@@ -1,0 +1,49 @@
+---
+/**
+ * User-data deletion instructions. Paste this URL into Meta as
+ * "User data deletion" / "Callback URL". It is a real HTML page so
+ * Facebook's crawler can read it without JavaScript.
+ */
+import ContentLayout from '../layouts/ContentLayout.astro';
+import { SUPPORT_EMAIL, withBase } from '../lib/config.js';
+
+const title = 'Delete your Next Train account';
+const description = 'How to delete a Next Train commuter account and ask us to remove your data.';
+const mail = `mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent('Please delete my Next Train account')}`;
+---
+
+<ContentLayout
+  title={title}
+  description={description}
+  canonicalPath="/account-delete.html"
+  seoPageType="account_delete"
+  bodyClass="bg-white text-gray-900 min-h-screen"
+>
+  <article class="max-w-xl mx-auto px-4 py-8">
+    <p class="text-sm mb-6"><a href={withBase('')} class="text-blue-600 underline">Back to Next Train</a></p>
+    <h1 class="text-2xl font-black tracking-tight mb-4">Delete your account</h1>
+    <p class="mb-4">You can remove a commuter Next Train account in the app, or by email. We do not need Facebook to finish the request.</p>
+
+    <h2 class="text-lg font-bold mt-6 mb-2">In the app</h2>
+    <ol class="list-decimal pl-5 space-y-2 mb-4">
+      <li>Open Next Train and tap <strong>Options</strong> (the menu).</li>
+      <li>Tap <strong>Account</strong>.</li>
+      <li>Tap <strong>Delete account</strong>, then confirm.</li>
+    </ol>
+    <p class="mb-4">That flags the profile for the operators. You are signed out. The login is removed when they process the request.</p>
+
+    <h2 class="text-lg font-bold mt-6 mb-2">By email</h2>
+    <p class="mb-3">
+      Send a message from the email on the account to
+      <a href={mail} class="text-blue-600 underline">{SUPPORT_EMAIL}</a>.
+      Write <strong>Please delete my Next Train account</strong> and include the name or Facebook/Google address you used.
+    </p>
+
+    <h2 class="text-lg font-bold mt-6 mb-2">Operator logins</h2>
+    <p class="mb-4">The two operator emails that run the service cannot use Delete account in the app. Email the same address if a record must be closed.</p>
+
+    <p class="mt-8 text-sm">
+      <a href={withBase('privacy.html')} class="text-blue-600 underline">Privacy Policy</a>
+    </p>
+  </article>
+</ContentLayout>

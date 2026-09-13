@@ -96,6 +96,20 @@ ok(layout.includes('launchQueue') && layout.includes('nt_launch_target_url'), 'h
 
 const astroCfg = readFileSync(join(ROOT, 'astro.config.mjs'), 'utf8');
 ok(astroCfg.includes("url.pathname === '/og/share'") && astroCfg.includes('NetworkOnly'), 'SW does not cache /og/share');
+ok(astroCfg.includes('privacy\\.html'), 'SW does not treat /privacy.html as the app shell');
+ok(astroCfg.includes('account-delete\\.html'), 'SW does not treat /account-delete.html as the app shell');
+
+const ui = readFileSync(join(ROOT, 'src/lib/ui.js'), 'utf8');
+ok(ui.includes("location.hash === '#privacy'"), 'home tab paint keeps #privacy');
+ok(ui.includes("location.hash === '#terms'"), 'home tab paint keeps #terms');
+
+const privacyPage = readFileSync(join(ROOT, 'src/pages/privacy.astro'), 'utf8');
+ok(privacyPage.includes('LEGAL_TEXTS.privacy'), 'privacy.html is the public policy, not a hash');
+ok(privacyPage.includes('canonicalPath="/privacy.html"'), 'privacy.html has a stable canonical');
+
+const deletePage = readFileSync(join(ROOT, 'src/pages/account-delete.astro'), 'utf8');
+ok(deletePage.includes('admin@nexttrain.co.za'), 'deletion page names the support email');
+ok(deletePage.includes('Delete account'), 'deletion page tells commuters to use Account');
 
 if (failures.length) {
     console.error('verify-deeplink-launch FAILED:\n - ' + failures.join('\n - '));

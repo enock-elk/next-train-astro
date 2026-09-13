@@ -241,11 +241,11 @@ export function prepareDeeplinkIntents() {
 /**
  * Returning users (or after Welcome): open whatever the current hash asks for.
  */
-export async function consumeHashDeeplinks() {
+export async function consumeHashDeeplinks(hashOverride) {
     if (typeof window === 'undefined') return;
     if (safeStorage.getItem('welcomeSeen') !== 'true') return;
 
-    const hash = location.hash || '';
+    const hash = hashOverride || location.hash || '';
     const legalDoc = legalDocFromHash(hash);
     if (legalDoc) {
         const { openLegal } = await import('./ui.js');

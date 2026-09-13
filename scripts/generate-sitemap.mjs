@@ -23,6 +23,9 @@ const core = [
   { loc: `${ORIGIN}/guide.html`, changefreq: 'weekly', priority: '0.9' },
   { loc: `${ORIGIN}/map.html`, changefreq: 'weekly', priority: '0.85' },
   { loc: `${ORIGIN}/routes.html`, changefreq: 'weekly', priority: '0.85' },
+  { loc: `${ORIGIN}/privacy.html`, changefreq: 'monthly', priority: '0.4' },
+  { loc: `${ORIGIN}/terms.html`, changefreq: 'monthly', priority: '0.4' },
+  { loc: `${ORIGIN}/account-delete.html`, changefreq: 'monthly', priority: '0.3' },
 ];
 
 const regionUrls = listSeoRegions().map((r) => ({

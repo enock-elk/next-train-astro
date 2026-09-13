@@ -96,7 +96,8 @@ assert(indexPage.includes('id="offline-dismiss-btn"'), 'offline dock has Close')
 assert(!indexPage.includes('id="bottom-nav" class="hidden shrink-0 border-t'), 'bottom nav dropped the boxy top border');
 
 const sidenav = readFileSync(new URL('../src/components/Sidenav.astro', import.meta.url), 'utf8');
-assert(sidenav.includes('id="settings-account-btn"') && sidenav.includes('data-admin-authed-only'), 'Account row is admin-gated');
+assert(sidenav.includes('id="settings-account-btn"'), 'Account row exists in Options');
+assert(!/id="settings-account-btn"[^>]*data-admin-authed-only/.test(sidenav), 'Account row is not admin-only; signed-in commuters keep it');
 
 const chrome = readFileSync(new URL('../src/lib/admin-chrome.js', import.meta.url), 'utf8');
 assert(chrome.includes('applyAdminAuthedChrome'), 'admin-chrome reveal helper exists');
@@ -393,6 +394,9 @@ assert(sidenavShare.includes('setPrefsOpen(false, false)'), 'Theme accordion sta
 const uiJs = readFileSync(new URL('../src/lib/ui.js', import.meta.url), 'utf8');
 assert(uiJs.includes('safeCur === lastTab'), 'last content tab swipe-left opens Options');
 assert(uiJs.includes('canAccessPilotSurface'), 'swipe and hash restore respect pin-gated Map/Community');
+const adminChrome = readFileSync(new URL('../src/lib/admin-chrome.js', import.meta.url), 'utf8');
+assert(adminChrome.includes('isSignedInAccount()'), 'signed-in commuters keep Account when extra features are off');
+assert(adminChrome.includes("addEventListener('accountchange'"), 'Account row reappears when someone signs in');
 assert(uiJs.includes("m.openAppHub"), 'planner swipe-left calls openAppHub');
 assert(uiJs.includes("modalId === 'route-modal' && !$currentRouteId.get()"), 'Select Route cannot close onto an empty board');
 

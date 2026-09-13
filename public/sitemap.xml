@@ -29,6 +29,24 @@
     <priority>0.85</priority>
   </url>
   <url>
+    <loc>https://nexttrain.co.za/privacy.html</loc>
+    <lastmod>2026-09-13</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.4</priority>
+  </url>
+  <url>
+    <loc>https://nexttrain.co.za/terms.html</loc>
+    <lastmod>2026-09-13</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.4</priority>
+  </url>
+  <url>
+    <loc>https://nexttrain.co.za/account-delete.html</loc>
+    <lastmod>2026-09-13</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.3</priority>
+  </url>
+  <url>
     <loc>https://nexttrain.co.za/regions/gauteng.html</loc>
     <lastmod>2026-09-12</lastmod>
     <changefreq>weekly</changefreq>

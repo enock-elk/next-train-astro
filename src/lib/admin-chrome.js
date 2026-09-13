@@ -6,7 +6,12 @@
  */
 import { safeStorage } from './utils.js';
 import { $currentRouteId } from '../store.js';
+import { $account } from './account.js';
 import { FEATURE_KEYS, isFeatureEnabled, isFeatureGranted } from './features.js';
+
+function isSignedInAccount() {
+    return $account.get()?.status === 'signed-in';
+}
 
 const PIN_REGIONS = ['GP', 'WC', 'KZN', 'EC'];
 
@@ -51,6 +56,9 @@ export function canAccessPilotSurface(surface, routeId = '') {
     if (surface === 'map' && isFeatureGranted(FEATURE_KEYS.MAP_TAB)) return true;
     if (surface === 'community' && isFeatureGranted(FEATURE_KEYS.COMMUNITY_TAB)) return true;
     if (surface === 'tripPrice' && isFeatureGranted(FEATURE_KEYS.TRIP_PRICE)) return true;
+    // A signed-in commuter must always reach Account, even if extra features
+    // (Map / Community / ride check-in) are switched off in Dev Hub.
+    if (surface === 'account' && isSignedInAccount()) return true;
     if (surface === 'account' && (
         isFeatureGranted(FEATURE_KEYS.MAP_TAB)
         || isFeatureGranted(FEATURE_KEYS.COMMUNITY_TAB)
@@ -71,12 +79,12 @@ export function applyPilotChrome() {
     if (typeof document === 'undefined') return;
     const mapOn = canAccessPilotSurface('map');
     const communityOn = canAccessPilotSurface('community');
-    const accountOn = canAccessPilotSurface('account');
+    const accountOn = isAdminAuthed() || canAccessPilotSurface('account');
 
+    setReveal(document.getElementById('settings-account-btn'), accountOn);
     if (!isAdminAuthed()) {
         setReveal(document.getElementById('bottom-nav-map'), mapOn);
         setReveal(document.getElementById('bottom-nav-community'), communityOn);
-        setReveal(document.getElementById('settings-account-btn'), accountOn);
     }
 
     const html = document.documentElement;
@@ -118,6 +126,14 @@ function bindPilotChromeListeners() {
     window.addEventListener('nt-features-updated', () => {
         try { applyPilotChrome(); } catch { /* ignore */ }
     });
+    window.addEventListener('accountchange', () => {
+        try { applyPilotChrome(); } catch { /* ignore */ }
+    });
+    if (typeof $account?.subscribe === 'function') {
+        $account.subscribe(() => {
+            try { applyPilotChrome(); } catch { /* ignore */ }
+        });
+    }
     window.addEventListener('storage', (e) => {
         if (!e?.key || !String(e.key).startsWith('defaultRoute')) return;
         try { applyPilotChrome(); } catch { /* ignore */ }

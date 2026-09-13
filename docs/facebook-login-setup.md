@@ -1,104 +1,147 @@
-# Facebook login — operator setup
+# Facebook login — copy these URLs, then click through
 
-The app already has the Facebook button, Firebase `FacebookAuthProvider`, and a
-Dev Hub toggle. The button stays disabled (`facebook: false`) until you finish
-the Meta + Firebase steps below and flip the flag. Nothing in this repo can
-finish those steps for you: they happen in two websites you own.
+You do not write any code. You paste three addresses into Facebook and Firebase.
+Google login already works. This only adds Facebook.
 
-Google and email already work. Facebook is the same pattern with one extra
-vendor (Meta).
+Do this on a laptop, signed into facebook.com as yourself.
 
-## What you already have in the app
+---
 
-- Account modal: **Continue with Facebook** (`#account-facebook-btn`)
-- Client: `signInWithFacebook()` in `src/lib/account.js`
-- Firebase SDK: `FacebookAuthProvider` in `src/lib/firebase-boot.js`
-- Remote flag: RTDB `config/auth_providers.facebook` (Dev Hub → System Controls)
-- Default: Facebook **off**. Do not default it on in code.
+## The three addresses (copy exactly)
 
-Firebase project: `metrorail-next-train`  
-Auth domain: `metrorail-next-train.firebaseapp.com`
+Facebook and Google open these as **web pages**. A hash like `#privacy` is never sent to their servers, so `https://nexttrain.co.za/#privacy` will always look like the home page to them.
 
-## Step 1 — Meta developer account
+| What Facebook asks for | Paste this |
+| --- | --- |
+| **Privacy Policy URL** | `https://nexttrain.co.za/privacy.html` |
+| **User data deletion** / deletion instructions | `https://nexttrain.co.za/account-delete.html` |
+| **Valid OAuth Redirect URI** | `https://metrorail-next-train.firebaseapp.com/__/auth/handler` |
 
-1. On a laptop, open [https://developers.facebook.com](https://developers.facebook.com) while logged into the Facebook account that should own the app (your personal admin account is fine to start).
-2. Accept the developer terms if asked.
-3. **Create app** → choose **Authenticate and request data from users with Facebook Login** (sometimes labelled **Consumer** / **Use cases → Authentication**).
-4. App name: `Next Train` (or `Metrorail Next Train`). Contact email: `admin@nexttrain.co.za`.
+Check the first two in a new browser tab **after production is deployed**. You should see a real article, not the live board.
 
-You now have an **App ID** and, under Settings → Basic, an **App Secret**. Treat the secret like a password. It never goes in git.
+Do **not** use:
 
-## Step 2 — Configure Facebook Login
+- `https://nexttrain.co.za/#privacy`
+- `https://nexttrain.co.za/#terms`
+- a Google Doc, unless you have nothing else yet (the two `.html` pages are the ones to use)
 
-1. In the Meta app, open **Use cases** → **Authentication and account creation** → **Facebook Login** → **Settings** (or **Products → Facebook Login → Settings**).
-2. Turn **Client OAuth login** and **Web OAuth login** on.
-3. **Valid OAuth Redirect URIs** — add exactly:
+There is one privacy policy, not a second “accounts only” policy. `/privacy.html` already covers Google, Facebook, route rooms, and how to delete.
+
+---
+
+## Step A — Create the Facebook app (about 5 minutes)
+
+1. Open [https://developers.facebook.com](https://developers.facebook.com)
+2. Top right: **My Apps** → **Create app**
+3. If it asks for a use case, pick **Authenticate and request data from users with Facebook Login** (sometimes **Consumer**)
+4. App name: `Next Train`
+5. Contact email: `admin@nexttrain.co.za`
+6. Create the app
+
+You are now inside the app dashboard.
+
+---
+
+## Step B — Privacy and deletion (the part you asked about)
+
+1. Left menu: **App settings** → **Basic** (sometimes **Settings** → **Basic**)
+2. Find **Privacy Policy URL**. Paste:
+
+   `https://nexttrain.co.za/privacy.html`
+
+3. Find **User data deletion** (or **Data deletion instructions URL**). Paste:
+
+   `https://nexttrain.co.za/account-delete.html`
+
+4. **App Domains**: add `nexttrain.co.za` then `metrorail-next-train.firebaseapp.com`
+5. Scroll to the bottom. Click **Save changes**
+
+If Facebook says the privacy URL is invalid, the new pages are not on production yet. Run **Deploy production → metrorail-app**, wait a few minutes, open the two URLs yourself, then save again.
+
+---
+
+## Step C — Facebook Login product
+
+1. Left menu: **Use cases** → **Authentication** → **Go to settings**  
+   or **Products** → **Facebook Login** → **Settings**
+2. Turn **Client OAuth login** ON
+3. Turn **Web OAuth login** ON
+4. **Valid OAuth Redirect URIs**. Paste exactly one line:
 
    `https://metrorail-next-train.firebaseapp.com/__/auth/handler`
 
-   That path is Firebase’s handler. Copy it from Firebase in the next step if you want to double-check. Do not invent a `nexttrain.co.za` redirect unless Firebase shows you one.
-4. **Settings → Basic**
-   - **App Domains:** `nexttrain.co.za`, `metrorail-next-train.firebaseapp.com`
-   - **Privacy Policy URL:** a public page you control (the live site or a simple Notion/Google Doc you publish). Meta will not put the app **Live** without this.
-   - **User data deletion:** you can point at `mailto:admin@nexttrain.co.za` or a short “email us to delete” page. You already have an in-app delete request.
-5. Save.
+5. Save
 
-## Step 3 — Enable Facebook in Firebase
+That handler belongs to Firebase. Do not invent a `nexttrain.co.za/...` redirect unless Firebase shows you one.
 
-1. Open [Firebase Console](https://console.firebase.google.com/) → project **metrorail-next-train**.
-2. **Authentication** → **Sign-in method** → **Facebook**.
-3. Enable it. Paste the Meta **App ID** and **App Secret**.
-4. Copy the **OAuth redirect URI** Firebase shows and confirm it matches Step 2.
-5. **Authentication → Settings → Authorized domains** must include:
+---
 
+## Step D — App ID and App Secret
+
+Still in **App settings** → **Basic**:
+
+1. Copy **App ID** (a number)
+2. Click **Show** next to **App Secret**. Copy it. This is a password. Do not put it in GitHub or Discord.
+
+---
+
+## Step E — Turn Facebook on in Firebase
+
+1. Open [https://console.firebase.google.com](https://console.firebase.google.com)
+2. Project **metrorail-next-train**
+3. Left: **Build** → **Authentication** → **Sign-in method**
+4. Click **Facebook**
+5. Enable
+6. Paste App ID and App Secret
+7. Copy the redirect URI Firebase shows. It must match Step C.
+8. Save
+9. **Authentication** → **Settings** → **Authorized domains**. These must already be there. Add any that are missing:
    - `nexttrain.co.za`
    - `metrorail-next-train.firebaseapp.com`
-   - `lab.nexttrain.co.za` if you test on lab
-   - `enock-elk.github.io` if you test the GitHub Pages preview
+   - `lab.nexttrain.co.za` (only if you test on lab)
+   - `enock-elk.github.io` (only if you test github.io)
 
-   Facebook login will fail on any host that is missing here.
+---
 
-## Step 4 — Testers first, then Live
+## Step F — Testers first
 
-A brand-new Meta app is in **Development** mode. Only people listed as
-**Roles → Administrators / Developers / Testers** can sign in.
+A new Facebook app is **Development**. Only testers can sign in.
 
-1. Add Thandeka (and yourself) as testers if she will use a different Facebook account.
-2. On your phone, open `https://nexttrain.co.za`, Account, Facebook. You should get the Meta popup or the Facebook app.
-3. When testers can sign in, **App Review** is not required for the default `public_profile` + `email` scopes we use. Switch the Meta app to **Live** so any commuter can use it.
-4. Live mode is what needs the privacy-policy URL. Without Live, random commuters see “app not set up” from Facebook.
+1. Facebook developer dashboard → **App roles** → **Roles**
+2. Add Thandeka as a tester if she will use a different Facebook account
+3. On your phone, open `https://nexttrain.co.za` → Options → Account → **Continue with Facebook**
+4. If the button still says **Not available yet**, do Step G
 
-## Step 5 — Turn the button on in Next Train
+When testers work: Facebook dashboard → switch the app to **Live**. Live needs the privacy URL from Step B. Without Live, random commuters see “app not set up”.
 
-1. Sign in as an operator.
-2. Dev Hub → System Controls → **Sign-in options**.
-3. Tick **Facebook** → **Save sign-in options**.
-4. That writes `config/auth_providers.facebook = true`. The Account button enables on the next load (or immediately after `authproviderschange`).
+---
 
-Leave the code default `false` so a fresh clone or a missing RTDB node does not advertise a login that Meta has not approved yet.
+## Step G — Show the button in Next Train
 
-## What a commuter should see
+1. Sign in as an operator
+2. Open Dev Hub → **System Controls** → **Sign-in options**
+3. Tick **Facebook** → **Save sign-in options**
 
-1. Account → Continue with Facebook.
-2. Facebook popup (or the Facebook app on a phone).
-3. “Signed in” toast, same profile path as Google.
+The button stays off in code until you tick that box, so a missing setup cannot advertise a broken login.
 
-Common errors:
+---
 
-| Message / code | Usually means |
+## If something fails
+
+| What you see | What to do |
 | --- | --- |
-| `auth/operation-not-allowed` | Facebook is still off in the Firebase console |
-| `auth/popup-closed-by-user` | They cancelled. Harmless. |
-| `auth/unauthorized-domain` | The host is missing from Firebase authorized domains |
-| Facebook “app not set up” / “URL blocked” | Redirect URI or App Domains mismatch, or the Meta app is still Development and they are not a tester |
-| Popup blocked | Try again; iOS home-screen PWA sometimes needs a full Safari tab the first time |
+| `#privacy` opens the home board | Use `/privacy.html`. That was the old hash. It is also fixed in the app after this deploy. |
+| Facebook: “invalid privacy URL” | Open `https://nexttrain.co.za/privacy.html` yourself. If it 404s, production is not deployed yet. |
+| `auth/operation-not-allowed` | Facebook is still off in the Firebase console (Step E) |
+| “URL blocked” | Redirect URI in Step C does not match Firebase |
+| “App not set up” | App is still Development and the person is not a tester, or it is not Live |
+| Account row missing for a signed-in commuter | Fixed in this release. Signed-in people keep Account even if Map/Community are hidden. |
+| You only see Sign out, no Delete | You are on an operator email (`enockelk@gmail.com`). Operator logins cannot self-delete. Commuters see **Delete account**. Everyone can open `https://nexttrain.co.za/account-delete.html`. |
 
-## What you do **not** do
+---
 
-- Do not put the App Secret in this repo, in `firebase-boot.js`, or in a Cloudflare env var. Firebase stores it.
-- Do not enable the Dev Hub flag before testers can complete a real Facebook login.
-- Do not mention Facebook login in What’s New. Account / sign-in stays off the public commuter list.
+## What you do not do
 
-## After it works
-
-Reply to a couple of real Facebook-created accounts in Community and confirm the display name looks sane. If Facebook hides the email, Firebase still creates a uid; that is enough for posting.
+- Do not put the App Secret in this repo
+- Do not tick Facebook in Dev Hub before a tester can finish a real Facebook login
+- Do not mention Facebook login in What’s New

@@ -315,6 +315,9 @@ assert(hubModals.includes('Continue with Facebook'), 'guest Facebook sign-in');
 assert(hubModals.includes('id="account-facebook-btn"'), 'Facebook button id');
 assert(hubModals.includes('Delete account'), 'signed-in delete row');
 assert(hubModals.includes('id="account-delete-confirm"'), 'delete confirm sheet');
+assert(hubModals.includes('id="account-operator-delete-note"'), 'operators see why Delete account is hidden');
+assert(hubModals.includes('account-delete.html'), 'Account links the public deletion page');
+assert(hubModals.includes('privacy.html'), 'Account links the public privacy page');
 assert(hubModals.includes('account-points-panel'), 'points details live inside Account');
 assert(hubModals.indexOf('id="account-points-btn"') < hubModals.indexOf('id="account-points-panel"'), 'points panel sits under the Points row');
 assert(hubModals.indexOf('id="account-points-panel"') < hubModals.indexOf('id="account-photo-alerts"'), 'points breakdown opens before the photo row, not at the page footer');
@@ -404,7 +407,7 @@ assert(hubModals.includes('id="nt-admin-publish-train"'), 'admin nearby sheet ca
     assert(adminCl.includes('listAdminChangelogVersions'), 'build notes list merges What’s New versions');
     assert(adminJs.includes('ntAdminSecureEscape'), 'build notes escape helper is in scope');
 }
-assert(hubModals.includes('account-legal-link') && hubModals.includes('Privacy Policy') && hubModals.includes('Terms of Use'), 'account footer is Privacy Policy and Terms of Use');
+assert(hubModals.includes('privacy.html') && hubModals.includes('terms.html') && hubModals.includes('Privacy Policy') && hubModals.includes('Terms of Use'), 'account footer links the public privacy and terms pages');
 assert(!hubModals.includes('Bronze · 0 marks'), 'account uses points, not marks');
 const riderMarks = readFileSync(new URL('../src/lib/rider-marks.js', import.meta.url), 'utf8');
 assert(riderMarks.includes('PHOTO_PREF_KEY') && riderMarks.includes('showPhotoInAlerts'), 'photo pref defaults off');

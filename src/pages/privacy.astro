@@ -1,0 +1,31 @@
+---
+/**
+ * Public Privacy Policy. Facebook, Google, and Meta fetch this file as HTML.
+ * They never see a hash. Do not point those consoles at /#privacy.
+ */
+import ContentLayout from '../layouts/ContentLayout.astro';
+import { LEGAL_TEXTS, withBase } from '../lib/config.js';
+
+const title = 'Privacy Policy | Next Train';
+const description = 'How Next Train handles optional accounts, location on your device, analytics, and POPIA deletion requests.';
+---
+
+<ContentLayout
+  title={title}
+  description={description}
+  canonicalPath="/privacy.html"
+  seoPageType="privacy"
+  bodyClass="bg-white text-gray-900 min-h-screen"
+>
+  <article class="max-w-xl mx-auto px-4 py-8">
+    <p class="text-sm mb-6"><a href={withBase('')} class="text-blue-600 underline">Back to Next Train</a></p>
+    <h1 class="text-2xl font-black tracking-tight mb-4">Privacy Policy</h1>
+    <p class="text-sm text-gray-500 mb-6">Kazembe CodeWorks · nexttrain.co.za</p>
+    <div class="text-gray-800 leading-relaxed" set:html={LEGAL_TEXTS.privacy} />
+    <p class="mt-8 text-sm">
+      <a href={withBase('account-delete.html')} class="text-blue-600 underline">How to delete your account</a>
+      ·
+      <a href={withBase('terms.html')} class="text-blue-600 underline">Terms of Use</a>
+    </p>
+  </article>
+</ContentLayout>

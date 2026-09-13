@@ -434,7 +434,7 @@ const faqLd = {
         safeStorage.getItem('welcomeSeen') === 'true' &&
         (bootHash === '#privacy' || bootHash === '#terms' || bootHash === '#legal')
     ) {
-        consumeHashDeeplinks().catch(() => {});
+        consumeHashDeeplinks(bootHash).catch(() => {});
     }
 
     window.revealAppShell = revealAppShell;

@@ -1335,7 +1335,16 @@ export function switchTab(tab, opts = null) {
             history.pushState({ tab: 'community' }, '', '#community');
         }
     } else if (location.hash !== '#home' && location.hash !== '') {
-        history.replaceState({ tab: 'next-train' }, '', '#home');
+        // Legal / fare hashes must survive the home tab paint. Replacing
+        // #privacy with #home is why Meta and cold links landed on the board.
+        const keepHash = location.hash === '#privacy'
+            || location.hash === '#terms'
+            || location.hash === '#legal'
+            || location.hash === '#fare'
+            || location.hash === '#account';
+        if (!keepHash) {
+            history.replaceState({ tab: 'next-train' }, '', '#home');
+        }
     }
 
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));

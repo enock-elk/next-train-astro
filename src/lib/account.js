@@ -371,8 +371,13 @@ export function syncAccountSettingsUi(state = $account.get()) {
     if (signedBlock) signedBlock.classList.toggle('hidden', !signed);
     if (guestBlock) guestBlock.classList.toggle('hidden', signed || state.status === 'loading');
     const deleteWrap = document.getElementById('account-delete-wrap');
+    const operatorDeleteNote = document.getElementById('account-operator-delete-note');
+    const isOperator = signed && isAdminEmail(state.email);
     if (deleteWrap) {
-        deleteWrap.classList.toggle('hidden', !signed || isAdminEmail(state.email));
+        deleteWrap.classList.toggle('hidden', !signed || isOperator);
+    }
+    if (operatorDeleteNote) {
+        operatorDeleteNote.classList.toggle('hidden', !isOperator);
     }
     if (!signed) {
         document.getElementById('account-delete-confirm')?.classList.add('hidden');
@@ -709,13 +714,6 @@ export function bindAccountUi() {
         box.dataset.userToggled = '1';
         const { setShowPhotoInAlerts } = await import('./rider-marks.js');
         await setShowPhotoInAlerts(!!box.checked);
-    });
-
-    document.querySelectorAll('.account-legal-link').forEach((btn) => {
-        btn.addEventListener('click', () => {
-            const type = btn.getAttribute('data-legal') || 'privacy';
-            window.openLegal?.(type);
-        });
     });
 
     paintAccountPoints();

@@ -23,7 +23,7 @@ if (process.env.PUBLIC_LAB_MODE === 'true'
 }
 
 /** Public indexable pages (must match public/sitemap.xml core set). */
-const INDEXABLE = ['index.html', 'guide.html', 'map.html', 'routes.html'];
+const INDEXABLE = ['index.html', 'guide.html', 'map.html', 'routes.html', 'privacy.html', 'terms.html', 'account-delete.html'];
 /** Must exist but must never be indexed (private / system). */
 const NOINDEX = ['offline.html', 'help.html', '404.html', 'status.html', 'marketing.html'];
 /** Legacy corridors that must keep stable slugs after SEO expansion. */

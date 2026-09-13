@@ -2,6 +2,12 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin, Dev Hub, Alerts, Trains near me, community chat, or other hidden-test work. No emoji and no em dashes in What’s New. Keep `APP_VERSION`, `package.json` `version`, and `public/app-version.json` aligned on each release. Changelog / What’s New may be skipped, or the heading may be only **no release notes.**
 
+## V9_09.13.2 — Public privacy and account-delete pages (13 Sep 2026)
+
+Real HTML pages at `/privacy.html`, `/terms.html`, and `/account-delete.html` so Facebook and Google can fetch the policy without JavaScript. `#privacy` no longer gets replaced with `#home` on boot. Signed-in commuters keep Account in Options when extra features are off. Operator emails still cannot self-delete in the app; they see a note plus the public deletion page.
+
+no release notes.
+
 ## V9_09.13.1 — Community route picker stacking, Reset and Recover fallback (13 Sep 2026)
 
 Community route list sat in a `z-[1]` header next to a `z-[1]` feed, so the empty-state copy painted through the menu and ate the taps. Chrome is now `z-20` (pinned in CSS). Reset and Recover (`help.html`) stays free of hashed `/_astro/` CSS, hides the honeypot with `hidden`, and keeps Facebook/email in a `<noscript>` block. Facebook login setup for operators is in `docs/facebook-login-setup.md`. The in-app Facebook button stays off until Meta + Firebase are live.

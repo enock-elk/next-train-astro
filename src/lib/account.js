@@ -285,8 +285,13 @@ export async function signOutAccount() {
 }
 
 export function openAccountModal() {
-    if (typeof window.syncFeedbackModalViewport === 'function') {
-        window.syncFeedbackModalViewport();
+    const modal = typeof document !== 'undefined' ? document.getElementById('account-modal') : null;
+    if (modal) {
+        modal.style.removeProperty('top');
+        modal.style.removeProperty('height');
+        modal.style.removeProperty('max-height');
+        modal.style.removeProperty('--nt-feedback-vv-top');
+        modal.style.removeProperty('--nt-feedback-vv-height');
     }
     if (typeof window.openSmoothModal === 'function') {
         window.openSmoothModal('account-modal');
@@ -402,6 +407,9 @@ export function syncAccountSettingsUi(state = $account.get()) {
     }
     const contribWrap = document.getElementById('account-contrib-wrap');
     if (contribWrap) contribWrap.classList.toggle('hidden', !signed);
+    document.getElementById('account-guest-points-wrap')?.classList.add('hidden');
+    const sidenavPoints = document.getElementById('settings-account-points');
+    if (sidenavPoints) sidenavPoints.classList.toggle('hidden', !signed);
     const letterEl = document.getElementById('account-modal-avatar-letter');
     const modalImg = document.getElementById('account-modal-avatar-img');
     if (letterEl) {

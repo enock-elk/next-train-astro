@@ -235,6 +235,12 @@ export function prepareDeeplinkIntents() {
     if (hash === '#fare' && !welcomeSeen) {
         writeIntent({ kind: 'fares' });
         stripHashKeepQuery();
+        return;
+    }
+
+    if (hash === '#account' && !welcomeSeen) {
+        writeIntent({ kind: 'account' });
+        stripHashKeepQuery();
     }
 }
 
@@ -255,6 +261,11 @@ export async function consumeHashDeeplinks(hashOverride) {
     if (hash === '#fare') {
         const { openFareModalForCurrentRoute } = await import('./live-board-ui.js');
         openFareModalForCurrentRoute();
+        return;
+    }
+    if (hash === '#account') {
+        const { openAccountModal } = await import('./account.js');
+        openAccountModal();
     }
 }
 
@@ -272,6 +283,11 @@ export async function flushPendingDeeplinkIntents() {
     if (intent.kind === 'fares') {
         const { openFareModalForCurrentRoute } = await import('./live-board-ui.js');
         openFareModalForCurrentRoute();
+        return;
+    }
+    if (intent.kind === 'account') {
+        const { openAccountModal } = await import('./account.js');
+        openAccountModal();
     }
 }
 

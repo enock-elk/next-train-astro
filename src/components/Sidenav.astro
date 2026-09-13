@@ -33,12 +33,13 @@ const versionBadge = String(APP_VERSION);
             <div class="text-left min-w-0">
               <p id="settings-account-name" class="text-sm font-bold text-gray-900 dark:text-white leading-tight truncate">Account</p>
               <p id="settings-account-sub" class="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5 truncate">Guest · Sign in optional</p>
-              <p data-rider-marks class="text-[10px] font-semibold text-amber-700 dark:text-amber-300 mt-0.5 truncate">Bronze · 0 points</p>
+              <p id="settings-account-points" data-rider-marks class="hidden text-[10px] font-semibold text-amber-700 dark:text-amber-300 mt-0.5 truncate">Bronze · 0 points</p>
             </div>
           </div>
           <svg class="w-4 h-4 text-gray-300 dark:text-gray-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
         </button>
 
+        <div id="sidenav-legacy-settings">
         <button type="button" id="settings-profile-btn" class="w-full flex justify-between items-center py-3 px-4 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors focus:outline-none group">
           <div class="flex items-center space-x-4">
             <svg class="w-5 h-5 text-blue-500 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>
@@ -49,6 +50,7 @@ const versionBadge = String(APP_VERSION);
           </div>
           <svg class="w-4 h-4 text-gray-300 dark:text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
         </button>
+        </div>
 
         <button type="button" id="settings-feedback-btn" class="w-full flex justify-between items-center py-3 px-4 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors focus:outline-none group">
           <div class="flex items-center space-x-4">
@@ -77,8 +79,8 @@ const versionBadge = String(APP_VERSION);
       </div>
     </div>
 
-    <!-- THEME & PREFERENCES (accordion) -->
-    <div class="pt-5">
+    <!-- THEME & PREFERENCES (accordion). Moves into Account when that row is visible. -->
+    <div id="sidenav-prefs-block" class="pt-5">
       <div class="flex flex-col border-t border-gray-100 dark:border-gray-800">
         <button
           type="button"
@@ -162,7 +164,7 @@ const versionBadge = String(APP_VERSION);
     </div>
 
     <!-- NETWORK MAPS -->
-    <div class="pt-5">
+    <div id="sidenav-maps-block" class="pt-5">
       <h3 class="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest px-5 mb-2">Network Maps</h3>
       <div class="flex flex-col border-t border-gray-100 dark:border-gray-800">
         <button type="button" id="sidenav-interactive-map-btn" class="w-full flex justify-between items-center py-3 px-4 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors focus:outline-none group">

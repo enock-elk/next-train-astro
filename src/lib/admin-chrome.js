@@ -75,6 +75,24 @@ export function canAccessPilotSurface(surface, routeId = '') {
     return false;
 }
 
+/** Passenger Type + Theme live in Account when that row is visible. */
+export function placeAccountSettings(accountOn) {
+    if (typeof document === 'undefined') return;
+    const profile = document.getElementById('settings-profile-btn');
+    const prefs = document.getElementById('sidenav-prefs-block');
+    const sidenavSlot = document.getElementById('sidenav-legacy-settings');
+    const accountSlot = document.getElementById('account-settings-host');
+    const mapsBlock = document.getElementById('sidenav-maps-block');
+    if (accountOn && accountSlot) {
+        if (profile) accountSlot.appendChild(profile);
+        if (prefs) accountSlot.appendChild(prefs);
+    } else {
+        if (profile && sidenavSlot) sidenavSlot.appendChild(profile);
+        if (prefs && mapsBlock?.parentElement) mapsBlock.parentElement.insertBefore(prefs, mapsBlock);
+    }
+    document.documentElement.setAttribute('data-account-settings', accountOn ? '1' : '0');
+}
+
 export function applyPilotChrome() {
     if (typeof document === 'undefined') return;
     const mapOn = canAccessPilotSurface('map');
@@ -82,6 +100,7 @@ export function applyPilotChrome() {
     const accountOn = isAdminAuthed() || canAccessPilotSurface('account');
 
     setReveal(document.getElementById('settings-account-btn'), accountOn);
+    placeAccountSettings(accountOn);
     if (!isAdminAuthed()) {
         setReveal(document.getElementById('bottom-nav-map'), mapOn);
         setReveal(document.getElementById('bottom-nav-community'), communityOn);
@@ -151,5 +170,6 @@ if (typeof window !== 'undefined') {
     window.applyPilotChrome = applyPilotChrome;
     window.canAccessPilotSurface = canAccessPilotSurface;
     window.getPinnedRouteIds = getPinnedRouteIds;
+    window.placeAccountSettings = placeAccountSettings;
     bindPilotChromeListeners();
 }

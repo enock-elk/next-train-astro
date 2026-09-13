@@ -1116,8 +1116,7 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
       }
       /* Feedback Hub / Send Feedback follow the keyboard, not --nt-app-h. */
       #nt-shell #messages-thread-modal.fixed,
-      #nt-shell #feedback-modal.fixed,
-      #nt-shell #account-modal.fixed {
+      #nt-shell #feedback-modal.fixed {
         inset: unset !important;
         top: var(--nt-feedback-vv-top, var(--nt-vv-top, 0px)) !important;
         left: 0 !important;
@@ -1125,6 +1124,15 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
         bottom: auto !important;
         height: var(--nt-feedback-vv-height, var(--nt-vv-h, 100dvh)) !important;
         max-height: var(--nt-feedback-vv-height, var(--nt-vv-h, 100dvh)) !important;
+      }
+      #nt-shell #account-modal.fixed {
+        inset: 0 !important;
+        top: 0 !important;
+        left: 0 !important;
+        right: 0 !important;
+        bottom: 0 !important;
+        height: var(--nt-app-h, 100dvh) !important;
+        max-height: var(--nt-app-h, 100dvh) !important;
       }
       /* Hide ads in the welcome/modal safe-zone without touching vendor left/top/transform. */
       html.nt-ads-cloaked iframe[src*="cleverwebserver"],

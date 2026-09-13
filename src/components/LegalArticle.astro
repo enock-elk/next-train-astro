@@ -1,0 +1,90 @@
+---
+/**
+ * Public legal pages (privacy, terms, delete). Same grey/white Account look.
+ * Back to Account uses /#account so the hash is a real in-app return, not a
+ * Facebook URL. Crawlers still get the article without JavaScript.
+ */
+import { withBase } from '../lib/config.js';
+
+interface Props {
+  title: string;
+  kicker?: string;
+}
+
+const { title, kicker = 'Kazembe CodeWorks · nexttrain.co.za' } = Astro.props;
+const fromAccount = Astro.url.searchParams.get('from') === 'account';
+const fromQ = fromAccount ? '?from=account' : '';
+const homeHref = withBase('');
+const accountHref = `${homeHref}#account`;
+const backHref = fromAccount ? accountHref : homeHref;
+const backLabel = fromAccount ? 'Account' : 'Next Train';
+---
+
+<div class="nt-legal-shell min-h-screen bg-[#f2f2f7] dark:bg-black text-gray-900 dark:text-white">
+  <header class="px-4 pb-3 bg-[#f2f2f7] dark:bg-black" style="padding-top: max(0.75rem, env(safe-area-inset-top, 0px));">
+    <div class="flex items-center justify-between min-h-[44px]">
+      <a href={backHref} class="text-[17px] font-normal text-blue-600 dark:text-blue-400 -ml-1 px-1 py-1">{backLabel}</a>
+    </div>
+    <h1 class="text-[28px] leading-tight font-bold tracking-tight">{title}</h1>
+    {kicker && <p class="mt-1 text-[13px] font-normal text-gray-500 dark:text-gray-400">{kicker}</p>}
+  </header>
+
+  <main class="px-4 pb-12 space-y-4 max-w-md mx-auto">
+    <section class="nt-legal-doc rounded-[10px] bg-white dark:bg-[#1c1c1e] px-4 py-4 text-[15px] leading-relaxed text-gray-800 dark:text-gray-200">
+      <slot />
+    </section>
+    <nav class="rounded-[10px] overflow-hidden bg-white dark:bg-[#1c1c1e] divide-y divide-black/10 dark:divide-white/10 text-[15px]">
+      <a href={`${withBase('privacy.html')}${fromQ}`} class="flex justify-between items-center px-4 py-[12px] text-gray-900 dark:text-white">
+        <span>Privacy Policy</span>
+        <span class="text-gray-300 dark:text-gray-600" aria-hidden="true">&gt;</span>
+      </a>
+      <a href={`${withBase('terms.html')}${fromQ}`} class="flex justify-between items-center px-4 py-[12px] text-gray-900 dark:text-white">
+        <span>Terms of Use</span>
+        <span class="text-gray-300 dark:text-gray-600" aria-hidden="true">&gt;</span>
+      </a>
+      <a href={`${withBase('account-delete.html')}${fromQ}`} class="flex justify-between items-center px-4 py-[12px] text-gray-900 dark:text-white">
+        <span>Delete account help</span>
+        <span class="text-gray-300 dark:text-gray-600" aria-hidden="true">&gt;</span>
+      </a>
+    </nav>
+    {fromAccount && (
+      <p class="text-center">
+        <a href={accountHref} class="text-[17px] font-normal text-blue-600 dark:text-blue-400">Back to Account</a>
+      </p>
+    )}
+  </main>
+</div>
+
+<style is:global>
+  .nt-legal-doc h4,
+  .nt-legal-doc h2 {
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    margin: 1.1rem 0 0.4rem;
+    color: inherit;
+  }
+  .nt-legal-doc h4:first-child,
+  .nt-legal-doc h2:first-child {
+    margin-top: 0;
+  }
+  .nt-legal-doc p,
+  .nt-legal-doc li {
+    font-size: 15px;
+    line-height: 1.45;
+    font-weight: 400;
+  }
+  .nt-legal-doc ol {
+    list-style: decimal;
+    padding-left: 1.25rem;
+    margin: 0 0 0.75rem;
+  }
+  .nt-legal-doc a {
+    color: #2563eb;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+  html.dark .nt-legal-doc a {
+    color: #60a5fa;
+  }
+</style>

@@ -287,9 +287,9 @@ import { withBase } from '../lib/config.js';
 </div>
 
 <!-- ACCOUNT -->
-<div id="account-modal" class="fixed left-0 right-0 bg-black/50 z-[120] hidden flex items-end justify-center p-0 backdrop-blur-[2px] transition-opacity duration-300">
-    <div class="bg-[#f2f2f7] dark:bg-black rounded-t-2xl shadow-2xl w-full max-w-md h-full flex flex-col overflow-hidden transform transition-all border-b-0">
-        <div class="shrink-0 z-10 flex items-center justify-between px-4 py-3 bg-[#f2f2f7]/95 dark:bg-black/95 backdrop-blur">
+<div id="account-modal" class="fixed inset-0 bg-[#f2f2f7] dark:bg-black z-[120] hidden flex items-stretch justify-center p-0 transition-opacity duration-300">
+    <div class="bg-[#f2f2f7] dark:bg-black w-full h-full max-w-none flex flex-col overflow-hidden border-0 rounded-none">
+        <div class="shrink-0 z-10 flex items-center justify-between px-4 pb-3 bg-[#f2f2f7] dark:bg-black" style="padding-top: max(0.75rem, env(safe-area-inset-top, 0px));">
             <h3 class="text-[28px] leading-tight font-bold text-gray-900 dark:text-white tracking-tight">Account</h3>
             <button type="button" id="account-modal-close" class="px-2 py-1 text-[17px] font-normal text-blue-600 dark:text-blue-400 focus:outline-none" aria-label="Close">Done</button>
         </div>
@@ -426,7 +426,7 @@ import { withBase } from '../lib/config.js';
                     <button type="button" id="account-email-signup-btn" data-account-action data-account-provider="email" class="w-full px-4 py-[11px] text-[13px] font-normal text-blue-600 dark:text-blue-400 text-center focus:outline-none">Create account <span data-provider-unavailable class="hidden block text-[11px]">Not available yet</span></button>
                 </div>
 
-                <div class="rounded-[10px] overflow-hidden bg-white dark:bg-[#1c1c1e]">
+                <div id="account-guest-points-wrap" class="hidden rounded-[10px] overflow-hidden bg-white dark:bg-[#1c1c1e]">
                     <button type="button" id="account-points-guest-btn" class="w-full flex items-center justify-between gap-2 px-4 py-[11px] text-left focus:outline-none" aria-expanded="false" aria-controls="account-points-panel">
                         <span class="text-[13px] font-normal text-gray-900 dark:text-white">Points</span>
                         <span class="flex items-center gap-1 min-w-0">
@@ -437,12 +437,14 @@ import { withBase } from '../lib/config.js';
                 </div>
             </div>
 
+            <div id="account-settings-host" class="space-y-3"></div>
+
             <div class="px-1 pb-2 flex justify-center items-center gap-3 flex-wrap">
-                <a href={withBase('privacy.html')} class="text-[12px] font-normal text-gray-500 hover:text-blue-600 dark:text-gray-400 dark:hover:text-blue-400 underline underline-offset-2">Privacy Policy</a>
+                <a href={`${withBase('privacy.html')}?from=account`} class="text-[12px] font-normal text-gray-500 hover:text-blue-600 dark:text-gray-400 dark:hover:text-blue-400 underline underline-offset-2">Privacy Policy</a>
                 <span class="text-gray-300 dark:text-gray-600 text-[12px]">|</span>
-                <a href={withBase('terms.html')} class="text-[12px] font-normal text-gray-500 hover:text-blue-600 dark:text-gray-400 dark:hover:text-blue-400 underline underline-offset-2">Terms of Use</a>
+                <a href={`${withBase('terms.html')}?from=account`} class="text-[12px] font-normal text-gray-500 hover:text-blue-600 dark:text-gray-400 dark:hover:text-blue-400 underline underline-offset-2">Terms of Use</a>
                 <span class="text-gray-300 dark:text-gray-600 text-[12px]">|</span>
-                <a href={withBase('account-delete.html')} class="text-[12px] font-normal text-gray-500 hover:text-blue-600 dark:text-gray-400 dark:hover:text-blue-400 underline underline-offset-2">Delete account help</a>
+                <a href={`${withBase('account-delete.html')}?from=account`} class="text-[12px] font-normal text-gray-500 hover:text-blue-600 dark:text-gray-400 dark:hover:text-blue-400 underline underline-offset-2">Delete account help</a>
             </div>
         </div>
     </div>
@@ -601,12 +603,17 @@ import { withBase } from '../lib/config.js';
 
 <style is:global>
   #feedback-modal,
-  #messages-thread-modal,
-  #account-modal {
+  #messages-thread-modal {
     top: var(--nt-feedback-vv-top, var(--nt-vv-top, 0px));
     bottom: auto;
     height: var(--nt-feedback-vv-height, var(--nt-vv-h, 100dvh));
     max-height: var(--nt-feedback-vv-height, var(--nt-vv-h, 100dvh));
+  }
+  #account-modal {
+    inset: 0;
+    top: 0;
+    height: var(--nt-app-h, 100dvh);
+    max-height: var(--nt-app-h, 100dvh);
   }
   /* Send Feedback stays centered in the visible viewport. Do not dock it like Hub. */
   #feedback-modal {
@@ -626,8 +633,7 @@ import { withBase } from '../lib/config.js';
     padding-left: 0;
     padding-right: 0;
   }
-  #messages-thread-modal > div,
-  #account-modal > div {
+  #messages-thread-modal > div {
     width: 100%;
     height: 100%;
     max-height: 100%;
@@ -635,9 +641,47 @@ import { withBase } from '../lib/config.js';
     border-bottom-right-radius: 0;
   }
   #account-modal {
-    align-items: flex-end;
-    justify-content: center;
+    align-items: stretch;
+    justify-content: stretch;
     padding: 0;
+    background: #f2f2f7;
+  }
+  html.dark #account-modal {
+    background: #000;
+  }
+  #account-modal > div {
+    width: 100%;
+    height: 100%;
+    max-height: 100%;
+    max-width: none;
+    border-radius: 0;
+  }
+  #account-settings-host:empty {
+    display: none;
+  }
+  #account-settings-host #settings-profile-btn,
+  #account-settings-host #prefs-accordion-toggle {
+    background: #fff;
+    border-radius: 10px;
+  }
+  html.dark #account-settings-host #settings-profile-btn,
+  html.dark #account-settings-host #prefs-accordion-toggle {
+    background: #1c1c1e;
+  }
+  #account-settings-host #sidenav-prefs-block {
+    padding-top: 0;
+  }
+  #account-settings-host #sidenav-prefs-block > div {
+    border-top: 0;
+  }
+  #account-settings-host #prefs-accordion-panel {
+    margin-top: 8px;
+    border-radius: 10px;
+    background: #fff;
+    border: 0;
+  }
+  html.dark #account-settings-host #prefs-accordion-panel {
+    background: #1c1c1e;
   }
   #account-modal .nt-account-provider-disabled {
     color: #9ca3af;

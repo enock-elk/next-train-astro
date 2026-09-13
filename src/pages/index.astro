@@ -432,7 +432,7 @@ const faqLd = {
     const bootHash = location.hash || '';
     if (
         safeStorage.getItem('welcomeSeen') === 'true' &&
-        (bootHash === '#privacy' || bootHash === '#terms' || bootHash === '#legal')
+        (bootHash === '#privacy' || bootHash === '#terms' || bootHash === '#legal' || bootHash === '#account')
     ) {
         consumeHashDeeplinks(bootHash).catch(() => {});
     }

@@ -208,7 +208,7 @@ function autosizeMessagesThreadInput() {
     el.style.overflowY = el.scrollHeight > maxH + 1 ? 'auto' : 'hidden';
 }
 
-const COMMUTER_FEEDBACK_MODAL_IDS = ['feedback-modal', 'messages-thread-modal', 'account-modal'];
+const COMMUTER_FEEDBACK_MODAL_IDS = ['feedback-modal', 'messages-thread-modal'];
 let feedbackViewportBound = false;
 
 function keepFeedbackFieldVisible(field) {
@@ -260,7 +260,7 @@ function syncFeedbackModalViewport() {
         modal.style.maxHeight = `${height}px`;
         modal.style.bottom = 'auto';
         const card = modal.querySelector(':scope > div');
-        if (id === 'messages-thread-modal' || id === 'account-modal') {
+        if (id === 'messages-thread-modal') {
             modal.style.paddingBottom = '0px';
             if (card) {
                 card.style.maxHeight = '100%';

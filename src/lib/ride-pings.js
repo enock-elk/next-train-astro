@@ -28,6 +28,7 @@ import {
     lagMinutesFromFix,
     addMinutesToTime,
     headingAgrees,
+    alignBearingToJourney,
     findStopsForTrain,
     progressAlongStops,
     progressAlongStopsDetailed,
@@ -261,6 +262,7 @@ export async function projectTrainTrackerFix({
             progress,
         };
     }
+    const journeyH = journeyHeadingAtProgress(id, progress, { stationIndex, ...(schedules ? { schedules } : {}) });
     return {
         ok: true,
         state: TRACKING_STATE.ACTIVE,
@@ -271,7 +273,7 @@ export async function projectTrainTrackerFix({
         routeProgressM: snap.routeM,
         distanceM: snap.distanceM,
         lastSeenLabel: journeyPositionLabel(stops, progress),
-        bearing: journeyHeadingAtProgress(id, progress, { stationIndex, ...(schedules ? { schedules } : {}) }),
+        bearing: alignBearingToJourney(snap.trackBearing, journeyH),
     };
 }
 
@@ -483,24 +485,19 @@ export function nearestStationOnRoute(lat, lon, routeId = $currentRouteId.get())
     return best;
 }
 
-function oneShotGps() {
-    return new Promise((resolve, reject) => {
-        if (!navigator.geolocation) {
-            reject(Object.assign(new Error('Location isn’t available on this device.'), { code: 2 }));
-            return;
+async function oneShotGps() {
+    const { peekLastGeoFix, waitForGeoFix, requestGeoLocateFix } = await import('./geo-watch.js');
+    const last = peekLastGeoFix();
+    if (last && Date.now() - last.t <= 8000) return last;
+    try {
+        return await waitForGeoFix({ maxAgeMs: 8000, timeoutMs: 12000 });
+    } catch (err) {
+        try {
+            return await requestGeoLocateFix();
+        } catch {
+            throw err;
         }
-        navigator.geolocation.getCurrentPosition(
-            (pos) => resolve({
-                lat: pos.coords.latitude,
-                lng: pos.coords.longitude,
-                accuracy: pos.coords.accuracy,
-                heading: typeof pos.coords.heading === 'number' ? pos.coords.heading : null,
-                speedMps: typeof pos.coords.speed === 'number' ? pos.coords.speed : null,
-            }),
-            reject,
-            { enableHighAccuracy: true, timeout: 12000, maximumAge: 20000 }
-        );
-    });
+    }
 }
 
 export function getCachedRidePings(routeId = $currentRouteId.get()) {
@@ -1193,7 +1190,10 @@ export async function submitRideCheckIn({
             routeProgressM: Number.isFinite(overrideProjected.routeM) ? overrideProjected.routeM : 0,
             distanceM: Number.isFinite(overrideProjected.distanceM) ? overrideProjected.distanceM : 0,
             lastSeenLabel: st,
-            bearing: Number.isFinite(heading) ? heading : null,
+            bearing: alignBearingToJourney(
+                overrideProjected.trackBearing,
+                Number.isFinite(heading) ? heading : journeyHeadingAtProgress(trainId, overrideProjected.pathFraction)
+            ),
         };
         resolvedState = TRACKING_STATE.ACTIVE;
         resolvedPauseReason = '';
@@ -1336,6 +1336,7 @@ export async function stopRideShare({ quiet = false, reason = '' } = {}) {
         clearSessionPoints();
         stopOnboardPingLoop();
         stopShareIdleWatch();
+        import('./geo-watch.js').then((g) => g.releaseGeoWatch('share')).catch(() => {});
         appendRideShareLog({
             action: 'stop',
             routeId,
@@ -1410,6 +1411,7 @@ async function pauseActiveTracker(active, reason, pos = null) {
 export function startOnboardPingLoop() {
     stopOnboardPingLoop();
     startShareIdleWatch();
+    import('./geo-watch.js').then((g) => g.acquireGeoWatch('share')).catch(() => {});
     const tick = async () => {
         if (await stopShareIfIdle()) return;
         const active = getActiveShare();

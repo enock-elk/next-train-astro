@@ -212,6 +212,19 @@ export function headingAgrees(userHeading, ghostHeading, maxDelta = HEADING_AGRE
     return d <= maxDelta;
 }
 
+/** Undirected rail tangent, flipped so it matches scheduled travel. */
+export function alignBearingToJourney(trackBearing, journeyBearing) {
+    if (!Number.isFinite(trackBearing)) {
+        return Number.isFinite(journeyBearing) ? journeyBearing : null;
+    }
+    const track = ((trackBearing % 360) + 360) % 360;
+    if (!Number.isFinite(journeyBearing)) return track;
+    const journey = ((journeyBearing % 360) + 360) % 360;
+    let d = Math.abs(track - journey) % 360;
+    if (d > 180) d = 360 - d;
+    return d > 90 ? (track + 180) % 360 : track;
+}
+
 /** Origin → terminus bearing for this train’s stop list. */
 export function journeyHeadingDeg(trainId, opts = {}) {
     const { stops } = findStopsForTrain(trainId, opts);

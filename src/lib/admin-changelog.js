@@ -5,6 +5,11 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_09.13.6': [
+        'Train oval yaw is bearing minus 90 so the long axis follows the rail tangent. Number still flips along the oval.',
+        'Projection bearing prefers snapToRail / path trackBearing, aligned to scheduled travel.',
+        'Map tab uses one fused watchPosition (not Leaflet high-accuracy watch). Hidden or no holders drop the watch. Locate recenters the last fix.',
+    ],
     'V9_09.13.5': [
         'Community Monitor Delete removes the RTDB post/reply and its community_activity key. Hide stays.',
         'Live sharing cards have Stop share: expire ride_pings and write ride_share_log stop (source admin_stop).',

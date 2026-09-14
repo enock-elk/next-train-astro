@@ -27,6 +27,7 @@ import {
     ONBOARD_STATIONARY_PING_MS,
     pingPublicTrainId,
     projectTrainTrackerFix,
+    terminusStopShouldFire,
     TRACKING_STATE,
     updateDirectionObservation,
 } from '../src/lib/ride-pings.js';
@@ -191,6 +192,12 @@ assert(
 assert(adaptiveOnboardPingMs(12) === ONBOARD_FAST_PING_MS, 'fast train broadcasts every 5 seconds');
 assert(adaptiveOnboardPingMs(2) === ONBOARD_MOVING_PING_MS, 'slow movement broadcasts every 10 seconds');
 assert(adaptiveOnboardPingMs(0) === ONBOARD_STATIONARY_PING_MS, 'stationary share heartbeats every 25 seconds');
+assert(!terminusStopShouldFire({
+    atLast: true, lastIndex: 12, minProgressSeen: 12,
+}), 'sitting at the last station when sharing starts does not end the share');
+assert(terminusStopShouldFire({
+    atLast: true, lastIndex: 12, minProgressSeen: 4,
+}), 'reaching the last station after travelling the corridor prompts to confirm arrival');
 
 let directionObservation = updateDirectionObservation({}, {
     speedMps: 10, heading: 270, expectedHeading: 90, accuracy: 8, now: 1000,
@@ -328,7 +335,10 @@ assert(mapAppSource.includes('interpolateRideMarkerLatLng'), 'remote map marker 
 assert(mapAppSource.includes('let marker = rideTrainMarkers[trainId]'), 'train markers are retained by train id');
 assert(mapAppSource.includes('readableTrainLabelDeg'), 'train number has a dedicated readable angle');
 assert(mapAppSource.includes('readable > 90') && mapAppSource.includes('readable < -90'), 'train number is bounded to -90 through 90 degrees');
-assert(mapAppSource.includes('nt-live-train-wake'), 'train pill includes an aft directional wake');
+assert(mapAppSource.includes('nt-live-train-wake'), 'train pill includes a bow wake');
+assert(mapAppSource.includes('nt-live-train-wake-ripple'), 'wake is stacked V ripples');
+assert(mapPageSource.includes('transform-origin: right center'), 'wake arms hinge at the bow and open aft');
+assert(mapPageSource.includes('translate(-26px, -50%)'), 'wake ripples travel backward, not forward');
 assert(mapPageSource.includes('prefers-reduced-motion: reduce'), 'train motion respects reduced-motion preference');
 assert(mapAppSource.includes('Show tracking details'), 'train popup opens tracking details');
 assert(mapAppSource.includes('Rail distance') && mapAppSource.includes('GPS accuracy'), 'train popup exposes tracking metrics');
@@ -340,6 +350,13 @@ assert(mapTabSource.includes('data-current-tracking-details'), 'Nearby current t
 assert(mapTabSource.includes('renderTrackingStatusCard') && mapTabSource.includes('trackingCardMode'), 'tracking metrics keep updating while the card is minimized');
 assert(mapTabSource.includes("setInterval(() => {") && mapTabSource.includes('map-tracking-warning'), 'tracking dashboard refreshes its live metrics and warning');
 assert(ridePingsSource.includes('subscribeGeoFix') && ridePingsSource.includes('adaptiveOnboardPingMs'), 'train sharing consumes every fix and broadcasts adaptively');
+assert(ridePingsSource.includes("title: 'Has this train arrived?'"), 'last station asks if the train has arrived');
+assert(ridePingsSource.includes("keepLabel: 'Still on the train'"), 'last-station prompt can keep sharing');
+assert(ridePingsSource.includes("stopLabel: 'Yes, we’ve arrived'"), 'last-station prompt can confirm arrival');
+assert(ridePingsSource.includes("title: 'Still on this train?'"), 'off-track and direction mismatch ask before stopping');
+assert(ridePingsSource.includes('offTrackStayUntil'), 'still-on-it snoozes another off-track drop');
+assert(ridePingsSource.includes('sharePromptOpen'), 'overlapping share prompts do not stack');
+assert(ridePingsSource.includes("reason === 'direction'"), 'direction mismatch can end the share after the prompt');
 assert(ridePingsSource.includes('cacheLocalProjectedFix'), 'owner pill updates locally before Firebase');
 assert(ridePingsSource.includes("source: 'onboard_local'"), 'local projected position is distinct from broadcast telemetry');
 assert(ridePingsSource.includes('{ silent: true }'), 'open timetable tracker refreshes without repeated haptics');

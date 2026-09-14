@@ -2121,7 +2121,7 @@
                     + '<span class="nt-live-train-ring" aria-hidden="true"></span>'
                     + '<span class="nt-live-train-ring nt-live-train-ring--delay" aria-hidden="true"></span>'
                     + '<span class="' + cls + '" style="transform:rotate(' + yaw + 'deg)">'
-                    + '<span class="nt-live-train-wake" aria-hidden="true"><i class="nt-live-train-wake-trace"></i><i class="nt-live-train-wake-trace"></i><i class="nt-live-train-wake-trace"></i></span>'
+                    + '<span class="nt-live-train-wake" aria-hidden="true"><span class="nt-live-train-wake-ripple"><i></i><i></i></span><span class="nt-live-train-wake-ripple"><i></i><i></i></span><span class="nt-live-train-wake-ripple"><i></i><i></i></span></span>'
                     + '<span class="nt-live-train-shell" aria-hidden="true"></span>'
                     + '<span class="nt-live-train-oval nt-live-train-oval--a" aria-hidden="true"></span>'
                     + '<span class="nt-live-train-oval nt-live-train-oval--b" aria-hidden="true"></span>'

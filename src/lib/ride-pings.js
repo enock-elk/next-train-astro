@@ -52,6 +52,8 @@ export const RIDE_GPS_STALE_MS = 90 * 1000;
 export const RIDE_OFFTRACK_GRACE_MS = 3 * 60 * 1000;
 /** Drop immediately if GPS is this far from the selected rail, even inside the grace window. */
 export const RIDE_OFFTRACK_HARD_M = 400;
+/** After “I’m still on it”, skip another off-track drop prompt for this long. */
+export const RIDE_OFFTRACK_STAY_MS = 5 * 60 * 1000;
 const SESSION_POINTS_KEY = 'nt_ride_share_session_points';
 
 /** Pause vs drop while a regular rider is sharing as a train. */
@@ -146,17 +148,88 @@ export function sharingStatusCopy({ count = 0, iAmSharing = false } = {}) {
     return `${n} sharing`;
 }
 
-function shareReachedTerminus(trainId, lat, lng, station) {
+export const TERMINUS_APPROACH_SLACK = 0.15;
+export const TERMINUS_TRAVELED_SLACK = 0.5;
+
+/**
+ * End the share only after the rider has actually travelled toward the last
+ * stop. Sitting at the terminus when sharing starts (admin test, wait at
+ * Pretoria, attach on arrival) must not kill the session on the first GPS tick.
+ */
+export function terminusStopShouldFire({
+    atLast = false,
+    lastIndex = 0,
+    minProgressSeen = null,
+} = {}) {
+    if (!atLast) return false;
+    if (!Number.isFinite(lastIndex) || lastIndex < 1) return false;
+    if (!Number.isFinite(minProgressSeen)) return false;
+    return minProgressSeen < lastIndex - TERMINUS_TRAVELED_SLACK;
+}
+
+function shareProgressAlongTrain(trainId, lat, lng) {
+    const { stops } = findStopsForTrain(String(trainId || ''));
+    if (!stops.length || !Number.isFinite(lat) || !Number.isFinite(lng)) {
+        return { stops, progress: null, lastIndex: Math.max(0, stops.length - 1) };
+    }
+    return {
+        stops,
+        progress: progressAlongStops(lat, lng, stops, $globalStationIndex.get() || {}),
+        lastIndex: stops.length - 1,
+    };
+}
+
+function shareReachedTerminus(trainId, lat, lng, station, share = {}) {
+    if (share.terminusStay) return false;
     const id = String(trainId || '');
     if (!id) return false;
-    const { stops } = findStopsForTrain(id);
+    const { stops, progress, lastIndex } = shareProgressAlongTrain(id, lat, lng);
     if (!stops.length) return false;
-    const last = stops[stops.length - 1]?.station;
-    if (station && last && normalizeStationName(station) === normalizeStationName(last)) return true;
-    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return false;
-    const prog = progressAlongStops(lat, lng, stops, $globalStationIndex.get() || {});
-    if (prog == null) return false;
-    return prog >= (stops.length - 1) - 0.15;
+    const last = stops[lastIndex]?.station;
+    const atLast = !!(station && last && normalizeStationName(station) === normalizeStationName(last))
+        || (progress != null && progress >= lastIndex - TERMINUS_APPROACH_SLACK);
+    const minSeen = Number.isFinite(share.minProgressSeen) ? share.minProgressSeen : progress;
+    return terminusStopShouldFire({
+        atLast,
+        lastIndex,
+        minProgressSeen: minSeen,
+    });
+}
+
+function nextMinProgressSeen(share, trainId, lat, lng) {
+    const { progress } = shareProgressAlongTrain(trainId, lat, lng);
+    if (progress == null) return share?.minProgressSeen;
+    const prev = Number.isFinite(share?.minProgressSeen) ? share.minProgressSeen : progress;
+    return Math.min(prev, progress);
+}
+
+function persistActiveSharePatch(patch) {
+    const active = getActiveShare();
+    if (!active) return null;
+    const next = { ...active, ...patch };
+    safeStorage.setItem(ACTIVE_KEY, JSON.stringify(next));
+    return next;
+}
+
+let sharePromptOpen = false;
+
+async function confirmShareContinue({ title, body, keepLabel, stopLabel }) {
+    if (sharePromptOpen) return 'busy';
+    sharePromptOpen = true;
+    try {
+        const { promptOnTrainSheet } = await import('./map-tab.js');
+        const choice = await promptOnTrainSheet({
+            title,
+            body,
+            primary: keepLabel,
+            secondary: stopLabel,
+        });
+        return choice === 'primary' ? 'keep' : 'stop';
+    } catch {
+        return 'busy';
+    } finally {
+        sharePromptOpen = false;
+    }
 }
 
 async function ensureAuthToken(forceRefresh = false) {
@@ -1356,6 +1429,10 @@ export async function submitRideCheckIn({
             adminOverrideRole: payload.adminOverrideRole || '',
             source: payload.source,
             offTrackSince: projection?.ok ? 0 : (previous?.offTrackSince || 0),
+            offTrackStayUntil: projection?.ok ? 0 : (Number(previous?.offTrackStayUntil) || 0),
+            terminusStay: Boolean(previous?.terminusStay),
+            directionStay: Boolean(previous?.directionStay),
+            minProgressSeen: nextMinProgressSeen(previous, trainId, coarseLat, coarseLng),
         }));
         startShareIdleWatch();
         const existing = getCachedRidePings(routeId).filter((p) => p.deviceId !== deviceId);
@@ -1451,14 +1528,16 @@ export async function stopRideShare({ quiet = false, reason = '', waitForOnboard
                 m.showShareThanksOverlay({ points: sessionPoints });
             }).catch(() => {});
             if (!quiet) {
-                showToast('Thanks for contributing. Sharing stopped because you left the tracks.', 'info', 4000);
+                showToast('Sharing stopped. You were no longer on this corridor.', 'info', 4000);
             }
         } else if (!quiet) {
             const msg = reason === 'terminus'
-                ? 'Sharing ended at the last station'
-                : reason === 'idle'
-                    ? 'Sharing ended after 30 minutes idle'
-                    : 'Sharing ended';
+                ? 'Sharing stopped at the last station.'
+                : reason === 'direction'
+                    ? 'Sharing stopped. Your movement no longer matched this train.'
+                    : reason === 'idle'
+                        ? 'Sharing ended after 30 minutes idle'
+                        : 'Sharing ended';
             showToast(msg, 'info');
         }
         return { ok: true };
@@ -1569,8 +1648,12 @@ function cacheLocalProjectedFix(active, pos, projection, near, observation) {
         speedMps: local.speedMps,
         accuracy: local.accuracy,
         offTrackSince: 0,
+        offTrackStayUntil: 0,
+        terminusStay: Boolean(active.terminusStay),
+        directionStay: observation?.warning ? Boolean(active.directionStay) : false,
         directionObservation: observation,
         directionWarning: !!observation?.warning,
+        minProgressSeen: nextMinProgressSeen(active, active.trainId, pos.lat, pos.lng),
     };
     safeStorage.setItem(ACTIVE_KEY, JSON.stringify(stored));
     const existing = getCachedRidePings(active.routeId).filter((p) => p.deviceId !== deviceId);
@@ -1590,9 +1673,32 @@ async function processOnboardFix(pos, { forceBroadcast = false, generation = onb
     }
     if (typeof document !== 'undefined' && document.hidden) return;
     const near = nearestStationOnRoute(pos.lat, pos.lng, active.routeId);
-    if (shareReachedTerminus(active.trainId, pos.lat, pos.lng, near?.stationName || active.station)) {
-        await stopRideShare({ reason: 'terminus', waitForOnboard: false });
-        return;
+    const minProgressSeen = nextMinProgressSeen(active, active.trainId, pos.lat, pos.lng);
+    if (Number.isFinite(minProgressSeen) && minProgressSeen !== active.minProgressSeen) {
+        persistActiveSharePatch({ minProgressSeen });
+        active.minProgressSeen = minProgressSeen;
+    }
+    if (active.terminusStay) {
+        const { progress, lastIndex } = shareProgressAlongTrain(active.trainId, pos.lat, pos.lng);
+        if (progress != null && progress < lastIndex - TERMINUS_TRAVELED_SLACK) {
+            persistActiveSharePatch({ terminusStay: false });
+            active.terminusStay = false;
+        }
+    }
+    if (shareReachedTerminus(active.trainId, pos.lat, pos.lng, near?.stationName || active.station, active)) {
+        const pick = await confirmShareContinue({
+            title: 'Has this train arrived?',
+            body: `You’re at the last station for Train ${active.trainId}. Stop sharing if it has arrived, or keep going if you’re still on it.`,
+            keepLabel: 'Still on the train',
+            stopLabel: 'Yes, we’ve arrived',
+        });
+        if (pick === 'busy') return;
+        if (pick !== 'keep') {
+            await stopRideShare({ reason: 'terminus', waitForOnboard: false });
+            return;
+        }
+        persistActiveSharePatch({ terminusStay: true });
+        active.terminusStay = true;
     }
     if (active.adminOverrideRole === 'train' && isAdminAuthed()) {
         const due = forceBroadcast || Date.now() - onboardLastBroadcastAt >= adaptiveOnboardPingMs(pos.speedMps);
@@ -1627,16 +1733,40 @@ async function processOnboardFix(pos, { forceBroadcast = false, generation = onb
     });
     if (generation !== onboardGeneration) return;
     if (!projection.ok) {
-        const offTrackSince = active.offTrackSince || Date.now();
+        const now = Date.now();
+        if (active.offTrackStayUntil && now < Number(active.offTrackStayUntil)) {
+            await pauseActiveTracker({ ...active, offTrackSince: 0 }, projection.reason || 'offTrack', pos);
+            return;
+        }
+        const offTrackSince = active.offTrackSince || now;
         const decision = offTrackShareDecision({
             offTrackSince,
             distanceM: projection.distanceM,
         });
         if (decision === 'drop_far' || decision === 'drop_grace') {
-            await stopRideShare({
-                reason: decision === 'drop_far' ? 'off_track_far' : 'off_track_grace',
-                waitForOnboard: false,
+            const pick = await confirmShareContinue({
+                title: 'Still on this train?',
+                body: decision === 'drop_far'
+                    ? 'Your location is no longer on this train’s path. Sharing will stop unless you are still on it.'
+                    : 'We have not seen you on this train’s path for a few minutes. Sharing will stop unless you are still on it.',
+                keepLabel: 'I’m still on it',
+                stopLabel: 'Stop sharing',
             });
+            if (pick === 'busy') return;
+            if (pick !== 'keep') {
+                await stopRideShare({
+                    reason: decision === 'drop_far' ? 'off_track_far' : 'off_track_grace',
+                    waitForOnboard: false,
+                });
+                return;
+            }
+            const offTrackStayUntil = now + RIDE_OFFTRACK_STAY_MS;
+            persistActiveSharePatch({ offTrackSince: 0, offTrackStayUntil });
+            await pauseActiveTracker({
+                ...active,
+                offTrackSince: 0,
+                offTrackStayUntil,
+            }, projection.reason || 'offTrack', pos);
             return;
         }
         await pauseActiveTracker({ ...active, offTrackSince }, projection.reason || 'offTrack', pos);
@@ -1644,13 +1774,32 @@ async function processOnboardFix(pos, { forceBroadcast = false, generation = onb
     }
 
     const expectedHeading = journeyHeadingAtProgress(active.trainId, projection.projectedProgress);
-    const observation = updateDirectionObservation(active.directionObservation, {
+    let observation = updateDirectionObservation(active.directionObservation, {
         speedMps: pos.speedMps,
         heading: pos.heading,
         expectedHeading,
         accuracy: pos.accuracy,
         nearInterchange,
     });
+    if (observation.warning && !active.directionStay) {
+        const pick = await confirmShareContinue({
+            title: 'Still on this train?',
+            body: 'Your movement does not match this train’s direction. Sharing will stop unless you are still on it.',
+            keepLabel: 'I’m still on it',
+            stopLabel: 'Stop sharing',
+        });
+        if (pick === 'busy') return;
+        if (pick !== 'keep') {
+            await stopRideShare({ reason: 'direction', waitForOnboard: false });
+            return;
+        }
+        persistActiveSharePatch({ directionStay: true, directionWarning: false });
+        active.directionStay = true;
+        observation = { ...observation, warning: false, conflicts: 0 };
+    } else if (!observation.warning && active.directionStay) {
+        persistActiveSharePatch({ directionStay: false });
+        active.directionStay = false;
+    }
     const local = cacheLocalProjectedFix(active, pos, projection, near, observation);
     const interval = adaptiveOnboardPingMs(pos.speedMps);
     if (!navigator.onLine || (!forceBroadcast && Date.now() - onboardLastBroadcastAt < interval)) return;

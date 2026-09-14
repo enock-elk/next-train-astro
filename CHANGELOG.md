@@ -2,6 +2,14 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin, Dev Hub, Alerts, Trains near me, community chat, or other hidden-test work. No emoji and no em dashes in What’s New. Keep `APP_VERSION`, `package.json` `version`, and `public/app-version.json` aligned on each release. Changelog / What’s New may be skipped, or the heading may be only **no release notes.**
 
+## V9_09.14.5 — Ask before ending a share at the last station or off the corridor (14 Sep 2026)
+
+Sharing as a train sitting at the terminus (Pretoria for inbound 1158) no longer ends on the first GPS tick. After the rider has travelled the corridor, the last station asks whether the train has arrived. Off-track and opposite-direction movement ask whether they are still on the train, then stop only if they confirm.
+
+The live pill wake is a V at the bow. Ripples open behind the tip and travel aft, like a ship wake, instead of chevrons drifting forward.
+
+no release notes.
+
 ## V9_09.14.4 — Community posts without Firebase Admin secret (14 Sep 2026)
 
 The community worker was returning Firebase Admin env incomplete on every post and composer reply because `FIREBASE_PRIVATE_KEY` is a Wrangler secret and was not on the deployed worker. Posts now write with the signed-in Firebase ID token when Admin env is missing. The app also falls back to a direct `route_community` write instead of showing that raw error.

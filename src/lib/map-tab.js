@@ -215,9 +215,9 @@ function renderTrackingStatusCard(active, marker = null) {
     }
     const state = marker?.trackingState || active.trackingState || 'active';
     const paused = state === 'paused';
-    const at = marker?.acceptedAt || marker?.at || active.acceptedAt || active.lastPingAt || active.at;
+    const at = marker?.fixAt || active.fixAt || marker?.acceptedAt || marker?.at || active.acceptedAt || active.lastPingAt || active.at;
     const bearing = marker?.bearing ?? marker?.heading ?? active.bearing;
-    const speed = marker?.speedMps;
+    const speed = marker?.speedMps ?? active.speedMps;
     const accuracy = marker?.accuracy ?? active.accuracy;
     setTrackingText('map-tracking-title', `Tracking Train ${active.trainId}`);
     setTrackingText('map-tracking-state', paused ? 'Paused' : 'Active');
@@ -228,6 +228,7 @@ function renderTrackingStatusCard(active, marker = null) {
     setTrackingText('map-tracking-rail', trackingDistanceLabel(marker?.railDistanceM ?? active.railDistanceM));
     setTrackingText('map-tracking-accuracy', Number.isFinite(accuracy) ? `±${Math.round(accuracy)} m` : 'Unknown');
     setTrackingText('map-tracking-count', String(Math.max(1, Number(marker?.n) || 1)));
+    document.getElementById('map-tracking-warning')?.classList.toggle('hidden', !active.directionWarning);
     setTrackingText('map-tracking-restore-label', `Train ${active.trainId} · ${paused ? 'paused' : 'active'}`);
     const stateEl = document.getElementById('map-tracking-state');
     stateEl?.classList.toggle('bg-green-100', !paused);
@@ -2266,6 +2267,18 @@ export function bindMapTabUi() {
             setStatus(`You’re here · ±${Math.round(lastCoords.accuracy || 0)} m`);
         }
     });
+    setInterval(() => {
+        const card = document.getElementById('map-tracking-card');
+        const restore = document.getElementById('map-tracking-restore');
+        if (card?.classList.contains('hidden') && restore?.classList.contains('hidden')) return;
+        import('./ride-pings.js').then((ride) => {
+            const active = ride.getActiveShare?.();
+            if (!active?.trainId) return;
+            const own = (ride.getCachedRidePings?.(active.routeId) || [])
+                .find((p) => p.deviceId === getDeviceId());
+            renderTrackingStatusCard(active, own || null);
+        }).catch(() => {});
+    }, 1000);
     if (document.getElementById('view-map')?.classList.contains('active')) {
         acquireGeoWatch('map');
     }

@@ -86,6 +86,11 @@ const REVERSE_PROGRESS_TOLERANCE = 0.08;
 const CONSENSUS_MIN_BAND = 0.2;
 const ACTIVE_KEY = 'ridePingActiveV1';
 const SHARE_SESSION_KEY = 'nt_ride_share_session';
+export const ONBOARD_FAST_PING_MS = 5 * 1000;
+export const ONBOARD_MOVING_PING_MS = 10 * 1000;
+export const ONBOARD_STATIONARY_PING_MS = 25 * 1000;
+const DIRECTION_CONFLICT_MIN_SAMPLES = 3;
+const DIRECTION_CONFLICT_MIN_MS = 20 * 1000;
 
 /** @type {Record<string, () => void>} */
 const routeListeners = {};
@@ -154,14 +159,14 @@ function shareReachedTerminus(trainId, lat, lng, station) {
     return prog >= (stops.length - 1) - 0.15;
 }
 
-async function ensureAuthToken() {
+async function ensureAuthToken(forceRefresh = false) {
     if (!window.firebaseAuth) await bootFirebase();
     if (window.firebaseAuth && !window.firebaseAuth.currentUser && window.firebaseSignInAnonymously) {
         try { await window.firebaseSignInAnonymously(window.firebaseAuth); } catch { /* optional */ }
     }
     if (window.firebaseAuth?.currentUser && window.firebaseGetIdToken) {
         try {
-            return await window.firebaseGetIdToken(window.firebaseAuth.currentUser, true);
+            return await window.firebaseGetIdToken(window.firebaseAuth.currentUser, forceRefresh);
         } catch {
             return '';
         }
@@ -223,6 +228,7 @@ export async function projectTrainTrackerFix({
     trainId,
     routeId,
     previousProgress = null,
+    allowReverse = false,
     stationIndex = $globalStationIndex.get() || {},
     schedules,
 } = {}) {
@@ -253,7 +259,8 @@ export async function projectTrainTrackerFix({
         return { ok: false, state: TRACKING_STATE.PAUSED, reason: 'geometryUnavailable', geometryUnavailable: true };
     }
     const progress = projected.progress;
-    if (Number.isFinite(previousProgress) && progress < previousProgress - REVERSE_PROGRESS_TOLERANCE) {
+    const reverseTolerance = allowReverse ? 0.35 : REVERSE_PROGRESS_TOLERANCE;
+    if (Number.isFinite(previousProgress) && progress < previousProgress - reverseTolerance) {
         return {
             ok: false,
             state: TRACKING_STATE.PAUSED,
@@ -274,6 +281,54 @@ export async function projectTrainTrackerFix({
         distanceM: snap.distanceM,
         lastSeenLabel: journeyPositionLabel(stops, progress),
         bearing: alignBearingToJourney(snap.trackBearing, journeyH),
+    };
+}
+
+export function adaptiveOnboardPingMs(speedMps) {
+    const speed = Number(speedMps);
+    if (!Number.isFinite(speed) || speed < 1.5) return ONBOARD_STATIONARY_PING_MS;
+    return speed >= 3 ? ONBOARD_FAST_PING_MS : ONBOARD_MOVING_PING_MS;
+}
+
+/** Sustained mismatch detector. Stationary, inaccurate and interchange samples are not evidence. */
+export function updateDirectionObservation(previous = {}, {
+    speedMps,
+    heading,
+    expectedHeading,
+    accuracy,
+    nearInterchange = false,
+    now = Date.now(),
+} = {}) {
+    const reliable = Number(speedMps) >= 1.5
+        && Number.isFinite(heading)
+        && Number.isFinite(expectedHeading)
+        && (!Number.isFinite(accuracy) || Number(accuracy) <= 50);
+    if (nearInterchange) {
+        return {
+            conflicts: 0,
+            consistent: Number(previous.consistent || 0),
+            conflictSince: 0,
+            warning: false,
+        };
+    }
+    if (!reliable) return { ...previous, warning: !!previous.warning };
+    if (headingAgrees(Number(heading), Number(expectedHeading))) {
+        const consistent = Number(previous.consistent || 0) + 1;
+        return {
+            conflicts: 0,
+            consistent,
+            conflictSince: 0,
+            warning: consistent < 2 && !!previous.warning,
+        };
+    }
+    const conflicts = Number(previous.conflicts || 0) + 1;
+    const conflictSince = Number(previous.conflictSince || now);
+    return {
+        conflicts,
+        consistent: 0,
+        conflictSince,
+        warning: conflicts >= DIRECTION_CONFLICT_MIN_SAMPLES
+            && now - conflictSince >= DIRECTION_CONFLICT_MIN_MS,
     };
 }
 
@@ -318,7 +373,7 @@ function stopShareIdleWatch() {
 }
 
 /** Expire a share that has had no ping activity for 30 minutes (or whose TTL elapsed). */
-export async function stopShareIfIdle() {
+export async function stopShareIfIdle({ waitForOnboard = true } = {}) {
     const raw = peekStoredShare();
     if (!raw || !shareSessionIdle(raw) || idleStopInFlight) return false;
     if (Date.now() - lastIdleAttempt < 5000) return false;
@@ -326,7 +381,7 @@ export async function stopShareIfIdle() {
     idleStopInFlight = true;
     try {
         const hidden = typeof document !== 'undefined' && document.hidden;
-        await stopRideShare({ reason: 'idle', quiet: hidden });
+        await stopRideShare({ reason: 'idle', quiet: hidden, waitForOnboard });
         return true;
     } finally {
         idleStopInFlight = false;
@@ -483,6 +538,29 @@ export function nearestStationOnRoute(lat, lon, routeId = $currentRouteId.get())
         }
     }
     return best;
+}
+
+export function isTrackingInterchange(stationName, stationIndex = $globalStationIndex.get() || {}) {
+    const target = normalizeStationName(stationName || '');
+    if (!target) return false;
+    const configured = Object.values(ROUTES).some((route) =>
+        [route?.transferStation, route?.relayStation]
+            .some((name) => normalizeStationName(name || '') === target)
+    );
+    if (configured) return true;
+    const entry = Object.entries(stationIndex).find(([name]) => normalizeStationName(name) === target)?.[1];
+    const routes = entry?.routes;
+    const count = routes instanceof Set ? routes.size : (Array.isArray(routes) ? routes.length : 0);
+    return count > 1;
+}
+
+function nearTrackingInterchange(pos, routeId, stationIndex = $globalStationIndex.get() || {}) {
+    if (!pos || !Number.isFinite(pos.lat) || !Number.isFinite(pos.lng)) return false;
+    const nearest = nearestStationOnRoute(pos.lat, pos.lng, routeId);
+    if (!nearest || !isTrackingInterchange(nearest.stationName, stationIndex)) return false;
+    const accuracyM = Number.isFinite(pos.accuracy) ? Number(pos.accuracy) : 0;
+    const radiusM = Math.min(350, Math.max(250, accuracyM * 2));
+    return nearest.distKm * 1000 <= radiusM;
 }
 
 async function oneShotGps() {
@@ -1106,6 +1184,7 @@ export async function submitRideCheckIn({
     pauseReason = '',
     adminOverrideRole = '',
     overrideProjected = null,
+    projectedFix = null,
 } = {}) {
     await fetchFeatures();
     const trustedAdminOverride = isAdminAuthed() && (adminOverrideRole === 'train' || adminOverrideRole === 'person')
@@ -1160,14 +1239,17 @@ export async function submitRideCheckIn({
     if (!String(source || '').startsWith('onboard_') && source !== 'stop') {
         clearSessionPoints();
     }
-    let projection = null;
+    let projection = projectedFix?.ok ? projectedFix : null;
     let resolvedState = trackingState;
     let resolvedPauseReason = pauseReason;
     if (trainId && trustedAdminOverride === 'train' && !overrideProjected && Number.isFinite(coarseLat) && Number.isFinite(coarseLng)) {
         const path = await railPathForTrain(trainId, { routeId, region: ROUTES[routeId]?.region || 'GP' });
         overrideProjected = scoreFixToRailPath(coarseLat, coarseLng, path);
     }
-    if (trainId && !resolvedState) {
+    if (trainId && projection?.ok && !resolvedState) {
+        resolvedState = TRACKING_STATE.ACTIVE;
+        resolvedPauseReason = '';
+    } else if (trainId && !resolvedState) {
         const previousProgress = previous?.routeId === routeId && String(previous?.trainId || '') === String(trainId)
             ? previous.projectedProgress
             : null;
@@ -1258,6 +1340,11 @@ export async function submitRideCheckIn({
             railDistanceM: payload.railDistanceM,
             acceptedAt: payload.acceptedAt, lastSeenLabel: payload.lastSeenLabel, bearing: payload.bearing,
             accuracy: payload.accuracy,
+            speedMps: payload.speedMps,
+            heading: payload.heading,
+            fixAt: previous?.fixAt || now,
+            directionObservation: previous?.directionObservation || null,
+            directionWarning: !!previous?.directionWarning,
             adminOverrideRole: payload.adminOverrideRole || '',
             source: payload.source,
             offTrackSince: projection?.ok ? 0 : (previous?.offTrackSince || 0),
@@ -1298,11 +1385,13 @@ export async function submitRideCheckIn({
     }
 }
 
-export async function stopRideShare({ quiet = false, reason = '' } = {}) {
+export async function stopRideShare({ quiet = false, reason = '', waitForOnboard = true } = {}) {
     const active = peekStoredShare();
     const routeId = active?.routeId || $currentRouteId.get();
     const deviceId = getDeviceId();
     if (!routeId || !deviceId) return { ok: false };
+    stopOnboardPingLoop();
+    if (waitForOnboard) await onboardProjectionChain.catch(() => {});
     const station = active?.station || document.getElementById('station-select')?.value || 'Unknown';
     const now = Date.now();
     const payload = {
@@ -1371,12 +1460,31 @@ export async function stopRideShare({ quiet = false, reason = '' } = {}) {
 }
 
 let onboardPingTimer = 0;
+let onboardGeoUnsub = null;
+let onboardProjectionChain = Promise.resolve();
+let onboardLatestFix = null;
+let onboardPendingFix = null;
+let onboardPendingOptions = null;
+let onboardDrainRunning = false;
+let onboardLastBroadcastAt = 0;
+let onboardWatchStartedAt = 0;
+let onboardGeneration = 0;
 
 export function stopOnboardPingLoop() {
+    onboardGeneration++;
     if (onboardPingTimer) {
         clearInterval(onboardPingTimer);
         onboardPingTimer = 0;
     }
+    if (onboardGeoUnsub) {
+        onboardGeoUnsub();
+        onboardGeoUnsub = null;
+    }
+    onboardLatestFix = null;
+    onboardPendingFix = null;
+    onboardPendingOptions = null;
+    onboardLastBroadcastAt = 0;
+    onboardWatchStartedAt = 0;
 }
 
 async function pauseActiveTracker(active, reason, pos = null) {
@@ -1407,95 +1515,234 @@ async function pauseActiveTracker(active, reason, pos = null) {
     });
 }
 
-/** While attached to a train, refresh the ping so others see movement. */
+function cacheLocalProjectedFix(active, pos, projection, near, observation) {
+    const now = Date.now();
+    const deviceId = getDeviceId();
+    const local = {
+        routeId: active.routeId,
+        deviceId,
+        station: near?.stationName || active.station,
+        trainId: active.trainId,
+        destination: active.destination || null,
+        at: now,
+        acceptedAt: now,
+        fixAt: Number(pos.t || now),
+        expiresAt: active.expiresAt || now + RIDE_SHARE_IDLE_MS,
+        coarseLat: pos.lat,
+        coarseLng: pos.lng,
+        heading: Number.isFinite(pos.heading) ? pos.heading : null,
+        speedMps: Number.isFinite(pos.speedMps) ? pos.speedMps : null,
+        accuracy: Number.isFinite(pos.accuracy) ? pos.accuracy : null,
+        trackingState: TRACKING_STATE.ACTIVE,
+        projectedLat: projection.projectedLat,
+        projectedLng: projection.projectedLng,
+        projectedProgress: projection.projectedProgress,
+        routeProgressM: projection.routeProgressM,
+        railDistanceM: projection.distanceM,
+        bearing: projection.bearing,
+        lastSeenLabel: projection.lastSeenLabel,
+        source: 'onboard_local',
+    };
+    const stored = {
+        ...active,
+        station: local.station,
+        trackingState: TRACKING_STATE.ACTIVE,
+        pauseReason: '',
+        projectedLat: local.projectedLat,
+        projectedLng: local.projectedLng,
+        projectedProgress: local.projectedProgress,
+        routeProgressM: Math.round(local.routeProgressM),
+        railDistanceM: Math.round(local.railDistanceM),
+        acceptedAt: now,
+        fixAt: local.fixAt,
+        lastSeenLabel: local.lastSeenLabel,
+        bearing: local.bearing,
+        heading: local.heading,
+        speedMps: local.speedMps,
+        accuracy: local.accuracy,
+        offTrackSince: 0,
+        directionObservation: observation,
+        directionWarning: !!observation?.warning,
+    };
+    safeStorage.setItem(ACTIVE_KEY, JSON.stringify(stored));
+    const existing = getCachedRidePings(active.routeId).filter((p) => p.deviceId !== deviceId);
+    routeCache[active.routeId] = activePings([local, ...existing]);
+    notifyPingsUpdated(active.routeId);
+    return stored;
+}
+
+async function processOnboardFix(pos, { forceBroadcast = false, generation = onboardGeneration } = {}) {
+    if (generation !== onboardGeneration) return;
+    if (!pos || await stopShareIfIdle({ waitForOnboard: false })) return;
+    if (generation !== onboardGeneration) return;
+    const active = getActiveShare();
+    if (!active?.trainId) {
+        stopOnboardPingLoop();
+        return;
+    }
+    if (typeof document !== 'undefined' && document.hidden) return;
+    const near = nearestStationOnRoute(pos.lat, pos.lng, active.routeId);
+    if (shareReachedTerminus(active.trainId, pos.lat, pos.lng, near?.stationName || active.station)) {
+        await stopRideShare({ reason: 'terminus', waitForOnboard: false });
+        return;
+    }
+    if (active.adminOverrideRole === 'train' && isAdminAuthed()) {
+        const due = forceBroadcast || Date.now() - onboardLastBroadcastAt >= adaptiveOnboardPingMs(pos.speedMps);
+        if (!due) return;
+        if (generation !== onboardGeneration) return;
+        const result = await submitRideCheckIn({
+            routeId: active.routeId,
+            station: near?.stationName || active.station,
+            trainId: active.trainId,
+            destination: active.destination || null,
+            coarseLat: pos.lat,
+            coarseLng: pos.lng,
+            heading: pos.heading,
+            speedMps: pos.speedMps,
+            accuracy: pos.accuracy,
+            source: 'admin_override_train',
+            quiet: true,
+            adminOverrideRole: 'train',
+        });
+        if (result.ok) onboardLastBroadcastAt = Date.now();
+        return;
+    }
+
+    const nearInterchange = nearTrackingInterchange(pos, active.routeId);
+    const projection = await projectTrainTrackerFix({
+        lat: pos.lat,
+        lng: pos.lng,
+        trainId: active.trainId,
+        routeId: active.routeId,
+        previousProgress: active.projectedProgress,
+        allowReverse: nearInterchange,
+    });
+    if (generation !== onboardGeneration) return;
+    if (!projection.ok) {
+        const offTrackSince = active.offTrackSince || Date.now();
+        const decision = offTrackShareDecision({
+            offTrackSince,
+            distanceM: projection.distanceM,
+        });
+        if (decision === 'drop_far' || decision === 'drop_grace') {
+            await stopRideShare({
+                reason: decision === 'drop_far' ? 'off_track_far' : 'off_track_grace',
+                waitForOnboard: false,
+            });
+            return;
+        }
+        await pauseActiveTracker({ ...active, offTrackSince }, projection.reason || 'offTrack', pos);
+        return;
+    }
+
+    const expectedHeading = journeyHeadingAtProgress(active.trainId, projection.projectedProgress);
+    const observation = updateDirectionObservation(active.directionObservation, {
+        speedMps: pos.speedMps,
+        heading: pos.heading,
+        expectedHeading,
+        accuracy: pos.accuracy,
+        nearInterchange,
+    });
+    const local = cacheLocalProjectedFix(active, pos, projection, near, observation);
+    const interval = adaptiveOnboardPingMs(pos.speedMps);
+    if (!navigator.onLine || (!forceBroadcast && Date.now() - onboardLastBroadcastAt < interval)) return;
+    if (generation !== onboardGeneration) return;
+    const result = await submitRideCheckIn({
+        routeId: local.routeId,
+        station: local.station,
+        trainId: local.trainId,
+        destination: local.destination || null,
+        coarseLat: pos.lat,
+        coarseLng: pos.lng,
+        heading: pos.heading,
+        speedMps: pos.speedMps,
+        accuracy: pos.accuracy,
+        source: active.trackingState === TRACKING_STATE.PAUSED ? 'onboard_resume' : 'onboard_ping',
+        quiet: true,
+        projectedFix: projection,
+    });
+    if (result.ok) onboardLastBroadcastAt = Date.now();
+}
+
+function queueOnboardFix(pos, options) {
+    if (!pos) return;
+    onboardLatestFix = pos;
+    onboardPendingFix = pos;
+    onboardPendingOptions = {
+        forceBroadcast: !!(onboardPendingOptions?.forceBroadcast || options?.forceBroadcast),
+    };
+    if (onboardDrainRunning) return;
+    const generation = onboardGeneration;
+    onboardDrainRunning = true;
+    onboardProjectionChain = onboardProjectionChain
+        .catch(() => {})
+        .then(async () => {
+            try {
+                while (generation === onboardGeneration && onboardPendingFix) {
+                    const latest = onboardPendingFix;
+                    const pendingOptions = onboardPendingOptions || {};
+                    onboardPendingFix = null;
+                    onboardPendingOptions = null;
+                    await processOnboardFix(latest, { ...pendingOptions, generation });
+                }
+            } finally {
+                onboardDrainRunning = false;
+                if (onboardPendingFix && onboardGeoUnsub) {
+                    queueOnboardFix(onboardPendingFix, onboardPendingOptions || {});
+                }
+            }
+        });
+}
+
+function queueOnboardPause(reason, pos = null) {
+    const generation = onboardGeneration;
+    onboardProjectionChain = onboardProjectionChain
+        .catch(() => {})
+        .then(async () => {
+            if (generation !== onboardGeneration) return;
+            const current = getActiveShare();
+            if (!current?.trainId) return;
+            if (current.trackingState === TRACKING_STATE.PAUSED && current.pauseReason === reason) return;
+            await pauseActiveTracker(current, reason, pos);
+        });
+    return onboardProjectionChain;
+}
+
+/** Every accepted fix moves the local pill; Firebase receives adaptive coalesced pings. */
 export function startOnboardPingLoop() {
     stopOnboardPingLoop();
     startShareIdleWatch();
-    import('./geo-watch.js').then((g) => g.acquireGeoWatch('share')).catch(() => {});
-    const tick = async () => {
-        if (await stopShareIfIdle()) return;
-        const active = getActiveShare();
-        if (!active?.trainId) {
+    const active = getActiveShare();
+    onboardLastBroadcastAt = Number(active?.lastPingAt || active?.at || 0);
+    onboardWatchStartedAt = Date.now();
+    import('./geo-watch.js').then((g) => {
+        g.acquireGeoWatch('share');
+        onboardGeoUnsub = g.subscribeGeoFix((fix) => queueOnboardFix(fix));
+        const last = g.peekLastGeoFix();
+        if (last) queueOnboardFix(last);
+    }).catch(() => {});
+    onboardPingTimer = setInterval(async () => {
+        const current = getActiveShare();
+        if (!current?.trainId) {
             stopOnboardPingLoop();
             return;
         }
         if (typeof document !== 'undefined' && document.hidden) {
-            if (active.trackingState !== TRACKING_STATE.PAUSED || active.pauseReason !== 'staleGps') {
-                await pauseActiveTracker(active, 'staleGps');
-            }
+            await queueOnboardPause('staleGps');
             return;
         }
         if (!navigator.onLine) {
-            if (active.trackingState !== TRACKING_STATE.PAUSED || active.pauseReason !== 'offline') {
-                await pauseActiveTracker(active, 'offline');
-            }
+            await queueOnboardPause('offline');
             return;
         }
-        try {
-            const pos = await oneShotGps();
-            const near = nearestStationOnRoute(pos.lat, pos.lng, active.routeId);
-            if (shareReachedTerminus(active.trainId, pos.lat, pos.lng, near?.stationName || active.station)) {
-                await stopRideShare({ reason: 'terminus' });
-                return;
-            }
-            if (active.adminOverrideRole === 'train' && isAdminAuthed()) {
-                await submitRideCheckIn({
-                    routeId: active.routeId,
-                    station: near?.stationName || active.station,
-                    trainId: active.trainId,
-                    destination: active.destination || null,
-                    coarseLat: pos.lat,
-                    coarseLng: pos.lng,
-                    heading: pos.heading,
-                    speedMps: pos.speedMps,
-                    accuracy: pos.accuracy,
-                    source: 'admin_override_train',
-                    quiet: true,
-                    adminOverrideRole: 'train',
-                });
-                return;
-            }
-            const projection = await projectTrainTrackerFix({
-                lat: pos.lat,
-                lng: pos.lng,
-                trainId: active.trainId,
-                routeId: active.routeId,
-                previousProgress: active.projectedProgress,
-            });
-            const offPath = !projection.ok;
-            if (offPath) {
-                const offTrackSince = active.offTrackSince || Date.now();
-                const decision = offTrackShareDecision({
-                    offTrackSince,
-                    distanceM: projection.distanceM,
-                });
-                if (decision === 'drop_far' || decision === 'drop_grace') {
-                    await stopRideShare({
-                        reason: decision === 'drop_far' ? 'off_track_far' : 'off_track_grace',
-                    });
-                    return;
-                }
-                await pauseActiveTracker({ ...active, offTrackSince }, projection.reason || 'offTrack', pos);
-                return;
-            }
-            await submitRideCheckIn({
-                routeId: active.routeId,
-                station: near?.stationName || active.station,
-                trainId: active.trainId,
-                destination: active.destination || null,
-                coarseLat: pos.lat,
-                coarseLng: pos.lng,
-                heading: pos.heading,
-                speedMps: pos.speedMps,
-                accuracy: pos.accuracy,
-                source: active.trackingState === TRACKING_STATE.PAUSED ? 'onboard_resume' : 'onboard_ping',
-                quiet: true,
-            });
-        } catch {
-            await pauseActiveTracker(active, 'fixFailure');
+        const lastFixAt = Number(onboardLatestFix?.t || onboardWatchStartedAt || 0);
+        if (lastFixAt && Date.now() - lastFixAt >= RIDE_GPS_STALE_MS) {
+            await queueOnboardPause('staleGps', onboardLatestFix);
+            return;
         }
-    };
-    onboardPingTimer = setInterval(tick, 45000);
+        const due = Date.now() - onboardLastBroadcastAt >= adaptiveOnboardPingMs(onboardLatestFix?.speedMps);
+        if (due && onboardLatestFix) queueOnboardFix(onboardLatestFix, { forceBroadcast: true });
+    }, 5000);
 }
 
 /**
@@ -1704,7 +1951,7 @@ function liveBetweenRow() {
     </div>`;
 }
 
-export function openLiveTrackerSheet(trainId, routeId = $currentRouteId.get()) {
+export function openLiveTrackerSheet(trainId, routeId = $currentRouteId.get(), { silent = false } = {}) {
     const modal = document.getElementById('nt-live-tracker-modal');
     const list = document.getElementById('nt-live-tracker-list');
     const title = document.getElementById('nt-live-tracker-title');
@@ -1712,8 +1959,10 @@ export function openLiveTrackerSheet(trainId, routeId = $currentRouteId.get()) {
     if (!modal || !list || !trainId) return;
     if (!canSeeLiveShareChrome(routeId) && !iAmSharingTrain(trainId, routeId)) return;
 
-    triggerHaptic();
+    if (!silent) triggerHaptic();
     const id = String(trainId);
+    modal.dataset.trainId = id;
+    modal.dataset.routeId = String(routeId || '');
     const ranked = rankVerifiedPings(getCachedRidePings(routeId), id);
     const { stops } = findStopsForTrain(id);
     const driver = ranked[0]?.ping;
@@ -1822,6 +2071,13 @@ export function bindRideCheckInUi() {
 
     window.addEventListener('nt-features-updated', () => {
         refreshRideSeenSurface($currentRouteId.get());
+    });
+    window.addEventListener('nt-ride-pings-updated', (event) => {
+        const modal = document.getElementById('nt-live-tracker-modal');
+        if (!modal || modal.classList.contains('hidden') || !modal.dataset.trainId) return;
+        const routeId = modal.dataset.routeId || $currentRouteId.get();
+        if (event?.detail?.routeId && event.detail.routeId !== routeId) return;
+        openLiveTrackerSheet(modal.dataset.trainId, routeId, { silent: true });
     });
 
     document.getElementById('nt-live-tracker-close')?.addEventListener('click', hideLiveTrackerSheet);

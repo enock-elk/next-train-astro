@@ -18,12 +18,19 @@ import {
     TRACKER_SNAP_MAX_M,
 } from '../src/lib/rail-tracks.js';
 import {
+    adaptiveOnboardPingMs,
     compactPingsForMap,
     consensusProjectedPings,
+    isTrackingInterchange,
+    ONBOARD_FAST_PING_MS,
+    ONBOARD_MOVING_PING_MS,
+    ONBOARD_STATIONARY_PING_MS,
     pingPublicTrainId,
     projectTrainTrackerFix,
     TRACKING_STATE,
+    updateDirectionObservation,
 } from '../src/lib/ride-pings.js';
+import { refineMotionFix } from '../src/lib/geo-watch.js';
 import { readFileSync } from 'node:fs';
 import {
     WEEKDAY_REPORT_MAX_AGE_MS,
@@ -140,6 +147,54 @@ assert(alignBearingToJourney(90, 270) === 270, 'undirected east tangent flips to
 assert(alignBearingToJourney(15, 10) === 15, 'track tangent close to travel is kept');
 assert(alignBearingToJourney(null, 42) === 42, 'missing track tangent falls back to journey heading');
 
+const stationaryFix = refineMotionFix(
+    { lat: -25, lng: 28.00007, accuracy: 10, heading: null, speedMps: 1.1, t: 11000 },
+    { lat: -25, lng: 28, accuracy: 10, heading: 90, speedMps: 0, t: 1000 }
+);
+assert(stationaryFix?.speedMps === 0 && stationaryFix.stationary, 'GPS drift inside accuracy clamps to stationary');
+const movingFix = refineMotionFix(
+    { lat: -25, lng: 28.001, accuracy: 5, heading: null, speedMps: null, t: 11000 },
+    { lat: -25, lng: 28, accuracy: 5, heading: null, speedMps: null, t: 1000 }
+);
+assert(movingFix?.speedMps > 8 && movingFix?.heading > 80 && movingFix?.heading < 100, 'meaningful movement derives speed and heading');
+assert(refineMotionFix(
+    { lat: -25, lng: 28.1, accuracy: 5, heading: 90, speedMps: 5, t: 2000 },
+    { lat: -25, lng: 28, accuracy: 5, heading: 90, speedMps: 5, t: 1000 }
+) === null, 'implausible GPS jump is rejected');
+const poorAccuracyFix = refineMotionFix(
+    { lat: -25, lng: 28.0006, accuracy: 200, heading: 90, speedMps: 12, t: 6000 },
+    { lat: -25, lng: 28, accuracy: 200, heading: null, speedMps: 0, t: 1000 }
+);
+assert(poorAccuracyFix?.speedMps === 0 && poorAccuracyFix.stationary, 'poor-accuracy displacement cannot impersonate train speed');
+assert(refineMotionFix(
+    { lat: -25, lng: 28.01, accuracy: 5, heading: 90, speedMps: 10, t: 1000 },
+    { lat: -25, lng: 28, accuracy: 5, heading: 90, speedMps: 10, t: 1000 }
+) === null, 'non-newer GPS timestamp is ignored');
+assert(adaptiveOnboardPingMs(12) === ONBOARD_FAST_PING_MS, 'fast train broadcasts every 5 seconds');
+assert(adaptiveOnboardPingMs(2) === ONBOARD_MOVING_PING_MS, 'slow movement broadcasts every 10 seconds');
+assert(adaptiveOnboardPingMs(0) === ONBOARD_STATIONARY_PING_MS, 'stationary share heartbeats every 25 seconds');
+
+let directionObservation = updateDirectionObservation({}, {
+    speedMps: 10, heading: 270, expectedHeading: 90, accuracy: 8, now: 1000,
+});
+directionObservation = updateDirectionObservation(directionObservation, {
+    speedMps: 10, heading: 270, expectedHeading: 90, accuracy: 8, now: 12000,
+});
+directionObservation = updateDirectionObservation(directionObservation, {
+    speedMps: 10, heading: 270, expectedHeading: 90, accuracy: 8, now: 23000,
+});
+assert(directionObservation.warning, 'sustained reliable opposite travel raises direction warning');
+const stationaryObservation = updateDirectionObservation(directionObservation, {
+    speedMps: 0, heading: 270, expectedHeading: 90, accuracy: 8, now: 24000,
+});
+assert(stationaryObservation.warning, 'stationary sample is not evidence that clears direction warning');
+const hubObservation = updateDirectionObservation(directionObservation, {
+    speedMps: 10, heading: 270, expectedHeading: 90, accuracy: 8, nearInterchange: true, now: 24000,
+});
+assert(!hubObservation.warning && hubObservation.conflicts === 0, 'interchange proximity suspends direction enforcement');
+assert(isTrackingInterchange('KOEDOESPOORT STATION', {}), 'configured Koedoespoort transfer is tracking-lenient');
+assert(isTrackingInterchange('SHARED', { SHARED: { routes: new Set(['a', 'b']) } }), 'multi-route station is tracking-lenient');
+
 const stops = [
     { station: 'ORIGIN' },
     { station: 'MIDDLE' },
@@ -245,7 +300,12 @@ assert(geoWatchSource.includes('document.hidden'), 'geo watch pauses when the do
 assert(geoWatchSource.includes("holders.add"), 'geo watch is reference-counted by map and share');
 assert(mapPageSource.includes('nt-live-train-oval'), 'map page styles the merged ovals');
 assert(mapPageSource.includes('border-radius: 999px'), 'map marker uses a capsule oval');
-assert(!mapAppSource.includes('animateTrainMarker'), 'map marker never extrapolates movement');
+assert(mapAppSource.includes('interpolateRideMarkerLatLng'), 'remote map marker interpolates bounded received corrections');
+assert(mapAppSource.includes('let marker = rideTrainMarkers[trainId]'), 'train markers are retained by train id');
+assert(mapAppSource.includes('readableTrainLabelDeg'), 'train number has a dedicated readable angle');
+assert(mapAppSource.includes('readable > 90') && mapAppSource.includes('readable < -90'), 'train number is bounded to -90 through 90 degrees');
+assert(mapAppSource.includes('nt-live-train-wake'), 'train pill includes an aft directional wake');
+assert(mapPageSource.includes('prefers-reduced-motion: reduce'), 'train motion respects reduced-motion preference');
 assert(mapAppSource.includes('Show tracking details'), 'train popup opens tracking details');
 assert(mapAppSource.includes('Rail distance') && mapAppSource.includes('GPS accuracy'), 'train popup exposes tracking metrics');
 assert(mapViewSource.includes('id="map-tracking-card"'), 'current contributor has a bottom tracking card');
@@ -254,6 +314,18 @@ assert(mapViewSource.includes('id="map-tracking-dismiss"'), 'tracking card is di
 assert(mapTabSource.includes('Currently tracking'), 'Nearby trains shows the current tracked train status');
 assert(mapTabSource.includes('data-current-tracking-details'), 'Nearby current train opens tracking details');
 assert(mapTabSource.includes('renderTrackingStatusCard') && mapTabSource.includes('trackingCardMode'), 'tracking metrics keep updating while the card is minimized');
+assert(mapTabSource.includes("setInterval(() => {") && mapTabSource.includes('map-tracking-warning'), 'tracking dashboard refreshes its live metrics and warning');
+assert(ridePingsSource.includes('subscribeGeoFix') && ridePingsSource.includes('adaptiveOnboardPingMs'), 'train sharing consumes every fix and broadcasts adaptively');
+assert(ridePingsSource.includes('cacheLocalProjectedFix'), 'owner pill updates locally before Firebase');
+assert(ridePingsSource.includes("source: 'onboard_local'"), 'local projected position is distinct from broadcast telemetry');
+assert(ridePingsSource.includes('{ silent: true }'), 'open timetable tracker refreshes without repeated haptics');
+assert(ridePingsSource.includes('onboardGeneration'), 'stale queued writes are invalidated when sharing stops');
+assert(ridePingsSource.includes('await onboardProjectionChain'), 'stop waits behind any in-flight location write');
+assert(ridePingsSource.includes('onboardPendingFix = pos') && ridePingsSource.includes('while (generation === onboardGeneration && onboardPendingFix)'), 'slow writes coalesce queued GPS fixes to the latest sample');
+assert(ridePingsSource.includes('queueOnboardPause'), 'lifecycle pauses serialize behind location writes');
+assert(ridePingsSource.includes('onboardWatchStartedAt'), 'share can become stale before its first GPS callback');
+assert(ridePingsSource.includes('Math.min(350'), 'interchange GPS leniency has a bounded radius');
+assert(ridePingsSource.includes('firebaseGetIdToken(window.firebaseAuth.currentUser, forceRefresh)'), 'adaptive pings reuse cached auth tokens');
 assert(mapTabSource.includes("modal.id = 'nt-share-checks-modal'"), 'train sharing opens the live checks bottom sheet');
 assert(mapTabSource.includes('Restart checks'), 'live checks can be restarted');
 assert(mapTabSource.includes('Distance to selected rail path'), 'checks measure the selected train path');
@@ -332,6 +404,17 @@ const reverseFix = await projectTrainTrackerFix({
     schedules: [trackerSchedule],
 });
 assert(!reverseFix.ok && reverseFix.reason === 'reverseProgress', 'reverse journey progress pauses tracking');
+const interchangeReverseFix = await projectTrainTrackerFix({
+    lat: -25,
+    lng: 28.002,
+    trainId: '1000',
+    routeId: 'pta-pien',
+    previousProgress: 0.4,
+    allowReverse: true,
+    stationIndex,
+    schedules: [trackerSchedule],
+});
+assert(interchangeReverseFix.ok, 'interchange grace permits temporary reverse projection');
 const missingRouteGeometry = await projectTrainTrackerFix({
     lat: -25,
     lng: 28.005,

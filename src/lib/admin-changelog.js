@@ -8,6 +8,11 @@ export const ADMIN_CHANGELOG = {
     'V9_09.14.1': [
         'System Controls Experimental features: accordion per type (Map, Community, I\'m on it / live share, Delay reports, Community realtime, Push notifications, Trip price). Open a type to allow routes. Save still merges into config/features.',
         'Trip price follows the route allow-list (or a device grant). Planner fare sheet states the algorithm is still being tested, floors R7.50 to R7 like the board fare button, money SVG on Trip fare, and Adult opens the passenger profile picker.',
+        'Also ships smooth live tracking: 5-10s moving publishes, local pill interpolation, wake, heading clamp, and interchange direction grace.',
+    ],
+    'V9_09.13.7': [
+        'Active share uses each accepted fused fix locally and coalesces Firebase writes to 5-10s moving or a 25s stationary heartbeat.',
+        'Remote pills interpolate in place. Number stays within -90 to 90 degrees. Direction warnings need sustained moving samples; interchange hubs get grace.',
     ],
     'V9_09.13.6': [
         'Train oval yaw is bearing minus 90 so the long axis follows the rail tangent. Number still flips along the oval.',

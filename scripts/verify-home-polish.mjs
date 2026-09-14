@@ -376,8 +376,8 @@ assert(hubModals.includes('id="nt-admin-publish-train"'), 'admin nearby sheet ca
     assert(ridePings.includes('RIDE_OFFTRACK_GRACE_MS = 3 * 60 * 1000'), 'off-track train share has a 3 minute grace');
     assert(ridePings.includes('offTrackShareDecision'), 'off-track pause vs drop is a named decision');
     assert(!ridePings.includes('Still on this train?'), 'off-path onboard loop no longer asks a sheet');
-    assert(mapApp.includes("rotate(180deg)"), 'train number stays along the oval and flips when upside down');
-    assert(!mapApp.includes("(-deg)"), 'train number is not counter-rotated upright');
+    assert(mapApp.includes('readableTrainLabelDeg'), 'train number uses a dedicated readable rail angle');
+    assert(mapApp.includes('labelCounterYaw'), 'nested train number counter-rotates to stay within 90 degrees');
     assert(!renderer.includes('nt-live-train-pulse'), 'live board has no sharing dots');
     const timetableGrid = readFileSync(new URL('../src/lib/timetable-grid.js', import.meta.url), 'utf8');
     assert(!timetableGrid.includes('paintLiveTrainDots'), 'full timetable grid has no sharing dots');

@@ -2043,6 +2043,7 @@
             /** Rider markers from the parent Map tab (ride_pings with coarse GPS). */
             let ridePingLayer = null;
             let rideTrainMarkers = {};
+            let rideLooseMarkers = [];
             let lastRidePings = [];
             function escapePing(s) {
                 return String(s || '').replace(/[&<>"']/g, function (c) {
@@ -2067,6 +2068,14 @@
             function railOvalYawDeg(bearing) {
                 if (!Number.isFinite(bearing)) return 0;
                 return bearing - 90;
+            }
+            function readableTrainLabelDeg(bearing) {
+                var yaw = railOvalYawDeg(bearing);
+                var readable = ((yaw % 360) + 360) % 360;
+                if (readable > 180) readable -= 360;
+                if (readable > 90) readable -= 180;
+                if (readable < -90) readable += 180;
+                return readable;
             }
             function liveTrainIconSpec(zoom, trainId, ping) {
                 var z = typeof zoom === 'number' ? zoom : 12;
@@ -2102,19 +2111,21 @@
                 }
                 var deg = spec && Number.isFinite(spec.bearing) ? spec.bearing : 0;
                 var id = escapePing(String(trainId || ''));
-                var norm = ((deg % 360) + 360) % 360;
                 // Glyph is drawn east-west (long axis = CSS X). Geographic 0 is north.
                 var yaw = railOvalYawDeg(deg);
-                var flip = (norm > 90 && norm < 270) ? ' rotate(180deg)' : '';
+                // The number is nested in the yawed glyph, so its child rotation must
+                // produce the readable final angle rather than repeat the parent yaw.
+                var labelCounterYaw = readableTrainLabelDeg(deg) - yaw;
                 var numSize = id.length >= 6 ? '8px' : (id.length >= 5 ? '9px' : '10px');
                 return '<div class="' + wrapCls + '" title="Train ' + id + '">'
                     + '<span class="nt-live-train-ring" aria-hidden="true"></span>'
                     + '<span class="nt-live-train-ring nt-live-train-ring--delay" aria-hidden="true"></span>'
                     + '<span class="' + cls + '" style="transform:rotate(' + yaw + 'deg)">'
+                    + '<span class="nt-live-train-wake" aria-hidden="true"><i class="nt-live-train-wake-trace"></i><i class="nt-live-train-wake-trace"></i><i class="nt-live-train-wake-trace"></i></span>'
                     + '<span class="nt-live-train-shell" aria-hidden="true"></span>'
                     + '<span class="nt-live-train-oval nt-live-train-oval--a" aria-hidden="true"></span>'
                     + '<span class="nt-live-train-oval nt-live-train-oval--b" aria-hidden="true"></span>'
-                    + '<span class="nt-live-train-num" style="font-size:' + numSize + ';transform:' + (flip ? 'rotate(180deg)' : 'none') + '">' + id + '</span>'
+                    + '<span class="nt-live-train-num" style="font-size:' + numSize + ';transform:rotate(' + labelCounterYaw + 'deg)">' + id + '</span>'
                     + '</span></div>';
             }
             function sharingStatusCopy(count, mine) {
@@ -2148,20 +2159,105 @@
                 if (!Number.isFinite(metres)) return 'Unknown';
                 return metres < 1000 ? Math.round(metres) + ' m' : (metres / 1000).toFixed(1) + ' km';
             }
+            function stopRideMarkerInterpolation(marker, target) {
+                if (!marker) return;
+                if (marker._ntRideFrame) {
+                    cancelAnimationFrame(marker._ntRideFrame);
+                    marker._ntRideFrame = 0;
+                }
+                if (target) marker.setLatLng(target);
+            }
+            function interpolateRideMarkerLatLng(marker, target, immediate) {
+                if (!marker || !target) return;
+                stopRideMarkerInterpolation(marker);
+                var end = L.latLng(target);
+                var start = marker.getLatLng();
+                var reduceMotion = false;
+                try { reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (_) {}
+                if (immediate || reduceMotion || (start.lat === end.lat && start.lng === end.lng)) {
+                    marker.setLatLng(end);
+                    return;
+                }
+                var distance = map.distance(start, end);
+                var duration = Math.max(180, Math.min(700, distance * 8));
+                var startedAt = performance.now();
+                function frame(now) {
+                    var t = Math.max(0, Math.min(1, (now - startedAt) / duration));
+                    var eased = 1 - Math.pow(1 - t, 3);
+                    marker.setLatLng([
+                        start.lat + ((end.lat - start.lat) * eased),
+                        start.lng + ((end.lng - start.lng) * eased)
+                    ]);
+                    if (t < 1) {
+                        marker._ntRideFrame = requestAnimationFrame(frame);
+                    } else {
+                        marker._ntRideFrame = 0;
+                        marker.setLatLng(end);
+                    }
+                }
+                marker._ntRideFrame = requestAnimationFrame(frame);
+            }
+            function bindRideTrainPopupActions(marker) {
+                var ctx = marker && marker._ntRidePopupContext;
+                if (!ctx) return;
+                const btn = document.getElementById(ctx.joinId);
+                if (btn) {
+                    btn.onclick = function () {
+                        try {
+                            (window.parent || window).postMessage({
+                                type: ctx.mine ? 'nt-map-stop-share' : 'nt-map-join-train',
+                                trainId: ctx.trainId,
+                                station: ctx.station,
+                                routeId: ctx.routeId
+                            }, '*');
+                        } catch (_) {}
+                        map.closePopup();
+                    };
+                }
+                const detailsBtn = document.getElementById(ctx.detailsId);
+                if (detailsBtn) {
+                    detailsBtn.onclick = function () {
+                        try {
+                            (window.parent || window).postMessage({
+                                type: 'nt-map-show-tracking-details',
+                                trainId: ctx.trainId,
+                                routeId: ctx.routeId,
+                                mine: ctx.mine
+                            }, '*');
+                        } catch (_) {}
+                        map.closePopup();
+                    };
+                }
+                const sheetBtn = document.getElementById(ctx.sheetId);
+                if (sheetBtn) {
+                    sheetBtn.onclick = function () {
+                        try {
+                            (window.parent || window).postMessage({
+                                type: 'nt-map-open-timetable',
+                                trainId: ctx.trainId,
+                                routeId: ctx.routeId
+                            }, '*');
+                        } catch (_) {}
+                        map.closePopup();
+                    };
+                }
+            }
             function renderRidePingMarkers(pings) {
                 lastRidePings = Array.isArray(pings) ? pings : [];
-                if (ridePingLayer) {
-                    map.removeLayer(ridePingLayer);
-                    ridePingLayer = null;
-                }
+                if (!ridePingLayer) ridePingLayer = L.layerGroup().addTo(map);
+                rideLooseMarkers.forEach(function (marker) { ridePingLayer.removeLayer(marker); });
+                rideLooseMarkers = [];
                 if (!pings || !pings.length) {
+                    Object.keys(rideTrainMarkers).forEach(function (trainId) {
+                        stopRideMarkerInterpolation(rideTrainMarkers[trainId]);
+                        ridePingLayer.removeLayer(rideTrainMarkers[trainId]);
+                        delete rideTrainMarkers[trainId];
+                    });
                     applyShareHidesUserDot(false);
                     return;
                 }
-                const group = L.layerGroup();
                 const trains = {};
                 const loose = [];
-                rideTrainMarkers = {};
                 pings.forEach(function (p) {
                     if (typeof p.lat !== 'number' || typeof p.lng !== 'number') return;
                     if (p.trainId) {
@@ -2174,7 +2270,9 @@
                 });
                 applyShareHidesUserDot(mineOnTrain);
 
+                const renderedTrainIds = {};
                 Object.keys(trains).forEach(function (trainId) {
+                    renderedTrainIds[trainId] = true;
                     const list = trains[trainId];
                     // Parent sends one robust, route-projected consensus marker.
                     // Never average again here: a second mean can move it off rail.
@@ -2200,7 +2298,6 @@
                         iconSize: [spec.w, spec.h],
                         iconAnchor: [Math.round(spec.w / 2), Math.round(spec.h / 2)]
                     });
-                    const marker = L.marker([lat, lng], { icon: icon, zIndexOffset: 800, keyboard: true });
                     const joinId = 'nt-join-train-' + String(trainId).replace(/[^a-zA-Z0-9_-]/g, '');
                     const sheetId = 'nt-tt-train-' + String(trainId).replace(/[^a-zA-Z0-9_-]/g, '');
                     const actionBtn = mine
@@ -2209,7 +2306,7 @@
                     const paused = newest.trackingState === 'paused' || isPingGpsStale(newest);
                     const status = paused ? 'Paused' : 'Active';
                     const detailsId = 'nt-track-details-' + String(trainId).replace(/[^a-zA-Z0-9_-]/g, '');
-                    marker.bindPopup(
+                    const popupHtml =
                         "<div class='nt-live-train-pop'>"
                         + "<div class='nt-live-train-pop-head'><p class='nt-live-train-pop-title'>Train " + escapePing(trainId) + "</p>"
                         + "<span class='nt-live-train-status nt-live-train-status--" + (paused ? 'paused' : 'active') + "'>" + status + "</span></div>"
@@ -2227,58 +2324,43 @@
                         + "<button type='button' id='" + detailsId + "' class='nt-live-train-pop-btn nt-live-train-pop-btn--details'>Show tracking details</button>"
                         + actionBtn
                         + "<button type='button' id='" + sheetId + "' class='nt-live-train-pop-btn nt-live-train-pop-btn--sheet'>Timetable</button>"
-                        + "</div></div>"
-                    );
-                    marker.on('popupopen', function () {
-                        const btn = document.getElementById(joinId);
-                        if (btn) {
-                            btn.onclick = function () {
-                                try {
-                                    (window.parent || window).postMessage({
-                                        type: mine ? 'nt-map-stop-share' : 'nt-map-join-train',
-                                        trainId: trainId,
-                                        station: list[0].station || '',
-                                        routeId: list[0].routeId || null
-                                    }, '*');
-                                } catch (_) {}
-                                map.closePopup();
-                            };
-                        }
-                        const detailsBtn = document.getElementById(detailsId);
-                        if (detailsBtn) {
-                            detailsBtn.onclick = function () {
-                                try {
-                                    (window.parent || window).postMessage({
-                                        type: 'nt-map-show-tracking-details',
-                                        trainId: trainId,
-                                        routeId: list[0].routeId || null,
-                                        mine: mine
-                                    }, '*');
-                                } catch (_) {}
-                                map.closePopup();
-                            };
-                        }
-                        const sheetBtn = document.getElementById(sheetId);
-                        if (sheetBtn) {
-                            sheetBtn.onclick = function () {
-                                try {
-                                    (window.parent || window).postMessage({
-                                        type: 'nt-map-open-timetable',
-                                        trainId: trainId,
-                                        routeId: list[0].routeId || null
-                                    }, '*');
-                                } catch (_) {}
-                                map.closePopup();
-                            };
-                        }
-                    });
-                    marker.addTo(group);
-                    rideTrainMarkers[trainId] = marker;
+                        + "</div></div>";
+                    let marker = rideTrainMarkers[trainId];
+                    if (!marker) {
+                        marker = L.marker([lat, lng], { icon: icon, zIndexOffset: 800, keyboard: true });
+                        marker.bindPopup(popupHtml);
+                        marker.on('popupopen', function () { bindRideTrainPopupActions(marker); });
+                        marker.addTo(ridePingLayer);
+                        rideTrainMarkers[trainId] = marker;
+                    } else {
+                        marker.setIcon(icon);
+                        marker.setPopupContent(popupHtml);
+                    }
+                    marker._ntRidePopupContext = {
+                        trainId: trainId,
+                        joinId: joinId,
+                        detailsId: detailsId,
+                        sheetId: sheetId,
+                        mine: mine,
+                        station: list[0].station || '',
+                        routeId: list[0].routeId || null
+                    };
+                    interpolateRideMarkerLatLng(marker, [lat, lng], mine || paused);
+                    if (marker.isPopupOpen && marker.isPopupOpen()) {
+                        requestAnimationFrame(function () { bindRideTrainPopupActions(marker); });
+                    }
+                });
+
+                Object.keys(rideTrainMarkers).forEach(function (trainId) {
+                    if (renderedTrainIds[trainId]) return;
+                    stopRideMarkerInterpolation(rideTrainMarkers[trainId]);
+                    ridePingLayer.removeLayer(rideTrainMarkers[trainId]);
+                    delete rideTrainMarkers[trainId];
                 });
 
                 loose.forEach(function (p) {
                     const mine = !!p.mine;
-                    L.circleMarker([p.lat, p.lng], {
+                    const marker = L.circleMarker([p.lat, p.lng], {
                         radius: mine ? 9 : 8,
                         color: mine ? '#1d4ed8' : '#d97706',
                         weight: 2,
@@ -2288,9 +2370,9 @@
                         "<div class='text-xs font-bold text-center text-gray-900'>"
                         + (mine ? 'You · ' : '') + (p.station || 'Person')
                         + "<br><span class='text-[10px] text-gray-500 font-normal'>visible until you stop</span></div>"
-                    ).addTo(group);
+                    ).addTo(ridePingLayer);
+                    rideLooseMarkers.push(marker);
                 });
-                ridePingLayer = group.addTo(map);
             }
 
             // Parent Map tab / external nudge (locate + trip contribute markers)

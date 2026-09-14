@@ -8,6 +8,18 @@ System Controls Experimental features lists Map, Community, I'm on it / live sha
 
 Trip price now follows that route allow-list (device grants and admin still unlock it). The planner fare sheet says the algorithm is still being developed and tested. Displayed fares use the same whole-rand floor as the Next Train fare button (R7.50 becomes R7). Trip fare has a money icon on the left. Adult is a button that opens the passenger profile picker.
 
+Also ships the smooth live-tracking work from V9_09.13.7.
+
+no release notes.
+
+## V9_09.13.7 — Smooth live train tracking (13 Sep 2026)
+
+An active share now consumes each accepted fused-location fix locally and coalesces ordered Firebase updates to 5-10 seconds while moving or a 25-second stationary heartbeat. Accuracy-aware motion filtering suppresses low-speed GPS drift, rejects implausible jumps, and derives heading only from meaningful displacement.
+
+The owner's rail-projected pill and tracking card update before the network round trip. Remote Leaflet markers are retained and interpolate bounded corrections instead of being destroyed and recreated. The pill carries an aft wake for direction, pauses that wake when tracking pauses, and keeps its number within -90 to 90 degrees, including westbound horizontal tracks.
+
+Direction mismatch warnings require sustained, reliable moving samples. Configured and multi-route interchange stations suspend that evidence and reverse-progress enforcement nearby, including Koedoespoort. The map tracking card and open timetable tracker refresh while visible.
+
 no release notes.
 
 ## V9_09.13.6 — Rail oval yaw and fused map GPS (13 Sep 2026)

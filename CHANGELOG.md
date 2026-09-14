@@ -2,6 +2,14 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin, Dev Hub, Alerts, Trains near me, community chat, or other hidden-test work. No emoji and no em dashes in What’s New. Keep `APP_VERSION`, `package.json` `version`, and `public/app-version.json` aligned on each release. Changelog / What’s New may be skipped, or the heading may be only **no release notes.**
 
+## V9_09.14.1 — Experimental feature accordions and trip fare sheet (14 Sep 2026)
+
+System Controls Experimental features lists Map, Community, I'm on it / live share, Delay reports, Community realtime, Push notifications, and Trip price. Each type is an accordion that reveals the routes an operator can allow. Save writes those keys into `config/features` and keeps any other existing flags.
+
+Trip price now follows that route allow-list (device grants and admin still unlock it). The planner fare sheet says the algorithm is still being developed and tested. Displayed fares use the same whole-rand floor as the Next Train fare button (R7.50 becomes R7). Trip fare has a money icon on the left. Adult is a button that opens the passenger profile picker.
+
+no release notes.
+
 ## V9_09.13.6 — Rail oval yaw and fused map GPS (13 Sep 2026)
 
 Live-share train ovals were rotating by geographic bearing while the glyph is drawn east-west, so the long axis sat across the rail (upright on east-west curves). Yaw is now bearing minus 90. Snap and path projection pass a local track tangent (`trackBearing`) and align it to scheduled travel.

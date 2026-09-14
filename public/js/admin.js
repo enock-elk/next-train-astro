@@ -1853,6 +1853,8 @@ const Admin = {
         const maintModeBody = document.getElementById('maint-mode-body');
         maintModeBody?.classList.add('hidden');
         document.getElementById('maint-mode-chevron')?.classList.add('-rotate-90');
+        document.querySelectorAll('.exp-feat-body').forEach((el) => el.classList.add('hidden'));
+        document.querySelectorAll('.exp-feat-chevron').forEach((el) => el.classList.add('-rotate-90'));
         [
             'sched-override-body',
             'auth-providers-body',
@@ -15731,7 +15733,71 @@ const Admin = {
             { key: 'delayReportsUi', label: 'Delay reports' },
             { key: 'communityRealtime', label: 'Community realtime' },
             { key: 'pushNotify', label: 'Push notifications' },
+            { key: 'tripPrice', label: 'Trip price' },
         ];
+    },
+
+    expFeatureControlIds: (key) => {
+        if (key === 'mapTab') {
+            return {
+                enabled: 'exp-map-enabled',
+                routes: 'exp-map-routes',
+                all: 'exp-map-all',
+                header: 'exp-feat-mapTab-header',
+                body: 'exp-feat-mapTab-body',
+                chevron: 'exp-feat-mapTab-chevron',
+                count: 'exp-feat-mapTab-count',
+            };
+        }
+        if (key === 'communityTab') {
+            return {
+                enabled: 'exp-community-enabled',
+                routes: 'exp-community-routes',
+                all: 'exp-community-all',
+                header: 'exp-feat-communityTab-header',
+                body: 'exp-feat-communityTab-body',
+                chevron: 'exp-feat-communityTab-chevron',
+                count: 'exp-feat-communityTab-count',
+            };
+        }
+        return {
+            enabled: `exp-feat-${key}-enabled`,
+            routes: `exp-feat-${key}-routes`,
+            all: `exp-feat-${key}-all`,
+            header: `exp-feat-${key}-header`,
+            body: `exp-feat-${key}-body`,
+            chevron: `exp-feat-${key}-chevron`,
+            count: `exp-feat-${key}-count`,
+        };
+    },
+
+    renderExpFeatureAccordions: () => {
+        return Admin.grantableFeatures().map((f) => {
+            const ids = Admin.expFeatureControlIds(f.key);
+            const label = typeof ntAdminSecureEscape === 'function' ? ntAdminSecureEscape(f.label) : String(f.label || '');
+            return `
+                        <div class="rounded-lg border border-teal-200 dark:border-teal-800 overflow-hidden bg-white/50 dark:bg-gray-900/20">
+                            <button type="button" id="${ids.header}" class="exp-feat-header w-full px-3 py-2.5 text-left flex items-center justify-between gap-2 focus:outline-none hover:bg-teal-100/60 dark:hover:bg-teal-900/40 transition-colors">
+                                <span class="text-sm font-bold text-teal-900 dark:text-teal-100">${label}</span>
+                                <span class="flex items-center gap-2 shrink-0">
+                                    <span id="${ids.count}" class="text-[9px] font-black uppercase tracking-widest text-teal-600 dark:text-teal-300">Off</span>
+                                    <svg id="${ids.chevron}" class="exp-feat-chevron w-4 h-4 text-teal-700 dark:text-teal-300 transform transition-transform -rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                                </span>
+                            </button>
+                            <div id="${ids.body}" class="exp-feat-body hidden px-3 pb-3 space-y-2 border-t border-teal-200 dark:border-teal-800">
+                                <label class="flex items-center justify-between gap-3 pt-2">
+                                    <span class="text-xs font-bold text-teal-900 dark:text-teal-100">Allow this feature</span>
+                                    <input type="checkbox" id="${ids.enabled}" class="rounded border-teal-400 text-teal-600 focus:ring-teal-500">
+                                </label>
+                                <label class="flex items-center gap-2 text-[11px] font-bold text-teal-800 dark:text-teal-200 cursor-pointer">
+                                    <input type="checkbox" id="${ids.all}" class="exp-feat-all rounded border-teal-400 text-teal-600 focus:ring-teal-500" data-exp-key="${f.key}">
+                                    All routes
+                                </label>
+                                <p class="text-[9px] font-black uppercase tracking-widest text-teal-700 dark:text-teal-300">Allowed routes</p>
+                                <div id="${ids.routes}" class="max-h-36 overflow-y-auto custom-scrollbar space-y-1 rounded-lg border border-teal-200 dark:border-teal-800/60 bg-white/60 dark:bg-gray-900/30 p-2"></div>
+                            </div>
+                        </div>`;
+        }).join('');
     },
 
     openFeedbackBetaGrant: async (deviceId) => {
@@ -17923,23 +17989,10 @@ const Admin = {
                         </span>
                         <svg id="exp-features-chevron" class="w-4 h-4 transform transition-transform -rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
                     </button>
-                    <div id="exp-features-body" class="hidden p-4 space-y-4">
-                        <p class="text-[10px] text-teal-700 dark:text-teal-300 leading-snug">Show Map or Community to commuters who have a selected route pinned. Those testers can also open Account to create a Next Train login. Viewing another corridor does not unlock the tabs.</p>
-                        <div class="space-y-2">
-                            <label class="flex items-center justify-between gap-3">
-                                <span class="text-sm font-bold text-teal-900 dark:text-teal-100">Map tab</span>
-                                <input type="checkbox" id="exp-map-enabled" class="rounded border-teal-400 text-teal-600 focus:ring-teal-500">
-                            </label>
-                            <p class="text-[9px] font-black uppercase tracking-widest text-teal-700 dark:text-teal-300">Pinned routes for Map</p>
-                            <div id="exp-map-routes" class="max-h-36 overflow-y-auto custom-scrollbar space-y-1 rounded-lg border border-teal-200 dark:border-teal-800/60 bg-white/60 dark:bg-gray-900/30 p-2"></div>
-                        </div>
-                        <div class="space-y-2">
-                            <label class="flex items-center justify-between gap-3">
-                                <span class="text-sm font-bold text-teal-900 dark:text-teal-100">Community tab</span>
-                                <input type="checkbox" id="exp-community-enabled" class="rounded border-teal-400 text-teal-600 focus:ring-teal-500">
-                            </label>
-                            <p class="text-[9px] font-black uppercase tracking-widest text-teal-700 dark:text-teal-300">Pinned routes for Community</p>
-                            <div id="exp-community-routes" class="max-h-36 overflow-y-auto custom-scrollbar space-y-1 rounded-lg border border-teal-200 dark:border-teal-800/60 bg-white/60 dark:bg-gray-900/30 p-2"></div>
+                    <div id="exp-features-body" class="hidden p-4 space-y-3">
+                        <p class="text-[10px] text-teal-700 dark:text-teal-300 leading-snug">Each feature type is an accordion. Open one to allow it on selected routes. Map and Community still need a matching pin. Other features follow the corridor the commuter is on. Per-device Feedback Options grants still unlock a feature without a route.</p>
+                        <div id="exp-features-accordions" class="space-y-2">
+                            ${Admin.renderExpFeatureAccordions()}
                         </div>
                         <button type="button" id="exp-features-save" class="w-full bg-teal-600 hover:bg-teal-700 text-white font-bold py-2.5 rounded-lg text-xs uppercase tracking-wide focus:outline-none">Save experimental features</button>
                     </div>
@@ -18350,13 +18403,12 @@ const Admin = {
         const expFeaturesHeader = document.getElementById('exp-features-header');
         const expFeaturesBody = document.getElementById('exp-features-body');
         const expFeaturesChevron = document.getElementById('exp-features-chevron');
-        const expMapEnabled = document.getElementById('exp-map-enabled');
-        const expCommunityEnabled = document.getElementById('exp-community-enabled');
-        const expMapRoutes = document.getElementById('exp-map-routes');
-        const expCommunityRoutes = document.getElementById('exp-community-routes');
         const expFeaturesSave = document.getElementById('exp-features-save');
-        const expMapSelected = new Set();
-        const expCommunitySelected = new Set();
+        const expFeatureState = {};
+        let expFeaturesHydrated = false;
+        Admin.grantableFeatures().forEach((f) => {
+            expFeatureState[f.key] = { enabled: false, routes: new Set(), allRoutes: false };
+        });
 
         const listExpRoutes = () => {
             const routesObj = (typeof ROUTES !== 'undefined' && ROUTES) || window.ROUTES || {};
@@ -18365,45 +18417,101 @@ const Admin = {
                 .sort((a, b) => String(a.region || '').localeCompare(String(b.region || '')) || String(a.name || a.id).localeCompare(String(b.name || b.id)));
         };
 
-        const paintExpRouteBox = (box, selected) => {
-            if (!box) return;
+        const expFeatCountLabel = (state) => {
+            if (!state?.enabled) return 'Off';
+            if (state.allRoutes) return 'All routes';
+            const n = state.routes.size;
+            return n ? `${n} route${n === 1 ? '' : 's'}` : 'No routes';
+        };
+
+        const paintExpFeatCount = (key) => {
+            const ids = Admin.expFeatureControlIds(key);
+            const countEl = document.getElementById(ids.count);
+            if (countEl) countEl.textContent = expFeatCountLabel(expFeatureState[key]);
+        };
+
+        const paintExpRouteBox = (key) => {
+            const ids = Admin.expFeatureControlIds(key);
+            const box = document.getElementById(ids.routes);
+            const state = expFeatureState[key];
+            if (!box || !state) return;
             const esc = (typeof escapeHTML === 'function')
                 ? escapeHTML
                 : (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+            const disabled = state.allRoutes ? 'disabled' : '';
             box.innerHTML = listExpRoutes().map((r) => {
                 const label = Admin.formatRouteLabelPlain
                     ? Admin.formatRouteLabelPlain(r.name || r.id)
                     : (r.name || r.id);
-                const checked = selected.has(r.id) ? 'checked' : '';
-                return `<label class="flex items-start gap-2 text-[10px] text-teal-900 dark:text-teal-100 cursor-pointer py-0.5">
-                    <input type="checkbox" class="exp-route-cb mt-0.5 rounded border-teal-300 text-teal-600 focus:ring-teal-500" value="${esc(r.id)}" ${checked}>
+                const checked = state.allRoutes || state.routes.has(r.id) ? 'checked' : '';
+                return `<label class="flex items-start gap-2 text-[10px] text-teal-900 dark:text-teal-100 cursor-pointer py-0.5 ${state.allRoutes ? 'opacity-60' : ''}">
+                    <input type="checkbox" class="exp-route-cb mt-0.5 rounded border-teal-300 text-teal-600 focus:ring-teal-500" data-exp-key="${esc(key)}" value="${esc(r.id)}" ${checked} ${disabled}>
                     <span><span class="font-black text-teal-600 dark:text-teal-300">${esc(r.region || '')}</span> · ${esc(label)}</span>
                 </label>`;
             }).join('') || '<p class="text-[10px] text-teal-500 italic">No routes loaded.</p>';
             box.querySelectorAll('.exp-route-cb').forEach((cb) => {
                 cb.onchange = () => {
-                    if (cb.checked) selected.add(cb.value);
-                    else selected.delete(cb.value);
+                    const st = expFeatureState[cb.getAttribute('data-exp-key')];
+                    if (!st || st.allRoutes) return;
+                    if (cb.checked) st.routes.add(cb.value);
+                    else st.routes.delete(cb.value);
+                    paintExpFeatCount(cb.getAttribute('data-exp-key'));
                 };
             });
+            paintExpFeatCount(key);
+        };
+
+        const bindExpFeatureControls = (key) => {
+            const ids = Admin.expFeatureControlIds(key);
+            const header = document.getElementById(ids.header);
+            const body = document.getElementById(ids.body);
+            const chevron = document.getElementById(ids.chevron);
+            const enabled = document.getElementById(ids.enabled);
+            const all = document.getElementById(ids.all);
+            if (header && body) {
+                header.onclick = () => {
+                    body.classList.toggle('hidden');
+                    if (body.classList.contains('hidden')) chevron?.classList.add('-rotate-90');
+                    else chevron?.classList.remove('-rotate-90');
+                };
+            }
+            if (enabled) {
+                enabled.onchange = () => {
+                    expFeatureState[key].enabled = !!enabled.checked;
+                    paintExpFeatCount(key);
+                };
+            }
+            if (all) {
+                all.onchange = () => {
+                    expFeatureState[key].allRoutes = !!all.checked;
+                    paintExpRouteBox(key);
+                };
+            }
+            paintExpRouteBox(key);
         };
 
         const applyExpFeaturesToForm = (cfg) => {
-            const map = cfg?.mapTab || {};
-            const community = cfg?.communityTab || {};
-            if (expMapEnabled) expMapEnabled.checked = !!map.enabled;
-            if (expCommunityEnabled) expCommunityEnabled.checked = !!community.enabled;
-            expMapSelected.clear();
-            expCommunitySelected.clear();
-            (Array.isArray(map.routeIds) ? map.routeIds : []).forEach((id) => {
-                if (id && id !== '*') expMapSelected.add(String(id));
+            Admin.grantableFeatures().forEach((f) => {
+                const raw = cfg?.[f.key] || {};
+                const state = expFeatureState[f.key];
+                if (!state) return;
+                state.enabled = !!raw.enabled;
+                state.allRoutes = Array.isArray(raw.routeIds) && raw.routeIds.includes('*');
+                state.routes.clear();
+                (Array.isArray(raw.routeIds) ? raw.routeIds : []).forEach((id) => {
+                    if (id && id !== '*') state.routes.add(String(id));
+                });
+                const ids = Admin.expFeatureControlIds(f.key);
+                const enabled = document.getElementById(ids.enabled);
+                const all = document.getElementById(ids.all);
+                if (enabled) enabled.checked = state.enabled;
+                if (all) all.checked = state.allRoutes;
+                paintExpRouteBox(f.key);
             });
-            (Array.isArray(community.routeIds) ? community.routeIds : []).forEach((id) => {
-                if (id && id !== '*') expCommunitySelected.add(String(id));
-            });
-            paintExpRouteBox(expMapRoutes, expMapSelected);
-            paintExpRouteBox(expCommunityRoutes, expCommunitySelected);
+            expFeaturesHydrated = true;
         };
+
+        Admin.grantableFeatures().forEach((f) => bindExpFeatureControls(f.key));
 
         if (expFeaturesHeader && expFeaturesBody) {
             expFeaturesHeader.onclick = () => {
@@ -18419,8 +18527,6 @@ const Admin = {
                 else authProvidersChevron?.classList.remove('-rotate-90');
             };
         }
-        paintExpRouteBox(expMapRoutes, expMapSelected);
-        paintExpRouteBox(expCommunityRoutes, expCommunitySelected);
         const SCHED_DAY_TYPES_WC = [
             { value: 'public_holiday', label: 'Public Holiday sheets' },
             { value: 'saturday', label: 'Saturday sheets' },
@@ -18617,11 +18723,9 @@ const Admin = {
                     const resFeat = await fetch(`${dynamicEndpoint}config/features.json`);
                     if (resFeat.ok) {
                         const featCfg = await resFeat.json();
-                        if (featCfg && typeof featCfg === 'object' && !featCfg.error) {
-                            applyExpFeaturesToForm(featCfg);
-                        }
+                        applyExpFeaturesToForm(featCfg && typeof featCfg === 'object' && !featCfg.error ? featCfg : {});
                     }
-                } catch (fe) { /* optional config */ }
+                } catch (fe) { /* leave unhydrated so save cannot wipe live flags */ }
 
                 try {
                     const resAuthProviders = await fetch(`${dynamicEndpoint}config/auth_providers.json`);
@@ -18673,6 +18777,10 @@ const Admin = {
                         if (typeof showToast === 'function') showToast('Authentication required.', 'error');
                         return;
                     }
+                    if (!expFeaturesHydrated) {
+                        if (typeof showToast === 'function') showToast('Experimental features have not loaded yet.', 'error');
+                        return;
+                    }
                     const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
                     let existing = {};
                     try {
@@ -18684,17 +18792,16 @@ const Admin = {
                     } catch { /* start from empty */ }
                     const payload = {
                         ...existing,
-                        mapTab: {
-                            enabled: !!expMapEnabled?.checked,
-                            routeIds: [...expMapSelected],
-                        },
-                        communityTab: {
-                            enabled: !!expCommunityEnabled?.checked,
-                            routeIds: [...expCommunitySelected],
-                        },
                         updatedAt: Date.now(),
                         updatedBy: Admin.currentUser?.email || 'Admin',
                     };
+                    Admin.grantableFeatures().forEach((f) => {
+                        const state = expFeatureState[f.key] || { enabled: false, routes: new Set(), allRoutes: false };
+                        payload[f.key] = {
+                            enabled: !!state.enabled,
+                            routeIds: state.allRoutes ? ['*'] : [...state.routes],
+                        };
+                    });
                     const res = await window.guardianFetch(`${dynamicEndpoint}config/features.json?auth=${secret}`, {
                         method: 'PUT',
                         body: JSON.stringify(payload),

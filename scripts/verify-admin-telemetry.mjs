@@ -152,6 +152,7 @@ ok(adminJs.includes("id: 'grid'") && adminJs.includes("id: 'exclusions'"), 'GSM 
 ok(adminJs.includes("maintModeBody?.classList.add('hidden')"), 'maintenance accordion is forced closed');
 ok(adminJs.includes('collapseSystemControlAccordions'), 'System Control reopens with every accordion closed');
 ok(adminJs.includes("'exp-features-body'"), 'experimental features accordion is included in the collapse set');
+ok(adminJs.includes(".exp-feat-body") || adminJs.includes('.exp-feat-body'), 'nested feature accordions collapse with System Control');
 ok(adminJs.includes('bindGsmSwipe'), 'Global State Monitor binds swipe between tabs');
 ok(adminJs.includes("bindGsmSwipe(document.getElementById('gsm-list'))"), 'GSM swipe works on the item list');
 ok(adminJs.includes('Snapshot generated: ${Admin.formatDate(Date.now())}'), 'DAU export uses 12 Sept dates');

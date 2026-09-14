@@ -22,6 +22,7 @@ assert((featuresSrc.match(/tripPrice:\s*\{\s*enabled:\s*false/g) || []).length >
 
 const chrome = readFileSync(join(ROOT, 'src/lib/admin-chrome.js'), 'utf8');
 assert(chrome.includes("surface === 'tripPrice'"), 'admin-chrome unlocks tripPrice for granted devices');
+assert(chrome.includes('FEATURE_KEYS.TRIP_PRICE'), 'trip price reads the tripPrice allow-list');
 assert(chrome.includes('isAdminAuthed()'), 'admins still unlock all pilot surfaces');
 
 assert(suggestZoneFromKm(15) === 'Z1', '15 km is Z1');
@@ -38,6 +39,7 @@ assert(FARE_CONFIG.offPeakEveryDay === false, 'off-peak is weekday-only');
     assert(sat && sat.isOffPeak === false, `Saturday 11:00 must be peak, got ${JSON.stringify(sat)}`);
     const wk = computeZoneFareForTrip('Z2', { dayType: 'weekday', depTime: '11:00' });
     assert(wk && wk.isOffPeak === true, `weekday 11:00 must be off-peak, got ${JSON.stringify(wk)}`);
+    assert(wk.price === 7 && wk.priceLabel === '7', `Z2 weekday off-peak floors R7.50 to R7, got ${JSON.stringify(wk)}`);
     const peak = computeZoneFareForTrip('Z2', { dayType: 'weekday', depTime: '07:30' });
     assert(peak && peak.isOffPeak === false, `weekday 07:30 must be peak, got ${JSON.stringify(peak)}`);
 }
@@ -45,6 +47,10 @@ assert(FARE_CONFIG.offPeakEveryDay === false, 'off-peak is weekday-only');
 const ui = readFileSync(join(ROOT, 'src/lib/planner-ui.js'), 'utf8');
 assert(ui.includes('data-nt-trip-fare'), 'planner header has the fare button');
 assert(ui.includes('TRIP FARE:'), 'fare label is TRIP FARE on one line');
+assert(ui.includes('plannerMoneySvg') || ui.includes('M3 7.5h13.5'), 'trip fare button has a money SVG');
+assert(ui.includes('planner-fare-profile-btn'), 'Adult in the fare sheet is a profile button');
+assert(ui.includes('openPassengerTypePicker'), 'Adult opens the passenger profile picker');
+assert(ui.includes('roundBoardFare'), 'planner uses the board whole-rand floor');
 assert(ui.includes('border-b border-dotted'), 'TRIP FARE uses a dotted underline');
 assert(ui.includes('getSmoothTripDistanceKm'), 'fare uses smoothed rail distance');
 assert(ui.includes('getCrowFliesTripKm'), 'fare also computes first-to-last straight-line km');
@@ -69,6 +75,8 @@ assert(ui.includes('planner-fare-breakdown-sheet'), 'fare sheet is wired');
 
 const modal = readFileSync(join(ROOT, 'src/components/PlannerModals.astro'), 'utf8');
 assert(modal.includes('id="planner-fare-breakdown-sheet"'), 'fare bottom sheet markup exists');
+assert(modal.includes('The price algorithm is still being developed and tested, so it may not be accurate.'), 'fare sheet warns the algorithm is experimental');
+assert(modal.includes('Trip fare') && modal.includes('M3 7.5h13.5'), 'Trip fare title has a money SVG on the left');
 
 if (failures.length) {
     console.error(`verify-trip-price: ${failures.length} failed`);

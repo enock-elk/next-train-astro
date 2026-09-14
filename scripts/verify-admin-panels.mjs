@@ -161,6 +161,10 @@ for (const id of requiredIds) {
     assert(admin.includes(`id="${id}"`), `admin still exposes #${id}`);
 }
 
+assert(admin.includes('renderExpFeatureAccordions'), 'experimental features render as per-type accordions');
+assert(admin.includes("I'm on it / live share") && admin.includes('Delay reports') && admin.includes('Community realtime') && admin.includes('Push notifications') && admin.includes('Trip price'), 'System Controls lists every experimental feature type');
+assert(admin.includes('exp-feat-${key}-header') || admin.includes('expFeatureControlIds'), 'each feature type has an accordion header');
+
 assert(admin.includes('showCancelledOnMap'), 'incidents persist the map cancelled-station toggle');
 assert(!/id="disr-show-map"[^>]*checked/.test(admin), 'show cancelled station on map defaults off');
 assert(admin.includes('applyDays'), 'incidents persist cancellation days');

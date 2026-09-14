@@ -7,7 +7,8 @@
  *   delayReportsUi:    { enabled: true, routeIds: ["*"] },
  *   pushNotify:        { enabled: true, routeIds: ["pta-pien", "ct-bellv"] },
  *   mapTab:            { enabled: true, routeIds: ["pta-kempton"] },
- *   communityTab:      { enabled: true, routeIds: ["pta-kempton"] }
+ *   communityTab:      { enabled: true, routeIds: ["pta-kempton"] },
+ *   tripPrice:         { enabled: true, routeIds: ["pta-pien"] }
  * }
  *
  * Lab (`lab.nexttrain.co.za` or PUBLIC_LAB_MODE=true): missing/empty config →

@@ -31,6 +31,7 @@ import { enterFeedbackReplyMode, openFeedbackModal } from './hub.js';
 import { prepareRichHtml } from './rich-text.js';
 import { trackAnalyticsEvent } from './analytics.js';
 import { canAccessPilotSurface } from './admin-chrome.js';
+import { FEATURE_KEYS, isFeatureEnabled } from './features.js';
 import { suggestZoneFromKm, ZONE_KM_RANGE_LABELS } from './zone-distance-audit.js';
 
 /** Last planner results view — survive map modal / hash pops */
@@ -330,11 +331,11 @@ function computeZoneFare(zoneCode) {
     }
     const multiplier = useOffPeak ? profile.offPeak : profile.base;
     let finalPrice = FARE_CONFIG.zones[zoneCode] * multiplier;
-    finalPrice = Math.ceil(finalPrice * 2) / 2;
+    finalPrice = roundBoardFare(finalPrice);
     return {
         zone: zoneCode,
         price: finalPrice,
-        priceLabel: finalPrice.toFixed(2),
+        priceLabel: formatBoardFareLabel(finalPrice),
         isOffPeak: useOffPeak,
     };
 }
@@ -364,11 +365,11 @@ export function computeZoneFareForTrip(zoneCode, trip = {}) {
     }
     const multiplier = useOffPeak ? profile.offPeak : profile.base;
     let finalPrice = FARE_CONFIG.zones[zoneCode] * multiplier;
-    finalPrice = Math.ceil(finalPrice * 2) / 2;
+    finalPrice = roundBoardFare(finalPrice);
     return {
         zone: zoneCode,
         price: finalPrice,
-        priceLabel: finalPrice.toFixed(2),
+        priceLabel: formatBoardFareLabel(finalPrice),
         isOffPeak: useOffPeak,
         dayType,
         depTime: trip.depTime || '',
@@ -376,9 +377,43 @@ export function computeZoneFareForTrip(zoneCode, trip = {}) {
     };
 }
 
-function canShowTripPrice() {
+/** Same as the Next Train fare button: half-rand ceil, then drop to a whole rand (R7.50 → R7). */
+function roundBoardFare(raw) {
+    let finalPrice = Number(raw);
+    if (!Number.isFinite(finalPrice)) return 0;
+    finalPrice = Math.ceil(finalPrice * 2) / 2;
+    return Math.floor(finalPrice);
+}
+
+function formatBoardFareLabel(raw) {
+    return String(roundBoardFare(raw));
+}
+
+function plannerMoneySvg(className = 'w-3.5 h-3.5') {
+    return `<svg class="${className} shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7.5h13.5A1.5 1.5 0 0118 9v9a1.5 1.5 0 01-1.5 1.5H3A1.5 1.5 0 011.5 18V9A1.5 1.5 0 013 7.5z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 7.5V6A1.5 1.5 0 017.5 4.5H21A1.5 1.5 0 0122.5 6v9A1.5 1.5 0 0121 16.5h-3"/><circle cx="10.5" cy="13.5" r="1.75"/></svg>`;
+}
+
+function openPassengerTypePicker() {
+    triggerHaptic();
+    const modal = document.getElementById('profile-modal');
+    if (modal) {
+        modal.style.zIndex = '160';
+        modal.dataset.fromFare = '1';
+    }
+    openSmoothModal('profile-modal');
+}
+
+/** @type {{ trip: object, km: number|null, crowKm: number|null, zone: string } | null} */
+let lastPlannerFareContext = null;
+
+function canShowTripPrice(trip) {
     try {
-        return canAccessPilotSurface('tripPrice');
+        if (canAccessPilotSurface('tripPrice')) return true;
+        const routes = trip ? collectTripRoutes(trip) : [];
+        if (routes.some((r) => canAccessPilotSurface('tripPrice', r.id) || isFeatureEnabled(FEATURE_KEYS.TRIP_PRICE, r.id))) {
+            return true;
+        }
+        return false;
     } catch {
         return false;
     }
@@ -415,6 +450,7 @@ async function getSmoothTripDistanceKm(trip) {
 function fillPlannerFareBreakdown(trip, { km, crowKm, zone, fare } = {}) {
     const body = document.getElementById('planner-fare-breakdown-body');
     if (!body || !fare) return;
+    lastPlannerFareContext = { trip, km, crowKm, zone };
     const band = ZONE_KM_RANGE_LABELS[zone] || '';
     const dayLabel = fare.dayType === 'saturday' ? 'Saturday'
         : fare.dayType === 'sunday' ? 'Sunday'
@@ -424,16 +460,34 @@ function fillPlannerFareBreakdown(trip, { km, crowKm, zone, fare } = {}) {
     const peakLabel = fare.isOffPeak ? 'Off-peak' : 'Peak';
     const kmLabel = km != null ? `${km} km` : 'Unavailable';
     const crowLabel = crowKm != null ? `${crowKm} km` : 'Unavailable';
+    const profileLabel = escapeHTML(fare.profile || 'Adult');
     body.innerHTML = `
         <dl class="space-y-3 text-sm text-gray-700 dark:text-gray-200">
             <div class="flex justify-between gap-3"><dt class="text-gray-500 dark:text-gray-400">Distance</dt><dd class="font-bold">${escapeHTML(kmLabel)}</dd></div>
             <div class="flex justify-between gap-3"><dt class="text-gray-500 dark:text-gray-400">Straight-line</dt><dd class="font-bold">${escapeHTML(crowLabel)}</dd></div>
             <div class="flex justify-between gap-3"><dt class="text-gray-500 dark:text-gray-400">Zone</dt><dd class="font-bold">${escapeHTML(zone || '-')}${band ? ` <span class="font-medium text-gray-500 dark:text-gray-400">(${escapeHTML(band)})</span>` : ''}</dd></div>
             <div class="flex justify-between gap-3"><dt class="text-gray-500 dark:text-gray-400">Peak / off-peak</dt><dd class="font-bold">${escapeHTML(peakLabel)} <span class="font-medium text-gray-500 dark:text-gray-400">${escapeHTML(dayLabel)}${depLabel ? ` ${escapeHTML(depLabel)}` : ''}</span></dd></div>
-            <div class="flex justify-between gap-3"><dt class="text-gray-500 dark:text-gray-400">Profile</dt><dd class="font-bold">${escapeHTML(fare.profile || 'Adult')}</dd></div>
+            <div class="flex justify-between gap-3 items-center"><dt class="text-gray-500 dark:text-gray-400">Profile</dt><dd><button type="button" id="planner-fare-profile-btn" class="font-bold text-blue-600 dark:text-blue-400 underline decoration-dotted underline-offset-2 hover:text-blue-700 dark:hover:text-blue-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 rounded px-1">${profileLabel}</button></dd></div>
             <div class="flex justify-between gap-3 pt-2 border-t border-gray-100 dark:border-gray-800"><dt class="text-gray-500 dark:text-gray-400">Fare</dt><dd class="font-black text-gray-900 dark:text-white">R${escapeHTML(fare.priceLabel)}</dd></div>
         </dl>
     `;
+    document.getElementById('planner-fare-profile-btn')?.addEventListener('click', (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        openPassengerTypePicker();
+    });
+}
+
+function refreshOpenPlannerFare() {
+    const ctx = lastPlannerFareContext;
+    const sheet = document.getElementById('planner-fare-breakdown-sheet');
+    if (!ctx?.trip) return;
+    const fare = computeZoneFareForTrip(ctx.zone, ctx.trip);
+    if (!fare) return;
+    if (sheet && !sheet.classList.contains('hidden')) {
+        fillPlannerFareBreakdown(ctx.trip, { ...ctx, fare });
+    }
+    hydratePlannerFareButton(ctx.trip);
 }
 
 function openPlannerFareBreakdown(trip, detail) {
@@ -573,9 +627,9 @@ function getTripFareSummary(trip) {
         if (fare.isOffPeak) anyOffPeak = true;
     }
     if (!any) return null;
-    total = Math.ceil(total * 2) / 2;
+    total = roundBoardFare(total);
     return {
-        priceLabel: total.toFixed(2),
+        priceLabel: formatBoardFareLabel(total),
         zones,
         isOffPeak: anyOffPeak,
         multiRoute: routes.length > 1,
@@ -2855,8 +2909,8 @@ export const PlannerRenderer = {
                      </div>
                 </div>
                 <div class="flex justify-between items-center mt-0.5">
-                     ${canShowTripPrice() ? `<button type="button" data-nt-trip-fare="1" class="planner-trip-fare min-w-0 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 rounded">
-                        <span class="text-[9px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap border-b border-dotted border-gray-400 dark:border-gray-500">TRIP FARE: <span data-nt-trip-fare-price>R-</span></span>
+                     ${canShowTripPrice(step) ? `<button type="button" data-nt-trip-fare="1" class="planner-trip-fare min-w-0 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 rounded">
+                        <span class="inline-flex items-center gap-1 text-[9px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap border-b border-dotted border-gray-400 dark:border-gray-500">${plannerMoneySvg('w-3 h-3 text-gray-400')}TRIP FARE: <span data-nt-trip-fare-price>R-</span></span>
                      </button>` : '<span></span>'}
                      <div class="text-[9px] text-gray-400 uppercase tracking-widest shrink-0 pl-2">Total Time</div>
                 </div>
@@ -3282,6 +3336,36 @@ export function initPlanner() {
     const closeFareSheet = () => closeSmoothModal('planner-fare-breakdown-sheet');
     document.getElementById('planner-fare-breakdown-close')?.addEventListener('click', closeFareSheet);
     document.getElementById('planner-fare-breakdown-done')?.addEventListener('click', closeFareSheet);
+
+    if (typeof window !== 'undefined' && !window.__ntPlannerFareReactionsBound) {
+        window.__ntPlannerFareReactionsBound = true;
+        const refreshPlannerFareSurfaces = () => {
+            const idx = typeof window._plannerCurrentTripIndex === 'number'
+                ? window._plannerCurrentTripIndex
+                : 0;
+            const trip = currentTripOptions[idx];
+            const container = document.getElementById('planner-results-list');
+            if (trip && container && currentTripOptions.length) {
+                renderSelectedTrip(container, idx);
+            }
+            refreshOpenPlannerFare();
+        };
+        if (typeof $userProfile?.subscribe === 'function') {
+            $userProfile.subscribe(() => {
+                try { refreshPlannerFareSurfaces(); } catch { /* ignore */ }
+            });
+        }
+        window.addEventListener('nt-features-updated', () => {
+            try { refreshPlannerFareSurfaces(); } catch { /* ignore */ }
+        });
+        document.getElementById('profile-modal')?.addEventListener('transitionend', () => {
+            const modal = document.getElementById('profile-modal');
+            if (modal?.classList.contains('hidden')) {
+                modal.style.zIndex = '';
+                delete modal.dataset.fromFare;
+            }
+        });
+    }
 
     const inputSection = document.getElementById('planner-input-section');
     if (inputSection && !document.getElementById('planner-day-select-container')) {

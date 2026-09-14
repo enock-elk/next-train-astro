@@ -524,7 +524,7 @@ assert(liveBoard.includes("timeEl.classList.add('hidden')"), 'commuters do not s
 
 const adminJs = readFileSync(new URL('../public/js/admin.js', import.meta.url), 'utf8');
 assert(adminJs.includes('id="exp-features-header"'), 'System Controls has Experimental features');
-assert(adminJs.includes('id="exp-map-enabled"') && adminJs.includes('id="exp-community-enabled"'), 'experimental Map and Community toggles exist');
+assert(adminJs.includes("'exp-map-enabled'") && adminJs.includes("'exp-community-enabled'"), 'experimental Map and Community toggles exist');
 assert(adminJs.includes("I'm on it / live share") && adminJs.includes('Delay reports') && adminJs.includes('Community realtime') && adminJs.includes('Push notifications') && adminJs.includes('Trip price'), 'experimental accordion lists every grantable feature');
 assert(adminJs.includes('exp-feat-header') && adminJs.includes('exp-feat-body'), 'feature types are nested accordions');
 assert(adminJs.includes('config/features.json'), 'experimental save writes config/features');

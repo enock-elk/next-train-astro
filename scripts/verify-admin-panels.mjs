@@ -153,13 +153,12 @@ const requiredIds = [
     'disr-show-map',
     'maint-expires',
     'exp-features-header',
-    'exp-map-enabled',
-    'exp-community-enabled',
     'exp-features-save',
 ];
 for (const id of requiredIds) {
     assert(admin.includes(`id="${id}"`), `admin still exposes #${id}`);
 }
+assert(admin.includes("'exp-map-enabled'") && admin.includes("'exp-community-enabled'"), 'experimental Map and Community toggles exist');
 
 assert(admin.includes('renderExpFeatureAccordions'), 'experimental features render as per-type accordions');
 assert(admin.includes("I'm on it / live share") && admin.includes('Delay reports') && admin.includes('Community realtime') && admin.includes('Push notifications') && admin.includes('Trip price'), 'System Controls lists every experimental feature type');

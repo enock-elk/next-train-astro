@@ -6,7 +6,7 @@ import { safeStorage, escapeHTML, repairMojibake, formatAppTime, formatThreadDat
 import { prepareRichHtml, injectRichTextStyles } from './rich-text.js';
 import { showToast, triggerHaptic, openSmoothModal, closeSmoothModal } from './ui.js';
 import { isAdminAuthed } from './admin-chrome.js';
-import { $currentRouteId } from '../store.js';
+import { $currentRouteId, $userRegion } from '../store.js';
 import { cacheAlertImages, pruneExpiredAlertImages, resolveCachedAlertImage } from './alert-image-cache.js';
 import {
     ALERTS_PAGE_SIZE,
@@ -139,6 +139,12 @@ export function getCachedLiveNotices() {
 export function setCachedLiveNotices(list) {
     cachedLiveNotices = Array.isArray(list) ? list.slice() : [];
     return cachedLiveNotices;
+}
+
+/** Keep only notices in the current union (global + region + this route). */
+export function scopedLiveNotices(list = cachedLiveNotices, region = $userRegion.get() || 'GP', routeId = $currentRouteId.get()) {
+    const keys = new Set(noticeScopeKeys(region, routeId && ROUTES[routeId] ? routeId : ''));
+    return (Array.isArray(list) ? list : []).filter((n) => keys.has(n._sourceKey));
 }
 
 async function fetchBucket(key) {
@@ -752,8 +758,9 @@ export function renderAlertsChannel(notices = cachedLiveNotices, opts = {}) {
     const earlierBtn = document.getElementById('alerts-load-earlier');
     if (!feed) return false;
 
-    const list = Array.isArray(notices) ? notices : [];
-    cachedLiveNotices = list;
+    const incoming = Array.isArray(notices) ? notices : [];
+    cachedLiveNotices = incoming;
+    const list = scopedLiveNotices(incoming);
     if (opts.resetVisible) visibleCount = ALERTS_PAGE_SIZE;
     if (opts.highlightId) highlightNoticeId = opts.highlightId;
 
@@ -829,7 +836,7 @@ export function closeAlertsChannel() {
 }
 
 export function openAlertsChannel(opts = {}) {
-    const notices = opts.notices || cachedLiveNotices;
+    const notices = scopedLiveNotices(opts.notices || cachedLiveNotices);
     if (opts.resetVisible !== false) visibleCount = ALERTS_PAGE_SIZE;
     highlightNoticeId = opts.highlightId || null;
     renderAlertsChannel(notices, { highlightId: highlightNoticeId });
@@ -851,6 +858,7 @@ export function applyBellFromNotices(notices) {
     const bellBtn = document.getElementById('notice-bell');
     const dot = document.getElementById('notice-dot');
     if (!bellBtn) return;
+    notices = scopedLiveNotices(notices);
 
     if (!notices || notices.length === 0) {
         bellBtn.classList.add('hidden');
@@ -896,7 +904,7 @@ export function applyBellFromNotices(notices) {
                 live_count: notices.length,
             });
         }
-        openAlertsChannel({ notices, resetVisible: true });
+        openAlertsChannel({ notices: scopedLiveNotices(cachedLiveNotices), resetVisible: true });
     };
 }
 

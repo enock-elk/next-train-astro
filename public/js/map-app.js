@@ -2143,11 +2143,45 @@
             function metricValue(value, fallback) {
                 return value == null || value === '' ? (fallback || 'Unknown') : String(value);
             }
+            function gpsPingSuccessAt(ping) {
+                return Number(ping && (ping.fixAt || ping.acceptedAt || ping.lastPingAt || ping.at) || 0) || 0;
+            }
+            function formatGpsPingClock(at) {
+                var ms = Number(at);
+                if (!ms) return '';
+                var d = new Date(ms);
+                if (isNaN(d.getTime())) return '';
+                var hh = String(d.getHours()).padStart(2, '0');
+                var mm = String(d.getMinutes()).padStart(2, '0');
+                var ss = String(d.getSeconds()).padStart(2, '0');
+                return hh + ':' + mm + ':' + ss;
+            }
             function ageMetric(at) {
-                var sec = Math.max(0, Math.round((Date.now() - Number(at || 0)) / 1000));
+                var sec = Math.max(0, Math.floor((Date.now() - Number(at || 0)) / 1000));
                 if (!Number(at)) return 'Unknown';
-                if (sec < 60) return sec + ' sec';
-                return Math.round(sec / 60) + ' min';
+                var m = Math.floor(sec / 60);
+                var s = sec % 60;
+                if (m <= 0) return s + ' sec';
+                return m + 'm ' + s + ' sec';
+            }
+            function lastSeenMetric(place, at) {
+                var station = String(place || 'on the route').trim() || 'on the route';
+                var clock = formatGpsPingClock(at);
+                return clock ? ('Last seen ' + station + ' - ' + clock) : ('Last seen ' + station);
+            }
+            function tickRidePopupFreshness() {
+                document.querySelectorAll('[data-nt-gps-at]').forEach(function (el) {
+                    var at = Number(el.getAttribute('data-nt-gps-at') || 0);
+                    if (!at) return;
+                    if (el.getAttribute('data-nt-gps-kind') === 'age') el.textContent = ageMetric(at);
+                    if (el.getAttribute('data-nt-gps-kind') === 'last') {
+                        el.textContent = lastSeenMetric(el.getAttribute('data-nt-last-seen') || 'on the route', at);
+                    }
+                });
+            }
+            if (!window.__ntRideFreshnessTick) {
+                window.__ntRideFreshnessTick = true;
+                setInterval(tickRidePopupFreshness, 1000);
             }
             function headingMetric(deg) {
                 if (!Number.isFinite(deg)) return 'Unknown';
@@ -2306,6 +2340,8 @@
                     const paused = newest.trackingState === 'paused' || isPingGpsStale(newest);
                     const status = paused ? 'Paused' : 'Active';
                     const detailsId = 'nt-track-details-' + String(trainId).replace(/[^a-zA-Z0-9_-]/g, '');
+                    const pingAt = gpsPingSuccessAt(newest);
+                    const lastPlace = newest.lastSeenLabel || newest.station || 'on the route';
                     const popupHtml =
                         "<div class='nt-live-train-pop'>"
                         + "<div class='nt-live-train-pop-head'><p class='nt-live-train-pop-title'>Train " + escapePing(trainId) + "</p>"
@@ -2315,11 +2351,11 @@
                         + "<div><dt>Speed</dt><dd>" + escapePing(speed == null ? 'Unknown' : (Math.max(0, speed) * 3.6).toFixed(0) + ' km/h') + "</dd></div>"
                         + "<div><dt>Heading</dt><dd>" + escapePing(headingMetric(heading)) + "</dd></div>"
                         + "<div><dt>Rail distance</dt><dd>" + escapePing(distanceMetric(Number(newest.railDistanceM))) + "</dd></div>"
-                        + "<div><dt>GPS age</dt><dd>" + escapePing(ageMetric(newest.acceptedAt || newest.at)) + "</dd></div>"
+                        + "<div><dt>GPS age</dt><dd data-nt-gps-at='" + pingAt + "' data-nt-gps-kind='age'>" + escapePing(ageMetric(pingAt)) + "</dd></div>"
                         + "<div><dt>GPS accuracy</dt><dd>" + escapePing(Number.isFinite(newest.accuracy) ? '±' + Math.round(newest.accuracy) + ' m' : 'Unknown') + "</dd></div>"
                         + "<div><dt>Contributors</dt><dd>" + escapePing(metricValue(n, '0')) + "</dd></div>"
                         + "</dl>"
-                        + "<p class='nt-live-train-last'>Last seen " + escapePing(metricValue(newest.lastSeenLabel, 'on the route')) + "</p>"
+                        + "<p class='nt-live-train-last' data-nt-gps-at='" + pingAt + "' data-nt-gps-kind='last' data-nt-last-seen='" + escapePing(lastPlace) + "'>" + escapePing(lastSeenMetric(lastPlace, pingAt)) + "</p>"
                         + "<div class='nt-live-train-pop-actions'>"
                         + "<button type='button' id='" + detailsId + "' class='nt-live-train-pop-btn nt-live-train-pop-btn--details'>Show tracking details</button>"
                         + actionBtn

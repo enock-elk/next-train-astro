@@ -387,6 +387,8 @@ export function buildFareVotePayload({
     routeIds,
     km,
     crowKm,
+    smoothKm,
+    abKm,
     zone,
     quotedPrice,
     reportedPrice,
@@ -406,14 +408,18 @@ export function buildFareVotePayload({
     const routes = Array.isArray(routeIds)
         ? routeIds.map((id) => clipStr(id, 40)).filter(Boolean).slice(0, 8)
         : [];
-    const kmNum = Number(km);
-    const crowNum = Number(crowKm);
+    const smoothNum = Number(smoothKm != null ? smoothKm : km);
+    const abNum = Number(abKm != null ? abKm : crowKm);
+    const smooth = Number.isFinite(smoothNum) ? smoothNum : null;
+    const ab = Number.isFinite(abNum) ? abNum : null;
     return {
         origin: clipStr(origin, 79),
         destination: clipStr(destination, 79),
         routeIds: routes,
-        km: Number.isFinite(kmNum) ? kmNum : null,
-        crowKm: Number.isFinite(crowNum) ? crowNum : null,
+        km: smooth,
+        crowKm: ab,
+        smoothKm: smooth,
+        abKm: ab,
         zone: clipStr(zone, 8) || null,
         quotedPrice: quoted,
         reportedPrice: reported,

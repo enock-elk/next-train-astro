@@ -17,6 +17,7 @@ import { currentScheduleData } from './live-board.js';
 import { trainGoingLabel, trainGoingFullLabel, TRACKING_WINDOW_SEC, compareNearbyTrainLikelihood, isGhostTrackable, trainIdsInSchedule } from './train-ghosts.js';
 import { relaxLiveShareGuards } from './features.js';
 import { isAdminAuthed } from './admin-chrome.js';
+import { formatGpsPingAge, formatLastSeenWithPingClock, gpsPingSuccessAt } from './gps-freshness.js';
 import {
     acquireGeoWatch,
     releaseGeoWatch,
@@ -183,12 +184,6 @@ function setStatus(text) {
     if (el) el.textContent = text;
 }
 
-function trackingAgeLabel(at, now = Date.now()) {
-    if (!Number(at)) return 'Unknown';
-    const sec = Math.max(0, Math.round((now - Number(at)) / 1000));
-    return sec < 60 ? `${sec}s` : `${Math.round(sec / 60)}m`;
-}
-
 function trackingDistanceLabel(metres) {
     if (!Number.isFinite(Number(metres))) return 'Unknown';
     const n = Number(metres);
@@ -218,16 +213,24 @@ function renderTrackingStatusCard(active, marker = null) {
     }
     const state = marker?.trackingState || active.trackingState || 'active';
     const paused = state === 'paused';
-    const at = marker?.fixAt || active.fixAt || marker?.acceptedAt || marker?.at || active.acceptedAt || active.lastPingAt || active.at;
+    const pingAt = gpsPingSuccessAt({
+        ...(active || {}),
+        ...(marker || {}),
+        fixAt: marker?.fixAt || active?.fixAt,
+        acceptedAt: marker?.acceptedAt || active?.acceptedAt,
+        lastPingAt: marker?.lastPingAt || active?.lastPingAt,
+        at: marker?.at || active?.at,
+    });
     const bearing = marker?.bearing ?? marker?.heading ?? active.bearing;
     const speed = marker?.speedMps ?? active.speedMps;
     const accuracy = marker?.accuracy ?? active.accuracy;
+    const place = marker?.lastSeenLabel || active.lastSeenLabel || active.station || 'on the route';
     setTrackingText('map-tracking-title', `Tracking Train ${active.trainId}`);
     setTrackingText('map-tracking-state', paused ? 'Paused' : 'Active');
-    setTrackingText('map-tracking-last-seen', `Last seen ${marker?.lastSeenLabel || active.lastSeenLabel || active.station || 'on the route'}`);
+    setTrackingText('map-tracking-last-seen', formatLastSeenWithPingClock(place, pingAt));
     setTrackingText('map-tracking-speed', Number.isFinite(speed) ? `${Math.round(Math.max(0, speed) * 3.6)} km/h` : 'Unknown');
     setTrackingText('map-tracking-heading', trackingHeadingLabel(bearing));
-    setTrackingText('map-tracking-gps', trackingAgeLabel(at));
+    setTrackingText('map-tracking-gps', formatGpsPingAge(pingAt));
     setTrackingText('map-tracking-rail', trackingDistanceLabel(marker?.railDistanceM ?? active.railDistanceM));
     setTrackingText('map-tracking-accuracy', Number.isFinite(accuracy) ? `±${Math.round(accuracy)} m` : 'Unknown');
     setTrackingText('map-tracking-count', String(Math.max(1, Number(marker?.n) || 1)));
@@ -1940,6 +1943,10 @@ export async function syncRidePingsToMap(routeId = $currentRouteId.get()) {
                     trainId: ride.pingPublicTrainId(p),
                     station: p.station || '',
                     at: p.at,
+                    acceptedAt: p.acceptedAt,
+                    fixAt: p.fixAt,
+                    lastPingAt: p.lastPingAt,
+                    lastSeenLabel: p.lastSeenLabel || p.station || '',
                     expiresAt: p.expiresAt,
                     heading: p.heading,
                     speedMps: p.speedMps,
@@ -1953,7 +1960,7 @@ export async function syncRidePingsToMap(routeId = $currentRouteId.get()) {
             ? { ...groupedMine, ...ownPing, n: groupedMine?.n || 1 }
             : groupedMine;
         renderTrackingStatusCard(ride.getActiveShare?.(), ownMetrics);
-        const sig = markers.map((m) => `${m.trainId || ''}:${m.lat}:${m.lng}:${m.n || 1}:${m.mine ? 1 : 0}:${m.at || 0}:${m.bearing || ''}:${m.trackingState || ''}:${m.accuracy || ''}:${m.railDistanceM || ''}`).join('|');
+        const sig = markers.map((m) => `${m.trainId || ''}:${m.lat}:${m.lng}:${m.n || 1}:${m.mine ? 1 : 0}:${m.at || 0}:${m.fixAt || ''}:${m.acceptedAt || ''}:${m.bearing || ''}:${m.trackingState || ''}:${m.accuracy || ''}:${m.railDistanceM || ''}`).join('|');
         if (sig === lastMapPingSig) return;
         lastMapPingSig = sig;
         postToMap({ type: 'nt-map-ride-pings', pings: markers });

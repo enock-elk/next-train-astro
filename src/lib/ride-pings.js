@@ -48,6 +48,12 @@ export const RIDE_SHARE_IDLE_MS = 30 * 60 * 1000;
 export const RIDE_PING_TTL_MS = RIDE_SHARE_IDLE_MS;
 /** Two missed onboard pings (loop is 45s). Map glyph goes slate. */
 export const RIDE_GPS_STALE_MS = 90 * 1000;
+export {
+    formatGpsPingAge,
+    formatGpsPingClock,
+    formatLastSeenWithPingClock,
+    gpsPingSuccessAt,
+} from './gps-freshness.js';
 /** Pause, then drop the train share if the rider stays off the rails this long. */
 export const RIDE_OFFTRACK_GRACE_MS = 3 * 60 * 1000;
 /** Drop immediately if GPS is this far from the selected rail, even inside the grace window. */
@@ -90,7 +96,7 @@ const ACTIVE_KEY = 'ridePingActiveV1';
 const SHARE_SESSION_KEY = 'nt_ride_share_session';
 export const ONBOARD_FAST_PING_MS = 5 * 1000;
 export const ONBOARD_MOVING_PING_MS = 10 * 1000;
-export const ONBOARD_STATIONARY_PING_MS = 25 * 1000;
+export const ONBOARD_STATIONARY_PING_MS = 10 * 1000;
 const DIRECTION_CONFLICT_MIN_SAMPLES = 3;
 const DIRECTION_CONFLICT_MIN_MS = 20 * 1000;
 
@@ -500,6 +506,8 @@ export async function compactPingsForMap(pings, { mineDeviceId = '', routeId = '
             bearing: p.bearing,
             trackingState: state,
             acceptedAt: p.acceptedAt,
+            fixAt: p.fixAt,
+            lastPingAt: p.lastPingAt,
             lastSeenLabel: p.lastSeenLabel || p.station || '',
             accuracy: p.accuracy,
             pauseReason: p.pauseReason || '',
@@ -555,8 +563,10 @@ export async function compactPingsForMap(pings, { mineDeviceId = '', routeId = '
             routeProgressM: driver.routeProgressM,
             railDistanceM: newest.railDistanceM,
             trackingState: pausedOnly ? TRACKING_STATE.PAUSED : TRACKING_STATE.ACTIVE,
-            acceptedAt: driver.acceptedAt,
-            lastSeenLabel: driver.lastSeenLabel,
+            acceptedAt: newest.acceptedAt || driver.acceptedAt,
+            fixAt: newest.fixAt || driver.fixAt,
+            lastPingAt: newest.lastPingAt || driver.lastPingAt,
+            lastSeenLabel: newest.lastSeenLabel || driver.lastSeenLabel,
             accuracy: newest.accuracy,
             pauseReason: pausedOnly ? newest.pauseReason : '',
         });
@@ -1266,6 +1276,7 @@ export async function submitRideCheckIn({
     adminOverrideRole = '',
     overrideProjected = null,
     projectedFix = null,
+    gpsFixAt = null,
 } = {}) {
     await fetchFeatures();
     const trustedAdminOverride = isAdminAuthed() && (adminOverrideRole === 'train' || adminOverrideRole === 'person')
@@ -1391,10 +1402,11 @@ export async function submitRideCheckIn({
         payload.routeProgressM = Math.round(projection.routeProgressM);
         payload.railDistanceM = Math.round(projection.distanceM);
         payload.acceptedAt = now;
+        payload.fixAt = Number(gpsFixAt || previous?.fixAt || now) || now;
         payload.lastSeenLabel = projection.lastSeenLabel || st;
         if (Number.isFinite(projection.bearing)) payload.bearing = Math.round(projection.bearing);
     } else if (resolvedState === TRACKING_STATE.PAUSED && previous) {
-        for (const key of ['projectedLat', 'projectedLng', 'projectedProgress', 'routeProgressM', 'railDistanceM', 'acceptedAt', 'lastSeenLabel', 'bearing']) {
+        for (const key of ['projectedLat', 'projectedLng', 'projectedProgress', 'routeProgressM', 'railDistanceM', 'acceptedAt', 'fixAt', 'lastSeenLabel', 'bearing']) {
             if (previous[key] != null) payload[key] = previous[key];
         }
     }
@@ -1423,7 +1435,7 @@ export async function submitRideCheckIn({
             accuracy: payload.accuracy,
             speedMps: payload.speedMps,
             heading: payload.heading,
-            fixAt: previous?.fixAt || now,
+            fixAt: payload.fixAt || previous?.fixAt || now,
             directionObservation: previous?.directionObservation || null,
             directionWarning: !!previous?.directionWarning,
             adminOverrideRole: payload.adminOverrideRole || '',
@@ -1671,7 +1683,6 @@ async function processOnboardFix(pos, { forceBroadcast = false, generation = onb
         stopOnboardPingLoop();
         return;
     }
-    if (typeof document !== 'undefined' && document.hidden) return;
     const near = nearestStationOnRoute(pos.lat, pos.lng, active.routeId);
     const minProgressSeen = nextMinProgressSeen(active, active.trainId, pos.lat, pos.lng);
     if (Number.isFinite(minProgressSeen) && minProgressSeen !== active.minProgressSeen) {
@@ -1717,6 +1728,7 @@ async function processOnboardFix(pos, { forceBroadcast = false, generation = onb
             source: 'admin_override_train',
             quiet: true,
             adminOverrideRole: 'train',
+            gpsFixAt: Number(pos.t || Date.now()),
         });
         if (result.ok) onboardLastBroadcastAt = Date.now();
         return;
@@ -1817,6 +1829,7 @@ async function processOnboardFix(pos, { forceBroadcast = false, generation = onb
         source: active.trackingState === TRACKING_STATE.PAUSED ? 'onboard_resume' : 'onboard_ping',
         quiet: true,
         projectedFix: projection,
+        gpsFixAt: Number(pos.t || local.fixAt || Date.now()),
     });
     if (result.ok) onboardLastBroadcastAt = Date.now();
 }
@@ -1882,10 +1895,6 @@ export function startOnboardPingLoop() {
         const current = getActiveShare();
         if (!current?.trainId) {
             stopOnboardPingLoop();
-            return;
-        }
-        if (typeof document !== 'undefined' && document.hidden) {
-            await queueOnboardPause('staleGps');
             return;
         }
         if (!navigator.onLine) {

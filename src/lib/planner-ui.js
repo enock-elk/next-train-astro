@@ -469,6 +469,8 @@ function plannerFareVoteInput(trip, { km, crowKm, zone, fare } = {}, extra = {})
         routeIds: collectTripRoutes(trip).map((r) => r.id).filter(Boolean),
         km,
         crowKm,
+        smoothKm: km,
+        abKm: crowKm,
         zone,
         quotedPrice: fare?.price,
         reportedPrice: extra.reportedPrice != null ? extra.reportedPrice : fare?.price,
@@ -494,10 +496,17 @@ function bindPlannerFareVote(trip, detail) {
     const correct = document.getElementById('planner-fare-vote-correct');
     const amount = document.getElementById('planner-fare-vote-amount');
     const sendBtn = document.getElementById('planner-fare-vote-send');
+    const sendVote = async (extra) => {
+        let km = detail?.km;
+        let crowKm = detail?.crowKm;
+        if (km == null) km = await getSmoothTripDistanceKm(trip);
+        if (crowKm == null) crowKm = getCrowFliesTripKm(trip);
+        return submitFareVote(plannerFareVoteInput(trip, { ...detail, km, crowKm }, extra));
+    };
     yesBtn?.addEventListener('click', (ev) => {
         ev.preventDefault();
         ev.stopPropagation();
-        submitFareVote(plannerFareVoteInput(trip, detail, { agree: true }));
+        sendVote({ agree: true });
         showPlannerFareVoteThanks(wrap);
     });
     noBtn?.addEventListener('click', (ev) => {
@@ -514,7 +523,7 @@ function bindPlannerFareVote(trip, detail) {
             if (typeof showToast === 'function') showToast('Enter a whole rand amount.', 'info', 2500);
             return;
         }
-        submitFareVote(plannerFareVoteInput(trip, detail, { agree: false, reportedPrice: reported }));
+        sendVote({ agree: false, reportedPrice: reported });
         showPlannerFareVoteThanks(wrap);
     });
 }
@@ -1200,10 +1209,12 @@ function keyboardOpen() {
 }
 
 /**
- * Undo the browser's focus / IME scroll so opening From / To does not jump
- * the planner, especially Select To Station at the bottom of the form.
+ * Undo the browser's focus / IME scroll on From so the planner does not jump.
+ * Select To Station is at the bottom: do not pin #app-scroll, or the blue
+ * header stays locked in view and the list cannot rise with the field.
  */
-function holdPlannerScroll() {
+function holdPlannerScroll(input) {
+    if (input && input.id === 'planner-to-search') return;
     const scroller = document.getElementById('app-scroll');
     if (!scroller) return;
     const y = scroller.scrollTop;
@@ -3965,7 +3976,7 @@ export function setupAutocomplete(inputId, selectId) {
     const renderList = (filterText = '') => {
         const rawFilter = filterText.trim();
         if (!list.classList.contains('hidden') && lastFilter === rawFilter && list.childElementCount > 0) {
-            holdPlannerScroll();
+            holdPlannerScroll(input);
             positionDropdownAroundTrigger(list, input, 240);
             return;
         }
@@ -4064,7 +4075,7 @@ export function setupAutocomplete(inputId, selectId) {
         }
 
         list.classList.remove('hidden');
-        holdPlannerScroll();
+        holdPlannerScroll(input);
         positionDropdownAroundTrigger(list, input, 240);
 
         const finishExtras = () => {
@@ -4113,13 +4124,13 @@ export function setupAutocomplete(inputId, selectId) {
     
     input.addEventListener('focus', () => {
         try { input.select(); } catch { /* ignore */ }
-        holdPlannerScroll();
+        holdPlannerScroll(input);
         renderList('');
     });
 
     window.visualViewport?.addEventListener('resize', () => {
         if (list.classList.contains('hidden')) return;
-        holdPlannerScroll();
+        holdPlannerScroll(input);
         requestAnimationFrame(() => positionDropdownAroundTrigger(list, input, 240));
     }, { passive: true });
     
@@ -4129,7 +4140,7 @@ export function setupAutocomplete(inputId, selectId) {
         if (list.classList.contains('hidden')) {
             lastFilter = null;
             renderList('');
-            holdPlannerScroll();
+            holdPlannerScroll(input);
         } else {
             list.classList.add('hidden');
             lastFilter = null;

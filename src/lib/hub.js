@@ -42,6 +42,8 @@ import {
 import {
     fetchUnionNotices,
     setCachedLiveNotices,
+    scopedLiveNotices,
+    renderAlertsChannel,
     applyBellFromNotices,
     openAlertsChannel,
     initAlertsChannel,
@@ -1700,6 +1702,8 @@ if (typeof window !== 'undefined') {
     window.injectRichTextStyles = injectRichTextStyles;
 }
 
+let alertsCheckGen = 0;
+
 export async function checkServiceAlerts() {
     const bellBtn = document.getElementById('notice-bell');
     const dot = document.getElementById('notice-dot');
@@ -1708,8 +1712,23 @@ export async function checkServiceAlerts() {
 
     const deviceId = $deviceId.get() || safeStorage.getItem('next_train_device_id');
     const routeId = $currentRouteId.get();
+    const region = $userRegion.get() || 'GP';
+    const gen = ++alertsCheckGen;
 
     try {
+        // Notices first so a route swap does not wait on the inbox round-trip.
+        const noticesPromise = fetchUnionNotices(region, routeId).then((validNotices) => {
+            if (gen !== alertsCheckGen) return null;
+            setCachedLiveNotices(validNotices);
+            const channel = document.getElementById('alerts-channel');
+            if (channel && !channel.classList.contains('hidden')) {
+                renderAlertsChannel(validNotices, { resetVisible: true });
+            }
+            if (!validNotices.length) bellBtn.classList.add('hidden');
+            else applyBellFromNotices(validNotices);
+            return validNotices;
+        });
+
         // 1. Commuter inbox (admin replies)
         let adminReply = null;
         if (deviceId) {
@@ -1778,17 +1797,9 @@ export async function checkServiceAlerts() {
             replyBanner.classList.add('hidden');
         }
 
-        // 2. Notices: union of global + region + current route (not exclusive winner)
-        const region = $userRegion.get() || 'GP';
-        const validNotices = await fetchUnionNotices(region, routeId);
-        setCachedLiveNotices(validNotices);
-
-        if (validNotices.length === 0) {
-            bellBtn.classList.add('hidden');
-            return;
-        }
-
-        applyBellFromNotices(validNotices);
+        const validNotices = await noticesPromise;
+        if (gen !== alertsCheckGen) return;
+        if (!validNotices || validNotices.length === 0) return;
 
         const autoNotice = pickAutoOpenNotice(validNotices);
         if (autoNotice && !window._alertsChannelOpening && canAutoOpenHomeNotices()) {
@@ -2524,6 +2535,18 @@ export function initHub() {
         document.addEventListener('visibilitychange', () => {
             if (document.visibilityState === 'visible') checkServiceAlerts();
         });
+        const paintAlertsForCurrentRoute = () => {
+            const scoped = scopedLiveNotices();
+            setCachedLiveNotices(scoped);
+            const channel = document.getElementById('alerts-channel');
+            if (channel && !channel.classList.contains('hidden')) {
+                renderAlertsChannel(scoped, { resetVisible: true });
+            }
+            applyBellFromNotices(scoped);
+            checkServiceAlerts();
+        };
+        $currentRouteId.subscribe(paintAlertsForCurrentRoute);
+        $userRegion.subscribe(paintAlertsForCurrentRoute);
     }
 
     // Prefetch holiday approvals, then show notice only on the home board

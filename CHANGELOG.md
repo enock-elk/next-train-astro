@@ -2,6 +2,20 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin, Dev Hub, Alerts, Trains near me, community chat, or other hidden-test work. No emoji and no em dashes in What’s New. Keep `APP_VERSION`, `package.json` `version`, and `public/app-version.json` aligned on each release. Changelog / What’s New may be skipped, or the heading may be only **no release notes.**
 
+## V9_09.14.8 — GPS ping clock, alerts route scope, planner To scroll, fare km (14 Sep 2026)
+
+Tracking card GPS is the age of the last successful GPS ping and always includes seconds (`5 sec`, `1m 5 sec`). Last seen is `Last seen Pretoria - 15:20:23` using the 24h clock of that ping (`fixAt`), not “now”. The train tooltip GPS age ticks the same way. Firebase ride pings now store `fixAt` so the clock survives a broadcast.
+
+An active share keeps GPS live: high-accuracy watch (map-only stays fused), screen wake lock, no pause just because the tab is hidden, and a restart if the OS goes quiet. Repeated stationary GPS callbacks still count as a successful ping so the age does not freeze at Pretoria. Stationary Firebase heartbeats are every 10 seconds.
+
+Switching routes while Alerts is open immediately drops the previous route’s notices (union stays global + region + current route) and refetches without waiting on the inbox call.
+
+Select To Station no longer pins `#app-scroll`, so the blue header is not locked on screen.
+
+Fare votes write both along-rail `smoothKm` and crow-flies `abKm` (also mirrored on `km` / `crowKm`). The Fares telemetry list and CSV show both.
+
+no release notes.
+
 ## V9_09.14.7 — Fare votes and DAU export title (14 Sep 2026)
 
 Trip fare sheet (flag-gated) can record a yes/no plus a whole-rand correction to `sys_logs/fare_votes` immediately, with a one-vote offline queue. Planner telemetry adds a Fares tab (list + CSV). DAU / Live Telemetry PNGs put the chart title on the grouped canvas above the white card and clip the frame to content.

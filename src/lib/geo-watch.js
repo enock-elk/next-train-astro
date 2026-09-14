@@ -1,8 +1,10 @@
 /**
- * One battery-safe geolocation watch for the map tab and an active share.
+ * One geolocation watch for the map tab and an active share.
  *
- * Seek uses fused / network location (not GPS-only). Locate can request a
- * short high-accuracy fix. Hidden / locked documents drop the watch and
+ * Map-only seek uses fused / network location. An active share upgrades to
+ * high-accuracy GPS and keeps the watch running while the document is hidden
+ * so the tracking card stays live. Locate can still request a short
+ * high-accuracy fix. Map-only hidden / locked documents drop the watch and
  * keep the last fix. Holders ('map' | 'share') decide when to seek.
  */
 const holders = new Set();
@@ -14,11 +16,18 @@ let lastFix = null;
 let watchId = null;
 let boundLifecycle = false;
 let mode = 'off';
+let lastWatchCallbackAt = 0;
+let shareWatchdogTimer = 0;
+let wakeLockSentinel = null;
+let wantShareWakeLock = false;
 
 const SEEK_OPTS = { enableHighAccuracy: false, maximumAge: 2500, timeout: 15000 };
+const SHARE_OPTS = { enableHighAccuracy: true, maximumAge: 1000, timeout: 20000 };
 const LOCATE_OPTS = { enableHighAccuracy: true, maximumAge: 4000, timeout: 12000 };
 const STATIONARY_SPEED_MPS = 1.5;
 const MAX_PLAUSIBLE_SPEED_MPS = 70;
+/** Restart a silent share watch so Android cannot freeze fused GPS for minutes. */
+const SHARE_SILENT_RESTART_MS = 8 * 1000;
 
 /** Map pin / last fused sample is still good enough to attach or list nearby trains. */
 export const GEO_REUSE_MAX_AGE_MS = 30 * 1000;
@@ -104,6 +113,29 @@ export function refineMotionFix(raw, previous = null) {
     };
 }
 
+/**
+ * Android fused/GPS often re-delivers the same coords with the same timestamp
+ * while stationary. That is still a successful GPS callback; bump `t` so the
+ * tracking card stays live without jumping the pin.
+ */
+export function confirmStationaryWatchTick(raw, previous, now = Date.now()) {
+    if (!raw || !previous) return null;
+    if (!Number.isFinite(raw.lat) || !Number.isFinite(raw.lng)) return null;
+    if (!Number.isFinite(previous.lat) || !Number.isFinite(previous.lng)) return null;
+    if (!(Number(raw.t) <= Number(previous.t))) return null;
+    const moved = distanceM(previous, raw);
+    const band = Math.max(6, Number(raw.accuracy) || Number(previous.accuracy) || 25);
+    if (moved > band * 1.5) return null;
+    return {
+        ...previous,
+        ...raw,
+        t: now,
+        speedMps: 0,
+        heading: Number.isFinite(previous.heading) ? previous.heading : raw.heading,
+        stationary: true,
+    };
+}
+
 function fromCoords(coords, timestamp = Date.now()) {
     return {
         lat: coords.latitude,
@@ -134,30 +166,81 @@ function clearWatch() {
     mode = 'off';
 }
 
-function startSeekWatch() {
+function desiredWatchKind() {
+    if (holders.has('share')) return 'share';
+    if (holders.size === 0) return 'off';
+    if (typeof document !== 'undefined' && document.hidden) return 'off';
+    return 'map';
+}
+
+function ingestWatchPosition(pos) {
+    lastWatchCallbackAt = Date.now();
+    if (!pos?.coords) return;
+    const raw = fromCoords(pos.coords, pos.timestamp);
+    const fix = refineMotionFix(raw, lastFix) || confirmStationaryWatchTick(raw, lastFix);
+    if (fix) emit(fix);
+}
+
+function startWatch(kind) {
     if (typeof navigator === 'undefined' || !navigator.geolocation) return;
-    if (watchId != null && mode === 'seek') return;
+    if (kind !== 'map' && kind !== 'share') return;
+    if (watchId != null && mode === kind) return;
     clearWatch();
     watchId = navigator.geolocation.watchPosition(
-        (pos) => {
-            if (!pos?.coords) return;
-            const fix = refineMotionFix(fromCoords(pos.coords, pos.timestamp), lastFix);
-            if (fix) emit(fix);
-        },
-        () => { /* keep last fix; next tick may recover */ },
-        SEEK_OPTS
+        ingestWatchPosition,
+        () => { lastWatchCallbackAt = lastWatchCallbackAt || Date.now(); },
+        kind === 'share' ? SHARE_OPTS : SEEK_OPTS
     );
-    mode = 'seek';
+    mode = kind;
     if (lastFix) emit(lastFix);
 }
 
+function syncShareWatchdog(on) {
+    if (!on) {
+        if (shareWatchdogTimer) {
+            clearInterval(shareWatchdogTimer);
+            shareWatchdogTimer = 0;
+        }
+        return;
+    }
+    if (shareWatchdogTimer) return;
+    shareWatchdogTimer = setInterval(() => {
+        if (desiredWatchKind() !== 'share') return;
+        const last = lastWatchCallbackAt || lastFix?.t || 0;
+        if (last && Date.now() - last < SHARE_SILENT_RESTART_MS) return;
+        lastWatchCallbackAt = Date.now();
+        clearWatch();
+        startWatch('share');
+    }, 4000);
+}
+
+async function syncShareWakeLock(on) {
+    wantShareWakeLock = on;
+    if (!on) {
+        try { await wakeLockSentinel?.release(); } catch { /* ignore */ }
+        wakeLockSentinel = null;
+        return;
+    }
+    if (typeof navigator === 'undefined' || !navigator.wakeLock) return;
+    if (typeof document !== 'undefined' && document.hidden) return;
+    try {
+        if (wakeLockSentinel) return;
+        wakeLockSentinel = await navigator.wakeLock.request('screen');
+        wakeLockSentinel.addEventListener('release', () => {
+            wakeLockSentinel = null;
+        });
+    } catch { /* unsupported or denied */ }
+}
+
 function applyWatch() {
-    const hidden = typeof document !== 'undefined' && document.hidden;
-    if (hidden || holders.size === 0) {
+    const kind = desiredWatchKind();
+    syncShareWakeLock(kind === 'share');
+    syncShareWatchdog(kind === 'share');
+    if (kind === 'off') {
         clearWatch();
         return;
     }
-    startSeekWatch();
+    startWatch(kind);
 }
 
 function bindLifecycle() {
@@ -168,6 +251,8 @@ function bindLifecycle() {
     });
     window.addEventListener('pagehide', () => {
         clearWatch();
+        syncShareWatchdog(false);
+        syncShareWakeLock(false);
     });
     window.addEventListener('pageshow', () => {
         applyWatch();

@@ -5997,7 +5997,9 @@ const Admin = {
                         const quoted = item.quotedPrice != null ? `R${item.quotedPrice}` : '-';
                         const reported = item.reportedPrice != null ? `R${item.reportedPrice}` : '-';
                         const peakLabel = item.isOffPeak ? 'Off-peak' : 'Peak';
-                        const kmLabel = item.km != null && item.km !== '' ? `${item.km} km` : '-';
+                        const smoothKm = item.smoothKm ?? item.km;
+                        const abKm = item.abKm ?? item.crowKm;
+                        const kmLabel = `smooth ${smoothKm != null && smoothKm !== '' ? smoothKm : '-'} km · A-B ${abKm != null && abKm !== '' ? abKm : '-'} km`;
                         const profileLabel = item.profile || 'Adult';
                         const vsLabel = item.agree ? `${quoted} (yes)` : `${quoted} → ${reported}`;
                         card.innerHTML = `
@@ -6738,7 +6740,7 @@ const Admin = {
                     return;
                 }
                 entries.sort((a, b) => (Number(b.at) || 0) - (Number(a.at) || 0));
-                const headers = ['at', 'origin', 'destination', 'quotedPrice', 'reportedPrice', 'agree', 'isOffPeak', 'dayType', 'depTime', 'profile', 'km', 'crowKm', 'zone', 'region', 'deviceId', 'authUid', 'appVersion', 'routeIds', 'id'];
+                const headers = ['at', 'origin', 'destination', 'quotedPrice', 'reportedPrice', 'agree', 'isOffPeak', 'dayType', 'depTime', 'profile', 'km', 'crowKm', 'smoothKm', 'abKm', 'zone', 'region', 'deviceId', 'authUid', 'appVersion', 'routeIds', 'id'];
                 const cell = (r, h) => {
                     if (h === 'at') return Admin.formatDate(r.at);
                     if (h === 'routeIds') return Array.isArray(r.routeIds) ? r.routeIds.join('|') : (r.routeIds || '');
@@ -6760,7 +6762,7 @@ const Admin = {
                         txt += `#${i + 1}  ${Admin.formatDate(r.at)}\n`;
                         txt += `  ${(r.origin || '-')} -> ${(r.destination || '-')}\n`;
                         txt += `  Quoted: R${r.quotedPrice ?? '-'}  Reported: R${r.reportedPrice ?? '-'}  Agree: ${r.agree ? 'yes' : 'no'}\n`;
-                        txt += `  ${r.isOffPeak ? 'Off-peak' : 'Peak'} - ${r.dayType || '-'} - ${r.km != null ? r.km + ' km' : '-'} - ${r.profile || 'Adult'}\n\n`;
+                        txt += `  ${r.isOffPeak ? 'Off-peak' : 'Peak'} - ${r.dayType || '-'} - smooth ${r.smoothKm ?? r.km ?? '-'} km - A-B ${r.abKm ?? r.crowKm ?? '-'} km - ${r.profile || 'Adult'}\n\n`;
                     });
                     Admin.downloadFile(`fare_votes_${dateStr}.txt`, txt);
                 }

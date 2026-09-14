@@ -169,6 +169,8 @@ ok(adminJs.includes("'height:auto'") && adminJs.includes("'overflow:hidden'"), '
 ok(adminJs.includes('id="de-tab-fares"'), 'planner telemetry has a Fares tab');
 ok(adminJs.includes('id="de-tab-trips"') && adminJs.indexOf('id="de-tab-fails"') < adminJs.indexOf('id="de-tab-fares"'), 'Fails tab is listed before Fares');
 ok(adminJs.includes('sys_logs/fare_votes'), 'admin reads fare_votes');
+ok(adminJs.includes('smoothKm') && adminJs.includes('abKm'), 'Fares tab exports smooth and A-B km');
+ok(adminJs.includes('A-B '), 'Fares list labels crow-flies as A-B');
 ok(adminJs.includes("['trips', 'fails', 'fares']"), 'swipe walks three planner telemetry tabs');
 ok(adminJs.includes('de-trip-hour-bars') && adminJs.includes('de-trip-od-heat'), 'planner insights include hour bars and an OD heatmap');
 ok(adminJs.includes('de-trip-dep-bars') && adminJs.includes('de-trip-xfer'), 'planner insights include departure-hour and transfer charts');

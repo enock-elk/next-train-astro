@@ -51,6 +51,24 @@ assert(roundFareVoteRand(7.01) === 7, 'just over 7 floors after half-rand ceil')
     assert(yes.quotedPrice === 8 && yes.reportedPrice === 8, 'yes ships quoted price as reported');
     assert(yes.origin === 'PRETORIA' && yes.destination === 'JOHANNESBURG', 'OD is stored');
     assert(Array.isArray(yes.routeIds) && yes.routeIds[0] === 'pta-jhb', 'routeIds array is stored');
+    assert(yes.km === 12.4 && yes.smoothKm === 12.4, 'smooth km is stored on km and smoothKm');
+    assert(yes.crowKm === 10.1 && yes.abKm === 10.1, 'A-B km is stored on crowKm and abKm');
+}
+
+{
+    const both = buildFareVotePayload({
+        origin: 'PRETORIA',
+        destination: 'JOHANNESBURG',
+        quotedPrice: 8,
+        deviceId: 'dev1',
+        at: 1,
+        km: 1,
+        crowKm: 2,
+        smoothKm: 9.1,
+        abKm: 3.3,
+    });
+    assert(both.smoothKm === 9.1 && both.km === 9.1, 'explicit smoothKm wins over km');
+    assert(both.abKm === 3.3 && both.crowKm === 3.3, 'explicit abKm wins over crowKm');
 }
 
 {
@@ -164,10 +182,14 @@ assert(ui.includes('planner-fare-vote-yes') && ui.includes('planner-fare-vote-no
 assert(ui.includes('planner-fare-vote-send'), 'No path has Send');
 assert(ui.includes('roundFareVoteRand'), 'correction uses the board whole-rand floor');
 assert(ui.includes('submitFareVote'), 'fare sheet writes votes immediately');
+assert(ui.includes('smoothKm: km') && ui.includes('abKm: crowKm'), 'fare sheet sends smooth and A-B km');
+assert(ui.includes('getCrowFliesTripKm') && ui.includes('getSmoothTripDistanceKm'), 'fare sheet can fill both distance types');
 assert(!ui.includes('most people paid'), 'do not show a live consensus fare');
 
 const tel = readFileSync(join(ROOT, 'src/lib/planner-telemetry.js'), 'utf8');
 assert(tel.includes('sys_logs/fare_votes'), 'client writes sys_logs/fare_votes');
+assert(tel.includes('smoothKm'), 'fare vote payload includes smoothKm');
+assert(tel.includes('abKm'), 'fare vote payload includes abKm');
 assert(tel.includes('FARE_VOTE_QUEUE_KEY'), 'offline fare vote queue exists');
 assert(tel.includes('slice(-1)'), 'offline fare vote queue is capped at 1');
 

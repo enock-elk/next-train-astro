@@ -231,6 +231,8 @@ const now = 1_700_000_000_000;
     assert(channel.includes('bg-slate-200 dark:bg-gray-950'), 'channel background contrasts with white cards');
 
     const js = readFileSync(new URL('../src/lib/alerts-channel.js', import.meta.url), 'utf8');
+    assert(js.includes('scopedLiveNotices'), 'feed filters to the current route union');
+    assert(js.includes('noticeScopeKeys(region, routeId'), 'scoped notices use union keys');
     assert(js.includes('alerts-channel-footer-close'), 'footer Close is bound');
     assert(js.includes('nt-alert-signoff'), 'card has signature class');
     assert(js.includes('nt-alert-poster-loading'), 'poster box has a loading overlay');
@@ -259,6 +261,9 @@ const now = 1_700_000_000_000;
     assert(js.includes('nt-alert-action-meta'), 'admin route/views share the roomier Reply row');
     const hub = readFileSync(new URL('../src/lib/hub.js', import.meta.url), 'utf8');
     assert(hub.includes("returnModalId !== 'alerts-channel'"), 'Reply does not park the alerts channel');
+    assert(hub.includes('$currentRouteId.subscribe'), 'route swaps refetch notices');
+    assert(hub.includes('paintAlertsForCurrentRoute'), 'open alerts drop the previous route immediately');
+    assert(hub.includes('noticesPromise'), 'notice fetch does not wait on inbox');
     const ui = readFileSync(new URL('../src/lib/ui.js', import.meta.url), 'utf8');
     assert(ui.includes("modalId === 'alerts-channel'"), 'alerts Close fades before popping history');
     assert(!/class="[^"]*nt-alert-reply[^"]*\bw-full\b/.test(js), 'Reply is not a full-width button');

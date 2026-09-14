@@ -31,7 +31,13 @@ import {
     TRACKING_STATE,
     updateDirectionObservation,
 } from '../src/lib/ride-pings.js';
-import { refineMotionFix, reusableGeoFix, locateFixOrLast, GEO_REUSE_MAX_AGE_MS } from '../src/lib/geo-watch.js';
+import {
+    formatGpsPingAge,
+    formatGpsPingClock,
+    formatLastSeenWithPingClock,
+    gpsPingSuccessAt,
+} from '../src/lib/gps-freshness.js';
+import { refineMotionFix, confirmStationaryWatchTick, reusableGeoFix, locateFixOrLast, GEO_REUSE_MAX_AGE_MS } from '../src/lib/geo-watch.js';
 import { readFileSync } from 'node:fs';
 import {
     WEEKDAY_REPORT_MAX_AGE_MS,
@@ -171,6 +177,20 @@ assert(refineMotionFix(
     { lat: -25, lng: 28.01, accuracy: 5, heading: 90, speedMps: 10, t: 1000 },
     { lat: -25, lng: 28, accuracy: 5, heading: 90, speedMps: 10, t: 1000 }
 ) === null, 'non-newer GPS timestamp is ignored');
+const heardAgain = confirmStationaryWatchTick(
+    { lat: -25.75, lng: 28.19, accuracy: 12, heading: null, speedMps: 0, t: 1000 },
+    { lat: -25.75, lng: 28.19, accuracy: 12, heading: 174, speedMps: 0, t: 1000 },
+    4000
+);
+assert(heardAgain?.t === 4000 && heardAgain.stationary, 'a repeated stationary GPS callback still counts as a live ping');
+assert(
+    confirmStationaryWatchTick(
+        { lat: -26, lng: 29, accuracy: 8, t: 1000 },
+        { lat: -25.75, lng: 28.19, accuracy: 8, t: 1000 },
+        4000
+    ) === null,
+    'a repeated callback that jumped is not treated as a live ping'
+);
 
 const mapPin = { lat: -25.75, lng: 28.19, accuracy: 99, heading: null, speedMps: 0, t: 50_000 };
 assert(reusableGeoFix(mapPin, 50_000 + 8_000), 'map pin younger than 8s is reusable');
@@ -191,7 +211,7 @@ assert(
 );
 assert(adaptiveOnboardPingMs(12) === ONBOARD_FAST_PING_MS, 'fast train broadcasts every 5 seconds');
 assert(adaptiveOnboardPingMs(2) === ONBOARD_MOVING_PING_MS, 'slow movement broadcasts every 10 seconds');
-assert(adaptiveOnboardPingMs(0) === ONBOARD_STATIONARY_PING_MS, 'stationary share heartbeats every 25 seconds');
+assert(adaptiveOnboardPingMs(0) === ONBOARD_STATIONARY_PING_MS, 'stationary share heartbeats every 10 seconds');
 assert(!terminusStopShouldFire({
     atLast: true, lastIndex: 12, minProgressSeen: 12,
 }), 'sitting at the last station when sharing starts does not end the share');
@@ -317,11 +337,17 @@ assert(mapAppSource.includes('enableHighAccuracy: false'), 'standalone map watch
 assert(!mapAppSource.includes('enableHighAccuracy: true});'), 'map no longer starts a Leaflet high-accuracy watch');
 assert(mapTabSource.includes('acquireGeoWatch'), 'map tab holds the fused geo watch while visible');
 assert(mapTabSource.includes('releaseGeoWatch'), 'leaving the map tab drops the map geo-watch holder');
-assert(ridePingsSource.includes("acquireGeoWatch('share')"), 'an active share keeps the fused geo watch');
+assert(ridePingsSource.includes("acquireGeoWatch('share')"), 'an active share keeps the geo watch');
+assert(!ridePingsSource.includes("document.hidden) {\n            await queueOnboardPause('staleGps')"), 'hidden documents do not pause an active share');
+assert(ridePingsSource.includes('queueOnboardPause(\'staleGps\', onboardLatestFix)'), 'share still pauses when GPS is actually stale');
 assert(ridePingsSource.includes('alignBearingToJourney'), 'projected pings use rail tangent aligned to travel');
 assert(geoWatchSource.includes('watchPosition'), 'geo watch uses a single watchPosition');
 assert(geoWatchSource.includes('enableHighAccuracy: false'), 'seek watch is fused / low power');
-assert(geoWatchSource.includes('document.hidden'), 'geo watch pauses when the document is hidden');
+assert(geoWatchSource.includes('enableHighAccuracy: true'), 'an active share uses a high-accuracy watch');
+assert(geoWatchSource.includes("holders.has('share')"), 'share keeps GPS running while the document is hidden');
+assert(geoWatchSource.includes('SHARE_SILENT_RESTART_MS'), 'a silent share watch is restarted');
+assert(geoWatchSource.includes('wakeLock.request'), 'sharing requests a screen wake lock to keep GPS live');
+assert(geoWatchSource.includes('confirmStationaryWatchTick'), 'repeated stationary GPS callbacks stay live');
 assert(geoWatchSource.includes("holders.add"), 'geo watch is reference-counted by map and share');
 assert(geoWatchSource.includes('reusableGeoFix'), 'locate can keep a fresh fused map pin');
 assert(geoWatchSource.includes('locateFixOrLast'), 'failed high-accuracy locate falls back to the map pin');
@@ -342,6 +368,14 @@ assert(mapPageSource.includes('translate(-26px, -50%)'), 'wake ripples travel ba
 assert(mapPageSource.includes('prefers-reduced-motion: reduce'), 'train motion respects reduced-motion preference');
 assert(mapAppSource.includes('Show tracking details'), 'train popup opens tracking details');
 assert(mapAppSource.includes('Rail distance') && mapAppSource.includes('GPS accuracy'), 'train popup exposes tracking metrics');
+assert(mapAppSource.includes('GPS age'), 'train popup shows GPS age');
+assert(mapAppSource.includes("s + ' sec'") && mapAppSource.includes("m + 'm ' + s + ' sec'"), 'train popup GPS age always includes seconds');
+assert(mapAppSource.includes('tickRidePopupFreshness'), 'open train popup ticks GPS age every second');
+assert(mapAppSource.includes("data-nt-gps-kind='age'"), 'popup GPS age is bound to the last ping');
+assert(mapTabSource.includes('formatLastSeenWithPingClock'), 'tracking card Last seen uses the GPS ping clock');
+assert(mapTabSource.includes('formatGpsPingAge'), 'tracking card GPS cell is ping age');
+assert(ridePingsSource.includes('payload.fixAt'), 'successful GPS pings store fixAt');
+assert(ridePingsSource.includes('gpsFixAt'), 'onboard broadcasts pass the GPS sample time');
 assert(mapViewSource.includes('id="map-tracking-card"'), 'current contributor has a bottom tracking card');
 assert(mapViewSource.includes('id="map-tracking-minimize"'), 'tracking card is minimizable');
 assert(mapViewSource.includes('id="map-tracking-dismiss"'), 'tracking card is dismissible');
@@ -497,6 +531,17 @@ const expired = expiredReportsFromToday([staleToday], { nowMs: morning, nowSec: 
 assert(expired.length === 1, 'expired accordion keeps today’s stale reports');
 assert(expiredReportsFromToday([fresh], { nowMs, nowSec, dayType: 'weekday' }).length === 0, 'live reports stay out of expired');
 assert(expiredReportsFromToday([staleToday], { nowMs: curfewMs }).length === 0, 'expired accordion also hides at 23:59');
+
+{
+    const now = Date.UTC(2026, 8, 14, 13, 20, 23);
+    assert(gpsPingSuccessAt({ fixAt: 9, acceptedAt: 8, at: 7 }) === 9, 'fixAt is the last GPS success');
+    assert(gpsPingSuccessAt({ acceptedAt: 8, at: 7 }) === 8, 'acceptedAt is used when fixAt is missing');
+    const clock = formatGpsPingClock(now);
+    assert(/^\d{2}:\d{2}:\d{2}$/.test(clock), `GPS clock has seconds: ${clock}`);
+    assert(formatGpsPingAge(now - 5000, now) === '5 sec', 'sub-minute GPS age keeps seconds');
+    assert(formatGpsPingAge(now - 65000, now) === '1m 5 sec', 'GPS age after a minute still shows seconds');
+    assert(formatLastSeenWithPingClock('PRETORIA', now) === `Last seen PRETORIA - ${clock}`, 'Last seen includes the ping clock');
+}
 
 if (failures.length) {
     console.error('verify-reports-tracking failed:');

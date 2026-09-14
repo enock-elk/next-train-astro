@@ -29,13 +29,27 @@ function isSafeRtdbKey(value) {
     return typeof value === 'string' && value.length > 0 && value.length <= 80 && !/[.#$[\]/]/.test(value);
 }
 
+function corsOriginAllowed(origin, env) {
+    if (!origin) return true;
+    const allowed = String(env.ALLOWED_ORIGINS || '')
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean);
+    if (allowed.includes('*') || allowed.includes(origin)) return true;
+    try {
+        const host = new URL(origin).hostname.toLowerCase();
+        if (host.endsWith('.github.io') || host.endsWith('.pages.dev')) return true;
+    } catch { /* ignore */ }
+    return false;
+}
+
 function corsHeaders(env, request) {
     const origin = request.headers.get('Origin') || '';
     const allowed = String(env.ALLOWED_ORIGINS || '')
         .split(',')
         .map((s) => s.trim())
         .filter(Boolean);
-    const ok = !origin || allowed.includes(origin) || allowed.includes('*');
+    const ok = corsOriginAllowed(origin, env);
     return {
         'Access-Control-Allow-Origin': ok ? (origin || '*') : (allowed[0] || '*'),
         'Access-Control-Allow-Methods': 'POST, OPTIONS, GET',
@@ -1066,18 +1080,22 @@ export default {
     },
 
     async scheduled(event, env, ctx) {
-        if (event.cron === ALERT_CRON) {
-            ctx.waitUntil(
-                runScheduledAlerts(env).catch((e) => console.error('Scheduled alert run failed', e))
-            );
-        }
-        if (event.cron === TTL_CRON) {
-            ctx.waitUntil(
+        const cron = String(event.cron || '');
+        // Always publish due alerts on every cron tick. Do not require an exact
+        // `event.cron === '*/5 * * * *'` match — Cloudflare can normalize the
+        // expression, and a no-op here leaves Monday 00:00 jobs sitting in the queue.
+        const tasks = [
+            runScheduledAlerts(env).catch((e) => console.error('Scheduled alert run failed', e)),
+        ];
+        const hourly = cron === TTL_CRON || cron === '0 * * * *' || /^0 \* \* \* \*$/.test(cron);
+        if (hourly) {
+            tasks.push(
                 Promise.all([
                     wipeStalePosts(env),
                     cleanupAlertImpressionDedupe(env),
                 ]).catch((e) => console.error('TTL wipe failed', e))
             );
         }
+        await Promise.all(tasks);
     },
 };

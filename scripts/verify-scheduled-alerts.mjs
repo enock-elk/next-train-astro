@@ -75,6 +75,22 @@ assert.equal(
     'end-of-day expiry is Johannesburg-local'
 );
 
+const mondayMorning = jhb('2026-09-14T02:48:00');
+assert.deepEqual(planScheduledAlertRun({
+    frequency: 'weekly',
+    weekdays: [1, 5],
+    timeOfDay: '00:00',
+    nextRunAt: jhb('2026-09-14T00:00:00'),
+    expireMode: 'end_of_day',
+    notice: {},
+}, mondayMorning), {
+    due: true,
+    occurrenceAt: jhb('2026-09-14T00:00:00'),
+    nextRunAt: jhb('2026-09-18T00:00:00'),
+    staleSkipped: 0,
+    finished: false,
+}, 'Monday 00:00 end-of-day weekly is still due at 02:48 SAST');
+
 const now = jhb('2026-09-10T12:00:00');
 const oldDaily = {
     frequency: 'daily',
@@ -188,8 +204,11 @@ const refreshRunner = adminSource.slice(
 );
 assert.match(refreshRunner, /fetchScheduledAlerts/);
 assert.match(refreshRunner, /publishDueScheduledAlerts optional/);
+assert.match(refreshRunner, /publishDueScheduledAlertsDirect/);
 assert.match(refreshRunner, /publish skipped/);
 assert.match(refreshRunner, /_cachedScheduledAlerts/);
+assert.match(adminSource, /ntAdminPlanScheduledAlertRun/);
+assert.match(adminSource, /publishDueScheduledAlertsDirect/);
 assert.doesNotMatch(
     refreshRunner.slice(0, refreshRunner.indexOf('fetchScheduledAlerts')),
     /statusEl\.textContent = 'Failed'/,
@@ -199,5 +218,10 @@ assert.match(workerSource, /enockelk@gmail\.com/);
 assert.match(workerSource, /thandeka05nxumalo@gmail\.com/);
 assert.match(wranglerSource, /"\*\/5 \* \* \* \*"/);
 assert.match(wranglerSource, /"0 \* \* \* \*"/);
+assert.match(wranglerSource, /enock-elk\.github\.io/);
+assert.match(workerSource, /runScheduledAlerts\(env\)/);
+assert.match(workerSource, /await Promise\.all\(tasks\)/);
+assert.match(workerSource, /Cloudflare can normalize/);
+assert.match(workerSource, /endsWith\('\.github\.io'\)/);
 
 console.log('Scheduled alerts verified: Johannesburg recurrence, stale skipping, ETag overlap, deterministic partial-failure retry, admin Worker handoff, and split cron triggers.');

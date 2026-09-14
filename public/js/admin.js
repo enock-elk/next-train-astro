@@ -513,6 +513,99 @@ function ntAdminComputeJobNextRun(job, fromTs) {
     return ntAdminCapScheduleRun(ntAdminLegacyNextScheduleRun(freq, from), job.untilAt);
 }
 
+const NT_ADMIN_JHB_OFFSET_MS = 2 * 60 * 60 * 1000;
+
+function ntAdminJhbParts(ts) {
+    const d = new Date(Number(ts) + NT_ADMIN_JHB_OFFSET_MS);
+    return {
+        year: d.getUTCFullYear(),
+        month: d.getUTCMonth(),
+        day: d.getUTCDate(),
+        weekday: d.getUTCDay(),
+        hour: d.getUTCHours(),
+        minute: d.getUTCMinutes(),
+    };
+}
+
+function ntAdminJhbTs(year, month, day, hour = 0, minute = 0, second = 0, ms = 0) {
+    return Date.UTC(year, month, day, hour, minute, second, ms) - NT_ADMIN_JHB_OFFSET_MS;
+}
+
+function ntAdminJhbNextWeeklyRun(job, fromTs) {
+    const days = ntAdminNormalizeWeekdays(job.weekdays);
+    if (!days.length) return 0;
+    const { hh, mm } = ntAdminParseTimeOfDay(job.timeOfDay || '00:00');
+    const start = ntAdminJhbParts(fromTs);
+    for (let offset = 0; offset < 8; offset += 1) {
+        const midnight = ntAdminJhbTs(start.year, start.month, start.day + offset);
+        const parts = ntAdminJhbParts(midnight);
+        const candidate = ntAdminJhbTs(parts.year, parts.month, parts.day, hh, mm);
+        if (days.includes(parts.weekday) && candidate > fromTs) return candidate;
+    }
+    return 0;
+}
+
+function ntAdminJhbNextRun(job, fromTs) {
+    const frequency = job?.frequency || 'once';
+    const from = Number(fromTs) || 0;
+    if (!from || frequency === 'once') return 0;
+    if (frequency === 'weekly' && ntAdminNormalizeWeekdays(job.weekdays).length) {
+        return ntAdminCapScheduleRun(ntAdminJhbNextWeeklyRun(job, from), job.untilAt);
+    }
+    return ntAdminComputeJobNextRun(job, from);
+}
+
+function ntAdminJhbExpiresAt(runAt, job) {
+    const when = Number(runAt) || Date.now();
+    const notice = job && job.notice && typeof job.notice === 'object' ? job.notice : {};
+    const p = ntAdminJhbParts(when);
+    if (job?.expireMode === 'month_end') return ntAdminJhbTs(p.year, p.month + 1, 0, 23, 59, 59, 999);
+    if (job?.expireMode === 'end_of_day') return ntAdminJhbTs(p.year, p.month, p.day, 23, 59, 59, 999);
+    if (job?.expireMode === 'absolute') {
+        const absolute = Number(notice.expiresAt || job.expiresAt || 0);
+        if (absolute) return absolute;
+    }
+    const duration = Number(notice.expiresInMs != null ? notice.expiresInMs : job?.expiresInMs) || 0;
+    return duration > 0 ? when + duration : ntAdminJhbTs(p.year, p.month, p.day, 23, 59, 59, 999);
+}
+
+function ntAdminPlanScheduledAlertRun(job, now) {
+    let cursor = Number(job?.nextRunAt || 0);
+    if (!cursor || cursor > now) return { due: false, nextRunAt: cursor, staleSkipped: 0, occurrenceAt: 0, finished: false };
+    let occurrenceAt = 0;
+    let staleSkipped = 0;
+    for (let guard = 0; cursor && cursor <= now && guard < 10000; guard += 1) {
+        if (ntAdminJhbExpiresAt(cursor, job) > now) {
+            if (occurrenceAt) staleSkipped += 1;
+            occurrenceAt = cursor;
+        } else {
+            staleSkipped += 1;
+        }
+        cursor = ntAdminJhbNextRun(job, cursor);
+    }
+    return {
+        due: true,
+        occurrenceAt,
+        nextRunAt: cursor,
+        staleSkipped,
+        finished: !cursor,
+    };
+}
+
+function ntAdminScheduledNoticeId(scheduleId, occurrenceAt) {
+    let hash = 2166136261;
+    for (const char of String(scheduleId)) {
+        hash ^= char.charCodeAt(0);
+        hash = Math.imul(hash, 16777619);
+    }
+    return `sched_${Number(occurrenceAt).toString(36)}_${(hash >>> 0).toString(36)}`;
+}
+
+function ntAdminScheduledTargets(job) {
+    const values = Array.isArray(job?.targets) && job.targets.length ? job.targets : [job?.target];
+    return Array.from(new Set((values || []).map((t) => String(t || '').trim()).filter(Boolean)));
+}
+
 function ntAdminFormatWeekdaysLabel(days) {
     return ntAdminNormalizeWeekdays(days).map((d) => NT_ADMIN_WEEKDAY_LABELS[d]).join(', ');
 }
@@ -10882,6 +10975,91 @@ const Admin = {
         return result;
     },
 
+    publishDueScheduledAlertsDirect: async (secret, jobs) => {
+        if (!secret) secret = await Admin.getAuthKey();
+        if (!secret) throw new Error('Authentication required');
+        const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
+        const now = Date.now();
+        const list = Array.isArray(jobs) ? jobs : await Admin.fetchScheduledAlerts();
+        const results = [];
+        for (const job of list) {
+            const scheduleId = String(job.id || '');
+            if (!scheduleId || job.enabled === false || !job.notice) {
+                results.push({ scheduleId, state: 'ignored' });
+                continue;
+            }
+            const plan = ntAdminPlanScheduledAlertRun(job, now);
+            if (!plan.due) {
+                results.push({ scheduleId, state: 'pending' });
+                continue;
+            }
+            const targets = ntAdminScheduledTargets(job);
+            if (!plan.occurrenceAt) {
+                const nextJob = plan.finished ? null : {
+                    nextRunAt: plan.nextRunAt || null,
+                    lastSkippedAt: now,
+                    staleSkipped: Number(job.staleSkipped || 0) + plan.staleSkipped,
+                };
+                if (plan.finished) {
+                    await fetch(`${dynamicEndpoint}notices_scheduled/${encodeURIComponent(scheduleId)}.json?auth=${secret}`, { method: 'DELETE' });
+                } else {
+                    await fetch(`${dynamicEndpoint}notices_scheduled/${encodeURIComponent(scheduleId)}.json?auth=${secret}`, {
+                        method: 'PATCH',
+                        body: JSON.stringify(nextJob),
+                    });
+                }
+                results.push({ scheduleId, state: 'stale', staleSkipped: plan.staleSkipped });
+                continue;
+            }
+            if (!targets.length) {
+                results.push({ scheduleId, state: 'invalid' });
+                continue;
+            }
+            const noticeId = ntAdminScheduledNoticeId(scheduleId, plan.occurrenceAt);
+            const notice = { ...(job.notice || {}) };
+            delete notice.expiresInMs;
+            const payload = {
+                ...notice,
+                id: noticeId,
+                postedAt: plan.occurrenceAt,
+                expiresAt: ntAdminJhbExpiresAt(plan.occurrenceAt, job),
+            };
+            const failures = [];
+            for (const target of targets) {
+                try {
+                    await Admin.publishNoticeToTarget(target, payload, secret);
+                } catch (error) {
+                    failures.push({ target, error: error?.message || 'Publish failed' });
+                }
+            }
+            if (failures.length) {
+                results.push({ scheduleId, state: 'failed', noticeId, failures });
+                continue;
+            }
+            if (plan.finished) {
+                await fetch(`${dynamicEndpoint}notices_scheduled/${encodeURIComponent(scheduleId)}.json?auth=${secret}`, { method: 'DELETE' });
+            } else {
+                await fetch(`${dynamicEndpoint}notices_scheduled/${encodeURIComponent(scheduleId)}.json?auth=${secret}`, {
+                    method: 'PATCH',
+                    body: JSON.stringify({
+                        nextRunAt: plan.nextRunAt || null,
+                        lastRunAt: now,
+                        lastOccurrenceAt: plan.occurrenceAt,
+                        lastNoticeId: noticeId,
+                        staleSkipped: Number(job.staleSkipped || 0) + plan.staleSkipped,
+                        processing: null,
+                    }),
+                });
+            }
+            results.push({ scheduleId, state: 'published', noticeId, targets: targets.length });
+        }
+        const published = results.filter((item) => item.state === 'published').length;
+        if (published && typeof checkServiceAlerts === 'function') {
+            try { checkServiceAlerts(); } catch (_) {}
+        }
+        return { ok: true, via: 'direct', published, results };
+    },
+
     fetchScheduledAlerts: async () => {
         const secret = await Admin.getAuthKey();
         if (!secret) throw new Error('Authentication required');
@@ -11006,17 +11184,29 @@ const Admin = {
         let publishNote = '';
         try {
             const secret = await Admin.getAuthKey();
+            let due = null;
             try {
-                const due = await Admin.publishDueScheduledAlerts(secret);
-                if (due && due.published) publishNote = ` - posted ${due.published}`;
+                due = await Admin.publishDueScheduledAlerts(secret);
             } catch (pubErr) {
                 console.warn('publishDueScheduledAlerts optional', pubErr);
-                const reason = String(pubErr?.message || 'publish skipped');
-                publishNote = reason.includes('not configured')
-                    ? ' - publish skipped (worker not configured)'
-                    : ` - publish skipped`;
             }
-            const items = await Admin.fetchScheduledAlerts();
+            let items = await Admin.fetchScheduledAlerts();
+            const stillDue = items.filter((job) => job && job.enabled !== false && Number(job.nextRunAt || 0) <= Date.now());
+            if (stillDue.length) {
+                try {
+                    due = await Admin.publishDueScheduledAlertsDirect(secret, stillDue);
+                    items = await Admin.fetchScheduledAlerts();
+                } catch (directErr) {
+                    console.warn('publishDueScheduledAlertsDirect optional', directErr);
+                    const reason = String(directErr?.message || 'publish skipped');
+                    publishNote = reason.includes('not configured')
+                        ? ' - publish skipped (worker not configured)'
+                        : ' - publish skipped';
+                }
+            }
+            if (!publishNote && due && due.published) {
+                publishNote = ` - posted ${due.published}`;
+            }
             Admin.renderScheduledAlertsList(items);
             if (statusEl) statusEl.textContent = `${items.length} scheduled${publishNote}`;
         } catch (e) {

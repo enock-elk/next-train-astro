@@ -2,6 +2,12 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin, Dev Hub, Alerts, Trains near me, community chat, or other hidden-test work. No emoji and no em dashes in What’s New. Keep `APP_VERSION`, `package.json` `version`, and `public/app-version.json` aligned on each release. Changelog / What’s New may be skipped, or the heading may be only **no release notes.**
 
+## V9_09.14.2 — Scheduled alert cron and Refresh fallback (14 Sep 2026)
+
+The community worker now publishes due `notices_scheduled` jobs on every cron tick and waits for that run to finish. github.io and pages.dev origins are allowed to call the worker. Scheduled Refresh also posts due jobs directly when the worker path is skipped, so a Monday 00:00 weekly no longer sits in the queue as PUBLISH SKIPPED.
+
+no release notes.
+
 ## V9_09.14.1 — Experimental feature accordions and trip fare sheet (14 Sep 2026)
 
 System Controls Experimental features lists Map, Community, I'm on it / live share, Delay reports, Community realtime, Push notifications, and Trip price. Each type is an accordion that reveals the routes an operator can allow. Save writes those keys into `config/features` and keeps any other existing flags.

@@ -5,6 +5,10 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_09.14.2': [
+        'Scheduled alerts: worker cron always publishes due jobs (no exact */5 string match) and awaits the run. github.io / pages.dev can call the worker.',
+        'Scheduled Refresh posts due jobs itself when the worker is skipped, so a Monday 00:00 Pretoria-Kempton weekly does not sit at PUBLISH SKIPPED.',
+    ],
     'V9_09.14.1': [
         'System Controls Experimental features: accordion per type (Map, Community, I\'m on it / live share, Delay reports, Community realtime, Push notifications, Trip price). Open a type to allow routes. Save still merges into config/features.',
         'Trip price follows the route allow-list (or a device grant). Planner fare sheet states the algorithm is still being tested, floors R7.50 to R7 like the board fare button, money SVG on Trip fare, and Adult opens the passenger profile picker.',

@@ -73,6 +73,15 @@ assert.match(admin, /admin_state\/\$\{encodeURIComponent\(Admin\.currentUser\.ui
 assert.match(admin, /Admin\._communityLoadRoute/, 'route messages load on demand');
 assert.match(admin, /const missingActivity = \{\}/, 'lazy route load derives missing index entries from stored messages');
 assert.match(admin, /Activity backfill failed/, 'backfill is best effort and does not replace source messages');
+assert.match(admin, /Object\.entries\(postsData\)/, 'monitor uses Firebase keys when postId is missing from the payload');
+assert.match(admin, /encodeURIComponent\(token\)/, 'monitor delete uses a fresh encoded ID token');
+assert.match(admin, /method: 'DELETE'/, 'published posts are deleted at their RTDB path, not via a root PATCH');
+assert.match(admin, /list\.onclick =/, 'monitor click handler is replaced on each refresh');
+assert.doesNotMatch(
+    admin.slice(admin.indexOf('Admin.deletePublishedCommunityMessage'), admin.indexOf('list.onclick')),
+    /method: 'PATCH'/,
+    'delete no longer PATCHes the database root'
+);
 assert.doesNotMatch(admin, /route_community\.json[^]*onValue/, 'monitor does not attach a root route listener');
 assert.doesNotMatch(admin, /status !== 'closed' && i\.status !== 'resolved'/, 'legacy approved-status overcount is gone');
 

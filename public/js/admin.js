@@ -8431,7 +8431,7 @@ const Admin = {
                 const secret = await Admin.getAuthKey();
                 if (!secret || !Admin.currentUser?.uid) throw new Error('Not signed in');
                 const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
-                const authQ = `?auth=${secret}`;
+                const authQ = `?auth=${encodeURIComponent(secret)}`;
                 const [activityRes, queueRes, seenRes] = await Promise.all([
                     window.guardianFetch(`${dynamicEndpoint}community_activity.json${authQ}`, {}, 8000),
                     window.guardianFetch(`${dynamicEndpoint}moderation_queue.json${authQ}`, {}, 8000),
@@ -8559,15 +8559,32 @@ const Admin = {
                     </div>`;
                 };
 
+                const communityAuthSuffix = async () => {
+                    const token = await Admin.getAuthKey();
+                    if (!token) throw new Error('Not signed in');
+                    return `?auth=${encodeURIComponent(token)}`;
+                };
+                const communityPostSelector = (postId) => {
+                    const id = String(postId || '');
+                    const safe = (typeof CSS !== 'undefined' && typeof CSS.escape === 'function')
+                        ? CSS.escape(id)
+                        : id.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+                    return `[data-community-post="${safe}"]`;
+                };
+
                 Admin._communityLoadRoute = async (details) => {
                     if (!details || details.dataset.loaded === 'true') return;
                     const routeId = details.dataset.communityRoute;
                     const target = details.querySelector('.community-route-conversation');
                     target.innerHTML = '<p class="py-3">Loading conversation...</p>';
-                    const routeRes = await window.guardianFetch(`${dynamicEndpoint}route_community/${encodeURIComponent(routeId)}/posts.json${authQ}`, {}, 8000);
+                    const routeAuthQ = await communityAuthSuffix();
+                    const routeRes = await window.guardianFetch(`${dynamicEndpoint}route_community/${encodeURIComponent(routeId)}/posts.json${routeAuthQ}`, {}, 8000);
                     if (!routeRes.ok) throw new Error(`Route load failed (${routeRes.status})`);
                     const postsData = await routeRes.json() || {};
-                    const posts = Object.values(postsData).sort((a, b) => Number(a.timestamp || 0) - Number(b.timestamp || 0));
+                    const posts = Object.entries(postsData).map(([key, post]) => ({
+                        ...(post && typeof post === 'object' ? post : {}),
+                        postId: (post && post.postId) || key,
+                    })).sort((a, b) => Number(a.timestamp || 0) - Number(b.timestamp || 0));
                     const missingActivity = {};
                     posts.forEach((post) => {
                         if (post?.postId && post.body && !post.hidden && !post.pendingReview && !activityData?.[routeId]?.[post.postId]) {
@@ -8578,12 +8595,13 @@ const Admin = {
                                 timestamp: post.timestamp,
                             };
                         }
-                        Object.values(post?.replies || {}).forEach((reply) => {
-                            if (!reply?.replyId || !reply.body || reply.hidden || reply.pendingReview || activityData?.[routeId]?.[reply.replyId]) return;
-                            missingActivity[`community_activity/${routeId}/${reply.replyId}`] = {
+                        Object.entries(post?.replies || {}).forEach(([replyKey, reply]) => {
+                            const replyId = (reply && reply.replyId) || replyKey;
+                            if (!replyId || !reply?.body || reply.hidden || reply.pendingReview || activityData?.[routeId]?.[replyId]) return;
+                            missingActivity[`community_activity/${routeId}/${replyId}`] = {
                                 kind: 'reply',
                                 postId: post.postId,
-                                replyId: reply.replyId,
+                                replyId,
                                 uid: reply.uid,
                                 timestamp: reply.timestamp,
                             };
@@ -8591,7 +8609,8 @@ const Admin = {
                     });
                     if (Object.keys(missingActivity).length) {
                         try {
-                            const backfillRes = await fetch(`${dynamicEndpoint}.json${authQ}`, {
+                            const backfillAuthQ = await communityAuthSuffix();
+                            const backfillRes = await fetch(`${dynamicEndpoint}.json${backfillAuthQ}`, {
                                 method: 'PATCH',
                                 headers: { 'Content-Type': 'application/json' },
                                 body: JSON.stringify(missingActivity),
@@ -8602,8 +8621,12 @@ const Admin = {
                         }
                     }
                     target.innerHTML = posts.length ? posts.map((post) => {
-                        const replies = Object.values(post.replies || {}).sort((a, b) => Number(a.timestamp || 0) - Number(b.timestamp || 0));
-                        return `${renderMessage(post, routeId)}${replies.map((reply) => renderMessage({ ...reply, postId: post.postId }, routeId, true)).join('')}`;
+                        const replies = Object.entries(post.replies || {}).map(([replyKey, reply]) => ({
+                            ...(reply && typeof reply === 'object' ? reply : {}),
+                            replyId: (reply && reply.replyId) || replyKey,
+                            postId: post.postId,
+                        })).sort((a, b) => Number(a.timestamp || 0) - Number(b.timestamp || 0));
+                        return `${renderMessage(post, routeId)}${replies.map((reply) => renderMessage(reply, routeId, true)).join('')}`;
                     }).join('') : '<p class="py-3">No published messages on this route.</p>';
                     details.dataset.loaded = 'true';
                     details.dataset.communitySearch += ` ${esc(posts.map((post) => [post.body, ...Object.values(post.replies || {}).map((reply) => reply.body)].join(' ')).join(' ').toLowerCase())}`;
@@ -8612,7 +8635,8 @@ const Admin = {
                 const markRouteSeen = async (details) => {
                     const routeId = details.dataset.communityRoute;
                     const seenAt = Date.now();
-                    const seenRes = await fetch(`${dynamicEndpoint}admin_state/${encodeURIComponent(Admin.currentUser.uid)}/community_seen/${encodeURIComponent(routeId)}.json${authQ}`, {
+                    const seenAuthQ = await communityAuthSuffix();
+                    const seenRes = await fetch(`${dynamicEndpoint}admin_state/${encodeURIComponent(Admin.currentUser.uid)}/community_seen/${encodeURIComponent(routeId)}.json${seenAuthQ}`, {
                         method: 'PUT',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(seenAt),
@@ -8659,40 +8683,43 @@ const Admin = {
 
                 Admin.deletePublishedCommunityMessage = async (routeId, postId, replyId) => {
                     if (!routeId || !postId) throw new Error('Missing route/post id');
-                    const updates = {};
+                    const authQ = await communityAuthSuffix();
+                    const postPath = `route_community/${encodeURIComponent(routeId)}/posts/${encodeURIComponent(postId)}`;
+                    const deleteJson = async (path) => {
+                        const res = await fetch(`${dynamicEndpoint}${path}.json${authQ}`, { method: 'DELETE' });
+                        if (!res.ok && res.status !== 404) throw new Error(`Delete failed (${res.status})`);
+                        return res;
+                    };
                     if (replyId) {
-                        updates[`route_community/${routeId}/posts/${postId}/replies/${replyId}`] = null;
-                        updates[`community_activity/${routeId}/${replyId}`] = null;
-                    } else {
-                        updates[`route_community/${routeId}/posts/${postId}`] = null;
-                        updates[`community_activity/${routeId}/${postId}`] = null;
-                        try {
-                            const postRes = await window.guardianFetch(`${dynamicEndpoint}route_community/${encodeURIComponent(routeId)}/posts/${encodeURIComponent(postId)}.json${authQ}`, {}, 6000);
-                            const post = postRes.ok ? await postRes.json() : null;
-                            Object.keys(post?.replies || {}).forEach((id) => {
-                                updates[`community_activity/${routeId}/${id}`] = null;
-                            });
-                        } catch (e) {
-                            console.warn('Community delete reply-index read failed', e);
-                        }
+                        await deleteJson(`${postPath}/replies/${encodeURIComponent(replyId)}`);
+                        await deleteJson(`community_activity/${encodeURIComponent(routeId)}/${encodeURIComponent(replyId)}`).catch(() => {});
+                        return;
                     }
-                    const del = await fetch(`${dynamicEndpoint}.json${authQ}`, {
-                        method: 'PATCH',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(updates),
-                    });
-                    if (!del.ok) throw new Error(`Delete failed (${del.status})`);
+                    let replyIds = [];
+                    try {
+                        const postRes = await window.guardianFetch(`${dynamicEndpoint}${postPath}.json${authQ}`, {}, 6000);
+                        const post = postRes.ok ? await postRes.json() : null;
+                        replyIds = Object.keys(post?.replies || {});
+                    } catch (e) {
+                        console.warn('Community delete reply-index read failed', e);
+                    }
+                    await deleteJson(postPath);
+                    await deleteJson(`community_activity/${encodeURIComponent(routeId)}/${encodeURIComponent(postId)}`).catch(() => {});
+                    await Promise.all(replyIds.map((id) =>
+                        deleteJson(`community_activity/${encodeURIComponent(routeId)}/${encodeURIComponent(id)}`).catch(() => {})
+                    ));
                 };
 
-                list.addEventListener('click', async (event) => {
+                list.onclick = async (event) => {
                     const hide = event.target.closest?.('.cm-hide-message');
                     if (hide) {
                         event.preventDefault();
                         const routeId = hide.dataset.route;
                         const postId = hide.dataset.post;
                         const replyId = hide.dataset.reply;
+                        const hideAuthQ = await communityAuthSuffix();
                         const path = `route_community/${encodeURIComponent(routeId)}/posts/${encodeURIComponent(postId)}${replyId ? `/replies/${encodeURIComponent(replyId)}` : ''}/hidden.json`;
-                        const put = await fetch(`${dynamicEndpoint}${path}${authQ}`, { method: 'PUT', body: 'true' });
+                        const put = await fetch(`${dynamicEndpoint}${path}${hideAuthQ}`, { method: 'PUT', body: 'true' });
                         if (put.ok) {
                             hide.closest('[data-community-message]')?.classList.add('opacity-50', 'ring-1', 'ring-red-400');
                             if (typeof showToast === 'function') showToast('Message hidden', 'success');
@@ -8716,7 +8743,7 @@ const Admin = {
                             if (replyId) {
                                 card?.remove();
                             } else {
-                                list.querySelectorAll(`[data-community-post="${CSS.escape(String(postId || ''))}"]`).forEach((el) => el.remove());
+                                list.querySelectorAll(communityPostSelector(postId)).forEach((el) => el.remove());
                             }
                             if (typeof showToast === 'function') showToast('Message deleted', 'success');
                         } catch (e) {
@@ -8730,7 +8757,7 @@ const Admin = {
                         event.preventDefault();
                         await Admin.applyShadowBan(ban.dataset.uid);
                     }
-                });
+                };
 
                 list.querySelectorAll('.mq-close').forEach((btn) => {
                     btn.onclick = async () => {

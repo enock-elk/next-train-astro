@@ -8,6 +8,8 @@ Sharing as a train sitting at the terminus (Pretoria for inbound 1158) no longer
 
 The live pill wake is a V at the bow. Ripples open behind the tip and travel aft, like a ship wake, instead of chevrons drifting forward.
 
+Community Monitor Delete now removes the published post (and its activity index) with a fresh ID token, instead of a root PATCH that Firebase rules reject.
+
 no release notes.
 
 ## V9_09.14.4 — Community posts without Firebase Admin secret (14 Sep 2026)

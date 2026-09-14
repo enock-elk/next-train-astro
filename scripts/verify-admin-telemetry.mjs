@@ -156,6 +156,12 @@ ok(adminJs.includes(".exp-feat-body") || adminJs.includes('.exp-feat-body'), 'ne
 ok(adminJs.includes('bindGsmSwipe'), 'Global State Monitor binds swipe between tabs');
 ok(adminJs.includes("bindGsmSwipe(document.getElementById('gsm-list'))"), 'GSM swipe works on the item list');
 ok(adminJs.includes('Snapshot generated: ${Admin.formatDate(Date.now())}'), 'DAU export uses 12 Sept dates');
+ok(adminJs.includes('_telemetryExportFrame'), 'snapshot and chart share one export frame');
+ok(adminJs.includes("background:#F2F2F7"), 'export cards sit on a grouped gray canvas');
+ok(adminJs.includes('border-radius:22px'), 'export card uses a large continuous corner');
+ok(adminJs.includes('_telemetryExportFooterHtml'), 'snapshot and chart share the same footer');
+ok(!adminJs.includes('Verified by Google Analytics'), 'export footer no longer uses the verified pill');
+ok(adminJs.includes('>Live Telemetry<'), 'snapshot title is title case, not all caps');
 ok(adminJs.includes('de-trip-hour-bars') && adminJs.includes('de-trip-od-heat'), 'planner insights include hour bars and an OD heatmap');
 ok(adminJs.includes('de-trip-dep-bars') && adminJs.includes('de-trip-xfer'), 'planner insights include departure-hour and transfer charts');
 ok(!adminJs.includes('if (countLiveMaint() > 0)'), 'live banners no longer auto-expand Maintenance Mode');

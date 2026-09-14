@@ -2619,21 +2619,21 @@ const Admin = {
         // Colors & Theme Independence (hardcoded hex for perfect exportability)
         const lineColor = '#3b82f6';
         const todayColor = '#f97316';
-        const gridColor = '#e2e8f0';
-        const labelColor = '#94a3b8';
+        const gridColor = '#e5e5ea';
+        const labelColor = '#8e8e93';
 
         let svg = `<svg viewBox="0 0 ${w} ${h}" width="100%" height="100%" xmlns="http://www.w3.org/2000/svg" style="display:block; max-height:100%;">`;
         
         // Defs for gradient
-        svg += `<defs><linearGradient id="lineGrad_${isMini ? 'mini' : 'full'}" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="${lineColor}" stop-opacity="0.3"/><stop offset="100%" stop-color="${lineColor}" stop-opacity="0.0"/></linearGradient></defs>`;
+        svg += `<defs><linearGradient id="lineGrad_${isMini ? 'mini' : 'full'}" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="${lineColor}" stop-opacity="0.22"/><stop offset="100%" stop-color="${lineColor}" stop-opacity="0.0"/></linearGradient></defs>`;
         
         // Background Grid & Y-Axis (Only in full view)
         if (!isMini) {
             [0, 0.5, 1].forEach(tick => {
                 const y = pt + uh - (tick * uh);
                 const val = Math.round(yMin + (yRange * tick));
-                svg += `<line x1="${pl}" y1="${y}" x2="${w-pr}" y2="${y}" stroke="${gridColor}" stroke-dasharray="4" stroke-width="1.5" />`;
-                svg += `<text x="${pl-12}" y="${y+4}" font-family="sans-serif" font-size="12" font-weight="800" fill="${labelColor}" text-anchor="end">${val}</text>`;
+                svg += `<line x1="${pl}" y1="${y}" x2="${w-pr}" y2="${y}" stroke="${gridColor}" stroke-width="1" />`;
+                svg += `<text x="${pl-12}" y="${y+4}" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="11" font-weight="500" fill="${labelColor}" text-anchor="end">${val}</text>`;
             });
         }
         
@@ -2654,7 +2654,7 @@ const Admin = {
         // Fill Area & Stroke Line (Hide area if only 1 point exists)
         if (knownIdx.length > 1 && pathD) {
             svg += `<path d="${areaD}" fill="url(#lineGrad_${isMini ? 'mini' : 'full'})" />`;
-            svg += `<path d="${pathD}" fill="none" stroke="${lineColor}" stroke-width="${isMini ? '3' : '4'}" stroke-linecap="round" stroke-linejoin="round" />`;
+            svg += `<path d="${pathD}" fill="none" stroke="${lineColor}" stroke-width="${isMini ? '3' : '3'}" stroke-linecap="round" stroke-linejoin="round" />`;
         }
         
         // Points and X-Axis
@@ -2702,11 +2702,11 @@ const Admin = {
             // X-Axis Labels (Dynamic formatting from worker)
             if (!isMini && labelsArray[i]) {
                 const dayColor = isToday ? todayColor : labelColor;
-                svg += `<text x="${vx}" y="${pt+uh+20}" font-family="sans-serif" font-size="11" font-weight="800" fill="${dayColor}" text-anchor="middle">${labelsArray[i]}</text>`;
+                svg += `<text x="${vx}" y="${pt+uh+20}" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="11" font-weight="600" fill="${dayColor}" text-anchor="middle">${labelsArray[i]}</text>`;
                 
                 // GUARDIAN UX FIX: Restore data counts directly on the graph for macro reports
                 if (Admin.telemetryRange !== 'INTRADAY') {
-                    svg += `<text x="${vx}" y="${vy - 10}" font-family="sans-serif" font-size="11" font-weight="900" fill="${dayColor}" text-anchor="middle">${val}</text>`;
+                    svg += `<text x="${vx}" y="${vy - 10}" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="10" font-weight="600" fill="${dayColor}" text-anchor="middle">${val}</text>`;
                 }
             }
         }
@@ -3104,6 +3104,48 @@ const Admin = {
         }
     },
 
+    _telemetryExportFrame: (widthPx) => {
+        const root = document.createElement('div');
+        root.style.cssText = [
+            'position:fixed',
+            'left:-9999px',
+            'top:0',
+            `width:${Number(widthPx) || 600}px`,
+            'background:#F2F2F7',
+            'font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","SF Pro Display",system-ui,sans-serif',
+            'padding:18px',
+            'color:#1c1c1e',
+            '-webkit-font-smoothing:antialiased',
+        ].join(';');
+        const card = document.createElement('div');
+        card.style.cssText = [
+            'background:#ffffff',
+            'border-radius:22px',
+            'padding:22px 22px 16px',
+            'box-shadow:0 1px 2px rgba(0,0,0,0.04),0 10px 28px rgba(0,0,0,0.06)',
+            'border:1px solid rgba(60,60,67,0.08)',
+        ].join(';');
+        root.appendChild(card);
+        return { root, card };
+    },
+
+    _telemetryExportFooterHtml: ({ kicker, detail } = {}) => `
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:16px;padding-top:14px;margin-top:8px;border-top:1px solid rgba(60,60,67,0.12);">
+                <div style="min-width:0;">
+                    <div style="font-size:13px;font-weight:600;letter-spacing:-0.24px;color:#1c1c1e;">${kicker || ''}</div>
+                    <div style="font-size:12px;font-weight:400;color:#8e8e93;margin-top:2px;">${detail || ''}</div>
+                </div>
+                <div style="text-align:right;flex-shrink:0;">
+                    <div style="display:flex;align-items:center;justify-content:flex-end;gap:6px;">
+                        <span style="width:18px;height:18px;border-radius:9px;background:#007AFF;display:inline-block;text-align:center;line-height:18px;">
+                            <svg width="10" height="10" viewBox="0 0 12 12" style="display:inline-block;vertical-align:middle;margin-top:-1px;" xmlns="http://www.w3.org/2000/svg"><path d="M2.1 6.2l2.5 2.5 5.3-5.4" stroke="#fff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>
+                        </span>
+                        <span style="font-size:12px;font-weight:500;color:#8e8e93;">Google Analytics</span>
+                    </div>
+                    <div style="font-size:11px;font-weight:400;color:#aeaeb2;margin-top:4px;">nexttrain.co.za</div>
+                </div>
+            </div>`,
+
     exportTelemetry: async () => {
         if (typeof showToast === 'function') showToast("Generating Snapshot...", "info", 2000);
         
@@ -3137,65 +3179,26 @@ const Admin = {
         const now = new Date();
         const fullDateTimeStr = Admin.formatDate(now);
 
-        const exportContainer = document.createElement('div');
-        exportContainer.style.position = 'fixed';
-        exportContainer.style.left = '-9999px';
-        exportContainer.style.top = '0';
-        exportContainer.style.width = '600px';
-        exportContainer.style.backgroundColor = '#ffffff'; 
-        exportContainer.style.fontFamily = 'system-ui, -apple-system, sans-serif';
-        exportContainer.style.padding = '30px';
-        exportContainer.style.color = '#0f172a'; // slate-900
-        exportContainer.style.borderRadius = '16px';
-        
-        exportContainer.innerHTML = `
-            <div style="border-bottom: 2px solid #e2e8f0; padding-bottom: 15px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: flex-end;">
-                <div>
-                    <h1 style="font-size: 24px; font-weight: 900; margin: 0; color: #0f172a; text-transform: uppercase; letter-spacing: -0.5px;">Live Telemetry Snapshot</h1>
-                    <p style="font-size: 11px; font-weight: 700; color: #64748b; margin-top: 4px; text-transform: uppercase; letter-spacing: 1px;">Metrorail Next Train</p>
-                </div>
+        const metricTile = (label, value) => `
+                <div style="background:#F2F2F7;padding:18px 8px 16px;border-radius:14px;text-align:center;">
+                    <div style="font-size:11px;font-weight:500;color:#8e8e93;letter-spacing:0.01em;margin-bottom:8px;">${label}</div>
+                    <div style="font-size:32px;font-weight:700;letter-spacing:-0.9px;color:#1c1c1e;line-height:1;font-variant-numeric:tabular-nums;">${value}</div>
+                </div>`;
+        const { root: exportContainer, card: exportCard } = Admin._telemetryExportFrame(600);
+        exportCard.innerHTML = `
+            <div style="margin-bottom:18px;">
+                <div style="font-size:22px;font-weight:700;letter-spacing:-0.66px;color:#1c1c1e;">Live Telemetry</div>
+                <div style="font-size:13px;font-weight:500;color:#8e8e93;margin-top:3px;">Next Train</div>
             </div>
-
-            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-bottom: 25px;">
-                <div style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 25px 10px; border-radius: 12px; text-align: center; box-shadow: 0 1px 2px rgba(0,0,0,0.02);">
-                    <div style="font-size: 10px; font-weight: 800; color: #475569; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px;">Active (Last 5 Mins)</div>
-                    <div style="font-size: 36px; font-weight: 900; color: #0f172a; line-height: 1;">${stat5m}</div>
-                </div>
-                <div style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 25px 10px; border-radius: 12px; text-align: center; box-shadow: 0 1px 2px rgba(0,0,0,0.02);">
-                    <div style="font-size: 10px; font-weight: 800; color: #475569; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px;">Active (Last 30 Mins)</div>
-                    <div style="font-size: 36px; font-weight: 900; color: #0f172a; line-height: 1;">${stat30m}</div>
-                </div>
-                <div style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 25px 10px; border-radius: 12px; text-align: center; box-shadow: 0 1px 2px rgba(0,0,0,0.02);">
-                    <div style="font-size: 10px; font-weight: 800; color: #475569; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px;">Unique Users Today</div>
-                    <div style="font-size: 36px; font-weight: 900; color: #0f172a; line-height: 1;">${statToday}</div>
-                </div>
-                <div style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 25px 10px; border-radius: 12px; text-align: center; box-shadow: 0 1px 2px rgba(0,0,0,0.02);">
-                    <div style="font-size: 10px; font-weight: 800; color: #475569; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px;">7 Days (WAU)</div>
-                    <div style="font-size: 36px; font-weight: 900; color: #0f172a; line-height: 1;">${statWeekly}</div>
-                </div>
-                <div style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 25px 10px; border-radius: 12px; text-align: center; box-shadow: 0 1px 2px rgba(0,0,0,0.02);">
-                    <div style="font-size: 10px; font-weight: 800; color: #475569; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px;">30 Days (MAU)</div>
-                    <div style="font-size: 36px; font-weight: 900; color: #0f172a; line-height: 1;">${statMonthly}</div>
-                </div>
-                <div style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 25px 10px; border-radius: 12px; text-align: center; box-shadow: 0 1px 2px rgba(0,0,0,0.02);">
-                    <div style="font-size: 10px; font-weight: 800; color: #475569; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px;">All-Time Users</div>
-                    <div style="font-size: 36px; font-weight: 900; color: #0f172a; line-height: 1;">${statAllTime}</div>
-                </div>
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:4px;">
+                ${metricTile('Last 5 min', stat5m)}
+                ${metricTile('Last 30 min', stat30m)}
+                ${metricTile('Today', statToday)}
+                ${metricTile('7 days', statWeekly)}
+                ${metricTile('30 days', statMonthly)}
+                ${metricTile('All-time', statAllTime)}
             </div>
-
-            <div style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 15px 20px; border-radius: 12px; display: flex; justify-content: space-between; align-items: center;">
-                <div>
-                    <div style="font-size: 12px; font-weight: 800; color: #334155; margin-bottom: 2px;">Exported by ${adminName}</div>
-                    <div style="font-size: 10px; font-weight: 600; color: #64748b;">${fullDateTimeStr}</div>
-                </div>
-                <div style="display: flex; flex-direction: column; align-items: flex-end;">
-                    <div style="display: flex; align-items: center; background: #ffffff; padding: 6px 12px; border-radius: 20px; border: 1px solid #e2e8f0; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
-                        <svg style="width: 14px; height: 14px; margin-right: 6px;" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 15h-2v-6h2v6zm4 0h-2V7h2v10z" fill="#E37400"/></svg>
-                        <span style="font-size: 10px; font-weight: 800; color: #475569; text-transform: uppercase; letter-spacing: 0.5px;">Verified by Google Analytics</span>
-                    </div>
-                    <div style="font-size: 10px; font-weight: 600; color: #64748b; margin-top: 6px; padding-right: 4px;">nexttrain.co.za</div>
-                </div>
-            </div>
+            ${Admin._telemetryExportFooterHtml({ kicker: `Exported by ${adminName}`, detail: fullDateTimeStr })}
         `;
 
         document.body.appendChild(exportContainer);
@@ -3205,7 +3208,7 @@ const Admin = {
 
             const canvas = await html2canvas(exportContainer, {
                 scale: 2,
-                backgroundColor: '#ffffff',
+                backgroundColor: '#F2F2F7',
                 logging: false
             });
 
@@ -3310,35 +3313,30 @@ const Admin = {
         const rawSvgNode = document.querySelector('#analytics-chart-svg-container svg');
         if (!rawSvgNode) return;
 
-        const exportContainer = document.createElement('div');
-        exportContainer.style.position = 'fixed';
-        exportContainer.style.left = '-9999px';
-        exportContainer.style.top = '0';
-        exportContainer.style.width = '700px';
-        exportContainer.style.backgroundColor = '#ffffff'; 
-        exportContainer.style.fontFamily = 'system-ui, -apple-system, sans-serif';
-        exportContainer.style.padding = '40px';
-        exportContainer.style.borderRadius = '16px';
-        
-        exportContainer.innerHTML = `
-            <div style="border-bottom: 3px solid #3b82f6; padding-bottom: 15px; margin-bottom: 30px;">
-                <h1 style="font-size: 26px; font-weight: 900; margin: 0; color: #1e3a8a; letter-spacing: -0.5px;">${titleText}</h1>
-                <p style="font-size: 12px; font-weight: 800; color: #64748b; margin-top: 4px; text-transform: uppercase; letter-spacing: 1px;">Metrorail Next Train Telemetry</p>
+        const { root: exportContainer, card: exportCard } = Admin._telemetryExportFrame(700);
+        exportCard.innerHTML = `
+            <div style="margin-bottom:14px;">
+                <div style="font-size:22px;font-weight:700;letter-spacing:-0.66px;color:#1c1c1e;">${titleText}</div>
+                <div style="font-size:13px;font-weight:500;color:#8e8e93;margin-top:3px;">Next Train</div>
             </div>
-            <div id="export-svg-slot" style="height: 350px; margin-bottom: 28px;"></div>
-            <div style="display:flex;flex-direction:column;align-items:flex-start;gap:4px;padding:16px 2px 0;margin-top:8px;border-top:1px solid #e2e8f0;">
-                <div style="font-size:11px;font-weight:700;color:#64748b;letter-spacing:0.04em;text-transform:uppercase;">Data via Google Analytics 4</div>
-                <div style="font-size:13px;font-weight:800;color:#334155;">Snapshot generated: ${Admin.formatDate(Date.now())}</div>
-            </div>
+            <div id="export-svg-slot" style="height:268px;background:#F2F2F7;border-radius:16px;padding:10px 6px 4px;box-sizing:border-box;"></div>
+            ${Admin._telemetryExportFooterHtml({
+                kicker: `Snapshot generated: ${Admin.formatDate(Date.now())}`,
+                detail: 'Daily activity from Google Analytics'
+            })}
         `;
         
         // Deep clone the SVG into the export container to preserve all exact vector points
-        exportContainer.querySelector('#export-svg-slot').appendChild(rawSvgNode.cloneNode(true));
+        const svgClone = rawSvgNode.cloneNode(true);
+        svgClone.style.width = '100%';
+        svgClone.style.height = '100%';
+        svgClone.style.maxHeight = 'none';
+        exportCard.querySelector('#export-svg-slot').appendChild(svgClone);
         document.body.appendChild(exportContainer);
 
         try {
             await new Promise(r => setTimeout(r, 150)); 
-            const canvas = await html2canvas(exportContainer, { scale: 2, backgroundColor: '#ffffff', logging: false });
+            const canvas = await html2canvas(exportContainer, { scale: 2, backgroundColor: '#F2F2F7', logging: false });
             
             canvas.toBlob(async (blob) => {
                 const timestampStr = new Date().toISOString().replace(/[-:T.]/g, '').slice(0, 12); 

@@ -2,6 +2,12 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin, Dev Hub, Alerts, Trains near me, community chat, or other hidden-test work. No emoji and no em dashes in What’s New. Keep `APP_VERSION`, `package.json` `version`, and `public/app-version.json` aligned on each release. Changelog / What’s New may be skipped, or the heading may be only **no release notes.**
 
+## V9_09.14.6 — iOS-style telemetry snapshot and DAU export (14 Sep 2026)
+
+Live Telemetry Snapshot and Daily Active Users PNG exports sit on a grouped gray canvas with a white rounded card, quieter metric tiles, and a hairline footer instead of the verified-by pill. The line chart uses lighter gridlines and a framed well so the image is not a sea of white.
+
+no release notes.
+
 ## V9_09.14.5 — Ask before ending a share at the last station or off the corridor (14 Sep 2026)
 
 Sharing as a train sitting at the terminus (Pretoria for inbound 1158) no longer ends on the first GPS tick. After the rider has travelled the corridor, the last station asks whether the train has arrived. Off-track and opposite-direction movement ask whether they are still on the train, then stop only if they confirm.

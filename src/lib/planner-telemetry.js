@@ -1,9 +1,12 @@
 /**
- * Planner telemetry: routing fails + batched successful trip plans.
+ * Planner telemetry: routing fails, batched trip plans, and immediate fare votes.
  *
- * Two buckets (intentionally separate):
+ * Two trip buckets (intentionally separate):
  *  1. UI recent trips — plannerHistory_* in planner-ui.js (display cap 5)
  *  2. Telemetry queue — nt_trip_plan_queue_v1 here (flush to RTDB every 10)
+ *
+ * Fare votes write immediately to sys_logs/fare_votes/$voteId (create-once).
+ * Offline devices keep a queue of one vote and flush on reconnect.
  *
  * RTDB sys_logs/trip_plans/$batchId allows create-once (!data.exists).
  * Auth token preferred; anonymous create-once still works without email claim.
@@ -308,15 +311,194 @@ export async function flushTripPlanQueue(force = false) {
     }
 }
 
+/** Same floor as the board fare button: half-rand ceil, then whole rand (R7.50 → 7). */
+export function roundFareVoteRand(raw) {
+    let n = Number(raw);
+    if (!Number.isFinite(n)) return 0;
+    n = Math.ceil(n * 2) / 2;
+    return Math.floor(n);
+}
+
+export const FARE_VOTE_QUEUE_KEY = 'nt_fare_vote_queue_v1';
+const FARE_VOTE_SENT_KEY = 'nt_fare_vote_sent_v1';
+
+export function fareVoteCooldownKey({ origin, destination, dayType, isOffPeak, profile } = {}) {
+    return [
+        String(origin || '').toUpperCase(),
+        String(destination || '').toUpperCase(),
+        String(dayType || ''),
+        isOffPeak ? 'off' : 'peak',
+        String(profile || 'Adult'),
+    ].join('|');
+}
+
+function readFareVoteSentKeys() {
+    try {
+        const arr = JSON.parse(safeStorage.getItem(FARE_VOTE_SENT_KEY) || '[]');
+        return Array.isArray(arr) ? arr : [];
+    } catch {
+        return [];
+    }
+}
+
+export function hasFareVoteBeenSent(key) {
+    if (!key) return false;
+    return readFareVoteSentKeys().includes(key);
+}
+
+export function markFareVoteSent(key) {
+    if (!key) return;
+    const keys = readFareVoteSentKeys();
+    if (keys.includes(key)) return;
+    keys.push(key);
+    safeStorage.setItem(FARE_VOTE_SENT_KEY, JSON.stringify(keys.slice(-200)));
+}
+
+function readFareVoteQueue() {
+    try {
+        const arr = JSON.parse(safeStorage.getItem(FARE_VOTE_QUEUE_KEY) || '[]');
+        return Array.isArray(arr) ? arr : [];
+    } catch {
+        return [];
+    }
+}
+
+function writeFareVoteQueue(arr) {
+    safeStorage.setItem(FARE_VOTE_QUEUE_KEY, JSON.stringify(Array.isArray(arr) ? arr.slice(-1) : []));
+}
+
+export function getFareVoteQueueLength() {
+    return readFareVoteQueue().length;
+}
+
+/** Offline buffer is exactly one vote (latest wins). */
+export function enqueueFareVoteOffline(payload) {
+    if (!payload || typeof payload !== 'object') return;
+    writeFareVoteQueue([payload]);
+}
+
+function clipStr(value, max) {
+    return String(value || '').slice(0, max);
+}
+
+export function buildFareVotePayload({
+    origin,
+    destination,
+    routeIds,
+    km,
+    crowKm,
+    zone,
+    quotedPrice,
+    reportedPrice,
+    agree,
+    isOffPeak,
+    dayType,
+    depTime,
+    profile,
+    region,
+    deviceId: did,
+    authUid: uidOverride,
+    appVersion,
+    at,
+} = {}) {
+    const quoted = roundFareVoteRand(quotedPrice);
+    const reported = roundFareVoteRand(reportedPrice == null ? quotedPrice : reportedPrice);
+    const routes = Array.isArray(routeIds)
+        ? routeIds.map((id) => clipStr(id, 40)).filter(Boolean).slice(0, 8)
+        : [];
+    const kmNum = Number(km);
+    const crowNum = Number(crowKm);
+    return {
+        origin: clipStr(origin, 79),
+        destination: clipStr(destination, 79),
+        routeIds: routes,
+        km: Number.isFinite(kmNum) ? kmNum : null,
+        crowKm: Number.isFinite(crowNum) ? crowNum : null,
+        zone: clipStr(zone, 8) || null,
+        quotedPrice: quoted,
+        reportedPrice: reported,
+        agree: !!agree,
+        isOffPeak: !!isOffPeak,
+        dayType: clipStr(dayType, 24) || null,
+        depTime: clipStr(depTime, 8) || null,
+        profile: clipStr(profile || 'Adult', 40),
+        region: region != null ? clipStr(region, 8) : ($userRegion.get() || null),
+        deviceId: clipStr(did || deviceId(), 79),
+        authUid: uidOverride !== undefined ? uidOverride : authUid(),
+        appVersion: clipStr(appVersion || APP_VERSION, 32),
+        at: Number(at) || Date.now(),
+    };
+}
+
+async function putFareVote(payload) {
+    const voteId = uid();
+    const q = await authQuery();
+    const res = await fetch(`${DYNAMIC_BASE_URL}sys_logs/fare_votes/${voteId}.json${q}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+    });
+    if (!res.ok) throw new Error(String(res.status));
+    return voteId;
+}
+
+export async function flushFareVoteQueue() {
+    const queue = readFareVoteQueue();
+    if (!queue.length) return false;
+    const payload = queue[0];
+    try {
+        await putFareVote(payload);
+        writeFareVoteQueue([]);
+        return true;
+    } catch (e) {
+        console.warn('🛡️ Guardian: fare_votes flush failed', e);
+        return false;
+    }
+}
+
+/**
+ * Write one fare vote immediately (create-once). Queue locally only if the
+ * device is offline, replacing any pending vote (queue length 1).
+ */
+export async function submitFareVote(input) {
+    const payload = buildFareVotePayload(input);
+    const key = fareVoteCooldownKey(payload);
+    if (hasFareVoteBeenSent(key)) return { skipped: true };
+    if (!payload.origin || !payload.destination) return { skipped: true };
+    if (payload.quotedPrice < 1 || payload.quotedPrice > 500) return { skipped: true };
+    if (payload.reportedPrice < 1 || payload.reportedPrice > 500) return { skipped: true };
+
+    const offline = typeof navigator !== 'undefined' && navigator.onLine === false;
+    if (offline) {
+        enqueueFareVoteOffline(payload);
+        markFareVoteSent(key);
+        return { queued: true };
+    }
+    try {
+        await putFareVote(payload);
+        markFareVoteSent(key);
+        return { ok: true };
+    } catch (e) {
+        console.warn('🛡️ Guardian: fare_votes write failed', e);
+        enqueueFareVoteOffline(payload);
+        markFareVoteSent(key);
+        return { queued: true };
+    }
+}
+
 if (typeof window !== 'undefined') {
     window.addEventListener('online', () => {
         const q = readTripQueue();
         if (q.length >= TRIP_FLUSH_SIZE) flushTripPlanQueue();
+        flushFareVoteQueue();
     });
     document.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'hidden') {
             const q = readTripQueue();
             if (q.length >= TRIP_FLUSH_SIZE) flushTripPlanQueue();
+        }
+        if (document.visibilityState === 'visible') {
+            flushFareVoteQueue();
         }
     });
 }

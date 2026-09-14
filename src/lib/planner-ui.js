@@ -26,7 +26,14 @@ import { buildPlannerShareUrl, buildRouteShareUrl, parsePlannerDeepLink, stripSh
 import { consumeShareDeeplinkSnapshot, peekShareDeeplinkSnapshot } from './deeplink.js';
 import { ensureRoutePinnedForRegion, loadAllSchedules } from './logic.js';
 import { showToast, switchTab, triggerHaptic, openSmoothModal, closeSmoothModal, unlockBackgroundScroll } from './ui.js';
-import { logRoutingFail, enqueueSuccessfulTripPlan } from './planner-telemetry.js';
+import {
+    logRoutingFail,
+    enqueueSuccessfulTripPlan,
+    submitFareVote,
+    hasFareVoteBeenSent,
+    fareVoteCooldownKey,
+    roundFareVoteRand,
+} from './planner-telemetry.js';
 import { enterFeedbackReplyMode, openFeedbackModal } from './hub.js';
 import { prepareRichHtml } from './rich-text.js';
 import { trackAnalyticsEvent } from './analytics.js';
@@ -447,10 +454,75 @@ async function getSmoothTripDistanceKm(trip) {
     return getTripDistanceKm(trip);
 }
 
+function plannerFareVoteOrigin(trip) {
+    return normalizeStationName(trip?.from || plannerOrigin || '');
+}
+
+function plannerFareVoteDestination(trip) {
+    return normalizeStationName(trip?.to || plannerDest || '');
+}
+
+function plannerFareVoteInput(trip, { km, crowKm, zone, fare } = {}, extra = {}) {
+    return {
+        origin: plannerFareVoteOrigin(trip),
+        destination: plannerFareVoteDestination(trip),
+        routeIds: collectTripRoutes(trip).map((r) => r.id).filter(Boolean),
+        km,
+        crowKm,
+        zone,
+        quotedPrice: fare?.price,
+        reportedPrice: extra.reportedPrice != null ? extra.reportedPrice : fare?.price,
+        agree: extra.agree !== false,
+        isOffPeak: !!fare?.isOffPeak,
+        dayType: fare?.dayType || null,
+        depTime: fare?.depTime || '',
+        profile: fare?.profile || 'Adult',
+        region: $userRegion.get() || null,
+    };
+}
+
+function showPlannerFareVoteThanks(wrap) {
+    if (!wrap) return;
+    wrap.innerHTML = '<p class="text-sm font-semibold text-gray-700 dark:text-gray-200">Thanks. That helps us check the fare.</p>';
+}
+
+function bindPlannerFareVote(trip, detail) {
+    const wrap = document.getElementById('planner-fare-vote');
+    if (!wrap) return;
+    const yesBtn = document.getElementById('planner-fare-vote-yes');
+    const noBtn = document.getElementById('planner-fare-vote-no');
+    const correct = document.getElementById('planner-fare-vote-correct');
+    const amount = document.getElementById('planner-fare-vote-amount');
+    const sendBtn = document.getElementById('planner-fare-vote-send');
+    yesBtn?.addEventListener('click', (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        submitFareVote(plannerFareVoteInput(trip, detail, { agree: true }));
+        showPlannerFareVoteThanks(wrap);
+    });
+    noBtn?.addEventListener('click', (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        correct?.classList.remove('hidden');
+        amount?.focus();
+    });
+    sendBtn?.addEventListener('click', (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        const reported = roundFareVoteRand(amount?.value);
+        if (reported < 1 || reported > 500) {
+            if (typeof showToast === 'function') showToast('Enter a whole rand amount.', 'info', 2500);
+            return;
+        }
+        submitFareVote(plannerFareVoteInput(trip, detail, { agree: false, reportedPrice: reported }));
+        showPlannerFareVoteThanks(wrap);
+    });
+}
+
 function fillPlannerFareBreakdown(trip, { km, crowKm, zone, fare } = {}) {
     const body = document.getElementById('planner-fare-breakdown-body');
     if (!body || !fare) return;
-    lastPlannerFareContext = { trip, km, crowKm, zone };
+    lastPlannerFareContext = { trip, km, crowKm, zone, fare };
     const band = ZONE_KM_RANGE_LABELS[zone] || '';
     const dayLabel = fare.dayType === 'saturday' ? 'Saturday'
         : fare.dayType === 'sunday' ? 'Sunday'
@@ -461,6 +533,37 @@ function fillPlannerFareBreakdown(trip, { km, crowKm, zone, fare } = {}) {
     const kmLabel = km != null ? `${km} km` : 'Unavailable';
     const crowLabel = crowKm != null ? `${crowKm} km` : 'Unavailable';
     const profileLabel = escapeHTML(fare.profile || 'Adult');
+    const voteKey = fareVoteCooldownKey({
+        origin: plannerFareVoteOrigin(trip),
+        destination: plannerFareVoteDestination(trip),
+        dayType: fare.dayType,
+        isOffPeak: fare.isOffPeak,
+        profile: fare.profile || 'Adult',
+    });
+    const showVote = canShowTripPrice(trip) && !hasFareVoteBeenSent(voteKey);
+    const voteHtml = showVote ? `
+        <div id="planner-fare-vote" class="pt-3 mt-1 border-t border-gray-100 dark:border-gray-800">
+            <p class="text-sm font-semibold text-gray-800 dark:text-gray-100">Is this what you paid?</p>
+            <div class="mt-2 grid grid-cols-2 gap-2">
+                <button type="button" id="planner-fare-vote-yes" class="inline-flex items-center justify-center gap-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-3 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400">
+                    <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                    Yes
+                </button>
+                <button type="button" id="planner-fare-vote-no" class="inline-flex items-center justify-center gap-1.5 rounded-xl bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-100 font-bold py-2.5 px-3 text-sm border border-gray-200 dark:border-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400">
+                    <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                    No
+                </button>
+            </div>
+            <div id="planner-fare-vote-correct" class="hidden mt-3 space-y-2">
+                <label for="planner-fare-vote-amount" class="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">What did you pay?</label>
+                <div class="flex items-center gap-2">
+                    <span class="text-sm font-black text-gray-900 dark:text-white">R</span>
+                    <input id="planner-fare-vote-amount" type="number" inputmode="numeric" min="1" max="500" step="1" class="min-w-0 flex-1 h-11 px-3 rounded-xl bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-sm font-bold text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-400" />
+                    <button type="button" id="planner-fare-vote-send" class="shrink-0 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-4 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400">Send</button>
+                </div>
+            </div>
+        </div>
+    ` : '';
     body.innerHTML = `
         <dl class="space-y-3 text-sm text-gray-700 dark:text-gray-200">
             <div class="flex justify-between gap-3"><dt class="text-gray-500 dark:text-gray-400">Distance</dt><dd class="font-bold">${escapeHTML(kmLabel)}</dd></div>
@@ -470,12 +573,14 @@ function fillPlannerFareBreakdown(trip, { km, crowKm, zone, fare } = {}) {
             <div class="flex justify-between gap-3 items-center"><dt class="text-gray-500 dark:text-gray-400">Profile</dt><dd><button type="button" id="planner-fare-profile-btn" class="font-bold text-blue-600 dark:text-blue-400 underline decoration-dotted underline-offset-2 hover:text-blue-700 dark:hover:text-blue-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 rounded px-1">${profileLabel}</button></dd></div>
             <div class="flex justify-between gap-3 pt-2 border-t border-gray-100 dark:border-gray-800"><dt class="text-gray-500 dark:text-gray-400">Fare</dt><dd class="font-black text-gray-900 dark:text-white">R${escapeHTML(fare.priceLabel)}</dd></div>
         </dl>
+        ${voteHtml}
     `;
     document.getElementById('planner-fare-profile-btn')?.addEventListener('click', (ev) => {
         ev.preventDefault();
         ev.stopPropagation();
         openPassengerTypePicker();
     });
+    if (showVote) bindPlannerFareVote(trip, { km, crowKm, zone, fare });
 }
 
 function refreshOpenPlannerFare() {

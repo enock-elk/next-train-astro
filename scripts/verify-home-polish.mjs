@@ -375,7 +375,9 @@ assert(hubModals.includes('id="nt-admin-publish-train"'), 'admin nearby sheet ca
     assert(ridePings.includes('snapToRail'), 'compact pings snap to rails before averaging');
     assert(ridePings.includes('RIDE_OFFTRACK_GRACE_MS = 3 * 60 * 1000'), 'off-track train share has a 3 minute grace');
     assert(ridePings.includes('offTrackShareDecision'), 'off-track pause vs drop is a named decision');
-    assert(!ridePings.includes('Still on this train?'), 'off-path onboard loop no longer asks a sheet');
+    assert(ridePings.includes("title: 'Still on this train?'"), 'off-track and direction mismatch ask before stopping');
+    assert(ridePings.includes('offTrackStayUntil'), 'still-on-it snoozes another off-track drop');
+    assert(ridePings.includes("decision === 'drop_far' || decision === 'drop_grace'"), 'off-path pause ticks do not open the sheet');
     assert(mapApp.includes('readableTrainLabelDeg'), 'train number uses a dedicated readable rail angle');
     assert(mapApp.includes('labelCounterYaw'), 'nested train number counter-rotates to stay within 90 degrees');
     assert(!renderer.includes('nt-live-train-pulse'), 'live board has no sharing dots');

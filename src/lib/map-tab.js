@@ -23,6 +23,9 @@ import {
     peekLastGeoFix,
     subscribeGeoFix,
     requestGeoLocateFix,
+    waitForGeoFix,
+    reusableGeoFix,
+    GEO_REUSE_MAX_AGE_MS,
 } from './geo-watch.js';
 
 /**
@@ -398,37 +401,42 @@ function hideVetProgress() {
     document.getElementById('map-vet-progress')?.classList.add('hidden');
 }
 
+function sampleFromFix(fix) {
+    if (!fix || !Number.isFinite(fix.lat) || !Number.isFinite(fix.lng)) return null;
+    return {
+        lat: fix.lat,
+        lng: fix.lng,
+        accuracy: fix.accuracy,
+        speed: fix.speedMps,
+        heading: fix.heading,
+        t: Number.isFinite(fix.t) ? fix.t : Date.now(),
+    };
+}
+
 function sampleGpsFor(ms, onTick) {
     return new Promise((resolve, reject) => {
-        if (!navigator.geolocation) {
+        if (typeof navigator === 'undefined' || !navigator.geolocation) {
             reject(new Error('Location isn’t available on this device.'));
             return;
         }
         const samples = [];
         const started = Date.now();
-        const watchId = navigator.geolocation.watchPosition(
-            (pos) => {
-                samples.push({
-                    lat: pos.coords.latitude,
-                    lng: pos.coords.longitude,
-                    accuracy: pos.coords.accuracy,
-                    speed: pos.coords.speed,
-                    heading: pos.coords.heading,
-                    t: Date.now(),
-                });
-                const pct = Math.min(100, ((Date.now() - started) / ms) * 100);
-                onTick?.(samples, pct);
-            },
-            (err) => {
-                if (err.code === 1) {
-                    navigator.geolocation.clearWatch(watchId);
-                    reject(err);
-                }
-            },
-            { enableHighAccuracy: true, maximumAge: 0, timeout: 20000 }
-        );
+        const pushSample = (fix) => {
+            const sample = sampleFromFix(fix);
+            if (!sample) return;
+            const prev = samples[samples.length - 1];
+            if (prev && prev.t === sample.t && prev.lat === sample.lat && prev.lng === sample.lng) return;
+            samples.push(sample);
+            const pct = Math.min(100, ((Date.now() - started) / ms) * 100);
+            onTick?.(samples, pct);
+        };
+        const seed = peekLastGeoFix() || lastCoords;
+        if (seed) pushSample(seed);
+        acquireGeoWatch('sample');
+        const unsub = subscribeGeoFix(pushSample);
         setTimeout(() => {
-            navigator.geolocation.clearWatch(watchId);
+            unsub();
+            releaseGeoWatch('sample');
             resolve(samples);
         }, ms);
     });
@@ -908,8 +916,14 @@ async function shareAdminTrainOnMap(trainId) {
         accuracy = pos.coords.accuracy;
         lastCoords = { lat, lng, accuracy };
     } catch (e) {
-        showToast(e?.code === 1 ? 'Location permission denied' : 'Couldn’t get your location.', 'error');
-        return { ok: false };
+        if (lastCoords && Number.isFinite(lastCoords.lat) && Number.isFinite(lastCoords.lng)) {
+            lat = lastCoords.lat;
+            lng = lastCoords.lng;
+            accuracy = lastCoords.accuracy;
+        } else {
+            showToast(e?.code === 1 ? 'Location permission denied' : 'Couldn’t get your location.', 'error');
+            return { ok: false };
+        }
     }
     const { switchTab } = await import('./ui.js');
     switchTab('map');
@@ -980,15 +994,19 @@ export async function openNearbyTrainsModal({ lat, lng } = {}) {
         try {
             const pos = await getPosition();
             coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-            lastCoords = coords;
+            lastCoords = { ...coords, accuracy: pos.coords.accuracy };
         } catch (e) {
-            list.innerHTML = '';
-            empty?.classList.remove('hidden');
-            if (empty) empty.textContent = e?.code === 1
-                ? 'Location is off - allow it to see trains near you.'
-                : (e?.message || 'Couldn’t get your location.');
-            paintAdminPublishTrain();
-            return;
+            if (lastCoords && Number.isFinite(lastCoords.lat) && Number.isFinite(lastCoords.lng)) {
+                coords = lastCoords;
+            } else {
+                list.innerHTML = '';
+                empty?.classList.remove('hidden');
+                if (empty) empty.textContent = e?.code === 1
+                    ? 'Location is off - allow it to see trains near you.'
+                    : (e?.message || 'Couldn’t get your location.');
+                paintAdminPublishTrain();
+                return;
+            }
         }
     }
 
@@ -1137,42 +1155,64 @@ function applyGeoFix(fix) {
         lat: fix.lat,
         lng: fix.lng,
         accuracy: fix.accuracy,
+        heading: fix.heading,
+        speedMps: fix.speedMps,
+        t: Number.isFinite(fix.t) ? fix.t : Date.now(),
     };
+}
+
+function positionFromFix(fix) {
+    return {
+        coords: {
+            latitude: fix.lat,
+            longitude: fix.lng,
+            accuracy: fix.accuracy,
+            heading: fix.heading ?? null,
+            speed: fix.speedMps ?? fix.speed ?? null,
+        },
+    };
+}
+
+function knownMapFix() {
+    const watched = reusableGeoFix(peekLastGeoFix());
+    if (watched) return watched;
+    if (lastCoords && Number.isFinite(lastCoords.lat) && Number.isFinite(lastCoords.lng)) {
+        return reusableGeoFix({
+            lat: lastCoords.lat,
+            lng: lastCoords.lng,
+            accuracy: lastCoords.accuracy,
+            heading: lastCoords.heading ?? null,
+            speedMps: lastCoords.speedMps ?? lastCoords.speed ?? null,
+            t: Number.isFinite(lastCoords.t) ? lastCoords.t : Date.now(),
+        });
+    }
+    return null;
 }
 
 function getPosition() {
     return new Promise((resolve, reject) => {
-        const last = peekLastGeoFix();
-        if (last && Date.now() - last.t <= 8000) {
-            resolve({
-                coords: {
-                    latitude: last.lat,
-                    longitude: last.lng,
-                    accuracy: last.accuracy,
-                    heading: last.heading,
-                    speed: last.speedMps,
-                },
-            });
+        const known = knownMapFix();
+        if (known) {
+            resolve(positionFromFix(known));
             return;
         }
-        requestGeoLocateFix()
-            .then((fix) => {
-                resolve({
-                    coords: {
-                        latitude: fix.lat,
-                        longitude: fix.lng,
-                        accuracy: fix.accuracy,
-                        heading: fix.heading,
-                        speed: fix.speedMps,
-                    },
-                });
-            })
+        waitForGeoFix({ maxAgeMs: GEO_REUSE_MAX_AGE_MS, timeoutMs: 12000 })
+            .then((fix) => resolve(positionFromFix(fix)))
             .catch((err) => {
-                if (!navigator.geolocation) {
-                    reject(new Error('Location isn’t available on this device.'));
-                    return;
-                }
-                reject(err);
+                requestGeoLocateFix()
+                    .then((fix) => resolve(positionFromFix(fix)))
+                    .catch((locateErr) => {
+                        const fallback = knownMapFix();
+                        if (fallback) {
+                            resolve(positionFromFix(fallback));
+                            return;
+                        }
+                        if (!navigator.geolocation) {
+                            reject(new Error('Location isn’t available on this device.'));
+                            return;
+                        }
+                        reject(locateErr || err);
+                    });
             });
     });
 }
@@ -2420,6 +2460,7 @@ export function bindMapTabUi() {
                 lat: data.lat,
                 lng: data.lng,
                 accuracy: data.accuracy,
+                t: Date.now(),
             };
             setStatus(`You’re here · ±${Math.round(lastCoords.accuracy || 0)} m`);
         }

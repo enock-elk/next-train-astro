@@ -564,16 +564,24 @@ function nearTrackingInterchange(pos, routeId, stationIndex = $globalStationInde
 }
 
 async function oneShotGps() {
-    const { peekLastGeoFix, waitForGeoFix, requestGeoLocateFix } = await import('./geo-watch.js');
-    const last = peekLastGeoFix();
-    if (last && Date.now() - last.t <= 8000) return last;
+    const {
+        peekLastGeoFix,
+        waitForGeoFix,
+        requestGeoLocateFix,
+        reusableGeoFix,
+        GEO_REUSE_MAX_AGE_MS,
+    } = await import('./geo-watch.js');
+    const last = reusableGeoFix(peekLastGeoFix());
+    if (last) return last;
     try {
-        return await waitForGeoFix({ maxAgeMs: 8000, timeoutMs: 12000 });
+        return await waitForGeoFix({ maxAgeMs: GEO_REUSE_MAX_AGE_MS, timeoutMs: 12000 });
     } catch (err) {
         try {
             return await requestGeoLocateFix();
-        } catch {
-            throw err;
+        } catch (locateErr) {
+            const kept = reusableGeoFix(peekLastGeoFix());
+            if (kept) return kept;
+            throw locateErr || err;
         }
     }
 }

@@ -2,6 +2,14 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin, Dev Hub, Alerts, Trains near me, community chat, or other hidden-test work. No emoji and no em dashes in What’s New. Keep `APP_VERSION`, `package.json` `version`, and `public/app-version.json` aligned on each release. Changelog / What’s New may be skipped, or the heading may be only **no release notes.**
 
+## V9_09.14.3 — Reuse the map GPS pin for train attach (14 Sep 2026)
+
+The Map tab already holds a fused `watchPosition` fix (the blue dot and “You’re here · ±99 m”). Nearby trains, I’m on it sampling, and a locate `getCurrentPosition` used to start a second high-accuracy GPS session. On Android that second request often times out while the watch is still painting a good pin, which showed “Couldn’t get your location.”
+
+Those paths now reuse a fused sample up to 30 seconds old, wait on the existing watch, and only toast if there is no pin. Onboard vetting collects samples from the same watch instead of opening another `watchPosition`.
+
+no release notes.
+
 ## V9_09.14.2 — Scheduled alert cron and Refresh fallback (14 Sep 2026)
 
 The community worker now publishes due `notices_scheduled` jobs on every cron tick and waits for that run to finish. github.io and pages.dev origins are allowed to call the worker. Scheduled Refresh also posts due jobs directly when the worker path is skipped, so a Monday 00:00 weekly no longer sits in the queue as PUBLISH SKIPPED.

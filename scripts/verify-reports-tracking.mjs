@@ -30,7 +30,7 @@ import {
     TRACKING_STATE,
     updateDirectionObservation,
 } from '../src/lib/ride-pings.js';
-import { refineMotionFix } from '../src/lib/geo-watch.js';
+import { refineMotionFix, reusableGeoFix, locateFixOrLast, GEO_REUSE_MAX_AGE_MS } from '../src/lib/geo-watch.js';
 import { readFileSync } from 'node:fs';
 import {
     WEEKDAY_REPORT_MAX_AGE_MS,
@@ -170,6 +170,24 @@ assert(refineMotionFix(
     { lat: -25, lng: 28.01, accuracy: 5, heading: 90, speedMps: 10, t: 1000 },
     { lat: -25, lng: 28, accuracy: 5, heading: 90, speedMps: 10, t: 1000 }
 ) === null, 'non-newer GPS timestamp is ignored');
+
+const mapPin = { lat: -25.75, lng: 28.19, accuracy: 99, heading: null, speedMps: 0, t: 50_000 };
+assert(reusableGeoFix(mapPin, 50_000 + 8_000), 'map pin younger than 8s is reusable');
+assert(reusableGeoFix(mapPin, 50_000 + 25_000), 'map pin younger than 30s is reusable');
+assert(!reusableGeoFix(mapPin, 50_000 + GEO_REUSE_MAX_AGE_MS + 1), 'stale map pin is not reused');
+assert(!reusableGeoFix({ lat: -25.75, lng: 28.19, accuracy: 99 }, 50_000), 'untimed fix is not reused');
+assert(
+    locateFixOrLast(null, mapPin, 50_000 + 5_000)?.lat === mapPin.lat,
+    'failed high-accuracy locate keeps the map pin'
+);
+assert(
+    locateFixOrLast(
+        { lat: -25.751, lng: 28.191, accuracy: 20 },
+        mapPin,
+        50_000 + 5_000
+    )?.lat === -25.751,
+    'trusted high-accuracy locate wins over the map pin'
+);
 assert(adaptiveOnboardPingMs(12) === ONBOARD_FAST_PING_MS, 'fast train broadcasts every 5 seconds');
 assert(adaptiveOnboardPingMs(2) === ONBOARD_MOVING_PING_MS, 'slow movement broadcasts every 10 seconds');
 assert(adaptiveOnboardPingMs(0) === ONBOARD_STATIONARY_PING_MS, 'stationary share heartbeats every 25 seconds');
@@ -298,6 +316,12 @@ assert(geoWatchSource.includes('watchPosition'), 'geo watch uses a single watchP
 assert(geoWatchSource.includes('enableHighAccuracy: false'), 'seek watch is fused / low power');
 assert(geoWatchSource.includes('document.hidden'), 'geo watch pauses when the document is hidden');
 assert(geoWatchSource.includes("holders.add"), 'geo watch is reference-counted by map and share');
+assert(geoWatchSource.includes('reusableGeoFix'), 'locate can keep a fresh fused map pin');
+assert(geoWatchSource.includes('locateFixOrLast'), 'failed high-accuracy locate falls back to the map pin');
+assert(mapTabSource.includes('knownMapFix'), 'nearby trains reuse the painted map pin');
+assert(mapTabSource.includes("acquireGeoWatch('sample')"), 'onboard GPS sampling uses the fused watch, not a second one');
+assert(!mapTabSource.includes('enableHighAccuracy: true, maximumAge: 0'), 'onboard sampling no longer starts a GPS-only watch');
+assert(ridePingsSource.includes('reusableGeoFix'), 'presence share reuses the fused map pin');
 assert(mapPageSource.includes('nt-live-train-oval'), 'map page styles the merged ovals');
 assert(mapPageSource.includes('border-radius: 999px'), 'map marker uses a capsule oval');
 assert(mapAppSource.includes('interpolateRideMarkerLatLng'), 'remote map marker interpolates bounded received corrections');

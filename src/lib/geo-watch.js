@@ -20,6 +20,9 @@ const LOCATE_OPTS = { enableHighAccuracy: true, maximumAge: 4000, timeout: 12000
 const STATIONARY_SPEED_MPS = 1.5;
 const MAX_PLAUSIBLE_SPEED_MPS = 70;
 
+/** Map pin / last fused sample is still good enough to attach or list nearby trains. */
+export const GEO_REUSE_MAX_AGE_MS = 30 * 1000;
+
 function distanceM(a, b) {
     if (!a || !b) return 0;
     const rad = Math.PI / 180;
@@ -175,6 +178,22 @@ export function peekLastGeoFix() {
     return lastFix;
 }
 
+/**
+ * Keep the map pin / last fused sample when a second GPS request times out
+ * or refineMotionFix drops a jump. Android often fails getCurrentPosition
+ * while watchPosition is already painting a usable fix.
+ */
+export function reusableGeoFix(fix, now = Date.now(), maxAgeMs = GEO_REUSE_MAX_AGE_MS) {
+    if (!fix || !Number.isFinite(fix.lat) || !Number.isFinite(fix.lng)) return null;
+    if (!Number.isFinite(fix.t) || now - fix.t > maxAgeMs) return null;
+    return fix;
+}
+
+export function locateFixOrLast(refined, last = lastFix, now = Date.now(), maxAgeMs = GEO_REUSE_MAX_AGE_MS) {
+    if (refined && Number.isFinite(refined.lat) && Number.isFinite(refined.lng)) return refined;
+    return reusableGeoFix(last, now, maxAgeMs);
+}
+
 export function subscribeGeoFix(fn) {
     listeners.add(fn);
     return () => listeners.delete(fn);
@@ -199,27 +218,41 @@ export function geoWatchHolders() {
 /** Recenter-quality fix. Reuses a recent watch sample when the OS still has one. */
 export function requestGeoLocateFix() {
     return new Promise((resolve, reject) => {
+        const reuse = () => reusableGeoFix(lastFix);
         if (typeof navigator === 'undefined' || !navigator.geolocation) {
+            const kept = reuse();
+            if (kept) {
+                resolve(kept);
+                return;
+            }
             reject(Object.assign(new Error('Location isn’t available on this device.'), { code: 2 }));
             return;
         }
         navigator.geolocation.getCurrentPosition(
             (pos) => {
                 const fix = refineMotionFix(fromCoords(pos.coords, pos.timestamp), lastFix);
-                if (!fix) {
+                const chosen = locateFixOrLast(fix, lastFix);
+                if (!chosen) {
                     reject(Object.assign(new Error('Location jumped too far to trust.'), { code: 2 }));
                     return;
                 }
-                emit(fix);
-                resolve(fix);
+                if (chosen === fix) emit(fix);
+                resolve(chosen);
             },
-            reject,
+            (err) => {
+                const kept = reuse();
+                if (kept) {
+                    resolve(kept);
+                    return;
+                }
+                reject(err);
+            },
             LOCATE_OPTS
         );
     });
 }
 
-export function waitForGeoFix({ maxAgeMs = 8000, timeoutMs = 12000 } = {}) {
+export function waitForGeoFix({ maxAgeMs = GEO_REUSE_MAX_AGE_MS, timeoutMs = 12000 } = {}) {
     if (lastFix && Date.now() - lastFix.t <= maxAgeMs) {
         return Promise.resolve(lastFix);
     }

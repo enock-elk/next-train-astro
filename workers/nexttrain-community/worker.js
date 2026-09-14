@@ -229,6 +229,36 @@ async function verifyIdToken(env, idToken) {
     };
 }
 
+export function hasFirebaseAdminEnv(env) {
+    return !!(
+        env?.FIREBASE_CLIENT_EMAIL
+        && env?.FIREBASE_PRIVATE_KEY
+        && String(env?.FIREBASE_DATABASE_URL || '').trim()
+    );
+}
+
+async function rtdbWriteWithUserToken(env, path, value, idToken) {
+    const base = String(env.FIREBASE_DATABASE_URL || '').replace(/\/$/, '');
+    if (!base) throw new Error('FIREBASE_DATABASE_URL missing');
+    if (!idToken) throw new Error('Missing auth token');
+    const url = `${base}/${String(path || '').replace(/^\//, '')}.json?auth=${encodeURIComponent(idToken)}`;
+    const res = await fetch(url, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(value),
+    });
+    if (!res.ok) {
+        const t = await res.text();
+        throw new Error(`RTDB write failed (${res.status}): ${t.slice(0, 200)}`);
+    }
+    return true;
+}
+
+async function rtdbWritePreferred(env, path, value, idToken) {
+    if (hasFirebaseAdminEnv(env)) return rtdbWrite(env, path, value);
+    return rtdbWriteWithUserToken(env, path, value, idToken);
+}
+
 async function rtdbWrite(env, path, value) {
     const email = env.FIREBASE_CLIENT_EMAIL;
     const key = env.FIREBASE_PRIVATE_KEY;
@@ -959,7 +989,7 @@ async function handlePost(request, env) {
     try {
         if (heldForReview) {
             const reportId = newId('mr');
-            await rtdbWrite(env, `moderation_queue/${reportId}`, {
+            await rtdbWritePreferred(env, `moderation_queue/${reportId}`, {
                 reportId,
                 type: 'auto_hold',
                 source: 'community_post',
@@ -977,7 +1007,7 @@ async function handlePost(request, env) {
                 timestamp: Date.now(),
                 status: 'open',
                 appVersion: payload.appVersion,
-            });
+            }, idToken);
             return json(env, request, 200, {
                 ok: true,
                 held: true,
@@ -985,15 +1015,23 @@ async function handlePost(request, env) {
                 reportId,
             });
         }
-        await rtdbUpdate(env, {
-            [`route_community/${routeId}/posts/${postId}`]: payload,
-            [`community_activity/${routeId}/${postId}`]: {
-                kind: 'post',
-                postId,
-                uid: payload.uid,
-                timestamp: payload.timestamp,
-            },
-        });
+        const activity = {
+            kind: 'post',
+            postId,
+            uid: payload.uid,
+            timestamp: payload.timestamp,
+        };
+        if (hasFirebaseAdminEnv(env)) {
+            await rtdbUpdate(env, {
+                [`route_community/${routeId}/posts/${postId}`]: payload,
+                [`community_activity/${routeId}/${postId}`]: activity,
+            });
+        } else {
+            await rtdbWriteWithUserToken(env, `route_community/${routeId}/posts/${postId}`, payload, idToken);
+            try {
+                await rtdbWriteWithUserToken(env, `community_activity/${routeId}/${postId}`, activity, idToken);
+            } catch { /* index is optional when Admin is unset */ }
+        }
         return json(env, request, 200, { ok: true, post: payload });
     } catch (e) {
         return json(env, request, 500, { ok: false, error: e.message || 'Write failed' });

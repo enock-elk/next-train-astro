@@ -2,6 +2,12 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin, Dev Hub, Alerts, Trains near me, community chat, or other hidden-test work. No emoji and no em dashes in What’s New. Keep `APP_VERSION`, `package.json` `version`, and `public/app-version.json` aligned on each release. Changelog / What’s New may be skipped, or the heading may be only **no release notes.**
 
+## V9_09.14.4 — Community posts without Firebase Admin secret (14 Sep 2026)
+
+The community worker was returning Firebase Admin env incomplete on every post and composer reply because `FIREBASE_PRIVATE_KEY` is a Wrangler secret and was not on the deployed worker. Posts now write with the signed-in Firebase ID token when Admin env is missing. The app also falls back to a direct `route_community` write instead of showing that raw error.
+
+no release notes.
+
 ## V9_09.14.3 — Reuse the map GPS pin for train attach (14 Sep 2026)
 
 The Map tab already holds a fused `watchPosition` fix (the blue dot and “You’re here · ±99 m”). Nearby trains, I’m on it sampling, and a locate `getCurrentPosition` used to start a second high-accuracy GPS session. On Android that second request often times out while the watch is still painting a good pin, which showed “Couldn’t get your location.”

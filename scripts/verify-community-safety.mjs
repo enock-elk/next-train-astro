@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { checkContentSafety } from '../src/lib/content-safety.js';
-import { sanitizeBody } from '../workers/nexttrain-community/worker.js';
+import { sanitizeBody, hasFirebaseAdminEnv } from '../workers/nexttrain-community/worker.js';
 
 const cases = [
     // English.
@@ -94,11 +94,23 @@ assert.match(heldReplyBranch, /queueAutoModeration/);
 assert.doesNotMatch(heldReplyBranch, /route_community/);
 const workerHoldBranch = workerSource.slice(
     workerSource.indexOf('if (heldForReview)'),
-    workerSource.indexOf('await rtdbWrite(env, `route_community/', workerSource.indexOf('if (heldForReview)'))
+    workerSource.indexOf('const activity =', workerSource.indexOf('if (heldForReview)'))
 );
 assert.match(workerHoldBranch, /moderation_queue\/\$\{reportId\}/);
 assert.match(workerHoldBranch, /publish:\s*\{\s*kind:\s*'community_post',\s*routeId,\s*payload\s*\}/);
 assert.match(workerHoldBranch, /held:\s*true/);
+assert.match(workerHoldBranch, /rtdbWritePreferred/);
+assert.equal(hasFirebaseAdminEnv({
+    FIREBASE_CLIENT_EMAIL: 'a@b',
+    FIREBASE_PRIVATE_KEY: 'k',
+    FIREBASE_DATABASE_URL: 'https://example.firebaseio.com',
+}), true, 'admin env is complete when email, key, and URL are set');
+assert.equal(hasFirebaseAdminEnv({
+    FIREBASE_CLIENT_EMAIL: 'a@b',
+    FIREBASE_DATABASE_URL: 'https://example.firebaseio.com',
+}), false, 'admin env is incomplete without the private key');
+assert.match(workerSource, /rtdbWriteWithUserToken/, 'posts can use the signed-in ID token when Admin is unset');
+assert.match(community, /shouldFallbackCommunityWrite/, 'client falls back to a direct RTDB write if the worker Admin env is incomplete');
 
 const handlePostSrc = workerSource.slice(
     workerSource.indexOf('async function handlePost'),

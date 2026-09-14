@@ -378,6 +378,22 @@ export async function fetchReplies(routeId, postId) {
     }
 }
 
+function shouldFallbackCommunityWrite(res, data) {
+    const err = String(data?.error || '');
+    return (res && res.status >= 500)
+        || /Admin env incomplete/i.test(err)
+        || /FIREBASE_PRIVATE_KEY/i.test(err)
+        || /Google auth failed/i.test(err);
+}
+
+function safeCommunityWriteError(message, status) {
+    const text = String(message || '');
+    if (/Admin env incomplete|FIREBASE_|Google auth|RTDB /i.test(text)) {
+        return 'Could not post. Try again in a moment.';
+    }
+    return text || (status ? `Post failed (${status})` : 'Could not post.');
+}
+
 export async function submitCommunityPost(body, routeId = $currentRouteId.get()) {
     const text = (body || '').trim();
     const acct = $account.get();
@@ -500,25 +516,32 @@ export async function submitCommunityPost(body, routeId = $currentRouteId.get())
             if (data.blocked) {
                 return { ok: false, message: data.error || 'That message isn’t allowed.' };
             }
-            if (!res.ok || !data.ok) {
-                if (res.status === 401 || res.status === 403 || data.shadowSilenced) {
-                    if (!localOverlayByRoute[routeId]) localOverlayByRoute[routeId] = [];
-                    localOverlayByRoute[routeId].push({ ...payload, shadowOnly: true });
-                    recordRateHit();
-                    return { ok: true, post: payload, shadowSilenced: true };
-                }
-                throw new Error(data.error || `Post failed (${res.status})`);
-            }
-            if (data.shadowSilenced) {
-                if (!localOverlayByRoute[routeId]) localOverlayByRoute[routeId] = [];
-                localOverlayByRoute[routeId].push({ ...(data.post || payload), shadowOnly: true });
+            if (data.held) {
                 recordRateHit();
                 rememberBody(text);
-                return { ok: true, post: data.post || payload, shadowSilenced: true };
+                return { ok: true, held: true, message: data.message || 'We’re checking this message.' };
             }
-            recordRateHit();
-            rememberBody(text);
-            return { ok: true, post: data.post || payload };
+            if (res.ok && data.ok) {
+                if (data.shadowSilenced) {
+                    if (!localOverlayByRoute[routeId]) localOverlayByRoute[routeId] = [];
+                    localOverlayByRoute[routeId].push({ ...(data.post || payload), shadowOnly: true });
+                    recordRateHit();
+                    rememberBody(text);
+                    return { ok: true, post: data.post || payload, shadowSilenced: true };
+                }
+                recordRateHit();
+                rememberBody(text);
+                return { ok: true, post: data.post || payload };
+            }
+            if (res.status === 401 || res.status === 403 || data.shadowSilenced) {
+                if (!localOverlayByRoute[routeId]) localOverlayByRoute[routeId] = [];
+                localOverlayByRoute[routeId].push({ ...payload, shadowOnly: true });
+                recordRateHit();
+                return { ok: true, post: payload, shadowSilenced: true };
+            }
+            if (!shouldFallbackCommunityWrite(res, data)) {
+                throw new Error(safeCommunityWriteError(data.error, res.status));
+            }
         }
 
         const q = await authQuery();
@@ -551,7 +574,7 @@ export async function submitCommunityPost(body, routeId = $currentRouteId.get())
         rememberBody(text);
         return { ok: true, post: payload };
     } catch (e) {
-        return { ok: false, message: e?.message || 'Could not post.' };
+        return { ok: false, message: safeCommunityWriteError(e?.message) };
     }
 }
 

@@ -123,6 +123,7 @@ ok(adminJs.includes('sys_logs/trip_plan_users'), 'admin reads trip_plan_users in
     const rules = readFileSync(join(ROOT, 'firebase-database.rules.json'), 'utf8');
     ok(rules.includes('"trip_plan_users"'), 'rules allow trip_plan_users index');
     ok(rules.includes('"trip_plan_pairs"'), 'rules allow trip_plan_pairs index');
+    ok(rules.includes('"fare_votes"'), 'rules allow fare_votes create-once log');
     ok(rules.includes('thandeka05nxumalo@gmail.com') && rules.includes('enockelk@gmail.com'), 'rules keep both operator emails');
 }
 {
@@ -130,6 +131,7 @@ ok(adminJs.includes('sys_logs/trip_plan_users'), 'admin reads trip_plan_users in
     ok(tel.includes('upsertTripPlanIndexes'), 'flush writes all-time user + pair indexes');
     ok(tel.includes('trip_plan_users'), 'client upserts trip_plan_users');
     ok(tel.includes('trip_plan_pairs'), 'client upserts trip_plan_pairs');
+    ok(tel.includes('sys_logs/fare_votes'), 'client writes fare_votes immediately');
 }
 ok(adminJs.includes('confirmClearDb'), 'Clear DB uses a second confirmation popup');
 ok(adminJs.includes("telemetryRange === 'ALL'"), 'admin ALL range does not use the 7-point slicer');
@@ -162,6 +164,12 @@ ok(adminJs.includes('border-radius:22px'), 'export card uses a large continuous 
 ok(adminJs.includes('_telemetryExportFooterHtml'), 'snapshot and chart share the same footer');
 ok(!adminJs.includes('Verified by Google Analytics'), 'export footer no longer uses the verified pill');
 ok(adminJs.includes('>Live Telemetry<'), 'snapshot title is title case, not all caps');
+ok(adminJs.includes('nt-export-heading'), 'chart title sits on the grouped canvas above the card');
+ok(adminJs.includes("'height:auto'") && adminJs.includes("'overflow:hidden'"), 'export frame clips to content');
+ok(adminJs.includes('id="de-tab-fares"'), 'planner telemetry has a Fares tab');
+ok(adminJs.includes('id="de-tab-trips"') && adminJs.indexOf('id="de-tab-fails"') < adminJs.indexOf('id="de-tab-fares"'), 'Fails tab is listed before Fares');
+ok(adminJs.includes('sys_logs/fare_votes'), 'admin reads fare_votes');
+ok(adminJs.includes("['trips', 'fails', 'fares']"), 'swipe walks three planner telemetry tabs');
 ok(adminJs.includes('de-trip-hour-bars') && adminJs.includes('de-trip-od-heat'), 'planner insights include hour bars and an OD heatmap');
 ok(adminJs.includes('de-trip-dep-bars') && adminJs.includes('de-trip-xfer'), 'planner insights include departure-hour and transfer charts');
 ok(!adminJs.includes('if (countLiveMaint() > 0)'), 'live banners no longer auto-expand Maintenance Mode');

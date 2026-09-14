@@ -3104,7 +3104,10 @@ const Admin = {
         }
     },
 
-    _telemetryExportFrame: (widthPx) => {
+    _telemetryExportFrame: (widthPx, { title = '', subtitle = '' } = {}) => {
+        const esc = (s) => String(s || '').replace(/[&<>"']/g, (ch) => ({
+            '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+        }[ch]));
         const root = document.createElement('div');
         root.style.cssText = [
             'position:fixed',
@@ -3113,10 +3116,25 @@ const Admin = {
             `width:${Number(widthPx) || 600}px`,
             'background:#F2F2F7',
             'font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","SF Pro Display",system-ui,sans-serif',
-            'padding:18px',
+            'padding:16px 18px 18px',
             'color:#1c1c1e',
+            'height:auto',
+            'overflow:hidden',
+            'box-sizing:border-box',
             '-webkit-font-smoothing:antialiased',
         ].join(';');
+        if (title) {
+            const heading = document.createElement('div');
+            heading.className = 'nt-export-heading';
+            heading.style.cssText = 'padding:2px 4px 14px;';
+            const subtitleHtml = subtitle
+                ? `<div style="font-size:13px;font-weight:500;color:#8e8e93;margin-top:3px;">${esc(subtitle)}</div>`
+                : '';
+            heading.innerHTML = title === 'Live Telemetry'
+                ? `<div style="font-size:22px;font-weight:700;letter-spacing:-0.66px;color:#1c1c1e;">Live Telemetry</div>${subtitleHtml}`
+                : `<div style="font-size:22px;font-weight:700;letter-spacing:-0.66px;color:#1c1c1e;">${esc(title)}</div>${subtitleHtml}`;
+            root.appendChild(heading);
+        }
         const card = document.createElement('div');
         card.style.cssText = [
             'background:#ffffff',
@@ -3184,12 +3202,11 @@ const Admin = {
                     <div style="font-size:11px;font-weight:500;color:#8e8e93;letter-spacing:0.01em;margin-bottom:8px;">${label}</div>
                     <div style="font-size:32px;font-weight:700;letter-spacing:-0.9px;color:#1c1c1e;line-height:1;font-variant-numeric:tabular-nums;">${value}</div>
                 </div>`;
-        const { root: exportContainer, card: exportCard } = Admin._telemetryExportFrame(600);
+        const { root: exportContainer, card: exportCard } = Admin._telemetryExportFrame(600, {
+            title: 'Live Telemetry',
+            subtitle: 'Next Train',
+        });
         exportCard.innerHTML = `
-            <div style="margin-bottom:18px;">
-                <div style="font-size:22px;font-weight:700;letter-spacing:-0.66px;color:#1c1c1e;">Live Telemetry</div>
-                <div style="font-size:13px;font-weight:500;color:#8e8e93;margin-top:3px;">Next Train</div>
-            </div>
             <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:4px;">
                 ${metricTile('Last 5 min', stat5m)}
                 ${metricTile('Last 30 min', stat30m)}
@@ -3209,7 +3226,13 @@ const Admin = {
             const canvas = await html2canvas(exportContainer, {
                 scale: 2,
                 backgroundColor: '#F2F2F7',
-                logging: false
+                logging: false,
+                width: exportContainer.offsetWidth,
+                height: exportContainer.scrollHeight,
+                windowWidth: exportContainer.offsetWidth,
+                windowHeight: exportContainer.scrollHeight,
+                scrollX: 0,
+                scrollY: 0,
             });
 
             canvas.toBlob(async (blob) => {
@@ -3313,12 +3336,11 @@ const Admin = {
         const rawSvgNode = document.querySelector('#analytics-chart-svg-container svg');
         if (!rawSvgNode) return;
 
-        const { root: exportContainer, card: exportCard } = Admin._telemetryExportFrame(700);
+        const { root: exportContainer, card: exportCard } = Admin._telemetryExportFrame(700, {
+            title: titleText,
+            subtitle: 'Next Train',
+        });
         exportCard.innerHTML = `
-            <div style="margin-bottom:14px;">
-                <div style="font-size:22px;font-weight:700;letter-spacing:-0.66px;color:#1c1c1e;">${titleText}</div>
-                <div style="font-size:13px;font-weight:500;color:#8e8e93;margin-top:3px;">Next Train</div>
-            </div>
             <div id="export-svg-slot" style="height:268px;background:#F2F2F7;border-radius:16px;padding:10px 6px 4px;box-sizing:border-box;"></div>
             ${Admin._telemetryExportFooterHtml({
                 kicker: `Snapshot generated: ${Admin.formatDate(Date.now())}`,
@@ -3336,7 +3358,17 @@ const Admin = {
 
         try {
             await new Promise(r => setTimeout(r, 150)); 
-            const canvas = await html2canvas(exportContainer, { scale: 2, backgroundColor: '#F2F2F7', logging: false });
+            const canvas = await html2canvas(exportContainer, {
+                scale: 2,
+                backgroundColor: '#F2F2F7',
+                logging: false,
+                width: exportContainer.offsetWidth,
+                height: exportContainer.scrollHeight,
+                windowWidth: exportContainer.offsetWidth,
+                windowHeight: exportContainer.scrollHeight,
+                scrollX: 0,
+                scrollY: 0,
+            });
             
             canvas.toBlob(async (blob) => {
                 const timestampStr = new Date().toISOString().replace(/[-:T.]/g, '').slice(0, 12); 
@@ -5700,6 +5732,7 @@ const Admin = {
                 <div id="de-tabs-swipe" class="flex gap-1 p-0.5 bg-gray-100 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 touch-pan-y">
                     <button type="button" id="de-tab-trips" class="flex-1 py-1.5 text-[10px] font-black uppercase tracking-wider rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white shadow-sm">Trip Plans</button>
                     <button type="button" id="de-tab-fails" class="flex-1 py-1.5 text-[10px] font-black uppercase tracking-wider rounded-md text-gray-500 dark:text-gray-400">Fails</button>
+                    <button type="button" id="de-tab-fares" class="flex-1 py-1.5 text-[10px] font-black uppercase tracking-wider rounded-md text-gray-500 dark:text-gray-400">Fares</button>
                 </div>
                 <div id="de-trip-filters" class="space-y-2">
                     <button type="button" id="de-filters-toggle" class="w-full flex items-center justify-between px-2.5 py-2 rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-[10px] font-black uppercase tracking-wider text-gray-500 dark:text-gray-400 focus:outline-none">
@@ -5777,24 +5810,33 @@ const Admin = {
 
         const syncDeFiltersVisibility = () => {
             const wrap = document.getElementById('de-trip-filters');
-            if (!wrap) return;
-            if (Admin._deActiveTab === 'trips') wrap.classList.remove('hidden');
-            else wrap.classList.add('hidden');
+            if (wrap) {
+                if (Admin._deActiveTab === 'trips') wrap.classList.remove('hidden');
+                else wrap.classList.add('hidden');
+            }
+            const hideCluster = Admin._deActiveTab === 'fares';
+            const sortEl = document.getElementById('de-sort-btn');
+            const countEl = document.getElementById('de-count-mode-btn');
+            if (sortEl) sortEl.classList.toggle('hidden', hideCluster);
+            if (countEl) countEl.classList.toggle('hidden', hideCluster);
         };
 
         const setDeTab = (tab) => {
-            Admin._deActiveTab = tab === 'trips' ? 'trips' : 'fails';
+            Admin._deActiveTab = (tab === 'fails' || tab === 'fares') ? tab : 'trips';
             const failsBtn = document.getElementById('de-tab-fails');
             const tripsBtn = document.getElementById('de-tab-trips');
+            const faresBtn = document.getElementById('de-tab-fares');
             const active = 'flex-1 py-1.5 text-[10px] font-black uppercase tracking-wider rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white shadow-sm';
             const idle = 'flex-1 py-1.5 text-[10px] font-black uppercase tracking-wider rounded-md text-gray-500 dark:text-gray-400';
             if (failsBtn) failsBtn.className = Admin._deActiveTab === 'fails' ? active : idle;
             if (tripsBtn) tripsBtn.className = Admin._deActiveTab === 'trips' ? active : idle;
+            if (faresBtn) faresBtn.className = Admin._deActiveTab === 'fares' ? active : idle;
             syncDeFiltersVisibility();
             Admin.fetchDeadEnds();
         };
         document.getElementById('de-tab-fails')?.addEventListener('click', () => setDeTab('fails'));
         document.getElementById('de-tab-trips')?.addEventListener('click', () => setDeTab('trips'));
+        document.getElementById('de-tab-fares')?.addEventListener('click', () => setDeTab('fares'));
         syncDeFiltersVisibility();
 
         document.getElementById('de-filters-toggle')?.addEventListener('click', () => {
@@ -5805,10 +5847,11 @@ const Admin = {
             chev?.classList.toggle('-rotate-90', !open);
         });
 
-        // Swipe between Fails ? Trip Plans (tabs + list surface)
+        // Swipe Trip Plans → Fails → Fares (tabs + list surface)
         const bindDeSwipe = (el) => {
             if (!el || el.dataset.deSwipeBound === '1') return;
             el.dataset.deSwipeBound = '1';
+            const order = ['trips', 'fails', 'fares'];
             let touchStartX = 0;
             el.addEventListener('touchstart', (e) => {
                 touchStartX = e.changedTouches?.[0]?.screenX || 0;
@@ -5817,8 +5860,9 @@ const Admin = {
                 const endX = e.changedTouches?.[0]?.screenX || 0;
                 const diffX = endX - touchStartX;
                 if (Math.abs(diffX) < 48) return;
-                if (diffX < 0 && Admin._deActiveTab === 'trips') setDeTab('fails');
-                else if (diffX > 0 && Admin._deActiveTab === 'fails') setDeTab('trips');
+                const idx = order.indexOf(Admin._deActiveTab);
+                if (diffX < 0 && idx < order.length - 1) setDeTab(order[idx + 1]);
+                else if (diffX > 0 && idx > 0) setDeTab(order[idx - 1]);
             }, { passive: true });
         };
         bindDeSwipe(document.getElementById('de-tabs-swipe'));
@@ -5925,6 +5969,49 @@ const Admin = {
 
                 if (Admin._deActiveTab === 'trips') {
                     await Admin.renderTripPlanBatches(listDiv, secret);
+                    return;
+                }
+
+                if (Admin._deActiveTab === 'fares') {
+                    const fareRes = await window.guardianFetch(`${dynamicEndpoint}sys_logs/fare_votes.json?auth=${secret}`, {}, 10000);
+                    if (!fareRes.ok) throw new Error("HTTP " + fareRes.status);
+                    const fareData = await fareRes.json();
+                    if (!fareData || typeof fareData !== 'object' || !Object.keys(fareData).length) {
+                        listDiv.innerHTML = '<div class="text-xs text-gray-500 italic text-center py-4">No fare votes recorded.</div>';
+                        return;
+                    }
+                    Admin._cachedFareVotes = fareData;
+                    const secureEscape = (str) => {
+                        if (!str) return '';
+                        if (typeof escapeHTML === 'function') return escapeHTML(str);
+                        return String(str).replace(/[&<>"']/g, function(m) {
+                            return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m];
+                        });
+                    };
+                    const entries = Object.entries(fareData).map(([id, v]) => ({ id, ...(v || {}) }));
+                    entries.sort((a, b) => (Number(b.at) || 0) - (Number(a.at) || 0));
+                    listDiv.innerHTML = '';
+                    entries.forEach((item) => {
+                        const card = document.createElement('div');
+                        card.className = "bg-white dark:bg-gray-900 p-3 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm";
+                        const quoted = item.quotedPrice != null ? `R${item.quotedPrice}` : '-';
+                        const reported = item.reportedPrice != null ? `R${item.reportedPrice}` : '-';
+                        const peakLabel = item.isOffPeak ? 'Off-peak' : 'Peak';
+                        const kmLabel = item.km != null && item.km !== '' ? `${item.km} km` : '-';
+                        const profileLabel = item.profile || 'Adult';
+                        const vsLabel = item.agree ? `${quoted} (yes)` : `${quoted} → ${reported}`;
+                        card.innerHTML = `
+                            <div class="text-xs font-bold text-gray-900 dark:text-white whitespace-normal break-words leading-snug">${secureEscape(item.origin)} ${Admin.routeArrowSvg('inline-block w-3.5 h-3.5 mx-1 align-middle text-gray-400 shrink-0')} ${secureEscape(item.destination)}</div>
+                            <div class="flex flex-wrap items-center mt-1.5 gap-1.5">
+                                <span class="text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded ${item.agree ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300' : 'bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-200'}">${secureEscape(vsLabel)}</span>
+                                <span class="text-[9px] font-bold text-indigo-600 dark:text-indigo-400 uppercase">${secureEscape(peakLabel)}</span>
+                                <span class="text-[9px] text-gray-400 font-mono">${secureEscape(kmLabel)}</span>
+                                <span class="text-[9px] text-gray-500 font-bold">${secureEscape(profileLabel)}</span>
+                                <span class="text-[9px] text-gray-400 font-mono">${Admin.formatDate(item.at)}</span>
+                            </div>
+                        `;
+                        listDiv.appendChild(card);
+                    });
                     return;
                 }
 
@@ -6599,7 +6686,9 @@ const Admin = {
                 'Download export',
                 Admin._deActiveTab === 'trips'
                     ? 'Export the Trip Plans tab (respects current filters).'
-                    : 'Export the Fails tab.',
+                    : Admin._deActiveTab === 'fares'
+                        ? 'Export the Fares tab.'
+                        : 'Export the Fails tab.',
                 [
                     { id: 'txt', label: 'Text (.txt)', primary: true },
                     { id: 'csv', label: 'Excel (.csv)' },
@@ -6641,6 +6730,44 @@ const Admin = {
                 return;
             }
 
+            if (Admin._deActiveTab === 'fares') {
+                const votes = Admin._cachedFareVotes || {};
+                const entries = Object.entries(votes).map(([id, v]) => ({ id, ...(v || {}) }));
+                if (!entries.length) {
+                    if (typeof showToast === 'function') showToast('No fare votes to export', 'info');
+                    return;
+                }
+                entries.sort((a, b) => (Number(b.at) || 0) - (Number(a.at) || 0));
+                const headers = ['at', 'origin', 'destination', 'quotedPrice', 'reportedPrice', 'agree', 'isOffPeak', 'dayType', 'depTime', 'profile', 'km', 'crowKm', 'zone', 'region', 'deviceId', 'authUid', 'appVersion', 'routeIds', 'id'];
+                const cell = (r, h) => {
+                    if (h === 'at') return Admin.formatDate(r.at);
+                    if (h === 'routeIds') return Array.isArray(r.routeIds) ? r.routeIds.join('|') : (r.routeIds || '');
+                    return r[h];
+                };
+                if (format === 'csv') {
+                    const esc = (v) => {
+                        const s = String(v ?? '');
+                        return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+                    };
+                    const lines = [headers.join(',')];
+                    entries.forEach((r) => {
+                        lines.push(headers.map((h) => esc(cell(r, h))).join(','));
+                    });
+                    Admin.downloadFile(`fare_votes_${dateStr}.csv`, lines.join('\n'), 'text/csv;charset=utf-8');
+                } else {
+                    let txt = `NEXT TRAIN - FARE VOTES EXPORT\nExported: ${Admin.formatDate(Date.now())}\nRows: ${entries.length}\n${'='.repeat(48)}\n\n`;
+                    entries.forEach((r, i) => {
+                        txt += `#${i + 1}  ${Admin.formatDate(r.at)}\n`;
+                        txt += `  ${(r.origin || '-')} -> ${(r.destination || '-')}\n`;
+                        txt += `  Quoted: R${r.quotedPrice ?? '-'}  Reported: R${r.reportedPrice ?? '-'}  Agree: ${r.agree ? 'yes' : 'no'}\n`;
+                        txt += `  ${r.isOffPeak ? 'Off-peak' : 'Peak'} - ${r.dayType || '-'} - ${r.km != null ? r.km + ' km' : '-'} - ${r.profile || 'Adult'}\n\n`;
+                    });
+                    Admin.downloadFile(`fare_votes_${dateStr}.txt`, txt);
+                }
+                if (typeof showToast === 'function') showToast(`Downloaded ${entries.length} fare vote(s)`, 'success');
+                return;
+            }
+
             // Fails tab
             const fails = Admin._cachedRoutingFails || {};
             const entries = Object.entries(fails).map(([id, v]) => ({ id, ...(v || {}) }));
@@ -6679,8 +6806,16 @@ const Admin = {
         };
 
         clearBtn.onclick = async () => {
-            const path = Admin._deActiveTab === 'trips' ? 'sys_logs/trip_plans' : 'sys_logs/routing_fails';
-            const label = Admin._deActiveTab === 'trips' ? 'trip plan batches' : 'routing fail logs';
+            const path = Admin._deActiveTab === 'trips'
+                ? 'sys_logs/trip_plans'
+                : Admin._deActiveTab === 'fares'
+                    ? 'sys_logs/fare_votes'
+                    : 'sys_logs/routing_fails';
+            const label = Admin._deActiveTab === 'trips'
+                ? 'trip plan batches'
+                : Admin._deActiveTab === 'fares'
+                    ? 'fare votes'
+                    : 'routing fail logs';
             const confirmed = await Admin.confirmClearDb(`all ${label} from the server`);
             if (!confirmed) return;
             const secret = await Admin.getAuthKey();

@@ -115,6 +115,12 @@ assert.match(worker, /isSafeRtdbKey\(routeId\)/);
 assert.match(worker, /isSafeRtdbKey\(postId\)/);
 assert.match(admin, /\[`community_activity\/\$\{routeId\}\//, 'admin approval indexes approved messages');
 
+const rootRules = rules.rules;
+assert.ok(rootRules.community_activity, 'community activity rules exist');
+assert.match(rootRules.community_activity.$routeId.$messageId['.write'], /root\.child\('route_community'\)/);
+assert.match(rootRules.community_activity.$routeId.$messageId['.write'], /newData\.child\('uid'\)\.val\(\) === auth\.uid/);
+assert.match(rootRules.admin_state.$adminUid['.write'], /auth\.uid === \$adminUid/);
+assert.match(rootRules.admin_state.$adminUid['.write'], /thandeka05nxumalo@gmail\.com/);
 assert.equal(rootRules.route_community.$routeId.post_reactions['.read'], true, 'post_reactions parent is public-read so other users can load reactions');
 assert.equal(rootRules.route_community.$routeId.post_reactions.$postId['.read'], true);
 

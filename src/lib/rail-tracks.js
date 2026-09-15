@@ -10,8 +10,6 @@ const SNAP_MAX_M = 900;
 const MAX_HOPS = 80000;
 /** Station coords may sit off the rail; still slice the bake within this. */
 const BAKED_COVER_M = 900;
-/** Draw a short stub from an off-track station onto the rail. */
-const STUB_MIN_M = 20;
 /**
  * Longest edge accepted from a baked line. The bake keeps a straight chord
  * where OSM has no rail (~3.2 km at most), so those edges must stay in the
@@ -437,17 +435,19 @@ function appendPoint(out, lat, lon) {
     out.push([lat, lon]);
 }
 
-function appendSeg(out, seg, fromStop, toStop) {
+/**
+ * Append a rail segment and nothing else.
+ *
+ * This used to draw a stub from the stop onto the rail whenever the station sat
+ * more than 20 m off the track. Most Metrorail station coordinates sit beside
+ * the track, so the trip line ran along the rail, kicked sideways to the
+ * platform pin and kicked back -- a spike at almost every stop. Stops choose
+ * which rail to follow; they never contribute a vertex.
+ */
+function appendSeg(out, seg) {
     if (!seg || seg.length < 2) return;
-    if (fromStop && haversineM(fromStop.lat, fromStop.lon, seg[0][0], seg[0][1]) >= STUB_MIN_M) {
-        appendPoint(out, fromStop.lat, fromStop.lon);
-    }
     if (!out.length) out.push(...seg);
     else out.push(...seg.slice(1));
-    const end = seg[seg.length - 1];
-    if (toStop && haversineM(toStop.lat, toStop.lon, end[0], end[1]) >= STUB_MIN_M) {
-        appendPoint(out, toStop.lat, toStop.lon);
-    }
 }
 
 function graphHop(graph, a, b, stops, hopIndex) {
@@ -496,14 +496,14 @@ export async function smoothPathFromStops(stops, region = 'GP') {
         const baked = routeId && byId ? byId.get(routeId) : null;
         const bakedSeg = baked ? sliceBakedHop(baked, a, b) : null;
         if (bakedSeg) {
-            appendSeg(out, bakedSeg, a, b);
+            appendSeg(out, bakedSeg);
             railHops++;
             continue;
         }
 
         const graphSeg = graphHop(graph, a, b, stops, i);
         if (graphSeg) {
-            appendSeg(out, graphSeg, a, b);
+            appendSeg(out, graphSeg);
             railHops++;
             continue;
         }

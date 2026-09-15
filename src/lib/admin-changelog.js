@@ -5,6 +5,13 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_09.15.8': [
+        'Map lines: a timetable sheet carries the whole line\u2019s station skeleton but only one corridor\u2019s train columns. The WC Northern Line sheets list the Wellington, Stellenbosch/Strand and Eerste River branches together, and the map painted through the rows with no times. Cape Town \u2194 Wellington ran STIKLAND \u2192 DU TOIT \u2192 Stellenbosch \u2192 Strand \u2192 Kuils River \u2192 BELLVILLE (194 km). It now paints only the stops its trains serve, so Stikland joins Bellville and the corridor is 73 km. Same fix for ct-kraai, ct-eerst, ct-strnd and eerst-dtoit.',
+        'The bake used to push the raw station coordinate on both ends of every hop, so every off-rail station left a spike (Rissik 908 m, Mzimhlope 1122 m, Mayfair 554 m, Kliptown 413 m). build-rail-tracks.mjs no longer injects them, and npm run tracks:smooth applies the same clean-up plus a despike to existing bakes without re-downloading OSM. GP, WC and EC are now spike-free.',
+        'Network map prefers the baked corridor when it covers the served stops, instead of re-deriving it hop by hop and re-entering yard throats. Planner and live tracking no longer stub sideways to an off-track station pin (rail-tracks.js appendSeg).',
+        'KZN is held as the reference shape: rail-tracks-KZN.geojson is untouched, GHOST_GEOMETRY_REGIONS keeps it painting ghost rows, and verify-map-lines asserts the Duff\u2019s Road fork (kwaMashu 3.3 km branch) survives.',
+        'Known: ct-nolu still falls back to the graph smoother (one 1.5 km kink). Its Aug-29 bake predates the current pattern, where train 9408 detours via Kapteinsklip. A re-bake of WC clears it once Overpass is reachable.',
+    ],
     'V9_09.15.7': [
         'Feedback version chips open Build notes above Dev Hub (skipHash, z-260). Older chips still resolve V9_09.11.2 · route to the version key.',
         'Admin image replies hoist duplicate <img> srcs so the commuter sees one poster. Feedback posters use the Alerts spinner-until-ready loader. Alerts poll no longer rewrites a feed whose cards did not change.',

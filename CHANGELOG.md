@@ -2,6 +2,18 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin, Dev Hub, Alerts, Trains near me, community chat, or other hidden-test work. No emoji and no em dashes in What’s New. Keep `APP_VERSION`, `package.json` `version`, and `public/app-version.json` aligned on each release. Changelog / What’s New may be skipped, or the heading may be only **no release notes.** Every bump must add `ADMIN_CHANGELOG[APP_VERSION]` (System Health Build notes).
 
+## V9_09.15.8 — Map lines follow the rail, and only their own corridor (15 Sep 2026)
+
+A timetable sheet carries the whole line's station skeleton but only one corridor's train columns. The Western Cape Northern Line sheets list the Wellington, Stellenbosch/Strand and Eerste River branches in one STATION column, and `map-app.js` painted straight through the rows that carry no times. Cape Town ↔ Wellington therefore ran STIKLAND → DU TOIT → Stellenbosch → Strand → Kuils River → BELLVILLE, 194 km of loop, with Bellville joined to Kuils River instead of Stikland. The route assembly already flagged those rows `inactive`; geometry now uses only the stops the corridor's trains actually serve, which is exactly the rule the bake has always used (`hasTimes`). Cape Town ↔ Wellington is 73.4 km, matching the real line. `ct-kraai`, `ct-eerst`, `ct-strnd` and `eerst-dtoit` collapse the same way.
+
+`build-rail-tracks.mjs` used to push the raw station coordinate on both ends of every hop to "bridge the snap gap". Metrorail station coordinates sit beside the track, so every stop left a spike: along the rail, sideways to the platform pin, back again. Rissik (908 m), Mzimhlope (1122 m), Mayfair (554 m), Kliptown (413 m) and Saulsville (830 m) were that artefact. The generator no longer injects those vertices, and `npm run tracks:smooth` applies the same correction plus an out-and-back despike to bakes made by the old generator, so the existing OSM snapshot is kept rather than re-downloaded. GP, WC and EC are spike-free; a terminus pin is preserved because it is the only thing holding the line out to the end of the corridor (De Wildt sits 2.9 km past the last OSM rail).
+
+The network map now prefers the baked corridor whenever it covers the served stops, instead of re-deriving it hop by hop through a graph merged from every route, which re-entered yard throats the bake had already routed around. Planner results and live tracking stop drawing a stub from an off-track station onto the rail.
+
+KZN is held as the reference shape. `rail-tracks-KZN.geojson` is untouched, `GHOST_GEOMETRY_REGIONS` keeps it painting ghost rows, `smooth-baked-tracks.mjs` refuses to rewrite it, and `verify-map-lines` asserts the Berea Road fork at Duff's Road keeps its 3.3 km kwaMashu branch.
+
+no release notes.
+
 ## V9_09.15.7 — Feedback posters, map fullscreen, per-account points (15 Sep 2026)
 
 Feedback version chips open Build notes with skipHash and z-260 so `#admin-build` does not fight `#dev-feedback-panel`. Chip text such as `V9_09.11.2 · jhb-soweto` normalizes to the version key. Admin and commuter inbox bubbles hoist unique image srcs and paint Alerts-style spinner posters, so one send cannot show twice. Alerts poll no longer rewrites a feed whose signature is unchanged, and already-decoded posters skip the blob URL swap.

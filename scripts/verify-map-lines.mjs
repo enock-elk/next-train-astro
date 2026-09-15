@@ -3,6 +3,7 @@
  * Run: node scripts/verify-map-lines.mjs
  */
 import { readFileSync } from 'node:fs';
+import { stripStationPins, despikeRailLine } from './lib/rail-line-smooth.mjs';
 
 const failures = [];
 const assert = (cond, msg) => { if (!cond) failures.push(msg); };
@@ -171,7 +172,20 @@ function pointToSegmentM(pLat, pLon, aLat, aLon, bLat, bLon) {
     return Math.hypot(pX - (aX + t * abx), pY - (aY + t * aby));
 }
 
-const COVER_M = 450;
+/**
+ * Stations may sit beside the rail. Smooth rail geometry is the contract, not
+ * touching the station pin: Mutual is 1.5 km from the Cape Flats corridor
+ * because its coordinate is wrong, and the line should still follow the track
+ * rather than kick sideways to the pin. This bound only has to catch a corridor
+ * painted on the wrong line; station order does the real work below.
+ */
+const STATION_NEAR_CORRIDOR_M = 2000;
+/** A corridor must still run the whole way to both of its termini. */
+const TERMINI_M = 400;
+/** Rail doubling back at a junction may nudge station order by this much. */
+const ORDER_SLACK_M = 1500;
+/** KZN ships as the reference shape; its Berea Road line forks at Duff's Road. */
+const HELD_REGIONS = new Set(['KZN']);
 /**
  * A straight hop is honest where OSM has no rail (De Wildt and the Cape Flats
  * both have real gaps), but a corridor should not be mostly straight, and a
@@ -202,29 +216,60 @@ for (const region of ['GP', 'WC', 'KZN', 'EC']) {
         assert(Array.isArray(stops) && stops.length > 1, `${id} baked line does not record its stops`);
         if (!Array.isArray(stops)) continue;
 
-        // Every stop the map paints must sit on the baked line, so a route can
-        // never stop short of a terminus the way Cato Ridge did.
+        // The line must run along this corridor, and every stop must sit beside
+        // it in route order, so a route can never stop short of a terminus the
+        // way Cato Ridge did or wander onto a neighbouring branch.
         let worst = 0;
         let worstAt = 0;
-        stops.forEach(([lat, lon], idx) => {
+        const along = stops.map(([lat, lon], idx) => {
             let best = Infinity;
+            let at = 0;
+            let travelled = 0;
             for (let i = 1; i < coords.length; i++) {
+                const segM = haversineM(coords[i - 1][1], coords[i - 1][0], coords[i][1], coords[i][0]);
                 const d = pointToSegmentM(lat, lon, coords[i - 1][1], coords[i - 1][0], coords[i][1], coords[i][0]);
-                if (d < best) best = d;
+                if (d < best) { best = d; at = travelled; }
+                travelled += segM;
             }
             if (best > worst) { worst = best; worstAt = idx; }
+            return at;
         });
         assert(
-            worst <= COVER_M,
-            `${id} baked line misses ${props.stationNames?.[worstAt] || `stop ${worstAt}`} by ${Math.round(worst)}m`
+            worst <= STATION_NEAR_CORRIDOR_M,
+            `${id} baked line runs ${Math.round(worst)}m from ${props.stationNames?.[worstAt] || `stop ${worstAt}`}; that is a different corridor`
         );
+
+        let up = true;
+        let down = true;
+        for (let i = 1; i < along.length; i++) {
+            if (along[i] < along[i - 1] - ORDER_SLACK_M) up = false;
+            if (along[i] > along[i - 1] + ORDER_SLACK_M) down = false;
+        }
+        assert(up || down, `${id} baked line does not pass its stations in route order`);
 
         const [firstLat, firstLon] = stops[0];
         const [lastLat, lastLon] = stops[stops.length - 1];
         const a = coords[0];
         const b = coords[coords.length - 1];
         const ends = haversineM(a[1], a[0], firstLat, firstLon) + haversineM(b[1], b[0], lastLat, lastLon);
-        assert(ends <= COVER_M, `${id} baked line does not begin and end at its termini (${Math.round(ends)}m)`);
+        assert(ends <= TERMINI_M, `${id} baked line does not begin and end at its termini (${Math.round(ends)}m)`);
+
+        // Smooth rail only: no vertex may be a station pin, and the line may not
+        // leave the corridor and come straight back. Both used to happen at
+        // almost every stop (Rissik 908m, Mzimhlope 1122m, Mayfair 554m), which
+        // is the zig-zag the map painted. Re-running the cleaner must be a no-op.
+        if (!HELD_REGIONS.has(region)) {
+            const pinned = stripStationPins(coords, stops);
+            assert(
+                pinned.removed === 0,
+                `${id} still routes through ${pinned.removed} station pins; run npm run tracks:smooth`
+            );
+            const spikes = despikeRailLine(coords);
+            assert(
+                spikes.excursions.length === 0,
+                `${id} has ${spikes.excursions.length} out-and-back spike(s) (${spikes.excursions.map((m) => `${m}m`).join(', ')}); run npm run tracks:smooth`
+            );
+        }
 
         const hops = stops.length - 1;
         const chordHops = Number(props.chordHops || 0);
@@ -247,16 +292,40 @@ for (const region of ['GP', 'WC', 'KZN', 'EC']) {
     const names = midway?.properties?.stationNames || [];
     assert(names.includes('MIDWAY') && names[names.length - 1] === 'LENZ', 'jhb-midway bake continues from Midway to Lenz');
     assert(names.includes('LENZ'), 'jhb-midway bake includes a Lenz hop');
-    assert((midway?.geometry?.coordinates || []).length === 823, 'jhb-midway bake is the 29 Aug line plus the Midway-Lenz hop');
     assert(gp.properties?.generatedAt === '2026-08-29T01:37:44.682Z', 'GP tracks keep the live 29 Aug bake timestamp');
-    const soweto = gp.features.find((f) => f.properties?.routeId === 'jhb-soweto');
-    assert((soweto?.geometry?.coordinates || []).length === 517, 'other GP lines were not rebaked');
+    assert(midway?.properties?.stationPinsStripped === true, 'GP geometry is smoothed, not re-downloaded from OSM');
+}
+
+{
+    // KZN is the reference shape and ships exactly as baked. Its Berea Road
+    // corridor forks at Duff's Road: the line runs out to kwaMashu and the
+    // special Duff's Road - Bridge City train continues from there, so the
+    // 3.3 km branch is geometry rather than a spike and must survive.
+    const kzn = JSON.parse(readFileSync(new URL('../public/tracks/rail-tracks-KZN.geojson', import.meta.url), 'utf8'));
+    assert(kzn.properties?.generatedAt === '2026-08-29T01:38:53.715Z', 'KZN tracks keep the live 29 Aug bake timestamp');
+    const bridge = kzn.features.find((f) => f.properties?.routeId === 'kzn-bridgecity');
+    assert((bridge?.geometry?.coordinates || []).length === 1095, 'KZN Bridge City geometry is untouched');
+    assert(
+        !kzn.features.some((f) => f.properties?.stationPinsStripped),
+        'KZN is held as the reference shape and is never smoothed',
+    );
+    const names = bridge?.properties?.stationNames || [];
+    assert(names.includes("DUFF'S ROAD") && names.includes('KWAMASHU'), 'KZN Bridge City keeps the Duff\u2019s Road fork stations');
 }
 
 const railTracks = readFileSync(new URL('../src/lib/rail-tracks.js', import.meta.url), 'utf8');
 assert(railTracks.includes('hopStraysFromChord(graph, nodePath, a, b)'), 'planner trip map rejects OSM hops that leave the station chord');
 assert(railTracks.includes('sliceBakedHop'), 'planner trip map slices the baked corridor per hop');
-assert(railTracks.includes('STUB_MIN_M'), 'off-track planner stations stub onto the rail');
+assert(!railTracks.includes('STUB_MIN_M'), 'planner and tracking no longer stub sideways to an off-track station pin');
+assert(railTracks.includes('function appendSeg(out, seg)'), 'planner appends rail segments only, never a station coordinate');
+assert(
+    mapApp.includes('function corridorGeometryStops'),
+    'network map paints the corridor from the stops its trains actually serve',
+);
+assert(
+    mapApp.includes("GHOST_GEOMETRY_REGIONS = new Set(['KZN'])"),
+    'KZN keeps painting its ghost rows so its shape is left exactly as it is',
+);
 assert(!railTracks.includes('railHops !== stops.length - 1'), 'planner keeps rail hops when one station sits off the track');
 assert(!mapApp.includes('railHops !== stops.length - 1'), 'network map also keeps valid rail hops when another hop falls back');
 

@@ -316,6 +316,69 @@ for (const region of ['GP', 'WC', 'KZN', 'EC']) {
 const railTracks = readFileSync(new URL('../src/lib/rail-tracks.js', import.meta.url), 'utf8');
 assert(railTracks.includes('hopStraysFromChord(graph, nodePath, a, b)'), 'planner trip map rejects OSM hops that leave the station chord');
 assert(railTracks.includes('sliceBakedHop'), 'planner trip map slices the baked corridor per hop');
+{
+    // KZN's Berea Road corridor is a single LineString carrying a fork: it runs
+    // Duff's Road -> Tembalihle -> kwaMashu, then doubles back to reach Bridge
+    // City, because the Duff's Road - Bridge City working branches off the
+    // kwaMashu line. Slicing Duff's Road -> Bridge City used to walk that whole
+    // branch, so a trip to Bridge City drew itself through kwaMashu (27.1 km).
+    const kzn = JSON.parse(readFileSync(new URL('../public/tracks/rail-tracks-KZN.geojson', import.meta.url), 'utf8'));
+    const feature = kzn.features.find((f) => f.properties?.routeId === 'kzn-bridgecity');
+    const names = feature?.properties?.stationNames || [];
+    const coords = feature?.properties?.stationCoords || [];
+    const stop = (name) => {
+        const i = names.indexOf(name);
+        return i < 0 ? null : { name, lat: coords[i][0], lon: coords[i][1], routeId: 'kzn-bridgecity' };
+    };
+    const trunk = ['DURBAN', 'MOSES MABHIDA', 'UMGENI', 'BRIARDENE', 'GREENWOOD PARK', 'RED HILL', 'AVOCA', "DUFF'S ROAD"];
+    const toBridgeCity = [...trunk, 'BRIDGE CITY'].map(stop).filter(Boolean);
+    const toKwaMashu = [...trunk, 'TEMBALIHLE', 'KWAMASHU'].map(stop).filter(Boolean);
+
+    const realFetch = globalThis.fetch;
+    globalThis.fetch = async (url) => {
+        const m = String(url).match(/rail-tracks-([A-Z]+)\.geojson/);
+        if (!m) return { ok: false };
+        const body = readFileSync(new URL(`../public/tracks/rail-tracks-${m[1]}.geojson`, import.meta.url), 'utf8');
+        return { ok: true, json: async () => JSON.parse(body) };
+    };
+    const { smoothPathFromStops } = await import('../src/lib/rail-tracks.js');
+    const nearestM = (path, s) => {
+        let best = Infinity;
+        for (const [lat, lon] of path || []) {
+            const d = haversineM(lat, lon, s.lat, s.lon);
+            if (d < best) best = d;
+        }
+        return best;
+    };
+
+    const bridgePath = await smoothPathFromStops(toBridgeCity, 'KZN');
+    const kwaPath = await smoothPathFromStops(toKwaMashu, 'KZN');
+    globalThis.fetch = realFetch;
+
+    const kwaStop = stop('KWAMASHU');
+    const bridgeStop = stop('BRIDGE CITY');
+    assert(!!bridgePath && !!kwaPath, 'KZN fork trips build a path');
+    if (bridgePath && kwaPath && kwaStop && bridgeStop) {
+        assert(
+            nearestM(bridgePath, kwaStop) > 1000,
+            `a Bridge City trip must not run out to kwaMashu (got ${Math.round(nearestM(bridgePath, kwaStop))}m)`
+        );
+        assert(
+            nearestM(bridgePath, bridgeStop) < 200,
+            'a Bridge City trip still reaches Bridge City'
+        );
+        assert(
+            nearestM(kwaPath, kwaStop) < 200,
+            'a kwaMashu trip still reaches kwaMashu'
+        );
+        assert(
+            nearestM(kwaPath, bridgeStop) > 1000,
+            `a kwaMashu trip must not run out to Bridge City (got ${Math.round(nearestM(kwaPath, bridgeStop))}m)`
+        );
+    }
+}
+
+assert(railTracks.includes('function dropOutAndBack'), 'a baked hop never leaves the corridor and comes back');
 assert(!railTracks.includes('STUB_MIN_M'), 'planner and tracking no longer stub sideways to an off-track station pin');
 assert(railTracks.includes('function appendSeg(out, seg)'), 'planner appends rail segments only, never a station coordinate');
 assert(

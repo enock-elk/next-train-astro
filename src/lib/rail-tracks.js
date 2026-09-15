@@ -417,6 +417,50 @@ function nearestPathIndexM(path, lat, lon, maxM = BAKED_COVER_M) {
     return bestD <= maxM ? best : -1;
 }
 
+/** How close the line must come back for a hop excursion to be a detour. */
+const HOP_RETURN_TOLERANCE_M = 40;
+
+/**
+ * Drop any part of a hop that leaves the corridor and comes back to where it
+ * left. A baked corridor is one LineString, so it cannot branch: KZN's Berea
+ * Road line runs Duff's Road -> Tembalihle -> kwaMashu and then doubles back to
+ * reach Bridge City, because the Duff's Road - Bridge City working is a fork off
+ * the kwaMashu line. Slicing Duff's Road -> Bridge City walked that whole branch
+ * and back, so a trip to Bridge City drew itself through kwaMashu.
+ *
+ * A hop runs between two consecutive stops, so it never needs to leave the
+ * corridor and return to the same point. Durban -> kwaMashu is untouched: that
+ * slice ends at kwaMashu and never returns.
+ */
+function dropOutAndBack(seg, toleranceM = HOP_RETURN_TOLERANCE_M) {
+    if (!Array.isArray(seg) || seg.length < 4) return seg;
+    let current = seg;
+    for (let pass = 0; pass < 6; pass++) {
+        const out = [];
+        let i = 0;
+        while (i < current.length) {
+            const [latA, lonA] = current[i];
+            let jump = -1;
+            for (let j = current.length - 1; j > i + 2; j--) {
+                if (haversineM(latA, lonA, current[j][0], current[j][1]) <= toleranceM) {
+                    let far = 0;
+                    for (let k = i; k <= j; k++) {
+                        const d = haversineM(latA, lonA, current[k][0], current[k][1]);
+                        if (d > far) far = d;
+                    }
+                    if (far > toleranceM) jump = j;
+                    break;
+                }
+            }
+            out.push(current[i]);
+            i = jump > i ? jump + 1 : i + 1;
+        }
+        if (out.length < 2 || out.length === current.length) return out.length > 1 ? out : current;
+        current = out;
+    }
+    return current;
+}
+
 /** Slice a baked corridor between two stops. Stations may sit off the rail. */
 function sliceBakedHop(feature, a, b) {
     const latlngs = featureLatLngs(feature);
@@ -425,7 +469,8 @@ function sliceBakedHop(feature, a, b) {
     const i2 = nearestPathIndexM(latlngs, b.lat, b.lon);
     if (i1 < 0 || i2 < 0) return null;
     if (i1 === i2) return null;
-    const seg = i1 < i2 ? latlngs.slice(i1, i2 + 1) : latlngs.slice(i2, i1 + 1).reverse();
+    const raw = i1 < i2 ? latlngs.slice(i1, i2 + 1) : latlngs.slice(i2, i1 + 1).reverse();
+    const seg = dropOutAndBack(raw);
     return seg.length > 1 ? seg : null;
 }
 

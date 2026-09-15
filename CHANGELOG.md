@@ -12,6 +12,8 @@ The network map now prefers the baked corridor whenever it covers the served sto
 
 KZN is held as the reference shape. `rail-tracks-KZN.geojson` is untouched, `GHOST_GEOMETRY_REGIONS` keeps it painting ghost rows, `smooth-baked-tracks.mjs` refuses to rewrite it, and `verify-map-lines` asserts the Berea Road fork at Duff's Road keeps its 3.3 km kwaMashu branch.
 
+That fork also broke trip planning. A baked corridor is a single LineString and cannot branch, so `kzn-bridgecity` runs Duff's Road → Tembalihle → kwaMashu and then doubles back to reach Bridge City. Slicing a hop from Duff's Road to Bridge City walked the whole kwaMashu branch, so Durban → Bridge City drew itself out to kwaMashu and back: 27.1 km, passing 0 m from kwaMashu. `sliceBakedHop` now drops any part of a hop that leaves the corridor and returns to where it left, which a hop between two consecutive stops never needs to do. Durban → Bridge City is 18.0 km and stays 2.7 km clear of kwaMashu; Durban → kwaMashu still reaches kwaMashu and stays 1.8 km clear of Bridge City. Every KZN station is still reached, within 25 m. `verify-map-lines` builds both trips through the real planner code rather than asserting on source text.
+
 no release notes.
 
 ## V9_09.15.7 — Feedback posters, map fullscreen, per-account points (15 Sep 2026)

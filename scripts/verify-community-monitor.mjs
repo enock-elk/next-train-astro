@@ -132,6 +132,9 @@ assert.match(community, /startRealtimeReactions/, 'reactions listen live so othe
 assert.match(community, /community-room-unread/, 'route list marks which room has unread');
 assert.match(community, /unread on \$\{roomNames/, 'Community badge names the unread room');
 assert.match(community, /paintCommunityQuotaHint/, 'remaining send quota is painted above the composer');
+assert.match(community, /uid === prevUid/, 'consecutive community messages from the same person are grouped');
+assert.match(community, /community-avatar-spacer/, 'grouped messages keep the avatar column');
+assert.match(communityView, /community-avatar-spacer/, 'Community CSS keeps WhatsApp-style grouped rows');
 assert.match(community, /\$\{left\} left/, 'quota hint is a remaining-messages countdown');
 assert.match(communityView, /id="community-route-unread"/, 'route picker shows unread that is not on the open room');
 assert.ok(

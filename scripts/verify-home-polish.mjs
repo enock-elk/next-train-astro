@@ -12,6 +12,9 @@ import {
     routeAllowsDualHubOptions,
     shortenStationLabel,
 } from '../src/lib/transfer-card.js';
+import { formatAccountDisplayName, clampDisplayName } from '../src/lib/display-name.js';
+import { normalizeAdminChangelogKey } from '../src/lib/admin-changelog.js';
+import { hoistAlertImagesFromHtml } from '../src/lib/alerts-feed.js';
 
 const failures = [];
 function assert(cond, msg) {
@@ -391,6 +394,9 @@ assert(hubModals.includes('id="nt-admin-publish-train"'), 'admin nearby sheet ca
     const timetableGrid = readFileSync(new URL('../src/lib/timetable-grid.js', import.meta.url), 'utf8');
     assert(!timetableGrid.includes('paintLiveTrainDots'), 'full timetable grid has no sharing dots');
     assert(mapTab.includes('hasRidePingsListener'), 'map prefers the live listener over REST');
+    assert(mapTab.includes('isMapTabFullscreen()'), 'map fullscreen can exit when already full');
+    assert(mapView.includes('allow="geolocation; fullscreen"'), 'map iframe allows fullscreen');
+    assert(mapPage.includes('data-map-fs-icon="minimize"'), 'fullscreen control becomes minimize');
     assert(mapTab.includes('PINGS_POLL_WITH_LISTENER_MS'), 'map REST poll backs off when the listener is live');
     assert(mapApp.includes('Stop sharing'), 'map popup can stop sharing');
     assert(ridePings.includes('Stop the other share'), 'second device is offered a stop');
@@ -416,8 +422,14 @@ assert(hubModals.includes('id="nt-admin-publish-train"'), 'admin nearby sheet ca
     assert(!liveBoard.includes('id="nt-timetable-live-dot"'), 'VIEW FULL TIMETABLE has no live dot');
     const marksJs = readFileSync(new URL('../src/lib/rider-marks.js', import.meta.url), 'utf8');
     assert(marksJs.includes('hydrateRemoteMarks({ persist = false }'), 'sign-in can force-upload merged marks');
+    assert(marksJs.includes('export function marksStorageKey'), 'rider marks are keyed per uid');
+    assert(marksJs.includes('ntRiderMarksV1:{uid}') || marksJs.includes('`${STORAGE_KEY}:${uid}`'), 'signed-in marks use ntRiderMarksV1:{uid}');
+    assert(marksJs.includes('export function switchMarksAccount'), 'account switch loads that uid only');
     const accountJs = readFileSync(new URL('../src/lib/account.js', import.meta.url), 'utf8');
-    assert(accountJs.includes("hydrateRemoteMarks({ persist: true })"), 'sign-in merges local marks onto the uid');
+    assert(accountJs.includes("hydrateRemoteMarks({ persist: true })"), 'sign-in hydrates that uid from users/{uid}/marks');
+    assert(accountJs.includes('switchMarksAccount(user.uid)'), 'sign-in drops the previous account points immediately');
+    assert(accountJs.includes('updateAccountDisplayName'), 'signed-in users can save a display name');
+    assert(hubModals.includes('id="account-edit-display-name"') && hubModals.includes('id="account-save-display-name"'), 'Account has a display name field');
     const adminCl = readFileSync(new URL('../src/lib/admin-changelog.js', import.meta.url), 'utf8');
     assert(adminCl.includes('ADMIN_CHANGELOG'), 'operator build notes exist');
     assert(adminCl.includes(`'${APP_VERSION}'`), `ADMIN_CHANGELOG must include ${APP_VERSION}`);
@@ -488,6 +500,17 @@ assert(!mapPage.includes('Loading Network...'), 'iframe heading is not Title Cas
 assert(mapTab.includes("map-tab-placeholder')?.classList.add('hidden')"), 'Map tab does not unhide a second loader');
 assert(!mapTab.includes("map-tab-placeholder')?.classList.remove('hidden')"), 'Map tab never shows the outer loader');
 assert(mapTab.includes('compareNearbyTrainLikelihood'), 'nearby modal ranks likely trains first');
+
+assert(formatAccountDisplayName('Enock Leo Kazembe') === 'Enock LK', 'display name is first word plus remaining initials');
+assert(formatAccountDisplayName('Enock') === 'Enock', 'single-word display name stays the first name');
+assert(clampDisplayName('  Enock   LK  ') === 'Enock LK', 'custom display name is trimmed');
+assert(normalizeAdminChangelogKey('V9_09.11.2 · jhb-soweto') === 'V9_09.11.2', 'version chips strip the route suffix');
+assert(normalizeAdminChangelogKey('V9_09.15.5 - extra') === 'V9_09.15.5', 'version chips strip ASCII hyphen suffixes');
+{
+    const hoisted = hoistAlertImagesFromHtml('<img src="https://firebasestorage.googleapis.com/v0/b/x/o/a.jpg"><button><img src="https://firebasestorage.googleapis.com/v0/b/x/o/a.jpg"></button>');
+    assert(hoisted.urls.length === 1, `duplicate inbox imgs hoist to one src, got ${hoisted.urls.length}`);
+    assert(!/<img/i.test(hoisted.body), 'hoist removes leftover img tags');
+}
 
 if (failures.length) {
     console.error('verify-home-polish failed:');

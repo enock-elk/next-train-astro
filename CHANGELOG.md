@@ -2,6 +2,14 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin, Dev Hub, Alerts, Trains near me, community chat, or other hidden-test work. No emoji and no em dashes in What’s New. Keep `APP_VERSION`, `package.json` `version`, and `public/app-version.json` aligned on each release. Changelog / What’s New may be skipped, or the heading may be only **no release notes.** Every bump must add `ADMIN_CHANGELOG[APP_VERSION]` (System Health Build notes).
 
+## V9_09.15.7 — Feedback posters, map fullscreen, per-account points (15 Sep 2026)
+
+Feedback version chips open Build notes with skipHash and z-260 so `#admin-build` does not fight `#dev-feedback-panel`. Chip text such as `V9_09.11.2 · jhb-soweto` normalizes to the version key. Admin and commuter inbox bubbles hoist unique image srcs and paint Alerts-style spinner posters, so one send cannot show twice. Alerts poll no longer rewrites a feed whose signature is unchanged, and already-decoded posters skip the blob URL swap.
+
+Map tab fullscreen toggles exit; the control becomes minimize. Rider points are `users/{uid}/marks` plus `ntRiderMarksV1:{uid}` (no copy from the previous sign-in). Community hides the avatar and name on consecutive messages from the same person. Account display name defaults to first name plus surname initials (Enock LK) and can be edited.
+
+no release notes.
+
 ## V9_09.15.5 — Route SEO first/last, nearby copy, Build notes chip (15 Sep 2026)
 
 Durban Yard is no longer labelled Durban on `/routes/` grids. First/last on corridor landings use destination-row arrivals so mid-line joiners count. Route pages get verified nearby/POI commentary. Admin Feedback version meta opens Build notes. `ADMIN_CHANGELOG` is required on every version bump.

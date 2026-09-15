@@ -5,6 +5,11 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_09.15.7': [
+        'Feedback version chips open Build notes above Dev Hub (skipHash, z-260). Older chips still resolve V9_09.11.2 · route to the version key.',
+        'Admin image replies hoist duplicate <img> srcs so the commuter sees one poster. Feedback posters use the Alerts spinner-until-ready loader. Alerts poll no longer rewrites a feed whose cards did not change.',
+        'Map tab fullscreen toggles exit; the control becomes minimize. Per-account points use users/{uid}/marks and ntRiderMarksV1:{uid} (no merge from the previous sign-in). Community hides the avatar on consecutive messages from the same person. Account display name defaults to first name + surname initials (Enock LK) and can be edited.',
+    ],
     'V9_09.15.6': [
         'Community: other people can see message reactions (parent post_reactions is public-read, plus a live listener and per-post REST fallback). Swipe-to-reply no longer switches to Map. Leaving a non-pinned room keeps that room and drops a quote that belongs to another corridor. Unread badge names the room and the route list shows a count per chat. Remaining send quota sits as tiny unformatted “n left” above the composer.',
         'Deploy firebase-database.rules.json so post_reactions/.read is live. Until then the client still loads reactions per post.',
@@ -167,8 +172,16 @@ export function versionSortKey(v) {
     return ((((Number(m[1]) * 100) + Number(m[2])) * 100 + Number(m[3])) * 100) + Number(m[4] || 0);
 }
 
+export function normalizeAdminChangelogKey(version) {
+    return String(version || '')
+        .split(' - ')[0]
+        .split(' · ')[0]
+        .split(' ·')[0]
+        .trim();
+}
+
 export function lookupAdminChangelog(version) {
-    const key = String(version || '').split(' - ')[0].trim();
+    const key = normalizeAdminChangelogKey(version);
     if (!key) return null;
     const notes = ADMIN_CHANGELOG[key];
     if (Array.isArray(notes) && notes.length) return notes;

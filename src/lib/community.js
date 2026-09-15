@@ -11,6 +11,7 @@
  * own post in a session overlay so they appear silenced without schema rewrites.
  */
 import { APP_VERSION, COMMUNITY_WORKER_URL, DYNAMIC_BASE_URL, ROUTES } from './config.js';
+import { formatAccountDisplayName } from './display-name.js';
 import { safeStorage, escapeHTML } from './utils.js';
 import { $currentRouteId, $userRegion, $deviceId } from '../store.js';
 import { $account } from './account.js';
@@ -194,6 +195,10 @@ function nameColorFor(seed) {
     let h = 0;
     for (let i = 0; i < s.length; i++) h = ((h << 5) - h) + s.charCodeAt(i);
     return NAME_COLORS[Math.abs(h) % NAME_COLORS.length];
+}
+
+function communityNameFor(acct) {
+    return acct?.displayName || formatAccountDisplayName(acct?.email ? String(acct.email).split('@')[0] : 'Passenger');
 }
 
 function renderAvatarHtml(photoURL) {
@@ -536,7 +541,7 @@ export async function submitCommunityPost(body, routeId = $currentRouteId.get())
                     body: text,
                     category: 'general',
                     uid: acct.uid,
-                    displayName: acct.displayName || 'Passenger',
+                    displayName: communityNameFor(acct),
                     photoURL: await publicCommuterPhoto(acct),
                     email: acct.email || null,
                     deviceId: getDeviceId(),
@@ -563,7 +568,7 @@ export async function submitCommunityPost(body, routeId = $currentRouteId.get())
         body: text,
         category: COMMUNITY_CATEGORIES[category] ? category : 'general',
         uid: acct.uid,
-        displayName: acct.displayName || 'Passenger',
+        displayName: communityNameFor(acct),
         photoURL: await publicCommuterPhoto(acct),
         email: acct.email || null,
         deviceId: getDeviceId(),
@@ -711,7 +716,7 @@ export async function submitCommunityReply(postId, body, routeId = $currentRoute
                     routeId,
                     body: text,
                     uid: acct.uid,
-                    displayName: acct.displayName || 'Passenger',
+                    displayName: communityNameFor(acct),
                     deviceId: getDeviceId(),
                     timestamp: Date.now(),
                     hidden: false,
@@ -732,7 +737,7 @@ export async function submitCommunityReply(postId, body, routeId = $currentRoute
         routeId,
         body: text,
         uid: acct.uid,
-        displayName: acct.displayName || 'Passenger',
+        displayName: communityNameFor(acct),
         deviceId: getDeviceId(),
         timestamp: Date.now(),
         hidden: false,
@@ -991,7 +996,7 @@ function closeReactionSheet() {
     document.getElementById('community-reaction-sheet')?.classList.add('hidden');
 }
 
-function renderPostCard(post, routeId) {
+function renderPostCard(post, routeId, { grouped = false } = {}) {
     const body = escapeHTML(post.body || '');
     const clock = formatClock24(post.timestamp);
     const postId = escapeHTML(post.postId || '');
@@ -1011,14 +1016,17 @@ function renderPostCard(post, routeId) {
 
     const avatar = isOwn
         ? ''
-        : `<div class="community-avatar">${renderAvatarHtml(photoURL)}</div>`;
+        : grouped
+            ? `<div class="community-avatar community-avatar-spacer" aria-hidden="true"></div>`
+            : `<div class="community-avatar">${renderAvatarHtml(photoURL)}</div>`;
     const bubbleCls = isOwn ? 'community-bubble community-bubble-own' : 'community-bubble community-bubble-other';
-    // Always show who posted (commenter) — own messages labelled "You"
     const displayName = isOwn ? 'You' : (post.displayName || 'Passenger');
-    const nameHtml = `<div class="community-bubble-name-row truncate" style="color:${isOwn ? 'inherit' : nameColor}">${escapeHTML(displayName)}</div>`;
+    const nameHtml = grouped
+        ? ''
+        : `<div class="community-bubble-name-row truncate" style="color:${isOwn ? 'inherit' : nameColor}">${escapeHTML(displayName)}</div>`;
 
     return `
-      <div class="community-post-row ${isOwn ? 'justify-end' : 'justify-start gap-2'}" data-post-id="${postId}" data-route="${escapeHTML(routeId)}">
+      <div class="community-post-row ${isOwn ? 'justify-end' : 'justify-start gap-2'}${grouped ? ' is-grouped' : ''}" data-post-id="${postId}" data-route="${escapeHTML(routeId)}" data-uid="${uid}">
         <div class="community-swipe-hint" aria-hidden="true">
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6M3 10l6-6"/></svg>
         </div>
@@ -1061,6 +1069,7 @@ function applyFeedFilter(routeId) {
 
     let html = '';
     let lastDate = '';
+    let prevUid = '';
     posts.forEach((p) => {
         const dayKey = new Date(p.timestamp || 0).toDateString();
         if (dayKey && dayKey !== lastDate) {
@@ -1068,8 +1077,12 @@ function applyFeedFilter(routeId) {
                 <span class="text-[9px] font-bold text-gray-500 dark:text-gray-400 bg-gray-200/70 dark:bg-gray-800/70 px-3 py-1 rounded-full uppercase tracking-widest shadow-sm border border-gray-200 dark:border-gray-700">${escapeHTML(formatDayDivider(p.timestamp))}</span>
             </div>`;
             lastDate = dayKey;
+            prevUid = '';
         }
-        html += renderPostCard(p, routeId);
+        const uid = String(p.uid || '');
+        const grouped = !!(uid && prevUid && uid === prevUid);
+        html += renderPostCard(p, routeId, { grouped });
+        prevUid = uid;
     });
     listEl.innerHTML = html;
     wireCommunityChatGestures(listEl);

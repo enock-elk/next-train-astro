@@ -49,8 +49,10 @@ import {
     initAlertsChannel,
     pickAutoOpenNotice,
     resolveAlertImageSrc,
+    hydrateAlertPosterImages,
+    renderLazyPosterHtml,
 } from './alerts-channel.js';
-import { layoutAlertPost } from './alerts-feed.js';
+import { layoutAlertPost, hoistAlertImagesFromHtml } from './alerts-feed.js';
 import { $userProfile, $currentRouteId, $userRegion, $deviceId } from '../store.js';
 import { isLieFi } from './logic.js';
 import { bindColourPackControls, setColourPack, getColourPack, resetLookToClassicLight } from './prefs.js';
@@ -71,6 +73,9 @@ import {
     ATTACHMENT_MAX_FILES,
     lightboxOnclickJs,
     attachmentRejectMessage,
+    sanitizeAttachmentDisplayUrl,
+    classifyAttachmentUrl,
+    attachmentPreviewHtml,
 } from './attachments.js';
 
 const FEEDBACK_RATE_KEY = 'feedbackSendRateV1';
@@ -1152,6 +1157,32 @@ function isCommuterInboxMsg(m) {
     return m?.from === 'commuter' || String(m?.id || '').startsWith('cm_');
 }
 
+function inboxMediaFromHtml(html, extraUrls = []) {
+    const hoisted = hoistAlertImagesFromHtml(html || '');
+    const images = [];
+    const files = [];
+    const add = (u) => {
+        const safe = sanitizeAttachmentDisplayUrl(u);
+        if (!safe) return;
+        const kind = classifyAttachmentUrl(safe);
+        if (kind === 'image') {
+            if (!images.includes(safe)) images.push(safe);
+        } else if (!files.includes(safe)) {
+            files.push(safe);
+        }
+    };
+    (hoisted.urls || []).forEach(add);
+    extraUrls.forEach(add);
+    let media = renderLazyPosterHtml(images);
+    files.forEach((url, idx) => {
+        media += attachmentPreviewHtml(url, {
+            pdfLabel: `View attached PDF${extraUrls.length > 1 ? ` ${idx + 1}` : ''}`,
+            fileLabel: `View file${extraUrls.length > 1 ? ` ${idx + 1}` : ''}`,
+        });
+    });
+    return { body: hoisted.body || '', media };
+}
+
 function stripAdminSignoff(html) {
     return String(html || '')
         .replace(/(?:<br\s*\/?>|\n)*\s*<span[^>]*>\s*[-–—]\s*[^<]*<\/span>\s*$/i, '')
@@ -1233,9 +1264,16 @@ function renderMessagesThread(list) {
     host.innerHTML = list.map((m) => {
         const mine = isCommuterInboxMsg(m);
         const raw = m.message || m.text || '';
+        const extraUrls = [];
+        if (m.attachmentUrl) extraUrls.push(m.attachmentUrl);
+        if (Array.isArray(m.attachmentUrls)) extraUrls.push(...m.attachmentUrls.filter(Boolean));
+        const laid = mine
+            ? inboxMediaFromHtml('', extraUrls)
+            : inboxMediaFromHtml(sanitizeHTML(stripAdminSignoff(raw)), extraUrls);
         const body = mine
             ? escapeHTML(commuterFeedbackText(raw))
-            : sanitizeHTML(stripAdminSignoff(raw));
+            : (laid.body || '');
+        const media = laid.media || '';
         const clock = inboxClock(m.timestamp);
         const who = mine ? 'You' : escapeHTML(adminBubbleName(m, raw));
         const avatar = mine
@@ -1248,7 +1286,7 @@ function renderMessagesThread(list) {
         <div class="inbox-bubble ${mine ? 'inbox-bubble-own' : 'inbox-bubble-other'}" data-inbox-react-host="1">
           <div class="inbox-bubble-name-row">${who}</div>
           <div class="inbox-bubble-body">
-            <div class="inbox-msg-text">${body}<span class="inbox-msg-time">${clock}</span></div>
+            <div class="inbox-msg-text">${media}${body}<span class="inbox-msg-time">${clock}</span></div>
           </div>
         </div>
         ${renderInboxReactionChips(m, actor)}
@@ -1257,6 +1295,7 @@ function renderMessagesThread(list) {
     }).join('');
     host._ntInboxList = list;
     bindInboxThreadReactions(host);
+    hydrateAlertPosterImages(host);
     host.scrollTop = host.scrollHeight;
 }
 
@@ -1310,6 +1349,14 @@ function bindInboxThreadReactions(host) {
     host.addEventListener('pointerup', clearLong);
     host.addEventListener('pointercancel', clearLong);
     host.addEventListener('click', (e) => {
+        const poster = e.target.closest?.('[data-alert-lightbox]');
+        if (poster && host.contains(poster)) {
+            e.preventDefault();
+            if (poster.getAttribute('data-alert-ready') !== '1') return;
+            const src = poster.getAttribute('data-alert-lightbox');
+            if (src && typeof window.openLightbox === 'function') window.openLightbox(src);
+            return;
+        }
         const chip = e.target.closest?.('[data-inbox-react]');
         if (!chip) return;
         const row = chip.closest('[data-inbox-msg-id]');
@@ -1722,7 +1769,7 @@ export async function checkServiceAlerts() {
             setCachedLiveNotices(validNotices);
             const channel = document.getElementById('alerts-channel');
             if (channel && !channel.classList.contains('hidden')) {
-                renderAlertsChannel(validNotices, { resetVisible: true });
+                renderAlertsChannel(validNotices);
             }
             if (!validNotices.length) bellBtn.classList.add('hidden');
             else applyBellFromNotices(validNotices);
@@ -2235,7 +2282,18 @@ export function initHub() {
     // Map-tab embed calls this for the Full screen control — never from map.html boot.
     window.__ntOpenNetworkMapSheet = () => openInAppSheet(withBase('/map.html'), 'Network Map');
     window.__ntFullscreenMapTab = () => {
+        if (typeof window.fullscreenMapTab === 'function') {
+            window.fullscreenMapTab();
+            return;
+        }
         const host = document.getElementById('view-map');
+        const active = document.fullscreenElement || document.webkitFullscreenElement;
+        const exit = document.exitFullscreen || document.webkitExitFullscreen;
+        if (host && active && (active === host || host.contains(active)) && exit) {
+            const out = exit.call(document);
+            if (out && typeof out.catch === 'function') out.catch(() => {});
+            return;
+        }
         const req = host?.requestFullscreen || host?.webkitRequestFullscreen;
         if (!req) return;
         try {

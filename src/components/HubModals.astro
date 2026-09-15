@@ -311,6 +311,14 @@ import { withBase } from '../lib/config.js';
                 </div>
 
                 <div class="rounded-[10px] overflow-hidden bg-white dark:bg-[#1c1c1e] divide-y divide-black/10 dark:divide-white/10">
+                    <div class="px-4 py-2">
+                        <label class="block text-[12px] font-normal text-gray-500 dark:text-gray-400" for="account-edit-display-name">Display name</label>
+                        <input id="account-edit-display-name" type="text" maxlength="80" autocomplete="nickname" class="w-full py-1 bg-transparent text-[13px] font-normal text-gray-900 dark:text-white focus:outline-none" placeholder="First name">
+                    </div>
+                    <button type="button" id="account-save-display-name" class="w-full px-4 py-[11px] text-[13px] font-normal text-blue-600 dark:text-blue-400 text-center focus:outline-none">Save name</button>
+                </div>
+
+                <div class="rounded-[10px] overflow-hidden bg-white dark:bg-[#1c1c1e] divide-y divide-black/10 dark:divide-white/10">
                     <button type="button" id="account-points-btn" class="w-full flex items-center justify-between gap-2 px-4 py-[11px] text-left focus:outline-none" aria-expanded="false" aria-controls="account-points-panel">
                         <span class="text-[13px] font-normal text-gray-900 dark:text-white">Points</span>
                         <span class="flex items-center gap-1 min-w-0">
@@ -379,7 +387,7 @@ import { withBase } from '../lib/config.js';
 
                 <div class="rounded-[10px] overflow-hidden bg-white dark:bg-[#1c1c1e] divide-y divide-black/10 dark:divide-white/10">
                     <div class="px-4 py-2">
-                        <label class="block text-[12px] font-normal text-gray-500 dark:text-gray-400" for="account-display-name">Display name <span class="text-gray-400">(new accounts)</span></label>
+                        <label class="block text-[12px] font-normal text-gray-500 dark:text-gray-400" for="account-display-name">Display name</label>
                         <input id="account-display-name" type="text" autocomplete="nickname" class="w-full py-1 bg-transparent text-[13px] font-normal text-gray-900 dark:text-white focus:outline-none" placeholder="Optional">
                     </div>
                     <div class="px-4 py-2">

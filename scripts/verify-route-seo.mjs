@@ -492,7 +492,7 @@ if (existsSync(DIST)) {
     if (!html.includes('Naledi to Johannesburg') && !html.includes('Showing trains to Naledi')) {
       fail('Naledi route HTML must mention both directions');
     }
-    if (!html.includes('Johannesburg ↔ Naledi Train Schedule & Times')) {
+    if (!html.includes('Johannesburg ↔ Naledi Train Schedule &amp; Times') && !html.includes('Johannesburg ↔ Naledi Train Schedule & Times')) {
       fail('Naledi route H1 should keep the calm ↔ pair');
     }
     if (!html.includes('<title>Train schedule from Johannesburg to Naledi | Metrorail Next Train</title>')) {

@@ -5,10 +5,13 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
-    'V9_09.15.3': [
+    'V9_09.15.5': [
         'Route landings: Durban Yard stays a distinct grid row (no longer labelled Durban). First/last times use the destination row so joiners count. Corridor pages get verified nearby/POI commentary (no invented stops). Ghosts such as Eersterust are named as areas passed, not calling points.',
         'Feedback Hub: admin bubble version (V9_09.15.2 · route) is the same Build notes button as the commuter chip. V9_09.15.2 notes are backfilled so that chip opens notes instead of an empty modal.',
         'Agent rule: every APP_VERSION bump must add an ADMIN_CHANGELOG entry. Distinct from optional commuter What’s New.',
+    ],
+    'V9_09.15.4': [
+        'Restore legacy CleverAds injection and shell handling. Units stay outside the max-w-md phone frame. A wrapper stays collapsed until its iframe finishes loading; nested wrapper+iframe count as one unit.',
     ],
     'V9_09.15.2': [
         'Schedule dump refresh from live RTDB region files. KZN lastUpdated 15 Sep 2026. Grid column order overlay matches the board (Apps Script _columnOrder into MANUAL_GRID_ORDER).',

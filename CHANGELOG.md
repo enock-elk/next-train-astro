@@ -2,9 +2,15 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin, Dev Hub, Alerts, Trains near me, community chat, or other hidden-test work. No emoji and no em dashes in What’s New. Keep `APP_VERSION`, `package.json` `version`, and `public/app-version.json` aligned on each release. Changelog / What’s New may be skipped, or the heading may be only **no release notes.** Every bump must add `ADMIN_CHANGELOG[APP_VERSION]` (System Health Build notes).
 
-## V9_09.15.3 — Route SEO first/last, nearby copy, Build notes chip (15 Sep 2026)
+## V9_09.15.5 — Route SEO first/last, nearby copy, Build notes chip (15 Sep 2026)
 
 Durban Yard is no longer labelled Durban on `/routes/` grids. First/last on corridor landings use destination-row arrivals so mid-line joiners count. Route pages get verified nearby/POI commentary. Admin Feedback version meta opens Build notes. `ADMIN_CHANGELOG` is required on every version bump.
+
+no release notes.
+
+## V9_09.15.4 — Restore legacy ad lifecycle with full-width paint (15 Sep 2026)
+
+Restore the pre-ad-change injection and shell handling while keeping vendor units outside the `max-w-md` phone frame. A wrapper stays collapsed until its iframe finishes loading, then a delayed payload revives it. Nested wrapper and iframe candidates count as one unit, preventing premature blank fixed overlays and duplicate layout classification. The vendor IIFE, loader URL, and four-slot schedule are unchanged.
 
 no release notes.
 

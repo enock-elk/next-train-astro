@@ -7,6 +7,7 @@
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createIframeLoadGate, topLevelAdNodes } from '../src/lib/clever-ad-lifecycle.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const failures = [];
@@ -90,7 +91,9 @@ if (ads.includes('reparentOccupiedAdsIntoScrollHost')) {
   fail('must not reparent Clever stickies into #nt-ad-scroll-host (clips 100vw creatives to the phone frame)');
 }
 if (ads.includes('function adScrollHost')) fail('must not move vendor overlays into the phone-frame ad host');
-if (!ads.includes('overlayShiftHeight')) fail('top vs bottom sticky must be distinguished so bottom units do not open a top gap');
+if (!ads.includes('topLevelAdNodes')) fail('nested wrapper/iframe candidates must collapse to one top-level unit');
+if (!ads.includes('iframeLoadGate.isLoaded')) fail('iframe payloads must not occupy space before their load event');
+if (ads.includes('const filled = occupied ||')) fail('wrapper presence alone must not stop the inject schedule');
 if (!ads.includes("getElementById('app-scroll')")) fail('must listen for scroll on #app-scroll');
 if (!layout.includes('#nt-ad-scroll-host')) fail('Layout must style #nt-ad-scroll-host');
 if (!layout.includes('#nt-ad-scroll-host:empty')) fail('empty ad host must not reserve height');
@@ -139,24 +142,65 @@ if (ads.includes("setProperty('display', 'none'")) {
   }
   if (!leftoverOccupies({ painted: true, iframeAlive: true })) fail('live iframe must occupy space');
 
-  const overlayShiftHeight = (r, cs) => {
-    if (cs.position !== 'fixed' && cs.position !== 'absolute') return 0;
-    if (r.top > 64) return 0;
-    return r.height;
-  };
   const targetShift = (overlayH, inFlowH) => (inFlowH > 0 ? 0 : overlayH);
   const flipInvert = (delta) => -delta;
-  if (overlayShiftHeight({ top: 0, height: 96 }, { position: 'fixed' }) !== 96) {
-    fail('sticky-top overlay must shift the shell by H');
-  }
-  if (overlayShiftHeight({ top: 710, height: 90 }, { position: 'fixed' }) !== 0) {
-    fail('bottom sticky must not open a top gap');
-  }
   if (targetShift(96, 0) !== 96) fail('fixed overlay must shift the shell by H');
   if (targetShift(96, 80) !== 0) fail('in-flow ads must not double-push');
-  if (targetShift(0, 0) !== 0) fail('bottom-only overlay must not shift the shell');
   if (flipInvert(80) !== -80) fail('in-flow fill inverts with -delta');
   if (flipInvert(-80) !== 80) fail('in-flow dismiss inverts with +H');
+}
+
+{
+  class FakeNode {
+    constructor(parent = null) {
+      this.parent = parent;
+      this.listeners = new Map();
+    }
+    contains(node) {
+      for (let cur = node; cur; cur = cur.parent) {
+        if (cur === this) return true;
+      }
+      return false;
+    }
+    addEventListener(name, fn) {
+      this.listeners.set(name, fn);
+    }
+  }
+
+  const wrapper = new FakeNode();
+  const frame = new FakeNode(wrapper);
+  frame.src = 'https://creative.example/payload';
+  frame.getAttribute = (name) => (name === 'src' ? frame.src : '');
+  frame.contentDocument = null;
+  frame.contentWindow = { location: { href: 'about:blank' } };
+  const units = topLevelAdNodes([wrapper, frame, frame]);
+  if (units.length !== 1 || units[0] !== wrapper) {
+    fail('nested wrapper + iframe must classify as one top-level fixed unit');
+  }
+
+  let wrapperIdle = true;
+  const gate = createIframeLoadGate(() => {
+    wrapperIdle = false;
+  });
+  gate.observe(frame);
+  if (gate.isLoaded(frame) || !wrapperIdle) {
+    fail('empty wrapper must remain collapsed while delayed iframe is still loading');
+  }
+  frame.listeners.get('load')?.();
+  if (gate.isLoaded(frame) || !wrapperIdle) {
+    fail('initial about:blank iframe load must not reveal the wrapper');
+  }
+  frame.contentWindow.location.href = frame.src;
+  frame.listeners.get('load')?.();
+  if (!gate.isLoaded(frame) || wrapperIdle) {
+    fail('loaded delayed creative must wake its previously idle wrapper');
+  }
+
+  const fixedHeight = units.length === 1 && gate.isLoaded(frame) ? 400 : 0;
+  const inFlowHeight = units.length > 1 ? 400 : 0;
+  if (fixedHeight !== 400 || inFlowHeight !== 0) {
+    fail('nested loaded creative must contribute one fixed height and no child in-flow height');
+  }
 }
 
 if (failures.length) {

@@ -5,8 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
-    'V9_09.15.10': [
+    'V9_09.16.1': [
         'iOS Safari zooms the page when a focused input/textarea/select computes under 16px. Commuter fields used text-sm / text-xs / text-[13px] (and text-lg can dip under 16px on a shrunk phone rem). Floor those controls to max(16px, 1em), keep text-lg at max(16px, 1.125rem) and text-base at max(16px, 1rem). Viewport stays maximum-scale=5. Do not bring back PLANNER_VIEWPORT_NO_ZOOM.',
+        'Commuter What’s New: typing in a box stays full size on iPhone. forceShow stays false. FORCE_UPDATE_REQUIRED stays true so existing shells hard-reload onto this version.',
     ],
     'V9_09.15.9': [
         'Mutual no longer claims Cape Town \u2194 Retreat. No Cape Flats train calls there; ensureMaitlandMutualAdjacency spliced Mutual in for geometry and the injected stop registered as a served stop. It is now geometry-only.',

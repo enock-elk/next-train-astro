@@ -10,6 +10,11 @@ import { safeStorage } from './utils.js';
 import { bootFirebase } from './firebase-boot.js';
 
 const STORAGE_KEY = 'ntRiderMarksV1';
+const STORAGE_KEY_GUEST = 'ntRiderMarksV1:guest';
+
+export function marksStorageKey(uid) {
+    return uid ? `${STORAGE_KEY}:${uid}` : STORAGE_KEY_GUEST;
+}
 const PHOTO_PREF_KEY = 'ntShowPhotoInAlerts';
 
 export const MARK_POINTS = {
@@ -143,7 +148,11 @@ function clampState(raw) {
 
 export function readMarks() {
     try {
-        return clampState(JSON.parse(safeStorage.getItem(STORAGE_KEY) || 'null'));
+        const uid = authUid();
+        const key = marksStorageKey(uid);
+        let raw = safeStorage.getItem(key);
+        if (!raw && !uid) raw = safeStorage.getItem(STORAGE_KEY);
+        return clampState(JSON.parse(raw || 'null'));
     } catch {
         return emptyState();
     }
@@ -151,10 +160,22 @@ export function readMarks() {
 
 function writeMarks(state) {
     const next = clampState({ ...state, updatedAt: Date.now() });
-    safeStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+    const uid = authUid();
+    safeStorage.setItem(marksStorageKey(uid), JSON.stringify(next));
     persistRemote(next);
     syncRiderMarksUi(next);
     return next;
+}
+
+/** Drop the previous account's local cache from the UI when the signed-in uid changes. */
+export function switchMarksAccount(nextUid) {
+    const uid = nextUid || null;
+    try {
+        const raw = safeStorage.getItem(marksStorageKey(uid));
+        syncRiderMarksUi(clampState(JSON.parse(raw || 'null')));
+    } catch {
+        syncRiderMarksUi(emptyState());
+    }
 }
 
 export function tierForPoints(points) {
@@ -267,7 +288,7 @@ export async function hydrateRemoteMarks({ persist = false } = {}) {
             return readMarks();
         }
         const merged = mergeStates(readMarks(), remote);
-        safeStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
+        safeStorage.setItem(marksStorageKey(uid), JSON.stringify(merged));
         if (persist || merged.points !== (remote.points || 0) || merged.updatedAt !== (remote.updatedAt || 0)) {
             await persistRemote(merged);
         }

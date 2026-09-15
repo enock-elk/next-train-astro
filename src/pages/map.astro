@@ -516,7 +516,8 @@ const regionSeoSlugs = Object.fromEntries(
         <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
       </button>
       <button id="map-fullscreen-btn" type="button" class="map-chrome-btn" aria-label="Full screen map" title="Full screen">
-        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H5a2 2 0 00-2 2v3M16 3h3a2 2 0 012 2v3M8 21H5a2 2 0 01-2-2v-3M16 21h3a2 2 0 002-2v-3"/></svg>
+        <svg class="w-4 h-4" data-map-fs-icon="expand" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H5a2 2 0 00-2 2v3M16 3h3a2 2 0 012 2v3M8 21H5a2 2 0 01-2-2v-3M16 21h3a2 2 0 002-2v-3"/></svg>
+        <svg class="w-4 h-4 hidden" data-map-fs-icon="minimize" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3v3a2 2 0 01-2 2H3M16 3v3a2 2 0 002 2h3M8 21v-3a2 2 0 00-2-2H3M16 21v-3a2 2 0 012-2h3"/></svg>
       </button>
     </div>
     <div class="legend-container" id="legend-container">
@@ -613,7 +614,16 @@ const regionSeoSlugs = Object.fromEntries(
           return !!(el && !el.classList.contains('hidden') && el.classList.contains('flex'));
         } catch (_) { return false; }
       }
-      function openMapFullscreen() {
+      function mapFsActive() {
+        try {
+          var doc = document;
+          var parentDoc = (window.parent && window.parent !== window) ? window.parent.document : null;
+          var el = doc.fullscreenElement || doc.webkitFullscreenElement
+            || (parentDoc && (parentDoc.fullscreenElement || parentDoc.webkitFullscreenElement));
+          return !!el;
+        } catch (_) { return false; }
+      }
+      function toggleMapFullscreen() {
         try {
           if (inMapTab() && window.parent && window.parent !== window) {
             if (typeof window.parent.__ntFullscreenMapTab === 'function') {
@@ -621,6 +631,12 @@ const regionSeoSlugs = Object.fromEntries(
               return;
             }
             var host = window.parent.document.getElementById('view-map');
+            var parentDoc = window.parent.document;
+            var active = parentDoc.fullscreenElement || parentDoc.webkitFullscreenElement;
+            if (host && active && (active === host || host.contains(active))) {
+              var pExit = parentDoc.exitFullscreen || parentDoc.webkitExitFullscreen;
+              if (pExit) { pExit.call(parentDoc); return; }
+            }
             if (host && host.requestFullscreen) {
               host.requestFullscreen();
               return;
@@ -628,6 +644,11 @@ const regionSeoSlugs = Object.fromEntries(
           }
         } catch (_) {}
         var root = document.getElementById('view-map') || document.documentElement;
+        var here = document.fullscreenElement || document.webkitFullscreenElement;
+        if (here) {
+          var exit = document.exitFullscreen || document.webkitExitFullscreen;
+          if (exit) { exit.call(document); return; }
+        }
         if (root && root.requestFullscreen) {
           root.requestFullscreen().catch(function () {});
           return;
@@ -635,6 +656,17 @@ const regionSeoSlugs = Object.fromEntries(
         if (document.documentElement.requestFullscreen) {
           document.documentElement.requestFullscreen().catch(function () {});
         }
+      }
+      function paintMapFullscreenBtn() {
+        var btn = document.getElementById('map-fullscreen-btn');
+        if (!btn) return;
+        var on = mapFsActive();
+        var expand = btn.querySelector('[data-map-fs-icon="expand"]');
+        var mini = btn.querySelector('[data-map-fs-icon="minimize"]');
+        if (expand) expand.classList.toggle('hidden', on);
+        if (mini) mini.classList.toggle('hidden', !on);
+        btn.setAttribute('aria-label', on ? 'Exit full screen' : 'Full screen map');
+        btn.setAttribute('title', on ? 'Exit full screen' : 'Full screen');
       }
       // Parent sheet / Map tab already has chrome — hide Back.
       if (inAppSheet() || inMapTab()) {
@@ -644,8 +676,16 @@ const regionSeoSlugs = Object.fromEntries(
       if (inMapTab()) document.documentElement.classList.add('nt-map-tab');
       document.getElementById('map-fullscreen-btn')?.addEventListener('click', function (e) {
         e.preventDefault();
-        openMapFullscreen();
+        toggleMapFullscreen();
       });
+      document.addEventListener('fullscreenchange', paintMapFullscreenBtn);
+      document.addEventListener('webkitfullscreenchange', paintMapFullscreenBtn);
+      window.addEventListener('message', function (ev) {
+        var data = ev && ev.data;
+        if (!data || data.type !== 'nt-map-fullscreen') return;
+        paintMapFullscreenBtn();
+      });
+      paintMapFullscreenBtn();
       document.getElementById('map-back-link')?.addEventListener('click', function () {
         var href = this.getAttribute('data-href') || '';
         if (!href) return;

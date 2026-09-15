@@ -782,6 +782,23 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
         overflow: hidden;
         padding: 0;
       }
+      #view-map:fullscreen,
+      #view-map:-webkit-full-screen {
+        width: 100%;
+        height: 100%;
+        background: #f3f4f6;
+      }
+      #view-map:fullscreen .map-tab-pane,
+      #view-map:-webkit-full-screen .map-tab-pane,
+      #view-map:fullscreen iframe,
+      #view-map:-webkit-full-screen iframe {
+        width: 100%;
+        height: 100%;
+      }
+      html.dark #view-map:fullscreen,
+      html.dark #view-map:-webkit-full-screen {
+        background: #111827;
+      }
       #view-community.view-section.active {
         display: flex;
         flex-direction: column;

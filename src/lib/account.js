@@ -22,6 +22,12 @@ import {
     loadAuthProviders,
 } from './auth-providers.js';
 import { $deviceId } from '../store.js';
+import {
+    formatAccountDisplayName,
+    clampDisplayName,
+    resolveAccountDisplayName,
+    DISPLAY_NAME_MAX,
+} from './display-name.js';
 
 /** @typedef {'guest' | 'loading' | 'signed-in'} AccountStatus */
 
@@ -41,7 +47,7 @@ function getDeviceId() {
     return $deviceId.get() || safeStorage.getItem('next_train_device_id') || null;
 }
 
-function publishUser(user) {
+function publishUser(user, extras = {}) {
     if (!user || user.isAnonymous) {
         $account.set({
             status: 'guest',
@@ -56,9 +62,10 @@ function publishUser(user) {
     $account.set({
         status: 'signed-in',
         uid: user.uid,
-        displayName: user.displayName || (user.email ? user.email.split('@')[0] : 'Passenger'),
+        displayName: extras.displayName || formatAccountDisplayName(user.displayName || (user.email ? user.email.split('@')[0] : 'Passenger')),
         photoURL: user.photoURL || null,
         email: user.email || null,
+        displayNameCustom: !!extras.displayNameCustom,
     });
     safeStorage.setItem('authUid', user.uid);
 }
@@ -84,18 +91,27 @@ async function waitForFirebase(timeoutMs = 8000) {
 
 /**
  * Ensure users/{uid} exists and link current device_id (additive — never wipes prefs).
+ * @param {object} user
+ * @param {{ customDisplayName?: string }} [opts]
  */
-export async function ensureUserProfile(user) {
+export async function ensureUserProfile(user, opts = {}) {
     if (!user || user.isAnonymous || !window.firebaseDb) return;
     const deviceId = getDeviceId();
     const userPath = `users/${user.uid}`;
     const now = Date.now();
+    const customName = clampDisplayName(opts.customDisplayName);
 
     try {
         const snap = await window.firebaseDbGet(window.firebaseDbRef(window.firebaseDb, userPath));
-        if (!snap.exists()) {
+        const existing = snap.exists() ? (snap.val() || {}) : null;
+        const displayName = resolveAccountDisplayName(user, {
+            displayName: customName || existing?.displayName,
+            displayNameCustom: !!(customName || existing?.displayNameCustom),
+        });
+        if (!existing) {
             await window.firebaseDbSet(window.firebaseDbRef(window.firebaseDb, userPath), {
-                displayName: user.displayName || null,
+                displayName,
+                displayNameCustom: !!customName,
                 photoURL: user.photoURL || null,
                 email: user.email || null,
                 createdAt: now,
@@ -110,23 +126,25 @@ export async function ensureUserProfile(user) {
             });
         } else {
             const patch = {
-                displayName: user.displayName || snap.val()?.displayName || null,
-                photoURL: user.photoURL || snap.val()?.photoURL || null,
-                email: user.email || snap.val()?.email || null,
+                photoURL: user.photoURL || existing.photoURL || null,
+                email: user.email || existing.email || null,
                 updatedAt: now,
             };
+            if (!existing.displayNameCustom) {
+                patch.displayName = displayName;
+            }
             if (deviceId) patch[`deviceIds/${deviceId}`] = true;
             // Preserve existing flags; only set defaults if missing
-            const flags = snap.val()?.flags;
+            const flags = existing.flags;
             if (!flags) {
                 patch.flags = { shadowBanned: false, shadowBannedUntil: 0, role: 'user' };
             } else if (flags.shadowBannedUntil === undefined) {
                 patch['flags/shadowBannedUntil'] = 0;
             }
-            if (snap.val()?.trustScore === undefined) {
+            if (existing.trustScore === undefined) {
                 patch.trustScore = 0;
             }
-            if (snap.val()?.prefs?.showPhotoInAlerts === undefined) {
+            if (existing.prefs?.showPhotoInAlerts === undefined) {
                 patch['prefs/showPhotoInAlerts'] = false;
             }
             await window.firebaseDbUpdate(window.firebaseDbRef(window.firebaseDb, userPath), patch);
@@ -138,10 +156,36 @@ export async function ensureUserProfile(user) {
                 { uid: user.uid, linkedAt: now }
             );
         }
+
+        publishUser(user, {
+            displayName,
+            displayNameCustom: !!(customName || existing?.displayNameCustom),
+        });
     } catch (e) {
         // RTDB rules may block until deployed — Auth session still valid locally
         console.warn('Account profile sync deferred', e?.message || e);
+        publishUser(user);
     }
+}
+
+export async function updateAccountDisplayName(raw) {
+    const user = window.firebaseAuth?.currentUser;
+    if (!user || user.isAnonymous) throw new Error('Sign in to set a display name.');
+    const custom = clampDisplayName(raw);
+    const displayName = custom || formatAccountDisplayName(user.displayName || (user.email ? user.email.split('@')[0] : 'Passenger'));
+    if (window.firebaseUpdateProfile) {
+        try { await window.firebaseUpdateProfile(user, { displayName }); } catch { /* RTDB is source for chat */ }
+    }
+    if (window.firebaseDb) {
+        await window.firebaseDbUpdate(window.firebaseDbRef(window.firebaseDb, `users/${user.uid}`), {
+            displayName,
+            displayNameCustom: !!custom,
+            updatedAt: Date.now(),
+        });
+    }
+    publishUser(user, { displayName, displayNameCustom: !!custom });
+    window.dispatchEvent(new CustomEvent('accountchange', { detail: $account.get() }));
+    return displayName;
 }
 
 export async function initAccount() {
@@ -160,12 +204,18 @@ export async function initAccount() {
         // Ignore anonymous sessions used for feedback uploads — treat as guest UI
         if (user && user.isAnonymous) {
             publishUser(null);
+            import('./rider-marks.js').then((m) => m.switchMarksAccount(null)).catch(() => {});
             return;
         }
         publishUser(user);
         if (user && !user.isAnonymous) {
+            import('./rider-marks.js').then((m) => {
+                m.switchMarksAccount(user.uid);
+                return m.hydrateRemoteMarks({ persist: true });
+            }).catch(() => {});
             await ensureUserProfile(user);
-            import('./rider-marks.js').then((m) => m.hydrateRemoteMarks({ persist: true })).catch(() => {});
+        } else {
+            import('./rider-marks.js').then((m) => m.switchMarksAccount(null)).catch(() => {});
         }
         window.dispatchEvent(new CustomEvent('accountchange', { detail: $account.get() }));
     });
@@ -266,8 +316,10 @@ export async function signUpWithEmail(email, password, displayName) {
     const cred = await window.firebaseCreateUser(window.firebaseAuth, email.trim(), password);
     if (displayName?.trim()) {
         try {
-            await window.firebaseUpdateProfile(cred.user, { displayName: displayName.trim() });
+            await window.firebaseUpdateProfile(cred.user, { displayName: clampDisplayName(displayName) });
         } catch (e) { /* non-fatal */ }
+        await ensureUserProfile(cred.user, { customDisplayName: displayName });
+        return cred.user;
     }
     await ensureUserProfile(cred.user);
     return cred.user;
@@ -282,6 +334,7 @@ export async function signOutAccount() {
         await window.firebaseSignOut(window.firebaseAuth);
     }
     publishUser(null);
+    import('./rider-marks.js').then((m) => m.switchMarksAccount(null)).catch(() => {});
 }
 
 export function openAccountModal() {
@@ -406,6 +459,10 @@ export function syncAccountSettingsUi(state = $account.get()) {
         if (pointsPanel && signedBtn) signedBtn.insertAdjacentElement('afterend', pointsPanel);
         if (modalName) modalName.textContent = state.displayName || 'Passenger';
         if (modalEmail) modalEmail.textContent = state.email || '';
+        const nameInput = document.getElementById('account-edit-display-name');
+        if (nameInput && document.activeElement !== nameInput) {
+            nameInput.value = state.displayName || '';
+        }
     }
     const contribWrap = document.getElementById('account-contrib-wrap');
     if (contribWrap) contribWrap.classList.toggle('hidden', !signed);
@@ -648,6 +705,20 @@ export function bindAccountUi() {
         }
     });
 
+    document.getElementById('account-save-display-name')?.addEventListener('click', async () => {
+        const input = document.getElementById('account-edit-display-name');
+        setBusy(true);
+        try {
+            const next = await updateAccountDisplayName(input?.value || '');
+            if (input) input.value = next;
+            if (typeof window.showToast === 'function') window.showToast('Display name saved', 'success');
+        } catch (e) {
+            showErr(e?.message || 'Could not save display name.');
+        } finally {
+            setBusy(false);
+        }
+    });
+
     document.getElementById('account-signout-btn')?.addEventListener('click', async () => {
         setBusy(true);
         try {
@@ -752,5 +823,7 @@ if (typeof window !== 'undefined') {
     window.waitForSignedIn = waitForSignedIn;
     window.signOutAccount = signOutAccount;
     window.paintAccountPoints = paintAccountPoints;
+    window.updateAccountDisplayName = updateAccountDisplayName;
+    window.formatAccountDisplayName = formatAccountDisplayName;
     window.$account = $account;
 }

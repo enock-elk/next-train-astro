@@ -2302,18 +2302,47 @@ export function deactivateMapTab() {
     releaseGeoWatch('map');
 }
 
+function mapTabFullscreenElement() {
+    return document.fullscreenElement || document.webkitFullscreenElement || null;
+}
+
+function isMapTabFullscreen() {
+    const host = document.getElementById('view-map');
+    const active = mapTabFullscreenElement();
+    return !!(host && active && (active === host || host.contains(active)));
+}
+
+function notifyMapFullscreen(on) {
+    postToMap({ type: 'nt-map-fullscreen', on: !!on });
+}
+
 export function fullscreenMapTab() {
     const host = document.getElementById('view-map');
     if (!host) return false;
-    const req = host.requestFullscreen || host.webkitRequestFullscreen;
-    if (!req) return false;
     try {
+        if (isMapTabFullscreen()) {
+            const exit = document.exitFullscreen || document.webkitExitFullscreen;
+            if (!exit) return false;
+            const result = exit.call(document);
+            if (result && typeof result.catch === 'function') result.catch(() => {});
+            return true;
+        }
+        const req = host.requestFullscreen || host.webkitRequestFullscreen;
+        if (!req) return false;
         const result = req.call(host);
         if (result && typeof result.catch === 'function') result.catch(() => {});
         return true;
     } catch {
         return false;
     }
+}
+
+function bindMapFullscreenChrome() {
+    if (typeof document === 'undefined' || window.__ntMapFullscreenBound) return;
+    window.__ntMapFullscreenBound = true;
+    const sync = () => notifyMapFullscreen(isMapTabFullscreen());
+    document.addEventListener('fullscreenchange', sync);
+    document.addEventListener('webkitfullscreenchange', sync);
 }
 
 function bindTrackingRestoreDrag() {
@@ -2395,6 +2424,7 @@ export function bindMapTabUi() {
     window.__ntFullscreenMapTab = fullscreenMapTab;
     exposeEmbedBridge();
     bindTrackingRestoreDrag();
+    bindMapFullscreenChrome();
     subscribeGeoFix((fix) => {
         applyGeoFix(fix);
         postFixToMap('nt-map-user-location', fix);
@@ -2629,5 +2659,6 @@ if (typeof window !== 'undefined') {
     window.promptOnTrainSheet = promptOnTrainSheet;
     window.maybeOfferParkedResume = maybeOfferParkedResume;
     window.startParkedTrainWatch = startParkedTrainWatch;
+    window.fullscreenMapTab = fullscreenMapTab;
     window.__ntFullscreenMapTab = fullscreenMapTab;
 }

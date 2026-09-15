@@ -27,6 +27,7 @@ import {
     sanitizeAlertImageUrl,
     sanitizeInlineAlertImageUrl,
     collectNoticeImageUrls,
+    hoistAlertImagesFromHtml,
     layoutAlertPost,
     stripAlertSignoffHtml,
     noticeScopeLabel,
@@ -43,6 +44,7 @@ export {
     pageAlertsFeed,
     sanitizeAlertImageUrl,
     collectNoticeImageUrls,
+    hoistAlertImagesFromHtml,
     layoutAlertPost,
     buildNoticesMeta,
     shouldForceOpen,
@@ -209,6 +211,10 @@ function severityChrome(severity) {
 }
 
 function renderPosterHtml(urls, notice = null) {
+    return renderLazyPosterHtml(urls, notice);
+}
+
+export function renderLazyPosterHtml(urls, notice = null) {
     if (!urls.length) return '';
     const spinner = `<svg class="animate-spin h-6 w-6 text-blue-600 dark:text-blue-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" aria-hidden="true"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>`;
     const noticeId = escapeHTML(String(notice?.id || ''));
@@ -238,9 +244,10 @@ export function hydrateAlertPosterImages(root = typeof document !== 'undefined' 
         const host = img.closest('[data-alert-lightbox]');
         const originalSrc = host?.getAttribute('data-alert-lightbox') || img.getAttribute('src') || '';
         resolveCachedAlertImage(originalSrc).then((cached) => {
-            if (!cached || img.dataset.ntPosterRevealed === '1') return;
+            if (!cached) return;
+            if (img.dataset.ntPosterRevealed === '1' || img.naturalWidth > 0) return;
             return cached.blob().then((blob) => {
-                if (img.dataset.ntPosterRevealed === '1') return;
+                if (img.dataset.ntPosterRevealed === '1' || img.naturalWidth > 0) return;
                 img.src = URL.createObjectURL(blob);
             });
         }).catch(() => {});
@@ -794,7 +801,15 @@ export function renderAlertsChannel(notices = cachedLiveNotices, opts = {}) {
         }
         parts.push(renderPostCard(n, { highlight: highlightNoticeId }));
     });
-    feed.innerHTML = parts.join('');
+    const html = parts.join('');
+    if (feed.dataset.ntAlertsSig === html) {
+        hydrateAlertPosterImages(feed);
+        observeRenderedAlertImpressions(feed);
+        hydrateAdminAlertImpressionCounts(page.visible);
+        return true;
+    }
+    feed.dataset.ntAlertsSig = html;
+    feed.innerHTML = html;
     pruneExpiredAlertImages(list);
     list.forEach((n) => cacheAlertImages(n, resolveAlertImageSrc));
     hydrateAlertPosterImages(feed);
@@ -1120,6 +1135,9 @@ export function initAlertsChannel() {
     window.openAlertsChannel = openAlertsChannel;
     window.closeAlertsChannel = closeAlertsChannel;
     window.renderAlertsChannel = renderAlertsChannel;
+    window.renderLazyPosterHtml = renderLazyPosterHtml;
+    window.hydrateAlertPosterImages = hydrateAlertPosterImages;
+    window.hoistAlertImagesFromHtml = hoistAlertImagesFromHtml;
     window.sanitizeAlertImageUrl = sanitizeAlertImageUrl;
     window.collectNoticeImageUrls = collectNoticeImageUrls;
     window.parseNoticeBucket = parseNoticeBucket;
@@ -1131,4 +1149,7 @@ if (typeof window !== 'undefined') {
     window.withBase = window.withBase || withBase;
     window.sanitizeAlertImageUrl = sanitizeAlertImageUrl;
     window.collectNoticeImageUrls = collectNoticeImageUrls;
+    window.hoistAlertImagesFromHtml = hoistAlertImagesFromHtml;
+    window.renderLazyPosterHtml = renderLazyPosterHtml;
+    window.hydrateAlertPosterImages = hydrateAlertPosterImages;
 }

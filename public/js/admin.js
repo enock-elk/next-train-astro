@@ -1729,6 +1729,45 @@ const Admin = {
         return `<button type="button" onclick='event.stopPropagation(); ${js}' class="relative block w-full focus:outline-none my-2 cursor-zoom-in rounded-lg overflow-hidden border ${border} shadow-sm active:scale-[0.98] transition-transform"><img src="${href}" class="w-full h-auto object-cover hover:opacity-90 transition-opacity" alt=""><span class="nt-zoom-plus absolute bottom-1.5 right-1.5 w-5 h-5 rounded-full bg-black/40 text-white text-xs font-bold leading-none flex items-center justify-center border border-white/20 pointer-events-none select-none shadow-sm" aria-hidden="true">+</span></button>`;
     },
 
+    /** Hoist unique image srcs out of admin/commuter HTML so one send cannot paint twice. */
+    layoutInboxMedia: function(html, extraUrls) {
+        const raw = String(html || '');
+        const hoisted = (typeof window.hoistAlertImagesFromHtml === 'function')
+            ? window.hoistAlertImagesFromHtml(raw)
+            : { urls: [], body: raw };
+        const images = [];
+        const files = [];
+        const add = (u) => {
+            const safe = typeof window.sanitizeAttachmentDisplayUrl === 'function'
+                ? window.sanitizeAttachmentDisplayUrl(u)
+                : String(u || '').trim();
+            if (!safe) return;
+            const kind = typeof window.classifyAttachmentUrl === 'function'
+                ? window.classifyAttachmentUrl(safe)
+                : 'image';
+            if (kind === 'image') {
+                if (!images.includes(safe)) images.push(safe);
+            } else if (!files.includes(safe)) {
+                files.push(safe);
+            }
+        };
+        (hoisted.urls || []).forEach(add);
+        (Array.isArray(extraUrls) ? extraUrls : []).forEach(add);
+        let media = (typeof window.renderLazyPosterHtml === 'function')
+            ? window.renderLazyPosterHtml(images)
+            : '';
+        files.forEach((url, idx) => {
+            if (typeof window.attachmentPreviewHtml === 'function') {
+                media += window.attachmentPreviewHtml(url, {
+                    admin: true,
+                    pdfLabel: `View Doc ${idx + 1}`,
+                    fileLabel: `View Doc ${idx + 1}`,
+                });
+            }
+        });
+        return { body: hoisted.body || '', media, urls: images };
+    },
+
     safeSourceHref: function(raw) {
         const s = String(raw || '').trim();
         if (!s) return null;
@@ -2046,6 +2085,15 @@ const Admin = {
         host.addEventListener('pointerup', clearLong);
         host.addEventListener('pointercancel', clearLong);
         host.addEventListener('click', (e) => {
+            const poster = e.target.closest?.('[data-alert-lightbox]');
+            if (poster && host.contains(poster)) {
+                e.preventDefault();
+                e.stopPropagation();
+                if (poster.getAttribute('data-alert-ready') !== '1') return;
+                const src = poster.getAttribute('data-alert-lightbox');
+                if (src && Admin.openLightbox) Admin.openLightbox(src);
+                return;
+            }
             const chip = e.target.closest?.('[data-inbox-react]');
             if (!chip) return;
             const row = chip.closest('[data-inbox-msg-id]');
@@ -7206,6 +7254,9 @@ const Admin = {
             });
             listContainer.appendChild(listFrag);
             Admin.bindFeedbackInboxReactions(listContainer);
+            if (typeof window.hydrateAlertPosterImages === 'function') {
+                window.hydrateAlertPosterImages(listContainer);
+            }
             if (Admin._pendingFeedbackOpen) {
                 setTimeout(() => Admin.consumePendingFeedbackOpen(), 40);
             }
@@ -15600,6 +15651,7 @@ const Admin = {
         }
         body.innerHTML = Admin.buildFeedbackThreadInnerHtml(payload);
         delete body.dataset.fbLazy;
+        if (typeof window.hydrateAlertPosterImages === 'function') window.hydrateAlertPosterImages(body);
     },
 
     buildFeedbackThreadInnerHtml: (payload) => {
@@ -15698,9 +15750,13 @@ const Admin = {
                             parsedAdminText = window.sanitizeRichHtml(parsedAdminText);
                         }
 
-                        parsedAdminText = parsedAdminText.replace(/(<button[^>]*>)?\s*(<img[^>]+src=["']([^"']+)["'][^>]*>)\s*(<\/button>)?/gi, (match, btnStart, imgTag, srcUrl, btnEnd) => {
-                            return Admin.wrapLightboxImgHtml(srcUrl, 'border-slate-600 dark:border-slate-700') || '';
-                        });
+                        const adminExtra = [];
+                        if (item.attachmentUrl) adminExtra.push(item.attachmentUrl);
+                        if (Array.isArray(item.attachmentUrls)) {
+                            item.attachmentUrls.forEach((u) => { if (u) adminExtra.push(u); });
+                        }
+                        const adminMedia = Admin.layoutInboxMedia(parsedAdminText, adminExtra);
+                        parsedAdminText = `${adminMedia.media || ''}${adminMedia.body || ''}`;
 
                         // GUARDIAN UX FIX: Professional, high-contrast Admin message bubble
                         // id/data use raw inbox key (same as [REPLY TO ADMIN: key]) for quote jump
@@ -15980,27 +16036,9 @@ const Admin = {
                         if (typeof rawText !== 'string') rawText = '';
                         rawText = rawText.replace(/^(?:<br>|\s)+/, '');
 
-
-                        // GUARDIAN PHASE 3: Dynamic Visual Attachment Previewer (Multi-File Grid & Lightbox)
-                        let attachmentHtml = '';
-                        if (uniqueAttach.length > 0) {
-                            const gridCols = uniqueAttach.length > 1 ? 'grid-cols-2' : 'grid-cols-1';
-                            attachmentHtml = `<div class="mt-2 grid ${gridCols} gap-2 w-full">`;
-                            uniqueAttach.forEach((rawUrl, idx) => {
-                                const cell = typeof window.attachmentPreviewHtml === 'function'
-                                    ? window.attachmentPreviewHtml(rawUrl, {
-                                        admin: true,
-                                        pdfLabel: `View Doc ${idx + 1}`,
-                                        fileLabel: `View Doc ${idx + 1}`,
-                                        imgClass: 'w-full h-24 object-cover rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 hover:opacity-90 transition-opacity cursor-zoom-in',
-                                        buttonClass: 'block focus:outline-none w-full text-left',
-                                        linkClass: 'flex items-center justify-center gap-1 text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 px-2 py-1.5 rounded border border-blue-200 dark:border-blue-800 hover:bg-blue-100 dark:hover:bg-blue-800/50 transition-colors text-xs font-bold w-full h-24',
-                                    })
-                                    : '';
-                                if (cell) attachmentHtml += cell;
-                            });
-                            attachmentHtml += `</div>`;
-                        }
+                        const commuterMedia = Admin.layoutInboxMedia(rawText, uniqueAttach);
+                        const attachmentHtml = commuterMedia.media || '';
+                        rawText = commuterMedia.body || '';
 
                         // METADATA: Integrated Bubble Header
                         let typeLabel = "General";
@@ -16074,6 +16112,7 @@ const Admin = {
             if (!btn) return;
             e.preventDefault();
             e.stopPropagation();
+            if (typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation();
             Admin.openAdminChangelogLookup(btn.getAttribute('data-admin-changelog'));
         }, true);
     },
@@ -16332,7 +16371,9 @@ const Admin = {
     },
 
     openAdminChangelogLookup: (version) => {
-        const key = String(version || '').split(' - ')[0].trim();
+        const key = (typeof window.normalizeAdminChangelogKey === 'function')
+            ? window.normalizeAdminChangelogKey(version)
+            : String(version || '').split(' - ')[0].split(' · ')[0].trim();
         const notes = (typeof window.lookupAdminChangelog === 'function')
             ? window.lookupAdminChangelog(key)
             : ((window.ADMIN_CHANGELOG && window.ADMIN_CHANGELOG[key]) || null);
@@ -16340,24 +16381,26 @@ const Admin = {
         if (!modal) {
             modal = document.createElement('div');
             modal.id = 'admin-changelog-modal';
-            modal.className = 'fixed inset-0 bg-black/70 z-[160] hidden flex items-center justify-center p-4';
+            modal.className = 'fixed inset-0 bg-black/70 hidden flex items-center justify-center p-4';
+            modal.style.zIndex = '260';
             modal.innerHTML = `
-                <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-sm p-5 border border-gray-200 dark:border-gray-700">
+                <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-sm p-5 border border-gray-200 dark:border-gray-700 transform transition-transform scale-95">
                     <h3 id="admin-changelog-title" class="text-base font-black text-gray-900 dark:text-white mb-2"></h3>
                     <div id="admin-changelog-notes" class="text-sm text-gray-700 dark:text-gray-300 space-y-1.5 mb-4"></div>
                     <button type="button" id="admin-changelog-close" class="w-full bg-slate-700 hover:bg-slate-800 text-white font-bold py-2.5 rounded-xl">Close</button>
                 </div>`;
             document.body.appendChild(modal);
             modal.querySelector('#admin-changelog-close')?.addEventListener('click', () => {
-                if (typeof window.closeSmoothModal === 'function') window.closeSmoothModal('admin-changelog-modal');
+                if (typeof window.closeSmoothModal === 'function') window.closeSmoothModal('admin-changelog-modal', true);
                 else modal.classList.add('hidden');
             });
             modal.addEventListener('click', (e) => {
                 if (e.target !== modal) return;
-                if (typeof window.closeSmoothModal === 'function') window.closeSmoothModal('admin-changelog-modal');
+                if (typeof window.closeSmoothModal === 'function') window.closeSmoothModal('admin-changelog-modal', true);
                 else modal.classList.add('hidden');
             });
         }
+        modal.style.zIndex = '260';
         const title = modal.querySelector('#admin-changelog-title');
         const body = modal.querySelector('#admin-changelog-notes');
         if (title) title.textContent = key || 'Unknown version';
@@ -16368,8 +16411,11 @@ const Admin = {
                 body.innerHTML = `<ul class="list-disc pl-4 space-y-1">${notes.map((n) => `<li>${ntAdminSecureEscape(String(n))}</li>`).join('')}</ul>`;
             }
         }
-        if (typeof window.openSmoothModal === 'function') window.openSmoothModal('admin-changelog-modal');
-        else modal.classList.remove('hidden');
+        if (typeof window.openSmoothModal === 'function') {
+            window.openSmoothModal('admin-changelog-modal', null, { skipHash: true });
+        } else {
+            modal.classList.remove('hidden');
+        }
     },
 
     openScheduleQaDeltaModal: (finding) => {

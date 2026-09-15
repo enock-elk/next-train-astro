@@ -26,11 +26,12 @@ const CONFIG_JS = path.join(ROOT, 'src', 'lib', 'config.js');
 const DUMP = path.join(ROOT, 'public', 'data', 'full-database.json');
 const OUT_DIR = path.join(ROOT, 'public', 'tracks');
 
+// kumi answers reliably; the other mirrors currently hang or 406 on this query.
 const OVERPASS_URLS = [
+    'https://overpass.kumi.systems/api/interpreter',
+    'https://overpass-api.de/api/interpreter',
     'https://overpass.private.coffee/api/interpreter',
     'https://maps.mail.ru/osm/tools/overpass/api/interpreter',
-    'https://overpass-api.de/api/interpreter',
-    'https://overpass.kumi.systems/api/interpreter',
 ];
 
 /**
@@ -496,9 +497,21 @@ function detourTooLong(chordM, railM) {
 }
 
 /**
- * One continuous LineString through every stop in order.
- * A hop with no usable rail path keeps its straight chord, so the line never
- * teleports and never stops short of the terminus.
+ * One continuous LineString that stays on the rail.
+ *
+ * This used to push the raw station coordinate on both ends of every hop to
+ * "bridge the snap gap". Most Metrorail station coordinates sit beside the
+ * track rather than on it, so that produced a spike at every stop: the line ran
+ * along the rail, jumped sideways to touch the station, then jumped back. Rissik
+ * (908 m), Mzimhlope (1122 m) and Mayfair (566 m) were all that artefact, not
+ * real geometry.
+ *
+ * Smooth rail geometry wins over touching the station pin: stations decide
+ * which rail to follow and in what order, never where a vertex goes. Where two
+ * consecutive hops snap to different rail nodes the line joins those two rail
+ * points directly, which is a few metres of track rather than a detour to the
+ * platform. A hop with no usable rail path still keeps its straight chord so
+ * the line never teleports and never stops short of a terminus.
  */
 function buildRouteLine(graph, stops) {
     const coords = [];
@@ -523,10 +536,7 @@ function buildRouteLine(graph, stops) {
             const nodePath = shortestPath(graph, snap.a.id, snap.b.id, budgetM);
             if (nodePath && nodePath.length >= 2 && !detourTooLong(chordM, pathLengthM(graph, nodePath))) {
                 const seg = pathToCoords(graph, nodePath);
-                // Bridge the snap gap so the line stays continuous through the stop
-                if (!coords.length) coords.push([a.lon, a.lat]);
                 coords.push(...seg);
-                coords.push([b.lon, b.lat]);
                 snapped++;
                 continue;
             }

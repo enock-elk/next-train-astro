@@ -10,8 +10,6 @@ const SNAP_MAX_M = 900;
 const MAX_HOPS = 80000;
 /** Station coords may sit off the rail; still slice the bake within this. */
 const BAKED_COVER_M = 900;
-/** Draw a short stub from an off-track station onto the rail. */
-const STUB_MIN_M = 20;
 /**
  * Longest edge accepted from a baked line. The bake keeps a straight chord
  * where OSM has no rail (~3.2 km at most), so those edges must stay in the
@@ -419,6 +417,50 @@ function nearestPathIndexM(path, lat, lon, maxM = BAKED_COVER_M) {
     return bestD <= maxM ? best : -1;
 }
 
+/** How close the line must come back for a hop excursion to be a detour. */
+const HOP_RETURN_TOLERANCE_M = 40;
+
+/**
+ * Drop any part of a hop that leaves the corridor and comes back to where it
+ * left. A baked corridor is one LineString, so it cannot branch: KZN's Berea
+ * Road line runs Duff's Road -> Tembalihle -> kwaMashu and then doubles back to
+ * reach Bridge City, because the Duff's Road - Bridge City working is a fork off
+ * the kwaMashu line. Slicing Duff's Road -> Bridge City walked that whole branch
+ * and back, so a trip to Bridge City drew itself through kwaMashu.
+ *
+ * A hop runs between two consecutive stops, so it never needs to leave the
+ * corridor and return to the same point. Durban -> kwaMashu is untouched: that
+ * slice ends at kwaMashu and never returns.
+ */
+function dropOutAndBack(seg, toleranceM = HOP_RETURN_TOLERANCE_M) {
+    if (!Array.isArray(seg) || seg.length < 4) return seg;
+    let current = seg;
+    for (let pass = 0; pass < 6; pass++) {
+        const out = [];
+        let i = 0;
+        while (i < current.length) {
+            const [latA, lonA] = current[i];
+            let jump = -1;
+            for (let j = current.length - 1; j > i + 2; j--) {
+                if (haversineM(latA, lonA, current[j][0], current[j][1]) <= toleranceM) {
+                    let far = 0;
+                    for (let k = i; k <= j; k++) {
+                        const d = haversineM(latA, lonA, current[k][0], current[k][1]);
+                        if (d > far) far = d;
+                    }
+                    if (far > toleranceM) jump = j;
+                    break;
+                }
+            }
+            out.push(current[i]);
+            i = jump > i ? jump + 1 : i + 1;
+        }
+        if (out.length < 2 || out.length === current.length) return out.length > 1 ? out : current;
+        current = out;
+    }
+    return current;
+}
+
 /** Slice a baked corridor between two stops. Stations may sit off the rail. */
 function sliceBakedHop(feature, a, b) {
     const latlngs = featureLatLngs(feature);
@@ -427,7 +469,8 @@ function sliceBakedHop(feature, a, b) {
     const i2 = nearestPathIndexM(latlngs, b.lat, b.lon);
     if (i1 < 0 || i2 < 0) return null;
     if (i1 === i2) return null;
-    const seg = i1 < i2 ? latlngs.slice(i1, i2 + 1) : latlngs.slice(i2, i1 + 1).reverse();
+    const raw = i1 < i2 ? latlngs.slice(i1, i2 + 1) : latlngs.slice(i2, i1 + 1).reverse();
+    const seg = dropOutAndBack(raw);
     return seg.length > 1 ? seg : null;
 }
 
@@ -437,17 +480,19 @@ function appendPoint(out, lat, lon) {
     out.push([lat, lon]);
 }
 
-function appendSeg(out, seg, fromStop, toStop) {
+/**
+ * Append a rail segment and nothing else.
+ *
+ * This used to draw a stub from the stop onto the rail whenever the station sat
+ * more than 20 m off the track. Most Metrorail station coordinates sit beside
+ * the track, so the trip line ran along the rail, kicked sideways to the
+ * platform pin and kicked back -- a spike at almost every stop. Stops choose
+ * which rail to follow; they never contribute a vertex.
+ */
+function appendSeg(out, seg) {
     if (!seg || seg.length < 2) return;
-    if (fromStop && haversineM(fromStop.lat, fromStop.lon, seg[0][0], seg[0][1]) >= STUB_MIN_M) {
-        appendPoint(out, fromStop.lat, fromStop.lon);
-    }
     if (!out.length) out.push(...seg);
     else out.push(...seg.slice(1));
-    const end = seg[seg.length - 1];
-    if (toStop && haversineM(toStop.lat, toStop.lon, end[0], end[1]) >= STUB_MIN_M) {
-        appendPoint(out, toStop.lat, toStop.lon);
-    }
 }
 
 function graphHop(graph, a, b, stops, hopIndex) {
@@ -496,14 +541,14 @@ export async function smoothPathFromStops(stops, region = 'GP') {
         const baked = routeId && byId ? byId.get(routeId) : null;
         const bakedSeg = baked ? sliceBakedHop(baked, a, b) : null;
         if (bakedSeg) {
-            appendSeg(out, bakedSeg, a, b);
+            appendSeg(out, bakedSeg);
             railHops++;
             continue;
         }
 
         const graphSeg = graphHop(graph, a, b, stops, i);
         if (graphSeg) {
-            appendSeg(out, graphSeg, a, b);
+            appendSeg(out, graphSeg);
             railHops++;
             continue;
         }

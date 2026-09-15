@@ -11,10 +11,13 @@
  * Secrets: FIREBASE_PRIVATE_KEY (PEM; \n escaped OK)
  * Vars: FIREBASE_WEB_API_KEY, FIREBASE_DATABASE_URL, FIREBASE_CLIENT_EMAIL, …
  */
-import { classifyUnsafeLanguage } from '../../src/lib/content-safety-core.js';
+import {
+    classifyScamContent,
+    classifyUnsafeLanguage,
+    findDisallowedUrls,
+} from '../../src/lib/content-safety-core.js';
 
 const BODY_MAX = 280;
-const ALLOWED_HOST = /(^|\.)nexttrain\.co\.za$/i;
 const ADMIN_EMAILS = new Set(['enockelk@gmail.com', 'thandeka05nxumalo@gmail.com']);
 const JOHANNESBURG_OFFSET_MS = 2 * 60 * 60 * 1000;
 const ALERT_CRON = '*/5 * * * *';
@@ -80,32 +83,21 @@ function stripHtml(text) {
         .trim();
 }
 
-function hasDisallowedUrl(text) {
-    const re = /\b((?:https?:\/\/|www\.)[^\s]+|[a-z0-9-]+(?:\.[a-z0-9-]+)+(?:\.[a-z]{2,})(?:\/\S*)?)/gi;
-    let m;
-    while ((m = re.exec(text))) {
-        try {
-            const raw = m[1];
-            const host = new URL(/^https?:\/\//i.test(raw) ? raw : `https://${raw}`).hostname;
-            if (!ALLOWED_HOST.test(host)) return true;
-        } catch {
-            return true;
-        }
-    }
-    return false;
-}
-
-/** Keep nexttrain.co.za links; refuse other URLs / profanity at the edge. */
+/** Keep nexttrain.co.za links; refuse other URLs, scam packs, and profanity at the edge. */
 export function sanitizeBody(raw) {
     const text = stripHtml(raw);
-    if (hasDisallowedUrl(text)) {
+    if (findDisallowedUrls(text).length) {
+        return { ok: false, verdict: 'block', error: "Couldn't post that." };
+    }
+    const scam = classifyScamContent(text);
+    if (scam.block.length) {
         return { ok: false, verdict: 'block', error: "Couldn't post that." };
     }
     const safety = classifyUnsafeLanguage(text);
     if (safety.block.length) {
         return { ok: false, verdict: 'block', error: 'That language isn’t allowed. Please rewrite without swearing or slurs.' };
     }
-    if (safety.review.length) {
+    if (safety.review.length || scam.review.length) {
         const clipped = text.length > BODY_MAX ? text.slice(0, BODY_MAX) : text;
         return {
             ok: false,

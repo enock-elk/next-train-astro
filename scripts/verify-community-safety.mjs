@@ -55,6 +55,22 @@ const cases = [
     ['classic train service', 'allow'],
     ['the shift starts now', 'allow'],
     ['visit nexttrain.co.za/help', 'allow'],
+    ['visit www.nexttrain .co.za/help', 'allow'],
+    ['join me at Pretoria', 'allow'],
+    ['platform 2 is packed', 'allow'],
+    ['salary late this month', 'allow'],
+    ['trust the process, the 0618 will come', 'allow'],
+    ['weed on the tracks near Mears', 'allow'],
+    ['the lights have no electricity', 'allow'],
+    ['I need to invest time waiting', 'allow'],
+    ['chat . whatsapp . com/LNhd6dQTXXE5b2hI2xa9rE', 'block'],
+    ['https://chat.whatsapp.com/LNhd6dQTXXE5b2hI2xa9rE', 'block'],
+    ['BITCOIN INVESTMENT / MINING !!! The biggest secret of earning without labour, 100% legit and safe. Stay at home and invest with us. Your monthly salary won\'t make you Rich, join, trust the process invest your money here', 'block'],
+    ['INVEST $200 GET $2,000 forex trading', 'block'],
+    ['prepaid electricity units for sale', 'block'],
+    ['selling dagga at Koedoespoort', 'block'],
+    ['nyaope cheap', 'block'],
+    ['tik for sale tonight', 'block'],
 ];
 
 for (const [text, expected] of cases) {

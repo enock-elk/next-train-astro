@@ -6,42 +6,25 @@
  *   block  — do not send; tell the user why
  *   review — hold for admin (moderation tab); do not show publicly
  *
- * nexttrain.co.za links are allowed. Other URLs are blocked.
- * Profanity lists cover English plus common ZA slang (Afrikaans, Nguni, Sotho).
- * Masked / lookalike forms are treated as the same word. Weak matches → review.
+ * nexttrain.co.za links are allowed. Other URLs are blocked, including
+ * spaced evasions (www.nexttrain .co.za). Scam / selling packs are blocked
+ * without catching ordinary commute notes. Profanity lists cover English
+ * plus common ZA slang. Masked / lookalike forms match. Weak matches → review.
  */
-import { classifyUnsafeLanguage } from './content-safety-core.js';
+import {
+    ALLOWED_LINK_HOST,
+    classifyScamContent,
+    classifyUnsafeLanguage,
+    collapseSpacedUrlText,
+    findDisallowedUrls,
+} from './content-safety-core.js';
 
-export const ALLOWED_LINK_HOST = /(^|\.)nexttrain\.co\.za$/i;
-
-function extractUrls(text) {
-    const raw = String(text || '');
-    const found = [];
-    const re = /\b((?:https?:\/\/|www\.)[^\s<>"']+|[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+(?:\.[a-z]{2,})(?:\/[^\s<>"']*)?)/gi;
-    let m;
-    while ((m = re.exec(raw))) found.push(m[1]);
-    return found;
-}
-
-function hostOf(raw) {
-    try {
-        const withScheme = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
-        return new URL(withScheme).hostname.replace(/^www\./i, '');
-    } catch {
-        return '';
-    }
-}
-
-export function findDisallowedUrls(text) {
-    return extractUrls(text).filter((u) => {
-        const host = hostOf(u);
-        if (!host) return /https?:\/\//i.test(u) || /^www\./i.test(u);
-        if (ALLOWED_LINK_HOST.test(host)) return false;
-        // Bare nexttrain mention without extra TLD noise
-        if (/^nexttrain\.co\.za$/i.test(host)) return false;
-        return true;
-    });
-}
+export {
+    ALLOWED_LINK_HOST,
+    classifyScamContent,
+    collapseSpacedUrlText,
+    findDisallowedUrls,
+};
 
 /**
  * @param {string} text
@@ -67,6 +50,16 @@ export function checkContentSafety(text, { live = false, allowLinks = false } = 
     }
 
     const probe = live ? raw.replace(/\S+$/, (last) => (/\s$/.test(raw) ? last : '')) : raw;
+    const scam = classifyScamContent(live ? probe : raw);
+    if (scam.block.length) {
+        return {
+            ok: false,
+            verdict: 'block',
+            reason: 'scam',
+            message: "Couldn't post that.",
+        };
+    }
+
     const hits = classifyUnsafeLanguage(live ? probe : raw);
     if (hits.block.length) {
         return {
@@ -81,11 +74,11 @@ export function checkContentSafety(text, { live = false, allowLinks = false } = 
         return { ok: true, verdict: 'allow', reason: '', message: '' };
     }
 
-    if (hits.review.length) {
+    if (hits.review.length || scam.review.length) {
         return {
             ok: false,
             verdict: 'review',
-            reason: 'mild_or_ambiguous',
+            reason: scam.review.length ? 'scam_thin' : 'mild_or_ambiguous',
             message: 'We’re checking this message. It won’t appear until an admin approves it.',
         };
     }

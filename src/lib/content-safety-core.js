@@ -146,6 +146,105 @@ function obfuscatedWordHits(text, lexicon) {
     return hits;
 }
 
+export const ALLOWED_LINK_HOST = /(^|\.)nexttrain\.co\.za$/i;
+
+/**
+ * Collapse spaced URL evasions: `www.nexttrain .co.za`, `chat . whatsapp . com`,
+ * `http : // example.com`. Does not merge ordinary sentence punctuation.
+ */
+export function collapseSpacedUrlText(text) {
+    let s = String(text || '');
+    s = s.replace(/h\s*t\s*t\s*p\s*s?\s*:\s*\/\s*\//gi, (m) => m.replace(/\s+/g, ''));
+    s = s.replace(/\bwww\s*\./gi, 'www.');
+    for (let i = 0; i < 8; i += 1) {
+        const next = s
+            .replace(/([a-z0-9-])\s*\.\s*(?=[a-z0-9])/gi, '$1.')
+            .replace(/([a-z0-9.-])\s*\/\s*/g, '$1/')
+            .replace(/@\s+/g, '@');
+        if (next === s) break;
+        s = next;
+    }
+    return s;
+}
+
+function extractUrls(text) {
+    const raw = collapseSpacedUrlText(text);
+    const found = [];
+    const re = /\b((?:https?:\/\/|www\.)[^\s<>"']+|[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+(?:\.[a-z]{2,})(?:\/[^\s<>"']*)?)/gi;
+    let m;
+    while ((m = re.exec(raw))) found.push(m[1]);
+    return found;
+}
+
+function hostOf(raw) {
+    try {
+        const withScheme = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+        return new URL(withScheme).hostname.replace(/^www\./i, '');
+    } catch {
+        return '';
+    }
+}
+
+export function findDisallowedUrls(text) {
+    return extractUrls(text).filter((u) => {
+        const host = hostOf(u);
+        if (!host) return /https?:\/\//i.test(u) || /^www\./i.test(u);
+        if (ALLOWED_LINK_HOST.test(host)) return false;
+        if (/^nexttrain\.co\.za$/i.test(host)) return false;
+        return true;
+    });
+}
+
+function scamFold(text) {
+    return collapseSpacedUrlText(text)
+        .toLowerCase()
+        .normalize('NFKD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[‘’‚‛′`´]/g, "'")
+        .replace(/%/g, ' percent ')
+        .replace(/\$/g, ' dollars ')
+        .replace(/[^a-z0-9]+/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+/**
+ * Selling / scam packs. Phrase-level: a commuter can still say “join me”,
+ * “platform 2”, “salary late”, or “trust the process” about a late train.
+ */
+export function classifyScamContent(text) {
+    const folded = scamFold(text);
+    const block = [];
+    const review = [];
+    if (!folded) return { block, review };
+
+    const hit = (label, ok) => {
+        if (ok && !block.includes(label)) block.push(label);
+    };
+
+    hit('bitcoin', /\b(bitcoin|bit coin|btc)\b/.test(folded));
+    hit('forex', /\bforex\b/.test(folded));
+    hit('binary', /\bbinary\s*(fx|option|options)\b/.test(folded));
+    hit('crypto', /\bcrypto(currency)?\b/.test(folded) && /\b(invest|profit|trading|trade|mining)\b/.test(folded));
+    hit('invest-plan', /\binvest\b/.test(folded) && /\b(dollars|usd|get|profit)\b/.test(folded) && /\d{2,}/.test(folded));
+    hit('invest-pack', /\binvest\b/.test(folded) && /\b(mining|profit|legit|salary)\b/.test(folded));
+    hit('mining', /\bmining\b/.test(folded) && /\b(invest|profit|bitcoin|earn|labour|labor)\b/.test(folded));
+    hit('electricity-units', /\b(electricity|prepaid|elec)\b/.test(folded) && /\bunits?\b/.test(folded));
+    hit('units-sale', /\bunits?\b/.test(folded) && /\b(for sale|selling|buy)\b/.test(folded));
+    hit('drugs', /\b(nyaope|mandrax|cocaine|meth)\b/.test(folded));
+    hit('drugs-sale', /\b(dagga|weed)\b/.test(folded) && /\b(sale|selling|buy|sold)\b/.test(folded));
+    hit('tik', /\btik\b/.test(folded) && !/\btik\s*tok\b/.test(folded) && !/\btiktok\b/.test(folded));
+    hit('legit-scam', /\b100\s*percent\s*legit\b/.test(folded));
+    hit('trust-process', /\btrust the process\b/.test(folded) && /\b(invest|money|profit|bitcoin|salary)\b/.test(folded));
+    hit('salary-rich', /\bsalary\b/.test(folded) && /\brich\b/.test(folded) && /\b(invest|join|wont|will not|won t)\b/.test(folded));
+    hit('wa-invite', /\bwhatsapp\b/.test(folded) && /\b(group|invite)\b/.test(folded) && /\b(invest|bitcoin|forex|profit|trading|crypto)\b/.test(folded));
+
+    if (!block.length && /\binvest\b/.test(folded) && /\b(money|profit)\b/.test(folded)) {
+        review.push('invest-thin');
+    }
+    return { block, review };
+}
+
 /**
  * Return severe block hits and milder review hits.
  * Phrase matching tolerates punctuation, apostrophes, hyphens, whitespace,

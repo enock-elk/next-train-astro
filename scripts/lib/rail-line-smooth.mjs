@@ -56,7 +56,13 @@ export const MAX_PIN_BRIDGE_M = 600;
  * @param {Array<[number, number]>} coords [lon, lat][]
  * @param {Array<[number, number]>} stationCoords [lat, lon][]
  */
-export function stripStationPins(coords, stationCoords, { maxBridgeM = MAX_PIN_BRIDGE_M } = {}) {
+/** A terminus pin this close to the rail is a hook, not the end of the line. */
+export const MAX_TERMINUS_REACH_M = 150;
+
+export function stripStationPins(coords, stationCoords, {
+    maxBridgeM = MAX_PIN_BRIDGE_M,
+    maxTerminusReachM = MAX_TERMINUS_REACH_M,
+} = {}) {
     if (!Array.isArray(coords) || !Array.isArray(stationCoords)) return { coords, removed: 0 };
     const pins = new Set(
         stationCoords
@@ -72,13 +78,26 @@ export function stripStationPins(coords, stationCoords, { maxBridgeM = MAX_PIN_B
         if (pins.has(`${lat.toFixed(6)},${lon.toFixed(6)}`)) {
             const prev = kept[kept.length - 1];
             const next = coords[i + 1];
-            // A terminus pin is the only thing holding the line out to the end
-            // of the corridor, and it cannot spike because nothing returns from
-            // it. De Wildt sits 2.9 km past the last OSM rail; dropping it left
-            // the corridor stopping short.
-            if (prev && next && haversineM(prev[1], prev[0], next[1], next[0]) <= maxBridgeM) {
-                removed++;
-                continue;
+            if (prev && next) {
+                // Interior pin: drop it when the rail either side is close
+                // enough that the pin is a sideways kick. A pin that carries a
+                // chord hop, where OSM simply has no rail, brackets kilometres
+                // and has to stay or the corridor stops short.
+                if (haversineM(prev[1], prev[0], next[1], next[0]) <= maxBridgeM) {
+                    removed++;
+                    continue;
+                }
+            } else {
+                // Terminus pin. Keep it only when it is genuinely holding the
+                // line out to the end of the corridor: De Wildt sits 2.9 km
+                // past the last OSM rail. Where the rail already reaches the
+                // station, as at Pretoria, the pin only adds a hook back on
+                // itself, which is the reversal seen at four Pretoria routes.
+                const neighbour = prev || next;
+                if (neighbour && haversineM(neighbour[1], neighbour[0], lat, lon) <= maxTerminusReachM) {
+                    removed++;
+                    continue;
+                }
             }
         }
         const last = kept[kept.length - 1];

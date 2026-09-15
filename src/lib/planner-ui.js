@@ -371,12 +371,14 @@ export function computeZoneFareForTrip(zoneCode, trip = {}) {
         }
     }
     const multiplier = useOffPeak ? profile.offPeak : profile.base;
-    let finalPrice = FARE_CONFIG.zones[zoneCode] * multiplier;
-    finalPrice = roundBoardFare(finalPrice);
+    const rawPrice = FARE_CONFIG.zones[zoneCode] * multiplier;
+    const finalPrice = roundBoardFare(rawPrice);
     return {
         zone: zoneCode,
         price: finalPrice,
+        rawPrice,
         priceLabel: formatBoardFareLabel(finalPrice),
+        rawPriceLabel: formatRawFareLabel(rawPrice),
         isOffPeak: useOffPeak,
         dayType,
         depTime: trip.depTime || '',
@@ -394,6 +396,14 @@ function roundBoardFare(raw) {
 
 function formatBoardFareLabel(raw) {
     return String(roundBoardFare(raw));
+}
+
+function formatRawFareLabel(raw) {
+    const n = Number(raw);
+    if (!Number.isFinite(n)) return '0';
+    const rounded = Math.round(n * 100) / 100;
+    if (Number.isInteger(rounded)) return String(rounded);
+    return String(rounded);
 }
 
 function plannerMoneySvg(className = 'w-3.5 h-3.5') {
@@ -532,6 +542,17 @@ function fillPlannerFareBreakdown(trip, { km, crowKm, zone, fare } = {}) {
     const body = document.getElementById('planner-fare-breakdown-body');
     if (!body || !fare) return;
     lastPlannerFareContext = { trip, km, crowKm, zone, fare };
+    const fareOdStation = (s) => String(s || '')
+        .replace(/ STATION$/i, '')
+        .trim()
+        .toLowerCase()
+        .replace(/\b\w/g, (c) => c.toUpperCase());
+    const origin = fareOdStation(plannerFareVoteOrigin(trip));
+    const dest = fareOdStation(plannerFareVoteDestination(trip));
+    const odEl = document.getElementById('planner-fare-od');
+    if (odEl) {
+        odEl.textContent = origin && dest ? `${origin} -> ${dest}` : '';
+    }
     const band = ZONE_KM_RANGE_LABELS[zone] || '';
     const dayLabel = fare.dayType === 'saturday' ? 'Saturday'
         : fare.dayType === 'sunday' ? 'Sunday'
@@ -580,7 +601,7 @@ function fillPlannerFareBreakdown(trip, { km, crowKm, zone, fare } = {}) {
             <div class="flex justify-between gap-3"><dt class="text-gray-500 dark:text-gray-400">Zone</dt><dd class="font-bold">${escapeHTML(zone || '-')}${band ? ` <span class="font-medium text-gray-500 dark:text-gray-400">(${escapeHTML(band)})</span>` : ''}</dd></div>
             <div class="flex justify-between gap-3"><dt class="text-gray-500 dark:text-gray-400">Peak / off-peak</dt><dd class="font-bold">${escapeHTML(peakLabel)} <span class="font-medium text-gray-500 dark:text-gray-400">${escapeHTML(dayLabel)}${depLabel ? ` ${escapeHTML(depLabel)}` : ''}</span></dd></div>
             <div class="flex justify-between gap-3 items-center"><dt class="text-gray-500 dark:text-gray-400">Profile</dt><dd><button type="button" id="planner-fare-profile-btn" class="font-bold text-blue-600 dark:text-blue-400 underline decoration-dotted underline-offset-2 hover:text-blue-700 dark:hover:text-blue-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 rounded px-1">${profileLabel}</button></dd></div>
-            <div class="flex justify-between gap-3 pt-2 border-t border-gray-100 dark:border-gray-800"><dt class="text-gray-500 dark:text-gray-400">Fare</dt><dd class="font-black text-gray-900 dark:text-white">R${escapeHTML(fare.priceLabel)}</dd></div>
+            <div class="flex justify-between gap-3 pt-2 border-t border-gray-100 dark:border-gray-800"><dt class="text-gray-500 dark:text-gray-400">Fare</dt><dd><button type="button" id="planner-fare-raw-toggle" class="font-black text-gray-900 dark:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 rounded" aria-pressed="false" title="Show calculated price">R${escapeHTML(fare.priceLabel)}</button></dd></div>
         </dl>
         ${voteHtml}
     `;
@@ -589,6 +610,17 @@ function fillPlannerFareBreakdown(trip, { km, crowKm, zone, fare } = {}) {
         ev.stopPropagation();
         openPassengerTypePicker();
     });
+    const rawBtn = document.getElementById('planner-fare-raw-toggle');
+    if (rawBtn && fare.rawPriceLabel && fare.rawPriceLabel !== fare.priceLabel) {
+        rawBtn.addEventListener('click', (ev) => {
+            ev.preventDefault();
+            ev.stopPropagation();
+            const showingRaw = rawBtn.getAttribute('aria-pressed') === 'true';
+            rawBtn.setAttribute('aria-pressed', showingRaw ? 'false' : 'true');
+            rawBtn.textContent = showingRaw ? `R${fare.priceLabel}` : `R${fare.rawPriceLabel}`;
+            rawBtn.title = showingRaw ? 'Show calculated price' : 'Show board price';
+        });
+    }
     if (showVote) bindPlannerFareVote(trip, { km, crowKm, zone, fare });
 }
 
@@ -3452,6 +3484,9 @@ export function initPlanner() {
     const closeFareSheet = () => closeSmoothModal('planner-fare-breakdown-sheet');
     document.getElementById('planner-fare-breakdown-close')?.addEventListener('click', closeFareSheet);
     document.getElementById('planner-fare-breakdown-done')?.addEventListener('click', closeFareSheet);
+    document.getElementById('planner-fare-breakdown-sheet')?.addEventListener('click', (ev) => {
+        if (ev.target === ev.currentTarget) closeFareSheet();
+    });
 
     if (typeof window !== 'undefined' && !window.__ntPlannerFareReactionsBound) {
         window.__ntPlannerFareReactionsBound = true;

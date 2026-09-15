@@ -178,6 +178,7 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
           // white/black tray under the floating pill while the system nav
           // already sat outside the webview.
           var sys = env;
+          if (!markStandalone()) sys = 0;
           if (Math.abs(h - lastH) >= 1) {
             lastH = h;
             root.style.setProperty('--nt-app-h', h + 'px');
@@ -822,6 +823,7 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
       html.nt-in-app, html.nt-in-app body {
         height: var(--nt-app-h, 100svh);
         overflow: hidden;
+        background-color: var(--nt-chrome-header, #1d4ed8);
       }
 
       /* Viewport-locked frame: only #app-scroll moves. Bottom nav never leaves
@@ -968,14 +970,22 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
         opacity: 0;
         transform: translateY(10px);
       }
-      /* Oval floats over the board canvas — no shell tray behind the pill. */
+      /* Oval floats over the board canvas — no shell tray behind the pill.
+         Safari (not Add to Home Screen) already sits above the home indicator;
+         lifting the oval by env(safe-area-inset-bottom) left a white strip. */
       html.nt-in-app body.nav-bottom:not(.nt-immersive) #bottom-nav.bottom-nav-bar {
         position: absolute;
         left: 0.75rem;
         right: 0.75rem;
-        bottom: var(--nt-sys-bottom, env(safe-area-inset-bottom, 0px));
+        bottom: 0;
         margin: 0;
         z-index: 110;
+      }
+      html.nt-standalone.nt-in-app body.nav-bottom:not(.nt-immersive) #bottom-nav.bottom-nav-bar {
+        bottom: var(--nt-sys-bottom, env(safe-area-inset-bottom, 0px));
+      }
+      html.nt-standalone.nt-in-app body.nav-bottom:not(.nt-immersive) #nt-shell {
+        background-color: var(--nt-chrome-header);
       }
       /* Keyboard open: keep the oval at the layout bottom (under the keys), never ride up. */
       html.nt-keyboard.nt-in-app body.nav-bottom:not(.nt-immersive) #bottom-nav.bottom-nav-bar {

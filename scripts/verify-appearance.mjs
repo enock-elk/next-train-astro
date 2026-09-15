@@ -416,7 +416,8 @@ assert(hubJs.includes('window.visualViewport?.height || window.innerHeight'), 'f
 assert(hubJs.includes('Always show contact + privacy lock'), 'Feedback Hub contact row stays visible when signed in');
 assert(!/if \(signedIn\) \{[\s\S]{0,80}row\.classList\.add\('hidden'\)/.test(hubJs), 'signed-in contact row is not hidden');
 assert(hubJs.includes('resetLookToClassicLight'), 'Check for Updates resets look to Classic light');
-assert(hubJs.includes('window.__ntOpenNetworkMapSheet'), 'Map tab fullscreen opens the in-app sheet');
+assert(hubJs.includes('window.__ntOpenNetworkMapSheet'), 'sidenav Network Map still opens the in-app sheet');
+assert(hubJs.includes('window.__ntFullscreenMapTab'), 'Map tab fullscreen stays on the tracking map');
 assert(hubJs.includes('window.__ntInAppSheetOpen = true'), 'in-app sheet open flag is set');
 assert(hubJs.includes('min-h-[2.25rem]'), 'sheet Back uses the same 2.25rem box as map chrome');
 assert(!hubJs.includes('py-2.5 px-4 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none'), 'sheet Back dropped the taller py-2.5 padding');
@@ -435,7 +436,9 @@ assert(layout.includes('window.ntFitAppViewport'), 'Layout exposes ntFitAppViewp
 assert(layout.includes('--nt-sys-bottom'), 'Layout still measures --nt-sys-bottom for the pill offset');
 assert(!layout.includes('pinBottomNav'), 'bottom nav has no synthetic geometry pin');
 assert(!layout.includes('--nt-nav-lift'), 'bottom nav has no synthetic lift token');
-assert(layout.includes('bottom: var(--nt-sys-bottom, env(safe-area-inset-bottom, 0px));'), 'oval uses only the measured system inset');
+assert(layout.includes('html.nt-standalone.nt-in-app body.nav-bottom:not(.nt-immersive) #bottom-nav.bottom-nav-bar'), 'standalone oval clears the home indicator');
+assert(layout.includes('bottom: var(--nt-sys-bottom, env(safe-area-inset-bottom, 0px));'), 'oval uses only the measured system inset on standalone');
+assert(layout.includes('if (!markStandalone()) sys = 0'), 'Safari does not lift the oval by the home-indicator inset');
 assert(layout.includes('100svh'), 'shell first-paint height falls back to 100svh');
 assert(layout.includes('Never use Math.max(inner, client)'), 'shell height never grows past the visible frame');
 assert(layout.includes('--nt-vv-h'), 'layout exposes visual viewport height for keyboard overlays');

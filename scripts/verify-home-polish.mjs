@@ -366,6 +366,13 @@ assert(hubModals.includes('id="nt-admin-publish-train"'), 'admin nearby sheet ca
     assert(!mapApp.includes('liveTrainShareLine'), 'map glyph does not print You’re sharing');
     assert(mapApp.includes('nt-map-open-timetable'), 'map popup can open the train timetable');
     assert(mapApp.includes("z < 11"), 'map train glyph is compact below zoom 11');
+    assert(mapApp.includes('nt-live-train-wrap--far'), 'zoomed-out train glyph has a far size');
+    assert(mapApp.includes('bearingsOppose'), 'opposite trains offset off the same rail');
+    assert(mapApp.includes('nt-station-callout'), 'station names move aside of a covering train');
+    assert(mapTab.includes('bindTrackingRestoreDrag'), 'tracking chip can be moved around the map');
+    assert(ridePings.includes("title: 'Have you left this train?'"), 'share asks after walking off the last station');
+    assert(mapPage.includes('__ntFullscreenMapTab'), 'map fullscreen button does not open the basic network map');
+    assert(!mapPage.includes('__ntOpenNetworkMapSheet()'), 'map fullscreen no longer opens the sidenav network map');
     assert(mapPage.includes('nt-live-train-halo'), 'map train ring animation is slow and faint');
     assert(mapPage.includes('overflow: visible'), 'leaflet icon does not clip the pulse');
     assert(mapPage.includes('nt-live-train-num'), 'map page styles the train number');
@@ -418,6 +425,15 @@ assert(hubModals.includes('id="nt-admin-publish-train"'), 'admin nearby sheet ca
     assert(adminCl.includes('listAdminChangelogVersions'), 'build notes list merges What’s New versions');
     assert(adminJs.includes('ntAdminSecureEscape'), 'build notes escape helper is in scope');
 }
+assert(hubModals.includes('id="account-session-actions"'), 'Account sign out sits in a bottom session block');
+assert(
+    hubModals.indexOf('id="account-settings-host"') < hubModals.indexOf('id="account-signout-btn"'),
+    'Sign out is below Account settings',
+);
+assert(
+    hubModals.indexOf('id="account-signout-btn"') < hubModals.indexOf('privacy.html'),
+    'Sign out is above the Account legal links',
+);
 assert(hubModals.includes('privacy.html') && hubModals.includes('terms.html') && hubModals.includes('Privacy Policy') && hubModals.includes('Terms of Use'), 'account footer links the public privacy and terms pages');
 assert(!hubModals.includes('Bronze · 0 marks'), 'account uses points, not marks');
 const riderMarks = readFileSync(new URL('../src/lib/rider-marks.js', import.meta.url), 'utf8');

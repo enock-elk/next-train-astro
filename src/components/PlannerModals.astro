@@ -184,12 +184,15 @@ import { withBase } from '../lib/config.js';
 <!-- PLANNER FARE BREAKDOWN (beta / admin) -->
 <div id="planner-fare-breakdown-sheet" class="fixed inset-0 left-0 right-0 bg-gray-900/60 z-[135] hidden flex items-end justify-center p-0 backdrop-blur-md transition-opacity duration-300">
     <div class="bg-white dark:bg-gray-900 rounded-t-2xl shadow-2xl w-full max-w-md max-h-[88dvh] flex flex-col overflow-hidden border border-gray-200 dark:border-gray-700 border-b-0 transform transition-transform duration-300 scale-95">
-        <div class="p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center shrink-0">
-            <h3 class="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                <svg class="w-5 h-5 shrink-0 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7.5h13.5A1.5 1.5 0 0118 9v9a1.5 1.5 0 01-1.5 1.5H3A1.5 1.5 0 011.5 18V9A1.5 1.5 0 013 7.5z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 7.5V6A1.5 1.5 0 017.5 4.5H21A1.5 1.5 0 0122.5 6v9A1.5 1.5 0 0121 16.5h-3"/><circle cx="10.5" cy="13.5" r="1.75"/></svg>
-                Trip fare
-            </h3>
-            <button type="button" id="planner-fare-breakdown-close" class="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition focus:outline-none" aria-label="Close fare">
+        <div class="p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-start shrink-0 gap-3">
+            <div class="min-w-0">
+                <h3 class="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                    <svg class="w-5 h-5 shrink-0 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7.5h13.5A1.5 1.5 0 0118 9v9a1.5 1.5 0 01-1.5 1.5H3A1.5 1.5 0 011.5 18V9A1.5 1.5 0 013 7.5z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 7.5V6A1.5 1.5 0 017.5 4.5H21A1.5 1.5 0 0122.5 6v9A1.5 1.5 0 0121 16.5h-3"/><circle cx="10.5" cy="13.5" r="1.75"/></svg>
+                    Trip fare
+                </h3>
+                <p id="planner-fare-od" class="mt-0.5 text-sm font-normal text-gray-500 dark:text-gray-400 truncate"></p>
+            </div>
+            <button type="button" id="planner-fare-breakdown-close" class="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition focus:outline-none shrink-0" aria-label="Close fare">
                 <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
             </button>
         </div>

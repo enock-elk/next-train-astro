@@ -375,6 +375,8 @@ export function syncAccountSettingsUi(state = $account.get()) {
     if (avatarEl) avatarEl.setAttribute('data-signed-in', signed ? 'true' : 'false');
     if (signedBlock) signedBlock.classList.toggle('hidden', !signed);
     if (guestBlock) guestBlock.classList.toggle('hidden', signed || state.status === 'loading');
+    const sessionActions = document.getElementById('account-session-actions');
+    if (sessionActions) sessionActions.classList.toggle('hidden', !signed);
     const deleteWrap = document.getElementById('account-delete-wrap');
     const operatorDeleteNote = document.getElementById('account-operator-delete-note');
     const isOperator = signed && isAdminEmail(state.email);

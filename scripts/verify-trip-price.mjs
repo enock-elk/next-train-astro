@@ -40,6 +40,7 @@ assert(FARE_CONFIG.offPeakEveryDay === false, 'off-peak is weekday-only');
     const wk = computeZoneFareForTrip('Z2', { dayType: 'weekday', depTime: '11:00' });
     assert(wk && wk.isOffPeak === true, `weekday 11:00 must be off-peak, got ${JSON.stringify(wk)}`);
     assert(wk.price === 7 && wk.priceLabel === '7', `Z2 weekday off-peak floors R7.50 to R7, got ${JSON.stringify(wk)}`);
+    assert(wk.rawPrice > wk.price, 'fare sheet can reveal the unrounded calculated price');
     const peak = computeZoneFareForTrip('Z2', { dayType: 'weekday', depTime: '07:30' });
     assert(peak && peak.isOffPeak === false, `weekday 07:30 must be peak, got ${JSON.stringify(peak)}`);
 }
@@ -75,8 +76,11 @@ assert(ui.includes('planner-fare-breakdown-sheet'), 'fare sheet is wired');
 
 const modal = readFileSync(join(ROOT, 'src/components/PlannerModals.astro'), 'utf8');
 assert(modal.includes('id="planner-fare-breakdown-sheet"'), 'fare bottom sheet markup exists');
+assert(modal.includes('id="planner-fare-od"'), 'fare sheet shows origin to destination');
 assert(modal.includes('The price algorithm is still being developed and tested, so it may not be accurate.'), 'fare sheet warns the algorithm is experimental');
 assert(modal.includes('Trip fare') && modal.includes('M3 7.5h13.5'), 'Trip fare title has a money SVG on the left');
+assert(ui.includes("ev.target === ev.currentTarget"), 'tapping the blurred fare overlay closes the sheet');
+assert(ui.includes('planner-fare-raw-toggle'), 'tapping the fare amount reveals the raw calculated price');
 
 if (failures.length) {
     console.error(`verify-trip-price: ${failures.length} failed`);

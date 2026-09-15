@@ -27,6 +27,7 @@
                         <select id="community-route-select" class="sr-only" tabindex="-1" aria-hidden="true"></select>
                         <button type="button" id="community-route-trigger" class="w-full flex items-center justify-between gap-2 px-3 py-2 rounded-xl bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 text-left shadow-sm hover:border-blue-300 dark:hover:border-blue-600 hover:bg-white dark:hover:bg-gray-800/80 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500" aria-haspopup="listbox" aria-expanded="false">
                             <span id="community-route-display" class="text-sm sm:text-base font-black text-gray-900 dark:text-white tracking-tight truncate leading-tight">Select route</span>
+                            <span id="community-route-unread" class="community-room-unread hidden">0</span>
                             <svg id="community-route-chevron" class="w-4 h-4 text-gray-400 shrink-0 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
                         </button>
                         <ul id="community-route-list" role="listbox" class="absolute z-30 left-0 right-0 mt-1.5 max-h-[min(50vh,20rem)] overflow-y-auto custom-scrollbar isolate bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-xl shadow-2xl hidden flex-col text-left"></ul>
@@ -64,6 +65,7 @@
                 </button>
             </div>
             <p id="community-error" class="text-xs font-bold text-red-600 dark:text-red-400 mb-1 empty:hidden empty:mb-0"></p>
+            <p id="community-quota-hint" hidden style="font-size:9px;margin:0 0 4px;line-height:1.2"></p>
             <div class="flex gap-2 items-end">
                 <textarea id="community-composer" rows="1" maxlength="280" class="flex-1 min-w-0 min-h-[2.75rem] py-2 px-3 rounded-xl bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-sm text-left text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none resize-none" placeholder="Sign in to post"></textarea>
                 <button type="button" id="community-post-btn" class="shrink-0 h-[2.75rem] px-3.5 min-w-[3.25rem] rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold shadow-sm focus:outline-none disabled:opacity-50">Post</button>
@@ -219,5 +221,21 @@
   .dark .community-reaction-pill {
     background: #111827;
     border-color: #374151;
+  }
+  .community-room-unread {
+    margin-left: auto;
+    min-width: 1.1rem;
+    height: 1.1rem;
+    padding: 0 0.3rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    background: #ef4444;
+    color: #fff;
+    font-size: 9px;
+    font-weight: 800;
+    line-height: 1;
+    flex-shrink: 0;
   }
 </style>

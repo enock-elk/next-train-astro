@@ -44,6 +44,11 @@ const AUTH_COOLDOWN_MS = 20 * 1000;
 let postsUnsub = null;
 /** @type {string | null} */
 let postsListenRouteId = null;
+/** @type {(() => void) | null} */
+let reactionsUnsub = null;
+/** @type {string | null} */
+let reactionsListenRouteId = null;
+let reactionsPollTimer = null;
 /** Skip full "Loading…" flash on realtime patches */
 let feedSilentRepaint = false;
 
@@ -75,8 +80,12 @@ const expandedReactionPosts = new Set();
 /** Guest hint dismissed for current Community visit only */
 let guestHintDismissedThisOpen = false;
 let unreadPollTimer = null;
+let quotaHintTimer = null;
 const UNREAD_SEEN_PREFIX = 'communityLastSeen_';
+const LAST_ROOM_PREFIX = 'communityLastRoom_';
 const UNREAD_POLL_MS = 60 * 1000;
+/** @type {Record<string, number>} */
+let cachedUnreadByRoute = {};
 
 /** @type {Record<string, object[]>} local-only posts for shadow-banned authors */
 const localOverlayByRoute = {};
@@ -209,6 +218,24 @@ async function publicCommuterPhoto(acct) {
 /** @type {{ postId: string, routeId: string, displayName: string, body: string } | null} */
 let replyDraft = null;
 
+function getLastCommunityRoom() {
+    const region = $userRegion.get() || 'GP';
+    const id = safeStorage.getItem(LAST_ROOM_PREFIX + region) || '';
+    return id && ROUTES[id] ? id : '';
+}
+
+function setLastCommunityRoom(routeId) {
+    const region = $userRegion.get() || 'GP';
+    if (!routeId || !ROUTES[routeId]) return;
+    safeStorage.setItem(LAST_ROOM_PREFIX + region, routeId);
+}
+
+function syncReplyDraftForRoute(routeId) {
+    if (replyDraft && routeId && replyDraft.routeId && replyDraft.routeId !== routeId) {
+        clearReplyDraft();
+    }
+}
+
 function setReplyDraft(post, routeId) {
     if (!post?.postId) {
         clearReplyDraft();
@@ -271,6 +298,77 @@ function stopRealtimePosts() {
     }
     postsUnsub = null;
     postsListenRouteId = null;
+    stopRealtimeReactions();
+}
+
+function stopRealtimeReactions() {
+    if (typeof reactionsUnsub === 'function') {
+        try { reactionsUnsub(); } catch { /* ignore */ }
+    }
+    reactionsUnsub = null;
+    reactionsListenRouteId = null;
+    if (reactionsPollTimer) {
+        clearInterval(reactionsPollTimer);
+        reactionsPollTimer = null;
+    }
+}
+
+async function applyReactionsMap(routeId, reactionsMap) {
+    cachedReactionsByPost = reactionsMap && typeof reactionsMap === 'object' ? reactionsMap : {};
+    feedSilentRepaint = true;
+    applyFeedFilter(routeId);
+    feedSilentRepaint = false;
+}
+
+function startReactionsPoll(routeId) {
+    if (reactionsPollTimer) clearInterval(reactionsPollTimer);
+    const tick = async () => {
+        const viewing = document.getElementById('community-route-select')?.value || postsListenRouteId;
+        if (viewing !== routeId) return;
+        const map = await fetchPostReactions(routeId, cachedFeedPosts.map((p) => p.postId));
+        await applyReactionsMap(routeId, map);
+    };
+    tick();
+    reactionsPollTimer = setInterval(tick, 15000);
+}
+
+/**
+ * Live RTDB reactions when the parent node is readable. Falls back to
+ * per-post REST (works with path-exact .read on $postId) if the parent listen fails.
+ */
+async function startRealtimeReactions(routeId) {
+    stopRealtimeReactions();
+    if (!routeId) return false;
+    await bootFirebase();
+    if (window.firebaseDb && window.firebaseDbRef && window.firebaseDbOnValue) {
+        try {
+            const ref = window.firebaseDbRef(
+                window.firebaseDb,
+                `route_community/${routeId}/post_reactions`
+            );
+            reactionsListenRouteId = routeId;
+            reactionsUnsub = window.firebaseDbOnValue(ref, (snap) => {
+                if (reactionsListenRouteId !== routeId) return;
+                cachedReactionsByPost = snap?.val?.() || {};
+                if (!cachedReactionsByPost || typeof cachedReactionsByPost !== 'object') {
+                    cachedReactionsByPost = {};
+                }
+                feedSilentRepaint = true;
+                applyFeedFilter(routeId);
+                feedSilentRepaint = false;
+            }, (err) => {
+                console.warn('Community reactions listener failed; polling REST', err);
+                reactionsUnsub = null;
+                reactionsListenRouteId = null;
+                startReactionsPoll(routeId);
+            });
+            return true;
+        } catch (e) {
+            console.warn('Community reactions start failed', e);
+        }
+    }
+    startReactionsPoll(routeId);
+    return false;
 }
 
 /**
@@ -317,10 +415,8 @@ async function startRealtimePosts(routeId) {
             feedSilentRepaint = true;
             applyFeedFilter(routeId);
             feedSilentRepaint = false;
-            // Keep unread badge honest while room is open
-            if (safeStorage.getItem('activeTab') === 'community'
-                && (routeId === getPinnedRouteId() || isAdminAuthed())) {
-                markCommunityRouteSeen(routeId);
+            if (safeStorage.getItem('activeTab') === 'community') {
+                markCommunityRouteSeen(routeId, { silent: true });
             }
         }, (err) => {
             console.warn('Community realtime listener failed; falling back to REST', err);
@@ -747,16 +843,39 @@ function routeLabel(routeId) {
     return formatRouteDisplayName(ROUTES[routeId]?.name || routeId || 'Route');
 }
 
-export async function fetchPostReactions(routeId) {
+export async function fetchPostReactions(routeId, postIds = null) {
     if (!routeId || !navigator.onLine) return {};
     try {
         const q = await authQuery();
         const res = await fetch(
             `${DYNAMIC_BASE_URL}route_community/${encodeURIComponent(routeId)}/post_reactions.json${q}`
         );
-        if (!res.ok) return {};
-        const data = await res.json();
-        return data && typeof data === 'object' ? data : {};
+        if (res.ok) {
+            const data = await res.json();
+            return data && typeof data === 'object' ? data : {};
+        }
+        const ids = (Array.isArray(postIds) && postIds.length
+            ? postIds
+            : cachedFeedPosts.map((p) => p.postId)
+        ).filter(Boolean);
+        if (!ids.length) return {};
+        const pairs = await Promise.all(ids.map(async (postId) => {
+            try {
+                const r = await fetch(
+                    `${DYNAMIC_BASE_URL}route_community/${encodeURIComponent(routeId)}/post_reactions/${encodeURIComponent(postId)}.json${q}`
+                );
+                if (!r.ok) return [postId, null];
+                const data = await r.json();
+                return [postId, data && typeof data === 'object' ? data : null];
+            } catch {
+                return [postId, null];
+            }
+        }));
+        const out = {};
+        pairs.forEach(([id, map]) => {
+            if (map) out[id] = map;
+        });
+        return out;
     } catch {
         return {};
     }
@@ -1012,7 +1131,7 @@ function wireCommunityChatGestures(listEl) {
         }
     }, { passive: true });
 
-    listEl.addEventListener('touchend', () => {
+    listEl.addEventListener('touchend', (e) => {
         clearLong();
         if (!activeRow) return;
         const row = activeRow;
@@ -1020,6 +1139,9 @@ function wireCommunityChatGestures(listEl) {
         row.classList.remove('is-swiping', 'is-pressing');
         row.style.transform = '';
         delete row.dataset.swipeDx;
+        if (dx >= 12) {
+            e.stopPropagation();
+        }
         if (!longFired && dx >= 48) {
             const postId = row.getAttribute('data-post-id');
             const routeId = row.getAttribute('data-route');
@@ -1057,6 +1179,20 @@ function getPinnedRouteId() {
     return safeStorage.getItem('defaultRoute_' + region) || '';
 }
 
+function regionCommunityRoutes() {
+    const region = $userRegion.get() || 'GP';
+    return Object.values(ROUTES).filter((r) => r.isActive && r.region === region && r.id !== 'special_event');
+}
+
+function viewingCommunityRouteId() {
+    if (safeStorage.getItem('activeTab') !== 'community') return '';
+    return document.getElementById('community-route-select')?.value
+        || getLastCommunityRoom()
+        || $currentRouteId.get()
+        || getPinnedRouteId()
+        || '';
+}
+
 function unreadSeenKey(routeId) {
     return UNREAD_SEEN_PREFIX + routeId;
 }
@@ -1068,11 +1204,12 @@ function getLastSeen(routeId) {
     return Number.isFinite(n) ? n : 0;
 }
 
-export async function markCommunityRouteSeen(routeId = getPinnedRouteId()) {
+export async function markCommunityRouteSeen(routeId = getPinnedRouteId(), opts = {}) {
     if (!routeId) return;
     const seenAt = Date.now();
     safeStorage.setItem(unreadSeenKey(routeId), String(seenAt));
-    paintCommunityUnreadBadge(0);
+    cachedUnreadByRoute[routeId] = 0;
+    if (!opts.silent) paintUnreadFromCache();
     if (!isAdminAuthed()) return;
     try {
         const acct = $account.get();
@@ -1092,46 +1229,52 @@ export async function markCommunityRouteSeen(routeId = getPinnedRouteId()) {
     }
 }
 
-function paintCommunityUnreadBadge(count) {
+function paintUnreadFromCache() {
+    const rooms = Object.entries(cachedUnreadByRoute)
+        .filter(([, n]) => n > 0)
+        .map(([id, n]) => ({ id, n, label: routeLabel(id) }));
+    const total = rooms.reduce((sum, r) => sum + r.n, 0);
+    paintCommunityUnreadBadge(total, rooms);
+    const rid = document.getElementById('community-route-select')?.value;
+    if (rid || document.getElementById('community-route-list')) {
+        syncCommunityRoutePicker(rid);
+    }
+}
+
+function paintCommunityUnreadBadge(count, rooms = []) {
     const labels = [document.getElementById('community-unread-badge'), document.getElementById('community-unread-badge-top')];
     const n = Math.max(0, Number(count) || 0);
     const text = n > 99 ? '99+' : String(n);
+    const roomNames = rooms.map((r) => r.label).filter(Boolean);
+    const hint = roomNames.length
+        ? (roomNames.length === 1
+            ? `${n} unread on ${roomNames[0]}`
+            : `${n} unread: ${roomNames.join(', ')}`)
+        : '';
     labels.forEach((el) => {
         if (!el) return;
         if (n <= 0) {
             el.classList.add('hidden');
             el.textContent = '0';
+            el.removeAttribute('title');
         } else {
             el.classList.remove('hidden');
             el.textContent = text;
+            if (hint) el.setAttribute('title', hint);
         }
     });
     const bottom = document.getElementById('bottom-nav-community');
     if (bottom) {
         bottom.setAttribute('aria-label', n > 0
-            ? `Community - ${n} unread on pinned route`
+            ? `Community - ${hint || `${n} unread`}`
             : 'Community - route feed');
+        if (hint) bottom.setAttribute('title', hint);
+        else bottom.removeAttribute('title');
     }
 }
 
-/**
- * Count unread posts on the user's pinned route (newer than last visit).
- */
-export async function refreshCommunityUnreadBadge() {
-    const routeId = getPinnedRouteId();
-    if (!routeId || !ROUTES[routeId]) {
-        paintCommunityUnreadBadge(0);
-        return 0;
-    }
-    // While viewing that room, treat as read
-    if (safeStorage.getItem('activeTab') === 'community') {
-        const viewing = document.getElementById('community-route-select')?.value || $currentRouteId.get();
-        if (viewing === routeId) {
-            markCommunityRouteSeen(routeId);
-            return 0;
-        }
-    }
-
+async function countUnreadOnRoute(routeId, viewingId) {
+    if (!routeId || routeId === viewingId) return 0;
     try {
         if (isAdminAuthed()) {
             const acct = $account.get();
@@ -1145,39 +1288,55 @@ export async function refreshCommunityUnreadBadge() {
                     const activity = await activityRes.json() || {};
                     const remoteSeen = Number(await seenRes.json() || 0);
                     if (!remoteSeen) {
-                        await markCommunityRouteSeen(routeId);
+                        await markCommunityRouteSeen(routeId, { silent: true });
                         return 0;
                     }
                     safeStorage.setItem(unreadSeenKey(routeId), String(remoteSeen));
-                    const unread = Object.values(activity).filter((item) =>
+                    return Object.values(activity).filter((item) =>
                         Number(item?.timestamp || 0) > remoteSeen
                     ).length;
-                    paintCommunityUnreadBadge(unread);
-                    return unread;
                 }
             }
         }
         const raw = safeStorage.getItem(unreadSeenKey(routeId));
         if (!raw) {
-            // First watch: seed last-seen so historic posts aren't all "unread"
             safeStorage.setItem(unreadSeenKey(routeId), String(Date.now()));
-            paintCommunityUnreadBadge(0);
             return 0;
         }
         const posts = await fetchRoutePosts(routeId);
         const lastSeen = getLastSeen(routeId);
         const myUid = $account.get()?.uid || '';
-        const unread = posts.filter((p) => {
+        return posts.filter((p) => {
             const ts = p.timestamp || 0;
             if (ts <= lastSeen) return false;
             if (myUid && p.uid === myUid) return false;
             return true;
         }).length;
-        paintCommunityUnreadBadge(unread);
-        return unread;
     } catch {
         return 0;
     }
+}
+
+/**
+ * Count unread posts per region room (newer than last visit) and name them on the badge.
+ */
+export async function refreshCommunityUnreadBadge() {
+    const routes = regionCommunityRoutes();
+    if (!routes.length) {
+        cachedUnreadByRoute = {};
+        paintCommunityUnreadBadge(0);
+        return 0;
+    }
+    const viewing = viewingCommunityRouteId();
+    if (viewing) await markCommunityRouteSeen(viewing, { silent: true });
+
+    const next = {};
+    await Promise.all(routes.map(async (r) => {
+        next[r.id] = await countUnreadOnRoute(r.id, viewing);
+    }));
+    cachedUnreadByRoute = next;
+    paintUnreadFromCache();
+    return Object.values(next).reduce((sum, n) => sum + n, 0);
 }
 
 export function startCommunityUnreadWatch() {
@@ -1213,29 +1372,23 @@ export async function renderCommunityFeed(routeId = $currentRouteId.get(), opts 
     if (!forceRest) {
         const live = await startRealtimePosts(routeId);
         if (live) {
-            // Listener will paint; still fetch reactions once
-            const reactionsMap = await fetchPostReactions(routeId);
-            cachedReactionsByPost = reactionsMap && typeof reactionsMap === 'object' ? reactionsMap : {};
-            if (!cachedFeedPosts.length) {
-                // First paint may race before first onValue — soft REST seed
-                const posts = await fetchRoutePosts(routeId);
-                if (postsListenRouteId === routeId && posts.length && !cachedFeedPosts.length) {
-                    cachedFeedPosts = posts;
-                    applyFeedFilter(routeId);
-                }
-            } else {
-                applyFeedFilter(routeId);
+            startRealtimeReactions(routeId);
+            const posts = await fetchRoutePosts(routeId);
+            if (postsListenRouteId === routeId && posts.length && !cachedFeedPosts.length) {
+                cachedFeedPosts = posts;
             }
+            const reactionsMap = await fetchPostReactions(routeId, cachedFeedPosts.map((p) => p.postId));
+            cachedReactionsByPost = reactionsMap && typeof reactionsMap === 'object' ? reactionsMap : {};
+            if (postsListenRouteId === routeId) applyFeedFilter(routeId);
             return;
         }
     }
 
     stopRealtimePosts();
-    const [posts, reactionsMap] = await Promise.all([
-        fetchRoutePosts(routeId),
-        fetchPostReactions(routeId),
-    ]);
+    const posts = await fetchRoutePosts(routeId);
     cachedFeedPosts = posts;
+    startRealtimeReactions(routeId);
+    const reactionsMap = await fetchPostReactions(routeId, posts.map((p) => p.postId));
     cachedReactionsByPost = reactionsMap && typeof reactionsMap === 'object' ? reactionsMap : {};
     applyFeedFilter(routeId);
 }
@@ -1269,6 +1422,19 @@ function syncCommunityRoutePicker(routeId) {
 
     const label = formatRouteDisplayName(ROUTES[routeSel.value]?.name || routeSel.value || 'Select route');
     if (display) display.textContent = label;
+    const triggerUnread = document.getElementById('community-route-unread');
+    if (triggerUnread) {
+        const other = Object.entries(cachedUnreadByRoute)
+            .filter(([id, n]) => n > 0 && id !== routeSel.value)
+            .reduce((sum, [, n]) => sum + n, 0);
+        if (other > 0) {
+            triggerUnread.classList.remove('hidden');
+            triggerUnread.textContent = other > 99 ? '99+' : String(other);
+        } else {
+            triggerUnread.classList.add('hidden');
+            triggerUnread.textContent = '0';
+        }
+    }
 
     if (list) {
         const allRoutes = [...routes];
@@ -1277,11 +1443,15 @@ function syncCommunityRoutePicker(routeId) {
         }
         list.innerHTML = allRoutes.map((r) => {
             const selected = r.id === routeSel.value;
-            return `<li role="option" data-route-id="${escapeHTML(r.id)}" aria-selected="${selected ? 'true' : 'false'}" class="px-3.5 py-3 text-sm font-bold cursor-pointer transition-colors border-b border-gray-100 dark:border-gray-700 last:border-0 ${
+            const unread = cachedUnreadByRoute[r.id] || 0;
+            const unreadHtml = unread > 0
+                ? `<span class="community-room-unread">${unread > 99 ? '99+' : unread}</span>`
+                : '';
+            return `<li role="option" data-route-id="${escapeHTML(r.id)}" aria-selected="${selected ? 'true' : 'false'}" class="px-3.5 py-3 text-sm font-bold cursor-pointer transition-colors border-b border-gray-100 dark:border-gray-700 last:border-0 flex items-center gap-2 ${
                 selected
                     ? 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300'
                     : 'text-gray-800 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-700'
-            }">${escapeHTML(formatRouteDisplayName(r.name || r.id))}</li>`;
+            }"><span class="min-w-0 flex-1 truncate">${escapeHTML(formatRouteDisplayName(r.name || r.id))}</span>${unreadHtml}</li>`;
         }).join('') || `<li class="px-3.5 py-3 text-sm text-gray-400">No routes</li>`;
     }
 }
@@ -1321,12 +1491,14 @@ function syncComposerChrome(signed = $account.get().status === 'signed-in') {
 }
 
 export function openRouteCommunity(opts = {}) {
-    const routeId = opts.routeId || $currentRouteId.get() || '';
+    const routeId = opts.routeId || getLastCommunityRoom() || $currentRouteId.get() || getPinnedRouteId() || '';
     const routeSel = document.getElementById('community-route-select');
     const guestHint = document.getElementById('community-guest-hint');
     const errEl = document.getElementById('community-error');
     const titleEl = document.getElementById('community-route-title');
 
+    if (routeId) setLastCommunityRoom(routeId);
+    syncReplyDraftForRoute(routeId);
     syncCommunityRoutePicker(routeId);
 
     // Always re-show guest hint when an unsigned user opens Community
@@ -1338,6 +1510,10 @@ export function openRouteCommunity(opts = {}) {
 
     const activeRoute = routeSel?.value || routeId;
     if (titleEl) titleEl.textContent = routeLabel(activeRoute);
+    if (activeRoute) {
+        setLastCommunityRoom(activeRoute);
+        syncReplyDraftForRoute(activeRoute);
+    }
 
     // Ensure the Community view is showing (avoid re-entrancy loops)
     if (safeStorage.getItem('activeTab') !== 'community' && typeof window.switchTab === 'function') {
@@ -1348,8 +1524,10 @@ export function openRouteCommunity(opts = {}) {
     triggerHaptic();
     renderCommunityFeed(activeRoute);
     joinCommunityPresence(activeRoute);
-    if (activeRoute && (activeRoute === getPinnedRouteId() || isAdminAuthed())) markCommunityRouteSeen(activeRoute);
-    else refreshCommunityUnreadBadge();
+    if (activeRoute) markCommunityRouteSeen(activeRoute, { silent: true });
+    refreshCommunityUnreadBadge();
+    paintCommunityQuotaHint();
+    startQuotaHintWatch();
 }
 
 export function leaveCommunityRoom() {
@@ -1369,9 +1547,10 @@ function bindCommunityVisibilityTeardown() {
         }
         if (safeStorage.getItem('activeTab') === 'community') {
             const routeSel = document.getElementById('community-route-select');
-            const rid = routeSel?.value || $currentRouteId.get();
+            const rid = routeSel?.value || getLastCommunityRoom() || $currentRouteId.get();
             if (rid) {
                 startRealtimePosts(rid);
+                startRealtimeReactions(rid);
                 joinCommunityPresence(rid);
             }
         }
@@ -1379,6 +1558,34 @@ function bindCommunityVisibilityTeardown() {
 }
 
 let communityWaitCancel = null;
+
+function paintCommunityQuotaHint() {
+    const el = document.getElementById('community-quota-hint');
+    if (!el) return;
+    const signed = $account.get().status === 'signed-in';
+    if (!signed || isAdminAuthed()) {
+        el.textContent = '';
+        el.hidden = true;
+        return;
+    }
+    const limit = checkCommunityRateLimit();
+    const left = Math.max(0, Number(limit.remaining) || 0);
+    el.hidden = false;
+    el.textContent = `${left} left`;
+    if (!limit.ok && limit.reason === 'quota' && !communityWaitCancel) {
+        paintCommunityWait(limit);
+    }
+}
+
+function startQuotaHintWatch() {
+    paintCommunityQuotaHint();
+    if (quotaHintTimer) return;
+    quotaHintTimer = setInterval(() => {
+        if (typeof document !== 'undefined' && document.hidden) return;
+        if (safeStorage.getItem('activeTab') !== 'community') return;
+        paintCommunityQuotaHint();
+    }, 10000);
+}
 
 function paintCommunityWait(limit) {
     const errEl = document.getElementById('community-error');
@@ -1390,6 +1597,7 @@ function paintCommunityWait(limit) {
             communityWaitCancel = null;
             if (btn) btn.disabled = false;
             if (errEl && /wait/i.test(errEl.textContent || '')) errEl.textContent = '';
+            paintCommunityQuotaHint();
         },
     });
     if (btn) btn.disabled = true;
@@ -1424,6 +1632,7 @@ async function handlePostSubmit() {
     if (btn) btn.disabled = true;
 
     const result = await submitCommunityPost(body, routeId);
+    paintCommunityQuotaHint();
     if (!result.ok) {
         if (errEl) errEl.textContent = result.message;
         if (result.retryAfterMs) {
@@ -1456,6 +1665,7 @@ async function handlePostSubmit() {
         await renderCommunityFeed(routeId);
     }
     if (btn) btn.disabled = false;
+    paintCommunityQuotaHint();
 }
 
 async function expandReplies(postId, routeId, container) {
@@ -1489,7 +1699,7 @@ export function bindCommunityUi() {
     const open = (e) => {
         e?.preventDefault?.();
         if (typeof window.switchTab === 'function') window.switchTab('community');
-        else openRouteCommunity({ routeId: $currentRouteId.get() });
+        else openRouteCommunity();
     };
 
     document.getElementById('route-community-open-btn')?.addEventListener('click', open);
@@ -1498,7 +1708,7 @@ export function bindCommunityUi() {
         if (typeof window.closeAppHub === 'function') window.closeAppHub(true);
         setTimeout(() => {
             if (typeof window.switchTab === 'function') window.switchTab('community');
-            else openRouteCommunity({ routeId: $currentRouteId.get() });
+            else openRouteCommunity();
         }, 50);
     });
 
@@ -1509,10 +1719,13 @@ export function bindCommunityUi() {
         if (titleEl) titleEl.textContent = routeLabel(rid);
         const display = document.getElementById('community-route-display');
         if (display) display.textContent = routeLabel(rid);
+        setLastCommunityRoom(rid);
+        syncReplyDraftForRoute(rid);
         renderCommunityFeed(rid);
         joinCommunityPresence(rid);
-        if (rid && (rid === getPinnedRouteId() || isAdminAuthed())) markCommunityRouteSeen(rid);
-        else refreshCommunityUnreadBadge();
+        if (rid) markCommunityRouteSeen(rid, { silent: true });
+        refreshCommunityUnreadBadge();
+        paintCommunityQuotaHint();
     });
     document.getElementById('community-route-trigger')?.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -1574,6 +1787,7 @@ export function bindCommunityUi() {
         const next = Math.min(Math.max(composerEl.scrollHeight, 44), 160);
         composerEl.style.height = `${next}px`;
         liveModerateComposer();
+        paintCommunityQuotaHint();
 
         const rid = document.getElementById('community-route-select')?.value || $currentRouteId.get();
         signalCommunityTyping(rid, true);
@@ -1673,6 +1887,7 @@ export function bindCommunityUi() {
             const routeId = send.getAttribute('data-route');
             const input = document.querySelector(`.community-reply-input[data-post-id="${postId}"]`);
             const result = await submitCommunityReply(postId, input?.value || '', routeId);
+            paintCommunityQuotaHint();
             if (!result.ok) {
                 showToast(result.message || 'Reply failed', 'error');
                 if (result.retryAfterMs) paintCommunityWait(result);

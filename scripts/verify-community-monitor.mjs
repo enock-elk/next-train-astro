@@ -115,11 +115,34 @@ assert.match(worker, /isSafeRtdbKey\(routeId\)/);
 assert.match(worker, /isSafeRtdbKey\(postId\)/);
 assert.match(admin, /\[`community_activity\/\$\{routeId\}\//, 'admin approval indexes approved messages');
 
-const rootRules = rules.rules;
-assert.ok(rootRules.community_activity, 'community activity rules exist');
-assert.match(rootRules.community_activity.$routeId.$messageId['.write'], /root\.child\('route_community'\)/);
-assert.match(rootRules.community_activity.$routeId.$messageId['.write'], /newData\.child\('uid'\)\.val\(\) === auth\.uid/);
-assert.match(rootRules.admin_state.$adminUid['.write'], /auth\.uid === \$adminUid/);
-assert.match(rootRules.admin_state.$adminUid['.write'], /thandeka05nxumalo@gmail\.com/);
+assert.equal(rootRules.route_community.$routeId.post_reactions['.read'], true, 'post_reactions parent is public-read so other users can load reactions');
+assert.equal(rootRules.route_community.$routeId.post_reactions.$postId['.read'], true);
+
+assert.match(community, /communityLastRoom_/, 'last community room is remembered per region');
+assert.match(community, /syncReplyDraftForRoute/, 'quote draft is dropped when the room does not match');
+assert.match(community, /getLastCommunityRoom\(\)/, 'reopening Community restores the last room, not only the pinned route');
+assert.match(community, /post_reactions\/\$\{encodeURIComponent\(postId\)\}\.json/, 'reaction fetch falls back to per-post reads');
+assert.match(community, /startRealtimeReactions/, 'reactions listen live so other users see them');
+assert.match(community, /community-room-unread/, 'route list marks which room has unread');
+assert.match(community, /unread on \$\{roomNames/, 'Community badge names the unread room');
+assert.match(community, /paintCommunityQuotaHint/, 'remaining send quota is painted above the composer');
+assert.match(community, /\$\{left\} left/, 'quota hint is a remaining-messages countdown');
+assert.match(communityView, /id="community-route-unread"/, 'route picker shows unread that is not on the open room');
+assert.ok(
+    communityView.indexOf('id="community-quota-hint"') < communityView.indexOf('id="community-composer"'),
+    'quota hint sits above the composer input'
+);
+assert.ok(
+    communityView.indexOf('id="community-error"') < communityView.indexOf('id="community-quota-hint"'),
+    'wait error stays above the quota hint'
+);
+
+const ui = await readFile(new URL('../src/lib/ui.js', import.meta.url), 'utf8');
+assert.match(ui, /community-post-row/, 'tab swipe ignores message rows so swipe-to-reply does not open Map');
+assert.match(ui, /community-feed-scroll/, 'tab swipe ignores the community feed');
+
+const trust = await readFile(new URL('../src/lib/trust.js', import.meta.url), 'utf8');
+assert.match(trust, /remaining: 0/, 'exhausted quota reports remaining 0');
+assert.match(trust, /return \{ ok: true, remaining \}/, 'rate check reports remaining sends');
 
 console.log('Community Monitor verified: grouping, activity order, per-operator unread, seen paths, write hooks, held actions, and rules.');

@@ -5,6 +5,10 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_09.15.6': [
+        'Community: other people can see message reactions (parent post_reactions is public-read, plus a live listener and per-post REST fallback). Swipe-to-reply no longer switches to Map. Leaving a non-pinned room keeps that room and drops a quote that belongs to another corridor. Unread badge names the room and the route list shows a count per chat. Remaining send quota sits as tiny unformatted “n left” above the composer.',
+        'Deploy firebase-database.rules.json so post_reactions/.read is live. Until then the client still loads reactions per post.',
+    ],
     'V9_09.15.5': [
         'Route landings: Durban Yard stays a distinct grid row (no longer labelled Durban). First/last times use the destination row so joiners count. Corridor pages get verified nearby/POI commentary (no invented stops). Ghosts such as Eersterust are named as areas passed, not calling points.',
         'Feedback Hub: admin bubble version (V9_09.15.2 · route) is the same Build notes button as the commuter chip. V9_09.15.2 notes are backfilled so that chip opens notes instead of an empty modal.',

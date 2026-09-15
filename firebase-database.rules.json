@@ -277,6 +277,7 @@
           }
         },
         "post_reactions": {
+          ".read": true,
           "$postId": {
             ".read": true,
             "$uid": {

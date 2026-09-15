@@ -83,12 +83,14 @@ export function checkRateLimit(key, opts) {
     const now = Date.now();
     data.global = prune(data.global, windowMs);
 
+    const remaining = Math.max(0, max - data.global.length);
     if (data.global.length >= max) {
         const oldest = data.global[0] || now;
         const retryAfterMs = Math.max(1000, (oldest + windowMs) - now);
         return {
             ok: false,
             reason: 'quota',
+            remaining: 0,
             retryAfterMs,
             message: rateLimitMessage('quota', retryAfterMs),
         };
@@ -99,6 +101,7 @@ export function checkRateLimit(key, opts) {
         return {
             ok: false,
             reason: 'cooldown',
+            remaining,
             retryAfterMs,
             message: rateLimitMessage('cooldown', retryAfterMs),
         };
@@ -116,12 +119,13 @@ export function checkRateLimit(key, opts) {
             return {
                 ok: false,
                 reason: 'route',
+                remaining,
                 retryAfterMs,
                 message: rateLimitMessage('route', retryAfterMs),
             };
         }
     }
-    return { ok: true };
+    return { ok: true, remaining };
 }
 
 export function recordRateHit(key, opts) {

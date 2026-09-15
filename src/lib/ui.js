@@ -1439,10 +1439,13 @@ export function setupSwipeNavigation() {
             (tripMapModal && !tripMapModal.classList.contains('hidden'));
     };
 
+    const swipeIgnoreFrom = (target) => !!target?.closest?.(
+        'input, textarea, select, [contenteditable="true"], .community-post-row, .community-feed-scroll, #community-reaction-sheet, #community-route-list, #community-reply-bar'
+    );
+
     contentArea.addEventListener('touchstart', (e) => {
         if (swipeBlocked()) return;
-        const fromField = e.target?.closest?.('input, textarea, select, [contenteditable="true"]');
-        swipeIgnore = !!fromField;
+        swipeIgnore = swipeIgnoreFrom(e.target);
         if (swipeIgnore) return;
         touchStartX = e.changedTouches[0].screenX;
         touchStartY = e.changedTouches[0].screenY;

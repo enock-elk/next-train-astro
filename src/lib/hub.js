@@ -2234,6 +2234,15 @@ export function initHub() {
 
     // Map-tab embed calls this for the Full screen control — never from map.html boot.
     window.__ntOpenNetworkMapSheet = () => openInAppSheet(withBase('/map.html'), 'Network Map');
+    window.__ntFullscreenMapTab = () => {
+        const host = document.getElementById('view-map');
+        const req = host?.requestFullscreen || host?.webkitRequestFullscreen;
+        if (!req) return;
+        try {
+            const result = req.call(host);
+            if (result && typeof result.catch === 'function') result.catch(() => {});
+        } catch { /* ignore */ }
+    };
 
     // Full map (regions + Network Lines). The home Map tab is the stripped
     // "where is my train" view, so this deliberately does NOT switch tabs.

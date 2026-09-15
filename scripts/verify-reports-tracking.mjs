@@ -28,6 +28,9 @@ import {
     pingPublicTrainId,
     projectTrainTrackerFix,
     terminusStopShouldFire,
+    atTerminusPlatform,
+    remainingCorridorTerminusFromStops,
+    shouldPromptLeftTrain,
     TRACKING_STATE,
     updateDirectionObservation,
 } from '../src/lib/ride-pings.js';
@@ -218,6 +221,32 @@ assert(!terminusStopShouldFire({
 assert(terminusStopShouldFire({
     atLast: true, lastIndex: 12, minProgressSeen: 4,
 }), 'reaching the last station after travelling the corridor prompts to confirm arrival');
+assert(!atTerminusPlatform({
+    nearestIsLast: true, progress: 1.5, lastIndex: 2, distanceToLastM: 400,
+}), 'between Mears and Pretoria is not the Pretoria platform');
+assert(atTerminusPlatform({
+    nearestIsLast: true, progress: 1.95, lastIndex: 2, distanceToLastM: 40,
+}), 'on the last platform is arrival');
+assert(!shouldPromptLeftTrain({
+    arrivedAtTerminus: false, distanceToLastM: 400, leftPrompted: false,
+}), 'leaving prompt waits until the rider actually arrived');
+assert(shouldPromptLeftTrain({
+    arrivedAtTerminus: true, distanceToLastM: 180, leftPrompted: false,
+}), 'walking off the last platform asks if they left the train');
+assert(
+    remainingCorridorTerminusFromStops(
+        [{ station: 'PRETORIA STATION' }, { station: 'KOEDOESPOORT STATION' }],
+        'pta-pien',
+    ) === 'PIENAARSPOORT STATION',
+    'a Pretoria shuttle that ends at Koedoespoort still has Pienaarspoort ahead',
+);
+assert(
+    remainingCorridorTerminusFromStops(
+        [{ station: 'PRETORIA STATION' }, { station: 'PIENAARSPOORT STATION' }],
+        'pta-pien',
+    ) === null,
+    'a through train to Pienaarspoort does not ask to switch',
+);
 
 let directionObservation = updateDirectionObservation({}, {
     speedMps: 10, heading: 270, expectedHeading: 90, accuracy: 8, now: 1000,
@@ -253,9 +282,11 @@ const stationIndex = {
 const projected = progressAlongStopsDetailed(-25, 28.015, stops, stationIndex);
 assert(projected?.progress > 1 && projected.progress < 2, 'journey projection stays on ordered stop sequence');
 assert(
-    journeyPositionLabel(stops, projected?.progress) === 'Between MIDDLE and TERMINUS',
-    'projected progress produces a human between-stations label'
+    journeyPositionLabel(stops, projected?.progress) === 'approaching TERMINUS',
+    'halfway along a hop is approaching the next station'
 );
+assert(journeyPositionLabel(stops, 1.2) === 'at MIDDLE', 'before midpoint stays at the last passed station');
+assert(journeyPositionLabel(stops, 2) === 'at TERMINUS', 'last stop is at the terminus');
 
 const acceptedAt = Date.now();
 const consensus = consensusProjectedPings([
@@ -385,6 +416,8 @@ assert(mapTabSource.includes('renderTrackingStatusCard') && mapTabSource.include
 assert(mapTabSource.includes("setInterval(() => {") && mapTabSource.includes('map-tracking-warning'), 'tracking dashboard refreshes its live metrics and warning');
 assert(ridePingsSource.includes('subscribeGeoFix') && ridePingsSource.includes('adaptiveOnboardPingMs'), 'train sharing consumes every fix and broadcasts adaptively');
 assert(ridePingsSource.includes("title: 'Has this train arrived?'"), 'last station asks if the train has arrived');
+assert(ridePingsSource.includes("title: 'Have you left this train?'"), 'leaving the last station asks if sharing should stop');
+assert(ridePingsSource.includes("title: 'Switch trains?'"), 'a shuttle that ends at a hub offers the connecting train');
 assert(ridePingsSource.includes("keepLabel: 'Still on the train'"), 'last-station prompt can keep sharing');
 assert(ridePingsSource.includes("stopLabel: 'Yes, we’ve arrived'"), 'last-station prompt can confirm arrival');
 assert(ridePingsSource.includes("title: 'Still on this train?'"), 'off-track and direction mismatch ask before stopping');

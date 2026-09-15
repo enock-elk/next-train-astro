@@ -497,10 +497,10 @@ export function journeyPositionLabel(stops, progress) {
     const i = Math.floor(bounded);
     const fraction = bounded - i;
     const here = shortStation(stops[i]?.station);
-    if (i >= stops.length - 1 || fraction < 0.12) return here ? `At ${here}` : '';
+    if (i >= stops.length - 1) return here ? `at ${here}` : '';
+    if (fraction < 0.5) return here ? `at ${here}` : '';
     const next = shortStation(stops[i + 1]?.station);
-    if (fraction > 0.88) return next ? `At ${next}` : '';
-    return here && next ? `Between ${here} and ${next}` : (here || next);
+    return next ? `approaching ${next}` : (here ? `at ${here}` : '');
 }
 
 function projectFraction(lat, lng, a, b) {

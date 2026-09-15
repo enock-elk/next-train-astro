@@ -53,6 +53,16 @@ Only after pilot metrics look healthy (reports/day, verify rate, chat posts, mod
 2. **FCM fanout** — Worker/Cloud Function: `delay_reports` / notices → `push_subscriptions` by `routeIds` (client token registration already exists).
 3. **TWA / Play Foreground Service** — background tracking wrapper **only if** Waves 1–3 prove demand; POPIA + battery cost otherwise.
 
+## Wave 5 — live share on Trip Planner and Next Train (do not build yet)
+
+Ride pings stay the source of truth. When a planned trip includes a train that currently has an active `ride_pings` broadcast:
+
+1. Draw a train pill on the **far-left** trip timeline. Motion is strictly **top to bottom** (origin toward destination).
+2. Stations the live train has already passed grey out. Stations ahead keep their current styling.
+3. The same last-seen progress later feeds Next Train and Trip Planner as a **delay indicator** (scheduled ghost vs live share), not a second GPS map.
+
+Do not mention this surface in What’s New while live sharing is still operator-only.
+
 ## Kill-switch checklist
 
 1. RTDB `config/features` → disable flag(s).

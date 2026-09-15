@@ -33,10 +33,13 @@ import {
     progressAlongStops,
     progressAlongStopsDetailed,
     journeyHeadingAtProgress,
+    journeyHeadingDeg,
     journeyPositionLabel,
     trainGoingLabel,
     railPathForTrain,
     scoreFixToRailPath,
+    coordsForStation,
+    haversineM,
 } from './train-ghosts.js';
 import { TRACKER_SNAP_MAX_M } from './rail-tracks.js';
 import { peekCachedRouteReports, isReportStillLive, routeHasNoScheduledTrains } from './delay-reports.js';
@@ -154,8 +157,11 @@ export function sharingStatusCopy({ count = 0, iAmSharing = false } = {}) {
     return `${n} sharing`;
 }
 
-export const TERMINUS_APPROACH_SLACK = 0.15;
+export const TERMINUS_APPROACH_SLACK = 0.12;
 export const TERMINUS_TRAVELED_SLACK = 0.5;
+export const TERMINUS_PLATFORM_M = 120;
+export const TERMINUS_LEAVE_M = 150;
+export const TERMINUS_ARRIVAL_FRACTION = 0.88;
 
 /**
  * End the share only after the rider has actually travelled toward the last
@@ -173,6 +179,50 @@ export function terminusStopShouldFire({
     return minProgressSeen < lastIndex - TERMINUS_TRAVELED_SLACK;
 }
 
+/** True only on the last platform, not midway on the last hop (Mears → Pretoria). */
+export function atTerminusPlatform({
+    nearestIsLast = false,
+    progress = null,
+    lastIndex = 0,
+    distanceToLastM = null,
+} = {}) {
+    if (!nearestIsLast) return false;
+    if (Number.isFinite(distanceToLastM) && distanceToLastM <= TERMINUS_PLATFORM_M) return true;
+    if (Number.isFinite(progress) && Number.isFinite(lastIndex) && lastIndex >= 1) {
+        return progress >= lastIndex - (1 - TERMINUS_ARRIVAL_FRACTION);
+    }
+    return false;
+}
+
+export function shouldPromptLeftTrain({
+    arrivedAtTerminus = false,
+    distanceToLastM = null,
+    leftPrompted = false,
+} = {}) {
+    if (!arrivedAtTerminus || leftPrompted) return false;
+    return Number.isFinite(distanceToLastM) && distanceToLastM > TERMINUS_LEAVE_M;
+}
+
+export function remainingCorridorTerminusFromStops(stops, routeId) {
+    const route = ROUTES[routeId];
+    if (!route || !stops?.length) return null;
+    const lastN = normalizeStationName(stops[stops.length - 1]?.station);
+    if (!lastN) return null;
+    if (lastN === normalizeStationName(route.destA) || lastN === normalizeStationName(route.destB)) {
+        return null;
+    }
+    const firstN = normalizeStationName(stops[0]?.station);
+    if (firstN === normalizeStationName(route.destA)) return route.destB;
+    if (firstN === normalizeStationName(route.destB)) return route.destA;
+    return route.destB || null;
+}
+
+export function trainEndsAtStation(trainId, stationName) {
+    const { stops } = findStopsForTrain(String(trainId || ''));
+    if (!stops.length || !stationName) return false;
+    return normalizeStationName(stops[stops.length - 1]?.station) === normalizeStationName(stationName);
+}
+
 function shareProgressAlongTrain(trainId, lat, lng) {
     const { stops } = findStopsForTrain(String(trainId || ''));
     if (!stops.length || !Number.isFinite(lat) || !Number.isFinite(lng)) {
@@ -185,6 +235,14 @@ function shareProgressAlongTrain(trainId, lat, lng) {
     };
 }
 
+function distanceToLastStopM(trainId, lat, lng) {
+    const { stops } = findStopsForTrain(String(trainId || ''));
+    const last = stops[stops.length - 1];
+    const coords = coordsForStation(last?.station, $globalStationIndex.get() || {});
+    if (!coords || !Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+    return haversineM(lat, lng, coords.lat, coords.lng);
+}
+
 function shareReachedTerminus(trainId, lat, lng, station, share = {}) {
     if (share.terminusStay) return false;
     const id = String(trainId || '');
@@ -192,8 +250,13 @@ function shareReachedTerminus(trainId, lat, lng, station, share = {}) {
     const { stops, progress, lastIndex } = shareProgressAlongTrain(id, lat, lng);
     if (!stops.length) return false;
     const last = stops[lastIndex]?.station;
-    const atLast = !!(station && last && normalizeStationName(station) === normalizeStationName(last))
-        || (progress != null && progress >= lastIndex - TERMINUS_APPROACH_SLACK);
+    const nearestIsLast = !!(station && last && normalizeStationName(station) === normalizeStationName(last));
+    const atLast = atTerminusPlatform({
+        nearestIsLast,
+        progress,
+        lastIndex,
+        distanceToLastM: distanceToLastStopM(id, lat, lng),
+    });
     const minSeen = Number.isFinite(share.minProgressSeen) ? share.minProgressSeen : progress;
     return terminusStopShouldFire({
         atLast,
@@ -219,7 +282,7 @@ function persistActiveSharePatch(patch) {
 
 let sharePromptOpen = false;
 
-async function confirmShareContinue({ title, body, keepLabel, stopLabel }) {
+async function confirmShareContinue({ title, body, keepLabel, stopLabel, switchLabel } = {}) {
     if (sharePromptOpen) return 'busy';
     sharePromptOpen = true;
     try {
@@ -227,9 +290,15 @@ async function confirmShareContinue({ title, body, keepLabel, stopLabel }) {
         const choice = await promptOnTrainSheet({
             title,
             body,
-            primary: keepLabel,
-            secondary: stopLabel,
+            primary: switchLabel || keepLabel,
+            secondary: switchLabel ? keepLabel : stopLabel,
+            tertiary: switchLabel ? stopLabel : undefined,
         });
+        if (switchLabel) {
+            if (choice === 'primary') return 'switch';
+            if (choice === 'secondary') return 'keep';
+            return 'stop';
+        }
         return choice === 'primary' ? 'keep' : 'stop';
     } catch {
         return 'busy';
@@ -348,7 +417,8 @@ export async function projectTrainTrackerFix({
             progress,
         };
     }
-    const journeyH = journeyHeadingAtProgress(id, progress, { stationIndex, ...(schedules ? { schedules } : {}) });
+    const journeyH = journeyHeadingAtProgress(id, progress, { stationIndex, ...(schedules ? { schedules } : {}) })
+        ?? journeyHeadingDeg(id, { stationIndex, ...(schedules ? { schedules } : {}) });
     return {
         ok: true,
         state: TRACKING_STATE.ACTIVE,
@@ -1443,6 +1513,9 @@ export async function submitRideCheckIn({
             offTrackSince: projection?.ok ? 0 : (previous?.offTrackSince || 0),
             offTrackStayUntil: projection?.ok ? 0 : (Number(previous?.offTrackStayUntil) || 0),
             terminusStay: Boolean(previous?.terminusStay),
+            terminusArrived: Boolean(previous?.terminusArrived),
+            leftTrainPrompted: Boolean(previous?.leftTrainPrompted),
+            hubSwitchStay: Boolean(previous?.hubSwitchStay),
             directionStay: Boolean(previous?.directionStay),
             minProgressSeen: nextMinProgressSeen(previous, trainId, coarseLat, coarseLng),
         }));
@@ -1662,6 +1735,9 @@ function cacheLocalProjectedFix(active, pos, projection, near, observation) {
         offTrackSince: 0,
         offTrackStayUntil: 0,
         terminusStay: Boolean(active.terminusStay),
+        terminusArrived: Boolean(active.terminusArrived),
+        leftTrainPrompted: Boolean(active.leftTrainPrompted),
+        hubSwitchStay: Boolean(active.hubSwitchStay),
         directionStay: observation?.warning ? Boolean(active.directionStay) : false,
         directionObservation: observation,
         directionWarning: !!observation?.warning,
@@ -1672,6 +1748,27 @@ function cacheLocalProjectedFix(active, pos, projection, near, observation) {
     routeCache[active.routeId] = activePings([local, ...existing]);
     notifyPingsUpdated(active.routeId);
     return stored;
+}
+
+async function suggestConnectingTrain(trainId, routeId, hubStation) {
+    const { stops } = findStopsForTrain(String(trainId || ''));
+    const dest = remainingCorridorTerminusFromStops(stops, routeId);
+    if (!dest || !hubStation) return null;
+    try {
+        const { planDirectTrip } = await import('./planner-core.js');
+        const dayType = (typeof window !== 'undefined' && window.currentDayType) || 'weekday';
+        const result = planDirectTrip(hubStation, dest, dayType, false, {});
+        const trips = Array.isArray(result?.trips) ? result.trips : [];
+        const next = trips.find((t) => String(t.train || '') !== String(trainId || ''));
+        if (!next?.train) return null;
+        return {
+            trainId: String(next.train),
+            depTime: String(next.depTime || '').slice(0, 5),
+            dest,
+        };
+    } catch {
+        return null;
+    }
 }
 
 async function processOnboardFix(pos, { forceBroadcast = false, generation = onboardGeneration } = {}) {
@@ -1691,12 +1788,80 @@ async function processOnboardFix(pos, { forceBroadcast = false, generation = onb
     }
     if (active.terminusStay) {
         const { progress, lastIndex } = shareProgressAlongTrain(active.trainId, pos.lat, pos.lng);
-        if (progress != null && progress < lastIndex - TERMINUS_TRAVELED_SLACK) {
+        const distLast = distanceToLastStopM(active.trainId, pos.lat, pos.lng);
+        const last = shareProgressAlongTrain(active.trainId, pos.lat, pos.lng).stops?.slice(-1)[0]?.station;
+        const nearestIsLast = !!(near?.stationName && last
+            && normalizeStationName(near.stationName) === normalizeStationName(last));
+        const atPlatform = atTerminusPlatform({
+            nearestIsLast,
+            progress,
+            lastIndex,
+            distanceToLastM: distLast,
+        });
+        if (atPlatform || (progress != null && progress < lastIndex - TERMINUS_TRAVELED_SLACK)) {
             persistActiveSharePatch({ terminusStay: false });
             active.terminusStay = false;
         }
     }
-    if (shareReachedTerminus(active.trainId, pos.lat, pos.lng, near?.stationName || active.station, active)) {
+    const { stops, progress, lastIndex } = shareProgressAlongTrain(active.trainId, pos.lat, pos.lng);
+    const distLast = distanceToLastStopM(active.trainId, pos.lat, pos.lng);
+    const lastStop = stops[lastIndex]?.station;
+    const nearestIsLast = !!(near?.stationName && lastStop
+        && normalizeStationName(near.stationName) === normalizeStationName(lastStop));
+    const atPlatform = atTerminusPlatform({
+        nearestIsLast,
+        progress,
+        lastIndex,
+        distanceToLastM: distLast,
+    });
+    if (atPlatform && !active.terminusArrived) {
+        persistActiveSharePatch({ terminusArrived: true });
+        active.terminusArrived = true;
+    }
+    const connectingDest = remainingCorridorTerminusFromStops(stops, active.routeId);
+    let handledHub = false;
+    if (atPlatform && connectingDest && !active.hubSwitchStay) {
+        const next = await suggestConnectingTrain(active.trainId, active.routeId, lastStop);
+        if (next?.trainId) {
+            handledHub = true;
+            const destLabel = String(next.dest || connectingDest).replace(/ STATION$/i, '');
+            const when = next.depTime ? ` departing ${next.depTime}` : '';
+            const pick = await confirmShareContinue({
+                title: 'Switch trains?',
+                body: `Train ${active.trainId} ends here. Switch to Train ${next.trainId}${when} toward ${destLabel}, or keep sharing this train.`,
+                switchLabel: `Switch to ${next.trainId}`,
+                keepLabel: 'Stay on this train',
+                stopLabel: 'Stop sharing',
+            });
+            if (pick === 'busy') return;
+            if (pick === 'stop') {
+                await stopRideShare({ reason: 'hub_switch', waitForOnboard: false });
+                return;
+            }
+            if (pick === 'switch') {
+                persistActiveSharePatch({
+                    trainId: next.trainId,
+                    destination: next.dest || connectingDest,
+                    hubSwitchStay: true,
+                    terminusStay: false,
+                    terminusArrived: false,
+                    leftTrainPrompted: false,
+                    minProgressSeen: null,
+                    projectedProgress: null,
+                });
+                active.trainId = next.trainId;
+                active.destination = next.dest || connectingDest;
+                active.hubSwitchStay = true;
+                active.terminusStay = false;
+                active.terminusArrived = false;
+                active.leftTrainPrompted = false;
+            } else {
+                persistActiveSharePatch({ hubSwitchStay: true });
+                active.hubSwitchStay = true;
+            }
+        }
+    }
+    if (!handledHub && shareReachedTerminus(active.trainId, pos.lat, pos.lng, near?.stationName || active.station, active)) {
         const pick = await confirmShareContinue({
             title: 'Has this train arrived?',
             body: `You’re at the last station for Train ${active.trainId}. Stop sharing if it has arrived, or keep going if you’re still on it.`,
@@ -1708,8 +1873,28 @@ async function processOnboardFix(pos, { forceBroadcast = false, generation = onb
             await stopRideShare({ reason: 'terminus', waitForOnboard: false });
             return;
         }
-        persistActiveSharePatch({ terminusStay: true });
+        persistActiveSharePatch({ terminusStay: true, terminusArrived: true });
         active.terminusStay = true;
+        active.terminusArrived = true;
+    }
+    if (shouldPromptLeftTrain({
+        arrivedAtTerminus: !!active.terminusArrived,
+        distanceToLastM: distLast,
+        leftPrompted: !!active.leftTrainPrompted,
+    })) {
+        const pick = await confirmShareContinue({
+            title: 'Have you left this train?',
+            body: 'Your location has moved away from the last station. Stop sharing if you have left, or keep going if you are still on it.',
+            keepLabel: 'I’m still on it',
+            stopLabel: 'I’ve left the train',
+        });
+        if (pick === 'busy') return;
+        if (pick !== 'keep') {
+            await stopRideShare({ reason: 'left_terminus', waitForOnboard: false });
+            return;
+        }
+        persistActiveSharePatch({ leftTrainPrompted: true });
+        active.leftTrainPrompted = true;
     }
     if (active.adminOverrideRole === 'train' && isAdminAuthed()) {
         const due = forceBroadcast || Date.now() - onboardLastBroadcastAt >= adaptiveOnboardPingMs(pos.speedMps);

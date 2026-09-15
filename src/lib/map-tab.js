@@ -2302,10 +2302,99 @@ export function deactivateMapTab() {
     releaseGeoWatch('map');
 }
 
+export function fullscreenMapTab() {
+    const host = document.getElementById('view-map');
+    if (!host) return false;
+    const req = host.requestFullscreen || host.webkitRequestFullscreen;
+    if (!req) return false;
+    try {
+        const result = req.call(host);
+        if (result && typeof result.catch === 'function') result.catch(() => {});
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+function bindTrackingRestoreDrag() {
+    const el = document.getElementById('map-tracking-restore');
+    const pane = document.querySelector('#view-map .map-tab-pane') || document.getElementById('view-map');
+    if (!el || !pane || el.dataset.ntDragBound === '1') return;
+    el.dataset.ntDragBound = '1';
+    const KEY = 'nt_map_restore_pos';
+    try {
+        const saved = JSON.parse(sessionStorage.getItem(KEY) || 'null');
+        if (saved && Number.isFinite(saved.left) && Number.isFinite(saved.top)) {
+            el.style.left = `${saved.left}px`;
+            el.style.top = `${saved.top}px`;
+            el.style.right = 'auto';
+            el.style.bottom = 'auto';
+        }
+    } catch { /* ignore */ }
+    let dragging = false;
+    let moved = false;
+    let startX = 0;
+    let startY = 0;
+    let origL = 0;
+    let origT = 0;
+    const panePos = () => {
+        const r = el.getBoundingClientRect();
+        const p = pane.getBoundingClientRect();
+        return { left: r.left - p.left, top: r.top - p.top };
+    };
+    el.addEventListener('pointerdown', (ev) => {
+        if (ev.button != null && ev.button !== 0) return;
+        const p = panePos();
+        dragging = true;
+        moved = false;
+        startX = ev.clientX;
+        startY = ev.clientY;
+        origL = p.left;
+        origT = p.top;
+        try { el.setPointerCapture(ev.pointerId); } catch { /* ignore */ }
+    });
+    el.addEventListener('pointermove', (ev) => {
+        if (!dragging) return;
+        const dx = ev.clientX - startX;
+        const dy = ev.clientY - startY;
+        if (Math.hypot(dx, dy) > 6) moved = true;
+        if (!moved) return;
+        ev.preventDefault();
+        const box = pane.getBoundingClientRect();
+        const w = el.offsetWidth;
+        const h = el.offsetHeight;
+        const left = Math.min(box.width - w - 8, Math.max(8, origL + dx));
+        const top = Math.min(box.height - h - 8, Math.max(8, origT + dy));
+        el.style.left = `${left}px`;
+        el.style.top = `${top}px`;
+        el.style.right = 'auto';
+        el.style.bottom = 'auto';
+    });
+    el.addEventListener('pointerup', () => {
+        if (!dragging) return;
+        dragging = false;
+        if (!moved) return;
+        try {
+            sessionStorage.setItem(KEY, JSON.stringify({
+                left: parseFloat(el.style.left),
+                top: parseFloat(el.style.top),
+            }));
+        } catch { /* ignore */ }
+    });
+    el.addEventListener('click', (ev) => {
+        if (!moved) return;
+        ev.preventDefault();
+        ev.stopPropagation();
+        moved = false;
+    }, true);
+}
+
 export function bindMapTabUi() {
     if (typeof document === 'undefined' || window.__ntMapTabBound) return;
     window.__ntMapTabBound = true;
+    window.__ntFullscreenMapTab = fullscreenMapTab;
     exposeEmbedBridge();
+    bindTrackingRestoreDrag();
     subscribeGeoFix((fix) => {
         applyGeoFix(fix);
         postFixToMap('nt-map-user-location', fix);
@@ -2540,4 +2629,5 @@ if (typeof window !== 'undefined') {
     window.promptOnTrainSheet = promptOnTrainSheet;
     window.maybeOfferParkedResume = maybeOfferParkedResume;
     window.startParkedTrainWatch = startParkedTrainWatch;
+    window.__ntFullscreenMapTab = fullscreenMapTab;
 }

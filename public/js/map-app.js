@@ -1819,7 +1819,7 @@
                       offset: [0, -5],
                       className: labelClass
                   });
-                stationLayerItems.push({ name, routes: data.routes, marker });
+                stationLayerItems.push({ name, routes: data.routes, marker, labelClass });
             });
             raiseStationMarkers();
 
@@ -2079,20 +2079,63 @@
             }
             function liveTrainIconSpec(zoom, trainId, ping) {
                 var z = typeof zoom === 'number' ? zoom : 12;
-                var compact = z < 11;
+                var far = z < 11;
+                var compact = z < 13;
                 var paused = !!(ping && ping.trackingState === 'paused') || isPingGpsStale(ping);
-                var id = String(trainId || '');
-                var box = compact ? 52 : 64;
-                var bearing = ping && Number.isFinite(ping.bearing)
-                    ? ping.bearing
-                    : (ping && Number.isFinite(ping.heading) ? ping.heading : 0);
+                var box = far ? 36 : (compact ? 48 : 64);
+                var bearing = ping && Number.isFinite(ping.bearing) ? ping.bearing : 0;
                 return {
                     w: box,
                     h: box,
                     compact: compact,
+                    far: far,
                     paused: paused,
                     bearing: bearing
                 };
+            }
+            function offsetLatLngByBearing(lat, lng, bearingDeg, metres) {
+                var rad = ((Number(bearingDeg) + 90) * Math.PI) / 180;
+                var mLat = metres / 111320;
+                var mLng = metres / (111320 * Math.max(0.2, Math.cos((lat * Math.PI) / 180)));
+                return {
+                    lat: lat + mLat * Math.cos(rad),
+                    lng: lng + mLng * Math.sin(rad)
+                };
+            }
+            function bearingsOppose(a, b) {
+                if (!Number.isFinite(a) || !Number.isFinite(b)) return false;
+                var d = Math.abs(a - b) % 360;
+                if (d > 180) d = 360 - d;
+                return d >= 120;
+            }
+            function updateStationCallouts(trainPts) {
+                if (!stationLayerItems.length) return;
+                stationLayerItems.forEach(function (item) {
+                    var marker = item.marker;
+                    if (!marker || !marker.getLatLng) return;
+                    var ll = marker.getLatLng();
+                    var stPt = map.latLngToContainerPoint(ll);
+                    var nearest = null;
+                    (trainPts || []).forEach(function (t) {
+                        if (!Number.isFinite(t.lat) || !Number.isFinite(t.lng)) return;
+                        var pt = map.latLngToContainerPoint(L.latLng(t.lat, t.lng));
+                        var d = stPt.distanceTo(pt);
+                        if (!nearest || d < nearest.d) nearest = { d: d, dx: pt.x - stPt.x };
+                    });
+                    var close = !!(nearest && nearest.d < 42);
+                    var dir = close ? (nearest.dx >= 0 ? 'left' : 'right') : 'top';
+                    var tip = marker.getTooltip && marker.getTooltip();
+                    if (!tip) return;
+                    tip.options.direction = dir;
+                    tip.options.offset = close
+                        ? L.point(dir === 'right' ? 16 : -16, 0)
+                        : L.point(0, -5);
+                    var el = tip.getElement && tip.getElement();
+                    if (el) el.classList.toggle('nt-station-callout', close);
+                    if (typeof tip._updatePosition === 'function') {
+                        try { tip._updatePosition(); } catch (_) {}
+                    }
+                });
             }
             function liveTrainGlyphHtml(trainId, n, mine, spec) {
                 var wrapCls = 'nt-live-train-wrap';
@@ -2105,7 +2148,10 @@
                     cls += ' nt-live-train-glyph--paused';
                     wrapCls += ' nt-live-train-wrap--paused';
                 }
-                if (spec && spec.compact) {
+                if (spec && spec.far) {
+                    wrapCls += ' nt-live-train-wrap--far';
+                    cls += ' nt-live-train-glyph--far';
+                } else if (spec && spec.compact) {
                     wrapCls += ' nt-live-train-wrap--compact';
                     cls += ' nt-live-train-glyph--compact';
                 }
@@ -2288,6 +2334,7 @@
                         delete rideTrainMarkers[trainId];
                     });
                     applyShareHidesUserDot(false);
+                    updateStationCallouts([]);
                     return;
                 }
                 const trains = {};
@@ -2305,27 +2352,53 @@
                 applyShareHidesUserDot(mineOnTrain);
 
                 const renderedTrainIds = {};
-                Object.keys(trains).forEach(function (trainId) {
-                    renderedTrainIds[trainId] = true;
+                const placedTrains = Object.keys(trains).map(function (trainId) {
                     const list = trains[trainId];
-                    // Parent sends one robust, route-projected consensus marker.
-                    // Never average again here: a second mean can move it off rail.
                     const consensus = list.reduce(function (a, b) {
                         return (Number(a.at) || 0) >= (Number(b.at) || 0) ? a : b;
                     }, list[0]);
-                    const lat = consensus.lat;
-                    const lng = consensus.lng;
                     const ids = {};
                     list.forEach(function (p) { ids[p.deviceId || (p.lat + ',' + p.lng)] = 1; });
                     const n = list.reduce(function (s, p) { return s + (Number(p.n) || 1); }, 0) || Object.keys(ids).length;
                     const mine = list.some(function (p) { return !!p.mine; });
                     const newest = consensus;
+                    const bearing = Number.isFinite(newest.bearing) ? newest.bearing : 0;
+                    return {
+                        trainId: trainId,
+                        list: list,
+                        newest: newest,
+                        n: n,
+                        mine: mine,
+                        lat: consensus.lat,
+                        lng: consensus.lng,
+                        bearing: bearing
+                    };
+                });
+                for (var pi = 0; pi < placedTrains.length; pi += 1) {
+                    for (var pj = pi + 1; pj < placedTrains.length; pj += 1) {
+                        var pa = placedTrains[pi];
+                        var pb = placedTrains[pj];
+                        var metres = map.distance(L.latLng(pa.lat, pa.lng), L.latLng(pb.lat, pb.lng));
+                        if (metres > 90 || !bearingsOppose(pa.bearing, pb.bearing)) continue;
+                        var ao = offsetLatLngByBearing(pa.lat, pa.lng, pa.bearing, 12);
+                        var bo = offsetLatLngByBearing(pb.lat, pb.lng, pb.bearing, 12);
+                        pa.lat = ao.lat; pa.lng = ao.lng;
+                        pb.lat = bo.lat; pb.lng = bo.lng;
+                    }
+                }
+                placedTrains.forEach(function (row) {
+                    const trainId = row.trainId;
+                    renderedTrainIds[trainId] = true;
+                    const list = row.list;
+                    const lat = row.lat;
+                    const lng = row.lng;
+                    const n = row.n;
+                    const mine = row.mine;
+                    const newest = row.newest;
                     const speedValue = (list.find(function (p) { return typeof p.speedMps === 'number'; }) || newest || {}).speedMps;
                     const speed = typeof speedValue === 'number' ? speedValue : null;
-                    const heading = Number.isFinite(newest.bearing)
-                        ? newest.bearing
-                        : (list.find(function (p) { return typeof p.heading === 'number'; }) || newest || {}).heading;
-                    const spec = liveTrainIconSpec(map.getZoom(), trainId, newest);
+                    const heading = row.bearing;
+                    const spec = liveTrainIconSpec(map.getZoom(), trainId, Object.assign({}, newest, { bearing: row.bearing }));
                     const icon = L.divIcon({
                         className: 'nt-live-train',
                         html: liveTrainGlyphHtml(trainId, n, mine, spec),
@@ -2386,6 +2459,7 @@
                         requestAnimationFrame(function () { bindRideTrainPopupActions(marker); });
                     }
                 });
+                updateStationCallouts(placedTrains);
 
                 Object.keys(rideTrainMarkers).forEach(function (trainId) {
                     if (renderedTrainIds[trainId]) return;

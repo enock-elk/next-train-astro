@@ -258,7 +258,8 @@ const regionSeoSlugs = Object.fromEntries(
         display: flex; align-items: center; justify-content: center;
         pointer-events: auto;
       }
-      .nt-live-train-wrap--compact { width: 52px; height: 52px; }
+      .nt-live-train-wrap--compact { width: 48px; height: 48px; }
+      .nt-live-train-wrap--far { width: 36px; height: 36px; }
       .nt-live-train-ring {
         position: absolute;
         width: 42px; height: 42px;
@@ -369,9 +370,14 @@ const regionSeoSlugs = Object.fromEntries(
       .nt-live-train-glyph--paused.nt-live-train-glyph--mine .nt-live-train-shell {
         box-shadow: 0 0 0 1px #cbd5e1, 0 1px 3px rgba(15, 23, 42, 0.28);
       }
-      .nt-live-train-glyph--compact { width: 44px; height: 20px; }
-      .nt-live-train-glyph--compact .nt-live-train-oval { width: 26px; height: 16px; }
-      .nt-live-train-glyph--compact .nt-live-train-num { font-size: 8px; letter-spacing: 0.02em; }
+      .nt-live-train-glyph--compact { width: 34px; height: 16px; }
+      .nt-live-train-glyph--compact .nt-live-train-oval { width: 20px; height: 13px; }
+      .nt-live-train-glyph--compact .nt-live-train-num { font-size: 7px; letter-spacing: 0.02em; }
+      .nt-live-train-glyph--far { width: 28px; height: 14px; }
+      .nt-live-train-glyph--far .nt-live-train-oval { width: 16px; height: 11px; }
+      .nt-live-train-glyph--far .nt-live-train-num { font-size: 6px; letter-spacing: 0.01em; }
+      .nt-live-train-wrap--far .nt-live-train-ring { width: 22px; height: 22px; }
+      .nt-live-train-wrap--far .nt-live-train-wake { display: none; }
       @keyframes nt-live-train-halo {
         0% { transform: scale(0.55); opacity: 0.42; }
         100% { transform: scale(1.7); opacity: 0; }
@@ -435,6 +441,26 @@ const regionSeoSlugs = Object.fromEntries(
         text-shadow: -1px -1px 0 rgba(0,0,0,0.8), 1px -1px 0 rgba(0,0,0,0.8), -1px 1px 0 rgba(0,0,0,0.8), 1px 1px 0 rgba(0,0,0,0.8), 0 0 8px rgba(0,0,0,0.9) !important;
       }
       .leaflet-tooltip.tooltip-halo::before { display: none !important; }
+      .leaflet-tooltip.nt-station-callout {
+        background: #ffffff !important;
+        border: none !important;
+        border-radius: 999px !important;
+        box-shadow: 0 6px 18px rgba(15, 23, 42, 0.16) !important;
+        padding: 4px 10px !important;
+        font-family: Inter, ui-sans-serif, system-ui, sans-serif !important;
+        font-size: 11px !important;
+        font-weight: 700 !important;
+        letter-spacing: 0.01em;
+        color: #0f172a !important;
+        text-shadow: none !important;
+        line-height: 1.2;
+      }
+      html.dark .leaflet-tooltip.nt-station-callout {
+        background: #1e293b !important;
+        color: #f8fafc !important;
+        box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35) !important;
+      }
+      .leaflet-tooltip.nt-station-callout::before { display: none !important; }
       .disruption-line-overlay { animation: dashPulse 1.5s linear infinite; }
       @keyframes dashPulse { to { stroke-dashoffset: -22; } }
       .sr-only {
@@ -589,20 +615,26 @@ const regionSeoSlugs = Object.fromEntries(
       }
       function openMapFullscreen() {
         try {
-          if (window.parent && window.parent !== window && typeof window.parent.__ntOpenNetworkMapSheet === 'function') {
-            window.parent.__ntOpenNetworkMapSheet();
-            return;
+          if (inMapTab() && window.parent && window.parent !== window) {
+            if (typeof window.parent.__ntFullscreenMapTab === 'function') {
+              window.parent.__ntFullscreenMapTab();
+              return;
+            }
+            var host = window.parent.document.getElementById('view-map');
+            if (host && host.requestFullscreen) {
+              host.requestFullscreen();
+              return;
+            }
           }
         } catch (_) {}
-        try {
-          var dest = new URL((window.APP_BASE || '/') + 'map.html', window.location.href);
-          dest.searchParams.delete('embed');
-          if (window.parent && window.parent !== window && typeof window.parent.__ntNavigateInAppSheet === 'function') {
-            window.parent.__ntNavigateInAppSheet(dest.pathname + dest.search, 'Network Map');
-            return;
-          }
-          window.location.href = dest.pathname + dest.search;
-        } catch (_) {}
+        var root = document.getElementById('view-map') || document.documentElement;
+        if (root && root.requestFullscreen) {
+          root.requestFullscreen().catch(function () {});
+          return;
+        }
+        if (document.documentElement.requestFullscreen) {
+          document.documentElement.requestFullscreen().catch(function () {});
+        }
       }
       // Parent sheet / Map tab already has chrome — hide Back.
       if (inAppSheet() || inMapTab()) {

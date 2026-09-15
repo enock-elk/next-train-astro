@@ -12,6 +12,7 @@
  */
 import { readFileSync, existsSync, readdirSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
+import { isSeoRedirectHtmlFile, listSeoRedirectHtmlFiles, SEO_REDIRECTS } from '../src/lib/seo-redirects.js';
 
 const DIST = process.argv[2] || 'dist';
 const ORIGIN = 'https://nexttrain.co.za';
@@ -69,9 +70,12 @@ for (const rel of htmlFiles) {
   }
 }
 
-const routeLandings = htmlFiles.filter((f) => f.startsWith('routes/') && f !== 'routes.html');
-const regionLandings = htmlFiles.filter((f) => f.startsWith('regions/'));
-const corridorLandings = htmlFiles.filter((f) => f.startsWith('corridors/'));
+const routeLandings = htmlFiles.filter(
+  (f) => f.startsWith('routes/') && f !== 'routes.html' && !isSeoRedirectHtmlFile(f)
+);
+const regionLandings = htmlFiles.filter((f) => f.startsWith('regions/') && !isSeoRedirectHtmlFile(f));
+const corridorLandings = htmlFiles.filter((f) => f.startsWith('corridors/') && !isSeoRedirectHtmlFile(f));
+const stationLandings = htmlFiles.filter((f) => f.startsWith('stations/') && !isSeoRedirectHtmlFile(f));
 if (routeLandings.length < 30) {
   fail(`expected SSG route landings for ~all active corridors (≥30), found ${routeLandings.length}`);
 }
@@ -81,12 +85,23 @@ if (regionLandings.length < 4) {
 if (corridorLandings.length < 8) {
   fail(`expected ≥8 corridor SEO pages (Central/Northern/etc), found ${corridorLandings.length}`);
 }
+if (stationLandings.length < 10) {
+  fail(`expected ≥10 station alias landings, found ${stationLandings.length}`);
+}
 for (const file of STABLE_ROUTE_SLUGS) {
   if (!existsSync(join(DIST, file))) fail(`stable SEO slug missing: /${file}`);
 }
+for (const slug of ['mamelodi', 'mabopane', 'naledi', 'tembisa', 'irene']) {
+  if (!existsSync(join(DIST, `stations/${slug}.html`))) fail(`station alias missing: /stations/${slug}.html`);
+}
 
-const seoLandings = [...routeLandings, ...regionLandings, ...corridorLandings];
-const known = new Set([...INDEXABLE, ...NOINDEX, ...seoLandings]);
+const redirectFiles = listSeoRedirectHtmlFiles();
+for (const file of redirectFiles) {
+  if (!existsSync(join(DIST, file))) fail(`SEO redirect HTML missing: /${file}`);
+}
+
+const seoLandings = [...routeLandings, ...regionLandings, ...corridorLandings, ...stationLandings];
+const known = new Set([...INDEXABLE, ...NOINDEX, ...seoLandings, ...redirectFiles]);
 const unexpected = htmlFiles.filter((f) => !known.has(f));
 if (unexpected.length) notes.push(`extra HTML pages not in parity lists: ${unexpected.join(', ')}`);
 
@@ -94,7 +109,8 @@ const isIndexableSeo = (file) =>
   INDEXABLE.includes(file) ||
   file.startsWith('routes/') ||
   file.startsWith('regions/') ||
-  file.startsWith('corridors/');
+  file.startsWith('corridors/') ||
+  file.startsWith('stations/');
 
 // 3. Canonicals must be self-referencing against the production origin, or Google
 //    consolidates onto a URL that is not the one it has indexed.
@@ -115,9 +131,23 @@ for (const file of [...INDEXABLE, ...NOINDEX, ...seoLandings]) {
   if (NOINDEX.includes(file) && !robots.includes('noindex')) {
     fail(`/${file} is a private/system page but is not noindex`);
   }
-  if (isIndexableSeo(file) && robots.includes('noindex')) {
+  if (isIndexableSeo(file) && !isSeoRedirectHtmlFile(file) && robots.includes('noindex')) {
     fail(`/${file} should be indexable but is marked noindex`);
   }
+}
+
+for (const row of SEO_REDIRECTS) {
+  const file = `${row.from.replace(/^\//, '')}.html`;
+  const path = join(DIST, file);
+  if (!existsSync(path)) continue;
+  const html = readFileSync(path, 'utf8');
+  if (!/noindex/i.test(html)) fail(`/${file} typo redirect must be noindex`);
+  const canonical = html.match(/<link rel="canonical" href="([^"]+)"/)?.[1] || '';
+  const want = `${ORIGIN}${row.to}`;
+  if (canonical && canonical !== want && !canonical.endsWith(row.to)) {
+    fail(`/${file} redirect canonical is ${canonical}, want ${want}`);
+  }
+  if (!/http-equiv="refresh"/i.test(html)) fail(`/${file} redirect missing meta refresh`);
 }
 
 // 4. Sitemap must list public pages + every SEO landing, omit private docs.
@@ -138,6 +168,10 @@ if (!existsSync(sitemapPath)) {
     if (file === '404.html' || file === 'offline.html' || file === 'help.html') continue;
     const loc = `${ORIGIN}/${file}`;
     if (sitemap.includes(loc)) fail(`sitemap.xml must not list private page ${loc}`);
+  }
+  for (const row of SEO_REDIRECTS) {
+    const loc = `${ORIGIN}${row.from}.html`;
+    if (sitemap.includes(`<loc>${loc}</loc>`)) fail(`sitemap.xml must not list typo redirect ${loc}`);
   }
 }
 
@@ -255,5 +289,5 @@ if (failures.length) {
 }
 
 console.log(
-  `\n✓ URL parity OK — ${INDEXABLE.length} core + ${regionLandings.length} regions + ${corridorLandings.length} corridors + ${routeLandings.length} routes + ${NOINDEX.length} system pages + SPA identity/precache match.`
+  `\n✓ URL parity OK — ${INDEXABLE.length} core + ${regionLandings.length} regions + ${corridorLandings.length} corridors + ${routeLandings.length} routes + ${stationLandings.length} stations + ${NOINDEX.length} system pages + SPA identity/precache match.`
 );

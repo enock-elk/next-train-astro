@@ -54,7 +54,7 @@ Live boards try **Firebase → Cloudflare (`nexttrain-cache`) → GitHub dump**.
 - Region swap must **not** reopen Select Route when a pin is restored.
 - Weekday/Sat/Sun sim must ignore leftover `#sim-date` unless the user picked a specific date.
 - Shared-corridor “To …” uses the warning **SVG**, not emoji.
-- Google Search favicon: first `<link rel="icon">` is the square **48×48 PNG** (`/icons/icon-48.png`). Do not put `favicon.ico` first with `sizes="any"` (that attribute is for SVG). Browser tab ≠ SERP chip; SERP lag after deploys is normal (days). Request indexing of `https://nexttrain.co.za/` in Search Console after production deploy.
+- Google Search favicon: first `<link rel="icon">` is the square **48×48 PNG** (`/icons/icon-48.png`). Do not put `favicon.ico` first with `sizes="any"` (that attribute is for SVG). Browser tab ≠ SERP chip; SERP lag after deploys is normal (days). Request indexing of `https://nexttrain.co.za/` in Search Console after production deploy. Also run URL Inspection on money corridors (Mabopane, Naledi, Pienaarspoort, Strand, Chris Hani, Umlazi, East London) and `/stations/` aliases. Do not lower `/_astro/` keep counts to chase Core Web Vitals.
 
 ## Versioning
 

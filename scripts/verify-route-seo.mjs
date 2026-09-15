@@ -14,6 +14,8 @@ import { join } from 'node:path';
 import { MANUAL_GRID_ORDER, orderGridTrainIds } from '../src/lib/grid-order.js';
 import { ROUTES } from '../src/lib/config.js';
 import { listFeaturedSeoRoutes, getSeoRouteBySlug, stationLabel, slugifyStation, gridStationLabel } from '../src/lib/seo-routes.js';
+import { listSeoStationAliases, SEO_STATION_ALIASES } from '../src/lib/seo-stations.js';
+import { listSeoRedirectHtmlFiles, SEO_REDIRECTS } from '../src/lib/seo-redirects.js';
 import {
   buildRouteSeoTimetable,
   bidirectionalTitle,
@@ -21,6 +23,9 @@ import {
   directionPhrase,
   routeDocumentTitle,
   routeMetaDescription,
+  stationDocumentTitle,
+  stationMetaDescription,
+  scheduleFromPhrase,
   buildRouteFareTable,
   resolveRouteZone,
   ogTimetableImageUrl,
@@ -97,8 +102,12 @@ for (const { id, slug } of FLAGSHIP) {
 }
 
 const featured = listFeaturedSeoRoutes();
-if (featured.length < 6) fail(`expected ≥6 featured SEO routes, found ${featured.length}`);
+if (featured.length < 10) fail(`expected ≥10 featured SEO routes, found ${featured.length}`);
 if (!featured.some((e) => e.route.id === 'jhb-soweto')) fail('featured list must include Naledi (jhb-soweto)');
+if (!featured.some((e) => e.route.id === 'ct-strnd')) fail('featured list must include Strand (ct-strnd)');
+if (!featured.some((e) => e.route.id === 'ct-chrishani')) fail('featured list must include Chris Hani (ct-chrishani)');
+if (!featured.some((e) => e.route.id === 'ec-berlin')) fail('featured list must include East London (ec-berlin)');
+if (!featured.some((e) => e.route.id === 'kzn-pinetown')) fail('featured list must include Pinetown (kzn-pinetown)');
 
 if (stationLabel('JOHANNESBURG STATION') !== 'Johannesburg') {
   fail(`stationLabel JOHANNESBURG STATION is "${stationLabel('JOHANNESBURG STATION')}"`);
@@ -148,26 +157,42 @@ if (directionPhrase('Pretoria', 'Mabopane') !== 'Pretoria to Mabopane') {
   fail('directionPhrase should be "Pretoria to Mabopane"');
 }
 const docTitle = routeDocumentTitle('Pretoria', 'Mabopane');
-if (!docTitle.startsWith('Pretoria ↔ Mabopane Train Schedule & Times |')) {
+if (docTitle !== 'Train schedule from Pretoria to Mabopane | Metrorail Next Train') {
   fail(`document title is "${docTitle}"`);
 }
+if (/↔/.test(docTitle) || /to .+ & .+ to /i.test(docTitle)) {
+  fail(`document title must be query-shaped, not a stuffed pair: "${docTitle}"`);
+}
+if (scheduleFromPhrase('Mamelodi', 'Pretoria') !== 'Train schedule from Mamelodi to Pretoria') {
+  fail('scheduleFromPhrase should be "Train schedule from Mamelodi to Pretoria"');
+}
 const meta = routeMetaDescription('Pretoria', 'Mabopane', 'Gauteng');
-if (!meta.includes('Pretoria to Mabopane') || !meta.includes('Mabopane to Pretoria')) {
+if (!meta.includes('Train schedule from Pretoria to Mabopane') || !meta.includes('Train schedule from Mabopane to Pretoria')) {
   fail(`meta description must name both directions: "${meta}"`);
 }
 if (meta.includes(' & Mabopane to')) {
   fail('meta description should not use the stuffed & title form');
 }
-if (!/train times/i.test(meta)) {
-  fail(`meta description should use train-times language: "${meta}"`);
+if (!/train schedule from/i.test(meta)) {
+  fail(`meta description should use train-schedule language: "${meta}"`);
+}
+if (/saturday/i.test(meta)) {
+  fail(`meta without hasSaturday must omit Saturday: "${meta}"`);
 }
 const metaSat = routeMetaDescription('Pretoria', 'Mabopane', 'Gauteng', { hasSaturday: true });
-if (!/saturday/i.test(metaSat) || !/sunday/i.test(metaSat)) {
-  fail(`Saturday meta should mention Saturday and Sunday: "${metaSat}"`);
+if (!/saturday/i.test(metaSat)) {
+  fail(`Saturday meta should mention Saturday: "${metaSat}"`);
+}
+const metaNoSat = routeMetaDescription('Pretoria', 'Mabopane', 'Gauteng', { hasSaturday: false });
+if (/saturday/i.test(metaNoSat)) {
+  fail(`hasSaturday false must omit Saturday: "${metaNoSat}"`);
 }
 const capeMeta = routeMetaDescription('Cape Town', 'Bellville', 'Western Cape', { hasSaturday: true });
 if (!/cape town train times/i.test(capeMeta)) {
   fail(`Cape Town meta should lead with Cape Town train times: "${capeMeta}"`);
+}
+if (!capeMeta.includes('Train schedule from Cape Town to Bellville') || !capeMeta.includes('Train schedule from Bellville to Cape Town')) {
+  fail(`Cape Town meta must name both directions: "${capeMeta}"`);
 }
 
 {
@@ -232,9 +257,60 @@ if (!gridPathSa.includes('d=sa') || gridPathSa.includes('dir=')) {
 }
 
 {
+  const aliases = listSeoStationAliases();
+  const requiredSlugs = [
+    'mamelodi',
+    'mamelodi-gardens',
+    'mabopane',
+    'pretoria-north',
+    'naledi',
+    'tembisa',
+    'irene',
+    'saulsville',
+    'hercules',
+    'kopanong',
+  ];
+  for (const slug of requiredSlugs) {
+    if (!aliases.some((row) => row.alias.slug === slug)) fail(`missing station alias ${slug}`);
+  }
+  if (new Set(SEO_STATION_ALIASES.map((a) => a.slug)).size !== SEO_STATION_ALIASES.length) {
+    fail('station alias slugs must be unique');
+  }
+  for (const row of aliases) {
+    const { alias, route, parent } = row;
+    if (!parent?.seed?.slug) fail(`station alias ${alias.slug} missing parent corridor seed`);
+    if (alias.parentRouteId !== route.id) fail(`station alias ${alias.slug} parent mismatch`);
+    const stations = corridorStationList(buildRouteSeoTimetable(route));
+    const lower = new Set(stations.map((s) => s.toLowerCase()));
+    for (const stop of alias.clockedStations) {
+      if (!lower.has(stop.toLowerCase())) {
+        fail(`station alias ${alias.slug} claims ${stop} but it is not on ${route.id}`);
+      }
+    }
+    const stTitle = stationDocumentTitle(alias.fromLabel, alias.toLabel);
+    if (!stTitle.startsWith(`Train schedule from ${alias.fromLabel} to ${alias.toLabel}`)) {
+      fail(`station alias title for ${alias.slug} is "${stTitle}"`);
+    }
+    const stMeta = stationMetaDescription(alias, row.province, { hasSaturday: true });
+    if (!stMeta.includes(scheduleFromPhrase(alias.fromLabel, alias.toLabel))) {
+      fail(`station alias meta for ${alias.slug} missing primary OD`);
+    }
+    if (!stMeta.includes(scheduleFromPhrase(alias.toLabel, alias.fromLabel))) {
+      fail(`station alias meta for ${alias.slug} missing reverse OD`);
+    }
+    if (stTitle === routeDocumentTitle(row.origin, row.dest)) {
+      fail(`station alias ${alias.slug} title collides with parent corridor title`);
+    }
+  }
+}
+
+{
   const guideSrc = readFileSync(new URL('../src/pages/guide.astro', import.meta.url), 'utf8');
   if (!guideSrc.includes('isSeoLanding') || !guideSrc.includes('__ntOpenSeoPage')) {
     fail('guide.html must open SEO landings instead of closing onto the pinned board');
+  }
+  if (!guideSrc.includes('\\/stations\\/')) {
+    fail('guide isSeoLanding must include /stations/');
   }
   if (/isAppHome \|\| \/\\\/routes/.test(guideSrc)) {
     fail('guide.html still closes the in-app sheet for /routes/ links');
@@ -416,8 +492,14 @@ if (existsSync(DIST)) {
     if (!html.includes('Naledi to Johannesburg') && !html.includes('Showing trains to Naledi')) {
       fail('Naledi route HTML must mention both directions');
     }
-    if (!html.includes('Johannesburg ↔ Naledi Train Schedule & Times')) {
-      fail('Naledi route H1/title should use Johannesburg');
+    if (!html.includes('Johannesburg ↔ Naledi Train Schedule &amp; Times') && !html.includes('Johannesburg ↔ Naledi Train Schedule & Times')) {
+      fail('Naledi route H1 should keep the calm ↔ pair');
+    }
+    if (!html.includes('<title>Train schedule from Johannesburg to Naledi | Metrorail Next Train</title>')) {
+      fail('Naledi <title> should be query-shaped Train schedule from Johannesburg to Naledi');
+    }
+    if (!html.includes('stations/naledi.html')) {
+      fail('Naledi corridor HTML should link the Naledi station alias');
     }
     if (html.includes('Johannesburg Park Station')) {
       fail('Naledi route HTML must not say Johannesburg Park Station');
@@ -471,6 +553,21 @@ if (existsSync(DIST)) {
   if (!indexHtml.includes('johannesburg-to-naledi')) {
     fail('homepage HTML should link the Naledi landing');
   }
+  if (!indexHtml.includes('cape-town-to-chris-hani')) {
+    fail('homepage HTML should link the Chris Hani landing');
+  }
+  if (!indexHtml.includes('east-london-to-berlin')) {
+    fail('homepage HTML should link the East London landing');
+  }
+  if (!indexHtml.includes('durban-to-pinetown')) {
+    fail('homepage HTML should link the Pinetown landing');
+  }
+  if (!indexHtml.includes('Cape Town train times')) {
+    fail('homepage meta should mention Cape Town train times');
+  }
+  if (!indexHtml.includes('Metrorail Next Train | 2026 Train Schedules for South Africa')) {
+    fail('homepage <title> must stay the brand title');
+  }
   if (!indexHtml.includes('Commuters can send a delay note, and some testers can share a trip location.')) {
     fail('homepage FAQ must mention delay notes and optional trip sharing');
   }
@@ -481,6 +578,9 @@ if (existsSync(DIST)) {
   const guideHtml = readFileSync(join(DIST, 'guide.html'), 'utf8');
   if (!guideHtml.includes('routes.html') || !guideHtml.includes('johannesburg-to-naledi')) {
     fail('guide.html should list featured route timetables');
+  }
+  if (!guideHtml.includes('cape-town-to-chris-hani') || !guideHtml.includes('durban-to-pinetown') || !guideHtml.includes('east-london-to-berlin')) {
+    fail('guide.html should list Chris Hani, Pinetown and East London');
   }
   if (!guideHtml.includes('Commuters can send a delay note, and some testers can share a trip location.')) {
     fail('guide.html must use the same delay-note FAQ sentence');
@@ -561,6 +661,65 @@ if (existsSync(DIST)) {
     if (!html.includes('Open Next Train · Gauteng')) {
       fail('Gauteng region page missing Open Next Train · Gauteng');
     }
+  }
+
+  const mamelodi = join(DIST, 'stations/mamelodi.html');
+  if (!existsSync(mamelodi)) {
+    fail('dist missing stations/mamelodi.html — run the build');
+  } else {
+    const html = readFileSync(mamelodi, 'utf8');
+    if (!html.includes('<h1') || !html.includes('Mamelodi train times')) {
+      fail('Mamelodi station HTML missing unique H1');
+    }
+    if (!html.includes('<title>Train schedule from Mamelodi to Pretoria | Metrorail Next Train</title>')) {
+      fail('Mamelodi station <title> should be query-shaped');
+    }
+    if (!html.includes('https://nexttrain.co.za/stations/mamelodi.html')) {
+      fail('Mamelodi station canonical must be self, not the parent corridor');
+    }
+    if (!html.includes('pretoria-to-pienaarspoort.html')) {
+      fail('Mamelodi station HTML must link the parent Pretoria to Pienaarspoort corridor');
+    }
+    if (!html.includes('Mamelodi Gardens') || !html.includes('Denneboom')) {
+      fail('Mamelodi station HTML missing published Mamelodi stops');
+    }
+    if (!html.includes('<table')) fail('Mamelodi station HTML has no parent timetable table');
+    if (!/\d{1,2}:\d{2}/.test(html)) fail('Mamelodi station HTML has no clock times');
+  }
+
+  for (const slug of ['mabopane', 'pretoria-north', 'naledi', 'tembisa', 'irene', 'saulsville', 'hercules', 'kopanong', 'mamelodi-gardens']) {
+    const path = join(DIST, `stations/${slug}.html`);
+    if (!existsSync(path)) {
+      fail(`dist missing stations/${slug}.html`);
+      continue;
+    }
+    const html = readFileSync(path, 'utf8');
+    if (!html.includes(`https://nexttrain.co.za/stations/${slug}.html`)) {
+      fail(`stations/${slug}.html canonical must be self`);
+    }
+    if (/<html[^>]*class="[^"]*\bdark\b/.test(html)) fail(`stations/${slug}.html has html.dark`);
+  }
+
+  const redirectsTxt = readFileSync(new URL('../public/_redirects', import.meta.url), 'utf8');
+  for (const row of SEO_REDIRECTS) {
+    const file = `${row.from.replace(/^\//, '')}.html`;
+    const path = join(DIST, file);
+    if (!existsSync(path)) {
+      fail(`dist missing redirect HTML ${file}`);
+      continue;
+    }
+    const html = readFileSync(path, 'utf8');
+    if (!/noindex/i.test(html)) fail(`${file} redirect must be noindex`);
+    if (!html.includes(row.to) && !html.includes(row.to.replace(/\.html$/, ''))) {
+      fail(`${file} redirect must point at ${row.to}`);
+    }
+    if (!/http-equiv="refresh"/i.test(html)) fail(`${file} redirect missing meta refresh`);
+    if (!redirectsTxt.includes(row.from)) {
+      fail(`public/_redirects missing ${row.from}`);
+    }
+  }
+  if (listSeoRedirectHtmlFiles().length !== SEO_REDIRECTS.length) {
+    fail('redirect HTML inventory drifted from SEO_REDIRECTS');
   }
 } else {
   console.log(`  note: ${DIST}/ not found — skipping built-HTML asserts (library checks still ran)`);

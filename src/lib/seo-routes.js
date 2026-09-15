@@ -395,9 +395,12 @@ export const FEATURED_SEO_ROUTE_IDS = [
     'pta-pien',
     'pta-saul',
     'ct-strnd',
+    'ct-chrishani',
     'ct-bellv',
     'ct-simon',
     'kzn-umlazi',
+    'kzn-pinetown',
+    'ec-berlin',
 ];
 
 export function listFeaturedSeoRoutes() {

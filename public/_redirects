@@ -15,3 +15,20 @@
 /status/  /status  301
 /offline/ /offline 301
 /index.html  /  301
+
+# GA-crawled typos. Extensionless destinations avoid CF Pages .html↔bare loops.
+# GitHub Pages ignores this file; Astro `redirects` emit the HTML copies.
+/routes/cape-town-to-chloris-hani  /routes/cape-town-to-chris-hani  301
+/routes/cape-town-to-chloris-hani.html  /routes/cape-town-to-chris-hani  301
+/routes/cape-town-to-chris-hnai  /routes/cape-town-to-chris-hani  301
+/routes/cape-town-to-chris-hnai.html  /routes/cape-town-to-chris-hani  301
+/regions/western-cable  /regions/western-cape  301
+/regions/western-cable.html  /regions/western-cape  301
+/regions/western-coder  /regions/western-cape  301
+/regions/western-coder.html  /regions/western-cape  301
+/regions/eastern-angle  /regions/eastern-cape  301
+/regions/eastern-angle.html  /regions/eastern-cape  301
+/corridors/western-line-northern-line  /corridors/western-cape-northern-line  301
+/corridors/western-line-northern-line.html  /corridors/western-cape-northern-line  301
+/routes/52a06c623e767edc20000003/leralla-germiston  /routes/germiston-to-leralla  301
+/routes/52a06c623e767edc20000003/leralla-germiston.html  /routes/germiston-to-leralla  301

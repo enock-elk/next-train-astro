@@ -5,13 +5,11 @@
  * CleverCoreLoader103008 next to the first page script. Guardian only decides
  * WHEN to call that IIFE (welcome / safe-zone / 4-slot schedule). Do not steal
  * #clever-core for a positioned DIV and do not set left/top/transform on their
- * overlays — their sticky format owns placement (full viewport, like Ster-Kinekor).
- * Do not reparent filled units into #nt-ad-scroll-host. The phone frame is
- * max-w-md overflow:hidden; forcing position:static + width:100% there clips a
- * 100vw creative to a blank strip (close X still shows). When a top sticky
- * fills or dismisses, ease #main-content via --nt-ad-shift / --nt-ad-flip on
- * #nt-shell. Bottom stickies overlay the page and must not create a top gap.
- * Do not transform #nt-shell itself (it wraps position:fixed overlays).
+ * overlays. Vendor units stay document-level so 100vw creative payloads can
+ * paint at full width; never reparent them into the max-w-md phone frame.
+ * When a unit fills or the commuter dismisses it, ease #main-content via
+ * --nt-ad-shift / --nt-ad-flip on #nt-shell. Do not transform #nt-shell itself
+ * (it wraps position:fixed overlays).
  *
  * A leftover top gap after the creative is gone is a bug: measure occupancy
  * (not just the wrapper box), reclaim idle in-flow leftovers, and re-sync on
@@ -23,6 +21,7 @@
  */
 import { safeStorage } from './utils.js';
 import { isReloadPending, isStableForThirdParty } from './session-stability.js';
+import { createIframeLoadGate, topLevelAdNodes } from './clever-ad-lifecycle.js';
 
 const LOADER_ID = 'CleverCoreLoader103008';
 /** Soft wait for schedules / welcome; pending reloads always win until their until. */
@@ -56,6 +55,15 @@ const AD_OCCUPANCY_WATCH_MS = 2000;
 const observedOverlayNodes = new Set();
 let overlayResizeObserver = null;
 const AD_SHELL_EASE_MS = 420;
+
+const iframeLoadGate = createIframeLoadGate((frame) => {
+    let parent = frame?.parentElement;
+    while (parent && parent !== document.body && parent !== document.documentElement) {
+        parent.removeAttribute('data-nt-ad-idle');
+        parent = parent.parentElement;
+    }
+    afterPaint(requestAdShellSync);
+});
 
 function bumpPageInjectCount() {
     pageInjectCount += 1;
@@ -132,9 +140,12 @@ function cleverOverlayNodes() {
     document.querySelectorAll('[id*="lever" i], [class*="lever" i]').forEach(add);
     document.querySelectorAll('iframe').forEach((el) => {
         const src = el.getAttribute('src') || '';
-        if (/clever/i.test(src) || el.closest('[id*="lever" i], [class*="lever" i]')) add(el);
+        if (/clever/i.test(src) || el.closest('[id*="lever" i], [class*="lever" i]')) {
+            iframeLoadGate.observe(el);
+            add(el);
+        }
     });
-    return out;
+    return topLevelAdNodes(out);
 }
 
 function prefersReducedMotion() {
@@ -188,12 +199,11 @@ function isPaintedBox(el, { ignoreOurHide = false } = {}) {
 
 function iframeLooksAlive(iframe, paintedOpts) {
     if (!iframe || iframe.tagName !== 'IFRAME') return false;
+    iframeLoadGate.observe(iframe);
     const src = String(iframe.getAttribute('src') || iframe.src || '').trim();
     if (!src || /^about:(blank|srcdoc)$/i.test(src)) return false;
     if (!iframe.isConnected) return false;
-    try {
-        if (iframe.contentWindow == null) return false;
-    } catch { /* cross-origin is fine; discarded frames are null */ }
+    if (!iframeLoadGate.isLoaded(iframe)) return false;
     return isPaintedBox(iframe, paintedOpts);
 }
 
@@ -247,16 +257,6 @@ function syncIdleAdNodes() {
 
 function ntShell() {
     return document.getElementById('nt-shell');
-}
-
-/**
- * Height to ease the board down. Sticky-top only.
- * Bottom/side stickies (Ster-Kinekor-style) overlay the page and return 0.
- */
-function overlayShiftHeight(r, cs) {
-    if (cs.position !== 'fixed' && cs.position !== 'absolute') return 0;
-    if (r.top > 64) return 0;
-    return r.height;
 }
 
 function afterPaint(fn) {
@@ -395,21 +395,19 @@ function animateOverlayTo(toH) {
 function measureAdLayout(paintedOpts = {}) {
     let overlayH = 0;
     let inFlowH = 0;
-    let occupied = false;
     cleverOverlayNodes().forEach((el) => {
         const cs = getComputedStyle(el);
         if (cs.display === 'none') return;
         if (el.getAttribute('data-nt-ad-idle') === '1') return;
         if (!unitOccupiesSpace(el, paintedOpts)) return;
-        occupied = true;
         const r = el.getBoundingClientRect();
         if (cs.position === 'fixed' || cs.position === 'absolute') {
-            overlayH = Math.max(overlayH, overlayShiftHeight(r, cs));
+            overlayH = Math.max(overlayH, r.height);
         } else {
             inFlowH = Math.max(inFlowH, r.height);
         }
     });
-    return { overlayH, inFlowH, occupied };
+    return { overlayH, inFlowH };
 }
 
 function syncAdShellMotion() {
@@ -431,8 +429,8 @@ function syncAdShellMotion() {
 
     if (adEntering || shellMotionLock) return;
 
-    const { overlayH, inFlowH, occupied } = measureAdLayout();
-    const filled = occupied || overlayH > 0 || inFlowH > 0;
+    const { overlayH, inFlowH } = measureAdLayout();
+    const filled = overlayH > 0 || inFlowH > 0;
 
     if (isAdsCloaked()) {
         if (inFlowH > 0) prevInFlowH = inFlowH;
@@ -571,8 +569,8 @@ function uncloak() {
 
 function isAdFilled() {
     if (adEntering) return true;
-    const { overlayH, inFlowH, occupied } = measureAdLayout({ ignoreOurHide: true });
-    return occupied || overlayH > 0 || inFlowH > 0;
+    const { overlayH, inFlowH } = measureAdLayout({ ignoreOurHide: true });
+    return overlayH > 0 || inFlowH > 0;
 }
 
 function handleAdFailure(adContainer, reason, isFatal = false) {
@@ -734,6 +732,11 @@ export function initCleverAds() {
                     if (/lever/i.test(`${el.id} ${el.className}`) || el.tagName === 'IFRAME') {
                         requestAdShellSync();
                     }
+                }
+                if (m.type === 'attributes' && m.attributeName === 'src' && m.target instanceof HTMLIFrameElement) {
+                    iframeLoadGate.invalidate(m.target);
+                    iframeLoadGate.observe(m.target);
+                    requestAdShellSync();
                 }
                 if (m.type === 'childList') sawChildList = true;
                 if (!window._adTelemetryFired && m.type === 'childList' && isAdFilled() && isSafeZone()) {

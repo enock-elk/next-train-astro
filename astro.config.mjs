@@ -1,6 +1,7 @@
 import { defineConfig } from 'astro/config';
 import tailwind from '@astrojs/tailwind';
 import AstroPWA from '@vite-pwa/astro';
+import { astroRedirectMap } from './src/lib/seo-redirects.js';
 
 // GitHub project Pages: /next-train-astro/
 // Local + custom domain: /
@@ -19,6 +20,7 @@ export default defineConfig({
   base: baseWithSlash,
   // Keep trailing slash on `base` itself; page URLs can still omit slash
   trailingSlash: 'ignore',
+  redirects: astroRedirectMap(),
   build: {
     // 'file' emits dist/guide.html; the default 'directory' emits dist/guide/index.html.
     // metrorail-app serves /guide.html, /map.html and /status.html, and those exact
@@ -63,8 +65,9 @@ export default defineConfig({
         globPatterns: ['**/*.{js,css,html,ico,webmanifest}'],
         // Private ops/marketing docs are noindex and never needed offline; keeping
         // them out shrinks the atomic install that every 3G user pays for up front.
-        // admin.js: lazy unlock only. routes/**: SEO landings are crawlable but
-        // must not inflate the atomic offline install for every commuter.
+        // admin.js: lazy unlock only. routes/** / regions/** / corridors/** /
+        // stations/**: SEO landings are crawlable but must not inflate the
+        // atomic offline install for every commuter.
         globIgnores: [
           '**/node_modules/**',
           'marketing.html',
@@ -73,6 +76,7 @@ export default defineConfig({
           'routes/**',
           'regions/**',
           'corridors/**',
+          'stations/**',
         ],
         navigateFallback: 'index.html',
         navigateFallbackDenylist: [
@@ -86,6 +90,7 @@ export default defineConfig({
           /\/routes(\.html|\/)/,
           /\/corridors\//,
           /\/regions\//,
+          /\/stations\//,
           /guide\.html/,
           /\/map(?:\.html)?(?:$|[/?#])/,
           /map\.html/,

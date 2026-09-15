@@ -403,12 +403,12 @@ export function buildRouteJsonLd({
     };
 }
 
-/** Corridor ends as a calm pair — used in H1, <title>, and metadata. */
+/** Corridor ends as a calm pair — used in H1 and on-page metadata, not stuffed into <title>. */
 export function corridorPairLabel(origin, dest) {
     return `${origin} ↔ ${dest}`;
 }
 
-/** `{A} ↔ {B} Train Schedule & Times` — do not stuff both "X to Y & Y to X" into the title. */
+/** `{A} ↔ {B} Train Schedule & Times` — H1 only. Do not stuff both "X to Y & Y to X" here. */
 export function bidirectionalTitle(origin, dest) {
     return `${corridorPairLabel(origin, dest)} Train Schedule & Times`;
 }
@@ -418,31 +418,45 @@ export function directionPhrase(from, to) {
     return `${from} to ${to}`;
 }
 
+/** Query-shaped phrase Search Console already converts on (`train schedule from A to B`). */
+export function scheduleFromPhrase(from, to) {
+    return `Train schedule from ${from} to ${to}`;
+}
+
 /** @deprecated Use bidirectionalTitle — kept so older verify scripts fail closed if they still import this name. */
 export function bothDirectionTitle(origin, dest) {
     return bidirectionalTitle(origin, dest);
 }
 
+/**
+ * Document <title>: one primary direction so Google does not rewrite a stuffed string.
+ * Reverse direction belongs in the meta description.
+ */
 export function routeDocumentTitle(origin, dest) {
-    return `${bidirectionalTitle(origin, dest)} | Metrorail Next Train`;
+    return `${scheduleFromPhrase(origin, dest)} | Metrorail Next Train`;
 }
 
 export function routeMetaDescription(origin, dest, province, opts = {}) {
     const hasSaturday = opts?.hasSaturday;
-    const pair = `${origin} and ${dest}`;
     const cape = /cape town/i.test(`${origin} ${dest}`);
-    const lead = cape
-        ? `Cape Town train times between ${pair}`
-        : `Metrorail train times between ${pair}`;
-    const dirs = `including trains from ${directionPhrase(origin, dest)} and ${directionPhrase(dest, origin)}`;
+    const dirs = `${scheduleFromPhrase(origin, dest)} and ${scheduleFromPhrase(dest, origin)}`;
+    const lead = cape ? `Cape Town train times. ${dirs}` : dirs;
     const nearby = opts?.nearby ? ` ${String(opts.nearby).trim()}` : '';
-    let extra = '';
-    if (hasSaturday === true) {
-        extra = ' Saturday train times are listed on this page. No Sunday service.';
-    } else if (hasSaturday === false) {
-        extra = ' No Saturday sheet in the published dump. No Sunday service.';
-    }
-    return `Check ${lead} (${province}), ${dirs}.${nearby}${extra}`;
+    const sat = hasSaturday === true ? ' Saturday train times are listed on this page.' : '';
+    return `Check ${lead} (${province}).${nearby}${sat}`;
+}
+
+export function stationDocumentTitle(fromLabel, toLabel) {
+    return `${scheduleFromPhrase(fromLabel, toLabel)} | Metrorail Next Train`;
+}
+
+export function stationMetaDescription(alias, province, opts = {}) {
+    const dirs = `${scheduleFromPhrase(alias.fromLabel, alias.toLabel)} and ${scheduleFromPhrase(alias.toLabel, alias.fromLabel)}`;
+    const stops = alias.clockedStations?.length
+        ? ` Published stops: ${alias.clockedStations.join(', ')}.`
+        : '';
+    const sat = opts?.hasSaturday === true ? ' Saturday train times are listed on this page.' : '';
+    return `${alias.place} Metrorail station (${province}). ${dirs}.${stops}${sat}`;
 }
 
 function getDumpValue(db, key) {

@@ -2,6 +2,12 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin, Dev Hub, Alerts, Trains near me, community chat, or other hidden-test work. No emoji and no em dashes in What’s New. Keep `APP_VERSION`, `package.json` `version`, and `public/app-version.json` aligned on each release. Changelog / What’s New may be skipped, or the heading may be only **no release notes.** Every bump must add `ADMIN_CHANGELOG[APP_VERSION]` (System Health Build notes).
 
+## V9_09.15.6 — Query-shaped route titles and station aliases (15 Sep 2026)
+
+Corridor `<title>` and meta use Train schedule from A to B (both directions in meta, Saturday only when the sheet exists). Station alias landings for high-impression suburb queries reuse the parent timetable. Featured home/guide links add Chris Hani, East London and Pinetown. Crawled typo URLs redirect and stay noindex.
+
+no release notes.
+
 ## V9_09.15.5 — Route SEO first/last, nearby copy, Build notes chip (15 Sep 2026)
 
 Durban Yard is no longer labelled Durban on `/routes/` grids. First/last on corridor landings use destination-row arrivals so mid-line joiners count. Route pages get verified nearby/POI commentary. Admin Feedback version meta opens Build notes. `ADMIN_CHANGELOG` is required on every version bump.

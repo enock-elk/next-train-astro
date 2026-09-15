@@ -250,7 +250,7 @@ const faqJsonLd = {
             return;
           }
           if (isGuide) return;
-          var isSeoLanding = /\/routes(\/|\.html)/i.test(path) || /\/regions\//i.test(path) || /\/corridors\//i.test(path);
+          var isSeoLanding = /\/routes(\/|\.html)/i.test(path) || /\/regions\//i.test(path) || /\/corridors\//i.test(path) || /\/stations\//i.test(path);
           if (isSeoLanding) {
             e.preventDefault();
             var dest = a.href;

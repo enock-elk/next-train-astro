@@ -6,6 +6,7 @@ import { writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { listSeoRoutes, listSeoRegions, listSeoCorridors } from '../src/lib/seo-routes.js';
+import { listSeoStationAliases } from '../src/lib/seo-stations.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const ORIGIN = 'https://nexttrain.co.za';
@@ -46,7 +47,13 @@ const routeUrls = listSeoRoutes().map(({ seed }) => ({
   priority: '0.75',
 }));
 
-const urls = [...core, ...regionUrls, ...corridorUrls, ...routeUrls];
+const stationUrls = listSeoStationAliases().map(({ alias }) => ({
+  loc: `${ORIGIN}/stations/${alias.slug}.html`,
+  changefreq: 'weekly',
+  priority: '0.72',
+}));
+
+const urls = [...core, ...regionUrls, ...corridorUrls, ...routeUrls, ...stationUrls];
 const body = urls
   .map(
     (u) => `  <url>
@@ -70,5 +77,5 @@ ${body}
 
 writeFileSync(join(ROOT, 'public', 'sitemap.xml'), xml, 'utf8');
 console.log(
-  `sitemap.xml: ${urls.length} URLs (${regionUrls.length} regions, ${corridorUrls.length} corridors, ${routeUrls.length} routes)`
+  `sitemap.xml: ${urls.length} URLs (${regionUrls.length} regions, ${corridorUrls.length} corridors, ${routeUrls.length} routes, ${stationUrls.length} stations)`
 );

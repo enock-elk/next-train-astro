@@ -5,6 +5,13 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_09.15.6': [
+        'Route <title>/meta: query-shaped Train schedule from A to B, reverse in meta, Saturday only when the sheet exists. H1 stays the calm ↔ pair. Homepage title unchanged; homepage meta names Cape Town train times and Gauteng boards.',
+        'Station alias landings at /stations/ for Mamelodi, Mamelodi Gardens, Mabopane, Pretoria North, Naledi, Tembisa, Irene, Saulsville, Hercules, Kopanong. Each reuses the parent corridor timetable, self-canonical, unique H1. No invented Pretoria–Johannesburg grid.',
+        'Featured home/guide links add Chris Hani, East London and Pinetown (Strand was already listed).',
+        'GA typo URLs (chloris-hani, chris-hnai, western-cable, western-coder, eastern-angle, western-line-northern-line, leftover Mongo leralla-germiston) redirect with noindex. Cloudflare _redirects plus Astro static HTML for GitHub Pages.',
+        'After production deploy: Search Console URL Inspection on Mabopane, Naledi, Pienaarspoort, Strand, Chris Hani, Umlazi, East London, and the new /stations/ aliases. Do not lower /_astro/ --keep / --keep-css for Core Web Vitals. globIgnores and navigateFallbackDenylist now also skip stations/** (same as routes/**).',
+    ],
     'V9_09.15.5': [
         'Route landings: Durban Yard stays a distinct grid row (no longer labelled Durban). First/last times use the destination row so joiners count. Corridor pages get verified nearby/POI commentary (no invented stops). Ghosts such as Eersterust are named as areas passed, not calling points.',
         'Feedback Hub: admin bubble version (V9_09.15.2 · route) is the same Build notes button as the commuter chip. V9_09.15.2 notes are backfilled so that chip opens notes instead of an empty modal.',

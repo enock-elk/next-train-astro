@@ -420,7 +420,7 @@ assert(hubModals.includes('id="nt-admin-publish-train"'), 'admin nearby sheet ca
     assert(accountJs.includes("hydrateRemoteMarks({ persist: true })"), 'sign-in merges local marks onto the uid');
     const adminCl = readFileSync(new URL('../src/lib/admin-changelog.js', import.meta.url), 'utf8');
     assert(adminCl.includes('ADMIN_CHANGELOG'), 'operator build notes exist');
-    assert(adminCl.includes('V9_09.10.11'), 'current build has operator notes');
+    assert(adminCl.includes(`'${APP_VERSION}'`), `ADMIN_CHANGELOG must include ${APP_VERSION}`);
     assert(adminCl.includes('CHANGELOG_DATA'), 'build notes fall back to What’s New');
     assert(adminCl.includes('listAdminChangelogVersions'), 'build notes list merges What’s New versions');
     assert(adminJs.includes('ntAdminSecureEscape'), 'build notes escape helper is in scope');

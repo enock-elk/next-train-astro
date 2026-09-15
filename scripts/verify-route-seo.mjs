@@ -13,7 +13,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { MANUAL_GRID_ORDER, orderGridTrainIds } from '../src/lib/grid-order.js';
 import { ROUTES } from '../src/lib/config.js';
-import { listFeaturedSeoRoutes, getSeoRouteBySlug, stationLabel, slugifyStation } from '../src/lib/seo-routes.js';
+import { listFeaturedSeoRoutes, getSeoRouteBySlug, stationLabel, slugifyStation, gridStationLabel } from '../src/lib/seo-routes.js';
 import {
   buildRouteSeoTimetable,
   bidirectionalTitle,
@@ -111,6 +111,18 @@ if (stationLabel('PRETORIA-N') !== 'Pretoria North') {
 }
 if (stationLabel('PRETORIA WES') !== 'Pretoria West') {
   fail(`stationLabel PRETORIA WES is "${stationLabel('PRETORIA WES')}"`);
+}
+if (stationLabel('DURBAN YARD') !== 'Durban') {
+  fail(`stationLabel DURBAN YARD (terminus) should stay Durban, got "${stationLabel('DURBAN YARD')}"`);
+}
+if (gridStationLabel('DURBAN YARD') !== 'Durban Yard') {
+  fail(`gridStationLabel DURBAN YARD should be Durban Yard, got "${gridStationLabel('DURBAN YARD')}"`);
+}
+if (gridStationLabel('DURBAN') !== 'Durban') {
+  fail(`gridStationLabel DURBAN should be Durban, got "${gridStationLabel('DURBAN')}"`);
+}
+if (gridStationLabel('WALTOO') !== 'Waltloo') {
+  fail(`gridStationLabel WALTOO should be Waltloo, got "${gridStationLabel('WALTOO')}"`);
 }
 if (slugifyStation('JOHANNESBURG STATION') !== 'johannesburg') {
   fail(`slugifyStation must stay johannesburg, got "${slugifyStation('JOHANNESBURG STATION')}"`);
@@ -342,6 +354,50 @@ if (!gridPathSa.includes('d=sa') || gridPathSa.includes('dir=')) {
   }
 }
 
+{
+  const id = 'kzn-umlazi';
+  const route = ROUTES[id];
+  if (!route) fail('ROUTES missing kzn-umlazi');
+  else {
+    const tt = buildRouteSeoTimetable(route);
+    const towardB = tt.weekday.b;
+    const towardA = tt.weekday.a;
+    const durbanCount = (towardB?.stations || []).filter((s) => s === 'Durban').length;
+    if (!towardB?.stations?.includes('Durban Yard')) fail('kzn-umlazi weekday-B missing Durban Yard');
+    if (!towardB?.stations?.includes('Durban')) fail('kzn-umlazi weekday-B missing Durban');
+    if (durbanCount !== 1) fail(`kzn-umlazi weekday-B should have one Durban row, got ${durbanCount}`);
+    if (towardB.last === '11:22') fail('kzn-umlazi first/last still uses Durban Yard origin last 11:22');
+    if (towardB.first !== '6:15' || towardB.last !== '21:17') {
+      fail(`kzn-umlazi dest-row first/last should be 6:15/21:17, got ${towardB.first}/${towardB.last}`);
+    }
+    if (towardA?.first !== '5:15' || towardA?.last !== '21:45') {
+      fail(`kzn-umlazi weekday-A dest Durban first/last should be 5:15/21:45, got ${towardA?.first}/${towardA?.last}`);
+    }
+  }
+}
+
+{
+  const entry = getSeoRouteBySlug('pretoria-to-pienaarspoort');
+  if (!entry?.seed?.serves) fail('pta-pien seed missing serves commentary');
+  else {
+    if (!/Loftus Versfeld/i.test(entry.seed.serves)) fail('pta-pien serves must mention Loftus Versfeld');
+    if (!/University of Pretoria/i.test(entry.seed.serves)) fail('pta-pien serves must mention University of Pretoria');
+    if (!/Mamelodi/i.test(entry.seed.serves)) fail('pta-pien serves must mention Mamelodi');
+    if (!/Denneboom/i.test(entry.seed.serves)) fail('pta-pien serves must mention Denneboom');
+    if (!/Eerste Fabrieke/i.test(entry.seed.serves)) fail('pta-pien serves must mention Eerste Fabrieke');
+    if (!/Silverton/i.test(entry.seed.serves)) fail('pta-pien serves must mention Silverton');
+    if (!/Eersterust/i.test(entry.seed.serves)) fail('pta-pien serves must mention Eersterust area');
+    if (!/not in service/i.test(entry.seed.serves)) fail('pta-pien serves must say Eersterust is not in service');
+  }
+  const umlazi = getSeoRouteBySlug('durban-to-umlazi');
+  if (!umlazi?.seed?.serves) fail('kzn-umlazi seed missing serves commentary');
+  else if (!/Durban Yard/i.test(umlazi.seed.serves) || !/\bDurban\b/i.test(umlazi.seed.serves)) {
+    fail('kzn-umlazi serves must distinguish Durban Yard and Durban');
+  }
+  const metaPien = routeMetaDescription('Pretoria', 'Pienaarspoort', 'Gauteng', { nearby: entry.seed.nearby });
+  if (!/Loftus/i.test(metaPien)) fail(`pta-pien meta should reuse nearby clause: "${metaPien}"`);
+}
+
 if (existsSync(DIST)) {
   const naledi = join(DIST, 'routes/johannesburg-to-naledi.html');
   if (!existsSync(naledi)) {
@@ -468,6 +524,29 @@ if (existsSync(DIST)) {
     if (/Fonteine|Kloofsig|Pinedene/.test(html)) fail('Kempton route HTML still lists ghost stations');
     if (!/Irene/.test(html)) fail('Kempton route HTML missing Irene');
     if (!/Kempton Park/.test(html)) fail('Kempton route HTML missing Kempton Park');
+  }
+
+  const umlaziHtmlPath = join(DIST, 'routes/durban-to-umlazi.html');
+  if (existsSync(umlaziHtmlPath)) {
+    const html = readFileSync(umlaziHtmlPath, 'utf8');
+    if (!html.includes('Durban Yard')) fail('Umlazi route HTML missing Durban Yard');
+    if ((html.match(/>Durban</g) || []).length < 1) fail('Umlazi route HTML missing Durban passenger stop');
+    if (/last 11:22/.test(html)) fail('Umlazi first/last still shows Yard last 11:22');
+    if (!html.includes('21:17')) fail('Umlazi route HTML missing dest last 21:17');
+    if (!html.includes('join along the line')) fail('Umlazi first/last copy missing joiner note');
+    if (!html.includes('Durban Yard, then the passenger stop at Durban')) {
+      fail('Umlazi route HTML missing Durban Yard vs Durban commentary');
+    }
+  }
+
+  const pienHtmlPath = join(DIST, 'routes/pretoria-to-pienaarspoort.html');
+  if (existsSync(pienHtmlPath)) {
+    const html = readFileSync(pienHtmlPath, 'utf8');
+    if (!html.includes('University of Pretoria')) fail('Pienaarspoort HTML missing University of Pretoria');
+    if (!html.includes('Loftus Versfeld')) fail('Pienaarspoort HTML missing Loftus Versfeld');
+    if (!html.includes('Mamelodi')) fail('Pienaarspoort HTML missing Mamelodi');
+    if (!html.includes('Eersterust')) fail('Pienaarspoort HTML missing Eersterust area');
+    if (!html.includes('not in service')) fail('Pienaarspoort HTML missing ghost-station note');
   }
 
   const region = join(DIST, 'regions/gauteng.html');

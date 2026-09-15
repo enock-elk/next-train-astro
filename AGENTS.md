@@ -62,6 +62,8 @@ Scheme: `V{major}_{MM.DD}.{n}` (example `V8_08.17.1`). Same calendar day → inc
 
 Keep in sync on every version bump: `APP_VERSION`, `package.json` `version`, and `public/app-version.json`.
 
+Every version bump **must** also add an `ADMIN_CHANGELOG` entry in `src/lib/admin-changelog.js` keyed to that exact `APP_VERSION` string (System Health diagnostics **Build notes**). This is not optional. It is separate from commuter What’s New (`CHANGELOG_DATA`), which remains optional.
+
 **Changelog is optional.** You may ship a version bump with no What’s New card and no `CHANGELOG.md` heading, or with a heading that is only **no release notes.** When you skip commuter notes, leave `CHANGELOG_DATA[0]` as the last public card. Do not invent What’s New bullets for admin-only, instruction-only, or operator-only ships.
 
 When you do write notes: add a `CHANGELOG.md` heading and, only if there is obvious commuter-facing behaviour, a matching `CHANGELOG_DATA[0]` card.

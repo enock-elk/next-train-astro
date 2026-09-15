@@ -346,6 +346,10 @@ assert(admin.includes('data-ls-session'), 'share sessions are expandable');
 assert(admin.includes('openAdminChangelogLookup'), 'admin can look up operator build notes');
 assert(admin.includes('admin-changelog-header-btn'), 'System Health has a build notes accordion');
 assert(admin.includes('data-admin-changelog'), 'feedback version opens build notes');
+assert(
+    admin.includes('rawAdminVer') && admin.includes('data-admin-changelog="${adminVer}"'),
+    'admin bubble version opens build notes'
+);
 assert(admin.includes("addEventListener('click', (e) => {") && admin.includes('__ntAdminChangelogBound'), 'build-notes clicks bind in capture');
 assert(admin.includes("if (e.target.closest?.('[data-admin-changelog]')) return;"), 'hold-to-react ignores the version chip');
 assert(admin.includes("data-fb-lazy=\"1\""), 'archive threads defer chat HTML');

@@ -15706,9 +15706,13 @@ const Admin = {
                         // id/data use raw inbox key (same as [REPLY TO ADMIN: key]) for quote jump
                         const rawMsgKey = String(item.id || item.key || '').trim();
                         const msgAnchor = secureEscape(rawMsgKey);
-                        const adminVer = secureEscape(String(item.appVersion || (typeof APP_VERSION !== 'undefined' ? APP_VERSION : '') || '').split(' - ')[0] || 'Admin');
+                        const rawAdminVer = String(item.appVersion || (typeof APP_VERSION !== 'undefined' ? APP_VERSION : '') || '').split(' - ')[0] || 'Admin';
+                        const adminVer = secureEscape(rawAdminVer);
                         const adminRoute = secureEscape(item.routeId || '');
-                        const adminMeta = adminRoute ? `${adminVer} · ${adminRoute}` : adminVer;
+                        const adminMetaLabel = adminRoute ? `${adminVer} · ${adminRoute}` : adminVer;
+                        const adminMeta = /^V\d+_/i.test(rawAdminVer)
+                            ? `<button type="button" class="font-mono font-medium opacity-80 ml-2 truncate underline decoration-dotted underline-offset-2 hover:opacity-100 focus:outline-none" data-admin-changelog="${adminVer}">${adminMetaLabel}</button>`
+                            : `<span class="font-mono font-medium opacity-60 truncate">${adminMetaLabel}</span>`;
                         const editedLabel = item.editedAt ? `<span class="ml-1 opacity-70">edited</span>` : '';
                         const inboxReactId = item.inboxMsgId || String(item.id || '');
                         const reactChips = (typeof window.renderInboxReactionChips === 'function' && inboxReactId)
@@ -15720,7 +15724,7 @@ const Admin = {
                                     <div class="inbox-bubble inbox-bubble-own" data-fb-edit-admin data-inbox-react-host="1">
                                         <div class="inbox-bubble-name-row">
                                             <span>${secureEscape(adminName)}</span>
-                                            <span class="font-mono font-medium opacity-60 truncate">${adminMeta}</span>
+                                            ${adminMeta}
                                         </div>
                                         <div class="inbox-bubble-body">
                                             <div class="inbox-msg-text">${parsedAdminText}<span class="inbox-msg-time">${dateStr}${receiptHtml}${editedLabel}</span></div>

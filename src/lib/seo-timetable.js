@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { FARE_CONFIG, ROUTES } from './config.js';
 import { getGridOrderManifest, orderGridTrainIds } from './grid-order.js';
 import { isRealTime, timeToSeconds } from './utils.js';
-import { stationLabel } from './seo-routes.js';
+import { gridStationLabel, stationLabel } from './seo-routes.js';
 
 const IGNORE_KEYS = new Set(['STATION', 'COORDINATES', 'KM_MARK', 'row_index']);
 const REGION_NESTS = ['gauteng', 'westerncape', 'kzn', 'easterncape'];
@@ -109,16 +109,21 @@ function rowHasClockInColumns(row, trainIds) {
 }
 
 function stationNameFromRow(row) {
-    return stationLabel(String(row?.STATION || '').replace(/\s+/g, ' ').trim());
+    return gridStationLabel(String(row?.STATION || '').replace(/\s+/g, ' ').trim());
+}
+
+function findNamedClockedRow(dataRows, trainIds, name) {
+    const want = String(name || '').trim().toLowerCase();
+    if (!want) return null;
+    const named = dataRows.find((r) => stationNameFromRow(r).toLowerCase() === want);
+    if (named && rowHasClockInColumns(named, trainIds)) return named;
+    return null;
 }
 
 function findOriginRow(dataRows, trainIds, originName) {
-    const want = String(originName || '').trim().toLowerCase();
-    if (want) {
-        const named = dataRows.find((r) => stationNameFromRow(r).toLowerCase() === want);
-        if (named && rowHasClockInColumns(named, trainIds)) return named;
-    }
-    return dataRows.find((r) => rowHasClockInColumns(r, trainIds)) || dataRows[0];
+    return findNamedClockedRow(dataRows, trainIds, originName)
+        || dataRows.find((r) => rowHasClockInColumns(r, trainIds))
+        || dataRows[0];
 }
 
 function firstLastFromRow(row, trainIds) {
@@ -142,6 +147,31 @@ function firstLastFromRow(row, trainIds) {
     return { first, last };
 }
 
+/** Min/max of each train's first non-empty clock (joiners that never hit a named row). */
+function firstLastFromTrainsFirstClock(keptRows, trainIds) {
+    let firstSec = Infinity;
+    let lastSec = -1;
+    let first = null;
+    let last = null;
+    for (const id of trainIds) {
+        for (const row of keptRows) {
+            const clock = formatClock(row[id]);
+            if (!clock) continue;
+            const sec = timeToSeconds(String(row[id]).trim());
+            if (sec < firstSec) {
+                firstSec = sec;
+                first = clock;
+            }
+            if (sec > lastSec) {
+                lastSec = sec;
+                last = clock;
+            }
+            break;
+        }
+    }
+    return { first, last };
+}
+
 function departuresFromRow(row, trainIds) {
     const out = [];
     for (const id of trainIds) {
@@ -155,6 +185,8 @@ function departuresFromRow(row, trainIds) {
  * @param {object} db
  * @param {string} sheetKey
  * @param {string} [originName]  Terminus we depart from (label, e.g. "Pretoria")
+ * @param {{ destName?: string }} [options]
+ * First/last prefer the destination row (trains that join along the line still count).
  * @returns {{
  *   sheetKey: string,
  *   stations: string[],
@@ -163,6 +195,7 @@ function departuresFromRow(row, trainIds) {
  *   first: string|null,
  *   last: string|null,
  *   originStation: string,
+ *   destStation: string,
  *   departures: string[],
  * } | null}
  */
@@ -192,7 +225,14 @@ export function extractSeoGrid(db, sheetKey, originName, options = {}) {
 
     const originRow = findOriginRow(keptRows, trainIds, originName);
     const originStation = stationNameFromRow(originRow) || stations[0];
-    const { first, last } = firstLastFromRow(originRow, trainIds);
+    const destRow = findNamedClockedRow(keptRows, trainIds, options.destName)
+        || keptRows.filter((r) => rowHasClockInColumns(r, trainIds)).at(-1)
+        || null;
+    const destStation = destRow ? stationNameFromRow(destRow) : stations[stations.length - 1];
+    const destClocks = destRow ? firstLastFromRow(destRow, trainIds) : { first: null, last: null };
+    const { first, last } = destClocks.first
+        ? destClocks
+        : firstLastFromTrainsFirstClock(keptRows, trainIds);
     return {
         sheetKey,
         stations,
@@ -201,6 +241,7 @@ export function extractSeoGrid(db, sheetKey, originName, options = {}) {
         first,
         last,
         originStation,
+        destStation,
         departures: departuresFromRow(originRow, trainIds),
     };
 }
@@ -220,10 +261,10 @@ export function buildRouteSeoTimetable(route) {
         runtimeConfig: exportedOrders?.[route?.region] || exportedOrders?.config?.grid_order?.[route?.region],
     };
 
-    const weekdayA = extractSeoGrid(db, keys.weekday_to_a, dest, orderOptions);
-    const weekdayB = extractSeoGrid(db, keys.weekday_to_b, origin, orderOptions);
-    const saturdayA = extractSeoGrid(db, keys.saturday_to_a, dest, orderOptions);
-    const saturdayB = extractSeoGrid(db, keys.saturday_to_b, origin, orderOptions);
+    const weekdayA = extractSeoGrid(db, keys.weekday_to_a, dest, { ...orderOptions, destName: origin });
+    const weekdayB = extractSeoGrid(db, keys.weekday_to_b, origin, { ...orderOptions, destName: dest });
+    const saturdayA = extractSeoGrid(db, keys.saturday_to_a, dest, { ...orderOptions, destName: origin });
+    const saturdayB = extractSeoGrid(db, keys.saturday_to_b, origin, { ...orderOptions, destName: dest });
 
     const labelGrid = (grid, toward) => {
         if (!grid) return null;
@@ -293,7 +334,7 @@ export function buildRouteJsonLd({
         faqs.push(
             faqQuestion(
                 `What time is the first weekday train from ${origin} to ${dest}?`,
-                `The first weekday train from ${origin} toward ${dest} is ${wdB.first}${wdB.last ? `. The last is ${wdB.last}` : ''}. Times are the published Metrorail weekday timetable, not a live countdown.`
+                `The first weekday train toward ${dest} arrives at ${wdB.first}${wdB.last ? `. The last arrives at ${wdB.last}` : ''}. Times include trains that join along the line, not only those that start at ${origin}. They are the published Metrorail weekday timetable, not a live countdown.`
             )
         );
     }
@@ -301,7 +342,7 @@ export function buildRouteJsonLd({
         faqs.push(
             faqQuestion(
                 `What time is the first weekday train from ${dest} to ${origin}?`,
-                `The first weekday train from ${dest} toward ${origin} is ${wdA.first}${wdA.last ? `. The last is ${wdA.last}` : ''}. Times are the published Metrorail weekday timetable, not a live countdown.`
+                `The first weekday train toward ${origin} arrives at ${wdA.first}${wdA.last ? `. The last arrives at ${wdA.last}` : ''}. Times include trains that join along the line, not only those that start at ${dest}. They are the published Metrorail weekday timetable, not a live countdown.`
             )
         );
     }
@@ -394,13 +435,14 @@ export function routeMetaDescription(origin, dest, province, opts = {}) {
         ? `Cape Town train times between ${pair}`
         : `Metrorail train times between ${pair}`;
     const dirs = `including trains from ${directionPhrase(origin, dest)} and ${directionPhrase(dest, origin)}`;
+    const nearby = opts?.nearby ? ` ${String(opts.nearby).trim()}` : '';
     let extra = '';
     if (hasSaturday === true) {
         extra = ' Saturday train times are listed on this page. No Sunday service.';
     } else if (hasSaturday === false) {
         extra = ' No Saturday sheet in the published dump. No Sunday service.';
     }
-    return `Check ${lead} (${province}), ${dirs}.${extra}`;
+    return `Check ${lead} (${province}), ${dirs}.${nearby}${extra}`;
 }
 
 function getDumpValue(db, key) {
@@ -470,7 +512,8 @@ export function firstLastSummaryLine(grid) {
     if (grid.first) bits.push(`first ${grid.first}`);
     if (grid.last) bits.push(`last ${grid.last}`);
     if (!bits.length) return null;
-    return `${grid.heading}: ${bits.join(', ')}`;
+    const toward = grid.destName || String(grid.heading || '').replace(/^Showing trains to\s+/i, '');
+    return `${grid.heading}: ${bits.join(', ')} at ${toward}`;
 }
 
 /** Ordered stop names for one corridor (weekday B, else weekday A). */

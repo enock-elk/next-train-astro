@@ -5,6 +5,18 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_09.15.3': [
+        'Route landings: Durban Yard stays a distinct grid row (no longer labelled Durban). First/last times use the destination row so joiners count. Corridor pages get verified nearby/POI commentary (no invented stops). Ghosts such as Eersterust are named as areas passed, not calling points.',
+        'Feedback Hub: admin bubble version (V9_09.15.2 · route) is the same Build notes button as the commuter chip. V9_09.15.2 notes are backfilled so that chip opens notes instead of an empty modal.',
+        'Agent rule: every APP_VERSION bump must add an ADMIN_CHANGELOG entry. Distinct from optional commuter What’s New.',
+    ],
+    'V9_09.15.2': [
+        'Schedule dump refresh from live RTDB region files. KZN lastUpdated 15 Sep 2026. Grid column order overlay matches the board (Apps Script _columnOrder into MANUAL_GRID_ORDER).',
+        'This repo remains the dump source of truth (public/data/), not the old OneDrive SPA tree.',
+    ],
+    'V9_09.15.1': [
+        'CleverAds stickies stay document-level (full viewport). Do not reparent filled units into #nt-ad-scroll-host or force position:static there. --nt-ad-shift still eases sticky-top only.',
+    ],
     'V9_09.14.2': [
         'Scheduled alerts: worker cron always publishes due jobs (no exact */5 string match) and awaits the run. github.io / pages.dev can call the worker.',
         'Scheduled Refresh posts due jobs itself when the worker is skipped, so a Monday 00:00 Pretoria-Kempton weekly does not sit at PUBLISH SKIPPED.',

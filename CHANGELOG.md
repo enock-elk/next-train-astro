@@ -1,6 +1,12 @@
 # Changelog
 
-Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin, Dev Hub, Alerts, Trains near me, community chat, or other hidden-test work. No emoji and no em dashes in What’s New. Keep `APP_VERSION`, `package.json` `version`, and `public/app-version.json` aligned on each release. Changelog / What’s New may be skipped, or the heading may be only **no release notes.**
+Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin, Dev Hub, Alerts, Trains near me, community chat, or other hidden-test work. No emoji and no em dashes in What’s New. Keep `APP_VERSION`, `package.json` `version`, and `public/app-version.json` aligned on each release. Changelog / What’s New may be skipped, or the heading may be only **no release notes.** Every bump must add `ADMIN_CHANGELOG[APP_VERSION]` (System Health Build notes).
+
+## V9_09.15.3 — Route SEO first/last, nearby copy, Build notes chip (15 Sep 2026)
+
+Durban Yard is no longer labelled Durban on `/routes/` grids. First/last on corridor landings use destination-row arrivals so mid-line joiners count. Route pages get verified nearby/POI commentary. Admin Feedback version meta opens Build notes. `ADMIN_CHANGELOG` is required on every version bump.
+
+no release notes.
 
 ## V9_09.15.2 — Schedule dump and grid order from live RTDB (15 Sep 2026)
 

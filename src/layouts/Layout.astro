@@ -50,6 +50,20 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
       @media (max-width: 639px) {
         html { font-size: clamp(13.12px, calc(100vw * 16 / 390), 16px); }
       }
+      /* iOS Safari zooms the page when a focused field computes under 16px.
+         Floor the typed face only. Do not lock the viewport (maximum-scale stays 5).
+         text-lg / text-base keep their rem size when that is already ≥16px. */
+      input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):not([type="file"]):not([type="range"]):not([type="color"]):not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="image"]),
+      textarea,
+      select {
+        font-size: max(16px, 1em) !important;
+      }
+      input.text-lg, textarea.text-lg, select.text-lg {
+        font-size: max(16px, 1.125rem) !important;
+      }
+      input.text-base, textarea.text-base, select.text-base {
+        font-size: max(16px, 1rem) !important;
+      }
     </style>
     <ShellFallbackStyles surface="app" />
     <StuckUpdateGuard />

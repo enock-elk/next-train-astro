@@ -1296,6 +1296,26 @@ html[data-colour-pack="ember"].dark .planner-share-slot > button {
   color: rgb(var(--nt-blue-800)) !important;
 }
 
+/* iOS Safari zooms the document when a focused input/textarea/select is under
+   16px. Floor the typed face only. Padding, height, and viewport zoom stay as
+   they are (maximum-scale=5). Smaller utilities become 16px; text-lg stays
+   1.125rem when that is larger (Home / Planner station fields). */
+input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):not([type="file"]):not([type="range"]):not([type="color"]):not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="image"]),
+textarea,
+select {
+  font-size: max(16px, 1em) !important;
+}
+input.text-lg,
+textarea.text-lg,
+select.text-lg {
+  font-size: max(16px, 1.125rem) !important;
+}
+input.text-base,
+textarea.text-base,
+select.text-base {
+  font-size: max(16px, 1rem) !important;
+}
+
 /* Phone width scale. Design 390. Floor 320 (SE). Do not raise rem on
    tablets/desktop — #main-content stays max-w-md (28rem). Do not transform
    #nt-shell (ads / fixed overlays). Planner toolbar stays 2rem / text-xs. */

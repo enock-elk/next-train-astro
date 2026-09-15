@@ -2,6 +2,12 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin, Dev Hub, Alerts, Trains near me, community chat, or other hidden-test work. No emoji and no em dashes in What’s New. Keep `APP_VERSION`, `package.json` `version`, and `public/app-version.json` aligned on each release. Changelog / What’s New may be skipped, or the heading may be only **no release notes.** Every bump must add `ADMIN_CHANGELOG[APP_VERSION]` (System Health Build notes).
 
+## V9_09.16.1 — iOS input zoom floor (16 Sep 2026)
+
+Safari zooms the document when a focused `input`, `textarea`, or `select` computes under 16px. Most commuter fields were `text-sm` (14px), `text-xs` (12px), or `text-[13px]`. Home/Planner `text-lg` is 18px at a 16px rem and can drop under 16px on the phone rem clamp. Typed controls now floor at `max(16px, 1em)`; `text-lg` stays `max(16px, 1.125rem)` and `text-base` stays `max(16px, 1rem)`. Padding, height, and `maximum-scale=5` are unchanged. Do not lock zoom with `user-scalable=no` or `PLANNER_VIEWPORT_NO_ZOOM`.
+
+What’s New: typing in a box stays full size on iPhone. The page does not zoom in.
+
 ## V9_09.15.9 — Forks, stale bakes, and a station that was never on the line (15 Sep 2026)
 
 Mutual was showing Cape Town ↔ Retreat because the map put it there. No Cape Flats train calls at Mutual — the sheet serves Koeberg Rd and Maitland — but `ensureMaitlandMutualAdjacency` splices Mutual in so the drawn line passes it, and the injected stop then registered as a served stop and claimed the route. It is now geometry-only.

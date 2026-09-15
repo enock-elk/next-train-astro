@@ -2,6 +2,18 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin, Dev Hub, Alerts, Trains near me, community chat, or other hidden-test work. No emoji and no em dashes in What’s New. Keep `APP_VERSION`, `package.json` `version`, and `public/app-version.json` aligned on each release. Changelog / What’s New may be skipped, or the heading may be only **no release notes.** Every bump must add `ADMIN_CHANGELOG[APP_VERSION]` (System Health Build notes).
 
+## V9_09.15.9 — Forks, stale bakes, and a station that was never on the line (15 Sep 2026)
+
+Mutual was showing Cape Town ↔ Retreat because the map put it there. No Cape Flats train calls at Mutual — the sheet serves Koeberg Rd and Maitland — but `ensureMaitlandMutualAdjacency` splices Mutual in so the drawn line passes it, and the injected stop then registered as a served stop and claimed the route. It is now geometry-only.
+
+Philippi is a fork, and is treated like Duff's Road. One Nolungile working out of ten (train 9408) detours Stock Road → Kapteinsklip → Mitchell's Plain → Lentegeur and rejoins at Philippi, which dragged the whole Cape Town ↔ Nolungile corridor out to Kapteinsklip. A stop carried by a single train, on a sheet that runs four or more, is a branch or extension working rather than part of the line's shape: it keeps its marker and its own route, it just no longer bends this one. Only `ct-nolu` and `pta-kempton` change; KZN and EC are untouched, and every terminus is preserved.
+
+The Nolungile trip was drawn down the wrong side of the city. `ct_to_nolu_weekday` now runs `CAPE TOWN > ESPLANADE > YSTERPLAAT > MUTUAL > …`, but the August bake still runs via Woodstock and Salt River, and `sliceBakedHop` sliced it anyway. A hop is now only sliced from a bake that carries both of its stations; anything else falls through to the merged rail graph, which already has the Esplanade alignment from `ct-bellv`. The trip passes 33 m from Esplanade and 0 m from Ysterplaat.
+
+Still outstanding: a few hops have no OSM rail in the 29 Aug bake and are therefore drawn straight — `pta-pien` runs a 937 m straight line from Loftus Versfeld Park to Rissik, and Nyanga → Philippi is a 3.2 km chord. Those are a data gap, not a rendering bug, and need a re-bake. Every Overpass mirror currently returns 504 on region-sized queries, while `api.openstreetmap.org/api/0.6/map` answers a small box in about three seconds, so the fetcher in `build-rail-tracks.mjs` should move onto tiled OSM API calls.
+
+no release notes.
+
 ## V9_09.15.8 — Map lines follow the rail, and only their own corridor (15 Sep 2026)
 
 A timetable sheet carries the whole line's station skeleton but only one corridor's train columns. The Western Cape Northern Line sheets list the Wellington, Stellenbosch/Strand and Eerste River branches in one STATION column, and `map-app.js` painted straight through the rows that carry no times. Cape Town ↔ Wellington therefore ran STIKLAND → DU TOIT → Stellenbosch → Strand → Kuils River → BELLVILLE, 194 km of loop, with Bellville joined to Kuils River instead of Stikland. The route assembly already flagged those rows `inactive`; geometry now uses only the stops the corridor's trains actually serve, which is exactly the rule the bake has always used (`hasTimes`). Cape Town ↔ Wellington is 73.4 km, matching the real line. `ct-kraai`, `ct-eerst`, `ct-strnd` and `eerst-dtoit` collapse the same way.

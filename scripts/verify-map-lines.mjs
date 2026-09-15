@@ -378,7 +378,63 @@ assert(railTracks.includes('sliceBakedHop'), 'planner trip map slices the baked 
     }
 }
 
+{
+    // Cape Town <-> Nolungile moved onto the Esplanade / Ysterplaat alignment,
+    // but the August bake still runs via Woodstock and Salt River. Slicing a
+    // stale bake drew every trip down the wrong side of the city, so a hop is
+    // only sliced from a bake that carries both of its stations.
+    const dump = JSON.parse(readFileSync(new URL('../public/data/full-database.json', import.meta.url), 'utf8'));
+    const rows = dump.westerncape?.ct_to_nolu_weekday || [];
+    const trains = [...new Set(rows.flatMap((r) => Object.keys(r)))].filter((k) => k !== 'STATION' && k !== 'COORDINATES');
+    const train = trains[0];
+    const stops = rows.filter((r) => {
+        const n = String(r.STATION || '').trim();
+        if (!n || /last updated|inter-station/i.test(n)) return false;
+        const v = String(r[train] == null ? '' : r[train]).trim();
+        return v && v !== '-' && v !== '---';
+    }).map((r) => {
+        const p = String(r.COORDINATES || '').split(',').map(Number);
+        return { name: String(r.STATION).replace(/ STATION/gi, '').toUpperCase().trim(), lat: p[0], lon: p[1], routeId: 'ct-nolu' };
+    }).filter((s) => Number.isFinite(s.lat));
+
+    const realFetch = globalThis.fetch;
+    globalThis.fetch = async (url) => {
+        const m = String(url).match(/rail-tracks-([A-Z]+)\.geojson/);
+        if (!m) return { ok: false };
+        const body = readFileSync(new URL(`../public/tracks/rail-tracks-${m[1]}.geojson`, import.meta.url), 'utf8');
+        return { ok: true, json: async () => JSON.parse(body) };
+    };
+    const { smoothPathFromStops } = await import('../src/lib/rail-tracks.js');
+    const path = await smoothPathFromStops(stops, 'WC');
+    globalThis.fetch = realFetch;
+
+    const nearestM = (p, s) => {
+        let best = Infinity;
+        for (const [lat, lon] of p || []) {
+            const d = haversineM(lat, lon, s.lat, s.lon);
+            if (d < best) best = d;
+        }
+        return best;
+    };
+    const esplanade = stops.find((s) => s.name === 'ESPLANADE');
+    const ysterplaat = stops.find((s) => s.name === 'YSTERPLAAT');
+    assert(!!path && !!esplanade && !!ysterplaat, 'Cape Town to Nolungile builds a path through Esplanade and Ysterplaat');
+    if (path && esplanade && ysterplaat) {
+        assert(nearestM(path, esplanade) < 250, `the Nolungile trip runs via Esplanade (got ${Math.round(nearestM(path, esplanade))}m)`);
+        assert(nearestM(path, ysterplaat) < 250, `the Nolungile trip runs via Ysterplaat (got ${Math.round(nearestM(path, ysterplaat))}m)`);
+    }
+}
+
+assert(railTracks.includes('function bakeServesHop'), 'a hop is only sliced from a bake that carries both of its stations');
 assert(railTracks.includes('function dropOutAndBack'), 'a baked hop never leaves the corridor and comes back');
+assert(
+    mapApp.includes('BRANCH_TRAIN_THRESHOLD'),
+    'a stop carried by a single train is a branch, not the corridor shape (Philippi fork)',
+);
+assert(
+    /validStops\.splice\(idx, 0, \{ name, lat: coord\[0\], lon: coord\[1\], inactive: true/.test(mapApp),
+    'the Maitland/Mutual geometry stop never claims a route, so Mutual stops showing Cape Town to Retreat',
+);
 assert(!railTracks.includes('STUB_MIN_M'), 'planner and tracking no longer stub sideways to an off-track station pin');
 assert(railTracks.includes('function appendSeg(out, seg)'), 'planner appends rail segments only, never a station coordinate');
 assert(

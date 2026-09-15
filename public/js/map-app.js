@@ -755,11 +755,30 @@
          * served stops is what keeps the map and the bake describing one line.
          * Ghost rows still register as `geometryStations` for disruption paths.
          */
+        /**
+         * A corridor also forks. One Nolungile working (train 9408 of 10) detours
+         * Stock Road -> Kapteinsklip -> Mitchell's Plain -> Lentegeur and rejoins
+         * at Philippi, exactly as the KZN Berea Road line forks at Duff's Road
+         * for Bridge City. Those three stops are on a branch, not on the corridor,
+         * and painting them dragged Cape Town <-> Nolungile out to Kapteinsklip.
+         *
+         * A stop carried by a single train on a sheet that runs several is a
+         * branch or an extension working rather than part of the line's shape.
+         * It keeps its marker and its own route; it just does not bend this one.
+         */
+        const BRANCH_TRAIN_THRESHOLD = 2;
+        const MIN_TRAINS_TO_JUDGE = 4;
+
         function corridorGeometryStops(routeObj) {
             const all = routeObj.validStops || [];
             if (GHOST_GEOMETRY_REGIONS.has(routeObj.region)) return all;
             const served = all.filter((s) => s && !s.inactive);
-            return served.length > 1 ? served : all;
+            if (served.length < 2) return all;
+            if (!(routeObj.trainCount >= MIN_TRAINS_TO_JUDGE)) return served;
+            const corridor = served.filter((s) => (
+                !Number.isFinite(s.servedTrains) || s.servedTrains >= BRANCH_TRAIN_THRESHOLD
+            ));
+            return corridor.length > 1 ? corridor : served;
         }
 
         /**
@@ -1307,7 +1326,10 @@
                 const iMut = names.indexOf('MUTUAL');
                 const iMai = names.indexOf('MAITLAND');
                 const insertAt = (idx, name, coord) => {
-                    validStops.splice(idx, 0, { name, lat: coord[0], lon: coord[1] });
+                    // Geometry only. No Cape Flats train calls at Mutual, so letting
+                    // this stand as a served stop made Mutual's popup claim the
+                    // Cape Town <-> Retreat route.
+                    validStops.splice(idx, 0, { name, lat: coord[0], lon: coord[1], inactive: true, servedTrains: 0 });
                     routeCoords.splice(idx, 0, coord);
                     if (!globalStations[name]) {
                         globalStations[name] = { lat: coord[0], lon: coord[1], origName: name, routes: new Set() };
@@ -1336,7 +1358,7 @@
                 for (const name of names) {
                     const s = byName.get(name);
                     if (!s) continue;
-                    ordered.push({ name: s.name, lat: s.lat, lon: s.lon, inactive: !!s.inactive });
+                    ordered.push({ name: s.name, lat: s.lat, lon: s.lon, inactive: !!s.inactive, servedTrains: s.servedTrains });
                     if (s.inactive) {
                         geometryStations[s.name] = { lat: s.lat, lon: s.lon };
                         continue;
@@ -1373,6 +1395,7 @@
                 let routeCoords = [];
                 let validStops = [];
                 let extractedDynamically = false;
+                const sheetTrainKeys = new Set();
 
                 if (sheetData && Array.isArray(sheetData)) {
                     let stationKey = 'STATION';
@@ -1404,7 +1427,10 @@
                         const sNameOrig = String(row[stationKey]).trim();
                         if (sNameOrig.toLowerCase().includes('last updated') || sNameOrig.toLowerCase().includes('inter-station')) continue;
 
-                        const hasData = Object.keys(row).some(k => k !== stationKey && k !== coordKey && k !== 'KM_MARK' && k !== 'row_index' && row[k] && String(row[k]).trim() !== "" && String(row[k]).trim() !== "-");
+                        const trainKeys = Object.keys(row).filter(k => k !== stationKey && k !== coordKey && k !== 'KM_MARK' && k !== 'row_index');
+                        trainKeys.forEach(k => sheetTrainKeys.add(k));
+                        const servedTrains = trainKeys.filter(k => row[k] && String(row[k]).trim() !== "" && String(row[k]).trim() !== "-").length;
+                        const hasData = servedTrains > 0;
 
                         const sName = sNameOrig.replace(/ STATION/gi, '').toUpperCase();
 
@@ -1429,7 +1455,7 @@
 
                         if (lat !== null && lon !== null) {
                             routeCoords.push([lat, lon]);
-                            validStops.push({ name: sName, lat: lat, lon: lon, inactive: !hasData });
+                            validStops.push({ name: sName, lat: lat, lon: lon, inactive: !hasData, servedTrains });
                             if (hasData) {
                                 if (!globalStations[sName]) {
                                     globalStations[sName] = { lat, lon, origName: sNameOrig, routes: new Set() };
@@ -1489,6 +1515,7 @@
                          color: colorMap[route.colorClass] || '#9ca3af',
                          isActive: route.isActive,
                          region: route.region,
+                         trainCount: sheetTrainKeys.size,
                          coords: routeCoords,
                          validStops: validStops
                      });

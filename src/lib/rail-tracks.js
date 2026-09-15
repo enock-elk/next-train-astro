@@ -461,10 +461,42 @@ function dropOutAndBack(seg, toleranceM = HOP_RETURN_TOLERANCE_M) {
     return current;
 }
 
+/**
+ * A bake describes the corridor it was built from. When the timetable moves a
+ * route onto a different alignment the bake goes stale, and slicing it then
+ * draws the old line: Cape Town -> Nolungile now runs via Esplanade and
+ * Ysterplaat, but the August bake still runs via Woodstock and Salt River, so
+ * every trip was drawn down the wrong side of the city. The bake records the
+ * stations it used, so only slice a hop whose stations it actually carries.
+ * Everything else falls through to the live rail graph, which is merged from
+ * every corridor and does have the Esplanade alignment.
+ */
+function bakeStationKey(name) {
+    // Same shape as normalizeStationName, so PRETORIA-B and PRETORIA B match.
+    return String(name || '')
+        .toUpperCase()
+        .replace(/ STATION/g, '')
+        .replace(/-/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+function bakeServesHop(feature, a, b) {
+    const names = feature?.properties?.stationNames;
+    if (!Array.isArray(names) || !names.length) return true;
+    const known = new Set(names.map(bakeStationKey));
+    for (const stop of [a, b]) {
+        const name = bakeStationKey(stop?.name);
+        if (name && !known.has(name)) return false;
+    }
+    return true;
+}
+
 /** Slice a baked corridor between two stops. Stations may sit off the rail. */
 function sliceBakedHop(feature, a, b) {
     const latlngs = featureLatLngs(feature);
     if (!latlngs || latlngs.length < 2 || !a || !b) return null;
+    if (!bakeServesHop(feature, a, b)) return null;
     const i1 = nearestPathIndexM(latlngs, a.lat, a.lon);
     const i2 = nearestPathIndexM(latlngs, b.lat, b.lon);
     if (i1 < 0 || i2 < 0) return null;

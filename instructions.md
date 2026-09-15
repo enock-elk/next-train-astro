@@ -12,6 +12,7 @@ This is a **commuter PWA**. Prefer small, reversible changes. Do not “clean up
 - **Live site** is `https://nexttrain.co.za`, hosted by **`enock-elk/metrorail-app`** (GitHub Pages + CNAME). Production publish is `.github/workflows/deploy-production.yml`.
 - **Do not** treat the old vanilla SPA checkout (`Train Schedule` / a stale `metrorail-app` working tree) as something to rebase onto live. That pull deletes `css/` and old icon folders and fights OneDrive locks. Abort those rebases (`git rebase --abort`). Never force-push `metrorail-app`.
 - **Lab** is the long-lived `lab` branch (lab.nexttrain.co.za). Do not wholesale-merge lab (or PR #8) into `main`.
+- **Map gold** is the long-lived `map-gold` branch. It freezes `public/tracks/rail-tracks-{GP,WC,KZN,EC}.geojson`. Do not wholesale-merge it. Do not force-push it. Fast-forward it onto `main` only after a proven map improvement. See **Map gold**.
 
 Work from **`main`**. The owner ships by pushing `main` and running the production deploy workflow. Do not leave them a pile of draft PRs they must merge unless they ask. Do not force-push. Do not amend published commits unless they ask.
 
@@ -30,6 +31,7 @@ Work from **`main`**. The owner ships by pushing `main` and running the producti
 - **Do not point `PIPELINE_SOURCES.GITHUB` back at `metrorail-app`.** The dump is this repo: `public/data/full-database.json` via jsDelivr `@main/public/data/`.
 - **Do not empty `metrorail-app/data/`.** Deploy overlays `public/data/*.json` only. Never `--delete` host-only files (e.g. `sanitize.py`).
 - **Do not create a new deploy PAT.** Production and schedule-sync both use repo secret `METRORAIL_APP_DEPLOY_TOKEN` (Contents write on `metrorail-app`). Rotate only if a run gets 403 or the token expired.
+- **Do not rewrite gold map tracks.** `public/tracks/rail-tracks-*.geojson` is gold. Mapping work must improve the maps across the regions, not damage them. See **Map gold**. `npm run verify:map-gold` must pass.
 
 ## Data pipeline
 
@@ -40,6 +42,47 @@ Live boards try **Firebase → Cloudflare (`nexttrain-cache`) → GitHub dump**.
 - Updating `public/data/full-database.json` refreshes the **fallback**, not the live board while Firebase is up. Push `main`; workflow **Sync schedule data → metrorail-app** overlays JSON onto the host. A full site publish still needs **Deploy production → metrorail-app** (`confirm=DEPLOY`).
 - After a real production deploy, purge Cloudflare cache for `nexttrain.co.za` (HTML + service worker).
 - **CARTO Voyager tiles** need `PUBLIC_CARTO_API_KEY` at **build** time (Astro inlines it into `window.ntCartoVoyagerUrl`). The **map page** uses `ContentLayout` (not the app `Layout`) — both layouts must expose the helper. GitHub **Actions** repository secrets are the right place for Actions-built deploys (`deploy-lab.yml`, production). They do **not** reach Cloudflare Pages Git previews (`*.next-train-lab.pages.dev`). Also set the same name as a Cloudflare Pages variable on `next-train-lab` (Production **and** Preview), then retry that deployment. Do not use GitHub Environment secrets unless a workflow has `environment:`. Never commit the key.
+
+## Map gold
+
+The four baked GeoJSON files in `public/tracks/` are **gold**. They are the rail geometry every map surface paints from (network map, planner trip map, live tracking). A bad bake zig-zags, chords, or paints the wrong fork. We have already paid for that. Do not do it again.
+
+**Any mapping work we do must improve the maps across the regions, not damage them.** A Western Cape-only “fix” that wrecks Gauteng is a regression. A Gauteng pin-strip that drops a terminus is a regression. A KwaZulu-Natal rewrite is forbidden.
+
+**Reference branch:** `map-gold` (same idea as `lab`: long-lived, not a PR). First freeze is `a90b667` (`V9_09.15.9`). Hashes live in `public/tracks/GOLD.json`. Compare any track change to `origin/map-gold`. Never force-push `map-gold`. After a proven improvement lands on `main`, fast-forward `map-gold` to that commit and update `GOLD.json`.
+
+**Files:** `public/tracks/rail-tracks-GP.geojson`, `rail-tracks-WC.geojson`, `rail-tracks-KZN.geojson`, `rail-tracks-EC.geojson`.
+
+### Do not
+
+- Re-run `tracks:build` / Overpass / OSM API over a whole region “to refresh”
+- Run `tracks:smooth` on KZN (`smooth-baked-tracks.mjs` refuses; keep it that way)
+- Replace a region’s GeoJSON from a new dump, generated geometry, or a straight station-to-station polyline
+- Inject station pins into the LineString (that is how Rissik, Mzimhlope, and Mayfair spiked)
+- Paint ghost timetable rows as the corridor (Western Cape Northern Line `STATION` column; Cape Town to Wellington blew out to 194 km)
+- Let a LineString fork leak into the other branch (KZN Duff’s Road: kwaMashu vs Bridge City; Western Cape Philippi: Kapteinsklip / Mitchell’s Plain / Lentegeur)
+- Put Mutual on Cape Town to Retreat, or skip Esplanade / Ysterplaat on Cape Town to Nolungile
+- Change `GHOST_GEOMETRY_REGIONS` off `{KZN}` without the owner asking
+- Update `GOLD.json` hashes only to silence `verify:map-gold`
+
+### Must
+
+- Diff `public/tracks/` against `origin/map-gold` before touching bake or paint
+- Keep KZN exactly as it ships (the Duff’s Road fork is the reference shape)
+- If you change GP, WC, or EC tracks, prove **all four** regions: `npm run verify:map-lines`, `npm run verify:map-hops`, then `npm run verify:map-gold` after updating hashes
+- Prove the failure you came to fix **and** the corridors that were already good (Bellville to Stikland, Cape Town to Wellington, Cape Town to Nolungile via Esplanade and Ysterplaat, Durban to Bridge City not via kwaMashu, Durban to kwaMashu not via Bridge City)
+- Paint from served stops, not ghost rows, except KZN which keeps ghost rows on purpose
+- Runtime paint lives in `public/js/map-app.js` (`corridorGeometryStops`, `resolveRouteLatLngs`) and `src/lib/rail-tracks.js` (`sliceBakedHop`, `dropOutAndBack`, `bakeServesHop`). A bake “fix” that the runtime then chords or stubs is not an improvement.
+
+### To update gold (only after a real improvement)
+
+1. Diff tracks vs `origin/map-gold`.
+2. `npm run verify:map-lines` and `npm run verify:map-hops` must pass.
+3. Update hashes and `frozenAt` in `public/tracks/GOLD.json` to the new `main` commit.
+4. Fast-forward only: `git fetch origin main && git push origin origin/main:map-gold`.
+5. Flag the gold pointer move in the summary.
+
+`npm run verify:map-gold` gates the hashes, the KZN hold, and this section of `AGENTS.md` / `instructions.md`. It runs in both production workflows.
 
 ## Alerts
 
@@ -113,6 +156,8 @@ Diagnosing an unstyled report: confirm the hashed CSS URL in the affected HTML s
 ## Testing
 
 Run the existing verify scripts that match the change (`npm run verify:alerts`, `verify:schedule`, `verify:urls`, …). Do not add walkthrough videos or screenshot demos unless the owner asks.
+
+When a change touches `public/tracks/`, map paint, or the OSM bake, run `verify:map-lines`, `verify:map-hops`, and `verify:map-gold`. Mapping work must improve the maps across the regions, not damage them.
 
 When a change touches shell boot, styling or deploy plumbing, also prove the failure mode: serve `dist/` with `/_astro/*.css` returning 404 and confirm the page is still readable and the lifeline behaves.
 

@@ -11,6 +11,11 @@
  * the board paints. STATIC_ROUTE_PATHS is only a fallback for routes the dump
  * does not carry.
  *
+ * GOLD: public/tracks/rail-tracks-*.geojson is the map-gold snapshot.
+ * Do not re-bake a region unless the owner asked and you can prove all four
+ * regions improve. See AGENTS.md Map gold. npm run verify:map-gold must pass.
+ * Never bake KZN; it is held as the Duff's Road reference shape.
+ *
  * Usage: node scripts/build-rail-tracks.mjs [GP|WC|KZN|EC|all]
  *
  * Source geometry: © OpenStreetMap contributors (ODbL).

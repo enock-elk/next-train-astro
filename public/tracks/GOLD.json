@@ -1,0 +1,23 @@
+{
+  "branch": "map-gold",
+  "frozenAt": "a90b66726285928094125df51f361a4244759dd7",
+  "note": "Gold snapshot of public/tracks/rail-tracks-{GP,WC,KZN,EC}.geojson. Mapping work must improve all four regions, never damage them. Diff against origin/map-gold. Fast-forward map-gold after a proven improvement lands on main. Never force-push map-gold. Update these hashes only after npm run verify:map-lines and verify:map-hops pass.",
+  "files": {
+    "rail-tracks-EC.geojson": {
+      "md5": "43409bfd05405205e596f0d03345ab18",
+      "sha256": "ba0ae80e8c6955ae99288ac5c06e85ea3075383f13f813f40375b78395812108"
+    },
+    "rail-tracks-GP.geojson": {
+      "md5": "84777f97b22c5663b0b278a84c0171fc",
+      "sha256": "3008e93f2f48553a0eb8fdfcf45d93db84c43c0ee5e4646200ff22822b60446c"
+    },
+    "rail-tracks-KZN.geojson": {
+      "md5": "d5d87ba5b1f1b406754c82eaa29e7e87",
+      "sha256": "fc5e22c8b4defdd09e9a8cebd595e45e33ba605d676fedc5a4aa0c91787740cc"
+    },
+    "rail-tracks-WC.geojson": {
+      "md5": "37b21359e8be2a7182c64048543e920c",
+      "sha256": "b0da6724b5fd8ffb3b17803118482220b148a463f5f209e08f1a5f9601d87646"
+    }
+  }
+}

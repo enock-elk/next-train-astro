@@ -1160,52 +1160,6 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
         visibility: hidden !important;
         pointer-events: none !important;
       }
-      /* Full-width in-flow slot above #nt-shell. Empty = no height.
-         Do not put vendor stickies inside the max-w-md phone frame. */
-      #nt-ad-page-host {
-        flex: 0 0 auto;
-        width: 100%;
-        min-height: 0;
-        overflow: visible;
-      }
-      #nt-ad-page-host:empty {
-        display: none;
-      }
-      #nt-ad-page-host > *,
-      #nt-ad-page-host iframe {
-        position: relative !important;
-        width: 100% !important;
-        max-width: 100%;
-        inset: auto !important;
-        left: 0 !important;
-        right: 0 !important;
-        top: auto !important;
-        bottom: auto !important;
-      }
-      /* In-flow ads make the document taller than the phone. Scroll the
-         document (html), not a nested body port — body overflow:hidden
-         would clip the unit and window.scrollY would stay 0. Scroll-away
-         is not dismiss; it only moves the unit off-screen. */
-      html.nt-in-app.nt-ad-page-flow,
-      html.nt-ad-page-flow {
-        height: auto !important;
-        max-height: none !important;
-        overflow-x: hidden !important;
-        overflow-y: auto !important;
-      }
-      html.nt-in-app.nt-ad-page-flow body,
-      html.nt-ad-page-flow body {
-        height: auto !important;
-        max-height: none !important;
-        overflow: visible !important;
-      }
-      html.nt-ad-page-flow #nt-shell {
-        flex-shrink: 0;
-      }
-      html.nt-ads-cloaked.nt-ad-page-flow,
-      html.nt-ads-cloaked.nt-ad-page-flow body {
-        overflow: hidden !important;
-      }
       /* Empty leftover wrappers (creative gone, box still in the tree).
          Do not use display:none (Clever measures from layout). Do not touch left/top/transform. */
       [data-nt-ad-idle="1"] {
@@ -1219,7 +1173,9 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
         opacity: 0 !important;
         pointer-events: none !important;
       }
-      /* Phone-frame slot stays empty. Vendor units use #nt-ad-page-host. */
+      /* Empty slot only. Vendor stickies stay on the document (full viewport).
+         Do not force position:static / width:100% on their overlays — that
+         clips a 100vw creative into the max-w-md frame as a blank strip. */
       #nt-ad-scroll-host {
         flex: 0 0 auto;
         flex-shrink: 0;
@@ -1277,9 +1233,6 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
       </div>
     </div>
 
-    <!-- Full-width in-flow ad slot. Sits above the phone frame; scrolls with
-         the page. Must not live inside #main-content (max-w-md clips creatives). -->
-    <div id="nt-ad-page-host" aria-hidden="true"></div>
     <!-- App frame: flex centering lives here, not on body, so vendor ad
          nodes cannot sit as a second flex item beside the board. -->
     <div id="nt-shell" class="flex items-stretch sm:items-center justify-center p-0 sm:p-4">

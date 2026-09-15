@@ -2,12 +2,6 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin, Dev Hub, Alerts, Trains near me, community chat, or other hidden-test work. No emoji and no em dashes in What’s New. Keep `APP_VERSION`, `package.json` `version`, and `public/app-version.json` aligned on each release. Changelog / What’s New may be skipped, or the heading may be only **no release notes.**
 
-## V9_09.15.3 — Ads sit above the phone and scroll with the page (15 Sep 2026)
-
-Clever top units reparent into `#nt-ad-page-host` (full width, above `#nt-shell`) so they push the document and scroll with it. Scroll-away is not dismiss. Leave/return still collapses empty leftover wrappers. Do not put stickies inside the max-w-md frame.
-
-no release notes.
-
 ## V9_09.15.2 — Schedule dump and grid order from live RTDB (15 Sep 2026)
 
 Refresh `public/data/full-database.json` from live `schedules/{gauteng,westerncape,kzn,easterncape}.json` (KZN lastUpdated 15 Sep 2026). Include Apps Script `_columnOrder` companions so the GitHub fallback matches the board. Merge those orders into `MANUAL_GRID_ORDER`. WC `public_holidays` is in the nested Western Cape node. This repo is still the dump source of truth, not the old OneDrive SPA tree.

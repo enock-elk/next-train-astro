@@ -19,8 +19,9 @@ if (!indexPage.includes('id="nt-ad-scroll-host"')) fail('homepage missing #nt-ad
 if (!/id="app-scroll"[\s\S]{0,180}id="nt-ad-scroll-host"/.test(indexPage)) {
     fail('#nt-ad-scroll-host must be the first child of #app-scroll');
 }
-if (!layout.includes('id="nt-ad-page-host"')) fail('Layout missing #nt-ad-page-host above the phone frame');
-if (!layout.includes('html.nt-ad-page-flow')) fail('Layout must allow document scroll while an in-flow ad is present');
+if (!layout.includes('clips a 100vw creative')) {
+    fail('Layout must document why vendor stickies stay outside the phone frame');
+}
 
 if (!layout.includes('id="clever-core"')) fail('Layout missing SCRIPT#clever-core');
 if (/<div[^>]*id="clever-core"/.test(layout)) fail('Layout must not host DIV#clever-core (vendor id is a SCRIPT)');
@@ -88,24 +89,6 @@ if (!ads.includes("addEventListener('scrollend'")) fail('must remasure ads on sc
 if (ads.includes('reparentOccupiedAdsIntoScrollHost')) {
   fail('must not reparent Clever stickies into #nt-ad-scroll-host (clips 100vw creatives to the phone frame)');
 }
-if (!ads.includes('reparentOccupiedAdsIntoPageHost')) fail('filled top ads must move into #nt-ad-page-host above the phone');
-if (!ads.includes('ignoreOffscreen')) fail('scrolled-off ads must not be treated as dismissed');
-if (!ads.includes('Off-screen due to document scroll is still filled')) {
-  fail('isAdFilled must not treat scroll-away as a missed inject');
-}
-if (!ads.includes('isInPageAdHost')) fail('page-host occupancy must ignore viewport intersection');
-if (!ads.includes('Scroll-away is not dismiss')) fail('idle reclaim must not treat scroll-away as dismiss');
-if (!ads.includes("unitOccupiesSpace(el, { ignoreOffscreen: true })")) {
-  fail('idle reclaim must ignore viewport intersection');
-}
-if (!ads.includes('setAdPageFlow')) fail('in-flow ads must toggle document scroll (nt-ad-page-flow)');
-if (!layout.includes('html.nt-in-app.nt-ad-page-flow')) {
-  fail('page-flow overflow must beat html.nt-in-app overflow:hidden');
-}
-if (!/html\.nt-in-app\.nt-ad-page-flow body[\s\S]{0,180}overflow:\s*visible\s*!important/.test(layout)) {
-  fail('page-flow body must not be a nested scrollport (overflow visible)');
-}
-if (!ads.includes('function adPageHost')) fail('page ad host helper missing');
 if (ads.includes('function adScrollHost')) fail('must not move vendor overlays into the phone-frame ad host');
 if (!ads.includes('overlayShiftHeight')) fail('top vs bottom sticky must be distinguished so bottom units do not open a top gap');
 if (!ads.includes("getElementById('app-scroll')")) fail('must listen for scroll on #app-scroll');
@@ -172,12 +155,8 @@ if (ads.includes("setProperty('display', 'none'")) {
   if (targetShift(96, 0) !== 96) fail('fixed overlay must shift the shell by H');
   if (targetShift(96, 80) !== 0) fail('in-flow ads must not double-push');
   if (targetShift(0, 0) !== 0) fail('bottom-only overlay must not shift the shell');
-  const scrolledStillOccupies = (inPageHost, offscreen, hasCreative) => (
-    hasCreative && (inPageHost || !offscreen)
-  );
-  if (!scrolledStillOccupies(true, true, true)) fail('scroll-away of a live page-host unit is not dismiss');
-  if (scrolledStillOccupies(true, true, false)) fail('empty leftover must still collapse after leave/return');
-  if (scrolledStillOccupies(false, true, true)) fail('fixed overlay off-screen must not keep a shift');
+  if (flipInvert(80) !== -80) fail('in-flow fill inverts with -delta');
+  if (flipInvert(-80) !== 80) fail('in-flow dismiss inverts with +H');
 }
 
 if (failures.length) {

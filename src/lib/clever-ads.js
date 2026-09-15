@@ -5,20 +5,18 @@
  * CleverCoreLoader103008 next to the first page script. Guardian only decides
  * WHEN to call that IIFE (welcome / safe-zone / 4-slot schedule). Do not steal
  * #clever-core for a positioned DIV and do not set left/top/transform on their
- * overlays. Filled top units move into #nt-ad-page-host (full-width sibling
- * above #nt-shell), in-flow, so they sit on the page above the phone frame and
- * scroll with the document. Scroll-away is not dismiss: an off-screen live
- * unit must stay in the tree. Do not reparent into #nt-ad-scroll-host inside
- * the max-w-md frame (that clips a 100vw creative to a blank strip). Bottom
- * stickies overlay and are not pulled into the page host. When a leftover
- * wrapper has no creative (leave and return), reclaim it. Do not transform
- * #nt-shell itself (it wraps position:fixed overlays).
+ * overlays — their sticky format owns placement (full viewport, like Ster-Kinekor).
+ * Do not reparent filled units into #nt-ad-scroll-host. The phone frame is
+ * max-w-md overflow:hidden; forcing position:static + width:100% there clips a
+ * 100vw creative to a blank strip (close X still shows). When a top sticky
+ * fills or dismisses, ease #main-content via --nt-ad-shift / --nt-ad-flip on
+ * #nt-shell. Bottom stickies overlay the page and must not create a top gap.
+ * Do not transform #nt-shell itself (it wraps position:fixed overlays).
  *
  * A leftover top gap after the creative is gone is a bug: measure occupancy
- * (not just the wrapper box), reclaim idle leftovers, and re-sync on resume,
- * scroll-return, and while a shift or page-flow slot is still applied. Cloak
- * visibility must not count as “filled” for board shift. Off-screen due to
- * scroll must still count as occupied.
+ * (not just the wrapper box), reclaim idle in-flow leftovers, and re-sync on
+ * resume, scroll-return, and while a shift is still applied. Cloak visibility
+ * must not count as “filled” for board shift.
  *
  * Page-load inject schedule (after app stabilized):
  *   1/4 immediate · 2/4 +30s · 3/4 +1min · 4/4 +2min · then stop for this page load.
@@ -127,7 +125,7 @@ function cleverOverlayNodes() {
     const add = (el) => {
         if (!el || seen.has(el) || el.id === 'clever-core' || el.id === LOADER_ID || el.tagName === 'SCRIPT') return;
         if (el.id === 'nt-shell' || el.id === 'offline-toast' || el.id === 'main-content') return;
-        if (el.id === 'nt-ad-scroll-host' || el.id === 'nt-ad-page-host' || el.id === 'app-scroll') return;
+        if (el.id === 'nt-ad-scroll-host' || el.id === 'app-scroll') return;
         seen.add(el);
         out.push(el);
     };
@@ -166,18 +164,12 @@ function consumeResumeInstant() {
     return next;
 }
 
-function isInPageAdHost(el) {
-    return !!(el && el.closest && el.closest('#nt-ad-page-host'));
-}
-
 /**
  * True when the box is actually showing. Skip visibility/opacity/off-screen
  * unless `ignoreOurHide` — our cloak uses visibility:hidden and must still
  * count as an injected unit so we do not fire another schedule slot.
- * `ignoreOffscreen` is for in-flow page units: scrolled out of view is not
- * dismiss, and must not collapse the slot.
  */
-function isPaintedBox(el, { ignoreOurHide = false, ignoreOffscreen = false } = {}) {
+function isPaintedBox(el, { ignoreOurHide = false } = {}) {
     const cs = getComputedStyle(el);
     if (cs.display === 'none') return false;
     const skipHideChecks = ignoreOurHide && isOurAdHideActive();
@@ -187,8 +179,7 @@ function isPaintedBox(el, { ignoreOurHide = false, ignoreOffscreen = false } = {
     }
     const r = el.getBoundingClientRect();
     if (r.height <= 20 || r.width <= 20) return false;
-    const skipOffscreen = ignoreOffscreen || isInPageAdHost(el);
-    if (!skipHideChecks && !skipOffscreen) {
+    if (!skipHideChecks) {
         if (r.bottom <= 1 || r.top >= window.innerHeight - 1) return false;
         if (r.right <= 1 || r.left >= window.innerWidth - 1) return false;
     }
@@ -208,13 +199,8 @@ function iframeLooksAlive(iframe, paintedOpts) {
 
 /** Wrapper with no creative (expired/discarded) must not keep a top gap. */
 function unitOccupiesSpace(el, paintedOpts = {}) {
-    // In-flow page-host units stay occupied when scrolled off-screen.
-    // Scroll-away is not dismiss; only a missing creative is.
-    const opts = isInPageAdHost(el)
-        ? { ...paintedOpts, ignoreOffscreen: true }
-        : paintedOpts;
-    if (!isPaintedBox(el, opts)) return false;
-    if (el.tagName === 'IFRAME') return iframeLooksAlive(el, opts);
+    if (!isPaintedBox(el, paintedOpts)) return false;
+    if (el.tagName === 'IFRAME') return iframeLooksAlive(el, paintedOpts);
     if (el.tagName === 'IMG' || el.tagName === 'VIDEO' || el.tagName === 'CANVAS'
         || el.tagName === 'OBJECT' || el.tagName === 'EMBED') {
         return true;
@@ -224,17 +210,17 @@ function unitOccupiesSpace(el, paintedOpts = {}) {
     for (const root of roots) {
         const iframes = root.querySelectorAll ? root.querySelectorAll('iframe') : [];
         for (const frame of iframes) {
-            if (iframeLooksAlive(frame, opts)) return true;
+            if (iframeLooksAlive(frame, paintedOpts)) return true;
         }
         const media = root.querySelectorAll ? root.querySelectorAll('img, video, canvas, object, embed') : [];
         for (const node of media) {
-            if (isPaintedBox(node, opts)) return true;
+            if (isPaintedBox(node, paintedOpts)) return true;
         }
     }
     for (const child of el.children) {
         if (child.tagName === 'SCRIPT' || child.tagName === 'STYLE'
             || child.tagName === 'LINK' || child.tagName === 'NOSCRIPT') continue;
-        if (unitOccupiesSpace(child, opts)) return true;
+        if (unitOccupiesSpace(child, paintedOpts)) return true;
     }
     const cs = getComputedStyle(el);
     if (cs.backgroundImage && cs.backgroundImage !== 'none') return true;
@@ -246,9 +232,7 @@ function unitOccupiesSpace(el, paintedOpts = {}) {
 function syncIdleAdNodes() {
     const hideActive = isOurAdHideActive();
     cleverOverlayNodes().forEach((el) => {
-        // Scroll-away is not dismiss: never idle a live unit just because it
-        // left the viewport. Empty leftovers (no creative) still collapse.
-        if (hideActive || unitOccupiesSpace(el, { ignoreOffscreen: true })) {
+        if (hideActive || unitOccupiesSpace(el)) {
             el.removeAttribute('data-nt-ad-idle');
             return;
         }
@@ -263,55 +247,6 @@ function syncIdleAdNodes() {
 
 function ntShell() {
     return document.getElementById('nt-shell');
-}
-
-function adPageHost() {
-    return document.getElementById('nt-ad-page-host');
-}
-
-function outermostMovableAdNode(el) {
-    let cur = el;
-    while (cur.parentElement) {
-        const p = cur.parentElement;
-        if (p === document.body || p === document.documentElement) break;
-        if (p.id === 'nt-ad-page-host' || p.id === 'nt-ad-scroll-host' || p.id === 'app-scroll'
-            || p.id === 'main-content' || p.id === 'nt-shell') break;
-        cur = p;
-    }
-    return cur;
-}
-
-function isBottomOrSideOverlay(el) {
-    const cs = getComputedStyle(el);
-    if (cs.position !== 'fixed' && cs.position !== 'absolute') return false;
-    return el.getBoundingClientRect().top > 64;
-}
-
-/** Move a filled top unit into the full-width page slot above the phone frame. */
-function reparentOccupiedAdsIntoPageHost() {
-    const host = adPageHost();
-    if (!host) return false;
-    let moved = false;
-    cleverOverlayNodes().forEach((el) => {
-        if (host.contains(el)) return;
-        if (isBottomOrSideOverlay(el)) return;
-        if (!unitOccupiesSpace(el, { ignoreOurHide: true, ignoreOffscreen: true })) return;
-        const move = outermostMovableAdNode(el);
-        if (!move || host.contains(move) || move === host) return;
-        if (move.id === 'nt-shell' || move.id === 'main-content' || move.id === 'app-scroll') return;
-        host.appendChild(move);
-        moved = true;
-    });
-    return moved;
-}
-
-function setAdPageFlow(on) {
-    const html = document.documentElement;
-    const wasOn = html.classList.contains('nt-ad-page-flow');
-    html.classList.toggle('nt-ad-page-flow', !!on);
-    if (wasOn && !on) {
-        try { window.scrollTo(0, 0); } catch { /* ignore */ }
-    }
 }
 
 /**
@@ -486,7 +421,6 @@ function syncAdShellMotion() {
         adEntering = false;
         shellMotionLock = false;
         cleverOverlayNodes().forEach((el) => el.removeAttribute('data-nt-ad-idle'));
-        setAdPageFlow(false);
         setShellVar('--nt-ad-shift', 0, false);
         setShellVar('--nt-ad-flip', 0, false);
         prevOverlayH = 0;
@@ -497,12 +431,10 @@ function syncAdShellMotion() {
 
     if (adEntering || shellMotionLock) return;
 
-    reparentOccupiedAdsIntoPageHost();
     const { overlayH, inFlowH, occupied } = measureAdLayout();
     const filled = occupied || overlayH > 0 || inFlowH > 0;
 
     if (isAdsCloaked()) {
-        setAdPageFlow(false);
         if (inFlowH > 0) prevInFlowH = inFlowH;
         return;
     }
@@ -515,7 +447,6 @@ function syncAdShellMotion() {
 
     const animate = !instant && userSawEmptyBoard;
     const targetShift = inFlowH > 0 ? 0 : overlayH;
-    setAdPageFlow(inFlowH > 0);
 
     if (!filled) {
         if (animate && prevOverlayH > 20) animateOverlayTo(0);
@@ -640,12 +571,7 @@ function uncloak() {
 
 function isAdFilled() {
     if (adEntering) return true;
-    // Off-screen due to document scroll is still filled. Do not fire another
-    // inject slot as if the commuter dismissed the unit.
-    const { overlayH, inFlowH, occupied } = measureAdLayout({
-        ignoreOurHide: true,
-        ignoreOffscreen: true,
-    });
+    const { overlayH, inFlowH, occupied } = measureAdLayout({ ignoreOurHide: true });
     return occupied || overlayH > 0 || inFlowH > 0;
 }
 
@@ -767,7 +693,7 @@ export function initCleverAds() {
         adScrollSyncTimer = 0;
     }
     stopOccupancyWatch();
-    document.documentElement.classList.remove('nt-ads-entering', 'nt-ad-page-flow');
+    document.documentElement.classList.remove('nt-ads-entering');
 
     let stabilizedAt = 0;
     let nextScheduleIndex = 0;
@@ -787,10 +713,7 @@ export function initCleverAds() {
         const adObserver = new MutationObserver((mutations) => {
             let sawChildList = false;
             for (const m of mutations) {
-                if (m.type === 'attributes') {
-                    if (m.target === document.documentElement && m.attributeName === 'class') {
-                        requestAdShellSync();
-                    }
+                if (m.type === 'attributes' && m.attributeName === 'style') {
                     const el = m.target;
                     if (!(el instanceof Element)) continue;
                     const style = el.getAttribute('style') || '';

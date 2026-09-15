@@ -116,8 +116,13 @@ assert(!/#main-content\.app-shell\.dropdown-escape #app-scroll \{\s*overflow:\s*
 assert(layout.includes('body.sidenav-open #app-scroll'), 'Options open freezes #app-scroll');
 assert(/#sidenav-overlay \{\s*touch-action:\s*none;/.test(layout), 'Options scrim does not scroll-chain on iOS');
 assert(layout.includes('font-size: clamp(13.12px, calc(100vw * 16 / 390), 16px)'), 'Layout first-paint scales html rem on phones');
+assert(layout.includes('font-size: max(16px, 1em) !important'), 'Layout first-paint floors focused fields at 16px');
+assert(layout.includes('font-size: max(16px, 1.125rem) !important'), 'Layout keeps text-lg station fields at 1.125rem when that is larger');
+assert(layout.includes('maximum-scale=5.0'), 'Layout still allows pinch zoom');
+assert(!layout.includes('user-scalable=no'), 'Layout does not disable zoom to dodge iOS input focus');
 const contentLayout = readFileSync(new URL('../src/layouts/ContentLayout.astro', import.meta.url), 'utf8');
 assert(contentLayout.includes('font-size: clamp(13.12px, calc(100vw * 16 / 390), 16px)'), 'map layout first-paint scales html rem on phones');
+assert(contentLayout.includes('font-size: max(16px, 1em) !important'), 'map layout floors focused fields at 16px');
 assert(layout.includes('max-width: 28rem'), 'phone shell keeps the 28rem max stretch');
 assert(!/max-width:\s*639px[\s\S]{0,180}max-width:\s*none/.test(layout), 'phone shell no longer drops max-width');
 
@@ -146,6 +151,9 @@ assert(css.includes('height: 2rem') && css.includes('#planner-header-badge > div
 assert(!/#planner-back-btn,[\s\S]{0,400}min-height: 2.5rem/.test(css), 'planner toolbar is not the taller 2.5rem lock');
 assert(!/#planner-back-btn,[\s\S]{0,360}font-size: calc\(0.8rem \* var\(--nt-ui-scale/.test(css), 'planner toolbar is not scaled down on phones');
 assert(css.includes('font-size: clamp(13.12px, calc(100vw * 16 / 390), 16px)'), 'phones scale html rem from viewport width');
+assert(css.includes('font-size: max(16px, 1em) !important'), 'hashed CSS floors typed fields at 16px so iOS does not zoom');
+assert(css.includes('input.text-lg'), 'hashed CSS preserves Home/Planner text-lg fields');
+assert(css.includes('font-size: max(16px, 1.125rem) !important'), 'text-lg fields stay 1.125rem when that is ≥16px');
 assert(css.includes('--nt-ui-scale: clamp(0.82, 100vw / 390px, 1)'), 'phone scale floor is 320/390');
 assert(!css.includes('clamp(0.90, calc(100vw / 390), 1.06)'), 'phone scale no longer floors at 0.90');
 assert(!plannerUi.includes('PLANNER_VIEWPORT_NO_ZOOM'), 'planner no longer rewrites the viewport to suppress input zoom');

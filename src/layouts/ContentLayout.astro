@@ -81,6 +81,18 @@ const resolvedHtmlClass = [forceDark ? 'dark' : '', htmlClass].filter(Boolean).j
       @media (max-width: 639px) {
         html { font-size: clamp(13.12px, calc(100vw * 16 / 390), 16px); }
       }
+      /* Same iOS 16px field floor as Layout.astro. Do not lock the viewport. */
+      input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):not([type="file"]):not([type="range"]):not([type="color"]):not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="image"]),
+      textarea,
+      select {
+        font-size: max(16px, 1em) !important;
+      }
+      input.text-lg, textarea.text-lg, select.text-lg {
+        font-size: max(16px, 1.125rem) !important;
+      }
+      input.text-base, textarea.text-base, select.text-base {
+        font-size: max(16px, 1rem) !important;
+      }
     </style>
     <ShellFallbackStyles surface="content" />
     <StuckUpdateGuard />

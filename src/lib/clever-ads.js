@@ -5,9 +5,13 @@
  * CleverCoreLoader103008 next to the first page script. Guardian only decides
  * WHEN to call that IIFE (welcome / safe-zone / 4-slot schedule). Do not steal
  * #clever-core for a positioned DIV and do not set left/top/transform on their
- * overlays. Occupied units are reparented into #nt-ad-scroll-host (first child
- * of #app-scroll) so they roll in at the top and scroll with the board.
- * In-flow fill uses --nt-ad-flip. Do not transform #nt-shell itself.
+ * overlays — their sticky format owns placement (full viewport, like Ster-Kinekor).
+ * Do not reparent filled units into #nt-ad-scroll-host. The phone frame is
+ * max-w-md overflow:hidden; forcing position:static + width:100% there clips a
+ * 100vw creative to a blank strip (close X still shows). When a top sticky
+ * fills or dismisses, ease #main-content via --nt-ad-shift / --nt-ad-flip on
+ * #nt-shell. Bottom stickies overlay the page and must not create a top gap.
+ * Do not transform #nt-shell itself (it wraps position:fixed overlays).
  *
  * A leftover top gap after the creative is gone is a bug: measure occupancy
  * (not just the wrapper box), reclaim idle in-flow leftovers, and re-sync on
@@ -245,36 +249,14 @@ function ntShell() {
     return document.getElementById('nt-shell');
 }
 
-function adScrollHost() {
-    return document.getElementById('nt-ad-scroll-host');
-}
-
-function outermostMovableAdNode(el) {
-    let cur = el;
-    while (cur.parentElement) {
-        const p = cur.parentElement;
-        if (p === document.body || p === document.documentElement) break;
-        if (p.id === 'nt-ad-scroll-host' || p.id === 'app-scroll' || p.id === 'main-content' || p.id === 'nt-shell') break;
-        cur = p;
-    }
-    return cur;
-}
-
-/** Move a filled unit into #app-scroll so it scrolls with the board. */
-function reparentOccupiedAdsIntoScrollHost() {
-    const host = adScrollHost();
-    if (!host) return false;
-    let moved = false;
-    cleverOverlayNodes().forEach((el) => {
-        if (host.contains(el)) return;
-        if (!unitOccupiesSpace(el, { ignoreOurHide: true })) return;
-        const move = outermostMovableAdNode(el);
-        if (!move || host.contains(move) || move === host) return;
-        if (move.id === 'nt-shell' || move.id === 'main-content' || move.id === 'app-scroll') return;
-        host.appendChild(move);
-        moved = true;
-    });
-    return moved;
+/**
+ * Height to ease the board down. Sticky-top only.
+ * Bottom/side stickies (Ster-Kinekor-style) overlay the page and return 0.
+ */
+function overlayShiftHeight(r, cs) {
+    if (cs.position !== 'fixed' && cs.position !== 'absolute') return 0;
+    if (r.top > 64) return 0;
+    return r.height;
 }
 
 function afterPaint(fn) {
@@ -413,19 +395,21 @@ function animateOverlayTo(toH) {
 function measureAdLayout(paintedOpts = {}) {
     let overlayH = 0;
     let inFlowH = 0;
+    let occupied = false;
     cleverOverlayNodes().forEach((el) => {
         const cs = getComputedStyle(el);
         if (cs.display === 'none') return;
         if (el.getAttribute('data-nt-ad-idle') === '1') return;
         if (!unitOccupiesSpace(el, paintedOpts)) return;
+        occupied = true;
         const r = el.getBoundingClientRect();
         if (cs.position === 'fixed' || cs.position === 'absolute') {
-            overlayH = Math.max(overlayH, r.height);
+            overlayH = Math.max(overlayH, overlayShiftHeight(r, cs));
         } else {
             inFlowH = Math.max(inFlowH, r.height);
         }
     });
-    return { overlayH, inFlowH };
+    return { overlayH, inFlowH, occupied };
 }
 
 function syncAdShellMotion() {
@@ -447,9 +431,8 @@ function syncAdShellMotion() {
 
     if (adEntering || shellMotionLock) return;
 
-    reparentOccupiedAdsIntoScrollHost();
-    const { overlayH, inFlowH } = measureAdLayout();
-    const filled = overlayH > 0 || inFlowH > 0;
+    const { overlayH, inFlowH, occupied } = measureAdLayout();
+    const filled = occupied || overlayH > 0 || inFlowH > 0;
 
     if (isAdsCloaked()) {
         if (inFlowH > 0) prevInFlowH = inFlowH;
@@ -588,8 +571,8 @@ function uncloak() {
 
 function isAdFilled() {
     if (adEntering) return true;
-    const { overlayH, inFlowH } = measureAdLayout({ ignoreOurHide: true });
-    return overlayH > 0 || inFlowH > 0;
+    const { overlayH, inFlowH, occupied } = measureAdLayout({ ignoreOurHide: true });
+    return occupied || overlayH > 0 || inFlowH > 0;
 }
 
 function handleAdFailure(adContainer, reason, isFatal = false) {

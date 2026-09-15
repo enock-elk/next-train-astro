@@ -19,6 +19,9 @@ if (!indexPage.includes('id="nt-ad-scroll-host"')) fail('homepage missing #nt-ad
 if (!/id="app-scroll"[\s\S]{0,180}id="nt-ad-scroll-host"/.test(indexPage)) {
     fail('#nt-ad-scroll-host must be the first child of #app-scroll');
 }
+if (!layout.includes('clips a 100vw creative')) {
+    fail('Layout must document why vendor stickies stay outside the phone frame');
+}
 
 if (!layout.includes('id="clever-core"')) fail('Layout missing SCRIPT#clever-core');
 if (/<div[^>]*id="clever-core"/.test(layout)) fail('Layout must not host DIV#clever-core (vendor id is a SCRIPT)');
@@ -83,13 +86,19 @@ if (!ads.includes('visibilitychange')) fail('must remeasure ads when the app bec
 if (!ads.includes('scheduleScrollOccupancyCheck')) fail('scroll-return must trigger occupancy remasure');
 if (!ads.includes("addEventListener('scroll'")) fail('must remeasure ad occupancy on scroll (same-session gap)');
 if (!ads.includes("addEventListener('scrollend'")) fail('must remasure ads on scrollend when available');
-if (!ads.includes('reparentOccupiedAdsIntoScrollHost')) fail('filled ads must move into #nt-ad-scroll-host');
-if (!ads.includes('adScrollHost')) fail('ad scroll host helper missing');
+if (ads.includes('reparentOccupiedAdsIntoScrollHost')) {
+  fail('must not reparent Clever stickies into #nt-ad-scroll-host (clips 100vw creatives to the phone frame)');
+}
+if (ads.includes('function adScrollHost')) fail('must not move vendor overlays into the phone-frame ad host');
+if (!ads.includes('overlayShiftHeight')) fail('top vs bottom sticky must be distinguished so bottom units do not open a top gap');
 if (!ads.includes("getElementById('app-scroll')")) fail('must listen for scroll on #app-scroll');
 if (!layout.includes('#nt-ad-scroll-host')) fail('Layout must style #nt-ad-scroll-host');
 if (!layout.includes('#nt-ad-scroll-host:empty')) fail('empty ad host must not reserve height');
 if (layout.includes('#nt-ad-scroll-host') && /#nt-ad-scroll-host[\s\S]{0,220}min-height:\s*100px/.test(layout)) {
     fail('ad scroll host must not reserve 100px');
+}
+if (/#nt-ad-scroll-host\s*>\s*\*[\s\S]{0,200}position:\s*static\s*!important/.test(layout)) {
+  fail('must not flatten vendor overlays to position:static inside the max-w-md frame');
 }
 if (!ads.includes('maybeStartOccupancyWatch')) fail('must watch occupancy while the board is still shifted');
 if (!ads.includes('stopOccupancyWatch')) fail('occupancy watch must stop when the board is unshifted');
@@ -130,10 +139,22 @@ if (ads.includes("setProperty('display', 'none'")) {
   }
   if (!leftoverOccupies({ painted: true, iframeAlive: true })) fail('live iframe must occupy space');
 
+  const overlayShiftHeight = (r, cs) => {
+    if (cs.position !== 'fixed' && cs.position !== 'absolute') return 0;
+    if (r.top > 64) return 0;
+    return r.height;
+  };
   const targetShift = (overlayH, inFlowH) => (inFlowH > 0 ? 0 : overlayH);
   const flipInvert = (delta) => -delta;
+  if (overlayShiftHeight({ top: 0, height: 96 }, { position: 'fixed' }) !== 96) {
+    fail('sticky-top overlay must shift the shell by H');
+  }
+  if (overlayShiftHeight({ top: 710, height: 90 }, { position: 'fixed' }) !== 0) {
+    fail('bottom sticky must not open a top gap');
+  }
   if (targetShift(96, 0) !== 96) fail('fixed overlay must shift the shell by H');
   if (targetShift(96, 80) !== 0) fail('in-flow ads must not double-push');
+  if (targetShift(0, 0) !== 0) fail('bottom-only overlay must not shift the shell');
   if (flipInvert(80) !== -80) fail('in-flow fill inverts with -delta');
   if (flipInvert(-80) !== 80) fail('in-flow dismiss inverts with +H');
 }

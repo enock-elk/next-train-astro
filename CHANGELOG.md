@@ -2,6 +2,12 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin, Dev Hub, Alerts, Trains near me, community chat, or other hidden-test work. No emoji and no em dashes in What’s New. Keep `APP_VERSION`, `package.json` `version`, and `public/app-version.json` aligned on each release. Changelog / What’s New may be skipped, or the heading may be only **no release notes.**
 
+## V9_09.15.1 — CleverAds stay viewport-fixed (15 Sep 2026)
+
+Clever’s loader URL and IIFE are unchanged from the original tag. V9_08.29.1 reparented filled units into `#nt-ad-scroll-host` inside the `max-w-md` phone frame and forced `position: static; width: 100%`. That is why desktop stickies shrank to the app column and the creative painted as a blank white strip with only the vendor close X. Stickies stay document-level (full viewport, same as Ster-Kinekor). `--nt-ad-shift` still eases the board for sticky-top only; bottom overlays do not open a top gap. `#nt-ad-scroll-host` stays empty.
+
+no release notes.
+
 ## V9_09.14.8 — GPS ping clock, alerts route scope, planner To scroll, fare km (14 Sep 2026)
 
 Tracking card GPS is the age of the last successful GPS ping and always includes seconds (`5 sec`, `1m 5 sec`). Last seen is `Last seen Pretoria - 15:20:23` using the 24h clock of that ping (`fixAt`), not “now”. The train tooltip GPS age ticks the same way. Firebase ride pings now store `fixAt` so the clock survives a broadcast.

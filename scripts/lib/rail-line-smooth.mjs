@@ -79,6 +79,16 @@ export function stripStationPins(coords, stationCoords, {
             const prev = kept[kept.length - 1];
             const next = coords[i + 1];
             if (prev && next) {
+                const prevD = haversineM(prev[1], prev[0], lat, lon);
+                const nextD = haversineM(lat, lon, next[1], next[0]);
+                // Hook: the pin sits a few metres off a rail vertex on one
+                // side and a long chord on the other (Loftus 11 m, Rissik 34 m).
+                // Dropping it removes the kick into the marker. The long chord
+                // stays until tracks:fill-chords can drape it onto OSM.
+                if (Math.min(prevD, nextD) <= maxTerminusReachM) {
+                    removed++;
+                    continue;
+                }
                 // Interior pin: drop it when the rail either side is close
                 // enough that the pin is a sideways kick. A pin that carries a
                 // chord hop, where OSM simply has no rail, brackets kilometres

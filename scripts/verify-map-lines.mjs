@@ -88,6 +88,26 @@ assert(
     'Ndabeni→Pinelands hop that does not pass Hazendal is kept'
 );
 
+{
+    // Hook pin: 12 m off the previous rail vertex, 900 m chord on the other side.
+    // That is Loftus / Rissik. The pin must drop; the long chord stays.
+    const hook = stripStationPins(
+        [[28.225414, -25.755025], [28.225357, -25.754940], [28.232275, -25.749263]],
+        [[-25.754940, 28.225357]],
+    );
+    assert(hook.removed === 1, 'stripStationPins drops a one-sided station-pin hook');
+    assert(hook.coords.length === 2, 'hook strip keeps the two rail/chord ends');
+}
+
+const pkg = readFileSync(new URL('../package.json', import.meta.url), 'utf8');
+assert(pkg.includes('"tracks:repair"'), 'package.json has tracks:repair');
+assert(pkg.includes('"tracks:audit"'), 'package.json has tracks:audit');
+const fillChords = readFileSync(new URL('../scripts/fill-rail-chords.mjs', import.meta.url), 'utf8');
+assert(fillChords.includes("HELD_REGIONS = new Set(['KZN'])"), 'fill-chords refuses KZN');
+assert(fillChords.includes('.sort((a, b) => b.lo - a.lo)'), 'fill-chords splices hops from the end so earlier indexes stay valid');
+assert(fillChords.includes('gautrain'), 'fill-chords ignores Gautrain-named OSM ways');
+assert(fillChords.includes('despikedAgain'), 'fill-chords strips pin hooks again after a drape');
+
 const plannerUi = readFileSync(new URL('../src/lib/planner-ui.js', import.meta.url), 'utf8');
 assert(plannerUi.includes('routeId: routeId || null'), 'planner trip stops carry a corridor id for the bake slice');
 assert(plannerUi.includes('addStops(trip.stops, trip.route?.id)'), 'direct trips pass the route id into the trip map');
@@ -294,6 +314,31 @@ for (const region of ['GP', 'WC', 'KZN', 'EC']) {
     assert(names.includes('LENZ'), 'jhb-midway bake includes a Lenz hop');
     assert(gp.properties?.generatedAt === '2026-08-29T01:37:44.682Z', 'GP tracks keep the live 29 Aug bake timestamp');
     assert(midway?.properties?.stationPinsStripped === true, 'GP geometry is smoothed, not re-downloaded from OSM');
+    const pien = gp.features.find((f) => f.properties?.routeId === 'pta-pien');
+    const pienCoords = pien?.geometry?.coordinates || [];
+    const pienPins = new Set(
+        (pienCoords || []).map((c) => `${Number(c[1]).toFixed(6)},${Number(c[0]).toFixed(6)}`)
+    );
+    const loftus = (pien?.properties?.stationCoords || [])[4];
+    const rissik = (pien?.properties?.stationCoords || [])[5];
+    assert(pien?.properties?.stationNames?.[4] === 'LOFTUS VERSFELD PARK', 'pta-pien stop 4 is Loftus');
+    assert(pien?.properties?.stationNames?.[5] === 'RISSIK', 'pta-pien stop 5 is Rissik');
+    assert(loftus && !pienPins.has(`${loftus[0].toFixed(6)},${loftus[1].toFixed(6)}`), 'pta-pien no longer routes through the Loftus pin');
+    assert(rissik && !pienPins.has(`${rissik[0].toFixed(6)},${rissik[1].toFixed(6)}`), 'pta-pien no longer routes through the Rissik pin');
+    let loftusI = 0;
+    let rissikI = 0;
+    let loftusD = Infinity;
+    let rissikD = Infinity;
+    for (let i = 0; i < pienCoords.length; i++) {
+        const dL = haversineM(loftus[0], loftus[1], pienCoords[i][1], pienCoords[i][0]);
+        const dR = haversineM(rissik[0], rissik[1], pienCoords[i][1], pienCoords[i][0]);
+        if (dL < loftusD) { loftusD = dL; loftusI = i; }
+        if (dR < rissikD) { rissikD = dR; rissikI = i; }
+    }
+    assert(
+        Math.abs(rissikI - loftusI) > 8,
+        `pta-pien Loftus→Rissik is draped onto rail (${Math.abs(rissikI - loftusI)} verts), not a two-point chord`
+    );
 }
 
 {

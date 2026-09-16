@@ -11,6 +11,7 @@ export const QA_ISSUE_TYPES = [
     { code: 'TIME_REGRESSION', label: 'Time goes backwards', defaultOn: true },
     { code: 'DELTA_VARIANCE', label: 'Inconsistent deltas', defaultOn: true },
     { code: 'MISSING_COORDS', label: 'Missing coordinates', defaultOn: true },
+    { code: 'GHOST_STATION', label: 'Junk station rows', defaultOn: true },
     { code: 'INVALID_COORDS', label: 'Invalid coordinates', defaultOn: true },
     { code: 'DUPLICATE_STATION', label: 'Duplicate station rows', defaultOn: true },
     { code: 'NON_TIME_CELL', label: 'Non-time cells', defaultOn: true },
@@ -29,6 +30,20 @@ export const QA_ISSUE_TYPES = [
 /** Strip " STATION" for display. */
 function stationShort(name) {
     return String(name || '').replace(/\s+STATION$/i, '').trim();
+}
+
+/**
+ * Spreadsheet leftover in the STATION column (Durban↔Winklespruit weekday
+ * ended with "12" and "7.20"). Not a real stop.
+ */
+export function isJunkStationName(name) {
+    const s = String(name || '').trim();
+    if (!s) return true;
+    if (/^last updated/i.test(s)) return true;
+    if (/^station$/i.test(s)) return true;
+    if (/^\d+([.,]\d+)?$/.test(s)) return true;
+    if (/^(total|km|hours?|minutes?)$/i.test(s)) return true;
+    return false;
 }
 
 function parseCoords(raw) {
@@ -104,6 +119,16 @@ export function scanScheduleSheet(schedule, ctx = {}) {
     for (const row of schedule.rows) {
         const station = row[stationCol];
         if (!station) continue;
+        if (isJunkStationName(station)) {
+            findings.push({
+                severity: 'warn',
+                code: 'GHOST_STATION',
+                message: `Junk station row "${stationShort(station)}" (spreadsheet leftover, not a stop)`,
+                station: stationShort(station),
+                ...ctx,
+            });
+            continue;
+        }
         const key = normalizeStationName(station);
         if (!key) continue;
         stationNames.push(key);

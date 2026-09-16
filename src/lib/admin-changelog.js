@@ -5,6 +5,12 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_09.16.6': [
+        'Map gold tracks: stripStationPins now also drops one-sided station-pin hooks (Loftus 11 m, Rissik 34 m). Those were kept because the other side of the pin is a 900 m chord (bridge > 600 m). KZN is not rewritten.',
+        'npm run tracks:fill-chords drapes leftover short chords (200 m–2 km, 0–1 verts between stops) onto OSM rails from api.openstreetmap.org, ignoring Gautrain-named ways. True OSM gaps (De Wildt) stay chords. npm run tracks:audit is read-only. npm run tracks:repair = smooth + fill, GP WC EC only.',
+        'Schedule QA GHOST_STATION flags junk STATION cells (12, 7.20, Last Updated). They no longer count as missing-coord stops or weekday-only stations.',
+        'forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
+    ],
     'V9_09.16.5': [
         'Blank slab under the Feedback Hub composer: appearance.css keeps non-fullscreen cards clear of the bottom nav with padding-bottom 4.5rem plus a card capped at --nt-app-h - 5.5rem !important. That was harmless while Hub was a centred sheet. Making it full view in 16.2 left the cap in place, so the card stopped 88px short. A keyboard cycle hid the URL bar, --nt-app-h grew, the cap cleared the sheet and the slab closed, which is why it looked like a measuring bug. #messages-thread-modal is now excluded from both selectors.',
         'Feedback Hub is sized like the Community tab and nothing else: position: absolute; inset: 0 over #nt-shell. No JS geometry, no --nt-app-h / --nt-shell-h / visualViewport copy (16.2, 16.3 and 16.4 each chased the wrong cause with those).',

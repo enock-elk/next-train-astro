@@ -16703,7 +16703,7 @@ const Admin = {
                     <div id="sched-qa-body" class="p-3 hidden space-y-3 overflow-visible">
                         <p class="text-[9px] text-violet-800 dark:text-violet-400 font-medium leading-snug">
                             Flags impossible or suspicious timetable cells: identical adjacent stops, time regressions,
-                            delta variance, missing coordinates, day mismatches, and more.
+                            delta variance, missing coordinates, junk leftover rows (a lone 12 or 7.20), day mismatches, and more.
                         </p>
 
                         <div class="grid grid-cols-2 gap-2">

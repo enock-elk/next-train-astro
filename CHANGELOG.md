@@ -2,6 +2,14 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin, Dev Hub, Alerts, Trains near me, community chat, or other hidden-test work. No emoji and no em dashes in What’s New. Keep `APP_VERSION`, `package.json` `version`, and `public/app-version.json` aligned on each release. Changelog / What’s New may be skipped, or the heading may be only **no release notes.** Every bump must add `ADMIN_CHANGELOG[APP_VERSION]` (System Health Build notes).
 
+## V9_09.16.6 — Gold-track hook strip, chord drape, junk-row QA (16 Sep 2026)
+
+Loftus Versfeld Park and Rissik on Pretoria-Pienaarspoort were exact station-pin vertices with a 937 m straight chord between them. `stripStationPins` used to keep those pins because the neighbour-to-neighbour bridge is over 600 m (the De Wildt chord-carrier rule). The new hook rule drops a pin when one side is already on rail within 150 m, so the line no longer kicks into the marker. Short leftover chords can be draped onto OSM Metro rails with `npm run tracks:fill-chords` (api.openstreetmap.org, Gautrain ways ignored). KZN is still held.
+
+Schedule Data QA treats leftover `STATION` cells such as `12` and `7.20` as `GHOST_STATION`, not missing coordinates.
+
+Workflow: `npm run tracks:audit` (read-only), `npm run tracks:repair` (smooth + fill, never KZN). No new What’s New card.
+
 ## V9_09.16.5 — Feedback Hub uses the Community box (16 Sep 2026)
 
 The blank slab under the Hub composer was never a viewport measurement. `appearance.css` keeps non-fullscreen cards clear of the bottom nav with `padding-bottom: 4.5rem` plus `> div { max-height: calc(var(--nt-app-h) - 5.5rem) !important }`. That was harmless while Hub was a centred sheet. Full view in 16.2 left the cap in place, so the card stopped 88px short of the sheet. Opening the keyboard hides the URL bar, which grows `--nt-app-h` until the cap clears the sheet, so the slab closed on a keyboard cycle and looked like stale geometry. 16.3 and 16.4 chased that false trail. `#messages-thread-modal` is now excluded from both selectors.

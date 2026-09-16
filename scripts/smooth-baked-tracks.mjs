@@ -11,6 +11,10 @@
  * shape, and the Berea Road line forks at Duff's Road for the kwaMashu and
  * Bridge City branches, so its geometry is left exactly as it ships.
  *
+ * Also drops one-sided station-pin hooks (Loftus 11 m, Rissik 34 m). Long
+ * chords where OSM has no rail stay put; npm run tracks:fill-chords drapes
+ * those onto Metro rails without a full Overpass rebake.
+ *
  * Idempotent. Usage: node scripts/smooth-baked-tracks.mjs GP WC EC
  */
 import fs from 'node:fs';

@@ -3,7 +3,7 @@
  * Run: node scripts/verify-admin-panels.mjs
  */
 import { readFileSync } from 'node:fs';
-import { runScheduleQaReport } from '../src/lib/schedule-qa.js';
+import { runScheduleQaReport, scanScheduleSheet, QA_ISSUE_TYPES } from '../src/lib/schedule-qa.js';
 
 const admin = readFileSync(new URL('../public/js/admin.js', import.meta.url), 'utf8');
 const start = admin.indexOf('function ntAdminEndOfTodayLocalValue');
@@ -376,10 +376,28 @@ assert(admin.includes('data-qa-delta-idx'), 'delta cards are clickable');
 const qa = readFileSync(new URL('../src/lib/schedule-qa.js', import.meta.url), 'utf8');
 assert(qa.includes('SATURDAY_PLACEHOLDER_ROUTES'), 'QA engine imports Saturday placeholders');
 assert(qa.includes('isPlaceholderSat'), 'QA skips expected empty Saturday sheets');
+assert(QA_ISSUE_TYPES.some((t) => t.code === 'GHOST_STATION'), 'QA lists junk station rows');
+{
+    const ghost = scanScheduleSheet({
+        headers: ['STATION', '0700'],
+        stationColumnName: 'STATION',
+        rows: [
+            { STATION: 'DURBAN', COORDINATES: '-29.85,31.02', '0700': '05:00' },
+            { STATION: 'WINKLESPRUIT', COORDINATES: '-30.09,30.85', '0700': '05:40' },
+            { STATION: '12' },
+            { STATION: '7.20' },
+        ],
+    });
+    const codes = ghost.findings.map((f) => `${f.code}:${f.station}`);
+    assert(codes.includes('GHOST_STATION:12'), 'numeric leftover 12 is GHOST_STATION not a missing-coord stop');
+    assert(codes.includes('GHOST_STATION:7.20'), '7.20 leftover is GHOST_STATION');
+    assert(!ghost.findings.some((f) => f.code === 'MISSING_COORDS' && (f.station === '12' || f.station === '7.20')), 'junk rows do not also fire MISSING_COORDS');
+    assert(!ghost.stationNames.some((s) => /^(12|7.20)$/.test(s)), 'junk names are kept out of weekday↔Saturday compare');
+}
 
 assert(ui.includes("'admin-changelog-modal': '#admin-build'"), 'build notes modal has its own hash');
 assert(ui.includes("'sched-qa-delta-modal': '#qa-delta'"), 'delta table modal has its own hash');
-assert(admin.includes('openFeedbackBetaGrant'), 'feedback Options opens Add to beta');
+assert(admin.includes('junk leftover rows'), 'Schedule QA mentions junk leftover rows');
 assert(admin.includes('openFeedbackTripPlans'), 'feedback Options opens trip plan search');
 assert(admin.includes('config/feature_grants/'), 'beta grants write config/feature_grants');
 

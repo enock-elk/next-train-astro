@@ -9,38 +9,16 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { stripStationPins, despikeRailLine, haversineM } from './lib/rail-line-smooth.mjs';
+import { findGapSteps, findRepairHops } from './lib/rail-gap-drape.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const TRACKS = path.join(ROOT, 'public', 'tracks');
 const HELD_REGIONS = new Set(['KZN']);
-const MIN_CHORD_M = 200;
-const MAX_CHORD_M = 2000;
 
 const raw = process.argv.slice(2).map((a) => a.toUpperCase());
 const regions = !raw.length || raw.includes('ALL')
     ? ['GP', 'WC', 'KZN', 'EC']
     : raw;
-
-function lineLengthM(coords, from, to) {
-    let m = 0;
-    for (let i = from + 1; i <= to; i++) {
-        m += haversineM(coords[i - 1][1], coords[i - 1][0], coords[i][1], coords[i][0]);
-    }
-    return m;
-}
-
-function nearestVert(coords, lat, lon) {
-    let best = 0;
-    let bestD = Infinity;
-    for (let i = 0; i < coords.length; i++) {
-        const d = haversineM(lat, lon, coords[i][1], coords[i][0]);
-        if (d < bestD) {
-            bestD = d;
-            best = i;
-        }
-    }
-    return { i: best, d: bestD };
-}
 
 console.log('Rail track audit. KZN is held. Repair (GP WC EC only): npm run tracks:repair\n');
 
@@ -99,23 +77,19 @@ for (const region of regions) {
             );
         }
 
-        for (let s = 0; s < stops.length - 1; s++) {
-            const a = stops[s];
-            const b = stops[s + 1];
-            const i1 = nearestVert(coords, a[0], a[1]);
-            const i2 = nearestVert(coords, b[0], b[1]);
-            const lo = Math.min(i1.i, i2.i);
-            const hi = Math.max(i1.i, i2.i);
-            const chordM = haversineM(a[0], a[1], b[0], b[1]);
-            const alongM = lineLengthM(coords, lo, hi);
-            const between = hi - lo - 1;
-            if (chordM < MIN_CHORD_M || chordM > MAX_CHORD_M) continue;
-            if (between > 1) continue;
-            if (alongM > chordM * 1.12) continue;
+        const repair = findRepairHops(coords, stops, names);
+        for (const hop of repair) {
             chords++;
             console.log(
-                `  ${id}: CHORD ${names[s] || s} → ${names[s + 1] || s + 1}`
-                + `  ${Math.round(chordM)}m  ${between} verts between`
+                `  ${id}: ${hop.kind.toUpperCase()} ${hop.from} → ${hop.to}`
+                + `  ${Math.round(hop.chordM)}m  ${hop.between} verts between  perp ${Math.round(hop.maxPerp)}m`
+            );
+        }
+        for (const hop of findGapSteps(coords, repair)) {
+            chords++;
+            console.log(
+                `  ${id}: GAP ${hop.from} → ${hop.to}`
+                + `  ${Math.round(hop.chordM)}m jump`
             );
         }
     }

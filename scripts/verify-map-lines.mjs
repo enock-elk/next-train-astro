@@ -105,8 +105,14 @@ assert(pkg.includes('"tracks:audit"'), 'package.json has tracks:audit');
 const fillChords = readFileSync(new URL('../scripts/fill-rail-chords.mjs', import.meta.url), 'utf8');
 assert(fillChords.includes("HELD_REGIONS = new Set(['KZN'])"), 'fill-chords refuses KZN');
 assert(fillChords.includes('.sort((a, b) => b.lo - a.lo)'), 'fill-chords splices hops from the end so earlier indexes stay valid');
-assert(fillChords.includes('gautrain'), 'fill-chords ignores Gautrain-named OSM ways');
+assert(fillChords.includes('gautrain') || fillChords.includes('Gautrain'), 'fill-chords ignores Gautrain-named OSM ways');
 assert(fillChords.includes('despikedAgain'), 'fill-chords strips pin hooks again after a drape');
+assert(fillChords.includes('NOLU_MAIN_STOPS'), 'Nolungile is restitched onto Esplanade / Ysterplaat');
+assert(fillChords.includes('YSTERPLAAT'), 'fill-chords knows the Ysterplaat OSM void');
+const gapDrape = readFileSync(new URL('../scripts/lib/rail-gap-drape.mjs', import.meta.url), 'utf8');
+assert(gapDrape.includes('sampleKeepGaps'), 'short OSM voids keep the corridor chord instead of snapping sideways');
+assert(gapDrape.includes('gautrain'), 'gap drape skips Gautrain-named ways');
+assert(gapDrape.includes('TUBE_M'), 'drape stays inside a corridor tube');
 
 const plannerUi = readFileSync(new URL('../src/lib/planner-ui.js', import.meta.url), 'utf8');
 assert(plannerUi.includes('routeId: routeId || null'), 'planner trip stops carry a corridor id for the bake slice');

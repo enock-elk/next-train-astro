@@ -24,8 +24,10 @@ assert(!!hercPath, 'herc-koed static path is present');
 assert(!hercPath[1].includes('DASPOORT'), 'herc-koed static path does not use DASPOORT');
 assert(mapApp.includes("'pta-mabopane':") && mapApp.includes('"DASPOORT"'), 'Mabopane still uses DASPOORT');
 const herculesLon = 28.167401;
-const west = (herc?.geometry?.coordinates || []).filter((c) => c[0] < herculesLon - 0.0002);
-assert(west.length === 0, `herc-koed does not run west of Hercules (got ${west.length} verts)`);
+// The Capital Park branch leaves Hercules north along the Mabopane through
+// tracks, which sit ~150 m west of the pin. Pretoria Wes is ~2 km west.
+const west = (herc?.geometry?.coordinates || []).filter((c) => c[0] < herculesLon - 0.003);
+assert(west.length === 0, `herc-koed does not run west of Hercules toward Pretoria Wes (got ${west.length} verts)`);
 
 if (failures.length) {
     console.error(failures.map((m) => `FAIL ${m}`).join('\n'));

@@ -314,7 +314,10 @@
             // GUARDIAN: Western Cape Expansion Paths
             'ct-malm': ["CAPE TOWN", "ESPLANADE", "YSTERPLAAT", "CENTURY CITY", "MONTE VISTA", "AVONDALE", "OOSTERZEE", "BELLVILLE", "STIKLAND", "BRACKENFELL", "EIKENFONTEIN", "KRAAIFONTEIN", "FISANTKRAAL", "MELLISH", "MIKPUNT", "KLIPHEUWEL", "WINTEVOGEL", "KALBASKRAAL", "ABBOTSDALE", "MALMESBURY"],
             'ct-flats': ["CAPE TOWN", "WOODSTOCK", "SALT RIVER", "KOEBERG RD", "MAITLAND", "MUTUAL", "NDABENI", "PINELANDS", "HAZENDAL", "ATHLONE", "CRAWFORD", "LANSDOWNE", "WETTON", "OTTERY", "SOUTHFIELD", "HEATHFIELD", "RETREAT"],
-            'ct-nolu': ["CAPE TOWN", "WOODSTOCK", "SALT RIVER", "KOEBERG RD", "MAITLAND", "MUTUAL", "LANGA", "BONTEHEUWEL", "NYANGA", "PHILIPPI", "LENTEGEUR", "MITCHELL'S PLAIN", "KAPTEINSKLIP", "STOCK ROAD", "MANDALAY", "NOLUNGILE"],
+            // Nolungile follows ct_to_nolu: Esplanade / Ysterplaat, then Langa.
+            // Philippi forks like Duff's Road — main Stock Road → Nolungile,
+            // spur Lentegeur → Kapteinsklip (painted as a second polyline).
+            'ct-nolu': ["CAPE TOWN", "ESPLANADE", "YSTERPLAAT", "MUTUAL", "LANGA", "BONTEHEUWEL", "NETREG", "HEIDEVELD", "NYANGA", "PHILIPPI", "LENTEGEUR", "MITCHELL'S PLAIN", "KAPTEINSKLIP", "STOCK ROAD", "MANDALAY", "NOLUNGILE"],
 
             // --- KWAZULU-NATAL ---
             'kzn-umlazi': ["DURBAN YARD", "DURBAN", "BEREA ROAD", "DALBRIDGE", "CONGELLA", "UMBILO", "ROSSBURGH", "CLAIRWOOD", "MONTCLAIR", "MEREBANK", "REUNION", "ZWELETHU", "KWAMNYANDU", "LINDOKUHLE", "UMLAZI"],
@@ -1366,6 +1369,10 @@
                     return prev === 'LANGA' || prev === 'BONTEHEUWEL' || prev === 'NDABENI' || prev === 'PINELANDS';
                 };
                 if (iMut >= 0 && iMai < 0) {
+                    // Nolungile (and the Northern Line) already sit on Esplanade /
+                    // Ysterplaat. Inserting Maitland here pulls the line south of
+                    // the N1 and misses the Ysterplaat top alignment.
+                    if (names.includes('YSTERPLAAT') || names.includes('ESPLANADE')) return;
                     insertAt(prevIsEastBranch(iMut) ? iMut + 1 : iMut, 'MAITLAND', mai);
                 } else if (iMai >= 0 && iMut < 0) {
                     insertAt(iMai + 1, 'MUTUAL', mut);

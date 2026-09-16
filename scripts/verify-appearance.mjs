@@ -206,7 +206,12 @@ const mapApp = readFileSync(new URL('../public/js/map-app.js', import.meta.url),
 assert(mapApp.includes('ntCartoVoyagerUrl'), 'network map uses ntCartoVoyagerUrl');
 assert(mapApp.includes('ensureMaitlandMutualAdjacency'), 'WC graph inserts Maitland next to Mutual');
 assert(/"MAITLAND", "MUTUAL"/.test(mapApp), 'static WC paths list Maitland then Mutual');
-assert(!mapApp.includes('"ESPLANADE", "YSTERPLAAT", "MUTUAL"'), 'Chris Hani path no longer jumps Ysterplaat to Mutual');
+const chrisPath = mapApp.match(/'ct-chrishani': \[([^\]]+)\]/);
+assert(!!chrisPath && !chrisPath[1].includes('ESPLANADE'), 'Chris Hani path no longer jumps Ysterplaat to Mutual');
+assert(
+    /'ct-nolu': \[[^\]]*ESPLANADE[^\]]*YSTERPLAAT[^\]]*MUTUAL/.test(mapApp),
+    'Nolungile static path runs Esplanade then Ysterplaat then Mutual'
+);
 assert(mapApp.includes('function applyCanonicalStationOrder'), 'map paints from official station order');
 assert(mapApp.includes('function railHopSkipsRouteStop'), 'OSM hops cannot skip another stop on the route');
 assert(mapApp.includes('function pathVisitsStopsInOrder'), 'baked tracks must visit stations in list order');

@@ -193,6 +193,7 @@ function ensureMaitlandMutualAdjacency(stops, stations) {
         return prev === 'LANGA' || prev === 'BONTEHEUWEL' || prev === 'NDABENI' || prev === 'PINELANDS';
     };
     if (iMut >= 0 && iMai < 0) {
+        if (names.includes('YSTERPLAAT') || names.includes('ESPLANADE')) return stops;
         stops.splice(prevIsEastBranch(iMut) ? iMut + 1 : iMut, 0, { name: 'MAITLAND', lat: mai[0], lon: mai[1] });
     } else if (iMai >= 0 && iMut < 0) {
         stops.splice(iMai + 1, 0, { name: 'MUTUAL', lat: mut[0], lon: mut[1] });

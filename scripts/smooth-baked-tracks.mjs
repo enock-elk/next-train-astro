@@ -11,6 +11,9 @@
  * shape, and the Berea Road line forks at Duff's Road for the kwaMashu and
  * Bridge City branches, so its geometry is left exactly as it ships.
  *
+ * GOLD: do not run this as a refresh. Mapping work must improve the maps
+ * across the regions, not damage them. Diff origin/map-gold first.
+ *
  * Idempotent. Usage: node scripts/smooth-baked-tracks.mjs GP WC EC
  */
 import fs from 'node:fs';

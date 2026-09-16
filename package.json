@@ -19,6 +19,7 @@
     "verify:reports-tracking": "node scripts/verify-reports-tracking.mjs",
     "verify:appearance": "node scripts/verify-appearance.mjs",
     "verify:map-lines": "node scripts/verify-map-lines.mjs",
+    "verify:map-gold": "node scripts/verify-map-gold.mjs",
     "verify:update-fouc": "node scripts/verify-update-fouc.mjs",
     "verify:admin-allowlist": "node scripts/verify-admin-allowlist.mjs",
     "verify:admin-panels": "node scripts/verify-admin-panels.mjs",

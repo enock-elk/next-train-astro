@@ -316,8 +316,9 @@
             'ct-flats': ["CAPE TOWN", "WOODSTOCK", "SALT RIVER", "KOEBERG RD", "MAITLAND", "MUTUAL", "NDABENI", "PINELANDS", "HAZENDAL", "ATHLONE", "CRAWFORD", "LANSDOWNE", "WETTON", "OTTERY", "SOUTHFIELD", "HEATHFIELD", "RETREAT"],
             // Nolungile follows ct_to_nolu: Esplanade / Ysterplaat, then Langa.
             // Philippi forks like Duff's Road — main Stock Road → Nolungile,
-            // spur Lentegeur → Kapteinsklip (painted as a second polyline).
-            'ct-nolu': ["CAPE TOWN", "ESPLANADE", "YSTERPLAAT", "MUTUAL", "LANGA", "BONTEHEUWEL", "NETREG", "HEIDEVELD", "NYANGA", "PHILIPPI", "LENTEGEUR", "MITCHELL'S PLAIN", "KAPTEINSKLIP", "STOCK ROAD", "MANDALAY", "NOLUNGILE"],
+            // spur Lentegeur → Kapteinsklip (painted as a second polyline from
+            // Philippi only, never a second Cape Town → Mutual line).
+            'ct-nolu': ["CAPE TOWN", "ESPLANADE", "YSTERPLAAT", "MUTUAL", "LANGA", "BONTEHEUWEL", "NETREG", "HEIDEVELD", "NYANGA", "PHILIPPI", "STOCK ROAD", "MANDALAY", "NOLUNGILE"],
 
             // --- KWAZULU-NATAL ---
             'kzn-umlazi': ["DURBAN YARD", "DURBAN", "BEREA ROAD", "DALBRIDGE", "CONGELLA", "UMBILO", "ROSSBURGH", "CLAIRWOOD", "MONTCLAIR", "MEREBANK", "REUNION", "ZWELETHU", "KWAMNYANDU", "LINDOKUHLE", "UMLAZI"],
@@ -820,7 +821,17 @@
             // which is where Cape Town <-> Wellington picked up 574 m, 376 m and
             // 142 m kinks that are not in the bake. Held regions keep today's
             // order because their bakes are the ones carrying the kinks.
-            if (!held && bakedIsUsable) return baked;
+            // A borrowed bake (Nolungile's Kapteinsklip spur uses ct-kapteinsklip)
+            // must be sliced to the spur stops. Returning the whole bake drew a
+            // second Cape Town → Mutual line via Woodstock.
+            if (!held && bakedIsUsable) {
+                if (preferBakeId && preferBakeId !== routeObj.routeId) {
+                    const sliced = clipBakedHop(baked, stops[0], stops[stops.length - 1]);
+                    if (sliced && sliced.length > 1) return sliced;
+                } else {
+                    return baked;
+                }
+            }
 
             if (bundle.graph) {
                 const smoothed = smoothStopsOnRailGraph(bundle.graph, stops, baked);
@@ -837,6 +848,9 @@
         function resolveNoluKapteinsklipSpurLatLngs(routeObj, trackBundle) {
             const stops = noluKapteinsklipSpurStops(routeObj);
             if (stops.length < 2) return null;
+            const baked = trackBundle?.byId?.get('ct-kapteinsklip');
+            const sliced = baked ? clipBakedHop(baked, stops[0], stops[stops.length - 1]) : null;
+            if (sliced && sliced.length > 1) return sliced;
             return resolveStopsLatLngs(stops, routeObj, trackBundle, 'ct-kapteinsklip');
         }
 

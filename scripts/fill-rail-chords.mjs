@@ -17,6 +17,10 @@
  * Cape Town → Esplanade is then forced onto the northern tracks: OSM connects
  * the Woodstock mainline, so a graph walk peels across the yard at MacGregor
  * Street. The drape stays in the corridor tube and jumps the OSM void.
+ * Bonteheuwel → Netreg and Nyanga → Philippi walk the Cape Flats rails OSM
+ * tags abandoned, on one connected island, so they follow the basemap instead
+ * of a diagonal chord. The Kapteinsklip working is a second polyline from
+ * Philippi only (map-app slices that bake).
  *
  * KZN is refused. Idempotent when there is nothing left to fill.
  *
@@ -29,6 +33,7 @@ import { fileURLToPath } from 'node:url';
 import { stripStationPins, despikeRailLine, haversineM } from './lib/rail-line-smooth.mjs';
 import {
     drapeHop,
+    drapeSameComponent,
     findGapSteps,
     findRepairHops,
     hopBboxPadDeg,
@@ -83,8 +88,8 @@ function spliceHop(coords, hop, draped) {
     ];
 }
 
-async function fetchOsm(hop) {
-    const pad = hop._padRetry || hopBboxPadDeg(hop);
+async function fetchOsm(hop, parseOpts = {}) {
+    const pad = hop._padRetry || hop._padOverride || hopBboxPadDeg(hop);
     const s = Math.min(hop.a.lat, hop.b.lat) - pad;
     const n = Math.max(hop.a.lat, hop.b.lat) + pad;
     const w = Math.min(hop.a.lon, hop.b.lon) - pad;
@@ -101,11 +106,11 @@ async function fetchOsm(hop) {
         if (!res.ok) {
             if (res.status === 400 && pad > 0.002) {
                 hop._padRetry = pad * 0.5;
-                return fetchOsm(hop);
+                return fetchOsm(hop, parseOpts);
             }
             throw new Error(`HTTP ${res.status}`);
         }
-        return parseRailNetwork(await res.text());
+        return parseRailNetwork(await res.text(), parseOpts);
     } finally {
         clearTimeout(timer);
     }
@@ -117,11 +122,14 @@ function sleep(ms) {
 
 let osmCalls = 0;
 
-async function drapeAndFetch(hop) {
+async function drapeAndFetch(hop, sameComponent = false) {
     if (osmCalls) await sleep(OSM_GAP_MS);
-    const network = await fetchOsm(hop);
+    if (sameComponent) hop._padOverride = Math.max(hop._padOverride || 0, 0.008);
+    const network = await fetchOsm(hop, sameComponent
+        ? { includeAbandoned: true, includeYard: true }
+        : {});
     osmCalls++;
-    return drapeHop(hop, network);
+    return sameComponent ? drapeSameComponent(hop, network) : drapeHop(hop, network);
 }
 
 /** Only the hops in the owner's screenshots. A full-network stray pass flattened live curves. */
@@ -137,6 +145,14 @@ const REPAIR_HOPS = new Set([
     'ct-kapteinsklip|NYANGA|PHILIPPI',
     'ct-kapteinsklip|BONTEHEUWEL|NETREG',
     'ct-kapteinsklip|HEIDEVELD|NYANGA',
+]);
+
+/** Cape Flats hops where OSM tags the running rails abandoned, so the tube
+ *  chord is wrong. Walk one connected island, including those ways. Nolungile
+ *  only — Chris Hani / Kapteinsklip keep their current bake. */
+const GRAPH_HOPS = new Set([
+    'ct-nolu|BONTEHEUWEL|NETREG',
+    'ct-nolu|NYANGA|PHILIPPI',
 ]);
 
 function shouldRepair(routeId, hop) {
@@ -161,7 +177,12 @@ function findForcedHops(coords, stops, names, routeId) {
         if (!a || !b) continue;
         const m = hopMetrics(coords, a[0], a[1], b[0], b[1]);
         if (m.chordM < MIN_CHORD_M || m.chordM > MAX_CHORD_M) continue;
-        if (m.maxPerp <= TUBE_M) continue;
+        const graphHop = GRAPH_HOPS.has(`${routeId}|${from}|${to}`);
+        if (graphHop) {
+            if (m.maxPerp > 200 && m.between >= 20) continue;
+        } else if (m.maxPerp <= TUBE_M) {
+            continue;
+        }
         hops.push({
             from,
             to,
@@ -301,6 +322,10 @@ for (const region of regions) {
         const names = feature?.properties?.stationNames;
         const routeId = feature?.properties?.routeId;
         if (!Array.isArray(original) || original.length < 2) continue;
+        // Nolungile is the only WC corridor this pass rewrites. Chris Hani and
+        // Kapteinsklip keep the shared Central Line bake; the map spur slices
+        // Kapteinsklip from Philippi instead of redrawing Cape Town → Mutual.
+        if (region === 'WC' && routeId !== 'ct-nolu') continue;
 
         const pinned = stripStationPins(original, stationCoords || []);
         const despiked = despikeRailLine(pinned.coords);
@@ -324,7 +349,7 @@ for (const region of regions) {
         for (const hop of hops) {
             let draped;
             try {
-                draped = await drapeAndFetch(hop);
+                draped = await drapeAndFetch(hop, GRAPH_HOPS.has(`${routeId}|${hop.from}|${hop.to}`));
             } catch (err) {
                 console.log(`  ${region} ${routeId} ${hop.from}→${hop.to}: OSM skip (${err.message})`);
                 skipped++;

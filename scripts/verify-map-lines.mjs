@@ -111,6 +111,8 @@ assert(fillChords.includes('shouldRepair'), 'fill-chords only rewrites the scree
 assert(fillChords.includes('NOLU_MAIN_STOPS'), 'Nolungile is restitched onto Esplanade / Ysterplaat');
 assert(fillChords.includes('YSTERPLAAT'), 'fill-chords knows the Ysterplaat OSM void');
 assert(fillChords.includes('ct-nolu|CAPE TOWN|ESPLANADE'), 'fill-chords forces Cape Town→Esplanade off the Woodstock mainline');
+assert(fillChords.includes('drapeSameComponent'), 'Nolungile Netreg and Philippi walk one OSM island, including abandoned Cape Flats rails');
+assert(fillChords.includes('GRAPH_HOPS'), 'only Nolungile Bonteheuwel→Netreg and Nyanga→Philippi use the island walk');
 assert(fillChords.includes('findForcedHops'), 'fill-chords can drape a dense hop that sits on the parallel railway');
 const gapDrape = readFileSync(new URL('../scripts/lib/rail-gap-drape.mjs', import.meta.url), 'utf8');
 assert(gapDrape.includes('sampleKeepGaps'), 'short OSM voids keep the corridor chord instead of snapping sideways');
@@ -526,6 +528,18 @@ assert(
     'the Kapteinsklip working is a second Nolungile polyline, not a detour of the main corridor',
 );
 assert(
+    mapApp.includes("clipBakedHop(baked, stops[0], stops[stops.length - 1])"),
+    'the Kapteinsklip spur is sliced from Philippi, not the whole Cape Town bake',
+);
+assert(
+    /'ct-nolu': \[[^\]]*PHILIPPI", "STOCK ROAD", "MANDALAY", "NOLUNGILE"/.test(mapApp),
+    'Nolungile main static path leaves Kapteinsklip off the Stock Road corridor',
+);
+assert(
+    !/'ct-nolu': \[[^\]]*LENTEGEUR[^\]]*STOCK ROAD/.test(mapApp),
+    'Nolungile main path does not run Lentegeur before Stock Road',
+);
+assert(
     /validStops\.splice\(idx, 0, \{ name, lat: coord\[0\], lon: coord\[1\], inactive: true/.test(mapApp),
     'the Maitland/Mutual geometry stop never claims a route, so Mutual stops showing Cape Town to Retreat',
 );
@@ -594,6 +608,39 @@ assert(wcTracks.includes('"routeId":"ct-bellv"'), 'WC bake includes Cape Town to
     assert(esp && near(esp).d < 50, `ct-nolu passes Esplanade (got ${Math.round(near(esp).d)}m)`);
     const nPhi = Math.abs(near(phi).i - near(nya).i);
     assert(nPhi > 8, `ct-nolu Nyanga→Philippi is draped (${nPhi} verts), not a two-point chord across the Cape Flats`);
+    let phiSouth = Infinity;
+    const nyaI = near(nya).i;
+    const phiI = near(phi).i;
+    const pLo = Math.min(nyaI, phiI);
+    const pHi = Math.max(nyaI, phiI);
+    for (let i = pLo; i <= pHi; i++) {
+        if (coords[i][1] < phiSouth) phiSouth = coords[i][1];
+    }
+    assert(phiSouth < -34.010, `ct-nolu Nyanga→Philippi follows the Duinefontein rails south (southmost ${phiSouth.toFixed(5)})`);
+    const duine = near([-34.008458, 18.565089]);
+    assert(duine.d < 80, `ct-nolu passes the Cape Flats rails at Duinefontein (got ${Math.round(duine.d)}m)`);
+    const bon = (nolu?.properties?.stationCoords || [])[names.indexOf('BONTEHEUWEL')];
+    const nrg = (nolu?.properties?.stationCoords || [])[names.indexOf('NETREG')];
+    if (bon && nrg) {
+        const lo = Math.min(near(bon).i, near(nrg).i);
+        const hi = Math.max(near(bon).i, near(nrg).i);
+        const hopA = { lat: coords[lo][1], lon: coords[lo][0] };
+        const hopB = { lat: coords[hi][1], lon: coords[hi][0] };
+        const lat0 = ((hopA.lat + hopB.lat) / 2) * Math.PI / 180;
+        const toXY = (la, lo) => [lo * Math.PI / 180 * 6371000 * Math.cos(lat0), la * Math.PI / 180 * 6371000];
+        const [aX, aY] = toXY(hopA.lat, hopA.lon);
+        const [bX, bY] = toXY(hopB.lat, hopB.lon);
+        const abx = bX - aX;
+        const aby = bY - aY;
+        const len = Math.hypot(abx, aby) || 1;
+        let maxPerp = 0;
+        for (let i = lo; i <= hi; i++) {
+            const [pX, pY] = toXY(coords[i][1], coords[i][0]);
+            const perp = Math.abs((pX - aX) * -aby + (pY - aY) * abx) / len;
+            if (perp > maxPerp) maxPerp = perp;
+        }
+        assert(maxPerp > 200, `ct-nolu Bonteheuwel→Netreg follows the Kalksteenfontein rails (max perp ${Math.round(maxPerp)}m)`);
+    }
     const cape = (nolu?.properties?.stationCoords || [])[names.indexOf('CAPE TOWN')];
     const woodstock = [-33.925058, 18.446139];
     assert(near(woodstock).d > 100, `ct-nolu stays off the Woodstock pin (got ${Math.round(near(woodstock).d)}m)`);

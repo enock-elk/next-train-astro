@@ -109,7 +109,9 @@ function hopBearingDot(from, to, hop) {
     return (vx * wx + vy * wy) / (vLen * wLen);
 }
 
-export function parseRailNetwork(xml) {
+export function parseRailNetwork(xml, opts = {}) {
+    const includeAbandoned = opts.includeAbandoned === true;
+    const includeYard = opts.includeYard === true;
     const nodes = new Map();
     for (const m of xml.matchAll(/<node id="(\d+)"[^>]*lat="([^"]+)" lon="([^"]+)"/g)) {
         nodes.set(m[1], { id: m[1], lat: Number(m[2]), lon: Number(m[3]) });
@@ -120,13 +122,18 @@ export function parseRailNetwork(xml) {
         if (!adj.has(a)) adj.set(a, []);
         adj.get(a).push({ to: b, w });
     };
+    const allowed = new Set(['rail', 'light_rail', 'subway']);
+    if (includeAbandoned) {
+        allowed.add('abandoned');
+        allowed.add('disused');
+    }
     const wayRe = /<way id="(\d+)"[\s\S]*?<\/way>/g;
     let wm;
     while ((wm = wayRe.exec(xml))) {
         const block = wm[0];
         const rw = block.match(/k="railway" v="([^"]+)"/);
-        if (!rw || !['rail', 'light_rail', 'subway'].includes(rw[1])) continue;
-        if (/k="abandoned"|k="disused" v="yes"/.test(block)) continue;
+        if (!rw || !allowed.has(rw[1])) continue;
+        if (!includeAbandoned && /k="abandoned"|k="disused" v="yes"/.test(block)) continue;
         const name = (block.match(/k="name" v="([^"]+)"/) || [])[1] || '';
         const operator = (block.match(/k="operator" v="([^"]+)"/) || [])[1] || '';
         const service = (block.match(/k="service" v="([^"]+)"/) || [])[1] || '';
@@ -140,7 +147,8 @@ export function parseRailNetwork(xml) {
             const B = nodes.get(nds[i]);
             if (!A || !B) continue;
             segs.push({ A, B, gautrain, yard });
-            if (gautrain || yard) continue;
+            if (gautrain) continue;
+            if (yard && !includeYard && !includeAbandoned) continue;
             const w = haversineM(A.lat, A.lon, B.lat, B.lon);
             addEdge(A.id, B.id, w);
             addEdge(B.id, A.id, w);
@@ -359,6 +367,74 @@ export function drapeHop(hop, network) {
     const tube = sampleKeepGaps(hop, segs);
     if (graph && (!tube.ok || graph.worst <= tube.worst)) return graph;
     return tube;
+}
+
+function componentIds(network, startId) {
+    const seen = new Set([startId]);
+    const stack = [startId];
+    while (stack.length) {
+        const u = stack.pop();
+        for (const { to } of network.adj.get(u) || []) {
+            if (seen.has(to)) continue;
+            seen.add(to);
+            stack.push(to);
+        }
+    }
+    return seen;
+}
+
+function nodesNear(network, lat, lon, maxM) {
+    const out = [];
+    for (const id of network.adj.keys()) {
+        const n = network.nodes.get(id);
+        if (!n) continue;
+        const d = haversineM(lat, lon, n.lat, n.lon);
+        if (d <= maxM) out.push({ id, d });
+    }
+    return out;
+}
+
+/**
+ * Walk one OSM component that has a node near both ends. Cape Flats rails are
+ * tagged abandoned/disused in places and split into parallel islands, so the
+ * nearest node to Bonteheuwel is often a different component from Netreg.
+ * Snapping both ends into the same island follows the basemap rails instead of
+ * the station-to-station chord.
+ */
+export function drapeSameComponent(hop, network) {
+    const nearA = nodesNear(network, hop.a.lat, hop.a.lon, 180).sort((x, y) => x.d - y.d);
+    const nearB = nodesNear(network, hop.b.lat, hop.b.lon, 180).sort((x, y) => x.d - y.d);
+    if (!nearA.length || !nearB.length) return { ok: false, reason: 'no snaps' };
+    const seen = new Set();
+    let best = null;
+    for (const a of nearA) {
+        if (seen.has(a.id)) continue;
+        const comp = componentIds(network, a.id);
+        for (const id of comp) seen.add(id);
+        const b = nearB.find((n) => comp.has(n.id));
+        if (!b) continue;
+        const budget = Math.max(hop.chordM * 2.8, hop.chordM + 900);
+        const path = dijkstra(network, a.id, b.id, budget);
+        if (!path || path.ids.length < 3) continue;
+        const coords = coordsFromIds(network, path.ids);
+        const step = pathMaxStep(coords);
+        if (path.m > hop.chordM * 2.8 || step > 250) continue;
+        const score = a.d + b.d;
+        if (best && score >= best.score) continue;
+        best = {
+            ok: true,
+            coords,
+            len: Math.round(path.m),
+            worst: Math.round(pathMaxPerp(coords, hop)),
+            railHits: coords.length,
+            gapHits: 0,
+            method: 'same-component rail',
+            score,
+        };
+    }
+    if (!best) return { ok: false, reason: 'no same-component path' };
+    delete best.score;
+    return best;
 }
 
 export function hopMetrics(coords, aLat, aLon, bLat, bLon) {

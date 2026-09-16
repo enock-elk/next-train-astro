@@ -2,6 +2,10 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin, Dev Hub, Alerts, Trains near me, community chat, or other hidden-test work. No emoji and no em dashes in What’s New. Keep `APP_VERSION`, `package.json` `version`, and `public/app-version.json` aligned on each release. Changelog / What’s New may be skipped, or the heading may be only **no release notes.** Every bump must add `ADMIN_CHANGELOG[APP_VERSION]` (System Health Build notes).
 
+## V9_09.16.7 — Gold-track OSM gap jumps, Nolungile via Ysterplaat (16 Sep 2026)
+
+Walker Street / Loftus no longer snap onto Gautrain across an OSM bridge void: the drape stays in a corridor tube and jumps short map gaps along Metro rail. Hercules walks the Mabopane through rails north, then east, instead of a 430 m pin chord. Cape Town ↔ Nolungile is restitched onto Esplanade / Ysterplaat and Cape Town → Esplanade stays on the northern tracks, so the MacGregor Street yard hook is gone. Nyanga → Philippi is draped; the Philippi fork (Stock Road vs Kapteinsklip) stays. Fill is allowlisted to those hops. KZN is still held. No new What’s New card.
+
 ## V9_09.16.6 — Gold-track hook strip, chord drape, junk-row QA (16 Sep 2026)
 
 Loftus Versfeld Park and Rissik on Pretoria-Pienaarspoort were exact station-pin vertices with a 937 m straight chord between them. `stripStationPins` used to keep those pins because the neighbour-to-neighbour bridge is over 600 m (the De Wildt chord-carrier rule). The new hook rule drops a pin when one side is already on rail within 150 m, so the line no longer kicks into the marker. Short leftover chords can be draped onto OSM Metro rails with `npm run tracks:fill-chords` (api.openstreetmap.org, Gautrain ways ignored). KZN is still held.

@@ -5,6 +5,11 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_09.16.7': [
+        'Gold tracks: fill only the screenshot hops (allowlist). A full-network stray pass had flattened Tembisa and Saulsville. Walker Street jumps the OSM bridge void along the Metro corridor instead of walking onto Gautrain. Hercules leaves on the Mabopane through rails (north, then east) instead of a 430 m pin chord. De Wildt stays a chord.',
+        'Cape Town ↔ Nolungile bake is restitched via Esplanade / Ysterplaat (from ct-bellv). Cape Town → Esplanade is forced onto the northern tracks so the MacGregor Street peel across the Woodstock yard is gone. Nyanga → Philippi is draped. Philippi still forks like Duff’s Road (Stock Road vs Kapteinsklip spur). KZN is not rewritten.',
+        'forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
+    ],
     'V9_09.16.6': [
         'Map gold tracks: stripStationPins now also drops one-sided station-pin hooks (Loftus 11 m, Rissik 34 m). Those were kept because the other side of the pin is a 900 m chord (bridge > 600 m). KZN is not rewritten.',
         'npm run tracks:fill-chords drapes leftover short chords (200 m–2 km, 0–1 verts between stops) onto OSM rails from api.openstreetmap.org, ignoring Gautrain-named ways. True OSM gaps (De Wildt) stay chords. npm run tracks:audit is read-only. npm run tracks:repair = smooth + fill, GP WC EC only.',

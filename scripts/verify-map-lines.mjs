@@ -107,8 +107,11 @@ assert(fillChords.includes("HELD_REGIONS = new Set(['KZN'])"), 'fill-chords refu
 assert(fillChords.includes('.sort((a, b) => b.lo - a.lo)'), 'fill-chords splices hops from the end so earlier indexes stay valid');
 assert(fillChords.includes('gautrain') || fillChords.includes('Gautrain'), 'fill-chords ignores Gautrain-named OSM ways');
 assert(fillChords.includes('despikedAgain'), 'fill-chords strips pin hooks again after a drape');
+assert(fillChords.includes('shouldRepair'), 'fill-chords only rewrites the screenshot hops, not every rural edge');
 assert(fillChords.includes('NOLU_MAIN_STOPS'), 'Nolungile is restitched onto Esplanade / Ysterplaat');
 assert(fillChords.includes('YSTERPLAAT'), 'fill-chords knows the Ysterplaat OSM void');
+assert(fillChords.includes('ct-nolu|CAPE TOWN|ESPLANADE'), 'fill-chords forces Cape Town→Esplanade off the Woodstock mainline');
+assert(fillChords.includes('findForcedHops'), 'fill-chords can drape a dense hop that sits on the parallel railway');
 const gapDrape = readFileSync(new URL('../scripts/lib/rail-gap-drape.mjs', import.meta.url), 'utf8');
 assert(gapDrape.includes('sampleKeepGaps'), 'short OSM voids keep the corridor chord instead of snapping sideways');
 assert(gapDrape.includes('gautrain'), 'gap drape skips Gautrain-named ways');
@@ -345,6 +348,38 @@ for (const region of ['GP', 'WC', 'KZN', 'EC']) {
         Math.abs(rissikI - loftusI) > 8,
         `pta-pien Loftus→Rissik is draped onto rail (${Math.abs(rissikI - loftusI)} verts), not a two-point chord`
     );
+    const walker = (pien?.properties?.stationCoords || [])[3];
+    assert(pien?.properties?.stationNames?.[3] === 'WALKER STREET', 'pta-pien stop 3 is Walker Street');
+    let walkerI = 0;
+    let walkerD = Infinity;
+    let walkerMaxStep = 0;
+    let onGautrain = 0;
+    for (let i = 0; i < pienCoords.length; i++) {
+        const dW = haversineM(walker[0], walker[1], pienCoords[i][1], pienCoords[i][0]);
+        if (dW < walkerD) { walkerD = dW; walkerI = i; }
+        if (haversineM(-25.760072, 28.217299, pienCoords[i][1], pienCoords[i][0]) < 35) onGautrain++;
+    }
+    const wLo = Math.min(walkerI, loftusI);
+    const wHi = Math.max(walkerI, loftusI);
+    for (let i = wLo + 1; i <= wHi; i++) {
+        const step = haversineM(pienCoords[i - 1][1], pienCoords[i - 1][0], pienCoords[i][1], pienCoords[i][0]);
+        if (step > walkerMaxStep) walkerMaxStep = step;
+    }
+    assert(onGautrain === 0, 'pta-pien Walker→Loftus does not sit on the Gautrain alignment south of Dougall');
+    assert(walkerMaxStep < 150, `pta-pien Walker→Loftus jumps OSM voids in short steps (max ${Math.round(walkerMaxStep)}m)`);
+}
+
+{
+    const gp = JSON.parse(readFileSync(new URL('../public/tracks/rail-tracks-GP.geojson', import.meta.url), 'utf8'));
+    const herc = gp.features.find((f) => f.properties?.routeId === 'herc-koed');
+    const hc = herc?.geometry?.coordinates || [];
+    const hercPin = (herc?.properties?.stationCoords || [])[0];
+    assert(hc.length > 8 && hercPin, 'herc-koed has a rail path out of Hercules');
+    const firstStep = haversineM(hc[0][1], hc[0][0], hc[1][1], hc[1][0]);
+    const fromPin = haversineM(hercPin[0], hercPin[1], hc[0][1], hc[0][0]);
+    assert(firstStep < 80, `herc-koed leaves Hercules on rail, not a 430 m pin chord (first step ${Math.round(firstStep)}m)`);
+    assert(fromPin < 150, `herc-koed starts on the Mabopane through rails (${Math.round(fromPin)}m from the pin)`);
+    assert(hc[1][1] > hc[0][1], 'herc-koed leaves Hercules north toward Capital Park, not a diagonal across the yard');
 }
 
 {
@@ -534,6 +569,60 @@ assert(!mapApp.includes('railHops !== stops.length - 1'), 'network map also keep
 }
 const wcTracks = readFileSync(new URL('../public/tracks/rail-tracks-WC.geojson', import.meta.url), 'utf8');
 assert(wcTracks.includes('"routeId":"ct-bellv"'), 'WC bake includes Cape Town to Bellville');
+{
+    const wc = JSON.parse(readFileSync(new URL('../public/tracks/rail-tracks-WC.geojson', import.meta.url), 'utf8'));
+    const nolu = wc.features.find((f) => f.properties?.routeId === 'ct-nolu');
+    const names = nolu?.properties?.stationNames || [];
+    const coords = nolu?.geometry?.coordinates || [];
+    assert(names.includes('YSTERPLAAT') && names.includes('ESPLANADE'), 'ct-nolu bake lists Esplanade and Ysterplaat');
+    assert(names.includes('NETREG') && names.includes('HEIDEVELD'), 'ct-nolu bake lists the Bonteheuwel south fork via Netreg');
+    assert(!names.includes('WOODSTOCK'), 'ct-nolu bake no longer runs Woodstock / Salt River');
+    const yst = (nolu?.properties?.stationCoords || [])[names.indexOf('YSTERPLAAT')];
+    const esp = (nolu?.properties?.stationCoords || [])[names.indexOf('ESPLANADE')];
+    const nya = (nolu?.properties?.stationCoords || [])[names.indexOf('NYANGA')];
+    const phi = (nolu?.properties?.stationCoords || [])[names.indexOf('PHILIPPI')];
+    const near = ([lat, lon]) => {
+        let best = Infinity;
+        let idx = 0;
+        for (let i = 0; i < coords.length; i++) {
+            const d = haversineM(lat, lon, coords[i][1], coords[i][0]);
+            if (d < best) { best = d; idx = i; }
+        }
+        return { d: best, i: idx };
+    };
+    assert(yst && near(yst).d < 40, `ct-nolu passes Ysterplaat (got ${Math.round(near(yst).d)}m)`);
+    assert(esp && near(esp).d < 50, `ct-nolu passes Esplanade (got ${Math.round(near(esp).d)}m)`);
+    const nPhi = Math.abs(near(phi).i - near(nya).i);
+    assert(nPhi > 8, `ct-nolu Nyanga→Philippi is draped (${nPhi} verts), not a two-point chord across the Cape Flats`);
+    const cape = (nolu?.properties?.stationCoords || [])[names.indexOf('CAPE TOWN')];
+    const woodstock = [-33.925058, 18.446139];
+    assert(near(woodstock).d > 100, `ct-nolu stays off the Woodstock pin (got ${Math.round(near(woodstock).d)}m)`);
+    let woodSouth = 0;
+    for (const [lon, lat] of coords) {
+        if (lon > 18.444 && lon < 18.450 && lat < -33.9246) woodSouth++;
+    }
+    assert(woodSouth === 0, `ct-nolu does not peel across the Woodstock yard at MacGregor Street (${woodSouth} verts on the southern mainline)`);
+    if (cape && esp) {
+        const lo = Math.min(near(cape).i, near(esp).i);
+        const hi = Math.max(near(cape).i, near(esp).i);
+        const hopA = { lat: coords[lo][1], lon: coords[lo][0] };
+        const hopB = { lat: coords[hi][1], lon: coords[hi][0] };
+        const lat0 = ((hopA.lat + hopB.lat) / 2) * Math.PI / 180;
+        const toXY = (la, lo) => [lo * Math.PI / 180 * 6371000 * Math.cos(lat0), la * Math.PI / 180 * 6371000];
+        const [aX, aY] = toXY(hopA.lat, hopA.lon);
+        const [bX, bY] = toXY(hopB.lat, hopB.lon);
+        const abx = bX - aX;
+        const aby = bY - aY;
+        const len = Math.hypot(abx, aby) || 1;
+        let maxPerp = 0;
+        for (let i = lo; i <= hi; i++) {
+            const [pX, pY] = toXY(coords[i][1], coords[i][0]);
+            const perp = Math.abs((pX - aX) * -aby + (pY - aY) * abx) / len;
+            if (perp > maxPerp) maxPerp = perp;
+        }
+        assert(maxPerp < 90, `ct-nolu Cape Town→Esplanade stays on the Northern Line (max perp ${Math.round(maxPerp)}m)`);
+    }
+}
 
 function escapeMapHtml(s) {
     return String(s || '').replace(/[&<>"']/g, (c) => ({

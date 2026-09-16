@@ -14,6 +14,9 @@
  * Cape Town ↔ Nolungile is restitched onto the Esplanade / Ysterplaat
  * alignment (from ct-bellv) before hops are draped: the August bake still ran
  * via Woodstock, and the N1 spaghetti at Ysterplaat is the same OSM-void case.
+ * Cape Town → Esplanade is then forced onto the northern tracks: OSM connects
+ * the Woodstock mainline, so a graph walk peels across the yard at MacGregor
+ * Street. The drape stays in the corridor tube and jumps the OSM void.
  *
  * KZN is refused. Idempotent when there is nothing left to fill.
  *
@@ -29,9 +32,13 @@ import {
     findGapSteps,
     findRepairHops,
     hopBboxPadDeg,
+    hopMetrics,
     lineLengthM,
+    MAX_CHORD_M,
+    MIN_CHORD_M,
     nearestVert,
     parseRailNetwork,
+    TUBE_M,
 } from './lib/rail-gap-drape.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -77,7 +84,7 @@ function spliceHop(coords, hop, draped) {
 }
 
 async function fetchOsm(hop) {
-    const pad = hopBboxPadDeg(hop);
+    const pad = hop._padRetry || hopBboxPadDeg(hop);
     const s = Math.min(hop.a.lat, hop.b.lat) - pad;
     const n = Math.max(hop.a.lat, hop.b.lat) + pad;
     const w = Math.min(hop.a.lon, hop.b.lon) - pad;
@@ -91,7 +98,13 @@ async function fetchOsm(hop) {
             headers: { 'User-Agent': USER_AGENT, Accept: 'application/osm3xml, application/xml, text/xml' },
             signal: ctrl.signal,
         });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        if (!res.ok) {
+            if (res.status === 400 && pad > 0.002) {
+                hop._padRetry = pad * 0.5;
+                return fetchOsm(hop);
+            }
+            throw new Error(`HTTP ${res.status}`);
+        }
         return parseRailNetwork(await res.text());
     } finally {
         clearTimeout(timer);
@@ -109,6 +122,54 @@ async function drapeAndFetch(hop) {
     const network = await fetchOsm(hop);
     osmCalls++;
     return drapeHop(hop, network);
+}
+
+/** Only the hops in the owner's screenshots. A full-network stray pass flattened live curves. */
+const REPAIR_HOPS = new Set([
+    'pta-pien|WALKER STREET|LOFTUS VERSFELD PARK',
+    'ct-nolu|CAPE TOWN|ESPLANADE',
+    'ct-nolu|NYANGA|PHILIPPI',
+    'ct-nolu|BONTEHEUWEL|NETREG',
+    'ct-nolu|HEIDEVELD|NYANGA',
+    'ct-chrishani|NYANGA|PHILIPPI',
+    'ct-chrishani|BONTEHEUWEL|NETREG',
+    'ct-chrishani|HEIDEVELD|NYANGA',
+    'ct-kapteinsklip|NYANGA|PHILIPPI',
+    'ct-kapteinsklip|BONTEHEUWEL|NETREG',
+    'ct-kapteinsklip|HEIDEVELD|NYANGA',
+]);
+
+function shouldRepair(routeId, hop) {
+    if (routeId === 'herc-koed' && hop.kind === 'gap' && hop.lo === 0) return true;
+    return REPAIR_HOPS.has(`${routeId}|${hop.from}|${hop.to}`);
+}
+
+/**
+ * Allowlisted station hops that are dense on the wrong railway (Cape Town →
+ * Esplanade rides the Woodstock mainline, then peels north at MacGregor
+ * Street). findRepairHops misses those: too many verts, steps under 250 m.
+ */
+function findForcedHops(coords, stops, names, routeId) {
+    const hops = [];
+    if (!Array.isArray(stops) || stops.length < 2) return hops;
+    for (let s = 0; s < stops.length - 1; s++) {
+        const from = names?.[s];
+        const to = names?.[s + 1];
+        if (!REPAIR_HOPS.has(`${routeId}|${from}|${to}`)) continue;
+        const a = stops[s];
+        const b = stops[s + 1];
+        if (!a || !b) continue;
+        const m = hopMetrics(coords, a[0], a[1], b[0], b[1]);
+        if (m.chordM < MIN_CHORD_M || m.chordM > MAX_CHORD_M) continue;
+        if (m.maxPerp <= TUBE_M) continue;
+        hops.push({
+            from,
+            to,
+            kind: 'forced',
+            ...m,
+        });
+    }
+    return hops;
 }
 
 function lerpHop(hop, stepM = 40) {
@@ -248,8 +309,18 @@ for (const region of regions) {
         spikeTotal += despiked.excursions.length;
 
         const stationHops = findRepairHops(coords, stationCoords, names);
+        const forcedHops = findForcedHops(coords, stationCoords, names, routeId);
         const gapHops = findGapSteps(coords, stationHops);
-        const hops = [...stationHops, ...gapHops].sort((a, b) => b.lo - a.lo);
+        const seen = new Set();
+        const hops = [...stationHops, ...forcedHops, ...gapHops]
+            .filter((hop) => shouldRepair(routeId, hop))
+            .filter((hop) => {
+                const key = `${hop.lo}:${hop.hi}`;
+                if (seen.has(key)) return false;
+                seen.add(key);
+                return true;
+            })
+            .sort((a, b) => b.lo - a.lo);
         for (const hop of hops) {
             let draped;
             try {
@@ -261,6 +332,10 @@ for (const region of regions) {
             }
             if (!draped.ok) {
                 console.log(`  ${region} ${routeId} ${hop.from}→${hop.to}: keep ${hop.kind} ${Math.round(hop.chordM)}m (${draped.reason})`);
+                skipped++;
+                continue;
+            }
+            if (hop.kind === 'gap' && String(draped.method || '').startsWith('tube+gap') && (draped.gapHits || 0) === 0) {
                 skipped++;
                 continue;
             }

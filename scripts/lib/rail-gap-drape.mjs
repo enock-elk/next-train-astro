@@ -24,7 +24,7 @@ export const MAX_LENGTH_RATIO = 1.5;
 export const STRAY_PERP_M = 75;
 export const STRAY_STEP_M = 250;
 export const STRAY_MAX_CHORD_M = 2200;
-export const MIN_GAP_STEP_M = 180;
+export const MIN_GAP_STEP_M = 350;
 export const MAX_GAP_STEP_M = 900;
 
 export function lineLengthM(coords, from = 0, to = coords.length - 1) {
@@ -314,6 +314,8 @@ export function sampleKeepGaps(hop, segs) {
         coords: draped,
         len: Math.round(len),
         worst: Math.round(pathMaxPerp(draped, hop)),
+        railHits,
+        gapHits,
         method: `tube+gap (${railHits} rail, ${gapHits} jumps)`,
     };
 }
@@ -322,6 +324,7 @@ export function drapeHop(hop, network) {
     const segs = corridorSegs(network);
     const sa = nearestGraphNode(network, hop.a.lat, hop.a.lon, 120);
     const sb = nearestGraphNode(network, hop.b.lat, hop.b.lon, 120);
+    let graph = null;
     if (sa && sb) {
         const budget = Math.max(hop.chordM * 2.8, hop.chordM + 900);
         const path = dijkstra(network, sa.node.id, sb.node.id, budget);
@@ -330,25 +333,32 @@ export function drapeHop(hop, network) {
             const perp = pathMaxPerp(coords, hop);
             const step = pathMaxStep(coords);
             const len = path.m;
-            const shortHop = hop.chordM < 2000;
-            const parallelTrack = shortHop && perp > TUBE_M + 20;
+            // Walker without Gautrain is disconnected. Hercules is a yard-throat
+            // gap whose connected path has to leave the chord (north, then east).
+            // A high-perp connected path on a station hop is the parallel railway
+            // (Woodstock mainline vs the Esplanade / Northern Line tracks).
             if (
                 coords.length >= 3
                 && len <= hop.chordM * MAX_LENGTH_RATIO
                 && step <= 200
-                && !parallelTrack
             ) {
-                return {
+                graph = {
                     ok: true,
                     coords,
                     len: Math.round(len),
                     worst: Math.round(perp),
+                    railHits: coords.length,
+                    gapHits: 0,
                     method: 'rail graph',
                 };
             }
         }
     }
-    return sampleKeepGaps(hop, segs);
+    if (graph && hop.kind === 'gap') return graph;
+    if (graph && graph.worst <= TUBE_M) return graph;
+    const tube = sampleKeepGaps(hop, segs);
+    if (graph && (!tube.ok || graph.worst <= tube.worst)) return graph;
+    return tube;
 }
 
 export function hopMetrics(coords, aLat, aLon, bLat, bLon) {
@@ -388,14 +398,17 @@ export function findRepairHops(coords, stops, names) {
         const m = hopMetrics(coords, a[0], a[1], b[0], b[1]);
         if (m.chordM < MIN_CHORD_M || m.chordM > MAX_CHORD_M) continue;
         const chordLike = m.between <= 1 && m.alongM <= m.chordM * 1.12;
+        const from = names?.[s] || `stop ${s}`;
+        const to = names?.[s + 1] || `stop ${s + 1}`;
+        if (/DE WILDT/i.test(`${from} ${to}`)) continue;
         const strayShort = m.between >= 2
             && m.chordM <= STRAY_MAX_CHORD_M
             && m.maxPerp > STRAY_PERP_M
             && m.maxStep > STRAY_STEP_M;
         if (!chordLike && !strayShort) continue;
         hops.push({
-            from: names?.[s] || `stop ${s}`,
-            to: names?.[s + 1] || `stop ${s + 1}`,
+            from,
+            to,
             kind: strayShort ? 'stray' : 'chord',
             ...m,
         });
@@ -442,5 +455,8 @@ export function findGapSteps(coords, hops) {
 }
 
 export function hopBboxPadDeg(hop) {
-    return Math.min(0.02, Math.max(0.0045, (hop.chordM / 111000) * 0.3));
+    // api.openstreetmap.org/map 400s when the bbox contains >50k nodes.
+    // Long urban hops (Nyanga→Philippi) must stay tight.
+    const raw = (hop.chordM / 111000) * 0.12;
+    return Math.min(0.005, Math.max(0.0025, raw));
 }

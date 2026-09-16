@@ -618,12 +618,10 @@ import { withBase } from '../lib/config.js';
     height: var(--nt-feedback-vv-height, var(--nt-vv-h, 100dvh));
     max-height: var(--nt-feedback-vv-height, var(--nt-vv-h, 100dvh));
   }
+  /* Same box as the Community tab: fill #nt-shell, measure nothing. */
   #messages-thread-modal {
-    inset: unset;
-    top: var(--nt-shell-top, 0px);
-    left: 0;
-    right: 0;
-    bottom: 0;
+    position: absolute;
+    inset: 0;
     height: auto;
     max-height: none;
   }

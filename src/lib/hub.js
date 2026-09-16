@@ -241,34 +241,18 @@ function keepFeedbackFieldVisible(field) {
     }
 }
 
-function dockHubComposer() {
-    const form = document.getElementById('messages-thread-form');
-    const modal = document.getElementById('messages-thread-modal');
-    if (!form) return;
-    const hubOpen = !!(modal && !modal.classList.contains('hidden'));
-    const editing = !!document.activeElement?.closest?.('#messages-thread-form');
-    const keyboard = document.documentElement.classList.contains('nt-keyboard');
-    if (!hubOpen || (!editing && !keyboard)) {
-        form.style.removeProperty('position');
-        form.style.removeProperty('left');
-        form.style.removeProperty('right');
-        form.style.removeProperty('width');
-        form.style.removeProperty('bottom');
-        form.style.removeProperty('z-index');
-        return;
-    }
-    const rootStyle = getComputedStyle(document.documentElement);
-    const kbH = Math.max(0, Math.round(parseFloat(rootStyle.getPropertyValue('--nt-kb-h')) || 0));
-    const vv = window.visualViewport;
-    const inner = window.innerHeight || 0;
-    const covered = vv ? Math.max(0, Math.round(inner - ((vv.offsetTop || 0) + vv.height))) : 0;
-    const bottom = Math.max(kbH, covered);
-    form.style.position = 'fixed';
-    form.style.left = '0px';
-    form.style.right = '0px';
-    form.style.width = '100%';
-    form.style.bottom = `${bottom}px`;
-    form.style.zIndex = '136';
+/**
+ * Feedback Hub is sized by CSS alone: absolute inset:0 over #nt-shell, the
+ * same box the Community tab fills, with the composer docking to --nt-kb-h.
+ * Clear anything an older build left inline so those pixels cannot win.
+ */
+function clearHubInlineGeometry(modal, card) {
+    [
+        '--nt-feedback-vv-height', '--nt-feedback-vv-top', '--nt-hub-top', '--nt-hub-bottom',
+        'top', 'bottom', 'left', 'right', 'width', 'height', 'max-height', 'padding-bottom',
+    ].forEach((prop) => modal.style.removeProperty(prop));
+    if (!card) return;
+    ['height', 'max-height', 'transform'].forEach((prop) => card.style.removeProperty(prop));
 }
 
 /** Size commuter feedback overlays to the viewport left above the software keyboard. */
@@ -294,23 +278,7 @@ function syncFeedbackModalViewport() {
         if (!modal) return;
         const card = modal.querySelector(':scope > div');
         if (id === 'messages-thread-modal') {
-            // Do not copy --nt-shell-h into inline height. Chrome's first
-            // visualViewport is shorter than the painted frame; those pixels
-            // stuck until a keyboard cycle remeasured and the slab vanished.
-            // CSS pins top: --nt-shell-top; bottom: 0 so the sheet fills.
-            modal.style.removeProperty('--nt-feedback-vv-height');
-            modal.style.removeProperty('--nt-feedback-vv-top');
-            modal.style.removeProperty('top');
-            modal.style.removeProperty('height');
-            modal.style.removeProperty('max-height');
-            modal.style.removeProperty('bottom');
-            modal.style.paddingBottom = '0px';
-            if (card) {
-                card.style.maxHeight = '100%';
-                card.style.height = '100%';
-                card.style.transform = 'none';
-            }
-            dockHubComposer();
+            clearHubInlineGeometry(modal, card);
             return;
         }
         modal.style.setProperty('--nt-feedback-vv-height', `${height}px`);
@@ -324,7 +292,6 @@ function syncFeedbackModalViewport() {
             card.style.maxHeight = '';
         }
     });
-    dockHubComposer();
 }
 
 function bindFeedbackViewportHandling() {
@@ -340,6 +307,9 @@ function bindFeedbackViewportHandling() {
     window.addEventListener('resize', update, { passive: true });
     window.visualViewport?.addEventListener('resize', update, { passive: true });
     window.visualViewport?.addEventListener('scroll', update, { passive: true });
+    window.addEventListener('orientationchange', () => {
+        [80, 260, 520].forEach((ms) => setTimeout(update, ms));
+    }, { passive: true });
     document.addEventListener('focusin', (event) => {
         if (!event.target?.closest?.('#feedback-modal, #messages-thread-modal, #account-modal')) return;
         syncFeedbackModalViewport();

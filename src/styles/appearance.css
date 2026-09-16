@@ -1396,13 +1396,19 @@ html.dark:not([data-colour-pack]) #bottom-nav .bottom-nav-item.is-active {
 }
 
 /* Non-fullscreen cards/sheets sit above the bottom nav, not under it.
-   Full-screen overlays (About, Welcome, map lightbox, timetable grid) skip this. */
-[id$="-modal"].fixed:not(.full-screen):not(#welcome-modal):not(#blackbox-modal),
+   Full-screen overlays (About, Welcome, map lightbox, timetable grid) skip this.
+
+   Feedback Hub must skip it too. It is a full-screen sheet with a docked
+   composer, and this pair (4.5rem of padding plus a card capped at
+   --nt-app-h - 5.5rem) is what left the blank slab under that composer. The
+   slab closed after a keyboard cycle only because the IME hides the URL bar,
+   which grows --nt-app-h enough for the cap to clear the sheet. */
+[id$="-modal"].fixed:not(.full-screen):not(#welcome-modal):not(#blackbox-modal):not(#messages-thread-modal),
 #nt-on-train-sheet {
   padding-bottom: calc(4.5rem + var(--nt-sys-bottom, env(safe-area-inset-bottom, 0px)));
   box-sizing: border-box;
 }
-[id$="-modal"].fixed:not(.full-screen):not(#welcome-modal):not(#blackbox-modal) > div,
+[id$="-modal"].fixed:not(.full-screen):not(#welcome-modal):not(#blackbox-modal):not(#messages-thread-modal) > div,
 #nt-on-train-sheet > div {
   max-height: calc(var(--nt-app-h, 100dvh) - 5.5rem - var(--nt-sys-bottom, env(safe-area-inset-bottom, 0px))) !important;
 }

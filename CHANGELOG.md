@@ -2,6 +2,12 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin, Dev Hub, Alerts, Trains near me, community chat, or other hidden-test work. No emoji and no em dashes in What’s New. Keep `APP_VERSION`, `package.json` `version`, and `public/app-version.json` aligned on each release. Changelog / What’s New may be skipped, or the heading may be only **no release notes.** Every bump must add `ADMIN_CHANGELOG[APP_VERSION]` (System Health Build notes).
 
+## V9_09.16.5 — Feedback Hub uses the Community box (16 Sep 2026)
+
+The blank slab under the Hub composer was never a viewport measurement. `appearance.css` keeps non-fullscreen cards clear of the bottom nav with `padding-bottom: 4.5rem` plus `> div { max-height: calc(var(--nt-app-h) - 5.5rem) !important }`. That was harmless while Hub was a centred sheet. Full view in 16.2 left the cap in place, so the card stopped 88px short of the sheet. Opening the keyboard hides the URL bar, which grows `--nt-app-h` until the cap clears the sheet, so the slab closed on a keyboard cycle and looked like stale geometry. 16.3 and 16.4 chased that false trail. `#messages-thread-modal` is now excluded from both selectors.
+
+Hub also stops measuring anything. `#messages-thread-modal` is `position: absolute; inset: 0` over `#nt-shell`, the same box the Community tab fills, and `HubModals` sits beside `#main-content` inside that shell so the box is exact. The composer keeps the Community dock (`position: fixed; bottom: var(--nt-kb-h)`), and `ntFitAppViewport` holds the shell at `lastShellH` while Hub has the IME open, the same branch Community uses. The chrome strip above the shell stays covered by `html.nt-full-overlay::before`. No new What's New card.
+
 ## V9_09.16.4 — Feedback Hub fills the frame on first open (16 Sep 2026)
 
 16.3 sized Hub by copying `--nt-shell-h` into inline `height`. Chrome’s first `visualViewport` is shorter than the painted frame, so the composer sat above a blank strip. Tapping the field and closing the keyboard remeasured and hid the strip.

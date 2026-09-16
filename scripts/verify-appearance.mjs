@@ -329,8 +329,9 @@ assert(hubModals.includes('data-feedback-scroll'), 'long feedback form has its o
 assert(hubModals.includes('--nt-feedback-vv-height'), 'feedback overlays use visible viewport height');
 assert(hubModals.includes('align-items: stretch'), 'Feedback Hub fills the screen');
 assert(hubModals.includes('padding-bottom: 0'), 'Feedback Hub has no gap above the keyboard');
-assert(hubModals.includes('bottom: 0'), 'Feedback Hub CSS pins to the layout bottom');
+assert(/#messages-thread-modal \{\s*position: absolute;\s*inset: 0;/.test(hubModals), 'Feedback Hub fills #nt-shell like the Community tab');
 assert(!/#messages-thread-modal \{[^}]*height: var\(--nt-feedback-vv-height/.test(hubModals), 'Feedback Hub CSS does not freeze a copied visualViewport height');
+assert(!/#messages-thread-modal \{[^}]*var\(--nt-shell-h/.test(hubModals), 'Feedback Hub CSS does not copy a measured shell height');
 assert(hubModals.includes('height: 100%'), 'Feedback Hub card height matches the keyboard-safe overlay');
 assert(!hubModals.includes('h-[min(90dvh,40rem)]'), 'Feedback Hub is not a centered 40rem card');
 assert(hubModals.includes('items-stretch justify-center p-0'), 'Feedback Hub overlay has no inset gap');
@@ -418,13 +419,14 @@ const hubJs = readFileSync(new URL('../src/lib/hub.js', import.meta.url), 'utf8'
 assert(hubJs.includes('collapsePrefsAccordion'), 'opening Options collapses Theme & Preferences');
 assert(hubJs.includes('autosizeMessagesThreadInput'), 'Feedback Hub composer grows before scrolling');
 assert(hubJs.includes('syncFeedbackModalViewport'), 'feedback overlays resize when the keyboard opens');
-assert(hubJs.includes("Stay in the visual hole") || hubJs.includes('Do not copy --nt-shell-h'), 'Feedback Hub does not freeze a short first-paint height');
-assert(hubJs.includes("removeProperty('height')"), 'Feedback Hub clears inline height so CSS bottom:0 can fill');
-assert(hubJs.includes('dockHubComposer'), 'Feedback Hub composer docks above the IME');
+assert(hubJs.includes('clearHubInlineGeometry'), 'Feedback Hub clears inline geometry from older builds');
+assert(
+    /if \(id === 'messages-thread-modal'\) \{\s*clearHubInlineGeometry\(modal, card\);\s*return;\s*\}/.test(hubJs),
+    'Feedback Hub geometry is CSS only, never a measured pixel height'
+);
 assert(hubJs.includes("field.closest?.('#messages-thread-form')"), 'Hub composer does not scroll the sheet while typing');
 assert(!hubJs.includes('const coverH = Math.max(height, height + top)'), 'Feedback Hub does not stretch past the visual hole');
-assert(hubJs.includes("card.style.height = '100%'"), 'Feedback Hub card stretches to the keyboard');
-assert(hubJs.includes("id === 'messages-thread-modal'"), 'Feedback Hub card stretches to the keyboard');
+assert(hubJs.includes("id === 'messages-thread-modal'"), 'Feedback Hub is sized separately from Send Feedback');
 assert(!hubJs.includes("id === 'messages-thread-modal' || id === 'account-modal'"), 'Account is not keyboard-shrunk with Feedback Hub');
 assert(hubJs.includes('keepFeedbackFieldVisible'), 'focused feedback fields scroll inside the modal');
 assert(hubJs.includes('editing && vv?.height'), 'Feedback Hub uses live visualViewport height while typing');
@@ -462,8 +464,17 @@ assert(layout.includes('100svh'), 'shell first-paint height falls back to 100svh
 assert(layout.includes('Never use Math.max(inner, client)'), 'shell height never grows past the visible frame');
 assert(layout.includes('--nt-vv-h'), 'layout exposes visual viewport height for keyboard overlays');
 assert(layout.includes('#nt-shell #messages-thread-modal.fixed'), 'Feedback Hub is not locked to --nt-app-h');
-assert(layout.includes('bottom: 0 !important'), 'Feedback Hub pins to the layout bottom so the first paint has no slab');
+assert(/#nt-shell #messages-thread-modal\.fixed \{\s*position: absolute !important;\s*inset: 0 !important;/.test(layout), 'Feedback Hub fills #nt-shell like the Community tab');
+assert(!/#nt-shell #messages-thread-modal\.fixed \{[^}]*var\(--nt-(app-h|shell-h|vv-h|feedback-vv)/.test(layout), 'Feedback Hub is not sized from a measured viewport token');
 assert(layout.includes('hubOn'), 'keyboard keeps Feedback Hub shell height like Community');
+assert(
+    css.includes(':not(#blackbox-modal):not(#messages-thread-modal) > div'),
+    'Feedback Hub card is not capped by the bottom-nav clearance that left the slab'
+);
+assert(
+    css.includes(':not(#blackbox-modal):not(#messages-thread-modal),'),
+    'Feedback Hub does not get the bottom-nav padding meant for centred cards'
+);
 assert(layout.includes('#nt-shell #account-modal.fixed'), 'Account overlay is a full-screen page');
 assert(layout.includes('html.nt-full-overlay #nt-shell'), 'full-screen overlays cover the blue chrome strip');
 assert(layout.includes('html.nt-full-overlay::before'), 'full-screen overlays paint only the URL-bar strip');

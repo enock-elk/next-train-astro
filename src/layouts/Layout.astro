@@ -1241,12 +1241,20 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
         height: var(--nt-feedback-vv-height, var(--nt-vv-h, 100dvh)) !important;
         max-height: var(--nt-feedback-vv-height, var(--nt-vv-h, 100dvh)) !important;
       }
+      /* Feedback Hub fills #nt-shell, exactly the box the Community tab gets.
+         Every viewport-measured version (--nt-app-h, --nt-shell-h, a copied
+         visualViewport height) froze a short first-paint value and left a
+         blank slab under the composer until a keyboard cycle re-measured.
+         Absolute inset:0 needs no measurement. The chrome strip above the
+         shell stays covered by html.nt-full-overlay::before. */
       #nt-shell #messages-thread-modal.fixed {
-        inset: unset !important;
-        top: var(--nt-shell-top, 0px) !important;
+        position: absolute !important;
+        inset: 0 !important;
+        top: 0 !important;
         left: 0 !important;
         right: 0 !important;
         bottom: 0 !important;
+        width: auto !important;
         height: auto !important;
         max-height: none !important;
       }

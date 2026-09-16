@@ -5,6 +5,13 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_09.16.5': [
+        'Blank slab under the Feedback Hub composer: appearance.css keeps non-fullscreen cards clear of the bottom nav with padding-bottom 4.5rem plus a card capped at --nt-app-h - 5.5rem !important. That was harmless while Hub was a centred sheet. Making it full view in 16.2 left the cap in place, so the card stopped 88px short. A keyboard cycle hid the URL bar, --nt-app-h grew, the cap cleared the sheet and the slab closed, which is why it looked like a measuring bug. #messages-thread-modal is now excluded from both selectors.',
+        'Feedback Hub is sized like the Community tab and nothing else: position: absolute; inset: 0 over #nt-shell. No JS geometry, no --nt-app-h / --nt-shell-h / visualViewport copy (16.2, 16.3 and 16.4 each chased the wrong cause with those).',
+        'HubModals and index.astro put #messages-thread-modal next to #main-content inside #nt-shell, so inset:0 is exactly the box Community fills. The chrome strip above the shell is still covered by html.nt-full-overlay::before.',
+        'Composer keeps the Community dock (position: fixed; bottom: var(--nt-kb-h)) and ntFitAppViewport keeps the shell at lastShellH while Hub has the IME open (hubOn, same branch as communityOn).',
+        'forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
+    ],
     'V9_09.16.4': [
         'Feedback Hub slab: 16.3 copied --nt-shell-h into inline height on open. Chrome’s first visualViewport is shorter than the painted frame, so the composer sat above a blank strip until a keyboard cycle remeasured. Hub CSS is now top: --nt-shell-top; bottom: 0; height: auto. JS removes leftover inline geometry. Keyboard still docks the composer to --nt-kb-h and keeps lastShellH like Community.',
         'forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',

@@ -5,6 +5,11 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_09.16.8': [
+        'Nolungile only: the Kapteinsklip working is sliced from Philippi, so selecting Cape Town ↔ Nolungile no longer paints a second Cape Town → Mutual line via Woodstock (that was the whole ct-kapteinsklip bake). Main STATIC path is Stock Road after Philippi; Lentegeur / Mitchells Plain / Kapteinsklip stay on the spur.',
+        'Bonteheuwel → Netreg and Nyanga → Philippi follow the Cape Flats rails the basemap draws. OSM tags those ways abandoned and splits them into islands, so the tube drape had been a diagonal chord. Fill walks one connected island, including abandoned/yard ways, for those two hops only. Chris Hani and Kapteinsklip bakes are untouched.',
+        'forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
+    ],
     'V9_09.16.7': [
         'Gold tracks: fill only the screenshot hops (allowlist). A full-network stray pass had flattened Tembisa and Saulsville. Walker Street jumps the OSM bridge void along the Metro corridor instead of walking onto Gautrain. Hercules leaves on the Mabopane through rails (north, then east) instead of a 430 m pin chord. De Wildt stays a chord.',
         'Cape Town ↔ Nolungile bake is restitched via Esplanade / Ysterplaat (from ct-bellv). Cape Town → Esplanade is forced onto the northern tracks so the MacGregor Street peel across the Woodstock yard is gone. Nyanga → Philippi is draped. Philippi still forks like Duff’s Road (Stock Road vs Kapteinsklip spur). KZN is not rewritten.',

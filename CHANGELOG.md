@@ -2,6 +2,10 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin, Dev Hub, Alerts, Trains near me, community chat, or other hidden-test work. No emoji and no em dashes in What’s New. Keep `APP_VERSION`, `package.json` `version`, and `public/app-version.json` aligned on each release. Changelog / What’s New may be skipped, or the heading may be only **no release notes.** Every bump must add `ADMIN_CHANGELOG[APP_VERSION]` (System Health Build notes).
 
+## V9_09.16.8 — Nolungile forks at Philippi, Cape Flats rails (16 Sep 2026)
+
+Selecting Cape Town ↔ Nolungile was drawing two lines into Mutual: Esplanade / Ysterplaat, plus the full Kapteinsklip bake from Cape Town via Woodstock. The Kapteinsklip working is now sliced from Philippi only, like the Duff's Road fork. Bonteheuwel → Netreg and Nyanga → Philippi follow the rails on the map instead of a diagonal; OSM tags those Cape Flats ways abandoned, which is why the tube drape stayed on the chord. Chris Hani is not rewritten. No new What’s New card.
+
 ## V9_09.16.7 — Gold-track OSM gap jumps, Nolungile via Ysterplaat (16 Sep 2026)
 
 Walker Street / Loftus no longer snap onto Gautrain across an OSM bridge void: the drape stays in a corridor tube and jumps short map gaps along Metro rail. Hercules walks the Mabopane through rails north, then east, instead of a 430 m pin chord. Cape Town ↔ Nolungile is restitched onto Esplanade / Ysterplaat and Cape Town → Esplanade stays on the northern tracks, so the MacGregor Street yard hook is gone. Nyanga → Philippi is draped; the Philippi fork (Stock Road vs Kapteinsklip) stays. Fill is allowlisted to those hops. KZN is still held. No new What’s New card.

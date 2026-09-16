@@ -67,13 +67,26 @@ export function bindPasswordReveal({ inputId, buttonId, openIconId, closedIconId
     sync();
 }
 
+const FULL_SCREEN_OVERLAY_IDS = ['messages-thread-modal', 'dev-modal'];
+
+function syncFullOverlayChrome() {
+    if (typeof document === 'undefined') return;
+    const on = FULL_SCREEN_OVERLAY_IDS.some((id) => {
+        const el = document.getElementById(id);
+        return !!(el && !el.classList.contains('hidden'));
+    });
+    document.documentElement.classList.toggle('nt-full-overlay', on);
+}
+
 // --- GLOBAL SCROLL-LOCK PROTOCOL ---
 export function lockBackgroundScroll() {
     if (typeof document !== 'undefined') document.body.classList.add('modal-active');
+    syncFullOverlayChrome();
 }
 
 export function unlockBackgroundScroll() {
     if (typeof document !== 'undefined') document.body.classList.remove('modal-active');
+    syncFullOverlayChrome();
 }
 
 
@@ -256,10 +269,14 @@ export function closeSmoothModal(modalId, fromPopState = false) {
             }
             if (!anyFixedModalOpen() && !document.body.classList.contains('sidenav-open')) {
                 unlockBackgroundScroll();
+            } else {
+                syncFullOverlayChrome();
             }
         }, 300);
     } else if (!anyFixedModalOpen() && !document.body.classList.contains('sidenav-open')) {
         unlockBackgroundScroll();
+    } else {
+        syncFullOverlayChrome();
     }
 }
 
@@ -312,6 +329,7 @@ export function openSmoothModal(modalId, customOrigin = null, opts = null) {
             });
         }
         lockBackgroundScroll();
+        syncFullOverlayChrome();
     }
 
     if (modalId === 'route-modal') {

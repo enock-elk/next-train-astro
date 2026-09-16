@@ -15767,7 +15767,7 @@ const Admin = {
                         const adminRoute = secureEscape(item.routeId || '');
                         const adminMetaLabel = adminRoute ? `${adminVer} · ${adminRoute}` : adminVer;
                         const adminMeta = /^V\d+_/i.test(rawAdminVer)
-                            ? `<button type="button" class="font-mono font-medium opacity-80 ml-2 truncate underline decoration-dotted underline-offset-2 hover:opacity-100 focus:outline-none" data-admin-changelog="${adminVer}">${adminMetaLabel}</button>`
+                            ? `<button type="button" class="fb-version-chip relative z-[2] font-mono font-medium opacity-80 ml-2 truncate underline decoration-dotted underline-offset-2 hover:opacity-100 focus:outline-none" data-admin-changelog="${adminVer}" onclick="event.preventDefault();event.stopPropagation();if(window.Admin&amp;&amp;Admin.openAdminChangelogLookup)Admin.openAdminChangelogLookup(this.getAttribute('data-admin-changelog')||this.textContent);">${adminMetaLabel}</button>`
                             : `<span class="font-mono font-medium opacity-60 truncate">${adminMetaLabel}</span>`;
                         const editedLabel = item.editedAt ? `<span class="ml-1 opacity-70">edited</span>` : '';
                         const inboxReactId = item.inboxMsgId || String(item.id || '');
@@ -16057,7 +16057,7 @@ const Admin = {
                         const integratedHeaderHtml = `
                             <div class="inbox-bubble-name-row">
                                 <span class="whitespace-nowrap inline-flex items-center gap-1 ${headerColorClass} uppercase tracking-widest text-[10px]">${headerLabelText}</span>
-                                <button type="button" class="font-mono font-medium opacity-80 ml-2 truncate underline decoration-dotted underline-offset-2 hover:opacity-100 focus:outline-none" data-admin-changelog="${verLabel}">${verLabel} · ${safeRouteId}</button>
+                                <button type="button" class="fb-version-chip relative z-[2] font-mono font-medium opacity-80 ml-2 truncate underline decoration-dotted underline-offset-2 hover:opacity-100 focus:outline-none" data-admin-changelog="${verLabel}" onclick="event.preventDefault();event.stopPropagation();if(window.Admin&amp;&amp;Admin.openAdminChangelogLookup)Admin.openAdminChangelogLookup(this.getAttribute('data-admin-changelog')||this.textContent);">${verLabel} · ${safeRouteId}</button>
                             </div>
                         `;
 
@@ -16106,15 +16106,18 @@ const Admin = {
     bindAdminChangelogClicks: () => {
         if (window.__ntAdminChangelogBound) return;
         window.__ntAdminChangelogBound = true;
-        document.addEventListener('click', (e) => {
+        const openFromEvent = (e) => {
             const el = e.target && e.target.nodeType === 1 ? e.target : e.target?.parentElement;
             const btn = el?.closest?.('[data-admin-changelog]');
             if (!btn) return;
             e.preventDefault();
             e.stopPropagation();
             if (typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation();
-            Admin.openAdminChangelogLookup(btn.getAttribute('data-admin-changelog'));
-        }, true);
+            const key = btn.getAttribute('data-admin-changelog') || btn.textContent;
+            Admin.openAdminChangelogLookup(key);
+        };
+        document.addEventListener('click', openFromEvent, true);
+        document.addEventListener('pointerup', openFromEvent, true);
     },
 
     grantableFeatures: () => {
@@ -16371,6 +16374,9 @@ const Admin = {
     },
 
     openAdminChangelogLookup: (version) => {
+        const now = Date.now();
+        if (window.__ntAdminChangelogOpenAt && (now - window.__ntAdminChangelogOpenAt) < 450) return;
+        window.__ntAdminChangelogOpenAt = now;
         const key = (typeof window.normalizeAdminChangelogKey === 'function')
             ? window.normalizeAdminChangelogKey(version)
             : String(version || '').split(' - ')[0].split(' · ')[0].trim();
@@ -16412,7 +16418,10 @@ const Admin = {
             }
         }
         if (typeof window.openSmoothModal === 'function') {
-            window.openSmoothModal('admin-changelog-modal', null, { skipHash: true });
+            // Defer so the same tap cannot hit the new overlay and close it.
+            setTimeout(() => {
+                window.openSmoothModal('admin-changelog-modal', null, { skipHash: true });
+            }, 0);
         } else {
             modal.classList.remove('hidden');
         }
@@ -18112,13 +18121,21 @@ const Admin = {
 
                 const approvedHtml = approvedRows.length
                     ? approvedRows.map(({ code, row, holiday }) => `
-                        <div class="bg-emerald-50/70 dark:bg-emerald-900/10 border border-emerald-200 dark:border-emerald-800/50 rounded-xl p-3 flex items-start justify-between gap-2">
-                            <div class="min-w-0">
-                                <p class="text-[10px] font-black uppercase tracking-widest text-emerald-700 dark:text-emerald-300">${escapeHTML(holiday.whenLabel)} - ${escapeHTML(code)}</p>
-                                <p class="text-sm font-black text-gray-900 dark:text-white leading-snug">${escapeHTML(holiday.name)}</p>
-                                <p class="text-[10px] text-gray-500 mt-0.5">${escapeHTML(dayTypeLabel(code, row.dayType))}</p>
+                        <div class="holiday-approval-card bg-emerald-50/70 dark:bg-emerald-900/10 border border-emerald-200 dark:border-emerald-800/50 rounded-xl p-3" data-iso="${holiday.iso}" data-key="${holiday.key}" data-name="${escapeHTML(holiday.name)}" data-default="${holiday.defaultDayType}">
+                            <div class="flex items-start justify-between gap-2 mb-2">
+                                <div class="min-w-0">
+                                    <p class="text-[10px] font-black uppercase tracking-widest text-emerald-700 dark:text-emerald-300">${escapeHTML(holiday.whenLabel)} - ${escapeHTML(code)}</p>
+                                    <p class="text-sm font-black text-gray-900 dark:text-white leading-snug">${escapeHTML(holiday.name)}</p>
+                                </div>
+                                <span class="text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 shrink-0">Approved</span>
                             </div>
-                            <span class="text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 shrink-0">Approved</span>
+                            <div class="holiday-region-row flex items-center gap-2" data-region="${code}">
+                                <select class="holiday-region-day flex-1 min-w-0 h-8 px-2 rounded-md bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-[10px] text-gray-900 dark:text-white outline-none" data-region="${code}">
+                                    ${dayTypeOptions(code, row.dayType || (code === 'WC' ? holiday.defaultDayType : (holiday.defaultDayType === 'public_holiday' ? 'saturday' : holiday.defaultDayType)))}
+                                </select>
+                                <button type="button" class="holiday-region-save shrink-0 h-8 px-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-black uppercase tracking-wide focus:outline-none" data-region="${code}">Save</button>
+                                <button type="button" class="holiday-region-unapprove shrink-0 h-8 px-2.5 rounded-lg bg-gray-200 dark:bg-gray-700 hover:bg-amber-100 dark:hover:bg-amber-900/40 text-gray-700 dark:text-gray-200 text-[10px] font-black uppercase tracking-wide focus:outline-none" data-region="${code}">Pending</button>
+                            </div>
                         </div>
                     `).join('')
                     : '<div class="text-xs text-gray-500 italic text-center py-4">No approved regions yet.</div>';
@@ -18148,6 +18165,13 @@ const Admin = {
                             dayType,
                             approvedBy: uid,
                             approvedAt: Date.now(),
+                        }
+                        : status === 'pending'
+                        ? {
+                            status: 'pending',
+                            dayType,
+                            updatedBy: uid,
+                            updatedAt: Date.now(),
                         }
                         : {
                             status: 'deferred',
@@ -18204,6 +18228,42 @@ const Admin = {
                         try {
                             await saveRegion(card, code, 'rejected', dayType);
                             if (typeof showToast === 'function') showToast(`${code} deferred`, 'info');
+                            Admin.fetchHolidayApprovals();
+                        } catch (e) {
+                            if (typeof showToast === 'function') showToast('Update failed', 'error');
+                            btn.disabled = false;
+                        }
+                    };
+                });
+
+                listDiv.querySelectorAll('.holiday-region-save').forEach((btn) => {
+                    btn.onclick = async () => {
+                        const card = btn.closest('.holiday-approval-card');
+                        const code = btn.dataset.region;
+                        const sel = card?.querySelector(`.holiday-region-day[data-region="${code}"]`);
+                        const dayType = sel?.value || (code === 'WC' ? 'public_holiday' : 'saturday');
+                        btn.disabled = true;
+                        try {
+                            await saveRegion(card, code, 'approved', dayType);
+                            if (typeof showToast === 'function') showToast(`${code} updated`, 'success');
+                            Admin.fetchHolidayApprovals();
+                        } catch (e) {
+                            if (typeof showToast === 'function') showToast('Save failed', 'error');
+                            btn.disabled = false;
+                        }
+                    };
+                });
+
+                listDiv.querySelectorAll('.holiday-region-unapprove').forEach((btn) => {
+                    btn.onclick = async () => {
+                        const card = btn.closest('.holiday-approval-card');
+                        const code = btn.dataset.region;
+                        const sel = card?.querySelector(`.holiday-region-day[data-region="${code}"]`);
+                        const dayType = sel?.value || (code === 'WC' ? 'public_holiday' : 'saturday');
+                        btn.disabled = true;
+                        try {
+                            await saveRegion(card, code, 'pending', dayType);
+                            if (typeof showToast === 'function') showToast(`${code} moved to pending`, 'info');
                             Admin.fetchHolidayApprovals();
                         } catch (e) {
                             if (typeof showToast === 'function') showToast('Update failed', 'error');

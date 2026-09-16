@@ -759,8 +759,10 @@
          * A corridor also forks. One Nolungile working (train 9408 of 10) detours
          * Stock Road -> Kapteinsklip -> Mitchell's Plain -> Lentegeur and rejoins
          * at Philippi, exactly as the KZN Berea Road line forks at Duff's Road
-         * for Bridge City. Those three stops are on a branch, not on the corridor,
-         * and painting them dragged Cape Town <-> Nolungile out to Kapteinsklip.
+         * for Bridge City. Those three stops stay off the main Nolungile polyline
+         * (Philippi -> Stock Road -> Mandalay -> Nolungile) so the corridor is
+         * not dragged around the Cape Flats. They are painted as a second spur
+         * that ends at Kapteinsklip.
          *
          * A stop carried by a single train on a sheet that runs several is a
          * branch or an extension working rather than part of the line's shape.
@@ -768,6 +770,7 @@
          */
         const BRANCH_TRAIN_THRESHOLD = 2;
         const MIN_TRAINS_TO_JUDGE = 4;
+        const NOLU_KAPTEINSKLIP_SPUR = ["PHILIPPI", "LENTEGEUR", "MITCHELL'S PLAIN", "KAPTEINSKLIP"];
 
         function corridorGeometryStops(routeObj) {
             const all = routeObj.validStops || [];
@@ -781,17 +784,30 @@
             return corridor.length > 1 ? corridor : served;
         }
 
+        function noluKapteinsklipSpurStops(routeObj) {
+            if (!routeObj || routeObj.routeId !== 'ct-nolu') return [];
+            const byName = new Map();
+            (routeObj.validStops || []).forEach((s) => {
+                const name = String(s?.name || '').toUpperCase().trim();
+                if (name && !byName.has(name)) byName.set(name, s);
+            });
+            const stops = NOLU_KAPTEINSKLIP_SPUR
+                .map((name) => byName.get(name))
+                .filter((s) => s && Number.isFinite(s.lat) && Number.isFinite(s.lon));
+            return stops.length >= 2 ? stops : [];
+        }
+
         /**
          * Strict paint rule: consecutive stations in route order.
          * OSM may only fill the hop between station i and i+1 (no shortcuts, no skips).
          */
-        function resolveRouteLatLngs(routeObj, trackBundle) {
-            const stops = corridorGeometryStops(routeObj);
+        function resolveStopsLatLngs(stops, routeObj, trackBundle, preferBakeId) {
             const chords = (stops.length > 1)
                 ? stops.map((s) => [s.lat, s.lon])
                 : (routeObj.coords || []);
             const bundle = trackBundle || { byId: new Map(), graph: null };
-            const baked = bundle.byId && bundle.byId.get(routeObj.routeId);
+            const baked = (preferBakeId && bundle.byId && bundle.byId.get(preferBakeId))
+                || (bundle.byId && bundle.byId.get(routeObj.routeId));
             const held = GHOST_GEOMETRY_REGIONS.has(routeObj.region);
             const bakedIsUsable = baked && baked.length > 1 && bakedLineCoversStops(baked, stops);
 
@@ -809,6 +825,16 @@
             }
             if (bakedIsUsable) return baked;
             return chords;
+        }
+
+        function resolveRouteLatLngs(routeObj, trackBundle) {
+            return resolveStopsLatLngs(corridorGeometryStops(routeObj), routeObj, trackBundle);
+        }
+
+        function resolveNoluKapteinsklipSpurLatLngs(routeObj, trackBundle) {
+            const stops = noluKapteinsklipSpurStops(routeObj);
+            if (stops.length < 2) return null;
+            return resolveStopsLatLngs(stops, routeObj, trackBundle, 'ct-kapteinsklip');
         }
 
         // --- MAP LOGIC (Dynamic Region & DB Sync) ---
@@ -1557,8 +1583,7 @@
                     const isLive = r.isActive;
                     const lineCoords = resolveRouteLatLngs(r, trackBundle);
                     r.trackCoords = lineCoords;
-                    if (r._polyline) map.removeLayer(r._polyline);
-                    r._polyline = L.polyline(lineCoords, {
+                    const lineStyle = {
                         color: r.color,
                         weight: isLive ? 4 : 3,
                         opacity: isLive ? 0.9 : 0.35,
@@ -1566,21 +1591,36 @@
                         lineCap: 'round',
                         lineJoin: 'round',
                         smoothFactor: 1
-                    });
-                    if (!selectedRouteId || r.routeId === selectedRouteId) r._polyline.addTo(map);
-                    r._polyline.bindPopup(`
+                    };
+                    const popupHtml = `
                     <div class="text-center">
                         <b class="uppercase text-sm">${r.name}</b><br>
                         ${isLive
                             ? '<span class="text-green-600 font-bold text-xs">● Active Service</span>'
                             : '<span class="text-blue-500 font-black text-[10px] uppercase tracking-widest animate-pulse">🚧 Launching Soon</span>'}
                     </div>
-                `);
+                `;
+                    if (r._polyline) map.removeLayer(r._polyline);
+                    r._polyline = L.polyline(lineCoords, lineStyle);
+                    if (!selectedRouteId || r.routeId === selectedRouteId) r._polyline.addTo(map);
+                    r._polyline.bindPopup(popupHtml);
+                    if (r._spurPolyline) {
+                        map.removeLayer(r._spurPolyline);
+                        r._spurPolyline = null;
+                    }
+                    const spurCoords = resolveNoluKapteinsklipSpurLatLngs(r, trackBundle);
+                    if (spurCoords && spurCoords.length > 1) {
+                        r._spurPolyline = L.polyline(spurCoords, lineStyle);
+                        if (!selectedRouteId || r.routeId === selectedRouteId) r._spurPolyline.addTo(map);
+                        r._spurPolyline.bindPopup(popupHtml);
+                    }
                 });
                 const bounds = L.latLngBounds([]);
                 drawnRoutes.forEach((r) => {
-                    if (!r._polyline || !r._polyline.getBounds) return;
-                    try { bounds.extend(r._polyline.getBounds()); } catch (_) {}
+                    [r._polyline, r._spurPolyline].forEach((layer) => {
+                        if (!layer || !layer.getBounds) return;
+                        try { bounds.extend(layer.getBounds()); } catch (_) {}
+                    });
                 });
                 networkBounds = bounds.isValid() ? bounds : null;
             }
@@ -1813,12 +1853,14 @@
 
                 drawnRoutes.forEach((r) => {
                     const show = !selectedRouteId || r.routeId === selectedRouteId;
-                    if (!r._polyline) return;
-                    if (show) {
-                        if (!map.hasLayer(r._polyline)) r._polyline.addTo(map);
-                    } else if (map.hasLayer(r._polyline)) {
-                        map.removeLayer(r._polyline);
-                    }
+                    [r._polyline, r._spurPolyline].forEach((layer) => {
+                        if (!layer) return;
+                        if (show) {
+                            if (!map.hasLayer(layer)) layer.addTo(map);
+                        } else if (map.hasLayer(layer)) {
+                            map.removeLayer(layer);
+                        }
+                    });
                 });
                 stationLayerItems.forEach((s) => {
                     const show = !selectedRouteId || (s.routes && s.routes.has(selectedRouteId));
@@ -1833,8 +1875,17 @@
                 if (!fit) return;
                 if (selectedRouteId) {
                     const r = drawnRoutes.find((x) => x.routeId === selectedRouteId);
-                    if (r && r._polyline && r._polyline.getBounds) {
-                        try { map.fitBounds(r._polyline.getBounds(), { padding: [48, 48], maxZoom: 13 }); } catch (_) {}
+                    const fitBounds = L.latLngBounds([]);
+                    let any = false;
+                    [r?._polyline, r?._spurPolyline].forEach((layer) => {
+                        if (!layer || !layer.getBounds) return;
+                        try {
+                            fitBounds.extend(layer.getBounds());
+                            any = true;
+                        } catch (_) {}
+                    });
+                    if (any) {
+                        try { map.fitBounds(fitBounds, { padding: [48, 48], maxZoom: 13 }); } catch (_) {}
                     }
                 } else if (wasFiltered) {
                     try { map.closePopup(); } catch (_) {}

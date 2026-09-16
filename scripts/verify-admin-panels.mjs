@@ -350,9 +350,12 @@ assert(
     admin.includes('rawAdminVer') && admin.includes('data-admin-changelog="${adminVer}"'),
     'admin bubble version opens build notes'
 );
-assert(admin.includes("addEventListener('click', (e) => {") && admin.includes('__ntAdminChangelogBound'), 'build-notes clicks bind in capture');
+assert(admin.includes("addEventListener('click', openFromEvent, true)"), 'build-notes clicks bind in capture');
 assert(admin.includes('stopImmediatePropagation'), 'version chip capture stops Dev Hub handlers');
 assert(admin.includes("openSmoothModal('admin-changelog-modal', null, { skipHash: true })"), 'build notes skip #admin-build so they stay above Feedback');
+assert(admin.includes('fb-version-chip'), 'feedback version chips are dedicated buttons');
+assert(admin.includes('holiday-region-save'), 'approved holiday notices can be re-saved');
+assert(admin.includes('holiday-region-unapprove'), 'approved holiday notices can return to pending');
 assert(admin.includes('layoutInboxMedia'), 'feedback bubbles hoist unique images');
 assert(admin.includes('hydrateAlertPosterImages'), 'feedback posters use the alerts loader');
 assert(admin.includes("style.zIndex = '260'"), 'build notes sit above Dev Hub');

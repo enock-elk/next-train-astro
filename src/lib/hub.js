@@ -260,20 +260,30 @@ function syncFeedbackModalViewport() {
     COMMUTER_FEEDBACK_MODAL_IDS.forEach((id) => {
         const modal = document.getElementById(id);
         if (!modal) return;
+        const card = modal.querySelector(':scope > div');
+        if (id === 'messages-thread-modal') {
+            // Cover the blue chrome from layout top 0, and sit on the keyboard.
+            const coverH = Math.max(height, height + top);
+            modal.style.setProperty('--nt-feedback-vv-height', `${coverH}px`);
+            modal.style.removeProperty('--nt-feedback-vv-top');
+            modal.style.top = '0px';
+            modal.style.height = `${coverH}px`;
+            modal.style.maxHeight = `${coverH}px`;
+            modal.style.bottom = 'auto';
+            modal.style.paddingBottom = '0px';
+            if (card) {
+                card.style.maxHeight = '100%';
+                card.style.height = '100%';
+            }
+            return;
+        }
         modal.style.setProperty('--nt-feedback-vv-height', `${height}px`);
         modal.style.setProperty('--nt-feedback-vv-top', `${top}px`);
         modal.style.top = `${top}px`;
         modal.style.height = `${height}px`;
         modal.style.maxHeight = `${height}px`;
         modal.style.bottom = 'auto';
-        const card = modal.querySelector(':scope > div');
-        if (id === 'messages-thread-modal') {
-            modal.style.paddingBottom = '0px';
-            if (card) {
-                card.style.maxHeight = '100%';
-                card.style.height = '100%';
-            }
-        } else if (card) {
+        if (card) {
             card.style.height = '';
             card.style.maxHeight = '';
         }
@@ -644,6 +654,25 @@ function openNetworkSlowConfirm(onProceed) {
     openSmoothModal('network-slow-confirm-modal');
 }
 
+function openCacheClearConfirm(onProceed) {
+    const modal = document.getElementById('cache-clear-modal');
+    const cancelBtn = document.getElementById('cache-clear-cancel-btn');
+    const proceedBtn = document.getElementById('cache-clear-confirm-btn');
+    if (!modal || !cancelBtn || !proceedBtn) {
+        onProceed?.();
+        return;
+    }
+    const finish = (proceed) => {
+        cancelBtn.onclick = null;
+        proceedBtn.onclick = null;
+        closeSmoothModal('cache-clear-modal');
+        if (proceed) onProceed?.();
+    };
+    cancelBtn.onclick = () => finish(false);
+    proceedBtn.onclick = () => finish(true);
+    openSmoothModal('cache-clear-modal');
+}
+
 export async function showCacheClearWarning() {
     triggerHaptic();
     const incomingVersion = (typeof navigator === 'undefined' || navigator.onLine)
@@ -653,14 +682,17 @@ export async function showCacheClearWarning() {
         latestVersion: !!(incomingVersion && !isAppVersionNewer(incomingVersion, APP_VERSION)),
         skipNetworkPreflight,
     });
-    if (!navigator.onLine || !incomingVersion) {
-        openNetworkSlowConfirm(() => runReset(true));
-        return;
-    }
-    const restarted = await runReset(false);
-    if (!restarted) {
-        openNetworkSlowConfirm(() => runReset(true));
-    }
+    const afterConfirm = async () => {
+        if (!navigator.onLine || !incomingVersion) {
+            openNetworkSlowConfirm(() => runReset(true));
+            return;
+        }
+        const restarted = await runReset(false);
+        if (!restarted) {
+            openNetworkSlowConfirm(() => runReset(true));
+        }
+    };
+    openCacheClearConfirm(afterConfirm);
 }
 
 function syncProfileDisplay() {

@@ -275,8 +275,8 @@ const now = 1_700_000_000_000;
 
     const appearance = readFileSync(new URL('../src/styles/appearance.css', import.meta.url), 'utf8');
     assert(/#alerts-channel-footer-close\s*\{[\s\S]*?background-color:\s*var\(--nt-primary\)/.test(appearance), 'footer Close stays the filled --nt-primary CTA');
-    assert(/\.nt-alert-reply\s*\{[\s\S]*?background:\s*var\(--nt-surface-muted\)/.test(appearance), 'Reply uses a reaction-style surface');
-    assert(/\.nt-alert-reply\s*\{[\s\S]*?border:\s*1px solid var\(--nt-border\)/.test(appearance), 'Reply uses a reaction-style border');
+    assert(/\.nt-alert-reply\s*\{[\s\S]*?background-color:\s*var\(--nt-primary\)/.test(appearance), 'Reply uses the filled --nt-primary CTA');
+    assert(/\.nt-alert-reply\s*\{[\s\S]*?color:\s*var\(--nt-primary-fg\)/.test(appearance), 'Reply uses white primary text');
     assert(js.includes('nt-alert-source'), 'source citation uses the quiet source class');
     assert(!js.includes('nt-alert-source mt-3 text-[11px] font-semibold'), 'source dropped the chip-sized type');
     assert(js.includes('0 views'), 'admin impression placeholder is 0 views');

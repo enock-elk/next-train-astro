@@ -697,6 +697,7 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
         overflow-y: auto;
         flex-direction: column;
         align-items: stretch;
+        padding: 0;
         background-color: #f9fafb;
       }
       html.dark body.modal-active #dev-modal {
@@ -708,6 +709,10 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
         flex-shrink: 0;
         overflow: visible;
         background-color: #f9fafb;
+        max-width: none;
+        width: 100%;
+        border-radius: 0;
+        padding-top: max(1.5rem, env(safe-area-inset-top));
       }
       html.dark body.modal-active #dev-modal > div {
         background-color: #111827;
@@ -1018,6 +1023,21 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
       html.nt-standalone.nt-in-app body.nav-bottom:not(.nt-immersive) #nt-shell {
         background-color: var(--nt-chrome-header);
       }
+      /* Full-screen overlays (Feedback Hub, Dev Mode) cover the blue chrome strip. */
+      html.nt-full-overlay,
+      html.nt-full-overlay body {
+        background-color: var(--nt-canvas, #f9fafb);
+      }
+      html.dark.nt-full-overlay,
+      html.dark.nt-full-overlay body {
+        background-color: #111827;
+      }
+      html.nt-full-overlay #nt-shell {
+        top: 0 !important;
+        height: var(--nt-app-h, 100dvh) !important;
+        max-height: var(--nt-app-h, 100dvh) !important;
+        background-color: var(--nt-canvas, #f9fafb);
+      }
       /* Keyboard open: keep the oval at the layout bottom (under the keys), never ride up. */
       html.nt-keyboard.nt-in-app body.nav-bottom:not(.nt-immersive) #bottom-nav.bottom-nav-bar {
         visibility: hidden;
@@ -1155,8 +1175,7 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
         height: var(--nt-app-h, 100dvh);
         max-height: var(--nt-app-h, 100dvh);
       }
-      /* Feedback Hub / Send Feedback follow the keyboard, not --nt-app-h. */
-      #nt-shell #messages-thread-modal.fixed,
+      /* Send Feedback follows the keyboard hole. Feedback Hub covers the chrome. */
       #nt-shell #feedback-modal.fixed {
         inset: unset !important;
         top: var(--nt-feedback-vv-top, var(--nt-vv-top, 0px)) !important;
@@ -1165,6 +1184,15 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
         bottom: auto !important;
         height: var(--nt-feedback-vv-height, var(--nt-vv-h, 100dvh)) !important;
         max-height: var(--nt-feedback-vv-height, var(--nt-vv-h, 100dvh)) !important;
+      }
+      #nt-shell #messages-thread-modal.fixed {
+        inset: unset !important;
+        top: 0 !important;
+        left: 0 !important;
+        right: 0 !important;
+        bottom: auto !important;
+        height: var(--nt-feedback-vv-height, var(--nt-app-h, 100dvh)) !important;
+        max-height: var(--nt-feedback-vv-height, var(--nt-app-h, 100dvh)) !important;
       }
       #nt-shell #account-modal.fixed {
         inset: 0 !important;

@@ -143,6 +143,7 @@ assert(!isAppVersionNewer('V9_09.11.9', 'V9_09.12.1'), 'older release is not new
 const hubJs = readFileSync(new URL('../src/lib/hub.js', import.meta.url), 'utf8');
 const hubModals = readFileSync(new URL('../src/components/HubModals.astro', import.meta.url), 'utf8');
 assert(hubJs.includes("performHardCacheClear('check_updates', {"), 'Check for Updates restarts when online');
+assert(hubJs.includes('openCacheClearConfirm'), 'Check for Updates asks before downloading');
 assert(hubJs.includes('openNetworkSlowConfirm'), 'Check for Updates asks before swapping on a slow probe');
 assert(hubJs.includes('installIncomingServiceWorker'), 'Check for Updates installs the incoming worker before reload');
 assert(hubModals.includes('bg-orange-500'), 'slow-network Proceed is orange');

@@ -5,6 +5,14 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_09.16.2': [
+        'Feedback Hub is a full-screen overlay (covers the blue chrome). Keyboard still shrinks it from the bottom. Dev Mode drops the p-4 inset the same way.',
+        'Approved holiday notices can change dayType (Save) or move back to Pending.',
+        'Feedback version chips (V9_09.15.9 · pta-pien and every other V-key) open that build’s internal notes. Capture + inline click + deferred skipHash modal so the same tap cannot dismiss it.',
+        'Check for Updates opens cache-clear-modal first (what it does / Cancel / Update). Slow-network confirm still follows when the probe fails.',
+        'ct-nolu keeps the main Philippi → Stock Road → Nolungile line and paints a second spur Philippi → Lentegeur → Mitchell’s Plain → Kapteinsklip (prefers the ct-kapteinsklip bake). BRANCH_TRAIN_THRESHOLD still holds for pta-kempton. KZN untouched.',
+        'Alerts Reply matches footer Close: --nt-primary fill, --nt-primary-fg text. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
+    ],
     'V9_09.16.1': [
         'iOS Safari zooms the page when a focused input/textarea/select computes under 16px. Commuter fields used text-sm / text-xs / text-[13px] (and text-lg can dip under 16px on a shrunk phone rem). Floor those controls to max(16px, 1em), keep text-lg at max(16px, 1.125rem) and text-base at max(16px, 1rem). Viewport stays maximum-scale=5. Do not bring back PLANNER_VIEWPORT_NO_ZOOM.',
         'Commuter What’s New: typing in a box stays full size on iPhone. forceShow stays false. FORCE_UPDATE_REQUIRED stays true so existing shells hard-reload onto this version.',

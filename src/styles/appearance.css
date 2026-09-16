@@ -1136,14 +1136,15 @@ body.nav-bottom:not(.nt-immersive) #sidenav {
   background-color: color-mix(in srgb, #fff 16%, transparent);
 }
 .nt-alert-reply {
-  background: var(--nt-surface-muted) !important;
-  color: var(--nt-text) !important;
-  border: 1px solid var(--nt-border) !important;
-  box-shadow: 0 1px 2px color-mix(in srgb, #000 7%, transparent);
+  background-color: var(--nt-primary) !important;
+  color: var(--nt-primary-fg) !important;
+  border: 1px solid transparent !important;
+  box-shadow: 0 1px 2px color-mix(in srgb, #000 12%, transparent);
 }
 .nt-alert-reply:hover {
-  background: var(--nt-primary-soft) !important;
-  border-color: var(--nt-primary) !important;
+  background-color: color-mix(in srgb, var(--nt-primary) 86%, #000) !important;
+  color: var(--nt-primary-fg) !important;
+  border-color: transparent !important;
 }
 .nt-alert-source {
   display: inline;

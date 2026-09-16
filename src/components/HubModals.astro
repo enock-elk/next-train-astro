@@ -563,9 +563,9 @@ import { withBase } from '../lib/config.js';
 </template>
 
 <!-- MESSAGES THREAD (commuter POV — WhatsApp-style Feedback Hub) -->
-<div id="messages-thread-modal" class="fixed left-0 right-0 bg-gray-900/60 z-[135] hidden flex items-end justify-center p-0 backdrop-blur-md transition-opacity duration-300">
-    <div class="bg-white dark:bg-gray-900 rounded-t-2xl shadow-2xl w-full max-w-md h-full flex flex-col overflow-hidden border border-gray-200 dark:border-gray-700 border-b-0">
-        <div class="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700 shrink-0">
+<div id="messages-thread-modal" class="fixed inset-0 bg-white dark:bg-gray-900 z-[135] hidden flex items-stretch justify-center p-0 transition-opacity duration-300">
+    <div class="bg-white dark:bg-gray-900 rounded-none shadow-none w-full max-w-md h-full flex flex-col overflow-hidden border-0">
+        <div class="flex items-center justify-between px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-3 border-b border-gray-200 dark:border-gray-700 shrink-0">
             <div>
                 <p class="text-[10px] font-black uppercase tracking-widest text-gray-400">Next Train</p>
                 <h3 class="text-base font-black text-gray-900 dark:text-white tracking-tight">Feedback Hub</h3>
@@ -612,12 +612,18 @@ import { withBase } from '../lib/config.js';
 </div>
 
 <style is:global>
-  #feedback-modal,
-  #messages-thread-modal {
+  #feedback-modal {
     top: var(--nt-feedback-vv-top, var(--nt-vv-top, 0px));
     bottom: auto;
     height: var(--nt-feedback-vv-height, var(--nt-vv-h, 100dvh));
     max-height: var(--nt-feedback-vv-height, var(--nt-vv-h, 100dvh));
+  }
+  #messages-thread-modal {
+    inset: 0;
+    top: 0;
+    bottom: auto;
+    height: var(--nt-feedback-vv-height, var(--nt-app-h, 100dvh));
+    max-height: var(--nt-feedback-vv-height, var(--nt-app-h, 100dvh));
   }
   #account-modal {
     inset: 0;
@@ -636,19 +642,23 @@ import { withBase } from '../lib/config.js';
     margin-bottom: 0;
   }
   #messages-thread-modal {
-    align-items: flex-end;
+    align-items: stretch;
     justify-content: center;
     padding: 0;
     padding-bottom: 0;
     padding-left: 0;
     padding-right: 0;
+    background: #fff;
+  }
+  html.dark #messages-thread-modal {
+    background: #111827;
   }
   #messages-thread-modal > div {
     width: 100%;
     height: 100%;
     max-height: 100%;
-    border-bottom-left-radius: 0;
-    border-bottom-right-radius: 0;
+    max-width: none;
+    border-radius: 0;
   }
   #account-modal {
     align-items: stretch;
@@ -800,6 +810,11 @@ import { withBase } from '../lib/config.js';
     justify-content: space-between;
     align-items: center;
     gap: 0.5rem;
+  }
+  #feedback-panel .inbox-bubble-name-row .fb-version-chip,
+  #messages-thread-modal .inbox-bubble-name-row .fb-version-chip {
+    pointer-events: auto;
+    cursor: pointer;
   }
   html.dark #messages-thread-modal .inbox-bubble-name-row,
   html.dark #feedback-panel .inbox-bubble-name-row {
@@ -986,6 +1001,24 @@ import { withBase } from '../lib/config.js';
             <div class="flex space-x-3">
                 <button type="button" id="region-cancel-btn" class="flex-1 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 font-medium py-2 px-4 rounded-lg transition-colors">Cancel</button>
                 <button type="button" id="region-confirm-action-btn" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg shadow-md transition-colors">Switch</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- CHECK FOR UPDATES: confirm before download / restart -->
+<div id="cache-clear-modal" class="fixed inset-0 bg-black bg-opacity-70 z-[140] hidden flex items-center justify-center p-4 backdrop-blur-sm transition-opacity duration-300">
+    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-sm p-6 transform transition-all scale-95">
+        <div class="text-center">
+            <div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-orange-100 dark:bg-orange-900/30 mb-4">
+                <svg class="h-6 w-6 text-orange-600 dark:text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m-15.357-2a8.001 8.001 0 0015.357 2m0 0H15"></path></svg>
+            </div>
+            <h3 class="text-lg font-black text-gray-900 dark:text-white mb-2 tracking-tight">Check for Updates?</h3>
+            <p class="text-sm text-gray-500 dark:text-gray-400 mb-2 leading-snug">This downloads the latest app onto this phone, then restarts Next Train so you leave any stuck copy behind.</p>
+            <p class="text-[12px] text-gray-500 dark:text-gray-400 leading-snug mb-6">Your pinned route stays. The look goes back to Classic light. Use this if the board looks stuck on an old version.</p>
+            <div class="flex space-x-3">
+                <button type="button" id="cache-clear-cancel-btn" class="flex-1 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 font-medium py-2.5 px-4 rounded-lg transition-colors focus:outline-none">Cancel</button>
+                <button type="button" id="cache-clear-confirm-btn" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-4 rounded-lg shadow-md transition-colors focus:outline-none">Update</button>
             </div>
         </div>
     </div>

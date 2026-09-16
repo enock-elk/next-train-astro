@@ -432,6 +432,14 @@ assert(
     'a stop carried by a single train is a branch, not the corridor shape (Philippi fork)',
 );
 assert(
+    mapApp.includes('NOLU_KAPTEINSKLIP_SPUR'),
+    'Nolungile also paints Philippi through Lentegeur and Mitchells Plain to Kapteinsklip',
+);
+assert(
+    mapApp.includes('resolveNoluKapteinsklipSpurLatLngs'),
+    'the Kapteinsklip working is a second Nolungile polyline, not a detour of the main corridor',
+);
+assert(
     /validStops\.splice\(idx, 0, \{ name, lat: coord\[0\], lon: coord\[1\], inactive: true/.test(mapApp),
     'the Maitland/Mutual geometry stop never claims a route, so Mutual stops showing Cape Town to Retreat',
 );

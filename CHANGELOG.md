@@ -2,6 +2,18 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin, Dev Hub, Alerts, Trains near me, community chat, or other hidden-test work. No emoji and no em dashes in What’s New. Keep `APP_VERSION`, `package.json` `version`, and `public/app-version.json` aligned on each release. Changelog / What’s New may be skipped, or the heading may be only **no release notes.** Every bump must add `ADMIN_CHANGELOG[APP_VERSION]` (System Health Build notes).
 
+## V9_09.16.2 — Feedback Hub full screen, holiday edit, Nolungile spur (16 Sep 2026)
+
+Feedback Hub covers the blue chrome (full overlay, `nt-full-overlay` zeros `--nt-shell-top`). Keyboard still sizes the overlay from the bottom. Dev Mode drops its `p-4` inset.
+
+Approved holiday notices can change `dayType` (Save) or move back to Pending.
+
+Feedback version chips open that version’s `ADMIN_CHANGELOG` notes (inline click + capture + deferred `skipHash` modal). Check for Updates shows `cache-clear-modal` again before download/restart.
+
+`ct-nolu` paints a Kapteinsklip spur (Philippi → Lentegeur → Mitchell’s Plain → Kapteinsklip) beside the main Philippi → Stock Road line. Alerts Reply is the same filled primary CTA as footer Close.
+
+What’s New: Cape Town to Nolungile also follows the line through Lentegeur and Mitchell's Plain, ending at Kapteinsklip.
+
 ## V9_09.16.1 — iOS input zoom floor (16 Sep 2026)
 
 Safari zooms the document when a focused `input`, `textarea`, or `select` computes under 16px. Most commuter fields were `text-sm` (14px), `text-xs` (12px), or `text-[13px]`. Home/Planner `text-lg` is 18px at a 16px rem and can drop under 16px on the phone rem clamp. Typed controls now floor at `max(16px, 1em)`; `text-lg` stays `max(16px, 1.125rem)` and `text-base` stays `max(16px, 1rem)`. Padding, height, and `maximum-scale=5` are unchanged. Do not lock zoom with `user-scalable=no` or `PLANNER_VIEWPORT_NO_ZOOM`.

@@ -117,6 +117,7 @@ assert(hub.indexOf('probeReachability(3500)') < hub.indexOf("if ('caches' in win
 assert(hub.includes("performHardCacheClear('check_updates', {"), 'manual Check for Updates still goes through the update path');
 assert(hub.includes("policy.systemKillswitch || (source === 'check_updates' && !skipNetworkPreflight)"), 'Check for Updates still preflights unless the commuter confirmed');
 assert(hub.includes('policy.systemKillswitch && isLieFi'), 'manual retry probes again instead of trusting a stale Lie-Fi flag');
+assert(hub.includes('openCacheClearConfirm'), 'Check for Updates asks before downloading');
 assert(hub.includes('openNetworkSlowConfirm'), 'slow Check for Updates asks before swapping');
 assert(hub.includes('installIncomingServiceWorker'), 'Check for Updates downloads the incoming worker before dropping the cached shell');
 assert(hub.includes('Kept your saved app. Try again on a stronger connection.'), 'failed Check for Updates keeps the cached app');

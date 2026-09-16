@@ -220,6 +220,8 @@ let feedbackViewportBound = false;
 
 function keepFeedbackFieldVisible(field) {
     if (!field?.closest?.('#feedback-modal, #messages-thread-modal, #account-modal')) return;
+    // Hub composer docks above the IME like Community. Do not scroll the sheet.
+    if (field.closest?.('#messages-thread-form')) return;
     const scroller = field.closest('[data-feedback-scroll]')
         || field.closest('#messages-thread-modal > div')
         || field.closest('#feedback-modal > div');
@@ -237,6 +239,36 @@ function keepFeedbackFieldVisible(field) {
     } else if (fieldRect.top < scrollRect.top + pad) {
         scroller.scrollTop -= scrollRect.top - fieldRect.top + pad;
     }
+}
+
+function dockHubComposer() {
+    const form = document.getElementById('messages-thread-form');
+    const modal = document.getElementById('messages-thread-modal');
+    if (!form) return;
+    const hubOpen = !!(modal && !modal.classList.contains('hidden'));
+    const editing = !!document.activeElement?.closest?.('#messages-thread-form');
+    const keyboard = document.documentElement.classList.contains('nt-keyboard');
+    if (!hubOpen || (!editing && !keyboard)) {
+        form.style.removeProperty('position');
+        form.style.removeProperty('left');
+        form.style.removeProperty('right');
+        form.style.removeProperty('width');
+        form.style.removeProperty('bottom');
+        form.style.removeProperty('z-index');
+        return;
+    }
+    const rootStyle = getComputedStyle(document.documentElement);
+    const kbH = Math.max(0, Math.round(parseFloat(rootStyle.getPropertyValue('--nt-kb-h')) || 0));
+    const vv = window.visualViewport;
+    const inner = window.innerHeight || 0;
+    const covered = vv ? Math.max(0, Math.round(inner - ((vv.offsetTop || 0) + vv.height))) : 0;
+    const bottom = Math.max(kbH, covered);
+    form.style.position = 'fixed';
+    form.style.left = '0px';
+    form.style.right = '0px';
+    form.style.width = '100%';
+    form.style.bottom = `${bottom}px`;
+    form.style.zIndex = '136';
 }
 
 /** Size commuter feedback overlays to the viewport left above the software keyboard. */
@@ -262,19 +294,25 @@ function syncFeedbackModalViewport() {
         if (!modal) return;
         const card = modal.querySelector(':scope > div');
         if (id === 'messages-thread-modal') {
-            // Cover the blue chrome from layout top 0, and sit on the keyboard.
-            const coverH = Math.max(height, height + top);
-            modal.style.setProperty('--nt-feedback-vv-height', `${coverH}px`);
-            modal.style.removeProperty('--nt-feedback-vv-top');
-            modal.style.top = '0px';
-            modal.style.height = `${coverH}px`;
-            modal.style.maxHeight = `${coverH}px`;
+            // Same box as #nt-shell. The composer docks to --nt-kb-h like
+            // Community; shrinking this overlay to visualViewport left the
+            // field behind the keyboard on iOS.
+            const rootStyle = getComputedStyle(document.documentElement);
+            const shellTop = Math.max(0, Math.round(parseFloat(rootStyle.getPropertyValue('--nt-shell-top')) || 0));
+            const shellH = Math.max(240, Math.round(parseFloat(rootStyle.getPropertyValue('--nt-shell-h')) || 0));
+            modal.style.setProperty('--nt-feedback-vv-height', `${shellH}px`);
+            modal.style.setProperty('--nt-feedback-vv-top', `${shellTop}px`);
+            modal.style.top = `${shellTop}px`;
+            modal.style.height = `${shellH}px`;
+            modal.style.maxHeight = `${shellH}px`;
             modal.style.bottom = 'auto';
             modal.style.paddingBottom = '0px';
             if (card) {
                 card.style.maxHeight = '100%';
                 card.style.height = '100%';
+                card.style.transform = 'none';
             }
+            dockHubComposer();
             return;
         }
         modal.style.setProperty('--nt-feedback-vv-height', `${height}px`);
@@ -288,6 +326,7 @@ function syncFeedbackModalViewport() {
             card.style.maxHeight = '';
         }
     });
+    dockHubComposer();
 }
 
 function bindFeedbackViewportHandling() {
@@ -312,6 +351,9 @@ function bindFeedbackViewportHandling() {
                 keepFeedbackFieldVisible(event.target);
             }, ms);
         });
+    });
+    document.addEventListener('focusout', () => {
+        setTimeout(() => syncFeedbackModalViewport(), 50);
     });
     syncFeedbackModalViewport();
 }

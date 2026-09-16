@@ -353,6 +353,9 @@ assert(
 assert(admin.includes("addEventListener('click', openFromEvent, true)"), 'build-notes clicks bind in capture');
 assert(admin.includes('stopImmediatePropagation'), 'version chip capture stops Dev Hub handlers');
 assert(admin.includes("openSmoothModal('admin-changelog-modal', null, { skipHash: true })"), 'build notes skip #admin-build so they stay above Feedback');
+assert(admin.includes("e.target.closest?.('#admin-changelog-notes')"), 'build notes keep background from stealing the pan');
+assert(admin.includes('overflow-y-auto custom-scrollbar overscroll-contain'), 'build notes scroll inside the card');
+assert(admin.includes("addEventListener('touchmove', stopBgScroll, { passive: false })"), 'build notes swallow backdrop touchmove');
 assert(admin.includes('fb-version-chip'), 'feedback version chips are dedicated buttons');
 assert(admin.includes('holiday-region-save'), 'approved holiday notices can be re-saved');
 assert(admin.includes('holiday-region-unapprove'), 'approved holiday notices can return to pending');

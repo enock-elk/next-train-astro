@@ -5,6 +5,13 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_09.16.3': [
+        'Check for Updates copy: drop “so you leave any stuck copy behind”. Body is download-then-restart; small line is pinned route stays, look goes back to Classic light.',
+        'Admin Build notes card (#admin-changelog-modal) is max 85dvh, notes overflow-y auto with overscroll-contain. Backdrop touchmove/wheel preventDefault unless the pan is on #admin-changelog-notes, so Feedback Hub behind does not scroll.',
+        'Feedback Hub stays in the #nt-shell visual hole (not --nt-app-h). nt-full-overlay paints only a ::before strip over --nt-shell-top; html/body stay the chrome colour so there is no white slab under the composer.',
+        'Feedback Hub composer docks like Community: position:fixed; bottom: var(--nt-kb-h). iOS ignores visualViewport height on fixed overlays, so shrinking the sheet left the field behind the keyboard. Inner card transform is none so the dock is viewport-relative.',
+        'forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
+    ],
     'V9_09.16.2': [
         'Feedback Hub is a full-screen overlay (covers the blue chrome). Keyboard still shrinks it from the bottom. Dev Mode drops the p-4 inset the same way.',
         'Approved holiday notices can change dayType (Save) or move back to Pending.',

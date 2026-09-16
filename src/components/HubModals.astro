@@ -619,11 +619,13 @@ import { withBase } from '../lib/config.js';
     max-height: var(--nt-feedback-vv-height, var(--nt-vv-h, 100dvh));
   }
   #messages-thread-modal {
-    inset: 0;
-    top: 0;
+    inset: unset;
+    top: var(--nt-feedback-vv-top, var(--nt-shell-top, 0px));
+    left: 0;
+    right: 0;
     bottom: auto;
-    height: var(--nt-feedback-vv-height, var(--nt-app-h, 100dvh));
-    max-height: var(--nt-feedback-vv-height, var(--nt-app-h, 100dvh));
+    height: var(--nt-feedback-vv-height, var(--nt-shell-h, var(--nt-vv-h, 100dvh)));
+    max-height: var(--nt-feedback-vv-height, var(--nt-shell-h, var(--nt-vv-h, 100dvh)));
   }
   #account-modal {
     inset: 0;
@@ -736,6 +738,17 @@ import { withBase } from '../lib/config.js';
   }
   #messages-thread-form {
     flex-shrink: 0;
+  }
+  html.nt-keyboard #messages-thread-form {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: var(--nt-kb-h, 0px);
+    z-index: 136;
+    width: 100%;
+  }
+  html.nt-keyboard #messages-thread-modal > div {
+    transform: none !important;
   }
   #messages-thread-contact.nt-contact-invalid,
   #feedback-email.nt-contact-invalid {
@@ -1014,8 +1027,8 @@ import { withBase } from '../lib/config.js';
                 <svg class="h-6 w-6 text-orange-600 dark:text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m-15.357-2a8.001 8.001 0 0015.357 2m0 0H15"></path></svg>
             </div>
             <h3 class="text-lg font-black text-gray-900 dark:text-white mb-2 tracking-tight">Check for Updates?</h3>
-            <p class="text-sm text-gray-500 dark:text-gray-400 mb-2 leading-snug">This downloads the latest app onto this phone, then restarts Next Train so you leave any stuck copy behind.</p>
-            <p class="text-[12px] text-gray-500 dark:text-gray-400 leading-snug mb-6">Your pinned route stays. The look goes back to Classic light. Use this if the board looks stuck on an old version.</p>
+            <p class="text-sm text-gray-500 dark:text-gray-400 mb-2 leading-snug">This downloads the latest app onto this phone, then restarts Next Train.</p>
+            <p class="text-[12px] text-gray-500 dark:text-gray-400 leading-snug mb-6">Your pinned route stays, but the look goes back to Classic light.</p>
             <div class="flex space-x-3">
                 <button type="button" id="cache-clear-cancel-btn" class="flex-1 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 font-medium py-2.5 px-4 rounded-lg transition-colors focus:outline-none">Cancel</button>
                 <button type="button" id="cache-clear-confirm-btn" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-4 rounded-lg shadow-md transition-colors focus:outline-none">Update</button>

@@ -342,7 +342,9 @@ assert(/#messages-thread-modal \{\s*align-items: stretch;\s*justify-content: cen
 assert(!/#messages-thread-modal \{\s*align-items: flex-end;/.test(hubModals), 'Feedback Hub CSS no longer docks with flex-end');
 assert(hubModals.includes('id="cache-clear-modal"'), 'Check for Updates has a confirm modal');
 assert(hubModals.includes('id="cache-clear-confirm-btn"'), 'Check for Updates confirm has Update');
-assert(hubModals.includes('This downloads the latest app onto this phone'), 'Check for Updates confirm explains the restart');
+assert(hubModals.includes('This downloads the latest app onto this phone, then restarts Next Train.'), 'Check for Updates confirm explains the restart');
+assert(hubModals.includes('Your pinned route stays, but the look goes back to Classic light.'), 'Check for Updates confirm mentions Classic light');
+assert(!hubModals.includes('stuck copy'), 'Check for Updates does not mention stuck copy');
 assert(hubModals.includes('id="messages-thread-contact-hint"'), 'Feedback Hub contact hint is present');
 assert(hubModals.includes('#messages-thread-contact.nt-contact-invalid'), 'invalid contact uses a red border');
 assert(hubModals.includes('Unofficial & Independent'), 'About unofficial pill present');
@@ -415,7 +417,11 @@ const hubJs = readFileSync(new URL('../src/lib/hub.js', import.meta.url), 'utf8'
 assert(hubJs.includes('collapsePrefsAccordion'), 'opening Options collapses Theme & Preferences');
 assert(hubJs.includes('autosizeMessagesThreadInput'), 'Feedback Hub composer grows before scrolling');
 assert(hubJs.includes('syncFeedbackModalViewport'), 'feedback overlays resize when the keyboard opens');
-assert(hubJs.includes("modal.style.top = '0px'"), 'Feedback Hub covers the chrome from layout top 0');
+assert(hubJs.includes("Stay in the visual hole") || hubJs.includes('Same box as #nt-shell'), 'Feedback Hub stays in the visual hole');
+assert(hubJs.includes('--nt-shell-top'), 'Feedback Hub top follows --nt-shell-top');
+assert(hubJs.includes('dockHubComposer'), 'Feedback Hub composer docks above the IME');
+assert(hubJs.includes("field.closest?.('#messages-thread-form')"), 'Hub composer does not scroll the sheet while typing');
+assert(!hubJs.includes('const coverH = Math.max(height, height + top)'), 'Feedback Hub does not stretch past the visual hole');
 assert(hubJs.includes("card.style.height = '100%'"), 'Feedback Hub card stretches to the keyboard');
 assert(hubJs.includes("id === 'messages-thread-modal'"), 'Feedback Hub card stretches to the keyboard');
 assert(!hubJs.includes("id === 'messages-thread-modal' || id === 'account-modal'"), 'Account is not keyboard-shrunk with Feedback Hub');
@@ -457,6 +463,9 @@ assert(layout.includes('--nt-vv-h'), 'layout exposes visual viewport height for 
 assert(layout.includes('#nt-shell #messages-thread-modal.fixed'), 'Feedback Hub is not locked to --nt-app-h');
 assert(layout.includes('#nt-shell #account-modal.fixed'), 'Account overlay is a full-screen page');
 assert(layout.includes('html.nt-full-overlay #nt-shell'), 'full-screen overlays cover the blue chrome strip');
+assert(layout.includes('html.nt-full-overlay::before'), 'full-screen overlays paint only the URL-bar strip');
+assert(!/html\.nt-full-overlay #nt-shell,[\s\S]{0,80}top:\s*0/.test(layout), 'full overlay does not zero #nt-shell top');
+assert(!/html\.nt-full-overlay,[\s\S]{0,80}html\.nt-full-overlay body \{[\s\S]{0,80}background-color:\s*#fff/.test(layout), 'full overlay does not paint html/body white');
 assert(!layout.includes('header-meta #current-day') || !/header-meta #current-day[\s\S]{0,80}0\.65rem/.test(layout), 'compact chrome does not force the day line to 0.65rem');
 assert(!layout.includes('interactive-widget=overlays-content'), 'layout viewport meta does not overlay-lock the IME');
 assert(layout.includes('lastLayoutH'), 'keyboard keeps full-screen layout height so the oval stays put');
@@ -474,6 +483,7 @@ assert(!/html\.nt-keyboard\.nt-in-app body\.nav-bottom:not\(\.nt-immersive\) #vi
 assert(/html\.nt-keyboard\.nt-in-app body\.nav-bottom:not\(\.nt-immersive\) #view-community \.community-pane \{\s*flex: 1 1 auto;/.test(layout), 'Community keyboard pane does not shrink to fit the Next Train header');
 assert(!/#view-community \.community-feed-scroll \{\s*padding-bottom:\s*6\.5rem/.test(layout), 'Community feed does not reserve a second composer gap');
 assert(layout.includes('#community-composer-dock'), 'Community composer docks above the IME');
+assert(layout.includes('html.nt-keyboard #messages-thread-form'), 'Feedback Hub composer docks above the IME like Community');
 assert(layout.includes('--nt-kb-h'), 'keyboard exposes IME height for the composer dock');
 assert(layout.includes('Community must not: leave the shell at full size'), 'Community keyboard leaves Next Train free to scroll away');
 assert(!/html\.nt-keyboard[\s\S]{0,500}#app-scroll:has\(#view-community\.active\) \{\s*overflow:\s*hidden/.test(layout), 'Community keyboard does not freeze #app-scroll');

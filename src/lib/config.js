@@ -14,7 +14,7 @@
  * Changelog / What’s New is optional: skip both, or write only "no release notes."
  * Always add ADMIN_CHANGELOG[APP_VERSION] (System Health Build notes).
  */
-export const APP_VERSION = "V9_09.16.2";
+export const APP_VERSION = "V9_09.16.3";
 
 /** Public support channels (About modal, lifeboat help.html, Safe Mode). */
 export const SUPPORT_EMAIL = 'admin@nexttrain.co.za';
@@ -951,6 +951,16 @@ export const HERC_KOED_JUNCTIONS = ['KOEDOESPOORT', 'HERCULES'];
 // comma, a period, or a hyphen. Do not explain strategy or "we fixed."
 // Leave every forceShow false. Never auto-open What's New over the welcome screen.
 export const CHANGELOG_DATA = [
+    {
+        id: "V9_09.16.3",
+        title: "Updates and Feedback Hub",
+        date: "16 Sep 2026",
+        forceShow: false,
+        features: [
+            "Check for Updates downloads the latest app onto this phone, then restarts Next Train. Your pinned route stays, but the look goes back to Classic light.",
+            "Feedback Hub sits flush at the bottom. Typing a message stays above the keyboard."
+        ]
+    },
     {
         id: "V9_09.16.2",
         title: "Nolungile to Kapteinsklip",

@@ -16387,13 +16387,13 @@ const Admin = {
         if (!modal) {
             modal = document.createElement('div');
             modal.id = 'admin-changelog-modal';
-            modal.className = 'fixed inset-0 bg-black/70 hidden flex items-center justify-center p-4';
+            modal.className = 'fixed inset-0 bg-black/70 hidden flex items-center justify-center p-4 overflow-hidden';
             modal.style.zIndex = '260';
             modal.innerHTML = `
-                <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-sm p-5 border border-gray-200 dark:border-gray-700 transform transition-transform scale-95">
-                    <h3 id="admin-changelog-title" class="text-base font-black text-gray-900 dark:text-white mb-2"></h3>
-                    <div id="admin-changelog-notes" class="text-sm text-gray-700 dark:text-gray-300 space-y-1.5 mb-4"></div>
-                    <button type="button" id="admin-changelog-close" class="w-full bg-slate-700 hover:bg-slate-800 text-white font-bold py-2.5 rounded-xl">Close</button>
+                <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-sm p-5 border border-gray-200 dark:border-gray-700 transform transition-transform scale-95 flex flex-col overflow-hidden max-h-[min(85dvh,var(--nt-vv-h,85dvh))]">
+                    <h3 id="admin-changelog-title" class="text-base font-black text-gray-900 dark:text-white mb-2 shrink-0"></h3>
+                    <div id="admin-changelog-notes" class="text-sm text-gray-700 dark:text-gray-300 space-y-1.5 mb-4 min-h-0 flex-1 overflow-y-auto custom-scrollbar overscroll-contain"></div>
+                    <button type="button" id="admin-changelog-close" class="w-full bg-slate-700 hover:bg-slate-800 text-white font-bold py-2.5 rounded-xl shrink-0">Close</button>
                 </div>`;
             document.body.appendChild(modal);
             modal.querySelector('#admin-changelog-close')?.addEventListener('click', () => {
@@ -16405,8 +16405,16 @@ const Admin = {
                 if (typeof window.closeSmoothModal === 'function') window.closeSmoothModal('admin-changelog-modal', true);
                 else modal.classList.add('hidden');
             });
+            const stopBgScroll = (e) => {
+                if (e.target.closest?.('#admin-changelog-notes')) return;
+                e.preventDefault();
+            };
+            modal.addEventListener('touchmove', stopBgScroll, { passive: false });
+            modal.addEventListener('wheel', stopBgScroll, { passive: false });
         }
         modal.style.zIndex = '260';
+        modal.style.overscrollBehavior = 'none';
+        modal.style.touchAction = 'none';
         const title = modal.querySelector('#admin-changelog-title');
         const body = modal.querySelector('#admin-changelog-notes');
         if (title) title.textContent = key || 'Unknown version';

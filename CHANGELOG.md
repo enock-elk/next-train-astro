@@ -2,6 +2,18 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin, Dev Hub, Alerts, Trains near me, community chat, or other hidden-test work. No emoji and no em dashes in What’s New. Keep `APP_VERSION`, `package.json` `version`, and `public/app-version.json` aligned on each release. Changelog / What’s New may be skipped, or the heading may be only **no release notes.** Every bump must add `ADMIN_CHANGELOG[APP_VERSION]` (System Health Build notes).
 
+## V9_09.16.3 — Updates copy, Build notes scroll, Hub flush (16 Sep 2026)
+
+Check for Updates drops “so you leave any stuck copy behind”. Confirm body: downloads the latest app onto this phone, then restarts Next Train. Small line: pinned route stays, look goes back to Classic light.
+
+Admin Build notes (`#admin-changelog-modal`) cap at 85dvh. Notes scroll inside the card (`overflow-y: auto`, `overscroll-behavior: contain`). Backdrop touch/wheel is swallowed unless the pan is on `#admin-changelog-notes`, so Feedback Hub behind the overlay does not move.
+
+Feedback Hub 16.2 stretched `#nt-shell` to `--nt-app-h` and/or painted html/body white, which left a blank slab under the composer. Hub now matches the visual hole (`--nt-shell-top` / `--nt-shell-h`). `nt-full-overlay` only paints a `::before` strip over the URL-bar gap.
+
+The Hub composer docks the same way as Community: `position: fixed; bottom: var(--nt-kb-h)`. Shrinking the overlay to `visualViewport` left the field behind the keyboard on iOS (`position: fixed` stays on the layout viewport). Inner card `transform` is none so the dock is viewport-relative.
+
+What’s New: Check for Updates downloads then restarts; pinned route stays, look goes back to Classic light. Feedback Hub sits flush at the bottom. Typing a message stays above the keyboard.
+
 ## V9_09.16.2 — Feedback Hub full screen, holiday edit, Nolungile spur (16 Sep 2026)
 
 Feedback Hub covers the blue chrome (full overlay, `nt-full-overlay` zeros `--nt-shell-top`). Keyboard still sizes the overlay from the bottom. Dev Mode drops its `p-4` inset.

@@ -690,6 +690,30 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
         overscroll-behavior: contain;
         -webkit-overflow-scrolling: touch;
       }
+      /* Build notes: scroll the notes, not Feedback Hub behind the overlay. */
+      #admin-changelog-modal.fixed {
+        overflow: hidden;
+        overscroll-behavior: none;
+        touch-action: none;
+      }
+      #admin-changelog-modal.fixed > div {
+        max-height: min(85dvh, var(--nt-vv-h, 85dvh));
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+      }
+      #admin-changelog-title,
+      #admin-changelog-close {
+        flex-shrink: 0;
+      }
+      #admin-changelog-notes {
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        -webkit-overflow-scrolling: touch;
+        touch-action: pan-y;
+      }
       body.modal-active #dev-modal {
         inset: 0;
         height: 100dvh;
@@ -1023,20 +1047,30 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
       html.nt-standalone.nt-in-app body.nav-bottom:not(.nt-immersive) #nt-shell {
         background-color: var(--nt-chrome-header);
       }
-      /* Full-screen overlays (Feedback Hub, Dev Mode) cover the blue chrome strip. */
-      html.nt-full-overlay,
-      html.nt-full-overlay body {
-        background-color: var(--nt-canvas, #f9fafb);
+      /* Full-screen overlays: cover the blue URL-bar strip only. Do not paint
+         html/body white or stretch #nt-shell to --nt-app-h — that left a
+         blank slab under Feedback Hub. Hub itself sits in the visual hole. */
+      html.nt-full-overlay::before {
+        content: '';
+        position: fixed;
+        left: 0;
+        right: 0;
+        top: 0;
+        height: var(--nt-shell-top, 0px);
+        background: #fff;
+        z-index: 134;
+        pointer-events: none;
       }
-      html.dark.nt-full-overlay,
-      html.dark.nt-full-overlay body {
+      html.dark.nt-full-overlay::before {
+        background: #111827;
+      }
+      html.nt-full-overlay #nt-shell,
+      html.nt-full-overlay.nt-standalone.nt-in-app body.nav-bottom:not(.nt-immersive) #nt-shell {
+        background-color: #fff;
+      }
+      html.dark.nt-full-overlay #nt-shell,
+      html.dark.nt-full-overlay.nt-standalone.nt-in-app body.nav-bottom:not(.nt-immersive) #nt-shell {
         background-color: #111827;
-      }
-      html.nt-full-overlay #nt-shell {
-        top: 0 !important;
-        height: var(--nt-app-h, 100dvh) !important;
-        max-height: var(--nt-app-h, 100dvh) !important;
-        background-color: var(--nt-canvas, #f9fafb);
       }
       /* Keyboard open: keep the oval at the layout bottom (under the keys), never ride up. */
       html.nt-keyboard.nt-in-app body.nav-bottom:not(.nt-immersive) #bottom-nav.bottom-nav-bar {
@@ -1081,6 +1115,22 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
         max-width: 28rem;
         margin-left: auto;
         margin-right: auto;
+      }
+      /* Feedback Hub composer: same IME dock as Community. iOS ignores
+         visualViewport height on position:fixed overlays, so shrinking the
+         hub sheet left the field behind the keyboard. */
+      html.nt-keyboard #messages-thread-form {
+        position: fixed;
+        left: 0;
+        right: 0;
+        bottom: var(--nt-kb-h, 0px);
+        z-index: 136;
+        width: 100%;
+        max-width: none;
+        margin: 0;
+      }
+      html.nt-keyboard #messages-thread-modal > div {
+        transform: none !important;
       }
       html.nt-in-app body.nav-bottom:not(.nt-immersive) #offline-wrapper:not(.hidden) {
         position: absolute;
@@ -1175,7 +1225,7 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
         height: var(--nt-app-h, 100dvh);
         max-height: var(--nt-app-h, 100dvh);
       }
-      /* Send Feedback follows the keyboard hole. Feedback Hub covers the chrome. */
+      /* Send Feedback follows the keyboard hole. Feedback Hub matches #nt-shell. */
       #nt-shell #feedback-modal.fixed {
         inset: unset !important;
         top: var(--nt-feedback-vv-top, var(--nt-vv-top, 0px)) !important;
@@ -1187,12 +1237,12 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
       }
       #nt-shell #messages-thread-modal.fixed {
         inset: unset !important;
-        top: 0 !important;
+        top: var(--nt-feedback-vv-top, var(--nt-shell-top, 0px)) !important;
         left: 0 !important;
         right: 0 !important;
         bottom: auto !important;
-        height: var(--nt-feedback-vv-height, var(--nt-app-h, 100dvh)) !important;
-        max-height: var(--nt-feedback-vv-height, var(--nt-app-h, 100dvh)) !important;
+        height: var(--nt-feedback-vv-height, var(--nt-shell-h, var(--nt-vv-h, 100dvh))) !important;
+        max-height: var(--nt-feedback-vv-height, var(--nt-shell-h, var(--nt-vv-h, 100dvh))) !important;
       }
       #nt-shell #account-modal.fixed {
         inset: 0 !important;

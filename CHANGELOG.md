@@ -2,6 +2,12 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin, Dev Hub, Alerts, Trains near me, community chat, or other hidden-test work. No emoji and no em dashes in What’s New. Keep `APP_VERSION`, `package.json` `version`, and `public/app-version.json` aligned on each release. Changelog / What’s New may be skipped, or the heading may be only **no release notes.** Every bump must add `ADMIN_CHANGELOG[APP_VERSION]` (System Health Build notes).
 
+## V9_09.16.4 — Feedback Hub fills the frame on first open (16 Sep 2026)
+
+16.3 sized Hub by copying `--nt-shell-h` into inline `height`. Chrome’s first `visualViewport` is shorter than the painted frame, so the composer sat above a blank strip. Tapping the field and closing the keyboard remeasured and hid the strip.
+
+Hub now pins `top: var(--nt-shell-top); bottom: 0` with `height: auto`. Inline top/height are cleared. The composer still docks to `--nt-kb-h` like Community. No new What’s New card.
+
 ## V9_09.16.3 — Updates copy, Build notes scroll, Hub flush (16 Sep 2026)
 
 Check for Updates drops “so you leave any stuck copy behind”. Confirm body: downloads the latest app onto this phone, then restarts Next Train. Small line: pinned route stays, look goes back to Classic light.

@@ -294,18 +294,16 @@ function syncFeedbackModalViewport() {
         if (!modal) return;
         const card = modal.querySelector(':scope > div');
         if (id === 'messages-thread-modal') {
-            // Same box as #nt-shell. The composer docks to --nt-kb-h like
-            // Community; shrinking this overlay to visualViewport left the
-            // field behind the keyboard on iOS.
-            const rootStyle = getComputedStyle(document.documentElement);
-            const shellTop = Math.max(0, Math.round(parseFloat(rootStyle.getPropertyValue('--nt-shell-top')) || 0));
-            const shellH = Math.max(240, Math.round(parseFloat(rootStyle.getPropertyValue('--nt-shell-h')) || 0));
-            modal.style.setProperty('--nt-feedback-vv-height', `${shellH}px`);
-            modal.style.setProperty('--nt-feedback-vv-top', `${shellTop}px`);
-            modal.style.top = `${shellTop}px`;
-            modal.style.height = `${shellH}px`;
-            modal.style.maxHeight = `${shellH}px`;
-            modal.style.bottom = 'auto';
+            // Do not copy --nt-shell-h into inline height. Chrome's first
+            // visualViewport is shorter than the painted frame; those pixels
+            // stuck until a keyboard cycle remeasured and the slab vanished.
+            // CSS pins top: --nt-shell-top; bottom: 0 so the sheet fills.
+            modal.style.removeProperty('--nt-feedback-vv-height');
+            modal.style.removeProperty('--nt-feedback-vv-top');
+            modal.style.removeProperty('top');
+            modal.style.removeProperty('height');
+            modal.style.removeProperty('max-height');
+            modal.style.removeProperty('bottom');
             modal.style.paddingBottom = '0px';
             if (card) {
                 card.style.maxHeight = '100%';
@@ -1508,8 +1506,9 @@ export async function openMessagesThread(replyToAcknowledge = latestPendingAdmin
     }
     paintThreadContactRow();
     setTimeout(() => {
-        syncFeedbackModalViewport();
+        try { window.ntFitAppViewport?.(); } catch { /* ignore */ }
         openSmoothModal('messages-thread-modal');
+        syncFeedbackModalViewport();
         autosizeMessagesThreadInput();
     }, 50);
     try {

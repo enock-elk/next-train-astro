@@ -5,6 +5,10 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_09.16.4': [
+        'Feedback Hub slab: 16.3 copied --nt-shell-h into inline height on open. Chrome’s first visualViewport is shorter than the painted frame, so the composer sat above a blank strip until a keyboard cycle remeasured. Hub CSS is now top: --nt-shell-top; bottom: 0; height: auto. JS removes leftover inline geometry. Keyboard still docks the composer to --nt-kb-h and keeps lastShellH like Community.',
+        'forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
+    ],
     'V9_09.16.3': [
         'Check for Updates copy: drop “so you leave any stuck copy behind”. Body is download-then-restart; small line is pinned route stays, look goes back to Classic light.',
         'Admin Build notes card (#admin-changelog-modal) is max 85dvh, notes overflow-y auto with overscroll-contain. Backdrop touchmove/wheel preventDefault unless the pan is on #admin-changelog-notes, so Feedback Hub behind does not scroll.',

@@ -4,8 +4,8 @@
  * Keep config in sync with src/lib/firebase-boot.js.
  */
 /* eslint-disable no-undef */
-importScripts('https://www.gstatic.com/firebasejs/11.6.0/firebase-app-compat.js');
-importScripts('https://www.gstatic.com/firebasejs/11.6.0/firebase-messaging-compat.js');
+importScripts('https://www.gstatic.com/firebasejs/12.15.0/firebase-app-compat.js');
+importScripts('https://www.gstatic.com/firebasejs/12.15.0/firebase-messaging-compat.js');
 
 try {
   firebase.initializeApp({

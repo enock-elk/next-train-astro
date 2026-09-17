@@ -13,6 +13,9 @@ import { NOTIFY_PREF_KEY, getNotifyPref, syncNotifyUi } from './prefs.js';
 
 const SUB_ROUTES_KEY = 'notifyRouteIds';
 const TOKEN_CACHE_KEY = 'fcmTokenCache';
+const REGISTRATION_TYPE_CACHE_KEY = 'fcmRegistrationType';
+let fidListenerBound = false;
+const fidWaiters = new Set();
 
 function getVapidKey() {
     try {
@@ -62,7 +65,7 @@ export function ensureCurrentRouteSubscribed() {
 
 async function ensureMessaging() {
     await bootFirebase();
-    if (!window.firebaseMessaging || !window.firebaseGetToken) return null;
+    if (!window.firebaseMessaging || (!window.firebaseRegisterMessaging && !window.firebaseGetToken)) return null;
     return window.firebaseMessaging;
 }
 
@@ -80,9 +83,10 @@ async function ensurePushAuth() {
     return null;
 }
 
-async function persistToken(token, { enabled = true } = {}) {
+async function persistToken(token, { enabled = true, registrationType = 'token' } = {}) {
     if (!token) return;
     safeStorage.setItem(TOKEN_CACHE_KEY, token);
+    safeStorage.setItem(REGISTRATION_TYPE_CACHE_KEY, registrationType);
     const deviceId = getDeviceId();
     const acct = $account.get();
     const firebaseUser = await ensurePushAuth();
@@ -90,6 +94,7 @@ async function persistToken(token, { enabled = true } = {}) {
     const routeIds = getNotifyRouteIds();
     const payload = {
         token,
+        registrationType,
         updatedAt: Date.now(),
         deviceId,
         uid: firebaseUser.uid,
@@ -129,8 +134,46 @@ async function persistToken(token, { enabled = true } = {}) {
     }
 }
 
+function resolveFidWaiters(fid) {
+    for (const finish of [...fidWaiters]) finish(fid);
+    fidWaiters.clear();
+}
+
+function bindFidRegistration(messaging) {
+    if (fidListenerBound || !window.firebaseOnRegistered) return false;
+    fidListenerBound = true;
+    window.firebaseOnRegistered(messaging, (fid) => {
+        if (!fid) return;
+        persistToken(fid, {
+            enabled: getNotifyPref(),
+            registrationType: 'fid',
+        }).then(() => resolveFidWaiters(fid)).catch((error) => {
+            console.warn('FCM FID persistence failed', error);
+            resolveFidWaiters(null);
+        });
+    });
+    return true;
+}
+
+function waitForRegisteredFid(timeoutMs = 12_000) {
+    return new Promise((resolve) => {
+        let done = false;
+        const finish = (fid) => {
+            if (done) return;
+            done = true;
+            clearTimeout(timer);
+            fidWaiters.delete(finish);
+            resolve(fid || null);
+        };
+        const timer = setTimeout(() => finish(null), timeoutMs);
+        fidWaiters.add(finish);
+    });
+}
+
 /**
- * Request FCM token using the existing PWA service worker registration.
+ * Register FCM using the existing PWA service worker. Current Firebase SDKs
+ * return an Installation ID through onRegistered(); legacy getToken remains a
+ * migration fallback for older cached bundles.
  * @returns {Promise<string|null>}
  */
 export async function registerPushToken() {
@@ -159,11 +202,18 @@ export async function registerPushToken() {
         if ('serviceWorker' in navigator) {
             registration = await navigator.serviceWorker.ready;
         }
-        const token = await window.firebaseGetToken(messaging, {
+        const options = {
             vapidKey,
             ...(registration ? { serviceWorkerRegistration: registration } : {}),
-        });
-        if (token) await persistToken(token);
+        };
+        if (window.firebaseRegisterMessaging && window.firebaseOnRegistered) {
+            bindFidRegistration(messaging);
+            const fidPromise = waitForRegisteredFid();
+            await window.firebaseRegisterMessaging(messaging, options);
+            return await fidPromise;
+        }
+        const token = await window.firebaseGetToken(messaging, options);
+        if (token) await persistToken(token, { registrationType: 'token' });
         return token || null;
     } catch (e) {
         console.warn('FCM getToken failed', e);
@@ -223,7 +273,10 @@ export async function disablePushNotifications() {
     const token = safeStorage.getItem(TOKEN_CACHE_KEY);
     if (token) {
         try {
-            await persistToken(token, { enabled: false });
+            await persistToken(token, {
+                enabled: false,
+                registrationType: safeStorage.getItem(REGISTRATION_TYPE_CACHE_KEY) === 'fid' ? 'fid' : 'token',
+            });
         } catch (e) {
             console.warn('FCM subscription disable failed', e);
         }

@@ -37,7 +37,14 @@ import {
     equalTo,
     limitToLast,
 } from 'firebase/database';
-import { getMessaging, getToken, onMessage, isSupported as isMessagingSupported } from 'firebase/messaging';
+import {
+    getMessaging,
+    getToken,
+    onMessage,
+    onRegistered,
+    register as registerMessaging,
+    isSupported as isMessagingSupported,
+} from 'firebase/messaging';
 
 const firebaseConfig = {
     apiKey: 'AIzaSyAU303BRMrH3A5n5zbJH4MVwWdkfznqxMY',
@@ -111,6 +118,8 @@ export async function bootFirebase() {
                 window.firebaseMessaging = getMessaging(app);
                 window.firebaseGetToken = getToken;
                 window.firebaseOnMessage = onMessage;
+                window.firebaseOnRegistered = onRegistered;
+                window.firebaseRegisterMessaging = registerMessaging;
             }
         } catch (msgErr) {
             console.warn('Firebase Messaging unavailable', msgErr);

@@ -2,7 +2,7 @@
 
 The app receives Firebase Cloud Messaging (FCM) notifications through its existing
 Astro/Workbox service worker. The `nexttrain-community` Worker is the trusted
-sender. Registration tokens stay in the existing RTDB
+sender. Firebase Installation IDs (with legacy-token compatibility) stay in the existing RTDB
 `push_subscriptions/{deviceId}` tree.
 
 Never put a service-account private key in Astro, GitHub Pages, Cloudflare Pages,
@@ -103,5 +103,5 @@ Android Chrome and installed PWAs support this flow. On iPhone/iPad, Web Push
 requires iOS/iPadOS 16.4 or later and Next Train added to the Home Screen.
 
 Turning Notifications off marks the stored registration disabled. Each app
-startup refreshes enabled registrations, and the sender removes tokens FCM
-reports as invalid.
+startup refreshes enabled registrations, and the sender removes registrations
+FCM reports as invalid.

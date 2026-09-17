@@ -48,6 +48,9 @@ assert.equal(message.webpush.fcm_options.link, request.link);
 assert.equal(message.webpush.headers.Urgency, 'high');
 assert.equal(message.webpush.notification.tag, 'test-tag');
 assert.match(message.webpush.notification.icon, /icon-192\.png$/);
+const fidMessage = buildFcmMessage('firebase-installation-id', request, 'fid-tag', 'fid');
+assert.equal(fidMessage.fid, 'firebase-installation-id');
+assert.equal('token' in fidMessage, false, 'new registrations use the current FID target');
 
 class FakeRtdb {
     constructor(tree) {
@@ -152,9 +155,13 @@ assert.match(client, /enabled:\s*!!enabled/);
 assert.match(client, /persistToken\(token,\s*\{\s*enabled:\s*false\s*\}\)/);
 assert.match(client, /firebaseSignInAnonymously/);
 assert.match(client, /!isOperatorSession\(\)\s*&&\s*!isFeatureEnabled/, 'operators can register before commuter push is enabled');
+assert.match(client, /firebaseRegisterMessaging/);
+assert.match(client, /firebaseOnRegistered/);
+assert.match(client, /registrationType:\s*'fid'/);
 assert.match(bridge, /firebase-messaging-compat\.js/);
 assert.match(rules, /"push_subscriptions"/);
 assert.match(rules, /newData\.child\('uid'\)\.val\(\) === auth\.uid/);
+assert.match(rules, /newData\.child\('registrationType'\)\.val\(\) === 'fid'/);
 assert.match(workerConfig, /"FIREBASE_PROJECT_ID":\s*"metrorail-next-train"/);
 for (const workflow of [productionDeploy, productionBuild, githubPreview, labDeploy]) {
     assert.match(workflow, /PUBLIC_FIREBASE_VAPID_KEY:\s*\$\{\{\s*secrets\.PUBLIC_FIREBASE_VAPID_KEY\s*\}\}/);

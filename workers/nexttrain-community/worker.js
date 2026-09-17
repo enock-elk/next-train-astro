@@ -888,9 +888,9 @@ export function pushSubscriptionMatches(subscription, request) {
     return routes.map(String).includes(request.target);
 }
 
-export function buildFcmMessage(token, request, tag = `nt-push-${Date.now()}`) {
+export function buildFcmMessage(registrationId, request, tag = `nt-push-${Date.now()}`, registrationType = 'token') {
     return {
-        token,
+        [registrationType === 'fid' ? 'fid' : 'token']: registrationId,
         notification: {
             title: request.title,
             body: request.body,
@@ -925,7 +925,7 @@ function invalidFcmToken(data) {
         || details.some((detail) => ['UNREGISTERED', 'INVALID_ARGUMENT'].includes(detail?.errorCode));
 }
 
-async function sendOneFcm(env, accessToken, token, request) {
+async function sendOneFcm(env, accessToken, registrationId, request, registrationType = 'token') {
     const projectId = String(env.FIREBASE_PROJECT_ID || '').trim();
     if (!projectId) throw new Error('FIREBASE_PROJECT_ID missing');
     const response = await fetch(
@@ -936,7 +936,14 @@ async function sendOneFcm(env, accessToken, token, request) {
                 Authorization: `Bearer ${accessToken}`,
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ message: buildFcmMessage(token, request, `nt-push-${crypto.randomUUID()}`) }),
+            body: JSON.stringify({
+                message: buildFcmMessage(
+                    registrationId,
+                    request,
+                    `nt-push-${crypto.randomUUID()}`,
+                    registrationType
+                ),
+            }),
         }
     );
     let data = null;
@@ -977,13 +984,18 @@ export async function deliverPushNotifications(env, raw, options = {}) {
         ? null
         : await getGoogleAccessToken(env.FIREBASE_CLIENT_EMAIL, env.FIREBASE_PRIVATE_KEY);
     const sendOne = options.sendOne
-        || ((token) => sendOneFcm(env, accessToken, token, request));
+        || ((registrationId, subscription) => (
+            sendOneFcm(env, accessToken, registrationId, request, subscription.registrationType)
+        ));
     const results = [];
     for (let i = 0; i < limited.length; i += 40) {
         const batch = limited.slice(i, i + 40);
         const settled = await Promise.all(batch.map(async (entry) => {
             try {
-                return { entry, ...(await sendOne(entry.subscription.token, request)) };
+                return {
+                    entry,
+                    ...(await sendOne(entry.subscription.token, entry.subscription, request)),
+                };
             } catch (error) {
                 return { entry, ok: false, status: 0, error: error?.message || 'FCM send failed' };
             }

@@ -152,7 +152,7 @@ assert.match(admin, /\/admin\/notifications\/send/);
 assert.match(admin, /Count devices/);
 assert.match(client, /region:\s*\$userRegion\.get\(\)/);
 assert.match(client, /enabled:\s*!!enabled/);
-assert.match(client, /persistToken\(token,\s*\{\s*enabled:\s*false\s*\}\)/);
+assert.match(client, /persistToken\(token,\s*\{[\s\S]{0,120}enabled:\s*false[\s\S]{0,120}registrationType:/);
 assert.match(client, /firebaseSignInAnonymously/);
 assert.match(client, /!isOperatorSession\(\)\s*&&\s*!isFeatureEnabled/, 'operators can register before commuter push is enabled');
 assert.match(client, /firebaseRegisterMessaging/);

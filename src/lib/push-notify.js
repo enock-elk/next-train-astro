@@ -1,6 +1,6 @@
 /**
  * Web Push / FCM bootstrap for corridor alerts + optional room activity.
- * Requires PUBLIC_FIREBASE_VAPID_KEY at build time for getToken().
+ * Requires PUBLIC_FIREBASE_VAPID_KEY at build time for FID registration.
  * Falls back to Notification API permission + local pref when VAPID missing.
  */
 import { DYNAMIC_BASE_URL, APP_VERSION } from './config.js';

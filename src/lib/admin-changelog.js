@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_09.17.16': [
+        'FCM notification delivery: push_subscriptions records authenticated owner uid, region, route ids, environment, enabled state, and refresh time. Turning Notifications off marks the registration disabled. nexttrain-community adds an allowlisted-admin-only HTTP v1 sender with all / region / route targeting, production / lab separation, TTL and urgency, invalid-token cleanup, and Next Train-only click links. Dev Hub adds a Notifications panel with audience count and confirmed send. Production, GitHub preview, and lab workflows inject PUBLIC_FIREBASE_VAPID_KEY. Firebase rules bind each subscription to auth.uid and its device key. No What’s New. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
+    ],
     'V9_09.17.15': [
         'Applied operator gold-track patches into public/tracks: GP pta-dewildt (refined export 571 verts, PRETORIA > … > WINTERSNEST > ROSSLYN > GA-RANKUWA > TAILLARDSHOOP > DE WILDT), herc-koed (214→218; HERCULES > CAPITAL PARK > GEZINA > DEERNESS > VILLIERIA > PIERNEEFSRUS > QUEENSWOOD > KOEDOESPOORT), germ-kwesine (340 verts; GERMISTON > … > KWESINE), pta-saul (402 verts; PRETORIA > PRETORIA WES > MITCHELLSTRAAT > KALAFONG > ATTERIDGEVILLE > SAULSVILLE, Schuttestraat dropped to match the export), jhb-soweto (full Park Station to Naledi gold, 558 verts; JOHANNESBURG > BRAAMFONTEIN > MAYFAIR > GROSVENOR > LANGLAAGTE > … > NALEDI). KZN kzn-bridgecity (1095→980 verts; BEREA ROAD > … > BRIDGE CITY). Exports take priority over STATIC. fill-chords / smooth / audit stay held. No What’s New. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
     ],

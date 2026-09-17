@@ -2,6 +2,8 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin, Dev Hub, Alerts, Trains near me, community chat, or other hidden-test work. No emoji and no em dashes in What’s New. Keep `APP_VERSION`, `package.json` `version`, and `public/app-version.json` aligned on each release. Changelog / What’s New may be skipped, or the heading may be only **no release notes.** Every bump must add `ADMIN_CHANGELOG[APP_VERSION]` (System Health Build notes).
 
+## V9_09.17.16 — no release notes
+
 ## V9_09.17.15 — GP and KZN gold-track patches (17 Sep 2026)
 
 Applied operator editor exports for Pretoria De Wildt, Hercules Koedoespoort, Germiston Kwesine, Pretoria Saulsville, Johannesburg Naledi, and Berea Road Bridge City. Pretoria De Wildt gold runs Pretoria to De Wildt. Station lists follow the exports (Pretoria Saulsville drops Schuttestraat). Johannesburg Naledi gold runs Park Station to Naledi. No new What’s New card.

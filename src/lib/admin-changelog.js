@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_09.17.5': [
+        'Applied a second operator gold-track patch for Pretoria ↔ Pienaarspoort (pta-pien) into public/tracks/rail-tracks-GP.geojson. Station list is unchanged (Greenview still on, Waltloo still off). Vertex count stays 525; worst vertex move vs the previous bake ~136 m. KZN untouched. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
+    ],
     'V9_09.17.4': [
         'Applied seven operator WC gold-track patches into public/tracks/rail-tracks-WC.geojson: bellville-mutual, ct-well, ct-malm, ct-chrishani, ct-kapteinsklip, ct-nolu, ct-eerst. Geometry is the editor export. ct-well and ct-eerst keep the previous station lists (the Save JSON dumped the shared Northern Line sheet, Stellenbosch/Strand included, which would paint the 194 km skeleton again). bellville-mutual bake now ends at Mutual to match the drawn line. Kapteinsklip station order is still Mutual, not Ndabeni/Pinelands. KZN untouched. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
     ],

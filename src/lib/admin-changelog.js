@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_09.17.3': [
+        'Applied the operator gold-track patch for Cape Town ↔ Chris Hani (ct-chrishani) into public/tracks/rail-tracks-WC.geojson. Station order is now CAPE TOWN > WOODSTOCK > SALT RIVER > KOEBERG RD > MAITLAND > MUTUAL > LANGA > … > CHRIS HANI (bake had skipped Woodstock, Salt River, Koeberg Rd). Vertex count stays 929; worst vertex move ~1110 m. Kapteinsklip and Nolungile bakes are untouched. KZN untouched. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
+    ],
     'V9_09.17.2': [
         'Applied the operator gold-track patch for Pretoria ↔ Pienaarspoort (pta-pien) into public/tracks/rail-tracks-GP.geojson. GREENVIEW is back on the baked station list. Geometry is the editor export (max vertex move ~287 m). One Walker→Loftus vertex grazes the Dougall Gautrain probe at 34 m; the hop is not rewritten further. KZN untouched. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
     ],

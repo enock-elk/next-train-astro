@@ -292,11 +292,26 @@ export function findingsFromPairDeltas(pairDeltas, ctx = {}, opts = {}) {
             to,
             lo,
             hi,
+            spreadMin: hi - lo,
             samples,
             ...ctx,
         });
     }
     return findings;
+}
+
+/** Keep delta-variance warnings together, largest minute spread first. */
+export function sortQaFindings(findings = []) {
+    const severityRank = { error: 0, warn: 1, info: 2 };
+    return findings.sort((a, b) => {
+        const severity = (severityRank[a.severity] ?? 9) - (severityRank[b.severity] ?? 9);
+        if (severity) return severity;
+        const aDelta = a.code === 'DELTA_VARIANCE';
+        const bDelta = b.code === 'DELTA_VARIANCE';
+        if (aDelta !== bDelta) return aDelta ? -1 : 1;
+        if (aDelta) return (b.spreadMin ?? 0) - (a.spreadMin ?? 0);
+        return 0;
+    });
 }
 
 /**
@@ -411,8 +426,7 @@ export function runScheduleQaReport(db, region, parseJSONSchedule) {
         }
     });
 
-    const severityRank = { error: 0, warn: 1, info: 2 };
-    findings.sort((a, b) => (severityRank[a.severity] ?? 9) - (severityRank[b.severity] ?? 9));
+    sortQaFindings(findings);
 
     return {
         findings,

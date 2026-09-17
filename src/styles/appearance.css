@@ -23,7 +23,7 @@
  * accent classes follow the pack. Alert semantics (red / amber / yellow / green
  * / orange) are NOT remapped — disruptions stay fixed.
  *
- * Packs: classic · midnight · contrast · signal · ember · earthy
+ * Packs: classic · midnight · contrast · signal · earthy
  * ---------------------------------------------------------------------------
  */
 
@@ -305,76 +305,6 @@ html[data-colour-pack="signal"].dark {
   --nt-theme-meta: #064e3b;
 }
 
-/* Ember — pale clay paper; ink on clay CTAs (not chocolate fills) */
-html[data-colour-pack="ember"] {
-  --nt-primary: #e8ddd0;
-  --nt-primary-hover: #dccfc0;
-  --nt-primary-fg: #3a2a1c;
-  --nt-primary-soft: #f4efe9;
-  --nt-canvas: #f5f2ee;
-  --nt-surface: #faf8f5;
-  --nt-surface-muted: #f3efe9;
-  --nt-chrome-header: #f0ebe5;
-  --nt-chrome-header-border: #e2dbd3;
-  --nt-chrome-nav: #ebe6df;
-  --nt-chrome-nav-border: #d8d1c8;
-  --nt-chrome-fg: #4a3224;
-  --nt-chrome-muted: #2a2118;
-  --nt-text: #2a2118;
-  --nt-text-muted: #2a2118;
-  --nt-text-faint: #3d3228;
-  --nt-border: #e2dbd3;
-  --nt-theme-meta: #f0ebe5;
-  --nt-accent: #8a6a4e;
-  --nt-chrome-nav-active: color-mix(in srgb, var(--nt-chrome-fg) 16%, var(--nt-chrome-nav));
-
-  --nt-blue-50: 248 245 241;
-  --nt-blue-100: 240 235 228;
-  --nt-blue-200: 226 218 206;
-  --nt-blue-300: 196 176 152;
-  --nt-blue-400: 168 140 112;
-  --nt-blue-500: 138 108 80;
-  --nt-blue-600: 232 220 206;
-  --nt-blue-700: 138 108 80;
-  --nt-blue-800: 58 46 36;
-  --nt-blue-900: 42 32 24;
-}
-
-html.dark[data-colour-pack="ember"],
-html[data-colour-pack="ember"].dark {
-  --nt-primary: #c4926a;
-  --nt-primary-hover: #d4a888;
-  --nt-primary-fg: #1c1612;
-  --nt-primary-soft: rgba(80, 56, 36, 0.45);
-  --nt-canvas: #100e0c;
-  --nt-surface: #322c26;
-  --nt-surface-muted: #1c1916;
-  --nt-chrome-header: #352e28;
-  --nt-chrome-header-border: #4a4038;
-  --nt-chrome-nav: #0c0b0a;
-  --nt-chrome-nav-border: #2a2420;
-  --nt-chrome-fg: #e8cfc0;
-  --nt-chrome-muted: #c4a392;
-  --nt-text: #f4ebe3;
-  --nt-text-muted: #c4a392;
-  --nt-text-faint: #a88874;
-  --nt-border: #4a4038;
-  --nt-theme-meta: #352e28;
-  --nt-accent: #c4926a;
-  --nt-chrome-nav-active: color-mix(in srgb, #fff 12%, var(--nt-chrome-nav));
-
-  --nt-blue-50: 53 46 40;
-  --nt-blue-100: 62 52 44;
-  --nt-blue-200: 74 62 52;
-  --nt-blue-300: 120 88 60;
-  --nt-blue-400: 168 120 80;
-  --nt-blue-500: 196 146 106;
-  --nt-blue-600: 196 146 106;
-  --nt-blue-700: 212 176 144;
-  --nt-blue-800: 224 200 176;
-  --nt-blue-900: 244 235 227;
-}
-
 /*
  * Earthy — editorial cream + sage (Understanding Burnout palette).
  * Eggshell paper, muted sage, dusty terracotta, soft charcoal.
@@ -586,7 +516,7 @@ html.dark #bottom-nav .bottom-nav-item.is-active {
   letter-spacing: 0.01em;
 }
 
-/* Brand-left header: solid pack primary (Ember → amber/orange) */
+/* Brand-left header: solid pack primary */
 #tab-sliding-indicator {
   background-color: var(--nt-primary) !important;
 }
@@ -647,29 +577,22 @@ html[data-colour-pack="contrast"] .bottom-nav-item.is-active {
   margin-inline: auto;
   box-shadow: 0 0 0 4px color-mix(in srgb, var(--nt-primary) 18%, transparent), 0 10px 22px color-mix(in srgb, var(--nt-primary) 32%, transparent);
 }
-html[data-colour-pack="earthy"] #view-full-timetable-btn,
-html[data-colour-pack="ember"] #view-full-timetable-btn {
+html[data-colour-pack="earthy"] #view-full-timetable-btn {
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--nt-primary) 10%, transparent), 0 4px 12px color-mix(in srgb, var(--nt-primary) 16%, transparent);
 }
 
 /* Pale --nt-blue-600 is the paper CTA wash. Labels (Zone, Saturday,
    Departs in) use text-blue-600 / text-blue-400 and must stay ink. */
-html[data-colour-pack="earthy"]:not(.dark) .text-blue-600,
-html[data-colour-pack="ember"]:not(.dark) .text-blue-600 {
+html[data-colour-pack="earthy"]:not(.dark) .text-blue-600 {
   color: rgb(var(--nt-blue-800)) !important;
 }
 html[data-colour-pack="earthy"].dark .text-blue-600,
 html[data-colour-pack="earthy"].dark .text-blue-500,
 html[data-colour-pack="earthy"].dark .text-blue-400,
-html[data-colour-pack="earthy"].dark .text-blue-300,
-html[data-colour-pack="ember"].dark .text-blue-600,
-html[data-colour-pack="ember"].dark .text-blue-500,
-html[data-colour-pack="ember"].dark .text-blue-400,
-html[data-colour-pack="ember"].dark .text-blue-300 {
+html[data-colour-pack="earthy"].dark .text-blue-300 {
   color: rgb(var(--nt-blue-800)) !important;
 }
-html[data-colour-pack="earthy"].dark .nt-fare-zone-chip,
-html[data-colour-pack="ember"].dark .nt-fare-zone-chip {
+html[data-colour-pack="earthy"].dark .nt-fare-zone-chip {
   background-color: var(--nt-surface) !important;
   border: 1px solid var(--nt-border);
 }
@@ -1230,7 +1153,7 @@ a.nt-alert-source:focus-visible {
 
 /* Idle/info bell: a real disc on every pack. Classic dark used
    --nt-primary-soft navy on a navy header so the circle vanished.
-   Earthy/Ember used --nt-surface on a matching header. Light disc +
+   Earthy used --nt-surface on a matching header. Light disc +
    dark ink matches Classic light. Critical/warning stay red/amber. */
 #notice-bell.nt-bell-info {
   background-color: #ffffff !important;
@@ -1245,7 +1168,6 @@ html.dark #notice-bell.nt-bell-info {
 html[data-colour-pack="midnight"] #notice-bell.nt-bell-info,
 html[data-colour-pack="contrast"] #notice-bell.nt-bell-info,
 html[data-colour-pack="signal"] #notice-bell.nt-bell-info,
-html[data-colour-pack="ember"] #notice-bell.nt-bell-info,
 html[data-colour-pack="earthy"] #notice-bell.nt-bell-info {
   box-shadow: 0 0 0 1.5px color-mix(in srgb, #000 26%, transparent), 0 1px 3px color-mix(in srgb, #000 14%, transparent);
 }
@@ -1290,10 +1212,7 @@ html.dark .planner-share-slot > button {
 }
 html[data-colour-pack="earthy"].dark #planner-back-btn,
 html[data-colour-pack="earthy"].dark #planner-header-badge,
-html[data-colour-pack="earthy"].dark .planner-share-slot > button,
-html[data-colour-pack="ember"].dark #planner-back-btn,
-html[data-colour-pack="ember"].dark #planner-header-badge,
-html[data-colour-pack="ember"].dark .planner-share-slot > button {
+html[data-colour-pack="earthy"].dark .planner-share-slot > button {
   color: rgb(var(--nt-blue-800)) !important;
 }
 

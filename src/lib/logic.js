@@ -23,7 +23,7 @@ import {
     simUsesSpecificDate, isRealTime, usesSaturdayScheduleSheet,
     pruneExclusionsTree, readCachedExclusions, writeCachedExclusions,
     KILLSWITCH_APPLIED_KEY, KILLSWITCH_PENDING_KEY,
-    newestUnappliedKillswitchTimestamp, createAsyncMutex
+    newestUnappliedKillswitchTimestamp, createAsyncMutex, flattenPublicHolidays
 } from './utils.js';
 import { showToast, hideOfflineChrome, scheduleOfflineChrome, openSmoothModal, closeSmoothModal, nudgeHomeAutoNotices } from './ui.js';
 import { resolveHolidayDayType } from './holiday-approvals.js';
@@ -1114,17 +1114,7 @@ export async function loadAllSchedules(force = false) {
             const mergedDb = { ...db, ...regionalData };
             delete mergedDb.gauteng; delete mergedDb.westerncape; delete mergedDb.kzn; delete mergedDb.easterncape; delete mergedDb.schedules;
             // WC pub sheets live under westerncape/public_holidays — flatten for targetDB[key] lookups.
-            // Keep regional lastUpdated intact; stash pub stamp for Smart Sync (root lastUpdated is not bumped by pub sync).
-            if (mergedDb.public_holidays && typeof mergedDb.public_holidays === 'object' && !Array.isArray(mergedDb.public_holidays)) {
-                const pubNode = mergedDb.public_holidays;
-                const rootLastUpdated = mergedDb.lastUpdated;
-                const pubLastUpdated = pubNode.lastUpdated;
-                Object.assign(mergedDb, pubNode);
-                delete mergedDb.public_holidays;
-                if (rootLastUpdated != null) mergedDb.lastUpdated = rootLastUpdated;
-                if (pubLastUpdated != null) mergedDb.publicHolidaysLastUpdated = pubLastUpdated;
-            }
-            return mergedDb;
+            return flattenPublicHolidays(mergedDb);
         };
 
         if (!currentRoute.isActive) return;

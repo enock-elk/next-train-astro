@@ -374,8 +374,10 @@ assert(admin.includes('id="sched-qa-delta-modal"') || admin.includes("id = 'sche
 assert(admin.includes('data-qa-delta-idx'), 'delta cards are clickable');
 
 const qa = readFileSync(new URL('../src/lib/schedule-qa.js', import.meta.url), 'utf8');
-assert(qa.includes('SATURDAY_PLACEHOLDER_ROUTES'), 'QA engine imports Saturday placeholders');
-assert(qa.includes('isPlaceholderSat'), 'QA skips expected empty Saturday sheets');
+assert(qa.includes('flattenPublicHolidays'), 'QA flattens WC public_holidays before sheetKeys lookup');
+assert(admin.includes('ntAdminUnwrapRegionScheduleDb'), 'admin unwraps region files then flattens WC pub sheets');
+assert(admin.includes('ntAdminFlattenPublicHolidays'), 'admin Deep Scan / QA / zone audit flatten public_holidays');
+assert(admin.includes('route.sheetKeys.pub_to_a'), 'admin station walk includes WC pub sheets');
 assert(QA_ISSUE_TYPES.some((t) => t.code === 'GHOST_STATION'), 'QA lists junk station rows');
 {
     const ghost = scanScheduleSheet({
@@ -453,6 +455,28 @@ assert(
     hercSatFindings(liveSatQa).length > 0 && !hercSatFindings(liveSatQa).some((f) => f.code === 'NO_TRAINS'),
     'placeholder Saturday sheets with live trains are still scanned'
 );
+
+{
+    const pubRows = [
+        { STATION: 'CAPE TOWN STATION', COORDINATES: '-33.92,18.42', '3500': '06:00' },
+        { STATION: 'KAPTEINSKLIP STATION', COORDINATES: '-34.04,18.68', '3500': '06:40' },
+    ];
+    const nestedPubQa = runScheduleQaReport({
+        kap_to_ct_weekday: pubRows,
+        ct_to_kap_weekday: pubRows,
+        kap_to_ct_sat: pubRows,
+        ct_to_kap_sat: pubRows,
+        public_holidays: {
+            kap_to_ct_pub: pubRows,
+            ct_to_kap_pub: pubRows,
+        },
+    }, 'WC', null);
+    const kapPubMissing = (nestedPubQa.findings || []).filter((f) => (
+        f.routeId === 'ct-kapteinsklip' && f.code === 'MISSING_SHEET' && /_pub$/.test(String(f.sheetKey || ''))
+    ));
+    assert(kapPubMissing.length === 0, 'QA finds WC pub sheets nested under public_holidays');
+    assert(nestedPubQa.summary.sheetsScanned >= 6, 'QA scans weekday, Saturday, and pub sheets for Kapteinsklip');
+}
 
 if (failed) {
     console.error(`\nverify-admin-panels failed: ${failed} check(s)`);

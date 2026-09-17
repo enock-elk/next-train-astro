@@ -2,6 +2,10 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin, Dev Hub, Alerts, Trains near me, community chat, or other hidden-test work. No emoji and no em dashes in What’s New. Keep `APP_VERSION`, `package.json` `version`, and `public/app-version.json` aligned on each release. Changelog / What’s New may be skipped, or the heading may be only **no release notes.** Every bump must add `ADMIN_CHANGELOG[APP_VERSION]` (System Health Build notes).
 
+## V9_09.17.10 — WC pub flatten in admin QA, Ember retired (17 Sep 2026)
+
+Western Cape public-holiday sheets live under `schedules/westerncape/public_holidays`, not as siblings of weekday/Saturday keys. Deep Network Scan, Schedule QA, Zone Distance Audit, grid-order fetch, and exclusion station lists now flatten that nest (same as the live board). Ember is removed from Options Look; saved Ember (and the old paper alias) become Earthy.
+
 ## V9_09.17.9 — Schedule dump, Play TWA client tag (17 Sep 2026)
 
 Refreshed `public/data/full-database.json`. SEO landings use that dump at the next production build. Play TWA (`za.co.nexttrain.app`) is persisted and counted as `twa_open` / `app_client=twa`. No new What’s New card.

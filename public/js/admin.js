@@ -163,6 +163,41 @@ function ntAdminFlattenTripPlanRows(data) {
     return rows;
 }
 
+function ntAdminFlattenPublicHolidays(db) {
+    if (typeof flattenPublicHolidays === 'function') return flattenPublicHolidays(db);
+    if (!db || typeof db !== 'object' || Array.isArray(db)) return db;
+    const pubNode = db.public_holidays;
+    if (!pubNode || typeof pubNode !== 'object' || Array.isArray(pubNode)) return db;
+    const rootLastUpdated = db.lastUpdated;
+    const pubLastUpdated = pubNode.lastUpdated;
+    const out = { ...db, ...pubNode };
+    delete out.public_holidays;
+    if (rootLastUpdated != null) out.lastUpdated = rootLastUpdated;
+    if (pubLastUpdated != null) out.publicHolidaysLastUpdated = pubLastUpdated;
+    return out;
+}
+
+function ntAdminUnwrapRegionScheduleDb(region, raw) {
+    if (!raw || typeof raw !== 'object') return raw;
+    let db = raw;
+    if (region === 'GP' && raw.gauteng) db = raw.gauteng;
+    else if (region === 'WC' && raw.westerncape) db = raw.westerncape;
+    else if (region === 'KZN' && raw.kzn) db = raw.kzn;
+    else if (region === 'EC' && raw.easterncape) db = raw.easterncape;
+    else if (region === 'GP' && raw.schedules && !raw.gauteng) db = raw.schedules;
+    return ntAdminFlattenPublicHolidays(db);
+}
+
+function ntAdminScheduleSheet(db, sheetKey) {
+    if (!db || !sheetKey) return null;
+    if (db[sheetKey] != null) return db[sheetKey];
+    const nest = db.public_holidays;
+    if (nest && typeof nest === 'object' && !Array.isArray(nest) && nest[sheetKey] != null) {
+        return nest[sheetKey];
+    }
+    return null;
+}
+
 function ntAdminDeleteAlertSource(list, id) {
     return (Array.isArray(list) ? list : []).filter((s) => s.id !== id);
 }
@@ -1020,8 +1055,13 @@ const Admin = {
                 route.sheetKeys.weekday_to_a,
                 route.sheetKeys.saturday_to_b,
                 route.sheetKeys.saturday_to_a,
+                route.sheetKeys.pub_to_b,
+                route.sheetKeys.pub_to_a,
             ].filter(Boolean);
-            keys.forEach((k) => { if (db[k]) walkSheet(db[k]); });
+            keys.forEach((k) => {
+                const sheet = ntAdminScheduleSheet(db, k);
+                if (sheet) walkSheet(sheet);
+            });
         }
 
         const idx = (typeof globalStationIndex !== 'undefined' && globalStationIndex) ? globalStationIndex : {};
@@ -14284,8 +14324,10 @@ const Admin = {
             return route.sheetKeys[`${dayEl.value}_to_${dir}`] || '';
         };
 
+        const unwrapRegionScheduleDb = (region, raw) => ntAdminUnwrapRegionScheduleDb(region, raw);
+
         const scheduleRowsFromDb = (db, sheetKey) => {
-            const raw = db?.[sheetKey];
+            const raw = ntAdminScheduleSheet(db, sheetKey);
             if (Array.isArray(raw)) return raw;
             if (Array.isArray(raw?.rows)) return raw.rows;
             if (raw && typeof raw === 'object') {
@@ -14295,16 +14337,6 @@ const Admin = {
                     .map((key) => raw[key]);
             }
             return [];
-        };
-
-        const unwrapRegionScheduleDb = (region, raw) => {
-            if (!raw || typeof raw !== 'object') return raw;
-            if (region === 'GP' && raw.gauteng) return raw.gauteng;
-            if (region === 'WC' && raw.westerncape) return raw.westerncape;
-            if (region === 'KZN' && raw.kzn) return raw.kzn;
-            if (region === 'EC' && raw.easterncape) return raw.easterncape;
-            if (region === 'GP' && raw.schedules && !raw.gauteng) return raw.schedules;
-            return raw;
         };
 
         const ensureGridOrderDb = async (region, sheetKey) => {
@@ -14807,7 +14839,7 @@ const Admin = {
 
         const trainsFromSheet = (sheetKey, runtimeOrder = null) => {
             if (typeof fullDatabase === 'undefined' || !fullDatabase || !sheetKey) return [];
-            const rawData = fullDatabase[sheetKey];
+            const rawData = ntAdminScheduleSheet(fullDatabase, sheetKey);
             if (!rawData) return [];
             const rows = Array.isArray(rawData) ? rawData : (Array.isArray(rawData.rows) ? rawData.rows : []);
             const set = new Set();
@@ -16918,7 +16950,7 @@ const Admin = {
                 if (typeof fullDatabase === 'undefined' || !fullDatabase) {
                     throw new Error('Offline cache (RAM) is empty for this session.');
                 }
-                return fullDatabase;
+                return ntAdminFlattenPublicHolidays(fullDatabase);
             }
 
             const paths = {
@@ -16938,13 +16970,7 @@ const Admin = {
             }
 
             const rawData = await Admin.fetchDiagJson(fetchUrl);
-
-            if (targetRegion === 'GP' && rawData.gauteng) return rawData.gauteng;
-            if (targetRegion === 'WC' && rawData.westerncape) return rawData.westerncape;
-            if (targetRegion === 'KZN' && rawData.kzn) return rawData.kzn;
-            if (targetRegion === 'EC' && rawData.easterncape) return rawData.easterncape;
-            if (targetRegion === 'GP' && rawData.schedules && !rawData.gauteng) return rawData.schedules;
-            return rawData;
+            return ntAdminUnwrapRegionScheduleDb(targetRegion, rawData);
         };
 
         const renderZoneAuditReport = (report) => {
@@ -17516,13 +17542,7 @@ const Admin = {
                     resultsDiv.innerHTML = `<div class="text-xs text-gray-500 text-center py-4 flex flex-col items-center"><svg class="animate-spin h-5 w-5 text-blue-600 mb-2" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>${loadingMsg}</div>`;
                     
                     let rawData = await Admin.fetchDiagJson(fetchUrl);
-                    
-                    if (targetRegion === 'GP' && rawData.gauteng) dbToScan = rawData.gauteng;
-                    else if (targetRegion === 'WC' && rawData.westerncape) dbToScan = rawData.westerncape;
-                    else if (targetRegion === 'KZN' && rawData.kzn) dbToScan = rawData.kzn;
-                    else if (targetRegion === 'EC' && rawData.easterncape) dbToScan = rawData.easterncape;
-                    else if (targetRegion === 'GP' && rawData.schedules && !rawData.gauteng) dbToScan = rawData.schedules;
-                    else dbToScan = rawData;
+                    dbToScan = ntAdminUnwrapRegionScheduleDb(targetRegion, rawData);
                 } catch(e) {
                     const hint = /Unauthorized Domain|Missing Origin/i.test(String(e.message || ''))
                         ? ' Deploy workers/nexttrain-cache (allowlist enock-elk.github.io) or run diagnostics on nexttrain.co.za.'
@@ -17536,7 +17556,7 @@ const Admin = {
                     resultsDiv.innerHTML = '<div class="text-xs text-red-500 font-bold bg-red-50 p-2 rounded">Error: Offline Cache (RAM) is missing.</div>';
                     return;
                 }
-                dbToScan = fullDatabase;
+                dbToScan = ntAdminFlattenPublicHolidays(fullDatabase);
             }
 
             // Small delay to allow UI to breathe
@@ -17778,7 +17798,7 @@ const Admin = {
                 if (typeof fullDatabase === 'undefined' || !fullDatabase) {
                     throw new Error('Offline cache (RAM) is empty for this session.');
                 }
-                return fullDatabase;
+                return ntAdminFlattenPublicHolidays(fullDatabase);
             }
 
             const paths = {
@@ -17798,13 +17818,7 @@ const Admin = {
             }
 
             const rawData = await Admin.fetchDiagJson(fetchUrl);
-
-            if (targetRegion === 'GP' && rawData.gauteng) return rawData.gauteng;
-            if (targetRegion === 'WC' && rawData.westerncape) return rawData.westerncape;
-            if (targetRegion === 'KZN' && rawData.kzn) return rawData.kzn;
-            if (targetRegion === 'EC' && rawData.easterncape) return rawData.easterncape;
-            if (targetRegion === 'GP' && rawData.schedules && !rawData.gauteng) return rawData.schedules;
-            return rawData;
+            return ntAdminUnwrapRegionScheduleDb(targetRegion, rawData);
         };
 
         const severityStyles = {

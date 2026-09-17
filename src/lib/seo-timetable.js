@@ -7,7 +7,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { FARE_CONFIG, ROUTES } from './config.js';
 import { getGridOrderManifest, orderGridTrainIds } from './grid-order.js';
-import { isRealTime, timeToSeconds } from './utils.js';
+import { isRealTime, timeToSeconds, flattenPublicHolidays } from './utils.js';
 import { gridStationLabel, stationLabel } from './seo-routes.js';
 
 const IGNORE_KEYS = new Set(['STATION', 'COORDINATES', 'KM_MARK', 'row_index']);
@@ -33,6 +33,9 @@ export function loadScheduleDump() {
         throw new Error('public/data/full-database.json not found (SEO timetable SSG)');
     }
     _dump = JSON.parse(readFileSync(path, 'utf8'));
+    if (_dump?.westerncape) {
+        _dump = { ..._dump, westerncape: flattenPublicHolidays(_dump.westerncape) };
+    }
     return _dump;
 }
 
@@ -45,20 +48,28 @@ export function loadGridOrderDump() {
     return _gridOrderDump;
 }
 
+function sheetFromNode(node, key) {
+    if (!key || !node || typeof node !== 'object') return null;
+    const candidates = [node[key], node.public_holidays?.[key]];
+    for (const nested of candidates) {
+        if (Array.isArray(nested) && nested.length) return nested;
+        if (Array.isArray(nested?.rows) && nested.rows.length) return nested.rows;
+    }
+    return null;
+}
+
 /**
  * Same overlay idea as live `unwrapDatabase`: region nest wins over a stale
  * top-level copy of the same sheet key (e.g. June root vs August `gauteng`).
+ * WC `*_pub` sheets live under westerncape.public_holidays.
  */
 export function getSheet(db, key) {
     if (!key || !db) return null;
     for (const nest of REGION_NESTS) {
-        const nested = db[nest]?.[key];
-        if (Array.isArray(nested) && nested.length) return nested;
-        if (Array.isArray(nested?.rows) && nested.rows.length) return nested.rows;
+        const hit = sheetFromNode(db[nest], key);
+        if (hit) return hit;
     }
-    if (Array.isArray(db[key]) && db[key].length) return db[key];
-    if (Array.isArray(db[key]?.rows) && db[key].rows.length) return db[key].rows;
-    return null;
+    return sheetFromNode(db, key);
 }
 
 function manifestForSheet(db, key) {
@@ -448,10 +459,12 @@ export function routeMetaDescription(origin, dest, province, opts = {}) {
 function getDumpValue(db, key) {
     if (!key || !db) return null;
     for (const nest of REGION_NESTS) {
-        const nested = db[nest]?.[key];
+        const node = db[nest];
+        const nested = node?.[key] ?? node?.public_holidays?.[key];
         if (nested != null && nested !== '') return nested;
     }
-    if (db[key] != null && db[key] !== '') return db[key];
+    const root = db[key] ?? db.public_holidays?.[key];
+    if (root != null && root !== '') return root;
     return null;
 }
 

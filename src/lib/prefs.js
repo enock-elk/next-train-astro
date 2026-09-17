@@ -13,14 +13,13 @@ export const NAV_STYLES = {
     BOTTOM: 'bottom',
 };
 
-/** @typedef {'classic' | 'midnight' | 'contrast' | 'signal' | 'ember' | 'earthy'} ColourPackId */
+/** @typedef {'classic' | 'midnight' | 'contrast' | 'signal' | 'earthy'} ColourPackId */
 
 export const COLOUR_PACKS = {
     CLASSIC: 'classic',
     MIDNIGHT: 'midnight',
     CONTRAST: 'contrast',
     SIGNAL: 'signal',
-    EMBER: 'ember',
     EARTHY: 'earthy',
 };
 
@@ -29,12 +28,11 @@ export const COLOUR_PACK_LABELS = {
     midnight: 'Midnight',
     contrast: 'High contrast',
     signal: 'Signal',
-    ember: 'Ember',
     earthy: 'Earthy',
 };
 
-/** Earthy shipped briefly as "paper" — keep old saved prefs working. */
-const PACK_ALIASES = { paper: COLOUR_PACKS.EARTHY };
+/** Earthy shipped briefly as "paper". Ember was retired — map both to Earthy. */
+const PACK_ALIASES = { paper: COLOUR_PACKS.EARTHY, ember: COLOUR_PACKS.EARTHY };
 
 function normalizePack(pack) {
     const raw = String(pack || '');
@@ -57,17 +55,23 @@ export function setNavStyle(_style) {
 const THEME_KEY = 'theme';
 
 /**
- * Classic is the product default. Undo the one-time lab Ember seed once
- * so returning lab users see Classic unless they pick another pack after this.
+ * One-shot marker from the old lab Ember default. Ember is gone; this only
+ * records that the seed already ran so we do not re-touch colourPack.
  */
 function seedClassicDefault() {
     if (typeof window === 'undefined') return;
     const REVERT = 'ntClassicDefaultV1';
     if (safeStorage.getItem(REVERT)) return;
-    if (safeStorage.getItem('ntLabEmberSeededV1') && safeStorage.getItem(COLOUR_PACK_KEY) === COLOUR_PACKS.EMBER) {
-        safeStorage.setItem(COLOUR_PACK_KEY, COLOUR_PACKS.CLASSIC);
-    }
     safeStorage.setItem(REVERT, '1');
+}
+
+/** Ember was removed. Persist Earthy so boot + IndexedDB restore match. */
+function migrateRetiredPacks() {
+    if (typeof window === 'undefined') return;
+    const raw = safeStorage.getItem(COLOUR_PACK_KEY);
+    if (raw !== 'ember' && raw !== 'paper') return;
+    safeStorage.setItem(COLOUR_PACK_KEY, COLOUR_PACKS.EARTHY);
+    safeStorage.setResilientItem?.(COLOUR_PACK_KEY, COLOUR_PACKS.EARTHY)?.catch?.(() => {});
 }
 
 function isLabRuntime() {
@@ -104,6 +108,7 @@ function seedLightDefault() {
 }
 
 export function getColourPack() {
+    migrateRetiredPacks();
     seedClassicDefault();
     seedProductionClassicPack();
     seedLightDefault();

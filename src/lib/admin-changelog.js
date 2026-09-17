@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_09.17.10': [
+        'Deep Network Scan, Schedule QA, Zone Distance Audit, grid-order fetch, and exclusion station walks flatten westerncape/public_holidays so WC *_pub sheets resolve next to weekday/Saturday keys. SEO dump getSheet does the same. Ember colour pack is gone; saved ember (and paper) map to Earthy. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
+    ],
     'V9_09.17.9': [
         'Replaced public/data/full-database.json with the operator export. SEO SSG and the GitHub fallback read that file. Live boards still prefer Firebase for clocks, bans, and killswitch.',
         'Play TWA za.co.nexttrain.app: persist nt_twa in localStorage, list related_applications (prefer_related_applications stays false), confirm via getInstalledRelatedApps, send app_source/twa_package on page_view, and fire twa_open once per session. The native “Google Play is enabled” dialog is Play Integrity/Billing in the Android wrapper, not map.html. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',

@@ -11,18 +11,13 @@ const css = readFileSync(new URL('../src/styles/appearance.css', import.meta.url
 assert(css.includes('--nt-chrome-header'), 'appearance defines --nt-chrome-header');
 assert(css.includes('--nt-text-faint'), 'appearance splits faint text from muted');
 assert(css.includes('--nt-text-muted: #2c2822'), 'Earthy light muted ink matches body text');
-assert(css.includes('--nt-text-muted: #2a2118'), 'Ember light muted ink matches body text');
 assert(css.includes('--nt-text-faint: #3a3530'), 'Earthy light faint stays readable on cream');
-assert(css.includes('--nt-text-faint: #3d3228'), 'Ember light faint stays readable on cream');
 assert(css.includes('html[data-colour-pack="earthy"]:not(.dark) .text-blue-600'), 'Earthy maps label blue to dark ink');
-assert(css.includes('html[data-colour-pack="ember"]:not(.dark) .text-blue-600'), 'Ember maps label blue to dark ink');
 assert(css.includes('html[data-colour-pack="earthy"].dark .text-blue-400'), 'Earthy dark maps pale blue labels to light ink');
-assert(css.includes('html[data-colour-pack="ember"].dark .text-blue-400'), 'Ember dark maps pale blue labels to light ink');
 assert(css.includes('html[data-colour-pack="earthy"].dark #planner-back-btn'), 'Earthy dark planner toolbar uses light ink');
-assert(css.includes('html[data-colour-pack="ember"].dark #planner-back-btn'), 'Ember dark planner toolbar uses light ink');
 assert(css.includes('.nt-fare-zone-chip'), 'fare Zone chip has a pack-aware class');
 assert(/html\[data-colour-pack="earthy"\] #view-full-timetable-btn/.test(css), 'Earthy weakens the timetable CTA halo');
-assert(/html\[data-colour-pack="ember"\] #view-full-timetable-btn/.test(css), 'Ember weakens the timetable CTA halo');
+assert(!css.includes('data-colour-pack="ember"'), 'Ember pack CSS is gone');
 assert(/\.text-gray-400,[\s\S]*?--nt-text-faint/.test(css), 'gray-400 maps to faint, not muted');
 assert(css.includes('--nt-chrome-nav'), 'appearance defines --nt-chrome-nav');
 assert(css.includes('--nt-canvas'), 'appearance defines --nt-canvas');
@@ -37,8 +32,6 @@ assert(css.includes('--nt-chrome-header: #1d4ed8'), 'Classic light header is blu
 assert(css.includes('--nt-chrome-nav: #163d96'), 'Classic light nav is darker blue #163d96');
 assert(css.includes('color: var(--nt-chrome-fg) !important'), 'title uses --nt-chrome-fg (white on Classic light)');
 assert(css.includes('html[data-colour-pack="classic"] #bottom-nav'), 'Classic bottom-nav items use chrome tokens');
-assert(css.includes('--nt-chrome-nav: #0c0b0a'), 'Ember dark nav is near-black, distinct from header');
-assert(css.includes('--nt-chrome-header: #352e28'), 'Ember dark header is lifted off the canvas');
 assert(css.includes('--nt-chrome-nav: #0e0d0c'), 'Earthy dark nav is near-black, distinct from header');
 assert(!/html\.dark #app-header\.nt-maint-active \{\s*background-color: rgb\(31 41 55\)/.test(css), 'maint header must not hardcode gray-800');
 assert(css.includes('#grid-trigger-container'), 'timetable CTA has extra canvas gap');
@@ -47,7 +40,7 @@ assert(css.includes('0 6px 18px') || css.includes('0 -10px 28px') || css.include
 assert(css.includes('border-radius: 999px'), 'bottom nav is a floating pill');
 assert(css.includes('#current-day'), 'day label letter-spacing rule present');
 
-['midnight', 'contrast', 'signal', 'ember', 'earthy'].forEach((pack) => {
+['midnight', 'contrast', 'signal', 'earthy'].forEach((pack) => {
     const block = css.split(`html[data-colour-pack="${pack}"]`)[1] || '';
     assert(block.includes('--nt-chrome-nav'), `${pack} light defines --nt-chrome-nav`);
     assert(block.includes('--nt-canvas'), `${pack} light defines --nt-canvas`);
@@ -70,7 +63,7 @@ assert(css.includes('html.dark #current-day span.text-red-600'), 'dark No Servic
 assert(css.includes('color: var(--nt-chrome-muted) !important'), 'Classic Sunday stays muted chrome, not white');
 assert(css.includes('#notice-bell.nt-bell-info {\n  background-color: #ffffff !important;'), 'info bell is a white disc on every pack');
 assert(css.includes('html.dark #notice-bell.nt-bell-info {\n  background-color: #ffffff !important;'), 'dark info bell keeps a white disc');
-assert(!css.includes('background-color: var(--nt-surface) !important;\n  color: var(--nt-chrome-fg) !important;'), 'Earthy/Ember no longer wash the bell into the header');
+assert(!css.includes('background-color: var(--nt-surface) !important;\n  color: var(--nt-chrome-fg) !important;'), 'Earthy no longer wash the bell into the header');
 assert(css.includes('html[data-colour-pack="earthy"] #notice-bell.nt-bell-info'), 'paper packs keep a stronger bell ring');
 
 const header = readFileSync(new URL('../src/components/Header.astro', import.meta.url), 'utf8');
@@ -100,6 +93,9 @@ assert(sidenav.includes('id="settings-account-btn"'), 'Account row exists in Opt
 assert(!/id="settings-account-btn"[^>]*data-admin-authed-only/.test(sidenav), 'Account row is not admin-only; signed-in commuters keep it');
 assert(sidenav.includes('id="sidenav-legacy-settings"'), 'Passenger Type can stay in Options for guests');
 assert(sidenav.includes('id="sidenav-prefs-block"'), 'Theme block can move into Account');
+assert(sidenav.includes('data-colour-pack-option="classic"'), 'Classic pack is in Options');
+assert(sidenav.includes('data-colour-pack-option="earthy"'), 'Earthy pack is in Options');
+assert(!sidenav.includes('data-colour-pack-option="ember"'), 'Ember pack is not in Options');
 
 const chrome = readFileSync(new URL('../src/lib/admin-chrome.js', import.meta.url), 'utf8');
 assert(chrome.includes('applyAdminAuthedChrome'), 'admin-chrome reveal helper exists');
@@ -270,11 +266,9 @@ assert(css.includes('max-height: 740px'), 'short screens compact the bottom nav'
 assert(css.includes('--nt-chrome-nav-active'), 'active tab uses --nt-chrome-nav-active');
 assert(css.includes('color-mix(in srgb, #fff 10%, var(--nt-chrome-nav))'), 'Classic light tab chip is a quiet white mix');
 assert(css.includes('color-mix(in srgb, #fff 12%, var(--nt-chrome-nav))'), 'dark active tab uses a quieter mix, not a loud ring');
-assert(css.includes('color-mix(in srgb, var(--nt-chrome-fg) 16%, var(--nt-chrome-nav))'), 'Earthy/Ember light tab chip is an ink wash');
+assert(css.includes('color-mix(in srgb, var(--nt-chrome-fg) 16%, var(--nt-chrome-nav))'), 'Earthy light tab chip is an ink wash');
 assert(css.includes('--nt-primary: #d8d6ce'), 'Earthy light CTA is desaturated paper sage');
-assert(css.includes('--nt-primary: #e8ddd0'), 'Ember light CTA is desaturated paper clay');
 assert(css.includes('--nt-chrome-header: #efeee9'), 'Earthy header is a quiet paper, not a sage wash');
-assert(css.includes('--nt-chrome-header: #f0ebe5'), 'Ember header is a quiet paper, not a peach wash');
 assert(css.includes('#planner-search-btn'), 'Plan Trip uses pack primary tokens');
 assert(css.includes('#planner-locate-btn'), 'planner locate uses pack primary tokens');
 assert(css.includes('html, body, #nt-shell'), 'shell paints canvas so the Options gap is not raw white');

@@ -11,7 +11,7 @@ import {
     ADMIN_EMAILS, isAdminEmail, COMMUNITY_WORKER_URL,
     SPECIAL_DATES, HOLIDAY_NAMES, SATURDAY_PLACEHOLDER_ROUTES
 } from './config.js';
-import { safeStorage, escapeHTML, formatAppDate, formatAppTime, formatThreadDateLabel, normalizeStationName } from './utils.js';
+import { safeStorage, escapeHTML, formatAppDate, formatAppTime, formatThreadDateLabel, normalizeStationName, flattenPublicHolidays } from './utils.js';
 import { parseFeedbackAlertQuote } from './feedback-quote.js';
 import {
     showToast, openSmoothModal, closeSmoothModal, triggerHaptic,
@@ -92,6 +92,7 @@ export function exposeAdminGlobals() {
     window.HOLIDAY_NAMES = HOLIDAY_NAMES;
     window.SATURDAY_PLACEHOLDER_ROUTES = SATURDAY_PLACEHOLDER_ROUTES;
     window.normalizeStationName = normalizeStationName;
+    window.flattenPublicHolidays = flattenPublicHolidays;
     window.safeStorage = safeStorage;
     window.escapeHTML = escapeHTML;
     window.formatAppDate = formatAppDate;

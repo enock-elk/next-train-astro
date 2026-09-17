@@ -194,8 +194,8 @@ const resolvedHtmlClass = [forceDark ? 'dark' : '', htmlClass].filter(Boolean).j
             localStorage.setItem('ntProdClassicPackV1', '1');
           }
         } catch (e) {}
-        if (pack === 'paper') { pack = 'earthy'; try { localStorage.setItem('colourPack', 'earthy'); } catch (e) {} }
-        const valid = pack === 'midnight' || pack === 'contrast' || pack === 'classic' || pack === 'signal' || pack === 'ember' || pack === 'earthy';
+        if (pack === 'paper' || pack === 'ember') { pack = 'earthy'; try { localStorage.setItem('colourPack', 'earthy'); } catch (e) {} }
+        const valid = pack === 'midnight' || pack === 'contrast' || pack === 'classic' || pack === 'signal' || pack === 'earthy';
         document.documentElement.setAttribute('data-colour-pack', valid ? pack : 'classic');
         try {
           if (!localStorage.getItem('next_train_device_id')) {

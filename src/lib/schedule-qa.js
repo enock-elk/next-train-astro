@@ -3,7 +3,7 @@
  * Used by the admin Schedule QA panel to flag impossible / suspicious cells.
  */
 import { ROUTES, SATURDAY_PLACEHOLDER_ROUTES } from './config.js';
-import { isRealTime, timeToSeconds, normalizeStationName } from './utils.js';
+import { isRealTime, timeToSeconds, normalizeStationName, flattenPublicHolidays } from './utils.js';
 
 /** Issue codes available in the admin filter dropdown. */
 export const QA_ISSUE_TYPES = [
@@ -313,6 +313,8 @@ export function runScheduleQaReport(db, region, parseJSONSchedule) {
             summary: { routesScanned: 0, sheetsScanned: 0, errors: 1, warnings: 0, infos: 0 },
         };
     }
+
+    db = flattenPublicHolidays(db);
 
     Object.values(ROUTES).forEach((route) => {
         if (!route?.isActive || route.id === 'special_event') return;

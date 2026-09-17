@@ -10,7 +10,7 @@
  *   Z1 1–15 km · Z2 16–40 km · Z3 41–135 km · Z4 >135 km
  */
 import { ROUTES, FARE_CONFIG } from './config.js';
-import { normalizeStationName } from './utils.js';
+import { normalizeStationName, flattenPublicHolidays } from './utils.js';
 
 /** Official PRASA max km (inclusive) for Z1–Z3; above Z3 → Z4. */
 export const DEFAULT_ZONE_KM_BANDS = {
@@ -250,6 +250,8 @@ export function runZoneDistanceAudit(db, region, opts = {}) {
             bands,
         };
     }
+
+    db = flattenPublicHolidays(db);
 
     Object.values(ROUTES).forEach((route) => {
         if (!route?.isActive || route.id === 'special_event') return;

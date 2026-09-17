@@ -142,6 +142,25 @@ export function scheduleDayTypeLabel(dayType) {
 }
 
 /**
+ * WC pub sheets live under westerncape/public_holidays in Firebase and the dump.
+ * Flatten so ROUTES.sheetKeys like kap_to_ct_pub resolve as db[key].
+ * Keep regional lastUpdated; stash the pub stamp on publicHolidaysLastUpdated.
+ */
+export function flattenPublicHolidays(db) {
+    if (!db || typeof db !== 'object' || Array.isArray(db)) return db;
+    const pubNode = db.public_holidays;
+    if (!pubNode || typeof pubNode !== 'object' || Array.isArray(pubNode)) return db;
+    const rootLastUpdated = db.lastUpdated;
+    const pubLastUpdated = pubNode.lastUpdated;
+    const { public_holidays: _drop, ...rest } = db;
+    const out = { ...rest, ...pubNode };
+    delete out.public_holidays;
+    if (rootLastUpdated != null) out.lastUpdated = rootLastUpdated;
+    if (pubLastUpdated != null) out.publicHolidaysLastUpdated = pubLastUpdated;
+    return out;
+}
+
+/**
  * Repair common UTF-8-as-Latin1/Windows-1252 mojibake in remote HTML/text
  * (e.g. Firebase notices saved as mojibake em-dash + "Next Train Ops").
  * Bad-side keys use \u escapes so source scanners cannot "fix" them away.

@@ -157,7 +157,7 @@ async function getGoogleAccessToken(clientEmail, privateKey) {
     const now = Math.floor(Date.now() / 1000);
     const payload = {
         iss: clientEmail,
-        scope: 'https://www.googleapis.com/auth/firebase.database https://www.googleapis.com/auth/userinfo.email',
+        scope: 'https://www.googleapis.com/auth/firebase.database https://www.googleapis.com/auth/firebase.messaging https://www.googleapis.com/auth/userinfo.email',
         aud: 'https://oauth2.googleapis.com/token',
         exp: now + 3600,
         iat: now,
@@ -825,6 +825,212 @@ async function requireAdmin(request, env) {
     }
 }
 
+const PUSH_REGIONS = new Set(['GP', 'WC', 'KZN', 'EC']);
+const MAX_PUSH_RECIPIENTS = 500;
+
+function pushText(value, max) {
+    return stripHtml(value).slice(0, max).trim();
+}
+
+function normalizePushLink(raw) {
+    const fallback = 'https://nexttrain.co.za/';
+    const value = String(raw || fallback).trim();
+    let url;
+    try {
+        url = new URL(value, fallback);
+    } catch {
+        throw new Error('Invalid notification link');
+    }
+    const host = url.hostname.toLowerCase();
+    const allowed = host === 'nexttrain.co.za'
+        || host === 'www.nexttrain.co.za'
+        || host === 'lab.nexttrain.co.za'
+        || host === 'enock-elk.github.io'
+        || host.endsWith('.next-train-lab.pages.dev');
+    if (url.protocol !== 'https:' || !allowed) throw new Error('Notification link must open Next Train');
+    return url.href;
+}
+
+export function normalizePushRequest(raw = {}) {
+    const title = pushText(raw.title, 80);
+    const body = pushText(raw.body, 180);
+    if (!title) throw new Error('Notification title is required');
+    if (!body) throw new Error('Notification message is required');
+    const audience = ['all', 'region', 'route'].includes(raw.audience) ? raw.audience : 'all';
+    const target = String(raw.target || '').trim();
+    if (audience === 'region' && !PUSH_REGIONS.has(target)) throw new Error('Choose a valid region');
+    if (audience === 'route' && !isSafeRtdbKey(target)) throw new Error('Choose a valid route');
+    const environment = raw.environment === 'lab' ? 'lab' : 'production';
+    const ttlSec = Math.min(86_400, Math.max(60, Math.round(Number(raw.ttlSec) || 3600)));
+    return {
+        title,
+        body,
+        audience,
+        target: audience === 'all' ? 'all' : target,
+        environment,
+        lab: environment === 'lab',
+        urgency: raw.urgency === 'high' ? 'high' : 'normal',
+        ttlSec,
+        link: normalizePushLink(raw.link),
+        dryRun: raw.dryRun === true,
+    };
+}
+
+export function pushSubscriptionMatches(subscription, request) {
+    if (!subscription || subscription.enabled === false) return false;
+    if (typeof subscription.token !== 'string' || subscription.token.length < 11) return false;
+    if ((subscription.lab === true) !== request.lab) return false;
+    if (request.audience === 'all') return true;
+    if (request.audience === 'region') return subscription.region === request.target;
+    const routes = Array.isArray(subscription.routeIds)
+        ? subscription.routeIds
+        : Object.values(subscription.routeIds || {});
+    return routes.map(String).includes(request.target);
+}
+
+export function buildFcmMessage(token, request, tag = `nt-push-${Date.now()}`) {
+    return {
+        token,
+        notification: {
+            title: request.title,
+            body: request.body,
+        },
+        data: {
+            audience: request.audience,
+            target: request.target,
+            environment: request.environment,
+            link: request.link,
+        },
+        webpush: {
+            headers: {
+                TTL: String(request.ttlSec),
+                Urgency: request.urgency,
+            },
+            notification: {
+                icon: 'https://nexttrain.co.za/icons/icon-192.png',
+                badge: 'https://nexttrain.co.za/icons/icon-48.png',
+                tag,
+            },
+            fcm_options: {
+                link: request.link,
+            },
+        },
+    };
+}
+
+function invalidFcmToken(data) {
+    const status = String(data?.error?.status || '');
+    const details = Array.isArray(data?.error?.details) ? data.error.details : [];
+    return status === 'NOT_FOUND'
+        || details.some((detail) => ['UNREGISTERED', 'INVALID_ARGUMENT'].includes(detail?.errorCode));
+}
+
+async function sendOneFcm(env, accessToken, token, request) {
+    const projectId = String(env.FIREBASE_PROJECT_ID || '').trim();
+    if (!projectId) throw new Error('FIREBASE_PROJECT_ID missing');
+    const response = await fetch(
+        `https://fcm.googleapis.com/v1/projects/${encodeURIComponent(projectId)}/messages:send`,
+        {
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${accessToken}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ message: buildFcmMessage(token, request, `nt-push-${crypto.randomUUID()}`) }),
+        }
+    );
+    let data = null;
+    try { data = await response.json(); } catch { /* bounded FCM response may be empty */ }
+    return { ok: response.ok, status: response.status, data, invalid: !response.ok && invalidFcmToken(data) };
+}
+
+export async function deliverPushNotifications(env, raw, options = {}) {
+    const request = normalizePushRequest(raw);
+    const rtdb = options.rtdb || createRtdbClient(env);
+    const tree = (await rtdb.get('push_subscriptions')).value || {};
+    const matched = Object.entries(tree)
+        .filter(([, subscription]) => pushSubscriptionMatches(subscription, request));
+    const byToken = new Map();
+    for (const [deviceId, subscription] of matched) {
+        if (!byToken.has(subscription.token)) {
+            byToken.set(subscription.token, { deviceIds: [deviceId], subscription });
+        } else {
+            byToken.get(subscription.token).deviceIds.push(deviceId);
+        }
+    }
+    const recipients = [...byToken.values()];
+    const limited = recipients.slice(0, MAX_PUSH_RECIPIENTS);
+    if (request.dryRun) {
+        return {
+            dryRun: true,
+            subscribers: Object.keys(tree).length,
+            matched: recipients.length,
+            attempted: 0,
+            sent: 0,
+            failed: 0,
+            invalid: 0,
+            truncated: Math.max(0, recipients.length - limited.length),
+        };
+    }
+
+    const accessToken = options.sendOne
+        ? null
+        : await getGoogleAccessToken(env.FIREBASE_CLIENT_EMAIL, env.FIREBASE_PRIVATE_KEY);
+    const sendOne = options.sendOne
+        || ((token) => sendOneFcm(env, accessToken, token, request));
+    const results = [];
+    for (let i = 0; i < limited.length; i += 40) {
+        const batch = limited.slice(i, i + 40);
+        const settled = await Promise.all(batch.map(async (entry) => {
+            try {
+                return { entry, ...(await sendOne(entry.subscription.token, request)) };
+            } catch (error) {
+                return { entry, ok: false, status: 0, error: error?.message || 'FCM send failed' };
+            }
+        }));
+        results.push(...settled);
+    }
+    const invalid = results.filter((result) => result.invalid);
+    await Promise.all(invalid.flatMap((result) => (
+        result.entry.deviceIds.map((deviceId) => rtdb.put(`push_subscriptions/${deviceId}`, null))
+    )));
+    const sent = results.filter((result) => result.ok).length;
+    return {
+        dryRun: false,
+        subscribers: Object.keys(tree).length,
+        matched: recipients.length,
+        attempted: results.length,
+        sent,
+        failed: results.length - sent,
+        invalid: invalid.length,
+        truncated: Math.max(0, recipients.length - limited.length),
+    };
+}
+
+async function handlePushNotificationsAdmin(request, env) {
+    const auth = await requireAdmin(request, env);
+    if (auth.error) return json(env, request, auth.status, { ok: false, error: auth.error });
+    let body;
+    try {
+        body = await request.json();
+    } catch {
+        return json(env, request, 400, { ok: false, error: 'Invalid JSON' });
+    }
+    try {
+        const result = await deliverPushNotifications(env, body);
+        console.log(JSON.stringify({
+            event: 'admin_push_notification',
+            admin: auth.user.email,
+            audience: body.audience || 'all',
+            target: body.target || 'all',
+            ...result,
+        }));
+        return json(env, request, 200, { ok: true, ...result });
+    } catch (error) {
+        return json(env, request, 400, { ok: false, error: error?.message || 'Notification send failed' });
+    }
+}
+
 async function handleAlertImpressionAdmin(request, env) {
     const auth = await requireAdmin(request, env);
     if (auth.error) return json(env, request, auth.status, { ok: false, error: auth.error });
@@ -1082,6 +1288,9 @@ export default {
             } catch (e) {
                 return json(env, request, 500, { ok: false, error: e.message || 'Impression lookup failed' });
             }
+        }
+        if (request.method === 'POST' && url.pathname === '/admin/notifications/send') {
+            return handlePushNotificationsAdmin(request, env);
         }
         if (
             (request.method === 'GET' || request.method === 'POST')

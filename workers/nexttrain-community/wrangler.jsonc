@@ -10,6 +10,7 @@
   "vars": {
     "FIREBASE_WEB_API_KEY": "AIzaSyAU303BRMrH3A5n5zbJH4MVwWdkfznqxMY",
     "FIREBASE_DATABASE_URL": "https://metrorail-next-train-default-rtdb.firebaseio.com",
+    "FIREBASE_PROJECT_ID": "metrorail-next-train",
     "FIREBASE_CLIENT_EMAIL": "nexttrain-telemetry@metrorail-next-train.iam.gserviceaccount.com",
     "POST_TTL_MS": "86400000",
     "RATE_WINDOW_MS": "60000",

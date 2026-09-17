@@ -3838,6 +3838,7 @@ const Admin = {
         runAdminSetup('holidayApprovals', () => Admin.setupHolidayApprovalsManager());
         runAdminSetup('maintenance', () => Admin.setupMaintenanceManager());
         runAdminSetup('specialEvent', () => Admin.setupSpecialEventManager());
+        runAdminSetup('pushNotifications', () => Admin.setupPushNotificationsManager());
         runAdminSetup('diagnostics', () => Admin.setupDiagnosticsManager());
         runAdminSetup('scheduleQa', () => Admin.setupScheduleQaManager());
         runAdminSetup('roadmap', () => Admin.setupRoadmapManager());
@@ -16749,6 +16750,225 @@ const Admin = {
     },
 
     // --- 7. SYSTEM HEALTH / DIAGNOSTICS SCANNER ---
+    setupPushNotificationsManager: () => {
+        const adminContainer = document.getElementById('admin-modules-container');
+        if (!adminContainer) return;
+        let panel = document.getElementById('push-notifications-panel');
+        if (!panel) {
+            panel = document.createElement('div');
+            panel.id = 'push-notifications-panel';
+            adminContainer.appendChild(panel);
+        }
+        if (panel.dataset.loaded === 'true') return;
+        panel.dataset.loaded = 'true';
+        panel.className = 'bg-white dark:bg-gray-800 rounded-xl shadow-md border border-gray-200 dark:border-gray-700 p-4 mb-4 relative overflow-hidden transition-all duration-300';
+        panel.innerHTML = `
+            <button type="button" id="push-notifications-header" class="w-full text-left text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center justify-center focus:outline-none">
+                <span class="flex flex-col items-center">
+                    ${Admin.tileIcon('megaphone', 'text-blue-600 dark:text-blue-400')}
+                    <span>Notifications</span>
+                </span>
+            </button>
+            <div id="push-notifications-body" class="hidden mt-4 space-y-3">
+                <p class="text-[10px] leading-snug text-gray-500 dark:text-gray-400">
+                    Sends an FCM system notification to enabled devices. This does not post an Alerts card.
+                </p>
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="block text-[9px] font-black uppercase tracking-wider text-gray-500 mb-1" for="push-notifications-environment">Environment</label>
+                        <select id="push-notifications-environment" class="w-full h-10 px-2 rounded-lg bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-xs text-gray-900 dark:text-white">
+                            <option value="production">Production</option>
+                            <option value="lab">Lab / previews</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-[9px] font-black uppercase tracking-wider text-gray-500 mb-1" for="push-notifications-audience">Audience</label>
+                        <select id="push-notifications-audience" class="w-full h-10 px-2 rounded-lg bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-xs text-gray-900 dark:text-white">
+                            <option value="all">Everyone</option>
+                            <option value="region">One region</option>
+                            <option value="route">One route</option>
+                        </select>
+                    </div>
+                </div>
+                <div id="push-notifications-region-wrap" class="hidden">
+                    <label class="block text-[9px] font-black uppercase tracking-wider text-gray-500 mb-1" for="push-notifications-region">Region</label>
+                    <select id="push-notifications-region" class="w-full h-10 px-2 rounded-lg bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-xs text-gray-900 dark:text-white">
+                        <option value="GP">Gauteng</option>
+                        <option value="WC">Western Cape</option>
+                        <option value="KZN">KwaZulu-Natal</option>
+                        <option value="EC">Eastern Cape</option>
+                    </select>
+                </div>
+                <div id="push-notifications-route-wrap" class="hidden">
+                    <label class="block text-[9px] font-black uppercase tracking-wider text-gray-500 mb-1" for="push-notifications-route">Route</label>
+                    <select id="push-notifications-route" class="w-full h-10 px-2 rounded-lg bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-xs text-gray-900 dark:text-white"></select>
+                </div>
+                <div>
+                    <label class="block text-[9px] font-black uppercase tracking-wider text-gray-500 mb-1" for="push-notifications-title">Title</label>
+                    <input id="push-notifications-title" maxlength="80" class="w-full h-10 px-3 rounded-lg bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-xs text-gray-900 dark:text-white" placeholder="Next Train service update">
+                </div>
+                <div>
+                    <div class="flex items-center justify-between mb-1">
+                        <label class="text-[9px] font-black uppercase tracking-wider text-gray-500" for="push-notifications-message">Message</label>
+                        <span id="push-notifications-count" class="text-[9px] text-gray-400">0 / 180</span>
+                    </div>
+                    <textarea id="push-notifications-message" maxlength="180" rows="3" class="w-full px-3 py-2 rounded-lg bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-xs text-gray-900 dark:text-white resize-none" placeholder="What commuters need to know"></textarea>
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="block text-[9px] font-black uppercase tracking-wider text-gray-500 mb-1" for="push-notifications-urgency">Delivery</label>
+                        <select id="push-notifications-urgency" class="w-full h-10 px-2 rounded-lg bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-xs text-gray-900 dark:text-white">
+                            <option value="normal">Normal</option>
+                            <option value="high">Urgent</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-[9px] font-black uppercase tracking-wider text-gray-500 mb-1" for="push-notifications-ttl">Expires from FCM</label>
+                        <select id="push-notifications-ttl" class="w-full h-10 px-2 rounded-lg bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-xs text-gray-900 dark:text-white">
+                            <option value="3600">1 hour</option>
+                            <option value="21600">6 hours</option>
+                            <option value="86400">24 hours</option>
+                        </select>
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-[9px] font-black uppercase tracking-wider text-gray-500 mb-1" for="push-notifications-link">Open link (optional)</label>
+                    <input id="push-notifications-link" class="w-full h-10 px-3 rounded-lg bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-xs text-gray-900 dark:text-white" placeholder="Uses the selected route or region">
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                    <button type="button" id="push-notifications-preview" class="h-10 rounded-lg border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300 text-[10px] font-black uppercase tracking-wide">Count devices</button>
+                    <button type="button" id="push-notifications-send" class="h-10 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-black uppercase tracking-wide">Send notification</button>
+                </div>
+                <p id="push-notifications-status" class="min-h-[1rem] text-[10px] leading-snug text-gray-500 dark:text-gray-400" aria-live="polite"></p>
+            </div>`;
+
+        const body = panel.querySelector('#push-notifications-body');
+        const header = panel.querySelector('#push-notifications-header');
+        const environment = panel.querySelector('#push-notifications-environment');
+        const audience = panel.querySelector('#push-notifications-audience');
+        const region = panel.querySelector('#push-notifications-region');
+        const regionWrap = panel.querySelector('#push-notifications-region-wrap');
+        const routeWrap = panel.querySelector('#push-notifications-route-wrap');
+        const route = panel.querySelector('#push-notifications-route');
+        const title = panel.querySelector('#push-notifications-title');
+        const message = panel.querySelector('#push-notifications-message');
+        const count = panel.querySelector('#push-notifications-count');
+        const urgency = panel.querySelector('#push-notifications-urgency');
+        const ttl = panel.querySelector('#push-notifications-ttl');
+        const link = panel.querySelector('#push-notifications-link');
+        const preview = panel.querySelector('#push-notifications-preview');
+        const send = panel.querySelector('#push-notifications-send');
+        const status = panel.querySelector('#push-notifications-status');
+
+        const isLab = /(^|\.)lab\.nexttrain\.co\.za$|\.pages\.dev$|\.github\.io$/i.test(location.hostname);
+        environment.value = isLab ? 'lab' : 'production';
+        const routeRows = Object.values(window.ROUTES || {})
+            .filter((item) => item?.isActive && item.id !== 'special_event')
+            .sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
+        const fillRoutes = () => {
+            const code = region.value;
+            route.innerHTML = routeRows
+                .filter((item) => item.region === code)
+                .map((item) => `<option value="${String(item.id).replace(/"/g, '&quot;')}">${String(item.name || item.id).replace(/<->/g, 'to').replace(/</g, '&lt;')}</option>`)
+                .join('');
+        };
+        const syncAudience = () => {
+            const type = audience.value;
+            regionWrap.classList.toggle('hidden', type === 'all');
+            routeWrap.classList.toggle('hidden', type !== 'route');
+            if (type === 'route') fillRoutes();
+        };
+        const defaultLink = () => {
+            const origin = environment.value === 'lab' ? 'https://lab.nexttrain.co.za' : 'https://nexttrain.co.za';
+            if (audience.value === 'route') {
+                return `${origin}/?rt=${encodeURIComponent(route.value)}&r=${encodeURIComponent(region.value)}`;
+            }
+            if (audience.value === 'region') return `${origin}/?region=${encodeURIComponent(region.value)}`;
+            return `${origin}/`;
+        };
+        const payload = (dryRun) => ({
+            environment: environment.value,
+            audience: audience.value,
+            target: audience.value === 'route' ? route.value : (audience.value === 'region' ? region.value : 'all'),
+            title: title.value.trim(),
+            body: message.value.trim(),
+            urgency: urgency.value,
+            ttlSec: Number(ttl.value) || 3600,
+            link: link.value.trim() || defaultLink(),
+            dryRun,
+        });
+        const callWorker = async (dryRun) => {
+            const workerUrl = String(window.COMMUNITY_WORKER_URL || '').replace(/\/$/, '');
+            if (!workerUrl) throw new Error('Notification service is not configured');
+            const token = await Admin.getAuthKey();
+            if (!token) throw new Error('Admin sign-in expired');
+            const response = await fetch(`${workerUrl}/admin/notifications/send`, {
+                method: 'POST',
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(payload(dryRun)),
+            });
+            const result = await response.json().catch(() => ({}));
+            if (!response.ok || !result.ok) throw new Error(result.error || `Notification service failed (${response.status})`);
+            return result;
+        };
+        const setBusy = (busy) => {
+            preview.disabled = busy;
+            send.disabled = busy;
+            preview.classList.toggle('opacity-50', busy);
+            send.classList.toggle('opacity-50', busy);
+        };
+
+        header.addEventListener('click', () => body.classList.toggle('hidden'));
+        audience.addEventListener('change', syncAudience);
+        region.addEventListener('change', () => {
+            fillRoutes();
+            if (!link.value.trim()) link.placeholder = defaultLink();
+        });
+        environment.addEventListener('change', () => {
+            if (!link.value.trim()) link.placeholder = defaultLink();
+        });
+        route.addEventListener('change', () => {
+            if (!link.value.trim()) link.placeholder = defaultLink();
+        });
+        message.addEventListener('input', () => { count.textContent = `${message.value.length} / 180`; });
+        preview.addEventListener('click', async () => {
+            setBusy(true);
+            status.textContent = 'Counting enabled devices...';
+            try {
+                const result = await callWorker(true);
+                status.textContent = `${result.matched} enabled device${result.matched === 1 ? '' : 's'} match (${result.subscribers} stored).`;
+            } catch (error) {
+                status.textContent = error.message || 'Could not count devices.';
+            } finally {
+                setBusy(false);
+            }
+        });
+        send.addEventListener('click', async () => {
+            if (!title.value.trim() || !message.value.trim()) {
+                status.textContent = 'Add a title and message first.';
+                return;
+            }
+            const targetLabel = audience.value === 'all' ? 'everyone' : (audience.value === 'region' ? region.value : route.value);
+            if (!window.confirm(`Send this ${environment.value} notification to ${targetLabel}?`)) return;
+            setBusy(true);
+            status.textContent = 'Sending notification...';
+            try {
+                const result = await callWorker(false);
+                status.textContent = `Sent ${result.sent} of ${result.attempted}. Failed ${result.failed}; removed ${result.invalid} invalid token${result.invalid === 1 ? '' : 's'}.`;
+            } catch (error) {
+                status.textContent = error.message || 'Notification send failed.';
+            } finally {
+                setBusy(false);
+            }
+        });
+        fillRoutes();
+        syncAudience();
+        link.placeholder = defaultLink();
+    },
+
     setupDiagnosticsManager: () => {
         const alertPanel = document.getElementById('alert-panel');
         if (!alertPanel || !alertPanel.parentNode) return;

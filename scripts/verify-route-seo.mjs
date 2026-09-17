@@ -633,7 +633,7 @@ if (existsSync(DIST)) {
     if (!html.includes('Open Next Train · Gauteng')) {
       fail('Gauteng region page missing Open Next Train · Gauteng');
     }
-    if (html.includes('western-cape-public-holidays')) {
+    if (/href="[^"]*western-cape-public-holidays/.test(html)) {
       fail('Gauteng region page must not link a Western Cape public-holiday timetable');
     }
   }
@@ -666,12 +666,18 @@ if (existsSync(DIST)) {
     if (/gtag\('event', 'View_astro_pages'/.test(html)) {
       fail('map.html must not fire View_astro_pages');
     }
+    if (!html.includes('const trackSeo = false')) {
+      fail('map.html must compile with trackSeo false');
+    }
   }
   const guideBuiltPath = join(DIST, 'guide.html');
   if (existsSync(guideBuiltPath)) {
     const html = readFileSync(guideBuiltPath, 'utf8');
     if (/gtag\('event', 'View_astro_pages'/.test(html)) {
       fail('guide.html must not fire View_astro_pages');
+    }
+    if (!html.includes('const trackSeo = false')) {
+      fail('guide.html must compile with trackSeo false');
     }
     if (!html.includes('western-cape-public-holidays')) {
       fail('guide.html must link the Western Cape public holiday timetable');

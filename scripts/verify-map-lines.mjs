@@ -236,14 +236,6 @@ function pointToSegmentM(pLat, pLon, aLat, aLon, bLat, bLon) {
 const STATION_NEAR_CORRIDOR_M = 2000;
 /** A corridor must still run the whole way to both of its termini. */
 const TERMINI_M = 400;
-/**
- * Gold that only covers a branch: paint still lists the published trunk, but
- * near-corridor / termini checks use the branch start onward so we do not
- * slice or invent Pretoria lead-in geometry.
- */
-const GOLD_BRANCH_START = {
-    'pta-dewildt': 'WINTERSNEST',
-};
 /** Rail doubling back at a junction may nudge station order by this much. */
 const ORDER_SLACK_M = 1500;
 /** KZN ships as the reference shape; its Berea Road line forks at Duff's Road. */
@@ -274,16 +266,9 @@ for (const region of ['GP', 'WC', 'KZN', 'EC']) {
         const props = feature.properties || {};
         const coords = feature.geometry?.coordinates || [];
         assert(coords.length > 1, `${id} baked line has no geometry`);
-        const allStops = props.stationCoords;
-        assert(Array.isArray(allStops) && allStops.length > 1, `${id} baked line does not record its stops`);
-        if (!Array.isArray(allStops)) continue;
-        const allNames = props.stationNames || [];
-        const branchAt = GOLD_BRANCH_START[id] ? allNames.indexOf(GOLD_BRANCH_START[id]) : 0;
-        if (GOLD_BRANCH_START[id]) {
-            assert(branchAt >= 0, `${id} station list includes gold branch start ${GOLD_BRANCH_START[id]}`);
-        }
-        const stops = allStops.slice(Math.max(0, branchAt));
-        const stopNames = allNames.slice(Math.max(0, branchAt));
+        const stops = props.stationCoords;
+        assert(Array.isArray(stops) && stops.length > 1, `${id} baked line does not record its stops`);
+        if (!Array.isArray(stops)) continue;
 
         // The line must run along this corridor, and every stop must sit beside
         // it in route order, so a route can never stop short of a terminus the
@@ -305,7 +290,7 @@ for (const region of ['GP', 'WC', 'KZN', 'EC']) {
         });
         assert(
             worst <= STATION_NEAR_CORRIDOR_M,
-            `${id} baked line runs ${Math.round(worst)}m from ${stopNames[worstAt] || `stop ${worstAt}`}; that is a different corridor`
+            `${id} baked line runs ${Math.round(worst)}m from ${props.stationNames?.[worstAt] || `stop ${worstAt}`}; that is a different corridor`
         );
 
         let up = true;
@@ -442,7 +427,7 @@ for (const region of ['GP', 'WC', 'KZN', 'EC']) {
     const names = (fc, id) => feature(fc, id)?.properties?.stationNames || [];
     const exports = [
         { fc: gp, id: 'pta-saul', n: 402, stations: ['PRETORIA', 'PRETORIA WES', 'MITCHELLSTRAAT', 'KALAFONG', 'ATTERIDGEVILLE', 'SAULSVILLE'] },
-        { fc: gp, id: 'pta-dewildt', n: 131, stations: ['PRETORIA', 'PRETORIA-B', 'PRETORIA WES', 'HERCULES', 'DASPOORT', 'MOUNTAIN VIEW', 'WONDERBOOM', 'PRETORIA-N', 'WOLMERTON', 'WINTERSNEST', 'ROSSLYN', 'GA-RANKUWA', 'TAILLARDSHOOP', 'DE WILDT'] },
+        { fc: gp, id: 'pta-dewildt', n: 571, stations: ['PRETORIA', 'PRETORIA-B', 'PRETORIA WES', 'HERCULES', 'DASPOORT', 'MOUNTAIN VIEW', 'WONDERBOOM', 'PRETORIA-N', 'WOLMERTON', 'WINTERSNEST', 'ROSSLYN', 'GA-RANKUWA', 'TAILLARDSHOOP', 'DE WILDT'] },
         { fc: gp, id: 'herc-koed', n: 218, stations: ['HERCULES', 'CAPITAL PARK', 'GEZINA', 'DEERNESS', 'VILLIERIA', 'PIERNEEFSRUS', 'QUEENSWOOD', 'KOEDOESPOORT'] },
         { fc: gp, id: 'germ-kwesine', n: 340, stations: ['GERMISTON', 'ELSBURG', 'KATLEHONG', 'LINDELA', 'PILOT', 'KWESINE'] },
         { fc: kzn, id: 'kzn-bridgecity', n: 980, stations: ['BEREA ROAD', 'DURBAN', 'MOSES MABHIDA', 'UMGENI', 'BRIARDENE', 'GREENWOOD PARK', 'RED HILL', 'AVOCA', "DUFF'S ROAD", 'TEMBALIHLE', 'KWAMASHU', 'BRIDGE CITY'] },

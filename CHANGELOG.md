@@ -4,7 +4,7 @@ Longer release notes for the repo. The in-app “What’s New” modal uses the 
 
 ## V9_09.17.15 — GP and KZN gold-track patches (17 Sep 2026)
 
-Applied operator editor exports for Pretoria De Wildt, Hercules Koedoespoort, Germiston Kwesine, Pretoria Saulsville, Johannesburg Naledi, and Berea Road Bridge City. Pretoria De Wildt lists Pretoria through De Wildt so the line does not stop at Wintersnest. Station lists otherwise follow the exports (Pretoria Saulsville drops Schuttestraat). Johannesburg Naledi gold runs Park Station to Naledi. No new What’s New card.
+Applied operator editor exports for Pretoria De Wildt, Hercules Koedoespoort, Germiston Kwesine, Pretoria Saulsville, Johannesburg Naledi, and Berea Road Bridge City. Pretoria De Wildt gold runs Pretoria to De Wildt. Station lists follow the exports (Pretoria Saulsville drops Schuttestraat). Johannesburg Naledi gold runs Park Station to Naledi. No new What’s New card.
 
 ## V9_09.17.14 — Ticket Prices note, Account layout, signed-in prefs (17 Sep 2026)
 

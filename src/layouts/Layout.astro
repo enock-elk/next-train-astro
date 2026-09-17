@@ -91,11 +91,17 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
             if (String(document.referrer || '').indexOf('android-app://') === 0) {
               sessionStorage.setItem('nt_twa', '1');
               var twaMatch = String(document.referrer).match(/^android-app:\/\/([^/]+)/);
-              if (twaMatch) sessionStorage.setItem('nt_twa_package', twaMatch[1]);
-              else sessionStorage.setItem('nt_twa_package', 'za.co.nexttrain.app');
+              var twaPkg = twaMatch ? twaMatch[1] : 'za.co.nexttrain.app';
+              sessionStorage.setItem('nt_twa_package', twaPkg);
+              try {
+                localStorage.setItem('nt_twa', '1');
+                localStorage.setItem('nt_twa_package', twaPkg);
+              } catch (e2) {}
             }
           } catch (e) {}
-          try { if (sessionStorage.getItem('nt_twa') === '1') on = true; } catch (e) {}
+          try {
+            if (sessionStorage.getItem('nt_twa') === '1' || localStorage.getItem('nt_twa') === '1') on = true;
+          } catch (e) {}
           return on;
         }
         function isAndroid() {
@@ -506,6 +512,41 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
           userRegion = savedRegion;
         }
       } catch (e) {}
+      var PLAY_TWA_PACKAGE = 'za.co.nexttrain.app';
+      function persistTwa(pkg) {
+        pkg = pkg || PLAY_TWA_PACKAGE;
+        try {
+          sessionStorage.setItem('nt_twa', '1');
+          sessionStorage.setItem('nt_twa_package', pkg);
+          localStorage.setItem('nt_twa', '1');
+          localStorage.setItem('nt_twa_package', pkg);
+        } catch (e) {}
+        return pkg;
+      }
+      function readStoredTwaPackage() {
+        try {
+          if (sessionStorage.getItem('nt_twa') === '1' || localStorage.getItem('nt_twa') === '1') {
+            return sessionStorage.getItem('nt_twa_package')
+              || localStorage.getItem('nt_twa_package')
+              || PLAY_TWA_PACKAGE;
+          }
+        } catch (e) {}
+        return '';
+      }
+      function sendTwaOpen(pkg) {
+        try {
+          if (sessionStorage.getItem('nt_twa_open_sent') === '1') return;
+          sessionStorage.setItem('nt_twa_open_sent', '1');
+        } catch (e) { return; }
+        try {
+          if (typeof gtag === 'function') {
+            gtag('event', 'twa_open', { app_source: 'twa', twa_package: pkg || PLAY_TWA_PACKAGE });
+          }
+        } catch (e) {}
+        try {
+          if (typeof clarity === 'function') clarity('event', 'twa_open');
+        } catch (e) {}
+      }
       var appSource = 'web';
       var twaPackage = '';
       try {
@@ -513,12 +554,10 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
         if (twaRef.indexOf('android-app://') === 0) {
           appSource = 'twa';
           var twaHit = twaRef.match(/^android-app:\/\/([^/]+)/);
-          twaPackage = (twaHit && twaHit[1]) || sessionStorage.getItem('nt_twa_package') || 'za.co.nexttrain.app';
-          sessionStorage.setItem('nt_twa', '1');
-          sessionStorage.setItem('nt_twa_package', twaPackage);
-        } else if (sessionStorage.getItem('nt_twa') === '1') {
+          twaPackage = persistTwa((twaHit && twaHit[1]) || readStoredTwaPackage() || PLAY_TWA_PACKAGE);
+        } else if (readStoredTwaPackage()) {
           appSource = 'twa';
-          twaPackage = sessionStorage.getItem('nt_twa_package') || 'za.co.nexttrain.app';
+          twaPackage = persistTwa(readStoredTwaPackage());
         } else if (
           (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches)
           || (window.navigator && window.navigator.standalone)
@@ -526,6 +565,8 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
           appSource = 'pwa';
         }
       } catch (e) {}
+      gaConfig['app_source'] = appSource;
+      gaConfig['twa_package'] = twaPackage || '';
       gaConfig['user_properties'] = {
         crm_region: userRegion,
         custom_device_id: deviceId,
@@ -548,6 +589,11 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
         s.onload = function () {
           window.__ntGaReady = true;
           try { window.dispatchEvent(new Event('nt-ga-ready')); } catch (e) {}
+          try {
+            if (window.__ntAppClient && window.__ntAppClient.app_source === 'twa') {
+              sendTwaOpen(window.__ntAppClient.twa_package);
+            }
+          } catch (e) {}
         };
         s.onerror = function () { window.__ntGaBooted = false; };
         document.head.appendChild(s);
@@ -556,6 +602,36 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
       };
       if ('requestIdleCallback' in window) requestIdleCallback(bootGa, { timeout: 4000 });
       else window.addEventListener('load', function () { setTimeout(bootGa, 2500); });
+      try {
+        if (navigator.getInstalledRelatedApps) {
+          navigator.getInstalledRelatedApps().then(function (apps) {
+            var hit = (apps || []).some(function (a) {
+              var id = String((a && a.id) || '');
+              var url = String((a && a.url) || '');
+              return id === PLAY_TWA_PACKAGE || url.indexOf(PLAY_TWA_PACKAGE) !== -1;
+            });
+            if (!hit) return;
+            twaPackage = persistTwa(PLAY_TWA_PACKAGE);
+            appSource = 'twa';
+            window.__ntAppClient = { app_source: 'twa', twa_package: twaPackage };
+            try {
+              if (window.__ntGaConfig) {
+                window.__ntGaConfig.app_source = 'twa';
+                window.__ntGaConfig.twa_package = twaPackage;
+                if (window.__ntGaConfig.user_properties) {
+                  window.__ntGaConfig.user_properties.app_client = 'twa';
+                  window.__ntGaConfig.user_properties.twa_package = twaPackage;
+                }
+              }
+              if (typeof gtag === 'function') {
+                gtag('set', 'user_properties', { app_client: 'twa', twa_package: twaPackage });
+                gtag('set', { app_source: 'twa', twa_package: twaPackage });
+              }
+            } catch (e) {}
+            sendTwaOpen(twaPackage);
+          }).catch(function () {});
+        }
+      } catch (e) {}
     </script>
 
     <!-- Clarity — same idle deferral as GA4 (timeout 4s) so LCP stays free -->
@@ -578,6 +654,13 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
             clarity('identify', id);
             clarity('set', 'custom_id', id);
           }
+          try {
+            var client = window.__ntAppClient || {};
+            if (client.app_source && typeof clarity === 'function') {
+              clarity('set', 'app_client', String(client.app_source));
+              if (client.twa_package) clarity('set', 'twa_package', String(client.twa_package));
+            }
+          } catch (e2) {}
         } catch (e) {}
       };
       if ('requestIdleCallback' in window) requestIdleCallback(bootClarity, { timeout: 4000 });

@@ -218,23 +218,31 @@ const resolvedHtmlClass = [forceDark ? 'dark' : '', htmlClass].filter(Boolean).j
       window.dataLayer = window.dataLayer || [];
       function gtag(){dataLayer.push(arguments);}
       var TWA_PACKAGE = 'za.co.nexttrain.app';
+      function persistTwa(pkg) {
+        pkg = pkg || TWA_PACKAGE;
+        try {
+          sessionStorage.setItem('nt_twa', '1');
+          sessionStorage.setItem('nt_twa_package', pkg);
+          localStorage.setItem('nt_twa', '1');
+          localStorage.setItem('nt_twa_package', pkg);
+        } catch (e) {}
+        return pkg;
+      }
       function detectAppClient() {
         var ref = String(document.referrer || '');
         var pkg = '';
-        try { pkg = sessionStorage.getItem('nt_twa_package') || ''; } catch (e) {}
         var isTwa = false;
-        try { isTwa = sessionStorage.getItem('nt_twa') === '1'; } catch (e) {}
+        try {
+          pkg = sessionStorage.getItem('nt_twa_package') || localStorage.getItem('nt_twa_package') || '';
+          isTwa = sessionStorage.getItem('nt_twa') === '1' || localStorage.getItem('nt_twa') === '1';
+        } catch (e) {}
         if (ref.indexOf('android-app://') === 0) {
-          isTwa = true;
           var m = ref.match(/^android-app:\/\/([^/]+)/);
           if (m) pkg = m[1];
-          try {
-            sessionStorage.setItem('nt_twa', '1');
-            if (pkg) sessionStorage.setItem('nt_twa_package', pkg);
-          } catch (e) {}
+          pkg = persistTwa(pkg || TWA_PACKAGE);
+          return { app_source: 'twa', twa_package: pkg };
         }
-        if (!pkg && isTwa) pkg = TWA_PACKAGE;
-        if (isTwa) return { app_source: 'twa', twa_package: pkg || TWA_PACKAGE };
+        if (isTwa) return { app_source: 'twa', twa_package: persistTwa(pkg || TWA_PACKAGE) };
         var standalone = false;
         try {
           if (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) standalone = true;
@@ -258,6 +266,8 @@ const resolvedHtmlClass = [forceDark ? 'dark' : '', htmlClass].filter(Boolean).j
         app_client: client.app_source,
         twa_package: client.twa_package || ''
       };
+      gaConfig['app_source'] = client.app_source;
+      gaConfig['twa_package'] = client.twa_package || '';
       // SEO dimensions only on crawlable landings. Map/guide skip this (in-app).
       if (trackSeo) {
         if (seoPageType) gaConfig['seo_page_type'] = String(seoPageType);

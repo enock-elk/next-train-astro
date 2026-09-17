@@ -268,8 +268,17 @@ export default defineConfig({
         ],
         categories: ['travel', 'navigation', 'utilities'],
         dir: 'ltr',
-        // Prefer this PWA until a Play TWA package ID exists for related_applications.
+        // Play TWA exists (za.co.nexttrain.app). Keep prefer false so Chrome
+        // still offers Add to Home Screen; related_applications lets
+        // getInstalledRelatedApps() count Play installs as TWA.
         prefer_related_applications: false,
+        related_applications: [
+          {
+            platform: 'play',
+            url: 'https://play.google.com/store/apps/details?id=za.co.nexttrain.app',
+            id: 'za.co.nexttrain.app',
+          },
+        ],
         display_override: ['standalone', 'browser'],
         // Re-open shared trips / shortcuts in the existing installed window.
         launch_handler: {

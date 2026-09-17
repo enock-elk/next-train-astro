@@ -130,6 +130,16 @@ const appLayout = src('src/layouts/Layout.astro');
 if (!appLayout.includes("app_client: appSource") || !appLayout.includes('nt_twa_package')) {
     fail('App Layout must set app_client / twa_package user properties');
 }
+if (!appLayout.includes("gtag('event', 'twa_open'")) {
+    fail('App Layout must fire twa_open when the Play TWA is detected');
+}
+if (!appLayout.includes('getInstalledRelatedApps') || !appLayout.includes("localStorage.setItem('nt_twa'")) {
+    fail('App Layout must persist TWA and confirm via getInstalledRelatedApps');
+}
+const astroConfig = src('astro.config.mjs');
+if (!astroConfig.includes("id: 'za.co.nexttrain.app'") || !astroConfig.includes('related_applications')) {
+    fail('web manifest must list Play package za.co.nexttrain.app in related_applications');
+}
 
 const adminBridge = src('src/lib/admin-bridge.js');
 if (!adminBridge.includes('if (!window.trackAnalyticsEvent)')) {

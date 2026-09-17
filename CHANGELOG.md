@@ -2,6 +2,10 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin, Dev Hub, Alerts, Trains near me, community chat, or other hidden-test work. No emoji and no em dashes in What’s New. Keep `APP_VERSION`, `package.json` `version`, and `public/app-version.json` aligned on each release. Changelog / What’s New may be skipped, or the heading may be only **no release notes.** Every bump must add `ADMIN_CHANGELOG[APP_VERSION]` (System Health Build notes).
 
+## V9_09.17.9 — Schedule dump, Play TWA client tag (17 Sep 2026)
+
+Refreshed `public/data/full-database.json`. SEO landings use that dump at the next production build. Play TWA (`za.co.nexttrain.app`) is persisted and counted as `twa_open` / `app_client=twa`. No new What’s New card.
+
 ## V9_09.17.8 — WC holidays SEO, Retreat name, KZN editor (17 Sep 2026)
 
 Cape Town <-> Retreat drops the Cape Flats suffix in the route name. Western Cape public-holiday landing plus internal SEO links; no invented GP/KZN/EC holiday sheets. Map editor and apply-patch accept KZN. Planner gold cover matches the map (2000 m). SEO landings fire one `seo_page_view`; map.html and guide.html skip it. No new What’s New card.

@@ -5,6 +5,10 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_09.17.9': [
+        'Replaced public/data/full-database.json with the operator export. SEO SSG and the GitHub fallback read that file. Live boards still prefer Firebase for clocks, bans, and killswitch.',
+        'Play TWA za.co.nexttrain.app: persist nt_twa in localStorage, list related_applications (prefer_related_applications stays false), confirm via getInstalledRelatedApps, send app_source/twa_package on page_view, and fire twa_open once per session. The native “Google Play is enabled” dialog is Play Integrity/Billing in the Android wrapper, not map.html. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
+    ],
     'V9_09.17.8': [
         'In-app route name for ct-flats is Cape Town <-> Retreat (corridor label stays Cape Flats Line).',
         'SEO: regions/western-cape-public-holidays.html lists 2026 WC Public Holiday vs no-service days from SPECIAL_DATES. WC region hub, WC route landings, routes.html WC section, and guide FAQ link it. SeoCrossLinks wires route/region/corridor/index pages. GP/KZN/EC have no *_pub sheets so they get no holiday landing.',

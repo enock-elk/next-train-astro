@@ -180,7 +180,11 @@ if (!existsSync(manifestPath)) {
     }
   }
   if (m.prefer_related_applications !== false) {
-    fail('manifest prefer_related_applications must be false until a Play package exists');
+    fail('manifest prefer_related_applications must stay false so Chrome A2HS is not replaced by Play');
+  }
+  const related = Array.isArray(m.related_applications) ? m.related_applications : [];
+  if (!related.some((a) => a.platform === 'play' && a.id === 'za.co.nexttrain.app')) {
+    fail('manifest related_applications must list Play package za.co.nexttrain.app');
   }
   if (!Array.isArray(m.display_override) || !m.display_override.includes('standalone')) {
     fail('manifest display_override must include standalone');

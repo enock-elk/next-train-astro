@@ -81,17 +81,17 @@ export function canAccessPilotSurface(surface, routeId = '') {
 export function placeAccountSettings(accountOn) {
     if (typeof document === 'undefined') return;
     const profile = document.getElementById('settings-profile-btn');
+    const cluster = document.getElementById('settings-profile-cluster') || profile;
     const prefs = document.getElementById('sidenav-prefs-block');
     const sidenavSlot = document.getElementById('sidenav-legacy-settings');
     const accountSlot = document.getElementById('account-settings-host');
-    const identitySlot = document.getElementById('account-identity-host');
     const mapsBlock = document.getElementById('sidenav-maps-block');
-    const signedIn = document.getElementById('account-signed-in');
-    const isSignedIn = !!(signedIn && !signedIn.classList.contains('hidden'));
+    const themeToggle = document.getElementById('settings-theme-toggle');
+    const notifyToggle = document.getElementById('settings-notify-toggle');
+    const paxNote = document.getElementById('settings-profile-community-note');
     if (accountOn && accountSlot) {
-        if (profile) {
-            if (isSignedIn && identitySlot) identitySlot.appendChild(profile);
-            else accountSlot.insertBefore(profile, accountSlot.firstChild);
+        if (cluster && themeToggle?.parentElement) {
+            themeToggle.parentElement.insertBefore(cluster, themeToggle);
         }
         if (prefs) accountSlot.appendChild(prefs);
         prefs?.classList.add('nt-prefs-flat');
@@ -100,6 +100,14 @@ export function placeAccountSettings(accountOn) {
         panel?.classList.remove('hidden');
         panel?.classList.add('flex');
         document.getElementById('prefs-accordion-toggle')?.setAttribute('aria-expanded', 'true');
+        if (notifyToggle) {
+            notifyToggle.hidden = false;
+            notifyToggle.removeAttribute('hidden');
+            notifyToggle.classList.remove('hidden');
+            notifyToggle.removeAttribute('inert');
+            notifyToggle.setAttribute('aria-hidden', 'false');
+        }
+        paxNote?.classList.remove('hidden');
     } else {
         prefs?.classList.remove('nt-prefs-flat');
         document.getElementById('prefs-accordion-toggle')?.classList.remove('hidden');
@@ -107,10 +115,21 @@ export function placeAccountSettings(accountOn) {
         const panel = document.getElementById('prefs-accordion-panel');
         panel?.classList.add('hidden');
         panel?.classList.remove('flex');
-        if (profile && sidenavSlot) sidenavSlot.appendChild(profile);
+        if (cluster && sidenavSlot) sidenavSlot.appendChild(cluster);
         if (prefs && mapsBlock?.parentElement) mapsBlock.parentElement.insertBefore(prefs, mapsBlock);
+        paxNote?.classList.add('hidden');
+        if (notifyToggle && !isAdminAuthed()) {
+            notifyToggle.hidden = true;
+            notifyToggle.setAttribute('hidden', '');
+            notifyToggle.classList.add('hidden');
+            notifyToggle.setAttribute('inert', '');
+            notifyToggle.setAttribute('aria-hidden', 'true');
+        }
     }
     document.documentElement.setAttribute('data-account-settings', accountOn ? '1' : '0');
+    if (typeof window.syncNotifyUi === 'function') {
+        try { window.syncNotifyUi(); } catch { /* ignore */ }
+    }
 }
 
 export function applyPilotChrome() {

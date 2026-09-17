@@ -287,6 +287,10 @@ export function syncNotifyUi(enabled = getNotifyPref()) {
             hint.textContent = 'Official notices and confirmed delays';
         }
     }
+    const types = document.getElementById('account-notify-types');
+    const toggle = document.getElementById('settings-notify-toggle');
+    const masterVisible = !!(toggle && !toggle.hidden && !toggle.classList.contains('hidden'));
+    types?.classList.toggle('hidden', !(masterVisible && enabled));
 }
 
 export async function setNotifyPref(wantOn) {
@@ -448,4 +452,5 @@ export function syncCrmRegionAnalytics(region) {
 if (typeof window !== 'undefined') {
     window.syncCrmRegionAnalytics = syncCrmRegionAnalytics;
     window.syncPrefsAccordionSummary = syncPrefsAccordionSummary;
+    window.syncNotifyUi = syncNotifyUi;
 }

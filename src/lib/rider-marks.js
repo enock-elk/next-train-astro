@@ -483,8 +483,13 @@ export function badgeUnlocked(action, state = readMarks()) {
 export function syncRiderMarksUi(state = readMarks()) {
     if (typeof document === 'undefined') return;
     const label = marksLabel(state);
+    const signedIn = typeof window !== 'undefined' && window.$account?.get?.()?.status === 'signed-in';
     document.querySelectorAll('[data-rider-marks]').forEach((el) => {
         el.textContent = label;
+        if (el.id === 'settings-account-points') {
+            el.classList.toggle('hidden', !signedIn);
+            return;
+        }
         el.classList.remove('hidden');
     });
     if (typeof window !== 'undefined' && typeof window.paintAccountPoints === 'function') {

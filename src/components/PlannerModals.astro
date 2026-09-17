@@ -40,6 +40,12 @@ import { withBase } from '../lib/config.js';
     </div>
 </div>
 
+<!-- Alert / attachment image preview (do not reuse #map-modal — that flashes network-map.png). -->
+<div id="alert-image-lightbox" class="fixed inset-0 bg-black z-[160] hidden flex-col items-center justify-center p-4" role="dialog" aria-modal="true" aria-label="Image Preview">
+    <img id="alert-image-lightbox-img" alt="Image Preview" class="max-w-full max-h-[calc(100%-5.5rem)] object-contain">
+    <button type="button" id="alert-image-lightbox-close" class="mt-4 w-full max-w-sm bg-white hover:bg-gray-100 text-gray-900 font-bold py-3 px-4 rounded-lg focus:outline-none">Close</button>
+</div>
+
 <!-- LEGAL MODAL -->
 <div id="legal-modal" class="fixed inset-0 bg-black bg-opacity-70 z-[150] hidden flex items-center justify-center p-4 backdrop-blur-sm transition-opacity duration-300">
     <div class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-lg max-h-[85dvh] flex flex-col transform transition-transform duration-300 scale-95">

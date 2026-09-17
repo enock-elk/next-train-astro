@@ -575,7 +575,6 @@ export function syncAccountSettingsUi(state = $account.get()) {
     if (guestBlock) guestBlock.classList.toggle('hidden', signed || state.status === 'loading');
     const sessionActions = document.getElementById('account-session-actions');
     if (sessionActions) sessionActions.classList.toggle('hidden', !signed);
-    document.getElementById('account-notify-block')?.classList.toggle('hidden', !signed);
     const deleteWrap = document.getElementById('account-delete-wrap');
     const isOperator = signed && isAdminEmail(state.email);
     if (deleteWrap) {
@@ -1029,16 +1028,6 @@ export function bindAccountUi() {
     });
     document.getElementById('account-photo-alerts')?.addEventListener('change', (e) => {
         e.target.dataset.dirty = '1';
-    });
-
-    const notifyToggle = document.getElementById('account-notify-toggle');
-    const notifyPanel = document.getElementById('account-notify-panel');
-    const notifyChevron = document.getElementById('account-notify-chevron');
-    notifyToggle?.addEventListener('click', () => {
-        const open = !!notifyPanel?.classList.contains('hidden');
-        notifyPanel?.classList.toggle('hidden', !open);
-        notifyToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
-        notifyChevron?.classList.toggle('rotate-180', open);
     });
 
     document.getElementById('account-badge-how-close')?.addEventListener('click', closeBadgeHowSheet);

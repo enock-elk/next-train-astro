@@ -289,12 +289,14 @@ import { withBase } from '../lib/config.js';
 <!-- ACCOUNT -->
 <div id="account-modal" class="fixed inset-0 bg-[#f2f2f7] dark:bg-black z-[120] hidden flex items-stretch justify-center p-0 transition-opacity duration-300">
     <div class="bg-[#f2f2f7] dark:bg-black w-full h-full max-w-none flex flex-col overflow-hidden border-0 rounded-none">
-        <div class="shrink-0 z-10 flex items-center justify-between px-4 pb-3 bg-[#f2f2f7] dark:bg-black" style="padding-top: max(0.75rem, env(safe-area-inset-top, 0px));">
-            <h3 class="text-[28px] leading-tight font-bold text-gray-900 dark:text-white tracking-tight">Account</h3>
-            <button type="button" id="account-modal-close" class="px-2 py-1 text-[17px] font-normal text-blue-600 dark:text-blue-400 focus:outline-none" aria-label="Close">Done</button>
+        <div class="shrink-0 z-10 flex items-center px-3 py-2.5 bg-[#f2f2f7] dark:bg-black" style="padding-top: max(0.5rem, env(safe-area-inset-top, 0px));">
+            <button type="button" id="account-modal-close" class="inline-flex items-center text-sm font-bold text-blue-600 dark:text-blue-400 px-2 py-1.5 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/30 focus:outline-none" aria-label="Back">
+                <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
+                Back
+            </button>
         </div>
 
-        <div class="px-4 pb-6 space-y-6 flex-1 min-h-0 overflow-y-auto custom-scrollbar" data-feedback-scroll>
+        <div class="px-4 pt-2 pb-6 space-y-6 flex-1 min-h-0 overflow-y-auto custom-scrollbar" data-feedback-scroll>
             <p id="account-error" class="px-1 text-[13px] font-normal text-red-600 dark:text-red-400 empty:hidden" role="alert"></p>
 
             <!-- Signed-in panel -->
@@ -366,14 +368,6 @@ import { withBase } from '../lib/config.js';
                         </div>
                     </div>
                 </div>
-
-                <div class="space-y-2">
-                    <p class="px-1 text-[12px] font-normal uppercase tracking-wide text-gray-500">Community identity</p>
-                    <div class="rounded-[12px] overflow-hidden bg-white dark:bg-[#1c1c1e] divide-y divide-black/10 dark:divide-white/10">
-                        <p class="px-4 py-2 text-[12px] font-normal text-gray-500 dark:text-gray-400 leading-snug">Passenger type is used on the Community tab.</p>
-                        <div id="account-identity-host"></div>
-                    </div>
-                </div>
             </div>
 
             <!-- Guest / sign-in panel -->
@@ -434,36 +428,6 @@ import { withBase } from '../lib/config.js';
             </div>
 
             <div id="account-settings-host" class="space-y-3"></div>
-
-            <div id="account-notify-block" class="hidden rounded-[12px] overflow-hidden bg-white dark:bg-[#1c1c1e]">
-                <button type="button" id="account-notify-toggle" class="w-full flex items-center justify-between gap-2 px-4 py-[11px] text-left focus:outline-none" aria-expanded="false" aria-controls="account-notify-panel">
-                    <span class="text-[13px] font-normal text-gray-900 dark:text-white">Notifications</span>
-                    <svg id="account-notify-chevron" class="w-3.5 h-3.5 text-gray-400 shrink-0 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7"></path></svg>
-                </button>
-                <div id="account-notify-panel" class="hidden divide-y divide-black/10 dark:divide-white/10 border-t border-black/10 dark:border-white/10">
-                    <p class="px-4 py-2 text-[12px] font-normal text-gray-500 dark:text-gray-400 leading-snug">Coming later. These stay off.</p>
-                    <label class="flex items-center justify-between gap-3 px-4 py-[11px] opacity-50 cursor-not-allowed">
-                        <span class="text-[13px] font-normal text-gray-900 dark:text-white">Community chats</span>
-                        <input type="checkbox" disabled aria-disabled="true" class="rounded border-gray-300 text-blue-600 shrink-0">
-                    </label>
-                    <label class="flex items-center justify-between gap-3 px-4 py-[11px] opacity-50 cursor-not-allowed">
-                        <span class="text-[13px] font-normal text-gray-900 dark:text-white">Delays</span>
-                        <input type="checkbox" disabled aria-disabled="true" class="rounded border-gray-300 text-blue-600 shrink-0">
-                    </label>
-                    <label class="flex items-center justify-between gap-3 px-4 py-[11px] opacity-50 cursor-not-allowed">
-                        <span class="text-[13px] font-normal text-gray-900 dark:text-white">Incidents</span>
-                        <input type="checkbox" disabled aria-disabled="true" class="rounded border-gray-300 text-blue-600 shrink-0">
-                    </label>
-                    <label class="flex items-center justify-between gap-3 px-4 py-[11px] opacity-50 cursor-not-allowed">
-                        <span class="text-[13px] font-normal text-gray-900 dark:text-white">Train nearby reminders</span>
-                        <input type="checkbox" disabled aria-disabled="true" class="rounded border-gray-300 text-blue-600 shrink-0">
-                    </label>
-                    <label class="flex items-center justify-between gap-3 px-4 py-[11px] opacity-50 cursor-not-allowed">
-                        <span class="text-[13px] font-normal text-gray-900 dark:text-white">Admin feedback</span>
-                        <input type="checkbox" disabled aria-disabled="true" class="rounded border-gray-300 text-blue-600 shrink-0">
-                    </label>
-                </div>
-            </div>
 
             <div id="account-session-actions" class="hidden space-y-6">
                 <div class="rounded-[12px] overflow-hidden bg-white dark:bg-[#1c1c1e]">
@@ -635,8 +599,8 @@ import { withBase } from '../lib/config.js';
         </div>
         <form id="messages-thread-form" class="shrink-0 p-3 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 space-y-2">
             <p id="messages-thread-hint" class="text-[11px] font-semibold text-amber-700 dark:text-amber-300 empty:hidden" aria-live="polite"></p>
-            <div id="messages-thread-contact-row" class="relative">
-                <input type="text" id="messages-thread-contact" maxlength="64" autocomplete="email" class="w-full pl-3 pr-10 py-2 rounded-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-[12px] text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="Email or WhatsApp if you want a reply">
+            <div id="messages-thread-contact-row" class="relative min-w-0">
+                <input type="text" id="messages-thread-contact" maxlength="64" autocomplete="email" class="w-full min-w-0 pl-3 pr-10 py-2 rounded-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-[12px] text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="Email or WhatsApp for a reply">
                 <button type="button" id="messages-thread-privacy" class="absolute right-1.5 top-1/2 -translate-y-1/2 w-8 h-8 inline-flex items-center justify-center rounded-full text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-gray-200/70 dark:hover:bg-gray-700 focus:outline-none" aria-label="Privacy Policy">
                     <svg class="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
                 </button>
@@ -679,10 +643,10 @@ import { withBase } from '../lib/config.js';
     max-height: none;
   }
   #account-modal {
+    position: absolute;
     inset: 0;
-    top: 0;
-    height: var(--nt-app-h, 100dvh);
-    max-height: var(--nt-app-h, 100dvh);
+    height: auto;
+    max-height: none;
   }
   /* Send Feedback stays centered in the visible viewport. Do not dock it like Hub. */
   #feedback-modal {
@@ -732,19 +696,18 @@ import { withBase } from '../lib/config.js';
   #account-settings-host:empty {
     display: none;
   }
-  #account-settings-host #settings-profile-btn,
   #account-settings-host #prefs-accordion-toggle {
     background: #fff;
     border-radius: 10px;
   }
-  html.dark #account-settings-host #settings-profile-btn,
-  html.dark #account-settings-host #prefs-accordion-toggle,
-  html.dark #account-identity-host #settings-profile-btn {
+  html.dark #account-settings-host #prefs-accordion-toggle {
     background: #1c1c1e;
   }
-  #account-identity-host #settings-profile-btn {
-    background: #fff;
-    border-radius: 0;
+  #account-settings-host #sidenav-prefs-block.nt-prefs-flat #settings-notify-toggle {
+    display: flex !important;
+  }
+  #account-settings-host #settings-profile-community-note:not(.hidden) {
+    display: block;
   }
   #account-profile-chevron.rotate-180 {
     transform: rotate(180deg);

@@ -124,6 +124,7 @@ ok(adminJs.includes('sys_logs/trip_plan_users'), 'admin reads trip_plan_users in
     ok(rules.includes('"trip_plan_users"'), 'rules allow trip_plan_users index');
     ok(rules.includes('"trip_plan_pairs"'), 'rules allow trip_plan_pairs index');
     ok(rules.includes('"fare_votes"'), 'rules allow fare_votes create-once log');
+    ok(rules.includes('"planner_fares"'), 'rules allow public-read planner_fares');
     ok(rules.includes('thandeka05nxumalo@gmail.com') && rules.includes('enockelk@gmail.com'), 'rules keep both operator emails');
 }
 {
@@ -171,6 +172,15 @@ ok(adminJs.includes('id="de-tab-trips"') && adminJs.indexOf('id="de-tab-fails"')
 ok(adminJs.includes('sys_logs/fare_votes'), 'admin reads fare_votes');
 ok(adminJs.includes('smoothKm') && adminJs.includes('abKm'), 'Fares tab exports smooth and A-B km');
 ok(adminJs.includes('A-B '), 'Fares list labels crow-flies as A-B');
+ok(adminJs.includes('Admin.approvePlannerFare'), 'Fares tab can approve a correction');
+ok(adminJs.includes('config/planner_fares/'), 'Approve writes config/planner_fares/$key');
+ok(adminJs.includes('de-fare-approve'), 'correction cards have an Approve button');
+ok(adminJs.includes('Live R'), 'already-approved corrections show Live');
+{
+    const bridge = readFileSync(join(ROOT, 'src/lib/admin-bridge.js'), 'utf8');
+    ok(bridge.includes('window.plannerFareOverrideKey'), 'admin bridge exposes override keys');
+    ok(bridge.includes('window.buildPlannerFareOverrideRecord'), 'admin bridge exposes override records');
+}
 ok(adminJs.includes("['trips', 'fails', 'fares']"), 'swipe walks three planner telemetry tabs');
 ok(adminJs.includes('de-trip-hour-bars') && adminJs.includes('de-trip-od-heat'), 'planner insights include hour bars and an OD heatmap');
 ok(adminJs.includes('de-trip-dep-bars') && adminJs.includes('de-trip-xfer'), 'planner insights include departure-hour and transfer charts');

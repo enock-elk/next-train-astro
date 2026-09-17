@@ -11,6 +11,12 @@
       "schedule_override": { ".read": true },
       "features": { ".read": true },
       "feature_grants": { ".read": true },
+      "planner_fares": {
+        ".read": true,
+        "$fareKey": {
+          ".validate": "!newData.exists() || (newData.hasChildren(['origin', 'destination', 'price', 'approvedAt']) && newData.child('origin').isString() && newData.child('origin').val().length > 0 && newData.child('origin').val().length < 80 && newData.child('destination').isString() && newData.child('destination').val().length > 0 && newData.child('destination').val().length < 80 && newData.child('price').isNumber() && newData.child('price').val() >= 1 && newData.child('price').val() <= 500 && newData.child('approvedAt').isNumber())"
+        }
+      },
       "grid_order": {
         ".read": true,
         ".write": "auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')",

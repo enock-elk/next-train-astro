@@ -5,10 +5,11 @@
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { FARE_CONFIG } from '../src/lib/config.js';
+import { FARE_CONFIG, fareMultiplierForProfile } from '../src/lib/config.js';
 import { FEATURE_KEYS, GRANTABLE_FEATURES } from '../src/lib/features.js';
 import { suggestZoneFromKm, DEFAULT_ZONE_KM_BANDS } from '../src/lib/zone-distance-audit.js';
 import { computeZoneFareForTrip, getCrowFliesTripKm } from '../src/lib/planner-ui.js';
+import { $userProfile } from '../src/store.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const failures = [];
@@ -45,18 +46,53 @@ assert(FARE_CONFIG.offPeakEveryDay === false, 'off-peak is weekday-only');
     assert(peak && peak.isOffPeak === false, `weekday 07:30 must be peak, got ${JSON.stringify(peak)}`);
 }
 
+assert(FARE_CONFIG.profiles.Scholar.alwaysDiscount === true, 'Scholar is the always-on discount profile');
+assert(!FARE_CONFIG.profiles.Adult.alwaysDiscount, 'Adult is not always-on');
+assert(!FARE_CONFIG.profiles.Pensioner.alwaysDiscount, 'Pensioner is off-peak only');
+assert(fareMultiplierForProfile('Scholar', false) === 0.5, 'Scholar peak is 50%');
+assert(fareMultiplierForProfile('Scholar', true) === 0.5, 'Scholar off-peak is still 50%');
+assert(fareMultiplierForProfile('Adult', false) === 1, 'Adult peak is full fare');
+assert(fareMultiplierForProfile('Adult', true) === 0.6, 'Adult off-peak is 40% off');
+assert(fareMultiplierForProfile('Pensioner', false) === 1, 'Pensioner peak is full fare');
+assert(fareMultiplierForProfile('Pensioner', true) === 0.5, 'Pensioner off-peak is 50%');
+
+{
+    $userProfile.set('Scholar');
+    try {
+        const scholarPeak = computeZoneFareForTrip('Z2', { dayType: 'weekday', depTime: '07:30' });
+        assert(scholarPeak && scholarPeak.alwaysDiscount === true && scholarPeak.price === 6,
+            `Scholar weekday 07:30 must be R6 (50% of Z2 12), got ${JSON.stringify(scholarPeak)}`);
+        const scholarOff = computeZoneFareForTrip('Z2', { dayType: 'weekday', depTime: '11:00' });
+        assert(scholarOff && scholarOff.alwaysDiscount === true && scholarOff.price === 6,
+            `Scholar weekday 11:00 must stay R6, got ${JSON.stringify(scholarOff)}`);
+        const scholarSat = computeZoneFareForTrip('Z2', { dayType: 'saturday', depTime: '11:00' });
+        assert(scholarSat && scholarSat.alwaysDiscount === true && scholarSat.price === 6 && scholarSat.isOffPeak === false,
+            `Scholar Saturday 11:00 must stay R6, got ${JSON.stringify(scholarSat)}`);
+    } finally {
+        $userProfile.set('Adult');
+    }
+}
+
 const ui = readFileSync(join(ROOT, 'src/lib/planner-ui.js'), 'utf8');
 assert(ui.includes('data-nt-trip-fare'), 'planner header has the fare button');
-assert(ui.includes('TRIP FARE:'), 'fare label is TRIP FARE on one line');
+assert(ui.includes('Trip fare:'), 'fare label is Trip fare on one line');
+assert(!ui.includes('TRIP FARE:'), 'fare label is not all-caps TRIP FARE');
+assert(ui.includes('text-xs font-black text-gray-800'), 'Trip fare is 12px gray-800');
 assert(ui.includes('plannerMoneySvg') || ui.includes('M3 7.5h13.5'), 'trip fare button has a money SVG');
 assert(ui.includes('planner-fare-profile-btn'), 'Adult in the fare sheet is a profile button');
 assert(ui.includes('openPassengerTypePicker'), 'Adult opens the passenger profile picker');
 assert(ui.includes('roundBoardFare'), 'planner uses the board whole-rand floor');
-assert(ui.includes('border-b border-dotted'), 'TRIP FARE uses a dotted underline');
+assert(ui.includes('border-b border-dotted'), 'Trip fare uses a dotted underline');
 assert(ui.includes('getSmoothTripDistanceKm'), 'fare uses smoothed rail distance');
 assert(ui.includes('getCrowFliesTripKm'), 'fare also computes first-to-last straight-line km');
-assert(ui.includes('Straight-line'), 'fare sheet shows the crow-flies line');
+assert(ui.includes('Straight-line'), 'fare sheet still has the crow-flies line');
+assert(ui.includes('data-admin-authed-only') && ui.includes('Straight-line') && ui.includes('Zone'), 'straight-line and zone are admin-only');
+assert(ui.includes('applyAdminAuthedChrome(isAdminAuthed())'), 'fare sheet re-applies admin chrome after innerHTML');
+assert(ui.includes("peakTitle = fare.alwaysDiscount ? 'Discount'"), 'scholar sheet labels Discount, not Peak / off-peak');
+assert(ui.includes('50% all day'), 'scholar sheet says 50% all day');
 assert(ui.includes('planner-fare-breakdown-sheet'), 'fare sheet is wired');
+assert(ui.includes('applyApprovedPlannerFare'), 'planner results apply approved live prices');
+assert(ui.includes('ensurePlannerFareOverrides'), 'planner fetches config/planner_fares before painting the button');
 {
     const crow = getCrowFliesTripKm({
         stops: [

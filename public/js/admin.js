@@ -6037,6 +6037,41 @@ const Admin = {
 
         refreshBtn.onclick = () => Admin.fetchDeadEnds();
 
+        Admin.approvePlannerFare = async (vote) => {
+            const secret = await Admin.getAuthKey();
+            if (!secret) throw new Error('Not signed in');
+            if (typeof window.plannerFareOverrideKey !== 'function' || typeof window.buildPlannerFareOverrideRecord !== 'function') {
+                throw new Error('Planner fare helpers are not loaded');
+            }
+            const item = vote && typeof vote === 'object' ? vote : {};
+            const reported = Number(item.reportedPrice);
+            if (!Number.isFinite(reported) || reported < 1 || reported > 500) {
+                throw new Error('Correction needs a whole rand between 1 and 500');
+            }
+            if (item.agree !== false) throw new Error('Only price corrections can be approved');
+            const key = window.plannerFareOverrideKey(item);
+            const record = window.buildPlannerFareOverrideRecord(item, {
+                approvedBy: Admin.currentUser?.email || Admin.currentUser?.uid || 'Admin',
+                at: Date.now(),
+            });
+            if (!record.origin || !record.destination || !record.price) {
+                throw new Error('Correction is missing origin, destination, or price');
+            }
+            const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
+            const put = await fetch(`${dynamicEndpoint}config/planner_fares/${encodeURIComponent(key)}.json?auth=${secret}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(record),
+            });
+            if (!put.ok) throw new Error(`Approve failed (${put.status})`);
+            Admin._cachedPlannerFares = { ...(Admin._cachedPlannerFares || {}), [key]: record };
+            if (typeof window.setPlannerFareOverridesCache === 'function') {
+                window.setPlannerFareOverridesCache(Admin._cachedPlannerFares);
+            }
+            if (typeof showToast === 'function') showToast(`Planner will quote R${record.price}`, 'success');
+            await Admin.fetchDeadEnds();
+        };
+
         Admin.fetchDeadEnds = async () => {
             const secret = await Admin.getAuthKey();
             if (!secret) return;
@@ -6069,6 +6104,18 @@ const Admin = {
                         return;
                     }
                     Admin._cachedFareVotes = fareData;
+                    let liveData = {};
+                    try {
+                        const liveRes = await window.guardianFetch(`${dynamicEndpoint}config/planner_fares.json?auth=${secret}`, {}, 10000);
+                        if (liveRes.ok) {
+                            const parsed = await liveRes.json();
+                            if (parsed && typeof parsed === 'object') liveData = parsed;
+                        }
+                    } catch (_) { /* public-read node; keep the votes list if it 401s */ }
+                    Admin._cachedPlannerFares = liveData;
+                    if (typeof window.setPlannerFareOverridesCache === 'function') {
+                        window.setPlannerFareOverridesCache(liveData);
+                    }
                     const secureEscape = (str) => {
                         if (!str) return '';
                         if (typeof escapeHTML === 'function') return escapeHTML(str);
@@ -6081,7 +6128,7 @@ const Admin = {
                     listDiv.innerHTML = '';
                     entries.forEach((item) => {
                         const card = document.createElement('div');
-                        card.className = "bg-white dark:bg-gray-900 p-3 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm";
+                        card.className = "bg-white dark:bg-gray-900 p-3 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm flex items-start justify-between gap-2";
                         const quoted = item.quotedPrice != null ? `R${item.quotedPrice}` : '-';
                         const reported = item.reportedPrice != null ? `R${item.reportedPrice}` : '-';
                         const peakLabel = item.isOffPeak ? 'Off-peak' : 'Peak';
@@ -6090,16 +6137,33 @@ const Admin = {
                         const kmLabel = `smooth ${smoothKm != null && smoothKm !== '' ? smoothKm : '-'} km · A-B ${abKm != null && abKm !== '' ? abKm : '-'} km`;
                         const profileLabel = item.profile || 'Adult';
                         const vsLabel = item.agree ? `${quoted} (yes)` : `${quoted} → ${reported}`;
+                        const fareKey = typeof window.plannerFareOverrideKey === 'function' ? window.plannerFareOverrideKey(item) : '';
+                        const liveRow = fareKey ? liveData[fareKey] : null;
+                        const livePrice = liveRow ? Number(liveRow.price) : NaN;
+                        const isLive = Number.isFinite(livePrice) && livePrice === Number(item.reportedPrice);
+                        const canApprove = item.agree === false && Number(item.reportedPrice) >= 1 && Number(item.reportedPrice) <= 500;
                         card.innerHTML = `
-                            <div class="text-xs font-bold text-gray-900 dark:text-white whitespace-normal break-words leading-snug">${secureEscape(item.origin)} ${Admin.routeArrowSvg('inline-block w-3.5 h-3.5 mx-1 align-middle text-gray-400 shrink-0')} ${secureEscape(item.destination)}</div>
-                            <div class="flex flex-wrap items-center mt-1.5 gap-1.5">
-                                <span class="text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded ${item.agree ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300' : 'bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-200'}">${secureEscape(vsLabel)}</span>
-                                <span class="text-[9px] font-bold text-indigo-600 dark:text-indigo-400 uppercase">${secureEscape(peakLabel)}</span>
-                                <span class="text-[9px] text-gray-400 font-mono">${secureEscape(kmLabel)}</span>
-                                <span class="text-[9px] text-gray-500 font-bold">${secureEscape(profileLabel)}</span>
-                                <span class="text-[9px] text-gray-400 font-mono">${Admin.formatDate(item.at)}</span>
+                            <div class="min-w-0 flex-1">
+                                <div class="text-xs font-bold text-gray-900 dark:text-white whitespace-normal break-words leading-snug">${secureEscape(item.origin)} ${Admin.routeArrowSvg('inline-block w-3.5 h-3.5 mx-1 align-middle text-gray-400 shrink-0')} ${secureEscape(item.destination)}</div>
+                                <div class="flex flex-wrap items-center mt-1.5 gap-1.5">
+                                    <span class="text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded ${item.agree ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300' : 'bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-200'}">${secureEscape(vsLabel)}</span>
+                                    <span class="text-[9px] font-bold text-indigo-600 dark:text-indigo-400 uppercase">${secureEscape(peakLabel)}</span>
+                                    <span class="text-[9px] text-gray-400 font-mono">${secureEscape(kmLabel)}</span>
+                                    <span class="text-[9px] text-gray-500 font-bold">${secureEscape(profileLabel)}</span>
+                                    <span class="text-[9px] text-gray-400 font-mono">${Admin.formatDate(item.at)}</span>
+                                    ${isLive ? `<span class="text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300">Live R${secureEscape(String(livePrice))}</span>` : ''}
+                                </div>
                             </div>
+                            ${canApprove && !isLive ? `<button type="button" class="de-fare-approve shrink-0 text-emerald-700 dark:text-emerald-400 hover:text-white hover:bg-emerald-600 text-[9px] font-black bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 px-3 py-1.5 rounded transition-colors focus:outline-none uppercase tracking-widest shadow-sm">Approve ${secureEscape(reported)}</button>` : ''}
                         `;
+                        card.querySelector('.de-fare-approve')?.addEventListener('click', async () => {
+                            try {
+                                await Admin.approvePlannerFare(item);
+                            } catch (e) {
+                                console.error('Approve planner fare failed', e);
+                                if (typeof showToast === 'function') showToast(e.message || 'Approve failed', 'error');
+                            }
+                        });
                         listDiv.appendChild(card);
                     });
                     return;

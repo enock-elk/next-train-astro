@@ -8,7 +8,7 @@ import {
     $isSimMode, $simTime
 } from '../store.js';
 import {
-    ROUTES, SPECIAL_DATES, HOLIDAY_NAMES, FARE_CONFIG, REFRESH_CONFIG, DYNAMIC_BASE_URL,
+    ROUTES, SPECIAL_DATES, HOLIDAY_NAMES, FARE_CONFIG, fareMultiplierForProfile, REFRESH_CONFIG, DYNAMIC_BASE_URL,
     MAX_RADIUS_KM
 } from './config.js';
 import {
@@ -685,7 +685,7 @@ export function getRouteFare(sheetKey) {
         }
     }
 
-    const multiplier = useOffPeakRate ? profile.offPeak : profile.base;
+    const multiplier = fareMultiplierForProfile(getUserProfile(), useOffPeakRate);
     let finalPrice = basePrice * multiplier;
     finalPrice = Math.ceil(finalPrice * 2) / 2;
     finalPrice = Math.floor(finalPrice);

@@ -105,7 +105,9 @@ function getRouteFare(sheetKey) {
         }
     }
 
-    const multiplier = useOffPeakRate ? profile.offPeak : profile.base;
+    const multiplier = (typeof fareMultiplierForProfile === 'function')
+        ? fareMultiplierForProfile(currentUserProfile, useOffPeakRate)
+        : (useOffPeakRate ? profile.offPeak : profile.base);
     let finalPrice = basePrice * multiplier;
     finalPrice = Math.ceil(finalPrice * 2) / 2;
 

@@ -6,10 +6,14 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
+    applyApprovedPlannerFare,
     buildFareVotePayload,
+    buildPlannerFareOverrideRecord,
     enqueueFareVoteOffline,
     getFareVoteQueueLength,
+    plannerFareOverrideKey,
     roundFareVoteRand,
+    setPlannerFareOverridesCache,
     submitFareVote,
     FARE_VOTE_QUEUE_KEY,
 } from '../src/lib/planner-telemetry.js';
@@ -192,6 +196,9 @@ assert(tel.includes('smoothKm'), 'fare vote payload includes smoothKm');
 assert(tel.includes('abKm'), 'fare vote payload includes abKm');
 assert(tel.includes('FARE_VOTE_QUEUE_KEY'), 'offline fare vote queue exists');
 assert(tel.includes('slice(-1)'), 'offline fare vote queue is capped at 1');
+assert(tel.includes("config/planner_fares"), 'approved prices live at config/planner_fares');
+assert(tel.includes('plannerFareOverrideKey'), 'override keys are OD + profile + peak + day');
+assert(tel.includes("peakSlot = always ? 'all'"), 'Scholar overrides apply all day');
 
 const modal = readFileSync(join(ROOT, 'src/components/PlannerModals.astro'), 'utf8');
 assert(modal.includes('The price algorithm is still being developed and tested, so it may not be accurate.'), 'algorithm note is unchanged');
@@ -199,8 +206,50 @@ assert(modal.includes('The price algorithm is still being developed and tested, 
 const rules = readFileSync(join(ROOT, 'firebase-database.rules.json'), 'utf8');
 assert(rules.includes('"fare_votes"'), 'rules include fare_votes');
 assert(rules.includes('!data.exists()'), 'fare votes are create-once');
+assert(rules.includes('"planner_fares"'), 'rules include planner_fares');
 assert(rules.includes('thandeka05nxumalo@gmail.com'), 'Thandeka stays on sys_logs read');
 assert(!rules.includes('"trains"'), 'do not add a trains tree');
+
+{
+    const adultPeak = plannerFareOverrideKey({
+        origin: 'PRETORIA',
+        destination: 'PIENAARSPOORT',
+        profile: 'Adult',
+        isOffPeak: false,
+        dayType: 'weekday',
+    });
+    assert(adultPeak === 'PRETORIA__PIENAARSPOORT__ADULT__peak__weekday', `Adult peak key, got ${adultPeak}`);
+    const scholar = plannerFareOverrideKey({
+        origin: 'PRETORIA',
+        destination: 'PIENAARSPOORT',
+        profile: 'Scholar',
+        isOffPeak: false,
+        dayType: 'weekday',
+    });
+    assert(scholar === 'PRETORIA__PIENAARSPOORT__SCHOLAR__all__weekday', `Scholar all-day key, got ${scholar}`);
+    const record = buildPlannerFareOverrideRecord({
+        origin: 'PRETORIA',
+        destination: 'PIENAARSPOORT',
+        profile: 'Adult',
+        isOffPeak: false,
+        dayType: 'weekday',
+        reportedPrice: 10,
+        quotedPrice: 12,
+        id: 'vote1',
+    }, { approvedBy: 'enockelk@gmail.com', at: 42 });
+    assert(record.price === 10 && record.approvedAt === 42 && record.origin === 'PRETORIA', 'override record ships reported rand');
+    setPlannerFareOverridesCache({ [adultPeak]: record });
+    const applied = applyApprovedPlannerFare(
+        { price: 12, priceLabel: '12', rawPriceLabel: '12', profile: 'Adult', isOffPeak: false, dayType: 'weekday' },
+        { from: 'PRETORIA', to: 'PIENAARSPOORT' },
+    );
+    assert(applied.price === 10 && applied.priceLabel === '10' && applied.approved === true, `approved fare replaces quoted, got ${JSON.stringify(applied)}`);
+    const miss = applyApprovedPlannerFare(
+        { price: 12, priceLabel: '12', profile: 'Adult', isOffPeak: true, dayType: 'weekday' },
+        { from: 'PRETORIA', to: 'PIENAARSPOORT' },
+    );
+    assert(miss.price === 12 && !miss.approved, 'off-peak Adult is a different override key');
+}
 
 if (failures.length) {
     console.error(`verify-fare-votes: ${failures.length} failed`);

@@ -63,6 +63,12 @@ import {
     renderInboxReactionPickerHtml,
     submitInboxReaction,
 } from './inbox-reactions.js';
+import {
+    plannerFareOverrideKey,
+    buildPlannerFareOverrideRecord,
+    setPlannerFareOverridesCache,
+    ensurePlannerFareOverrides,
+} from './planner-telemetry.js';
 
 function defineLive(name, getter, setter) {
     try {
@@ -131,6 +137,10 @@ export function exposeAdminGlobals() {
     window.renderInboxReactionChips = renderInboxReactionChips;
     window.renderInboxReactionPickerHtml = renderInboxReactionPickerHtml;
     window.submitInboxReaction = submitInboxReaction;
+    window.plannerFareOverrideKey = plannerFareOverrideKey;
+    window.buildPlannerFareOverrideRecord = buildPlannerFareOverrideRecord;
+    window.setPlannerFareOverridesCache = setPlannerFareOverridesCache;
+    window.ensurePlannerFareOverrides = ensurePlannerFareOverrides;
 
     window.trustIsShadowBanned = isShadowBanned;
     window.trustLocalBlockList = localBlockList;

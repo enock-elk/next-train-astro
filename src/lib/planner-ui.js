@@ -11,7 +11,7 @@ import {
     $isSimMode, $userRegion, $currentRouteId, $globalStationIndex, 
     $globalDisruptions, $opsOverlaysReady, $masterStationList, $ghostStationList, $userProfile, $fullDatabase, $simTime
 } from '../store.js';
-import { ROUTES, FARE_CONFIG, withBase, SPECIAL_DATES, HOLIDAY_NAMES } from './config.js';
+import { ROUTES, FARE_CONFIG, fareMultiplierForProfile, withBase, SPECIAL_DATES, HOLIDAY_NAMES } from './config.js';
 import { resolveHolidayDayType } from './holiday-approvals.js';
 import { smoothPathFromStops, nearestPathIndex } from './rail-tracks.js';
 import { 
@@ -33,11 +33,13 @@ import {
     hasFareVoteBeenSent,
     fareVoteCooldownKey,
     roundFareVoteRand,
+    ensurePlannerFareOverrides,
+    applyApprovedPlannerFare,
 } from './planner-telemetry.js';
 import { enterFeedbackReplyMode, openFeedbackModal } from './hub.js';
 import { prepareRichHtml } from './rich-text.js';
 import { trackAnalyticsEvent } from './analytics.js';
-import { canAccessPilotSurface } from './admin-chrome.js';
+import { canAccessPilotSurface, isAdminAuthed, applyAdminAuthedChrome } from './admin-chrome.js';
 import { FEATURE_KEYS, isFeatureEnabled } from './features.js';
 import { suggestZoneFromKm, ZONE_KM_RANGE_LABELS } from './zone-distance-audit.js';
 
@@ -336,7 +338,7 @@ function computeZoneFare(zoneCode) {
             useOffPeak = true;
         }
     }
-    const multiplier = useOffPeak ? profile.offPeak : profile.base;
+    const multiplier = fareMultiplierForProfile($userProfile.get(), useOffPeak);
     let finalPrice = FARE_CONFIG.zones[zoneCode] * multiplier;
     finalPrice = roundBoardFare(finalPrice);
     return {
@@ -370,9 +372,10 @@ export function computeZoneFareForTrip(zoneCode, trip = {}) {
             useOffPeak = true;
         }
     }
-    const multiplier = useOffPeak ? profile.offPeak : profile.base;
+    const multiplier = fareMultiplierForProfile(profileName, useOffPeak);
     const rawPrice = FARE_CONFIG.zones[zoneCode] * multiplier;
     const finalPrice = roundBoardFare(rawPrice);
+    const alwaysDiscount = !!(profile.alwaysDiscount);
     return {
         zone: zoneCode,
         price: finalPrice,
@@ -380,6 +383,7 @@ export function computeZoneFareForTrip(zoneCode, trip = {}) {
         priceLabel: formatBoardFareLabel(finalPrice),
         rawPriceLabel: formatRawFareLabel(rawPrice),
         isOffPeak: useOffPeak,
+        alwaysDiscount,
         dayType,
         depTime: trip.depTime || '',
         profile: profileName,
@@ -541,6 +545,7 @@ function bindPlannerFareVote(trip, detail) {
 function fillPlannerFareBreakdown(trip, { km, crowKm, zone, fare } = {}) {
     const body = document.getElementById('planner-fare-breakdown-body');
     if (!body || !fare) return;
+    fare = applyApprovedPlannerFare(fare, trip) || fare;
     lastPlannerFareContext = { trip, km, crowKm, zone, fare };
     const fareOdStation = (s) => String(s || '')
         .replace(/ STATION$/i, '')
@@ -559,7 +564,10 @@ function fillPlannerFareBreakdown(trip, { km, crowKm, zone, fare } = {}) {
         : fare.dayType === 'public_holiday' ? 'Public holiday'
         : 'Weekday';
     const depLabel = fare.depTime ? String(fare.depTime).slice(0, 5) : '';
-    const peakLabel = fare.isOffPeak ? 'Off-peak' : 'Peak';
+    const peakLabel = fare.alwaysDiscount
+        ? '50% all day'
+        : (fare.isOffPeak ? 'Off-peak' : 'Peak');
+    const peakTitle = fare.alwaysDiscount ? 'Discount' : 'Peak / off-peak';
     const kmLabel = km != null ? `${km} km` : 'Unavailable';
     const crowLabel = crowKm != null ? `${crowKm} km` : 'Unavailable';
     const profileLabel = escapeHTML(fare.profile || 'Adult');
@@ -597,14 +605,15 @@ function fillPlannerFareBreakdown(trip, { km, crowKm, zone, fare } = {}) {
     body.innerHTML = `
         <dl class="space-y-3 text-sm text-gray-700 dark:text-gray-200">
             <div class="flex justify-between gap-3"><dt class="text-gray-500 dark:text-gray-400">Distance</dt><dd class="font-bold">${escapeHTML(kmLabel)}</dd></div>
-            <div class="flex justify-between gap-3"><dt class="text-gray-500 dark:text-gray-400">Straight-line</dt><dd class="font-bold">${escapeHTML(crowLabel)}</dd></div>
-            <div class="flex justify-between gap-3"><dt class="text-gray-500 dark:text-gray-400">Zone</dt><dd class="font-bold">${escapeHTML(zone || '-')}${band ? ` <span class="font-medium text-gray-500 dark:text-gray-400">(${escapeHTML(band)})</span>` : ''}</dd></div>
-            <div class="flex justify-between gap-3"><dt class="text-gray-500 dark:text-gray-400">Peak / off-peak</dt><dd class="font-bold">${escapeHTML(peakLabel)} <span class="font-medium text-gray-500 dark:text-gray-400">${escapeHTML(dayLabel)}${depLabel ? ` ${escapeHTML(depLabel)}` : ''}</span></dd></div>
+            <div data-admin-authed-only hidden inert aria-hidden="true" class="flex justify-between gap-3"><dt class="text-gray-500 dark:text-gray-400">Straight-line</dt><dd class="font-bold">${escapeHTML(crowLabel)}</dd></div>
+            <div data-admin-authed-only hidden inert aria-hidden="true" class="flex justify-between gap-3"><dt class="text-gray-500 dark:text-gray-400">Zone</dt><dd class="font-bold">${escapeHTML(zone || '-')}${band ? ` <span class="font-medium text-gray-500 dark:text-gray-400">(${escapeHTML(band)})</span>` : ''}</dd></div>
+            <div class="flex justify-between gap-3"><dt class="text-gray-500 dark:text-gray-400">${escapeHTML(peakTitle)}</dt><dd class="font-bold">${escapeHTML(peakLabel)} <span class="font-medium text-gray-500 dark:text-gray-400">${escapeHTML(dayLabel)}${depLabel ? ` ${escapeHTML(depLabel)}` : ''}</span></dd></div>
             <div class="flex justify-between gap-3 items-center"><dt class="text-gray-500 dark:text-gray-400">Profile</dt><dd><button type="button" id="planner-fare-profile-btn" class="font-bold text-blue-600 dark:text-blue-400 underline decoration-dotted underline-offset-2 hover:text-blue-700 dark:hover:text-blue-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 rounded px-1">${profileLabel}</button></dd></div>
             <div class="flex justify-between gap-3 pt-2 border-t border-gray-100 dark:border-gray-800"><dt class="text-gray-500 dark:text-gray-400">Fare</dt><dd><button type="button" id="planner-fare-raw-toggle" class="font-black text-gray-900 dark:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 rounded" aria-pressed="false" title="Show calculated price">R${escapeHTML(fare.priceLabel)}</button></dd></div>
         </dl>
         ${voteHtml}
     `;
+    try { applyAdminAuthedChrome(isAdminAuthed()); } catch { /* ignore */ }
     document.getElementById('planner-fare-profile-btn')?.addEventListener('click', (ev) => {
         ev.preventDefault();
         ev.stopPropagation();
@@ -628,7 +637,7 @@ function refreshOpenPlannerFare() {
     const ctx = lastPlannerFareContext;
     const sheet = document.getElementById('planner-fare-breakdown-sheet');
     if (!ctx?.trip) return;
-    const fare = computeZoneFareForTrip(ctx.zone, ctx.trip);
+    const fare = applyApprovedPlannerFare(computeZoneFareForTrip(ctx.zone, ctx.trip), ctx.trip);
     if (!fare) return;
     if (sheet && !sheet.classList.contains('hidden')) {
         fillPlannerFareBreakdown(ctx.trip, { ...ctx, fare });
@@ -645,10 +654,11 @@ async function hydratePlannerFareButton(trip) {
     if (!canShowTripPrice() || !trip) return;
     const btn = document.querySelector('[data-nt-trip-fare="1"]');
     if (!btn) return;
+    await ensurePlannerFareOverrides();
     const km = await getSmoothTripDistanceKm(trip);
     const crowKm = getCrowFliesTripKm(trip);
     const zone = suggestZoneFromKm(km);
-    const fare = computeZoneFareForTrip(zone, trip);
+    const fare = applyApprovedPlannerFare(computeZoneFareForTrip(zone, trip), trip);
     if (!fare) {
         btn.hidden = true;
         return;
@@ -3058,7 +3068,7 @@ export const PlannerRenderer = {
                 </div>
                 <div class="flex justify-between items-center mt-0.5">
                      ${canShowTripPrice(step) ? `<button type="button" data-nt-trip-fare="1" class="planner-trip-fare min-w-0 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 rounded">
-                        <span class="inline-flex items-center gap-1 text-[9px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap border-b border-dotted border-gray-400 dark:border-gray-500">${plannerMoneySvg('w-3 h-3 text-gray-400')}TRIP FARE: <span data-nt-trip-fare-price>R-</span></span>
+                        <span class="inline-flex items-center gap-1 text-xs font-black text-gray-800 dark:text-gray-100 tracking-wide whitespace-nowrap border-b border-dotted border-gray-700 dark:border-gray-200">${plannerMoneySvg('w-3.5 h-3.5 text-gray-800 dark:text-gray-100')}Trip fare: <span data-nt-trip-fare-price>R-</span></span>
                      </button>` : '<span></span>'}
                      <div class="text-[9px] text-gray-400 uppercase tracking-widest shrink-0 pl-2">Total Time</div>
                 </div>

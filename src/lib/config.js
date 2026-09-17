@@ -14,7 +14,7 @@
  * Changelog / What’s New is optional: skip both, or write only "no release notes."
  * Always add ADMIN_CHANGELOG[APP_VERSION] (System Health Build notes).
  */
-export const APP_VERSION = "V9_09.17.10";
+export const APP_VERSION = "V9_09.17.11";
 
 /** Public support channels (About modal, lifeboat help.html, Safe Mode). */
 export const SUPPORT_EMAIL = 'admin@nexttrain.co.za';
@@ -910,11 +910,18 @@ export const FARE_CONFIG = {
 
     profiles: {
         "Adult":     { base: 1.0, offPeak: 0.6 }, // 40% off-peak (public / commuters)
-        "Scholar":   { base: 0.5, offPeak: 0.5 }, // 50% all hours (uniform)
+        "Scholar":   { base: 0.5, offPeak: 0.5, alwaysDiscount: true }, // 50% whenever trains run
         "Pensioner": { base: 1.0, offPeak: 0.5 }, // 50% off-peak
         "Military":  { base: 1.0, offPeak: 0.5 }  // 50% off-peak (military veterans)
     }
 };
+
+/** Peak uses profile.base; off-peak uses offPeak. Scholar always uses base (50%). */
+export function fareMultiplierForProfile(profileName, useOffPeak) {
+    const profile = FARE_CONFIG.profiles[profileName] || FARE_CONFIG.profiles.Adult;
+    if (profile.alwaysDiscount) return profile.base;
+    return useOffPeak ? profile.offPeak : profile.base;
+}
 
 // 6. GHOST TRAIN PROTOCOL (Default Exclusions)
 // Offline-only fallback if the Firebase exclusions tree cannot be fetched.

@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_09.17.11': [
+        'Planner fare sheet hides Straight-line and Zone behind data-admin-authed-only. Scholar uses alwaysDiscount (50% any time trains run). Trip fare on planner results is text-xs gray-800. Fares tab Approve writes config/planner_fares/$key (public read, operator write); the planner quotes that price for the same OD, profile, peak slot, and day. Deploy firebase-database.rules.json or commuters cannot read the live prices. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
+    ],
     'V9_09.17.10': [
         'Deep Network Scan, Schedule QA, Zone Distance Audit, grid-order fetch, and exclusion station walks flatten westerncape/public_holidays so WC *_pub sheets resolve next to weekday/Saturday keys. SEO dump getSheet does the same. Ember colour pack is gone; saved ember (and paper) map to Earthy. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
     ],

@@ -8,11 +8,14 @@
  * Fare votes write immediately to sys_logs/fare_votes/$voteId (create-once).
  * Offline devices keep a queue of one vote and flush on reconnect.
  *
+ * Operator-approved live prices live at config/planner_fares/$fareKey
+ * (public read, operator write). Votes stay create-once in sys_logs.
+ *
  * RTDB sys_logs/trip_plans/$batchId allows create-once (!data.exists).
  * Auth token preferred; anonymous create-once still works without email claim.
  */
-import { DYNAMIC_BASE_URL, APP_VERSION } from './config.js';
-import { safeStorage } from './utils.js';
+import { DYNAMIC_BASE_URL, APP_VERSION, FARE_CONFIG } from './config.js';
+import { safeStorage, normalizeStationName } from './utils.js';
 import { $deviceId, $userRegion } from '../store.js';
 
 /** Optional signed-in Firebase uid (null for guests / anonymous). */
@@ -490,6 +493,110 @@ export async function submitFareVote(input) {
         markFareVoteSent(key);
         return { queued: true };
     }
+}
+
+const PLANNER_FARES_PATH = 'config/planner_fares';
+let cachedPlannerFares = null;
+let cachedPlannerFaresAt = 0;
+const PLANNER_FARES_TTL_MS = 60 * 1000;
+
+function fareOverrideSlug(value) {
+    return String(value || '')
+        .toUpperCase()
+        .replace(/ STATION$/i, '')
+        .replace(/[^A-Z0-9]+/g, '_')
+        .replace(/^_|_$/g, '')
+        .slice(0, 40);
+}
+
+function fareOverrideDay(dayType) {
+    const raw = String(dayType || 'weekday').toLowerCase();
+    if (raw === 'saturday' || raw === 'sunday' || raw === 'public_holiday') return raw;
+    return 'weekday';
+}
+
+export function plannerFareOverrideKey({ origin, destination, profile, isOffPeak, dayType } = {}) {
+    const prof = fareOverrideSlug(profile || 'Adult') || 'ADULT';
+    const always = !!(FARE_CONFIG.profiles[profile || 'Adult']?.alwaysDiscount
+        || FARE_CONFIG.profiles[String(profile || '').replace(/^\w/, (c) => c.toUpperCase())]?.alwaysDiscount);
+    const peakSlot = always ? 'all' : (isOffPeak ? 'off' : 'peak');
+    return [
+        fareOverrideSlug(origin) || 'ORIGIN',
+        fareOverrideSlug(destination) || 'DEST',
+        prof,
+        peakSlot,
+        fareOverrideDay(dayType),
+    ].join('__');
+}
+
+export function setPlannerFareOverridesCache(map) {
+    cachedPlannerFares = (map && typeof map === 'object' && !Array.isArray(map)) ? map : {};
+    cachedPlannerFaresAt = Date.now();
+}
+
+export async function ensurePlannerFareOverrides(force = false) {
+    if (!force && cachedPlannerFares && (Date.now() - cachedPlannerFaresAt) < PLANNER_FARES_TTL_MS) {
+        return cachedPlannerFares;
+    }
+    try {
+        const res = await fetch(`${DYNAMIC_BASE_URL}${PLANNER_FARES_PATH}.json`, { cache: 'no-store' });
+        if (res.ok) {
+            const data = await res.json();
+            setPlannerFareOverridesCache(data && typeof data === 'object' ? data : {});
+        } else if (!cachedPlannerFares) {
+            setPlannerFareOverridesCache({});
+        }
+    } catch {
+        if (!cachedPlannerFares) setPlannerFareOverridesCache({});
+    }
+    return cachedPlannerFares || {};
+}
+
+export function lookupPlannerFareOverride({ origin, destination, profile, isOffPeak, dayType } = {}) {
+    const map = cachedPlannerFares;
+    if (!map) return null;
+    const key = plannerFareOverrideKey({ origin, destination, profile, isOffPeak, dayType });
+    const row = map[key];
+    if (!row || typeof row !== 'object') return null;
+    const price = Number(row.price);
+    if (!Number.isFinite(price) || price < 1 || price > 500) return null;
+    return { ...row, key, price };
+}
+
+export function applyApprovedPlannerFare(fare, trip = {}) {
+    if (!fare) return fare;
+    const hit = lookupPlannerFareOverride({
+        origin: normalizeStationName(trip.from || trip.origin || ''),
+        destination: normalizeStationName(trip.to || trip.destination || ''),
+        profile: fare.profile || 'Adult',
+        isOffPeak: !!fare.isOffPeak,
+        dayType: fare.dayType,
+    });
+    if (!hit) return fare;
+    return {
+        ...fare,
+        price: hit.price,
+        priceLabel: String(Math.floor(hit.price)),
+        rawPriceLabel: String(hit.price),
+        approved: true,
+        approvedKey: hit.key,
+    };
+}
+
+export function buildPlannerFareOverrideRecord(vote = {}, { approvedBy, at } = {}) {
+    const price = Number(vote.reportedPrice);
+    return {
+        origin: String(vote.origin || '').slice(0, 79),
+        destination: String(vote.destination || '').slice(0, 79),
+        profile: String(vote.profile || 'Adult').slice(0, 40),
+        isOffPeak: !!vote.isOffPeak,
+        dayType: String(vote.dayType || 'weekday').slice(0, 24),
+        price: Number.isFinite(price) ? price : 0,
+        voteId: String(vote.id || vote.voteId || '').slice(0, 80),
+        quotedPrice: Number(vote.quotedPrice) || null,
+        approvedAt: Number(at) || Date.now(),
+        approvedBy: String(approvedBy || '').slice(0, 80),
+    };
 }
 
 if (typeof window !== 'undefined') {

@@ -46,16 +46,27 @@ export function stationRouteSet(name) {
     return new Set();
 }
 
+/**
+ * stub = only on the closed corridor (no Saturday trains).
+ * junction = also on another route that still runs (Hercules, Koedoespoort).
+ * outside = not on the closed corridor.
+ */
+export function classifyPlaceholderStation(name, closedRouteId) {
+    const routes = stationRouteSet(name);
+    if (!routes.has(closedRouteId)) return 'outside';
+    for (const id of routes) {
+        if (id !== closedRouteId) return 'junction';
+    }
+    return 'stub';
+}
+
 export function isHercKoedJunction(name) {
-    const n = normalizeStationName(name);
-    return HERC_KOED_JUNCTIONS.some((j) => normalizeStationName(j) === n);
+    return classifyPlaceholderStation(name, 'herc-koed') === 'junction';
 }
 
 /** stub | junction | outside */
 export function classifyHercKoedStation(name) {
-    if (isHercKoedJunction(name)) return 'junction';
-    if (stationRouteSet(name).has('herc-koed')) return 'stub';
-    return 'outside';
+    return classifyPlaceholderStation(name, 'herc-koed');
 }
 
 function sharedRouteCount(stationA, stationB) {
@@ -92,24 +103,23 @@ export function tripNeedsHercKoedBridge(origin, dest) {
  * @returns {null | { kind: 'NO_SERVICE'|'DEST_CUT'|'ORIGIN_CUT', routeId: string, junctions?: string[] }}
  */
 export function classifySaturdayPlaceholderTrip(origin, dest, dayType, db = $fullDatabase.get()) {
-    if (isPlaceholderRouteClosed('ec-berlin', dayType, db)) {
-        const oOn = stationRouteSet(origin).has('ec-berlin');
-        const dOn = stationRouteSet(dest).has('ec-berlin');
-        if (oOn && dOn) return { kind: 'NO_SERVICE', routeId: 'ec-berlin' };
-    }
-
-    if (!isPlaceholderRouteClosed('herc-koed', dayType, db)) return null;
-
-    const o = classifyHercKoedStation(origin);
-    const d = classifyHercKoedStation(dest);
-    if (o !== 'outside' && d !== 'outside') {
-        return { kind: 'NO_SERVICE', routeId: 'herc-koed' };
-    }
-    if (d === 'stub' && o === 'outside') {
-        return { kind: 'DEST_CUT', routeId: 'herc-koed', junctions: orderJunctionsForOrigin(origin) };
-    }
-    if (o === 'stub' && d === 'outside') {
-        return { kind: 'ORIGIN_CUT', routeId: 'herc-koed', junctions: orderJunctionsForOrigin(dest) };
+    for (const routeId of SATURDAY_PLACEHOLDER_ROUTES) {
+        if (!isPlaceholderRouteClosed(routeId, dayType, db)) continue;
+        const o = classifyPlaceholderStation(origin, routeId);
+        const d = classifyPlaceholderStation(dest, routeId);
+        // Junctions still have Saturday trains on other routes (e.g. Hercules
+        // and Koedoespoort via Pretoria). Let Dijkstra use that walkaround.
+        if (o === 'junction' && d === 'junction') continue;
+        if (o !== 'outside' && d !== 'outside') {
+            return { kind: 'NO_SERVICE', routeId };
+        }
+        const junctions = routeId === 'herc-koed' ? HERC_KOED_JUNCTIONS : [];
+        if (d === 'stub' && o === 'outside') {
+            return { kind: 'DEST_CUT', routeId, junctions: orderJunctionsForOrigin(origin, junctions) };
+        }
+        if (o === 'stub' && d === 'outside') {
+            return { kind: 'ORIGIN_CUT', routeId, junctions: orderJunctionsForOrigin(dest, junctions) };
+        }
     }
     return null;
 }

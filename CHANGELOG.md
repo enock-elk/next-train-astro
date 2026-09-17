@@ -2,6 +2,10 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin, Dev Hub, Alerts, Trains near me, community chat, or other hidden-test work. No emoji and no em dashes in What’s New. Keep `APP_VERSION`, `package.json` `version`, and `public/app-version.json` aligned on each release. Changelog / What’s New may be skipped, or the heading may be only **no release notes.** Every bump must add `ADMIN_CHANGELOG[APP_VERSION]` (System Health Build notes).
 
+## V9_09.17.12 — Saturday junction walkaround, planner GPS map (17 Sep 2026)
+
+When both ends of a closed Saturday placeholder still have trains on other routes (Hercules and Koedoespoort), the planner no longer stops at “No weekend service”; Dijkstra can use Pretoria (or any other live Saturday path). Stubs such as Gezina stay closed. Open Network Map on a planner error card opens the sidenav GPS Network Map sheet, not the live-tracking Map tab. No new What’s New card.
+
 ## V9_09.17.11 — Planner fare sheet, scholar all-day, approve live prices (17 Sep 2026)
 
 Straight-line km and zone stay in the fare sheet for signed-in operators only. Scholar is 50% whenever trains run (`alwaysDiscount`). Planner results paint Trip fare a step darker. Price corrections on the Fares tab can be approved into `config/planner_fares`; the planner then quotes that rand for everyone on the same origin, destination, profile, peak slot, and day. Deploy `firebase-database.rules.json` so that node is public-read. No new What’s New card.

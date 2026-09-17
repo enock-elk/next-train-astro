@@ -1635,19 +1635,24 @@ export function hidePlannerResults() {
     try { renderPlannerHistory(); } catch { /* ignore */ }
 }
 
-/** Open GPS map tab in-app (never hard-nav to /map.html) so Back restores planner results. */
+/** Open the sidenav GPS Network Map sheet. Never the live-tracking Map tab. */
 export function openPlannerNetworkMap() {
     if (typeof triggerHaptic === 'function') triggerHaptic();
     const resultsSection = document.getElementById('planner-results-section');
     if (resultsSection) resultsSection.classList.remove('hidden');
-    if (typeof location !== 'undefined' && location.hash !== '#planner-results' && location.hash !== '#map') {
+    if (typeof location !== 'undefined' && location.hash !== '#planner-results' && location.hash !== '#sheet') {
         try { history.pushState({ view: 'planner-results' }, '', '#planner-results'); } catch { /* ignore */ }
     }
     try {
         sessionStorage.setItem('nt_map_from_planner', '1');
     } catch { /* ignore */ }
-    // GPS Leaflet map (#view-map) — allowed from planner even when Map nav is operator-only.
-    switchTab('map', { allowHiddenTabs: true });
+    if (typeof window !== 'undefined' && typeof window.__ntOpenNetworkMapSheet === 'function') {
+        try { trackAnalyticsEvent('click_network_map', { location: 'planner' }); } catch { /* ignore */ }
+        window.__ntOpenNetworkMapSheet();
+        return;
+    }
+    // Last resort: official PRASA PNG, still not the live Map tab.
+    if (typeof openSmoothModal === 'function') openSmoothModal('map-modal');
 }
 
 function capturePlannerSnapshot(extra = {}) {

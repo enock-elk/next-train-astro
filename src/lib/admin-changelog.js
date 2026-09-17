@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_09.17.12': [
+        'Saturday placeholder classification: junction↔junction (Hercules ↔ Koedoespoort) no longer short-circuits as NO_SERVICE, so Dijkstra can use other-route walkarounds (via Pretoria). Stubs like Gezina stay NO_SERVICE / DEST_CUT / ORIGIN_CUT. Same rule for every SATURDAY_PLACEHOLDER_ROUTES id. Planner error Open Network Map calls __ntOpenNetworkMapSheet (sidenav GPS map.html), not switchTab(map). forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
+    ],
     'V9_09.17.11': [
         'Planner fare sheet hides Straight-line and Zone behind data-admin-authed-only. Scholar uses alwaysDiscount (50% any time trains run). Trip fare on planner results is text-xs gray-800. Fares tab Approve writes config/planner_fares/$key (public read, operator write); the planner quotes that price for the same OD, profile, peak slot, and day. Deploy firebase-database.rules.json or commuters cannot read the live prices. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
     ],

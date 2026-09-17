@@ -72,7 +72,9 @@ if (ui.includes('allowedDisrIds.size && !allowedDisrIds.has')) fail('empty allow
 if (!ui.includes('!allowedDisrIds.has(d.id)')) fail('trip map paints only disruptions that hit this trip');
 if (!ui.includes('stopOnTripPath')) fail('trip map requires zone ends on this trip path');
 if (!ui.includes('planner-notice-copy')) fail('notice body copy must be fittable');
-if (!ui.includes('TRIP FARE:')) fail('planner fare is a single TRIP FARE line');
+if (!ui.includes('Trip fare:')) fail('planner fare is a single Trip fare line');
+if (ui.includes("switchTab('map'")) fail('Open Network Map must not switch to the live Map tab');
+if (!ui.includes('__ntOpenNetworkMapSheet')) fail('Open Network Map opens the sidenav GPS network map sheet');
 {
     const departedFn = ui.slice(ui.indexOf('export function renderAllDepartedResult'));
     const ctaAt = departedFn.indexOf('${nextDayCta}');
@@ -83,7 +85,8 @@ if (!ui.includes('TRIP FARE:')) fail('planner fare is a single TRIP FARE line');
 }
 if (ui.includes('pr-14')) fail('planner notice must not reserve pr-14 on phones');
 if (!ui.includes('paintSaturdayBetweenLine')) fail('Saturday advisory must paint blue corridor ends');
-if (!sat.includes('buildSaturdayAdvisoryCopy')) fail('saturday-service must build dynamic advisory copy');
+if (!sat.includes('classifyPlaceholderStation')) fail('placeholder stations classify as stub/junction from other routes');
+if (!sat.includes("o === 'junction' && d === 'junction'")) fail('junction↔junction must not short-circuit Dijkstra');
 if (!core.includes('extractTrainSheetStops')) fail('planner-core must extract the full train column');
 const logic = readFileSync(join(ROOT, 'src/lib/logic.js'), 'utf8');
 if (!logic.includes('paintHeaderDayLabel') || !logic.includes('currentRouteSaturdayClosed')) {
@@ -128,6 +131,14 @@ const originCut = classifySaturdayPlaceholderTrip('GEZINA', 'PRETORIA', 'saturda
 if (originCut?.kind !== 'ORIGIN_CUT') fail(`Gezina→Pretoria Saturday must be ORIGIN_CUT, got ${JSON.stringify(originCut)}`);
 const junctionOk = classifySaturdayPlaceholderTrip('PRETORIA', 'KOEDOESPOORT', 'saturday');
 if (junctionOk) fail(`Pretoria→Koedoespoort must stay a normal Saturday plan, got ${JSON.stringify(junctionOk)}`);
+const junctionWalkaround = classifySaturdayPlaceholderTrip('HERCULES', 'KOEDOESPOORT', 'saturday');
+if (junctionWalkaround) {
+    fail(`Hercules→Koedoespoort Saturday must use Dijkstra, got ${JSON.stringify(junctionWalkaround)}`);
+}
+const reverseWalkaround = classifySaturdayPlaceholderTrip('KOEDOESPOORT', 'HERCULES', 'saturday');
+if (reverseWalkaround) {
+    fail(`Koedoespoort→Hercules Saturday must use Dijkstra, got ${JSON.stringify(reverseWalkaround)}`);
+}
 const weekday = classifySaturdayPlaceholderTrip('GEZINA', 'HERCULES', 'weekday');
 if (weekday) fail('weekday Gezina→Hercules must not use the Saturday placeholder path');
 const ec = classifySaturdayPlaceholderTrip('EAST LONDON', 'BERLIN', 'saturday');

@@ -1328,6 +1328,8 @@ export async function planUnifiedTrip(origin, dest, dayType, externalContext = {
 
     const satClass = classifySaturdayPlaceholderTrip(origin, dest, dayType, $fullDatabase.get());
 
+    // Stub↔stub (Gezina) has no Saturday edges. Junction↔junction (Hercules ↔
+    // Koedoespoort) is not classified here so Dijkstra can use other routes.
     // Manual "See next day" already advanced past the closed weekend sheet — do not
     // re-trap on ERR_NO_SATURDAY_SERVICE before the weekday search runs.
     if (satClass?.kind === 'NO_SERVICE' && startOffset === 0) {

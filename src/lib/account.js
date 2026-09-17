@@ -519,7 +519,17 @@ export function waitForSignedIn(timeoutMs = 90000) {
     });
 }
 
+function setAccountProfileOpen(open) {
+    const toggle = document.getElementById('account-profile-toggle');
+    const panel = document.getElementById('account-profile-panel');
+    const chevron = document.getElementById('account-profile-chevron');
+    panel?.classList.toggle('hidden', !open);
+    toggle?.setAttribute('aria-expanded', open ? 'true' : 'false');
+    chevron?.classList.toggle('rotate-180', !!open);
+}
+
 export function closeAccountModal() {
+    setAccountProfileOpen(false);
     if (typeof window.closeSmoothModal === 'function') {
         window.closeSmoothModal('account-modal');
     }
@@ -590,6 +600,9 @@ export function syncAccountSettingsUi(state = $account.get()) {
         document.querySelectorAll('#account-points-chevron, .account-points-chevron').forEach((el) => {
             el.classList.remove('rotate-180');
         });
+        setAccountProfileOpen(false);
+        const photoBox = document.getElementById('account-photo-alerts');
+        if (photoBox) delete photoBox.dataset.dirty;
         if (modalName) modalName.textContent = 'Passenger';
         if (modalEmail) modalEmail.textContent = '';
     } else {
@@ -626,7 +639,7 @@ export function syncAccountSettingsUi(state = $account.get()) {
         }
     }
     const photoToggle = document.getElementById('account-photo-alerts');
-    if (photoToggle && !photoToggle.dataset.userToggled) {
+    if (photoToggle && photoToggle.dataset.dirty !== '1') {
         import('./rider-marks.js').then((m) => {
             photoToggle.checked = !!m.showPhotoInAlerts();
         }).catch(() => {});
@@ -894,13 +907,18 @@ export function bindAccountUi() {
 
     document.getElementById('account-save-display-name')?.addEventListener('click', async () => {
         const input = document.getElementById('account-edit-display-name');
+        const photo = document.getElementById('account-photo-alerts');
         setBusy(true);
         try {
             const next = await updateAccountDisplayName(input?.value || '');
             if (input) input.value = next;
-            if (typeof window.showToast === 'function') window.showToast('Display name saved', 'success');
+            const { setShowPhotoInAlerts } = await import('./rider-marks.js');
+            await setShowPhotoInAlerts(!!photo?.checked);
+            await pushSignedInPrefs({ showPhotoInAlerts: !!photo?.checked });
+            if (photo) delete photo.dataset.dirty;
+            if (typeof window.showToast === 'function') window.showToast('Saved', 'success');
         } catch (e) {
-            const msg = e?.message || 'Could not save display name.';
+            const msg = e?.message || 'Could not save.';
             if (msg === DISPLAY_NAME_REFUSE_MSG && typeof window.showToast === 'function') {
                 window.showToast(DISPLAY_NAME_REFUSE_MSG);
             }
@@ -997,12 +1015,20 @@ export function bindAccountUi() {
     document.getElementById('account-points-btn')?.addEventListener('click', togglePoints);
     document.getElementById('account-points-guest-btn')?.addEventListener('click', togglePoints);
 
-    document.getElementById('account-photo-alerts')?.addEventListener('change', async (e) => {
-        const box = e.target;
-        box.dataset.userToggled = '1';
-        const { setShowPhotoInAlerts } = await import('./rider-marks.js');
-        await setShowPhotoInAlerts(!!box.checked);
-        await pushSignedInPrefs({ showPhotoInAlerts: !!box.checked });
+    document.getElementById('account-profile-toggle')?.addEventListener('click', () => {
+        const panel = document.getElementById('account-profile-panel');
+        setAccountProfileOpen(!!panel?.classList.contains('hidden'));
+    });
+    document.getElementById('account-photo-toggle')?.addEventListener('click', (e) => {
+        const t = e.target;
+        if (t.tagName === 'INPUT' || t.tagName === 'LABEL') return;
+        const cb = document.getElementById('account-photo-alerts');
+        if (!cb) return;
+        cb.checked = !cb.checked;
+        cb.dataset.dirty = '1';
+    });
+    document.getElementById('account-photo-alerts')?.addEventListener('change', (e) => {
+        e.target.dataset.dirty = '1';
     });
 
     const notifyToggle = document.getElementById('account-notify-toggle');

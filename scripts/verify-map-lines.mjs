@@ -410,14 +410,15 @@ for (const region of ['GP', 'WC', 'KZN', 'EC']) {
 }
 
 {
-    // KZN is the reference shape and ships exactly as baked. Its Berea Road
-    // corridor forks at Duff's Road: the line runs out to kwaMashu and the
-    // special Duff's Road - Bridge City train continues from there, so the
-    // 3.3 km branch is geometry rather than a spike and must survive.
+    // KZN is the reference shape except where an operator gold-track patch
+    // rewrote a corridor. Its Berea Road corridor forks at Duff's Road: the
+    // line runs out to kwaMashu and the special Duff's Road - Bridge City
+    // train continues from there, so the branch is geometry rather than a
+    // spike and must survive.
     const kzn = JSON.parse(readFileSync(new URL('../public/tracks/rail-tracks-KZN.geojson', import.meta.url), 'utf8'));
     assert(kzn.properties?.generatedAt === '2026-08-29T01:38:53.715Z', 'KZN tracks keep the live 29 Aug bake timestamp');
     const bridge = kzn.features.find((f) => f.properties?.routeId === 'kzn-bridgecity');
-    assert((bridge?.geometry?.coordinates || []).length === 1095, 'KZN Bridge City geometry is untouched');
+    assert((bridge?.geometry?.coordinates || []).length === 980, 'KZN Bridge City geometry is the operator gold-track patch');
     assert(
         !kzn.features.some((f) => f.properties?.stationPinsStripped),
         'KZN is held as the reference shape and is never smoothed',

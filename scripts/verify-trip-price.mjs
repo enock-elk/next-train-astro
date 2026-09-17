@@ -9,7 +9,15 @@ import { FARE_CONFIG, fareMultiplierForProfile } from '../src/lib/config.js';
 import { FEATURE_KEYS, GRANTABLE_FEATURES } from '../src/lib/features.js';
 import { suggestZoneFromKm, DEFAULT_ZONE_KM_BANDS } from '../src/lib/zone-distance-audit.js';
 import { computeZoneFareForTrip, getCrowFliesTripKm } from '../src/lib/planner-ui.js';
-import { $userProfile } from '../src/store.js';
+import {
+    cheaperZone,
+    capZoneForSingleRoute,
+    dumpZoneForRoute,
+    lookupRouteFareCap,
+    setRouteFaresCache,
+    singleRouteIdFromList,
+} from '../src/lib/route-fares.js';
+import { $userProfile, $fullDatabase } from '../src/store.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const failures = [];
@@ -34,6 +42,36 @@ assert(suggestZoneFromKm(135) === 'Z3', '135 km is Z3');
 assert(suggestZoneFromKm(135.1) === 'Z4', 'just over 135 km is Z4');
 assert(DEFAULT_ZONE_KM_BANDS.Z1 === 15 && DEFAULT_ZONE_KM_BANDS.Z2 === 40 && DEFAULT_ZONE_KM_BANDS.Z3 === 135, 'band constants match FARE_CONFIG');
 assert(FARE_CONFIG.offPeakEveryDay === false, 'off-peak is weekday-only');
+assert(Array.isArray(FARE_CONFIG.confirmedFareRegions) && FARE_CONFIG.confirmedFareRegions.includes('GP'), 'Gauteng dump zones are confirmed');
+assert(cheaperZone('Z2', 'Z1') === 'Z1', 'Z1 is cheaper than Z2');
+assert(singleRouteIdFromList([{ id: 'pta-saul' }]) === 'pta-saul', 'one route id is a single-route trip');
+assert(singleRouteIdFromList([{ id: 'pta-saul' }, { id: 'pta-jhb' }]) === null, 'two route ids are not corridor-capped');
+
+{
+    const prevDb = $fullDatabase.get();
+    try {
+        $fullDatabase.set({
+            pta_to_saul_weekday_zone: 'Z1',
+            saul_to_pta_weekday_zone: 'Z1',
+        });
+        setRouteFaresCache({});
+        assert(dumpZoneForRoute('pta-saul') === 'Z1', 'Pretoria-Saulsville dump zone is Z1');
+        assert(suggestZoneFromKm(16) === 'Z2', '16 km is Z2 before the corridor cap');
+        assert(capZoneForSingleRoute('Z2', 'pta-saul') === 'Z1', 'single-route quote cannot exceed dump Z1');
+        const capped = computeZoneFareForTrip(capZoneForSingleRoute('Z2', 'pta-saul'), { dayType: 'weekday', depTime: '07:30' });
+        assert(capped && capped.price === 10 && capped.zone === 'Z1', `Pretoria-Atteridgeville adult peak is R10, got ${JSON.stringify(capped)}`);
+        assert(lookupRouteFareCap('pta-saul')?.source === 'dump', 'GP cap comes from the dump until RTDB says otherwise');
+        setRouteFaresCache({ 'pta-saul': { confirmed: false } });
+        assert(capZoneForSingleRoute('Z2', 'pta-saul') === 'Z2', 'RTDB confirmed:false lifts the GP dump cap');
+        setRouteFaresCache({ 'ct-bellv': { confirmed: true, zone: 'Z1' } });
+        assert(capZoneForSingleRoute('Z2', 'ct-bellv') === 'Z1', 'operator-confirmed WC route is capped');
+        setRouteFaresCache({});
+        assert(capZoneForSingleRoute('Z2', 'ct-bellv') === 'Z2', 'unconfirmed WC stays on km zone');
+    } finally {
+        setRouteFaresCache({});
+        $fullDatabase.set(prevDb);
+    }
+}
 
 {
     const sat = computeZoneFareForTrip('Z2', { dayType: 'saturday', depTime: '11:00' });
@@ -93,6 +131,9 @@ assert(ui.includes('50% all day'), 'scholar sheet says 50% all day');
 assert(ui.includes('planner-fare-breakdown-sheet'), 'fare sheet is wired');
 assert(ui.includes('applyApprovedPlannerFare'), 'planner results apply approved live prices');
 assert(ui.includes('ensurePlannerFareOverrides'), 'planner fetches config/planner_fares before painting the button');
+assert(ui.includes('capZoneForSingleRoute') && ui.includes('ensureRouteFares'), 'single-route quotes apply the confirmed corridor cap');
+assert(ui.includes('resolvePlannerQuoteZone'), 'planner quote zone is km then corridor cap');
+assert(!/saulsville/i.test(ui), 'do not hardcode Saulsville');
 {
     const crow = getCrowFliesTripKm({
         stops: [

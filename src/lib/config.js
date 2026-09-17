@@ -14,7 +14,7 @@
  * Changelog / What’s New is optional: skip both, or write only "no release notes."
  * Always add ADMIN_CHANGELOG[APP_VERSION] (System Health Build notes).
  */
-export const APP_VERSION = "V9_09.17.12";
+export const APP_VERSION = "V9_09.17.13";
 
 /** Public support channels (About modal, lifeboat help.html, Safe Mode). */
 export const SUPPORT_EMAIL = 'admin@nexttrain.co.za';
@@ -913,7 +913,10 @@ export const FARE_CONFIG = {
         "Scholar":   { base: 0.5, offPeak: 0.5, alwaysDiscount: true }, // 50% whenever trains run
         "Pensioner": { base: 1.0, offPeak: 0.5 }, // 50% off-peak
         "Military":  { base: 1.0, offPeak: 0.5 }  // 50% off-peak (military veterans)
-    }
+    },
+
+    /** Dump `{sheet}_zone` is a confirmed long-fare ceiling for these regions. */
+    confirmedFareRegions: ['GP'],
 };
 
 /** Peak uses profile.base; off-peak uses offPeak. Scholar always uses base (50%). */

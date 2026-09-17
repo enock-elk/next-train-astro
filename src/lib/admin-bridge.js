@@ -69,6 +69,14 @@ import {
     setPlannerFareOverridesCache,
     ensurePlannerFareOverrides,
 } from './planner-telemetry.js';
+import {
+    ROUTE_FARES_PATH,
+    dumpZoneForRoute,
+    ensureRouteFares,
+    setRouteFaresCache,
+    lookupRouteFareCap,
+    buildRouteFareRecord,
+} from './route-fares.js';
 
 function defineLive(name, getter, setter) {
     try {
@@ -141,6 +149,12 @@ export function exposeAdminGlobals() {
     window.buildPlannerFareOverrideRecord = buildPlannerFareOverrideRecord;
     window.setPlannerFareOverridesCache = setPlannerFareOverridesCache;
     window.ensurePlannerFareOverrides = ensurePlannerFareOverrides;
+    window.ROUTE_FARES_PATH = ROUTE_FARES_PATH;
+    window.dumpZoneForRoute = dumpZoneForRoute;
+    window.ensureRouteFares = ensureRouteFares;
+    window.setRouteFaresCache = setRouteFaresCache;
+    window.lookupRouteFareCap = lookupRouteFareCap;
+    window.buildRouteFareRecord = buildRouteFareRecord;
 
     window.trustIsShadowBanned = isShadowBanned;
     window.trustLocalBlockList = localBlockList;

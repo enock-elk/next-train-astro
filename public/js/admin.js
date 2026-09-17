@@ -6072,6 +6072,123 @@ const Admin = {
             await Admin.fetchDeadEnds();
         };
 
+        Admin.saveRouteFare = async (routeId, { confirmed, zone } = {}) => {
+            const secret = await Admin.getAuthKey();
+            if (!secret) throw new Error('Not signed in');
+            if (typeof window.buildRouteFareRecord !== 'function') {
+                throw new Error('Route fare helpers are not loaded');
+            }
+            const record = window.buildRouteFareRecord(routeId, {
+                zone,
+                confirmed,
+                source: 'admin',
+                updatedBy: Admin.currentUser?.email || Admin.currentUser?.uid || 'Admin',
+                at: Date.now(),
+            });
+            if (!record.routeId) throw new Error('Missing route');
+            const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
+            const put = await fetch(`${dynamicEndpoint}config/route_fares/${encodeURIComponent(routeId)}.json?auth=${secret}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(record),
+            });
+            if (!put.ok) throw new Error(`Save failed (${put.status})`);
+            Admin._cachedRouteFares = { ...(Admin._cachedRouteFares || {}), [routeId]: record };
+            if (typeof window.setRouteFaresCache === 'function') {
+                window.setRouteFaresCache(Admin._cachedRouteFares);
+            }
+            if (typeof showToast === 'function') {
+                showToast(record.confirmed ? `${routeId} long fare ${record.zone || ''}`.trim() : `${routeId} estimated`, 'success');
+            }
+        };
+
+        Admin.paintConfirmedCorridorFares = (host, liveRouteFares) => {
+            if (!host) return;
+            const wrap = document.createElement('div');
+            wrap.id = 'de-route-fares';
+            wrap.className = 'mb-3 space-y-2';
+            const regions = typeof REGIONS !== 'undefined' ? Object.keys(REGIONS) : ['GP', 'WC', 'KZN', 'EC'];
+            const region = Admin._deRouteFaresRegion || 'GP';
+            wrap.innerHTML = `
+                <div class="flex items-center justify-between gap-2">
+                    <p class="text-[10px] font-black uppercase tracking-widest text-gray-500">Confirmed corridor fares</p>
+                    <select id="de-route-fares-region" class="h-7 px-2 rounded-md bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-[10px] font-bold text-gray-700 dark:text-gray-200">
+                        ${regions.map((code) => `<option value="${code}" ${code === region ? 'selected' : ''}>${code}</option>`).join('')}
+                    </select>
+                </div>
+                <p class="text-[10px] text-gray-500 leading-snug">Single-route quotes cannot exceed a confirmed long fare. Gauteng dump zones are confirmed until you un-confirm them.</p>
+                <div id="de-route-fares-list" class="space-y-2"></div>
+            `;
+            const list = wrap.querySelector('#de-route-fares-list');
+            const dumpDb = typeof fullDatabase !== 'undefined' ? fullDatabase : window.fullDatabase;
+            if (typeof window.setRouteFaresCache === 'function') {
+                window.setRouteFaresCache(liveRouteFares || {});
+            }
+            const paintList = () => {
+                const code = Admin._deRouteFaresRegion || 'GP';
+                const routes = (typeof ROUTES === 'undefined' ? [] : Object.values(ROUTES))
+                    .filter((r) => r && r.id && r.region === code)
+                    .sort((a, b) => String(a.name).localeCompare(String(b.name)));
+                list.innerHTML = '';
+                if (!routes.length) {
+                    list.innerHTML = '<div class="text-xs text-gray-500 italic text-center py-2">No routes in this region.</div>';
+                    return;
+                }
+                routes.forEach((route) => {
+                    const dumpZone = typeof window.dumpZoneForRoute === 'function' ? window.dumpZoneForRoute(route.id, dumpDb) : '';
+                    const cap = typeof window.lookupRouteFareCap === 'function' ? window.lookupRouteFareCap(route.id) : null;
+                    const row = (liveRouteFares || {})[route.id];
+                    const selectedZone = (row && row.zone) || cap?.zone || dumpZone || 'Z1';
+                    const isConfirmed = !!cap?.confirmed;
+                    const sourceLabel = row && row.confirmed === false
+                        ? 'Estimated'
+                        : (cap?.source === 'dump' ? 'Dump' : (isConfirmed ? 'Confirmed' : 'Estimated'));
+                    const adult = (typeof FARE_CONFIG !== 'undefined' && FARE_CONFIG.zones && FARE_CONFIG.zones[selectedZone]) || '';
+                    const name = Admin.formatRouteLabelPlain ? Admin.formatRouteLabelPlain(route.name) : route.name;
+                    const card = document.createElement('div');
+                    card.className = 'bg-white dark:bg-gray-900 p-3 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm flex items-start justify-between gap-2';
+                    card.innerHTML = `
+                        <div class="min-w-0 flex-1">
+                            <div class="text-xs font-bold text-gray-900 dark:text-white whitespace-normal break-words leading-snug">${ntAdminSecureEscape(name)}</div>
+                            <div class="flex flex-wrap items-center mt-1.5 gap-1.5">
+                                <span class="text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded ${isConfirmed ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300' : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300'}">${sourceLabel}${adult ? ` R${adult}` : ''}</span>
+                                ${dumpZone ? `<span class="text-[9px] text-gray-400 font-mono">dump ${ntAdminSecureEscape(dumpZone)}</span>` : ''}
+                            </div>
+                        </div>
+                        <div class="shrink-0 flex items-center gap-1.5">
+                            <select class="de-route-fare-zone h-7 px-1.5 rounded-md bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-[10px] font-bold">
+                                ${['Z1', 'Z2', 'Z3', 'Z4'].map((z) => `<option value="${z}" ${z === selectedZone ? 'selected' : ''}>${z}</option>`).join('')}
+                            </select>
+                            <button type="button" class="de-route-fare-toggle text-[9px] font-black uppercase tracking-widest px-2.5 py-1.5 rounded border ${isConfirmed ? 'text-gray-600 dark:text-gray-300 bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700' : 'text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800'}">${isConfirmed ? 'Unconfirm' : 'Confirm'}</button>
+                        </div>
+                    `;
+                    const zoneSel = card.querySelector('.de-route-fare-zone');
+                    const toggleBtn = card.querySelector('.de-route-fare-toggle');
+                    const save = async (confirmed) => {
+                        try {
+                            await Admin.saveRouteFare(route.id, { confirmed, zone: zoneSel.value });
+                            liveRouteFares[route.id] = (Admin._cachedRouteFares || {})[route.id];
+                            paintList();
+                        } catch (e) {
+                            console.error('Save route fare failed', e);
+                            if (typeof showToast === 'function') showToast(e.message || 'Save failed', 'error');
+                        }
+                    };
+                    toggleBtn?.addEventListener('click', () => save(!isConfirmed));
+                    zoneSel?.addEventListener('change', () => {
+                        if (isConfirmed) save(true);
+                    });
+                    list.appendChild(card);
+                });
+            };
+            wrap.querySelector('#de-route-fares-region')?.addEventListener('change', (ev) => {
+                Admin._deRouteFaresRegion = ev.target.value;
+                paintList();
+            });
+            paintList();
+            host.appendChild(wrap);
+        };
+
         Admin.fetchDeadEnds = async () => {
             const secret = await Admin.getAuthKey();
             if (!secret) return;
@@ -6099,22 +6216,37 @@ const Admin = {
                     const fareRes = await window.guardianFetch(`${dynamicEndpoint}sys_logs/fare_votes.json?auth=${secret}`, {}, 10000);
                     if (!fareRes.ok) throw new Error("HTTP " + fareRes.status);
                     const fareData = await fareRes.json();
-                    if (!fareData || typeof fareData !== 'object' || !Object.keys(fareData).length) {
-                        listDiv.innerHTML = '<div class="text-xs text-gray-500 italic text-center py-4">No fare votes recorded.</div>';
-                        return;
-                    }
-                    Admin._cachedFareVotes = fareData;
+                    Admin._cachedFareVotes = (fareData && typeof fareData === 'object') ? fareData : {};
                     let liveData = {};
+                    let liveRouteFares = {};
+                    let ticketPhotos = {};
                     try {
-                        const liveRes = await window.guardianFetch(`${dynamicEndpoint}config/planner_fares.json?auth=${secret}`, {}, 10000);
+                        const [liveRes, routeRes, photoRes] = await Promise.all([
+                            window.guardianFetch(`${dynamicEndpoint}config/planner_fares.json?auth=${secret}`, {}, 10000),
+                            window.guardianFetch(`${dynamicEndpoint}config/route_fares.json?auth=${secret}`, {}, 10000),
+                            window.guardianFetch(`${dynamicEndpoint}sys_logs/fare_ticket_photos.json?auth=${secret}`, {}, 10000),
+                        ]);
                         if (liveRes.ok) {
                             const parsed = await liveRes.json();
                             if (parsed && typeof parsed === 'object') liveData = parsed;
                         }
-                    } catch (_) { /* public-read node; keep the votes list if it 401s */ }
+                        if (routeRes.ok) {
+                            const parsed = await routeRes.json();
+                            if (parsed && typeof parsed === 'object') liveRouteFares = parsed;
+                        }
+                        if (photoRes.ok) {
+                            const parsed = await photoRes.json();
+                            if (parsed && typeof parsed === 'object') ticketPhotos = parsed;
+                        }
+                    } catch (_) { /* public-read nodes; still paint votes */ }
                     Admin._cachedPlannerFares = liveData;
+                    Admin._cachedRouteFares = liveRouteFares;
+                    Admin._cachedFareTicketPhotos = ticketPhotos;
                     if (typeof window.setPlannerFareOverridesCache === 'function') {
                         window.setPlannerFareOverridesCache(liveData);
+                    }
+                    if (typeof window.setRouteFaresCache === 'function') {
+                        window.setRouteFaresCache(liveRouteFares);
                     }
                     const secureEscape = (str) => {
                         if (!str) return '';
@@ -6123,9 +6255,17 @@ const Admin = {
                             return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m];
                         });
                     };
-                    const entries = Object.entries(fareData).map(([id, v]) => ({ id, ...(v || {}) }));
-                    entries.sort((a, b) => (Number(b.at) || 0) - (Number(a.at) || 0));
                     listDiv.innerHTML = '';
+                    Admin.paintConfirmedCorridorFares(listDiv, liveRouteFares);
+                    const entries = Object.entries(Admin._cachedFareVotes).map(([id, v]) => ({ id, ...(v || {}) }));
+                    if (!entries.length) {
+                        const empty = document.createElement('div');
+                        empty.className = 'text-xs text-gray-500 italic text-center py-4';
+                        empty.textContent = 'No fare votes recorded.';
+                        listDiv.appendChild(empty);
+                        return;
+                    }
+                    entries.sort((a, b) => (Number(b.at) || 0) - (Number(a.at) || 0));
                     entries.forEach((item) => {
                         const card = document.createElement('div');
                         card.className = "bg-white dark:bg-gray-900 p-3 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm flex items-start justify-between gap-2";
@@ -6142,6 +6282,10 @@ const Admin = {
                         const livePrice = liveRow ? Number(liveRow.price) : NaN;
                         const isLive = Number.isFinite(livePrice) && livePrice === Number(item.reportedPrice);
                         const canApprove = item.agree === false && Number(item.reportedPrice) >= 1 && Number(item.reportedPrice) <= 500;
+                        const ticketUrl = item.ticketUrl || ticketPhotos[item.id]?.ticketUrl || '';
+                        const ticketHtml = ticketUrl && typeof window.attachmentPreviewHtml === 'function'
+                            ? `<div class="mt-2 de-fare-ticket">${window.attachmentPreviewHtml(ticketUrl, { admin: true, imgClass: 'w-12 h-12 object-cover rounded-md border border-gray-200 dark:border-gray-700 hover:opacity-90 cursor-zoom-in', alt: 'Ticket' })}</div>`
+                            : '';
                         card.innerHTML = `
                             <div class="min-w-0 flex-1">
                                 <div class="text-xs font-bold text-gray-900 dark:text-white whitespace-normal break-words leading-snug">${secureEscape(item.origin)} ${Admin.routeArrowSvg('inline-block w-3.5 h-3.5 mx-1 align-middle text-gray-400 shrink-0')} ${secureEscape(item.destination)}</div>
@@ -6153,6 +6297,7 @@ const Admin = {
                                     <span class="text-[9px] text-gray-400 font-mono">${Admin.formatDate(item.at)}</span>
                                     ${isLive ? `<span class="text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300">Live R${secureEscape(String(livePrice))}</span>` : ''}
                                 </div>
+                                ${ticketHtml}
                             </div>
                             ${canApprove && !isLive ? `<button type="button" class="de-fare-approve shrink-0 text-emerald-700 dark:text-emerald-400 hover:text-white hover:bg-emerald-600 text-[9px] font-black bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 px-3 py-1.5 rounded transition-colors focus:outline-none uppercase tracking-widest shadow-sm">Approve ${secureEscape(reported)}</button>` : ''}
                         `;
@@ -6892,10 +7037,12 @@ const Admin = {
                     return;
                 }
                 entries.sort((a, b) => (Number(b.at) || 0) - (Number(a.at) || 0));
-                const headers = ['at', 'origin', 'destination', 'quotedPrice', 'reportedPrice', 'agree', 'isOffPeak', 'dayType', 'depTime', 'profile', 'km', 'crowKm', 'smoothKm', 'abKm', 'zone', 'region', 'deviceId', 'authUid', 'appVersion', 'routeIds', 'id'];
+                const photos = Admin._cachedFareTicketPhotos || {};
+                const headers = ['at', 'origin', 'destination', 'quotedPrice', 'reportedPrice', 'agree', 'isOffPeak', 'dayType', 'depTime', 'profile', 'km', 'crowKm', 'smoothKm', 'abKm', 'zone', 'region', 'deviceId', 'authUid', 'appVersion', 'routeIds', 'ticketUrl', 'id'];
                 const cell = (r, h) => {
                     if (h === 'at') return Admin.formatDate(r.at);
                     if (h === 'routeIds') return Array.isArray(r.routeIds) ? r.routeIds.join('|') : (r.routeIds || '');
+                    if (h === 'ticketUrl') return r.ticketUrl || photos[r.id]?.ticketUrl || '';
                     return r[h];
                 };
                 if (format === 'csv') {

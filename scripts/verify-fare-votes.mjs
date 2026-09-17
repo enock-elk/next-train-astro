@@ -15,6 +15,8 @@ import {
     roundFareVoteRand,
     setPlannerFareOverridesCache,
     submitFareVote,
+    putFareTicketPhoto,
+    buildFareTicketPhotoPayload,
     FARE_VOTE_QUEUE_KEY,
 } from '../src/lib/planner-telemetry.js';
 import { safeStorage } from '../src/lib/utils.js';
@@ -119,6 +121,7 @@ try {
         at: 2,
     });
     assert(yesRes.ok === true, 'yes submit writes immediately');
+    assert(typeof yesRes.voteId === 'string' && yesRes.voteId.length > 4, 'yes submit returns voteId');
     assert(sent && sent.agree === true && sent.reportedPrice === 8 && sent.quotedPrice === 8, 'yes PUT body ships quoted price');
 
     sent = null;
@@ -187,6 +190,10 @@ assert(ui.includes('planner-fare-vote-send'), 'No path has Send');
 assert(ui.includes('roundFareVoteRand'), 'correction uses the board whole-rand floor');
 assert(ui.includes('submitFareVote'), 'fare sheet writes votes immediately');
 assert(ui.includes('smoothKm: km') && ui.includes('abKm: crowKm'), 'fare sheet sends smooth and A-B km');
+assert(ui.includes('showPlannerFareTicketPrompt'), 'Yes/Send then offers an optional ticket photo');
+assert(ui.includes('planner-fare-ticket-add') && ui.includes('planner-fare-ticket-skip'), 'ticket prompt has Add photo and Skip');
+assert(ui.includes('putFareTicketPhoto'), 'ticket photo writes the sidecar, not the vote');
+assert(ui.includes('fare_tickets/'), 'ticket photos upload to fare_tickets');
 assert(ui.includes('getCrowFliesTripKm') && ui.includes('getSmoothTripDistanceKm'), 'fare sheet can fill both distance types');
 assert(!ui.includes('most people paid'), 'do not show a live consensus fare');
 
@@ -199,6 +206,8 @@ assert(tel.includes('slice(-1)'), 'offline fare vote queue is capped at 1');
 assert(tel.includes("config/planner_fares"), 'approved prices live at config/planner_fares');
 assert(tel.includes('plannerFareOverrideKey'), 'override keys are OD + profile + peak + day');
 assert(tel.includes("peakSlot = always ? 'all'"), 'Scholar overrides apply all day');
+assert(tel.includes('fare_ticket_photos'), 'ticket sidecar lives under sys_logs/fare_ticket_photos');
+assert(tel.includes('putFareTicketPhoto'), 'client can PUT a ticket sidecar after the vote');
 
 const modal = readFileSync(join(ROOT, 'src/components/PlannerModals.astro'), 'utf8');
 assert(modal.includes('The price algorithm is still being developed and tested, so it may not be accurate.'), 'algorithm note is unchanged');
@@ -207,6 +216,8 @@ const rules = readFileSync(join(ROOT, 'firebase-database.rules.json'), 'utf8');
 assert(rules.includes('"fare_votes"'), 'rules include fare_votes');
 assert(rules.includes('!data.exists()'), 'fare votes are create-once');
 assert(rules.includes('"planner_fares"'), 'rules include planner_fares');
+assert(rules.includes('"route_fares"'), 'rules include route_fares');
+assert(rules.includes('"fare_ticket_photos"'), 'rules include fare_ticket_photos sidecar');
 assert(rules.includes('thandeka05nxumalo@gmail.com'), 'Thandeka stays on sys_logs read');
 assert(!rules.includes('"trains"'), 'do not add a trains tree');
 
@@ -249,6 +260,33 @@ assert(!rules.includes('"trains"'), 'do not add a trains tree');
         { from: 'PRETORIA', to: 'PIENAARSPOORT' },
     );
     assert(miss.price === 12 && !miss.approved, 'off-peak Adult is a different override key');
+}
+
+{
+    const photo = buildFareTicketPhotoPayload({
+        ticketUrl: 'https://firebasestorage.googleapis.com/v0/b/x/o/fare_tickets%2Fv1.jpg?alt=media',
+        deviceId: 'dev-ticket',
+        at: 9,
+    });
+    assert(photo.ticketUrl.includes('fare_tickets') && photo.deviceId === 'dev-ticket' && photo.at === 9, 'ticket sidecar payload has url, device, at');
+    const origFetch = globalThis.fetch;
+    let photoUrl = '';
+    let photoBody = null;
+    globalThis.fetch = async (url, opts) => {
+        photoUrl = String(url);
+        photoBody = JSON.parse(opts.body);
+        return { ok: true };
+    };
+    try {
+        const res = await putFareTicketPhoto('vote_abc', photo);
+        assert(res.ok === true, 'ticket sidecar PUT succeeds');
+        assert(photoUrl.includes('sys_logs/fare_ticket_photos/vote_abc.json'), `sidecar URL, got ${photoUrl}`);
+        assert(photoBody.ticketUrl === photo.ticketUrl && photoBody.deviceId === 'dev-ticket', 'sidecar body is ticketUrl + deviceId');
+        const skipped = await putFareTicketPhoto('', photo);
+        assert(skipped.skipped === true, 'missing voteId skips the sidecar');
+    } finally {
+        globalThis.fetch = origFetch;
+    }
 }
 
 if (failures.length) {

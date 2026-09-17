@@ -2,6 +2,10 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin, Dev Hub, Alerts, Trains near me, community chat, or other hidden-test work. No emoji and no em dashes in What’s New. Keep `APP_VERSION`, `package.json` `version`, and `public/app-version.json` aligned on each release. Changelog / What’s New may be skipped, or the heading may be only **no release notes.** Every bump must add `ADMIN_CHANGELOG[APP_VERSION]` (System Health Build notes).
 
+## V9_09.17.13 — Planner fare ceiling, optional ticket photos (17 Sep 2026)
+
+Single-route Trip fare cannot exceed the confirmed corridor long zone (Gauteng dump `{sheet}_zone`, or `config/route_fares` when an operator confirms/un-confirms). Transfers across two route IDs are not corridor-capped. Approved OD prices still win. After Yes/Send, a ticket photo is optional and writes `sys_logs/fare_ticket_photos/{voteId}` so the vote itself stays create-once. Fares tab lists confirmed long fares and ticket thumbs. Deploy RTDB rules; Storage needs `fare_tickets/` like `feedback_attachments/`. No What’s New.
+
 ## V9_09.17.12 — Saturday junction walkaround, planner GPS map (17 Sep 2026)
 
 When both ends of a closed Saturday placeholder still have trains on other routes (Hercules and Koedoespoort), the planner no longer stops at “No weekend service”; Dijkstra can use Pretoria (or any other live Saturday path). Stubs such as Gezina stay closed. Open Network Map on a planner error card opens the sidenav GPS Network Map sheet, not the live-tracking Map tab. No new What’s New card.

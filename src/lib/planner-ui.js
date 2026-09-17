@@ -35,7 +35,15 @@ import {
     roundFareVoteRand,
     ensurePlannerFareOverrides,
     applyApprovedPlannerFare,
+    putFareTicketPhoto,
 } from './planner-telemetry.js';
+import {
+    ensureRouteFares,
+    capZoneForSingleRoute,
+    singleRouteIdFromList,
+    dumpZoneForRoute,
+} from './route-fares.js';
+import { sniffAttachmentFile } from './attachments.js';
 import { enterFeedbackReplyMode, openFeedbackModal } from './hub.js';
 import { prepareRichHtml } from './rich-text.js';
 import { trackAnalyticsEvent } from './analytics.js';
@@ -298,31 +306,16 @@ function plannerFareClockParts() {
 
 /** Resolve assigned fare zone for a corridor (same rules as live board). */
 function resolvePlannerRouteZone(routeId) {
-    const db = $fullDatabase.get();
-    if (!db || !routeId || !ROUTES[routeId]) return null;
-    const route = ROUTES[routeId];
-    const keysToCheck = Object.values(route.sheetKeys || {});
-    for (const key of keysToCheck) {
-        const zoneVal = db[`${key}_zone`];
-        if (zoneVal && FARE_CONFIG.zones[zoneVal]) return zoneVal;
-    }
-    for (const key of keysToCheck) {
-        if (!key.includes('_to_')) continue;
-        const parts = key.split('_to_');
-        if (parts.length !== 2) continue;
-        const prefix = parts[0];
-        const rest = parts[1];
-        let suffix = '';
-        let dest = '';
-        if (rest.endsWith('_weekday')) { suffix = '_weekday'; dest = rest.replace('_weekday', ''); }
-        else if (rest.endsWith('_saturday')) { suffix = '_saturday'; dest = rest.replace('_saturday', ''); }
-        else if (rest.endsWith('_sat')) { suffix = '_sat'; dest = rest.slice(0, -4); }
-        if (dest && suffix) {
-            const reverseZone = db[`${dest}_to_${prefix}${suffix}_zone`];
-            if (reverseZone && FARE_CONFIG.zones[reverseZone]) return reverseZone;
-        }
-    }
-    return null;
+    return dumpZoneForRoute(routeId);
+}
+
+/** Km zone, capped at the confirmed corridor long fare when the trip is one route. */
+async function resolvePlannerQuoteZone(trip, km) {
+    await ensureRouteFares();
+    const kmZone = suggestZoneFromKm(km);
+    const routeId = singleRouteIdFromList(collectTripRoutes(trip));
+    if (!routeId) return kmZone;
+    return capZoneForSingleRoute(kmZone, routeId);
 }
 
 function computeZoneFare(zoneCode) {
@@ -502,6 +495,67 @@ function showPlannerFareVoteThanks(wrap) {
     wrap.innerHTML = '<p class="text-sm font-semibold text-gray-700 dark:text-gray-200">Thanks. That helps us check the fare.</p>';
 }
 
+async function uploadPlannerFareTicket(voteId, file) {
+    const { bootFirebase } = await import('./firebase-boot.js');
+    await bootFirebase();
+    if (!window.firebaseStorage || !window.firebaseStorageRef || !window.firebaseUploadBytesResumable || !window.firebaseGetDownloadURL) {
+        throw new Error('Could not attach photo. Check your connection and try again.');
+    }
+    const kind = await sniffAttachmentFile(file);
+    if (!kind || !String(kind.mime || '').startsWith('image/')) {
+        throw new Error('Use a photo of the ticket.');
+    }
+    const safeId = String(voteId || '').replace(/[^a-zA-Z0-9._-]/g, '').slice(0, 80);
+    if (!safeId) throw new Error('Could not attach photo.');
+    const storageReference = window.firebaseStorageRef(window.firebaseStorage, `fare_tickets/${safeId}.${kind.ext}`);
+    const task = window.firebaseUploadBytesResumable(storageReference, file, { contentType: kind.mime });
+    await new Promise((resolve, reject) => {
+        task.on('state_changed', null, reject, resolve);
+    });
+    return window.firebaseGetDownloadURL(task.snapshot.ref);
+}
+
+function showPlannerFareTicketPrompt(wrap, voteId) {
+    if (!wrap || !voteId) {
+        showPlannerFareVoteThanks(wrap);
+        return;
+    }
+    wrap.innerHTML = `
+        <p class="text-sm font-semibold text-gray-700 dark:text-gray-200">Thanks. Add a photo of your ticket? Optional.</p>
+        <div class="mt-2 grid grid-cols-2 gap-2">
+            <button type="button" id="planner-fare-ticket-add" class="inline-flex items-center justify-center rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-3 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400">Add photo</button>
+            <button type="button" id="planner-fare-ticket-skip" class="inline-flex items-center justify-center rounded-xl bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-100 font-bold py-2.5 px-3 text-sm border border-gray-200 dark:border-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400">Skip</button>
+        </div>
+        <input id="planner-fare-ticket-file" type="file" accept="image/*" capture="environment" class="hidden" />
+    `;
+    const fileInput = document.getElementById('planner-fare-ticket-file');
+    const addBtn = document.getElementById('planner-fare-ticket-add');
+    const skipBtn = document.getElementById('planner-fare-ticket-skip');
+    skipBtn?.addEventListener('click', (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        showPlannerFareVoteThanks(wrap);
+    });
+    addBtn?.addEventListener('click', (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        fileInput?.click();
+    });
+    fileInput?.addEventListener('change', async () => {
+        const file = fileInput.files && fileInput.files[0];
+        if (!file) return;
+        addBtn.disabled = true;
+        skipBtn.disabled = true;
+        try {
+            const ticketUrl = await uploadPlannerFareTicket(voteId, file);
+            await putFareTicketPhoto(voteId, { ticketUrl });
+        } catch (e) {
+            if (typeof showToast === 'function') showToast(e.message || 'Could not attach photo.', 'info', 2500);
+        }
+        showPlannerFareVoteThanks(wrap);
+    });
+}
+
 function bindPlannerFareVote(trip, detail) {
     const wrap = document.getElementById('planner-fare-vote');
     if (!wrap) return;
@@ -510,6 +564,7 @@ function bindPlannerFareVote(trip, detail) {
     const correct = document.getElementById('planner-fare-vote-correct');
     const amount = document.getElementById('planner-fare-vote-amount');
     const sendBtn = document.getElementById('planner-fare-vote-send');
+    let voting = false;
     const sendVote = async (extra) => {
         let km = detail?.km;
         let crowKm = detail?.crowKm;
@@ -517,11 +572,22 @@ function bindPlannerFareVote(trip, detail) {
         if (crowKm == null) crowKm = getCrowFliesTripKm(trip);
         return submitFareVote(plannerFareVoteInput(trip, { ...detail, km, crowKm }, extra));
     };
-    yesBtn?.addEventListener('click', (ev) => {
+    const afterVote = (res) => {
+        if (res?.ok && res.voteId) showPlannerFareTicketPrompt(wrap, res.voteId);
+        else showPlannerFareVoteThanks(wrap);
+    };
+    yesBtn?.addEventListener('click', async (ev) => {
         ev.preventDefault();
         ev.stopPropagation();
-        sendVote({ agree: true });
-        showPlannerFareVoteThanks(wrap);
+        if (voting) return;
+        voting = true;
+        yesBtn.disabled = true;
+        noBtn && (noBtn.disabled = true);
+        try {
+            afterVote(await sendVote({ agree: true }));
+        } catch {
+            showPlannerFareVoteThanks(wrap);
+        }
     });
     noBtn?.addEventListener('click', (ev) => {
         ev.preventDefault();
@@ -529,16 +595,22 @@ function bindPlannerFareVote(trip, detail) {
         correct?.classList.remove('hidden');
         amount?.focus();
     });
-    sendBtn?.addEventListener('click', (ev) => {
+    sendBtn?.addEventListener('click', async (ev) => {
         ev.preventDefault();
         ev.stopPropagation();
+        if (voting) return;
         const reported = roundFareVoteRand(amount?.value);
         if (reported < 1 || reported > 500) {
             if (typeof showToast === 'function') showToast('Enter a whole rand amount.', 'info', 2500);
             return;
         }
-        sendVote({ agree: false, reportedPrice: reported });
-        showPlannerFareVoteThanks(wrap);
+        voting = true;
+        sendBtn.disabled = true;
+        try {
+            afterVote(await sendVote({ agree: false, reportedPrice: reported }));
+        } catch {
+            showPlannerFareVoteThanks(wrap);
+        }
     });
 }
 
@@ -633,14 +705,15 @@ function fillPlannerFareBreakdown(trip, { km, crowKm, zone, fare } = {}) {
     if (showVote) bindPlannerFareVote(trip, { km, crowKm, zone, fare });
 }
 
-function refreshOpenPlannerFare() {
+async function refreshOpenPlannerFare() {
     const ctx = lastPlannerFareContext;
     const sheet = document.getElementById('planner-fare-breakdown-sheet');
     if (!ctx?.trip) return;
-    const fare = applyApprovedPlannerFare(computeZoneFareForTrip(ctx.zone, ctx.trip), ctx.trip);
+    const zone = await resolvePlannerQuoteZone(ctx.trip, ctx.km);
+    const fare = applyApprovedPlannerFare(computeZoneFareForTrip(zone, ctx.trip), ctx.trip);
     if (!fare) return;
     if (sheet && !sheet.classList.contains('hidden')) {
-        fillPlannerFareBreakdown(ctx.trip, { ...ctx, fare });
+        fillPlannerFareBreakdown(ctx.trip, { ...ctx, zone, fare });
     }
     hydratePlannerFareButton(ctx.trip);
 }
@@ -657,7 +730,7 @@ async function hydratePlannerFareButton(trip) {
     await ensurePlannerFareOverrides();
     const km = await getSmoothTripDistanceKm(trip);
     const crowKm = getCrowFliesTripKm(trip);
-    const zone = suggestZoneFromKm(km);
+    const zone = await resolvePlannerQuoteZone(trip, km);
     const fare = applyApprovedPlannerFare(computeZoneFareForTrip(zone, trip), trip);
     if (!fare) {
         btn.hidden = true;

@@ -125,6 +125,8 @@ ok(adminJs.includes('sys_logs/trip_plan_users'), 'admin reads trip_plan_users in
     ok(rules.includes('"trip_plan_pairs"'), 'rules allow trip_plan_pairs index');
     ok(rules.includes('"fare_votes"'), 'rules allow fare_votes create-once log');
     ok(rules.includes('"planner_fares"'), 'rules allow public-read planner_fares');
+    ok(rules.includes('"route_fares"'), 'rules allow public-read route_fares');
+    ok(rules.includes('"fare_ticket_photos"'), 'rules allow fare_ticket_photos create-once sidecar');
     ok(rules.includes('thandeka05nxumalo@gmail.com') && rules.includes('enockelk@gmail.com'), 'rules keep both operator emails');
 }
 {
@@ -133,6 +135,7 @@ ok(adminJs.includes('sys_logs/trip_plan_users'), 'admin reads trip_plan_users in
     ok(tel.includes('trip_plan_users'), 'client upserts trip_plan_users');
     ok(tel.includes('trip_plan_pairs'), 'client upserts trip_plan_pairs');
     ok(tel.includes('sys_logs/fare_votes'), 'client writes fare_votes immediately');
+    ok(tel.includes('fare_ticket_photos'), 'client can write fare_ticket_photos sidecar');
 }
 ok(adminJs.includes('confirmClearDb'), 'Clear DB uses a second confirmation popup');
 ok(adminJs.includes("telemetryRange === 'ALL'"), 'admin ALL range does not use the 7-point slicer');
@@ -176,10 +179,17 @@ ok(adminJs.includes('Admin.approvePlannerFare'), 'Fares tab can approve a correc
 ok(adminJs.includes('config/planner_fares/'), 'Approve writes config/planner_fares/$key');
 ok(adminJs.includes('de-fare-approve'), 'correction cards have an Approve button');
 ok(adminJs.includes('Live R'), 'already-approved corrections show Live');
+ok(adminJs.includes('Confirmed corridor fares'), 'Fares tab lists confirmed corridor long fares');
+ok(adminJs.includes('Admin.saveRouteFare'), 'Fares tab can confirm a corridor long fare');
+ok(adminJs.includes('config/route_fares/'), 'Confirm writes config/route_fares/$routeId');
+ok(adminJs.includes('de-fare-ticket'), 'vote cards can show a ticket thumb');
+ok(adminJs.includes('fare_ticket_photos'), 'Fares tab reads ticket photo sidecars');
 {
     const bridge = readFileSync(join(ROOT, 'src/lib/admin-bridge.js'), 'utf8');
     ok(bridge.includes('window.plannerFareOverrideKey'), 'admin bridge exposes override keys');
     ok(bridge.includes('window.buildPlannerFareOverrideRecord'), 'admin bridge exposes override records');
+    ok(bridge.includes('window.buildRouteFareRecord'), 'admin bridge exposes corridor fare records');
+    ok(bridge.includes('window.dumpZoneForRoute'), 'admin bridge exposes dump corridor zones');
 }
 ok(adminJs.includes("['trips', 'fails', 'fares']"), 'swipe walks three planner telemetry tabs');
 ok(adminJs.includes('de-trip-hour-bars') && adminJs.includes('de-trip-od-heat'), 'planner insights include hour bars and an OD heatmap');

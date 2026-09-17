@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_09.17.13': [
+        'Planner Trip fare on a single route (direct or same-route shuttle) is min(km zone, confirmed corridor long zone). Gauteng dump {sheet}_zone is confirmed until config/route_fares/{routeId}.confirmed is false. Other regions stay km-estimated until an operator confirms. OD Approve (config/planner_fares) still wins. Optional ticket photo after Yes/Send is a create-once sidecar at sys_logs/fare_ticket_photos/{voteId}; the vote does not wait. Fares tab has Confirmed corridor fares + ticket thumbs. Deploy firebase-database.rules.json. Storage must allow fare_tickets/ like feedback_attachments/. No What’s New (trip price is still a pilot). forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
+    ],
     'V9_09.17.12': [
         'Saturday placeholder classification: junction↔junction (Hercules ↔ Koedoespoort) no longer short-circuits as NO_SERVICE, so Dijkstra can use other-route walkarounds (via Pretoria). Stubs like Gezina stay NO_SERVICE / DEST_CUT / ORIGIN_CUT. Same rule for every SATURDAY_PLACEHOLDER_ROUTES id. Planner error Open Network Map calls __ntOpenNetworkMapSheet (sidenav GPS map.html), not switchTab(map). forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
     ],

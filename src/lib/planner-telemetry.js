@@ -484,15 +484,40 @@ export async function submitFareVote(input) {
         return { queued: true };
     }
     try {
-        await putFareVote(payload);
+        const voteId = await putFareVote(payload);
         markFareVoteSent(key);
-        return { ok: true };
+        return { ok: true, voteId };
     } catch (e) {
         console.warn('🛡️ Guardian: fare_votes write failed', e);
         enqueueFareVoteOffline(payload);
         markFareVoteSent(key);
         return { queued: true };
     }
+}
+
+export const FARE_TICKET_PHOTOS_PATH = 'sys_logs/fare_ticket_photos';
+
+export function buildFareTicketPhotoPayload({ ticketUrl, deviceId: did, at } = {}) {
+    return {
+        ticketUrl: clipStr(ticketUrl, 1999),
+        deviceId: clipStr(did || deviceId(), 79),
+        at: Number(at) || Date.now(),
+    };
+}
+
+/** Create-once sidecar. Votes cannot be patched, so the photo is a second PUT. */
+export async function putFareTicketPhoto(voteId, input = {}) {
+    const id = clipStr(voteId, 80);
+    const payload = buildFareTicketPhotoPayload(input);
+    if (!id || payload.ticketUrl.length < 13 || !payload.deviceId) return { skipped: true };
+    const q = await authQuery();
+    const res = await fetch(`${DYNAMIC_BASE_URL}${FARE_TICKET_PHOTOS_PATH}/${encodeURIComponent(id)}.json${q}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+    });
+    if (!res.ok) throw new Error(String(res.status));
+    return { ok: true };
 }
 
 const PLANNER_FARES_PATH = 'config/planner_fares';

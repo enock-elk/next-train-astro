@@ -85,6 +85,7 @@ jobs:
           PUBLIC_SITE_URL: ${{ env.SITE_ORIGIN }}
           PUBLIC_BASE_PATH: /
           PUBLIC_CARTO_API_KEY: ${{ secrets.PUBLIC_CARTO_API_KEY }}
+          PUBLIC_FIREBASE_VAPID_KEY: ${{ secrets.PUBLIC_FIREBASE_VAPID_KEY }}
           # Public endpoint, intentionally committed so production cannot
           # silently fall back to direct RTDB writes when a secret is absent.
           PUBLIC_COMMUNITY_WORKER_URL: https://nexttrain-community.enock.workers.dev

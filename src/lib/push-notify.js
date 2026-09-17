@@ -60,18 +60,37 @@ async function ensureMessaging() {
     return window.firebaseMessaging;
 }
 
-async function persistToken(token) {
+async function ensurePushAuth() {
+    await bootFirebase();
+    if (window.firebaseAuth?.currentUser) return window.firebaseAuth.currentUser;
+    if (window.firebaseAuth && window.firebaseSignInAnonymously) {
+        try {
+            const credential = await window.firebaseSignInAnonymously(window.firebaseAuth);
+            return credential?.user || window.firebaseAuth.currentUser || null;
+        } catch (e) {
+            console.warn('FCM anonymous auth failed', e);
+        }
+    }
+    return null;
+}
+
+async function persistToken(token, { enabled = true } = {}) {
     if (!token) return;
     safeStorage.setItem(TOKEN_CACHE_KEY, token);
     const deviceId = getDeviceId();
     const acct = $account.get();
+    const firebaseUser = await ensurePushAuth();
+    if (!firebaseUser) throw new Error('Notification sign-in unavailable');
     const routeIds = getNotifyRouteIds();
     const payload = {
         token,
         updatedAt: Date.now(),
         deviceId,
-        uid: acct.status === 'signed-in' ? acct.uid : null,
+        uid: firebaseUser.uid,
+        accountUid: acct.status === 'signed-in' ? acct.uid : null,
+        region: $userRegion.get() || 'GP',
         routeIds,
+        enabled: !!enabled,
         appVersion: APP_VERSION,
         lab: isLabEnvironment(),
         userAgent: typeof navigator !== 'undefined' ? String(navigator.userAgent || '').slice(0, 180) : '',
@@ -195,6 +214,14 @@ export async function enablePushNotifications() {
 
 export async function disablePushNotifications() {
     safeStorage.setItem(NOTIFY_PREF_KEY, 'false');
+    const token = safeStorage.getItem(TOKEN_CACHE_KEY);
+    if (token) {
+        try {
+            await persistToken(token, { enabled: false });
+        } catch (e) {
+            console.warn('FCM subscription disable failed', e);
+        }
+    }
     syncNotifyUi(false);
     return false;
 }

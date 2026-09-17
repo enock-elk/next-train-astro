@@ -410,6 +410,15 @@ for (const region of ['GP', 'WC', 'KZN', 'EC']) {
 }
 
 {
+    const gp = JSON.parse(readFileSync(new URL('../public/tracks/rail-tracks-GP.geojson', import.meta.url), 'utf8'));
+    const naledi = gp.features.find((f) => f.properties?.routeId === 'jhb-soweto');
+    const names = naledi?.properties?.stationNames || [];
+    const coords = naledi?.geometry?.coordinates || [];
+    assert(names[0] === 'JOHANNESBURG' && names[names.length - 1] === 'NALEDI', 'jhb-soweto bake lists Park Station through Naledi');
+    assert(coords.length === 558, `jhb-soweto gold is the full Park-to-Naledi export (${coords.length} verts)`);
+}
+
+{
     // KZN is the reference shape except where an operator gold-track patch
     // rewrote a corridor. Its Berea Road corridor forks at Duff's Road: the
     // line runs out to kwaMashu and the special Duff's Road - Bridge City

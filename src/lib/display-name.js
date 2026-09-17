@@ -11,6 +11,22 @@ export const DISPLAY_NAME_REFUSE_MSG = 'Choose a different name.';
 
 const BARE_DOMAIN = /\b[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+\.[a-z]{2,}\b/i;
 
+const DISPLAY_NAME_BLOCK = new Set([
+    'sex', 'sexy', 'sexx', 'sexxx', 'sexxy',
+    'porn', 'porno',
+    'xxx', 'xxxx',
+    'nude', 'nudes',
+    'nsfw',
+]);
+
+function displayNameHasBlockedWord(raw) {
+    const tokens = String(raw || '')
+        .toLowerCase()
+        .split(/[^a-z0-9]+/)
+        .filter(Boolean);
+    return tokens.some((t) => DISPLAY_NAME_BLOCK.has(t));
+}
+
 export function formatAccountDisplayName(fullName) {
     const parts = String(fullName || '')
         .trim()
@@ -43,6 +59,9 @@ export function refuseDisplayName(raw) {
     if (!custom) return { ok: true, name: '' };
     if (displayNameLooksLikeUrl(custom)) {
         return { ok: false, name: custom, reason: 'url', message: DISPLAY_NAME_REFUSE_MSG };
+    }
+    if (displayNameHasBlockedWord(custom)) {
+        return { ok: false, name: custom, reason: 'blocked', message: DISPLAY_NAME_REFUSE_MSG };
     }
     const safety = checkContentSafety(custom, { allowLinks: false });
     if (!safety.ok || safety.verdict === 'block' || safety.verdict === 'review') {

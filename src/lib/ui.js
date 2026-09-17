@@ -67,7 +67,7 @@ export function bindPasswordReveal({ inputId, buttonId, openIconId, closedIconId
     sync();
 }
 
-const FULL_SCREEN_OVERLAY_IDS = ['messages-thread-modal', 'dev-modal'];
+const FULL_SCREEN_OVERLAY_IDS = ['messages-thread-modal', 'dev-modal', 'account-modal'];
 
 function syncFullOverlayChrome() {
     if (typeof document === 'undefined') return;
@@ -162,7 +162,9 @@ function legalHashForType(type) {
 function anyFixedModalOpen() {
     const alerts = document.getElementById('alerts-channel');
     const alertsOpen = !!(alerts && !alerts.classList.contains('hidden'));
-    return !!document.querySelector('div[id$="-modal"].fixed:not(.hidden)') || alertsOpen;
+    const lightbox = document.getElementById('alert-image-lightbox');
+    const lightboxOpen = !!(lightbox && !lightbox.classList.contains('hidden'));
+    return !!document.querySelector('div[id$="-modal"].fixed:not(.hidden)') || alertsOpen || lightboxOpen;
 }
 
 /** Instantly hide a fixed overlay (no animation). Used when history.back() must not leave it up. */
@@ -852,15 +854,13 @@ export function hideCheckToast() {
 
 
 // --- LIGHTBOX ENGINE ---
-function resetMapImageVisibility(mapImg) {
-    if (!mapImg) return;
-    // Empty src / prior failed loads set display:none via onerror — clear before swap
-    mapImg.style.display = '';
-    const fallback = mapImg.nextElementSibling;
-    if (fallback instanceof HTMLElement) {
-        fallback.style.display = 'none';
-        fallback.classList.add('hidden');
-    }
+function bindAlertImageLightbox() {
+    if (typeof document === 'undefined' || window._alertLightboxBound) return;
+    window._alertLightboxBound = true;
+    document.getElementById('alert-image-lightbox-close')?.addEventListener('click', (e) => {
+        e.preventDefault();
+        closeLightbox();
+    });
 }
 
 export function openLightbox(url) {
@@ -874,150 +874,48 @@ export function openLightbox(url) {
         if (pending) return;
     } catch { /* ignore */ }
     triggerHaptic();
+    bindAlertImageLightbox();
+    const overlay = document.getElementById('alert-image-lightbox');
+    const img = document.getElementById('alert-image-lightbox-img');
+    if (!overlay || !img) return;
     history.pushState({ modal: 'lightbox' }, '', '#lightbox');
     lockBackgroundScroll();
-    
-    const mapModal = document.getElementById('map-modal');
-    const mapImg = document.getElementById('map-image');
-    const mapTitle = document.getElementById('map-modal-title');
-    
-    if (mapModal && mapImg) {
-        window._isLightboxMode = true;
-        mapModal.classList.add('!z-[160]');
-        
-        // Save original map states for the Teardown Hook (once per lightbox session)
-        if (window._originalMapSrc == null) {
-            const attrSrc = mapImg.getAttribute('src') || '';
-            window._originalMapSrc = attrSrc || mapImg.dataset.mapSrc || '';
-        }
-        if (mapTitle && window._originalMapTitle == null) {
-            window._originalMapTitle = mapTitle.textContent;
-        }
-        
-        if (mapTitle) mapTitle.textContent = "Image Preview";
-        // Un-hide before assigning — sticky onerror display:none was blanking previews
-        resetMapImageVisibility(mapImg);
-        mapImg.alt = 'Image Preview';
-        mapImg.src = src;
-        if (typeof window.resetMap === 'function') window.resetMap();
-        else mapImg.style.transform = 'translate(0px, 0px) scale(1)';
-        
-        // Temporarily hijack the map modal close buttons
-        const closeBtn1 = document.getElementById('close-map-btn');
-        const closeBtn2 = document.getElementById('close-map-btn-2');
-        
-        if (!window._originalMapClose1 && closeBtn1) window._originalMapClose1 = closeBtn1.onclick;
-        if (!window._originalMapClose2 && closeBtn2) window._originalMapClose2 = closeBtn2.onclick;
-        
-        if (closeBtn2) {
-            if (!window._originalMapCloseText) window._originalMapCloseText = closeBtn2.textContent;
-            closeBtn2.textContent = "Close Preview";
-        }
-
-        const lightboxCloseHandler = (e) => {
-            if (e) e.preventDefault();
-            closeLightbox();
-        };
-        
-        if (closeBtn1) closeBtn1.onclick = lightboxCloseHandler;
-        if (closeBtn2) closeBtn2.onclick = lightboxCloseHandler;
-
-        // Show map-modal visually WITHOUT openSmoothModal — that would push a second
-        // #prasa-map history entry and break Close Preview back to the alert (#notice).
-        window._isModalAnimating = true;
-        setTimeout(() => { window._isModalAnimating = false; }, 350);
-        mapModal.classList.remove('hidden');
-        const inner = mapModal.firstElementChild;
-        if (inner) {
-            inner.classList.remove('origin-top-right', 'origin-bottom-left', 'origin-bottom');
-            inner.classList.add('origin-center', 'scale-95');
-            inner.classList.remove('scale-100');
-        }
-        void mapModal.offsetWidth;
-        mapModal.classList.remove('opacity-0');
-        if (inner) {
-            requestAnimationFrame(() => {
-                inner.classList.remove('scale-95');
-                inner.classList.add('scale-100');
-            });
-        }
-        lockBackgroundScroll();
-        // Ensure pinch/pan/zoom bindings are live for alert images too
-        if (typeof window.setupMapLogic === 'function') window.setupMapLogic();
-        if (typeof window.resetMap === 'function') window.resetMap();
-    }
+    window._isLightboxMode = true;
+    img.removeAttribute('src');
+    img.alt = 'Image Preview';
+    overlay.classList.remove('hidden');
+    overlay.classList.add('flex');
+    img.src = src;
 }
 
 export function closeLightbox(fromPopState = false) {
     if (typeof window === 'undefined') return;
-    // Cover #lightbox and legacy static-map hashes from older builds (#map / #prasa-map)
     if (!fromPopState && (location.hash === '#lightbox' || location.hash === '#prasa-map')) {
         history.back();
         return;
     }
-    
-    // Visual teardown only (no history.back here — that would skip past #notice)
-    const mapModal = document.getElementById('map-modal');
-    if (mapModal && !mapModal.classList.contains('hidden')) {
-        window._isModalAnimating = true;
-        setTimeout(() => { window._isModalAnimating = false; }, 350);
-        const inner = mapModal.firstElementChild;
-        if (inner?.classList.contains('scale-100')) {
-            inner.classList.remove('scale-100');
-            inner.classList.add('scale-95');
+
+    const overlay = document.getElementById('alert-image-lightbox');
+    if (overlay && !overlay.classList.contains('hidden')) {
+        overlay.classList.add('hidden');
+        overlay.classList.remove('flex');
+        const img = document.getElementById('alert-image-lightbox-img');
+        if (img) {
+            img.removeAttribute('src');
+            img.alt = '';
         }
-        mapModal.classList.add('opacity-0');
-        setTimeout(() => {
-            mapModal.classList.add('hidden');
-            // Keep scroll locked if notice / another overlay is still open
-            if (!anyFixedModalOpen() && !document.body.classList.contains('sidenav-open')) {
-                unlockBackgroundScroll();
-            } else {
-                lockBackgroundScroll();
-            }
-        }, 300);
+        window._isLightboxMode = false;
+        if (!anyFixedModalOpen() && !document.body.classList.contains('sidenav-open')) {
+            unlockBackgroundScroll();
+        } else {
+            lockBackgroundScroll();
+        }
     } else if (!anyFixedModalOpen() && !document.body.classList.contains('sidenav-open')) {
+        window._isLightboxMode = false;
         unlockBackgroundScroll();
+    } else {
+        window._isLightboxMode = false;
     }
-    
-    // Teardown Hook: Restore the regional map image and bindings AFTER the fade out
-    setTimeout(() => {
-        if (window._isLightboxMode) {
-            const mapModal = document.getElementById('map-modal');
-            const mapImg = document.getElementById('map-image');
-            const mapTitle = document.getElementById('map-modal-title');
-            
-            if (mapModal) mapModal.classList.remove('!z-[160]');
-            if (mapImg) {
-                const restoreSrc = window._originalMapSrc || mapImg.dataset.mapSrc || '';
-                // Prefer lazy empty until Network Map opens again (avoid empty-src onerror hide)
-                if (restoreSrc) mapImg.setAttribute('src', restoreSrc);
-                else mapImg.removeAttribute('src');
-                resetMapImageVisibility(mapImg);
-                mapImg.alt = 'Metrorail Network Map';
-                mapImg.style.transform = 'translate(0px, 0px) scale(1)';
-            }
-            if (mapTitle && window._originalMapTitle != null) {
-                mapTitle.textContent = window._originalMapTitle;
-            }
-            
-            const closeBtn1 = document.getElementById('close-map-btn');
-            const closeBtn2 = document.getElementById('close-map-btn-2');
-            
-            if (closeBtn1 && window._originalMapClose1) closeBtn1.onclick = window._originalMapClose1;
-            if (closeBtn2 && window._originalMapClose2) closeBtn2.onclick = window._originalMapClose2;
-            
-            if (closeBtn2 && window._originalMapCloseText) {
-                closeBtn2.textContent = window._originalMapCloseText;
-            }
-            if (typeof window.resetMap === 'function') window.resetMap();
-            // Re-bind map viewer close handlers after lightbox hijack
-            if (typeof window.setupMapLogic === 'function') window.setupMapLogic();
-            window._isLightboxMode = false;
-            window._originalMapSrc = null;
-            window._originalMapTitle = null;
-        }
-    }, 350);
 }
 
 // --- GLOBAL ERROR SHIELD (Safe Mode Protocol) ---

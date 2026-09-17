@@ -92,7 +92,7 @@ function isSafeZone() {
     const mainOk = hash === '' || hash === '#home' || hash === '#planner' || hash === '#planner-results';
     if (!mainOk) return false;
 
-    const blocked = ['map-modal', 'trip-map-modal', 'full-schedule-modal', 'about-modal', 'blackbox-modal'];
+    const blocked = ['map-modal', 'trip-map-modal', 'full-schedule-modal', 'about-modal', 'blackbox-modal', 'account-modal'];
     for (const id of blocked) {
         const el = document.getElementById(id);
         if (el && !el.classList.contains('hidden')) return false;

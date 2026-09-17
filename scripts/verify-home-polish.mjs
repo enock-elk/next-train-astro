@@ -331,6 +331,9 @@ assert(!/route rooms|delay reports|trip sharing/i.test(hubModals.slice(hubModals
 assert(!hubModals.includes('Schedules and trip planning work fully as a guest'), 'account no longer uses schedule/trip-planning pitch');
 assert(hubModals.includes('Show my photo next to my name'), 'photo opt-in is commuter-facing');
 assert(hubModals.includes('id="account-photo-alerts"'), 'photo opt-in checkbox exists');
+assert(hubModals.includes('id="account-profile-toggle"') && hubModals.includes('id="account-profile-panel"'), 'signed-in name and email open a profile accordion');
+assert(hubModals.includes('id="account-photo-toggle"') && hubModals.includes('toggle-checkbox'), 'photo opt-in is a settings toggle');
+assert(hubModals.includes('>Save<') && hubModals.includes('id="account-save-display-name"'), 'display name and photo share one Save');
 assert(hubModals.includes('Continue with Facebook'), 'guest Facebook sign-in');
 assert(hubModals.includes('id="account-facebook-btn"'), 'Facebook button id');
 assert(hubModals.includes('Delete account'), 'signed-in delete row');
@@ -340,23 +343,32 @@ assert(!hubModals.includes('id="account-operator-delete-note"'), 'Account panel 
 assert(!/for the operators/.test(hubModals.slice(hubModals.indexOf('id="account-modal"'), hubModals.indexOf('id="nt-admin-chrome-template"'))), 'Account panel does not mention operators');
 assert(hubModals.includes('id="account-guest-points-wrap"'), 'guest points row can be hidden after sign-out');
 assert(hubModals.includes('id="account-settings-host"'), 'Account can host Passenger Type and Theme');
-assert(hubModals.includes('id="account-identity-host"'), 'signed-in Account hosts Passenger Type on the identity card');
-assert(hubModals.includes('id="account-notify-block"') && hubModals.includes('id="account-notify-toggle"'), 'Account has a Notifications accordion');
-assert(hubModals.includes('Community chats') && hubModals.includes('Train nearby reminders') && hubModals.includes('Admin feedback'), 'disabled notification rows exist');
+assert(!hubModals.includes('id="account-identity-host"'), 'Passenger Type is no longer a separate Community identity card');
+assert(!hubModals.includes('id="account-notify-block"'), 'Account no longer has a duplicate Notifications accordion');
+assert(hubModals.includes('id="account-modal-close"') && hubModals.includes('M10 19l-7-7m0 0l7-7m-7 7h18'), 'Account close control uses the guide Back arrow');
+assert(!/id="account-modal-close"[^>]*>\s*Done\s*</.test(hubModals), 'Account close is not labelled Done');
+assert(!/<h3[^>]*>Account<\/h3>/.test(hubModals), 'Account overlay has no large Account title');
+assert(hubModals.includes('placeholder="Email or WhatsApp for a reply"'), 'Hub contact placeholder is the shorter line');
+assert(!hubModals.includes('Email or WhatsApp if you want a reply'), 'Hub contact placeholder is not the long iOS-clipping line');
+assert(hubModals.includes('id="messages-thread-contact-row"') && hubModals.includes('min-w-0'), 'Hub contact row can shrink without changing input font-size');
 assert(hubModals.includes('id="account-delete-type"'), 'delete confirm requires typing DELETE');
 assert(hubModals.includes('id="account-badge-how-sheet"') && hubModals.includes('id="account-badge-how-close"'), 'badge how-to sheet exists');
 assert(
-    hubModals.indexOf('id="account-points-btn"') < hubModals.indexOf('id="account-identity-host"')
-    && hubModals.indexOf('id="account-identity-host"') < hubModals.indexOf('id="account-settings-host"')
-    && hubModals.indexOf('id="account-settings-host"') < hubModals.indexOf('id="account-notify-block"')
-    && hubModals.indexOf('id="account-notify-block"') < hubModals.indexOf('id="account-signout-btn"'),
-    'signed-in Account order is Points, identity, theme host, notifications, sign out',
+    hubModals.indexOf('id="account-profile-toggle"') < hubModals.indexOf('id="account-photo-alerts"')
+    && hubModals.indexOf('id="account-photo-alerts"') < hubModals.indexOf('id="account-save-display-name"')
+    && hubModals.indexOf('id="account-save-display-name"') < hubModals.indexOf('id="account-points-btn"')
+    && hubModals.indexOf('id="account-points-btn"') < hubModals.indexOf('id="account-settings-host"')
+    && hubModals.indexOf('id="account-settings-host"') < hubModals.indexOf('id="account-signout-btn"'),
+    'signed-in Account order is profile accordion, Points, theme host, sign out',
 );
 assert(hubModals.includes('?from=account'), 'Account legal links return with from=account');
 assert(hubModals.includes('account-points-panel'), 'points details live inside Account');
 assert(hubModals.indexOf('id="account-points-btn"') < hubModals.indexOf('id="account-points-panel"'), 'points panel sits under the Points row');
-assert(hubModals.indexOf('id="account-points-panel"') < hubModals.indexOf('id="account-photo-alerts"'), 'points breakdown opens before the photo row, not at the page footer');
+assert(hubModals.indexOf('id="account-edit-display-name"') < hubModals.indexOf('id="account-photo-alerts"')
+    && hubModals.indexOf('id="account-photo-alerts"') < hubModals.indexOf('id="account-save-display-name"')
+    && hubModals.indexOf('id="account-save-display-name"') < hubModals.indexOf('id="account-points-panel"'), 'name and photo sit in the profile accordion with a shared Save');
 assert(accountJs.includes("insertAdjacentElement('afterend'") && accountJs.includes('account-points-panel'), 'Points toggle docks the breakdown next to the accordion button');
+assert(accountJs.includes('setShowPhotoInAlerts') && accountJs.includes("window.showToast('Saved', 'success')"), 'Save writes display name and photo together');
 assert(hubModals.includes('id="reports-feed-modal"'), 'VIEW opens a commuter reports list');
 assert(hubModals.includes('id="reports-feed-list"'), 'reports list has a feed host');
 assert(hubModals.includes('items-end justify-center p-0'), 'reports sheet docks to the bottom');
@@ -544,11 +556,21 @@ assert(refuseDisplayName('https://spam.example').ok === false, 'display names th
 assert(refuseDisplayName('www.spam.com').ok === false, 'www display names are refused');
 assert(refuseDisplayName('spam.example.com').ok === false, 'bare-domain display names are refused');
 assert(refuseDisplayName('https://spam.example').message === DISPLAY_NAME_REFUSE_MSG, 'refused names toast Choose a different name.');
+assert(refuseDisplayName('Sex').ok === false, 'Sex is refused as a display name');
+assert(refuseDisplayName('sexy').ok === false, 'sexy is refused as a display name');
+assert(refuseDisplayName('Enock').ok === true, 'ordinary first names are still allowed');
 {
     const sidenav = readFileSync(new URL('../src/components/Sidenav.astro', import.meta.url), 'utf8');
     assert(sidenav.includes('Haptic feedback'), 'haptics row is labelled Haptic feedback');
     assert(!sidenav.includes('>Vibrations<'), 'haptics row is not labelled Vibrations');
     assert(sidenav.includes('id="settings-haptics-toggle"') && sidenav.includes('id="settings-haptics-checkbox"'), 'haptics toggle ids stay');
+    assert(sidenav.indexOf('id="settings-haptics-toggle"') < sidenav.indexOf('id="settings-notify-toggle"'), 'Notifications sit after Haptic feedback');
+    assert(sidenav.indexOf('id="settings-notify-toggle"') < sidenav.indexOf('id="account-notify-types"'), 'notification types sit under the master toggle');
+    assert(sidenav.includes('Coming later. These stay off.'), 'notification types stay disabled');
+    assert(sidenav.includes('Passenger type is used on the Community tab.'), 'Passenger Type keeps the Community one-liner');
+    const chrome = readFileSync(new URL('../src/lib/admin-chrome.js', import.meta.url), 'utf8');
+    assert(chrome.includes('insertBefore(cluster, themeToggle)'), 'Passenger Type is inserted before Dark Mode in prefs');
+    assert(chrome.includes("getElementById('settings-theme-toggle')"), 'prefs restack targets the Dark Mode row');
     const liveBoardUi = readFileSync(new URL('../src/lib/live-board-ui.js', import.meta.url), 'utf8');
     assert(liveBoardUi.includes('id="fare-confirm-note"'), 'Ticket Prices modal has fare-confirm-note');
     assert(liveBoardUi.includes('Shorter Trips may cost less. Confirm at station.'), 'Z2+ Ticket Prices note mentions shorter trips');
@@ -557,8 +579,21 @@ assert(refuseDisplayName('https://spam.example').message === DISPLAY_NAME_REFUSE
     assert(hubJs.includes('chatDeviceId'), 'Feedback Hub prefers the canonical oldest device');
     const marksSrc = readFileSync(new URL('../src/lib/rider-marks.js', import.meta.url), 'utf8');
     assert(marksSrc.includes("requires: ['streak_3day']"), '5-day streak badge requires 3-day streak');
+    assert(marksSrc.includes("el.id === 'settings-account-points'"), 'marks sync does not unhide Options points for guests');
     assert(pickCanonicalChatDeviceId({ usr_new_2000000000000: 2000000000000, usr_old_1000000000000: 1000000000000 }, 'usr_new_2000000000000') === 'usr_old_1000000000000', 'oldest linked device wins for inbox');
     assert(pickCanonicalChatDeviceId({ usr_a_2000000000000: true, usr_b_1000000000000: true }, 'usr_a_2000000000000') === 'usr_b_1000000000000', 'boolean deviceIds fall back to the usr_ epoch suffix');
+    const uiJs = readFileSync(new URL('../src/lib/ui.js', import.meta.url), 'utf8');
+    assert(uiJs.includes('alert-image-lightbox'), 'alert image preview uses a dedicated overlay');
+    assert(!/openLightbox[\s\S]*mapImg\.src\s*=/.test(uiJs), 'openLightbox must not assign #map-image');
+    assert(uiJs.includes("FULL_SCREEN_OVERLAY_IDS = ['messages-thread-modal', 'dev-modal', 'account-modal']"), 'Account is a full-screen overlay so ads and board chrome stay covered');
+    const layout = readFileSync(new URL('../src/layouts/Layout.astro', import.meta.url), 'utf8');
+    const appearance = readFileSync(new URL('../src/styles/appearance.css', import.meta.url), 'utf8');
+    assert(layout.includes('font-size: max(16px, 1em) !important'), 'Layout keeps the iOS 16px input floor');
+    assert(appearance.includes('font-size: max(16px, 1em) !important'), 'appearance.css keeps the iOS 16px input floor');
+    const plannerModals = readFileSync(new URL('../src/components/PlannerModals.astro', import.meta.url), 'utf8');
+    assert(plannerModals.includes('id="alert-image-lightbox"') && plannerModals.includes('id="alert-image-lightbox-img"'), 'dedicated alert image lightbox markup exists');
+    const adsJs = readFileSync(new URL('../src/lib/clever-ads.js', import.meta.url), 'utf8');
+    assert(adsJs.includes("'account-modal'"), 'ads cloak while Account is open');
 }
 assert(normalizeAdminChangelogKey('V9_09.11.2 · jhb-soweto') === 'V9_09.11.2', 'version chips strip the route suffix');
 assert(normalizeAdminChangelogKey('V9_09.15.5 - extra') === 'V9_09.15.5', 'version chips strip ASCII hyphen suffixes');

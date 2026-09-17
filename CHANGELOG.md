@@ -2,6 +2,10 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin, Dev Hub, Alerts, Trains near me, community chat, or other hidden-test work. No emoji and no em dashes in What’s New. Keep `APP_VERSION`, `package.json` `version`, and `public/app-version.json` aligned on each release. Changelog / What’s New may be skipped, or the heading may be only **no release notes.** Every bump must add `ADMIN_CHANGELOG[APP_VERSION]` (System Health Build notes).
 
+## V9_09.17.14 — Ticket Prices note, Account layout, signed-in prefs (17 Sep 2026)
+
+Live-board Ticket Prices: Zone 1 keeps “Prices are subject to change. Confirm at station.” Other zones (and unknown) say “Shorter Trips may cost less. Confirm at station.” Account signed-in order is Points, then Community identity, then flat Theme rows, then a disabled Notifications accordion. Badges open a how-to sheet; 5-day streak needs 3-day first. Vibrations is Haptic feedback. Delete requires typing DELETE. Display names refuse swears, scams, and URLs. Signed-in prefs sync on `users/{uid}/prefs` (remote wins on sign-in). Feedback Hub uses the oldest linked device id; `next_train_device_id` is unchanged. What’s New is the ticket note only.
+
 ## V9_09.17.13 — Planner fare ceiling, optional ticket photos (17 Sep 2026)
 
 Single-route Trip fare cannot exceed the confirmed corridor long zone (Gauteng dump `{sheet}_zone`, or `config/route_fares` when an operator confirms/un-confirms). Transfers across two route IDs are not corridor-capped. Approved OD prices still win. After Yes/Send, a ticket photo is optional and writes `sys_logs/fare_ticket_photos/{voteId}` so the vote itself stays create-once. Fares tab lists confirmed long fares and ticket thumbs. Deploy RTDB rules; Storage needs `fare_tickets/` like `feedback_attachments/`. No What’s New.

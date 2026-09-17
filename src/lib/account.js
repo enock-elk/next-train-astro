@@ -5,7 +5,8 @@
  * RTDB shape (design):
  *   users/{uid}: {
  *     displayName, photoURL, email?, createdAt,
- *     deviceIds: { [deviceId]: true },
+ *     deviceIds: { [deviceId]: linkedAtMs | true },
+ *     prefs: { showPhotoInAlerts, theme, colourPack, hapticsEnabled, passengerType, updatedAt },
  *     flags: { shadowBanned: false, shadowBannedUntil: 0, role: 'user' },
  *     trustScore: 0
  *   }
@@ -21,12 +22,13 @@ import {
     isAuthProviderActionDisabled,
     loadAuthProviders,
 } from './auth-providers.js';
-import { $deviceId } from '../store.js';
+import { $deviceId, $userProfile } from '../store.js';
 import {
     formatAccountDisplayName,
     clampDisplayName,
     resolveAccountDisplayName,
-    DISPLAY_NAME_MAX,
+    refuseDisplayName,
+    DISPLAY_NAME_REFUSE_MSG,
 } from './display-name.js';
 
 /** @typedef {'guest' | 'loading' | 'signed-in'} AccountStatus */
@@ -37,14 +39,116 @@ export const $account = atom({
     displayName: null,
     photoURL: null,
     email: null,
+    chatDeviceId: null,
 });
 
 let _inited = false;
 let _unsubAuth = null;
 let _accountUiBusy = false;
+let _hydratingPrefs = false;
+
+const PHOTO_PREF_KEY = 'ntShowPhotoInAlerts';
 
 function getDeviceId() {
     return $deviceId.get() || safeStorage.getItem('next_train_device_id') || null;
+}
+
+export function deviceIdAgeMs(id, linkedAt) {
+    if (typeof linkedAt === 'number' && Number.isFinite(linkedAt) && linkedAt > 1e9) {
+        return linkedAt < 1e12 ? linkedAt * 1000 : linkedAt;
+    }
+    const m = String(id || '').match(/_(\d{10,13})$/);
+    if (!m) return Number.MAX_SAFE_INTEGER;
+    const raw = Number(m[1]);
+    if (!Number.isFinite(raw)) return Number.MAX_SAFE_INTEGER;
+    return raw < 1e12 ? raw * 1000 : raw;
+}
+
+/** Oldest linked device wins for admin inbox. Local mint is still recorded. */
+export function pickCanonicalChatDeviceId(deviceIds, localId) {
+    const ids = [];
+    if (deviceIds && typeof deviceIds === 'object' && !Array.isArray(deviceIds)) {
+        Object.keys(deviceIds).forEach((id) => { if (id) ids.push(id); });
+    }
+    if (localId && !ids.includes(localId)) ids.push(localId);
+    if (!ids.length) return localId || '';
+    ids.sort((a, b) => {
+        const ta = deviceIdAgeMs(a, deviceIds?.[a]);
+        const tb = deviceIdAgeMs(b, deviceIds?.[b]);
+        if (ta !== tb) return ta - tb;
+        return String(a).localeCompare(String(b));
+    });
+    return ids[0];
+}
+
+export function readLocalAccountPrefs() {
+    return {
+        showPhotoInAlerts: safeStorage.getItem(PHOTO_PREF_KEY) === '1',
+        theme: safeStorage.getItem('theme') === 'dark' ? 'dark' : 'light',
+        colourPack: safeStorage.getItem('colourPack') || 'classic',
+        hapticsEnabled: safeStorage.getItem('hapticsEnabled') === 'true',
+        passengerType: safeStorage.getItem('userProfile') || $userProfile.get() || 'Adult',
+        updatedAt: Date.now(),
+    };
+}
+
+export async function applyAccountPrefs(prefs) {
+    if (!prefs || typeof prefs !== 'object') return;
+    _hydratingPrefs = true;
+    try {
+        if (prefs.theme === 'dark' || prefs.theme === 'light') {
+            safeStorage.setItem('theme', prefs.theme);
+            safeStorage.setResilientItem?.('theme', prefs.theme)?.catch?.(() => {});
+            if (typeof document !== 'undefined') {
+                document.documentElement.classList.toggle('dark', prefs.theme === 'dark');
+                const themeCb = document.getElementById('settings-theme-checkbox');
+                if (themeCb) themeCb.checked = prefs.theme === 'dark';
+            }
+        }
+        if (prefs.colourPack) {
+            try {
+                const m = await import('./prefs.js');
+                m.setColourPack(prefs.colourPack);
+            } catch { /* ignore */ }
+        }
+        if (typeof prefs.hapticsEnabled === 'boolean') {
+            safeStorage.setItem('hapticsEnabled', prefs.hapticsEnabled ? 'true' : 'false');
+            const cb = document.getElementById('settings-haptics-checkbox');
+            if (cb) cb.checked = prefs.hapticsEnabled;
+        }
+        if (prefs.passengerType) {
+            $userProfile.set(prefs.passengerType);
+            safeStorage.setItem('userProfile', prefs.passengerType);
+            const display = document.getElementById('settings-profile-display');
+            if (display) display.textContent = prefs.passengerType;
+        }
+        if (typeof prefs.showPhotoInAlerts === 'boolean') {
+            safeStorage.setItem(PHOTO_PREF_KEY, prefs.showPhotoInAlerts ? '1' : '0');
+            const box = document.getElementById('account-photo-alerts');
+            if (box) box.checked = prefs.showPhotoInAlerts;
+        }
+        try {
+            const m = await import('./prefs.js');
+            m.syncPrefsAccordionSummary();
+        } catch { /* ignore */ }
+    } finally {
+        _hydratingPrefs = false;
+    }
+}
+
+export async function pushSignedInPrefs(partial = {}) {
+    if (_hydratingPrefs) return;
+    const user = window.firebaseAuth?.currentUser;
+    if (!user || user.isAnonymous || !window.firebaseDb) return;
+    const payload = { ...readLocalAccountPrefs(), ...partial, updatedAt: Date.now() };
+    try {
+        await window.firebaseDbUpdate(
+            window.firebaseDbRef(window.firebaseDb, `users/${user.uid}/prefs`),
+            payload,
+        );
+    } catch {
+        /* local prefs still apply */
+    }
 }
 
 function publishUser(user, extras = {}) {
@@ -55,6 +159,7 @@ function publishUser(user, extras = {}) {
             displayName: null,
             photoURL: null,
             email: null,
+            chatDeviceId: null,
         });
         safeStorage.removeItem('authUid');
         return;
@@ -66,6 +171,7 @@ function publishUser(user, extras = {}) {
         photoURL: user.photoURL || null,
         email: user.email || null,
         displayNameCustom: !!extras.displayNameCustom,
+        chatDeviceId: extras.chatDeviceId || $account.get().chatDeviceId || null,
     });
     safeStorage.setItem('authUid', user.uid);
 }
@@ -99,7 +205,8 @@ export async function ensureUserProfile(user, opts = {}) {
     const deviceId = getDeviceId();
     const userPath = `users/${user.uid}`;
     const now = Date.now();
-    const customName = clampDisplayName(opts.customDisplayName);
+    const refused = opts.customDisplayName ? refuseDisplayName(opts.customDisplayName) : { ok: true, name: '' };
+    const customName = refused.ok ? refused.name : '';
 
     try {
         const snap = await window.firebaseDbGet(window.firebaseDbRef(window.firebaseDb, userPath));
@@ -108,6 +215,13 @@ export async function ensureUserProfile(user, opts = {}) {
             displayName: customName || existing?.displayName,
             displayNameCustom: !!(customName || existing?.displayNameCustom),
         });
+        const localPrefs = readLocalAccountPrefs();
+        const mergedDeviceIds = { ...(existing?.deviceIds && typeof existing.deviceIds === 'object' ? existing.deviceIds : {}) };
+        if (deviceId && mergedDeviceIds[deviceId] == null) {
+            mergedDeviceIds[deviceId] = now;
+        }
+        const chatDeviceId = pickCanonicalChatDeviceId(mergedDeviceIds, deviceId);
+
         if (!existing) {
             await window.firebaseDbSet(window.firebaseDbRef(window.firebaseDb, userPath), {
                 displayName,
@@ -115,14 +229,14 @@ export async function ensureUserProfile(user, opts = {}) {
                 photoURL: user.photoURL || null,
                 email: user.email || null,
                 createdAt: now,
-                deviceIds: deviceId ? { [deviceId]: true } : {},
+                deviceIds: deviceId ? { [deviceId]: now } : {},
                 flags: {
                     shadowBanned: false,
                     shadowBannedUntil: 0,
                     role: 'user',
                 },
                 trustScore: 0,
-                prefs: { showPhotoInAlerts: false },
+                prefs: localPrefs,
             });
         } else {
             const patch = {
@@ -133,8 +247,9 @@ export async function ensureUserProfile(user, opts = {}) {
             if (!existing.displayNameCustom) {
                 patch.displayName = displayName;
             }
-            if (deviceId) patch[`deviceIds/${deviceId}`] = true;
-            // Preserve existing flags; only set defaults if missing
+            if (deviceId && existing.deviceIds?.[deviceId] == null) {
+                patch[`deviceIds/${deviceId}`] = now;
+            }
             const flags = existing.flags;
             if (!flags) {
                 patch.flags = { shadowBanned: false, shadowBannedUntil: 0, role: 'user' };
@@ -144,34 +259,46 @@ export async function ensureUserProfile(user, opts = {}) {
             if (existing.trustScore === undefined) {
                 patch.trustScore = 0;
             }
-            if (existing.prefs?.showPhotoInAlerts === undefined) {
-                patch['prefs/showPhotoInAlerts'] = false;
-            }
             await window.firebaseDbUpdate(window.firebaseDbRef(window.firebaseDb, userPath), patch);
+
+            const remotePrefs = existing.prefs && typeof existing.prefs === 'object' ? existing.prefs : {};
+            const hasCloudLook = !!(remotePrefs.updatedAt || remotePrefs.theme || remotePrefs.colourPack
+                || remotePrefs.passengerType || typeof remotePrefs.hapticsEnabled === 'boolean');
+            if (hasCloudLook) {
+                await applyAccountPrefs(remotePrefs);
+            } else {
+                if (typeof remotePrefs.showPhotoInAlerts === 'boolean') {
+                    await applyAccountPrefs({ showPhotoInAlerts: remotePrefs.showPhotoInAlerts });
+                }
+                await pushSignedInPrefs();
+            }
         }
 
         if (deviceId) {
             await window.firebaseDbUpdate(
                 window.firebaseDbRef(window.firebaseDb, `devices/${deviceId}`),
-                { uid: user.uid, linkedAt: now }
+                { uid: user.uid, linkedAt: typeof existing?.deviceIds?.[deviceId] === 'number' ? existing.deviceIds[deviceId] : now }
             );
         }
 
         publishUser(user, {
             displayName,
             displayNameCustom: !!(customName || existing?.displayNameCustom),
+            chatDeviceId,
         });
     } catch (e) {
         // RTDB rules may block until deployed — Auth session still valid locally
         console.warn('Account profile sync deferred', e?.message || e);
-        publishUser(user);
+        publishUser(user, { chatDeviceId: pickCanonicalChatDeviceId({ [deviceId]: now }, deviceId) });
     }
 }
 
 export async function updateAccountDisplayName(raw) {
     const user = window.firebaseAuth?.currentUser;
     if (!user || user.isAnonymous) throw new Error('Sign in to set a display name.');
-    const custom = clampDisplayName(raw);
+    const check = refuseDisplayName(raw);
+    if (!check.ok) throw new Error(check.message);
+    const custom = check.name;
     const displayName = custom || formatAccountDisplayName(user.displayName || (user.email ? user.email.split('@')[0] : 'Passenger'));
     if (window.firebaseUpdateProfile) {
         try { await window.firebaseUpdateProfile(user, { displayName }); } catch { /* RTDB is source for chat */ }
@@ -312,12 +439,21 @@ export async function signInWithEmail(email, password) {
 export async function signUpWithEmail(email, password, displayName) {
     const ok = await waitForFirebase();
     if (!ok) throw new Error('Cloud sign-in unavailable offline.');
+    if (password.length < 6) {
+        throw new Error('Password must be at least 6 characters.');
+    }
+    if (displayName?.trim()) {
+        const check = refuseDisplayName(displayName);
+        if (!check.ok) throw new Error(check.message);
+    }
     const cred = await window.firebaseCreateUser(window.firebaseAuth, email.trim(), password);
     if (displayName?.trim()) {
+        const check = refuseDisplayName(displayName);
+        if (!check.ok) throw new Error(check.message);
         try {
-            await window.firebaseUpdateProfile(cred.user, { displayName: clampDisplayName(displayName) });
+            await window.firebaseUpdateProfile(cred.user, { displayName: check.name });
         } catch (e) { /* non-fatal */ }
-        await ensureUserProfile(cred.user, { customDisplayName: displayName });
+        await ensureUserProfile(cred.user, { customDisplayName: check.name });
         return cred.user;
     }
     await ensureUserProfile(cred.user);
@@ -429,6 +565,7 @@ export function syncAccountSettingsUi(state = $account.get()) {
     if (guestBlock) guestBlock.classList.toggle('hidden', signed || state.status === 'loading');
     const sessionActions = document.getElementById('account-session-actions');
     if (sessionActions) sessionActions.classList.toggle('hidden', !signed);
+    document.getElementById('account-notify-block')?.classList.toggle('hidden', !signed);
     const deleteWrap = document.getElementById('account-delete-wrap');
     const isOperator = signed && isAdminEmail(state.email);
     if (deleteWrap) {
@@ -436,6 +573,13 @@ export function syncAccountSettingsUi(state = $account.get()) {
     }
     if (!signed) {
         document.getElementById('account-delete-confirm')?.classList.add('hidden');
+        const typeInput = document.getElementById('account-delete-type');
+        if (typeInput) typeInput.value = '';
+        const confirmBtn = document.getElementById('account-delete-confirm-btn');
+        if (confirmBtn) {
+            confirmBtn.disabled = true;
+            confirmBtn.classList.add('opacity-40');
+        }
         const pointsPanel = document.getElementById('account-points-panel');
         pointsPanel?.classList.add('hidden');
         const guestBtn = document.getElementById('account-points-guest-btn');
@@ -488,6 +632,11 @@ export function syncAccountSettingsUi(state = $account.get()) {
         }).catch(() => {});
     }
     import('./rider-marks.js').then((m) => m.syncRiderMarksUi()).catch(() => {});
+    if (typeof window.placeAccountSettings === 'function') {
+        const accountOn = document.documentElement.getAttribute('data-account-settings') === '1'
+            || !document.getElementById('settings-account-btn')?.classList.contains('hidden');
+        window.placeAccountSettings(accountOn);
+    }
 }
 
 export function syncAuthProviderUi(providers = getAuthProviders(), busy = _accountUiBusy) {
@@ -521,6 +670,39 @@ function badgeSvg(kind, on) {
     };
     const d = icons[kind] || icons.community;
     return `<svg class="w-7 h-7 mx-auto" viewBox="0 0 24 24" fill="${fill}" stroke="${stroke}" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+}
+
+function closeBadgeHowSheet() {
+    document.getElementById('account-badge-how-sheet')?.classList.add('hidden');
+}
+
+function openBadgeHowSheet(badgeId, state, marks) {
+    const sheet = document.getElementById('account-badge-how-sheet');
+    const cat = marks.MARK_CATALOG.find((c) => c.id === badgeId);
+    if (!sheet || !cat) return;
+    const on = marks.badgeUnlocked(badgeId, state);
+    const title = document.getElementById('account-badge-how-title');
+    const status = document.getElementById('account-badge-how-status');
+    const body = document.getElementById('account-badge-how-body');
+    const prereq = document.getElementById('account-badge-how-prereq');
+    if (title) title.textContent = cat.title;
+    if (status) status.textContent = on ? 'Unlocked' : 'Not unlocked yet';
+    if (body) body.textContent = `${cat.how} ${cat.points} ${marks.pointsWord(cat.points)}.`;
+    const needs = Array.isArray(cat.requires) ? cat.requires : [];
+    const missing = needs.filter((id) => !marks.badgeUnlocked(id, state)).map((id) => {
+        const row = marks.MARK_CATALOG.find((c) => c.id === id);
+        return row?.title || id;
+    });
+    if (prereq) {
+        if (missing.length) {
+            prereq.textContent = `Need first: ${missing.join(', ')}.`;
+            prereq.classList.remove('hidden');
+        } else {
+            prereq.textContent = '';
+            prereq.classList.add('hidden');
+        }
+    }
+    sheet.classList.remove('hidden');
 }
 
 export function paintAccountPoints(state) {
@@ -582,8 +764,13 @@ export function paintAccountPoints(state) {
             ];
             grid.innerHTML = badges.map((b) => {
                 const on = m.badgeUnlocked(b.id, st);
-                return `<div class="rounded-xl border px-1.5 py-2 text-center ${on ? 'border-amber-200 dark:border-amber-800 bg-amber-50/80 dark:bg-amber-950/20' : 'border-gray-100 dark:border-gray-800 opacity-55'}">${badgeSvg(b.kind, on)}<p class="mt-1 text-[9px] font-bold leading-tight ${on ? 'text-amber-800 dark:text-amber-200' : 'text-gray-400'}">${escapeAccountHtml(b.title)}</p></div>`;
+                return `<button type="button" data-badge-id="${escapeAccountHtml(b.id)}" class="rounded-xl border px-1.5 py-2 text-center focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 ${on ? 'border-amber-200 dark:border-amber-800 bg-amber-50/80 dark:bg-amber-950/20' : 'border-gray-100 dark:border-gray-800 opacity-55'}">${badgeSvg(b.kind, on)}<p class="mt-1 text-[9px] font-bold leading-tight ${on ? 'text-amber-800 dark:text-amber-200' : 'text-gray-400'}">${escapeAccountHtml(b.title)}</p></button>`;
             }).join('');
+            grid.onclick = (ev) => {
+                const btn = ev.target?.closest?.('[data-badge-id]');
+                if (!btn) return;
+                openBadgeHowSheet(btn.getAttribute('data-badge-id'), st, m);
+            };
         }
     }).catch(() => {});
 }
@@ -694,7 +881,12 @@ export function bindAccountUi() {
             if (typeof window.showToast === 'function') window.showToast('Account created', 'success');
             paintAccountPoints();
         } catch (e) {
-            showErr(friendlyAuthError(e));
+            if (e?.message === DISPLAY_NAME_REFUSE_MSG) {
+                if (typeof window.showToast === 'function') window.showToast(DISPLAY_NAME_REFUSE_MSG);
+                showErr(DISPLAY_NAME_REFUSE_MSG);
+            } else {
+                showErr(friendlyAuthError(e));
+            }
         } finally {
             setBusy(false);
         }
@@ -708,7 +900,11 @@ export function bindAccountUi() {
             if (input) input.value = next;
             if (typeof window.showToast === 'function') window.showToast('Display name saved', 'success');
         } catch (e) {
-            showErr(e?.message || 'Could not save display name.');
+            const msg = e?.message || 'Could not save display name.';
+            if (msg === DISPLAY_NAME_REFUSE_MSG && typeof window.showToast === 'function') {
+                window.showToast(DISPLAY_NAME_REFUSE_MSG);
+            }
+            showErr(msg);
         } finally {
             setBusy(false);
         }
@@ -727,17 +923,33 @@ export function bindAccountUi() {
     });
 
     const deleteConfirm = document.getElementById('account-delete-confirm');
+    const deleteType = document.getElementById('account-delete-type');
+    const deleteConfirmBtn = document.getElementById('account-delete-confirm-btn');
+    const syncDeleteType = () => {
+        const ok = (deleteType?.value || '') === 'DELETE';
+        if (deleteConfirmBtn) {
+            deleteConfirmBtn.disabled = !ok;
+            deleteConfirmBtn.classList.toggle('opacity-40', !ok);
+        }
+    };
     document.getElementById('account-delete-btn')?.addEventListener('click', () => {
         if (isAdminEmail($account.get().email)) {
             showErr('This account cannot be deleted in the app.');
             return;
         }
+        if (deleteType) deleteType.value = '';
+        syncDeleteType();
         deleteConfirm?.classList.remove('hidden');
+        deleteType?.focus();
     });
     document.getElementById('account-delete-cancel-btn')?.addEventListener('click', () => {
         deleteConfirm?.classList.add('hidden');
+        if (deleteType) deleteType.value = '';
+        syncDeleteType();
     });
+    deleteType?.addEventListener('input', syncDeleteType);
     document.getElementById('account-delete-confirm-btn')?.addEventListener('click', async () => {
+        if ((deleteType?.value || '') !== 'DELETE') return;
         setBusy(true);
         try {
             await requestAccountDeletion();
@@ -790,7 +1002,21 @@ export function bindAccountUi() {
         box.dataset.userToggled = '1';
         const { setShowPhotoInAlerts } = await import('./rider-marks.js');
         await setShowPhotoInAlerts(!!box.checked);
+        await pushSignedInPrefs({ showPhotoInAlerts: !!box.checked });
     });
+
+    const notifyToggle = document.getElementById('account-notify-toggle');
+    const notifyPanel = document.getElementById('account-notify-panel');
+    const notifyChevron = document.getElementById('account-notify-chevron');
+    notifyToggle?.addEventListener('click', () => {
+        const open = !!notifyPanel?.classList.contains('hidden');
+        notifyPanel?.classList.toggle('hidden', !open);
+        notifyToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+        notifyChevron?.classList.toggle('rotate-180', open);
+    });
+
+    document.getElementById('account-badge-how-close')?.addEventListener('click', closeBadgeHowSheet);
+    document.getElementById('account-badge-how-overlay')?.addEventListener('click', closeBadgeHowSheet);
 
     paintAccountPoints();
 }
@@ -820,5 +1046,7 @@ if (typeof window !== 'undefined') {
     window.paintAccountPoints = paintAccountPoints;
     window.updateAccountDisplayName = updateAccountDisplayName;
     window.formatAccountDisplayName = formatAccountDisplayName;
+    window.pushSignedInPrefs = pushSignedInPrefs;
+    window.pickCanonicalChatDeviceId = pickCanonicalChatDeviceId;
     window.$account = $account;
 }

@@ -12,7 +12,8 @@ import {
     routeAllowsDualHubOptions,
     shortenStationLabel,
 } from '../src/lib/transfer-card.js';
-import { formatAccountDisplayName, clampDisplayName } from '../src/lib/display-name.js';
+import { formatAccountDisplayName, clampDisplayName, refuseDisplayName, DISPLAY_NAME_REFUSE_MSG } from '../src/lib/display-name.js';
+import { pickCanonicalChatDeviceId } from '../src/lib/account.js';
 import { normalizeAdminChangelogKey } from '../src/lib/admin-changelog.js';
 import { hoistAlertImagesFromHtml } from '../src/lib/alerts-feed.js';
 
@@ -29,50 +30,53 @@ const packageVersionFromApp = versionParts
     : '';
 assert(appVersionFile.version === APP_VERSION, `app-version.json ${appVersionFile.version} matches ${APP_VERSION}`);
 assert(packageFile.version === packageVersionFromApp, `package.json ${packageFile.version} matches ${APP_VERSION}`);
-assert(FORCE_UPDATE_REQUIRED === true, 'this ship forces existing shells onto V9_09.17.13');
+assert(FORCE_UPDATE_REQUIRED === true, 'this ship forces existing shells onto V9_09.17.14');
 assert(CHANGELOG_DATA[0].forceShow === false, 'What’s New does not auto-open');
 assert(!CHANGELOG_DATA.some((e) => e.forceShow), 'no What’s New card opts into auto-open');
-assert(CHANGELOG_DATA[0].id === 'V9_09.17.10' && CHANGELOG_DATA[0].features.length === 1, 'What’s New latest card is V9_09.17.10');
-assert(CHANGELOG_DATA[0].features[0].includes('Classic and Earthy'), 'V9_09.17.10 What’s New mentions Classic and Earthy');
-assert(CHANGELOG_DATA[1].id === 'V9_09.16.3' && CHANGELOG_DATA[1].features.length === 2, 'keep V9_09.16.3 as the previous What’s New card');
-assert(CHANGELOG_DATA[1].features[0].includes('Classic light'), 'V9_09.16.3 What’s New mentions Classic light');
-assert(CHANGELOG_DATA[1].features[1].includes('Feedback Hub sits flush'), 'V9_09.16.3 What’s New mentions Feedback Hub flush');
-assert(CHANGELOG_DATA[1].features[1].includes('above the keyboard'), 'V9_09.16.3 What’s New mentions Hub typing above the keyboard');
-assert(CHANGELOG_DATA[2].id === 'V9_09.16.2' && CHANGELOG_DATA[2].features.length === 1, 'keep V9_09.16.2 as the previous What’s New card');
-assert(CHANGELOG_DATA[2].features[0].includes('Kapteinsklip'), 'V9_09.16.2 What’s New mentions Kapteinsklip');
-assert(CHANGELOG_DATA[3].id === 'V9_09.16.1' && CHANGELOG_DATA[3].features.length === 1, 'keep V9_09.16.1 as the previous What’s New card');
-assert(CHANGELOG_DATA[3].features[0].includes('iPhone'), 'V9_09.16.1 What’s New mentions iPhone typing');
-assert(CHANGELOG_DATA[4].id === 'V9_08.29.2' && CHANGELOG_DATA[4].features.length === 3, 'keep V9_08.29.2 as the previous What’s New card');
-assert(CHANGELOG_DATA[5].id === 'V9_08.28.20', 'keep V9_08.28.20 as the previous What’s New card');
-assert(CHANGELOG_DATA[6].id === 'V9_08.28.19', 'keep V9_08.28.19 as the previous What’s New card');
-assert(CHANGELOG_DATA[7].id === 'V9_08.28.14', 'keep V9_08.28.14 as the previous What’s New card');
-assert(CHANGELOG_DATA[8].id === 'V9_08.28.13', 'keep V9_08.28.13 as the previous What’s New card');
-assert(CHANGELOG_DATA[9].id === 'V9_08.28.11', 'keep V9_08.28.11 as the previous What’s New card');
-assert(CHANGELOG_DATA[10].id === 'V9_08.28.10', 'keep V9_08.28.10 as the previous What’s New card');
-assert(CHANGELOG_DATA[11].id === 'V9_08.28.9', 'keep V9_08.28.9 as the previous What’s New card');
-assert(CHANGELOG_DATA[12].id === 'V9_08.28.8', 'keep V9_08.28.8 as the previous What’s New card');
-assert(CHANGELOG_DATA[13].id === 'V9_08.28.7', 'keep V9_08.28.7 as the previous What’s New card');
-assert(CHANGELOG_DATA[14].id === 'V9_08.28.2', 'V9_08.28.6–28.3 folded into V9_08.28.2');
-assert(CHANGELOG_DATA[15].id === 'V9_08.28.1', 'keep V9_08.28.1 as the previous production What’s New card');
+assert(CHANGELOG_DATA[0].id === 'V9_09.17.14' && CHANGELOG_DATA[0].features.length === 1, 'What’s New latest card is V9_09.17.14');
+assert(CHANGELOG_DATA[0].features[0].includes('shorter trips may cost less'), 'V9_09.17.14 What’s New mentions the ticket note');
+assert(CHANGELOG_DATA[0].features[0].includes('Confirm at the station'), 'V9_09.17.14 What’s New tells commuters to confirm at the station');
+assert(CHANGELOG_DATA[1].id === 'V9_09.17.10' && CHANGELOG_DATA[1].features.length === 1, 'keep V9_09.17.10 as the previous What’s New card');
+assert(CHANGELOG_DATA[1].features[0].includes('Classic and Earthy'), 'V9_09.17.10 What’s New mentions Classic and Earthy');
+assert(CHANGELOG_DATA[2].id === 'V9_09.16.3' && CHANGELOG_DATA[2].features.length === 2, 'keep V9_09.16.3 as the previous What’s New card');
+assert(CHANGELOG_DATA[2].features[0].includes('Classic light'), 'V9_09.16.3 What’s New mentions Classic light');
+assert(CHANGELOG_DATA[2].features[1].includes('Feedback Hub sits flush'), 'V9_09.16.3 What’s New mentions Feedback Hub flush');
+assert(CHANGELOG_DATA[2].features[1].includes('above the keyboard'), 'V9_09.16.3 What’s New mentions Hub typing above the keyboard');
+assert(CHANGELOG_DATA[3].id === 'V9_09.16.2' && CHANGELOG_DATA[3].features.length === 1, 'keep V9_09.16.2 as the previous What’s New card');
+assert(CHANGELOG_DATA[3].features[0].includes('Kapteinsklip'), 'V9_09.16.2 What’s New mentions Kapteinsklip');
+assert(CHANGELOG_DATA[4].id === 'V9_09.16.1' && CHANGELOG_DATA[4].features.length === 1, 'keep V9_09.16.1 as the previous What’s New card');
+assert(CHANGELOG_DATA[4].features[0].includes('iPhone'), 'V9_09.16.1 What’s New mentions iPhone typing');
+assert(CHANGELOG_DATA[5].id === 'V9_08.29.2' && CHANGELOG_DATA[5].features.length === 3, 'keep V9_08.29.2 as the previous What’s New card');
+assert(CHANGELOG_DATA[6].id === 'V9_08.28.20', 'keep V9_08.28.20 as the previous What’s New card');
+assert(CHANGELOG_DATA[7].id === 'V9_08.28.19', 'keep V9_08.28.19 as the previous What’s New card');
+assert(CHANGELOG_DATA[8].id === 'V9_08.28.14', 'keep V9_08.28.14 as the previous What’s New card');
+assert(CHANGELOG_DATA[9].id === 'V9_08.28.13', 'keep V9_08.28.13 as the previous What’s New card');
+assert(CHANGELOG_DATA[10].id === 'V9_08.28.11', 'keep V9_08.28.11 as the previous What’s New card');
+assert(CHANGELOG_DATA[11].id === 'V9_08.28.10', 'keep V9_08.28.10 as the previous What’s New card');
+assert(CHANGELOG_DATA[12].id === 'V9_08.28.9', 'keep V9_08.28.9 as the previous What’s New card');
+assert(CHANGELOG_DATA[13].id === 'V9_08.28.8', 'keep V9_08.28.8 as the previous What’s New card');
+assert(CHANGELOG_DATA[14].id === 'V9_08.28.7', 'keep V9_08.28.7 as the previous What’s New card');
+assert(CHANGELOG_DATA[15].id === 'V9_08.28.2', 'V9_08.28.6–28.3 folded into V9_08.28.2');
+assert(CHANGELOG_DATA[16].id === 'V9_08.28.1', 'keep V9_08.28.1 as the previous production What’s New card');
 assert(!CHANGELOG_DATA.some((e) => ['V9_08.28.6', 'V9_08.28.5', 'V9_08.28.4', 'V9_08.28.3'].includes(e.id)), 'folded 28.6–28.3 out of What’s New');
-assert(CHANGELOG_DATA[4].features.some((f) => f.includes('smaller list')), 'V9_08.29.2 What’s New mentions Network Lines size');
-assert(CHANGELOG_DATA[4].features.some((f) => f.includes('follows the rail in all four regions')), 'V9_08.29.2 What’s New mentions every region following rail');
-assert(CHANGELOG_DATA[4].features.some((f) => f.includes('Cato Ridge')), 'V9_08.29.2 What’s New mentions Cato Ridge reaching its terminus');
-assert(CHANGELOG_DATA[5].features.some((f) => f.includes('sits in the middle of its row')), 'V9_08.28.20 What’s New mentions planner title center');
-assert(CHANGELOG_DATA[5].features.some((f) => f.includes('grow upward')), 'V9_08.28.20 What’s New mentions Feedback Hub growing up');
-assert(CHANGELOG_DATA[6].features.some((f) => f.includes('Station choices open at the top')), 'V9_08.28.19 What’s New mentions planner list at the top');
-assert(CHANGELOG_DATA[6].features.some((f) => f.includes('oval bar stays at the bottom')), 'V9_08.28.19 What’s New mentions pinned tabs');
-assert(CHANGELOG_DATA[7].features.some((f) => f.includes('From sits in the same place')), 'V9_08.28.14 What’s New mentions From alignment');
-assert(CHANGELOG_DATA[8].features.some((f) => f.includes('Check for Updates')), 'V9_08.28.13 What’s New still mentions Check for Updates');
-assert(CHANGELOG_DATA[9].features.some((f) => f.includes('Station dots sit on the lines')), 'V9_08.28.11 What’s New mentions station dots');
-assert(CHANGELOG_DATA[10].features.some((f) => f.includes('Park Station')), 'V9_08.28.10 What’s New mentions Park Station');
-assert(CHANGELOG_DATA[11].features.some((f) => f.includes('oval bar stays at the bottom')), 'V9_08.28.9 What’s New mentions pinned tabs');
-assert(CHANGELOG_DATA[12].features.some((f) => f.includes('Max. Single Fare')), 'V9_08.28.8 What’s New mentions train-sheet fares');
-assert(CHANGELOG_DATA[12].features.some((f) => f.includes('Durban to Crossmoor')), 'V9_08.28.8 What’s New mentions Crossmoor train order');
-assert(CHANGELOG_DATA[13].features.some((f) => f.includes('every corridor that stops there')), 'V9_08.28.7 What’s New mentions station corridors');
-assert(CHANGELOG_DATA[13].features.some((f) => f.includes('Show all lines')), 'V9_08.28.7 What’s New mentions restoring the network');
-assert(CHANGELOG_DATA[14].features.some((f) => f.includes('Network Lines')), 'folded 28.2 card still mentions Network Lines');
-assert(CHANGELOG_DATA[14].features.some((f) => f.includes('oval bar')), 'folded 28.2 card still mentions floating tabs');
+assert(CHANGELOG_DATA[5].features.some((f) => f.includes('smaller list')), 'V9_08.29.2 What’s New mentions Network Lines size');
+assert(CHANGELOG_DATA[5].features.some((f) => f.includes('follows the rail in all four regions')), 'V9_08.29.2 What’s New mentions every region following rail');
+assert(CHANGELOG_DATA[5].features.some((f) => f.includes('Cato Ridge')), 'V9_08.29.2 What’s New mentions Cato Ridge reaching its terminus');
+assert(CHANGELOG_DATA[6].features.some((f) => f.includes('sits in the middle of its row')), 'V9_08.28.20 What’s New mentions planner title center');
+assert(CHANGELOG_DATA[6].features.some((f) => f.includes('grow upward')), 'V9_08.28.20 What’s New mentions Feedback Hub growing up');
+assert(CHANGELOG_DATA[7].features.some((f) => f.includes('Station choices open at the top')), 'V9_08.28.19 What’s New mentions planner list at the top');
+assert(CHANGELOG_DATA[7].features.some((f) => f.includes('oval bar stays at the bottom')), 'V9_08.28.19 What’s New mentions pinned tabs');
+assert(CHANGELOG_DATA[8].features.some((f) => f.includes('From sits in the same place')), 'V9_08.28.14 What’s New mentions From alignment');
+assert(CHANGELOG_DATA[9].features.some((f) => f.includes('Check for Updates')), 'V9_08.28.13 What’s New still mentions Check for Updates');
+assert(CHANGELOG_DATA[10].features.some((f) => f.includes('Station dots sit on the lines')), 'V9_08.28.11 What’s New mentions station dots');
+assert(CHANGELOG_DATA[11].features.some((f) => f.includes('Park Station')), 'V9_08.28.10 What’s New mentions Park Station');
+assert(CHANGELOG_DATA[12].features.some((f) => f.includes('oval bar stays at the bottom')), 'V9_08.28.9 What’s New mentions pinned tabs');
+assert(CHANGELOG_DATA[13].features.some((f) => f.includes('Max. Single Fare')), 'V9_08.28.8 What’s New mentions train-sheet fares');
+assert(CHANGELOG_DATA[13].features.some((f) => f.includes('Durban to Crossmoor')), 'V9_08.28.8 What’s New mentions Crossmoor train order');
+assert(CHANGELOG_DATA[14].features.some((f) => f.includes('every corridor that stops there')), 'V9_08.28.7 What’s New mentions station corridors');
+assert(CHANGELOG_DATA[14].features.some((f) => f.includes('Show all lines')), 'V9_08.28.7 What’s New mentions restoring the network');
+assert(CHANGELOG_DATA[15].features.some((f) => f.includes('Network Lines')), 'folded 28.2 card still mentions Network Lines');
+assert(CHANGELOG_DATA[15].features.some((f) => f.includes('oval bar')), 'folded 28.2 card still mentions floating tabs');
 assert(!/admin|account|password|sign-in|face id|dev hub|deploy|worker|firebase|nuke|analytics|seo|google/i.test(CHANGELOG_DATA[0].features.join(' ')), 'What’s New latest card is commuter-only');
 assert(!CHANGELOG_DATA.some((e) => e.id === 'V8_08.16.1' || e.id === 'V8_08.15.1'), 'folded 16.1–15.1 out of What’s New');
 assert(!CHANGELOG_DATA.some((e) => ['V8_08.28.5', 'V8_08.28.4', 'V8_08.28.3', 'V8_08.28.2', 'V8_08.28.1', 'V8_08.27.9', 'V8_08.27.8', 'V8_08.27.7', 'V8_08.27.6', 'V8_08.27.5', 'V8_08.27.4', 'V8_08.27.3', 'V8_08.26.2', 'V8_08.26.1'].includes(e.id)), 'folded 28.5–26.1 into V9_08.28.1');
@@ -336,6 +340,18 @@ assert(!hubModals.includes('id="account-operator-delete-note"'), 'Account panel 
 assert(!/for the operators/.test(hubModals.slice(hubModals.indexOf('id="account-modal"'), hubModals.indexOf('id="nt-admin-chrome-template"'))), 'Account panel does not mention operators');
 assert(hubModals.includes('id="account-guest-points-wrap"'), 'guest points row can be hidden after sign-out');
 assert(hubModals.includes('id="account-settings-host"'), 'Account can host Passenger Type and Theme');
+assert(hubModals.includes('id="account-identity-host"'), 'signed-in Account hosts Passenger Type on the identity card');
+assert(hubModals.includes('id="account-notify-block"') && hubModals.includes('id="account-notify-toggle"'), 'Account has a Notifications accordion');
+assert(hubModals.includes('Community chats') && hubModals.includes('Train nearby reminders') && hubModals.includes('Admin feedback'), 'disabled notification rows exist');
+assert(hubModals.includes('id="account-delete-type"'), 'delete confirm requires typing DELETE');
+assert(hubModals.includes('id="account-badge-how-sheet"') && hubModals.includes('id="account-badge-how-close"'), 'badge how-to sheet exists');
+assert(
+    hubModals.indexOf('id="account-points-btn"') < hubModals.indexOf('id="account-identity-host"')
+    && hubModals.indexOf('id="account-identity-host"') < hubModals.indexOf('id="account-settings-host"')
+    && hubModals.indexOf('id="account-settings-host"') < hubModals.indexOf('id="account-notify-block"')
+    && hubModals.indexOf('id="account-notify-block"') < hubModals.indexOf('id="account-signout-btn"'),
+    'signed-in Account order is Points, identity, theme host, notifications, sign out',
+);
 assert(hubModals.includes('?from=account'), 'Account legal links return with from=account');
 assert(hubModals.includes('account-points-panel'), 'points details live inside Account');
 assert(hubModals.indexOf('id="account-points-btn"') < hubModals.indexOf('id="account-points-panel"'), 'points panel sits under the Points row');
@@ -523,6 +539,27 @@ assert(mapTab.includes('compareNearbyTrainLikelihood'), 'nearby modal ranks like
 assert(formatAccountDisplayName('Enock Leo Kazembe') === 'Enock LK', 'display name is first word plus remaining initials');
 assert(formatAccountDisplayName('Enock') === 'Enock', 'single-word display name stays the first name');
 assert(clampDisplayName('  Enock   LK  ') === 'Enock LK', 'custom display name is trimmed');
+assert(refuseDisplayName('').ok === true, 'empty display name is allowed for Auth fallback');
+assert(refuseDisplayName('https://spam.example').ok === false, 'display names that look like URLs are refused');
+assert(refuseDisplayName('www.spam.com').ok === false, 'www display names are refused');
+assert(refuseDisplayName('spam.example.com').ok === false, 'bare-domain display names are refused');
+assert(refuseDisplayName('https://spam.example').message === DISPLAY_NAME_REFUSE_MSG, 'refused names toast Choose a different name.');
+{
+    const sidenav = readFileSync(new URL('../src/components/Sidenav.astro', import.meta.url), 'utf8');
+    assert(sidenav.includes('Haptic feedback'), 'haptics row is labelled Haptic feedback');
+    assert(!sidenav.includes('>Vibrations<'), 'haptics row is not labelled Vibrations');
+    assert(sidenav.includes('id="settings-haptics-toggle"') && sidenav.includes('id="settings-haptics-checkbox"'), 'haptics toggle ids stay');
+    const liveBoardUi = readFileSync(new URL('../src/lib/live-board-ui.js', import.meta.url), 'utf8');
+    assert(liveBoardUi.includes('id="fare-confirm-note"'), 'Ticket Prices modal has fare-confirm-note');
+    assert(liveBoardUi.includes('Shorter Trips may cost less. Confirm at station.'), 'Z2+ Ticket Prices note mentions shorter trips');
+    assert(liveBoardUi.includes("zone === 'Z1'"), 'Z1 keeps the original confirm-at-station note');
+    const hubJs = readFileSync(new URL('../src/lib/hub.js', import.meta.url), 'utf8');
+    assert(hubJs.includes('chatDeviceId'), 'Feedback Hub prefers the canonical oldest device');
+    const marksSrc = readFileSync(new URL('../src/lib/rider-marks.js', import.meta.url), 'utf8');
+    assert(marksSrc.includes("requires: ['streak_3day']"), '5-day streak badge requires 3-day streak');
+    assert(pickCanonicalChatDeviceId({ usr_new_2000000000000: 2000000000000, usr_old_1000000000000: 1000000000000 }, 'usr_new_2000000000000') === 'usr_old_1000000000000', 'oldest linked device wins for inbox');
+    assert(pickCanonicalChatDeviceId({ usr_a_2000000000000: true, usr_b_1000000000000: true }, 'usr_a_2000000000000') === 'usr_b_1000000000000', 'boolean deviceIds fall back to the usr_ epoch suffix');
+}
 assert(normalizeAdminChangelogKey('V9_09.11.2 · jhb-soweto') === 'V9_09.11.2', 'version chips strip the route suffix');
 assert(normalizeAdminChangelogKey('V9_09.15.5 - extra') === 'V9_09.15.5', 'version chips strip ASCII hyphen suffixes');
 {

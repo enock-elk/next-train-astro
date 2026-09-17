@@ -83,6 +83,7 @@ export const MARK_CATALOG = [
         how: 'Contribute on 5 Monday-to-Saturday days in a row. Sundays do not break the streak.',
         points: MARK_POINTS.streak_5day,
         badge: true,
+        requires: ['streak_3day'],
     },
 ];
 

@@ -4,7 +4,12 @@
  * Custom names (Account) are stored as-is, capped at 80 characters.
  */
 
+import { checkContentSafety, findDisallowedUrls } from './content-safety.js';
+
 export const DISPLAY_NAME_MAX = 80;
+export const DISPLAY_NAME_REFUSE_MSG = 'Choose a different name.';
+
+const BARE_DOMAIN = /\b[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+\.[a-z]{2,}\b/i;
 
 export function formatAccountDisplayName(fullName) {
     const parts = String(fullName || '')
@@ -23,6 +28,27 @@ export function clampDisplayName(raw) {
     const s = String(raw || '').trim().replace(/\s+/g, ' ');
     if (!s) return '';
     return s.slice(0, DISPLAY_NAME_MAX);
+}
+
+export function displayNameLooksLikeUrl(raw) {
+    const s = String(raw || '').trim();
+    if (!s) return false;
+    if (/:\/\//.test(s) || /\bwww\./i.test(s) || BARE_DOMAIN.test(s)) return true;
+    return findDisallowedUrls(s).length > 0;
+}
+
+/** Empty names are allowed (caller falls back to Auth/email). */
+export function refuseDisplayName(raw) {
+    const custom = clampDisplayName(raw);
+    if (!custom) return { ok: true, name: '' };
+    if (displayNameLooksLikeUrl(custom)) {
+        return { ok: false, name: custom, reason: 'url', message: DISPLAY_NAME_REFUSE_MSG };
+    }
+    const safety = checkContentSafety(custom, { allowLinks: false });
+    if (!safety.ok || safety.verdict === 'block' || safety.verdict === 'review') {
+        return { ok: false, name: custom, reason: safety.reason || 'blocked', message: DISPLAY_NAME_REFUSE_MSG };
+    }
+    return { ok: true, name: custom };
 }
 
 export function resolveAccountDisplayName(user, profile) {

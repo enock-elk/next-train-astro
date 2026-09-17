@@ -162,6 +162,9 @@ export function setColourPack(pack) {
         syncColourPackUi(next);
         if (typeof window !== 'undefined') {
             window.dispatchEvent(new CustomEvent('colourpackchange', { detail: { pack: next } }));
+            if (typeof window.pushSignedInPrefs === 'function') {
+                window.pushSignedInPrefs({ colourPack: next });
+            }
         }
     }
     return next;
@@ -204,6 +207,9 @@ export function persistTheme(theme) {
     const next = theme === 'dark' ? 'dark' : 'light';
     safeStorage.setItem(THEME_KEY, next);
     safeStorage.setResilientItem?.(THEME_KEY, next)?.catch?.(() => {});
+    if (typeof window !== 'undefined' && typeof window.pushSignedInPrefs === 'function') {
+        window.pushSignedInPrefs({ theme: next });
+    }
     return next;
 }
 

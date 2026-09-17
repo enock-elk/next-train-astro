@@ -349,7 +349,7 @@ export function openFareModal(fareDetails, routeIdOverride) {
                 </div>
                 <div class="p-6 overflow-y-auto flex-grow text-gray-700 dark:text-gray-300">
                     <div id="fare-table-content" class="space-y-0"></div>
-                    <p class="text-[10px] text-gray-500 dark:text-gray-400 text-center mt-6">Prices are subject to change. Confirm at station.</p>
+                    <p id="fare-confirm-note" class="text-[10px] text-gray-500 dark:text-gray-400 text-center mt-6">Prices are subject to change. Confirm at station.</p>
                     <p class="text-[10px] text-gray-500 dark:text-gray-400 text-center mt-1">Off-Peak Fares apply weekdays between 09:30 and 14:30.</p>
                 </div>
                 <div class="p-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 rounded-b-2xl shrink-0">
@@ -379,6 +379,14 @@ export function openFareModal(fareDetails, routeIdOverride) {
             <div class="flex justify-between items-center py-3 border-b border-dashed border-gray-300 dark:border-gray-600"><span class="text-gray-600 dark:text-gray-400 text-sm font-bold">Weekly <span class="opacity-70 font-normal">(Mon-Fri)</span></span><span class="font-black text-gray-900 dark:text-white text-lg">R${calc(prices.weekly_mon_fri)}</span></div>
             <div class="flex justify-between items-center py-3 border-b border-dashed border-gray-300 dark:border-gray-600"><span class="text-gray-600 dark:text-gray-400 text-sm font-bold">Weekly <span class="opacity-70 font-normal">(Mon-Sat)</span></span><span class="font-black text-gray-900 dark:text-white text-lg">R${calc(prices.weekly_mon_sat)}</span></div>
             <div class="flex justify-between items-center py-3"><span class="text-gray-600 dark:text-gray-400 text-sm font-bold">Monthly Pass</span><span class="font-black text-gray-900 dark:text-white text-lg">R${calc(prices.monthly)}</span></div>`;
+    }
+
+    const noteEl = document.getElementById('fare-confirm-note');
+    if (noteEl) {
+        const zone = String(fareDetails.code || '').toUpperCase();
+        noteEl.textContent = zone === 'Z1'
+            ? 'Prices are subject to change. Confirm at station.'
+            : 'Shorter Trips may cost less. Confirm at station.';
     }
 
     openSmoothModal('fare-modal');
@@ -469,6 +477,9 @@ export function selectProfile(profileType) {
     closeSmoothModal('profile-modal');
     findNextTrains();
     showToast(`Profile set to ${profileType}`, 'success', 1500);
+    if (typeof window.pushSignedInPrefs === 'function') {
+        window.pushSignedInPrefs({ passengerType: profileType });
+    }
 }
 
 export function loadUserProfile() {

@@ -311,14 +311,6 @@ import { withBase } from '../lib/config.js';
                 </div>
 
                 <div class="rounded-[10px] overflow-hidden bg-white dark:bg-[#1c1c1e] divide-y divide-black/10 dark:divide-white/10">
-                    <div class="px-4 py-2">
-                        <label class="block text-[12px] font-normal text-gray-500 dark:text-gray-400" for="account-edit-display-name">Display name</label>
-                        <input id="account-edit-display-name" type="text" maxlength="80" autocomplete="nickname" class="w-full py-1 bg-transparent text-[13px] font-normal text-gray-900 dark:text-white focus:outline-none" placeholder="First name">
-                    </div>
-                    <button type="button" id="account-save-display-name" class="w-full px-4 py-[11px] text-[13px] font-normal text-blue-600 dark:text-blue-400 text-center focus:outline-none">Save name</button>
-                </div>
-
-                <div class="rounded-[10px] overflow-hidden bg-white dark:bg-[#1c1c1e] divide-y divide-black/10 dark:divide-white/10">
                     <button type="button" id="account-points-btn" class="w-full flex items-center justify-between gap-2 px-4 py-[11px] text-left focus:outline-none" aria-expanded="false" aria-controls="account-points-panel">
                         <span class="text-[13px] font-normal text-gray-900 dark:text-white">Points</span>
                         <span class="flex items-center gap-1 min-w-0">
@@ -352,13 +344,26 @@ import { withBase } from '../lib/config.js';
                             <ul id="account-contrib-list" class="space-y-1.5 text-[13px] font-normal text-gray-600 dark:text-gray-300"></ul>
                         </div>
                     </div>
-                    <label class="flex items-center justify-between gap-3 px-4 py-[11px] cursor-pointer">
-                        <span class="min-w-0">
-                            <span class="block text-[13px] font-normal text-gray-900 dark:text-white">Show my photo next to my name</span>
-                            <span class="block text-[12px] font-normal text-gray-500 dark:text-gray-400 mt-0.5 leading-snug">Off unless you turn it on.</span>
-                        </span>
-                        <input type="checkbox" id="account-photo-alerts" class="rounded border-gray-300 text-blue-600 focus:ring-blue-500 shrink-0">
-                    </label>
+                </div>
+
+                <div class="space-y-2">
+                    <p class="px-1 text-[12px] font-normal uppercase tracking-wide text-gray-500">Community identity</p>
+                    <div class="rounded-[10px] overflow-hidden bg-white dark:bg-[#1c1c1e] divide-y divide-black/10 dark:divide-white/10">
+                        <p class="px-4 py-2 text-[12px] font-normal text-gray-500 dark:text-gray-400 leading-snug">Display name, photo, and passenger type are used on the Community tab.</p>
+                        <div class="px-4 py-2">
+                            <label class="block text-[12px] font-normal text-gray-500 dark:text-gray-400" for="account-edit-display-name">Display name</label>
+                            <input id="account-edit-display-name" type="text" maxlength="80" autocomplete="nickname" class="w-full py-1 bg-transparent text-[13px] font-normal text-gray-900 dark:text-white focus:outline-none" placeholder="First name">
+                        </div>
+                        <button type="button" id="account-save-display-name" class="w-full px-4 py-[11px] text-[13px] font-normal text-blue-600 dark:text-blue-400 text-center focus:outline-none">Save name</button>
+                        <label class="flex items-center justify-between gap-3 px-4 py-[11px] cursor-pointer">
+                            <span class="min-w-0">
+                                <span class="block text-[13px] font-normal text-gray-900 dark:text-white">Show my photo next to my name</span>
+                                <span class="block text-[12px] font-normal text-gray-500 dark:text-gray-400 mt-0.5 leading-snug">Off unless you turn it on.</span>
+                            </span>
+                            <input type="checkbox" id="account-photo-alerts" class="rounded border-gray-300 text-blue-600 focus:ring-blue-500 shrink-0">
+                        </label>
+                        <div id="account-identity-host"></div>
+                    </div>
                 </div>
             </div>
 
@@ -421,6 +426,36 @@ import { withBase } from '../lib/config.js';
 
             <div id="account-settings-host" class="space-y-3"></div>
 
+            <div id="account-notify-block" class="hidden rounded-[10px] overflow-hidden bg-white dark:bg-[#1c1c1e]">
+                <button type="button" id="account-notify-toggle" class="w-full flex items-center justify-between gap-2 px-4 py-[11px] text-left focus:outline-none" aria-expanded="false" aria-controls="account-notify-panel">
+                    <span class="text-[13px] font-normal text-gray-900 dark:text-white">Notifications</span>
+                    <svg id="account-notify-chevron" class="w-3.5 h-3.5 text-gray-400 shrink-0 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7"></path></svg>
+                </button>
+                <div id="account-notify-panel" class="hidden divide-y divide-black/10 dark:divide-white/10 border-t border-black/10 dark:border-white/10">
+                    <p class="px-4 py-2 text-[12px] font-normal text-gray-500 dark:text-gray-400 leading-snug">Coming later. These stay off.</p>
+                    <label class="flex items-center justify-between gap-3 px-4 py-[11px] opacity-50 cursor-not-allowed">
+                        <span class="text-[13px] font-normal text-gray-900 dark:text-white">Community chats</span>
+                        <input type="checkbox" disabled aria-disabled="true" class="rounded border-gray-300 text-blue-600 shrink-0">
+                    </label>
+                    <label class="flex items-center justify-between gap-3 px-4 py-[11px] opacity-50 cursor-not-allowed">
+                        <span class="text-[13px] font-normal text-gray-900 dark:text-white">Delays</span>
+                        <input type="checkbox" disabled aria-disabled="true" class="rounded border-gray-300 text-blue-600 shrink-0">
+                    </label>
+                    <label class="flex items-center justify-between gap-3 px-4 py-[11px] opacity-50 cursor-not-allowed">
+                        <span class="text-[13px] font-normal text-gray-900 dark:text-white">Incidents</span>
+                        <input type="checkbox" disabled aria-disabled="true" class="rounded border-gray-300 text-blue-600 shrink-0">
+                    </label>
+                    <label class="flex items-center justify-between gap-3 px-4 py-[11px] opacity-50 cursor-not-allowed">
+                        <span class="text-[13px] font-normal text-gray-900 dark:text-white">Train nearby reminders</span>
+                        <input type="checkbox" disabled aria-disabled="true" class="rounded border-gray-300 text-blue-600 shrink-0">
+                    </label>
+                    <label class="flex items-center justify-between gap-3 px-4 py-[11px] opacity-50 cursor-not-allowed">
+                        <span class="text-[13px] font-normal text-gray-900 dark:text-white">Admin feedback</span>
+                        <input type="checkbox" disabled aria-disabled="true" class="rounded border-gray-300 text-blue-600 shrink-0">
+                    </label>
+                </div>
+            </div>
+
             <div id="account-session-actions" class="hidden space-y-6">
                 <div class="rounded-[10px] overflow-hidden bg-white dark:bg-[#1c1c1e]">
                     <button type="button" id="account-signout-btn" data-account-action class="w-full px-4 py-[11px] text-[13px] font-normal text-blue-600 dark:text-blue-400 text-center focus:outline-none">
@@ -437,9 +472,11 @@ import { withBase } from '../lib/config.js';
                     </div>
                     <div id="account-delete-confirm" class="hidden rounded-[10px] bg-white dark:bg-[#1c1c1e] px-4 py-3 space-y-3">
                         <p class="text-[13px] font-normal text-gray-600 dark:text-gray-300 leading-snug">This asks Next Train to delete your account. You will be signed out.</p>
+                        <label class="block text-[12px] font-normal text-gray-500 dark:text-gray-400" for="account-delete-type">Type DELETE to confirm</label>
+                        <input id="account-delete-type" type="text" autocomplete="off" autocapitalize="characters" class="w-full h-11 px-3 rounded-lg bg-[#f2f2f7] dark:bg-[#2c2c2e] text-[13px] font-normal text-gray-900 dark:text-white focus:outline-none" placeholder="DELETE">
                         <div class="flex gap-2">
                             <button type="button" id="account-delete-cancel-btn" class="flex-1 py-2 rounded-lg text-[13px] font-normal text-gray-700 dark:text-gray-200 bg-[#f2f2f7] dark:bg-[#2c2c2e] focus:outline-none">Cancel</button>
-                            <button type="button" id="account-delete-confirm-btn" data-account-action class="flex-1 py-2 rounded-lg text-[13px] font-normal text-white bg-[#ff3b30] focus:outline-none">Delete</button>
+                            <button type="button" id="account-delete-confirm-btn" data-account-action disabled class="flex-1 py-2 rounded-lg text-[13px] font-normal text-white bg-[#ff3b30] opacity-40 focus:outline-none">Delete</button>
                         </div>
                     </div>
                 </div>
@@ -453,6 +490,17 @@ import { withBase } from '../lib/config.js';
                 <a href={`${withBase('account-delete.html')}?from=account`} class="text-[12px] font-normal text-gray-500 hover:text-blue-600 dark:text-gray-400 dark:hover:text-blue-400 underline underline-offset-2">Delete account help</a>
             </div>
         </div>
+    </div>
+</div>
+
+<div id="account-badge-how-sheet" class="fixed inset-0 z-[130] hidden flex items-end justify-center p-0 bg-black/40" role="dialog" aria-modal="true" aria-labelledby="account-badge-how-title">
+    <button type="button" id="account-badge-how-overlay" class="absolute inset-0" aria-label="Close"></button>
+    <div class="relative w-full max-w-md rounded-t-2xl bg-white dark:bg-[#1c1c1e] px-4 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))] space-y-3">
+        <p id="account-badge-how-title" class="text-[17px] font-semibold text-gray-900 dark:text-white"></p>
+        <p id="account-badge-how-status" class="text-[13px] font-normal text-gray-500 dark:text-gray-400"></p>
+        <p id="account-badge-how-body" class="text-[13px] font-normal text-gray-600 dark:text-gray-300 leading-snug"></p>
+        <p id="account-badge-how-prereq" class="hidden text-[13px] font-normal text-gray-500 dark:text-gray-400 leading-snug"></p>
+        <button type="button" id="account-badge-how-close" class="w-full py-2.5 rounded-xl text-[13px] font-normal text-blue-600 dark:text-blue-400 bg-[#f2f2f7] dark:bg-[#2c2c2e] focus:outline-none">Close</button>
     </div>
 </div>
 
@@ -681,8 +729,20 @@ import { withBase } from '../lib/config.js';
     border-radius: 10px;
   }
   html.dark #account-settings-host #settings-profile-btn,
-  html.dark #account-settings-host #prefs-accordion-toggle {
+  html.dark #account-settings-host #prefs-accordion-toggle,
+  html.dark #account-identity-host #settings-profile-btn {
     background: #1c1c1e;
+  }
+  #account-identity-host #settings-profile-btn {
+    background: #fff;
+    border-radius: 0;
+  }
+  #account-settings-host #sidenav-prefs-block.nt-prefs-flat #prefs-accordion-toggle {
+    display: none;
+  }
+  #account-settings-host #sidenav-prefs-block.nt-prefs-flat #prefs-accordion-panel {
+    display: flex !important;
+    margin-top: 0;
   }
   #account-settings-host #sidenav-prefs-block {
     padding-top: 0;

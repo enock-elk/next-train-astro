@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_09.17.14': [
+        'Live-board Ticket Prices (#fare-confirm-note): Z1 keeps “Prices are subject to change. Confirm at station.” Z2+ / unknown: “Shorter Trips may cost less. Confirm at station.” Planner experimental note unchanged. Account signed-in order: Points, Community identity (display name, photo default off, Passenger Type), flat Theme rows (nt-prefs-flat hides accordion on Account only), disabled Notifications accordion. Badge cells are buttons opening #account-badge-how-sheet; streak_5day requires streak_3day. Vibrations renamed Haptic feedback with two offset phone outlines. Delete requires typing DELETE. Display names run checkContentSafety({ allowLinks: false }) plus URL block; toast “Choose a different name.” Signed-in users/{uid}/prefs hydrates remote-wins then write-through (theme, colourPack, hapticsEnabled, passengerType, showPhotoInAlerts, updatedAt). getThreadDeviceId prefers $account.chatDeviceId = oldest linked device; local next_train_device_id is still minted and recorded. What’s New is the ticket note only. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
+    ],
     'V9_09.17.13': [
         'Planner Trip fare on a single route (direct or same-route shuttle) is min(km zone, confirmed corridor long zone). Gauteng dump {sheet}_zone is confirmed until config/route_fares/{routeId}.confirmed is false. Other regions stay km-estimated until an operator confirms. OD Approve (config/planner_fares) still wins. Optional ticket photo after Yes/Send is a create-once sidecar at sys_logs/fare_ticket_photos/{voteId}; the vote does not wait. Fares tab has Confirmed corridor fares + ticket thumbs. Deploy firebase-database.rules.json. Storage must allow fare_tickets/ like feedback_attachments/. No What’s New (trip price is still a pilot). forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
     ],

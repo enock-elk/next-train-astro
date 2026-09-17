@@ -84,11 +84,29 @@ export function placeAccountSettings(accountOn) {
     const prefs = document.getElementById('sidenav-prefs-block');
     const sidenavSlot = document.getElementById('sidenav-legacy-settings');
     const accountSlot = document.getElementById('account-settings-host');
+    const identitySlot = document.getElementById('account-identity-host');
     const mapsBlock = document.getElementById('sidenav-maps-block');
+    const signedIn = document.getElementById('account-signed-in');
+    const isSignedIn = !!(signedIn && !signedIn.classList.contains('hidden'));
     if (accountOn && accountSlot) {
-        if (profile) accountSlot.appendChild(profile);
+        if (profile) {
+            if (isSignedIn && identitySlot) identitySlot.appendChild(profile);
+            else accountSlot.insertBefore(profile, accountSlot.firstChild);
+        }
         if (prefs) accountSlot.appendChild(prefs);
+        prefs?.classList.add('nt-prefs-flat');
+        document.getElementById('prefs-accordion-toggle')?.classList.add('hidden');
+        const panel = document.getElementById('prefs-accordion-panel');
+        panel?.classList.remove('hidden');
+        panel?.classList.add('flex');
+        document.getElementById('prefs-accordion-toggle')?.setAttribute('aria-expanded', 'true');
     } else {
+        prefs?.classList.remove('nt-prefs-flat');
+        document.getElementById('prefs-accordion-toggle')?.classList.remove('hidden');
+        document.getElementById('prefs-accordion-toggle')?.setAttribute('aria-expanded', 'false');
+        const panel = document.getElementById('prefs-accordion-panel');
+        panel?.classList.add('hidden');
+        panel?.classList.remove('flex');
         if (profile && sidenavSlot) sidenavSlot.appendChild(profile);
         if (prefs && mapsBlock?.parentElement) mapsBlock.parentElement.insertBefore(prefs, mapsBlock);
     }

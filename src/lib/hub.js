@@ -55,6 +55,7 @@ import {
 } from './alerts-channel.js';
 import { layoutAlertPost, hoistAlertImagesFromHtml } from './alerts-feed.js';
 import { $userProfile, $currentRouteId, $userRegion, $deviceId } from '../store.js';
+import { $account } from './account.js';
 import { isLieFi } from './logic.js';
 import { bindColourPackControls, setColourPack, getColourPack, resetLookToClassicLight } from './prefs.js';
 import { markPendingReload } from './session-stability.js';
@@ -529,6 +530,8 @@ export function openAppHub() {
 }
 
 function collapsePrefsAccordion() {
+    const prefs = document.getElementById('sidenav-prefs-block');
+    if (prefs?.classList.contains('nt-prefs-flat')) return;
     const panel = document.getElementById('prefs-accordion-panel');
     const toggle = document.getElementById('prefs-accordion-toggle');
     const chevron = document.getElementById('prefs-accordion-chevron');
@@ -1143,6 +1146,8 @@ export function syncInboxBadges(count = 0) {
 }
 
 function getThreadDeviceId() {
+    const canonical = $account.get()?.chatDeviceId;
+    if (canonical) return canonical;
     return $deviceId.get() || safeStorage.getItem('next_train_device_id') || '';
 }
 
@@ -2080,6 +2085,9 @@ export function initHub() {
         safeStorage.setItem('hapticsEnabled', on ? 'true' : 'false');
         if (hapticsCb) hapticsCb.checked = on;
         if (on) triggerHaptic();
+        if (typeof window.pushSignedInPrefs === 'function') {
+            window.pushSignedInPrefs({ hapticsEnabled: !!on });
+        }
     };
     hapticsToggle?.addEventListener('click', (e) => {
         const t = e.target;

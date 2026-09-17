@@ -33,6 +33,7 @@ import {
     renderInboxReactionPickerHtml,
     submitInboxReaction,
 } from './inbox-reactions.js';
+import { isAdminAuthed } from './admin-chrome.js';
 import { trackAnalyticsEvent } from './analytics.js';
 import { prepareRichHtml, injectRichTextStyles, isSafeHref } from './rich-text.js';
 import {
@@ -2160,6 +2161,12 @@ export function initHub() {
         }, 320);
     };
 
+    const postMapAdminAuth = (win) => {
+        if (!win) return;
+        try {
+            win.postMessage({ type: 'nt-map-admin', authed: isAdminAuthed() }, '*');
+        } catch { /* ignore */ }
+    };
     const hideSheetFallback = () => {
         document.getElementById('nt-inapp-sheet-fallback')?.classList.add('hidden');
     };
@@ -2199,6 +2206,7 @@ export function initHub() {
             loaded = true;
             if (frame._ntSheetWatch) clearTimeout(frame._ntSheetWatch);
             hideSheetFallback();
+            postMapAdminAuth(frame.contentWindow);
             frame.removeEventListener('load', onLoad);
             frame.removeEventListener('error', onError);
         };

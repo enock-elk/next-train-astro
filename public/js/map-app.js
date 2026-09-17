@@ -606,6 +606,7 @@
 
         async function loadRailTrackBundle(region) {
             const byId = new Map();
+            const stationOrderById = new Map();
             let graph = null;
             try {
                 const base = (typeof window.APP_BASE === 'string' && window.APP_BASE)
@@ -615,7 +616,7 @@
                 // /tracks/ (not /data/) — production rsync excludes metrorail-app/data/
                 const url = `${root}tracks/rail-tracks-${region}.geojson`;
                 const res = await fetch(url, { cache: 'default' });
-                if (!res.ok) return { byId, graph: null };
+                if (!res.ok) return { byId, graph: null, stationOrderById };
                 const fc = await res.json();
                 const features = fc.features || [];
                 for (const f of features) {
@@ -635,12 +636,18 @@
                         latlngs = best;
                     }
                     if (latlngs.length > 1) byId.set(id, latlngs);
+                    // Manual patches set stationOrderOverride so paint follows
+                    // Ndabeni/Pinelands (or any edited list) instead of STATIC.
+                    const names = f.properties?.stationNames;
+                    if (f.properties?.stationOrderOverride && Array.isArray(names) && names.length >= 2) {
+                        stationOrderById.set(id, names.map((n) => String(n || '').replace(/ STATION$/i, '').trim().toUpperCase()).filter(Boolean));
+                    }
                 }
                 graph = buildRailGraphFromFeatures(features);
             } catch (e) {
                 console.warn('Guardian: OSM track GeoJSON unavailable, using station chords.', e);
             }
-            return { byId, graph };
+            return { byId, graph, stationOrderById };
         }
 
         /** Baked OSM LineString may only be used if stations appear along it in list order. */
@@ -775,8 +782,12 @@
         const BRANCH_TRAIN_THRESHOLD = 2;
         const MIN_TRAINS_TO_JUDGE = 4;
         const NOLU_KAPTEINSKLIP_SPUR = ["PHILIPPI", "LENTEGEUR", "MITCHELL'S PLAIN", "KAPTEINSKLIP"];
+        let trackEdit = null;
 
         function corridorGeometryStops(routeObj) {
+            if (trackEdit && trackEdit.routeId === routeObj.routeId && trackEdit.stops && trackEdit.stops.length > 1) {
+                return trackEdit.stops;
+            }
             const all = routeObj.validStops || [];
             if (GHOST_GEOMETRY_REGIONS.has(routeObj.region)) return all;
             const served = all.filter((s) => s && !s.inactive);
@@ -806,6 +817,9 @@
          * OSM may only fill the hop between station i and i+1 (no shortcuts, no skips).
          */
         function resolveStopsLatLngs(stops, routeObj, trackBundle, preferBakeId) {
+            if (trackEdit && trackEdit.routeId === routeObj.routeId && trackEdit.coords && trackEdit.coords.length > 1) {
+                return trackEdit.coords;
+            }
             const chords = (stops.length > 1)
                 ? stops.map((s) => [s.lat, s.lon])
                 : (routeObj.coords || []);
@@ -873,6 +887,16 @@
 
         function isMapTabEmbed() {
             try { return new URLSearchParams(location.search).get('embed') === '1'; } catch (_) { return false; }
+        }
+
+        function isMapOperator() {
+            try {
+                if (window.__ntAdminAuthed === true) return true;
+                if (document.documentElement.getAttribute('data-admin-authed') === '1') return true;
+                if (window.parent && window.parent !== window && window.parent.__ntAdminAuthed === true) return true;
+                if (localStorage.getItem('ntOperatorAuthed') === '1') return true;
+            } catch (_) {}
+            return false;
         }
 
         /** Map view region only — never overwrite a returning user's saved app region/route. */
@@ -1272,7 +1296,10 @@
             const map = L.map('map', { zoomControl: false }).setView([initLat, initLon], initZoom);
             map.createPane('nt-stations');
             const stationPane = map.getPane('nt-stations');
-            if (stationPane) stationPane.style.zIndex = 450; 
+            if (stationPane) stationPane.style.zIndex = 450;
+            map.createPane('nt-track-edit');
+            const trackEditPane = map.getPane('nt-track-edit');
+            if (trackEditPane) trackEditPane.style.zIndex = 460; 
             
             // Guardian UX: "Midnight Blue" unified tile layer
             // CSS filter (.dark .leaflet-tile-pane) flips this strictly in dark mode
@@ -1394,16 +1421,28 @@
             }
 
             /** Paint order is the official station list, never sheet-row scramble. */
-            function applyCanonicalStationOrder(routeId, validStops, routeCoords) {
-                const names = STATIC_ROUTE_PATHS[routeId];
+            function applyCanonicalStationOrder(routeId, validStops, routeCoords, namesOverride) {
+                const names = (Array.isArray(namesOverride) && namesOverride.length >= 2)
+                    ? namesOverride
+                    : STATIC_ROUTE_PATHS[routeId];
+                const fillMissing = Array.isArray(namesOverride) && namesOverride.length >= 2;
                 if (!names || names.length < 2) return { validStops, routeCoords };
                 const byName = new Map();
                 for (const s of validStops || []) {
                     if (s?.name && Number.isFinite(s.lat) && Number.isFinite(s.lon)) byName.set(s.name, s);
                 }
                 const ordered = [];
-                for (const name of names) {
-                    const s = byName.get(name);
+                for (const rawName of names) {
+                    const name = String(rawName || '').replace(/ STATION$/i, '').trim().toUpperCase();
+                    if (!name) continue;
+                    let s = byName.get(name);
+                    if (!s && fillMissing && STATION_COORDINATES[name]) {
+                        const c = STATION_COORDINATES[name];
+                        s = { name, lat: c[0], lon: c[1], inactive: false };
+                    }
+                    if (!s && fillMissing && globalStations[name]) {
+                        s = { name, lat: globalStations[name].lat, lon: globalStations[name].lon, inactive: false };
+                    }
                     if (!s) continue;
                     ordered.push({ name: s.name, lat: s.lat, lon: s.lon, inactive: !!s.inactive, servedTrains: s.servedTrains });
                     if (s.inactive) {
@@ -1553,6 +1592,7 @@
                 }
 
                 if (currentRegion === 'WC') ensureMaitlandMutualAdjacency(validStops, routeCoords);
+                const sheetStops = validStops.slice();
                 ({ validStops, routeCoords } = applyCanonicalStationOrder(route.id, validStops, routeCoords));
 
                 if (routeCoords.length > 1) {
@@ -1564,7 +1604,8 @@
                          region: route.region,
                          trainCount: sheetTrainKeys.size,
                          coords: routeCoords,
-                         validStops: validStops
+                         validStops: validStops,
+                         sheetStops: sheetStops
                      });
                 }
             });
@@ -1597,7 +1638,23 @@
             // --- OSM TRACK GEOMETRY (cached GeoJSON + live graph smooth) ---
             // © OpenStreetMap contributors — baked offline via scripts/build-rail-tracks.mjs
             const overlayGroup = L.layerGroup().addTo(map);
-            const emptyTracks = { byId: new Map(), graph: null };
+            const emptyTracks = { byId: new Map(), graph: null, stationOrderById: new Map() };
+            let liveTrackBundle = emptyTracks;
+            let mapOperatorAuthed = false;
+
+            function applyGoldStationOrders(trackBundle) {
+                const orders = trackBundle?.stationOrderById;
+                if (!orders || !orders.size) return;
+                drawnRoutes.forEach((r) => {
+                    const names = orders.get(r.routeId);
+                    if (!names || names.length < 2) return;
+                    const pool = [...(r.sheetStops || []), ...(r.validStops || [])];
+                    const next = applyCanonicalStationOrder(r.routeId, pool, r.coords, names);
+                    if (!next.validStops || next.validStops.length < 2) return;
+                    r.validStops = next.validStops;
+                    r.coords = next.routeCoords;
+                });
+            }
 
             function paintRouteLines(trackBundle) {
                 drawnRoutes.forEach((r) => {
@@ -1793,8 +1850,10 @@
             globalDisruptions = disruptionData || {};
 
             // Phase 2: refine polylines onto OSM tracks, then redraw warnings
-            paintRouteLines(trackBundle);
-            paintDisruptionOverlays(trackBundle, globalDisruptions);
+            liveTrackBundle = trackBundle || emptyTracks;
+            applyGoldStationOrders(liveTrackBundle);
+            paintRouteLines(liveTrackBundle);
+            paintDisruptionOverlays(liveTrackBundle, globalDisruptions);
 
             // --- PHASE 8: COMMUTER DELAY REPORT PINS (recent, by station) ---
             try {
@@ -1893,6 +1952,7 @@
                 });
                 raiseStationMarkers();
                 syncLineFilterChrome();
+                syncTrackEditorChrome();
                 if (!fit) return;
                 if (selectedRouteId) {
                     const r = drawnRoutes.find((x) => x.routeId === selectedRouteId);
@@ -1915,6 +1975,10 @@
             }
 
             function applySelectedLine(routeId) {
+                if (trackEdit) {
+                    if (routeId === trackEdit.routeId) return;
+                    stopTrackEditor();
+                }
                 setSelectedLine(routeId, { toggle: true, fit: true });
             }
 
@@ -2045,6 +2109,328 @@
                     legendContent.appendChild(row);
                 });
             }
+
+            const trackEditLayer = L.layerGroup().addTo(map);
+            const vertexIcon = L.divIcon({ className: 'nt-track-vertex', iconSize: [16, 16], iconAnchor: [8, 8] });
+            const vertexEndIcon = L.divIcon({ className: 'nt-track-vertex is-end', iconSize: [16, 16], iconAnchor: [8, 8] });
+            const TRACK_EDIT_HINTS = {
+                move: 'Drag a dot along the rails. Zoom in for more dots.',
+                add: 'Tap the line where the extra dot should go.',
+                delete: 'Tap a dot to remove it.'
+            };
+            let trackEditTool = 'move';
+
+            function parseEditorStationNames(text) {
+                return String(text || '')
+                    .split(/[\n,]+/)
+                    .map((s) => s.replace(/ STATION$/i, '').trim().toUpperCase())
+                    .filter(Boolean);
+            }
+
+            function cloneLatLngs(coords) {
+                return (coords || []).map((p) => [p[0], p[1]]);
+            }
+
+            function editorStopsFromNames(routeObj, names) {
+                const pool = [...(routeObj.sheetStops || []), ...(routeObj.validStops || [])];
+                const next = applyCanonicalStationOrder(routeObj.routeId, pool, routeObj.coords, names);
+                return next.validStops && next.validStops.length > 1 ? next.validStops : routeObj.validStops;
+            }
+
+            function editorCoverStatus(coords, stops) {
+                const along = stopsAlongPath(coords, stops);
+                if (!along) return { ok: false, text: 'Need two stations and two points.' };
+                const far = along.filter((p) => !(p.offM <= RAIL_BAKED_COVER_M));
+                const orderOk = pathVisitsStopsInOrder(coords, stops);
+                if (!far.length && orderOk) {
+                    return { ok: true, text: 'Line reaches every station.' };
+                }
+                if (far.length) {
+                    const p = far[0];
+                    const km = p.offM >= 1000 ? `${(p.offM / 1000).toFixed(1)} km` : `${Math.round(p.offM)} m`;
+                    return { ok: false, text: `${p.name} is ${km} off this line.` };
+                }
+                return { ok: false, text: 'Station order does not follow this line.' };
+            }
+
+            function vertexStride(zoom, n) {
+                if (n <= 120) return 1;
+                if (zoom >= 17) return 1;
+                if (zoom >= 15) return Math.max(1, Math.ceil(n / 400));
+                if (zoom >= 13) return Math.max(1, Math.ceil(n / 220));
+                return Math.max(1, Math.ceil(n / 120));
+            }
+
+            function setTrackEditTool(tool) {
+                trackEditTool = (tool === 'add' || tool === 'delete') ? tool : 'move';
+                const html = document.documentElement;
+                html.classList.toggle('nt-track-tool-add', trackEditTool === 'add');
+                html.classList.toggle('nt-track-tool-delete', trackEditTool === 'delete');
+                document.querySelectorAll('#nt-track-editor-tools [data-track-tool]').forEach((btn) => {
+                    const on = btn.getAttribute('data-track-tool') === trackEditTool;
+                    btn.classList.toggle('is-on', on);
+                    btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+                });
+                const hint = document.getElementById('nt-track-editor-hint');
+                if (hint) hint.textContent = TRACK_EDIT_HINTS[trackEditTool];
+                if (trackEdit) rebuildTrackVertices();
+            }
+
+            function paintEditorVia() {
+                const via = document.getElementById('nt-track-editor-via');
+                if (!via || !trackEdit) return;
+                via.textContent = (trackEdit.stops || []).map((s) => s.name).join(' · ');
+            }
+
+            function setStationsOpen(open) {
+                const wrap = document.getElementById('nt-track-editor-stations-wrap');
+                const btn = document.getElementById('nt-track-editor-stations-toggle');
+                wrap?.classList.toggle('is-open', !!open);
+                btn?.setAttribute('aria-expanded', open ? 'true' : 'false');
+            }
+
+            function syncTrackEditorChrome() {
+                const html = document.documentElement;
+                const can = mapOperatorAuthed && !isMapTabEmbed();
+                const route = drawnRoutes.find((x) => x.routeId === selectedRouteId);
+                const baked = !!(route && liveTrackBundle?.byId?.has(route.routeId));
+                const ready = can && !!route && baked && currentRegion !== 'KZN';
+                html.classList.toggle('nt-track-editor-ready', ready && !trackEdit);
+                html.classList.toggle('nt-track-editing', !!trackEdit);
+                const toggle = document.getElementById('nt-track-editor-toggle');
+                if (toggle) {
+                    if (can && route && currentRegion === 'KZN') toggle.title = 'KZN gold tracks are held';
+                    else if (can && route && !baked) toggle.title = 'This line has no baked gold track';
+                    else toggle.title = 'Edit line';
+                }
+            }
+
+            function paintEditorCover() {
+                const el = document.getElementById('nt-track-editor-cover');
+                if (!el || !trackEdit) return;
+                const status = editorCoverStatus(trackEdit.coords, trackEdit.stops);
+                el.textContent = status.text;
+                el.classList.toggle('is-warn', !status.ok);
+                el.classList.toggle('is-ok', status.ok);
+                paintEditorVia();
+            }
+
+            function applyEditPreview(opts) {
+                if (!trackEdit) return;
+                const r = drawnRoutes.find((x) => x.routeId === trackEdit.routeId);
+                if (!r) return;
+                liveTrackBundle.byId.set(r.routeId, trackEdit.coords);
+                if (!liveTrackBundle.stationOrderById) liveTrackBundle.stationOrderById = new Map();
+                liveTrackBundle.stationOrderById.set(r.routeId, trackEdit.stops.map((s) => s.name));
+                r.validStops = trackEdit.stops;
+                r.coords = trackEdit.stops.map((s) => [s.lat, s.lon]);
+                r.trackCoords = trackEdit.coords;
+                if (r._polyline) r._polyline.setLatLngs(trackEdit.coords);
+                if (!opts || opts.rebuild !== false) rebuildTrackVertices();
+                paintEditorCover();
+            }
+
+            function rebuildTrackVertices() {
+                trackEditLayer.clearLayers();
+                if (!trackEdit || !trackEdit.coords) return;
+                const coords = trackEdit.coords;
+                const stride = vertexStride(map.getZoom(), coords.length);
+                const canDrag = trackEditTool !== 'delete';
+                for (let i = 0; i < coords.length; i++) {
+                    const isEnd = i === 0 || i === coords.length - 1;
+                    if (!isEnd && i % stride !== 0) continue;
+                    const marker = L.marker(coords[i], {
+                        icon: isEnd ? vertexEndIcon : vertexIcon,
+                        draggable: canDrag,
+                        pane: 'nt-track-edit',
+                        keyboard: false
+                    });
+                    marker._ntVert = i;
+                    marker.on('dragstart', () => {
+                        snapshotTrackEdit();
+                    });
+                    marker.on('drag', (ev) => {
+                        const ll = ev.latlng;
+                        const idx = marker._ntVert;
+                        if (!trackEdit || idx == null) return;
+                        trackEdit.coords[idx] = [ll.lat, ll.lng];
+                        const r = drawnRoutes.find((x) => x.routeId === trackEdit.routeId);
+                        if (r?._polyline) r._polyline.setLatLngs(trackEdit.coords);
+                    });
+                    marker.on('dragend', () => {
+                        applyEditPreview({ rebuild: false });
+                    });
+                    marker.on('click', (ev) => {
+                        L.DomEvent.stop(ev);
+                        if (trackEditTool !== 'delete') return;
+                        if (!trackEdit || trackEdit.coords.length <= 2) return;
+                        const idx = marker._ntVert;
+                        snapshotTrackEdit();
+                        trackEdit.coords.splice(idx, 1);
+                        applyEditPreview();
+                    });
+                    marker.addTo(trackEditLayer);
+                }
+            }
+
+            function snapshotTrackEdit() {
+                if (!trackEdit) return;
+                trackEdit.undo.push({
+                    coords: cloneLatLngs(trackEdit.coords),
+                    names: trackEdit.stops.map((s) => s.name)
+                });
+                if (trackEdit.undo.length > 40) trackEdit.undo.shift();
+            }
+
+            function bindEditPolylineClicks() {
+                const r = drawnRoutes.find((x) => x.routeId === trackEdit?.routeId);
+                if (!r?._polyline) return;
+                r._polyline.off('click', onEditLineClick);
+                r._polyline.on('click', onEditLineClick);
+                try { r._polyline.unbindPopup(); } catch (_) {}
+            }
+
+            function onEditLineClick(ev) {
+                if (!trackEdit || trackEditTool !== 'add') return;
+                L.DomEvent.stop(ev);
+                const ll = ev.latlng;
+                const coords = trackEdit.coords;
+                let bestI = 0;
+                let bestD = Infinity;
+                for (let i = 0; i < coords.length - 1; i++) {
+                    const d = pointToSegmentM(ll.lat, ll.lng, coords[i][0], coords[i][1], coords[i + 1][0], coords[i + 1][1]);
+                    if (d < bestD) { bestD = d; bestI = i; }
+                }
+                snapshotTrackEdit();
+                coords.splice(bestI + 1, 0, [ll.lat, ll.lng]);
+                applyEditPreview();
+            }
+
+            function startTrackEditor() {
+                if (isMapTabEmbed() || !mapOperatorAuthed) return;
+                if (currentRegion === 'KZN') return;
+                const r = drawnRoutes.find((x) => x.routeId === selectedRouteId);
+                if (!r || !liveTrackBundle?.byId?.has(r.routeId)) return;
+                const coords = cloneLatLngs(r.trackCoords && r.trackCoords.length > 1 ? r.trackCoords : liveTrackBundle.byId.get(r.routeId));
+                if (coords.length < 2) return;
+                const names = (r.validStops || []).map((s) => s.name);
+                trackEdit = { routeId: r.routeId, coords, stops: editorStopsFromNames(r, names), undo: [] };
+                const title = document.getElementById('nt-track-editor-title');
+                if (title) title.textContent = r.name;
+                const area = document.getElementById('nt-track-editor-stations');
+                if (area) area.value = names.join('\n');
+                setStationsOpen(false);
+                setTrackEditTool('move');
+                setSelectedLine(r.routeId, { toggle: false, fit: false });
+                applyEditPreview();
+                bindEditPolylineClicks();
+                document.documentElement.classList.add('nt-track-editing');
+                document.documentElement.classList.remove('nt-track-editor-ready');
+                syncTrackEditorChrome();
+            }
+
+            function stopTrackEditor() {
+                const id = trackEdit?.routeId;
+                const r = drawnRoutes.find((x) => x.routeId === id);
+                if (r?._polyline) r._polyline.off('click', onEditLineClick);
+                trackEditLayer.clearLayers();
+                trackEdit = null;
+                trackEditTool = 'move';
+                document.documentElement.classList.remove('nt-track-editing', 'nt-track-tool-add', 'nt-track-tool-delete');
+                setStationsOpen(false);
+                paintRouteLines(liveTrackBundle);
+                syncTrackEditorChrome();
+            }
+
+            function undoTrackEditor() {
+                if (!trackEdit || !trackEdit.undo.length) return;
+                const prev = trackEdit.undo.pop();
+                trackEdit.coords = cloneLatLngs(prev.coords);
+                const r = drawnRoutes.find((x) => x.routeId === trackEdit.routeId);
+                trackEdit.stops = editorStopsFromNames(r || { routeId: trackEdit.routeId, validStops: trackEdit.stops }, prev.names);
+                const area = document.getElementById('nt-track-editor-stations');
+                if (area) area.value = prev.names.join('\n');
+                applyEditPreview();
+            }
+
+            function downloadTrackPatch() {
+                if (!trackEdit) return;
+                if (currentRegion === 'KZN' || String(trackEdit.routeId).startsWith('kzn-')) return;
+                const r = drawnRoutes.find((x) => x.routeId === trackEdit.routeId);
+                const names = trackEdit.stops.map((s) => s.name);
+                const fileName = `track-patch-${currentRegion}-${trackEdit.routeId}.json`;
+                const patch = {
+                    kind: 'nexttrain-track-patch',
+                    version: 1,
+                    region: currentRegion,
+                    routeId: trackEdit.routeId,
+                    name: r ? r.name : trackEdit.routeId,
+                    stationNames: names,
+                    coordinateOrder: 'lon,lat',
+                    coordinates: trackEdit.coords.map((p) => [p[1], p[0]])
+                };
+                const blob = new Blob([JSON.stringify(patch, null, 2)], { type: 'application/json' });
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                a.download = fileName;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+                const el = document.getElementById('nt-track-editor-cover');
+                if (el) {
+                    el.textContent = `Saved ${fileName}. On the computer: npm run tracks:apply-patch`;
+                    el.classList.remove('is-warn');
+                    el.classList.add('is-ok');
+                }
+            }
+
+            function setMapOperatorAuthed(on) {
+                mapOperatorAuthed = !!on;
+                syncTrackEditorChrome();
+            }
+
+            document.getElementById('nt-track-editor-toggle')?.addEventListener('click', (e) => {
+                e.stopPropagation();
+                startTrackEditor();
+            });
+            document.getElementById('nt-track-editor-done')?.addEventListener('click', (e) => {
+                e.stopPropagation();
+                stopTrackEditor();
+            });
+            document.getElementById('nt-track-editor-undo')?.addEventListener('click', (e) => {
+                e.stopPropagation();
+                undoTrackEditor();
+            });
+            document.getElementById('nt-track-editor-download')?.addEventListener('click', (e) => {
+                e.stopPropagation();
+                downloadTrackPatch();
+            });
+            document.getElementById('nt-track-editor-stations-toggle')?.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const wrap = document.getElementById('nt-track-editor-stations-wrap');
+                setStationsOpen(!wrap?.classList.contains('is-open'));
+            });
+            document.querySelectorAll('#nt-track-editor-tools [data-track-tool]').forEach((btn) => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    setTrackEditTool(btn.getAttribute('data-track-tool'));
+                });
+            });
+            document.getElementById('nt-track-editor-stations')?.addEventListener('change', () => {
+                if (!trackEdit) return;
+                const r = drawnRoutes.find((x) => x.routeId === trackEdit.routeId);
+                if (!r) return;
+                const names = parseEditorStationNames(document.getElementById('nt-track-editor-stations').value);
+                if (names.length < 2) return;
+                snapshotTrackEdit();
+                trackEdit.stops = editorStopsFromNames(r, names);
+                applyEditPreview();
+            });
+            map.on('zoomend', () => {
+                if (trackEdit) rebuildTrackVertices();
+            });
+            setMapOperatorAuthed(isMapOperator());
 
             // --- 🛡️ GUARDIAN UX: MAP CONTROLS ---
             // Theme Toggle (compact chrome; zoom +/- removed — pinch / scroll zoom)
@@ -2635,6 +3021,10 @@
             window.addEventListener('message', function (ev) {
                 const data = ev && ev.data;
                 if (!data || typeof data !== 'object') return;
+                if (data.type === 'nt-map-admin') {
+                    setMapOperatorAuthed(!!data.authed);
+                    return;
+                }
                 if (data.type === 'nt-map-ride-pings') {
                     renderRidePingMarkers(data.pings || []);
                     return;

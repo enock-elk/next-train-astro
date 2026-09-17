@@ -2,8 +2,14 @@
  * Strict map paint: station-to-station order, hop skip/detour guards.
  * Run: node scripts/verify-map-lines.mjs
  */
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { spawnSync } from 'node:child_process';
 import { stripStationPins, despikeRailLine } from './lib/rail-line-smooth.mjs';
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 const failures = [];
 const assert = (cond, msg) => { if (!cond) failures.push(msg); };
@@ -102,6 +108,11 @@ assert(
 const pkg = readFileSync(new URL('../package.json', import.meta.url), 'utf8');
 assert(pkg.includes('"tracks:repair"'), 'package.json has tracks:repair');
 assert(pkg.includes('"tracks:audit"'), 'package.json has tracks:audit');
+assert(pkg.includes('"tracks:apply-patch"'), 'package.json has tracks:apply-patch');
+const applyPatch = readFileSync(new URL('../scripts/apply-track-patch.mjs', import.meta.url), 'utf8');
+assert(applyPatch.includes("HELD_REGIONS = new Set(['KZN'])"), 'apply-patch refuses KZN');
+assert(applyPatch.includes('stationOrderOverride'), 'apply-patch writes stationOrderOverride so paint follows the edited stop list');
+assert(applyPatch.includes("kind === 'nexttrain-track-patch'"), 'apply-patch reads the map editor export');
 const fillChords = readFileSync(new URL('../scripts/fill-rail-chords.mjs', import.meta.url), 'utf8');
 assert(fillChords.includes("HELD_REGIONS = new Set(['KZN'])"), 'fill-chords refuses KZN');
 assert(fillChords.includes('.sort((a, b) => b.lo - a.lo)'), 'fill-chords splices hops from the end so earlier indexes stay valid');
@@ -156,6 +167,16 @@ assert(
     mapApp.includes('"CAPE TOWN", "ESPLANADE", "YSTERPLAAT", "KENTEMADE", "CENTURY CITY"'),
     'Cape Town to Bellville is the Northern Line via Century City'
 );
+assert(mapApp.includes('stationOrderOverride'), 'map paint honours a manual station-order override');
+assert(mapApp.includes('function applyGoldStationOrders'), 'gold-track station names are applied after the bake loads');
+assert(mapApp.includes('function startTrackEditor'), 'full map has a gold-track editor');
+assert(mapApp.includes('data-track-tool'), 'editor has Move Add Delete tools');
+assert(!mapApp.includes('originalEvent.altKey'), 'editor does not rely on Alt-tap to delete');
+const mapPage = readFileSync(new URL('../src/pages/map.astro', import.meta.url), 'utf8');
+assert(mapPage.includes('id="nt-track-editor"'), 'map page ships the line editor sheet');
+assert(mapPage.includes('data-track-tool="move"'), 'editor defaults to Move');
+assert(mapPage.includes('nt-track-editor-stations-toggle'), 'station list is behind a Stations control');
+assert(mapPage.includes('html.nt-map-tab #nt-track-editor'), 'Map tab embed hides the editor');
 
 const bake = readFileSync(new URL('../scripts/build-rail-tracks.mjs', import.meta.url), 'utf8');
 assert(!/skip long chord/.test(bake), 'the bake never drops a hop, so a route cannot stop short of its terminus');
@@ -703,6 +724,40 @@ const clairwood = stationPopupHtml('CLAIRWOOD', new Set(['kzn-umlazi', 'kzn-wink
 assert(clairwood.includes('CLAIRWOOD') && clairwood.includes('map-popup-name'), 'popup title is the station name');
 assert(clairwood.includes('Durban &lt;-&gt; Umlazi') && clairwood.includes('Durban &lt;-&gt; Winklespruit'), 'popup lists every corridor that stops there');
 assert(!clairwood.includes('Bridge City'), 'popup omits corridors that do not stop there');
+
+{
+    const dir = mkdtempSync(path.join(tmpdir(), 'nt-track-patch-'));
+    const kznFile = path.join(dir, 'kzn.json');
+    writeFileSync(kznFile, JSON.stringify({
+        kind: 'nexttrain-track-patch',
+        region: 'KZN',
+        routeId: 'kzn-umlazi',
+        coordinates: [[31.02, -29.84], [31.01, -29.85]]
+    }));
+    const kzn = spawnSync(process.execPath, ['scripts/apply-track-patch.mjs', '--dry-run', kznFile], {
+        encoding: 'utf8',
+        cwd: ROOT
+    });
+    assert(kzn.status !== 0, 'apply-patch exits nonzero for KZN');
+    assert(/held/i.test(`${kzn.stdout}\n${kzn.stderr}`), 'apply-patch names KZN as held');
+
+    const wc = JSON.parse(readFileSync(new URL('../public/tracks/rail-tracks-WC.geojson', import.meta.url), 'utf8'));
+    const kap = wc.features.find((f) => f.properties?.routeId === 'ct-kapteinsklip');
+    const wcFile = path.join(dir, 'wc.json');
+    writeFileSync(wcFile, JSON.stringify({
+        kind: 'nexttrain-track-patch',
+        region: 'WC',
+        routeId: 'ct-kapteinsklip',
+        stationNames: kap.properties.stationNames,
+        coordinates: kap.geometry.coordinates.slice(0, 8)
+    }));
+    const wcRun = spawnSync(process.execPath, ['scripts/apply-track-patch.mjs', '--dry-run', wcFile], {
+        encoding: 'utf8',
+        cwd: ROOT
+    });
+    assert(wcRun.status === 0, `apply-patch dry-run WC ok (${wcRun.stderr || wcRun.stdout})`);
+    assert(/ct-kapteinsklip/.test(wcRun.stdout), 'apply-patch dry-run names the corridor');
+}
 
 if (failures.length) {
     console.error('verify-map-lines failed:');

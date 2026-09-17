@@ -5,6 +5,10 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_09.17.1': [
+        'Manual gold-track editor on the full /map (Network Lines, operator only). Select a line, Edit line, then Move / Add / Delete dots. Stations is a tap-to-open list so Kapteinsklip can be MAITLAND > NDABENI > PINELANDS > LANGA instead of Mutual. Save downloads a JSON patch; npm run tracks:apply-patch writes public/tracks/rail-tracks-{GP,WC,EC}.geojson and sets stationOrderOverride. KZN is refused. Bake geometry is not rewritten in this ship.',
+        'Paint uses geojson stationOrderOverride after the bake loads, otherwise STATIC still wins (which is why Kapteinsklip currently climbs via Mutual: STATIC and the Aug-29 bake both list MUTUAL, while the timetable is Ndabeni then Pinelands). forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
+    ],
     'V9_09.16.8': [
         'Nolungile only: the Kapteinsklip working is sliced from Philippi, so selecting Cape Town ↔ Nolungile no longer paints a second Cape Town → Mutual line via Woodstock (that was the whole ct-kapteinsklip bake). Main STATIC path is Stock Road after Philippi; Lentegeur / Mitchells Plain / Kapteinsklip stay on the spur.',
         'Bonteheuwel → Netreg and Nyanga → Philippi follow the Cape Flats rails the basemap draws. OSM tags those ways abandoned and splits them into islands, so the tube drape had been a diagonal chord. Fill walks one connected island, including abandoned/yard ways, for those two hops only. Chris Hani and Kapteinsklip bakes are untouched.',

@@ -126,6 +126,10 @@ export function applyPilotChrome() {
 export function applyAdminAuthedChrome(authed) {
     const on = !!authed;
     if (typeof window !== 'undefined') window.__ntAdminAuthed = on;
+    try {
+        if (on) localStorage.setItem('ntOperatorAuthed', '1');
+        else localStorage.removeItem('ntOperatorAuthed');
+    } catch { /* ignore */ }
     if (typeof document === 'undefined') return;
 
     document.documentElement.setAttribute('data-admin-authed', on ? '1' : '0');

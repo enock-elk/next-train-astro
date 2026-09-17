@@ -2571,6 +2571,9 @@ export function bindMapTabUi() {
         document.getElementById('map-tab-placeholder')?.classList.add('hidden');
         document.getElementById('map-tab-fallback')?.classList.add('hidden');
         lastMapPingSig = '';
+        try {
+            frame.contentWindow?.postMessage({ type: 'nt-map-admin', authed: isAdminAuthed() }, '*');
+        } catch { /* ignore */ }
         focusPinnedCorridorOnMap();
         syncRidePingsToMap();
     });

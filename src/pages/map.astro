@@ -467,6 +467,180 @@ const regionSeoSlugs = Object.fromEntries(
         position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
         overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0;
       }
+      /* Operator gold-track editor. Full /map only — Map tab embed has no Network Lines. */
+      html.nt-map-tab #nt-track-editor,
+      html.nt-map-tab #nt-track-editor-toggle { display: none !important; }
+      html.nt-track-editing #custom-locate-btn { display: none; }
+      #nt-track-editor-toggle {
+        display: none;
+        pointer-events: auto;
+        width: auto;
+        min-width: var(--map-chrome-h);
+        padding: 0 0.7rem !important;
+        font-size: 11px;
+        font-weight: 800;
+      }
+      html.nt-track-editor-ready:not(.nt-track-editing) #nt-track-editor-toggle { display: inline-flex; }
+      #nt-track-editor {
+        display: none;
+        position: fixed;
+        left: 10px; right: 10px;
+        bottom: max(0.6rem, env(safe-area-inset-bottom, 0px));
+        z-index: 1105;
+        pointer-events: auto;
+        background: rgba(255, 255, 255, 0.97);
+        border: 1px solid var(--nt-border, #d1d5db);
+        border-radius: 1rem;
+        box-shadow: 0 10px 28px rgba(15, 23, 42, 0.18);
+        padding: 0.65rem 0.7rem 0.7rem;
+        font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+        color: #111827;
+      }
+      html.nt-track-editing #nt-track-editor { display: block; }
+      html.dark #nt-track-editor {
+        background: rgba(17, 24, 39, 0.96);
+        color: #f3f4f6;
+        border-color: #374151;
+      }
+      #nt-track-editor-head {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+      }
+      #nt-track-editor-title {
+        margin: 0;
+        flex: 1;
+        min-width: 0;
+        font-size: 13px;
+        font-weight: 800;
+        line-height: 1.2;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      #nt-track-editor-tools {
+        display: flex;
+        gap: 0.3rem;
+        margin-top: 0.5rem;
+      }
+      #nt-track-editor-tools button,
+      #nt-track-editor-actions button,
+      #nt-track-editor-stations-toggle,
+      #nt-track-editor-done {
+        font-family: inherit;
+        font-size: 12px;
+        font-weight: 800;
+        padding: 0.42rem 0.65rem;
+        border-radius: 0.6rem;
+        border: 1px solid #d1d5db;
+        background: #fff;
+        color: #111827;
+        cursor: pointer;
+      }
+      html.dark #nt-track-editor-tools button,
+      html.dark #nt-track-editor-actions button,
+      html.dark #nt-track-editor-stations-toggle,
+      html.dark #nt-track-editor-done {
+        background: #1f2937;
+        color: #f3f4f6;
+        border-color: #4b5563;
+      }
+      #nt-track-editor-tools button {
+        flex: 1;
+      }
+      #nt-track-editor-tools button.is-on {
+        background: #111827;
+        color: #fff;
+        border-color: #111827;
+      }
+      html.dark #nt-track-editor-tools button.is-on {
+        background: #f3f4f6;
+        color: #111827;
+        border-color: #f3f4f6;
+      }
+      #nt-track-editor-hint,
+      #nt-track-editor-cover {
+        margin: 0.35rem 0 0;
+        font-size: 12px;
+        font-weight: 600;
+        line-height: 1.35;
+        color: #4b5563;
+      }
+      html.dark #nt-track-editor-hint,
+      html.dark #nt-track-editor-cover { color: #d1d5db; }
+      #nt-track-editor-cover.is-ok { color: #15803d; }
+      html.dark #nt-track-editor-cover.is-ok { color: #86efac; }
+      #nt-track-editor-cover.is-warn { color: #b45309; }
+      html.dark #nt-track-editor-cover.is-warn { color: #fbbf24; }
+      #nt-track-editor-stations-row {
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
+        margin-top: 0.45rem;
+        min-width: 0;
+      }
+      #nt-track-editor-via {
+        flex: 1;
+        min-width: 0;
+        font-size: 11px;
+        font-weight: 700;
+        color: #6b7280;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      html.dark #nt-track-editor-via { color: #9ca3af; }
+      #nt-track-editor-stations-wrap { display: none; margin-top: 0.4rem; }
+      #nt-track-editor-stations-wrap.is-open { display: block; }
+      #nt-track-editor-stations {
+        display: block;
+        width: 100%;
+        min-height: 6.5rem;
+        max-height: 10rem;
+        resize: vertical;
+        box-sizing: border-box;
+        font-size: 16px;
+        line-height: 1.35;
+        font-weight: 600;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        padding: 0.5rem 0.55rem;
+        border-radius: 0.55rem;
+        border: 1px solid #d1d5db;
+        background: #fff;
+        color: #111827;
+      }
+      html.dark #nt-track-editor-stations {
+        background: #111827;
+        color: #f9fafb;
+        border-color: #4b5563;
+      }
+      #nt-track-editor-actions {
+        display: flex;
+        gap: 0.4rem;
+        margin-top: 0.55rem;
+      }
+      #nt-track-editor-actions button { flex: 1; }
+      #nt-track-editor-download {
+        background: #2563eb !important;
+        color: #fff !important;
+        border-color: #1d4ed8 !important;
+      }
+      .nt-track-vertex {
+        width: 16px;
+        height: 16px;
+        margin-left: -8px;
+        margin-top: -8px;
+        border-radius: 999px;
+        background: #fff;
+        border: 2px solid #7c3aed;
+        box-shadow: 0 1px 4px rgba(15, 23, 42, 0.35);
+        cursor: grab;
+      }
+      .nt-track-vertex.is-end { border-color: #111827; background: #fde68a; }
+      html.nt-track-tool-delete .nt-track-vertex {
+        border-color: #dc2626;
+        cursor: pointer;
+      }
   </style>
   <script slot="head" is:inline type="application/ld+json" set:html={JSON.stringify({
     "@context": "https://schema.org",
@@ -573,7 +747,34 @@ const regionSeoSlugs = Object.fromEntries(
     </div>
   </div>
 
+  <div id="nt-track-editor">
+    <div id="nt-track-editor-head">
+      <p id="nt-track-editor-title">Edit line</p>
+      <button type="button" id="nt-track-editor-done">Done</button>
+    </div>
+    <div id="nt-track-editor-tools" role="group" aria-label="Edit tools">
+      <button type="button" data-track-tool="move" class="is-on">Move</button>
+      <button type="button" data-track-tool="add">Add</button>
+      <button type="button" data-track-tool="delete">Delete</button>
+    </div>
+    <p id="nt-track-editor-hint">Drag a dot along the rails. Zoom in for more dots.</p>
+    <p id="nt-track-editor-cover"></p>
+    <div id="nt-track-editor-stations-row">
+      <button type="button" id="nt-track-editor-stations-toggle" aria-expanded="false" aria-controls="nt-track-editor-stations-wrap">Stations</button>
+      <span id="nt-track-editor-via"></span>
+    </div>
+    <div id="nt-track-editor-stations-wrap">
+      <label class="sr-only" for="nt-track-editor-stations">Station order, one name per line</label>
+      <textarea id="nt-track-editor-stations" spellcheck="false" autocomplete="off" autocapitalize="characters"></textarea>
+    </div>
+    <div id="nt-track-editor-actions">
+      <button type="button" id="nt-track-editor-undo">Undo</button>
+      <button type="button" id="nt-track-editor-download">Save</button>
+    </div>
+  </div>
+
   <div class="fixed bottom-6 right-4 z-[1000] pointer-events-none flex flex-col items-end gap-2">
+    <button id="nt-track-editor-toggle" type="button" class="map-chrome-btn map-chrome-btn-wide pointer-events-auto" aria-label="Edit line">Edit line</button>
     <button id="custom-locate-btn" type="button" class="w-14 h-14 flex items-center justify-center bg-white dark:bg-gray-800 rounded-full shadow-lg border border-gray-300 dark:border-gray-600 hover:scale-105 transition-transform pointer-events-auto text-gray-400 focus:outline-none" aria-label="Locate me">
       <svg class="w-6 h-6" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="22" y1="12" x2="18" y2="12"/><line x1="6" y1="12" x2="2" y2="12"/><line x1="12" y1="6" x2="12" y2="2"/><line x1="12" y1="22" x2="12" y2="18"/></svg>
     </button>

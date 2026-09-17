@@ -1,7 +1,7 @@
 {
   "name": "next-train-2.0",
   "type": "module",
-  "version": "9.9.16.8",
+  "version": "9.9.17.1",
   "scripts": {
     "dev": "astro dev",
     "prebuild": "node scripts/generate-sitemap.mjs",
@@ -48,6 +48,7 @@
     "tracks:audit": "node scripts/audit-rail-tracks.mjs",
     "tracks:fill-chords": "node scripts/fill-rail-chords.mjs GP WC EC",
     "tracks:repair": "node scripts/smooth-baked-tracks.mjs GP WC EC && node scripts/fill-rail-chords.mjs GP WC EC",
+    "tracks:apply-patch": "node scripts/apply-track-patch.mjs",
     "firebase:rules": "npx -y firebase-tools@latest deploy --only database",
     "astro": "astro"
   },

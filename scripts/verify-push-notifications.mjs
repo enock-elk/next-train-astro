@@ -151,6 +151,7 @@ assert.match(client, /region:\s*\$userRegion\.get\(\)/);
 assert.match(client, /enabled:\s*!!enabled/);
 assert.match(client, /persistToken\(token,\s*\{\s*enabled:\s*false\s*\}\)/);
 assert.match(client, /firebaseSignInAnonymously/);
+assert.match(client, /!isOperatorSession\(\)\s*&&\s*!isFeatureEnabled/, 'operators can register before commuter push is enabled');
 assert.match(bridge, /firebase-messaging-compat\.js/);
 assert.match(rules, /"push_subscriptions"/);
 assert.match(rules, /newData\.child\('uid'\)\.val\(\) === auth\.uid/);

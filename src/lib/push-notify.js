@@ -26,6 +26,12 @@ function getDeviceId() {
     return $deviceId.get() || safeStorage.getItem('next_train_device_id') || 'unknown';
 }
 
+function isOperatorSession() {
+    if (typeof window === 'undefined') return false;
+    return window.__ntAdminAuthed === true
+        || document.documentElement.getAttribute('data-admin-authed') === '1';
+}
+
 export function getNotifyRouteIds() {
     try {
         const raw = safeStorage.getItem(SUB_ROUTES_KEY);
@@ -130,7 +136,7 @@ async function persistToken(token, { enabled = true } = {}) {
 export async function registerPushToken() {
     await fetchFeatures();
     const routeId = $currentRouteId.get() || '';
-    if (!isFeatureEnabled(FEATURE_KEYS.PUSH_NOTIFY, routeId) && !isLabEnvironment()) {
+    if (!isOperatorSession() && !isFeatureEnabled(FEATURE_KEYS.PUSH_NOTIFY, routeId) && !isLabEnvironment()) {
         // Still allow token if any route in allow-list matches a subscribed id
         const allowed = getNotifyRouteIds().some((id) => isFeatureEnabled(FEATURE_KEYS.PUSH_NOTIFY, id));
         if (!allowed && !isFeatureEnabled(FEATURE_KEYS.PUSH_NOTIFY, '')) return null;

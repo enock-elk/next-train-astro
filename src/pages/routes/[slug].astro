@@ -1,6 +1,7 @@
 ---
 import ContentLayout from '../../layouts/ContentLayout.astro';
 import SeoPageHeader from '../../components/SeoPageHeader.astro';
+import SeoAppPreview from '../../components/SeoAppPreview.astro';
 import SeoFareTable from '../../components/SeoFareTable.astro';
 import SeoTimetableGrid from '../../components/SeoTimetableGrid.astro';
 import { withBase } from '../../lib/config.js';
@@ -146,6 +147,8 @@ const related = [
       >
         Open live timetable in Next Train
       </a>
+
+      <SeoAppPreview routeId={route.id} href={liveBoardHref} />
     </div>
 
     {stations.length > 0 && (

@@ -1,0 +1,74 @@
+---
+import { withBase } from '../lib/config.js';
+
+interface Props {
+  routeId: string;
+  href: string;
+}
+
+interface RoutePreview {
+  title: string;
+  body: string;
+  image: string;
+  alt: string;
+  linkLabel: string;
+}
+
+const previews: Record<string, RoutePreview> = {
+  'pta-pien': {
+    title: 'See Pretoria to Pienaarspoort at a glance',
+    body: 'This route opens as a live board for your saved station.',
+    image: 'images/seo/pta-pien-live-board.webp',
+    alt: 'Next Train live board for Pretoria to Pienaarspoort showing upcoming trains at Devenish Street, the full timetable, estimated fare, and app navigation',
+    linkLabel: 'Open Pretoria to Pienaarspoort in Next Train',
+  },
+};
+const href = Astro.props.href;
+const preview = previews[Astro.props.routeId];
+---
+
+{preview && (
+  <section
+    id="seo-app-preview"
+    data-seo-app-preview={Astro.props.routeId}
+    class="mt-8 overflow-hidden rounded-2xl border border-blue-100 bg-white shadow-lg shadow-blue-900/10"
+    aria-labelledby="seo-app-preview-title"
+  >
+    <div class="grid items-center gap-0 sm:grid-cols-[minmax(0,1fr)_14rem] lg:grid-cols-[minmax(0,1fr)_16rem]">
+      <div class="p-5 sm:p-6">
+        <p class="text-[10px] font-black uppercase tracking-widest text-blue-600">Inside Next Train</p>
+        <h2 id="seo-app-preview-title" class="mt-1 text-xl font-black leading-tight text-slate-900">
+          {preview.title}
+        </h2>
+        <p class="mt-3 text-sm leading-relaxed text-slate-600">{preview.body}</p>
+        <ul class="mt-3 space-y-1.5 text-sm text-slate-700">
+          <li>Upcoming departures and connections</li>
+          <li>Full timetable and estimated fare</li>
+          <li>Trip Planner and network map</li>
+        </ul>
+        <a
+          href={href}
+          class="mt-5 inline-flex w-full items-center justify-center rounded-xl bg-blue-600 px-4 py-3 text-sm font-bold text-white shadow-md shadow-blue-900/20 transition-colors hover:bg-blue-500 sm:w-auto"
+        >
+          Open this route in Next Train
+        </a>
+      </div>
+
+      <a
+        href={href}
+        class="block bg-gradient-to-b from-blue-50 to-slate-100 px-5 pb-5 pt-1 sm:h-full sm:px-4 sm:py-5"
+        aria-label={preview.linkLabel}
+      >
+        <img
+          src={withBase(preview.image)}
+          alt={preview.alt}
+          class="mx-auto h-auto w-full max-w-[15rem] rounded-[1.35rem] border border-slate-200 bg-slate-50 shadow-xl"
+          loading="lazy"
+          decoding="async"
+          width="435"
+          height="807"
+        />
+      </a>
+    </div>
+  </section>
+)}

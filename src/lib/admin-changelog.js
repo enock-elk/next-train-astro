@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_09.17.2': [
+        'Applied the operator gold-track patch for Pretoria ↔ Pienaarspoort (pta-pien) into public/tracks/rail-tracks-GP.geojson. GREENVIEW is back on the baked station list. Geometry is the editor export (max vertex move ~287 m). One Walker→Loftus vertex grazes the Dougall Gautrain probe at 34 m; the hop is not rewritten further. KZN untouched. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
+    ],
     'V9_09.17.1': [
         'Manual gold-track editor on the full /map (Network Lines, operator only). Select a line, Edit line, then Move / Add / Delete dots. Stations is a tap-to-open list so Kapteinsklip can be MAITLAND > NDABENI > PINELANDS > LANGA instead of Mutual. Save downloads a JSON patch; npm run tracks:apply-patch writes public/tracks/rail-tracks-{GP,WC,EC}.geojson and sets stationOrderOverride. KZN is refused. Bake geometry is not rewritten in this ship.',
         'Paint uses geojson stationOrderOverride after the bake loads, otherwise STATIC still wins (which is why Kapteinsklip currently climbs via Mutual: STATIC and the Aug-29 bake both list MUTUAL, while the timetable is Ndabeni then Pinelands). forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',

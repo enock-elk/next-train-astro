@@ -2,6 +2,10 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin, Dev Hub, Alerts, Trains near me, community chat, or other hidden-test work. No emoji and no em dashes in What’s New. Keep `APP_VERSION`, `package.json` `version`, and `public/app-version.json` aligned on each release. Changelog / What’s New may be skipped, or the heading may be only **no release notes.** Every bump must add `ADMIN_CHANGELOG[APP_VERSION]` (System Health Build notes).
 
+## V9_09.17.2 — Pretoria Pienaarspoort gold-track patch (17 Sep 2026)
+
+Applied the operator editor export for Pretoria ↔ Pienaarspoort into the GP bake. Greenview is on the station list again. No new What’s New card.
+
 ## V9_09.17.1 — Manual gold-track editor (17 Sep 2026)
 
 Cape Town ↔ Kapteinsklip currently climbs via Mutual because STATIC and the bake both list MAITLAND > MUTUAL > LANGA, while every `ct_to_kap_weekday` train calls Ndabeni then Pinelands. This ship does not rewrite that geometry. Operators can fix lines by hand on the full Network Map: select the corridor, Edit line, Move / Add / Delete dots, optional Stations list, Save a JSON patch, then `npm run tracks:apply-patch`. KZN is held. No new What’s New card.

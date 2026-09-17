@@ -29,7 +29,7 @@ const packageVersionFromApp = versionParts
     : '';
 assert(appVersionFile.version === APP_VERSION, `app-version.json ${appVersionFile.version} matches ${APP_VERSION}`);
 assert(packageFile.version === packageVersionFromApp, `package.json ${packageFile.version} matches ${APP_VERSION}`);
-assert(FORCE_UPDATE_REQUIRED === true, 'this ship forces existing shells onto V9_09.17.5');
+assert(FORCE_UPDATE_REQUIRED === true, 'this ship forces existing shells onto V9_09.17.6');
 assert(CHANGELOG_DATA[0].forceShow === false, 'What’s New does not auto-open');
 assert(!CHANGELOG_DATA.some((e) => e.forceShow), 'no What’s New card opts into auto-open');
 assert(CHANGELOG_DATA[0].id === 'V9_09.16.3' && CHANGELOG_DATA[0].features.length === 2, 'What’s New latest card is V9_09.16.3');

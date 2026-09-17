@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_09.17.6': [
+        'Applied the operator gold-track patch for Cape Town ↔ Bellville (ct-bellv) into public/tracks/rail-tracks-WC.geojson. Station list is unchanged (Esplanade / Ysterplaat / Kentemade / Century City). Vertex count stays 396; worst vertex move ~213 m. KZN untouched. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
+    ],
     'V9_09.17.5': [
         'Applied a second operator gold-track patch for Pretoria ↔ Pienaarspoort (pta-pien) into public/tracks/rail-tracks-GP.geojson. Station list is unchanged (Greenview still on, Waltloo still off). Vertex count stays 525; worst vertex move vs the previous bake ~136 m. KZN untouched. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
     ],

@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_09.17.4': [
+        'Applied seven operator WC gold-track patches into public/tracks/rail-tracks-WC.geojson: bellville-mutual, ct-well, ct-malm, ct-chrishani, ct-kapteinsklip, ct-nolu, ct-eerst. Geometry is the editor export. ct-well and ct-eerst keep the previous station lists (the Save JSON dumped the shared Northern Line sheet, Stellenbosch/Strand included, which would paint the 194 km skeleton again). bellville-mutual bake now ends at Mutual to match the drawn line. Kapteinsklip station order is still Mutual, not Ndabeni/Pinelands. KZN untouched. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
+    ],
     'V9_09.17.3': [
         'Applied the operator gold-track patch for Cape Town ↔ Chris Hani (ct-chrishani) into public/tracks/rail-tracks-WC.geojson. Station order is now CAPE TOWN > WOODSTOCK > SALT RIVER > KOEBERG RD > MAITLAND > MUTUAL > LANGA > … > CHRIS HANI (bake had skipped Woodstock, Salt River, Koeberg Rd). Vertex count stays 929; worst vertex move ~1110 m. Kapteinsklip and Nolungile bakes are untouched. KZN untouched. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
     ],

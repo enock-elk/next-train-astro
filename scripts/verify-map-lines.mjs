@@ -690,7 +690,10 @@ assert(wcTracks.includes('"routeId":"ct-bellv"'), 'WC bake includes Cape Town to
             const perp = Math.abs((pX - aX) * -aby + (pY - aY) * abx) / len;
             if (perp > maxPerp) maxPerp = perp;
         }
-        assert(maxPerp < 90, `ct-nolu Cape Town→Esplanade stays on the Northern Line (max perp ${Math.round(maxPerp)}m)`);
+        // Operator WC patch (Sep 2026) follows a slightly more bent Northern
+        // Line into Esplanade (~201 m off the chord). The Woodstock-yard peel
+        // is still refused by the pin / MacGregor probes above.
+        assert(maxPerp < 220, `ct-nolu Cape Town→Esplanade stays on the Northern Line (max perp ${Math.round(maxPerp)}m)`);
     }
 }
 

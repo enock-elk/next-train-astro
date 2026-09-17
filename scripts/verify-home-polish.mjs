@@ -119,6 +119,12 @@ const layout = readFileSync(new URL('../src/layouts/Layout.astro', import.meta.u
 assert(!layout.includes('padding-bottom: 108px'), 'Layout must not reserve 108px for ads');
 assert(!layout.includes('min-height: 100px'), 'clever-core must not reserve 100px height');
 assert(layout.includes('Never reserve page space'), 'ad overlay comment present');
+{
+    const accountViewportRule = layout.match(/#nt-shell #account-modal\.fixed\s*\{([\s\S]*?)\n\s*\}/)?.[1] || '';
+    assert(accountViewportRule.includes('position: fixed !important'), 'Account overlay is fixed to the viewport, not clipped by a short shell');
+    assert(accountViewportRule.includes('height: 100dvh !important'), 'Account overlay fills the dynamic mobile viewport');
+    assert(!accountViewportRule.includes('position: absolute'), 'Account overlay does not inherit the shell bottom gap');
+}
 
 const ads = readFileSync(new URL('../src/lib/clever-ads.js', import.meta.url), 'utf8');
 assert(ads.includes('Never push the board or footer down'), 'setAdPadding is a no-op');

@@ -1337,6 +1337,8 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
         max-height: none !important;
       }
       #nt-shell #account-modal.fixed {
+        /* Account fills the same unmeasured #nt-shell box as Feedback Hub.
+           The generic modal card clearance is excluded in appearance.css. */
         position: absolute !important;
         inset: 0 !important;
         top: 0 !important;

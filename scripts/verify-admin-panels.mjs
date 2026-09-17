@@ -3,7 +3,13 @@
  * Run: node scripts/verify-admin-panels.mjs
  */
 import { readFileSync } from 'node:fs';
-import { runScheduleQaReport, scanScheduleSheet, QA_ISSUE_TYPES } from '../src/lib/schedule-qa.js';
+import {
+    findingsFromPairDeltas,
+    runScheduleQaReport,
+    scanScheduleSheet,
+    sortQaFindings,
+    QA_ISSUE_TYPES,
+} from '../src/lib/schedule-qa.js';
 
 const admin = readFileSync(new URL('../public/js/admin.js', import.meta.url), 'utf8');
 const start = admin.indexOf('function ntAdminEndOfTodayLocalValue');
@@ -372,6 +378,7 @@ assert(admin.includes(".join('<br>')"), 'zone hops render one segment per line')
 assert(admin.includes('openScheduleQaDeltaModal'), 'delta variance opens a train table');
 assert(admin.includes('id="sched-qa-delta-modal"') || admin.includes("id = 'sched-qa-delta-modal'"), 'delta modal id is stable');
 assert(admin.includes('data-qa-delta-idx'), 'delta cards are clickable');
+assert(admin.includes('${deltaSpread} min'), 'delta cards show their minute spread at top right');
 
 const qa = readFileSync(new URL('../src/lib/schedule-qa.js', import.meta.url), 'utf8');
 assert(qa.includes('flattenPublicHolidays'), 'QA flattens WC public_holidays before sheetKeys lookup');
@@ -395,6 +402,22 @@ assert(QA_ISSUE_TYPES.some((t) => t.code === 'GHOST_STATION'), 'QA lists junk st
     assert(codes.includes('GHOST_STATION:7.20'), '7.20 leftover is GHOST_STATION');
     assert(!ghost.findings.some((f) => f.code === 'MISSING_COORDS' && (f.station === '12' || f.station === '7.20')), 'junk rows do not also fire MISSING_COORDS');
     assert(!ghost.stationNames.some((s) => /^(12|7.20)$/.test(s)), 'junk names are kept out of weekday↔Saturday compare');
+}
+{
+    const pairDeltas = new Map([
+        ['A→B', [
+            { train: '1', deltaMin: 4, from: 'A', to: 'B' },
+            { train: '2', deltaMin: 5, from: 'A', to: 'B' },
+        ]],
+        ['C→D', [
+            { train: '1', deltaMin: 3, from: 'C', to: 'D' },
+            { train: '2', deltaMin: 9, from: 'C', to: 'D' },
+        ]],
+    ]);
+    const deltaFindings = findingsFromPairDeltas(pairDeltas);
+    assert(deltaFindings[0]?.spreadMin === 1, '4–5 minute deltas record a 1 minute spread');
+    sortQaFindings(deltaFindings);
+    assert(deltaFindings.map((f) => f.spreadMin).join(',') === '6,1', 'delta variance sorts largest spread first');
 }
 
 assert(ui.includes("'admin-changelog-modal': '#admin-build'"), 'build notes modal has its own hash');

@@ -18086,6 +18086,7 @@ const Admin = {
                 const meta = [f.sheetKey, f.dayDir, f.train, f.station].filter(Boolean).join(' - ');
                 const isDelta = f.code === 'DELTA_VARIANCE' && Array.isArray(f.samples) && f.samples.length;
                 const pair = (f.from && f.to) ? `${String(f.from).replace(/</g, '&lt;')} → ${String(f.to).replace(/</g, '&lt;')}` : '';
+                const deltaSpread = isDelta ? Math.max(0, Number(f.spreadMin ?? Number(f.hi) - Number(f.lo)) || 0) : null;
                 const previewRows = isDelta
                     ? f.samples.slice(0, 6).map((s) => `${String(s.train || '').replace(/</g, '&lt;')}  ${s.deltaMin}m`).join('<br>')
                     : '';
@@ -18102,8 +18103,11 @@ const Admin = {
                     <div class="p-2.5 rounded-lg border text-[10px] leading-snug ${style}${isDelta ? ' cursor-pointer hover:brightness-[0.98]' : ''}"${clickable}>
                         <div class="flex items-center justify-between gap-2 mb-1">
                             <span class="font-black uppercase tracking-wider text-[9px]">${f.severity} - ${f.code}</span>
-                            <span class="font-mono text-[9px] opacity-70 truncate">${meta}</span>
+                            ${isDelta
+                                ? `<span class="font-mono text-[10px] font-black text-violet-700 dark:text-violet-300 shrink-0">${deltaSpread} min</span>`
+                                : `<span class="font-mono text-[9px] opacity-70 truncate">${meta}</span>`}
                         </div>
+                        ${isDelta && meta ? `<div class="font-mono text-[9px] opacity-70 truncate mb-1">${meta}</div>` : ''}
                         <div class="font-semibold mb-0.5">${routeBit}</div>
                         ${body}
                     </div>

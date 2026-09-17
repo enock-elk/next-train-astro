@@ -32,6 +32,8 @@ interface Props {
   seoRegion?: string;
   seoCorridor?: string;
   seoRouteId?: string;
+  /** SEO landings fire one `seo_page_view`. Map/guide skip it (opened inside the app). */
+  trackSeo?: boolean;
 }
 
 const base = normalizeBase(import.meta.env.BASE_URL);
@@ -56,6 +58,7 @@ const {
   seoRegion = '',
   seoCorridor = '',
   seoRouteId = '',
+  trackSeo = true,
 } = Astro.props;
 
 const labNoIndex = import.meta.env.PUBLIC_LAB_MODE === 'true'
@@ -211,7 +214,7 @@ const resolvedHtmlClass = [forceDark ? 'dark' : '', htmlClass].filter(Boolean).j
     </script>
 
     <!-- Device identity is not required on SEO pages; idle-defer GA4 so LCP keeps the pipe -->
-    <script is:inline define:vars={{ seoPageType, seoSlug, seoRegion, seoCorridor, seoRouteId }}>
+    <script is:inline define:vars={{ seoPageType, seoSlug, seoRegion, seoCorridor, seoRouteId, trackSeo }}>
       window.dataLayer = window.dataLayer || [];
       function gtag(){dataLayer.push(arguments);}
       var TWA_PACKAGE = 'za.co.nexttrain.app';
@@ -255,23 +258,24 @@ const resolvedHtmlClass = [forceDark ? 'dark' : '', htmlClass].filter(Boolean).j
         app_client: client.app_source,
         twa_package: client.twa_package || ''
       };
-      // Stable SEO dimensions on every page_view for this document.
-      if (seoPageType) gaConfig['seo_page_type'] = String(seoPageType);
-      if (seoSlug) gaConfig['seo_slug'] = String(seoSlug);
-      if (seoRegion) gaConfig['seo_region'] = String(seoRegion);
-      else gaConfig['seo_region'] = userRegion;
-      if (seoCorridor) gaConfig['seo_corridor'] = String(seoCorridor);
-      if (seoRouteId) gaConfig['seo_route_id'] = String(seoRouteId);
+      // SEO dimensions only on crawlable landings. Map/guide skip this (in-app).
+      if (trackSeo) {
+        if (seoPageType) gaConfig['seo_page_type'] = String(seoPageType);
+        if (seoSlug) gaConfig['seo_slug'] = String(seoSlug);
+        if (seoRegion) gaConfig['seo_region'] = String(seoRegion);
+        else gaConfig['seo_region'] = userRegion;
+        if (seoCorridor) gaConfig['seo_corridor'] = String(seoCorridor);
+        if (seoRouteId) gaConfig['seo_route_id'] = String(seoRouteId);
+      }
       window.__ntGaConfig = gaConfig;
       window.__ntAppClient = client;
       var pageType = seoPageType || '';
-      if (!pageType) {
+      if (trackSeo && !pageType) {
         var pathName = String((typeof location !== 'undefined' && location.pathname) || '');
-        if (/guide\.html?$/i.test(pathName)) pageType = 'guide';
-        else if (/map\.html?$/i.test(pathName)) pageType = 'map';
-        else if (/status\.html?$/i.test(pathName)) pageType = 'status';
+        if (/status\.html?$/i.test(pathName)) pageType = 'status';
         else if (/routes\.html?$/i.test(pathName)) pageType = 'routes_index';
         else if (/\/routes\//i.test(pathName)) pageType = 'route';
+        else if (/western-cape-public-holidays/i.test(pathName)) pageType = 'region_holidays';
         else if (/\/regions\//i.test(pathName)) pageType = 'region';
         else if (/\/corridors\//i.test(pathName)) pageType = 'corridor';
         else pageType = 'content';
@@ -300,9 +304,8 @@ const resolvedHtmlClass = [forceDark ? 'dark' : '', htmlClass].filter(Boolean).j
           window.__ntGaReady = true;
           try { window.dispatchEvent(new Event('nt-ga-ready')); } catch (e) {}
           try {
-            if (typeof gtag === 'function') {
-              gtag('event', 'View_astro_pages', window.__ntSeoAnalytics || {});
-              if (pageType) gtag('event', 'seo_page_view', window.__ntSeoAnalytics || {});
+            if (trackSeo && pageType && typeof gtag === 'function') {
+              gtag('event', 'seo_page_view', window.__ntSeoAnalytics || {});
             }
           } catch (e) {}
         };
@@ -316,7 +319,7 @@ const resolvedHtmlClass = [forceDark ? 'dark' : '', htmlClass].filter(Boolean).j
     </script>
 
     <!-- Microsoft Clarity — same idle deferral as GA4 (timeout 4s) -->
-    <script is:inline define:vars={{ seoPageType, seoSlug, seoRegion, seoCorridor, seoRouteId }}>
+    <script is:inline define:vars={{ seoPageType, seoSlug, seoRegion, seoCorridor, seoRouteId, trackSeo }}>
       var bootClarity = function () {
         if (window.__ntClarityBooted) return;
         window.__ntClarityBooted = true;
@@ -335,7 +338,7 @@ const resolvedHtmlClass = [forceDark ? 'dark' : '', htmlClass].filter(Boolean).j
             clarity('identify', id);
             clarity('set', 'custom_id', id);
           }
-          if (typeof clarity === 'function') {
+          if (typeof clarity === 'function' && trackSeo) {
             var analytics = window.__ntSeoAnalytics || {};
             if (analytics.page_type) clarity('set', 'seo_page_type', String(analytics.page_type));
             if (seoSlug) clarity('set', 'seo_slug', String(seoSlug));
@@ -344,7 +347,6 @@ const resolvedHtmlClass = [forceDark ? 'dark' : '', htmlClass].filter(Boolean).j
             if (seoRouteId) clarity('set', 'seo_route_id', String(seoRouteId));
             if (analytics.app_source) clarity('set', 'app_client', String(analytics.app_source));
             if (analytics.twa_package) clarity('set', 'twa_package', String(analytics.twa_package));
-            clarity('event', 'View_astro_pages');
             if (analytics.page_type) clarity('event', 'seo_page_view');
           }
         } catch (e) {}

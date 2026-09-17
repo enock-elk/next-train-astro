@@ -2194,13 +2194,12 @@
                 const can = mapOperatorAuthed && !isMapTabEmbed();
                 const route = drawnRoutes.find((x) => x.routeId === selectedRouteId);
                 const baked = !!(route && liveTrackBundle?.byId?.has(route.routeId));
-                const ready = can && !!route && baked && currentRegion !== 'KZN';
+                const ready = can && !!route && baked;
                 html.classList.toggle('nt-track-editor-ready', ready && !trackEdit);
                 html.classList.toggle('nt-track-editing', !!trackEdit);
                 const toggle = document.getElementById('nt-track-editor-toggle');
                 if (toggle) {
-                    if (can && route && currentRegion === 'KZN') toggle.title = 'KZN gold tracks are held';
-                    else if (can && route && !baked) toggle.title = 'This line has no baked gold track';
+                    if (can && route && !baked) toggle.title = 'This line has no baked gold track';
                     else toggle.title = 'Edit line';
                 }
             }
@@ -2308,7 +2307,6 @@
 
             function startTrackEditor() {
                 if (isMapTabEmbed() || !mapOperatorAuthed) return;
-                if (currentRegion === 'KZN') return;
                 const r = drawnRoutes.find((x) => x.routeId === selectedRouteId);
                 if (!r || !liveTrackBundle?.byId?.has(r.routeId)) return;
                 const coords = cloneLatLngs(r.trackCoords && r.trackCoords.length > 1 ? r.trackCoords : liveTrackBundle.byId.get(r.routeId));
@@ -2355,7 +2353,6 @@
 
             function downloadTrackPatch() {
                 if (!trackEdit) return;
-                if (currentRegion === 'KZN' || String(trackEdit.routeId).startsWith('kzn-')) return;
                 const r = drawnRoutes.find((x) => x.routeId === trackEdit.routeId);
                 const names = trackEdit.stops.map((s) => s.name);
                 const fileName = `track-patch-${currentRegion}-${trackEdit.routeId}.json`;

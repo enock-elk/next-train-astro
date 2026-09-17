@@ -5,7 +5,7 @@
  * Stable slugs: hand-authored overrides keep URLs already in the wild.
  * Everything else is generated from ROUTES destA/destB.
  */
-import { ROUTES, REGIONS, CORRIDOR_META, REGION_SEO, getCorridorLabel } from './config.js';
+import { ROUTES, REGIONS, CORRIDOR_META, REGION_SEO, HOLIDAY_NAMES, SPECIAL_DATES, getCorridorLabel } from './config.js';
 
 /** @typedef {{ slug: string, routeId: string, blurb: string, operatingNote: string, serves?: string, nearby?: string }} SeoRouteSeed */
 
@@ -106,7 +106,7 @@ const SEO_OVERRIDES = {
     'ct-bellv': {
         slug: 'cape-town-to-bellville',
         blurb: 'Cape Town / Bellville Metrorail times for the Northern Line corridor (Western Cape).',
-        operatingNote: 'Use Next Train for weekday vs Saturday boards and holiday overrides for 2026.',
+        operatingNote: 'Western Cape uses a dedicated Public Holiday timetable on most public holidays. Sundays and a few holidays such as Christmas Day have no service.',
     },
     'kzn-umlazi': {
         slug: 'durban-to-umlazi',
@@ -289,7 +289,11 @@ function buildSeedForRoute(route) {
         blurb:
             override?.blurb ||
             `Live Metrorail train times for ${origin} ↔ ${dest} (${province}). Open Next Train for the next departure, fares, and full timetable.`,
-        operatingNote: override?.operatingNote || DEFAULT_OPERATING_NOTE,
+        operatingNote:
+            override?.operatingNote ||
+            (route.region === 'WC' && route.sheetKeys?.pub_to_a
+                ? 'Western Cape uses a dedicated Public Holiday timetable on most public holidays. Sundays and a few holidays such as Christmas Day have no service.'
+                : DEFAULT_OPERATING_NOTE),
         serves: serve?.body || '',
         nearby: serve?.meta || '',
     };
@@ -383,6 +387,48 @@ export function listSeoRegions() {
 
 export function getSeoRegionBySlug(slug) {
     return listSeoRegions().find((r) => r.slug === slug) || null;
+}
+
+/** Western Cape dedicated Public Holiday sheets. Other regions do not have this page. */
+export const WC_PUBLIC_HOLIDAYS_SLUG = 'western-cape-public-holidays';
+export const WC_PUBLIC_HOLIDAYS_PATH = `regions/${WC_PUBLIC_HOLIDAYS_SLUG}.html`;
+
+/**
+ * 2026 Western Cape public-holiday service. Only WC has *_pub sheets.
+ * Sunday-mapped holidays have no trains. Do not list GP / KZN / EC holiday grids.
+ */
+export function listWcPublicHolidayDays(year = 2026) {
+    return Object.keys(HOLIDAY_NAMES)
+        .sort()
+        .map((md) => {
+            const name = HOLIDAY_NAMES[md];
+            const mapped = SPECIAL_DATES[md];
+            const iso = `${year}-${md}`;
+            if (mapped === 'sunday') {
+                return {
+                    md,
+                    iso,
+                    name,
+                    dayType: 'sunday',
+                    runs: false,
+                    note: 'No Metrorail service',
+                };
+            }
+            return {
+                md,
+                iso,
+                name,
+                dayType: 'public_holiday',
+                runs: true,
+                note: 'Public Holiday timetable',
+            };
+        });
+}
+
+export function wcRoutesWithHolidaySheets() {
+    return listSeoRoutes().filter(
+        ({ route }) => route.region === 'WC' && route.sheetKeys?.pub_to_a && route.sheetKeys?.pub_to_b
+    );
 }
 
 /**

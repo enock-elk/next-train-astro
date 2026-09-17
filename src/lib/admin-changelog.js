@@ -5,6 +5,12 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_09.17.8': [
+        'In-app route name for ct-flats is Cape Town <-> Retreat (corridor label stays Cape Flats Line).',
+        'SEO: regions/western-cape-public-holidays.html lists 2026 WC Public Holiday vs no-service days from SPECIAL_DATES. WC region hub, WC route landings, routes.html WC section, and guide FAQ link it. SeoCrossLinks wires route/region/corridor/index pages. GP/KZN/EC have no *_pub sheets so they get no holiday landing.',
+        'Gold-track editor and npm run tracks:apply-patch accept KZN. fill-chords / smooth / audit stay held. Planner smoothPathFromStops cover is 2000 m (same as the map) and still hop-slices with dropOutAndBack.',
+        'ContentLayout fires one SEO event, seo_page_view. View_astro_pages is gone. map.html and guide.html pass trackSeo={false} so in-app opens do not get SEO dimensions or that event. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
+    ],
     'V9_09.17.7': [
         'Account panel copy is commuter-facing: guest pitch no longer names route rooms, delay reports, or trip sharing. Delete confirm and the public delete-help page no longer mention operators. Privacy section 3 drops route rooms and operator logins. Operator emails still cannot use in-app Delete. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
     ],

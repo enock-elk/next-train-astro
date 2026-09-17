@@ -301,7 +301,7 @@ export function formatTimeDisplay(timeStr) {
 }
 
 /**
- * Shared-corridor pill label: "Cape Town <-> Retreat (Cape Flats)" → "Retreat".
+ * Shared-corridor pill label: "Cape Town <-> Retreat" → "Retreat".
  * Strips parenthetical line suffixes so the time box stays short.
  */
 export function shortSharedSourceLabel(sourceRoute) {

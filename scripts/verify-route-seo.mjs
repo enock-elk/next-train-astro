@@ -13,7 +13,17 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { MANUAL_GRID_ORDER, orderGridTrainIds } from '../src/lib/grid-order.js';
 import { ROUTES } from '../src/lib/config.js';
-import { listFeaturedSeoRoutes, getSeoRouteBySlug, stationLabel, slugifyStation, gridStationLabel } from '../src/lib/seo-routes.js';
+import {
+  listFeaturedSeoRoutes,
+  getSeoRouteBySlug,
+  stationLabel,
+  slugifyStation,
+  gridStationLabel,
+  listWcPublicHolidayDays,
+  wcRoutesWithHolidaySheets,
+  WC_PUBLIC_HOLIDAYS_PATH,
+  WC_PUBLIC_HOLIDAYS_SLUG,
+} from '../src/lib/seo-routes.js';
 import {
   buildRouteSeoTimetable,
   bidirectionalTitle,
@@ -242,8 +252,70 @@ if (!gridPathSa.includes('d=sa') || gridPathSa.includes('dir=')) {
   const hubSrc = readFileSync(new URL('../src/lib/hub.js', import.meta.url), 'utf8');
   if (!hubSrc.includes('window.__ntOpenSeoPage')) fail('hub must expose __ntOpenSeoPage for guide SEO links');
   const layout = readFileSync(new URL('../src/layouts/ContentLayout.astro', import.meta.url), 'utf8');
-  if (!layout.includes("View_astro_pages")) fail('ContentLayout must fire View_astro_pages');
+  if (!layout.includes("seo_page_view")) fail('ContentLayout must fire seo_page_view');
+  if (layout.includes("View_astro_pages")) fail('ContentLayout must not fire View_astro_pages as a second SEO event');
+  if (!layout.includes('trackSeo')) fail('ContentLayout can skip SEO events on map/guide');
   if (!layout.includes('za.co.nexttrain.app')) fail('ContentLayout must detect Play Store TWA package');
+  const mapSrc = readFileSync(new URL('../src/pages/map.astro', import.meta.url), 'utf8');
+  const guideSrcTrack = readFileSync(new URL('../src/pages/guide.astro', import.meta.url), 'utf8');
+  if (!mapSrc.includes('trackSeo={false}')) fail('map.astro must set trackSeo={false}');
+  if (!guideSrcTrack.includes('trackSeo={false}')) fail('guide.astro must set trackSeo={false}');
+}
+
+{
+  if (ROUTES['ct-flats']?.name !== 'Cape Town <-> Retreat') {
+    fail(`ct-flats name should be Cape Town <-> Retreat, got "${ROUTES['ct-flats']?.name}"`);
+  }
+  if (/\(Cape Flats\)/.test(String(ROUTES['ct-flats']?.name || ''))) {
+    fail('ct-flats route name must not keep the Cape Flats suffix');
+  }
+
+  const days = listWcPublicHolidayDays(2026);
+  if (days.length < 10) fail(`expected WC holiday calendar rows, got ${days.length}`);
+  const xmas = days.find((d) => d.md === '12-25');
+  if (!xmas || xmas.runs) fail('Christmas Day must be listed as no Metrorail service');
+  const nye = days.find((d) => d.md === '01-01');
+  if (!nye || !nye.runs || nye.dayType !== 'public_holiday') {
+    fail('New Year\'s Day must use the Western Cape Public Holiday timetable');
+  }
+  const womens = days.find((d) => d.md === '08-09');
+  if (!womens || womens.runs) fail("National Women's Day 2026 must be no service");
+
+  const wcHol = wcRoutesWithHolidaySheets();
+  if (wcHol.length < 5) fail(`expected several WC routes with *_pub sheets, got ${wcHol.length}`);
+  if (wcHol.some(({ route }) => route.region !== 'WC')) fail('holiday sheets must be WC-only');
+  if (wcHol.some(({ route }) => !route.sheetKeys?.pub_to_a || !route.sheetKeys?.pub_to_b)) {
+    fail('wcRoutesWithHolidaySheets must require both pub_to_a and pub_to_b');
+  }
+  if (WC_PUBLIC_HOLIDAYS_PATH !== 'regions/western-cape-public-holidays.html') {
+    fail(`WC holiday path is ${WC_PUBLIC_HOLIDAYS_PATH}`);
+  }
+  if (WC_PUBLIC_HOLIDAYS_SLUG !== 'western-cape-public-holidays') {
+    fail(`WC holiday slug is ${WC_PUBLIC_HOLIDAYS_SLUG}`);
+  }
+
+  const holidayPage = readFileSync(new URL('../src/pages/regions/western-cape-public-holidays.astro', import.meta.url), 'utf8');
+  if (!holidayPage.includes('Western Cape public holiday timetable')) {
+    fail('WC holiday landing missing H1 copy');
+  }
+  if (!holidayPage.includes('seoPageType="region_holidays"')) {
+    fail('WC holiday landing must tag seoPageType region_holidays');
+  }
+  const regionSrc = readFileSync(new URL('../src/pages/regions/[slug].astro', import.meta.url), 'utf8');
+  if (!regionSrc.includes('WC_PUBLIC_HOLIDAYS_PATH') || !regionSrc.includes('Public holidays')) {
+    fail('WC region hub must link the public holiday timetable');
+  }
+  const routesIndex = readFileSync(new URL('../src/pages/routes.astro', import.meta.url), 'utf8');
+  if (!routesIndex.includes('WC_PUBLIC_HOLIDAYS_PATH')) {
+    fail('routes.html must link the WC public holiday timetable');
+  }
+  const routePage = readFileSync(new URL('../src/pages/routes/[slug].astro', import.meta.url), 'utf8');
+  if (!routePage.includes('route.region === \'WC\'') && !routePage.includes('route.region === "WC"')) {
+    fail('route landings must only link WC holidays on WC corridors');
+  }
+  const cross = readFileSync(new URL('../src/components/SeoCrossLinks.astro', import.meta.url), 'utf8');
+  if (!cross.includes('More timetable pages')) fail('SeoCrossLinks missing internal-link nav');
+  if (!cross.includes("region === 'WC'")) fail('SeoCrossLinks must keep the holiday link WC-only');
 }
 
 {
@@ -560,6 +632,49 @@ if (existsSync(DIST)) {
     if (!html.includes('Interactive map')) fail('Gauteng region page missing Interactive map control');
     if (!html.includes('Open Next Train · Gauteng')) {
       fail('Gauteng region page missing Open Next Train · Gauteng');
+    }
+    if (html.includes('western-cape-public-holidays')) {
+      fail('Gauteng region page must not link a Western Cape public-holiday timetable');
+    }
+  }
+
+  const wcRegion = join(DIST, 'regions/western-cape.html');
+  if (existsSync(wcRegion)) {
+    const html = readFileSync(wcRegion, 'utf8');
+    if (!html.includes('western-cape-public-holidays')) {
+      fail('Western Cape region page must link the public holiday timetable');
+    }
+  }
+
+  const holidayHtmlPath = join(DIST, 'regions/western-cape-public-holidays.html');
+  if (existsSync(holidayHtmlPath)) {
+    const html = readFileSync(holidayHtmlPath, 'utf8');
+    if (!html.includes('Western Cape public holiday timetable')) {
+      fail('WC holiday HTML missing the public holiday heading');
+    }
+    if (!html.includes('Gauteng, KwaZulu-Natal and Eastern Cape do not have a separate public-holiday timetable')) {
+      fail('WC holiday HTML must say other provinces have no dedicated holiday sheet');
+    }
+    if (!html.includes('cape-town-to-bellville')) {
+      fail('WC holiday HTML should list Cape Town to Bellville');
+    }
+  }
+
+  const mapHtml = join(DIST, 'map.html');
+  if (existsSync(mapHtml)) {
+    const html = readFileSync(mapHtml, 'utf8');
+    if (/gtag\('event', 'View_astro_pages'/.test(html)) {
+      fail('map.html must not fire View_astro_pages');
+    }
+  }
+  const guideBuiltPath = join(DIST, 'guide.html');
+  if (existsSync(guideBuiltPath)) {
+    const html = readFileSync(guideBuiltPath, 'utf8');
+    if (/gtag\('event', 'View_astro_pages'/.test(html)) {
+      fail('guide.html must not fire View_astro_pages');
+    }
+    if (!html.includes('western-cape-public-holidays')) {
+      fail('guide.html must link the Western Cape public holiday timetable');
     }
   }
 } else {

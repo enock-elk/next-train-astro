@@ -13,7 +13,9 @@ import {
   getCorridorLabel,
   listSeoRegions,
   listSeoCorridors,
+  WC_PUBLIC_HOLIDAYS_PATH,
 } from '../../lib/seo-routes.js';
+import SeoCrossLinks from '../../components/SeoCrossLinks.astro';
 import {
   buildRouteSeoTimetable,
   buildRouteJsonLd,
@@ -215,6 +217,15 @@ const related = [
           <p>
             <span class="font-semibold text-slate-800 dark:text-slate-100">Sundays and public holidays.</span>
             {seed.operatingNote}
+            {route.region === 'WC' && route.sheetKeys?.pub_to_a && (
+              <>
+                {' '}
+                <a href={withBase(WC_PUBLIC_HOLIDAYS_PATH)} class="text-blue-700 dark:text-blue-300 hover:underline">
+                  Western Cape public holiday timetable
+                </a>
+                .
+              </>
+            )}
           </p>
         </div>
       </div>
@@ -318,6 +329,8 @@ const related = [
           ))}
         </ul>
       </section>
+
+      <SeoCrossLinks region={route.region} current="route" />
 
       <p class="mt-10 text-sm text-slate-500">
         For more info:

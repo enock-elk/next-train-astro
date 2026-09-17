@@ -40,13 +40,21 @@ const corridorUrls = listSeoCorridors().map((c) => ({
   priority: '0.78',
 }));
 
+const holidayUrls = [
+  {
+    loc: `${ORIGIN}/regions/western-cape-public-holidays.html`,
+    changefreq: 'weekly',
+    priority: '0.78',
+  },
+];
+
 const routeUrls = listSeoRoutes().map(({ seed }) => ({
   loc: `${ORIGIN}/routes/${seed.slug}.html`,
   changefreq: 'weekly',
   priority: '0.75',
 }));
 
-const urls = [...core, ...regionUrls, ...corridorUrls, ...routeUrls];
+const urls = [...core, ...regionUrls, ...corridorUrls, ...holidayUrls, ...routeUrls];
 const body = urls
   .map(
     (u) => `  <url>
@@ -70,5 +78,5 @@ ${body}
 
 writeFileSync(join(ROOT, 'public', 'sitemap.xml'), xml, 'utf8');
 console.log(
-  `sitemap.xml: ${urls.length} URLs (${regionUrls.length} regions, ${corridorUrls.length} corridors, ${routeUrls.length} routes)`
+  `sitemap.xml: ${urls.length} URLs (${regionUrls.length} regions, ${corridorUrls.length} corridors, ${holidayUrls.length} holiday, ${routeUrls.length} routes)`
 );

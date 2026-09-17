@@ -7,7 +7,9 @@ import {
   getSeoRegionBySlug,
   displayRouteName,
   getCorridorLabel,
+  WC_PUBLIC_HOLIDAYS_PATH,
 } from '../../lib/seo-routes.js';
+import SeoCrossLinks from '../../components/SeoCrossLinks.astro';
 
 export function getStaticPaths() {
   return listSeoRegions().map((r) => ({ params: { slug: r.slug } }));
@@ -139,6 +141,25 @@ const jsonLd = {
         </ul>
       </section>
 
+      {entry.region === 'WC' && (
+        <section class="mt-10">
+          <h2 class="text-sm font-black uppercase tracking-widest text-slate-500 mb-3">
+            Public holidays
+          </h2>
+          <a
+            href={withBase(WC_PUBLIC_HOLIDAYS_PATH)}
+            class="block rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900/60 px-4 py-4 hover:border-blue-500 dark:hover:border-blue-700 transition-colors"
+          >
+            <span class="block text-base font-bold text-slate-900 dark:text-white">
+              Western Cape public holiday timetable
+            </span>
+            <span class="block text-sm text-slate-500 dark:text-slate-400 mt-1">
+              Cape Town uses a dedicated Public Holiday sheet. Other provinces do not have that timetable here.
+            </span>
+          </a>
+        </section>
+      )}
+
       <a
         href={appHref}
         class="mt-10 flex w-full items-center justify-center rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold py-3.5 transition-colors"
@@ -148,6 +169,8 @@ const jsonLd = {
       <p class="mt-2 text-center text-[11px] text-slate-500">
         First visit suggests {entry.regionLabel}. Returning visitors keep their saved setup.
       </p>
+      <SeoCrossLinks region={entry.region} current="region" />
+
       <p class="mt-6 text-sm text-slate-500 text-center">
         <a href={guideHref} class="text-blue-600 dark:text-blue-400 hover:underline">User guide</a>
         ·

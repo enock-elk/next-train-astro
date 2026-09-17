@@ -1,0 +1,71 @@
+---
+/**
+ * Crawlable internal links between SEO landings.
+ * Western Cape public-holiday timetable is WC-only (dedicated *_pub sheets).
+ */
+import { withBase } from '../lib/config.js';
+import {
+  listSeoRegions,
+  listSeoCorridors,
+  WC_PUBLIC_HOLIDAYS_PATH,
+} from '../lib/seo-routes.js';
+
+interface Props {
+  region?: string;
+  current?: 'index' | 'region' | 'corridor' | 'route' | 'holidays';
+}
+
+const region = ['GP', 'WC', 'KZN', 'EC'].includes(Astro.props.region || '')
+  ? Astro.props.region
+  : '';
+const current = Astro.props.current || '';
+const regions = listSeoRegions().filter(
+  (r) => !(current === 'region' && r.region === region)
+);
+const corridors = region ? listSeoCorridors().filter((c) => c.region === region) : [];
+---
+
+<nav class="mt-10" aria-label="More Metrorail timetable pages">
+  <h2 class="text-sm font-black uppercase tracking-widest text-slate-500 mb-3">
+    More timetable pages
+  </h2>
+  <ul class="space-y-2 text-sm">
+    {current !== 'index' && (
+      <li>
+        <a href={withBase('routes.html')} class="text-blue-700 dark:text-blue-300 hover:underline">
+          All Metrorail route timetables
+        </a>
+      </li>
+    )}
+    {regions.map((r) => (
+      <li>
+        <a
+          href={withBase(`regions/${r.slug}.html`)}
+          class="text-blue-700 dark:text-blue-300 hover:underline"
+        >
+          {r.title} schedules
+        </a>
+      </li>
+    ))}
+    {corridors.map((c) => (
+      <li>
+        <a
+          href={withBase(`corridors/${c.slug}.html`)}
+          class="text-blue-700 dark:text-blue-300 hover:underline"
+        >
+          {c.label} train times
+        </a>
+      </li>
+    ))}
+    {region === 'WC' && current !== 'holidays' && (
+      <li>
+        <a
+          href={withBase(WC_PUBLIC_HOLIDAYS_PATH)}
+          class="text-blue-700 dark:text-blue-300 hover:underline"
+        >
+          Western Cape public holiday timetable
+        </a>
+      </li>
+    )}
+  </ul>
+</nav>

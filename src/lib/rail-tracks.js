@@ -8,8 +8,8 @@ import { withBase } from './config.js';
 
 const SNAP_MAX_M = 900;
 const MAX_HOPS = 80000;
-/** Station coords may sit off the rail; still slice the bake within this. */
-const BAKED_COVER_M = 900;
+/** Match the network map: station pins sit beside the gold line (Mutual ~1.5 km). */
+const BAKED_COVER_M = 2000;
 /**
  * Longest edge accepted from a baked line. The bake keeps a straight chord
  * where OSM has no rail (~3.2 km at most), so those edges must stay in the

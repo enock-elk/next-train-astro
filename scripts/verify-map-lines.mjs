@@ -110,7 +110,8 @@ assert(pkg.includes('"tracks:repair"'), 'package.json has tracks:repair');
 assert(pkg.includes('"tracks:audit"'), 'package.json has tracks:audit');
 assert(pkg.includes('"tracks:apply-patch"'), 'package.json has tracks:apply-patch');
 const applyPatch = readFileSync(new URL('../scripts/apply-track-patch.mjs', import.meta.url), 'utf8');
-assert(applyPatch.includes("HELD_REGIONS = new Set(['KZN'])"), 'apply-patch refuses KZN');
+assert(applyPatch.includes("ALLOWED_REGIONS = new Set(['GP', 'WC', 'KZN', 'EC'])"), 'apply-patch writes GP, WC, KZN and EC');
+assert(!applyPatch.includes("HELD_REGIONS = new Set(['KZN'])"), 'apply-patch no longer refuses KZN editor exports');
 assert(applyPatch.includes('stationOrderOverride'), 'apply-patch writes stationOrderOverride so paint follows the edited stop list');
 assert(applyPatch.includes("kind === 'nexttrain-track-patch'"), 'apply-patch reads the map editor export');
 const fillChords = readFileSync(new URL('../scripts/fill-rail-chords.mjs', import.meta.url), 'utf8');
@@ -170,6 +171,7 @@ assert(
 assert(mapApp.includes('stationOrderOverride'), 'map paint honours a manual station-order override');
 assert(mapApp.includes('function applyGoldStationOrders'), 'gold-track station names are applied after the bake loads');
 assert(mapApp.includes('function startTrackEditor'), 'full map has a gold-track editor');
+assert(!/if \(currentRegion === 'KZN'\) return;/.test(mapApp), 'editor is available on KZN corridors');
 assert(mapApp.includes('data-track-tool'), 'editor has Move Add Delete tools');
 assert(!mapApp.includes('originalEvent.altKey'), 'editor does not rely on Alt-tap to delete');
 const mapPage = readFileSync(new URL('../src/pages/map.astro', import.meta.url), 'utf8');
@@ -425,6 +427,8 @@ for (const region of ['GP', 'WC', 'KZN', 'EC']) {
 }
 
 const railTracks = readFileSync(new URL('../src/lib/rail-tracks.js', import.meta.url), 'utf8');
+assert(railTracks.includes('const BAKED_COVER_M = 2000'), 'planner gold cover matches the map (2000 m)');
+assert(!/const BAKED_COVER_M = 900/.test(railTracks), 'planner cover is not the old 900 m miss');
 assert(railTracks.includes('hopStraysFromChord(graph, nodePath, a, b)'), 'planner trip map rejects OSM hops that leave the station chord');
 assert(railTracks.includes('sliceBakedHop'), 'planner trip map slices the baked corridor per hop');
 {
@@ -743,8 +747,8 @@ assert(!clairwood.includes('Bridge City'), 'popup omits corridors that do not st
         encoding: 'utf8',
         cwd: ROOT
     });
-    assert(kzn.status !== 0, 'apply-patch exits nonzero for KZN');
-    assert(/held/i.test(`${kzn.stdout}\n${kzn.stderr}`), 'apply-patch names KZN as held');
+    assert(kzn.status === 0, `apply-patch dry-run accepts KZN (${kzn.stderr || kzn.stdout})`);
+    assert(/kzn-umlazi/.test(`${kzn.stdout}\n${kzn.stderr}`), 'apply-patch dry-run names the KZN corridor');
 
     const wc = JSON.parse(readFileSync(new URL('../public/tracks/rail-tracks-WC.geojson', import.meta.url), 'utf8'));
     const kap = wc.features.find((f) => f.properties?.routeId === 'ct-kapteinsklip');

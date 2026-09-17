@@ -1,0 +1,139 @@
+---
+/**
+ * Western Cape dedicated Public Holiday timetable landing.
+ * Other provinces do not have *_pub sheets — do not invent those pages.
+ */
+import ContentLayout from '../../layouts/ContentLayout.astro';
+import SeoPageHeader from '../../components/SeoPageHeader.astro';
+import SeoCrossLinks from '../../components/SeoCrossLinks.astro';
+import { withBase } from '../../lib/config.js';
+import {
+  getSeoRegionBySlug,
+  displayRouteName,
+  WC_PUBLIC_HOLIDAYS_PATH,
+  WC_PUBLIC_HOLIDAYS_SLUG,
+  listWcPublicHolidayDays,
+  wcRoutesWithHolidaySheets,
+} from '../../lib/seo-routes.js';
+
+const entry = getSeoRegionBySlug('western-cape');
+if (!entry) return Astro.redirect('/routes.html');
+
+const year = 2026;
+const holidays = listWcPublicHolidayDays(year);
+const running = holidays.filter((h) => h.runs);
+const noService = holidays.filter((h) => !h.runs);
+const routes = wcRoutesWithHolidaySheets();
+const title = `Western Cape Metrorail public holiday timetable ${year} | Next Train`;
+const description = `Cape Town Metrorail public holiday train times for ${year}. Western Cape uses a dedicated Public Holiday timetable. Sundays and a few holidays have no service.`;
+const canonicalPath = `/${WC_PUBLIC_HOLIDAYS_PATH}`;
+const regionHref = withBase(`regions/${entry.slug}.html`);
+const routesIndexHref = withBase('routes.html');
+const appHref = withBase('/?region=WC');
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebPage',
+  name: title,
+  description,
+  isPartOf: { '@type': 'WebSite', name: 'Metrorail Next Train', url: 'https://nexttrain.co.za/' },
+  about: 'Western Cape Metrorail public holiday timetable',
+};
+---
+
+<ContentLayout
+  title={title}
+  description={description}
+  canonicalPath={canonicalPath}
+  themeColor="#1d4ed8"
+  forceLight={true}
+  seoPageType="region_holidays"
+  seoSlug={WC_PUBLIC_HOLIDAYS_SLUG}
+  seoRegion="WC"
+>
+  <script type="application/ld+json" slot="head" set:html={JSON.stringify(jsonLd)} />
+  <SeoPageHeader region="WC" regionLabel={entry.regionLabel} />
+
+  <main class="min-h-screen bg-slate-50 text-slate-800 dark:bg-slate-950 dark:text-slate-100">
+    <div class="max-w-2xl mx-auto px-4 py-6 sm:py-10">
+      <p class="text-xs font-bold uppercase tracking-widest text-blue-600 dark:text-blue-400 mb-3">
+        <a href={routesIndexHref} class="hover:underline">Metrorail routes</a>
+        <span class="text-slate-400 dark:text-slate-500"> / </span>
+        <a href={regionHref} class="hover:underline">{entry.regionLabel}</a>
+        <span class="text-slate-400 dark:text-slate-500"> / </span>
+        Public holidays
+      </p>
+
+      <h1 class="text-2xl sm:text-3xl font-black tracking-tight text-slate-900 dark:text-white leading-tight">
+        Western Cape public holiday timetable
+      </h1>
+      <p class="mt-3 text-base text-slate-600 dark:text-slate-300 leading-relaxed">
+        Cape Town Metrorail uses a dedicated Public Holiday timetable. That is not the Saturday sheet.
+        Gauteng, KwaZulu-Natal and Eastern Cape do not have a separate public-holiday timetable here.
+      </p>
+
+      <section class="mt-10">
+        <h2 class="text-sm font-black uppercase tracking-widest text-slate-500 mb-3">
+          {year} days with a Public Holiday timetable
+        </h2>
+        <ul class="rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900/60 divide-y divide-slate-100 dark:divide-slate-800">
+          {running.map((h) => (
+            <li class="px-4 py-3 flex items-baseline justify-between gap-3">
+              <span class="font-semibold text-slate-900 dark:text-white">{h.name}</span>
+              <span class="text-sm text-slate-500 whitespace-nowrap">{h.iso}</span>
+            </li>
+          ))}
+        </ul>
+      </section>
+
+      <section class="mt-8">
+        <h2 class="text-sm font-black uppercase tracking-widest text-slate-500 mb-3">
+          {year} days with no trains
+        </h2>
+        <ul class="rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900/60 divide-y divide-slate-100 dark:divide-slate-800">
+          {noService.map((h) => (
+            <li class="px-4 py-3 flex items-baseline justify-between gap-3">
+              <span class="font-semibold text-slate-900 dark:text-white">{h.name}</span>
+              <span class="text-sm text-slate-500 whitespace-nowrap">{h.iso}</span>
+            </li>
+          ))}
+        </ul>
+        <p class="mt-3 text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+          Sundays also have no Metrorail service. Open Next Train and pick Public Holiday for the live Western Cape board.
+        </p>
+      </section>
+
+      <section class="mt-10">
+        <h2 class="text-sm font-black uppercase tracking-widest text-slate-500 mb-3">
+          Western Cape routes with a Public Holiday sheet
+        </h2>
+        <ul class="space-y-2">
+          {routes.map(({ seed, route }) => (
+            <li>
+              <a
+                href={withBase(`routes/${seed.slug}.html`)}
+                class="block rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900/60 px-4 py-4 hover:border-blue-500 dark:hover:border-blue-700 transition-colors"
+              >
+                <span class="block text-base font-bold text-slate-900 dark:text-white">
+                  {displayRouteName(route)}
+                </span>
+                <span class="block text-sm text-slate-500 dark:text-slate-400 mt-1">
+                  Weekday, Saturday, and Public Holiday times
+                </span>
+              </a>
+            </li>
+          ))}
+        </ul>
+      </section>
+
+      <a
+        href={appHref}
+        class="mt-10 flex w-full items-center justify-center rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold py-3.5 transition-colors"
+      >
+        Open Next Train · Western Cape
+      </a>
+
+      <SeoCrossLinks region="WC" current="holidays" />
+    </div>
+  </main>
+</ContentLayout>

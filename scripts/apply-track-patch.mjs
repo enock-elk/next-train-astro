@@ -2,8 +2,8 @@
  * Apply a downloaded gold-track patch to public/tracks/rail-tracks-{GP,WC,EC}.geojson.
  *
  * The network map editor (admin, full /map) exports a JSON patch. This script
- * writes that LineString (and optional station order) into the bake. KZN is
- * held (Duff's Road) and is always refused. Does not invent RTDB paths.
+ * writes that LineString (and optional station order) into the bake.
+ * GP / WC / KZN / EC. Does not invent RTDB paths.
  *
  * Usage:
  *   npm run tracks:apply-patch -- path/to/track-patch-WC-ct-kapteinsklip.json
@@ -16,8 +16,7 @@ import { fileURLToPath } from 'node:url';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const TRACKS = path.join(ROOT, 'public', 'tracks');
 const MAP_APP = path.join(ROOT, 'public', 'js', 'map-app.js');
-const HELD_REGIONS = new Set(['KZN']);
-const ALLOWED_REGIONS = new Set(['GP', 'WC', 'EC']);
+const ALLOWED_REGIONS = new Set(['GP', 'WC', 'KZN', 'EC']);
 
 const args = process.argv.slice(2);
 const dryRun = args.includes('--dry-run');
@@ -135,13 +134,8 @@ for (const file of files) {
         failed++;
         continue;
     }
-    if (HELD_REGIONS.has(region) || routeId.startsWith('kzn-')) {
-        console.error(`${file}: KZN gold tracks are held (Duff's Road). Refusing to write ${routeId}.`);
-        failed++;
-        continue;
-    }
     if (!ALLOWED_REGIONS.has(region)) {
-        console.error(`${file}: region must be GP, WC or EC (got ${region || 'empty'})`);
+        console.error(`${file}: region must be GP, WC, KZN or EC (got ${region || 'empty'})`);
         failed++;
         continue;
     }

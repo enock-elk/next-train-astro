@@ -14,7 +14,7 @@
  * Changelog / What’s New is optional: skip both, or write only "no release notes."
  * Always add ADMIN_CHANGELOG[APP_VERSION] (System Health Build notes).
  */
-export const APP_VERSION = "V9_09.17.7";
+export const APP_VERSION = "V9_09.17.8";
 
 /** Public support channels (About modal, lifeboat help.html, Safe Mode). */
 export const SUPPORT_EMAIL = 'admin@nexttrain.co.za';
@@ -598,7 +598,7 @@ export const ROUTES = {
     },
     'ct-flats': { 
         id: 'ct-flats', 
-        name: "Cape Town <-> Retreat (Cape Flats)", 
+        name: "Cape Town <-> Retreat", 
         corridorId: 'WC_FLATS', 
         region: 'WC', 
         colorClass: 'text-yellow-600', 

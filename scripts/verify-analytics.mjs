@@ -105,12 +105,24 @@ if (!mapViewer.includes("click_static_map")) fail('PRASA PNG map must ping click
 if (!ui.includes("view_legal_doc")) fail('openLegal must ping view_legal_doc');
 
 const contentLayout = src('src/layouts/ContentLayout.astro');
-if (!contentLayout.includes("gtag('event', 'View_astro_pages'")) {
-    fail('ContentLayout must fire View_astro_pages');
+const seoGtagEvents = [...contentLayout.matchAll(/gtag\('event', '([^']+)'/g)].map((m) => m[1]);
+if (seoGtagEvents.filter((name) => name === 'seo_page_view').length !== 1) {
+    fail('ContentLayout must fire exactly one seo_page_view gtag event');
+}
+if (seoGtagEvents.some((name) => name !== 'seo_page_view')) {
+    fail(`ContentLayout must not fire extra gtag page events (${seoGtagEvents.join(', ')})`);
+}
+if (contentLayout.includes('View_astro_pages')) {
+    fail('ContentLayout must not fire View_astro_pages as a second SEO event');
 }
 if (!contentLayout.includes('route_id:') || !contentLayout.includes('region:')) {
-    fail('View_astro_pages must send route_id and region');
+    fail('seo_page_view must send route_id and region');
 }
+const mapPage = src('src/pages/map.astro');
+if (!mapPage.includes('trackSeo={false}')) fail('map.html must skip the SEO page event');
+if (/seoPageType=/.test(mapPage)) fail('map.html must not pass seoPageType');
+const guidePage = src('src/pages/guide.astro');
+if (!guidePage.includes('trackSeo={false}')) fail('guide.html must skip the SEO page event');
 if (!contentLayout.includes('za.co.nexttrain.app') || !contentLayout.includes('app_source')) {
     fail('SEO analytics must tag Play Store TWA (za.co.nexttrain.app)');
 }

@@ -8,7 +8,9 @@ import {
   displayRouteName,
   regionName,
   getCorridorLabel,
+  WC_PUBLIC_HOLIDAYS_PATH,
 } from '../lib/seo-routes.js';
+import SeoCrossLinks from '../components/SeoCrossLinks.astro';
 
 const title = 'Metrorail Route Timetables | Metrorail Next Train';
 const description =
@@ -77,6 +79,13 @@ const regionOrder = ['GP', 'WC', 'KZN', 'EC'];
                 regionName(region)
               )}
             </h2>
+            {region === 'WC' && (
+              <p class="mb-3 text-sm">
+                <a href={withBase(WC_PUBLIC_HOLIDAYS_PATH)} class="text-blue-700 dark:text-blue-300 hover:underline">
+                  Western Cape public holiday timetable
+                </a>
+              </p>
+            )}
             <ul class="space-y-2">
               {byRegion[region].map(({ seed, route }) => (
                 <li>
@@ -104,6 +113,7 @@ const regionOrder = ['GP', 'WC', 'KZN', 'EC'];
       >
         Open Next Train app
       </a>
+      <SeoCrossLinks current="index" />
     </div>
   </main>
 </ContentLayout>

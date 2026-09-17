@@ -2,6 +2,7 @@
 import ContentLayout from '../layouts/ContentLayout.astro';
 import SeoFeaturedRoutes from '../components/SeoFeaturedRoutes.astro';
 import { FARE_CONFIG, normalizeBase, withBase } from '../lib/config.js';
+import { WC_PUBLIC_HOLIDAYS_PATH } from '../lib/seo-routes.js';
 
 const title = "User Guide & FAQ | Metrorail Next Train (Updated for 2026)";
 const description = "Updated for 2026. Learn how to use Metrorail Next Train to find train times near me. Check live timetables, ticket prices, and routes for Pretoria, Johannesburg, Cape Town, Durban, and East London.";
@@ -29,7 +30,7 @@ const fareRows = [
 });
 
 const holidayFaqText =
-    "Metrorail generally does not operate train services on Sundays. Public holidays are not always the same as Saturday. In Gauteng, KZN, and Eastern Cape, some holidays follow a Saturday/holiday timetable; others (such as Christmas Day or National Women's Day in 2026) have no service. Western Cape runs on its own structure: public holidays typically use a dedicated Public Holiday timetable, which you can still open in the app. A few routes, including Hercules / Koedoespoort and Eastern Cape, also have no Saturday service. Next Train's True Day Simulator applies the correct 2026 holiday and route rules automatically.";
+    "Metrorail generally does not operate train services on Sundays. Public holidays are not always the same as Saturday. In Gauteng, KZN, and Eastern Cape, some holidays follow a Saturday/holiday timetable; others (such as Christmas Day or National Women's Day in 2026) have no service. Western Cape uses a dedicated Public Holiday timetable: https://nexttrain.co.za/regions/western-cape-public-holidays.html. A few routes, including Hercules / Koedoespoort and Eastern Cape, also have no Saturday service. Next Train's True Day Simulator applies the correct 2026 holiday and route rules automatically.";
 
 const faqJsonLd = {
   "@context": "https://schema.org",
@@ -94,8 +95,7 @@ const faqJsonLd = {
   ogType="article"
   robots="index, follow"
   bodyClass="bg-slate-50 dark:bg-gray-900 selection:bg-blue-200 selection:text-blue-900"
-  seoPageType="guide"
-  seoSlug="guide"
+  trackSeo={false}
 >
   <script slot="head" is:inline type="application/ld+json" set:html={JSON.stringify(faqJsonLd)} />
   <style slot="head" is:global>
@@ -479,7 +479,7 @@ const faqJsonLd = {
                         <div class="p-4 pt-1 border-t border-gray-200 dark:border-gray-700 text-sm text-gray-600 dark:text-gray-300 leading-relaxed">
                             <p>Metrorail generally <strong>does not operate train services on Sundays</strong>.</p>
                             <p class="mt-2"><strong>Public holidays are not always the same as Saturday.</strong> In Gauteng, KZN, and Eastern Cape, some holidays follow a Saturday/holiday timetable; others (such as Christmas Day or National Women's Day in 2026) have <strong>no service</strong>.</p>
-                            <p class="mt-2"><strong>Western Cape runs on its own structure.</strong> Public holidays there typically follow a dedicated <strong>Public Holiday</strong> timetable (not Saturday). You can still open that Public Holiday schedule in the app to see the trains that run.</p>
+                            <p class="mt-2"><strong>Western Cape runs on its own structure.</strong> Public holidays there typically follow a dedicated <strong>Public Holiday</strong> timetable (not Saturday). See the <a href={withBase(WC_PUBLIC_HOLIDAYS_PATH)} class="text-blue-600 dark:text-blue-400 underline">Western Cape public holiday timetable</a>.</p>
                             <p class="mt-2">A few routes, including Hercules / Koedoespoort and Eastern Cape, also have <strong>no Saturday service</strong> even when other lines are running.</p>
                             <p class="mt-2">You don't need to guess: the app's <strong>True Day Simulator</strong> applies the correct 2026 holiday and route rules automatically.</p>
                         </div>

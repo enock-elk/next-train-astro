@@ -19,7 +19,8 @@ Never put a service-account private key in Astro, GitHub Pages, Cloudflare Pages
 ## 2. Generate the Web Push public key
 
 1. Firebase Console → Project settings → **Cloud Messaging**.
-2. Under **Web configuration** → **Web Push certificates**, generate a key pair.
+2. Under **Web configuration** → **Web Push certificates**, copy the existing
+   key pair or generate one if none exists.
 3. Copy the public key.
 
 Add that same value as `PUBLIC_FIREBASE_VAPID_KEY` in:

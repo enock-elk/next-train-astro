@@ -99,6 +99,11 @@ already-built release.
 7. Put the app in the background and confirm the system notification opens the
    selected Next Train route or region.
 
+Operator accounts can register before commuter rollout is enabled. To enrol
+commuters in production, enable **Push notifications** for the intended routes
+under Dev Hub → Experimental features (`config/features/pushNotify`). Start with
+the pilot routes before selecting everyone.
+
 Android Chrome and installed PWAs support this flow. On iPhone/iPad, Web Push
 requires iOS/iPadOS 16.4 or later and Next Train added to the Home Screen.
 

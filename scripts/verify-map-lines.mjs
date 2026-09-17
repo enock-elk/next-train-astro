@@ -410,14 +410,48 @@ for (const region of ['GP', 'WC', 'KZN', 'EC']) {
 }
 
 {
-    // KZN is the reference shape and ships exactly as baked. Its Berea Road
-    // corridor forks at Duff's Road: the line runs out to kwaMashu and the
-    // special Duff's Road - Bridge City train continues from there, so the
-    // 3.3 km branch is geometry rather than a spike and must survive.
+    const gp = JSON.parse(readFileSync(new URL('../public/tracks/rail-tracks-GP.geojson', import.meta.url), 'utf8'));
+    const naledi = gp.features.find((f) => f.properties?.routeId === 'jhb-soweto');
+    const names = naledi?.properties?.stationNames || [];
+    const coords = naledi?.geometry?.coordinates || [];
+    assert(names[0] === 'JOHANNESBURG' && names[names.length - 1] === 'NALEDI', 'jhb-soweto bake lists Park Station through Naledi');
+    assert(coords.length === 558, `jhb-soweto gold is the full Park-to-Naledi export (${coords.length} verts)`);
+}
+
+{
+    const gp = JSON.parse(readFileSync(new URL('../public/tracks/rail-tracks-GP.geojson', import.meta.url), 'utf8'));
+    const kzn = JSON.parse(readFileSync(new URL('../public/tracks/rail-tracks-KZN.geojson', import.meta.url), 'utf8'));
+    const mapApp = readFileSync(new URL('../public/js/map-app.js', import.meta.url), 'utf8');
+    const feature = (fc, id) => fc.features.find((f) => f.properties?.routeId === id);
+    const verts = (fc, id) => (feature(fc, id)?.geometry?.coordinates || []).length;
+    const names = (fc, id) => feature(fc, id)?.properties?.stationNames || [];
+    const exports = [
+        { fc: gp, id: 'pta-saul', n: 402, stations: ['PRETORIA', 'PRETORIA WES', 'MITCHELLSTRAAT', 'KALAFONG', 'ATTERIDGEVILLE', 'SAULSVILLE'] },
+        { fc: gp, id: 'pta-dewildt', n: 571, stations: ['PRETORIA', 'PRETORIA-B', 'PRETORIA WES', 'HERCULES', 'DASPOORT', 'MOUNTAIN VIEW', 'WONDERBOOM', 'PRETORIA-N', 'WOLMERTON', 'WINTERSNEST', 'ROSSLYN', 'GA-RANKUWA', 'TAILLARDSHOOP', 'DE WILDT'] },
+        { fc: gp, id: 'herc-koed', n: 218, stations: ['HERCULES', 'CAPITAL PARK', 'GEZINA', 'DEERNESS', 'VILLIERIA', 'PIERNEEFSRUS', 'QUEENSWOOD', 'KOEDOESPOORT'] },
+        { fc: gp, id: 'germ-kwesine', n: 340, stations: ['GERMISTON', 'ELSBURG', 'KATLEHONG', 'LINDELA', 'PILOT', 'KWESINE'] },
+        { fc: kzn, id: 'kzn-bridgecity', n: 980, stations: ['BEREA ROAD', 'DURBAN', 'MOSES MABHIDA', 'UMGENI', 'BRIARDENE', 'GREENWOOD PARK', 'RED HILL', 'AVOCA', "DUFF'S ROAD", 'TEMBALIHLE', 'KWAMASHU', 'BRIDGE CITY'] },
+    ];
+    for (const row of exports) {
+        assert(verts(row.fc, row.id) === row.n, `${row.id} gold is the full operator export`);
+        assert(JSON.stringify(names(row.fc, row.id)) === JSON.stringify(row.stations), `${row.id} bake station list matches the operator export`);
+        const staticBlock = mapApp.match(new RegExp(`'${row.id}':\\s*\\[([^\\]]+)\\]`));
+        const staticNames = (staticBlock?.[1] || '').match(/"([^"]+)"/g)?.map((s) => s.slice(1, -1)) || [];
+        assert(JSON.stringify(staticNames) === JSON.stringify(row.stations), `${row.id} STATIC station list matches the operator export`);
+    }
+    assert(!mapApp.includes("'pta-saul': [\"PRETORIA\", \"PRETORIA WES\", \"MITCHELLSTRAAT\", \"SCHUTTESTRAAT\""), 'pta-saul STATIC does not reinsert Schuttestraat over the export');
+}
+
+{
+    // KZN is the reference shape except where an operator gold-track patch
+    // rewrote a corridor. Its Berea Road corridor forks at Duff's Road: the
+    // line runs out to kwaMashu and the special Duff's Road - Bridge City
+    // train continues from there, so the branch is geometry rather than a
+    // spike and must survive.
     const kzn = JSON.parse(readFileSync(new URL('../public/tracks/rail-tracks-KZN.geojson', import.meta.url), 'utf8'));
     assert(kzn.properties?.generatedAt === '2026-08-29T01:38:53.715Z', 'KZN tracks keep the live 29 Aug bake timestamp');
     const bridge = kzn.features.find((f) => f.properties?.routeId === 'kzn-bridgecity');
-    assert((bridge?.geometry?.coordinates || []).length === 1095, 'KZN Bridge City geometry is untouched');
+    assert((bridge?.geometry?.coordinates || []).length === 980, 'KZN Bridge City geometry is the operator gold-track patch');
     assert(
         !kzn.features.some((f) => f.properties?.stationPinsStripped),
         'KZN is held as the reference shape and is never smoothed',

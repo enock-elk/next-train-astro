@@ -118,6 +118,7 @@ ok(deeplink.includes("hash === '#account'"), ' /#account opens Account');
 const deletePage = readFileSync(join(ROOT, 'src/pages/account-delete.astro'), 'utf8');
 ok(deletePage.includes('SUPPORT_EMAIL'), 'deletion page names the support email');
 ok(deletePage.includes('Delete account'), 'deletion page tells commuters to use Account');
+ok(!/operator/i.test(deletePage), 'deletion page does not mention operator accounts');
 
 if (failures.length) {
     console.error('verify-deeplink-launch FAILED:\n - ' + failures.join('\n - '));

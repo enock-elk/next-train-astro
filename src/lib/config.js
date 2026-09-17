@@ -14,7 +14,7 @@
  * Changelog / What’s New is optional: skip both, or write only "no release notes."
  * Always add ADMIN_CHANGELOG[APP_VERSION] (System Health Build notes).
  */
-export const APP_VERSION = "V9_09.17.6";
+export const APP_VERSION = "V9_09.17.7";
 
 /** Public support channels (About modal, lifeboat help.html, Safe Mode). */
 export const SUPPORT_EMAIL = 'admin@nexttrain.co.za';
@@ -244,9 +244,8 @@ export const LEGAL_TEXTS = {
         <p class="mb-3"><strong>Advertising:</strong> We use third-party ad networks to help cover server costs. These networks may use cookies to serve relevant ads. (Note: We will soon be introducing a cookie consent banner to give you full control over this).</p>
         <p class="mb-3"><strong>Infrastructure:</strong> Our schedules and live alerts are distributed via secure, globally recognized cloud infrastructure providers.</p>
 
-        <h4 class="font-bold text-lg mb-2 mt-4">3. Accounts and route rooms</h4>
-        <p class="mb-3">If you sign in, we store your user id, display name, email, and optional photo from Google or Facebook. Posts and replies you write in a route room stay on that corridor until you ask us to remove them. We do not publish to your Facebook or Google feed.</p>
-        <p class="mb-3">Operator emails used to run the service are not commuter accounts. Those logins cannot be deleted from the in-app Delete control.</p>
+        <h4 class="font-bold text-lg mb-2 mt-4">3. Accounts</h4>
+        <p class="mb-3">If you sign in, we store your display name, email, and optional photo from Google or Facebook. We do not publish to your Facebook or Google feed.</p>
 
         <h4 class="font-bold text-lg mb-2 mt-4">4. Your POPIA Rights (South Africa)</h4>
         <p class="mb-3">Under the Protection of Personal Information Act (POPIA), you have the right to request access to, correction of, or deletion of any personal data you have voluntarily provided to us (such as an account or a feedback email).</p>

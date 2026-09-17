@@ -9,7 +9,7 @@ import LegalArticle from '../components/LegalArticle.astro';
 import { SUPPORT_EMAIL } from '../lib/config.js';
 
 const title = 'Delete your Next Train account';
-const description = 'How to delete a Next Train commuter account and ask us to remove your data.';
+const description = 'How to delete a Next Train account and ask us to remove your data.';
 const mail = `mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent('Please delete my Next Train account')}`;
 ---
 
@@ -21,7 +21,7 @@ const mail = `mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent('Please delet
   bodyClass="bg-[#f2f2f7] dark:bg-black text-gray-900 min-h-screen"
 >
   <LegalArticle title="Delete your account">
-    <p class="mb-3">You can remove a commuter Next Train account in the app, or by email. We do not need Facebook to finish the request.</p>
+    <p class="mb-3">You can remove a Next Train account in the app, or by email. We do not need Facebook to finish the request.</p>
 
     <h2>In the app</h2>
     <ol class="space-y-2 mb-3">
@@ -29,7 +29,7 @@ const mail = `mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent('Please delet
       <li>Tap <strong>Account</strong>.</li>
       <li>Tap <strong>Delete account</strong>, then confirm.</li>
     </ol>
-    <p class="mb-3">That flags the profile for the operators. You are signed out. The login is removed when they process the request.</p>
+    <p class="mb-3">You are signed out. We remove the account after we receive the request.</p>
 
     <h2>By email</h2>
     <p class="mb-3">
@@ -37,8 +37,5 @@ const mail = `mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent('Please delet
       <a href={mail}>{SUPPORT_EMAIL}</a>.
       Write <strong>Please delete my Next Train account</strong> and include the name or Facebook/Google address you used.
     </p>
-
-    <h2>Operator logins</h2>
-    <p>The two operator emails that run the service cannot use Delete account in the app. Email the same address if a record must be closed.</p>
   </LegalArticle>
 </ContentLayout>

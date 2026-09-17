@@ -244,9 +244,8 @@ export async function signInWithFacebook() {
 }
 
 function deletionRequestDraft(user) {
-    const uid = user?.uid || '';
     const email = user?.email || '';
-    return `Please delete my Next Train account.\n\nuid: ${uid}\nemail: ${email}`;
+    return `Please delete my Next Train account.${email ? `\n\n${email}` : ''}`;
 }
 
 function openDeletionMail(draft) {
@@ -274,7 +273,7 @@ function notifyOperatorsOfDeletion(draft) {
 export async function requestAccountDeletion() {
     const state = $account.get();
     if (isAdminEmail(state.email)) {
-        throw new Error('Operator accounts cannot use this control.');
+        throw new Error('This account cannot be deleted in the app.');
     }
     const ok = await waitForFirebase();
     if (!ok || !window.firebaseAuth || !window.firebaseDb) {
@@ -431,13 +430,9 @@ export function syncAccountSettingsUi(state = $account.get()) {
     const sessionActions = document.getElementById('account-session-actions');
     if (sessionActions) sessionActions.classList.toggle('hidden', !signed);
     const deleteWrap = document.getElementById('account-delete-wrap');
-    const operatorDeleteNote = document.getElementById('account-operator-delete-note');
     const isOperator = signed && isAdminEmail(state.email);
     if (deleteWrap) {
         deleteWrap.classList.toggle('hidden', !signed || isOperator);
-    }
-    if (operatorDeleteNote) {
-        operatorDeleteNote.classList.toggle('hidden', !isOperator);
     }
     if (!signed) {
         document.getElementById('account-delete-confirm')?.classList.add('hidden');
@@ -734,7 +729,7 @@ export function bindAccountUi() {
     const deleteConfirm = document.getElementById('account-delete-confirm');
     document.getElementById('account-delete-btn')?.addEventListener('click', () => {
         if (isAdminEmail($account.get().email)) {
-            showErr('Operator accounts cannot use this control.');
+            showErr('This account cannot be deleted in the app.');
             return;
         }
         deleteConfirm?.classList.remove('hidden');
@@ -809,7 +804,7 @@ function friendlyAuthError(e) {
     if (code === 'auth/email-already-in-use') return 'Email already registered - try Sign in.';
     if (code === 'auth/weak-password') return 'Password is too weak.';
     if (code === 'auth/network-request-failed') return 'Network error - try again.';
-    if (code === 'auth/unauthorized-domain') return 'This host cannot sign in. Open nexttrain.co.za or ask an operator to allow this domain.';
+    if (code === 'auth/unauthorized-domain') return 'This site cannot sign in. Open nexttrain.co.za.';
     if (code === 'auth/popup-blocked') return 'Popup blocked. Allow popups and try again.';
     if (code === 'auth/operation-not-allowed') return 'Facebook sign-in is not enabled yet. Try Google or email.';
     if (code === 'auth/account-exists-with-different-credential') {

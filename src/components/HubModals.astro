@@ -354,8 +354,8 @@ import { withBase } from '../lib/config.js';
                     </div>
                     <label class="flex items-center justify-between gap-3 px-4 py-[11px] cursor-pointer">
                         <span class="min-w-0">
-                            <span class="block text-[13px] font-normal text-gray-900 dark:text-white">Show my photo on commuter alerts</span>
-                            <span class="block text-[12px] font-normal text-gray-500 dark:text-gray-400 mt-0.5 leading-snug">Off unless you turn it on. Your name can still appear.</span>
+                            <span class="block text-[13px] font-normal text-gray-900 dark:text-white">Show my photo next to my name</span>
+                            <span class="block text-[12px] font-normal text-gray-500 dark:text-gray-400 mt-0.5 leading-snug">Off unless you turn it on.</span>
                         </span>
                         <input type="checkbox" id="account-photo-alerts" class="rounded border-gray-300 text-blue-600 focus:ring-blue-500 shrink-0">
                     </label>
@@ -365,7 +365,7 @@ import { withBase } from '../lib/config.js';
             <!-- Guest / sign-in panel -->
             <div id="account-guest" class="space-y-6">
                 <p class="px-1 text-[13px] font-normal text-gray-600 dark:text-gray-300 leading-relaxed">
-                    An account unlocks extra features such as route rooms, delay reports, and trip sharing. It is completely free, and you can cancel anytime.
+                    Sign in is optional. An account keeps your name and points with you. It is completely free, and you can cancel anytime.
                 </p>
 
                 <div class="rounded-[10px] overflow-hidden bg-white dark:bg-[#1c1c1e] divide-y divide-black/10 dark:divide-white/10">
@@ -436,17 +436,13 @@ import { withBase } from '../lib/config.js';
                         </button>
                     </div>
                     <div id="account-delete-confirm" class="hidden rounded-[10px] bg-white dark:bg-[#1c1c1e] px-4 py-3 space-y-3">
-                        <p class="text-[13px] font-normal text-gray-600 dark:text-gray-300 leading-snug">This flags your profile for the operators. You will be signed out. Your login stays until they process the request.</p>
+                        <p class="text-[13px] font-normal text-gray-600 dark:text-gray-300 leading-snug">This asks Next Train to delete your account. You will be signed out.</p>
                         <div class="flex gap-2">
                             <button type="button" id="account-delete-cancel-btn" class="flex-1 py-2 rounded-lg text-[13px] font-normal text-gray-700 dark:text-gray-200 bg-[#f2f2f7] dark:bg-[#2c2c2e] focus:outline-none">Cancel</button>
                             <button type="button" id="account-delete-confirm-btn" data-account-action class="flex-1 py-2 rounded-lg text-[13px] font-normal text-white bg-[#ff3b30] focus:outline-none">Delete</button>
                         </div>
                     </div>
                 </div>
-                <p id="account-operator-delete-note" class="hidden px-1 text-[12px] font-normal text-gray-500 dark:text-gray-400 leading-snug">
-                    This operator login cannot be deleted in the app.
-                    <a href={withBase('account-delete.html')} class="underline text-blue-600 dark:text-blue-400">How commuters delete an account</a>
-                </p>
             </div>
 
             <div class="px-1 pb-2 flex justify-center items-center gap-3 flex-wrap">

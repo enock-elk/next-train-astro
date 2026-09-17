@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_09.17.7': [
+        'Account panel copy is commuter-facing: guest pitch no longer names route rooms, delay reports, or trip sharing. Delete confirm and the public delete-help page no longer mention operators. Privacy section 3 drops route rooms and operator logins. Operator emails still cannot use in-app Delete. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
+    ],
     'V9_09.17.6': [
         'Applied the operator gold-track patch for Cape Town ↔ Bellville (ct-bellv) into public/tracks/rail-tracks-WC.geojson. Station list is unchanged (Esplanade / Ysterplaat / Kentemade / Century City). Vertex count stays 396; worst vertex move ~213 m. KZN untouched. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
     ],

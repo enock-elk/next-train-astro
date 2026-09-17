@@ -313,6 +313,19 @@ if (!gridPathSa.includes('d=sa') || gridPathSa.includes('dir=')) {
   if (!routePage.includes('route.region === \'WC\'') && !routePage.includes('route.region === "WC"')) {
     fail('route landings must only link WC holidays on WC corridors');
   }
+  if (!routePage.includes('<SeoAppPreview routeId={route.id} href={liveBoardHref} />')) {
+    fail('route landings must select app previews by route id');
+  }
+  const appPreview = readFileSync(new URL('../src/components/SeoAppPreview.astro', import.meta.url), 'utf8');
+  if (!appPreview.includes("'pta-pien'") || !appPreview.includes('pta-pien-live-board.webp')) {
+    fail('app preview catalog must map the Pienaarspoort screenshot only to pta-pien');
+  }
+  if (!appPreview.includes('sm:grid-cols-') || !appPreview.includes('max-w-[15rem]')) {
+    fail('app preview must adapt from stacked mobile to capped desktop columns');
+  }
+  if (!appPreview.includes('loading="lazy"') || !appPreview.includes('width="435"') || !appPreview.includes('height="807"')) {
+    fail('route screenshot must be lazy-loaded with fixed intrinsic dimensions');
+  }
   const cross = readFileSync(new URL('../src/components/SeoCrossLinks.astro', import.meta.url), 'utf8');
   if (!cross.includes('More timetable pages')) fail('SeoCrossLinks missing internal-link nav');
   if (!cross.includes("region === 'WC'")) fail('SeoCrossLinks must keep the holiday link WC-only');
@@ -619,6 +632,15 @@ if (existsSync(DIST)) {
     if (!html.includes('Mamelodi')) fail('Pienaarspoort HTML missing Mamelodi');
     if (!html.includes('Eersterust')) fail('Pienaarspoort HTML missing Eersterust area');
     if (!html.includes('not in service')) fail('Pienaarspoort HTML missing ghost-station note');
+    if (!html.includes('data-seo-app-preview="pta-pien"')) fail('Pienaarspoort HTML missing its route-specific app preview');
+    if (!html.includes('pta-pien-live-board.webp')) fail('Pienaarspoort HTML missing its route-specific screenshot');
+  }
+  const mabopaneHtmlPath = join(DIST, 'routes/pretoria-to-mabopane.html');
+  if (existsSync(mabopaneHtmlPath)) {
+    const html = readFileSync(mabopaneHtmlPath, 'utf8');
+    if (html.includes('data-seo-app-preview') || html.includes('pta-pien-live-board.webp')) {
+      fail('Pienaarspoort screenshot must not appear on the Mabopane route page');
+    }
   }
 
   const region = join(DIST, 'regions/gauteng.html');

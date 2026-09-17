@@ -121,9 +121,10 @@ assert(!layout.includes('min-height: 100px'), 'clever-core must not reserve 100p
 assert(layout.includes('Never reserve page space'), 'ad overlay comment present');
 {
     const accountViewportRule = layout.match(/#nt-shell #account-modal\.fixed\s*\{([\s\S]*?)\n\s*\}/)?.[1] || '';
-    assert(accountViewportRule.includes('position: fixed !important'), 'Account overlay is fixed to the viewport, not clipped by a short shell');
-    assert(accountViewportRule.includes('height: 100dvh !important'), 'Account overlay fills the dynamic mobile viewport');
-    assert(!accountViewportRule.includes('position: absolute'), 'Account overlay does not inherit the shell bottom gap');
+    assert(accountViewportRule.includes('position: absolute !important'), 'Account overlay fills the same unmeasured shell box as Feedback Hub');
+    assert(accountViewportRule.includes('height: auto !important'), 'Account overlay height comes from inset edges');
+    assert(accountViewportRule.includes('max-height: none !important'), 'Account overlay is not capped by a viewport token');
+    assert(!/var\(--nt-(app-h|shell-h|vv-h)/.test(accountViewportRule), 'Account overlay does not inherit a stale measured height');
 }
 
 const ads = readFileSync(new URL('../src/lib/clever-ads.js', import.meta.url), 'utf8');

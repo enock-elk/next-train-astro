@@ -467,14 +467,16 @@ assert(/#nt-shell #messages-thread-modal\.fixed \{\s*position: absolute !importa
 assert(!/#nt-shell #messages-thread-modal\.fixed \{[^}]*var\(--nt-(app-h|shell-h|vv-h|feedback-vv)/.test(layout), 'Feedback Hub is not sized from a measured viewport token');
 assert(layout.includes('hubOn'), 'keyboard keeps Feedback Hub shell height like Community');
 assert(
-    css.includes(':not(#blackbox-modal):not(#messages-thread-modal) > div'),
-    'Feedback Hub card is not capped by the bottom-nav clearance that left the slab'
+    css.includes(':not(#blackbox-modal):not(#messages-thread-modal):not(#account-modal) > div'),
+    'Feedback Hub and Account cards are not capped by the bottom-nav clearance that left the slab'
 );
 assert(
-    css.includes(':not(#blackbox-modal):not(#messages-thread-modal),'),
-    'Feedback Hub does not get the bottom-nav padding meant for centred cards'
+    css.includes(':not(#blackbox-modal):not(#messages-thread-modal):not(#account-modal),'),
+    'Feedback Hub and Account do not get the bottom-nav padding meant for centred cards'
 );
 assert(layout.includes('#nt-shell #account-modal.fixed'), 'Account overlay is a full-screen page');
+assert(/#nt-shell #account-modal\.fixed \{\s*\/\*[\s\S]*?\*\/\s*position: absolute !important;\s*inset: 0 !important;/.test(layout), 'Account fills #nt-shell without measured viewport height');
+assert(!/#nt-shell #account-modal\.fixed \{[^}]*var\(--nt-(app-h|shell-h|vv-h)/.test(layout), 'Account is not sized from a stale viewport token');
 assert(layout.includes('html.nt-full-overlay #nt-shell'), 'full-screen overlays cover the blue chrome strip');
 assert(layout.includes('html.nt-full-overlay::before'), 'full-screen overlays paint only the URL-bar strip');
 assert(!/html\.nt-full-overlay #nt-shell,[\s\S]{0,80}top:\s*0/.test(layout), 'full overlay does not zero #nt-shell top');

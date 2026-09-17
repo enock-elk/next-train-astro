@@ -3,7 +3,9 @@
  *
  * Route IDs in SATURDAY_PLACEHOLDER_ROUTES are hardcoded, but the special
  * planner path only runs when those Saturday sheets have no timed trains.
- * The moment live data appears, Dijkstra / direct planning take over.
+ * Junctions that still appear on another live Saturday route are not blocked;
+ * Dijkstra / direct planning take over. Stubs on the closed corridor stay cut.
+ * The moment live data appears on the placeholder itself, this path is skipped.
  */
 import { ROUTES, SATURDAY_PLACEHOLDER_ROUTES, HERC_KOED_JUNCTIONS } from './config.js';
 import { $fullDatabase, $globalStationIndex } from '../store.js';

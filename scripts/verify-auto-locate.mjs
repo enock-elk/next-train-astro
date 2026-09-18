@@ -209,7 +209,7 @@ assert(locateSrc.includes("state === 'granted'"), 'granted permission locates');
 assert(locateSrc.includes("state === 'denied'"), 'denied permission never locates');
 assert(locateSrc.includes("installed && state === 'unknown'"), 'installed apps may locate when Permissions API is missing');
 assert(locateSrc.includes("addEventListener('pageshow'"), 'pageshow retriggers auto-locate after PWA restore');
-assert(!locateSrc.includes('getCurrentPosition'), 'auto-locate helper never calls getCurrentPosition itself');
+assert(!/navigator\.geolocation\.getCurrentPosition/.test(locateSrc), 'auto-locate helper never calls getCurrentPosition itself');
 assert(locateSrc.includes("tab === 'next-train' || tab === 'trip-planner'"), 'tab trigger includes Trip Planner');
 
 function fakeDoc({

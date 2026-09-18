@@ -5,16 +5,18 @@
  * RTDB shape (design):
  *   users/{uid}: {
  *     displayName, photoURL, email?, createdAt,
+ *     lastSeenAt, region, lastRouteId, appVersion,
  *     deviceIds: { [deviceId]: linkedAtMs | true },
  *     prefs: { showPhotoInAlerts, theme, colourPack, hapticsEnabled, passengerType, updatedAt },
  *     flags: { shadowBanned: false, shadowBannedUntil: 0, role: 'user' },
  *     trustScore: 0
  *   }
  *   devices/{deviceId}: { uid, linkedAt }  — reverse link (migration, not a wipe)
+ * GPS is never written to the account.
  */
 import { atom } from 'nanostores';
 import { bootFirebase } from './firebase-boot.js';
-import { isAdminEmail, SUPPORT_EMAIL } from './config.js';
+import { isAdminEmail, SUPPORT_EMAIL, APP_VERSION } from './config.js';
 import { trackAnalyticsEvent } from './analytics.js';
 import { safeStorage } from './utils.js';
 import {
@@ -22,7 +24,7 @@ import {
     isAuthProviderActionDisabled,
     loadAuthProviders,
 } from './auth-providers.js';
-import { $deviceId, $userProfile } from '../store.js';
+import { $deviceId, $userProfile, $userRegion, $currentRouteId } from '../store.js';
 import {
     formatAccountDisplayName,
     clampDisplayName,
@@ -90,6 +92,48 @@ export function readLocalAccountPrefs() {
         passengerType: safeStorage.getItem('userProfile') || $userProfile.get() || 'Adult',
         updatedAt: Date.now(),
     };
+}
+
+export const ACCOUNT_OPS_THROTTLE_MS = 60_000;
+let lastOpsWriteAt = 0;
+let _opsListenersBound = false;
+
+/** Signed-in operational fields. Never includes GPS. */
+export function accountOpsFields(now = Date.now()) {
+    return {
+        lastSeenAt: now,
+        region: $userRegion.get() || null,
+        lastRouteId: $currentRouteId.get() || null,
+        appVersion: APP_VERSION,
+    };
+}
+
+export async function pushSignedInOps({ force = false, now = Date.now() } = {}) {
+    const user = window.firebaseAuth?.currentUser;
+    if (!user || user.isAnonymous || !window.firebaseDb) return false;
+    if (!force && now - lastOpsWriteAt < ACCOUNT_OPS_THROTTLE_MS) return false;
+    lastOpsWriteAt = now;
+    const patch = accountOpsFields(now);
+    if ('lat' in patch || 'lon' in patch || 'latitude' in patch || 'longitude' in patch) return false;
+    try {
+        await window.firebaseDbUpdate(window.firebaseDbRef(window.firebaseDb, `users/${user.uid}`), patch);
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+function bindSignedInOpsListeners() {
+    if (_opsListenersBound || typeof window === 'undefined') return;
+    _opsListenersBound = true;
+    const kick = () => {
+        pushSignedInOps().catch(() => {});
+    };
+    $userRegion.subscribe(kick);
+    $currentRouteId.subscribe(kick);
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') kick();
+    });
 }
 
 export async function applyAccountPrefs(prefs) {
@@ -221,6 +265,7 @@ export async function ensureUserProfile(user, opts = {}) {
             mergedDeviceIds[deviceId] = now;
         }
         const chatDeviceId = pickCanonicalChatDeviceId(mergedDeviceIds, deviceId);
+        const ops = accountOpsFields(now);
 
         if (!existing) {
             await window.firebaseDbSet(window.firebaseDbRef(window.firebaseDb, userPath), {
@@ -237,12 +282,14 @@ export async function ensureUserProfile(user, opts = {}) {
                 },
                 trustScore: 0,
                 prefs: localPrefs,
+                ...ops,
             });
         } else {
             const patch = {
                 photoURL: user.photoURL || existing.photoURL || null,
                 email: user.email || existing.email || null,
                 updatedAt: now,
+                ...ops,
             };
             if (!existing.displayNameCustom) {
                 patch.displayName = displayName;
@@ -341,6 +388,8 @@ export async function initAccount() {
                 return m.hydrateRemoteMarks({ persist: true });
             }).catch(() => {});
             await ensureUserProfile(user);
+            lastOpsWriteAt = Date.now();
+            bindSignedInOpsListeners();
         } else {
             import('./rider-marks.js').then((m) => m.switchMarksAccount(null)).catch(() => {});
         }

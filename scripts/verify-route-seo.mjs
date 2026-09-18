@@ -3,9 +3,9 @@
  *
  * Library tests (no dist): weekday grids from full-database.json follow
  * MANUAL_GRID_ORDER; first/last trains exist for flagship OD corridors.
- * HTML tests (after astro build): light first-paint, calm ↔ titles plus
- * both-direction body copy, fare table, real <table> times, FAQPage JSON-LD,
- * crawlable home/guide links.
+ * HTML tests (after astro build): light first-paint, destA-first 2026 titles,
+ * schedule/PRASA/fare/train-number meta, From X towards Y grids, fare table,
+ * real <table> times, FAQPage JSON-LD, crawlable home/guide links.
  *
  * Usage: node scripts/verify-route-seo.mjs [distDir]
  */
@@ -29,6 +29,7 @@ import {
   bidirectionalTitle,
   corridorPairLabel,
   directionPhrase,
+  directionGridHeading,
   routeDocumentTitle,
   routeMetaDescription,
   buildRouteFareTable,
@@ -39,6 +40,8 @@ import {
   buildRouteGridAppPath,
   buildRouteBoardAppPath,
   corridorStationList,
+  seoTrainIdSample,
+  SEO_SCHEDULE_YEAR,
 } from '../src/lib/seo-timetable.js';
 import { extractGridPreview } from '../workers/nexttrain-og/src/schedule.js';
 
@@ -87,9 +90,10 @@ for (const { id, slug } of FLAGSHIP) {
   }
   // Ghost / coordinate-only rows are dropped; remaining stop list must still be real.
   if (towardB && towardB.stations.length < 5) fail(`${id} weekday-B unexpectedly short (${towardB.stations.length} stations)`);
-  if (towardB?.heading && !/^Showing trains to /.test(towardB.heading)) {
-    fail(`${id} weekday-B heading should match in-app ("Showing trains to …"), got "${towardB.heading}"`);
+  if (towardB?.heading && towardB.heading !== directionGridHeading(tt.origin, tt.dest)) {
+    fail(`${id} weekday-B heading should be "${directionGridHeading(tt.origin, tt.dest)}", got "${towardB.heading}"`);
   }
+  if (seoTrainIdSample(tt).length < 1) fail(`${id} SEO meta train sample is empty`);
 
   const sheetB = route.sheetKeys.weekday_to_b;
   const manual = MANUAL_GRID_ORDER[sheetB];
@@ -103,6 +107,16 @@ for (const { id, slug } of FLAGSHIP) {
     if (firstManualPresent && towardB.trainIds[0] !== firstManualPresent) {
       fail(`${id} first column ${towardB.trainIds[0]} != first present manual ${firstManualPresent}`);
     }
+  }
+}
+
+{
+  const pien = buildRouteSeoTimetable(ROUTES['pta-pien']);
+  if (pien.weekday.a?.heading !== 'From Pienaarspoort towards Pretoria') {
+    fail(`pta-pien weekday-A heading is "${pien.weekday.a?.heading}"`);
+  }
+  if (pien.weekday.b?.heading !== 'From Pretoria towards Pienaarspoort') {
+    fail(`pta-pien weekday-B heading is "${pien.weekday.b?.heading}"`);
   }
 }
 
@@ -145,39 +159,53 @@ if (slugifyStation('PRETORIA WES') !== 'pretoria-west') {
 }
 
 const title = bidirectionalTitle('Johannesburg', 'Naledi');
-if (title !== 'Johannesburg ↔ Naledi Train Schedule & Times') {
-  fail(`calm bidirectional title is "${title}"`);
+if (title !== `Johannesburg to Naledi ${SEO_SCHEDULE_YEAR} Train Times`) {
+  fail(`destA-first title is "${title}"`);
 }
 if (/to .+ & .+ to /i.test(title)) {
   fail(`title must not stuff both "X to Y & Y to X": "${title}"`);
 }
-if (corridorPairLabel('Durban', 'Umlazi') !== 'Durban ↔ Umlazi') {
-  fail('corridor pair should be Durban ↔ Umlazi');
+if (corridorPairLabel('Durban', 'Umlazi') !== 'Durban to Umlazi') {
+  fail('corridor pair should be Durban to Umlazi');
 }
 if (directionPhrase('Pretoria', 'Mabopane') !== 'Pretoria to Mabopane') {
   fail('directionPhrase should be "Pretoria to Mabopane"');
 }
 const docTitle = routeDocumentTitle('Pretoria', 'Mabopane');
-if (!docTitle.startsWith('Pretoria ↔ Mabopane Train Schedule & Times |')) {
+if (!docTitle.startsWith(`Pretoria to Mabopane ${SEO_SCHEDULE_YEAR} Train Times |`)) {
   fail(`document title is "${docTitle}"`);
 }
-const meta = routeMetaDescription('Pretoria', 'Mabopane', 'Gauteng');
-if (!meta.includes('Pretoria to Mabopane') || !meta.includes('Mabopane to Pretoria')) {
-  fail(`meta description must name both directions: "${meta}"`);
+if (docTitle.includes('Mabopane to Pretoria')) {
+  fail('document title must keep in-app destA-first order');
+}
+const meta = routeMetaDescription('Pretoria', 'Mabopane', 'Gauteng', {
+  trainIds: ['1810', '1818'],
+  maxSingle: 'R12.00',
+});
+if (!meta.includes('Pretoria to Mabopane')) fail(`meta must use in-app route name: "${meta}"`);
+if (!/schedule/i.test(meta)) fail(`meta must include schedule: "${meta}"`);
+if (!/PRASA/i.test(meta) || !/Metrorail/i.test(meta)) fail(`meta must name PRASA and Metrorail: "${meta}"`);
+if (!/Updated/i.test(meta) || !/Current trains/i.test(meta)) fail(`meta must say updated/current: "${meta}"`);
+if (!meta.includes('1810') || !meta.includes('1818')) fail(`meta must list train numbers: "${meta}"`);
+if (!/ticket prices/i.test(meta) && !/Max adult single/i.test(meta)) {
+  fail(`meta must mention ticket prices: "${meta}"`);
+}
+if (!/next train/i.test(meta) || !/trip planner/i.test(meta)) {
+  fail(`meta must mention Next Train features: "${meta}"`);
+}
+if (/Mabopane to Pretoria/.test(meta)) {
+  fail(`meta must not rename the corridor as Mabopane to Pretoria: "${meta}"`);
 }
 if (meta.includes(' & Mabopane to')) {
   fail('meta description should not use the stuffed & title form');
 }
-if (!/train times/i.test(meta)) {
-  fail(`meta description should use train-times language: "${meta}"`);
-}
-const metaSat = routeMetaDescription('Pretoria', 'Mabopane', 'Gauteng', { hasSaturday: true });
+const metaSat = routeMetaDescription('Pretoria', 'Mabopane', 'Gauteng', { hasSaturday: true, trainIds: ['1810'] });
 if (!/saturday/i.test(metaSat) || !/sunday/i.test(metaSat)) {
   fail(`Saturday meta should mention Saturday and Sunday: "${metaSat}"`);
 }
 const capeMeta = routeMetaDescription('Cape Town', 'Bellville', 'Western Cape', { hasSaturday: true });
-if (!/cape town train times/i.test(capeMeta)) {
-  fail(`Cape Town meta should lead with Cape Town train times: "${capeMeta}"`);
+if (!/Cape Town to Bellville/i.test(capeMeta) || !/train schedule/i.test(capeMeta)) {
+  fail(`Cape Town meta should lead with Cape Town to Bellville schedule: "${capeMeta}"`);
 }
 
 {
@@ -495,14 +523,20 @@ if (existsSync(DIST)) {
     if (!html.includes('forceLight') && !html.includes('Naledi to Johannesburg')) {
       /* forceLight is a build prop; the title is the crawler-visible signal */
     }
-    if (!html.includes('Johannesburg to Naledi') && !html.includes('Showing trains to Johannesburg')) {
+    if (!html.includes('Johannesburg to Naledi') && !html.includes('From Naledi towards Johannesburg')) {
       fail('Naledi route HTML must mention Johannesburg as a terminus');
     }
-    if (!html.includes('Naledi to Johannesburg') && !html.includes('Showing trains to Naledi')) {
-      fail('Naledi route HTML must mention both directions');
+    if (!html.includes('From Johannesburg towards Naledi')) {
+      fail('Naledi route HTML must name trains from Johannesburg towards Naledi');
     }
-    if (!html.includes('Johannesburg ↔ Naledi Train Schedule & Times')) {
-      fail('Naledi route H1/title should use Johannesburg');
+    if (!html.includes(`Johannesburg to Naledi ${SEO_SCHEDULE_YEAR} Train Times`)) {
+      fail('Naledi route H1/title should use Johannesburg to Naledi 2026 Train Times');
+    }
+    if (!html.includes('Metrorail (PRASA)')) {
+      fail('Naledi route HTML must name Metrorail (PRASA)');
+    }
+    if (!html.includes('Current trains')) {
+      fail('Naledi route SERP description must list current train numbers');
     }
     if (html.includes('Johannesburg Park Station')) {
       fail('Naledi route HTML must not say Johannesburg Park Station');
@@ -556,6 +590,12 @@ if (existsSync(DIST)) {
   if (!indexHtml.includes('johannesburg-to-naledi')) {
     fail('homepage HTML should link the Naledi landing');
   }
+  if (!indexHtml.includes('PRASA Train Times')) {
+    fail('homepage title should include PRASA Train Times');
+  }
+  if (!/Updated 2026 PRASA Metrorail train times and schedules/i.test(indexHtml)) {
+    fail('homepage meta should lead with updated PRASA Metrorail train times and schedules');
+  }
   if (!indexHtml.includes('Commuters can send a delay note, and some testers can share a trip location.')) {
     fail('homepage FAQ must mention delay notes and optional trip sharing');
   }
@@ -591,7 +631,7 @@ if (existsSync(DIST)) {
     const html = readFileSync(kemp, 'utf8');
     if (/<html[^>]*class="[^"]*\bdark\b/.test(html)) fail('Kempton route page has html.dark');
     if (!html.includes('<table')) fail('Kempton route HTML has no <table>');
-    if (!html.includes('Showing trains to')) fail('Kempton route HTML missing in-app direction heading');
+    if (!html.includes('From Pretoria towards Kempton Park')) fail('Kempton route HTML missing destA-first grid heading');
     if (!html.includes('Open live timetable in Next Train')) fail('Kempton route HTML missing live-board CTA');
     if ((html.match(/Open live timetable in Next Train/g) || []).length !== 2) {
       fail('Kempton route HTML should keep exactly two “Open live timetable in Next Train” CTAs');

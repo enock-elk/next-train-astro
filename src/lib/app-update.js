@@ -100,10 +100,12 @@ export function isAppVersionNewer(candidate, current = APP_VERSION) {
 
 /** Visible force-update toast (SPA parity) — always names the *incoming* version. */
 function showCrucialUpdateToast(incomingVersion) {
+    if (crucialUpdateToastShown) return;
+    crucialUpdateToastShown = true;
     const label = incomingVersion || 'Latest';
     const msg = `Crucial system update incoming: ${label}.`;
     try {
-        showToast(msg, 'error', 5000);
+        showToast(msg, 'error', 5000, '', { cooldownMs: 30 * 60 * 1000 });
     } catch { /* ignore */ }
 
     // Fallback banner if #toast is not in the DOM yet (early boot / race).
@@ -135,15 +137,20 @@ async function updateNetworkPreflight() {
 
 const OFFLINE_SAVED_TIMES_TOAST = 'You are offline. Using saved times until you reconnect.';
 const SLOW_SAVED_TIMES_TOAST = 'Network is slow. Using saved times until you reconnect.';
+const SAVED_TIMES_TOAST_COOLDOWN_MS = 10 * 60 * 1000;
 let lastSavedTimesToastAt = 0;
+let crucialUpdateToastShown = false;
+let forcedUpdateAnnounced = false;
 
 function showSavedTimesToast() {
     const now = Date.now();
-    if (lastSavedTimesToastAt && now - lastSavedTimesToastAt < 60_000) return;
+    if (lastSavedTimesToastAt && now - lastSavedTimesToastAt < SAVED_TIMES_TOAST_COOLDOWN_MS) return;
     lastSavedTimesToastAt = now;
     const online = typeof navigator === 'undefined' || navigator.onLine === true;
     try {
-        showToast(online ? SLOW_SAVED_TIMES_TOAST : OFFLINE_SAVED_TIMES_TOAST, 'error', 4000);
+        showToast(online ? SLOW_SAVED_TIMES_TOAST : OFFLINE_SAVED_TIMES_TOAST, 'error', 4000, '', {
+            cooldownMs: SAVED_TIMES_TOAST_COOLDOWN_MS,
+        });
     } catch { /* ignore */ }
 }
 
@@ -266,7 +273,9 @@ function scheduleForcedUpdate(version) {
         if (!window.__ntForcedUpdateVersion || forcedUpdatePromise) return;
         if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
         if (typeof navigator !== 'undefined' && !navigator.onLine) return;
-        forcedUpdatePromise = handleUpdateClick(window.__ntForcedUpdateVersion, { announce: true })
+        const announce = !forcedUpdateAnnounced;
+        forcedUpdateAnnounced = true;
+        forcedUpdatePromise = handleUpdateClick(window.__ntForcedUpdateVersion, { announce })
             .then((started) => {
                 if (started) window.__ntForcedUpdateVersion = null;
             })

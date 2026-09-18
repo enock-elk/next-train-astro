@@ -31,6 +31,7 @@ this.ntAdminMatchAlertSource = ntAdminMatchAlertSource;
 this.ntAdminNormalizeRoadmapText = ntAdminNormalizeRoadmapText;
 this.ntAdminParseRoadmapSource = ntAdminParseRoadmapSource;
 this.ntAdminDevPanelIdFromHash = ntAdminDevPanelIdFromHash;
+this.ntAdminCanonicalPanelId = ntAdminCanonicalPanelId;
 this.ntAdminPushDrillPanel = ntAdminPushDrillPanel;
 this.ntAdminTrimDrillStackTo = ntAdminTrimDrillStackTo;
 this.ntAdminDrillBackAction = ntAdminDrillBackAction;
@@ -204,6 +205,13 @@ assert(admin.includes('sourceUrl: sourceUrlInput ? sourceUrlInput.value.trim()')
 assert(helpers.ntAdminDevPanelIdFromHash('#dev-feedback-panel') === 'feedback-panel', 'drill hash maps to the panel id');
 assert(helpers.ntAdminDevPanelIdFromHash('#dev') === '', 'grid hash is not a panel');
 assert(helpers.ntAdminDevPanelIdFromHash('#roadmap-ticket') === '', 'ticket overlay hash is not a panel');
+assert(helpers.ntAdminCanonicalPanelId('alert-panel--inapp') === 'alert-panel', 'in-app hub hash still mounts Service Alerts');
+assert(helpers.ntAdminCanonicalPanelId('feedback-panel') === 'feedback-panel', 'other panel ids stay unchanged');
+assert(admin.includes('id="alert-hub"'), 'Service Alerts drill opens an inner hub');
+assert(admin.includes('In-app alerts'), 'hub tile for channel posts');
+assert(admin.includes('alert-hub-push'), 'hub tile for FCM notifications');
+assert(admin.includes("data-admin-subview"), 'Notifications is a subview, not a home-grid tile');
+assert(admin.includes('openAlertHubInapp'), 'in-app tile drills into the existing alerts manager');
 
 const stacked = helpers.ntAdminPushDrillPanel(['roadmap-panel'], 'feedback-panel');
 assert(stacked.join(',') === 'roadmap-panel,feedback-panel', 'opening original pushes onto the drill stack');
@@ -237,7 +245,7 @@ assert(ui.includes('Admin.stepDrillBack'), 'drilled Back steps one panel, not al
 
 assert(admin.includes('data-alert-when="weekly"'), 'compose exposes weekly when-mode');
 assert(admin.includes('data-alert-when="monthly"'), 'compose exposes monthly when-mode');
-assert(admin.includes('alerts-sched-v4'), 'alert panel rebuilds after composer and schedule UX');
+assert(admin.includes('alerts-hub-v1'), 'alert panel rebuilds after composer and schedule UX');
 assert(!admin.includes('Recurring schedule (optional)'), 'old recurrence accordion is gone');
 assert(admin.includes('ntAdminComputeJobNextRun'), 'scheduled publish uses job-aware next-run');
 

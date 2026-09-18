@@ -23,7 +23,8 @@ import {
     simUsesSpecificDate, isRealTime, usesSaturdayScheduleSheet,
     pruneExclusionsTree, readCachedExclusions, writeCachedExclusions,
     KILLSWITCH_APPLIED_KEY, KILLSWITCH_PENDING_KEY,
-    newestUnappliedKillswitchTimestamp, createAsyncMutex, flattenPublicHolidays
+    newestUnappliedKillswitchTimestamp, createAsyncMutex, flattenPublicHolidays,
+    parseStationLatLon, coordsFromTimetableSheets
 } from './utils.js';
 import { showToast, hideOfflineChrome, scheduleOfflineChrome, openSmoothModal, closeSmoothModal, nudgeHomeAutoNotices } from './ui.js';
 import { resolveHolidayDayType } from './holiday-approvals.js';
@@ -536,9 +537,9 @@ export async function guardianFetch(url, options = {}, timeoutMs = 8000) {
                     }
                 } else if (struggleElapsedOk() && isActiveForegroundSession()) {
                     const now = Date.now();
-                    if (now - _lastSlowNetworkToastTime > 6000) {
+                    if (now - _lastSlowNetworkToastTime > 120_000) {
                         _lastSlowNetworkToastTime = now;
-                        showToast("Connection is very slow. Still trying...", "warning", 3500);
+                        showToast("Connection is very slow. Still trying...", "warning", 3500, '', { cooldownMs: 120_000 });
                     }
                 }
             } else {
@@ -901,17 +902,10 @@ export async function buildGlobalStationIndexAsync(targetDB) {
     };
 
     const parseRowCoords = (row, coordKey) => {
-        let coords = { lat: null, lon: null };
-        try {
-            const coordVal = coordKey ? row[coordKey] : null;
-            if (coordVal) {
-                const parts = String(coordVal).split(',').map((s) => parseFloat(s.trim()));
-                if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
-                    coords = { lat: parts[0], lon: parts[1] };
-                }
-            }
-        } catch { /* ignore */ }
-        return coords;
+        const parsed = parseStationLatLon(
+            (coordKey ? row?.[coordKey] : null) ?? row?.COORDINATES ?? row?.coordinates
+        );
+        return parsed || { lat: null, lon: null };
     };
 
     const ingestStationRow = (row, stationKey, coordKey, routeId) => {
@@ -935,9 +929,14 @@ export async function buildGlobalStationIndexAsync(targetDB) {
             ghostCandidates[stationName].routes.add(routeId);
             return;
         }
+        const hasIncoming = Number.isFinite(coords.lat) && Number.isFinite(coords.lon);
         if (!tempIndex[stationName]) {
-            tempIndex[stationName] = { lat: coords.lat, lon: coords.lon, routes: new Set() };
-        } else if (tempIndex[stationName].lat === null && coords.lat !== null) {
+            tempIndex[stationName] = {
+                lat: hasIncoming ? coords.lat : null,
+                lon: hasIncoming ? coords.lon : null,
+                routes: new Set(),
+            };
+        } else if (!Number.isFinite(tempIndex[stationName].lat) && hasIncoming) {
             tempIndex[stationName].lat = coords.lat;
             tempIndex[stationName].lon = coords.lon;
         }
@@ -952,7 +951,11 @@ export async function buildGlobalStationIndexAsync(targetDB) {
 
         await new Promise(resolve => setTimeout(resolve, 0));
 
-        Object.values(route.sheetKeys).forEach(dbKey => {
+        const sheetKeys = Object.entries(route.sheetKeys).sort(([a], [b]) => {
+            const rank = (key) => (String(key).startsWith('weekday') ? 0 : String(key).startsWith('saturday') ? 1 : 2);
+            return rank(a) - rank(b);
+        });
+        sheetKeys.forEach(([, dbKey]) => {
             let sheetData = targetDB[dbKey];
             if (!sheetData) return;
             if (!Array.isArray(sheetData) && typeof sheetData === 'object') {
@@ -998,6 +1001,25 @@ export async function buildGlobalStationIndexAsync(targetDB) {
                     ingestStationRow(row, stationKey, coordKey, route.id);
                 });
             }
+        });
+    }
+
+    // Stations do not move: if a later-day sheet (WC *_pub) omitted COORDINATES,
+    // copy weekday lat/lon into any index entry that is still missing them.
+    for (let i = 0; i < routeList.length; i++) {
+        const route = routeList[i];
+        if (route.region !== $userRegion.get()) continue;
+        const weekdaySheets = [
+            targetDB[route.sheetKeys?.weekday_to_a],
+            targetDB[route.sheetKeys?.weekday_to_b],
+        ];
+        Object.keys(tempIndex).forEach((name) => {
+            const entry = tempIndex[name];
+            if (Number.isFinite(entry?.lat) && Number.isFinite(entry?.lon)) return;
+            const filled = coordsFromTimetableSheets(name, weekdaySheets);
+            if (!filled) return;
+            entry.lat = filled.lat;
+            entry.lon = filled.lon;
         });
     }
 

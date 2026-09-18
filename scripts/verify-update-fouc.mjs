@@ -157,6 +157,10 @@ assert(hubJs.includes("policy.systemKillswitch || (source === 'check_updates' &&
 assert(appUpdate.includes('You’re on the latest version'), 'current release gets a grey informational toast after restart');
 assert(appUpdate.includes("'info', 3000"), 'latest-version toast uses the grey info style');
 assert(appUpdate.includes('lastSavedTimesToastAt'), 'forced-update saved-times toast has a session cooldown');
+assert(appUpdate.includes('SAVED_TIMES_TOAST_COOLDOWN_MS = 10 * 60 * 1000'), 'red saved-times toast waits 10 minutes');
+assert(appUpdate.includes('crucialUpdateToastShown'), 'crucial-update toast is once per session');
+assert(appUpdate.includes('forcedUpdateAnnounced'), 'forced-update retries do not re-announce every minute');
+assert(isAppVersionNewer('V9_09.18.3', 'V9_09.17.12'), 'this release is newer than live V9_09.17.12');
 assert(appUpdate.includes('You are offline. Using saved times until you reconnect.'), 'offline saved-times copy is unchanged');
 assert(appUpdate.includes('Network is slow. Using saved times until you reconnect.'), 'a slow probe is not called offline');
 assert(appUpdate.includes('return preflight === \'ok\''), 'force update only proceeds when the probe is ok');

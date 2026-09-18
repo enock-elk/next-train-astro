@@ -5,6 +5,27 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_09.18.10': [
+        'Dev Hub Service Alerts is a hub: two home-style tiles for In-app alerts (existing channel composer) and Notifications (existing FCM sender). The Notifications home-grid tile is gone (data-admin-subview). Review / GSM still skip the hub and open Compose. No What’s New. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
+    ],
+    'V9_09.18.9': [
+        'Auto-locate reuses weekday COORDINATES when a later-day sheet (WC public holiday *_pub) omitted them. Station index fills missing lat/lon from weekday_to_a/b; findNearestStation and planner From locate skip invalid coords and fall back to weekday rows. Stations do not move. No What’s New. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
+    ],
+    'V9_09.18.8': [
+        'Live board and Trip Planner From silently pick the nearest station only when OS geolocation is already granted, Welcome is done, Next Train or Trip Planner is visible, and a route is pinned. Auto-locate never opens a permission prompt, never overwrites a From field the commuter is picking or has already set, and re-checks that gate after GPS returns. Signed-in users/{uid} PATCHes lastSeenAt, region, lastRouteId, appVersion (throttled). No GPS on the account. Privacy copy drops the promised cookie banner and stops calling device-id diagnostics anonymous. No What’s New. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
+    ],
+    'V9_09.18.6': [
+        'Admin Feedback inbox ticks: 1 grey sent, 2 grey when the commuter app fetched the inbox (delivered), 2 blue when they opened Messages (read). Auth-backed PATCH on inbox/{deviceId}/{msgId}. No R chip. Opening a thread no longer writes acknowledged. Commuter Messages stays tick-free. No What’s New. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
+    ],
+    'V9_09.18.5': [
+        'SEO route landings: destA-first titles `{A} to {B} 2026 Train Times`. Meta is Updated + in-app route name + Metrorail (PRASA) train schedule + current train ids + max adult single + Next Train next-train/timetable/ticket prices/trip planner. Grid H2 is From {far end} towards {terminus}. Homepage/routes/region/corridor metas pick up PRASA, train times, schedule, updated/current, ticket prices. No What’s New. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
+    ],
+    'V9_09.18.4': [
+        'CleverAds top units dock into #nt-ad-scroll-host as one wrapper (pushdown iframe + vendor Close.png). They sit in the Next Train frame and scroll with the board. The vendor X stays tappable; pointer-events are not disabled. Scroll-away is not dismiss. Loaded iframes are never reparented. Already-painted units, including body-level in-flow pushdowns, follow #app-scroll via CSS translate plus a host spacer. #main-content is not translateY-pinned. Occupancy still needs a loaded creative; empty leftovers collapse. What’s New is the ad scroll bullet. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
+    ],
+    'V9_09.18.3': [
+        'Toasts are rate-limited: same copy waits, at most four in 30s, 1.2s gap. Red Network is slow / saved-times at most once per 10 minutes. Connection is very slow at most once per 2 minutes. Forced-update retries no longer re-announce every minute. FCM prune 401 does not fail a delivered send. Fallback Worker URL stays. Live V9_09.17.12 update path unchanged: quiet SW, retain --keep 8 --keep-css 30, inline lifeline hide, FORCE_UPDATE still gated by reachability. No What’s New. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
+    ],
     'V9_09.18.2': [
         'Dev Hub Notifications shows the first FCM error when send fails (Sent 0 of N with tokens kept). Typical cause is the telemetry service account missing Firebase Cloud Messaging API Admin. Fallback Worker URL stays. No What’s New. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
     ],

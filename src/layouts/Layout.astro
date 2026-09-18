@@ -9,7 +9,7 @@ import { APP_VERSION, MANIFEST_FILENAME, normalizeBase, withBase } from '../lib/
 
 const {
   /** Full SEO brand — SPA default. Short "Next Train" stays for PWA homescreen only. */
-  title = "Metrorail Next Train | 2026 Train Schedules for South Africa",
+  title = "Metrorail Next Train | 2026 PRASA Train Times and Schedules",
   description = "Check live train schedules, download offline timetable images, and check fares for Metrorail South Africa.",
   canonicalPath = "/",
   /** Optional social overrides (SPA used slightly different og/twitter copy on home). */
@@ -1378,18 +1378,43 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
         opacity: 0 !important;
         pointer-events: none !important;
       }
-      /* Empty slot only. Vendor stickies stay on the document (full viewport).
-         Do not force position:static / width:100% on their overlays — that
-         clips a 100vw creative into the max-w-md frame as a blank strip. */
+      /* Top of the Next Train frame. Docked units scroll with #app-scroll.
+         Do not flatten a live document-level sticky until it is docked
+         (moving a loaded iframe reloads the creative). */
       #nt-ad-scroll-host {
         flex: 0 0 auto;
         flex-shrink: 0;
         width: 100%;
         min-height: 0;
-        overflow: hidden;
+        overflow: visible;
+        touch-action: pan-y;
       }
       #nt-ad-scroll-host:empty {
         display: none;
+      }
+      #nt-ad-scroll-host.nt-ad-slot-open {
+        display: block;
+      }
+      /* Only the outer unit is taken in-flow. Leave iframe, overlay, and the
+         vendor Close.png (img[alt=close], position:absolute top/right) alone
+         so the creative and X scroll as one piece. */
+      #nt-ad-scroll-host > [data-nt-ad-docked="1"] {
+        position: relative !important;
+        inset: auto !important;
+        left: auto !important;
+        top: auto !important;
+        right: auto !important;
+        bottom: auto !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        margin-left: 0 !important;
+        margin-right: 0 !important;
+      }
+      /* Already-painted units that we cannot reparent follow #app-scroll as
+         one wrapper (creative + vendor X). Do not disable pointer-events —
+         Close.png is a sibling of the iframe, not inside it. */
+      html.nt-ad-scroll-sync .nt-ad-undocked {
+        translate: 0 var(--nt-ad-scroll, 0px);
       }
     </style>
     <!--

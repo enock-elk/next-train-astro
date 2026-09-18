@@ -251,19 +251,24 @@ async function rtdbWritePreferred(env, path, value, idToken) {
     return rtdbWriteWithUserToken(env, path, value, idToken);
 }
 
+/** Google OAuth `access_token` is the RTDB REST admin bypass. Bearer can be scored as a user. */
+function rtdbJsonUrl(base, path, accessToken) {
+    const cleanBase = String(base || '').replace(/\/$/, '');
+    const cleanPath = String(path || '').replace(/^\//, '');
+    const url = new URL(`${cleanBase}/${cleanPath}.json`);
+    url.searchParams.set('access_token', accessToken);
+    return url.toString();
+}
+
 async function rtdbWrite(env, path, value) {
     const email = env.FIREBASE_CLIENT_EMAIL;
     const key = env.FIREBASE_PRIVATE_KEY;
     const base = String(env.FIREBASE_DATABASE_URL || '').replace(/\/$/, '');
     if (!email || !key || !base) throw new Error('Firebase Admin env incomplete');
     const token = await getGoogleAccessToken(email, key);
-    const url = `${base}/${path.replace(/^\//, '')}.json`;
-    const res = await fetch(url, {
+    const res = await fetch(rtdbJsonUrl(base, path, token), {
         method: 'PUT',
-        headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(value),
     });
     if (!res.ok) {
@@ -279,12 +284,9 @@ async function rtdbUpdate(env, updates) {
     const base = String(env.FIREBASE_DATABASE_URL || '').replace(/\/$/, '');
     if (!email || !key || !base) throw new Error('Firebase Admin env incomplete');
     const token = await getGoogleAccessToken(email, key);
-    const res = await fetch(`${base}/.json`, {
+    const res = await fetch(rtdbJsonUrl(base, '', token), {
         method: 'PATCH',
-        headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updates),
     });
     if (!res.ok) {
@@ -300,10 +302,7 @@ async function rtdbGet(env, path) {
     const base = String(env.FIREBASE_DATABASE_URL || '').replace(/\/$/, '');
     if (!email || !key || !base) throw new Error('Firebase Admin env incomplete');
     const token = await getGoogleAccessToken(email, key);
-    const url = `${base}/${path.replace(/^\//, '')}.json`;
-    const res = await fetch(url, {
-        headers: { Authorization: `Bearer ${token}` },
-    });
+    const res = await fetch(rtdbJsonUrl(base, path, token));
     if (!res.ok) throw new Error(`RTDB read failed (${res.status})`);
     return res.json();
 }
@@ -313,11 +312,7 @@ async function rtdbDelete(env, path) {
     const key = env.FIREBASE_PRIVATE_KEY;
     const base = String(env.FIREBASE_DATABASE_URL || '').replace(/\/$/, '');
     const token = await getGoogleAccessToken(email, key);
-    const url = `${base}/${path.replace(/^\//, '')}.json`;
-    const res = await fetch(url, {
-        method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` },
-    });
+    const res = await fetch(rtdbJsonUrl(base, path, token), { method: 'DELETE' });
     if (!res.ok) throw new Error(`RTDB delete failed (${res.status})`);
 }
 
@@ -333,14 +328,7 @@ function createRtdbClient(env) {
     };
     const request = async (path, init = {}) => {
         const authToken = await token();
-        const url = `${base}/${String(path || '').replace(/^\//, '')}.json`;
-        return fetch(url, {
-            ...init,
-            headers: {
-                Authorization: `Bearer ${authToken}`,
-                ...(init.headers || {}),
-            },
-        });
+        return fetch(rtdbJsonUrl(base, path, authToken), init);
     };
     return {
         async get(path, withEtag = false) {
@@ -368,7 +356,36 @@ function createRtdbClient(env) {
             }
             return { matched: true };
         },
+        async del(path) {
+            const res = await request(path, { method: 'DELETE' });
+            if (!res.ok) {
+                const text = await res.text();
+                throw new Error(`RTDB delete failed (${res.status}): ${text.slice(0, 200)}`);
+            }
+            return { matched: true };
+        },
     };
+}
+
+async function pruneInvalidPushSubscriptions(rtdb, invalid) {
+    const deviceIds = [...new Set(invalid.flatMap((result) => result.entry?.deviceIds || []))]
+        .filter((deviceId) => isSafeRtdbKey(deviceId));
+    let pruned = 0;
+    await Promise.all(deviceIds.map(async (deviceId) => {
+        const path = `push_subscriptions/${deviceId}`;
+        try {
+            if (typeof rtdb.del === 'function') await rtdb.del(path);
+            else await rtdb.put(path, null);
+            pruned += 1;
+        } catch (error) {
+            console.log(JSON.stringify({
+                event: 'push_subscription_prune_failed',
+                deviceId,
+                error: String(error?.message || error).slice(0, 200),
+            }));
+        }
+    }));
+    return pruned;
 }
 
 function isNoticePayload(value) {
@@ -976,6 +993,7 @@ export async function deliverPushNotifications(env, raw, options = {}) {
             sent: 0,
             failed: 0,
             invalid: 0,
+            pruned: 0,
             truncated: Math.max(0, recipients.length - limited.length),
         };
     }
@@ -1003,9 +1021,7 @@ export async function deliverPushNotifications(env, raw, options = {}) {
         results.push(...settled);
     }
     const invalid = results.filter((result) => result.invalid);
-    await Promise.all(invalid.flatMap((result) => (
-        result.entry.deviceIds.map((deviceId) => rtdb.put(`push_subscriptions/${deviceId}`, null))
-    )));
+    const pruned = await pruneInvalidPushSubscriptions(rtdb, invalid);
     const sent = results.filter((result) => result.ok).length;
     const firstFail = results.find((result) => !result.ok);
     const sampleError = firstFail
@@ -1024,6 +1040,7 @@ export async function deliverPushNotifications(env, raw, options = {}) {
         sent,
         failed: results.length - sent,
         invalid: invalid.length,
+        pruned,
         truncated: Math.max(0, recipients.length - limited.length),
         sampleError,
     };

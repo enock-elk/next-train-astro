@@ -16958,7 +16958,8 @@ const Admin = {
             try {
                 const result = await callWorker(false);
                 const detail = result.sampleError ? ` ${result.sampleError}` : '';
-                status.textContent = `Sent ${result.sent} of ${result.attempted}. Failed ${result.failed}; removed ${result.invalid} invalid token${result.invalid === 1 ? '' : 's'}.${detail}`;
+                const removed = Number.isFinite(result.pruned) ? result.pruned : result.invalid;
+                status.textContent = `Sent ${result.sent} of ${result.attempted}. Failed ${result.failed}; removed ${removed} invalid token${removed === 1 ? '' : 's'}.${detail}`;
             } catch (error) {
                 status.textContent = error.message || 'Notification send failed.';
             } finally {

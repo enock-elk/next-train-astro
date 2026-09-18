@@ -46,6 +46,13 @@ If Dev Hub **Count devices** works but send returns **Sent 0 of N** with
 still missing. Count only reads RTDB; send needs FCM Admin on that same
 service account. Do not rotate the Worker key for this symptom.
 
+If the system notification arrives but Dev Hub shows
+`RTDB conditional write failed (401): Permission denied`, FCM already
+succeeded. That 401 was the sender trying to delete a dead token under
+rules. The Worker now authenticates RTDB as admin with `access_token` and
+does not fail the send when prune is denied. Redeploy `nexttrain-community`
+after that Worker change. Do not treat the Chrome card as a failed send.
+
 The Worker already uses this service account for RTDB. Do not create a second key
 unless the existing Worker secret is missing or has been revoked.
 

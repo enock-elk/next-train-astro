@@ -24,7 +24,7 @@ import {
 import { showToast, triggerHaptic, openSmoothModal, closeSmoothModal } from './ui.js';
 import { routeAllowsDualHubOptions } from './transfer-card.js';
 import { trackAnalyticsEvent } from './analytics.js';
-import { shouldApplySilentLocate } from './auto-locate.js';
+import { shouldApplySilentLocate, rememberGeolocationGranted, disarmStartupLocateOverwrite } from './auto-locate.js';
 import { resolveHolidayDayType } from './holiday-approvals.js';
 import { isAdminAuthed } from './admin-chrome.js';
 import {
@@ -1289,6 +1289,7 @@ export function findNearestStation(isAuto = false) {
             const nearest = candidates[0];
 
             if (isAuto && !shouldApplySilentLocate()) return;
+            rememberGeolocationGranted();
             
             if (nearest.dist <= MAX_RADIUS_KM) {
                 const stationName = nearest.stationName;
@@ -1321,10 +1322,9 @@ export function findNearestStation(isAuto = false) {
                         searchInput.dataset.resolvedValue = selectedVal;
                     }
                     
-                    findNextTrains(); 
-                    if (!isAuto) {
-                        showToast(`Found: ${stationName.replace(' STATION', '')} (${distStr}km)`, "success");
-                    }
+                    findNextTrains();
+                    disarmStartupLocateOverwrite();
+                    showToast(`Found: ${stationName.replace(' STATION', '')} (${distStr}km)`, "success");
 
                     try {
                         window.dispatchEvent(new CustomEvent('nt-locate-fix', {
@@ -1371,7 +1371,7 @@ export function findNearestStation(isAuto = false) {
                 if (icon) icon.classList.remove('spinning', 'animate-spin');
             }
         },
-        { timeout: 8000, enableHighAccuracy: true } // 🛡️ GUARDIAN UX FIX: 8s timeout to stop infinite underground hangs
+        { timeout: 8000, enableHighAccuracy: !isAuto }
     );
 }
 

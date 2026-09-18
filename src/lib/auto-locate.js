@@ -1,17 +1,30 @@
 /**
  * Silent nearest-station locate on the live board and Trip Planner From field.
- * Only runs when the OS already granted geolocation — never prompts.
- * Coordinates stay on-device (findNearestStation).
- * Never overwrites a From station the commuter is picking or has already set.
+ * Never opens a permission prompt. Coordinates stay on-device (findNearestStation).
+ *
+ * Installed PWA / Play Store TWA: Permissions API is often missing or stuck on
+ * "prompt" even after the OS already granted location. Those clients may locate
+ * on startup and may refresh a restored last-station once. A Chrome tab still
+ * requires query=granted and will not overwrite a station the commuter set.
  */
 import { $currentRouteId } from '../store.js';
 
 export const AUTO_LOCATE_DEBOUNCE_MS = 120_000;
+export const GEO_GRANTED_KEY = 'nt_geo_granted';
 
 let lastAutoLocateAt = 0;
+let startupOverwriteArmed = true;
 
 export function resetAutoLocateDebounce() {
     lastAutoLocateAt = 0;
+}
+
+export function resetStartupLocateOverwrite() {
+    startupOverwriteArmed = true;
+}
+
+export function disarmStartupLocateOverwrite() {
+    startupOverwriteArmed = false;
 }
 
 export function welcomeIsActive(doc = typeof document !== 'undefined' ? document : null) {
@@ -82,9 +95,81 @@ export function fromStationIsClaimed(doc = typeof document !== 'undefined' ? doc
     return false;
 }
 
+export function hasRememberedGeoGrant(storage = typeof localStorage !== 'undefined' ? localStorage : null) {
+    try {
+        return storage?.getItem?.(GEO_GRANTED_KEY) === '1';
+    } catch {
+        return false;
+    }
+}
+
+export function rememberGeolocationGranted(storage = typeof localStorage !== 'undefined' ? localStorage : null) {
+    try {
+        storage?.setItem?.(GEO_GRANTED_KEY, '1');
+    } catch { /* ignore */ }
+}
+
+/**
+ * Home-screen PWA, Play Store TWA, or a session that already stamped standalone.
+ * @param {{ standalone?: boolean, twa?: boolean }} [signals]
+ */
+export function isInstalledAppClient(signals) {
+    if (signals && (signals.standalone != null || signals.twa != null)) {
+        return !!(signals.standalone || signals.twa);
+    }
+    if (typeof window === 'undefined') return false;
+    try {
+        if (window.matchMedia?.('(display-mode: standalone)').matches) return true;
+        if (window.matchMedia?.('(display-mode: fullscreen)').matches) return true;
+        if (window.matchMedia?.('(display-mode: minimal-ui)').matches) return true;
+        if (window.navigator?.standalone) return true;
+        if (String(document.referrer || '').indexOf('android-app://') === 0) return true;
+        if (sessionStorage.getItem('nt_standalone') === '1') return true;
+        if (sessionStorage.getItem('nt_twa') === '1' || localStorage.getItem('nt_twa') === '1') return true;
+        if (document.documentElement?.classList?.contains('nt-standalone')) return true;
+        if (window.__ntAppClient?.app_source === 'twa' || window.__ntAppClient?.app_source === 'pwa') return true;
+    } catch { /* ignore */ }
+    return false;
+}
+
+export async function geolocationPermissionState() {
+    if (typeof navigator === 'undefined' || !navigator.permissions?.query) return 'unknown';
+    try {
+        const status = await navigator.permissions.query({ name: 'geolocation' });
+        const state = String(status?.state || '');
+        if (state === 'granted' || state === 'denied' || state === 'prompt') return state;
+        return 'unknown';
+    } catch {
+        return 'unknown';
+    }
+}
+
+/**
+ * True when a silent getCurrentPosition will not open a permission prompt.
+ * @param {{ state?: string, remembered?: boolean, installed?: boolean }} [opts]
+ */
+export async function geolocationAlreadyGranted(opts = {}) {
+    const state = opts.state != null ? opts.state : await geolocationPermissionState();
+    if (state === 'granted') return true;
+    if (state === 'denied') return false;
+    const remembered = opts.remembered != null ? !!opts.remembered : hasRememberedGeoGrant();
+    if (remembered) return true;
+    const installed = opts.installed != null ? !!opts.installed : isInstalledAppClient();
+    // iOS PWA and Play TWA often omit Permissions API (unknown) while OS location is on.
+    if (installed && state === 'unknown') return true;
+    return false;
+}
+
 /** Re-check right before applying GPS so an in-flight locate cannot steal the picker. */
-export function shouldApplySilentLocate(doc = typeof document !== 'undefined' ? document : null) {
-    return !stationPickerIsEngaged(doc) && !fromStationIsClaimed(doc);
+export function shouldApplySilentLocate(doc = typeof document !== 'undefined' ? document : null, opts = {}) {
+    if (stationPickerIsEngaged(doc)) {
+        disarmStartupLocateOverwrite();
+        return false;
+    }
+    if (!fromStationIsClaimed(doc)) return true;
+    const installed = opts.installed != null ? !!opts.installed : isInstalledAppClient();
+    const overwrite = opts.startupOverwrite != null ? !!opts.startupOverwrite : (startupOverwriteArmed && installed);
+    return overwrite;
 }
 
 /** Pure gate used by tests. Does not read Permissions API. */
@@ -96,24 +181,15 @@ export function boardIsReadyForAutoLocate({
     visible = true,
     pickerEngaged = false,
     fromAlreadySet = false,
+    startupOverwrite = false,
 } = {}) {
     if (welcomeActive) return false;
     if (!String(routeId || '').trim()) return false;
     if (!nextTrainActive && !plannerActive) return false;
     if (visible === false) return false;
     if (pickerEngaged) return false;
-    if (fromAlreadySet) return false;
+    if (fromAlreadySet && !startupOverwrite) return false;
     return true;
-}
-
-export async function geolocationAlreadyGranted() {
-    if (typeof navigator === 'undefined' || !navigator.permissions?.query) return false;
-    try {
-        const status = await navigator.permissions.query({ name: 'geolocation' });
-        return status?.state === 'granted';
-    } catch {
-        return false;
-    }
 }
 
 /**
@@ -129,18 +205,25 @@ export async function maybeAutoLocateBoard(opts = {}) {
     if (typeof locate !== 'function') return false;
 
     const doc = opts.doc ?? (typeof document !== 'undefined' ? document : null);
+    const installed = opts.installed != null ? !!opts.installed : isInstalledAppClient();
+    const pickerEngaged = opts.pickerEngaged ?? stationPickerIsEngaged(doc);
+    if (pickerEngaged) disarmStartupLocateOverwrite();
+    const startupOverwrite = opts.startupOverwrite != null
+        ? !!opts.startupOverwrite
+        : (startupOverwriteArmed && installed && !pickerEngaged);
     const ready = boardIsReadyForAutoLocate({
         welcomeActive: opts.welcomeActive ?? welcomeIsActive(doc),
         routeId: opts.routeId ?? $currentRouteId.get(),
         nextTrainActive: opts.nextTrainActive ?? nextTrainTabIsActive(doc),
         plannerActive: opts.plannerActive ?? tripPlannerTabIsActive(doc),
         visible: opts.visible ?? (typeof document === 'undefined' ? true : document.visibilityState === 'visible'),
-        pickerEngaged: opts.pickerEngaged ?? stationPickerIsEngaged(doc),
+        pickerEngaged,
         fromAlreadySet: opts.fromAlreadySet ?? fromStationIsClaimed(doc),
+        startupOverwrite,
     });
     if (!ready) return false;
 
-    const granted = opts.granted != null ? !!opts.granted : await geolocationAlreadyGranted();
+    const granted = opts.granted != null ? !!opts.granted : await geolocationAlreadyGranted({ installed });
     if (!granted) return false;
 
     lastAutoLocateAt = now;
@@ -157,6 +240,7 @@ export function bindAutoLocateTriggers() {
     document.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'visible') kick();
     });
+    window.addEventListener('pageshow', kick);
     window.addEventListener('nt-tab-changed', (e) => {
         const tab = e?.detail?.tab;
         if (tab === 'next-train' || tab === 'trip-planner') kick();

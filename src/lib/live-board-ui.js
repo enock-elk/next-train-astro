@@ -9,6 +9,7 @@ import { currentTime, loadAllSchedules } from './logic.js';
 import { showToast, triggerHaptic, openSmoothModal, closeSmoothModal } from './ui.js';
 import { applyPilotChrome } from './admin-chrome.js';
 import { trackAnalyticsEvent } from './analytics.js';
+import { bindAutoLocateTriggers, maybeAutoLocateBoard } from './auto-locate.js';
 import {
     simulateNextActiveService,
     getAllStations,
@@ -818,6 +819,7 @@ export function initLiveBoardUi() {
             findNextTrains();
             updateNextTrainView();
             updatePinUI();
+            maybeAutoLocateBoard().catch(() => {});
         }
     });
 
@@ -832,6 +834,7 @@ export function initLiveBoardUi() {
             populateStationList();
             findNextTrains();
             updateNextTrainView();
+            maybeAutoLocateBoard().catch(() => {});
         });
     });
 
@@ -1008,6 +1011,8 @@ export function initLiveBoardUi() {
     });
 
     try { startSmartRefresh(); } catch (e) { console.warn('Smart refresh unavailable', e); }
+    bindAutoLocateTriggers();
+    maybeAutoLocateBoard().catch(() => {});
 
     // Keep route-modal region label in sync whenever the store changes
     $userRegion.subscribe((region) => {

@@ -18,7 +18,8 @@ import {
     normalizeStationName, timeToSeconds, formatTimeDisplay, 
     escapeHTML, getDistanceFromLatLonInKm, safeStorage, usesWeekdayScheduleSheet,
     resolveOperatingDayType, simUsesSpecificDate, formatAppDate,
-    resolvePlannerStationInput, plannerStationDisplayName, masterListHasStation, STATION_ALIASES
+    resolvePlannerStationInput, plannerStationDisplayName, masterListHasStation, STATION_ALIASES,
+    resolveStationLatLon, weekdaySheetsForRoute
 } from './utils.js';
 import { planUnifiedTrip, extractTrainSheetStops } from './planner-core.js';
 import { saturdayNoServiceCopy, buildSaturdayAdvisoryCopy, stationDisplayName } from './saturday-service.js';
@@ -3727,9 +3728,17 @@ export function initPlanner() {
                     const { latitude: userLat, longitude: userLon } = position.coords;
                     let candidates = [];
                     const globalIndex = $globalStationIndex.get();
+                    const weekdaySheets = weekdaySheetsForRoute(
+                        ROUTES[$currentRouteId.get()],
+                        null,
+                        $fullDatabase.get(),
+                    );
                     if (globalIndex) {
                         for (const [stationName, coords] of Object.entries(globalIndex)) {
-                            const dist = getDistanceFromLatLonInKm(userLat, userLon, coords.lat, coords.lon);
+                            const ll = resolveStationLatLon(stationName, coords, weekdaySheets);
+                            if (!ll) continue;
+                            const dist = getDistanceFromLatLonInKm(userLat, userLon, ll.lat, ll.lon);
+                            if (!Number.isFinite(dist)) continue;
                             candidates.push({ stationName, dist });
                         }
                         candidates.sort((a, b) => a.dist - b.dist);
@@ -4075,6 +4084,8 @@ export function setupAutocomplete(inputId, selectId) {
 
     const list = document.createElement('ul');
     list.className = "absolute z-50 w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-b-lg shadow-xl max-h-60 overflow-y-auto hidden mt-1 left-0 custom-scrollbar text-left";
+    if (inputId === 'planner-from-search') list.id = 'planner-from-autocomplete-list';
+    else if (inputId === 'planner-to-search') list.id = 'planner-to-autocomplete-list';
     input.parentNode.appendChild(list);
     let renderGen = 0;
     let lastFilter = null;

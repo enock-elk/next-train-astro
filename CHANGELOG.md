@@ -2,9 +2,17 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin, Dev Hub, Alerts, Trains near me, community chat, or other hidden-test work. No emoji and no em dashes in What’s New. Keep `APP_VERSION`, `package.json` `version`, and `public/app-version.json` aligned on each release. Changelog / What’s New may be skipped, or the heading may be only **no release notes.** Every bump must add `ADMIN_CHANGELOG[APP_VERSION]` (System Health Build notes).
 
-## V9_09.18.7 — no release notes
+## V9_09.18.10 — no release notes
 
-FCM collapsed Android notifications use a transparent train icon and a white silhouette badge instead of the opaque app icon. No What’s New.
+FCM collapsed Android notifications use the transparent Next Train logo as the small icon, not the opaque app-icon square. No What’s New.
+
+## V9_09.18.9 — no release notes
+
+Auto-locate uses weekday station coordinates when a public-holiday sheet left them blank. No What’s New.
+
+## V9_09.18.8 — no release notes
+
+Granted-only nearest-station locate on the live board and Trip Planner From when those fields are untouched. Signed-in ops fields lastSeenAt, region, lastRouteId, appVersion. Privacy copy matches telemetry. No cookie banner. No What’s New.
 
 ## V9_09.18.6 — no release notes
 

@@ -5,8 +5,14 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
-    'V9_09.18.7': [
-        'FCM web push uses notification-icon.png (color train, transparent) as the large icon and notification-badge.png (white silhouette) as the Android status-bar / collapsed badge. Opaque icon-48/192 filled the small-icon mask and showed as a white square. Redeploy nexttrain-community after the PNG files are on nexttrain.co.za. No What’s New. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
+    'V9_09.18.10': [
+        'FCM webpush.notification icon/badge no longer use opaque icon-48/192 (those fill Android’s small-icon mask and paint as a white square). Payload uses loading-logo.png which is already on nexttrain.co.za with a transparent ground, plus dedicated notification-icon.png / notification-badge.png for after this build is on the host. Firebase Console cannot set a Web badge; Dev Hub sends are the path. Redeploy nexttrain-community. No What’s New. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
+    ],
+    'V9_09.18.9': [
+        'Auto-locate reuses weekday COORDINATES when a later-day sheet (WC public holiday *_pub) omitted them. Station index fills missing lat/lon from weekday_to_a/b; findNearestStation and planner From locate skip invalid coords and fall back to weekday rows. Stations do not move. No What’s New. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
+    ],
+    'V9_09.18.8': [
+        'Live board and Trip Planner From silently pick the nearest station only when OS geolocation is already granted, Welcome is done, Next Train or Trip Planner is visible, and a route is pinned. Auto-locate never opens a permission prompt, never overwrites a From field the commuter is picking or has already set, and re-checks that gate after GPS returns. Signed-in users/{uid} PATCHes lastSeenAt, region, lastRouteId, appVersion (throttled). No GPS on the account. Privacy copy drops the promised cookie banner and stops calling device-id diagnostics anonymous. No What’s New. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
     ],
     'V9_09.18.6': [
         'Admin Feedback inbox ticks: 1 grey sent, 2 grey when the commuter app fetched the inbox (delivered), 2 blue when they opened Messages (read). Auth-backed PATCH on inbox/{deviceId}/{msgId}. No R chip. Opening a thread no longer writes acknowledged. Commuter Messages stays tick-free. No What’s New. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',

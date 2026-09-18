@@ -14,7 +14,7 @@
  * Changelog / What’s New is optional: skip both, or write only "no release notes."
  * Always add ADMIN_CHANGELOG[APP_VERSION] (System Health Build notes).
  */
-export const APP_VERSION = "V9_09.18.7";
+export const APP_VERSION = "V9_09.18.10";
 
 /** Public support channels (About modal, lifeboat help.html, Safe Mode). */
 export const SUPPORT_EMAIL = 'admin@nexttrain.co.za';
@@ -230,25 +230,25 @@ export const LEGAL_TEXTS = {
 
         <h4 class="font-bold text-lg mb-2 mt-4">3. Acceptable Use</h4>
         <p class="mb-3">Next Train is built for personal, non-commercial transit planning. Automated data scraping, reverse-engineering of our databases, or malicious interference with our cloud infrastructure is strictly prohibited.</p>
-        <p class="mb-3">By using the Trip Planner and related features, you acknowledge that we may process limited anonymous service diagnostics to maintain reliability. This does not change the disclaimers above regarding schedule or fare accuracy.</p>
+        <p class="mb-3">By using the Trip Planner and related features, you acknowledge that we may process limited service diagnostics (origin, destination, region, device id, and optional signed-in account id) to maintain reliability. This does not change the disclaimers above regarding schedule or fare accuracy.</p>
     `,
     privacy: `
         <h4 class="font-bold text-lg mb-2">1. What Information Do We Collect?</h4>
         <p class="mb-3">We respect your privacy. Next Train is designed to be used without creating an account.</p>
         <p class="mb-3"><strong>Optional sign-in:</strong> If you create an account, Google or Facebook may act as an identity provider. We receive a name, email, and optional photo so we can keep your profile. We do not post on your behalf.</p>
-        <p class="mb-3"><strong>Location Data:</strong> If you use the “Find Nearest Station” feature, your GPS coordinates are processed strictly locally on your device. We never transmit, track, or store your physical location on our servers.</p>
-        <p class="mb-3"><strong>Anonymous Telemetry:</strong> To keep the app fast and crash-free, we automatically collect basic diagnostic data (e.g., device model, operating system, generic region, and crash logs).</p>
-        <p class="mb-3">We may also collect limited anonymous diagnostics related to trip planning and routing outcomes, solely to improve service reliability. This data is not used to identify or market to you.</p>
+        <p class="mb-3"><strong>Location Data:</strong> If you allow location, Next Train may pick the nearest station on the live board and in Trip Planner From when those fields are still empty. Coordinates stay on your device. We never transmit, track, or store your physical location on our servers.</p>
+        <p class="mb-3"><strong>Service diagnostics:</strong> To keep the app fast and crash-free, we collect diagnostic data such as device type, operating system, selected region, crash logs, and a first-party device id.</p>
+        <p class="mb-3">When you use Trip Planner, we may store origin, destination, region, device id, and (if you are signed in) your account id, to improve routing reliability. This is not used to market to you.</p>
         <p class="mb-3"><strong>Voluntary Information:</strong> If you use the In-App Feedback tool, you may optionally provide your email or WhatsApp number. This is used only to reply to your specific query and is never used for marketing.</p>
 
         <h4 class="font-bold text-lg mb-2 mt-4">2. Third-Party Tracking &amp; Cookies</h4>
         <p class="mb-3">To understand how commuters use the app and to keep the servers running, we integrate with industry-standard third-party services:</p>
-        <p class="mb-3"><strong>Analytics:</strong> We use Google Analytics 4 and Microsoft Clarity to track generic usage patterns (e.g., which routes are most popular) and identify UX roadblocks. All data is highly anonymized.</p>
-        <p class="mb-3"><strong>Advertising:</strong> We use third-party ad networks to help cover server costs. These networks may use cookies to serve relevant ads. (Note: We will soon be introducing a cookie consent banner to give you full control over this).</p>
+        <p class="mb-3"><strong>Analytics:</strong> We use Google Analytics 4 and Microsoft Clarity to understand usage patterns (for example which routes are popular) and fix UX issues. These services may set their own cookies.</p>
+        <p class="mb-3"><strong>Advertising:</strong> We use third-party ad networks to help cover server costs. These networks may use cookies to serve ads.</p>
         <p class="mb-3"><strong>Infrastructure:</strong> Our schedules and live alerts are distributed via secure, globally recognized cloud infrastructure providers.</p>
 
         <h4 class="font-bold text-lg mb-2 mt-4">3. Accounts</h4>
-        <p class="mb-3">If you sign in, we store your display name, email, and optional photo from Google or Facebook. We do not publish to your Facebook or Google feed.</p>
+        <p class="mb-3">If you sign in, we store your display name, email, and optional photo from Google or Facebook. We also store the last time the app was open, your selected region and route, and the app version, so we can keep your profile working. We do not store GPS on the account. We do not publish to your Facebook or Google feed.</p>
 
         <h4 class="font-bold text-lg mb-2 mt-4">4. Your POPIA Rights (South Africa)</h4>
         <p class="mb-3">Under the Protection of Personal Information Act (POPIA), you have the right to request access to, correction of, or deletion of any personal data you have voluntarily provided to us (such as an account or a feedback email).</p>

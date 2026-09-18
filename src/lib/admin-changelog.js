@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_09.18.2': [
+        'Dev Hub Notifications shows the first FCM error when send fails (Sent 0 of N with tokens kept). Typical cause is the telemetry service account missing Firebase Cloud Messaging API Admin. Fallback Worker URL stays. No What’s New. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
+    ],
     'V9_09.18.1': [
         'Lab FCM Count devices: Dev Hub uses PUBLIC_COMMUNITY_WORKER_URL when the Pages build inlines it, and falls back to https://nexttrain-community.enock.workers.dev when Cloudflare Git omits the var. Fallback stays. No What’s New. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
     ],

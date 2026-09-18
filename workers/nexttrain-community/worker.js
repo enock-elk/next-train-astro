@@ -1007,6 +1007,15 @@ export async function deliverPushNotifications(env, raw, options = {}) {
         result.entry.deviceIds.map((deviceId) => rtdb.put(`push_subscriptions/${deviceId}`, null))
     )));
     const sent = results.filter((result) => result.ok).length;
+    const firstFail = results.find((result) => !result.ok);
+    const sampleError = firstFail
+        ? String(
+            firstFail.data?.error?.message
+            || firstFail.data?.error?.status
+            || firstFail.error
+            || (firstFail.status ? `HTTP ${firstFail.status}` : 'FCM send failed')
+        ).slice(0, 180)
+        : '';
     return {
         dryRun: false,
         subscribers: Object.keys(tree).length,
@@ -1016,6 +1025,7 @@ export async function deliverPushNotifications(env, raw, options = {}) {
         failed: results.length - sent,
         invalid: invalid.length,
         truncated: Math.max(0, recipients.length - limited.length),
+        sampleError,
     };
 }
 

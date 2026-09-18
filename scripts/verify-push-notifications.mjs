@@ -92,6 +92,7 @@ assert.deepEqual(
     { matched: sent.matched, attempted: sent.attempted, sent: sent.sent, failed: sent.failed, invalid: sent.invalid },
     { matched: 2, attempted: 2, sent: 1, failed: 1, invalid: 1 }
 );
+assert.equal(sent.sampleError, 'HTTP 404');
 assert.deepEqual(sendDb.deleted, ['push_subscriptions/bad']);
 
 const missingAuth = await communityWorker.fetch(

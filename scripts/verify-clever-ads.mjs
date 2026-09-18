@@ -70,15 +70,18 @@ if (!ads.includes('if (nodeHasLoadedCreative(move)) return')) fail('loaded creat
 if (!ads.includes('ignoreOffscreen')) fail('scroll-away must not count as dismiss');
 if (!ads.includes('nt-ad-scroll-sync')) fail('already-painted stickies must follow #app-scroll');
 if (!ads.includes('nt-ad-undocked')) fail('undocked stickies must be marked so they follow #app-scroll');
+if (!ads.includes('undockedTopUnitHeight')) fail('body-level pushdowns (in-flow, not fixed) must still follow #app-scroll');
 if (!ads.includes('const host = adScrollHost()')) fail('destroyed-ad cleanup must resolve #nt-ad-scroll-host');
 if (!layout.includes('translate: 0 var(--nt-ad-scroll')) fail('undocked stickies must use CSS translate, not transform');
 if (!layout.includes('html.nt-ad-scroll-sync .nt-ad-undocked')) fail('undocked follow CSS must target .nt-ad-undocked');
-if (!/html\.nt-ad-scroll-sync \.nt-ad-undocked[\s\S]{0,120}pointer-events:\s*none/.test(layout)) {
-  fail('undocked wrappers must not trap page scroll');
+if (/html\.nt-ad-scroll-sync \.nt-ad-undocked[\s\S]{0,160}pointer-events:\s*none/.test(layout)) {
+  fail('vendor Close.png is a sibling of the iframe; do not disable pointer-events on the unit');
 }
-if (!layout.includes('#nt-ad-scroll-host iframe')) fail('docked iframes must stay in the Next Train frame');
-if (!/\#nt-ad-scroll-host iframe[\s\S]{0,280}position:\s*relative\s*!important/.test(layout)) {
-  fail('docked iframes must not remain position:fixed to the viewport');
+if (/\#nt-ad-scroll-host iframe[\s\S]{0,280}position:\s*relative\s*!important/.test(layout)) {
+  fail('do not flatten docked iframes; vendor close must stay on the unit');
+}
+if (layout.includes('img[alt="close"]') && /img\[alt="close"\][\s\S]{0,200}display:\s*none/.test(layout)) {
+  fail('must not hide the vendor close control');
 }
 if (!ads.includes('unitOccupiesSpace')) fail('must ignore empty leftover wrappers, not just box height');
 if (!ads.includes('visibility === \'hidden\'')) fail('shift measure must skip vendor visibility:hidden');
@@ -148,10 +151,19 @@ if (ads.includes("setProperty('display', 'none'")) {
 
   const pinShell = (overlayH, inFlowH) => 0;
   const scrollAway = (scrollTop) => -Math.max(0, scrollTop);
+  const unitKeepsVendorClose = ({ wrapperHasClose, closePointerEvents, iframeFlattened }) => (
+    wrapperHasClose && closePointerEvents !== 'none' && !iframeFlattened
+  );
   if (pinShell(96, 0) !== 0) fail('filled ads must not pin #main-content (scroll-away, not X)');
   if (pinShell(96, 80) !== 0) fail('docked in-flow ads must not double-push the shell');
   if (scrollAway(40) !== -40) fail('undocked stickies follow #app-scroll by -scrollTop');
   if (scrollAway(0) !== 0) fail('undocked stickies sit at rest at scroll 0');
+  if (!unitKeepsVendorClose({ wrapperHasClose: true, closePointerEvents: 'auto', iframeFlattened: false })) {
+    fail('pushdown close must stay on the unit');
+  }
+  if (unitKeepsVendorClose({ wrapperHasClose: true, closePointerEvents: 'none', iframeFlattened: false })) {
+    fail('pointer-events none on the unit would eat the vendor X');
+  }
 }
 
 {

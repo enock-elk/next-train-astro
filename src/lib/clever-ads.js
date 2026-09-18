@@ -5,12 +5,13 @@
  * CleverCoreLoader103008 next to the first page script. Guardian only decides
  * WHEN to call that IIFE (welcome / safe-zone / 4-slot schedule). Do not steal
  * #clever-core for a positioned DIV and do not set left/top/transform on their
- * overlays. Top units dock into #nt-ad-scroll-host (first child of
- * #app-scroll) before their iframe loads, so they sit in the Next Train
- * frame and scroll away with the board. Scroll-away is not dismiss: a live
+ * overlays. Top units (Clever pushdown: wrapper + iframe + vendor Close.png)
+ * dock into #nt-ad-scroll-host as one piece so they sit in the Next Train
+ * frame and scroll away with the board. Keep the vendor X; do not disable
+ * pointer-events on the unit. Scroll-away is not dismiss: a live
  * unit that has left the viewport must stay occupied. Never move a wrapper
  * that already has a loaded iframe (reparenting reloads the creative).
- * Already-painted viewport stickies stay document-level and follow
+ * Already-painted units stay document-level and the whole wrapper follows
  * #app-scroll via CSS `translate` (not transform) plus a host spacer.
  * Do not transform #nt-shell itself (it wraps position:fixed overlays).
  *
@@ -264,12 +265,26 @@ function markUndockedFollowers(follow) {
     });
 }
 
-/** Already-painted stickies stay document-level; follow #app-scroll without reparenting. */
-function syncUndockedOverlayScroll(overlayH, inFlowH) {
+/** Height of a top unit that is still outside #nt-ad-scroll-host (body pushdown). */
+function undockedTopUnitHeight() {
+    const host = adScrollHost();
+    let h = 0;
+    cleverOverlayNodes().forEach((el) => {
+        const move = outermostMovableAdNode(el);
+        if (!move || (host && host.contains(move)) || isBottomOrSideOverlay(move)) return;
+        if (!unitOccupiesSpace(move, { ignoreOffscreen: true })) return;
+        h = Math.max(h, move.getBoundingClientRect().height);
+    });
+    return h;
+}
+
+/** Already-painted units stay put; the whole wrapper (creative + vendor X) follows #app-scroll. */
+function syncUndockedOverlayScroll() {
     const html = document.documentElement;
     const scroller = appScrollEl();
     const host = adScrollHost();
-    const follow = overlayH > 20 && inFlowH < 8 && !isAdsCloaked();
+    const outsideH = undockedTopUnitHeight();
+    const follow = outsideH > 20 && !isAdsCloaked();
     if (!follow || !scroller) {
         html.classList.remove('nt-ad-scroll-sync');
         html.style.removeProperty('--nt-ad-scroll');
@@ -286,7 +301,7 @@ function syncUndockedOverlayScroll(overlayH, inFlowH) {
     markUndockedFollowers(true);
     if (host && !host.childElementCount) {
         host.classList.add('nt-ad-slot-open');
-        host.style.height = `${Math.round(overlayH)}px`;
+        host.style.height = `${Math.round(outsideH)}px`;
         host.removeAttribute('aria-hidden');
     }
 }
@@ -564,7 +579,7 @@ function syncAdShellMotion() {
     const filled = overlayH > 0 || inFlowH > 0;
 
     if (isAdsCloaked()) {
-        syncUndockedOverlayScroll(0, 0);
+        syncUndockedOverlayScroll();
         if (inFlowH > 0) prevInFlowH = inFlowH;
         return;
     }
@@ -578,14 +593,14 @@ function syncAdShellMotion() {
     setShellVar('--nt-ad-flip', 0, false);
 
     if (!filled) {
-        syncUndockedOverlayScroll(0, 0);
+        syncUndockedOverlayScroll();
         prevOverlayH = 0;
         prevInFlowH = 0;
         stopOccupancyWatch();
         return;
     }
 
-    syncUndockedOverlayScroll(overlayH, inFlowH);
+    syncUndockedOverlayScroll();
     prevOverlayH = overlayH;
     prevInFlowH = inFlowH;
     if (overlayH > 0 || inFlowH > 0) maybeStartOccupancyWatch();

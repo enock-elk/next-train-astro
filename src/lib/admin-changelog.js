@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_09.18.15': [
+        'SERP copy leads with View and download PRASA Metrorail train timetables, plus free/works offline. Route/region/corridor metas match that download intent. No live train tracking in public meta. Titles stay destA-first 2026 Train Times. No What’s New. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
+    ],
     'V9_09.18.14': [
         'Startup auto-locate on installed PWA / Play TWA: treat missing Permissions API as already granted, remember nt_geo_granted after GPS, one-shot overwrite of a restored last station, pageshow kick, fused GPS (enableHighAccuracy false). The green Found: {station} ({km}km) toast now also fires on silent auto-locate (Locating / errors stay tap-only). App stuck? Get help stays hidden until 15s of visible Starting Next Train. help.html is a light Next Train shell and no longer paints device id / version / URL. Styles stay inline in the document (no hashed /_astro/ CSS). With CSS off, headings, lists, real buttons, Facebook, mailto, and the honeypot hidden= attribute still work. Play Store users are twa_open (app_source: twa, za.co.nexttrain.app). No What’s New. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
     ],

@@ -924,8 +924,11 @@ export function buildFcmMessage(registrationId, request, tag = `nt-push-${Date.n
                 Urgency: request.urgency,
             },
             notification: {
-                icon: 'https://nexttrain.co.za/icons/icon-192.png',
-                badge: 'https://nexttrain.co.za/icons/icon-48.png',
+                // Color train on transparent canvas (large/expanded icon).
+                // Opaque app icons (icon-48/192) become a white square on Android collapsed shade.
+                icon: 'https://nexttrain.co.za/icons/notification-icon.png',
+                // White silhouette, transparent ground — Android status-bar / collapsed small icon.
+                badge: 'https://nexttrain.co.za/icons/notification-badge.png',
                 tag,
             },
             fcm_options: {

@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_09.18.7': [
+        'FCM web push uses notification-icon.png (color train, transparent) as the large icon and notification-badge.png (white silhouette) as the Android status-bar / collapsed badge. Opaque icon-48/192 filled the small-icon mask and showed as a white square. Redeploy nexttrain-community after the PNG files are on nexttrain.co.za. No What’s New. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
+    ],
     'V9_09.18.6': [
         'Admin Feedback inbox ticks: 1 grey sent, 2 grey when the commuter app fetched the inbox (delivered), 2 blue when they opened Messages (read). Auth-backed PATCH on inbox/{deviceId}/{msgId}. No R chip. Opening a thread no longer writes acknowledged. Commuter Messages stays tick-free. No What’s New. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
     ],

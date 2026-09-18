@@ -47,7 +47,23 @@ assert.equal(message.token, baseSub.token);
 assert.equal(message.webpush.fcm_options.link, request.link);
 assert.equal(message.webpush.headers.Urgency, 'high');
 assert.equal(message.webpush.notification.tag, 'test-tag');
-assert.match(message.webpush.notification.icon, /icon-192\.png$/);
+assert.match(message.webpush.notification.icon, /notification-icon\.png$/);
+assert.match(message.webpush.notification.badge, /notification-badge\.png$/);
+{
+    const { existsSync, readFileSync } = await import('node:fs');
+    const { fileURLToPath } = await import('node:url');
+    const { dirname, join } = await import('node:path');
+    const icons = join(dirname(fileURLToPath(import.meta.url)), '../public/icons');
+    for (const name of ['notification-icon.png', 'notification-badge.png']) {
+        const path = join(icons, name);
+        assert.equal(existsSync(path), true, `${name} is committed`);
+        const bytes = readFileSync(path);
+        assert.equal(bytes[0] === 0x89 && bytes[1] === 0x50, true, `${name} is a PNG`);
+        // IHDR color type at byte 25 of a standard PNG (8 + 4 + 4 + 13 IHDR): 6 = RGBA
+        const colorType = bytes[25];
+        assert.equal(colorType, 6, `${name} must be RGBA so Android can mask the silhouette`);
+    }
+}
 const fidMessage = buildFcmMessage('firebase-installation-id', request, 'fid-tag', 'fid');
 assert.equal(fidMessage.fid, 'firebase-installation-id');
 assert.equal('token' in fidMessage, false, 'new registrations use the current FID target');

@@ -1641,6 +1641,7 @@
             const emptyTracks = { byId: new Map(), graph: null, stationOrderById: new Map() };
             let liveTrackBundle = emptyTracks;
             let mapOperatorAuthed = false;
+            let mapViewOnly = false;
 
             function applyGoldStationOrders(trackBundle) {
                 const orders = trackBundle?.stationOrderById;
@@ -2382,8 +2383,9 @@
                 }
             }
 
-            function setMapOperatorAuthed(on) {
+            function setMapOperatorAuthed(on, viewOnly) {
                 mapOperatorAuthed = !!on;
+                if (viewOnly != null) mapViewOnly = !!viewOnly;
                 syncTrackEditorChrome();
             }
 
@@ -2938,7 +2940,9 @@
                     const sheetId = 'nt-tt-train-' + String(trainId).replace(/[^a-zA-Z0-9_-]/g, '');
                     const actionBtn = mine
                         ? "<button type='button' id='" + joinId + "' class='nt-live-train-pop-btn nt-live-train-pop-btn--stop'>Stop sharing</button>"
-                        : "<button type='button' id='" + joinId + "' class='nt-live-train-pop-btn'>I’m on this train</button>";
+                        : (mapViewOnly
+                            ? ''
+                            : "<button type='button' id='" + joinId + "' class='nt-live-train-pop-btn'>I’m on this train</button>");
                     const paused = newest.trackingState === 'paused' || isPingGpsStale(newest);
                     const status = paused ? 'Paused' : 'Active';
                     const detailsId = 'nt-track-details-' + String(trainId).replace(/[^a-zA-Z0-9_-]/g, '');
@@ -3019,7 +3023,8 @@
                 const data = ev && ev.data;
                 if (!data || typeof data !== 'object') return;
                 if (data.type === 'nt-map-admin') {
-                    setMapOperatorAuthed(!!data.authed);
+                    setMapOperatorAuthed(!!data.authed, data.viewOnly === true);
+                    if (lastRidePings.length) renderRidePingMarkers(lastRidePings);
                     return;
                 }
                 if (data.type === 'nt-map-ride-pings') {

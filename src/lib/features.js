@@ -13,7 +13,9 @@
  *
  * Lab (`lab.nexttrain.co.za` or PUBLIC_LAB_MODE=true): missing/empty config →
  * realtime / delay / push / ride-checkin on (sharing still works for admins).
- * Map and Community tabs stay off until config/features lists pinned routes.
+ * Map tab is opened for all lab users as view-only (see isLabMapSpectator);
+ * mapTab in this file stays off so Account chrome does not unlock.
+ * Community tab stays off until config/features lists pinned routes.
  * The green live-share chip uses `isRideCheckInPinned` (RTDB pins only, no
  * lab `*` default). Production: missing config → all off (safe merge).
  */

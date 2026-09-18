@@ -558,6 +558,15 @@ assert(adminChrome.includes('FEATURE_KEYS.COMMUNITY_TAB'), 'Community tab is a p
 assert(adminChrome.includes('isSignedInAccount()'), 'signed-in commuters keep Account when extra features are off');
 assert(adminChrome.includes("addEventListener('accountchange'"), 'Account row reappears when someone signs in');
 assert(adminChrome.includes('placeAccountSettings'), 'Passenger Type and Theme move into Account when that row is visible');
+assert(adminChrome.includes('isLabMapSpectator'), 'lab map viewers are distinct from mapTab pilots');
+assert(adminChrome.includes("surface === 'map' && isLabEnvironment()"), 'lab opens Map without the mapTab flag');
+assert(adminChrome.includes("isLabEnvironment() && !isSignedInAccount()"), 'unsigned lab map viewers do not get Account from mapTab');
+assert(adminChrome.includes("data-lab-map-view"), 'lab spectator state is marked on html');
+assert(adminChrome.includes("map-tab-nearby-btn"), 'lab spectators lose Trains near you');
+
+const featuresJs = readFileSync(new URL('../src/lib/features.js', import.meta.url), 'utf8');
+assert(featuresJs.includes("mapTab: { enabled: false, routeIds: [] }"), 'lab defaults keep mapTab off so Account stays locked');
+assert(featuresJs.includes('isLabMapSpectator'), 'features comment points at view-only lab Map');
 
 const liveBoard = readFileSync(new URL('../src/lib/live-board.js', import.meta.url), 'utf8');
 assert(liveBoard.includes('isAdminAuthed() && rule && rule.expiresAt'), 'exclusion Until line is admin-only');

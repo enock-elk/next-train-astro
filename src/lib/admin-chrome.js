@@ -7,7 +7,7 @@
 import { safeStorage } from './utils.js';
 import { $currentRouteId } from '../store.js';
 import { $account } from './account.js';
-import { FEATURE_KEYS, isFeatureEnabled, isFeatureGranted } from './features.js';
+import { FEATURE_KEYS, isFeatureEnabled, isFeatureGranted, isLabEnvironment } from './features.js';
 
 function isSignedInAccount() {
     return $account.get()?.status === 'signed-in';
@@ -50,9 +50,16 @@ function setReveal(el, on) {
     }
 }
 
+/** Lab commuters may open Map to watch live shares. Operators keep share/join. */
+export function isLabMapSpectator() {
+    return isLabEnvironment() && !isAdminAuthed();
+}
+
 /** Pin-gated testers: Map / Community / Account follow pinned routes, not the viewed corridor. */
 export function canAccessPilotSurface(surface, routeId = '') {
     if (isAdminAuthed()) return true;
+    // Lab: Map tab is view-only for everyone. Do not treat this as mapTab (that unlocks Account).
+    if (surface === 'map' && isLabEnvironment()) return true;
     if (surface === 'map' && isFeatureGranted(FEATURE_KEYS.MAP_TAB)) return true;
     if (surface === 'community' && isFeatureGranted(FEATURE_KEYS.COMMUNITY_TAB)) return true;
     if (surface === 'tripPrice' && isFeatureGranted(FEATURE_KEYS.TRIP_PRICE)) return true;
@@ -60,7 +67,9 @@ export function canAccessPilotSurface(surface, routeId = '') {
     // A signed-in commuter must always reach Account, even if extra features
     // (Map / Community / ride check-in) are switched off in Dev Hub.
     if (surface === 'account' && isSignedInAccount()) return true;
-    if (surface === 'account' && (
+    if (surface === 'account' && isLabEnvironment()) {
+        if (isFeatureGranted(FEATURE_KEYS.COMMUNITY_TAB)) return true;
+    } else if (surface === 'account' && (
         isFeatureGranted(FEATURE_KEYS.MAP_TAB)
         || isFeatureGranted(FEATURE_KEYS.COMMUNITY_TAB)
         || isFeatureGranted(FEATURE_KEYS.RIDE_CHECKIN)
@@ -72,6 +81,10 @@ export function canAccessPilotSurface(surface, routeId = '') {
     if (surface === 'community') return hit(FEATURE_KEYS.COMMUNITY_TAB);
     if (surface === 'tripPrice') return hit(FEATURE_KEYS.TRIP_PRICE);
     if (surface === 'account') {
+        // Lab map viewers keep the public Options drawer (no Account).
+        if (isLabEnvironment() && !isSignedInAccount()) {
+            return hit(FEATURE_KEYS.COMMUNITY_TAB);
+        }
         return hit(FEATURE_KEYS.MAP_TAB) || hit(FEATURE_KEYS.COMMUNITY_TAB);
     }
     return false;
@@ -148,6 +161,9 @@ export function applyPilotChrome() {
     const html = document.documentElement;
     html.setAttribute('data-pilot-map', !isAdminAuthed() && mapOn ? '1' : '0');
     html.setAttribute('data-pilot-community', !isAdminAuthed() && communityOn ? '1' : '0');
+    html.setAttribute('data-lab-map-view', isLabMapSpectator() ? '1' : '0');
+    const nearbyBtn = document.getElementById('map-tab-nearby-btn');
+    if (nearbyBtn) setReveal(nearbyBtn, !isLabMapSpectator());
 
     const tab = safeStorage.getItem('activeTab');
     if (!isAdminAuthed() && ((tab === 'map' && !mapOn) || (tab === 'community' && !communityOn))) {
@@ -212,6 +228,7 @@ if (typeof window !== 'undefined') {
     window.applyAdminAuthedChrome = applyAdminAuthedChrome;
     window.applyPilotChrome = applyPilotChrome;
     window.canAccessPilotSurface = canAccessPilotSurface;
+    window.isLabMapSpectator = isLabMapSpectator;
     window.getPinnedRouteIds = getPinnedRouteIds;
     window.placeAccountSettings = placeAccountSettings;
     bindPilotChromeListeners();

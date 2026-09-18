@@ -27,7 +27,7 @@ import {
 } from './trust.js';
 import { FEATURE_KEYS, fetchFeatures, isFeatureEnabled } from './features.js';
 import { timetableWhereLabel, TRACKING_WINDOW_SEC } from './train-ghosts.js';
-import { isAdminAuthed } from './admin-chrome.js';
+import { isAdminAuthed, isLabMapSpectator } from './admin-chrome.js';
 
 /** @deprecated Prefer isDelayReportsUiEnabled(routeId) — kept for any external reads. */
 export let DELAY_REPORTS_UI_ENABLED = false;
@@ -894,7 +894,7 @@ export function openTrainReportModal(opts = {}) {
         rideBox.dataset.route = routeId || '';
         rideBox.dataset.time = scheduledTime || '';
         import('./ride-pings.js').then((m) => {
-            rideBox.classList.toggle('hidden', !(trainId && m.isRideCheckInEnabled?.(routeId)));
+            rideBox.classList.toggle('hidden', isLabMapSpectator() || !(trainId && m.isRideCheckInEnabled?.(routeId)));
         }).catch(() => { rideBox.classList.add('hidden'); });
     }
     const hint = document.getElementById('tr-update-hint');
@@ -1592,6 +1592,7 @@ export function bindDelayReportUi() {
     });
 
     document.getElementById('tr-im-on-it')?.addEventListener('click', () => {
+        if (isLabMapSpectator()) return;
         triggerHaptic();
         const box = document.getElementById('tr-ride-actions');
         const trainId = box?.dataset.train || document.getElementById('tr-train')?.value;
@@ -1608,6 +1609,7 @@ export function bindDelayReportUi() {
         })).catch(() => {});
     });
     document.getElementById('tr-im-waiting')?.addEventListener('click', () => {
+        if (isLabMapSpectator()) return;
         triggerHaptic();
         const box = document.getElementById('tr-ride-actions');
         const trainId = box?.dataset.train || document.getElementById('tr-train')?.value;

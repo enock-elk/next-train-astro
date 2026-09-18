@@ -2,6 +2,10 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin, Dev Hub, Alerts, Trains near me, community chat, or other hidden-test work. No emoji and no em dashes in What’s New. Keep `APP_VERSION`, `package.json` `version`, and `public/app-version.json` aligned on each release. Changelog / What’s New may be skipped, or the heading may be only **no release notes.** Every bump must add `ADMIN_CHANGELOG[APP_VERSION]` (System Health Build notes).
 
+## V9_09.18.12 — no release notes
+
+Lab Map tab is view-only for all users so they can watch a live share. Share, join, and Account chrome stay off for unsigned lab commuters. Production is unchanged. No What’s New.
+
 ## V9_09.18.11 — Points, badges, notification targeting
 
 Account points take longer. Same-day contributions collapse to one row and expand for detail. Badge tiles fill toward a streak. Community can show the signed-in level. Dev Hub Notifications can target pinned routes, a user id, and a notification type. No FCM, Alerts, or Community chat in What’s New.

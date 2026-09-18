@@ -417,6 +417,10 @@ assert(hubModals.includes('id="nt-admin-publish-train"'), 'admin nearby sheet ca
     assert(mapView.includes('id="map-tab-stop-btn"'), 'Map tab has Stop sharing');
     assert(mapTab.includes('ENFORCE_LIVE_SHARE_VET = true'), 'live-share GPS vet is enforced');
     assert(mapTab.includes("'nearby_modal'"), 'Trains near you still starts a share');
+    assert(mapTab.includes('isLabMapSpectator()'), 'lab spectators cannot start a live share');
+    assert(mapTab.includes('postMapSharePolicy'), 'map iframe is told when join/share is view-only');
+    assert(mapApp.includes('mapViewOnly'), 'map popups can hide I’m on this train');
+    assert(mapApp.includes('data.viewOnly === true'), 'map embed honors viewOnly from the parent tab');
     assert(mapTab.includes('skipVolunteer: true'), 'nearby / map join skip the volunteer sheet');
     assert(mapApp.includes('nt-live-train-glyph--mine'), 'map train glyph has a mine state');
     assert(mapApp.includes('nt-live-train-glyph--paused'), 'map train glyph has a paused GPS state');

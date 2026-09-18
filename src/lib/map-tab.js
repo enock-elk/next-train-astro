@@ -16,7 +16,7 @@ import { currentTime } from './logic.js';
 import { currentScheduleData } from './live-board.js';
 import { trainGoingLabel, trainGoingFullLabel, TRACKING_WINDOW_SEC, compareNearbyTrainLikelihood, isGhostTrackable, trainIdsInSchedule } from './train-ghosts.js';
 import { relaxLiveShareGuards } from './features.js';
-import { isAdminAuthed } from './admin-chrome.js';
+import { isAdminAuthed, isLabMapSpectator } from './admin-chrome.js';
 import { formatGpsPingAge, formatLastSeenWithPingClock, gpsPingSuccessAt } from './gps-freshness.js';
 import {
     acquireGeoWatch,
@@ -343,6 +343,14 @@ function postToMap(payload) {
     try {
         frame?.contentWindow?.postMessage(payload, '*');
     } catch { /* ignore */ }
+}
+
+function postMapSharePolicy() {
+    postToMap({
+        type: 'nt-map-admin',
+        authed: isAdminAuthed(),
+        viewOnly: isLabMapSpectator(),
+    });
 }
 
 /** Coords for a station name from the global index (keys are display names). */
@@ -958,6 +966,7 @@ async function publishAdminManualTrain() {
  * Full-screen list of timetable trains scored against the rider's fix.
  */
 export async function openNearbyTrainsModal({ lat, lng } = {}) {
+    if (isLabMapSpectator()) return;
     hideContributeSheet();
     const modal = document.getElementById('nt-nearby-trains-modal');
     const list = document.getElementById('nt-nearby-list');
@@ -1328,6 +1337,7 @@ const locatePromptSeen = new Set();
 /** After Locate: if snapped to rails and a ghost is nearby, ask once. */
 export async function maybePromptLocateOnTrain(detail) {
     if (!detail || detail.isAuto) return;
+    if (isLabMapSpectator()) return;
     const { isRideCheckInEnabled } = await import('./ride-pings.js');
     if (!isRideCheckInEnabled()) return;
     const lat = Number(detail.lat);
@@ -1540,6 +1550,9 @@ export async function startOnTrainShare({
     intent: forcedIntent = '',
     adminOverrideRole = '',
 } = {}) {
+    if (isLabMapSpectator()) {
+        return { ok: false, disabled: true };
+    }
     lastShareRequest = { trainId, station, destination, routeId, source, scheduledTime, intent: 'onboard', adminOverrideRole };
     triggerHaptic();
     const id = trainId === 'trip' ? null : (trainId || null);
@@ -2147,6 +2160,10 @@ async function runTripWatch(watch) {
  * the rider is close to the departure station.
  */
 export function maybeOfferPlannerContribute() {
+    if (isLabMapSpectator()) {
+        document.getElementById('planner-contribute-banner')?.remove();
+        return;
+    }
     const bannerId = 'planner-contribute-banner';
     let banner = document.getElementById(bannerId);
     const results = document.getElementById('planner-results-section');
@@ -2294,6 +2311,7 @@ export function activateMapTab() {
     }).catch(() => {});
     startPingsPolling();
     syncMapShareChrome();
+    postMapSharePolicy();
 }
 
 export function deactivateMapTab() {
@@ -2571,9 +2589,7 @@ export function bindMapTabUi() {
         document.getElementById('map-tab-placeholder')?.classList.add('hidden');
         document.getElementById('map-tab-fallback')?.classList.add('hidden');
         lastMapPingSig = '';
-        try {
-            frame.contentWindow?.postMessage({ type: 'nt-map-admin', authed: isAdminAuthed() }, '*');
-        } catch { /* ignore */ }
+        postMapSharePolicy();
         focusPinnedCorridorOnMap();
         syncRidePingsToMap();
     });
@@ -2597,6 +2613,7 @@ export function bindMapTabUi() {
             locateOnMapTab();
         }
         if (data.type === 'nt-map-join-train' && data.trainId) {
+            if (isLabMapSpectator()) return;
             const routeId = $currentRouteId.get();
             const station = document.getElementById('station-select')?.value || data.station || '';
             contributeForTrain({

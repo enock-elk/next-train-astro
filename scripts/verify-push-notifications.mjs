@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import { readFile, access } from 'node:fs/promises';
+import { constants as fsConstants } from 'node:fs';
 import communityWorker, {
     buildFcmMessage,
     deliverPushNotifications,
@@ -21,6 +22,7 @@ assert.equal(request.title, 'Service update');
 assert.equal(request.body, 'Trains are moving again.');
 assert.equal(request.ttlSec, 60, 'FCM TTL has a one-minute floor');
 assert.equal(request.lab, false);
+assert.equal(request.category, 'incidents');
 assert.throws(
     () => normalizePushRequest({ title: 'x', body: 'y', link: 'https://evil.example/' }),
     /must open Next Train/
@@ -32,6 +34,9 @@ const baseSub = {
     lab: false,
     region: 'GP',
     routeIds: ['pta-pien'],
+    pinnedRouteIds: ['jhb-naledi'],
+    accountUid: 'acct-user-1',
+    uid: 'anon-user-1',
 };
 assert.equal(pushSubscriptionMatches(baseSub, request), true);
 assert.equal(pushSubscriptionMatches({ ...baseSub, enabled: false }, request), false);
@@ -41,13 +46,51 @@ assert.equal(
     pushSubscriptionMatches(baseSub, { ...request, audience: 'region', target: 'GP' }),
     true
 );
+assert.equal(
+    pushSubscriptionMatches(baseSub, { ...request, audience: 'pinned', target: 'jhb-naledi' }),
+    true
+);
+assert.equal(
+    pushSubscriptionMatches(baseSub, { ...request, audience: 'pinned', target: 'pta-pien' }),
+    false
+);
+assert.equal(
+    pushSubscriptionMatches(baseSub, { ...request, audience: 'user', target: 'acct-user-1' }),
+    true
+);
+assert.equal(
+    pushSubscriptionMatches(baseSub, { ...request, audience: 'user', target: 'anon-user-1' }),
+    true
+);
+assert.equal(
+    pushSubscriptionMatches(baseSub, { ...request, audience: 'user', target: 'someone-else' }),
+    false
+);
+assert.equal(
+    pushSubscriptionMatches({ ...baseSub, categories: { incidents: false, delays: true } }, request),
+    false,
+    'opted-out incidents skip default type'
+);
+assert.equal(
+    pushSubscriptionMatches(
+        { ...baseSub, categories: { incidents: false, delays: true } },
+        { ...request, audience: 'all', category: 'delays' }
+    ),
+    true
+);
+assert.equal(
+    pushSubscriptionMatches(baseSub, { ...request, audience: 'all', category: 'community' }),
+    false,
+    'legacy tokens only receive incidents and delays'
+);
 
 const message = buildFcmMessage(baseSub.token, request, 'test-tag');
 assert.equal(message.token, baseSub.token);
 assert.equal(message.webpush.fcm_options.link, request.link);
 assert.equal(message.webpush.headers.Urgency, 'high');
 assert.equal(message.webpush.notification.tag, 'test-tag');
-assert.match(message.webpush.notification.icon, /icon-192\.png$/);
+assert.match(message.webpush.notification.icon, /notification-icon\.png$/);
+assert.match(message.webpush.notification.badge, /notification-badge\.png$/);
 const fidMessage = buildFcmMessage('firebase-installation-id', request, 'fid-tag', 'fid');
 assert.equal(fidMessage.fid, 'firebase-installation-id');
 assert.equal('token' in fidMessage, false, 'new registrations use the current FID target');
@@ -175,12 +218,16 @@ assert.match(admin, /id = 'push-notifications-panel'/);
 assert.match(admin, /data-admin-subview/);
 assert.match(admin, /alert-hub-push/);
 assert.match(admin, /\/admin\/notifications\/send/);
-assert.match(admin, /Count devices/);
+assert.match(admin, /Pinned route/);
+assert.match(admin, /One user/);
+assert.match(admin, /push-notifications-category/);
+assert.match(admin, /push-notifications-user/);
 assert.match(admin, /result\.pruned/);
 assert.match(configSrc, /COMMUNITY_WORKER_FALLBACK_URL/);
 assert.match(adminBridge, /COMMUNITY_WORKER_URL \|\| COMMUNITY_WORKER_FALLBACK_URL/);
 assert.match(labDeploy, /PUBLIC_COMMUNITY_WORKER_URL:\s*https:\/\/nexttrain-community\.enock\.workers\.dev/);
-assert.match(client, /region:\s*\$userRegion\.get\(\)/);
+assert.match(client, /pinnedRouteIds/);
+assert.match(client, /categories/);
 assert.match(client, /enabled:\s*!!enabled/);
 assert.match(client, /persistToken\(token,\s*\{[\s\S]{0,120}enabled:\s*false[\s\S]{0,120}registrationType:/);
 assert.match(client, /firebaseSignInAnonymously/);
@@ -191,7 +238,8 @@ assert.match(client, /registrationType:\s*'fid'/);
 assert.match(bridge, /firebase-messaging-compat\.js/);
 assert.match(rules, /"push_subscriptions"/);
 assert.match(rules, /newData\.child\('uid'\)\.val\(\) === auth\.uid/);
-assert.match(rules, /newData\.child\('registrationType'\)\.val\(\) === 'fid'/);
+assert.match(rules, /"pinnedRouteIds"/);
+assert.match(rules, /"categories"/);
 assert.match(workerConfig, /"FIREBASE_PROJECT_ID":\s*"metrorail-next-train"/);
 for (const workflow of [productionDeploy, productionBuild, githubPreview, labDeploy]) {
     assert.match(workflow, /PUBLIC_FIREBASE_VAPID_KEY:\s*\$\{\{\s*secrets\.PUBLIC_FIREBASE_VAPID_KEY\s*\}\}/);
@@ -205,5 +253,7 @@ assert.match(workerJs, /searchParams\.set\('access_token'/);
 assert.match(workerJs, /pruneInvalidPushSubscriptions/);
 assert.match(workerJs, /push_subscription_prune_failed/);
 assert.match(fcmDocs, /RTDB conditional write failed \(401\)/);
+await access(new URL('../public/icons/notification-badge.png', import.meta.url), fsConstants.R_OK);
+await access(new URL('../public/icons/notification-icon.png', import.meta.url), fsConstants.R_OK);
 
 console.log('Push notifications verified: scoped subscriptions, disable state, admin-only sender, FCM payload, invalid-token cleanup, VAPID build wiring, and admin panel.');

@@ -56,6 +56,19 @@
           "$index": {
             ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length < 80"
           }
+        },
+        "pinnedRouteIds": {
+          "$index": {
+            ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length < 80"
+          }
+        },
+        "accountUid": {
+          ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length < 120"
+        },
+        "categories": {
+          "$category": {
+            ".validate": "($category === 'incidents' || $category === 'delays' || $category === 'community' || $category === 'nearby' || $category === 'feedback') && newData.isBoolean()"
+          }
         }
       }
     },

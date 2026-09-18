@@ -1708,6 +1708,10 @@ export function bindCommunityUi() {
     if (typeof document === 'undefined' || window.__ntCommunityBound) return;
     window.__ntCommunityBound = true;
     bindCommunityVisibilityTeardown();
+    import('./rider-marks.js').then((m) => m.paintCommunityMarksChip?.()).catch(() => {});
+    $account.subscribe(() => {
+        import('./rider-marks.js').then((m) => m.paintCommunityMarksChip?.()).catch(() => {});
+    });
 
     const open = (e) => {
         e?.preventDefault?.();

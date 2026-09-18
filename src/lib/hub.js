@@ -2045,7 +2045,7 @@ export function initHub() {
     import('./ride-pings.js').then((m) => m.bindRideCheckInUi()).catch(() => {});
 
     // Notifications pref (Phase 8 stub)
-    import('./prefs.js').then(({ getNotifyPref, setNotifyPref, syncNotifyUi }) => {
+    import('./prefs.js').then(({ getNotifyPref, setNotifyPref, setNotifyCategories, syncNotifyUi }) => {
         syncNotifyUi(getNotifyPref());
         const toggle = document.getElementById('settings-notify-toggle');
         const cb = document.getElementById('settings-notify-checkbox');
@@ -2057,6 +2057,13 @@ export function initHub() {
             }
         });
         cb?.addEventListener('change', (e) => apply(e.target.checked));
+        document.querySelectorAll('[data-notify-category]').forEach((input) => {
+            input.addEventListener('change', () => {
+                const id = input.getAttribute('data-notify-category');
+                if (!id) return;
+                setNotifyCategories({ [id]: !!input.checked });
+            });
+        });
     }).catch(() => {});
 
     // Profile

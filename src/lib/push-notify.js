@@ -9,7 +9,7 @@ import { $currentRouteId, $deviceId, $userRegion } from '../store.js';
 import { $account } from './account.js';
 import { bootFirebase } from './firebase-boot.js';
 import { FEATURE_KEYS, isFeatureEnabled, fetchFeatures, isLabEnvironment } from './features.js';
-import { NOTIFY_PREF_KEY, getNotifyPref, syncNotifyUi } from './prefs.js';
+import { NOTIFY_PREF_KEY, getNotifyPref, getNotifyCategories, syncNotifyUi } from './prefs.js';
 
 const SUB_ROUTES_KEY = 'notifyRouteIds';
 const TOKEN_CACHE_KEY = 'fcmTokenCache';
@@ -54,6 +54,19 @@ export function setNotifyRouteIds(ids) {
     return next;
 }
 
+export function getPinnedRouteIds() {
+    const ids = [];
+    for (const region of ['GP', 'WC', 'KZN', 'EC']) {
+        const id = safeStorage.getItem(`defaultRoute_${region}`);
+        if (id) ids.push(String(id));
+    }
+    return [...new Set(ids)];
+}
+
+export function refreshPushSubscriptionAudience() {
+    scheduleSubscriptionSync();
+}
+
 export function ensureCurrentRouteSubscribed() {
     const rid = $currentRouteId.get();
     if (!rid) return getNotifyRouteIds();
@@ -94,20 +107,24 @@ async function persistToken(token, { enabled = true, registrationType = 'token' 
     const firebaseUser = await ensurePushAuth();
     if (!firebaseUser) throw new Error('Notification sign-in unavailable');
     const routeIds = getNotifyRouteIds();
+    const pinnedRouteIds = getPinnedRouteIds();
+    const categories = getNotifyCategories();
     const payload = {
         token,
         registrationType,
         updatedAt: Date.now(),
         deviceId,
         uid: firebaseUser.uid,
-        accountUid: acct.status === 'signed-in' ? acct.uid : null,
         region: $userRegion.get() || 'GP',
         routeIds,
+        pinnedRouteIds,
+        categories,
         enabled: !!enabled,
         appVersion: APP_VERSION,
         lab: isLabEnvironment(),
         userAgent: typeof navigator !== 'undefined' ? String(navigator.userAgent || '').slice(0, 180) : '',
     };
+    if (acct.status === 'signed-in' && acct.uid) payload.accountUid = acct.uid;
 
     try {
         if (window.firebaseDb && window.firebaseDbRef && window.firebaseDbSet && window.firebaseAuth?.currentUser) {
@@ -355,6 +372,7 @@ export function alertLiveEvent({ title, body, dedupeKey, toast = true, system = 
 
 export function maybeNotifyOfficialNotice(notice, { toast = true } = {}) {
     if (!getNotifyPref() || !notice) return false;
+    if (!getNotifyCategories().incidents) return false;
     const id = notice.id || notice.timestamp || notice.message || notice.text || 'x';
     const key = `notified_notice_${notice._sourceKey || 'x'}_${id}`;
     return alertLiveEvent({
@@ -368,6 +386,7 @@ export function maybeNotifyOfficialNotice(notice, { toast = true } = {}) {
 
 export function maybeNotifyVerifiedDelay(agg, ctx = {}) {
     if (!getNotifyPref() || !agg?.isVerified || !agg.trainKey) return false;
+    if (!getNotifyCategories().delays) return false;
     const routeId = ctx.routeId || $currentRouteId.get();
     const region = $userRegion.get() || 'GP';
     const pinned = safeStorage.getItem(`defaultRoute_${region}`) || '';

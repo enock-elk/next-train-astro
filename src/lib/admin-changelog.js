@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_09.18.12': [
+        'Lab: Map tab is on for every commuter as view-only (watch live shares). Join / share / Trains near you / I’m on it stay off for non-operators. Options stays the public drawer (no Account) unless they are signed in. mapTab flag stays off so this does not unlock Account. Production unchanged. No What’s New. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
+    ],
     'V9_09.18.11': [
         'Dev Hub Notifications: audience Everyone / region / pinned route / notify-list route / user id, plus Type (incidents, delays, community, nearby, feedback). Worker matches pinnedRouteIds, accountUid/uid, and categories (legacy tokens still get incidents+delays). FCM icon/badge are notification-icon.png and a dense white notification-badge.png; tag is nt-push-{category}. Account notification types are live (incidents/delays on by default). Rider points slower (share 2, join 1, delay 2, validate 1, first post 5, streaks 5/8; Silver 80, Gold 250, Platinum 600). History dedupes by key. Contributions group by day. Badge fill uses shareStreak. Community chip shows marksLabel when signed-in and showMarksInCommunity (default on). No contribution toasts. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
     ],

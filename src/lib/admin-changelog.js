@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_09.18.10': [
+        'FCM webpush.notification icon/badge no longer use opaque icon-48/192 (those fill Android’s small-icon mask and paint as a white square). Payload uses loading-logo.png which is already on nexttrain.co.za with a transparent ground, plus dedicated notification-icon.png / notification-badge.png for after this build is on the host. Firebase Console cannot set a Web badge; Dev Hub sends are the path. Redeploy nexttrain-community. No What’s New. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
+    ],
     'V9_09.18.9': [
         'Auto-locate reuses weekday COORDINATES when a later-day sheet (WC public holiday *_pub) omitted them. Station index fills missing lat/lon from weekday_to_a/b; findNearestStation and planner From locate skip invalid coords and fall back to weekday rows. Stations do not move. No What’s New. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
     ],

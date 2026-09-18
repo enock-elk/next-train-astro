@@ -122,3 +122,41 @@ requires iOS/iPadOS 16.4 or later and Next Train added to the Home Screen.
 Turning Notifications off marks the stored registration disabled. Each app
 startup refreshes enabled registrations, and the sender removes registrations
 FCM reports as invalid.
+
+## 7. Small icon (fix the white square)
+
+Android Chrome draws the **badge** as a silhouette: every opaque pixel becomes
+white. `icon-48.png` / `icon-192.png` are full-color rounded squares, so the
+status bar shows a white box. Dev Hub sends use
+`https://nexttrain.co.za/icons/loading-logo.png` (transparent train, already on
+the live host). After this build is on `nexttrain.co.za`,
+`/icons/notification-badge.png` is the dedicated 96px white silhouette.
+
+**Firebase Console cannot set the Web small icon.** The Console field labelled
+Notification icon is an Android **drawable name** for a native Play app
+(`ic_stat_train`), not a PNG URL. Leave it blank. Send from Dev Hub →
+Notifications instead.
+
+If you must use Console (Messaging → New campaign):
+
+1. Choose **Firebase Notification messages**.
+2. Fill title and text only. Do not attach a square app-icon PNG as the
+   notification image if you expect that to become the status-bar icon. That
+   image is the large shade photo, and a square PNG still collapses to a white
+   box.
+3. Additional options → Custom data can carry `title`, `body`, and `link`
+   (`https://nexttrain.co.za/...` only). A **data-only** send (no Notification
+   title/body) lets the service worker attach `notification-badge.png`.
+4. There is no Console control for `webpush.notification.badge`.
+
+After changing the Worker payload, redeploy `nexttrain-community`:
+
+```bash
+cd workers/nexttrain-community
+npx -y wrangler@latest deploy --keep-vars
+```
+
+A `main` push alone does not update that Worker. The live site also needs
+**Deploy production → metrorail-app** before `/icons/notification-badge.png`
+exists on `nexttrain.co.za`. `loading-logo.png` is already there, which is why
+the Worker uses it for icon and badge now.

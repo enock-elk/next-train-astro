@@ -47,7 +47,33 @@ assert.equal(message.token, baseSub.token);
 assert.equal(message.webpush.fcm_options.link, request.link);
 assert.equal(message.webpush.headers.Urgency, 'high');
 assert.equal(message.webpush.notification.tag, 'test-tag');
-assert.match(message.webpush.notification.icon, /icon-192\.png$/);
+assert.match(message.webpush.notification.icon, /loading-logo\.png$/);
+assert.match(message.webpush.notification.badge, /loading-logo\.png$/);
+assert.equal(
+    message.webpush.notification.icon.includes('icon-48'),
+    false,
+    'opaque favicon must not be the FCM large icon'
+);
+assert.equal(
+    message.webpush.notification.badge.includes('icon-48'),
+    false,
+    'opaque favicon must not be the FCM Android badge'
+);
+{
+    const { existsSync, readFileSync } = await import('node:fs');
+    const { fileURLToPath } = await import('node:url');
+    const { dirname, join } = await import('node:path');
+    const icons = join(dirname(fileURLToPath(import.meta.url)), '../public/icons');
+    for (const name of ['loading-logo.png', 'notification-icon.png', 'notification-badge.png']) {
+        const path = join(icons, name);
+        assert.equal(existsSync(path), true, `${name} is committed`);
+        const bytes = readFileSync(path);
+        assert.equal(bytes[0] === 0x89 && bytes[1] === 0x50, true, `${name} is a PNG`);
+        // IHDR color type at byte 25 of a standard PNG (8 + 4 + 4 + 13 IHDR): 6 = RGBA
+        const colorType = bytes[25];
+        assert.equal(colorType, 6, `${name} must be RGBA so Android can mask the silhouette`);
+    }
+}
 const fidMessage = buildFcmMessage('firebase-installation-id', request, 'fid-tag', 'fid');
 assert.equal(fidMessage.fid, 'firebase-installation-id');
 assert.equal('token' in fidMessage, false, 'new registrations use the current FID target');
@@ -187,6 +213,10 @@ assert.match(client, /firebaseRegisterMessaging/);
 assert.match(client, /firebaseOnRegistered/);
 assert.match(client, /registrationType:\s*'fid'/);
 assert.match(bridge, /firebase-messaging-compat\.js/);
+assert.match(bridge, /onBackgroundMessage/);
+assert.match(bridge, /loading-logo\.png/);
+assert.match(bridge, /notificationclick/);
+assert.match(bridge, /metrorail-next-train-default-rtdb/);
 assert.match(rules, /"push_subscriptions"/);
 assert.match(rules, /newData\.child\('uid'\)\.val\(\) === auth\.uid/);
 assert.match(rules, /newData\.child\('registrationType'\)\.val\(\) === 'fid'/);
@@ -203,5 +233,8 @@ assert.match(workerJs, /searchParams\.set\('access_token'/);
 assert.match(workerJs, /pruneInvalidPushSubscriptions/);
 assert.match(workerJs, /push_subscription_prune_failed/);
 assert.match(fcmDocs, /RTDB conditional write failed \(401\)/);
+assert.match(fcmDocs, /Firebase Console cannot set the Web small icon/);
+assert.match(workerJs, /icon: 'https:\/\/nexttrain\.co\.za\/icons\/loading-logo\.png'/);
+assert.match(workerJs, /badge: 'https:\/\/nexttrain\.co\.za\/icons\/loading-logo\.png'/);
 
 console.log('Push notifications verified: scoped subscriptions, disable state, admin-only sender, FCM payload, invalid-token cleanup, VAPID build wiring, and admin panel.');

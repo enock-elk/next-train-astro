@@ -14,7 +14,7 @@ import {
 } from './utils.js';
 import { currentTime } from './logic.js';
 import { currentScheduleData } from './live-board.js';
-import { trainGoingLabel, trainGoingFullLabel, TRACKING_WINDOW_SEC, compareNearbyTrainLikelihood, isGhostTrackable, trainIdsInSchedule } from './train-ghosts.js';
+import { trainGoingLabel, trainGoingFullLabel, trainTowardLabel, trainTerminusName, journeyHeadingAtProgress, TRACKING_WINDOW_SEC, compareNearbyTrainLikelihood, isGhostTrackable, trainIdsInSchedule } from './train-ghosts.js';
 import { relaxLiveShareGuards } from './features.js';
 import { isAdminAuthed } from './admin-chrome.js';
 import { formatGpsPingAge, formatLastSeenWithPingClock, gpsPingSuccessAt } from './gps-freshness.js';
@@ -63,6 +63,7 @@ let lastMapPingSig = '';
 let trackingCardMode = 'expanded';
 let lastShareRequest = null;
 let shareRestartInFlight = false;
+let restoreDragMoved = false;
 
 let frameLoaded = false;
 /** @type {{ lat: number, lng: number, accuracy?: number } | null} */
@@ -202,6 +203,47 @@ function setTrackingText(id, value) {
     if (el) el.textContent = value;
 }
 
+function trackingIsPaused(active, marker = null, pingAt = 0) {
+    if ((marker?.trackingState || active?.trackingState) === 'paused') return true;
+    const t = Number(pingAt || 0);
+    return !!(active?.trainId) && (!t || (Date.now() - t) >= 90 * 1000);
+}
+
+function resetTrackingCardDock() {
+    const card = document.getElementById('map-tracking-card');
+    if (!card) return;
+    card.style.left = '';
+    card.style.top = '';
+    card.style.right = '';
+    card.style.bottom = '';
+    card.style.marginLeft = '';
+    card.style.marginRight = '';
+}
+
+function positionTrackingCardFromPill() {
+    const card = document.getElementById('map-tracking-card');
+    const pill = document.getElementById('map-tracking-restore');
+    const host = card?.parentElement;
+    if (!card || !pill || !host) return;
+    const hostR = host.getBoundingClientRect();
+    const pillR = pill.getBoundingClientRect();
+    const cardW = Math.min(card.offsetWidth || hostR.width - 24, hostR.width - 16);
+    const cardH = card.offsetHeight || 240;
+    let left = pillR.left - hostR.left;
+    left = Math.max(8, Math.min(left, hostR.width - cardW - 8));
+    const spaceBelow = hostR.bottom - pillR.bottom;
+    let top = spaceBelow >= cardH + 12
+        ? (pillR.bottom - hostR.top + 8)
+        : (pillR.top - hostR.top - cardH - 8);
+    top = Math.max(8, Math.min(top, hostR.height - cardH - 8));
+    card.style.left = `${left}px`;
+    card.style.top = `${top}px`;
+    card.style.right = 'auto';
+    card.style.bottom = 'auto';
+    card.style.marginLeft = '0';
+    card.style.marginRight = '0';
+}
+
 function renderTrackingStatusCard(active, marker = null) {
     const card = document.getElementById('map-tracking-card');
     const restore = document.getElementById('map-tracking-restore');
@@ -211,8 +253,6 @@ function renderTrackingStatusCard(active, marker = null) {
         restore.classList.add('hidden');
         return;
     }
-    const state = marker?.trackingState || active.trackingState || 'active';
-    const paused = state === 'paused';
     const pingAt = gpsPingSuccessAt({
         ...(active || {}),
         ...(marker || {}),
@@ -221,11 +261,16 @@ function renderTrackingStatusCard(active, marker = null) {
         lastPingAt: marker?.lastPingAt || active?.lastPingAt,
         at: marker?.at || active?.at,
     });
-    const bearing = marker?.bearing ?? marker?.heading ?? active.bearing;
+    const paused = trackingIsPaused(active, marker, pingAt);
+    const progress = marker?.projectedProgress ?? active.projectedProgress;
+    const journeyH = journeyHeadingAtProgress(active.trainId, progress);
+    const bearing = Number.isFinite(journeyH) ? journeyH : (marker?.bearing ?? active.bearing);
     const speed = marker?.speedMps ?? active.speedMps;
     const accuracy = marker?.accuracy ?? active.accuracy;
     const place = marker?.lastSeenLabel || active.lastSeenLabel || active.station || 'on the route';
-    setTrackingText('map-tracking-title', `Tracking Train ${active.trainId}`);
+    const toward = trainTowardLabel(active.trainId, active.destination);
+    setTrackingText('map-tracking-title', `Train ${active.trainId}`);
+    setTrackingText('map-tracking-toward', toward);
     setTrackingText('map-tracking-state', paused ? 'Paused' : 'Active');
     setTrackingText('map-tracking-last-seen', formatLastSeenWithPingClock(place, pingAt));
     setTrackingText('map-tracking-speed', Number.isFinite(speed) ? `${Math.round(Math.max(0, speed) * 3.6)} km/h` : 'Unknown');
@@ -245,11 +290,18 @@ function renderTrackingStatusCard(active, marker = null) {
     stateEl?.classList.toggle('dark:bg-gray-700', paused);
     stateEl?.classList.toggle('text-gray-700', paused);
     stateEl?.classList.toggle('dark:text-gray-200', paused);
+    const toggle = document.getElementById('map-tracking-toggle');
+    if (toggle) {
+        toggle.textContent = paused ? 'Restart' : 'Pause';
+        toggle.setAttribute('aria-label', paused ? 'Restart sharing' : 'Pause sharing');
+    }
     card.classList.toggle('hidden', trackingCardMode !== 'expanded');
     restore.classList.toggle('hidden', trackingCardMode !== 'minimized');
 }
 
 export function showTrackingStatusCard() {
+    const pill = document.getElementById('map-tracking-restore');
+    const fromPill = !!(pill && !pill.classList.contains('hidden'));
     trackingCardMode = 'expanded';
     import('./ride-pings.js').then((ride) => {
         const active = ride.getActiveShare?.();
@@ -259,6 +311,11 @@ export function showTrackingStatusCard() {
         const own = trainPings.find((p) => p.deviceId === getDeviceId());
         const marker = own ? { ...own, n: trainPings.length || 1 } : null;
         renderTrackingStatusCard(active, marker);
+        if (fromPill) {
+            requestAnimationFrame(() => positionTrackingCardFromPill());
+        } else {
+            resetTrackingCardDock();
+        }
     }).catch(() => {});
 }
 
@@ -1060,7 +1117,9 @@ export async function openNearbyTrainsModal({ lat, lng } = {}) {
     if (currentShare?.trainId) {
         const ownPing = (pingMod.getCachedRidePings?.(currentShare.routeId) || [])
             .find((p) => p.deviceId === getDeviceId());
-        const state = ownPing?.trackingState || currentShare.trackingState || 'active';
+        const pingAt = gpsPingSuccessAt({ ...(currentShare || {}), ...(ownPing || {}) });
+        const statePaused = trackingIsPaused(currentShare, ownPing, pingAt);
+        const toward = trainTowardLabel(currentShare.trainId, currentShare.destination);
         const current = document.createElement('section');
         current.className = 'rounded-2xl border border-blue-200 dark:border-blue-800 bg-blue-50/70 dark:bg-blue-950/30 px-4 py-3';
         current.innerHTML = `
@@ -1068,17 +1127,30 @@ export async function openNearbyTrainsModal({ lat, lng } = {}) {
                 <div class="min-w-0">
                     <p class="text-[9px] font-black uppercase tracking-wider text-blue-600 dark:text-blue-300">Currently tracking</p>
                     <p class="text-sm font-black text-gray-900 dark:text-white">Train ${escapeHTML(String(currentShare.trainId))}</p>
-                    <p class="mt-0.5 text-[11px] font-semibold text-gray-500 dark:text-gray-400">${state === 'paused' ? 'Paused at the last accepted position' : 'Active tracking'}</p>
+                    <p class="mt-0.5 text-[11px] font-semibold text-gray-500 dark:text-gray-400">${toward ? escapeHTML(toward) : (statePaused ? 'Paused at the last accepted position' : 'Active tracking')}</p>
                 </div>
-                <span class="shrink-0 px-2 py-1 rounded-full ${state === 'paused' ? 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200' : 'bg-green-100 dark:bg-green-950 text-green-700 dark:text-green-300'} text-[9px] font-black uppercase">${state === 'paused' ? 'Paused' : 'Active'}</span>
+                <span class="shrink-0 px-2 py-1 rounded-full ${statePaused ? 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200' : 'bg-green-100 dark:bg-green-950 text-green-700 dark:text-green-300'} text-[9px] font-black uppercase">${statePaused ? 'Paused' : 'Active'}</span>
             </div>
             <div class="grid grid-cols-2 gap-2 mt-3">
                 <button type="button" data-current-tracking-details class="py-2 rounded-xl bg-gray-900 dark:bg-white text-white dark:text-gray-900 text-[11px] font-black">Tracking details</button>
-                <button type="button" data-current-tracking-stop class="py-2 rounded-xl border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 text-[11px] font-black">Stop sharing</button>
+                <button type="button" data-current-tracking-toggle class="py-2 rounded-xl ${statePaused ? 'bg-blue-600 text-white' : 'border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-200'} text-[11px] font-black">${statePaused ? 'Restart' : 'Pause'}</button>
+                <button type="button" data-current-tracking-stop class="col-span-2 py-2 rounded-xl border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 text-[11px] font-black">Stop sharing</button>
             </div>`;
         current.querySelector('[data-current-tracking-details]')?.addEventListener('click', () => {
             hideNearbyTrainsModal();
             showTrackingStatusCard();
+        });
+        current.querySelector('[data-current-tracking-toggle]')?.addEventListener('click', async () => {
+            if (statePaused) {
+                const result = await pingMod.resumeRideShare?.();
+                if (!result?.ok && result?.message) showToast(result.message, 'error');
+            } else {
+                const result = await pingMod.pauseRideShare?.({ reason: 'user' });
+                if (!result?.ok && result?.message) showToast(result.message, 'error');
+            }
+            hideNearbyTrainsModal();
+            syncMapShareChrome();
+            syncRidePingsToMap();
         });
         current.querySelector('[data-current-tracking-stop]')?.addEventListener('click', async () => {
             const result = await pingMod.stopRideShare?.();
@@ -1858,11 +1930,12 @@ async function finishRideShare({
             return { ok: false };
         }
 
+        const dest = trainId ? (trainTerminusName(trainId, destination) || destination || null) : (destination || null);
         const result = await submitRideCheckIn({
             routeId,
             station,
             trainId,
-            destination: destination || null,
+            destination: dest,
             coarseLat: lat,
             coarseLng: lng,
             heading,
@@ -1956,9 +2029,9 @@ export async function syncRidePingsToMap(routeId = $currentRouteId.get()) {
                 }));
         const groupedMine = markers.find((m) => m.mine) || null;
         const ownPing = (pings || []).find((p) => p.deviceId === mine) || null;
-        const ownMetrics = ownPing
-            ? { ...groupedMine, ...ownPing, n: groupedMine?.n || 1 }
-            : groupedMine;
+        const ownMetrics = groupedMine
+            ? { ...ownPing, ...groupedMine, n: groupedMine?.n || 1 }
+            : ownPing;
         renderTrackingStatusCard(ride.getActiveShare?.(), ownMetrics);
         const sig = markers.map((m) => `${m.trainId || ''}:${m.lat}:${m.lng}:${m.n || 1}:${m.mine ? 1 : 0}:${m.at || 0}:${m.fixAt || ''}:${m.acceptedAt || ''}:${m.bearing || ''}:${m.trackingState || ''}:${m.accuracy || ''}:${m.railDistanceM || ''}`).join('|');
         if (sig === lastMapPingSig) return;
@@ -1975,8 +2048,8 @@ export async function syncRidePingsToMap(routeId = $currentRouteId.get()) {
 export function syncMapShareChrome() {
     const btn = document.getElementById('map-tab-stop-btn');
     if (!btn) return;
-    import('./ride-pings.js').then(({ getActiveShare }) => {
-        const mine = getActiveShare();
+    import('./ride-pings.js').then((ride) => {
+        const mine = ride.getActiveShare();
         const on = !!mine;
         btn.classList.toggle('hidden', !on);
         if (on) {
@@ -1986,8 +2059,35 @@ export function syncMapShareChrome() {
             btn.setAttribute('hidden', '');
             btn.setAttribute('aria-hidden', 'true');
         }
-        btn.setAttribute('aria-label', mine?.trainId ? `Stop sharing Train ${mine.trainId}` : 'Stop sharing');
-        if (!mine) renderTrackingStatusCard(null);
+        if (!mine) {
+            renderTrackingStatusCard(null);
+            return;
+        }
+        const own = (ride.getCachedRidePings?.(mine.routeId) || []).find((p) => p.deviceId === getDeviceId());
+        const pingAt = gpsPingSuccessAt({ ...(mine || {}), ...(own || {}) });
+        const paused = trackingIsPaused(mine, own, pingAt);
+        btn.textContent = paused ? 'Restart' : 'Stop sharing';
+        btn.title = paused ? 'Restart sharing this train' : 'Stop sharing your location as this train';
+        btn.setAttribute('aria-label', paused
+            ? (mine.trainId ? `Restart sharing Train ${mine.trainId}` : 'Restart sharing')
+            : (mine.trainId ? `Stop sharing Train ${mine.trainId}` : 'Stop sharing'));
+        btn.classList.toggle('bg-red-50', !paused);
+        btn.classList.toggle('dark:bg-red-950/40', !paused);
+        btn.classList.toggle('border-red-200', !paused);
+        btn.classList.toggle('dark:border-red-800', !paused);
+        btn.classList.toggle('text-red-700', !paused);
+        btn.classList.toggle('dark:text-red-300', !paused);
+        btn.classList.toggle('hover:bg-red-100', !paused);
+        btn.classList.toggle('dark:hover:bg-red-900/50', !paused);
+        btn.classList.toggle('bg-blue-50', paused);
+        btn.classList.toggle('dark:bg-blue-950/40', paused);
+        btn.classList.toggle('border-blue-200', paused);
+        btn.classList.toggle('dark:border-blue-800', paused);
+        btn.classList.toggle('text-blue-700', paused);
+        btn.classList.toggle('dark:text-blue-300', paused);
+        btn.classList.toggle('hover:bg-blue-100', paused);
+        btn.classList.toggle('dark:hover:bg-blue-900/50', paused);
+        renderTrackingStatusCard(mine, own || null);
     }).catch(() => {});
 }
 
@@ -2300,6 +2400,11 @@ export function deactivateMapTab() {
     hideContributeSheet();
     stopPingsPolling();
     releaseGeoWatch('map');
+    import('./ride-pings.js').then((m) => {
+        // Listeners (and the sharer watching others) drop the RTDB watch off-map.
+        // Sharer GPS uses the `share` geo holder + onboard loop, which stay up.
+        m.stopRidePingsListener?.();
+    }).catch(() => {});
 }
 
 function mapTabFullscreenElement() {
@@ -2347,8 +2452,8 @@ function bindMapFullscreenChrome() {
 
 function bindTrackingRestoreDrag() {
     const el = document.getElementById('map-tracking-restore');
-    const pane = document.querySelector('#view-map .map-tab-pane') || document.getElementById('view-map');
-    if (!el || !pane || el.dataset.ntDragBound === '1') return;
+    const host = el?.parentElement;
+    if (!el || !host || el.dataset.ntDragBound === '1') return;
     el.dataset.ntDragBound = '1';
     const KEY = 'nt_map_restore_pos';
     try {
@@ -2361,48 +2466,40 @@ function bindTrackingRestoreDrag() {
         }
     } catch { /* ignore */ }
     let dragging = false;
-    let moved = false;
+    let grabX = 0;
+    let grabY = 0;
     let startX = 0;
     let startY = 0;
-    let origL = 0;
-    let origT = 0;
-    const panePos = () => {
-        const r = el.getBoundingClientRect();
-        const p = pane.getBoundingClientRect();
-        return { left: r.left - p.left, top: r.top - p.top };
-    };
     el.addEventListener('pointerdown', (ev) => {
         if (ev.button != null && ev.button !== 0) return;
-        const p = panePos();
+        const r = el.getBoundingClientRect();
         dragging = true;
-        moved = false;
+        restoreDragMoved = false;
         startX = ev.clientX;
         startY = ev.clientY;
-        origL = p.left;
-        origT = p.top;
+        grabX = ev.clientX - r.left;
+        grabY = ev.clientY - r.top;
         try { el.setPointerCapture(ev.pointerId); } catch { /* ignore */ }
     });
     el.addEventListener('pointermove', (ev) => {
         if (!dragging) return;
-        const dx = ev.clientX - startX;
-        const dy = ev.clientY - startY;
-        if (Math.hypot(dx, dy) > 6) moved = true;
-        if (!moved) return;
+        if (Math.hypot(ev.clientX - startX, ev.clientY - startY) > 6) restoreDragMoved = true;
+        if (!restoreDragMoved) return;
         ev.preventDefault();
-        const box = pane.getBoundingClientRect();
-        const w = el.offsetWidth;
-        const h = el.offsetHeight;
-        const left = Math.min(box.width - w - 8, Math.max(8, origL + dx));
-        const top = Math.min(box.height - h - 8, Math.max(8, origT + dy));
-        el.style.left = `${left}px`;
-        el.style.top = `${top}px`;
+        const box = host.getBoundingClientRect();
+        const left = ev.clientX - box.left - grabX;
+        const top = ev.clientY - box.top - grabY;
+        const maxL = Math.max(8, box.width - el.offsetWidth - 8);
+        const maxT = Math.max(8, box.height - el.offsetHeight - 8);
+        el.style.left = `${Math.min(maxL, Math.max(8, left))}px`;
+        el.style.top = `${Math.min(maxT, Math.max(8, top))}px`;
         el.style.right = 'auto';
         el.style.bottom = 'auto';
     });
     el.addEventListener('pointerup', () => {
         if (!dragging) return;
         dragging = false;
-        if (!moved) return;
+        if (!restoreDragMoved) return;
         try {
             sessionStorage.setItem(KEY, JSON.stringify({
                 left: parseFloat(el.style.left),
@@ -2410,12 +2507,45 @@ function bindTrackingRestoreDrag() {
             }));
         } catch { /* ignore */ }
     });
-    el.addEventListener('click', (ev) => {
-        if (!moved) return;
-        ev.preventDefault();
-        ev.stopPropagation();
-        moved = false;
-    }, true);
+}
+
+async function shareLiveTrain() {
+    const ride = await import('./ride-pings.js');
+    const { buildLiveTrainShareUrl } = await import('./share-links.js');
+    const active = ride.getActiveShare?.();
+    if (!active?.trainId) return;
+    const dest = trainTerminusName(active.trainId, active.destination);
+    const url = buildLiveTrainShareUrl({
+        trainId: active.trainId,
+        routeId: active.routeId,
+        destination: dest,
+    });
+    const title = dest ? `Train ${active.trainId} to ${dest} is live` : `Train ${active.trainId} is live`;
+    const text = dest
+        ? `A rider is sharing Train ${active.trainId} toward ${dest} in Next Train.`
+        : `A rider is sharing Train ${active.trainId} in Next Train.`;
+    triggerHaptic();
+    try {
+        if (navigator.share) await navigator.share({ title, text, url });
+        else {
+            await navigator.clipboard.writeText(url);
+            showToast('Live train link copied', 'success');
+        }
+    } catch {
+        try {
+            await navigator.clipboard.writeText(url);
+            showToast('Live train link copied', 'success');
+        } catch {
+            showToast('Could not share link.', 'error');
+        }
+    }
+}
+
+function locateSharedTrainOnMap() {
+    import('./ride-pings.js').then((ride) => {
+        const active = ride.getActiveShare?.();
+        if (active?.trainId) focusTrainOnMap(active.trainId);
+    }).catch(() => {});
 }
 
 export function bindMapTabUi() {
@@ -2469,9 +2599,19 @@ export function bindMapTabUi() {
     });
     document.getElementById('map-tab-stop-btn')?.addEventListener('click', async () => {
         triggerHaptic();
-        const { stopRideShare } = await import('./ride-pings.js');
-        const result = await stopRideShare();
-        if (!result.ok && result.message) showToast(result.message, 'error');
+        const ride = await import('./ride-pings.js');
+        const mine = ride.getActiveShare?.();
+        const own = mine
+            ? (ride.getCachedRidePings?.(mine.routeId) || []).find((p) => p.deviceId === getDeviceId())
+            : null;
+        const pingAt = gpsPingSuccessAt({ ...(mine || {}), ...(own || {}) });
+        if (mine && trackingIsPaused(mine, own, pingAt)) {
+            const result = await ride.resumeRideShare?.();
+            if (!result?.ok && result?.message) showToast(result.message, 'error');
+        } else {
+            const result = await ride.stopRideShare();
+            if (!result.ok && result.message) showToast(result.message, 'error');
+        }
         syncMapShareChrome();
         syncRidePingsToMap();
     });
@@ -2483,6 +2623,26 @@ export function bindMapTabUi() {
         syncMapShareChrome();
         syncRidePingsToMap();
     });
+    document.getElementById('map-tracking-toggle')?.addEventListener('click', async () => {
+        triggerHaptic();
+        const ride = await import('./ride-pings.js');
+        const mine = ride.getActiveShare?.();
+        if (!mine) return;
+        const own = (ride.getCachedRidePings?.(mine.routeId) || []).find((p) => p.deviceId === getDeviceId());
+        const pingAt = gpsPingSuccessAt({ ...(mine || {}), ...(own || {}) });
+        if (trackingIsPaused(mine, own, pingAt)) {
+            const result = await ride.resumeRideShare?.();
+            if (!result?.ok && result?.message) showToast(result.message, 'error');
+        } else {
+            const result = await ride.pauseRideShare?.({ reason: 'user' });
+            if (!result?.ok && result?.message) showToast(result.message, 'error');
+        }
+        syncMapShareChrome();
+        syncRidePingsToMap();
+    });
+    document.getElementById('map-tracking-share')?.addEventListener('click', () => {
+        shareLiveTrain();
+    });
     document.getElementById('map-tracking-minimize')?.addEventListener('click', () => {
         trackingCardMode = 'minimized';
         syncRidePingsToMap();
@@ -2491,7 +2651,24 @@ export function bindMapTabUi() {
         trackingCardMode = 'dismissed';
         syncRidePingsToMap();
     });
-    document.getElementById('map-tracking-restore')?.addEventListener('click', showTrackingStatusCard);
+    document.getElementById('map-tracking-restore-open')?.addEventListener('click', (ev) => {
+        if (restoreDragMoved) {
+            ev.preventDefault();
+            restoreDragMoved = false;
+            return;
+        }
+        showTrackingStatusCard();
+    });
+    document.getElementById('map-tracking-locate')?.addEventListener('click', (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        if (restoreDragMoved) {
+            restoreDragMoved = false;
+            return;
+        }
+        triggerHaptic();
+        locateSharedTrainOnMap();
+    });
     window.addEventListener('nt-ride-pings-updated', (ev) => {
         syncMapShareChrome();
         if (document.getElementById('view-map')?.classList.contains('active')) {
@@ -2613,6 +2790,24 @@ export function bindMapTabUi() {
             import('./ride-pings.js').then(async ({ stopRideShare }) => {
                 const result = await stopRideShare();
                 if (!result.ok && result.message) showToast(result.message, 'error');
+                syncMapShareChrome();
+                lastMapPingSig = '';
+                syncRidePingsToMap();
+            }).catch(() => {});
+        }
+        if (data.type === 'nt-map-resume-share') {
+            import('./ride-pings.js').then(async ({ resumeRideShare }) => {
+                const result = await resumeRideShare();
+                if (!result?.ok && result?.message) showToast(result.message, 'error');
+                syncMapShareChrome();
+                lastMapPingSig = '';
+                syncRidePingsToMap();
+            }).catch(() => {});
+        }
+        if (data.type === 'nt-map-pause-share') {
+            import('./ride-pings.js').then(async ({ pauseRideShare }) => {
+                const result = await pauseRideShare({ reason: 'user' });
+                if (!result?.ok && result?.message) showToast(result.message, 'error');
                 syncMapShareChrome();
                 lastMapPingSig = '';
                 syncRidePingsToMap();

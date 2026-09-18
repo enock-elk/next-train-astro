@@ -2580,7 +2580,7 @@
                 });
             }
             function isPingGpsStale(ping) {
-                var at = Number(ping && ping.at || 0);
+                var at = Number(ping && (ping.acceptedAt || ping.fixAt || ping.at) || 0);
                 return !at || (Date.now() - at) >= 90000;
             }
             function applyShareHidesUserDot(hide) {
@@ -2809,6 +2809,19 @@
             function bindRideTrainPopupActions(marker) {
                 var ctx = marker && marker._ntRidePopupContext;
                 if (!ctx) return;
+                const resumeBtn = document.getElementById(ctx.resumeId);
+                if (resumeBtn) {
+                    resumeBtn.onclick = function () {
+                        try {
+                            (window.parent || window).postMessage({
+                                type: 'nt-map-resume-share',
+                                trainId: ctx.trainId,
+                                routeId: ctx.routeId
+                            }, '*');
+                        } catch (_) {}
+                        map.closePopup();
+                    };
+                }
                 const btn = document.getElementById(ctx.joinId);
                 if (btn) {
                     btn.onclick = function () {
@@ -2936,19 +2949,25 @@
                     });
                     const joinId = 'nt-join-train-' + String(trainId).replace(/[^a-zA-Z0-9_-]/g, '');
                     const sheetId = 'nt-tt-train-' + String(trainId).replace(/[^a-zA-Z0-9_-]/g, '');
-                    const actionBtn = mine
-                        ? "<button type='button' id='" + joinId + "' class='nt-live-train-pop-btn nt-live-train-pop-btn--stop'>Stop sharing</button>"
-                        : "<button type='button' id='" + joinId + "' class='nt-live-train-pop-btn'>I’m on this train</button>";
+                    const resumeId = 'nt-resume-train-' + String(trainId).replace(/[^a-zA-Z0-9_-]/g, '');
                     const paused = newest.trackingState === 'paused' || isPingGpsStale(newest);
+                    const actionBtn = mine
+                        ? (paused
+                            ? "<button type='button' id='" + resumeId + "' class='nt-live-train-pop-btn nt-live-train-pop-btn--resume'>Restart</button>"
+                                + "<button type='button' id='" + joinId + "' class='nt-live-train-pop-btn nt-live-train-pop-btn--stop'>Stop sharing</button>"
+                            : "<button type='button' id='" + joinId + "' class='nt-live-train-pop-btn nt-live-train-pop-btn--stop'>Stop sharing</button>")
+                        : "<button type='button' id='" + joinId + "' class='nt-live-train-pop-btn'>I’m on this train</button>";
                     const status = paused ? 'Paused' : 'Active';
                     const detailsId = 'nt-track-details-' + String(trainId).replace(/[^a-zA-Z0-9_-]/g, '');
                     const pingAt = gpsPingSuccessAt(newest);
                     const lastPlace = newest.lastSeenLabel || newest.station || 'on the route';
+                    const dest = String(newest.destination || '').replace(/\s+STATION$/i, '').trim();
+                    const toward = dest ? ('Toward ' + dest) : '';
                     const popupHtml =
                         "<div class='nt-live-train-pop'>"
                         + "<div class='nt-live-train-pop-head'><p class='nt-live-train-pop-title'>Train " + escapePing(trainId) + "</p>"
                         + "<span class='nt-live-train-status nt-live-train-status--" + (paused ? 'paused' : 'active') + "'>" + status + "</span></div>"
-                        + "<p class='nt-live-train-pop-sub'>" + escapePing(sharingStatusCopy(n, mine)) + "</p>"
+                        + "<p class='nt-live-train-pop-sub'>" + escapePing(sharingStatusCopy(n, mine)) + (toward ? (' · ' + escapePing(toward)) : '') + "</p>"
                         + "<dl class='nt-live-train-metrics'>"
                         + "<div><dt>Speed</dt><dd>" + escapePing(speed == null ? 'Unknown' : (Math.max(0, speed) * 3.6).toFixed(0) + ' km/h') + "</dd></div>"
                         + "<div><dt>Heading</dt><dd>" + escapePing(headingMetric(heading)) + "</dd></div>"
@@ -2979,6 +2998,7 @@
                         joinId: joinId,
                         detailsId: detailsId,
                         sheetId: sheetId,
+                        resumeId: resumeId,
                         mine: mine,
                         station: list[0].station || '',
                         routeId: list[0].routeId || null

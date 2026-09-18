@@ -15,6 +15,9 @@
 #      CLOUDFLARE_ACCOUNT_ID
 # 4. Optional:
 #      PUBLIC_FIREBASE_VAPID_KEY — Web Push certificate key from Firebase Console
+#      PUBLIC_COMMUNITY_WORKER_URL — https://nexttrain-community.enock.workers.dev
+#        (GitHub Actions lab build now hardcodes this; also set it on the
+#        Cloudflare Pages project Production + Preview so Git-built lab has it)
 #      PUBLIC_CARTO_API_KEY — CARTO Voyager raster key (never commit; also set on
 #        the Cloudflare Pages project for Git-built PR previews)
 #
@@ -61,7 +64,7 @@ jobs:
           PUBLIC_BASE_PATH: /
           PUBLIC_LAB_MODE: 'true'
           PUBLIC_FIREBASE_VAPID_KEY: ${{ secrets.PUBLIC_FIREBASE_VAPID_KEY }}
-          PUBLIC_COMMUNITY_WORKER_URL: ${{ secrets.PUBLIC_COMMUNITY_WORKER_URL }}
+          PUBLIC_COMMUNITY_WORKER_URL: https://nexttrain-community.enock.workers.dev
           PUBLIC_CARTO_API_KEY: ${{ secrets.PUBLIC_CARTO_API_KEY }}
 
       - name: De-index the lab site

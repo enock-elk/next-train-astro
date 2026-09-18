@@ -103,7 +103,10 @@ export const PILOT_ROUTE_IDS = ['pta-pien', 'pta-mabopane', 'ct-bellv'];
 /**
  * Community write bouncer (Cloudflare Worker). Empty = direct RTDB writes (lab/dev).
  * Production should set PUBLIC_COMMUNITY_WORKER_URL at build time.
+ * Dev Hub FCM / scheduled-alert calls fall back to this workers.dev host when
+ * Cloudflare Pages Git builds omit the public env var.
  */
+export const COMMUNITY_WORKER_FALLBACK_URL = 'https://nexttrain-community.enock.workers.dev';
 export const COMMUNITY_WORKER_URL = (() => {
     try {
         return String(import.meta.env?.PUBLIC_COMMUNITY_WORKER_URL || '').replace(/\/$/, '');

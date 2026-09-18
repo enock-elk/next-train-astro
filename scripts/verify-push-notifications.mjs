@@ -134,6 +134,8 @@ const [
     productionBuild,
     githubPreview,
     labDeploy,
+    adminBridge,
+    configSrc,
 ] = await Promise.all([
     readFile(new URL('../public/js/admin.js', import.meta.url), 'utf8'),
     readFile(new URL('../src/lib/push-notify.js', import.meta.url), 'utf8'),
@@ -144,12 +146,17 @@ const [
     readFile(new URL('../.github/workflows/production-build.yml', import.meta.url), 'utf8'),
     readFile(new URL('../.github/workflows/deploy.yml', import.meta.url), 'utf8'),
     readFile(new URL('../.github/workflows/deploy-lab.yml', import.meta.url), 'utf8'),
+    readFile(new URL('../src/lib/admin-bridge.js', import.meta.url), 'utf8'),
+    readFile(new URL('../src/lib/config.js', import.meta.url), 'utf8'),
 ]);
 
 assert.match(admin, /setupPushNotificationsManager/);
 assert.match(admin, /id = 'push-notifications-panel'/);
 assert.match(admin, /\/admin\/notifications\/send/);
 assert.match(admin, /Count devices/);
+assert.match(configSrc, /COMMUNITY_WORKER_FALLBACK_URL/);
+assert.match(adminBridge, /COMMUNITY_WORKER_URL \|\| COMMUNITY_WORKER_FALLBACK_URL/);
+assert.match(labDeploy, /PUBLIC_COMMUNITY_WORKER_URL:\s*https:\/\/nexttrain-community\.enock\.workers\.dev/);
 assert.match(client, /region:\s*\$userRegion\.get\(\)/);
 assert.match(client, /enabled:\s*!!enabled/);
 assert.match(client, /persistToken\(token,\s*\{[\s\S]{0,120}enabled:\s*false[\s\S]{0,120}registrationType:/);

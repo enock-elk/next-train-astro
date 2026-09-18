@@ -415,6 +415,10 @@ assert(hubModals.includes('id="nt-admin-publish-train"'), 'admin nearby sheet ca
     const ridePings = readFileSync(new URL('../src/lib/ride-pings.js', import.meta.url), 'utf8');
     const adminJs = readFileSync(new URL('../public/js/admin.js', import.meta.url), 'utf8');
     assert(mapView.includes('id="map-tab-stop-btn"'), 'Map tab has Stop sharing');
+    assert(mapView.includes('id="map-tracking-share"'), 'tracking card has a share control');
+    assert(mapView.includes('id="map-tracking-locate"'), 'tracking pill can centre on the train');
+    assert(mapView.includes('id="map-tracking-toggle"'), 'tracking card can pause or restart');
+    assert(mapView.includes('id="map-tracking-restore-open"'), 'tracking pill opens the card from its position');
     assert(mapTab.includes('ENFORCE_LIVE_SHARE_VET = true'), 'live-share GPS vet is enforced');
     assert(mapTab.includes("'nearby_modal'"), 'Trains near you still starts a share');
     assert(mapTab.includes('skipVolunteer: true'), 'nearby / map join skip the volunteer sheet');
@@ -427,7 +431,13 @@ assert(hubModals.includes('id="nt-admin-publish-train"'), 'admin nearby sheet ca
     assert(mapApp.includes('railOvalYawDeg'), 'map train capsule yaws long-axis along the rail');
     assert(mapApp.includes('watchPosition'), 'map location uses watchPosition');
     assert(mapTab.includes('acquireGeoWatch'), 'map tab acquires the fused geo watch');
-    assert(ridePings.includes('alignBearingToJourney'), 'share projection aligns oval to the rail tangent');
+    assert(ridePings.includes('pauseRideShare'), 'sharer can pause from the card');
+    assert(ridePings.includes('resumeRideShare'), 'sharer can restart a paused share');
+    assert(ridePings.includes("pauseReason === 'user'"), 'user pause does not auto-resume');
+    assert(mapTab.includes('stopRidePingsListener'), 'leaving Map drops the ride_pings listener');
+    assert(mapTab.includes('parentElement'), 'tracking pill drag is relative to the map pane');
+    assert(mapApp.includes('nt-map-resume-share'), 'map popup can restart a paused share');
+    assert(mapApp.includes('Toward '), 'map popup shows timetable toward dest');
     assert(mapApp.includes('nt-live-train-ring'), 'map train has a pulse ring around the oval');
     assert(mapApp.includes('applyShareHidesUserDot'), 'sharing a train hides the GPS pulse');
     assert(!mapApp.includes('liveTrainShareLine'), 'map glyph does not print You’re sharing');

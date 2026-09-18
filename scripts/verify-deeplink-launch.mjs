@@ -76,6 +76,28 @@ ok(intent && intent.kind === 'route' && intent.routeId === 'germ-leralla', 'work
 const appUrl = buildAppDeepLink(intent, 'https://nexttrain.co.za');
 ok(appUrl.startsWith('https://nexttrain.co.za/?') && appUrl.includes('rt=germ-leralla'), 'human 302 target is /?rt=');
 
+const liveIntent = parseShareIntent(new URL('https://nexttrain.co.za/og/share?live=0823&rt=pta-mabopane&to=Mabopane'));
+ok(liveIntent && liveIntent.kind === 'live' && liveIntent.trainId === '0823', 'worker parseShareIntent reads live=');
+ok(liveIntent.dest === 'Mabopane', 'live OG dest is timetable terminus, not corridor destB');
+const liveApp = buildAppDeepLink(liveIntent, 'https://nexttrain.co.za');
+ok(liveApp.includes('live=0823') && liveApp.includes('to=Mabopane'), 'human 302 target is /?live=');
+
+const shareLinks = readFileSync(join(ROOT, 'src/lib/share-links.js'), 'utf8');
+ok(shareLinks.includes('buildLiveTrainShareUrl'), 'client can mint /og/share?live=');
+ok(shareLinks.includes("params.get('live')"), 'route parser ignores live shares');
+
+const ogHtml = readFileSync(join(ROOT, 'workers/nexttrain-og/src/og-html.js'), 'utf8');
+ok(ogHtml.includes('A rider is sharing Train'), 'live OG describes a rider sharing the train');
+ok(ogHtml.includes('/og/live.png'), 'live OG image is /og/live.png');
+
+const ogIndex = readFileSync(join(ROOT, 'workers/nexttrain-og/src/index.js'), 'utf8');
+ok(ogIndex.includes("/og/live.png"), 'worker serves /og/live.png');
+ok(ogIndex.includes('buildLiveTrainOgMeta'), 'worker emits live OG HTML');
+
+const ghosts = readFileSync(join(ROOT, 'src/lib/train-ghosts.js'), 'utf8');
+const termFn = ghosts.slice(ghosts.indexOf('export function trainTerminusName'), ghosts.indexOf('export function trainGoingLabel'));
+ok(termFn.indexOf('findStopsForTrain') < termFn.indexOf('shortStation(fallback)'), 'terminus prefers timetable last stop over corridor fallback');
+
 ok(isSocialCrawler('facebookexternalhit/1.1'), 'facebookexternalhit is a crawler');
 ok(!isSocialCrawler('Mozilla/5.0 FBAN/FB4A FBAV/50.0'), 'Facebook IAB is not a crawler (must 302)');
 ok(!isSocialCrawler('Mozilla/5.0 Instagram 192.0.0.0'), 'Instagram IAB is not a crawler');

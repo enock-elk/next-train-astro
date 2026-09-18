@@ -7,6 +7,7 @@ import { safeStorage } from './utils.js';
 import {
     parsePlannerDeepLink,
     parseRouteDeepLinkParams,
+    parseLiveTrainDeepLink,
     parseMapDeepLink,
     parsePlannerShortcutDeepLink,
     parseShareTargetDeepLink,
@@ -19,6 +20,7 @@ const LAUNCH_URL_KEY = 'nt_launch_target_url';
 
 function parseShareFromSearch(search) {
     return parsePlannerDeepLink(search)
+        || parseLiveTrainDeepLink(search)
         || parseRouteDeepLinkParams(search)
         || parseMapDeepLink(search)
         || parsePlannerShortcutDeepLink(search)
@@ -30,6 +32,7 @@ function shareFingerprint(snap) {
     if (!snap || !snap.kind) return '';
     if (snap.kind === 'route') return `route:${snap.routeId}:${snap.view || ''}:${snap.dir || ''}:${snap.day || ''}`;
     if (snap.kind === 'planner') return `planner:${snap.from}:${snap.to}:${snap.time || ''}:${snap.day || ''}:${snap.region || ''}`;
+    if (snap.kind === 'live') return `live:${snap.trainId}:${snap.routeId || ''}:${snap.dest || ''}`;
     if (snap.kind === 'planner-shortcut') return 'planner-shortcut';
     if (snap.kind === 'map') return 'map';
     if (snap.kind === 'share-target') return `share-target:${snap.url || ''}:${snap.text || ''}`;
@@ -165,6 +168,7 @@ export function hasInboundShareIntent(search = typeof location !== 'undefined' ?
     return !!(snap && (
         snap.kind === 'route'
         || snap.kind === 'planner'
+        || snap.kind === 'live'
         || snap.kind === 'planner-shortcut'
         || snap.kind === 'map'
         || snap.kind === 'share-target'
@@ -319,7 +323,7 @@ export async function applyShareTargetDeepLink() {
     if (typeof window === 'undefined') return false;
     const snap = peekShareDeeplinkSnapshot();
     // Share-target parser may upgrade to planner/route — those are handled elsewhere.
-    if (snap && (snap.kind === 'planner' || snap.kind === 'route')) return false;
+    if (snap && (snap.kind === 'planner' || snap.kind === 'route' || snap.kind === 'live')) return false;
 
     const link = (snap && snap.kind === 'share-target')
         ? snap
@@ -337,6 +341,58 @@ export async function applyShareTargetDeepLink() {
     const hint = [link.text, link.title, link.url].filter(Boolean).join(' — ').slice(0, 120);
     if (hint && typeof window.showToast === 'function') {
         window.showToast(`Shared to Trip Planner${hint ? `: ${hint}` : ''}`, 'info', 4000);
+    }
+    return true;
+}
+
+/**
+ * Live train share `?live=0823&rt=pta-mabopane&to=Mabopane` — open Map on that train.
+ */
+export async function applyLiveTrainDeepLink() {
+    if (typeof window === 'undefined') return false;
+    const snap = peekShareDeeplinkSnapshot();
+    const link = (snap && snap.kind === 'live')
+        ? snap
+        : parseLiveTrainDeepLink(location.search);
+    if (!link || link.kind !== 'live' || !link.trainId) return false;
+    if (snap && snap.kind === 'live') consumeShareDeeplinkSnapshot();
+
+    if (typeof window.showToast === 'function') {
+        window.showToast('Opening live train…', 'info', 4000);
+    }
+
+    if (safeStorage.getItem('welcomeSeen') !== 'true') {
+        safeStorage.setItem('welcomeSeen', 'true');
+    }
+    try { document.getElementById('welcome-modal')?.classList.add('hidden'); } catch { /* ignore */ }
+
+    const { ROUTES } = await import('./config.js');
+    const { $currentRouteId, $userRegion } = await import('../store.js');
+    const route = link.routeId ? ROUTES[link.routeId] : null;
+    if (route?.isActive) {
+        const region = route.region || $userRegion.get() || 'GP';
+        $userRegion.set(region);
+        const defaultKey = 'defaultRoute_' + region;
+        if (!safeStorage.getItem(defaultKey)) safeStorage.setItem(defaultKey, route.id);
+        $currentRouteId.set(route.id);
+    }
+
+    stripShareParamsFromUrl();
+    if (typeof window.switchTab === 'function') {
+        window.switchTab('map', { allowHiddenTabs: true });
+    }
+    try {
+        const map = await import('./map-tab.js');
+        await map.focusTrainOnMap?.(link.trainId);
+    } catch { /* map optional */ }
+    if (typeof window.trackAnalyticsEvent === 'function') {
+        window.trackAnalyticsEvent('deep_link_open', { type: 'live', train_id: link.trainId, route_id: link.routeId || '' });
+    }
+    if (typeof window.showToast === 'function') {
+        const dest = String(link.dest || '').replace(/\s+STATION$/i, '').trim();
+        window.showToast(dest
+            ? `Following Train ${link.trainId} toward ${dest}`
+            : `Following Train ${link.trainId}`, 'success', 2800);
     }
     return true;
 }

@@ -86,7 +86,19 @@ export function parseShareIntent(url) {
       to,
       time: params.get('t') || params.get('time') || '',
       day: decodeDay(params.get('d') || params.get('day') || ''),
-      region: ['GP', 'WC', 'KZN', 'EC'].includes(regionRaw) ? regionRaw : null,
+      region: ['GP', 'WC', 'KZN', 'EC'].includes(regionRaw) ? regionRaw : '',
+    };
+  }
+
+  const liveId = String(params.get('live') || '').trim();
+  if (liveId) {
+    const regionRaw = (params.get('r') || params.get('region') || '').toUpperCase();
+    return {
+      kind: 'live',
+      trainId: liveId,
+      routeId: params.get('rt') || params.get('route') || '',
+      dest: stationLabel(params.get('to') || ''),
+      region: ['GP', 'WC', 'KZN', 'EC'].includes(regionRaw) ? regionRaw : '',
     };
   }
 

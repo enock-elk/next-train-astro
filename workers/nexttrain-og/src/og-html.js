@@ -29,6 +29,12 @@ export function buildAppDeepLink(intent, site) {
     if (intent.region) app.searchParams.set('r', intent.region);
     return app.toString();
   }
+  if (intent.kind === 'live') {
+    app.searchParams.set('live', intent.trainId);
+    if (intent.routeId) app.searchParams.set('rt', intent.routeId);
+    if (intent.dest) app.searchParams.set('to', intent.dest);
+    return app.toString();
+  }
   app.searchParams.set('rt', intent.routeId);
   app.searchParams.set('v', intent.view === 'fares' ? 'f' : 'g');
   if (intent.dir === 'B') app.searchParams.set('dir', 'B');
@@ -44,6 +50,12 @@ export function buildOgShareLink(intent, site) {
     if (intent.time) share.searchParams.set('t', intent.time);
     if (intent.day) share.searchParams.set('d', dayCode(intent.day));
     if (intent.region) share.searchParams.set('r', intent.region);
+    return share.toString();
+  }
+  if (intent.kind === 'live') {
+    share.searchParams.set('live', intent.trainId);
+    if (intent.routeId) share.searchParams.set('rt', intent.routeId);
+    if (intent.dest) share.searchParams.set('to', intent.dest);
     return share.toString();
   }
   share.searchParams.set('rt', intent.routeId);
@@ -105,6 +117,27 @@ export function buildPlannerOgMeta(intent, site) {
     appUrl: buildAppDeepLink(intent, site),
     image: withImageCacheBust(img.toString()),
     imageAlt: `Trip plan ${from} to ${to}`,
+  };
+}
+
+export function buildLiveTrainOgMeta(intent, site) {
+  const id = String(intent.trainId || '').trim();
+  const dest = stationLabel(intent.dest || '');
+  const title = dest ? `Train ${id} to ${dest} is live` : `Train ${id} is live`;
+  const description = dest
+    ? `A rider is sharing Train ${id} toward ${dest} in real time. Open Next Train to follow it on the map.`
+    : `A rider is sharing Train ${id} in real time. Open Next Train to follow it on the map.`;
+  const img = new URL('/og/live.png', site);
+  img.searchParams.set('train', id);
+  if (dest) img.searchParams.set('to', dest);
+  if (intent.routeId) img.searchParams.set('rt', intent.routeId);
+  return {
+    title,
+    description,
+    url: buildOgShareLink(intent, site),
+    appUrl: buildAppDeepLink(intent, site),
+    image: withImageCacheBust(img.toString()),
+    imageAlt: dest ? `Live Train ${id} toward ${dest}` : `Live Train ${id}`,
   };
 }
 

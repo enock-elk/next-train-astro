@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_09.18.12': [
+        'Live train share URL (?live=) with Worker OG /og/live.png. Headboard uses timetable last stop (0823 → Mabopane), never corridor destB. Tracking pill drag is finger-aligned to the map pane; locate recentres the sharer on the train; card opens from the pill. Pause-aware header/card/popup (Restart vs Stop). Sharer GPS keeps running off Map and auto-resumes when the path is good; user Pause does not. Listeners drop the ride_pings RTDB watch off Map. Tracking card share top-right. Planner View Trip Plan on Map is slightly blue. No What’s New (live location stays operator-hidden). forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
+    ],
     'V9_09.18.11': [
         'Dev Hub Notifications: audience Everyone / region / pinned route / notify-list route / user id, plus Type (incidents, delays, community, nearby, feedback). Worker matches pinnedRouteIds, accountUid/uid, and categories (legacy tokens still get incidents+delays). FCM icon/badge are notification-icon.png and a dense white notification-badge.png; tag is nt-push-{category}. Account notification types are live (incidents/delays on by default). Rider points slower (share 2, join 1, delay 2, validate 1, first post 5, streaks 5/8; Silver 80, Gold 250, Platinum 600). History dedupes by key. Contributions group by day. Badge fill uses shareStreak. Community chip shows marksLabel when signed-in and showMarksInCommunity (default on). No contribution toasts. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
     ],

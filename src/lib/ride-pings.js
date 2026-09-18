@@ -36,6 +36,7 @@ import {
     journeyHeadingDeg,
     journeyPositionLabel,
     trainGoingLabel,
+    trainTerminusName,
     railPathForTrain,
     scoreFixToRailPath,
     coordsForStation,
@@ -429,7 +430,10 @@ export async function projectTrainTrackerFix({
         routeProgressM: snap.routeM,
         distanceM: snap.distanceM,
         lastSeenLabel: journeyPositionLabel(stops, progress),
-        bearing: alignBearingToJourney(snap.trackBearing, journeyH),
+        // Station-to-station timetable heading, not GPS/campus tangent.
+        bearing: Number.isFinite(journeyH)
+            ? journeyH
+            : alignBearingToJourney(snap.trackBearing, journeyH),
     };
 }
 
@@ -579,6 +583,7 @@ export async function compactPingsForMap(pings, { mineDeviceId = '', routeId = '
             fixAt: p.fixAt,
             lastPingAt: p.lastPingAt,
             lastSeenLabel: p.lastSeenLabel || p.station || '',
+            destination: p.destination || '',
             accuracy: p.accuracy,
             pauseReason: p.pauseReason || '',
         };
@@ -625,9 +630,12 @@ export async function compactPingsForMap(pings, { mineDeviceId = '', routeId = '
             speedMps: newest.speedMps,
             station: newest.station,
             routeId: newest.routeId,
-            bearing: Number.isFinite(driver.bearing)
-                ? driver.bearing
-                : journeyHeadingAtProgress(trainId, driver.projectedProgress),
+            bearing: (() => {
+                const journeyH = journeyHeadingAtProgress(trainId, medianProgress);
+                return Number.isFinite(journeyH)
+                    ? journeyH
+                    : (Number.isFinite(driver.bearing) ? driver.bearing : null);
+            })(),
             onRails: true,
             projectedProgress: medianProgress,
             routeProgressM: driver.routeProgressM,
@@ -637,6 +645,7 @@ export async function compactPingsForMap(pings, { mineDeviceId = '', routeId = '
             fixAt: newest.fixAt || driver.fixAt,
             lastPingAt: newest.lastPingAt || driver.lastPingAt,
             lastSeenLabel: newest.lastSeenLabel || driver.lastSeenLabel,
+            destination: trainTerminusName(trainId, newest.destination || driver.lastSeenLabel),
             accuracy: newest.accuracy,
             pauseReason: pausedOnly ? newest.pauseReason : '',
         });
@@ -823,22 +832,8 @@ function scheduleDataMap() {
     return {};
 }
 
-function destinationForTrain(trainId, route) {
-    if (!trainId || !route) return null;
-    const id = String(trainId);
-    const data = scheduleDataMap();
-    for (const dest of [route.destA, route.destB]) {
-        const journeys = dest ? (data[dest] || []) : [];
-        if (journeys.some((j) => journeyTrainId(j) === id)) return dest;
-    }
-    const { stops } = findStopsForTrain(id);
-    if (!stops.length) {
-        return null;
-    }
-    const last = stops[stops.length - 1]?.station || '';
-    if (normalizeStationName(last) === normalizeStationName(route.destA)) return route.destA;
-    if (normalizeStationName(last) === normalizeStationName(route.destB)) return route.destB;
-    return null;
+function destinationForTrain(trainId, _route) {
+    return trainTerminusName(trainId) || null;
 }
 
 function pickLiveGroup(pings, opts = {}) {
@@ -1361,6 +1356,9 @@ export async function submitRideCheckIn({
     }
     if (!routeId) return { ok: false, message: 'Pick a corridor first.' };
     if (!st && trustedAdminOverride) st = 'here';
+    if (trainId) {
+        destination = trainTerminusName(trainId, destination) || destination || null;
+    }
     if (
         source !== 'onboard_ping'
         && source !== 'stop'
@@ -1434,10 +1432,12 @@ export async function submitRideCheckIn({
             routeProgressM: Number.isFinite(overrideProjected.routeM) ? overrideProjected.routeM : 0,
             distanceM: Number.isFinite(overrideProjected.distanceM) ? overrideProjected.distanceM : 0,
             lastSeenLabel: st,
-            bearing: alignBearingToJourney(
-                overrideProjected.trackBearing,
-                Number.isFinite(heading) ? heading : journeyHeadingAtProgress(trainId, overrideProjected.pathFraction)
-            ),
+            bearing: (() => {
+                const journeyH = journeyHeadingAtProgress(trainId, overrideProjected.pathFraction);
+                return Number.isFinite(journeyH)
+                    ? journeyH
+                    : alignBearingToJourney(overrideProjected.trackBearing, heading);
+            })(),
         };
         resolvedState = TRACKING_STATE.ACTIVE;
         resolvedPauseReason = '';
@@ -1687,6 +1687,35 @@ async function pauseActiveTracker(active, reason, pos = null) {
     });
 }
 
+export async function pauseRideShare({ reason = 'user', quiet = false } = {}) {
+    const active = getActiveShare();
+    if (!active?.trainId) return { ok: false, message: 'You’re not sharing' };
+    const result = await pauseActiveTracker(active, reason);
+    if (!quiet && reason === 'user') {
+        showToast('Sharing paused. Restart when you are ready.', 'info');
+    }
+    return result?.ok === false ? result : { ok: true };
+}
+
+export async function resumeRideShare({ quiet = false } = {}) {
+    const active = peekStoredShare();
+    if (!active?.trainId || shareSessionIdle(active)) {
+        return { ok: false, message: 'You’re not sharing' };
+    }
+    persistActiveSharePatch({ trackingState: TRACKING_STATE.ACTIVE, pauseReason: '' });
+    if (!onboardGeoUnsub) startOnboardPingLoop();
+    else if (onboardLatestFix) queueOnboardFix(onboardLatestFix, { forceBroadcast: true });
+    else {
+        import('./geo-watch.js').then((g) => {
+            const last = g.peekLastGeoFix();
+            if (last) queueOnboardFix(last, { forceBroadcast: true });
+        }).catch(() => {});
+    }
+    if (!quiet) showToast('Sharing restarted', 'success');
+    notifyPingsUpdated(active.routeId);
+    return { ok: true };
+}
+
 function cacheLocalProjectedFix(active, pos, projection, near, observation) {
     const now = Date.now();
     const deviceId = getDeviceId();
@@ -1778,6 +1807,9 @@ async function processOnboardFix(pos, { forceBroadcast = false, generation = onb
     const active = getActiveShare();
     if (!active?.trainId) {
         stopOnboardPingLoop();
+        return;
+    }
+    if (active.trackingState === TRACKING_STATE.PAUSED && active.pauseReason === 'user') {
         return;
     }
     const near = nearestStationOnRoute(pos.lat, pos.lng, active.routeId);
@@ -2080,6 +2112,9 @@ export function startOnboardPingLoop() {
         const current = getActiveShare();
         if (!current?.trainId) {
             stopOnboardPingLoop();
+            return;
+        }
+        if (current.trackingState === TRACKING_STATE.PAUSED && current.pauseReason === 'user') {
             return;
         }
         if (!navigator.onLine) {
@@ -2449,6 +2484,8 @@ if (typeof window !== 'undefined') {
     window.submitRideCheckIn = submitRideCheckIn;
     window.startPresenceShare = startPresenceShare;
     window.stopRideShare = stopRideShare;
+    window.pauseRideShare = pauseRideShare;
+    window.resumeRideShare = resumeRideShare;
     window.refreshRideSeenSurface = refreshRideSeenSurface;
     window.renderRideSeenChip = renderRideSeenChip;
     window.bindRideCheckInUi = bindRideCheckInUi;

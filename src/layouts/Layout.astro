@@ -1378,18 +1378,60 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
         opacity: 0 !important;
         pointer-events: none !important;
       }
-      /* Empty slot only. Vendor stickies stay on the document (full viewport).
-         Do not force position:static / width:100% on their overlays — that
-         clips a 100vw creative into the max-w-md frame as a blank strip. */
+      /* Top of the Next Train frame. Docked units scroll with #app-scroll.
+         Do not flatten a live document-level sticky until it is docked
+         (moving a loaded iframe reloads the creative). */
       #nt-ad-scroll-host {
         flex: 0 0 auto;
         flex-shrink: 0;
         width: 100%;
         min-height: 0;
-        overflow: hidden;
+        overflow: visible;
+        touch-action: pan-y;
       }
       #nt-ad-scroll-host:empty {
         display: none;
+      }
+      #nt-ad-scroll-host.nt-ad-slot-open {
+        display: block;
+      }
+      #nt-ad-scroll-host > [data-nt-ad-docked="1"] {
+        position: relative !important;
+        inset: auto !important;
+        left: auto !important;
+        top: auto !important;
+        right: auto !important;
+        bottom: auto !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        margin-left: 0 !important;
+        margin-right: 0 !important;
+        transform: none !important;
+        touch-action: pan-y;
+      }
+      /* Keep the creative in the phone frame. Vendor often sets the iframe to
+         position:fixed even after the wrapper is docked. */
+      #nt-ad-scroll-host iframe {
+        position: relative !important;
+        inset: auto !important;
+        left: auto !important;
+        top: auto !important;
+        right: auto !important;
+        bottom: auto !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        display: block;
+      }
+      /* Already-painted viewport stickies follow #app-scroll without reparenting.
+         CSS `translate` composes with vendor `transform` (centering stays).
+         Wrapper pointer-events are off so a full-viewport overlay cannot trap
+         scroll; the iframe still receives taps. Dismiss X is not required. */
+      html.nt-ad-scroll-sync .nt-ad-undocked {
+        translate: 0 var(--nt-ad-scroll, 0px);
+        pointer-events: none;
+      }
+      html.nt-ad-scroll-sync .nt-ad-undocked iframe {
+        pointer-events: auto;
       }
     </style>
     <!--

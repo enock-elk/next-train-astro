@@ -2,6 +2,10 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin, Dev Hub, Alerts, Trains near me, community chat, or other hidden-test work. No emoji and no em dashes in What’s New. Keep `APP_VERSION`, `package.json` `version`, and `public/app-version.json` aligned on each release. Changelog / What’s New may be skipped, or the heading may be only **no release notes.** Every bump must add `ADMIN_CHANGELOG[APP_VERSION]` (System Health Build notes).
 
+## V9_09.18.4 — Ads scroll with the board
+
+Top Clever units park in `#nt-ad-scroll-host` at the top of the Next Train frame and roll away with `#app-scroll`. The vendor close control is no longer required to recover the board. Live iframes are not moved (that reload used to blank the creative). Already-painted viewport stickies follow the same scroller with CSS `translate`. Empty leftovers still collapse; no reserved blank gap.
+
 ## V9_09.18.3 — no release notes
 
 ## V9_09.18.2 — no release notes

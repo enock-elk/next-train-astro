@@ -5,16 +5,20 @@
  * CleverCoreLoader103008 next to the first page script. Guardian only decides
  * WHEN to call that IIFE (welcome / safe-zone / 4-slot schedule). Do not steal
  * #clever-core for a positioned DIV and do not set left/top/transform on their
- * overlays. Vendor units stay document-level so 100vw creative payloads can
- * paint at full width; never reparent them into the max-w-md phone frame.
- * When a unit fills or the commuter dismisses it, ease #main-content via
- * --nt-ad-shift / --nt-ad-flip on #nt-shell. Do not transform #nt-shell itself
- * (it wraps position:fixed overlays).
+ * overlays. Top units dock into #nt-ad-scroll-host (first child of
+ * #app-scroll) before their iframe loads, so they sit in the Next Train
+ * frame and scroll away with the board. Scroll-away is not dismiss: a live
+ * unit that has left the viewport must stay occupied. Never move a wrapper
+ * that already has a loaded iframe (reparenting reloads the creative).
+ * Already-painted viewport stickies stay document-level and follow
+ * #app-scroll via CSS `translate` (not transform) plus a host spacer.
+ * Do not transform #nt-shell itself (it wraps position:fixed overlays).
  *
  * A leftover top gap after the creative is gone is a bug: measure occupancy
- * (not just the wrapper box), reclaim idle in-flow leftovers, and re-sync on
- * resume, scroll-return, and while a shift is still applied. Cloak visibility
- * must not count as “filled” for board shift.
+ * (not just the wrapper box), reclaim idle leftovers, and re-sync on resume,
+ * scroll-return, and while a shift or docked slot is still applied. Cloak
+ * visibility must not count as “filled” for board shift. Off-screen due to
+ * scroll must still count as occupied.
  *
  * Page-load inject schedule (after app stabilized):
  *   1/4 immediate · 2/4 +30s · 3/4 +1min · 4/4 +2min · then stop for this page load.
@@ -175,12 +179,126 @@ function consumeResumeInstant() {
     return next;
 }
 
+function adScrollHost() {
+    return document.getElementById('nt-ad-scroll-host');
+}
+
+function isInAppAdHost(el) {
+    return !!(el && el.closest && el.closest('#nt-ad-scroll-host'));
+}
+
+function outermostMovableAdNode(el) {
+    let cur = el;
+    while (cur.parentElement) {
+        const p = cur.parentElement;
+        if (p === document.body || p === document.documentElement) break;
+        if (p.id === 'nt-ad-scroll-host' || p.id === 'app-scroll'
+            || p.id === 'main-content' || p.id === 'nt-shell') break;
+        cur = p;
+    }
+    return cur;
+}
+
+function isBottomOrSideOverlay(el) {
+    const cs = getComputedStyle(el);
+    if (cs.position !== 'fixed' && cs.position !== 'absolute') return false;
+    return el.getBoundingClientRect().top > 64;
+}
+
+function nodeHasLoadedCreative(el) {
+    if (!el) return false;
+    if (el.tagName === 'IFRAME') return iframeLoadGate.isLoaded(el);
+    const frames = el.querySelectorAll ? el.querySelectorAll('iframe') : [];
+    for (const frame of frames) {
+        if (iframeLoadGate.isLoaded(frame)) return true;
+    }
+    return false;
+}
+
+/** Park a top unit in the phone frame before its iframe loads. Never move a live creative. */
+function dockAdsIntoAppScroll() {
+    const host = adScrollHost();
+    if (!host) return false;
+    let moved = false;
+    cleverOverlayNodes().forEach((el) => {
+        if (host.contains(el)) return;
+        if (isBottomOrSideOverlay(el)) return;
+        const move = outermostMovableAdNode(el);
+        if (!move || host.contains(move) || move === host) return;
+        if (move.id === 'nt-shell' || move.id === 'main-content' || move.id === 'app-scroll') return;
+        if (nodeHasLoadedCreative(move)) return;
+        host.appendChild(move);
+        move.setAttribute('data-nt-ad-docked', '1');
+        move.classList.remove('nt-ad-undocked');
+        moved = true;
+    });
+    if (host.childElementCount) host.removeAttribute('aria-hidden');
+    else host.setAttribute('aria-hidden', 'true');
+    return moved;
+}
+
+function appScrollEl() {
+    return document.getElementById('app-scroll');
+}
+
+function clearUndockedFollowers() {
+    document.querySelectorAll('.nt-ad-undocked').forEach((el) => {
+        el.classList.remove('nt-ad-undocked');
+    });
+}
+
+function markUndockedFollowers(follow) {
+    if (!follow) {
+        clearUndockedFollowers();
+        return;
+    }
+    const host = adScrollHost();
+    cleverOverlayNodes().forEach((el) => {
+        const move = outermostMovableAdNode(el);
+        if (!move || (host && host.contains(move)) || isBottomOrSideOverlay(move)) {
+            el.classList.remove('nt-ad-undocked');
+            if (move && move !== el) move.classList.remove('nt-ad-undocked');
+            return;
+        }
+        move.classList.add('nt-ad-undocked');
+    });
+}
+
+/** Already-painted stickies stay document-level; follow #app-scroll without reparenting. */
+function syncUndockedOverlayScroll(overlayH, inFlowH) {
+    const html = document.documentElement;
+    const scroller = appScrollEl();
+    const host = adScrollHost();
+    const follow = overlayH > 20 && inFlowH < 8 && !isAdsCloaked();
+    if (!follow || !scroller) {
+        html.classList.remove('nt-ad-scroll-sync');
+        html.style.removeProperty('--nt-ad-scroll');
+        markUndockedFollowers(false);
+        if (host) {
+            host.classList.remove('nt-ad-slot-open');
+            if (!host.childElementCount) host.style.height = '';
+        }
+        return;
+    }
+    const y = Math.max(0, scroller.scrollTop || 0);
+    html.classList.add('nt-ad-scroll-sync');
+    html.style.setProperty('--nt-ad-scroll', `${Math.round(-y)}px`);
+    markUndockedFollowers(true);
+    if (host && !host.childElementCount) {
+        host.classList.add('nt-ad-slot-open');
+        host.style.height = `${Math.round(overlayH)}px`;
+        host.removeAttribute('aria-hidden');
+    }
+}
+
 /**
  * True when the box is actually showing. Skip visibility/opacity/off-screen
  * unless `ignoreOurHide` — our cloak uses visibility:hidden and must still
  * count as an injected unit so we do not fire another schedule slot.
+ * `ignoreOffscreen` is for docked / scroll-synced units: scrolled out of view
+ * is not dismiss, and must not collapse the slot.
  */
-function isPaintedBox(el, { ignoreOurHide = false } = {}) {
+function isPaintedBox(el, { ignoreOurHide = false, ignoreOffscreen = false } = {}) {
     const cs = getComputedStyle(el);
     if (cs.display === 'none') return false;
     const skipHideChecks = ignoreOurHide && isOurAdHideActive();
@@ -190,7 +308,8 @@ function isPaintedBox(el, { ignoreOurHide = false } = {}) {
     }
     const r = el.getBoundingClientRect();
     if (r.height <= 20 || r.width <= 20) return false;
-    if (!skipHideChecks) {
+    const skipOffscreen = ignoreOffscreen || isInAppAdHost(el);
+    if (!skipHideChecks && !skipOffscreen) {
         if (r.bottom <= 1 || r.top >= window.innerHeight - 1) return false;
         if (r.right <= 1 || r.left >= window.innerWidth - 1) return false;
     }
@@ -209,8 +328,11 @@ function iframeLooksAlive(iframe, paintedOpts) {
 
 /** Wrapper with no creative (expired/discarded) must not keep a top gap. */
 function unitOccupiesSpace(el, paintedOpts = {}) {
-    if (!isPaintedBox(el, paintedOpts)) return false;
-    if (el.tagName === 'IFRAME') return iframeLooksAlive(el, paintedOpts);
+    const opts = isInAppAdHost(el)
+        ? { ...paintedOpts, ignoreOffscreen: true }
+        : paintedOpts;
+    if (!isPaintedBox(el, opts)) return false;
+    if (el.tagName === 'IFRAME') return iframeLooksAlive(el, opts);
     if (el.tagName === 'IMG' || el.tagName === 'VIDEO' || el.tagName === 'CANVAS'
         || el.tagName === 'OBJECT' || el.tagName === 'EMBED') {
         return true;
@@ -220,17 +342,17 @@ function unitOccupiesSpace(el, paintedOpts = {}) {
     for (const root of roots) {
         const iframes = root.querySelectorAll ? root.querySelectorAll('iframe') : [];
         for (const frame of iframes) {
-            if (iframeLooksAlive(frame, paintedOpts)) return true;
+            if (iframeLooksAlive(frame, opts)) return true;
         }
         const media = root.querySelectorAll ? root.querySelectorAll('img, video, canvas, object, embed') : [];
         for (const node of media) {
-            if (isPaintedBox(node, paintedOpts)) return true;
+            if (isPaintedBox(node, opts)) return true;
         }
     }
     for (const child of el.children) {
         if (child.tagName === 'SCRIPT' || child.tagName === 'STYLE'
             || child.tagName === 'LINK' || child.tagName === 'NOSCRIPT') continue;
-        if (unitOccupiesSpace(child, paintedOpts)) return true;
+        if (unitOccupiesSpace(child, opts)) return true;
     }
     const cs = getComputedStyle(el);
     if (cs.backgroundImage && cs.backgroundImage !== 'none') return true;
@@ -242,7 +364,8 @@ function unitOccupiesSpace(el, paintedOpts = {}) {
 function syncIdleAdNodes() {
     const hideActive = isOurAdHideActive();
     cleverOverlayNodes().forEach((el) => {
-        if (hideActive || unitOccupiesSpace(el)) {
+        // Scroll-away is not dismiss. Empty leftovers (no creative) still collapse.
+        if (hideActive || unitOccupiesSpace(el, { ignoreOffscreen: true })) {
             el.removeAttribute('data-nt-ad-idle');
             return;
         }
@@ -415,10 +538,17 @@ function syncAdShellMotion() {
     if (!shell) return;
 
     if (window._adNetworkDestroyed) {
-        document.documentElement.classList.remove('nt-ads-entering');
+        const host = adScrollHost();
+        document.documentElement.classList.remove('nt-ads-entering', 'nt-ad-scroll-sync');
+        document.documentElement.style.removeProperty('--nt-ad-scroll');
         adEntering = false;
         shellMotionLock = false;
         cleverOverlayNodes().forEach((el) => el.removeAttribute('data-nt-ad-idle'));
+        clearUndockedFollowers();
+        if (host) {
+            host.classList.remove('nt-ad-slot-open');
+            if (!host.childElementCount) host.style.height = '';
+        }
         setShellVar('--nt-ad-shift', 0, false);
         setShellVar('--nt-ad-flip', 0, false);
         prevOverlayH = 0;
@@ -429,65 +559,36 @@ function syncAdShellMotion() {
 
     if (adEntering || shellMotionLock) return;
 
-    const { overlayH, inFlowH } = measureAdLayout();
+    dockAdsIntoAppScroll();
+    const { overlayH, inFlowH } = measureAdLayout({ ignoreOffscreen: true });
     const filled = overlayH > 0 || inFlowH > 0;
 
     if (isAdsCloaked()) {
+        syncUndockedOverlayScroll(0, 0);
         if (inFlowH > 0) prevInFlowH = inFlowH;
         return;
     }
 
-    const instant = consumeResumeInstant() || prefersReducedMotion();
-
+    consumeResumeInstant();
     syncIdleAdNodes();
 
     if (!filled) userSawEmptyBoard = true;
 
-    const animate = !instant && userSawEmptyBoard;
-    const targetShift = inFlowH > 0 ? 0 : overlayH;
+    setShellVar('--nt-ad-shift', 0, false);
+    setShellVar('--nt-ad-flip', 0, false);
 
     if (!filled) {
-        if (animate && prevOverlayH > 20) animateOverlayTo(0);
-        else setShellVar('--nt-ad-shift', 0, animate);
-        setShellVar('--nt-ad-flip', 0, false);
+        syncUndockedOverlayScroll(0, 0);
         prevOverlayH = 0;
         prevInFlowH = 0;
         stopOccupancyWatch();
         return;
     }
 
-    const overlayGrew = overlayH > 20 && prevOverlayH < 8 && inFlowH === 0;
-    const overlayShrunk = prevOverlayH > 20 && overlayH < 8 && inFlowH === 0;
-    const inFlowDelta = inFlowH - prevInFlowH;
-
-    if (animate && overlayGrew) {
-        beginOverlayEntrance(overlayH);
-        prevOverlayH = overlayH;
-        prevInFlowH = inFlowH;
-        return;
-    }
-
-    if (animate && overlayShrunk) {
-        animateOverlayTo(0);
-        prevOverlayH = overlayH;
-        prevInFlowH = inFlowH;
-        return;
-    }
-
-    if (animate && Math.abs(inFlowDelta) > 16) {
-        setShellVar('--nt-ad-shift', 0, false);
-        playInFlowFlip(-inFlowDelta);
-        prevOverlayH = overlayH;
-        prevInFlowH = inFlowH;
-        return;
-    }
-
-    setShellVar('--nt-ad-shift', targetShift, animate);
-    if (!(inFlowDelta && animate)) setShellVar('--nt-ad-flip', 0, false);
-
+    syncUndockedOverlayScroll(overlayH, inFlowH);
     prevOverlayH = overlayH;
     prevInFlowH = inFlowH;
-    if (targetShift > 0 || inFlowH > 0) maybeStartOccupancyWatch();
+    if (overlayH > 0 || inFlowH > 0) maybeStartOccupancyWatch();
 }
 
 function requestAdShellSync() {
@@ -521,7 +622,7 @@ function maybeStartOccupancyWatch() {
             stopOccupancyWatch();
             return;
         }
-        const { overlayH, inFlowH } = measureAdLayout();
+        const { overlayH, inFlowH } = measureAdLayout({ ignoreOffscreen: true });
         if (overlayH < 8 && inFlowH < 8) requestAdShellSync();
     }, AD_OCCUPANCY_WATCH_MS);
 }
@@ -749,6 +850,7 @@ export function initCleverAds() {
                 }
             }
             if (sawChildList) {
+                dockAdsIntoAppScroll();
                 refreshOverlayObservations();
                 requestAdShellSync();
             }
@@ -885,8 +987,16 @@ export function initCleverAds() {
 
     // Same-session: vendor may discard a sticky unit while the tab stays visible.
     // Scroll back to top will not fire visibilitychange/pageshow/resume.
-    window.addEventListener('scroll', scheduleScrollOccupancyCheck, { passive: true });
-    document.getElementById('app-scroll')?.addEventListener('scroll', scheduleScrollOccupancyCheck, { passive: true });
+    const onAppScroll = () => {
+        const html = document.documentElement;
+        if (html.classList.contains('nt-ad-scroll-sync')) {
+            const y = Math.max(0, appScrollEl()?.scrollTop || 0);
+            html.style.setProperty('--nt-ad-scroll', `${Math.round(-y)}px`);
+        }
+        scheduleScrollOccupancyCheck();
+    };
+    window.addEventListener('scroll', onAppScroll, { passive: true });
+    document.getElementById('app-scroll')?.addEventListener('scroll', onAppScroll, { passive: true });
     if ('onscrollend' in window) {
         window.addEventListener('scrollend', () => requestAdShellSync(), { passive: true });
         document.getElementById('app-scroll')?.addEventListener('scrollend', () => requestAdShellSync(), { passive: true });

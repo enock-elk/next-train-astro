@@ -20,8 +20,8 @@ if (!indexPage.includes('id="nt-ad-scroll-host"')) fail('homepage missing #nt-ad
 if (!/id="app-scroll"[\s\S]{0,180}id="nt-ad-scroll-host"/.test(indexPage)) {
     fail('#nt-ad-scroll-host must be the first child of #app-scroll');
 }
-if (!layout.includes('clips a 100vw creative')) {
-    fail('Layout must document why vendor stickies stay outside the phone frame');
+if (!layout.includes('data-nt-ad-docked')) {
+    fail('Layout must in-flow docked top units inside the Next Train frame');
 }
 
 if (!layout.includes('id="clever-core"')) fail('Layout missing SCRIPT#clever-core');
@@ -64,15 +64,25 @@ if (!layout.includes('#dev-modal') || !layout.includes('touch-action: pan-y')) {
 
 if (!ads.includes('__ntCleverVendorInject')) fail('clever-ads.js must call the vendor IIFE, not a restyled host DIV');
 if (!ads.includes('--nt-ad-shift')) fail('clever-ads.js must drive --nt-ad-shift on #nt-shell');
-if (!ads.includes('beginOverlayEntrance')) fail('overlay fill must hide the unit, ease the shell, then reveal');
-if (!ads.includes('nt-ads-entering')) fail('entrance cloak class missing from clever-ads.js');
-if (!layout.includes('html.nt-ads-entering')) fail('Layout must hide the unit during shell entrance');
-if (!ads.includes('afterPaint')) fail('ad motion must paint the from-state before easing');
-if (!ads.includes('userSawEmptyBoard')) fail('do not animate until the commuter has seen the empty board');
-if (!ads.includes('const targetShift = inFlowH > 0 ? 0 : overlayH')) {
-  fail('in-flow ads must not double-push with a lasting overlay shift');
+if (!ads.includes('dockAdsIntoAppScroll')) fail('top units must dock into the Next Train frame before the iframe loads');
+if (!ads.includes('nodeHasLoadedCreative')) fail('must not reparent a wrapper that already has a loaded iframe');
+if (!ads.includes('if (nodeHasLoadedCreative(move)) return')) fail('loaded creatives must stay put');
+if (!ads.includes('ignoreOffscreen')) fail('scroll-away must not count as dismiss');
+if (!ads.includes('nt-ad-scroll-sync')) fail('already-painted stickies must follow #app-scroll');
+if (!ads.includes('nt-ad-undocked')) fail('undocked stickies must be marked so they follow #app-scroll');
+if (!ads.includes('undockedTopUnitHeight')) fail('body-level pushdowns (in-flow, not fixed) must still follow #app-scroll');
+if (!ads.includes('const host = adScrollHost()')) fail('destroyed-ad cleanup must resolve #nt-ad-scroll-host');
+if (!layout.includes('translate: 0 var(--nt-ad-scroll')) fail('undocked stickies must use CSS translate, not transform');
+if (!layout.includes('html.nt-ad-scroll-sync .nt-ad-undocked')) fail('undocked follow CSS must target .nt-ad-undocked');
+if (/html\.nt-ad-scroll-sync \.nt-ad-undocked[\s\S]{0,160}pointer-events:\s*none/.test(layout)) {
+  fail('vendor Close.png is a sibling of the iframe; do not disable pointer-events on the unit');
 }
-if (!ads.includes('playInFlowFlip(-inFlowDelta)')) fail('in-flow fill/dismiss must invert with FLIP');
+if (/\#nt-ad-scroll-host iframe[\s\S]{0,280}position:\s*relative\s*!important/.test(layout)) {
+  fail('do not flatten docked iframes; vendor close must stay on the unit');
+}
+if (layout.includes('img[alt="close"]') && /img\[alt="close"\][\s\S]{0,200}display:\s*none/.test(layout)) {
+  fail('must not hide the vendor close control');
+}
 if (!ads.includes('unitOccupiesSpace')) fail('must ignore empty leftover wrappers, not just box height');
 if (!ads.includes('visibility === \'hidden\'')) fail('shift measure must skip vendor visibility:hidden');
 if (!ads.includes('ignoreOurHide')) fail('inject filled-check must ignore our cloak visibility');
@@ -87,10 +97,7 @@ if (!ads.includes('visibilitychange')) fail('must remeasure ads when the app bec
 if (!ads.includes('scheduleScrollOccupancyCheck')) fail('scroll-return must trigger occupancy remasure');
 if (!ads.includes("addEventListener('scroll'")) fail('must remeasure ad occupancy on scroll (same-session gap)');
 if (!ads.includes("addEventListener('scrollend'")) fail('must remasure ads on scrollend when available');
-if (ads.includes('reparentOccupiedAdsIntoScrollHost')) {
-  fail('must not reparent Clever stickies into #nt-ad-scroll-host (clips 100vw creatives to the phone frame)');
-}
-if (ads.includes('function adScrollHost')) fail('must not move vendor overlays into the phone-frame ad host');
+if (!ads.includes('function adScrollHost')) fail('top ads dock into #nt-ad-scroll-host in the phone frame');
 if (!ads.includes('topLevelAdNodes')) fail('nested wrapper/iframe candidates must collapse to one top-level unit');
 if (!ads.includes('iframeLoadGate.isLoaded')) fail('iframe payloads must not occupy space before their load event');
 if (ads.includes('const filled = occupied ||')) fail('wrapper presence alone must not stop the inject schedule');
@@ -142,12 +149,21 @@ if (ads.includes("setProperty('display', 'none'")) {
   }
   if (!leftoverOccupies({ painted: true, iframeAlive: true })) fail('live iframe must occupy space');
 
-  const targetShift = (overlayH, inFlowH) => (inFlowH > 0 ? 0 : overlayH);
-  const flipInvert = (delta) => -delta;
-  if (targetShift(96, 0) !== 96) fail('fixed overlay must shift the shell by H');
-  if (targetShift(96, 80) !== 0) fail('in-flow ads must not double-push');
-  if (flipInvert(80) !== -80) fail('in-flow fill inverts with -delta');
-  if (flipInvert(-80) !== 80) fail('in-flow dismiss inverts with +H');
+  const pinShell = (overlayH, inFlowH) => 0;
+  const scrollAway = (scrollTop) => -Math.max(0, scrollTop);
+  const unitKeepsVendorClose = ({ wrapperHasClose, closePointerEvents, iframeFlattened }) => (
+    wrapperHasClose && closePointerEvents !== 'none' && !iframeFlattened
+  );
+  if (pinShell(96, 0) !== 0) fail('filled ads must not pin #main-content (scroll-away, not X)');
+  if (pinShell(96, 80) !== 0) fail('docked in-flow ads must not double-push the shell');
+  if (scrollAway(40) !== -40) fail('undocked stickies follow #app-scroll by -scrollTop');
+  if (scrollAway(0) !== 0) fail('undocked stickies sit at rest at scroll 0');
+  if (!unitKeepsVendorClose({ wrapperHasClose: true, closePointerEvents: 'auto', iframeFlattened: false })) {
+    fail('pushdown close must stay on the unit');
+  }
+  if (unitKeepsVendorClose({ wrapperHasClose: true, closePointerEvents: 'none', iframeFlattened: false })) {
+    fail('pointer-events none on the unit would eat the vendor X');
+  }
 }
 
 {

@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_09.18.13': [
+        'Startup auto-locate on installed PWA / Play TWA: treat missing Permissions API as already granted, remember nt_geo_granted after GPS, one-shot overwrite of a restored last station, pageshow kick, fused GPS (enableHighAccuracy false). The green Found: {station} ({km}km) toast now also fires on silent auto-locate (Locating / errors stay tap-only). App stuck? Get help stays hidden until 15s of visible Starting Next Train. help.html is a light Next Train shell and no longer paints device id / version / URL. Play Store users are twa_open (app_source: twa, za.co.nexttrain.app). No What’s New. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
+    ],
     'V9_09.18.12': [
         'Live train share URL (?live=) with Worker OG /og/live.png. Headboard uses timetable last stop (0823 → Mabopane), never corridor destB. Tracking pill drag is finger-aligned to the map pane; locate recentres the sharer on the train; card opens from the pill. Pause-aware header/card/popup (Restart vs Stop). Sharer GPS keeps running off Map and auto-resumes when the path is good; user Pause does not. Listeners drop the ride_pings RTDB watch off Map. Tracking card share top-right. Planner View Trip Plan on Map is slightly blue. No What’s New (live location stays operator-hidden). forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
     ],

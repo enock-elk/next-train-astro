@@ -4075,6 +4075,8 @@ export function setupAutocomplete(inputId, selectId) {
 
     const list = document.createElement('ul');
     list.className = "absolute z-50 w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-b-lg shadow-xl max-h-60 overflow-y-auto hidden mt-1 left-0 custom-scrollbar text-left";
+    if (inputId === 'planner-from-search') list.id = 'planner-from-autocomplete-list';
+    else if (inputId === 'planner-to-search') list.id = 'planner-to-autocomplete-list';
     input.parentNode.appendChild(list);
     let renderGen = 0;
     let lastFilter = null;

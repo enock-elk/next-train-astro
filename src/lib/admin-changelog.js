@@ -6,7 +6,7 @@ import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
     'V9_09.18.8': [
-        'Live board silently picks the nearest station only when OS geolocation is already granted, Welcome is done, the Next Train tab is visible, and a route is pinned. Permissions prompt is never opened from boot. Signed-in users/{uid} PATCHes lastSeenAt, region, lastRouteId, appVersion (throttled). No GPS on the account. Privacy copy drops the promised cookie banner and stops calling device-id diagnostics anonymous. No What’s New. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
+        'Live board and Trip Planner From silently pick the nearest station only when OS geolocation is already granted, Welcome is done, Next Train or Trip Planner is visible, and a route is pinned. Auto-locate never opens a permission prompt, never overwrites a From field the commuter is picking or has already set, and re-checks that gate after GPS returns. Signed-in users/{uid} PATCHes lastSeenAt, region, lastRouteId, appVersion (throttled). No GPS on the account. Privacy copy drops the promised cookie banner and stops calling device-id diagnostics anonymous. No What’s New. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
     ],
     'V9_09.18.6': [
         'Admin Feedback inbox ticks: 1 grey sent, 2 grey when the commuter app fetched the inbox (delivered), 2 blue when they opened Messages (read). Auth-backed PATCH on inbox/{deviceId}/{msgId}. No R chip. Opening a thread no longer writes acknowledged. Commuter Messages stays tick-free. No What’s New. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',

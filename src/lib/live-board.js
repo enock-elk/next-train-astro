@@ -24,6 +24,7 @@ import {
 import { showToast, triggerHaptic, openSmoothModal, closeSmoothModal } from './ui.js';
 import { routeAllowsDualHubOptions } from './transfer-card.js';
 import { trackAnalyticsEvent } from './analytics.js';
+import { shouldApplySilentLocate } from './auto-locate.js';
 import { resolveHolidayDayType } from './holiday-approvals.js';
 import { isAdminAuthed } from './admin-chrome.js';
 import {
@@ -1275,6 +1276,8 @@ export function findNearestStation(isAuto = false) {
             }
 
             const nearest = candidates[0];
+
+            if (isAuto && !shouldApplySilentLocate()) return;
             
             if (nearest.dist <= MAX_RADIUS_KM) {
                 const stationName = nearest.stationName;

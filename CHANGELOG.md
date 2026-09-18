@@ -4,7 +4,7 @@ Longer release notes for the repo. The in-app “What’s New” modal uses the 
 
 ## V9_09.18.8 — no release notes
 
-Granted-only nearest-station locate on the live board. Signed-in ops fields lastSeenAt, region, lastRouteId, appVersion. Privacy copy matches telemetry. No cookie banner. No What’s New.
+Granted-only nearest-station locate on the live board and Trip Planner From when those fields are untouched. Signed-in ops fields lastSeenAt, region, lastRouteId, appVersion. Privacy copy matches telemetry. No cookie banner. No What’s New.
 
 ## V9_09.18.6 — no release notes
 

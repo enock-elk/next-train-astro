@@ -12,9 +12,9 @@
  */
 import catalog from './catalog.json';
 import { isSocialCrawler, parseShareIntent, dayLabel, stationLabel, decodeDay } from './parse.js';
-import { buildRouteOgMeta, buildPlannerOgMeta, renderOgHtml, buildAppDeepLink } from './og-html.js';
+import { buildRouteOgMeta, buildPlannerOgMeta, buildLiveTrainOgMeta, renderOgHtml, buildAppDeepLink } from './og-html.js';
 import { extractGridPreview, loadRegionDb, loadRegionGridOrder } from './schedule.js';
-import { timetablePng, plannerPng, buildTimetableSvg, buildPlannerSvg } from './og-images.js';
+import { timetablePng, plannerPng, liveTrainPng, buildTimetableSvg, buildPlannerSvg, buildLiveTrainSvg } from './og-images.js';
 
 function siteBase(env, requestUrl) {
   return String(env.PUBLIC_SITE || `${requestUrl.protocol}//${requestUrl.host}`).replace(/\/$/, '');
@@ -104,10 +104,35 @@ async function handleOgPlan(url, env) {
   }
 }
 
+async function handleOgLive(url) {
+  const trainId = url.searchParams.get('train') || url.searchParams.get('live') || 'Train';
+  const dest = stationLabel(url.searchParams.get('to') || '');
+  const wantSvg = url.searchParams.get('format') === 'svg';
+  const opts = { trainId, dest };
+  if (wantSvg) return svgResponse(buildLiveTrainSvg(opts));
+  try {
+    const png = await liveTrainPng(opts);
+    return pngResponse(png);
+  } catch (e) {
+    console.error('Live train PNG failed, SVG fallback', e.message || e);
+    return svgResponse(buildLiveTrainSvg(opts));
+  }
+}
+
 async function handleBotShare(url, env, ctx) {
   const intent = parseShareIntent(url);
   if (!intent) return null;
   const site = siteBase(env, url);
+
+  if (intent.kind === 'live') {
+    const meta = buildLiveTrainOgMeta(intent, site);
+    return new Response(renderOgHtml(meta), {
+      headers: {
+        'Content-Type': 'text/html; charset=utf-8',
+        'Cache-Control': 'public, max-age=60, s-maxage=120',
+      },
+    });
+  }
 
   if (intent.kind === 'planner') {
     const meta = buildPlannerOgMeta(intent, site);
@@ -173,6 +198,10 @@ export default {
       if (url.pathname.endsWith('.svg')) url.searchParams.set('format', 'svg');
       return handleOgPlan(url, env);
     }
+    if (url.pathname === '/og/live.png' || url.pathname === '/og/live.svg') {
+      if (url.pathname.endsWith('.svg')) url.searchParams.set('format', 'svg');
+      return handleOgLive(url);
+    }
 
     // Share links: crawlers get OG HTML. Humans (Facebook/Instagram IAB included)
     // get one HTTP 302 to /?rt=… — JS location.replace in IAB is often stolen by
@@ -180,7 +209,7 @@ export default {
     if (url.pathname === '/og/share') {
       const intent = parseShareIntent(url);
       if (!intent) {
-        return new Response('Missing rt= or plan= share params', { status: 400 });
+        return new Response('Missing rt=, plan=, or live= share params', { status: 400 });
       }
       const uaShare = request.headers.get('user-agent') || '';
       if (!isSocialCrawler(uaShare)) {
@@ -192,7 +221,7 @@ export default {
         stub.headers.set('X-NextTrain-OG', 'share');
         return stub;
       }
-      return new Response('Missing rt= or plan= share params', { status: 400 });
+      return new Response('Missing rt=, plan=, or live= share params', { status: 400 });
     }
 
     // Social crawlers on legacy deep-link homepage shares (/?rt= / ?plan=)

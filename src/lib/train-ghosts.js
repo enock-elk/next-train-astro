@@ -556,13 +556,11 @@ function shortStation(name) {
     return String(name || '').replace(/ STATION$/i, '').trim();
 }
 
-/** Last timed stop on this timetable column (headboard / terminus). */
+/** Last timed stop on this timetable column (headboard / terminus). Never corridor destB. */
 export function trainTerminusName(trainId, fallback) {
-    const fb = shortStation(fallback);
-    if (fb) return fb;
     const { stops } = findStopsForTrain(trainId);
     if (stops.length) return shortStation(stops[stops.length - 1].station);
-    return '';
+    return shortStation(fallback);
 }
 
 /** "1165 → Pienaarspoort" — never a bare train number. */
@@ -581,6 +579,12 @@ export function trainGoingFullLabel(trainId, destination) {
     if (id && dest) return `Train ${id} → ${dest}`;
     if (id) return `Train ${id}`;
     return dest || 'Train';
+}
+
+/** Timetable headboard, e.g. "Toward Mabopane". Never the opposite corridor name. */
+export function trainTowardLabel(trainId, destination) {
+    const dest = trainTerminusName(trainId, destination);
+    return dest ? `Toward ${dest}` : '';
 }
 
 /** Where the timetable says this train should be right now. */

@@ -17,6 +17,8 @@ export { SUPPORT_EMAIL, SUPPORT_FACEBOOK_URL };
 const RECOVERY_AUTO_REDIRECT_MS = 55_000;
 /** Soft “connection struggling” strip while still “online” but not stabilized. */
 const SLOW_BOOT_HINT_MS = 18_000;
+/** “App stuck? Get help” on Starting Next Train. Hidden until this visible time. */
+export const LOADER_ESCAPE_MS = 15_000;
 
 /** @param {string} [reason] */
 export function helpUrl(reason = 'broken_install') {
@@ -60,31 +62,54 @@ function isForeground() {
     return typeof document !== 'undefined' && document.visibilityState === 'visible';
 }
 
+function setLoaderEscapeVisible(show) {
+    if (typeof document === 'undefined') return;
+    const overlay = document.getElementById('loading-overlay');
+    const link = overlay?.querySelector('[data-nt-help-escape]');
+    if (!link) return;
+    if (show) {
+        link.hidden = false;
+        link.removeAttribute('hidden');
+        link.classList.remove('hidden');
+        link.setAttribute('aria-hidden', 'false');
+        link.style.removeProperty('visibility');
+        link.style.removeProperty('display');
+    } else {
+        link.hidden = true;
+        link.setAttribute('hidden', '');
+        link.classList.add('hidden');
+        link.setAttribute('aria-hidden', 'true');
+    }
+}
+
 function ensureLoaderEscape() {
     if (typeof document === 'undefined') return;
     const overlay = document.getElementById('loading-overlay');
-    if (!overlay || overlay.querySelector('[data-nt-help-escape]')) return;
-
-    const link = document.createElement('a');
-    link.setAttribute('data-nt-help-escape', '1');
-    link.href = helpUrl('boot');
-    link.textContent = 'App stuck? Get help';
-    link.style.cssText = [
-        'position:absolute',
-        'bottom:max(24px,var(--nt-sys-bottom,env(safe-area-inset-bottom)))',
-        'left:50%',
-        'transform:translateX(-50%)',
-        'font-size:12px',
-        'font-weight:700',
-        'color:#64748b',
-        'text-decoration:underline',
-        'z-index:2',
-        'padding:8px 12px',
-    ].join(';');
-    if (getComputedStyle(overlay).position === 'static') {
-        overlay.style.position = 'fixed';
+    if (!overlay) return;
+    let link = overlay.querySelector('[data-nt-help-escape]');
+    if (!link) {
+        link = document.createElement('a');
+        link.setAttribute('data-nt-help-escape', '1');
+        link.href = helpUrl('boot');
+        link.textContent = 'App stuck? Get help';
+        link.style.cssText = [
+            'position:absolute',
+            'bottom:max(24px,var(--nt-sys-bottom,env(safe-area-inset-bottom)))',
+            'left:50%',
+            'transform:translateX(-50%)',
+            'font-size:12px',
+            'font-weight:700',
+            'color:#64748b',
+            'text-decoration:underline',
+            'z-index:2',
+            'padding:8px 12px',
+        ].join(';');
+        if (getComputedStyle(overlay).position === 'static') {
+            overlay.style.position = 'fixed';
+        }
+        overlay.appendChild(link);
     }
-    overlay.appendChild(link);
+    setLoaderEscapeVisible(false);
 }
 
 /** True while the boot logo is still covering the board. */
@@ -208,6 +233,13 @@ export function initRecoveryWatchdog() {
     setTimeout(ensureLoaderEscape, 500);
     // Remove any leftover soft banner from older builds
     try { document.getElementById('nt-recovery-banner')?.remove(); } catch { /* ignore */ }
+
+    onVisibleElapsed(LOADER_ESCAPE_MS, () => {
+        if (window._appStabilized) return;
+        if (!overlayStillBlocking()) return;
+        ensureLoaderEscape();
+        setLoaderEscapeVisible(true);
+    });
 
     onVisibleElapsed(SLOW_BOOT_HINT_MS, () => {
         if (window._appStabilized) return;

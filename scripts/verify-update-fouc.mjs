@@ -123,6 +123,17 @@ assert(/<div class="hp"[^>]*\bhidden\b/.test(help), 'honeypot stays hidden when 
 assert(help.includes('id="btn-reset"'), 'Reset saved app data is a real button');
 assert(help.includes('admin@nexttrain.co.za'), 'Reset and Recover keeps the support email as a mailto');
 assert(help.includes('facebook.com/enock.kazembe'), 'Reset and Recover keeps the Facebook support link');
+assert(!help.includes('id="diag"'), 'Reset and Recover does not paint a diagnostic dump');
+assert(!/Device:\s*['+]/.test(help), 'Reset and Recover does not print a device id on the page');
+assert(help.includes('class="phone"') || help.includes('class="brand"'), 'Reset and Recover uses Next Train light chrome');
+assert(!help.includes('#0f172a'), 'Reset and Recover is not the old dark stacked shell');
+
+const recoverySrc = readFileSync(new URL('../src/lib/recovery.js', import.meta.url), 'utf8');
+assert(recoverySrc.includes('LOADER_ESCAPE_MS = 15_000'), 'App stuck waits 15s of visible time');
+assert(recoverySrc.includes('setLoaderEscapeVisible(true)'), 'App stuck is revealed after the delay');
+const indexSrc = readFileSync(new URL('../src/pages/index.astro', import.meta.url), 'utf8');
+assert(indexSrc.includes('data-nt-help-escape="1"'), 'Starting Next Train has the App stuck link');
+assert(/data-nt-help-escape="1"[\s\S]{0,80}\bhidden\b/.test(indexSrc), 'App stuck starts hidden on Starting Next Train');
 
 const appUpdate = readFileSync(new URL('../src/lib/app-update.js', import.meta.url), 'utf8');
 assert(appUpdate.includes('Incoming update waiting (quiet)'), 'onNeedRefresh is quiet');

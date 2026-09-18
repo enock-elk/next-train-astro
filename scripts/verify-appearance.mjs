@@ -524,6 +524,7 @@ assert(recovery.includes('visibilityState'), 'recovery counts visible time only'
 assert(recovery.includes('overlayStillBlocking'), 'auto-lifeboat requires the loading overlay');
 assert(!recovery.includes("if (!board || !tabs) return true"), 'recovery does not treat hidden top tabs as a crash');
 assert(recovery.includes('view-trip-planner'), 'planner tab is a healthy shell');
+assert(recovery.includes('LOADER_ESCAPE_MS = 15_000'), 'App stuck on Starting Next Train waits 15s visible');
 
 const bootLogic = readFileSync(new URL('../src/lib/logic.js', import.meta.url), 'utf8');
 assert(bootLogic.includes('markSchedulesCoreReady'), 'cached schedules stabilize the shell immediately');

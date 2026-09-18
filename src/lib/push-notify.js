@@ -16,6 +16,8 @@ const TOKEN_CACHE_KEY = 'fcmTokenCache';
 const REGISTRATION_TYPE_CACHE_KEY = 'fcmRegistrationType';
 let fidListenerBound = false;
 const fidWaiters = new Set();
+let subscriptionSyncBound = false;
+let subscriptionSyncTimer = null;
 
 function getVapidKey() {
     try {
@@ -275,7 +277,7 @@ export async function disablePushNotifications() {
         try {
             await persistToken(token, {
                 enabled: false,
-                registrationType: safeStorage.getItem(REGISTRATION_TYPE_CACHE_KEY) === 'fid' ? 'fid' : 'token',
+                registrationType: cachedRegistrationType(),
             });
         } catch (e) {
             console.warn('FCM subscription disable failed', e);
@@ -285,9 +287,36 @@ export async function disablePushNotifications() {
     return false;
 }
 
+function cachedRegistrationType() {
+    return safeStorage.getItem(REGISTRATION_TYPE_CACHE_KEY) === 'fid' ? 'fid' : 'token';
+}
+
+function scheduleSubscriptionSync() {
+    if (!getNotifyPref()) return;
+    const registrationId = safeStorage.getItem(TOKEN_CACHE_KEY);
+    if (!registrationId) return;
+    clearTimeout(subscriptionSyncTimer);
+    subscriptionSyncTimer = setTimeout(() => {
+        ensureCurrentRouteSubscribed();
+        persistToken(registrationId, {
+            enabled: true,
+            registrationType: cachedRegistrationType(),
+        }).catch((error) => console.warn('FCM audience refresh failed', error));
+    }, 300);
+}
+
+function bindSubscriptionSync() {
+    if (subscriptionSyncBound) return;
+    subscriptionSyncBound = true;
+    $currentRouteId.subscribe(scheduleSubscriptionSync);
+    $userRegion.subscribe(scheduleSubscriptionSync);
+    $account.subscribe(scheduleSubscriptionSync);
+}
+
 /** Boot hook — refresh token if pref already on. */
 export async function hydratePushNotifications() {
     await fetchFeatures();
+    bindSubscriptionSync();
     if (!getNotifyPref()) return;
     if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
         ensureCurrentRouteSubscribed();

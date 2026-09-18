@@ -208,6 +208,10 @@ if (!meta.includes('Pretoria to Mabopane')) fail(`meta must use in-app route nam
 if (!/schedule/i.test(meta)) fail(`meta must include schedule: "${meta}"`);
 if (!/PRASA/i.test(meta) || !/Metrorail/i.test(meta)) fail(`meta must name PRASA and Metrorail: "${meta}"`);
 if (!/Updated/i.test(meta) || !/Current trains/i.test(meta)) fail(`meta must say updated/current: "${meta}"`);
+if (!/^View and download the Pretoria to Mabopane/.test(meta)) {
+  fail(`meta must lead with view and download: "${meta}"`);
+}
+if (!/works offline/i.test(meta)) fail(`meta must mention offline: "${meta}"`);
 if (!meta.includes('1810') || !meta.includes('1818')) fail(`meta must list train numbers: "${meta}"`);
 if (!/ticket prices/i.test(meta) && !/Max adult single/i.test(meta)) {
   fail(`meta must mention ticket prices: "${meta}"`);
@@ -615,8 +619,14 @@ if (existsSync(DIST)) {
   if (!indexHtml.includes('PRASA Train Times')) {
     fail('homepage title should include PRASA Train Times');
   }
-  if (!/Updated 2026 PRASA Metrorail train times and schedules/i.test(indexHtml)) {
-    fail('homepage meta should lead with updated PRASA Metrorail train times and schedules');
+  if (!/View and download 2026 PRASA Metrorail train timetables for Gauteng, Cape Town, Durban and East London/i.test(indexHtml)) {
+    fail('homepage meta should lead with view and download PRASA Metrorail timetables');
+  }
+  if (!/works offline/i.test(indexHtml) || !/ticket prices/i.test(indexHtml)) {
+    fail('homepage meta should mention offline and ticket prices');
+  }
+  if (/live train tracking/i.test(indexHtml)) {
+    fail('homepage meta must not advertise live train tracking');
   }
   if (!indexHtml.includes('Commuters can send a delay note, and some testers can share a trip location.')) {
     fail('homepage FAQ must mention delay notes and optional trip sharing');

@@ -473,7 +473,7 @@ export function routeMetaDescription(origin, dest, province, opts = {}) {
     else if (opts.hasSaturday === false) satBit = ' No Sunday service.';
     const nearby = opts.nearby ? ` ${String(opts.nearby).trim()}` : '';
     const provinceBit = province ? ` (${province})` : '';
-    return `Updated ${pair} Metrorail (PRASA) train schedule${provinceBit}.${trainBit}${fareBit} Next Train shows the next train, timetable, ticket prices, and trip planner.${satBit}${nearby}`;
+    return `View and download the ${pair} Metrorail (PRASA) train schedule${provinceBit}. Updated ${SEO_SCHEDULE_YEAR} timetable.${trainBit}${fareBit} Works offline in Next Train, with next train, ticket prices, and trip planner.${satBit}${nearby}`;
 }
 
 function getDumpValue(db, key) {

@@ -15,7 +15,7 @@ import {
     normalizeStationName, timeToSeconds, formatTimeDisplay, isRealTime, safeStorage,
     getDistanceFromLatLonInKm, escapeHTML, formatAppDate, usesWeekdayScheduleSheet, usesSaturdayScheduleSheet,
     usesPublicHolidayScheduleSheet, resolveOperatingDayType, scheduleCacheSlot, routeSheetKeyForDay,
-    simUsesSpecificDate, exclusionAppliesToSurface
+    simUsesSpecificDate, exclusionAppliesToSurface, resolveStationLatLon, weekdaySheetsForRoute
 } from './utils.js';
 import {
     parseJSONSchedule, currentTime, currentDayType, currentDayIndex,
@@ -1257,11 +1257,22 @@ export function findNearestStation(isAuto = false) {
             const userLon = position.coords.longitude;
             
             let candidates = [];
+            const routeId = getCurrentRouteId();
+            const weekdaySheets = weekdaySheetsForRoute(
+                ROUTES[routeId],
+                getSchedules(),
+                getFullDatabase(),
+            );
             for (const [stationName, coords] of Object.entries(getGlobalStationIndex())) {
-                if (coords.routes.has(getCurrentRouteId())) {
-                    const dist = getDistanceFromLatLonInKm(userLat, userLon, coords.lat, coords.lon);
-                    candidates.push({ stationName, dist });
-                }
+                const onRoute = coords?.routes instanceof Set
+                    ? coords.routes.has(routeId)
+                    : Array.isArray(coords?.routes) && coords.routes.includes(routeId);
+                if (!onRoute) continue;
+                const ll = resolveStationLatLon(stationName, coords, weekdaySheets);
+                if (!ll) continue;
+                const dist = getDistanceFromLatLonInKm(userLat, userLon, ll.lat, ll.lon);
+                if (!Number.isFinite(dist)) continue;
+                candidates.push({ stationName, dist });
             }
             
             candidates.sort((a, b) => a.dist - b.dist);

@@ -18,7 +18,8 @@ import {
     normalizeStationName, timeToSeconds, formatTimeDisplay, 
     escapeHTML, getDistanceFromLatLonInKm, safeStorage, usesWeekdayScheduleSheet,
     resolveOperatingDayType, simUsesSpecificDate, formatAppDate,
-    resolvePlannerStationInput, plannerStationDisplayName, masterListHasStation, STATION_ALIASES
+    resolvePlannerStationInput, plannerStationDisplayName, masterListHasStation, STATION_ALIASES,
+    resolveStationLatLon, weekdaySheetsForRoute
 } from './utils.js';
 import { planUnifiedTrip, extractTrainSheetStops } from './planner-core.js';
 import { saturdayNoServiceCopy, buildSaturdayAdvisoryCopy, stationDisplayName } from './saturday-service.js';
@@ -3727,9 +3728,17 @@ export function initPlanner() {
                     const { latitude: userLat, longitude: userLon } = position.coords;
                     let candidates = [];
                     const globalIndex = $globalStationIndex.get();
+                    const weekdaySheets = weekdaySheetsForRoute(
+                        ROUTES[$currentRouteId.get()],
+                        null,
+                        $fullDatabase.get(),
+                    );
                     if (globalIndex) {
                         for (const [stationName, coords] of Object.entries(globalIndex)) {
-                            const dist = getDistanceFromLatLonInKm(userLat, userLon, coords.lat, coords.lon);
+                            const ll = resolveStationLatLon(stationName, coords, weekdaySheets);
+                            if (!ll) continue;
+                            const dist = getDistanceFromLatLonInKm(userLat, userLon, ll.lat, ll.lon);
+                            if (!Number.isFinite(dist)) continue;
                             candidates.push({ stationName, dist });
                         }
                         candidates.sort((a, b) => a.dist - b.dist);

@@ -445,6 +445,71 @@ export function getDistanceFromLatLonInKm(lat1, lon1, lat2, lon2) {
     return R * c; 
 }
 
+/** Parse "lat, lon" timetable cells or { lat, lon } index entries. Invalid/blank → null. */
+export function parseStationLatLon(raw) {
+    if (raw == null || raw === '') return null;
+    if (typeof raw === 'object') {
+        const lat = Number(raw.lat);
+        const lon = Number(raw.lon ?? raw.lng);
+        if (Number.isFinite(lat) && Number.isFinite(lon)) return { lat, lon };
+        return null;
+    }
+    const parts = String(raw).split(',').map((s) => parseFloat(String(s).trim()));
+    if (parts.length >= 2 && Number.isFinite(parts[0]) && Number.isFinite(parts[1])) {
+        return { lat: parts[0], lon: parts[1] };
+    }
+    return null;
+}
+
+export function timetableSheetRows(sheet) {
+    if (!sheet) return [];
+    if (Array.isArray(sheet)) return sheet;
+    if (typeof sheet !== 'object') return [];
+    if (Array.isArray(sheet.rows)) return sheet.rows;
+    return Object.keys(sheet)
+        .filter((k) => k !== 'lastUpdated' && k !== 'headers' && k !== 'rows')
+        .sort((a, b) => Number(a) - Number(b) || String(a).localeCompare(String(b)))
+        .map((k) => sheet[k])
+        .filter((r) => r && typeof r === 'object');
+}
+
+/** First finite COORDINATES cell for this station across timetable sheets. */
+export function coordsFromTimetableSheets(stationName, sheets = []) {
+    const want = normalizeStationName(stationName);
+    if (!want) return null;
+    for (const sheet of sheets) {
+        for (const row of timetableSheetRows(sheet)) {
+            const name = row?.STATION ?? row?.station;
+            if (normalizeStationName(name) !== want) continue;
+            const parsed = parseStationLatLon(row.COORDINATES ?? row.coordinates);
+            if (parsed) return parsed;
+        }
+    }
+    return null;
+}
+
+export function weekdaySheetsForRoute(route, schedules, database) {
+    const sheets = [];
+    if (schedules?.weekday_to_a) sheets.push(schedules.weekday_to_a);
+    if (schedules?.weekday_to_b) sheets.push(schedules.weekday_to_b);
+    const keys = route?.sheetKeys;
+    if (database && keys) {
+        if (keys.weekday_to_a) sheets.push(database[keys.weekday_to_a]);
+        if (keys.weekday_to_b) sheets.push(database[keys.weekday_to_b]);
+    }
+    return sheets;
+}
+
+/**
+ * Stations do not move: if today's sheet (e.g. WC public holiday) omitted
+ * coordinates, reuse weekday coordinates for locate.
+ */
+export function resolveStationLatLon(stationName, indexEntry, weekdaySheets = []) {
+    const fromIndex = parseStationLatLon(indexEntry);
+    if (fromIndex) return fromIndex;
+    return coordsFromTimetableSheets(stationName, weekdaySheets);
+}
+
 // --- GUARDIAN PHASE 1 & 2: RESILIENT STORAGE WRAPPER ---
 // Protects against SecurityError (Safari Private Mode) AND Apple ITP 7-Day Purge via IndexedDB Mirroring
 // 🛡️ GUARDIAN QUOTA CLEANSER: Nuke legacy 5MB databases from LocalStorage to ensure safeStorage can breathe.

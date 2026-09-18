@@ -13,6 +13,10 @@ import {
     fromStationIsClaimed,
     shouldApplySilentLocate,
 } from '../src/lib/auto-locate.js';
+import {
+    coordsFromTimetableSheets,
+    resolveStationLatLon,
+} from '../src/lib/utils.js';
 import { accountOpsFields } from '../src/lib/account.js';
 
 const failures = [];
@@ -198,9 +202,35 @@ assert(shouldApplySilentLocate(fakeDoc({ stationValue: 'PRETORIA' })) === false,
 
 const liveBoard = readFileSync(new URL('../src/lib/live-board.js', import.meta.url), 'utf8');
 assert(liveBoard.includes('shouldApplySilentLocate'), 'GPS callback re-checks picker engagement before writing');
+assert(liveBoard.includes('resolveStationLatLon'), 'live-board locate uses weekday coord fallback');
+assert(liveBoard.includes('weekdaySheetsForRoute'), 'live-board locate reads weekday sheets');
 
 const plannerUi = readFileSync(new URL('../src/lib/planner-ui.js', import.meta.url), 'utf8');
 assert(plannerUi.includes("list.id = 'planner-from-autocomplete-list'"), 'planner From list has a stable id');
+assert(plannerUi.includes('resolveStationLatLon'), 'planner locate uses weekday coord fallback');
+
+const logicSrc = readFileSync(new URL('../src/lib/logic.js', import.meta.url), 'utf8');
+assert(logicSrc.includes('coordsFromTimetableSheets'), 'station index fills missing coords from weekday sheets');
+
+assert(resolveStationLatLon('CAPE TOWN', { lat: null, lon: null }, []) === null, 'blank index without weekday sheets stays empty');
+assert(resolveStationLatLon('CAPE TOWN', { lat: -33.92, lon: 18.42 }, [{
+    STATION: 'CAPE TOWN',
+    COORDINATES: '-1, 1',
+}]).lat === -33.92, 'finite index coords win over weekday');
+
+const dump = JSON.parse(readFileSync(new URL('../public/data/full-database.json', import.meta.url), 'utf8'));
+const wc = dump.westerncape || {};
+const pubBellv = wc.public_holidays?.ct_to_bellv_pub;
+const weekBellv = wc.ct_to_bellv_weekday;
+assert(Array.isArray(pubBellv) && Array.isArray(weekBellv), 'WC Bellville pub and weekday sheets are in the dump');
+assert(coordsFromTimetableSheets('CAPE TOWN', [pubBellv]) === null, 'WC pub Bellville sheet has no Cape Town coordinates');
+const weekCape = coordsFromTimetableSheets('CAPE TOWN', [weekBellv]);
+assert(weekCape && weekCape.lat < 0 && weekCape.lon > 18, 'WC weekday Bellville sheet has Cape Town coordinates');
+const fallbackCape = resolveStationLatLon('CAPE TOWN', { lat: null, lon: null }, [pubBellv, weekBellv]);
+assert(fallbackCape && Math.abs(fallbackCape.lat - weekCape.lat) < 1e-9, 'locate falls back to weekday coords when pub omitted them');
+const woodstockWeek = coordsFromTimetableSheets('WOODSTOCK', [wc.ct_to_hani_weekday]);
+const woodstockFromPubBellv = resolveStationLatLon('WOODSTOCK', { lat: null }, [pubBellv, wc.ct_to_hani_weekday]);
+assert(woodstockWeek && woodstockFromPubBellv && Math.abs(woodstockFromPubBellv.lat - woodstockWeek.lat) < 1e-9, 'weekday coords from another WC sheet fill a pub row that omitted them');
 
 if (failures.length) {
     console.error('verify-auto-locate failed:');

@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_09.18.1': [
+        'Lab FCM Count devices: Dev Hub uses PUBLIC_COMMUNITY_WORKER_URL when the Pages build inlines it, and falls back to https://nexttrain-community.enock.workers.dev when Cloudflare Git omits the var. Fallback stays. No What’s New. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
+    ],
     'V9_09.17.16': [
         'FCM notification delivery: push_subscriptions records authenticated owner uid, region, route ids, environment, enabled state, and refresh time. Turning Notifications off marks the registration disabled. nexttrain-community adds an allowlisted-admin-only HTTP v1 sender with all / region / route targeting, production / lab separation, TTL and urgency, invalid-token cleanup, and Next Train-only click links. Dev Hub adds a Notifications panel with audience count and confirmed send. Production, GitHub preview, and lab workflows inject PUBLIC_FIREBASE_VAPID_KEY. Firebase rules bind each subscription to auth.uid and its device key. No What’s New. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
     ],

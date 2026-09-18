@@ -763,7 +763,7 @@ export async function submitDelayValidation({ routeId, trainId, scheduledTime, a
         delete routeReportCacheAt[routeId];
         await hydrateTrainReportSlots(document.getElementById('view-next-train') || document);
         const { awardMark } = await import('./rider-marks.js');
-        awardMark('delay_confirm', { key: `delay:${key}` });
+        awardMark('delay_confirm');
         showToast('Thanks - that helps others', 'success');
         import('./push-notify.js').then((m) => m.maybeOfferCorridorAlerts?.()).catch(() => {});
         return { ok: true };
@@ -826,7 +826,7 @@ export async function submitQuickDelayReport({
         hydrateTrainReportSlots(document.getElementById('view-next-train') || document);
         if (!existing) {
             import('./rider-marks.js').then((m) => {
-                m.awardMark('delay_report', { key: `delay_report:${reportId}` });
+                m.awardMark('delay_report');
             }).catch(() => {});
         }
         return { ok: true };
@@ -1070,7 +1070,7 @@ async function submitTrainReportPayload({ status, lateBucket, note }) {
         hydrateTrainReportSlots(document.getElementById('view-next-train') || document);
         if (!isUpdate) {
             import('./rider-marks.js').then((m) => {
-                m.awardMark('delay_report', { key: `delay_report:${reportId}` });
+                m.awardMark('delay_report');
             }).catch(() => {});
         }
         return true;

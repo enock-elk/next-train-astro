@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_09.18.11': [
+        'Dev Hub Notifications: audience Everyone / region / pinned route / notify-list route / user id, plus Type (incidents, delays, community, nearby, feedback). Worker matches pinnedRouteIds, accountUid/uid, and categories (legacy tokens still get incidents+delays). FCM icon/badge are notification-icon.png and a dense white notification-badge.png; tag is nt-push-{category}. Account notification types are live (incidents/delays on by default). Rider points slower (share 2, join 1, delay 2, validate 1, first post 5, streaks 5/8; Silver 80, Gold 250, Platinum 600). History dedupes by key. Contributions group by day. Badge fill uses shareStreak. Community chip shows marksLabel when signed-in and showMarksInCommunity (default on). No contribution toasts. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
+    ],
     'V9_09.18.10': [
         'Dev Hub Service Alerts is a hub: two home-style tiles for In-app alerts (existing channel composer) and Notifications (existing FCM sender). The Notifications home-grid tile is gone (data-admin-subview). Review / GSM still skip the hub and open Compose. No What’s New. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
     ],

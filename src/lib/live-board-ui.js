@@ -870,6 +870,7 @@ export function initLiveBoardUi() {
                 showToast('Route pinned!', 'success', 2000);
                 updatePinUI();
             }
+            import('./push-notify.js').then((m) => m.refreshPushSubscriptionAudience?.()).catch(() => {});
         });
     }
 

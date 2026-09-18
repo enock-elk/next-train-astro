@@ -843,6 +843,9 @@ async function requireAdmin(request, env) {
 }
 
 const PUSH_REGIONS = new Set(['GP', 'WC', 'KZN', 'EC']);
+const PUSH_CATEGORIES = new Set(['incidents', 'delays', 'community', 'nearby', 'feedback']);
+const PUSH_ICON_URL = 'https://nexttrain.co.za/icons/notification-icon.png';
+const PUSH_BADGE_URL = 'https://nexttrain.co.za/icons/notification-badge.png';
 const MAX_PUSH_RECIPIENTS = 500;
 
 function pushText(value, max) {
@@ -868,15 +871,30 @@ function normalizePushLink(raw) {
     return url.href;
 }
 
+function subscriptionIdList(subscription, field) {
+    const raw = subscription?.[field];
+    if (Array.isArray(raw)) return raw.map(String);
+    return Object.values(raw || {}).map(String);
+}
+
+export function subscriptionAllowsCategory(subscription, category) {
+    const key = PUSH_CATEGORIES.has(category) ? category : 'incidents';
+    const cats = subscription?.categories;
+    if (!cats || typeof cats !== 'object') return key === 'incidents' || key === 'delays';
+    return cats[key] === true;
+}
+
 export function normalizePushRequest(raw = {}) {
     const title = pushText(raw.title, 80);
     const body = pushText(raw.body, 180);
     if (!title) throw new Error('Notification title is required');
     if (!body) throw new Error('Notification message is required');
-    const audience = ['all', 'region', 'route'].includes(raw.audience) ? raw.audience : 'all';
+    const audience = ['all', 'region', 'route', 'pinned', 'user'].includes(raw.audience) ? raw.audience : 'all';
     const target = String(raw.target || '').trim();
     if (audience === 'region' && !PUSH_REGIONS.has(target)) throw new Error('Choose a valid region');
-    if (audience === 'route' && !isSafeRtdbKey(target)) throw new Error('Choose a valid route');
+    if ((audience === 'route' || audience === 'pinned') && !isSafeRtdbKey(target)) throw new Error('Choose a valid route');
+    if (audience === 'user' && !isSafeRtdbKey(target)) throw new Error('Choose a valid user');
+    const category = PUSH_CATEGORIES.has(raw.category) ? raw.category : 'incidents';
     const environment = raw.environment === 'lab' ? 'lab' : 'production';
     const ttlSec = Math.min(86_400, Math.max(60, Math.round(Number(raw.ttlSec) || 3600)));
     return {
@@ -884,6 +902,7 @@ export function normalizePushRequest(raw = {}) {
         body,
         audience,
         target: audience === 'all' ? 'all' : target,
+        category,
         environment,
         lab: environment === 'lab',
         urgency: raw.urgency === 'high' ? 'high' : 'normal',
@@ -897,15 +916,25 @@ export function pushSubscriptionMatches(subscription, request) {
     if (!subscription || subscription.enabled === false) return false;
     if (typeof subscription.token !== 'string' || subscription.token.length < 11) return false;
     if ((subscription.lab === true) !== request.lab) return false;
+    if (!subscriptionAllowsCategory(subscription, request.category || 'incidents')) return false;
     if (request.audience === 'all') return true;
     if (request.audience === 'region') return subscription.region === request.target;
-    const routes = Array.isArray(subscription.routeIds)
-        ? subscription.routeIds
-        : Object.values(subscription.routeIds || {});
-    return routes.map(String).includes(request.target);
+    if (request.audience === 'user') {
+        const target = String(request.target || '');
+        return String(subscription.accountUid || '') === target || String(subscription.uid || '') === target;
+    }
+    if (request.audience === 'pinned') {
+        return subscriptionIdList(subscription, 'pinnedRouteIds').includes(String(request.target || ''));
+    }
+    return subscriptionIdList(subscription, 'routeIds').includes(String(request.target || ''));
 }
 
-export function buildFcmMessage(registrationId, request, tag = `nt-push-${Date.now()}`, registrationType = 'token') {
+export function pushNotificationTag(request) {
+    const category = PUSH_CATEGORIES.has(request?.category) ? request.category : 'incidents';
+    return `nt-push-${category}`;
+}
+
+export function buildFcmMessage(registrationId, request, tag = pushNotificationTag(request), registrationType = 'token') {
     return {
         [registrationType === 'fid' ? 'fid' : 'token']: registrationId,
         notification: {
@@ -915,6 +944,7 @@ export function buildFcmMessage(registrationId, request, tag = `nt-push-${Date.n
         data: {
             audience: request.audience,
             target: request.target,
+            category: request.category || 'incidents',
             environment: request.environment,
             link: request.link,
         },
@@ -924,8 +954,8 @@ export function buildFcmMessage(registrationId, request, tag = `nt-push-${Date.n
                 Urgency: request.urgency,
             },
             notification: {
-                icon: 'https://nexttrain.co.za/icons/icon-192.png',
-                badge: 'https://nexttrain.co.za/icons/icon-48.png',
+                icon: PUSH_ICON_URL,
+                badge: PUSH_BADGE_URL,
                 tag,
             },
             fcm_options: {
@@ -957,7 +987,7 @@ async function sendOneFcm(env, accessToken, registrationId, request, registratio
                 message: buildFcmMessage(
                     registrationId,
                     request,
-                    `nt-push-${crypto.randomUUID()}`,
+                    pushNotificationTag(request),
                     registrationType
                 ),
             }),

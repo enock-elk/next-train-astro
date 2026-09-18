@@ -7,6 +7,15 @@ import { applyAdminAuthedChrome } from './admin-chrome.js';
 export const NAV_STYLE_KEY = 'navStyle';
 export const COLOUR_PACK_KEY = 'colourPack';
 export const NOTIFY_PREF_KEY = 'notifyRoomActivity';
+export const NOTIFY_CATEGORIES_KEY = 'ntNotifyCategories';
+export const NOTIFY_CATEGORY_IDS = ['incidents', 'delays', 'community', 'nearby', 'feedback'];
+const DEFAULT_NOTIFY_CATEGORIES = {
+    incidents: true,
+    delays: true,
+    community: false,
+    nearby: false,
+    feedback: false,
+};
 
 export const NAV_STYLES = {
     TOP: 'top',
@@ -261,9 +270,37 @@ export function hydratePrefs() {
     syncPrefsAccordionSummary();
 }
 
-/** Phase 8 — preference for room / delay push (FCM when VAPID configured) */
+/** Preference for official / delay / category push (FCM when VAPID configured) */
 export function getNotifyPref() {
     return safeStorage.getItem(NOTIFY_PREF_KEY) === 'true';
+}
+
+export function getNotifyCategories() {
+    const next = { ...DEFAULT_NOTIFY_CATEGORIES };
+    try {
+        const raw = safeStorage.getItem(NOTIFY_CATEGORIES_KEY);
+        if (!raw) return next;
+        const parsed = JSON.parse(raw);
+        if (!parsed || typeof parsed !== 'object') return next;
+        for (const id of NOTIFY_CATEGORY_IDS) {
+            if (typeof parsed[id] === 'boolean') next[id] = parsed[id];
+        }
+    } catch { /* defaults */ }
+    return next;
+}
+
+export function setNotifyCategories(partial = {}) {
+    const next = { ...getNotifyCategories() };
+    for (const id of NOTIFY_CATEGORY_IDS) {
+        if (typeof partial[id] === 'boolean') next[id] = partial[id];
+    }
+    safeStorage.setItem(NOTIFY_CATEGORIES_KEY, JSON.stringify(next));
+    syncNotifyUi();
+    import('./push-notify.js').then((m) => m.refreshPushSubscriptionAudience?.()).catch(() => {});
+    if (typeof window !== 'undefined' && typeof window.pushSignedInPrefs === 'function') {
+        window.pushSignedInPrefs({ notifyCategories: next });
+    }
+    return next;
 }
 
 export function syncNotifyUi(enabled = getNotifyPref()) {
@@ -291,6 +328,14 @@ export function syncNotifyUi(enabled = getNotifyPref()) {
     const toggle = document.getElementById('settings-notify-toggle');
     const masterVisible = !!(toggle && !toggle.hidden && !toggle.classList.contains('hidden'));
     types?.classList.toggle('hidden', !(masterVisible && enabled));
+    const cats = getNotifyCategories();
+    document.querySelectorAll('[data-notify-category]').forEach((input) => {
+        const id = input.getAttribute('data-notify-category');
+        if (id && Object.prototype.hasOwnProperty.call(cats, id)) input.checked = !!cats[id];
+        input.disabled = false;
+        input.removeAttribute('aria-disabled');
+        input.closest('label')?.classList.remove('opacity-50', 'cursor-not-allowed');
+    });
 }
 
 export async function setNotifyPref(wantOn) {

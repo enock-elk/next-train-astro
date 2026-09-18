@@ -165,26 +165,26 @@ const versionBadge = String(APP_VERSION);
           </button>
 
           <div id="account-notify-types" class="hidden divide-y divide-black/10 dark:divide-white/10 border-t border-black/10 dark:border-white/10">
-            <p class="px-4 py-2 text-[12px] font-normal text-gray-500 dark:text-gray-400 leading-snug">Coming later. These stay off.</p>
-            <label class="flex items-center justify-between gap-3 px-4 py-[11px] opacity-50 cursor-not-allowed">
-              <span class="text-[13px] font-normal text-gray-900 dark:text-white">Community chats</span>
-              <input type="checkbox" disabled aria-disabled="true" class="rounded border-gray-300 text-blue-600 shrink-0">
-            </label>
-            <label class="flex items-center justify-between gap-3 px-4 py-[11px] opacity-50 cursor-not-allowed">
-              <span class="text-[13px] font-normal text-gray-900 dark:text-white">Delays</span>
-              <input type="checkbox" disabled aria-disabled="true" class="rounded border-gray-300 text-blue-600 shrink-0">
-            </label>
-            <label class="flex items-center justify-between gap-3 px-4 py-[11px] opacity-50 cursor-not-allowed">
+            <p class="px-4 py-2 text-[12px] font-normal text-gray-500 dark:text-gray-400 leading-snug">Choose what this phone may receive.</p>
+            <label class="flex items-center justify-between gap-3 px-4 py-[11px]">
               <span class="text-[13px] font-normal text-gray-900 dark:text-white">Incidents</span>
-              <input type="checkbox" disabled aria-disabled="true" class="rounded border-gray-300 text-blue-600 shrink-0">
+              <input type="checkbox" data-notify-category="incidents" class="rounded border-gray-300 text-blue-600 shrink-0">
             </label>
-            <label class="flex items-center justify-between gap-3 px-4 py-[11px] opacity-50 cursor-not-allowed">
+            <label class="flex items-center justify-between gap-3 px-4 py-[11px]">
+              <span class="text-[13px] font-normal text-gray-900 dark:text-white">Delays</span>
+              <input type="checkbox" data-notify-category="delays" class="rounded border-gray-300 text-blue-600 shrink-0">
+            </label>
+            <label class="flex items-center justify-between gap-3 px-4 py-[11px]">
+              <span class="text-[13px] font-normal text-gray-900 dark:text-white">Community chats</span>
+              <input type="checkbox" data-notify-category="community" class="rounded border-gray-300 text-blue-600 shrink-0">
+            </label>
+            <label class="flex items-center justify-between gap-3 px-4 py-[11px]">
               <span class="text-[13px] font-normal text-gray-900 dark:text-white">Train nearby reminders</span>
-              <input type="checkbox" disabled aria-disabled="true" class="rounded border-gray-300 text-blue-600 shrink-0">
+              <input type="checkbox" data-notify-category="nearby" class="rounded border-gray-300 text-blue-600 shrink-0">
             </label>
-            <label class="flex items-center justify-between gap-3 px-4 py-[11px] opacity-50 cursor-not-allowed">
+            <label class="flex items-center justify-between gap-3 px-4 py-[11px]">
               <span class="text-[13px] font-normal text-gray-900 dark:text-white">Admin feedback</span>
-              <input type="checkbox" disabled aria-disabled="true" class="rounded border-gray-300 text-blue-600 shrink-0">
+              <input type="checkbox" data-notify-category="feedback" class="rounded border-gray-300 text-blue-600 shrink-0">
             </label>
           </div>
         </div>

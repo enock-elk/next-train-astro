@@ -14,7 +14,7 @@
  * Changelog / What’s New is optional: skip both, or write only "no release notes."
  * Always add ADMIN_CHANGELOG[APP_VERSION] (System Health Build notes).
  */
-export const APP_VERSION = "V9_09.18.10";
+export const APP_VERSION = "V9_09.18.11";
 
 /** Public support channels (About modal, lifeboat help.html, Safe Mode). */
 export const SUPPORT_EMAIL = 'admin@nexttrain.co.za';
@@ -963,6 +963,15 @@ export const HERC_KOED_JUNCTIONS = ['KOEDOESPOORT', 'HERCULES'];
 // comma, a period, or a hyphen. Do not explain strategy or "we fixed."
 // Leave every forceShow false. Never auto-open What's New over the welcome screen.
 export const CHANGELOG_DATA = [
+    {
+        id: "V9_09.18.11",
+        title: "Points and badges",
+        date: "18 Sep 2026",
+        forceShow: false,
+        features: [
+            "Points take longer to earn. Same-day contributions group together. Badge tiles fill as you work toward a streak."
+        ]
+    },
     {
         id: "V9_09.18.4",
         title: "Ads scroll with the board",

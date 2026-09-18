@@ -16919,9 +16919,21 @@ const Admin = {
                         <select id="push-notifications-audience" class="w-full h-10 px-2 rounded-lg bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-xs text-gray-900 dark:text-white">
                             <option value="all">Everyone</option>
                             <option value="region">One region</option>
-                            <option value="route">One route</option>
+                            <option value="pinned">Pinned route</option>
+                            <option value="route">Notify-list route</option>
+                            <option value="user">One user</option>
                         </select>
                     </div>
+                </div>
+                <div>
+                    <label class="block text-[9px] font-black uppercase tracking-wider text-gray-500 mb-1" for="push-notifications-category">Type</label>
+                    <select id="push-notifications-category" class="w-full h-10 px-2 rounded-lg bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-xs text-gray-900 dark:text-white">
+                        <option value="incidents" selected>Incidents</option>
+                        <option value="delays">Delays</option>
+                        <option value="community">Community chats</option>
+                        <option value="nearby">Train nearby reminders</option>
+                        <option value="feedback">Admin feedback</option>
+                    </select>
                 </div>
                 <div id="push-notifications-region-wrap" class="hidden">
                     <label class="block text-[9px] font-black uppercase tracking-wider text-gray-500 mb-1" for="push-notifications-region">Region</label>
@@ -16935,6 +16947,10 @@ const Admin = {
                 <div id="push-notifications-route-wrap" class="hidden">
                     <label class="block text-[9px] font-black uppercase tracking-wider text-gray-500 mb-1" for="push-notifications-route">Route</label>
                     <select id="push-notifications-route" class="w-full h-10 px-2 rounded-lg bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-xs text-gray-900 dark:text-white"></select>
+                </div>
+                <div id="push-notifications-user-wrap" class="hidden">
+                    <label class="block text-[9px] font-black uppercase tracking-wider text-gray-500 mb-1" for="push-notifications-user">User id</label>
+                    <input id="push-notifications-user" class="w-full h-10 px-3 rounded-lg bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-xs text-gray-900 dark:text-white" placeholder="Signed-in Account uid" autocomplete="off">
                 </div>
                 <div>
                     <label class="block text-[9px] font-black uppercase tracking-wider text-gray-500 mb-1" for="push-notifications-title">Title</label>
@@ -16979,10 +16995,13 @@ const Admin = {
         const header = panel.querySelector('#push-notifications-header');
         const environment = panel.querySelector('#push-notifications-environment');
         const audience = panel.querySelector('#push-notifications-audience');
+        const category = panel.querySelector('#push-notifications-category');
         const region = panel.querySelector('#push-notifications-region');
         const regionWrap = panel.querySelector('#push-notifications-region-wrap');
         const routeWrap = panel.querySelector('#push-notifications-route-wrap');
+        const userWrap = panel.querySelector('#push-notifications-user-wrap');
         const route = panel.querySelector('#push-notifications-route');
+        const userId = panel.querySelector('#push-notifications-user');
         const title = panel.querySelector('#push-notifications-title');
         const message = panel.querySelector('#push-notifications-message');
         const count = panel.querySelector('#push-notifications-count');
@@ -17007,22 +17026,30 @@ const Admin = {
         };
         const syncAudience = () => {
             const type = audience.value;
-            regionWrap.classList.toggle('hidden', type === 'all');
-            routeWrap.classList.toggle('hidden', type !== 'route');
-            if (type === 'route') fillRoutes();
+            regionWrap.classList.toggle('hidden', type === 'all' || type === 'user');
+            routeWrap.classList.toggle('hidden', type !== 'route' && type !== 'pinned');
+            userWrap.classList.toggle('hidden', type !== 'user');
+            if (type === 'route' || type === 'pinned') fillRoutes();
         };
         const defaultLink = () => {
             const origin = environment.value === 'lab' ? 'https://lab.nexttrain.co.za' : 'https://nexttrain.co.za';
-            if (audience.value === 'route') {
+            if (audience.value === 'route' || audience.value === 'pinned') {
                 return `${origin}/?rt=${encodeURIComponent(route.value)}&r=${encodeURIComponent(region.value)}`;
             }
             if (audience.value === 'region') return `${origin}/?region=${encodeURIComponent(region.value)}`;
             return `${origin}/`;
         };
+        const payloadTarget = () => {
+            if (audience.value === 'route' || audience.value === 'pinned') return route.value;
+            if (audience.value === 'region') return region.value;
+            if (audience.value === 'user') return (userId.value || '').trim();
+            return 'all';
+        };
         const payload = (dryRun) => ({
             environment: environment.value,
             audience: audience.value,
-            target: audience.value === 'route' ? route.value : (audience.value === 'region' ? region.value : 'all'),
+            category: category.value || 'incidents',
+            target: payloadTarget(),
             title: title.value.trim(),
             body: message.value.trim(),
             urgency: urgency.value,
@@ -17084,8 +17111,16 @@ const Admin = {
                 status.textContent = 'Add a title and message first.';
                 return;
             }
-            const targetLabel = audience.value === 'all' ? 'everyone' : (audience.value === 'region' ? region.value : route.value);
-            if (!window.confirm(`Send this ${environment.value} notification to ${targetLabel}?`)) return;
+            if (audience.value === 'user' && !(userId.value || '').trim()) {
+                status.textContent = 'Paste a user id first.';
+                return;
+            }
+            const targetLabel = audience.value === 'all'
+                ? 'everyone'
+                : (audience.value === 'region'
+                    ? region.value
+                    : (audience.value === 'user' ? ((userId.value || '').trim() || 'that user') : route.value));
+            if (!window.confirm(`Send this ${environment.value} ${category.value || 'incidents'} notification to ${targetLabel}?`)) return;
             setBusy(true);
             status.textContent = 'Sending notification...';
             try {

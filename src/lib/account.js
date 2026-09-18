@@ -7,7 +7,7 @@
  *     displayName, photoURL, email?, createdAt,
  *     lastSeenAt, region, lastRouteId, appVersion,
  *     deviceIds: { [deviceId]: linkedAtMs | true },
- *     prefs: { showPhotoInAlerts, theme, colourPack, hapticsEnabled, passengerType, updatedAt },
+ *     prefs: { showPhotoInAlerts, showMarksInCommunity, notifyCategories, theme, colourPack, hapticsEnabled, passengerType, updatedAt },
  *     flags: { shadowBanned: false, shadowBannedUntil: 0, role: 'user' },
  *     trustScore: 0
  *   }
@@ -50,6 +50,7 @@ let _accountUiBusy = false;
 let _hydratingPrefs = false;
 
 const PHOTO_PREF_KEY = 'ntShowPhotoInAlerts';
+const MARKS_COMMUNITY_PREF_KEY = 'ntShowMarksInCommunity';
 
 function getDeviceId() {
     return $deviceId.get() || safeStorage.getItem('next_train_device_id') || null;
@@ -84,8 +85,15 @@ export function pickCanonicalChatDeviceId(deviceIds, localId) {
 }
 
 export function readLocalAccountPrefs() {
+    let notifyCategories = null;
+    try {
+        const raw = safeStorage.getItem('ntNotifyCategories');
+        if (raw) notifyCategories = JSON.parse(raw);
+    } catch { /* ignore */ }
     return {
         showPhotoInAlerts: safeStorage.getItem(PHOTO_PREF_KEY) === '1',
+        showMarksInCommunity: safeStorage.getItem(MARKS_COMMUNITY_PREF_KEY) !== '0',
+        notifyCategories,
         theme: safeStorage.getItem('theme') === 'dark' ? 'dark' : 'light',
         colourPack: safeStorage.getItem('colourPack') || 'classic',
         hapticsEnabled: safeStorage.getItem('hapticsEnabled') === 'true',
@@ -170,6 +178,26 @@ export async function applyAccountPrefs(prefs) {
             safeStorage.setItem(PHOTO_PREF_KEY, prefs.showPhotoInAlerts ? '1' : '0');
             const box = document.getElementById('account-photo-alerts');
             if (box) box.checked = prefs.showPhotoInAlerts;
+        }
+        if (typeof prefs.showMarksInCommunity === 'boolean') {
+            safeStorage.setItem(MARKS_COMMUNITY_PREF_KEY, prefs.showMarksInCommunity ? '1' : '0');
+            const box = document.getElementById('account-marks-community');
+            if (box) box.checked = prefs.showMarksInCommunity;
+            import('./rider-marks.js').then((m) => m.paintCommunityMarksChip?.()).catch(() => {});
+        }
+        if (prefs.notifyCategories && typeof prefs.notifyCategories === 'object') {
+            try {
+                const { NOTIFY_CATEGORY_IDS, syncNotifyUi } = await import('./prefs.js');
+                const next = {};
+                for (const id of NOTIFY_CATEGORY_IDS) {
+                    if (typeof prefs.notifyCategories[id] === 'boolean') next[id] = prefs.notifyCategories[id];
+                }
+                if (Object.keys(next).length) {
+                    const { getNotifyCategories } = await import('./prefs.js');
+                    safeStorage.setItem('ntNotifyCategories', JSON.stringify({ ...getNotifyCategories(), ...next }));
+                    syncNotifyUi();
+                }
+            } catch { /* ignore */ }
         }
         try {
             const m = await import('./prefs.js');
@@ -316,6 +344,9 @@ export async function ensureUserProfile(user, opts = {}) {
             } else {
                 if (typeof remotePrefs.showPhotoInAlerts === 'boolean') {
                     await applyAccountPrefs({ showPhotoInAlerts: remotePrefs.showPhotoInAlerts });
+                }
+                if (typeof remotePrefs.showMarksInCommunity === 'boolean') {
+                    await applyAccountPrefs({ showMarksInCommunity: remotePrefs.showMarksInCommunity });
                 }
                 await pushSignedInPrefs();
             }
@@ -651,6 +682,8 @@ export function syncAccountSettingsUi(state = $account.get()) {
         setAccountProfileOpen(false);
         const photoBox = document.getElementById('account-photo-alerts');
         if (photoBox) delete photoBox.dataset.dirty;
+        const marksBox = document.getElementById('account-marks-community');
+        if (marksBox) delete marksBox.dataset.dirty;
         if (modalName) modalName.textContent = 'Passenger';
         if (modalEmail) modalEmail.textContent = '';
     } else {
@@ -692,6 +725,12 @@ export function syncAccountSettingsUi(state = $account.get()) {
             photoToggle.checked = !!m.showPhotoInAlerts();
         }).catch(() => {});
     }
+    const marksToggle = document.getElementById('account-marks-community');
+    if (marksToggle && marksToggle.dataset.dirty !== '1') {
+        import('./rider-marks.js').then((m) => {
+            marksToggle.checked = !!m.showMarksInCommunity();
+        }).catch(() => {});
+    }
     import('./rider-marks.js').then((m) => m.syncRiderMarksUi()).catch(() => {});
     if (typeof window.placeAccountSettings === 'function') {
         const accountOn = document.documentElement.getAttribute('data-account-settings') === '1'
@@ -718,9 +757,9 @@ function escapeAccountHtml(s) {
     }[c]));
 }
 
-function badgeSvg(kind, on) {
-    const stroke = on ? '#d97706' : '#9ca3af';
-    const fill = on ? '#fef3c7' : '#f3f4f6';
+function badgeGlyph(kind, filled) {
+    const stroke = filled ? '#d97706' : '#9ca3af';
+    const fill = filled ? '#fef3c7' : '#f3f4f6';
     const icons = {
         community: `<path d="M8 10h.01M12 10h.01M16 10h.01M21 12c0 4.418-4.03 8-9 8a9.86 9.86 0 01-4-.8L3 20l.8-3.2A7.5 7.5 0 013 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>`,
         map: `<path d="M12 21s7-4.5 7-11a7 7 0 10-14 0c0 6.5 7 11 7 11z"/><circle cx="12" cy="10" r="2.2"/>`,
@@ -730,7 +769,16 @@ function badgeSvg(kind, on) {
         streak5: `<path d="M12 2l3 6 7 .9-5 4.9 1.2 7L12 17.8 5.8 20.8 7 13.8 2 8.9 9 8z"/>`,
     };
     const d = icons[kind] || icons.community;
-    return `<svg class="w-7 h-7 mx-auto" viewBox="0 0 24 24" fill="${fill}" stroke="${stroke}" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+    return `<svg class="w-7 h-7" viewBox="0 0 24 24" fill="${fill}" stroke="${stroke}" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+}
+
+function badgeSvg(kind, ratio) {
+    const pct = Math.max(0, Math.min(100, Math.round((Number(ratio) || 0) * 100)));
+    const top = 100 - pct;
+    return `<span class="relative inline-block w-7 h-7 mx-auto">
+        <span class="block opacity-40">${badgeGlyph(kind, false)}</span>
+        <span class="absolute inset-0 overflow-hidden" style="clip-path: inset(${top}% 0 0 0)">${badgeGlyph(kind, true)}</span>
+    </span>`;
 }
 
 function closeBadgeHowSheet() {
@@ -742,12 +790,17 @@ function openBadgeHowSheet(badgeId, state, marks) {
     const cat = marks.MARK_CATALOG.find((c) => c.id === badgeId);
     if (!sheet || !cat) return;
     const on = marks.badgeUnlocked(badgeId, state);
+    const progress = typeof marks.badgeProgress === 'function' ? marks.badgeProgress(badgeId, state) : { current: on ? 1 : 0, total: 1, unlocked: on };
     const title = document.getElementById('account-badge-how-title');
     const status = document.getElementById('account-badge-how-status');
     const body = document.getElementById('account-badge-how-body');
     const prereq = document.getElementById('account-badge-how-prereq');
     if (title) title.textContent = cat.title;
-    if (status) status.textContent = on ? 'Unlocked' : 'Not unlocked yet';
+    if (status) {
+        if (on) status.textContent = 'Unlocked';
+        else if (progress.total > 1 && progress.current > 0) status.textContent = `${progress.current} of ${progress.total} service days`;
+        else status.textContent = 'Not unlocked yet';
+    }
     if (body) body.textContent = `${cat.how} ${cat.points} ${marks.pointsWord(cat.points)}.`;
     const needs = Array.isArray(cat.requires) ? cat.requires : [];
     const missing = needs.filter((id) => !marks.badgeUnlocked(id, state)).map((id) => {
@@ -805,11 +858,24 @@ export function paintAccountPoints(state) {
         }
         const contrib = document.getElementById('account-contrib-list');
         if (contrib) {
-            const rows = m.listContributions(st);
-            contrib.innerHTML = rows.length
-                ? rows.slice(0, 12).map((row) => {
-                    const when = row.at ? new Date(row.at).toLocaleDateString() : '';
-                    return `<li class="flex justify-between gap-2"><span>${escapeAccountHtml(row.title)}${when ? ` · ${escapeAccountHtml(when)}` : ''}</span><span class="shrink-0 font-semibold">+${row.points}</span></li>`;
+            const days = typeof m.listContributionDays === 'function'
+                ? m.listContributionDays(st)
+                : [];
+            contrib.innerHTML = days.length
+                ? days.map((day) => {
+                    const when = day.at ? new Date(day.at).toLocaleDateString() : day.day;
+                    const items = (day.items || []).map((item) => (
+                        `<li class="flex justify-between gap-2 pl-1"><span>${escapeAccountHtml(item.title)}</span><span class="shrink-0">+${item.points}</span></li>`
+                    )).join('');
+                    return `<li>
+                        <details class="account-contrib-day">
+                            <summary class="flex justify-between gap-2 cursor-pointer list-none">
+                                <span>${escapeAccountHtml(when)}</span>
+                                <span class="shrink-0 font-semibold">+${day.total}</span>
+                            </summary>
+                            <ul class="mt-1.5 space-y-1 text-gray-500 dark:text-gray-400">${items}</ul>
+                        </details>
+                    </li>`;
                 }).join('')
                 : '<li>No contributions yet. Earn points from the actions above.</li>';
         }
@@ -824,8 +890,10 @@ export function paintAccountPoints(state) {
                 { id: 'streak_5day', kind: 'streak5', title: '5-day streak' },
             ];
             grid.innerHTML = badges.map((b) => {
-                const on = m.badgeUnlocked(b.id, st);
-                return `<button type="button" data-badge-id="${escapeAccountHtml(b.id)}" class="rounded-xl border px-1.5 py-2 text-center focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 ${on ? 'border-amber-200 dark:border-amber-800 bg-amber-50/80 dark:bg-amber-950/20' : 'border-gray-100 dark:border-gray-800 opacity-55'}">${badgeSvg(b.kind, on)}<p class="mt-1 text-[9px] font-bold leading-tight ${on ? 'text-amber-800 dark:text-amber-200' : 'text-gray-400'}">${escapeAccountHtml(b.title)}</p></button>`;
+                const progress = m.badgeProgress(b.id, st);
+                const on = progress.unlocked;
+                const warm = progress.ratio > 0;
+                return `<button type="button" data-badge-id="${escapeAccountHtml(b.id)}" class="rounded-xl border px-1.5 py-2 text-center focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 ${warm ? 'border-amber-200 dark:border-amber-800 bg-amber-50/80 dark:bg-amber-950/20' : 'border-gray-100 dark:border-gray-800 opacity-55'}">${badgeSvg(b.kind, progress.ratio)}<p class="mt-1 text-[9px] font-bold leading-tight ${on ? 'text-amber-800 dark:text-amber-200' : 'text-gray-400'}">${escapeAccountHtml(b.title)}</p></button>`;
             }).join('');
             grid.onclick = (ev) => {
                 const btn = ev.target?.closest?.('[data-badge-id]');
@@ -960,10 +1028,16 @@ export function bindAccountUi() {
         try {
             const next = await updateAccountDisplayName(input?.value || '');
             if (input) input.value = next;
-            const { setShowPhotoInAlerts } = await import('./rider-marks.js');
+            const { setShowPhotoInAlerts, setShowMarksInCommunity } = await import('./rider-marks.js');
             await setShowPhotoInAlerts(!!photo?.checked);
-            await pushSignedInPrefs({ showPhotoInAlerts: !!photo?.checked });
+            const marks = document.getElementById('account-marks-community');
+            await setShowMarksInCommunity(marks ? !!marks.checked : true);
+            await pushSignedInPrefs({
+                showPhotoInAlerts: !!photo?.checked,
+                showMarksInCommunity: marks ? !!marks.checked : true,
+            });
             if (photo) delete photo.dataset.dirty;
+            if (marks) delete marks.dataset.dirty;
             if (typeof window.showToast === 'function') window.showToast('Saved', 'success');
         } catch (e) {
             const msg = e?.message || 'Could not save.';
@@ -1076,6 +1150,17 @@ export function bindAccountUi() {
         cb.dataset.dirty = '1';
     });
     document.getElementById('account-photo-alerts')?.addEventListener('change', (e) => {
+        e.target.dataset.dirty = '1';
+    });
+    document.getElementById('account-marks-toggle')?.addEventListener('click', (e) => {
+        const t = e.target;
+        if (t.tagName === 'INPUT' || t.tagName === 'LABEL') return;
+        const cb = document.getElementById('account-marks-community');
+        if (!cb) return;
+        cb.checked = !cb.checked;
+        cb.dataset.dirty = '1';
+    });
+    document.getElementById('account-marks-community')?.addEventListener('change', (e) => {
         e.target.dataset.dirty = '1';
     });
 

@@ -16957,7 +16957,8 @@ const Admin = {
             status.textContent = 'Sending notification...';
             try {
                 const result = await callWorker(false);
-                status.textContent = `Sent ${result.sent} of ${result.attempted}. Failed ${result.failed}; removed ${result.invalid} invalid token${result.invalid === 1 ? '' : 's'}.`;
+                const detail = result.sampleError ? ` ${result.sampleError}` : '';
+                status.textContent = `Sent ${result.sent} of ${result.attempted}. Failed ${result.failed}; removed ${result.invalid} invalid token${result.invalid === 1 ? '' : 's'}.${detail}`;
             } catch (error) {
                 status.textContent = error.message || 'Notification send failed.';
             } finally {

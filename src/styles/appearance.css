@@ -1173,9 +1173,9 @@ html[data-colour-pack="earthy"] #notice-bell.nt-bell-info {
 }
 
 .nt-planner-map-btn {
-  background-color: var(--nt-surface) !important;
-  color: var(--nt-text) !important;
-  border-color: var(--nt-border) !important;
+  background-color: color-mix(in srgb, var(--nt-primary, #2563eb) 16%, var(--nt-surface, #fff)) !important;
+  color: var(--nt-primary, #1d4ed8) !important;
+  border-color: color-mix(in srgb, var(--nt-primary, #2563eb) 32%, var(--nt-border, #e5e7eb)) !important;
 }
 
 /* One 2rem row for Back, weekday, and Share. Same text-xs / weight / box

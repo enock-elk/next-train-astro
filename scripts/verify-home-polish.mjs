@@ -238,7 +238,7 @@ assert(admin.includes('const result = await Admin.upsertSavedAlertSource('), 'so
 assert(admin.includes('Source saved online for both operators.'), 'source Save confirms shared online persistence');
 assert(admin.includes('online sync failed.'), 'source Save/Delete report online failures');
 assert(admin.includes('endOfTodayLocalValue'), 'shared end-of-day expiry helper');
-assert(admin.includes('alerts-sched-v4'), 'alert panel rebuild key');
+assert(admin.includes('alerts-hub-v1'), 'alert panel rebuild key');
 assert(admin.includes('alert-tab-active'), 'Active alerts tab exists');
 assert(admin.includes('Active Alerts'), 'Active alerts tab label');
 assert(admin.includes('fetchActiveAlerts'), 'Active alerts list loader');

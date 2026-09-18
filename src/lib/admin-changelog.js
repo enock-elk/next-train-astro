@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_09.18.10': [
+        'Dev Hub Service Alerts is a hub: two home-style tiles for In-app alerts (existing channel composer) and Notifications (existing FCM sender). The Notifications home-grid tile is gone (data-admin-subview). Review / GSM still skip the hub and open Compose. No What’s New. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
+    ],
     'V9_09.18.9': [
         'Auto-locate reuses weekday COORDINATES when a later-day sheet (WC public holiday *_pub) omitted them. Station index fills missing lat/lon from weekday_to_a/b; findNearestStation and planner From locate skip invalid coords and fall back to weekday rows. Stations do not move. No What’s New. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
     ],

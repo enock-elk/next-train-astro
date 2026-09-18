@@ -306,6 +306,13 @@ function ntAdminDevPanelIdFromHash(hash) {
     return '';
 }
 
+/** Hub child hashes (`alert-panel--inapp`) still mount the Service Alerts card. */
+function ntAdminCanonicalPanelId(panelId) {
+    const id = String(panelId || '');
+    if (id === 'alert-panel--inapp') return 'alert-panel';
+    return id;
+}
+
 /** Push a drilled admin panel onto the in-memory stack (no duplicate of the current top). */
 function ntAdminPushDrillPanel(stack, panelId) {
     const id = String(panelId || '');
@@ -938,6 +945,7 @@ const Admin = {
             pencil: '<path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/>',
             columns: '<rect x="3" y="3" width="7" height="18" rx="1"/><rect x="14" y="3" width="7" height="18" rx="1"/><path d="M6.5 7h0M17.5 7h0"/>',
             circle: '<circle cx="12" cy="12" r="5" fill="currentColor" stroke="none"/>',
+            bell: '<path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/>',
         };
         const body = paths[name];
         if (!body) return '';
@@ -4592,7 +4600,9 @@ const Admin = {
     /** Paint a drilled admin panel and bind ← to one history step (not always the grid). */
     showDrilledPanel: (panelId, opts = {}) => {
         if (!Admin.confirmGridOrderLeave(panelId)) return false;
-        const targetPanel = document.getElementById(panelId);
+        const requestedId = String(panelId || '');
+        const domId = ntAdminCanonicalPanelId(requestedId);
+        const targetPanel = document.getElementById(domId);
         const container = document.getElementById('admin-modules-container');
         if (!targetPanel || !container) return false;
         const quiet = !!opts.quiet;
@@ -4682,17 +4692,57 @@ const Admin = {
         if (panelId === 'maint-panel') {
             Admin.collapseSystemControlAccordions();
         }
-        if (panelId === 'alert-panel') {
-            if (typeof Admin.setAlertManagerTab === 'function' && Admin._pendingAdminRoute) {
-                Admin.setAlertManagerTab('compose');
-            }
-            Admin.applyPendingAdminRoute('alert-panel');
-            const targetEl = document.getElementById('alert-target');
-            if (targetEl && !Admin._pendingAdminRoute && typeof Admin.fetchCurrentAlertsForTargets === 'function') {
-                Admin.fetchCurrentAlertsForTargets();
+        if (domId === 'alert-panel') {
+            const skipHub = !!(
+                opts.alertView === 'inapp'
+                || requestedId === 'alert-panel--inapp'
+                || Admin._pendingAdminRoute
+                || Admin._pendingReviewItemId
+            );
+            Admin.applyAlertHubView(skipHub ? 'inapp' : 'hub');
+            if (skipHub) {
+                if (typeof Admin.setAlertManagerTab === 'function' && Admin._pendingAdminRoute) {
+                    Admin.setAlertManagerTab('compose');
+                }
+                Admin.applyPendingAdminRoute('alert-panel');
+                const targetEl = document.getElementById('alert-target');
+                if (targetEl && !Admin._pendingAdminRoute && typeof Admin.fetchCurrentAlertsForTargets === 'function') {
+                    Admin.fetchCurrentAlertsForTargets();
+                }
             }
         }
         return true;
+    },
+
+    paintDrillTitle: (text) => {
+        const span = document.querySelector('#dev-modal h3 span.truncate');
+        if (span && text) span.textContent = text;
+    },
+
+    applyAlertHubView: (view) => {
+        const mode = view === 'inapp' ? 'inapp' : 'hub';
+        Admin._alertHubView = mode;
+        const hub = document.getElementById('alert-hub');
+        const body = document.getElementById('alert-body');
+        if (hub) hub.classList.toggle('hidden', mode !== 'hub');
+        if (body) body.classList.toggle('hidden', mode !== 'inapp');
+        Admin.paintDrillTitle(mode === 'inapp' ? 'In-app alerts' : 'Service Alerts');
+        if (mode === 'inapp' && typeof window.injectRichTextStyles === 'function') {
+            window.injectRichTextStyles();
+        }
+    },
+
+    openAlertHubInapp: () => {
+        const nextStack = ntAdminPushDrillPanel(Admin._drillStack, 'alert-panel--inapp');
+        Admin._drillStack = nextStack;
+        try {
+            history.pushState(
+                { adminPanel: 'alert-panel--inapp', drillStack: nextStack.slice() },
+                '',
+                '#dev-alert-panel--inapp'
+            );
+        } catch (_) { /* ignore */ }
+        Admin.showDrilledPanel('alert-panel--inapp');
     },
 
     /** Back/←: previous drilled panel when there is one, otherwise the Dev Mode grid. */
@@ -4723,7 +4773,8 @@ const Admin = {
     /** Restore the drilled panel that matches the current `#dev-*` hash (or the grid). */
     syncDrillFromHash: (opts = {}) => {
         const panelId = ntAdminDevPanelIdFromHash(location.hash);
-        if (panelId && document.getElementById(panelId)) {
+        const domId = ntAdminCanonicalPanelId(panelId);
+        if (panelId && document.getElementById(domId)) {
             Admin._drillStack = ntAdminTrimDrillStackTo(Admin._drillStack, panelId);
             if (!Admin._drillStack.length) Admin._drillStack = [panelId];
             return Admin.showDrilledPanel(panelId, { quiet: true });
@@ -5578,6 +5629,51 @@ const Admin = {
                     .admin-grid-view > div [id$="-header-btn"] svg[id$="-chevron"] { display: none !important; }
                     .admin-grid-view > div [id$="-header-btn"] span[id$="-last-sync"] { display: none !important; }
                     .admin-grid-view .grid-hidden-actions { display: none !important; }
+                    .admin-grid-view #alert-hub { display: none !important; }
+
+                    #alert-hub.admin-inner-hub {
+                      display: grid;
+                      grid-template-columns: repeat(2, minmax(0, 1fr));
+                      gap: 12px;
+                      padding: 4px 2px 12px;
+                    }
+                    #alert-hub.admin-inner-hub.hidden { display: none !important; }
+                    .admin-inner-tile {
+                      height: 110px;
+                      display: flex;
+                      flex-direction: column;
+                      justify-content: center;
+                      align-items: center;
+                      cursor: pointer;
+                      background: #fff;
+                      border: 1px solid #e5e7eb;
+                      border-radius: 0.75rem;
+                      box-shadow: 0 1px 3px 0 rgba(0,0,0,0.1), 0 1px 2px -1px rgba(0,0,0,0.1);
+                      padding: 1rem;
+                      transition: transform 0.2s, box-shadow 0.2s;
+                      color: #64748b;
+                    }
+                    .dark .admin-inner-tile {
+                      background: #1f2937;
+                      border-color: #374151;
+                      color: #94a3b8;
+                    }
+                    .admin-inner-tile:hover {
+                      transform: scale(1.02);
+                      box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+                      border-color: #3b82f6;
+                    }
+                    .admin-inner-tile .admin-tile-icon { margin-bottom: 8px; }
+                    .admin-inner-tile .admin-tile-icon svg { width: 1.75rem; height: 1.75rem; }
+                    .admin-inner-tile > span > span:not(.admin-tile-icon) {
+                      font-size: 10px;
+                      font-weight: 800;
+                      letter-spacing: 0.04em;
+                      text-transform: uppercase;
+                      line-height: 1.15;
+                      text-align: center;
+                      padding: 0 4px;
+                    }
 
                     /* Compact corner unread pills - never stretch across the tile */
                     .admin-unread-badge {
@@ -5654,11 +5750,14 @@ const Admin = {
                     gridStyleEl.textContent += `
                     .admin-grid-view > [data-admin-subview="true"] { display: none !important; height: 0 !important; margin: 0 !important; padding: 0 !important; border: 0 !important; overflow: hidden !important; pointer-events: none !important; }`;
                 }
-                if (!gridStyleEl.textContent.includes('color: #64748b')) {
+                if (!gridStyleEl.textContent.includes('.admin-inner-tile')) {
                     gridStyleEl.textContent += `
-                    .admin-grid-view > div [id$="-header-btn"] { color: #64748b; }
-                    .dark .admin-grid-view > div [id$="-header-btn"] { color: #94a3b8; }
-                    .admin-grid-view > div [id$="-header-btn"] > span > span:not(.admin-tile-icon):not(.admin-unread-badge) { color: inherit !important; }`;
+                    .admin-grid-view #alert-hub { display: none !important; }
+                    #alert-hub.admin-inner-hub { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; padding: 4px 2px 12px; }
+                    #alert-hub.admin-inner-hub.hidden { display: none !important; }
+                    .admin-inner-tile { height: 110px; display: flex; flex-direction: column; justify-content: center; align-items: center; cursor: pointer; background: #fff; border: 1px solid #e5e7eb; border-radius: 0.75rem; box-shadow: 0 1px 3px 0 rgba(0,0,0,0.1); padding: 1rem; color: #64748b; }
+                    .dark .admin-inner-tile { background: #1f2937; border-color: #374151; color: #94a3b8; }
+                    .admin-inner-tile > span > span:not(.admin-tile-icon) { font-size: 10px; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; }`;
                 }
             }
 
@@ -11719,7 +11818,7 @@ const Admin = {
         
         const alertHeaderLen = (alertPanel.querySelector('#alert-header-btn')?.textContent || '').trim().length;
         const alertShellEmpty = !(alertPanel.innerHTML || '').trim() || alertHeaderLen < 3;
-        const ALERT_PANEL_REV = 'alerts-sched-v4';
+        const ALERT_PANEL_REV = 'alerts-hub-v1';
         if (
             alertPanel.dataset.adminLoaded === ALERT_PANEL_REV
             && (!document.getElementById('alert-poster-toggle') || !document.querySelector('#alert-body [data-nt-font-select]') || !document.getElementById('alert-source-saved'))
@@ -11739,10 +11838,25 @@ const Admin = {
             <button id="alert-header-btn" class="w-full text-left text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider flex items-center justify-center focus:outline-none relative">
                 <span class="flex flex-col items-center">
                     ${Admin.tileIcon('megaphone', 'text-rose-500 dark:text-rose-400')}
-                    <span>Service Alerts Manager</span>
+                    <span>Service Alerts</span>
                 </span>
                 <svg id="alert-chevron" class="w-4 h-4 transform transition-transform -rotate-90 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
             </button>
+
+            <div id="alert-hub" class="admin-inner-hub hidden mt-1">
+                <button type="button" id="alert-hub-inapp" class="admin-inner-tile">
+                    <span class="flex flex-col items-center">
+                        ${Admin.tileIcon('megaphone', 'text-rose-500 dark:text-rose-400')}
+                        <span>In-app alerts</span>
+                    </span>
+                </button>
+                <button type="button" id="alert-hub-push" class="admin-inner-tile">
+                    <span class="flex flex-col items-center">
+                        ${Admin.tileIcon('bell', 'text-blue-600 dark:text-blue-400')}
+                        <span>Notifications</span>
+                    </span>
+                </button>
+            </div>
             
             <div id="alert-body" class="hidden mt-4 space-y-4">
                 <div id="alert-tabs-swipe" class="flex border-b border-gray-200 dark:border-gray-700 touch-pan-y">
@@ -12750,7 +12864,9 @@ const Admin = {
         header.onclick = () => {
 
             if (Admin.isGridMode) return; // Prevent accordion action when in grid
+            const hub = document.getElementById('alert-hub');
             body.classList.toggle('hidden');
+            if (hub) hub.classList.add('hidden');
             if (body.classList.contains('hidden')) {
                 chevron.classList.add('-rotate-90');
                 header.classList.remove('mb-4');
@@ -12764,6 +12880,23 @@ const Admin = {
                 Admin.publishDueScheduledAlerts().catch(() => {});
             }
         };
+
+        const hubInapp = document.getElementById('alert-hub-inapp');
+        const hubPush = document.getElementById('alert-hub-push');
+        if (hubInapp) {
+            hubInapp.onclick = (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                Admin.openAlertHubInapp();
+            };
+        }
+        if (hubPush) {
+            hubPush.onclick = (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (typeof Admin.deepLinkToPanel === 'function') Admin.deepLinkToPanel('push-notifications-panel');
+            };
+        }
 
         if (srcToggleBtn) {
             srcToggleBtn.onclick = () => {
@@ -16754,8 +16887,11 @@ const Admin = {
         if (!panel) {
             panel = document.createElement('div');
             panel.id = 'push-notifications-panel';
-            adminContainer.appendChild(panel);
+            const alertPanel = document.getElementById('alert-panel');
+            if (alertPanel && alertPanel.parentNode) alertPanel.parentNode.insertBefore(panel, alertPanel.nextSibling);
+            else adminContainer.appendChild(panel);
         }
+        panel.setAttribute('data-admin-subview', 'true');
         if (panel.dataset.loaded === 'true') return;
         panel.dataset.loaded = 'true';
         panel.className = 'bg-white dark:bg-gray-800 rounded-xl shadow-md border border-gray-200 dark:border-gray-700 p-4 mb-4 relative overflow-hidden transition-all duration-300';

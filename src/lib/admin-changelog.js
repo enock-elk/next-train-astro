@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_09.18.6': [
+        'Admin Feedback inbox ticks: 1 grey sent, 2 grey when the commuter app fetched the inbox (delivered), 2 blue when they opened Messages (read). Auth-backed PATCH on inbox/{deviceId}/{msgId}. No R chip. Opening a thread no longer writes acknowledged. Commuter Messages stays tick-free. No What’s New. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
+    ],
     'V9_09.18.5': [
         'SEO route landings: destA-first titles `{A} to {B} 2026 Train Times`. Meta is Updated + in-app route name + Metrorail (PRASA) train schedule + current train ids + max adult single + Next Train next-train/timetable/ticket prices/trip planner. Grid H2 is From {far end} towards {terminus}. Homepage/routes/region/corridor metas pick up PRASA, train times, schedule, updated/current, ticket prices. No What’s New. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
     ],

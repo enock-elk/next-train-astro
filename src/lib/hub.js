@@ -28,6 +28,11 @@ import {
     parseInboxReplyAcks,
 } from './inbox-replies.js';
 import {
+    inboxEntriesFromMap,
+    markInboxDelivered,
+    markInboxRead,
+} from './inbox-receipts.js';
+import {
     inboxReactionActorId,
     renderInboxReactionChips,
     renderInboxReactionPickerHtml,
@@ -1260,9 +1265,9 @@ async function fetchRemoteInbox() {
     if (!res.ok) return [];
     const data = await res.json();
     if (!data || typeof data !== 'object') return [];
-    return Object.entries(data)
-        .map(([id, m]) => ({ id, ...(m || {}) }))
-        .filter((m) => m && (m.message || m.text));
+    const list = inboxEntriesFromMap(data).filter((m) => m && (m.message || m.text));
+    markInboxDelivered(deviceId, list).catch(() => {});
+    return list;
 }
 
 function withTimeout(promise, ms, fallback) {
@@ -1491,20 +1496,11 @@ export async function openMessagesThread(replyToAcknowledge = latestPendingAdmin
         const list = await fetchInboxThread();
         renderMessagesThread(list);
         const deviceId = getThreadDeviceId();
+        if (deviceId) markInboxDelivered(deviceId, list).catch(() => {});
         const unread = list.filter((m) => !isCommuterInboxMsg(m) && !m.read && m.id);
         if (unread.length && deviceId) {
             rememberAcknowledgedInboxReplies(unread, deviceId);
-            const updates = {};
-            unread.forEach((m) => {
-                updates[`${m.id}/read`] = true;
-                updates[`${m.id}/readAt`] = Date.now();
-                updates[`${m.id}/viewedAt`] = Date.now();
-                updates[`${m.id}/acknowledged`] = true;
-            });
-            fetch(`${DYNAMIC_BASE_URL}inbox/${encodeURIComponent(deviceId)}.json`, {
-                method: 'PATCH',
-                body: JSON.stringify(updates),
-            }).catch(() => {});
+            markInboxRead(deviceId, unread).catch(() => {});
             syncInboxBadges(0);
         }
     } catch {
@@ -1840,6 +1836,7 @@ export async function checkServiceAlerts() {
                     if (ct.includes('text/html')) throw new Error('Captive Portal Detected');
                     const inboxData = await inboxRes.json();
                     if (inboxData) {
+                        markInboxDelivered(deviceId, inboxEntriesFromMap(inboxData)).catch(() => {});
                         const unreadKeys = Object.keys(inboxData).filter((k) => {
                             const locallyAcknowledged = localAcknowledgements.has(inboxReplyAckToken(deviceId, inboxData[k], k));
                             return inboxReplyStillVisible(inboxData[k], Date.now(), locallyAcknowledged);
@@ -1848,19 +1845,6 @@ export async function checkServiceAlerts() {
                         if (unreadKeys.length > 0) {
                             const latestKey = unreadKeys.sort((a, b) => (inboxData[b].timestamp || 0) - (inboxData[a].timestamp || 0))[0];
                             adminReply = { ...inboxData[latestKey], _key: latestKey };
-
-                            const undeliveredKeys = unreadKeys.filter((k) => !inboxData[k].delivered);
-                            if (undeliveredKeys.length > 0) {
-                                const updates = {};
-                                undeliveredKeys.forEach((k) => {
-                                    updates[`${k}/delivered`] = true;
-                                    updates[`${k}/deliveredAt`] = Date.now();
-                                });
-                                fetch(`${DYNAMIC_BASE_URL}inbox/${deviceId}.json`, {
-                                    method: 'PATCH',
-                                    body: JSON.stringify(updates)
-                                }).catch(() => {});
-                            }
                         }
                     }
                 }

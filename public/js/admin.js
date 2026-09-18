@@ -15971,12 +15971,9 @@ const Admin = {
                     }
                     
                     if (item.isFromAdmin) {
-                        // ADMIN BUBBLE (Right)
-                        // GUARDIAN PHASE 4: Polished Read Receipts & Acknowledged State
+                        // ADMIN BUBBLE (Right) — 1 grey sent, 2 grey delivered, 2 blue read. No R.
                         let receiptHtml = `<span class="inline-flex items-center text-gray-400 ml-1 shrink-0" title="Sent">${Admin.receiptTicks('single', 'w-3 h-2.5')}</span>`;
-                        if (item.acknowledged) {
-                            receiptHtml = `<span class="inline-flex items-center text-sky-400 ml-1 shrink-0" title="Read">${Admin.receiptTicks('double', 'w-3.5 h-2.5')}</span><span class="text-[9px] font-black bg-green-500 text-white rounded-sm px-1 ml-1.5 leading-none py-[1px]" title="Acknowledged by Commuter">R</span>`;
-                        } else if (item.read) {
+                        if (item.read || item.acknowledged) {
                             receiptHtml = `<span class="inline-flex items-center text-sky-400 ml-1 shrink-0" title="Read">${Admin.receiptTicks('double', 'w-3.5 h-2.5')}</span>`;
                         } else if (item.delivered) {
                             receiptHtml = `<span class="inline-flex items-center text-gray-400 ml-1 shrink-0" title="Delivered">${Admin.receiptTicks('double', 'w-3.5 h-2.5')}</span>`;

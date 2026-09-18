@@ -18,7 +18,7 @@ const zoneLabel = zoneCode.replace(/^Z/i, 'Zone ');
 <section class="mt-8 rounded-2xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900/80 p-4 sm:p-5" data-seo-fares>
   <h2 class="text-lg font-bold text-slate-900 dark:text-white">Maximum fares</h2>
   <p class="mt-2 text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
-    These are the <strong>maximum</strong> adult cash fares for {origin} ↔ {dest}
+    These are the <strong>maximum</strong> adult cash fares for {origin} to {dest}
     ({zoneLabel}{inferred ? ', network maximum' : ''}) - terminus to terminus.
     Shorter trips on the same line can cost less, especially for weekday
     <strong>off-peak</strong> singles and returns (09:30–14:30).
@@ -31,7 +31,7 @@ const zoneLabel = zoneCode.replace(/^Z/i, 'Zone ');
   <div class="mt-4 overflow-x-auto">
     <table class="w-full text-sm text-left border-collapse">
       <caption class="sr-only">
-        Maximum adult Metrorail fares for {origin} ↔ {dest} ({zoneLabel})
+        Maximum adult Metrorail fares for {origin} to {dest} ({zoneLabel})
       </caption>
       <thead>
         <tr class="border-b border-slate-200 dark:border-slate-700 text-[10px] font-black uppercase tracking-widest text-slate-500">

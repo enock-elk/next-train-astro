@@ -277,11 +277,11 @@ export function buildRouteSeoTimetable(route) {
     const saturdayA = extractSeoGrid(db, keys.saturday_to_a, dest, { ...orderOptions, destName: origin });
     const saturdayB = extractSeoGrid(db, keys.saturday_to_b, origin, { ...orderOptions, destName: dest });
 
-    const labelGrid = (grid, toward) => {
+    const labelGrid = (grid, fromName, toward) => {
         if (!grid) return null;
         return {
             ...grid,
-            heading: `Showing trains to ${toward}`,
+            heading: directionGridHeading(fromName, toward),
             destName: toward,
         };
     };
@@ -290,12 +290,12 @@ export function buildRouteSeoTimetable(route) {
         origin,
         dest,
         weekday: {
-            a: labelGrid(weekdayA, origin),
-            b: labelGrid(weekdayB, dest),
+            a: labelGrid(weekdayA, dest, origin),
+            b: labelGrid(weekdayB, origin, dest),
         },
         saturday: {
-            a: labelGrid(saturdayA, origin),
-            b: labelGrid(saturdayB, dest),
+            a: labelGrid(saturdayA, dest, origin),
+            b: labelGrid(saturdayB, origin, dest),
         },
         hasWeekday: !!(weekdayA || weekdayB),
         hasSaturday: !!(saturdayA || saturdayB),
@@ -414,14 +414,37 @@ export function buildRouteJsonLd({
     };
 }
 
-/** Corridor ends as a calm pair — used in H1, <title>, and metadata. */
+/** Corridor ends in in-app order (destA then destB) — used in H1, <title>, and metadata. */
+export const SEO_SCHEDULE_YEAR = 2026;
+
 export function corridorPairLabel(origin, dest) {
-    return `${origin} ↔ ${dest}`;
+    return `${origin} to ${dest}`;
 }
 
-/** `{A} ↔ {B} Train Schedule & Times` — do not stuff both "X to Y & Y to X" into the title. */
+/** `{A} to {B} 2026 Train Times` — destA-first, same order as ROUTES.name. */
 export function bidirectionalTitle(origin, dest) {
-    return `${corridorPairLabel(origin, dest)} Train Schedule & Times`;
+    return `${origin} to ${dest} ${SEO_SCHEDULE_YEAR} Train Times`;
+}
+
+/** SEO timetable heading: trains traveling from the far end toward this terminus. */
+export function directionGridHeading(fromName, towardName) {
+    return `From ${fromName} towards ${towardName}`;
+}
+
+/** Weekday train ids for SERP copy (route-name direction first). */
+export function seoTrainIdSample(timetable, limit = 4) {
+    const primary = timetable?.weekday?.b?.trainIds || [];
+    const secondary = timetable?.weekday?.a?.trainIds || [];
+    const seen = new Set();
+    const out = [];
+    for (const id of [...primary, ...secondary]) {
+        const token = String(id || '').trim();
+        if (!token || seen.has(token)) continue;
+        seen.add(token);
+        out.push(token);
+        if (out.length >= limit) break;
+    }
+    return out;
 }
 
 /** Exact directional phrase for body headings and meta copy. */
@@ -439,21 +462,18 @@ export function routeDocumentTitle(origin, dest) {
 }
 
 export function routeMetaDescription(origin, dest, province, opts = {}) {
-    const hasSaturday = opts?.hasSaturday;
-    const pair = `${origin} and ${dest}`;
-    const cape = /cape town/i.test(`${origin} ${dest}`);
-    const lead = cape
-        ? `Cape Town train times between ${pair}`
-        : `Metrorail train times between ${pair}`;
-    const dirs = `including trains from ${directionPhrase(origin, dest)} and ${directionPhrase(dest, origin)}`;
-    const nearby = opts?.nearby ? ` ${String(opts.nearby).trim()}` : '';
-    let extra = '';
-    if (hasSaturday === true) {
-        extra = ' Saturday train times are listed on this page. No Sunday service.';
-    } else if (hasSaturday === false) {
-        extra = ' No Saturday sheet in the published dump. No Sunday service.';
-    }
-    return `Check ${lead} (${province}), ${dirs}.${nearby}${extra}`;
+    const pair = `${origin} to ${dest}`;
+    const trains = (opts.trainIds || []).map((id) => String(id || '').trim()).filter(Boolean).slice(0, 4);
+    const trainBit = trains.length ? ` Current trains ${trains.join(', ')}.` : '';
+    const fareBit = (opts.maxSingle && !opts.inferredZone)
+        ? ` Max adult single ${opts.maxSingle}.`
+        : ' Ticket prices in Next Train.';
+    let satBit = '';
+    if (opts.hasSaturday === true) satBit = ' Saturday schedule listed. No Sunday service.';
+    else if (opts.hasSaturday === false) satBit = ' No Sunday service.';
+    const nearby = opts.nearby ? ` ${String(opts.nearby).trim()}` : '';
+    const provinceBit = province ? ` (${province})` : '';
+    return `Updated ${pair} Metrorail (PRASA) train schedule${provinceBit}.${trainBit}${fareBit} Next Train shows the next train, timetable, ticket prices, and trip planner.${satBit}${nearby}`;
 }
 
 function getDumpValue(db, key) {
@@ -525,7 +545,7 @@ export function firstLastSummaryLine(grid) {
     if (grid.first) bits.push(`first ${grid.first}`);
     if (grid.last) bits.push(`last ${grid.last}`);
     if (!bits.length) return null;
-    const toward = grid.destName || String(grid.heading || '').replace(/^Showing trains to\s+/i, '');
+    const toward = grid.destName || String(grid.heading || '').replace(/^From .+ towards\s+/i, '').replace(/^Showing trains to\s+/i, '');
     return `${grid.heading}: ${bits.join(', ')} at ${toward}`;
 }
 

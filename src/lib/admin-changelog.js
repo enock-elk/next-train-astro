@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_09.18.5': [
+        'SEO route landings: destA-first titles `{A} to {B} 2026 Train Times`. Meta is Updated + in-app route name + Metrorail (PRASA) train schedule + current train ids + max adult single + Next Train next-train/timetable/ticket prices/trip planner. Grid H2 is From {far end} towards {terminus}. Homepage/routes/region/corridor metas pick up PRASA, train times, schedule, updated/current, ticket prices. No What’s New. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
+    ],
     'V9_09.18.4': [
         'CleverAds top units dock into #nt-ad-scroll-host as one wrapper (pushdown iframe + vendor Close.png). They sit in the Next Train frame and scroll with the board. The vendor X stays tappable; pointer-events are not disabled. Scroll-away is not dismiss. Loaded iframes are never reparented. Already-painted units, including body-level in-flow pushdowns, follow #app-scroll via CSS translate plus a host spacer. #main-content is not translateY-pinned. Occupancy still needs a loaded creative; empty leftovers collapse. What’s New is the ad scroll bullet. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
     ],

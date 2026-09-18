@@ -30,6 +30,8 @@ import {
   buildRouteBoardAppPath,
   buildRouteFareTable,
   corridorStationList,
+  seoTrainIdSample,
+  SEO_SCHEDULE_YEAR,
 } from '../../lib/seo-timetable.js';
 
 export function getStaticPaths() {
@@ -62,10 +64,14 @@ const firstA = firstLastSummaryLine(timetable.weekday.a);
 const satNote = timetable.hasSaturday
   ? 'Saturday trains are listed further down this page.'
   : 'This corridor has no Saturday sheet in the published dump.';
+const fares = buildRouteFareTable(route);
 const title = routeDocumentTitle(origin, dest);
 const description = routeMetaDescription(origin, dest, province, {
   hasSaturday: timetable.hasSaturday,
   nearby: seed.nearby,
+  trainIds: seoTrainIdSample(timetable),
+  maxSingle: fares.tickets[0]?.value,
+  inferredZone: fares.inferred,
 });
 const canonicalPath = `/routes/${seed.slug}.html`;
 const pageUrl = `https://nexttrain.co.za${canonicalPath}`;
@@ -77,7 +83,6 @@ const guideHref = withBase('guide.html');
 const regionHref = regionEntry ? withBase(`regions/${regionEntry.slug}.html`) : routesIndexHref;
 const corridorHref = corridorEntry ? withBase(`corridors/${corridorEntry.slug}.html`) : null;
 const ogImage = ogTimetableImageUrl(route.id, 'A');
-const fares = buildRouteFareTable(route);
 const stations = corridorStationList(timetable);
 const liveGridPrimary = liveGridWeekdayB || liveGridWeekdayA;
 
@@ -140,6 +145,9 @@ const related = [
       </h1>
       <p class="mt-3 text-base text-slate-600 dark:text-slate-300 leading-relaxed">
         {seed.blurb}
+      </p>
+      <p class="mt-3 text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+        Updated {SEO_SCHEDULE_YEAR} {origin} to {dest} Metrorail (PRASA) schedule. Next Train is an unofficial helper: next train at your station, full timetable, ticket prices, trip planner, and network map.
       </p>
       <a
         href={liveBoardHref}

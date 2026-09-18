@@ -21,7 +21,7 @@ if (!entry) return Astro.redirect('/routes.html');
 
 const province = regionName(entry.region);
 const title = `${entry.label} Train Times | Metrorail Next Train`;
-const description = `${entry.blurb} Check live ${province} Metrorail schedules offline in Metrorail Next Train.`;
+const description = `Updated ${entry.label} PRASA Metrorail train schedule. ${entry.blurb} Current times, ticket prices, and the next train in Next Train.`;
 const canonicalPath = `/corridors/${entry.slug}.html`;
 const routesIndexHref = withBase('routes.html');
 const regionEntry = listSeoRegions().find((r) => r.region === entry.region);

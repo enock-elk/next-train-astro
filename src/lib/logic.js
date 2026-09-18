@@ -536,9 +536,9 @@ export async function guardianFetch(url, options = {}, timeoutMs = 8000) {
                     }
                 } else if (struggleElapsedOk() && isActiveForegroundSession()) {
                     const now = Date.now();
-                    if (now - _lastSlowNetworkToastTime > 6000) {
+                    if (now - _lastSlowNetworkToastTime > 120_000) {
                         _lastSlowNetworkToastTime = now;
-                        showToast("Connection is very slow. Still trying...", "warning", 3500);
+                        showToast("Connection is very slow. Still trying...", "warning", 3500, '', { cooldownMs: 120_000 });
                     }
                 }
             } else {

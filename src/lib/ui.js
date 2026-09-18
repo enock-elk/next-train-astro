@@ -712,8 +712,46 @@ export function toggleDropdownScrim(listId = null, chevronId = null) {
 
 // --- GLOBAL TOAST NOTIFICATIONS ---
 let toastTimeout = null;
+let lastToastAt = 0;
+const toastLastByKey = new Map();
+const toastShownAt = [];
+const TOAST_GLOBAL_GAP_MS = 1200;
+const TOAST_WINDOW_MS = 30_000;
+const TOAST_MAX_PER_WINDOW = 4;
+const TOAST_COOLDOWN_MS = {
+    info: 8_000,
+    success: 8_000,
+    warning: 20_000,
+    error: 25_000,
+};
 
-export function showToast(message, type = 'info', duration = 2500, actionHTML = '') { 
+function toastMessageKey(message, type) {
+    const text = String(message || '').replace(/<[^>]*>?/gm, '').replace(/\s+/g, ' ').trim().slice(0, 180);
+    return `${type}:${text}`;
+}
+
+function toastAllowsShow(message, type, options = {}) {
+    const now = Date.now();
+    const key = toastMessageKey(message, type);
+    const cooldown = Number(options.cooldownMs) > 0
+        ? Number(options.cooldownMs)
+        : (TOAST_COOLDOWN_MS[type] || TOAST_COOLDOWN_MS.info);
+    const lastSame = toastLastByKey.get(key) || 0;
+    if (lastSame && now - lastSame < cooldown) return false;
+    if (!options.force && lastToastAt && now - lastToastAt < TOAST_GLOBAL_GAP_MS) return false;
+    while (toastShownAt.length && now - toastShownAt[0] > TOAST_WINDOW_MS) toastShownAt.shift();
+    if (!options.force && toastShownAt.length >= TOAST_MAX_PER_WINDOW) return false;
+    toastLastByKey.set(key, now);
+    lastToastAt = now;
+    toastShownAt.push(now);
+    if (toastLastByKey.size > 80) {
+        const oldest = toastLastByKey.keys().next().value;
+        toastLastByKey.delete(oldest);
+    }
+    return true;
+}
+
+export function showToast(message, type = 'info', duration = 2500, actionHTML = '', options = {}) { 
     if (typeof document === 'undefined') return;
     const toastEl = document.getElementById('toast');
     
@@ -721,6 +759,7 @@ export function showToast(message, type = 'info', duration = 2500, actionHTML = 
     if (toastEl && toastEl.classList.contains('show') && toastEl.innerText.includes(message.replace(/<[^>]*>?/gm, '').trim())) {
         return;
     }
+    if (!toastAllowsShow(message, type, options)) return;
 
     if (toastTimeout) clearTimeout(toastTimeout); 
     const safeDuration = Math.min(duration, 5000);

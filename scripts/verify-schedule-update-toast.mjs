@@ -49,5 +49,10 @@ assert(ui.includes('whitespace-normal break-words'), 'toast copy wraps instead o
 assert(ui.includes('line-clamp-2'), 'toast copy wraps at most two lines');
 assert(ui.includes('rounded-2xl'), 'two-line toast is not a stadium capsule');
 assert(!ui.includes('leading-snug truncate'), 'toast no longer clips mid-word with truncate');
+assert(ui.includes('function toastAllowsShow'), 'every toast goes through a rate limit');
+assert(ui.includes('TOAST_MAX_PER_WINDOW = 4'), 'at most four toasts in 30s');
+assert(ui.includes('TOAST_GLOBAL_GAP_MS = 1200'), 'toasts cannot replace each other faster than 1.2s');
+assert(ui.includes('error: 25_000'), 'error toasts wait 25s before repeating');
+assert(logic.includes('_lastSlowNetworkToastTime > 120_000'), 'slow-connection warning waits 2 minutes');
 
 console.log('✓ route-specific schedule update baseline, dedupe, coalescing, and two-line toast OK');

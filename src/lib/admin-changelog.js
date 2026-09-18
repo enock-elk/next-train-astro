@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_09.18.3': [
+        'Toasts are rate-limited: same copy waits, at most four in 30s, 1.2s gap. Red Network is slow / saved-times at most once per 10 minutes. Connection is very slow at most once per 2 minutes. Forced-update retries no longer re-announce every minute. FCM prune 401 does not fail a delivered send. Fallback Worker URL stays. Live V9_09.17.12 update path unchanged: quiet SW, retain --keep 8 --keep-css 30, inline lifeline hide, FORCE_UPDATE still gated by reachability. No What’s New. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
+    ],
     'V9_09.18.2': [
         'Dev Hub Notifications shows the first FCM error when send fails (Sent 0 of N with tokens kept). Typical cause is the telemetry service account missing Firebase Cloud Messaging API Admin. Fallback Worker URL stays. No What’s New. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
     ],

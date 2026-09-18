@@ -1353,6 +1353,9 @@ export function switchTab(tab, opts = null) {
     if (tab === 'next-train' || tab === 'trip-planner') {
         nudgeHomeAutoNotices();
     }
+    try {
+        window.dispatchEvent(new CustomEvent('nt-tab-changed', { detail: { tab } }));
+    } catch { /* ignore */ }
 }
 
 export function initTabIndicator() {

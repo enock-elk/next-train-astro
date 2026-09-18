@@ -15,6 +15,7 @@ import { MANUAL_GRID_ORDER, orderGridTrainIds } from '../src/lib/grid-order.js';
 import { ROUTES } from '../src/lib/config.js';
 import {
   listFeaturedSeoRoutes,
+  listSeoRoutes,
   getSeoRouteBySlug,
   stationLabel,
   slugifyStation,
@@ -43,6 +44,7 @@ import {
   seoTrainIdSample,
   SEO_SCHEDULE_YEAR,
 } from '../src/lib/seo-timetable.js';
+import { listSeoAppPreviews, seoPreviewImageAbsPath } from '../src/lib/seo-app-previews.js';
 import { extractGridPreview } from '../workers/nexttrain-og/src/schedule.js';
 
 const DIST = process.argv[2] || 'dist';
@@ -117,6 +119,26 @@ for (const { id, slug } of FLAGSHIP) {
   }
   if (pien.weekday.b?.heading !== 'From Pretoria towards Pienaarspoort') {
     fail(`pta-pien weekday-B heading is "${pien.weekday.b?.heading}"`);
+  }
+}
+
+{
+  const previews = listSeoAppPreviews();
+  const seoRoutes = listSeoRoutes();
+  if (previews.length !== seoRoutes.length) {
+    fail(`seo app previews (${previews.length}) must cover every SEO route (${seoRoutes.length})`);
+  }
+  const pienPreview = previews.find((item) => item.routeId === 'pta-pien');
+  if (!pienPreview || !/devenish/i.test(pienPreview.stationRaw || '')) {
+    fail('Pienaarspoort preview station must stay Devenish Street');
+  }
+  for (const preview of previews) {
+    if (!preview.stationRaw) fail(`${preview.routeId} preview is missing a station`);
+    if (!preview.image.includes(`${preview.routeId}-live-board.webp`)) {
+      fail(`${preview.routeId} preview image path must be route-specific`);
+    }
+    const imagePath = seoPreviewImageAbsPath(preview.routeId);
+    if (!existsSync(imagePath)) fail(`missing SEO preview image ${imagePath}`);
   }
 }
 
@@ -345,8 +367,8 @@ if (!gridPathSa.includes('d=sa') || gridPathSa.includes('dir=')) {
     fail('route landings must select app previews by route id');
   }
   const appPreview = readFileSync(new URL('../src/components/SeoAppPreview.astro', import.meta.url), 'utf8');
-  if (!appPreview.includes("'pta-pien'") || !appPreview.includes('pta-pien-live-board.webp')) {
-    fail('app preview catalog must map the Pienaarspoort screenshot only to pta-pien');
+  if (!appPreview.includes('getSeoAppPreview') || !appPreview.includes('preview.image')) {
+    fail('app preview catalog must map screenshots by route id');
   }
   if (!appPreview.includes('sm:grid-cols-') || !appPreview.includes('max-w-[15rem]')) {
     fail('app preview must adapt from stacked mobile to capped desktop columns');
@@ -674,12 +696,20 @@ if (existsSync(DIST)) {
     if (!html.includes('not in service')) fail('Pienaarspoort HTML missing ghost-station note');
     if (!html.includes('data-seo-app-preview="pta-pien"')) fail('Pienaarspoort HTML missing its route-specific app preview');
     if (!html.includes('pta-pien-live-board.webp')) fail('Pienaarspoort HTML missing its route-specific screenshot');
+    if (!/Devenish Street/i.test(html)) fail('Pienaarspoort preview alt must name Devenish Street');
   }
-  const mabopaneHtmlPath = join(DIST, 'routes/pretoria-to-mabopane.html');
-  if (existsSync(mabopaneHtmlPath)) {
-    const html = readFileSync(mabopaneHtmlPath, 'utf8');
-    if (html.includes('data-seo-app-preview') || html.includes('pta-pien-live-board.webp')) {
-      fail('Pienaarspoort screenshot must not appear on the Mabopane route page');
+  for (const { seed, route } of listSeoRoutes()) {
+    const htmlPath = join(DIST, `routes/${seed.slug}.html`);
+    if (!existsSync(htmlPath)) continue;
+    const html = readFileSync(htmlPath, 'utf8');
+    if (!html.includes(`data-seo-app-preview="${route.id}"`)) {
+      fail(`${seed.slug} missing data-seo-app-preview="${route.id}"`);
+    }
+    if (!html.includes(`${route.id}-live-board.webp`)) {
+      fail(`${seed.slug} missing ${route.id}-live-board.webp`);
+    }
+    if (route.id !== 'pta-pien' && html.includes('pta-pien-live-board.webp')) {
+      fail(`${seed.slug} must not reuse the Pienaarspoort screenshot`);
     }
   }
 

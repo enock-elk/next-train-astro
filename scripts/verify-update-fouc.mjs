@@ -123,6 +123,10 @@ assert(/<div class="hp"[^>]*\bhidden\b/.test(help), 'honeypot stays hidden when 
 assert(help.includes('id="btn-reset"'), 'Reset saved app data is a real button');
 assert(help.includes('admin@nexttrain.co.za'), 'Reset and Recover keeps the support email as a mailto');
 assert(help.includes('facebook.com/enock.kazembe'), 'Reset and Recover keeps the Facebook support link');
+assert(help.includes('<h1 id="title">'), 'unstyled fallback still has a real heading');
+assert(help.includes('<ol class="steps"'), 'unstyled fallback still has a real list');
+assert(help.includes('<button type="button"') && help.includes('<button type="submit"'), 'unstyled fallback still has real buttons');
+assert(help.includes('If CSS is disabled entirely'), 'help.html documents the no-CSS fallback');
 assert(!help.includes('id="diag"'), 'Reset and Recover does not paint a diagnostic dump');
 assert(!/Device:\s*['+]/.test(help), 'Reset and Recover does not print a device id on the page');
 assert(help.includes('class="phone"') || help.includes('class="brand"'), 'Reset and Recover uses Next Train light chrome');

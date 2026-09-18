@@ -1,30 +1,14 @@
 ---
 import { withBase } from '../lib/config.js';
+import { getSeoAppPreview } from '../lib/seo-app-previews.js';
 
 interface Props {
   routeId: string;
   href: string;
 }
 
-interface RoutePreview {
-  title: string;
-  body: string;
-  image: string;
-  alt: string;
-  linkLabel: string;
-}
-
-const previews: Record<string, RoutePreview> = {
-  'pta-pien': {
-    title: 'See Pretoria to Pienaarspoort at a glance',
-    body: 'This route opens as a live board for your saved station.',
-    image: 'images/seo/pta-pien-live-board.webp',
-    alt: 'Next Train live board for Pretoria to Pienaarspoort showing upcoming trains at Devenish Street, the full timetable, estimated fare, and app navigation',
-    linkLabel: 'Open Pretoria to Pienaarspoort in Next Train',
-  },
-};
 const href = Astro.props.href;
-const preview = previews[Astro.props.routeId];
+const preview = getSeoAppPreview(Astro.props.routeId);
 ---
 
 {preview && (

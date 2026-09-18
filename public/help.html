@@ -81,6 +81,7 @@
       font-size: 0.92rem;
     }
     .steps li:first-child { border-top: 0; padding-top: 0; }
+    .steps li > span { flex: 1; min-width: 0; }
     .steps li::before {
       content: counter(step);
       flex: 0 0 24px; height: 24px; border-radius: 999px;
@@ -165,9 +166,9 @@
     <div class="card">
       <h2>Try this first</h2>
       <ol class="steps" id="steps">
-        <li>Pull down to refresh, or close the app and open Next Train again.</li>
-        <li>If it still looks broken, tap <strong>Reset saved app data</strong> below. That clears an old saved copy, which is common after a big update.</li>
-        <li>Still stuck? Leave your contact details, or WhatsApp / email us. We’ll reply when we can.</li>
+        <li><span>Pull down to refresh, or close the app and open Next Train again.</span></li>
+        <li><span>If it still looks broken, tap <strong>Reset saved app data</strong> below. That clears an old saved copy, which is common after a big update.</span></li>
+        <li><span>Still stuck? Leave your contact details, or WhatsApp / email us. We’ll reply when we can.</span></li>
       </ol>
       <div class="ios" id="ios-tip" hidden>
         On iPhone: open the site in Safari, then Share, then Add to Home Screen again after reset.
@@ -220,9 +221,9 @@
     <details class="more card">
       <summary>More tips</summary>
       <ol class="steps" style="margin-top:12px">
-        <li>Android Chrome: menu, Delete browsing data, Cached images and files for this site, then reopen.</li>
-        <li>If you installed the app icon, remove it and reopen from the browser once after reset.</li>
-        <li>Check <a class="inline" href="https://www.cloudflarestatus.com/" target="_blank" rel="noopener">Cloudflare status</a> if the whole internet feels broken.</li>
+        <li><span>Android Chrome: menu, Delete browsing data, Cached images and files for this site, then reopen.</span></li>
+        <li><span>If you installed the app icon, remove it and reopen from the browser once after reset.</span></li>
+        <li><span>Check <a class="inline" href="https://www.cloudflarestatus.com/" target="_blank" rel="noopener">Cloudflare status</a> if the whole internet feels broken.</span></li>
       </ol>
     </details>
     </div>

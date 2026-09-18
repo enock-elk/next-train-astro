@@ -126,6 +126,7 @@ assert(help.includes('facebook.com/enock.kazembe'), 'Reset and Recover keeps the
 assert(!help.includes('id="diag"'), 'Reset and Recover does not paint a diagnostic dump');
 assert(!/Device:\s*['+]/.test(help), 'Reset and Recover does not print a device id on the page');
 assert(help.includes('class="phone"') || help.includes('class="brand"'), 'Reset and Recover uses Next Train light chrome');
+assert(help.includes('<li><span>'), 'help step copy is wrapped so bold labels do not become extra columns');
 assert(!help.includes('#0f172a'), 'Reset and Recover is not the old dark stacked shell');
 
 const recoverySrc = readFileSync(new URL('../src/lib/recovery.js', import.meta.url), 'utf8');

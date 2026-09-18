@@ -41,6 +41,11 @@ In Google Cloud Console for `metrorail-next-train`:
    `nexttrain-telemetry@metrorail-next-train.iam.gserviceaccount.com`
    the **Firebase Cloud Messaging API Admin** role.
 
+If Dev Hub **Count devices** works but send returns **Sent 0 of N** with
+**removed 0 invalid tokens**, this IAM grant or the FCM API enablement is
+still missing. Count only reads RTDB; send needs FCM Admin on that same
+service account. Do not rotate the Worker key for this symptom.
+
 The Worker already uses this service account for RTDB. Do not create a second key
 unless the existing Worker secret is missing or has been revoked.
 

@@ -66,6 +66,10 @@ class FakeRtdb {
         this.deleted.push(path);
         return { matched: true };
     }
+    async del(path) {
+        this.deleted.push(path);
+        return { matched: true };
+    }
 }
 
 const tree = {
@@ -89,11 +93,26 @@ const sent = await deliverPushNotifications({}, request, {
         : { ok: true, status: 200, invalid: false },
 });
 assert.deepEqual(
-    { matched: sent.matched, attempted: sent.attempted, sent: sent.sent, failed: sent.failed, invalid: sent.invalid },
-    { matched: 2, attempted: 2, sent: 1, failed: 1, invalid: 1 }
+    { matched: sent.matched, attempted: sent.attempted, sent: sent.sent, failed: sent.failed, invalid: sent.invalid, pruned: sent.pruned },
+    { matched: 2, attempted: 2, sent: 1, failed: 1, invalid: 1, pruned: 1 }
 );
 assert.equal(sent.sampleError, 'HTTP 404');
 assert.deepEqual(sendDb.deleted, ['push_subscriptions/bad']);
+
+const failPruneDb = new FakeRtdb(tree);
+failPruneDb.del = async () => {
+    throw new Error('RTDB conditional write failed (401): { "error" : "Permission denied" }');
+};
+const pruneDenied = await deliverPushNotifications({}, request, {
+    rtdb: failPruneDb,
+    sendOne: async (token) => token.startsWith('bad-')
+        ? { ok: false, status: 404, invalid: true }
+        : { ok: true, status: 200, invalid: false },
+});
+assert.equal(pruneDenied.sent, 1, 'delivered FCM must not fail when invalid-token prune is denied');
+assert.equal(pruneDenied.pruned, 0);
+assert.equal(pruneDenied.invalid, 1);
+assert.equal(pruneDenied.sampleError, 'HTTP 404');
 
 const missingAuth = await communityWorker.fetch(
     new Request('https://worker.example/admin/notifications/send', {
@@ -155,6 +174,7 @@ assert.match(admin, /setupPushNotificationsManager/);
 assert.match(admin, /id = 'push-notifications-panel'/);
 assert.match(admin, /\/admin\/notifications\/send/);
 assert.match(admin, /Count devices/);
+assert.match(admin, /result\.pruned/);
 assert.match(configSrc, /COMMUNITY_WORKER_FALLBACK_URL/);
 assert.match(adminBridge, /COMMUNITY_WORKER_URL \|\| COMMUNITY_WORKER_FALLBACK_URL/);
 assert.match(labDeploy, /PUBLIC_COMMUNITY_WORKER_URL:\s*https:\/\/nexttrain-community\.enock\.workers\.dev/);
@@ -174,5 +194,14 @@ assert.match(workerConfig, /"FIREBASE_PROJECT_ID":\s*"metrorail-next-train"/);
 for (const workflow of [productionDeploy, productionBuild, githubPreview, labDeploy]) {
     assert.match(workflow, /PUBLIC_FIREBASE_VAPID_KEY:\s*\$\{\{\s*secrets\.PUBLIC_FIREBASE_VAPID_KEY\s*\}\}/);
 }
+
+const [workerJs, fcmDocs] = await Promise.all([
+    readFile(new URL('../workers/nexttrain-community/worker.js', import.meta.url), 'utf8'),
+    readFile(new URL('../docs/FCM-NOTIFICATIONS-SETUP.md', import.meta.url), 'utf8'),
+]);
+assert.match(workerJs, /searchParams\.set\('access_token'/);
+assert.match(workerJs, /pruneInvalidPushSubscriptions/);
+assert.match(workerJs, /push_subscription_prune_failed/);
+assert.match(fcmDocs, /RTDB conditional write failed \(401\)/);
 
 console.log('Push notifications verified: scoped subscriptions, disable state, admin-only sender, FCM payload, invalid-token cleanup, VAPID build wiring, and admin panel.');

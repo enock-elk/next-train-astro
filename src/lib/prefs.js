@@ -92,27 +92,24 @@ function isLabRuntime() {
 }
 
 /**
- * When lab packs ship to production, remap once to Classic.
- * Keep `theme` (light/dark) and `next_train_device_id` so inbox threads still match.
+ * Stamp the production pack FLAG once. Retired ember/paper names still map via
+ * migrateRetiredPacks. Do not remap Earthy/Midnight/etc. when the FLAG is missing
+ * after a NUKE or ITP wipe — that is what reset Classic over a chosen look.
  */
 function seedProductionClassicPack() {
     if (typeof window === 'undefined' || isLabRuntime()) return;
     const FLAG = 'ntProdClassicPackV1';
     if (safeStorage.getItem(FLAG)) return;
-    const pack = normalizePack(safeStorage.getItem(COLOUR_PACK_KEY));
-    if (pack && pack !== COLOUR_PACKS.CLASSIC) {
-        safeStorage.setItem(COLOUR_PACK_KEY, COLOUR_PACKS.CLASSIC);
-        safeStorage.setResilientItem?.(COLOUR_PACK_KEY, COLOUR_PACKS.CLASSIC)?.catch?.(() => {});
-    }
     safeStorage.setItem(FLAG, '1');
     safeStorage.setResilientItem?.(FLAG, '1')?.catch?.(() => {});
 }
 
-/** Persist light when the user has never chosen a mode (do not follow the OS). */
+/** Class-only light FOUC. Persistence waits for restoreLookPrefs / IndexedDB. */
 function seedLightDefault() {
     if (typeof window === 'undefined') return;
-    if (!safeStorage.getItem(THEME_KEY)) {
-        persistTheme('light');
+    if (safeStorage.getItem(THEME_KEY)) return;
+    if (typeof document !== 'undefined' && !document.documentElement.classList.contains('dark')) {
+        document.documentElement.classList.remove('dark');
     }
 }
 
@@ -233,6 +230,9 @@ export async function restoreLookPrefs() {
         if (theme === 'dark' || theme === 'light') {
             persistTheme(theme);
             document.documentElement.classList.toggle('dark', theme === 'dark');
+        } else {
+            persistTheme('light');
+            document.documentElement.classList.remove('dark');
         }
         if (pack) setColourPack(pack);
     } catch { /* ignore */ }
@@ -255,15 +255,30 @@ export function resetLookToClassicLight() {
 
 export function hydratePrefs() {
     if (typeof window !== 'undefined') window.ntPersistTheme = persistTheme;
-    restoreLookPrefs().then(() => {
+    const paintStoredPack = () => {
         applyNavChrome(getNavStyle());
+        const pack = normalizePack(safeStorage.getItem(COLOUR_PACK_KEY));
+        if (VALID_PACKS.has(pack) && typeof document !== 'undefined') {
+            document.documentElement.setAttribute('data-colour-pack', pack);
+            syncColourPackUi(pack);
+        }
+        syncPrefsAccordionSummary();
+        syncThemeColorMeta();
+    };
+    paintStoredPack();
+    restoreLookPrefs().then(async () => {
+        try {
+            const { restoreHolidaySeenPrefs } = await import('./holiday-notice.js');
+            await restoreHolidaySeenPrefs();
+        } catch { /* ignore */ }
+        paintStoredPack();
         setColourPack(getColourPack());
         syncPrefsAccordionSummary();
         syncThemeColorMeta();
-    }).catch(() => {});
+    }).catch(() => {
+        setColourPack(getColourPack());
+    });
     applyAdminAuthedChrome(false);
-    applyNavChrome(getNavStyle());
-    setColourPack(getColourPack());
     applyReturningUserChrome();
     bindColourPackControls();
     syncNotifyUi();

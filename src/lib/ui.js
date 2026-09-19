@@ -936,23 +936,59 @@ function clampAlertLightboxPan() {
     if (lbY < -limitY) lbY = -limitY;
 }
 
-/** Reuse the already-decoded poster (blob or HTTP cache) so full view does not refetch. */
-function resolveLightboxDisplaySrc(src) {
+function lightboxPosterHost(src, host) {
+    if (host?.nodeType === 1) {
+        const wrap = host.matches?.('[data-alert-lightbox]') ? host : host.closest?.('[data-alert-lightbox]');
+        if (wrap) return wrap;
+    }
     try {
         const posters = document.querySelectorAll('[data-alert-lightbox]');
+        let fallback = null;
         for (const el of posters) {
             if (el.getAttribute('data-alert-lightbox') !== src) continue;
-            const poster = el.querySelector('img');
-            if (!poster) continue;
+            if (el.getAttribute('data-alert-ready') === '1') return el;
+            fallback = fallback || el;
+        }
+        return fallback;
+    } catch { /* ignore */ }
+    return null;
+}
+
+/** Copy decoded pixels so full view never waits on a second network decode. */
+function snapshotDecodedImage(img) {
+    if (!img || !(img.naturalWidth > 0)) return '';
+    try {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.naturalWidth;
+        canvas.height = img.naturalHeight;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return '';
+        ctx.drawImage(img, 0, 0);
+        return canvas.toDataURL('image/jpeg', 0.92);
+    } catch {
+        return '';
+    }
+}
+
+/** Reuse the already-decoded poster (object URL, snapshot, or live src). */
+function resolveLightboxDisplaySrc(src, host) {
+    try {
+        const wrap = lightboxPosterHost(src, host);
+        const objectUrl = wrap?.getAttribute('data-alert-object-url') || '';
+        if (objectUrl) return objectUrl;
+        const poster = wrap?.querySelector?.('img') || null;
+        const snap = snapshotDecodedImage(poster);
+        if (snap) return snap;
+        if (poster && poster.naturalWidth > 0) {
             const live = poster.currentSrc || poster.getAttribute('src') || poster.src || '';
-            if (live && poster.naturalWidth > 0) return live;
+            if (live) return live;
         }
         const imgs = document.querySelectorAll('img');
-        for (const poster of imgs) {
-            if (poster.id === 'alert-image-lightbox-img') continue;
-            const live = poster.currentSrc || poster.src || '';
-            if ((live === src || poster.getAttribute('src') === src) && poster.naturalWidth > 0) {
-                return live || src;
+        for (const node of imgs) {
+            if (node.id === 'alert-image-lightbox-img') continue;
+            const live = node.currentSrc || node.src || '';
+            if ((live === src || node.getAttribute('src') === src) && node.naturalWidth > 0) {
+                return snapshotDecodedImage(node) || live || src;
             }
         }
     } catch { /* ignore */ }
@@ -1062,16 +1098,12 @@ function bindAlertImageLightbox() {
     });
 }
 
-export function openLightbox(url) {
+export function openLightbox(url, host) {
     if (typeof window === 'undefined') return;
     const src = sanitizeAttachmentDisplayUrl(url);
     if (!src) return;
-    try {
-        const pending = Array.from(document.querySelectorAll('[data-alert-lightbox]')).find((el) => {
-            return el.getAttribute('data-alert-lightbox') === src && el.getAttribute('data-alert-ready') !== '1';
-        });
-        if (pending) return;
-    } catch { /* ignore */ }
+    const wrap = lightboxPosterHost(src, host);
+    if (wrap && wrap.getAttribute('data-alert-ready') !== '1') return;
     triggerHaptic();
     bindAlertImageLightbox();
     const { overlay, img } = lightboxEls();
@@ -1081,7 +1113,8 @@ export function openLightbox(url) {
     window._isLightboxMode = true;
     resetAlertLightboxTransform();
     img.alt = 'Image Preview';
-    const displaySrc = resolveLightboxDisplaySrc(src);
+    img.decoding = 'sync';
+    const displaySrc = resolveLightboxDisplaySrc(src, wrap || host);
     if (img.getAttribute('src') !== displaySrc) img.src = displaySrc;
     overlay.classList.remove('hidden');
     overlay.classList.add('flex');

@@ -401,6 +401,9 @@ assert(admin.includes('openScheduleQaDeltaModal'), 'delta variance opens a train
 assert(admin.includes('id="sched-qa-delta-modal"') || admin.includes("id = 'sched-qa-delta-modal'"), 'delta modal id is stable');
 assert(admin.includes('data-qa-delta-idx'), 'delta cards are clickable');
 assert(admin.includes('${deltaSpread} min'), 'delta cards show their minute spread at top right');
+assert(!admin.includes('id="sched-qa-region"'), 'Schedule QA has no private region selector');
+assert(admin.includes("getElementById('diag-region-select')"), 'Schedule QA uses Target Region (Matrix & Scan)');
+assert(admin.includes('Uses the Target Region (Matrix &amp; Scan) control above.'), 'Schedule QA points at the shared region control');
 
 const qa = readFileSync(new URL('../src/lib/schedule-qa.js', import.meta.url), 'utf8');
 assert(qa.includes('flattenPublicHolidays'), 'QA flattens WC public_holidays before sheetKeys lookup');

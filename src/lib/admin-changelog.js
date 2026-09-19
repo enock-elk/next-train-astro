@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_09.19.11': [
+        'Schedule QA uses Target Region (Matrix & Scan); the extra QA region select is gone. Alert full view paints the already-decoded feed poster (object URL / canvas snapshot) instead of refetching. Earthy Close Timetable, fare Close, planner tips Got it, and View trip plan on map use the same readable CTA ink as Alerts Close. Classic dark Max. Single Fare chip stays white with navy text. Admin NUKE keeps Classic/Earthy, light/dark, and holiday Got it seen keys (no boot remap when the pack FLAG is missing; holiday dismiss map in IndexedDB). No What’s New. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
+    ],
     'V9_09.19.10': [
         'Replaced public/data/full-database.json with the operator export as-is (lastUpdated 19 Sep 2026 17:54). SEO SSG and the GitHub waterfall read that dump. WC zone fields updated (Cape Town-Wellington and Strand Z3, Malmesbury Z3, most Cape Town metros Z2). Public-holiday nest is whatever the export contained. No What’s New. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
     ],

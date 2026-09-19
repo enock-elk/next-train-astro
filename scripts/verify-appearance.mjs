@@ -131,12 +131,16 @@ assert(!css.includes('#app-header.nt-maint-active #app-title'), 'maintenance bar
 const prefs = readFileSync(new URL('../src/lib/prefs.js', import.meta.url), 'utf8');
 assert(prefs.includes('syncInAppChrome'), 'prefs exports syncInAppChrome after Welcome');
 assert(prefs.includes("getItem('welcomeSeen') === 'true' && !welcomeOpen"), 'bottom bar waits until Welcome is done');
-assert(prefs.includes('ntProdClassicPackV1'), 'production one-shot remaps non-classic packs');
+assert(prefs.includes('ntProdClassicPackV1'), 'production pack FLAG still exists');
+assert(!prefs.includes('if (pack && pack !== COLOUR_PACKS.CLASSIC)'), 'missing FLAG does not remap Earthy to Classic');
 assert(prefs.includes('syncPrefsAccordionSummary'), 'theme accordion subtitle follows the live pack');
 assert(prefs.includes('restoreLookPrefs'), 'look prefs restore from IndexedDB after a purge');
 assert(prefs.includes('resetLookToClassicLight'), 'Check for Updates can force Classic light');
 assert(prefs.includes('setResilientItem'), 'colour pack writes mirror to IndexedDB');
-assert(layout.includes('ntProdClassicPackV1'), 'Layout boot remaps production packs before first paint');
+assert(prefs.includes('restoreHolidaySeenPrefs'), 'holiday dismiss map restores after a purge');
+assert(layout.includes('ntProdClassicPackV1'), 'Layout boot still stamps the production pack FLAG');
+assert(!layout.includes("if (storedPack && storedPack !== 'classic')"), 'Layout boot does not remap a saved colour pack');
+assert(!layout.includes("localStorage.setItem('theme', 'light')"), 'Layout boot does not persist a missing theme before IndexedDB restore');
 
 const welcome = readFileSync(new URL('../src/components/WelcomeModal.astro', import.meta.url), 'utf8');
 assert(welcome.includes('later in Options'), 'Welcome copy points at Options, not side menu');

@@ -27,6 +27,39 @@ let holidayStabilityWaitStartedAt = 0;
 const SEEN_WEEK_PREFIX = 'seen_holiday_week_';
 const SEEN_EVE_PREFIX = 'seen_holiday_eve_';
 const SEEN_DAY_PREFIX = 'seen_holiday_day_';
+export const HOLIDAY_SEEN_MAP_KEY = 'nt_holiday_seen_map_v1';
+
+function persistHolidaySeenKey(key) {
+    if (!key) return;
+    try {
+        safeStorage.setItem(key, 'true');
+        safeStorage.setResilientItem?.(key, 'true')?.catch?.(() => {});
+        let map = {};
+        try { map = JSON.parse(safeStorage.getItem(HOLIDAY_SEEN_MAP_KEY) || '{}') || {}; } catch { map = {}; }
+        if (!map || typeof map !== 'object' || Array.isArray(map)) map = {};
+        map[key] = 'true';
+        const raw = JSON.stringify(map);
+        safeStorage.setItem(HOLIDAY_SEEN_MAP_KEY, raw);
+        safeStorage.setResilientItem?.(HOLIDAY_SEEN_MAP_KEY, raw)?.catch?.(() => {});
+    } catch { /* ignore */ }
+}
+
+/** Rehydrate dismiss keys after NUKE / ITP when localStorage was empty. */
+export async function restoreHolidaySeenPrefs() {
+    try {
+        const raw = await safeStorage.getResilientItem?.(HOLIDAY_SEEN_MAP_KEY);
+        if (!raw) return;
+        const map = typeof raw === 'string' ? JSON.parse(raw) : raw;
+        if (!map || typeof map !== 'object' || Array.isArray(map)) return;
+        Object.keys(map).forEach((key) => {
+            if (key.startsWith('seen_holiday_') && map[key]) {
+                safeStorage.setItem(key, 'true');
+            }
+        });
+        const packed = typeof raw === 'string' ? raw : JSON.stringify(map);
+        safeStorage.setItem(HOLIDAY_SEEN_MAP_KEY, packed);
+    } catch { /* ignore */ }
+}
 
 function pad2(n) {
     return String(n).padStart(2, '0');
@@ -70,7 +103,7 @@ export function getUpcomingUnseenHolidays(now = new Date()) {
             // Eve replaces week for this holiday — mark week seen so it cannot also fire.
             phase = 'eve';
             seenKey = `${SEEN_EVE_PREFIX}${key}_${y}`;
-            try { safeStorage.setItem(`${SEEN_WEEK_PREFIX}${key}_${y}`, 'true'); } catch { /* ignore */ }
+            persistHolidaySeenKey(`${SEEN_WEEK_PREFIX}${key}_${y}`);
         } else {
             phase = 'week';
             seenKey = `${SEEN_WEEK_PREFIX}${key}_${y}`;
@@ -194,12 +227,8 @@ export function maybeShowHolidayNotice() {
             const closeBtn = document.getElementById('holiday-notice-close');
             const dismiss = () => {
                 holidays.forEach((h) => {
-                    try {
-                        safeStorage.setItem(h.seenKey, 'true');
-                        if (h.phase === 'eve') {
-                            safeStorage.setItem(`${SEEN_WEEK_PREFIX}${h.key}_${h.year}`, 'true');
-                        }
-                    } catch { /* ignore */ }
+                    persistHolidaySeenKey(h.seenKey);
+                    if (h.phase === 'eve') persistHolidaySeenKey(`${SEEN_WEEK_PREFIX}${h.key}_${h.year}`);
                 });
                 closeSmoothModal('holiday-notice-modal');
             };

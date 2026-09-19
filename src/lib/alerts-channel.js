@@ -243,12 +243,27 @@ export function hydrateAlertPosterImages(root = typeof document !== 'undefined' 
         img.decoding = 'async';
         const host = img.closest('[data-alert-lightbox]');
         const originalSrc = host?.getAttribute('data-alert-lightbox') || img.getAttribute('src') || '';
+        const rememberObjectUrl = (blob) => {
+            if (!blob || !host) return '';
+            try {
+                const prev = host.getAttribute('data-alert-object-url') || '';
+                const obj = URL.createObjectURL(blob);
+                host.setAttribute('data-alert-object-url', obj);
+                if (prev && prev.startsWith('blob:') && prev !== obj) {
+                    try { URL.revokeObjectURL(prev); } catch { /* ignore */ }
+                }
+                return obj;
+            } catch {
+                return '';
+            }
+        };
         resolveCachedAlertImage(originalSrc).then((cached) => {
             if (!cached) return;
-            if (img.dataset.ntPosterRevealed === '1' || img.naturalWidth > 0) return;
             return cached.blob().then((blob) => {
+                const obj = rememberObjectUrl(blob);
+                if (!obj) return;
                 if (img.dataset.ntPosterRevealed === '1' || img.naturalWidth > 0) return;
-                img.src = URL.createObjectURL(blob);
+                img.src = obj;
             });
         }).catch(() => {});
         const reveal = () => {
@@ -259,6 +274,8 @@ export function hydrateAlertPosterImages(root = typeof document !== 'undefined' 
             img.classList.add('opacity-100');
             host?.querySelector('.nt-alert-poster-loading')?.classList.add('hidden');
             host?.setAttribute('data-alert-ready', '1');
+            const live = img.currentSrc || img.src || '';
+            if (live.startsWith('blob:')) host?.setAttribute('data-alert-object-url', live);
             if (originalSrc) {
                 cacheAlertImages({
                     id: host?.getAttribute('data-alert-notice-id') || '',
@@ -1076,7 +1093,7 @@ function bindAlertsChannelOnce() {
             e.preventDefault();
             if (lightbox.getAttribute('data-alert-ready') !== '1') return;
             const src = lightbox.getAttribute('data-alert-lightbox');
-            if (src && typeof window.openLightbox === 'function') window.openLightbox(src);
+            if (src && typeof window.openLightbox === 'function') window.openLightbox(src, lightbox);
             return;
         }
         const jump = e.target.closest?.('[data-alert-jump]');

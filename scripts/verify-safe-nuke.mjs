@@ -103,6 +103,8 @@ assert(shouldDeleteCacheForPolicy(ALERT_IMAGE_CACHE, factory), 'factory reset re
 assert(!VOLATILE_FLUSH_PROTECTED_KEYS.includes(ALERT_IMAGE_INDEX_KEY), 'alert image index is not a protected localStorage key');
 assert(!VOLATILE_FLUSH_PROTECTED_PREFIXES.some((prefix) => ALERT_IMAGE_INDEX_KEY.startsWith(prefix)), 'alert image index is not under a protected prefix');
 assert(!isProtectedVolatileKey(ALERT_IMAGE_INDEX_KEY), 'alert image index is flushed on nuke');
+assert(isProtectedVolatileKey('nt_holiday_seen_map_v1'), 'holiday dismiss map survives volatile flush');
+assert(isProtectedVolatileKey('seen_holiday_week_09-24_2026'), 'holiday week seen keys survive volatile flush');
 
 assert(FORCE_UPDATE_REQUIRED === true, 'FORCE_UPDATE_REQUIRED is true for this build');
 
@@ -123,6 +125,7 @@ assert(hub.includes('installIncomingServiceWorker'), 'Check for Updates download
 assert(hub.includes('Kept your saved app. Try again on a stronger connection.'), 'failed Check for Updates keeps the cached app');
 assert(hub.includes('skipNetworkPreflight'), 'confirmed Check for Updates can skip only the check_updates probe');
 assert(!hub.includes('skipNetworkPreflight') || hub.includes('policy.systemKillswitch || (source === \'check_updates\' && !skipNetworkPreflight)'), 'killswitch never skips the network preflight');
+assert(hub.includes("source !== 'system_killswitch'"), 'admin NUKE never resets look or flushes prefs');
 assert(update.indexOf('await activateWaitingServiceWorker()') < update.indexOf("hardReloadWithCacheBust('version_enforce')"), 'forced update activates waiting SW before reload');
 assert(update.includes("window.addEventListener('online', attempt)"), 'forced update retries immediately when online');
 assert(update.includes("document.visibilityState === 'visible'"), 'forced update defers until visible');

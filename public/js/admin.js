@@ -2150,7 +2150,8 @@ const Admin = {
                 e.stopPropagation();
                 if (poster.getAttribute('data-alert-ready') !== '1') return;
                 const src = poster.getAttribute('data-alert-lightbox');
-                if (src && Admin.openLightbox) Admin.openLightbox(src);
+                if (src && typeof window.openLightbox === 'function') window.openLightbox(src, poster);
+                else if (src && Admin.openLightbox) Admin.openLightbox(src);
                 return;
             }
             const chip = e.target.closest?.('[data-inbox-react]');
@@ -17364,26 +17365,17 @@ const Admin = {
                             delta variance, missing coordinates, junk leftover rows (a lone 12 or 7.20), day mismatches, and more.
                         </p>
 
-                        <div class="grid grid-cols-2 gap-2">
-                            <div>
-                                <label class="block text-[10px] font-bold text-violet-800 dark:text-violet-300 uppercase mb-1">Region</label>
-                                <select id="sched-qa-region" class="w-full h-10 px-2 rounded-lg bg-white dark:bg-gray-800 border border-violet-200 dark:border-violet-800/50 text-xs text-gray-900 dark:text-white focus:ring-2 focus:ring-violet-500 outline-none">
-                                    <option value="CURRENT">Active region</option>
-                                    <option value="GP">Gauteng</option>
-                                    <option value="WC">Western Cape</option>
-                                    <option value="KZN">KwaZulu-Natal</option>
-                                    <option value="EC">Eastern Cape</option>
-                                </select>
-                            </div>
-                            <div>
-                                <label class="block text-[10px] font-bold text-violet-800 dark:text-violet-300 uppercase mb-1">Source</label>
-                                <select id="sched-qa-source" class="w-full h-10 px-2 rounded-lg bg-white dark:bg-gray-800 border border-violet-200 dark:border-violet-800/50 text-xs text-gray-900 dark:text-white focus:ring-2 focus:ring-violet-500 outline-none">
-                                    <option value="FIREBASE" selected>Firebase</option>
-                                    <option value="CLOUDFLARE">Cloudflare</option>
-                                    <option value="GITHUB">GitHub CDN</option>
-                                    <option value="RAM">RAM cache</option>
-                                </select>
-                            </div>
+                        <p class="text-[9px] text-violet-700 dark:text-violet-300 font-medium leading-snug">
+                            Uses the Target Region (Matrix &amp; Scan) control above.
+                        </p>
+                        <div>
+                            <label class="block text-[10px] font-bold text-violet-800 dark:text-violet-300 uppercase mb-1">Source</label>
+                            <select id="sched-qa-source" class="w-full h-10 px-2 rounded-lg bg-white dark:bg-gray-800 border border-violet-200 dark:border-violet-800/50 text-xs text-gray-900 dark:text-white focus:ring-2 focus:ring-violet-500 outline-none">
+                                <option value="FIREBASE" selected>Firebase</option>
+                                <option value="CLOUDFLARE">Cloudflare</option>
+                                <option value="GITHUB">GitHub CDN</option>
+                                <option value="RAM">RAM cache</option>
+                            </select>
                         </div>
 
                         <div class="relative z-30" id="sched-qa-filter-wrap">
@@ -18553,7 +18545,7 @@ const Admin = {
 
         if (runBtn) {
             runBtn.onclick = async () => {
-                const regionSelect = document.getElementById('sched-qa-region');
+                const regionSelect = document.getElementById('diag-region-select');
                 const sourceSelect = document.getElementById('sched-qa-source');
                 const scanRegion = regionSelect?.value || 'CURRENT';
                 const scanSourceRaw = sourceSelect?.value || 'FIREBASE';

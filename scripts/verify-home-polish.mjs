@@ -633,6 +633,7 @@ assert(refuseDisplayName('Enock').ok === true, 'ordinary first names are still a
     assert(plannerModals.includes('id="alert-image-lightbox-close"') && plannerModals.indexOf('alert-image-lightbox-stage') < plannerModals.indexOf('alert-image-lightbox-close'), 'Close sits after the image stage');
     assert(plannerModals.includes('shrink-0') && plannerModals.includes('pb-[max(1rem,env(safe-area-inset-bottom))]'), 'Close stays in a bottom bar');
     assert(uiJs.includes('resolveLightboxDisplaySrc') && uiJs.includes('currentSrc'), 'full view reuses the already-decoded poster');
+    assert(uiJs.includes('snapshotDecodedImage'), 'full view can snapshot the decoded poster');
     assert(!/img\.removeAttribute\('src'\);\s*img\.alt = 'Image Preview'/.test(uiJs), 'openLightbox does not clear src before showing');
     assert(uiJs.includes('blockPageZoom') && uiJs.includes('gesturestart'), 'alert preview pinch does not zoom the Close chrome');
     const adsJs = readFileSync(new URL('../src/lib/clever-ads.js', import.meta.url), 'utf8');

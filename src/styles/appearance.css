@@ -1011,6 +1011,21 @@ body.nav-bottom:not(.nt-immersive) #sidenav {
   color: var(--nt-primary-fg) !important;
   border-color: transparent !important;
 }
+#close-timetable-footer-btn,
+#close-help-btn-2,
+#fare-modal-close-btn {
+  background-color: var(--nt-primary) !important;
+  color: var(--nt-primary-fg) !important;
+  border-color: transparent !important;
+}
+#planner-train-sheet-fare {
+  background-color: #ffffff !important;
+  color: #1e3a8a !important;
+}
+html.dark #planner-train-sheet-fare {
+  background-color: #ffffff !important;
+  color: #1e3a8a !important;
+}
 .nt-alert-card {
   background-color: var(--nt-surface) !important;
   border-color: var(--nt-border);
@@ -1173,9 +1188,9 @@ html[data-colour-pack="earthy"] #notice-bell.nt-bell-info {
 }
 
 .nt-planner-map-btn {
-  background-color: color-mix(in srgb, var(--nt-primary, #2563eb) 16%, var(--nt-surface, #fff)) !important;
-  color: var(--nt-primary, #1d4ed8) !important;
-  border-color: color-mix(in srgb, var(--nt-primary, #2563eb) 32%, var(--nt-border, #e5e7eb)) !important;
+  background-color: color-mix(in srgb, var(--nt-text) 10%, var(--nt-surface, #fff)) !important;
+  color: var(--nt-text) !important;
+  border-color: var(--nt-border, #e5e7eb) !important;
 }
 
 /* One 2rem row for Back, weekday, and Share. Same text-xs / weight / box

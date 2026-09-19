@@ -2,6 +2,10 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin, Dev Hub, Alerts, Trains near me, community chat, or other hidden-test work. No emoji and no em dashes in What’s New. Keep `APP_VERSION`, `package.json` `version`, and `public/app-version.json` aligned on each release. Changelog / What’s New may be skipped, or the heading may be only **no release notes.** Every bump must add `ADMIN_CHANGELOG[APP_VERSION]` (System Health Build notes).
 
+## V9_09.19.11 — no release notes
+
+Schedule QA follows the shared admin target region. Alert full view reuses the loaded poster. Earthy modal Close/Got it ink matches Alerts. Classic dark train-sheet fare chip stays readable. Admin NUKE keeps theme pack, light/dark, and holiday reminder seen state. No What’s New.
+
 ## V9_09.19.10 — no release notes
 
 GitHub schedule dump replaced with the operator export. SEO route pages and the fallback waterfall read that file. No What’s New.

@@ -622,13 +622,13 @@ export async function performHardCacheClear(source = 'modal_confirm', { latestVe
                 if (shouldDeleteCacheForPolicy(name, policy)) await caches.delete(name);
             }
         }
-        if (policy.flushLocalStorage && typeof safeStorage.flushVolatile === 'function') {
+        if (policy.flushLocalStorage && source !== 'system_killswitch' && typeof safeStorage.flushVolatile === 'function') {
             safeStorage.flushVolatile();
-        } else if (policy.flushLocalStorage) {
+        } else if (policy.flushLocalStorage && source !== 'system_killswitch') {
             safeStorage.removeItem(`full_db_${$userRegion.get() || 'GP'}`);
             safeStorage.removeItem('app_installed_version');
         }
-        if (policy.resetLook) resetLookToClassicLight();
+        if (policy.resetLook && source !== 'system_killswitch') resetLookToClassicLight();
         if (policy.deleteScheduleDatabase && window.indexedDB) {
             await new Promise((resolve) => {
                 try {
@@ -1407,7 +1407,7 @@ function bindInboxThreadReactions(host) {
             e.preventDefault();
             if (poster.getAttribute('data-alert-ready') !== '1') return;
             const src = poster.getAttribute('data-alert-lightbox');
-            if (src && typeof window.openLightbox === 'function') window.openLightbox(src);
+            if (src && typeof window.openLightbox === 'function') window.openLightbox(src, poster);
             return;
         }
         const chip = e.target.closest?.('[data-inbox-react]');

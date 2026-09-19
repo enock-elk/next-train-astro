@@ -389,6 +389,12 @@ assert(ridePingsSource.includes('reusableGeoFix'), 'presence share reuses the fu
 assert(mapPageSource.includes('nt-live-train-oval'), 'map page styles the merged ovals');
 assert(mapPageSource.includes('border-radius: 999px'), 'map marker uses a capsule oval');
 assert(mapAppSource.includes('interpolateRideMarkerLatLng'), 'remote map marker interpolates bounded received corrections');
+assert(mapAppSource.includes('interpolateAlongRidePath'), 'train interpolation follows the painted rail, not a Euclidean jump');
+assert(mapAppSource.includes('STATION_APPROACH_M'), 'trains slow approaching a station');
+assert(mapAppSource.includes('STATION_DWELL_SEC'), 'trains dwell when GPS is at a station');
+assert(mapAppSource.includes('source of truth'), 'animation stays tied to commuter GPS fixes');
+assert(mapAppSource.includes('paused, {'), 'own share still glides; only a paused ping snaps');
+assert(!mapAppSource.includes('mine || paused'), 'own share is no longer snapped instantly');
 assert(mapAppSource.includes('let marker = rideTrainMarkers[trainId]'), 'train markers are retained by train id');
 assert(mapAppSource.includes('readableTrainLabelDeg'), 'train number has a dedicated readable angle');
 assert(mapAppSource.includes('readable > 90') && mapAppSource.includes('readable < -90'), 'train number is bounded to -90 through 90 degrees');

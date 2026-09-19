@@ -132,9 +132,11 @@ import { withBase } from '../lib/config.js';
                             modal.classList.add('hidden');
                             modal.classList.remove('opacity-0');
                             revealChrome();
+                            try { window.dispatchEvent(new CustomEvent('nt-welcome-closed')); } catch (e) {}
                         }, 300);
                     } else {
                         revealChrome();
+                        try { window.dispatchEvent(new CustomEvent('nt-welcome-closed')); } catch (e) {}
                     }
                     
                     // 4. Trigger base schedule fetch

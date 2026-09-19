@@ -157,7 +157,7 @@ assert(called.length === 1 && called[0] === true, 'startup overwrite still uses 
 assert(await geolocationAlreadyGranted({ state: 'granted', remembered: false, installed: false }) === true, 'Permissions granted locates');
 assert(await geolocationAlreadyGranted({ state: 'denied', remembered: true, installed: true }) === false, 'denied never locates');
 assert(await geolocationAlreadyGranted({ state: 'prompt', remembered: false, installed: false }) === false, 'browser prompt does not locate');
-assert(await geolocationAlreadyGranted({ state: 'prompt', remembered: false, installed: true }) === false, 'installed prompt does not locate (would open a sheet)');
+assert(await geolocationAlreadyGranted({ state: 'prompt', remembered: false, installed: true }) === true, 'installed PWA/TWA may locate even when Permissions API says prompt');
 assert(await geolocationAlreadyGranted({ state: 'prompt', remembered: true, installed: false }) === true, 'remembered grant locates when query is prompt');
 assert(await geolocationAlreadyGranted({ state: 'unknown', remembered: false, installed: true }) === true, 'installed PWA/TWA with unknown Permissions API may locate');
 assert(await geolocationAlreadyGranted({ state: 'unknown', remembered: false, installed: false }) === false, 'browser tab with unknown permission does not locate');
@@ -207,10 +207,14 @@ const locateSrc = readFileSync(new URL('../src/lib/auto-locate.js', import.meta.
 assert(locateSrc.includes("name: 'geolocation'"), 'permission query is geolocation');
 assert(locateSrc.includes("state === 'granted'"), 'granted permission locates');
 assert(locateSrc.includes("state === 'denied'"), 'denied permission never locates');
-assert(locateSrc.includes("installed && state === 'unknown'"), 'installed apps may locate when Permissions API is missing');
+assert(locateSrc.includes("installed && state !== 'denied'"), 'installed apps locate unless OS geolocation is denied');
 assert(locateSrc.includes("addEventListener('pageshow'"), 'pageshow retriggers auto-locate after PWA restore');
+assert(locateSrc.includes("nt-welcome-closed"), 'welcome close retriggers auto-locate');
 assert(!/navigator\.geolocation\.getCurrentPosition/.test(locateSrc), 'auto-locate helper never calls getCurrentPosition itself');
 assert(locateSrc.includes("tab === 'next-train' || tab === 'trip-planner'"), 'tab trigger includes Trip Planner');
+
+const welcomeSrc = readFileSync(new URL('../src/components/WelcomeModal.astro', import.meta.url), 'utf8');
+assert(welcomeSrc.includes('nt-welcome-closed'), 'finishing Welcome dispatches auto-locate kick');
 
 function fakeDoc({
     ntListHidden = true,
@@ -251,6 +255,8 @@ assert(fromStationIsClaimed(fakeDoc()) === false, 'empty From fields are unclaim
 assert(fromStationIsClaimed(fakeDoc({ stationValue: 'PRETORIA' })) === true, 'Next Train station is claimed');
 assert(fromStationIsClaimed(fakeDoc({ plannerFromResolved: 'PRETORIA' })) === true, 'planner From resolved value is claimed');
 assert(fromStationIsClaimed(fakeDoc({ plannerFromSearch: 'pret' })) === true, 'typed From text is claimed');
+assert(fromStationIsClaimed(fakeDoc({ plannerFrom: 'PRETORIA' }), { nextTrainActive: true, plannerActive: false }) === false, 'planner From leftover does not claim the Next Train station');
+assert(fromStationIsClaimed(fakeDoc({ stationValue: 'PRETORIA' }), { nextTrainActive: false, plannerActive: true }) === false, 'Next Train station leftover does not claim planner From');
 assert(shouldApplySilentLocate(fakeDoc()) === true, 'silent locate may apply to empty idle fields');
 assert(shouldApplySilentLocate(fakeDoc({ ntListHidden: false })) === false, 'silent locate does not apply while the list is open');
 assert(shouldApplySilentLocate(fakeDoc({ stationValue: 'PRETORIA' })) === false, 'silent locate does not apply over a chosen station');
@@ -261,7 +267,11 @@ assert(liveBoard.includes('shouldApplySilentLocate'), 'GPS callback re-checks pi
 assert(liveBoard.includes('rememberGeolocationGranted'), 'successful GPS remembers the OS grant');
 assert(liveBoard.includes('disarmStartupLocateOverwrite'), 'a successful apply spends the one-shot startup overwrite');
 assert(liveBoard.includes('enableHighAccuracy: !isAuto'), 'startup auto-locate uses a fused GPS fix');
-assert(liveBoard.includes("showToast(`Found: ${stationName.replace(' STATION', '')} (${distStr}km)`, \"success\")"), 'Found toast uses the green success style with station and distance');
+assert(liveBoard.includes('maximumAge: isAuto ? 60000 : 0'), 'startup auto-locate may reuse a recent OS fix');
+assert(liveBoard.includes('peekLastGeoFix'), 'startup auto-locate reuses an in-app fused pin when one exists');
+assert(liveBoard.includes('noteAutoLocateFailed'), 'a failed silent locate can retry instead of waiting two minutes');
+assert(liveBoard.includes("showToast(`Found: ${stationName.replace(' STATION', '')} (${distStr}km)`, \"success\", 2500, '', { force: true })"), 'Found toast uses the green success style with station and distance');
+assert(liveBoard.includes('{ force: true }'), 'Found toast is not swallowed by the Locating rate-limit');
 assert(!/if\s*\(\s*!isAuto\s*\)\s*\{\s*showToast\(`Found:/.test(liveBoard), 'startup auto-locate shows the same Found toast as the locate button');
 assert(/if\s*\(\s*!isAuto\s*\)\s*\{\s*showToast\("Locating nearest station/.test(liveBoard), 'Locating toast stays tap-only');
 assert(liveBoard.includes('resolveStationLatLon'), 'live-board locate uses weekday coord fallback');

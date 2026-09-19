@@ -24,7 +24,14 @@ import {
 import { showToast, triggerHaptic, openSmoothModal, closeSmoothModal } from './ui.js';
 import { routeAllowsDualHubOptions } from './transfer-card.js';
 import { trackAnalyticsEvent } from './analytics.js';
-import { shouldApplySilentLocate, rememberGeolocationGranted, disarmStartupLocateOverwrite } from './auto-locate.js';
+import {
+    shouldApplySilentLocate,
+    rememberGeolocationGranted,
+    disarmStartupLocateOverwrite,
+    noteAutoLocateApplied,
+    noteAutoLocateFailed,
+} from './auto-locate.js';
+import { peekLastGeoFix, reusableGeoFix } from './geo-watch.js';
 import { resolveHolidayDayType } from './holiday-approvals.js';
 import { isAdminAuthed } from './admin-chrome.js';
 import {
@@ -1238,140 +1245,157 @@ export function findConnections(arrivalTimeAtTransfer, schedule, connectionStati
 }
 
 export function findNearestStation(isAuto = false) {
+    const stopLocateSpin = () => {
+        if (isAuto) return;
+        const icon = locateBtnEl()?.querySelector('svg');
+        if (icon) icon.classList.remove('spinning', 'animate-spin');
+    };
+
+    const applyFromCoords = (userLat, userLon) => {
+        let candidates = [];
+        const routeId = getCurrentRouteId();
+        const weekdaySheets = weekdaySheetsForRoute(
+            ROUTES[routeId],
+            getSchedules(),
+            getFullDatabase(),
+        );
+        for (const [stationName, coords] of Object.entries(getGlobalStationIndex())) {
+            const onRoute = coords?.routes instanceof Set
+                ? coords.routes.has(routeId)
+                : Array.isArray(coords?.routes) && coords.routes.includes(routeId);
+            if (!onRoute) continue;
+            const ll = resolveStationLatLon(stationName, coords, weekdaySheets);
+            if (!ll) continue;
+            const dist = getDistanceFromLatLonInKm(userLat, userLon, ll.lat, ll.lon);
+            if (!Number.isFinite(dist)) continue;
+            candidates.push({ stationName, dist });
+        }
+
+        candidates.sort((a, b) => a.dist - b.dist);
+
+        if (candidates.length === 0) {
+            if (isAuto) noteAutoLocateFailed();
+            else {
+                showToast("No stations on this route found in database.", "error");
+                stopLocateSpin();
+            }
+            return;
+        }
+
+        const nearest = candidates[0];
+
+        if (isAuto && !shouldApplySilentLocate()) return;
+        rememberGeolocationGranted();
+
+        if (nearest.dist <= MAX_RADIUS_KM) {
+            const stationName = nearest.stationName;
+            const distStr = nearest.dist.toFixed(1);
+
+            let matched = false;
+            const options = (stationSelectEl() && stationSelectEl().options) || [];
+
+            for (let i = 0; i < options.length; i++) {
+                if (normalizeStationName(options[i].value) === normalizeStationName(stationName)) {
+                    if (stationSelectEl()) {
+                        stationSelectEl().selectedIndex = i;
+                        stationSelectEl().value = options[i].value;
+                    }
+                    matched = true;
+                    break;
+                }
+            }
+
+            if (matched) {
+                const selectedVal = stationSelectEl()?.value || '';
+                if (typeof window.syncPlannerFromMain === 'function') {
+                    window.syncPlannerFromMain(selectedVal);
+                }
+
+                const searchInput = document.getElementById('station-search-input');
+                if (searchInput) {
+                    searchInput.value = selectedVal.replace(/ STATION/g, '');
+                    searchInput.dataset.resolvedValue = selectedVal;
+                }
+
+                findNextTrains();
+                disarmStartupLocateOverwrite();
+                noteAutoLocateApplied();
+                // force: Locating toast (1.2s global gap) must not swallow Found on the board.
+                showToast(`Found: ${stationName.replace(' STATION', '')} (${distStr}km)`, "success", 2500, '', { force: true });
+
+                try {
+                    window.dispatchEvent(new CustomEvent('nt-locate-fix', {
+                        detail: {
+                            lat: userLat,
+                            lon: userLon,
+                            station: stationName,
+                            isAuto: !!isAuto,
+                        },
+                    }));
+                } catch { /* ignore */ }
+
+                if (typeof trackAnalyticsEvent === 'function') {
+                    trackAnalyticsEvent('auto_locate_success', {
+                        station: stationName.replace(' STATION', ''),
+                        route_id: getCurrentRouteId(),
+                        distance_km: parseFloat(distStr),
+                        is_background_check: isAuto
+                    });
+                }
+            } else if (isAuto) {
+                noteAutoLocateFailed();
+            } else {
+                showToast("Station found nearby, but not available in dropdown.", "error");
+            }
+        } else if (isAuto) {
+            noteAutoLocateFailed();
+        } else {
+            showToast(`No stations on this route within ${MAX_RADIUS_KM}km.`, "error");
+        }
+
+        stopLocateSpin();
+    };
+
     if (!navigator.geolocation) {
         if (!isAuto) showToast("Geolocation is not supported by your browser.", "error");
         if (!isAuto) if (stationSelectEl()) stationSelectEl().value = "";
+        if (isAuto) noteAutoLocateFailed();
         return;
     }
-    
+
     if (!isAuto) {
         showToast("Locating nearest station...", "info", 4000);
         const icon = locateBtnEl()?.querySelector('svg');
-        // SPA uses `.spinning`; also add Tailwind `animate-spin` so motion always shows
         if (icon) icon.classList.add('spinning', 'animate-spin');
     }
 
+    if (isAuto) {
+        try {
+            const kept = reusableGeoFix(peekLastGeoFix(), Date.now(), 60_000);
+            if (kept && Number.isFinite(kept.lat) && Number.isFinite(kept.lng)) {
+                applyFromCoords(kept.lat, kept.lng);
+                return;
+            }
+        } catch { /* still ask the OS */ }
+    }
+
     navigator.geolocation.getCurrentPosition(
-        async (position) => {
-            const userLat = position.coords.latitude;
-            const userLon = position.coords.longitude;
-            
-            let candidates = [];
-            const routeId = getCurrentRouteId();
-            const weekdaySheets = weekdaySheetsForRoute(
-                ROUTES[routeId],
-                getSchedules(),
-                getFullDatabase(),
-            );
-            for (const [stationName, coords] of Object.entries(getGlobalStationIndex())) {
-                const onRoute = coords?.routes instanceof Set
-                    ? coords.routes.has(routeId)
-                    : Array.isArray(coords?.routes) && coords.routes.includes(routeId);
-                if (!onRoute) continue;
-                const ll = resolveStationLatLon(stationName, coords, weekdaySheets);
-                if (!ll) continue;
-                const dist = getDistanceFromLatLonInKm(userLat, userLon, ll.lat, ll.lon);
-                if (!Number.isFinite(dist)) continue;
-                candidates.push({ stationName, dist });
-            }
-            
-            candidates.sort((a, b) => a.dist - b.dist);
-
-            if (candidates.length === 0) {
-                 if (!isAuto) {
-                     showToast("No stations on this route found in database.", "error");
-                     const icon = locateBtnEl()?.querySelector('svg');
-                     if (icon) icon.classList.remove('spinning', 'animate-spin');
-                 }
-                 return;
-            }
-
-            const nearest = candidates[0];
-
-            if (isAuto && !shouldApplySilentLocate()) return;
-            rememberGeolocationGranted();
-            
-            if (nearest.dist <= MAX_RADIUS_KM) {
-                const stationName = nearest.stationName;
-                const distStr = nearest.dist.toFixed(1);
-
-                let matched = false;
-                const options = (stationSelectEl() && stationSelectEl().options);
-                
-                for (let i = 0; i < options.length; i++) {
-                    if (normalizeStationName(options[i].value) === normalizeStationName(stationName)) {
-                        if (stationSelectEl()) {
-                            stationSelectEl().selectedIndex = i;
-                            stationSelectEl().value = options[i].value;
-                        }
-                        matched = true;
-                        break;
-                    }
-                }
-
-                if (matched) {
-                    const selectedVal = stationSelectEl()?.value || '';
-                    if (typeof window.syncPlannerFromMain === 'function') {
-                        window.syncPlannerFromMain(selectedVal);
-                    }
-
-                    // GUARDIAN V6.21: Unified Dataset Sync logic absorbed from UI
-                    const searchInput = document.getElementById('station-search-input');
-                    if (searchInput) {
-                        searchInput.value = selectedVal.replace(/ STATION/g, '');
-                        searchInput.dataset.resolvedValue = selectedVal;
-                    }
-                    
-                    findNextTrains();
-                    disarmStartupLocateOverwrite();
-                    showToast(`Found: ${stationName.replace(' STATION', '')} (${distStr}km)`, "success");
-
-                    try {
-                        window.dispatchEvent(new CustomEvent('nt-locate-fix', {
-                            detail: {
-                                lat: userLat,
-                                lon: userLon,
-                                station: stationName,
-                                isAuto: !!isAuto,
-                            },
-                        }));
-                    } catch { /* ignore */ }
-
-                    // GUARDIAN PHASE 1 (ANALYTICS): Inject 'auto_locate_success' event tracking
-                    if (typeof trackAnalyticsEvent === 'function') {
-                        trackAnalyticsEvent('auto_locate_success', {
-                            station: stationName.replace(' STATION', ''),
-                            route_id: getCurrentRouteId(),
-                            distance_km: parseFloat(distStr),
-                            is_background_check: isAuto
-                        });
-                    }
-                    
-                } else {
-                     if (!isAuto) showToast("Station found nearby, but not available in dropdown.", "error");
-                }
-            } else {
-                if (!isAuto) showToast(`No stations on this route within ${MAX_RADIUS_KM}km.`, "error");
-            }
-            
-            if (!isAuto) {
-                const icon = locateBtnEl()?.querySelector('svg');
-                if (icon) icon.classList.remove('spinning', 'animate-spin');
-            }
+        (position) => {
+            applyFromCoords(position.coords.latitude, position.coords.longitude);
         },
         (error) => {
-            if (!isAuto) {
-                let msg = "Unable to retrieve location.";
-                if (error.code === 1) msg = "Location permission denied.";
-                // 🛡️ GUARDIAN UX FIX: Handle timeout specifically
-                if (error.code === 3) msg = "Location request timed out."; 
-                showToast(msg, "error");
-                if (stationSelectEl()) stationSelectEl().value = "";
-                const icon = locateBtnEl()?.querySelector('svg');
-                if (icon) icon.classList.remove('spinning', 'animate-spin');
+            if (isAuto) {
+                noteAutoLocateFailed();
+                return;
             }
+            let msg = "Unable to retrieve location.";
+            if (error.code === 1) msg = "Location permission denied.";
+            if (error.code === 3) msg = "Location request timed out.";
+            showToast(msg, "error");
+            if (stationSelectEl()) stationSelectEl().value = "";
+            stopLocateSpin();
         },
-        { timeout: 8000, enableHighAccuracy: !isAuto }
+        { timeout: isAuto ? 15000 : 8000, enableHighAccuracy: !isAuto, maximumAge: isAuto ? 60000 : 0 }
     );
 }
 

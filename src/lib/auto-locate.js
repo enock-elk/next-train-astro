@@ -1,22 +1,52 @@
 /**
  * Silent nearest-station locate on the live board and Trip Planner From field.
- * Never opens a permission prompt. Coordinates stay on-device (findNearestStation).
+ * Coordinates stay on-device (findNearestStation).
  *
- * Installed PWA / Play Store TWA: Permissions API is often missing or stuck on
- * "prompt" even after the OS already granted location. Those clients may locate
- * on startup and may refresh a restored last-station once. A Chrome tab still
- * requires query=granted and will not overwrite a station the commuter set.
+ * Installed PWA / Play Store TWA eagerly request a fused fix on startup (the OS
+ * sheet appears only if location was never allowed). Permissions API is often
+ * missing or stuck on "prompt" after the OS already granted location. A Chrome
+ * tab still requires query=granted (or nt_geo_granted) and will not overwrite a
+ * station the commuter set, except the one-shot installed startup refresh.
  */
 import { $currentRouteId } from '../store.js';
 
 export const AUTO_LOCATE_DEBOUNCE_MS = 120_000;
+export const AUTO_LOCATE_RETRY_MS = 4_000;
+export const AUTO_LOCATE_MAX_FAILS = 3;
 export const GEO_GRANTED_KEY = 'nt_geo_granted';
 
 let lastAutoLocateAt = 0;
+let lastAutoLocateFailAt = 0;
+let autoLocateFailCount = 0;
+let autoLocateRetryTimer = 0;
 let startupOverwriteArmed = true;
 
 export function resetAutoLocateDebounce() {
     lastAutoLocateAt = 0;
+    lastAutoLocateFailAt = 0;
+}
+
+export function noteAutoLocateApplied() {
+    lastAutoLocateAt = Date.now();
+    lastAutoLocateFailAt = 0;
+    autoLocateFailCount = 0;
+    if (autoLocateRetryTimer) {
+        clearTimeout(autoLocateRetryTimer);
+        autoLocateRetryTimer = 0;
+    }
+}
+
+export function noteAutoLocateFailed() {
+    lastAutoLocateAt = 0;
+    lastAutoLocateFailAt = Date.now();
+    autoLocateFailCount += 1;
+    if (autoLocateFailCount > AUTO_LOCATE_MAX_FAILS) return;
+    if (typeof window === 'undefined') return;
+    if (autoLocateRetryTimer) clearTimeout(autoLocateRetryTimer);
+    autoLocateRetryTimer = window.setTimeout(() => {
+        autoLocateRetryTimer = 0;
+        maybeAutoLocateBoard().catch(() => {});
+    }, AUTO_LOCATE_RETRY_MS);
 }
 
 export function resetStartupLocateOverwrite() {
@@ -86,12 +116,20 @@ export function stationPickerIsEngaged(doc = typeof document !== 'undefined' ? d
 }
 
 /** Next Train station or Trip Planner From already has a value (including leftover typed text). */
-export function fromStationIsClaimed(doc = typeof document !== 'undefined' ? document : null) {
+export function fromStationIsClaimed(doc = typeof document !== 'undefined' ? document : null, opts = {}) {
     if (!doc) return false;
-    if (fieldHasStation(doc.getElementById('station-select'))) return true;
-    if (fieldHasStation(doc.getElementById('station-search-input'))) return true;
-    if (fieldHasStation(doc.getElementById('planner-from'))) return true;
-    if (fieldHasStation(doc.getElementById('planner-from-search'))) return true;
+    const nextTrain = opts.nextTrainActive ?? nextTrainTabIsActive(doc);
+    const planner = opts.plannerActive ?? tripPlannerTabIsActive(doc);
+    const checkNt = nextTrain || (!nextTrain && !planner);
+    const checkPl = planner || (!nextTrain && !planner);
+    if (checkNt) {
+        if (fieldHasStation(doc.getElementById('station-select'))) return true;
+        if (fieldHasStation(doc.getElementById('station-search-input'))) return true;
+    }
+    if (checkPl) {
+        if (fieldHasStation(doc.getElementById('planner-from'))) return true;
+        if (fieldHasStation(doc.getElementById('planner-from-search'))) return true;
+    }
     return false;
 }
 
@@ -145,7 +183,9 @@ export async function geolocationPermissionState() {
 }
 
 /**
- * True when a silent getCurrentPosition will not open a permission prompt.
+ * True when startup/silent locate may call getCurrentPosition.
+ * Installed clients try unless OS geolocation is denied. Browser tabs stay
+ * granted-or-remembered so a regular tab does not open a permission sheet.
  * @param {{ state?: string, remembered?: boolean, installed?: boolean }} [opts]
  */
 export async function geolocationAlreadyGranted(opts = {}) {
@@ -155,8 +195,9 @@ export async function geolocationAlreadyGranted(opts = {}) {
     const remembered = opts.remembered != null ? !!opts.remembered : hasRememberedGeoGrant();
     if (remembered) return true;
     const installed = opts.installed != null ? !!opts.installed : isInstalledAppClient();
-    // iOS PWA and Play TWA often omit Permissions API (unknown) while OS location is on.
-    if (installed && state === 'unknown') return true;
+    // Installed PWA / Play TWA: Permissions API is often missing (unknown) or
+    // stuck on prompt after the OS already granted location. Eagerly try.
+    if (installed && state !== 'denied') return true;
     return false;
 }
 
@@ -166,7 +207,9 @@ export function shouldApplySilentLocate(doc = typeof document !== 'undefined' ? 
         disarmStartupLocateOverwrite();
         return false;
     }
-    if (!fromStationIsClaimed(doc)) return true;
+    const nextTrainActive = opts.nextTrainActive ?? nextTrainTabIsActive(doc);
+    const plannerActive = opts.plannerActive ?? tripPlannerTabIsActive(doc);
+    if (!fromStationIsClaimed(doc, { nextTrainActive, plannerActive })) return true;
     const installed = opts.installed != null ? !!opts.installed : isInstalledAppClient();
     const overwrite = opts.startupOverwrite != null ? !!opts.startupOverwrite : (startupOverwriteArmed && installed);
     return overwrite;
@@ -199,6 +242,7 @@ export function boardIsReadyForAutoLocate({
 export async function maybeAutoLocateBoard(opts = {}) {
     const now = Number(opts.now) || Date.now();
     if (now - lastAutoLocateAt < AUTO_LOCATE_DEBOUNCE_MS) return false;
+    if (lastAutoLocateFailAt && now - lastAutoLocateFailAt < AUTO_LOCATE_RETRY_MS) return false;
 
     const locate = opts.locate
         || (typeof window !== 'undefined' ? window.findNearestStation : null);
@@ -211,22 +255,27 @@ export async function maybeAutoLocateBoard(opts = {}) {
     const startupOverwrite = opts.startupOverwrite != null
         ? !!opts.startupOverwrite
         : (startupOverwriteArmed && installed && !pickerEngaged);
+    const nextTrainActive = opts.nextTrainActive ?? nextTrainTabIsActive(doc);
+    const plannerActive = opts.plannerActive ?? tripPlannerTabIsActive(doc);
     const ready = boardIsReadyForAutoLocate({
         welcomeActive: opts.welcomeActive ?? welcomeIsActive(doc),
         routeId: opts.routeId ?? $currentRouteId.get(),
-        nextTrainActive: opts.nextTrainActive ?? nextTrainTabIsActive(doc),
-        plannerActive: opts.plannerActive ?? tripPlannerTabIsActive(doc),
+        nextTrainActive,
+        plannerActive,
         visible: opts.visible ?? (typeof document === 'undefined' ? true : document.visibilityState === 'visible'),
         pickerEngaged,
-        fromAlreadySet: opts.fromAlreadySet ?? fromStationIsClaimed(doc),
+        fromAlreadySet: opts.fromAlreadySet ?? fromStationIsClaimed(doc, { nextTrainActive, plannerActive }),
         startupOverwrite,
     });
     if (!ready) return false;
 
-    const granted = opts.granted != null ? !!opts.granted : await geolocationAlreadyGranted({ installed });
-    if (!granted) return false;
-
     lastAutoLocateAt = now;
+    const granted = opts.granted != null ? !!opts.granted : await geolocationAlreadyGranted({ installed });
+    if (!granted) {
+        lastAutoLocateAt = 0;
+        return false;
+    }
+
     locate(true);
     return true;
 }
@@ -241,6 +290,7 @@ export function bindAutoLocateTriggers() {
         if (document.visibilityState === 'visible') kick();
     });
     window.addEventListener('pageshow', kick);
+    window.addEventListener('nt-welcome-closed', kick);
     window.addEventListener('nt-tab-changed', (e) => {
         const tab = e?.detail?.tab;
         if (tab === 'next-train' || tab === 'trip-planner') kick();

@@ -11,6 +11,7 @@ import {
     resetStartupLocateOverwrite,
     AUTO_LOCATE_DEBOUNCE_MS,
     GEO_GRANTED_KEY,
+    AUTO_LOCATE_PREF_KEY,
     stationPickerIsEngaged,
     fromStationIsClaimed,
     shouldApplySilentLocate,
@@ -18,6 +19,9 @@ import {
     isInstalledAppClient,
     rememberGeolocationGranted,
     hasRememberedGeoGrant,
+    autoLocatePrefEnabled,
+    setAutoLocatePref,
+    startupAutoLocateIsPending,
 } from '../src/lib/auto-locate.js';
 import {
     coordsFromTimetableSheets,
@@ -114,6 +118,12 @@ assert(called.length === 0, 'locate is not called without granted permission');
 assert(await maybeAutoLocateBoard({ ...readyOpts, granted: true }) === true, 'granted permission locates');
 assert(called.length === 1 && called[0] === true, 'findNearestStation(true) is used');
 assert(await maybeAutoLocateBoard({ ...readyOpts, granted: true, now: 1_000_000 + AUTO_LOCATE_DEBOUNCE_MS - 1 }) === false, 'debounce skips a second locate');
+assert(startupAutoLocateIsPending() === false, 'a successful startup locate consumes the session');
+assert(await maybeAutoLocateBoard({
+    ...readyOpts,
+    granted: true,
+    now: 1_000_000 + AUTO_LOCATE_DEBOUNCE_MS + 5,
+}) === false, 'later kicks do not auto-locate after startup');
 resetAutoLocateDebounce();
 called = [];
 assert(await maybeAutoLocateBoard({
@@ -153,6 +163,28 @@ assert(await maybeAutoLocateBoard({
     now: 6_000_000,
 }) === true, 'installed-app startup locates over a restored station');
 assert(called.length === 1 && called[0] === true, 'startup overwrite still uses findNearestStation(true)');
+
+resetAutoLocateDebounce();
+called = [];
+assert(await maybeAutoLocateBoard({
+    ...readyOpts,
+    granted: true,
+    prefEnabled: false,
+    now: 7_000_000,
+}) === false, 'Options off skips auto-locate');
+assert(called.length === 0, 'locate is not called when the setting is off');
+const prefMemory = new Map();
+const prefStorage = {
+    getItem: (k) => (prefMemory.has(k) ? prefMemory.get(k) : null),
+    setItem: (k, v) => { prefMemory.set(k, String(v)); },
+};
+assert(autoLocatePrefEnabled(prefStorage) === true, 'auto-locate defaults on');
+setAutoLocatePref(false, prefStorage);
+assert(prefStorage.getItem(AUTO_LOCATE_PREF_KEY) === '0', 'turning off stores nt_auto_locate=0');
+assert(autoLocatePrefEnabled(prefStorage) === false, 'stored off is readable');
+setAutoLocatePref(true, prefStorage);
+assert(prefStorage.getItem(AUTO_LOCATE_PREF_KEY) === '1', 'turning on stores nt_auto_locate=1');
+assert(autoLocatePrefEnabled(prefStorage) === true, 'stored on is readable');
 
 assert(await geolocationAlreadyGranted({ state: 'granted', remembered: false, installed: false }) === true, 'Permissions granted locates');
 assert(await geolocationAlreadyGranted({ state: 'denied', remembered: true, installed: true }) === false, 'denied never locates');
@@ -201,7 +233,9 @@ assert(!/latitude:|longitude:|coarseLat:/.test(accountSrc), 'account.js does not
 
 const board = readFileSync(new URL('../src/lib/live-board-ui.js', import.meta.url), 'utf8');
 assert(board.includes('maybeAutoLocateBoard'), 'live board kicks granted-only auto-locate');
-assert(board.includes('bindAutoLocateTriggers'), 'live board binds visibility and tab triggers');
+assert(board.includes('bindAutoLocateTriggers'), 'live board binds startup auto-locate triggers');
+assert(!/\$schedules\.subscribe[\s\S]{0,500}maybeAutoLocateBoard/.test(board), 'schedule load does not auto-locate');
+assert(!/\$currentRouteId\.subscribe[\s\S]{0,800}maybeAutoLocateBoard/.test(board), 'route change does not auto-locate');
 
 const locateSrc = readFileSync(new URL('../src/lib/auto-locate.js', import.meta.url), 'utf8');
 assert(locateSrc.includes("name: 'geolocation'"), 'permission query is geolocation');
@@ -211,7 +245,18 @@ assert(locateSrc.includes("installed && state !== 'denied'"), 'installed apps lo
 assert(locateSrc.includes("addEventListener('pageshow'"), 'pageshow retriggers auto-locate after PWA restore');
 assert(locateSrc.includes("nt-welcome-closed"), 'welcome close retriggers auto-locate');
 assert(!/navigator\.geolocation\.getCurrentPosition/.test(locateSrc), 'auto-locate helper never calls getCurrentPosition itself');
-assert(locateSrc.includes("tab === 'next-train' || tab === 'trip-planner'"), 'tab trigger includes Trip Planner');
+assert(!/visibilitychange/.test(locateSrc), 'visibility change does not auto-locate');
+assert(!/nt-tab-changed/.test(locateSrc), 'tab changes do not auto-locate');
+assert(locateSrc.includes('startupSessionActive'), 'auto-locate is one-shot per app start');
+assert(locateSrc.includes('AUTO_LOCATE_PREF_KEY'), 'Options pref can disable auto-locate');
+
+const hubSrc = readFileSync(new URL('../src/lib/hub.js', import.meta.url), 'utf8');
+assert(hubSrc.includes('settings-auto-locate-toggle'), 'Options wires the auto-locate toggle');
+assert(hubSrc.includes('setAutoLocatePref'), 'Options writes nt_auto_locate');
+
+const sidenavSrc = readFileSync(new URL('../src/components/Sidenav.astro', import.meta.url), 'utf8');
+assert(sidenavSrc.includes('id="settings-auto-locate-toggle"'), 'Options has Find nearest station');
+assert(sidenavSrc.includes('When the app opens'), 'auto-locate setting is startup-only copy');
 
 const welcomeSrc = readFileSync(new URL('../src/components/WelcomeModal.astro', import.meta.url), 'utf8');
 assert(welcomeSrc.includes('nt-welcome-closed'), 'finishing Welcome dispatches auto-locate kick');

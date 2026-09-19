@@ -605,6 +605,7 @@ export const VOLATILE_FLUSH_PROTECTED_KEYS = Object.freeze([
     'userProfile',
     'theme',
     'hapticsEnabled',
+    'nt_auto_locate',
     'userRegion',
     'navStyle',
     'colourPack',

@@ -2,11 +2,15 @@
  * Silent nearest-station locate on the live board and Trip Planner From field.
  * Coordinates stay on-device (findNearestStation).
  *
- * Installed PWA / Play Store TWA eagerly request a fused fix on startup (the OS
- * sheet appears only if location was never allowed). Permissions API is often
- * missing or stuck on "prompt" after the OS already granted location. A Chrome
- * tab still requires query=granted (or nt_geo_granted) and will not overwrite a
- * station the commuter set, except the one-shot installed startup refresh.
+ * Runs once per app start (init, Welcome close, or an unconsumed pageshow),
+ * never on later route / tab / visibility changes. Installed PWA / Play Store
+ * TWA eagerly request a fused fix on that startup pass (the OS sheet appears
+ * only if location was never allowed). Permissions API is often missing or
+ * stuck on "prompt" after the OS already granted location. A Chrome tab still
+ * requires query=granted (or nt_geo_granted) and will not overwrite a station
+ * the commuter set, except the one-shot installed startup refresh.
+ *
+ * Options → Find nearest station (default on) is stored as nt_auto_locate.
  */
 import { $currentRouteId } from '../store.js';
 
@@ -14,22 +18,54 @@ export const AUTO_LOCATE_DEBOUNCE_MS = 120_000;
 export const AUTO_LOCATE_RETRY_MS = 4_000;
 export const AUTO_LOCATE_MAX_FAILS = 3;
 export const GEO_GRANTED_KEY = 'nt_geo_granted';
+export const AUTO_LOCATE_PREF_KEY = 'nt_auto_locate';
 
 let lastAutoLocateAt = 0;
 let lastAutoLocateFailAt = 0;
 let autoLocateFailCount = 0;
 let autoLocateRetryTimer = 0;
 let startupOverwriteArmed = true;
+let startupSessionActive = true;
+let startupRetryAllowed = false;
+
+export function autoLocatePrefEnabled(storage = typeof localStorage !== 'undefined' ? localStorage : null) {
+    try {
+        const raw = storage?.getItem?.(AUTO_LOCATE_PREF_KEY);
+        if (raw == null || raw === '') return true;
+        return raw !== '0' && raw !== 'false';
+    } catch {
+        return true;
+    }
+}
+
+export function setAutoLocatePref(on, storage = typeof localStorage !== 'undefined' ? localStorage : null) {
+    try {
+        storage?.setItem?.(AUTO_LOCATE_PREF_KEY, on ? '1' : '0');
+    } catch { /* ignore */ }
+}
+
+export function consumeStartupAutoLocate() {
+    startupSessionActive = false;
+}
+
+export function startupAutoLocateIsPending() {
+    return startupSessionActive || startupRetryAllowed;
+}
 
 export function resetAutoLocateDebounce() {
     lastAutoLocateAt = 0;
     lastAutoLocateFailAt = 0;
+    autoLocateFailCount = 0;
+    startupSessionActive = true;
+    startupRetryAllowed = false;
 }
 
 export function noteAutoLocateApplied() {
     lastAutoLocateAt = Date.now();
     lastAutoLocateFailAt = 0;
     autoLocateFailCount = 0;
+    startupRetryAllowed = false;
+    consumeStartupAutoLocate();
     if (autoLocateRetryTimer) {
         clearTimeout(autoLocateRetryTimer);
         autoLocateRetryTimer = 0;
@@ -41,16 +77,19 @@ export function noteAutoLocateFailed() {
     lastAutoLocateFailAt = Date.now();
     autoLocateFailCount += 1;
     if (autoLocateFailCount > AUTO_LOCATE_MAX_FAILS) return;
+    startupRetryAllowed = true;
     if (typeof window === 'undefined') return;
     if (autoLocateRetryTimer) clearTimeout(autoLocateRetryTimer);
     autoLocateRetryTimer = window.setTimeout(() => {
         autoLocateRetryTimer = 0;
-        maybeAutoLocateBoard().catch(() => {});
+        maybeAutoLocateBoard({ retry: true }).catch(() => {});
     }, AUTO_LOCATE_RETRY_MS);
 }
 
 export function resetStartupLocateOverwrite() {
     startupOverwriteArmed = true;
+    startupSessionActive = true;
+    startupRetryAllowed = false;
 }
 
 export function disarmStartupLocateOverwrite() {
@@ -241,6 +280,9 @@ export function boardIsReadyForAutoLocate({
  */
 export async function maybeAutoLocateBoard(opts = {}) {
     const now = Number(opts.now) || Date.now();
+    if (!(opts.prefEnabled ?? autoLocatePrefEnabled())) return false;
+    const retry = opts.retry === true || startupRetryAllowed;
+    if (!startupSessionActive && !retry) return false;
     if (now - lastAutoLocateAt < AUTO_LOCATE_DEBOUNCE_MS) return false;
     if (lastAutoLocateFailAt && now - lastAutoLocateFailAt < AUTO_LOCATE_RETRY_MS) return false;
 
@@ -277,6 +319,8 @@ export async function maybeAutoLocateBoard(opts = {}) {
     }
 
     locate(true);
+    startupRetryAllowed = false;
+    consumeStartupAutoLocate();
     return true;
 }
 
@@ -284,15 +328,9 @@ export function bindAutoLocateTriggers() {
     if (typeof window === 'undefined' || window.__ntAutoLocateBound) return;
     window.__ntAutoLocateBound = true;
     const kick = () => {
+        if (!startupAutoLocateIsPending()) return;
         maybeAutoLocateBoard().catch(() => {});
     };
-    document.addEventListener('visibilitychange', () => {
-        if (document.visibilityState === 'visible') kick();
-    });
     window.addEventListener('pageshow', kick);
     window.addEventListener('nt-welcome-closed', kick);
-    window.addEventListener('nt-tab-changed', (e) => {
-        const tab = e?.detail?.tab;
-        if (tab === 'next-train' || tab === 'trip-planner') kick();
-    });
 }

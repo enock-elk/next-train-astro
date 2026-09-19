@@ -819,7 +819,6 @@ export function initLiveBoardUi() {
             findNextTrains();
             updateNextTrainView();
             updatePinUI();
-            maybeAutoLocateBoard().catch(() => {});
         }
     });
 
@@ -834,7 +833,6 @@ export function initLiveBoardUi() {
             populateStationList();
             findNextTrains();
             updateNextTrainView();
-            maybeAutoLocateBoard().catch(() => {});
         });
     });
 

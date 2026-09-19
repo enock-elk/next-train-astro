@@ -45,6 +45,7 @@ import {
     showToast, triggerHaptic, openSmoothModal, closeSmoothModal, canAutoOpenHomeNotices,
     hapticsAreEnabled, bindPasswordReveal
 } from './ui.js';
+import { autoLocatePrefEnabled, setAutoLocatePref } from './auto-locate.js';
 import {
     fetchUnionNotices,
     setCachedLiveNotices,
@@ -722,6 +723,11 @@ function syncProfileDisplay() {
 function syncHapticsToggle() {
     const cb = document.getElementById('settings-haptics-checkbox');
     if (cb) cb.checked = hapticsAreEnabled();
+}
+
+function syncAutoLocateToggle() {
+    const cb = document.getElementById('settings-auto-locate-checkbox');
+    if (cb) cb.checked = autoLocatePrefEnabled();
 }
 
 // What's New is a commuter surface. CHANGELOG_DATA copy must stay
@@ -1998,6 +2004,7 @@ export function initHub() {
 
     syncProfileDisplay();
     syncHapticsToggle();
+    syncAutoLocateToggle();
     syncChangelogBadge();
     maybeForceShowChangelog();
     $userProfile.subscribe(syncProfileDisplay);
@@ -2087,6 +2094,21 @@ export function initHub() {
         }
     });
     hapticsCb?.addEventListener('change', (e) => applyHaptics(e.target.checked));
+
+    const autoLocateToggle = document.getElementById('settings-auto-locate-toggle');
+    const autoLocateCb = document.getElementById('settings-auto-locate-checkbox');
+    const applyAutoLocate = (on) => {
+        setAutoLocatePref(!!on);
+        if (autoLocateCb) autoLocateCb.checked = !!on;
+        if (on) triggerHaptic();
+    };
+    autoLocateToggle?.addEventListener('click', (e) => {
+        const t = e.target;
+        if (t.tagName !== 'INPUT' && t.tagName !== 'LABEL') {
+            applyAutoLocate(!autoLocatePrefEnabled());
+        }
+    });
+    autoLocateCb?.addEventListener('change', (e) => applyAutoLocate(e.target.checked));
 
     // Network map pinch/pan/zoom (SPA map-viewer parity)
     setupMapLogic();

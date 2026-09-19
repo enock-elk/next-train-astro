@@ -1,6 +1,6 @@
 {
   "branch": "map-gold",
-  "frozenAt": "5995a62727a7f63bd932a336680616598e5a2e6c",
+  "frozenAt": "253888b5547a34bd94a70219d992918753a870ec",
   "version": "V9_09.19.13",
   "note": "Gold snapshot of this build: live trains sit on lab projected GPS, no painted-rail interpolation; oval glyph and tracking card stay; baked tracks and advert handling unchanged. Diff against origin/map-gold. Fast-forward map-gold after this lands on main. Never force-push map-gold.",
   "files": {

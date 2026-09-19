@@ -49,7 +49,7 @@ The baked GeoJSON in `public/tracks/` plus map runtime (`public/js/map-app.js`, 
 
 **Any mapping work we do must improve the maps across the regions, not damage them.** A Western Cape-only “fix” that wrecks Gauteng is a regression. A Gauteng pin-strip that drops a terminus is a regression. A KwaZulu-Natal rewrite is forbidden.
 
-**Reference branch:** `map-gold` (same idea as `lab`: long-lived, not a PR). Current freeze is `V9_09.19.9`. Hashes live in `public/tracks/GOLD.json`. Compare any track or map-runtime change to `origin/map-gold`. Never force-push `map-gold`. After a proven improvement lands on `main`, fast-forward `map-gold` to that commit and update `GOLD.json`.
+**Reference branch:** `map-gold` (same idea as `lab`: long-lived, not a PR). Current freeze is `V9_09.19.10`. Hashes live in `public/tracks/GOLD.json`. Compare any track or map-runtime change to `origin/map-gold`. Never force-push `map-gold`. After a proven improvement lands on `main`, fast-forward `map-gold` to that commit and update `GOLD.json`.
 
 **Track files:** `public/tracks/rail-tracks-GP.geojson`, `rail-tracks-WC.geojson`, `rail-tracks-KZN.geojson`, `rail-tracks-EC.geojson`.
 

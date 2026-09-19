@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_09.19.10': [
+        'Replaced public/data/full-database.json with the operator export as-is (lastUpdated 19 Sep 2026 17:54). SEO SSG and the GitHub waterfall read that dump. WC zone fields updated (Cape Town-Wellington and Strand Z3, Malmesbury Z3, most Cape Town metros Z2). Public-holiday nest is whatever the export contained. No What’s New. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
+    ],
     'V9_09.19.9': [
         'Planner trip fare distance uses baked destA to destB km and drops --- fork rows from shared WC sheets (Cape Town-Wellington ~72 km, not 156 km via Strand/Stellenbosch). Same static-map hop graph as the zone audit. loadRegionBundle is exported from rail-tracks.js for that lookup. No What’s New. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
     ],

@@ -1,7 +1,7 @@
 {
   "branch": "map-gold",
   "frozenAt": "55b9fe0d596fcaf2ba01d36c8bc13fb85556816e",
-  "version": "V9_09.19.9",
+  "version": "V9_09.19.10",
   "note": "Gold snapshot of this build: planner fare uses painted corridor km, static-map station hops, rail-tangent trains, baked tracks, map runtime, advert handling. Diff against origin/map-gold. Fast-forward map-gold after this lands on main. Never force-push map-gold.",
   "files": {
     "public/tracks/rail-tracks-EC.geojson": {

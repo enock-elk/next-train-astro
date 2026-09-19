@@ -31,6 +31,8 @@ import {
   buildRouteFareTable,
   corridorStationList,
   seoTrainIdSample,
+  seoRouteDistanceKm,
+  seoRouteDistanceLabel,
   SEO_SCHEDULE_YEAR,
 } from '../../lib/seo-timetable.js';
 
@@ -85,6 +87,8 @@ const corridorHref = corridorEntry ? withBase(`corridors/${corridorEntry.slug}.h
 const ogImage = ogTimetableImageUrl(route.id, 'A');
 const stations = corridorStationList(timetable);
 const liveGridPrimary = liveGridWeekdayB || liveGridWeekdayA;
+const distanceLabel = seoRouteDistanceLabel(seoRouteDistanceKm(route));
+const pienPlannerHref = withBase('/?plan=PRETORIA~PIENAARSPOORT&r=GP');
 
 const jsonLd = buildRouteJsonLd({
   title,
@@ -171,6 +175,18 @@ const related = [
         {seed.serves && (
           <p class="mt-3 text-sm text-slate-700 dark:text-slate-200 leading-relaxed">
             {seed.serves}
+          </p>
+        )}
+        {seed.insight && (
+          <p class="mt-3 text-sm text-slate-700 dark:text-slate-200 leading-relaxed">
+            {seed.insight}
+          </p>
+        )}
+        {route.id === 'pta-pien' && (
+          <p class="mt-2 text-sm">
+            <a href={pienPlannerHref} class="text-blue-700 dark:text-blue-300 font-semibold hover:underline">
+              Open the trip planner for Pretoria to Pienaarspoort
+            </a>
           </p>
         )}
       </div>
@@ -310,6 +326,12 @@ const related = [
             <div>
               <dt class="text-slate-500 font-bold uppercase tracking-wide text-[10px]">Line</dt>
               <dd class="mt-1 font-semibold text-slate-900 dark:text-white">{lineLabel}</dd>
+            </div>
+          )}
+          {distanceLabel && (
+            <div>
+              <dt class="text-slate-500 font-bold uppercase tracking-wide text-[10px]">Distance</dt>
+              <dd class="mt-1 font-semibold text-slate-900 dark:text-white">{distanceLabel}</dd>
             </div>
           )}
         </dl>

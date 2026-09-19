@@ -5,6 +5,15 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_09.19.2': [
+        'SEO insights: Randfontein / Lenz / Naledi Langlaagte manual-authorisation and Croesus turnback; De Wildt connection tips plus off-peak test-train caveat (no pasted clock list). SeoFareTable states weekday 09:30 to 14:30 40% adult and 50% pensioner, military veteran, scholar. Window stays 09:30 to 14:30 (not the 09:00 to 14:00 WhatsApp shorthand). No What’s New. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
+    ],
+    'V9_09.19.1': [
+        'SEO: keep View and download SERP copy. Regenerated sitemap lastmod. Pretoria–JHB corridor page (gauteng-pretoria-jhb-line) adds three-train Pretoria to Johannesburg copy plus a trip-planner link without removing the existing blurb or route list. Route landings add SEO_INSIGHTS after station serves (KZN maintenance/speed, Randfontein shuttle, Pienaarspoort mix, Saulsville frequency, Midway/Lenz rehab, Kempton sinkhole and 0618/0619 Blue Train/Rovos, Irene as a subset). Constants dl shows calculated along-published-stops km. No What’s New. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
+    ],
+    'V9_09.18.15': [
+        'SERP copy leads with View and download PRASA Metrorail train timetables, plus free/works offline. Route/region/corridor metas match that download intent. No live train tracking in public meta. Titles stay destA-first 2026 Train Times. No What’s New. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
+    ],
     'V9_09.18.14': [
         'Startup auto-locate on installed PWA / Play TWA: treat missing Permissions API as already granted, remember nt_geo_granted after GPS, one-shot overwrite of a restored last station, pageshow kick, fused GPS (enableHighAccuracy false). The green Found: {station} ({km}km) toast now also fires on silent auto-locate (Locating / errors stay tap-only). App stuck? Get help stays hidden until 15s of visible Starting Next Train. help.html is a light Next Train shell and no longer paints device id / version / URL. Styles stay inline in the document (no hashed /_astro/ CSS). With CSS off, headings, lists, real buttons, Facebook, mailto, and the honeypot hidden= attribute still work. Play Store users are twa_open (app_source: twa, za.co.nexttrain.app). No What’s New. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
     ],

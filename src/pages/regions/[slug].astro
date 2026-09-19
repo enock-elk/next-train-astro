@@ -20,7 +20,7 @@ const entry = getSeoRegionBySlug(slug);
 if (!entry) return Astro.redirect('/routes.html');
 
 const title = `${entry.title} Train Times | Metrorail Next Train`;
-const description = `Updated ${entry.title} PRASA Metrorail train schedule. ${entry.blurb} Current times, ticket prices, and the next train in Next Train.`;
+const description = `View and download ${entry.title} PRASA Metrorail train timetables. ${entry.blurb} Works offline in Next Train, with ticket prices and the next train.`;
 const canonicalPath = `/regions/${entry.slug}.html`;
 const routesIndexHref = withBase('routes.html');
 const guideHref = withBase('guide.html');

@@ -8,6 +8,7 @@ import {
   listSeoRegions,
   displayRouteName,
   regionName,
+  CORRIDOR_INSIGHTS,
 } from '../../lib/seo-routes.js';
 import SeoCrossLinks from '../../components/SeoCrossLinks.astro';
 
@@ -21,12 +22,14 @@ if (!entry) return Astro.redirect('/routes.html');
 
 const province = regionName(entry.region);
 const title = `${entry.label} Train Times | Metrorail Next Train`;
-const description = `Updated ${entry.label} PRASA Metrorail train schedule. ${entry.blurb} Current times, ticket prices, and the next train in Next Train.`;
+const description = `View and download ${entry.label} PRASA Metrorail train timetables. ${entry.blurb} Works offline in Next Train, with ticket prices and the next train.`;
 const canonicalPath = `/corridors/${entry.slug}.html`;
 const routesIndexHref = withBase('routes.html');
 const regionEntry = listSeoRegions().find((r) => r.region === entry.region);
 const regionHref = regionEntry ? withBase(`regions/${regionEntry.slug}.html`) : routesIndexHref;
 const appHref = withBase(`/?region=${encodeURIComponent(entry.region)}`);
+const corridorInsight = CORRIDOR_INSIGHTS[entry.slug] || '';
+const ptaJhbPlannerHref = withBase('/?plan=PRETORIA~JOHANNESBURG&r=GP');
 
 const jsonLd = {
   '@context': 'https://schema.org',
@@ -68,6 +71,20 @@ const jsonLd = {
       <p class="mt-3 text-base text-slate-600 dark:text-slate-300 leading-relaxed">
         {entry.blurb}
       </p>
+      {corridorInsight && (
+        <>
+          <p class="mt-3 text-base text-slate-600 dark:text-slate-300 leading-relaxed">
+            {corridorInsight}
+          </p>
+          {entry.slug === 'gauteng-pretoria-jhb-line' && (
+            <p class="mt-3 text-sm">
+              <a href={ptaJhbPlannerHref} class="text-blue-700 dark:text-blue-300 font-semibold hover:underline">
+                Plan Pretoria to Johannesburg in Next Train
+              </a>
+            </p>
+          )}
+        </>
+      )}
 
       <section class="mt-10">
         <h2 class="text-sm font-black uppercase tracking-widest text-slate-500 mb-3">Routes on this line</h2>

@@ -7,7 +7,7 @@
  */
 import { ROUTES, REGIONS, CORRIDOR_META, REGION_SEO, HOLIDAY_NAMES, SPECIAL_DATES, getCorridorLabel } from './config.js';
 
-/** @typedef {{ slug: string, routeId: string, blurb: string, operatingNote: string, serves?: string, nearby?: string }} SeoRouteSeed */
+/** @typedef {{ slug: string, routeId: string, blurb: string, operatingNote: string, serves?: string, nearby?: string, insight?: string }} SeoRouteSeed */
 
 /** Sheet / dump names → commuter-facing labels on SEO pages. */
 const STATION_DISPLAY_ALIASES = {
@@ -265,6 +265,47 @@ const SEO_SERVES = {
 };
 
 /**
+ * Human corridor notes for SEO route landings. Station lists stay in SEO_SERVES.
+ * No em dashes or en dashes.
+ */
+export const SEO_INSIGHTS = {
+    'kzn-bridgecity':
+        "Most commuters on this north corridor ride Berea Road through to kwaMashu, but there is also a train that takes you from Duff's Road straight into Bridge City, so you do not have to stay on the kwaMashu working if Bridge City is your stop. On selected Wednesdays some off-peak trains are held for planned maintenance, so check that day's sheet in Next Train before you travel.",
+    'kzn-catoridge':
+        'Transnet Freight Rail (TFR) takes the line for essential maintenance on the first Monday of each month. Unless PRASA announces otherwise, no Metrorail services are booked that day.',
+    'kzn-umlazi':
+        'Certain off-peak trains do not run on selected days because of planned maintenance. For safety, all trains also run at a reduced 15 km/h between Umlazi and Reunion until the track can be improved.',
+    'kzn-crossmoor':
+        'For safety, all trains run at a reduced 30 km/h between Crossmoor and Merebank until repairs to the signalling systems are finished.',
+    'kzn-pinetown':
+        'For safety, all trains run at a reduced 30 km/h between Pinetown and Rossburgh until repairs to the signalling systems are finished.',
+    'kzn-winklespruit':
+        'Certain off-peak trains do not run on selected days because of planned maintenance. Check the published sheet in Next Train for that date.',
+    'jhb-rand':
+        'This corridor currently runs as a shuttle, not a single Johannesburg to Randfontein through train. You change at Roodepoort: Johannesburg to Roodepoort, then Roodepoort on to Randfontein. After the 2020 lockdown, overhead wires came back in 2022 but many points and signals did not, so Langlaagte still runs on manual authorisation. Two of the four lines are locked for Naledi through trains, one for Midway / Lenz, and one for Roodepoort. Until those points can switch on their own, Randfontein cannot send every train through to Johannesburg.',
+    'pta-pien':
+        'In the morning and afternoon peaks this line is a mix of shuttle workings that turn at Koedoespoort and through trains that still run terminus to terminus. Off-peak is mostly Pretoria to Pienaarspoort the whole way. Some Mamelodi trains stop short at Mamelodi Gardens and never reach Pienaarspoort. Use the trip planner, which is built to follow those shorts and shuttles.',
+    'pta-saul':
+        'Saulsville is one of the few Pretoria corridors with a frequent service. Commuters typically wait about 15 minutes for the next train.',
+    'jhb-soweto':
+        'Naledi is the Soweto working that still runs through to Johannesburg. From Langlaagte, two of the four lines are locked for Naledi and are not flipped for Randfontein or Lenz unless a pointsman is on the ground, the way Kwesine can be turned. That is why Naledi commuters do not change at Roodepoort or Croesus the way the other west-side corridors do.',
+    'jhb-midway':
+        'Johannesburg to Midway / Lenz is still in rehabilitation after the destruction and decay of recent years. There is movement: PRASA reopened Lenz station in early 2026, edging the service closer to Vereeniging. Many Lenasia-side trains still turn at Croesus rather than running into Johannesburg. After Croesus the Naledi working takes that lane so the Roodepoort train can pass. Langlaagte only has four lines, and two of them stay locked for Naledi, so this Croesus turnback is likely to stay until the points and signalling are restored.',
+    'pta-dewildt':
+        'If you are going to Marabastad or Gezina, get off at Hercules. For Atteridgeville, get off at Pretoria West. For Mamelodi, Tembisa, Kempton Park, Germiston or Johannesburg, change at Pretoria. Some off-peak trains on this line are taken out when PRASA is testing new sets, so the middle of the day can be thinner than the weekday grid. Check Next Train before you travel.',
+    'pta-kempton':
+        'Pretoria to Irene is the inner stretch of this Pretoria to Kempton Park line, not a separate railway. A sinkhole opened near Centurion in early 2026. It has been patched and normal service has resumed, but Centurion sits on dolomite, rock that dissolves when water reaches it, so the ground there stays sinkhole-prone. Trains 0618 and 0619 do not run on Mondays or Fridays. They run Tuesday to Thursday so the Blue Train and Rovos Rail can pass safely.',
+    'pta-irene':
+        'This Pretoria to Irene timetable is the inner stretch of the Pretoria to Kempton Park line, not a separate railway. Centurion on this stretch saw a sinkhole in early 2026. The patch is in and trains are running again, but the station sits on dolomite, so the area remains sinkhole-prone.',
+};
+
+/** Extra copy on parent corridor landings. Does not replace the generated blurb. */
+export const CORRIDOR_INSIGHTS = {
+    'gauteng-pretoria-jhb-line':
+        "There is no single Pretoria to Johannesburg Metrorail train. You change twice: a Johannesburg-side train into Germiston, the Germiston to Kempton Park working on the Leralla line, then a Pretoria-line train from Kempton Park. Next Train's trip planner builds that three-train journey from the published sheets, so you do not have to stitch the boards by hand.",
+};
+
+/**
  * @deprecated Prefer listSeoRoutes() — kept as the override catalogue for tooling.
  * @type {SeoRouteSeed[]}
  */
@@ -275,6 +316,7 @@ export const SEO_ROUTE_SEEDS = Object.entries(SEO_OVERRIDES).map(([routeId, o]) 
     operatingNote: o.operatingNote,
     serves: SEO_SERVES[routeId]?.body || '',
     nearby: SEO_SERVES[routeId]?.meta || '',
+    insight: SEO_INSIGHTS[routeId] || '',
 }));
 
 function buildSeedForRoute(route) {
@@ -296,6 +338,7 @@ function buildSeedForRoute(route) {
                 : DEFAULT_OPERATING_NOTE),
         serves: serve?.body || '',
         nearby: serve?.meta || '',
+        insight: SEO_INSIGHTS[route.id] || '',
     };
 }
 

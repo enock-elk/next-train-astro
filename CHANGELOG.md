@@ -2,6 +2,18 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin, Dev Hub, Alerts, Trains near me, community chat, or other hidden-test work. No emoji and no em dashes in What’s New. Keep `APP_VERSION`, `package.json` `version`, and `public/app-version.json` aligned on each release. Changelog / What’s New may be skipped, or the heading may be only **no release notes.** Every bump must add `ADMIN_CHANGELOG[APP_VERSION]` (System Health Build notes).
 
+## V9_09.19.2 — no release notes
+
+West-side SEO notes for Naledi, Randfontein and Lenz, De Wildt connections, off-peak fare lines on route landings. No What’s New.
+
+## V9_09.19.1 — no release notes
+
+SEO route insights, Pretoria to Johannesburg corridor copy, sitemap lastmod, Distance on route constants. No What’s New.
+
+## V9_09.18.15 — no release notes
+
+Homepage and route SERP copy lead with view and download PRASA Metrorail timetables, plus offline. No What’s New.
+
 ## V9_09.18.14 — no release notes
 
 Installed-app startup auto-locate, Found station toast on auto-locate, delayed App stuck link, light help page without on-screen IDs. No What’s New.

@@ -1,8 +1,8 @@
 {
   "branch": "map-gold",
-  "frozenAt": "a737978950f6702677bff25e581187d5dc8b4800",
-  "version": "V9_09.19.7",
-  "note": "Gold snapshot of this build: live-share OG path, rail-tangent trains, baked tracks, map runtime, advert handling. Diff against origin/map-gold. Fast-forward map-gold after this lands on main. Never force-push map-gold.",
+  "frozenAt": "8f61f82dda8a6620f93f8b3d657dc455ef3dfc0b",
+  "version": "V9_09.19.8",
+  "note": "Gold snapshot of this build: static-map station hops for zone km, rail-tangent trains without Leaflet tooltip, baked tracks, map runtime, advert handling. Diff against origin/map-gold. Fast-forward map-gold after this lands on main. Never force-push map-gold.",
   "files": {
     "public/tracks/rail-tracks-EC.geojson": {
       "md5": "43409bfd05405205e596f0d03345ab18",
@@ -21,24 +21,24 @@
       "sha256": "090a5d7fc45cafb8c7b81dc583ae24978540f38278cab447953bc90c8821f01f"
     },
     "public/js/map-app.js": {
-      "md5": "5a744d5644f71d84d5384d8cfd603770",
-      "sha256": "6919c1b3a81a86ced12d0dd637dd268c9884beb678cfd8f0735899c7be25f6e2"
+      "md5": "fa5c79c9696a10794420944c71a620b7",
+      "sha256": "08acde51a5444b586f3a2977bc0e9af003b773d53982cb773832120ed2d444c8"
     },
     "src/pages/map.astro": {
-      "md5": "a484e8257687ffc8e6b9e92c44a93884",
-      "sha256": "274494262e851e87dd719b3e7f8f1fdbfd434808aa4b34b3b2c258d4d60ea427"
+      "md5": "e3baceb290d5fd25cdb13ba838e5391f",
+      "sha256": "4abd77d437281509601822305d8dd557fcb2024c1c446a2d61062eb758fa4cbd"
     },
     "src/components/MapView.astro": {
-      "md5": "dd019f8d4837cceed74a648613db4a18",
-      "sha256": "28660294f355eff199616387c5afc3ca4bb50e4f1cd72138c7470cfd89cfca41"
+      "md5": "2262680ca793ed94bec21a821433c1e7",
+      "sha256": "ec85edb1da8d3b3b46e946b61c901c25288710fe4dc6a5ec79e4491b47112528"
     },
     "src/lib/rail-tracks.js": {
       "md5": "74c1bca1657f9f4724719153ca7b9270",
       "sha256": "e455896967c7a45bec29eaf1db3828065f8ac82beb8c1669b5771e2b302b728f"
     },
     "src/lib/map-tab.js": {
-      "md5": "b554e20ac0f527c6ba10973605b442f3",
-      "sha256": "7f400be8e80b5a657c96208c58fcd6918054b497b115d05de1ea31a1099bf530"
+      "md5": "5cea717bd5c2e473eecf23f0af69b1ae",
+      "sha256": "85cd951742145ac4814c2b47c9e4bebd2abe7bb5abcdac6b05bae2fbd728a784"
     },
     "src/lib/clever-ads.js": {
       "md5": "4d78da253d60d3ba285de6c41d697cad",

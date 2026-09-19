@@ -440,12 +440,12 @@ assert(hubModals.includes('id="nt-admin-publish-train"'), 'admin nearby sheet ca
     assert(ridePings.includes("pauseReason === 'user'"), 'user pause does not auto-resume');
     assert(mapTab.includes('stopRidePingsListener'), 'leaving Map drops the ride_pings listener');
     assert(mapTab.includes('parentElement'), 'tracking pill drag is relative to the map pane');
-    assert(mapApp.includes('nt-map-resume-share'), 'map popup can restart a paused share');
-    assert(mapApp.includes('Toward '), 'map popup shows timetable toward dest');
+    assert(mapTab.includes('nt-map-resume-share'), 'tracking card can restart a paused share');
+    assert(mapView.includes('id="map-tracking-toward"'), 'tracking card shows timetable toward dest');
     assert(mapApp.includes('nt-live-train-ring'), 'map train has a pulse ring around the oval');
     assert(mapApp.includes('applyShareHidesUserDot'), 'sharing a train hides the GPS pulse');
     assert(!mapApp.includes('liveTrainShareLine'), 'map glyph does not print You’re sharing');
-    assert(mapApp.includes('nt-map-open-timetable'), 'map popup can open the train timetable');
+    assert(mapTab.includes('nt-map-open-timetable'), 'tracking card can open the train timetable');
     assert(mapApp.includes("z < 11"), 'map train glyph is compact below zoom 11');
     assert(mapApp.includes('nt-live-train-wrap--far'), 'zoomed-out train glyph has a far size');
     assert(mapApp.includes('bearingsOppose'), 'opposite trains offset off the same rail');
@@ -476,7 +476,7 @@ assert(hubModals.includes('id="nt-admin-publish-train"'), 'admin nearby sheet ca
     assert(mapView.includes('allow="geolocation; fullscreen"'), 'map iframe allows fullscreen');
     assert(mapPage.includes('data-map-fs-icon="minimize"'), 'fullscreen control becomes minimize');
     assert(mapTab.includes('PINGS_POLL_WITH_LISTENER_MS'), 'map REST poll backs off when the listener is live');
-    assert(mapApp.includes('Stop sharing'), 'map popup can stop sharing');
+    assert(mapView.includes('Stop sharing'), 'tracking card can stop sharing');
     assert(ridePings.includes('Stop the other share'), 'second device is offered a stop');
     assert(ridePings.includes('appendRideShareLog'), 'share start/stop writes a log');
     assert(ridePings.includes("action: 'session'"), 'share log writes a session node');

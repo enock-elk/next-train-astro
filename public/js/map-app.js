@@ -2913,11 +2913,25 @@
                 }
                 return lastGood;
             }
-            // Face the painted rail: long axis = local tangent, tip toward travel.
+            // Face the painted rail: look ~80 m along travel so a station-yard
+            // wiggle cannot yaw the oval across the green corridor.
             function rideFacingAlongPath(path, alongM, destAlongM) {
+                if (!path || path.length < 2) return NaN;
+                var dir = 1;
+                if (Number.isFinite(destAlongM) && destAlongM + 8 < alongM) dir = -1;
+                else if (Number.isFinite(destAlongM) && destAlongM > alongM + 8) dir = 1;
+                var here = pointAtRideAlongM(path, alongM);
+                if (!here) return rideTangentAlongPath(path, alongM);
+                var look = 80;
+                var ahead = pointAtRideAlongM(path, alongM + dir * look);
+                var dAhead = ahead ? railHaversineM(here[0], here[1], ahead[0], ahead[1]) : 0;
+                if (dAhead >= 18) return geoBearingDeg(here[0], here[1], ahead[0], ahead[1]);
+                var behind = pointAtRideAlongM(path, alongM - dir * look);
+                var dBehind = behind ? railHaversineM(behind[0], behind[1], here[0], here[1]) : 0;
+                if (dBehind >= 18) return geoBearingDeg(behind[0], behind[1], here[0], here[1]);
                 var tang = rideTangentAlongPath(path, alongM);
                 if (!Number.isFinite(tang)) return NaN;
-                if (Number.isFinite(destAlongM) && destAlongM + 12 < alongM) tang = (tang + 180) % 360;
+                if (dir < 0) tang = (tang + 180) % 360;
                 return tang;
             }
             function alongMForStationName(stations, name) {
@@ -3115,7 +3129,11 @@
                     : null;
                 if (immediate || reduceMotion || !along || (start.lat === end.lat && start.lng === end.lng)) {
                     marker.setLatLng(end);
-                    applyTrainGlyphYaw(marker, snap ? snap.facing : (opts && Number(opts.bearing)));
+                    var yaw = snap ? snap.facing : (opts && Number(opts.bearing));
+                    applyTrainGlyphYaw(marker, yaw);
+                    if (Number.isFinite(yaw)) {
+                        requestAnimationFrame(function () { applyTrainGlyphYaw(marker, yaw); });
+                    }
                     return;
                 }
                 var duration = Math.max(450, Math.min(8000, along.samples.totalSec * 1000));
@@ -3127,10 +3145,10 @@
                     if (pos) {
                         marker.setLatLng(pos);
                         var alongNow = rideAlongAtWarpedTime(along.samples, t);
-                        var facing = rideTangentAlongPath(along.path, alongNow);
-                        if (along.travelDir < 0 && Number.isFinite(facing)) facing = (facing + 180) % 360;
-                        else if (!Number.isFinite(along.travelDir)) {
-                            facing = rideFacingAlongPath(along.path, alongNow, along.destAlong);
+                        var facing = rideFacingAlongPath(along.path, alongNow, along.destAlong);
+                        if (!Number.isFinite(facing) && along.travelDir < 0) {
+                            var tang = rideTangentAlongPath(along.path, alongNow);
+                            if (Number.isFinite(tang)) facing = (tang + 180) % 360;
                         }
                         applyTrainGlyphYaw(marker, facing);
                     } else {
@@ -3297,8 +3315,18 @@
                     const n = row.n;
                     const mine = row.mine;
                     const newest = row.newest;
-                    const speedValue = (list.find(function (p) { return typeof p.speedMps === 'number'; }) || newest || {}).speedMps;
+                    function firstFinitePingField(key) {
+                        for (var fi = 0; fi < list.length; fi++) {
+                            var fv = list[fi] && list[fi][key];
+                            if (typeof fv === 'number' && Number.isFinite(fv)) return fv;
+                        }
+                        return null;
+                    }
+                    const speedValue = firstFinitePingField('speedMps');
                     const speed = typeof speedValue === 'number' ? speedValue : null;
+                    const accuracyValue = firstFinitePingField('accuracy');
+                    const railDistanceValue = firstFinitePingField('railDistanceM');
+                    const pingAtValue = Number(newest.fixAt || newest.acceptedAt || newest.lastPingAt || newest.at || 0) || firstFinitePingField('fixAt') || firstFinitePingField('acceptedAt') || firstFinitePingField('at');
                     const spec = liveTrainIconSpec(map.getZoom(), trainId, Object.assign({}, newest, { bearing: row.bearing }));
                     const icon = L.divIcon({
                         className: 'nt-live-train',
@@ -3318,7 +3346,18 @@
                                     type: 'nt-map-show-tracking-details',
                                     trainId: trainId,
                                     routeId: newest.routeId || list[0].routeId || null,
-                                    ping: newest,
+                                    ping: Object.assign({}, newest, {
+                                        bearing: row.bearing,
+                                        lat: lat,
+                                        lng: lng,
+                                        speedMps: speed,
+                                        accuracy: accuracyValue != null ? accuracyValue : newest.accuracy,
+                                        railDistanceM: railDistanceValue != null ? railDistanceValue : newest.railDistanceM,
+                                        onRails: true,
+                                        fixAt: pingAtValue || newest.fixAt,
+                                        acceptedAt: newest.acceptedAt || pingAtValue,
+                                        at: newest.at || pingAtValue
+                                    }),
                                     n: n,
                                     mine: mine
                                 }, '*');

@@ -46,7 +46,7 @@ assert(existsSync(GOLD_PATH), 'public/tracks/GOLD.json is the gold lockfile');
 const gold = JSON.parse(readFileSync(GOLD_PATH, 'utf8'));
 assert(gold.branch === 'map-gold', 'GOLD.json points at the map-gold branch');
 assert(typeof gold.frozenAt === 'string' && /^[0-9a-f]{40}$/.test(gold.frozenAt), 'frozenAt is a full git SHA');
-assert(gold.version === 'V9_09.19.10', 'gold freeze is this build (V9_09.19.10)');
+assert(gold.version === 'V9_09.19.12', 'gold freeze is this build (V9_09.19.12)');
 
 for (const rel of REQUIRED) {
     const path = join(ROOT, rel);

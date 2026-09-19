@@ -28,6 +28,7 @@ const ok = (cond, msg) => {
 
 const adminJs = readFileSync(join(ROOT, 'public/js/admin.js'), 'utf8');
 const workerJs = readFileSync(join(ROOT, 'workers/nexttrain-telemetry/worker.js'), 'utf8');
+const plannerTelemetry = readFileSync(join(ROOT, 'src/lib/planner-telemetry.js'), 'utf8');
 
 ok(classifyCrmRegion('GP') === 'GP', 'crm_region GP');
 ok(classifyCrmRegion('gauteng') === 'GP', 'crm_region Gauteng alias');
@@ -243,6 +244,8 @@ ok(missingToken.ok === false && /GH_ACTIONS_TOKEN/.test(missingToken.error || ''
 ok(adminJs.includes('Insights (all time)'), 'insights labelled Insights (all time)');
 ok(!adminJs.includes('Insights (this window)'), 'must not say Insights (this window)');
 ok(adminJs.includes('sys_logs/trip_plans.json?auth='), 'all-time trip_plans fetch has no limitToLast on the primary GET');
+ok(plannerTelemetry.includes('sys_logs/trip_plans/${batchId}.json'), 'live trip plan flush still PUTs sys_logs/trip_plans/$batchId');
+ok(plannerTelemetry.includes('docs/R2-AND-TRIP-PLANS.md'), 'trip_plans TTL/R2 plan is documented, not wired');
 ok(!/usersEver:\s*ever\.usersEver\s*\|\|\s*uniqueUsers/.test(adminJs), 'Users ever must not fall back to a window unique-user count');
 
 ok(adminJs.includes('openAliasModal'), 'commuter alias opens a modal');

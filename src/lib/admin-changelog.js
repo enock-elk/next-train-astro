@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_09.19.1': [
+        'SEO: keep View and download SERP copy. Regenerated sitemap lastmod. Pretoria–JHB corridor page (gauteng-pretoria-jhb-line) adds three-train Pretoria to Johannesburg copy plus a trip-planner link without removing the existing blurb or route list. Route landings add SEO_INSIGHTS after station serves (KZN maintenance/speed, Randfontein shuttle, Pienaarspoort mix, Saulsville frequency, Midway/Lenz rehab, Kempton sinkhole and 0618/0619 Blue Train/Rovos, Irene as a subset). Constants dl shows calculated along-published-stops km. No What’s New. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
+    ],
     'V9_09.18.15': [
         'SERP copy leads with View and download PRASA Metrorail train timetables, plus free/works offline. Route/region/corridor metas match that download intent. No live train tracking in public meta. Titles stay destA-first 2026 Train Times. No What’s New. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
     ],

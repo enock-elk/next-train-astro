@@ -9,6 +9,11 @@ import { FARE_CONFIG, ROUTES } from './config.js';
 import { getGridOrderManifest, orderGridTrainIds } from './grid-order.js';
 import { isRealTime, timeToSeconds, flattenPublicHolidays } from './utils.js';
 import { gridStationLabel, stationLabel } from './seo-routes.js';
+import {
+  extractStationChain,
+  measureStationChain,
+  primaryDistanceKm,
+} from './zone-distance-audit.js';
 
 const IGNORE_KEYS = new Set(['STATION', 'COORDINATES', 'KM_MARK', 'row_index']);
 const REGION_NESTS = ['gauteng', 'westerncape', 'kzn', 'easterncape'];
@@ -590,4 +595,38 @@ export function buildRouteBoardAppPath(routeId) {
     const region = ROUTES[routeId]?.region;
     if (region) params.set('r', region);
     return `/?${params.toString()}`;
+}
+
+const DISTANCE_SHEET_ORDER = ['weekday_to_b', 'weekday_to_a', 'saturday_to_b', 'saturday_to_a'];
+
+/**
+ * Along-published-stops km from the dump (KM_MARK span, else station-to-station path).
+ * Same primary figure as the zone-distance audit.
+ */
+export function seoRouteDistanceKm(route, dump = loadScheduleDump()) {
+    const keys = route?.sheetKeys || {};
+    const dayDirs = [
+        ...DISTANCE_SHEET_ORDER.filter((k) => keys[k]),
+        ...Object.keys(keys).filter((k) => !DISTANCE_SHEET_ORDER.includes(k)),
+    ];
+    for (const dayDir of dayDirs) {
+        const sheet = getSheet(dump, keys[dayDir]);
+        if (!sheet) continue;
+        const rows = Array.isArray(sheet) ? sheet : sheet.rows;
+        if (!rows?.length) continue;
+        const km = primaryDistanceKm(measureStationChain(extractStationChain({
+            rows,
+            stationColumnName: 'STATION',
+        })));
+        if (km != null && Number.isFinite(km) && km > 0) {
+            return Math.round(km * 10) / 10;
+        }
+    }
+    return null;
+}
+
+/** Constants-row label. Null when the dump has no measurable chain. */
+export function seoRouteDistanceLabel(km) {
+    if (km == null || !Number.isFinite(km) || km <= 0) return null;
+    return `${km.toFixed(1)} km along published stops`;
 }

@@ -118,9 +118,11 @@ export default defineConfig({
         // stuck-boot page (linked from the overlay), not the app-shell fallback.
         runtimeCaching: [
           {
-            // Worker owns /og/share (OG HTML for crawlers, 302 for humans).
+            // Worker owns /og/share and /og/l/* (OG HTML for crawlers, 302 for humans).
             // Never cache the stub in the PWA or Facebook IAB gets a dead hop.
-            urlPattern: ({ url }) => url.pathname === '/og/share' || url.pathname.endsWith('/og/share'),
+            urlPattern: ({ url }) => url.pathname === '/og/share'
+                || url.pathname.endsWith('/og/share')
+                || /^\/og\/l(?:ive)?(?:\/|$)/i.test(url.pathname),
             handler: 'NetworkOnly',
           },
           {

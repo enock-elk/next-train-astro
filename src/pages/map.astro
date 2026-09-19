@@ -345,6 +345,18 @@ const regionSeoSlugs = Object.fromEntries(
       }
       .nt-live-train-oval--a { left: 2px; }
       .nt-live-train-oval--b { right: 2px; }
+      .nt-live-train-nose {
+        position: absolute;
+        right: 1px;
+        top: 50%;
+        width: 9px;
+        height: 9px;
+        margin-top: -4.5px;
+        background: linear-gradient(135deg, #60a5fa 0%, #1d4ed8 100%);
+        transform: rotate(45deg);
+        border-radius: 1px 2px 1px 1px;
+        z-index: 1;
+      }
       .nt-live-train-num {
         position: relative; z-index: 2;
         display: block;
@@ -360,20 +372,28 @@ const regionSeoSlugs = Object.fromEntries(
       .nt-live-train-glyph--mine .nt-live-train-oval {
         background: linear-gradient(180deg, #2563eb 0%, #1e40af 100%);
       }
+      .nt-live-train-glyph--mine .nt-live-train-nose {
+        background: linear-gradient(135deg, #60a5fa 0%, #1e40af 100%);
+      }
       .nt-live-train-glyph--mine .nt-live-train-shell {
         box-shadow: 0 0 0 1px #93c5fd, 0 1px 4px rgba(30, 64, 175, 0.45);
       }
       .nt-live-train-glyph--paused .nt-live-train-oval {
         background: linear-gradient(180deg, #94a3b8 0%, #64748b 100%);
       }
+      .nt-live-train-glyph--paused .nt-live-train-nose {
+        background: linear-gradient(135deg, #cbd5e1 0%, #64748b 100%);
+      }
       .nt-live-train-glyph--paused.nt-live-train-glyph--mine .nt-live-train-shell {
         box-shadow: 0 0 0 1px #cbd5e1, 0 1px 3px rgba(15, 23, 42, 0.28);
       }
       .nt-live-train-glyph--compact { width: 34px; height: 16px; }
       .nt-live-train-glyph--compact .nt-live-train-oval { width: 20px; height: 13px; }
+      .nt-live-train-glyph--compact .nt-live-train-nose { width: 6px; height: 6px; margin-top: -3px; }
       .nt-live-train-glyph--compact .nt-live-train-num { font-size: 7px; letter-spacing: 0.02em; }
       .nt-live-train-glyph--far { width: 28px; height: 14px; }
       .nt-live-train-glyph--far .nt-live-train-oval { width: 16px; height: 11px; }
+      .nt-live-train-glyph--far .nt-live-train-nose { width: 5px; height: 5px; margin-top: -2.5px; }
       .nt-live-train-glyph--far .nt-live-train-num { font-size: 6px; letter-spacing: 0.01em; }
       .nt-live-train-wrap--far .nt-live-train-ring { width: 22px; height: 22px; }
       .nt-live-train-wrap--far .nt-live-train-wake { display: none; }

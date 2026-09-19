@@ -8,6 +8,8 @@ import {
     parsePlannerDeepLink,
     parseRouteDeepLinkParams,
     parseLiveTrainDeepLink,
+    parseLiveSharePath,
+    liveShareSearchFromUrl,
     parseMapDeepLink,
     parsePlannerShortcutDeepLink,
     parseShareTargetDeepLink,
@@ -19,8 +21,8 @@ const SHARE_SNAPSHOT_KEY = 'nt_share_deeplink_snapshot';
 const LAUNCH_URL_KEY = 'nt_launch_target_url';
 
 function parseShareFromSearch(search) {
-    return parsePlannerDeepLink(search)
-        || parseLiveTrainDeepLink(search)
+    return parseLiveTrainDeepLink(search)
+        || parsePlannerDeepLink(search)
         || parseRouteDeepLinkParams(search)
         || parseMapDeepLink(search)
         || parsePlannerShortcutDeepLink(search)
@@ -150,16 +152,21 @@ export function ingestLaunchTargetUrl(targetURL) {
     }
     if (url.origin !== location.origin) return null;
 
-    const snap = snapshotShareDeeplink(url.search);
-    if (!snap) return null;
+    const search = liveShareSearchFromUrl(url) || url.search;
+    const pathLive = parseLiveSharePath(url.pathname);
+    const snap = snapshotShareDeeplink(search);
+    if (!snap && !pathLive) return null;
 
     try {
-        const destPath = /\/og\/share\/?$/.test(url.pathname) ? '/' : (url.pathname || '/');
-        const next = destPath + url.search + (url.hash || '');
+        const destPath = (/\/og\/share\/?$/.test(url.pathname) || parseLiveSharePath(url.pathname))
+            ? '/'
+            : (url.pathname || '/');
+        const destSearch = pathLive ? search : url.search;
+        const next = destPath + destSearch + (url.hash || '');
         const cur = location.pathname + location.search + location.hash;
         if (next !== cur) history.replaceState(history.state || {}, '', next);
     } catch { /* ignore */ }
-    return snap;
+    return snap || pathLive;
 }
 
 export function hasInboundShareIntent(search = typeof location !== 'undefined' ? location.search : '') {

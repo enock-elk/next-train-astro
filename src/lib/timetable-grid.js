@@ -101,6 +101,7 @@ export function buildFareShareUrl(routeId) {
 export function parseRouteDeepLink() {
     if (typeof location === 'undefined') return null;
     const snap = peekShareDeeplinkSnapshot();
+    if (snap && snap.kind === 'live') return null;
     const fromUrl = parseRouteDeepLinkParams(location.search);
     // URL wins over a leftover share snapshot so a Hercules page cannot open Pretoria.
     const raw = (fromUrl && fromUrl.routeId)

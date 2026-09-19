@@ -2,7 +2,7 @@ import { dayLabel, stationLabel } from './parse.js';
 import { OG_IMAGE_HEIGHT, OG_IMAGE_WIDTH } from './og-size.js';
 
 /** Bump when OG art/meta changes so WhatsApp/Facebook re-fetch the image. */
-const OG_IMAGE_CACHE_BUST = 'wa9';
+const OG_IMAGE_CACHE_BUST = 'wa10';
 
 function esc(s) {
   return String(s ?? '')
@@ -53,10 +53,13 @@ export function buildOgShareLink(intent, site) {
     return share.toString();
   }
   if (intent.kind === 'live') {
-    share.searchParams.set('live', intent.trainId);
-    if (intent.routeId) share.searchParams.set('rt', intent.routeId);
-    if (intent.dest) share.searchParams.set('to', intent.dest);
-    return share.toString();
+    const id = encodeURIComponent(String(intent.trainId || '').trim());
+    const rt = encodeURIComponent(String(intent.routeId || '').trim());
+    const dest = encodeURIComponent(String(intent.dest || '').trim());
+    let path = `/og/l/${id}`;
+    if (rt) path += `/${rt}`;
+    if (dest) path += `/${dest}`;
+    return `${site.replace(/\/$/, '')}${path}`;
   }
   share.searchParams.set('rt', intent.routeId);
   share.searchParams.set('v', intent.view === 'fares' ? 'f' : 'g');

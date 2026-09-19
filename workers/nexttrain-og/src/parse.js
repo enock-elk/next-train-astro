@@ -62,8 +62,42 @@ export function stationLabel(raw) {
   return cleaned;
 }
 
+/** Path share `/og/l/9115/pta-pien/PIENAARSPOORT` — avoids WhatsApp wrapping query strings. */
+export function parseLiveSharePath(pathname) {
+  const m = String(pathname || '').match(/^\/og\/(?:l|live)\/([^/]+)(?:\/([^/]+))?(?:\/([^/]+))?\/?$/i);
+  if (!m) return null;
+  const trainId = decodeURIComponent(m[1] || '').trim();
+  if (!trainId || /\./.test(trainId)) return null;
+  const routeId = m[2] ? decodeURIComponent(m[2]).trim() : '';
+  const dest = m[3] ? stationLabel(decodeURIComponent(m[3])) : '';
+  return {
+    kind: 'live',
+    trainId,
+    routeId,
+    dest,
+    region: '',
+  };
+}
+
 export function parseShareIntent(url) {
   const params = url.searchParams;
+  const pathLive = parseLiveSharePath(url.pathname);
+  if (pathLive) return pathLive;
+
+  // Live must win over rt=/to= (those are also on live shares). Production
+  // previously treated ?live=9115&rt=pta-pien as a timetable card.
+  const liveId = String(params.get('live') || params.get('train') || '').trim();
+  if (liveId) {
+    const regionRaw = (params.get('r') || params.get('region') || '').toUpperCase();
+    return {
+      kind: 'live',
+      trainId: liveId,
+      routeId: params.get('rt') || params.get('route') || '',
+      dest: stationLabel(params.get('to') || ''),
+      region: ['GP', 'WC', 'KZN', 'EC'].includes(regionRaw) ? regionRaw : '',
+    };
+  }
+
   const plan = params.get('plan');
   const action = String(params.get('action') || '').toLowerCase();
 
@@ -86,18 +120,6 @@ export function parseShareIntent(url) {
       to,
       time: params.get('t') || params.get('time') || '',
       day: decodeDay(params.get('d') || params.get('day') || ''),
-      region: ['GP', 'WC', 'KZN', 'EC'].includes(regionRaw) ? regionRaw : '',
-    };
-  }
-
-  const liveId = String(params.get('live') || '').trim();
-  if (liveId) {
-    const regionRaw = (params.get('r') || params.get('region') || '').toUpperCase();
-    return {
-      kind: 'live',
-      trainId: liveId,
-      routeId: params.get('rt') || params.get('route') || '',
-      dest: stationLabel(params.get('to') || ''),
       region: ['GP', 'WC', 'KZN', 'EC'].includes(regionRaw) ? regionRaw : '',
     };
   }

@@ -392,13 +392,17 @@ assert(mapAppSource.includes('interpolateRideMarkerLatLng'), 'remote map marker 
 assert(mapAppSource.includes('interpolateAlongRidePath'), 'train interpolation follows the painted rail, not a Euclidean jump');
 assert(mapAppSource.includes('STATION_APPROACH_M'), 'trains slow approaching a station');
 assert(mapAppSource.includes('STATION_DWELL_SEC'), 'trains dwell when GPS is at a station');
+assert(mapAppSource.includes('rideFacingAlongPath'), 'train yaw follows the painted-rail tangent');
+assert(mapAppSource.includes('snapTrainToRail'), 'train centre is snapped onto the painted rail');
+assert(mapAppSource.includes('applyTrainGlyphYaw'), 'glyph rotates with the rail while interpolating');
+assert(mapAppSource.includes('separate along-track'), 'opposing trains stay on the rail instead of offsetting sideways');
 assert(mapAppSource.includes('source of truth'), 'animation stays tied to commuter GPS fixes');
 assert(mapAppSource.includes('paused, {'), 'own share still glides; only a paused ping snaps');
 assert(!mapAppSource.includes('mine || paused'), 'own share is no longer snapped instantly');
 assert(mapAppSource.includes('let marker = rideTrainMarkers[trainId]'), 'train markers are retained by train id');
 assert(mapAppSource.includes('readableTrainLabelDeg'), 'train number has a dedicated readable angle');
 assert(mapAppSource.includes('readable > 90') && mapAppSource.includes('readable < -90'), 'train number is bounded to -90 through 90 degrees');
-assert(mapAppSource.includes('nt-live-train-wake'), 'train pill includes a bow wake');
+assert(mapAppSource.includes('nt-live-train-nose'), 'train glyph has a forward tip on the rail axis');
 assert(mapAppSource.includes('nt-live-train-wake-ripple'), 'wake is stacked V ripples');
 assert(mapPageSource.includes('transform-origin: right center'), 'wake arms hinge at the bow and open aft');
 assert(mapPageSource.includes('translate(-26px, -50%)'), 'wake ripples travel backward, not forward');

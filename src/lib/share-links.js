@@ -64,14 +64,40 @@ export function buildPlannerShareUrl({ from, to, time, day, region, origin, path
     return `${baseOrigin}/og/share?${params.toString()}`;
 }
 
+export function parseLiveSharePath(pathname) {
+    const m = String(pathname || '').match(/^\/og\/(?:l|live)\/([^/]+)(?:\/([^/]+))?(?:\/([^/]+))?\/?$/i);
+    if (!m) return null;
+    let trainId = '';
+    let routeId = '';
+    let dest = '';
+    try { trainId = decodeURIComponent(m[1] || '').trim(); } catch { trainId = String(m[1] || '').trim(); }
+    if (!trainId || /\./.test(trainId)) return null;
+    try { routeId = m[2] ? decodeURIComponent(m[2]).trim() : ''; } catch { routeId = String(m[2] || '').trim(); }
+    try { dest = m[3] ? decodeURIComponent(m[3]).trim() : ''; } catch { dest = String(m[3] || '').trim(); }
+    dest = dest.replace(/\s+STATION$/i, '').trim();
+    return { kind: 'live', trainId, routeId, dest, region: null };
+}
+
+export function liveShareSearchFromUrl(url) {
+    const pathLive = parseLiveSharePath(url?.pathname);
+    if (!pathLive) return url?.search || '';
+    const params = new URLSearchParams();
+    params.set('live', pathLive.trainId);
+    if (pathLive.routeId) params.set('rt', pathLive.routeId);
+    if (pathLive.dest) params.set('to', pathLive.dest);
+    return `?${params.toString()}`;
+}
+
 export function buildLiveTrainShareUrl({ trainId, routeId, destination, origin } = {}) {
     const baseOrigin = origin || (typeof location !== 'undefined' ? location.origin : 'https://nexttrain.co.za');
-    const params = new URLSearchParams();
-    params.set('live', String(trainId || '').trim());
-    if (routeId) params.set('rt', routeId);
-    const dest = String(destination || '').replace(/\s+STATION$/i, '').trim();
-    if (dest) params.set('to', dest);
-    return `${baseOrigin}/og/share?${params.toString()}`;
+    const id = encodeURIComponent(String(trainId || '').trim());
+    if (!id) return `${baseOrigin}/og/share`;
+    const rt = encodeURIComponent(String(routeId || '').trim());
+    const dest = encodeURIComponent(String(destination || '').replace(/\s+STATION$/i, '').trim());
+    let path = `/og/l/${id}`;
+    if (rt) path += `/${rt}`;
+    if (dest) path += `/${dest}`;
+    return `${baseOrigin}${path}`;
 }
 
 export function parseLiveTrainDeepLink(search = typeof location !== 'undefined' ? location.search : '') {

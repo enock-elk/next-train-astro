@@ -1,8 +1,8 @@
 {
   "branch": "map-gold",
   "frozenAt": "a737978950f6702677bff25e581187d5dc8b4800",
-  "version": "V9_09.19.6",
-  "note": "Gold snapshot of this build: baked rail tracks, map runtime, and advert handling. Diff against origin/map-gold. Fast-forward map-gold after a proven improvement lands on main. Never force-push map-gold. Update hashes only after npm run verify:map-lines, verify:map-hops, and verify:clever-ads pass.",
+  "version": "V9_09.19.7",
+  "note": "Gold snapshot of this build: live-share OG path, rail-tangent trains, baked tracks, map runtime, advert handling. Diff against origin/map-gold. Fast-forward map-gold after this lands on main. Never force-push map-gold.",
   "files": {
     "public/tracks/rail-tracks-EC.geojson": {
       "md5": "43409bfd05405205e596f0d03345ab18",
@@ -21,12 +21,12 @@
       "sha256": "090a5d7fc45cafb8c7b81dc583ae24978540f38278cab447953bc90c8821f01f"
     },
     "public/js/map-app.js": {
-      "md5": "ef7150a9bb77399f9edec3c5bcd1a1b3",
-      "sha256": "2948dd47ee15c161ba184038c5b91c1db10902f2c9dbfea29e013d959d3bd569"
+      "md5": "5a744d5644f71d84d5384d8cfd603770",
+      "sha256": "6919c1b3a81a86ced12d0dd637dd268c9884beb678cfd8f0735899c7be25f6e2"
     },
     "src/pages/map.astro": {
-      "md5": "d2e038d77c72ed586634819938332841",
-      "sha256": "2a2afce8da7754adab728582f696bd2a25fd81a91879287e0ea87c783f11a92f"
+      "md5": "a484e8257687ffc8e6b9e92c44a93884",
+      "sha256": "274494262e851e87dd719b3e7f8f1fdbfd434808aa4b34b3b2c258d4d60ea427"
     },
     "src/components/MapView.astro": {
       "md5": "dd019f8d4837cceed74a648613db4a18",

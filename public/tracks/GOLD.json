@@ -1,0 +1,52 @@
+{
+  "branch": "map-gold",
+  "frozenAt": "a737978950f6702677bff25e581187d5dc8b4800",
+  "version": "V9_09.19.6",
+  "note": "Gold snapshot of this build: baked rail tracks, map runtime, and advert handling. Diff against origin/map-gold. Fast-forward map-gold after a proven improvement lands on main. Never force-push map-gold. Update hashes only after npm run verify:map-lines, verify:map-hops, and verify:clever-ads pass.",
+  "files": {
+    "public/tracks/rail-tracks-EC.geojson": {
+      "md5": "43409bfd05405205e596f0d03345ab18",
+      "sha256": "ba0ae80e8c6955ae99288ac5c06e85ea3075383f13f813f40375b78395812108"
+    },
+    "public/tracks/rail-tracks-GP.geojson": {
+      "md5": "8dc57c7bcf1bdc5201d08397b0d41920",
+      "sha256": "e411cdadeef27245ef24b578622f400507c556a9e57f5d70e9482bb1a3f76c59"
+    },
+    "public/tracks/rail-tracks-KZN.geojson": {
+      "md5": "36e4df5f583f1dc663266cb4c2b0672f",
+      "sha256": "93135692b2be6b11a06bbef984927fe4b444a59a3d7195f8a9665f85a63044fb"
+    },
+    "public/tracks/rail-tracks-WC.geojson": {
+      "md5": "eae7f554daf9a27ba4b2175cde2cc8f7",
+      "sha256": "090a5d7fc45cafb8c7b81dc583ae24978540f38278cab447953bc90c8821f01f"
+    },
+    "public/js/map-app.js": {
+      "md5": "ef7150a9bb77399f9edec3c5bcd1a1b3",
+      "sha256": "2948dd47ee15c161ba184038c5b91c1db10902f2c9dbfea29e013d959d3bd569"
+    },
+    "src/pages/map.astro": {
+      "md5": "d2e038d77c72ed586634819938332841",
+      "sha256": "2a2afce8da7754adab728582f696bd2a25fd81a91879287e0ea87c783f11a92f"
+    },
+    "src/components/MapView.astro": {
+      "md5": "dd019f8d4837cceed74a648613db4a18",
+      "sha256": "28660294f355eff199616387c5afc3ca4bb50e4f1cd72138c7470cfd89cfca41"
+    },
+    "src/lib/rail-tracks.js": {
+      "md5": "74c1bca1657f9f4724719153ca7b9270",
+      "sha256": "e455896967c7a45bec29eaf1db3828065f8ac82beb8c1669b5771e2b302b728f"
+    },
+    "src/lib/map-tab.js": {
+      "md5": "b554e20ac0f527c6ba10973605b442f3",
+      "sha256": "7f400be8e80b5a657c96208c58fcd6918054b497b115d05de1ea31a1099bf530"
+    },
+    "src/lib/clever-ads.js": {
+      "md5": "4d78da253d60d3ba285de6c41d697cad",
+      "sha256": "8b33d5d05e76b08c79947fecc4ded53c3cb384fa46708c1d0afa3a7a6b05bf22"
+    },
+    "src/lib/clever-ad-lifecycle.js": {
+      "md5": "cb7881c006e3b658e05c7fde77cfa6c6",
+      "sha256": "14890961847749dd2a20899d35043cc3effff41df4d503369b0da03902c9aedb"
+    }
+  }
+}

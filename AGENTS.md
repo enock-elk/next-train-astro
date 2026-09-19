@@ -30,6 +30,8 @@ Work from **`main`**. The owner ships by pushing `main` and running the producti
 - **Do not point `PIPELINE_SOURCES.GITHUB` back at `metrorail-app`.** The dump is this repo: `public/data/full-database.json` via jsDelivr `@main/public/data/`.
 - **Do not empty `metrorail-app/data/`.** Deploy overlays `public/data/*.json` only. Never `--delete` host-only files (e.g. `sanitize.py`).
 - **Do not create a new deploy PAT.** Production and schedule-sync both use repo secret `METRORAIL_APP_DEPLOY_TOKEN` (Contents write on `metrorail-app`). Rotate only if a run gets 403 or the token expired.
+- **Do not rewrite gold map tracks.** Baked GeoJSON and map runtime are locked to `map-gold` (`public/tracks/GOLD.json`). Mapping work must improve the maps across the regions, not damage them.
+- **Do not rewrite gold advert handling.** `clever-ads.js` / `clever-ad-lifecycle.js` are the same gold snapshot. Ads overlay from the bottom (`#clever-core`). Do not reserve a blank ad gap.
 
 ## Data pipeline
 
@@ -40,6 +42,55 @@ Live boards try **Firebase → Cloudflare (`nexttrain-cache`) → GitHub dump**.
 - Updating `public/data/full-database.json` refreshes the **fallback**, not the live board while Firebase is up. Push `main`; workflow **Sync schedule data → metrorail-app** overlays JSON onto the host. A full site publish still needs **Deploy production → metrorail-app** (`confirm=DEPLOY`).
 - After a real production deploy, purge Cloudflare cache for `nexttrain.co.za` (HTML + service worker).
 - **CARTO Voyager tiles** need `PUBLIC_CARTO_API_KEY` at **build** time (Astro inlines it into `window.ntCartoVoyagerUrl`). The **map page** uses `ContentLayout` (not the app `Layout`) — both layouts must expose the helper. GitHub **Actions** repository secrets are the right place for Actions-built deploys (`deploy-lab.yml`, production). They do **not** reach Cloudflare Pages Git previews (`*.next-train-lab.pages.dev`). Also set the same name as a Cloudflare Pages variable on `next-train-lab` (Production **and** Preview), then retry that deployment. Do not use GitHub Environment secrets unless a workflow has `environment:`. Never commit the key.
+
+## Map gold
+
+The baked GeoJSON in `public/tracks/` plus map runtime (`public/js/map-app.js`, `src/pages/map.astro`, `src/components/MapView.astro`, `src/lib/rail-tracks.js`, `src/lib/map-tab.js`) are **gold**. They are the rail geometry and paint every map surface uses (network map, Map tab, planner trip map, live tracking). A bad bake zig-zags, chords, or paints the wrong fork. We have already paid for that. Do not do it again.
+
+**Any mapping work we do must improve the maps across the regions, not damage them.** A Western Cape-only “fix” that wrecks Gauteng is a regression. A Gauteng pin-strip that drops a terminus is a regression. A KwaZulu-Natal rewrite is forbidden.
+
+**Reference branch:** `map-gold` (same idea as `lab`: long-lived, not a PR). Current freeze is `V9_09.19.6` (`a737978`). Hashes live in `public/tracks/GOLD.json`. Compare any track or map-runtime change to `origin/map-gold`. Never force-push `map-gold`. After a proven improvement lands on `main`, fast-forward `map-gold` to that commit and update `GOLD.json`.
+
+**Track files:** `public/tracks/rail-tracks-GP.geojson`, `rail-tracks-WC.geojson`, `rail-tracks-KZN.geojson`, `rail-tracks-EC.geojson`.
+
+### Do not
+
+- Re-run `tracks:build` / Overpass / OSM API over a whole region “to refresh”
+- Run `tracks:smooth` on KZN (`smooth-baked-tracks.mjs` refuses; keep it that way)
+- Replace a region’s GeoJSON from a new dump, generated geometry, or a straight station-to-station polyline
+- Inject station pins into the LineString (that is how Rissik, Mzimhlope, and Mayfair spiked)
+- Paint ghost timetable rows as the corridor (Western Cape Northern Line `STATION` column; Cape Town to Wellington blew out to 194 km)
+- Let a LineString fork leak into the other branch (KZN Duff’s Road: kwaMashu vs Bridge City; Western Cape Philippi: Kapteinsklip / Mitchell’s Plain / Lentegeur)
+- Put Mutual on Cape Town to Retreat, or skip Esplanade / Ysterplaat on Cape Town to Nolungile
+- Change `GHOST_GEOMETRY_REGIONS` off `{KZN}` without the owner asking
+- Update `GOLD.json` hashes only to silence `verify:map-gold`
+
+### Must
+
+- Diff listed gold files against `origin/map-gold` before touching bake or paint
+- Keep KZN exactly as it ships (the Duff’s Road fork is the reference shape)
+- If you change GP, WC, or EC tracks, prove **all four** regions: `npm run verify:map-lines`, `npm run verify:map-hops`, then `npm run verify:map-gold` after updating hashes
+- Prove the failure you came to fix **and** the corridors that were already good (Bellville to Stikland, Cape Town to Wellington, Cape Town to Nolungile via Esplanade and Ysterplaat, Durban to Bridge City not via kwaMashu, Durban to kwaMashu not via Bridge City)
+- Paint from served stops, not ghost rows, except KZN which keeps ghost rows on purpose
+- Runtime paint lives in `public/js/map-app.js` (`corridorGeometryStops`, `resolveRouteLatLngs`) and `src/lib/rail-tracks.js` (`sliceBakedHop`, `dropOutAndBack`, `bakeServesHop`). A bake “fix” that the runtime then chords or stubs is not an improvement.
+
+### To update gold (only after a real improvement)
+
+1. Diff gold files vs `origin/map-gold`.
+2. `npm run verify:map-lines`, `npm run verify:map-hops`, and `npm run verify:clever-ads` must pass.
+3. Update hashes and `frozenAt` in `public/tracks/GOLD.json` to the new `main` commit.
+4. Fast-forward only: `git fetch origin main && git push origin origin/main:map-gold`.
+5. Flag the gold pointer move in the summary.
+
+`npm run verify:map-gold` gates the hashes, the KZN hold, Advert gold, and this section of `AGENTS.md` / `instructions.md`. It runs in both production workflows.
+
+## Advert gold
+
+This build’s CleverAds path is **gold** (`src/lib/clever-ads.js`, `src/lib/clever-ad-lifecycle.js`). Same `map-gold` snapshot and `GOLD.json` hashes.
+
+**Do not rewrite gold advert handling.** Ads overlay from the bottom (`#clever-core`). Footer stays `nt-board-footer mt-auto`. Do not reserve a blank ad gap. Do not restyle the vendor snippet into a host DIV. Do not force-center vendor overlays. Keep `--nt-ad-shift` on `#nt-shell` and drop `.nt-ad-shifted` when shift is 0.
+
+Run `npm run verify:clever-ads` before updating advert hashes. Then follow the same fast-forward as Map gold.
 
 ## Alerts
 

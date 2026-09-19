@@ -595,7 +595,11 @@ assert(refuseDisplayName('Enock').ok === true, 'ordinary first names are still a
     assert(sidenav.includes('Haptic feedback'), 'haptics row is labelled Haptic feedback');
     assert(!sidenav.includes('>Vibrations<'), 'haptics row is not labelled Vibrations');
     assert(sidenav.includes('id="settings-haptics-toggle"') && sidenav.includes('id="settings-haptics-checkbox"'), 'haptics toggle ids stay');
-    assert(sidenav.indexOf('id="settings-haptics-toggle"') < sidenav.indexOf('id="settings-notify-toggle"'), 'Notifications sit after Haptic feedback');
+    assert(sidenav.indexOf('id="settings-haptics-toggle"') < sidenav.indexOf('id="settings-auto-locate-toggle"'), 'Find nearest station sits after Haptic feedback');
+    assert(sidenav.includes('id="settings-auto-locate-toggle"') && sidenav.includes('id="settings-auto-locate-checkbox"'), 'auto-locate toggle ids stay');
+    assert(sidenav.includes('Find nearest station'), 'auto-locate row is labelled Find nearest station');
+    assert(sidenav.includes('When the app opens'), 'auto-locate row says it runs when the app opens');
+    assert(sidenav.indexOf('id="settings-auto-locate-toggle"') < sidenav.indexOf('id="settings-notify-toggle"'), 'Notifications sit after Find nearest station');
     assert(sidenav.indexOf('id="settings-notify-toggle"') < sidenav.indexOf('id="account-notify-types"'), 'notification types sit under the master toggle');
     assert(!sidenav.includes('Coming later. These stay off.'), 'notification types are enabled');
     assert(sidenav.includes('data-notify-category="incidents"'), 'Incidents is a live notification type');

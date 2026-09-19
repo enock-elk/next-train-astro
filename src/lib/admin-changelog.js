@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_09.19.8': [
+        'Auto-locate is startup-only: init, Welcome close, and an unconsumed pageshow. Route change, schedule load, tab change, and visibility no longer kick GPS. populateStationList still clears a station that is not on the new corridor, but the empty board is no longer filled by a silent locate. Options → Find nearest station (default on, nt_auto_locate) turns the startup pass off. Locate button stays manual. No What’s New. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
+    ],
     'V9_09.19.7': [
         'Live share OG: ?live= + rt= is a live card not a timetable. Canonical URL is /og/l/{train}/{route}/{dest} so WhatsApp does not wrap the query and scrape the grid. Worker HTML is no-store. Humans 302 to /?live= and open Map. Train glyph snaps to the painted rail, yaw follows local tangent with the tip toward travel, interpolation still station-slows. No What’s New. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
     ],

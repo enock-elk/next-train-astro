@@ -13,7 +13,7 @@ import {
 } from '../store.js';
 import { ROUTES, FARE_CONFIG, fareMultiplierForProfile, withBase, SPECIAL_DATES, HOLIDAY_NAMES } from './config.js';
 import { resolveHolidayDayType } from './holiday-approvals.js';
-import { smoothPathFromStops, nearestPathIndex } from './rail-tracks.js';
+import { smoothPathFromStops, nearestPathIndex, loadRegionBundle } from './rail-tracks.js';
 import { 
     normalizeStationName, timeToSeconds, formatTimeDisplay, 
     escapeHTML, getDistanceFromLatLonInKm, safeStorage, usesWeekdayScheduleSheet,
@@ -49,7 +49,17 @@ import { enterFeedbackReplyMode, openFeedbackModal } from './hub.js';
 import { prepareRichHtml } from './rich-text.js';
 import { trackAnalyticsEvent } from './analytics.js';
 import { isAdminAuthed, applyAdminAuthedChrome } from './admin-chrome.js';
-import { suggestZoneFromKm, ZONE_KM_RANGE_LABELS } from './zone-distance-audit.js';
+import {
+    suggestZoneFromKm,
+    ZONE_KM_RANGE_LABELS,
+    isTrainTime,
+    bakedDestToDestKm,
+    extractMapStationChain,
+    mapCorridorsFromFeatures,
+    corridorNameList,
+    stationAuditKey,
+    mergeBakedCoordLookup,
+} from './zone-distance-audit.js';
 
 /** Last planner results view — survive map modal / hash pops */
 let lastPlannerSnapshot = null;
@@ -424,32 +434,129 @@ function canShowTripPrice() {
     return true;
 }
 
-async function getSmoothTripDistanceKm(trip) {
+function roundTripKm(km) {
+    if (!Number.isFinite(km) || km <= 0) return null;
+    return Math.round(km * 10) / 10;
+}
+
+function pathLengthKm(path) {
+    if (!path || path.length < 2) return null;
+    let km = 0;
+    for (let i = 1; i < path.length; i++) {
+        km += getDistanceFromLatLonInKm(path[i - 1][0], path[i - 1][1], path[i][0], path[i][1]);
+    }
+    return roundTripKm(km);
+}
+
+function resolveTripStopCoords(stop, index = $globalStationIndex.get() || {}) {
+    if (!stop) return null;
+    const station = normalizeStationName(stop.station || stop.name || stop);
+    if (!station) return null;
+    const idx = index[station];
+    const lat = stop.lat ?? idx?.lat ?? null;
+    const lon = stop.lon ?? idx?.lon ?? null;
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+    return { station, name: station, lat, lon };
+}
+
+function tripEndpoints(trip) {
+    const stops = collectTripStops(trip);
     const index = $globalStationIndex.get() || {};
+    const first = resolveTripStopCoords(trip?.from, index)
+        || resolveTripStopCoords(stops[0], index);
+    const last = resolveTripStopCoords(trip?.to, index)
+        || resolveTripStopCoords(stops[stops.length - 1], index);
+    return { first, last, stops };
+}
+
+async function kmAlongMapStops(stops, region, routeId) {
+    const enriched = stops.map((s) => ({
+        ...s,
+        routeId: s.routeId || routeId || '',
+    })).filter((s) => Number.isFinite(s.lat) && Number.isFinite(s.lon));
+    if (enriched.length < 2) return null;
+    try {
+        const path = await smoothPathFromStops(enriched, region);
+        return pathLengthKm(path);
+    } catch {
+        return null;
+    }
+}
+
+/**
+ * Along-rail km using the static network map / painted corridor, not the
+ * union of every branch printed on a shared timetable sheet.
+ */
+async function getSmoothTripDistanceKm(trip) {
     const routes = collectTripRoutes(trip);
     const fallbackRouteId = routes[0]?.id || '';
-    const enriched = collectTripStops(trip).map((s) => {
-        const idx = index[normalizeStationName(s.station)];
-        return {
-            ...s,
-            lat: s.lat ?? idx?.lat ?? null,
-            lon: s.lon ?? idx?.lon ?? null,
-            routeId: s.routeId || fallbackRouteId,
-        };
-    }).filter((s) => Number.isFinite(s.lat) && Number.isFinite(s.lon));
-    if (enriched.length < 2) return getTripDistanceKm(trip);
+    const region = $userRegion.get() || 'GP';
+    const { first, last } = tripEndpoints(trip);
+
     try {
-        const region = $userRegion.get() || 'GP';
-        const path = await smoothPathFromStops(enriched, region);
-        if (path && path.length > 1) {
-            let km = 0;
-            for (let i = 1; i < path.length; i++) {
-                km += getDistanceFromLatLonInKm(path[i - 1][0], path[i - 1][1], path[i][0], path[i][1]);
-            }
-            if (Number.isFinite(km) && km > 0) return Math.round(km * 10) / 10;
+        const bundle = await loadRegionBundle(region);
+        const features = bundle?.features || [];
+        const byId = bundle?.byId;
+        const bakedKm = (feature, a, b) => roundTripKm(bakedDestToDestKm(feature, a, b));
+
+        if (first && last && routes.length <= 1) {
+            const km = bakedKm(byId?.get(fallbackRouteId), first, last);
+            if (km != null) return km;
         }
-    } catch { /* crow-flies fallback */ }
-    return getTripDistanceKm(trip);
+
+        const legs = Array.isArray(trip?.legs) && trip.legs.length
+            ? trip.legs
+            : [trip?.leg1, trip?.leg2, trip?.leg3].filter(Boolean);
+        if (legs.length > 1 && byId) {
+            let sum = 0;
+            let ok = true;
+            for (const leg of legs) {
+                const legStops = collectTripStops({ stops: leg.stops || [], from: leg.from, to: leg.to });
+                const a = resolveTripStopCoords(legStops[0]) || resolveTripStopCoords(leg.from);
+                const b = resolveTripStopCoords(legStops[legStops.length - 1]) || resolveTripStopCoords(leg.to);
+                const km = bakedKm(byId.get(leg.route?.id), a, b);
+                if (km == null) {
+                    ok = false;
+                    break;
+                }
+                sum += km;
+            }
+            if (ok && sum > 0) return roundTripKm(sum);
+        }
+
+        if (first && last && features.length) {
+            const lookup = new Map();
+            const index = $globalStationIndex.get() || {};
+            Object.keys(index).forEach((name) => {
+                const hit = resolveTripStopCoords({ station: name, lat: index[name]?.lat, lon: index[name]?.lon }, index);
+                if (hit) lookup.set(stationAuditKey(name), hit);
+            });
+            for (const feature of features) mergeBakedCoordLookup(lookup, feature);
+            const chain = extractMapStationChain(
+                mapCorridorsFromFeatures(features),
+                first.station,
+                last.station,
+                lookup,
+                corridorNameList(byId?.get(fallbackRouteId)),
+            );
+            const km = await kmAlongMapStops(chain || [], region, fallbackRouteId);
+            if (km != null) return km;
+            if (chain?.length >= 2) {
+                const a = chain.find((s) => Number.isFinite(s.lat));
+                const b = [...chain].reverse().find((s) => Number.isFinite(s.lat));
+                const hop = bakedKm(byId?.get(fallbackRouteId), a, b);
+                if (hop != null) return hop;
+            }
+        }
+    } catch { /* fall through to timed stops */ }
+
+    const enriched = collectTripStops(trip).map((s) => {
+        const hit = resolveTripStopCoords(s);
+        return hit ? { ...s, ...hit, routeId: s.routeId || fallbackRouteId } : null;
+    }).filter(Boolean);
+    if (enriched.length < 2) return getTripDistanceKm(trip);
+    const smoothed = await kmAlongMapStops(enriched, region, fallbackRouteId);
+    return smoothed != null ? smoothed : getTripDistanceKm(trip);
 }
 
 function plannerFareVoteOrigin(trip) {
@@ -755,11 +862,15 @@ function collectTripStops(trip) {
     const pushStop = (s) => {
         const name = normalizeStationName(s?.station || s?.name || s);
         if (!name) return;
+        // Shared WC sheets print Strand / Stellenbosch / Northern Line on one
+        // grid. Rows the train does not call have "---" and are not a path.
+        if (s && s.time != null && String(s.time).trim() !== '' && !isTrainTime(s.time)) return;
         if (stops.length && normalizeStationName(stops[stops.length - 1].station) === name) return;
         stops.push({
             station: name,
             lat: s?.lat ?? null,
             lon: s?.lon ?? null,
+            routeId: s?.routeId || null,
         });
     };
     if (Array.isArray(trip?.stops) && trip.stops.length) {
@@ -777,6 +888,11 @@ function collectTripStops(trip) {
         pushStop(trip.to);
     }
     return stops;
+}
+
+/** Exported for fare-distance tests. Same stop list the trip fare uses. */
+export function collectTripStopsForDistance(trip) {
+    return collectTripStops(trip);
 }
 
 /** Est. along-route km from stop coords (crow-flies hops); null if too thin. */

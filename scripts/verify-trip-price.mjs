@@ -7,8 +7,8 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { FARE_CONFIG, fareMultiplierForProfile } from '../src/lib/config.js';
 import { FEATURE_KEYS, GRANTABLE_FEATURES, isFeatureEnabled } from '../src/lib/features.js';
-import { suggestZoneFromKm, DEFAULT_ZONE_KM_BANDS } from '../src/lib/zone-distance-audit.js';
-import { computeZoneFareForTrip, getCrowFliesTripKm } from '../src/lib/planner-ui.js';
+import { suggestZoneFromKm, DEFAULT_ZONE_KM_BANDS, bakedDestToDestKm } from '../src/lib/zone-distance-audit.js';
+import { computeZoneFareForTrip, getCrowFliesTripKm, collectTripStopsForDistance } from '../src/lib/planner-ui.js';
 import {
     cheaperZone,
     capZoneForSingleRoute,
@@ -127,6 +127,9 @@ assert(ui.includes('openPassengerTypePicker'), 'Adult opens the passenger profil
 assert(ui.includes('roundBoardFare'), 'planner uses the board whole-rand floor');
 assert(ui.includes('border-b border-dotted'), 'Trip fare uses a dotted underline');
 assert(ui.includes('getSmoothTripDistanceKm'), 'fare uses smoothed rail distance');
+assert(ui.includes('bakedDestToDestKm'), 'planner fare prefers painted corridor km');
+assert(ui.includes('isTrainTime(s.time)'), 'planner fare skips --- sheet rows');
+assert(ui.includes('extractMapStationChain'), 'planner fare falls back to static-map station order');
 assert(ui.includes('getCrowFliesTripKm'), 'fare also computes first-to-last straight-line km');
 assert(ui.includes('Straight-line'), 'fare sheet still has the crow-flies line');
 assert(ui.includes('data-admin-authed-only') && ui.includes('Straight-line') && ui.includes('Zone'), 'straight-line and zone are admin-only');
@@ -154,6 +157,34 @@ assert(!/saulsville/i.test(ui), 'do not hardcode Saulsville');
         ],
     });
     assert(crow != null && hops != null && crow === hops, `crow-flies ignores intermediate hops, got ${crow} vs ${hops}`);
+}
+
+{
+    const clipped = collectTripStopsForDistance({
+        from: 'CAPE TOWN',
+        to: 'WELLINGTON',
+        route: { id: 'ct-well' },
+        stops: [
+            { station: 'CAPE TOWN STATION', time: '06:00', lat: -33.923631, lon: 18.427186 },
+            { station: 'STRAND STATION', time: '---', lat: -34.116, lon: 18.828 },
+            { station: 'DU TOIT STATION', time: '---', lat: -33.932, lon: 18.860 },
+            { station: 'STIKLAND STATION', time: '06:40', lat: -33.891, lon: 18.680 },
+            { station: 'WELLINGTON STATION', time: '07:30', lat: -33.640, lon: 19.012 },
+        ],
+    });
+    assert(!clipped.some((s) => /STRAND|DU TOIT/i.test(s.station)), 'fare stop list drops --- fork rows from the shared WC sheet');
+    assert(clipped.some((s) => /CAPE TOWN/i.test(s.station)) && clipped.some((s) => /WELLINGTON/i.test(s.station)), 'fare stop list keeps Cape Town and Wellington');
+    const wcTracks = JSON.parse(readFileSync(join(ROOT, 'public/tracks/rail-tracks-WC.geojson'), 'utf8'));
+    const well = (wcTracks.features || []).find((f) => f.properties?.routeId === 'ct-well');
+    const names = well?.properties?.stationNames || [];
+    const coords = well?.properties?.stationCoords || [];
+    const at = (want) => {
+        const i = names.findIndex((n) => String(n).toUpperCase().includes(want));
+        const c = coords[i];
+        return c ? { lat: c[0], lon: c[1] } : null;
+    };
+    const railKm = bakedDestToDestKm(well, at('CAPE TOWN'), at('WELLINGTON'));
+    assert(railKm != null && railKm >= 68 && railKm <= 78, `planner baked Cape Town-Wellington is ~72 km, got ${railKm}`);
 }
 
 const modal = readFileSync(join(ROOT, 'src/components/PlannerModals.astro'), 'utf8');

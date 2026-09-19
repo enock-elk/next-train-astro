@@ -137,7 +137,7 @@ const NON_TRAIN_KEYS = new Set([
     'STATION', 'COORDINATES', 'KM_MARK', 'row_index', 'coordinates', 'KM',
 ]);
 
-function isTrainTime(value) {
+export function isTrainTime(value) {
     const s = String(value ?? '').trim();
     if (!s || s === '-' || s === '—' || s === '–') return false;
     return /\d/.test(s);

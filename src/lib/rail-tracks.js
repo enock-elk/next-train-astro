@@ -363,7 +363,7 @@ function hopSkipsRouteStop(graph, nodePath, stops, hopIndex, skipM = SKIP_STATIO
     return false;
 }
 
-async function loadRegionBundle(region) {
+export async function loadRegionBundle(region) {
     const key = String(region || 'GP').toUpperCase();
     if (cache.has(key)) return cache.get(key);
 

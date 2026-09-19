@@ -550,10 +550,12 @@ if (!gridPathSa.includes('d=sa') || gridPathSa.includes('dir=')) {
     { id: 'kzn-crossmoor', phrases: ['30 km/h', 'Crossmoor', 'Merebank'] },
     { id: 'kzn-pinetown', phrases: ['30 km/h', 'Pinetown', 'Rossburgh'] },
     { id: 'kzn-winklespruit', phrases: ['off-peak', 'planned maintenance'] },
-    { id: 'jhb-rand', phrases: ['shuttle', 'Roodepoort', 'Randfontein'] },
+    { id: 'jhb-rand', phrases: ['shuttle', 'Roodepoort', 'Randfontein', 'Langlaagte', 'manual authorisation'] },
+    { id: 'jhb-soweto', phrases: ['Naledi', 'Langlaagte', 'Croesus', 'Kwesine'] },
+    { id: 'pta-dewildt', phrases: ['Hercules', 'Pretoria West', 'Marabastad', 'testing new sets'] },
     { id: 'pta-pien', phrases: ['Koedoespoort', 'Mamelodi Gardens', 'trip planner'] },
     { id: 'pta-saul', phrases: ['15 minutes', 'Saulsville'] },
-    { id: 'jhb-midway', phrases: ['Lenz', '2026', 'Vereeniging'] },
+    { id: 'jhb-midway', phrases: ['Lenz', '2026', 'Vereeniging', 'Croesus', 'Lenasia'] },
     { id: 'pta-kempton', phrases: ['Irene', '0618', '0619', 'Blue Train', 'Rovos Rail', 'sinkhole'] },
     { id: 'pta-irene', phrases: ['Pretoria to Kempton Park', 'sinkhole', 'dolomite'] },
   ];
@@ -644,6 +646,15 @@ if (existsSync(DIST)) {
     }
     if (!html.includes('data-seo-fares') || !html.includes('Maximum fares') || !html.includes('Weekly Mon–Fri')) {
       fail('Naledi route HTML missing the max fare table');
+    }
+    if (!html.includes('40% off') || !html.includes('50% off') || !html.includes('Scholars in uniform')) {
+      fail('Naledi fare table should mention 40% adult off-peak and 50% scholar/pensioner/veteran');
+    }
+    if (!html.includes('09:30 to 14:30')) {
+      fail('Naledi fare table should keep the 09:30 to 14:30 off-peak window');
+    }
+    if (!/Langlaagte/.test(html) || !/Croesus/.test(html)) {
+      fail('Naledi route HTML missing Langlaagte / Croesus through-train note');
     }
     if (!html.includes('Open Next Train · Gauteng')) {
       fail('Naledi route HTML missing header Open Next Train · Gauteng');
@@ -863,6 +874,28 @@ if (existsSync(DIST)) {
     const html = readFileSync(randHtmlPath, 'utf8');
     if (!/shuttle/i.test(html) || !/Roodepoort/i.test(html)) {
       fail('Randfontein HTML missing shuttle / Roodepoort note');
+    }
+    if (!/Langlaagte/.test(html) || !/manual authorisation/.test(html)) {
+      fail('Randfontein HTML missing Langlaagte manual-authorisation note');
+    }
+  }
+
+  const lenzHtmlPath = join(DIST, 'routes/johannesburg-to-lenz.html');
+  if (existsSync(lenzHtmlPath)) {
+    const html = readFileSync(lenzHtmlPath, 'utf8');
+    if (!/Croesus/.test(html) || !/Lenasia/.test(html)) {
+      fail('Lenz HTML missing Croesus / Lenasia turnback note');
+    }
+  }
+
+  const dewHtmlPath = join(DIST, 'routes/pretoria-to-de-wildt.html');
+  if (existsSync(dewHtmlPath)) {
+    const html = readFileSync(dewHtmlPath, 'utf8');
+    if (!/Hercules/.test(html) || !/Marabastad/.test(html) || !/Pretoria West/.test(html)) {
+      fail('De Wildt HTML missing Hercules / Marabastad / Pretoria West connection notes');
+    }
+    if (!/testing new sets/.test(html)) {
+      fail('De Wildt HTML missing off-peak test-train caveat');
     }
   }
 

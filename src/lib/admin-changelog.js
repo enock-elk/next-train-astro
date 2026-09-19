@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_09.19.2': [
+        'SEO insights: Randfontein / Lenz / Naledi Langlaagte manual-authorisation and Croesus turnback; De Wildt connection tips plus off-peak test-train caveat (no pasted clock list). SeoFareTable states weekday 09:30 to 14:30 40% adult and 50% pensioner, military veteran, scholar. Window stays 09:30 to 14:30 (not the 09:00 to 14:00 WhatsApp shorthand). No What’s New. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
+    ],
     'V9_09.19.1': [
         'SEO: keep View and download SERP copy. Regenerated sitemap lastmod. Pretoria–JHB corridor page (gauteng-pretoria-jhb-line) adds three-train Pretoria to Johannesburg copy plus a trip-planner link without removing the existing blurb or route list. Route landings add SEO_INSIGHTS after station serves (KZN maintenance/speed, Randfontein shuttle, Pienaarspoort mix, Saulsville frequency, Midway/Lenz rehab, Kempton sinkhole and 0618/0619 Blue Train/Rovos, Irene as a subset). Constants dl shows calculated along-published-stops km. No What’s New. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
     ],

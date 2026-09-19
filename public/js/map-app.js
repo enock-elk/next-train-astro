@@ -319,6 +319,14 @@
             // spur Lentegeur → Kapteinsklip (painted as a second polyline from
             // Philippi only, never a second Cape Town → Mutual line).
             'ct-nolu': ["CAPE TOWN", "ESPLANADE", "YSTERPLAAT", "MUTUAL", "LANGA", "BONTEHEUWEL", "NETREG", "HEIDEVELD", "NYANGA", "PHILIPPI", "STOCK ROAD", "MANDALAY", "NOLUNGILE"],
+            // network-map_wc.png: Northern Line trunk via Mutual (not Century City,
+            // not the Strand or Stellenbosch forks). Stikland is not adjacent to Du Toit.
+            'ct-well': ["CAPE TOWN", "WOODSTOCK", "SALT RIVER", "KOEBERG RD", "MAITLAND", "WOLTEMADE", "MUTUAL", "THORNTON", "GOODWOOD", "VASCO", "ELSIES RIVER", "PAROW", "TYGERBERG", "BELLVILLE", "STIKLAND", "BRACKENFELL", "EIKENFONTEIN", "KRAAIFONTEIN", "MULDERSVLEI", "KLAPMUTS", "PAARL", "HUGUENOT", "DAL JOSAFAT", "MBEKWENI", "WELLINGTON"],
+            'ct-kraai': ["CAPE TOWN", "WOODSTOCK", "SALT RIVER", "KOEBERG RD", "MAITLAND", "WOLTEMADE", "MUTUAL", "THORNTON", "GOODWOOD", "VASCO", "ELSIES RIVER", "PAROW", "TYGERBERG", "BELLVILLE", "STIKLAND", "BRACKENFELL", "EIKENFONTEIN", "KRAAIFONTEIN"],
+            'ct-eerst': ["CAPE TOWN", "WOODSTOCK", "SALT RIVER", "KOEBERG RD", "MAITLAND", "WOLTEMADE", "MUTUAL", "THORNTON", "GOODWOOD", "VASCO", "ELSIES RIVER", "PAROW", "TYGERBERG", "BELLVILLE", "KUILS RIVER", "BLACKHEATH", "MELTONROSE", "EERSTE RIVER"],
+            'ct-strnd': ["CAPE TOWN", "WOODSTOCK", "SALT RIVER", "KOEBERG RD", "MAITLAND", "WOLTEMADE", "MUTUAL", "THORNTON", "GOODWOOD", "VASCO", "ELSIES RIVER", "PAROW", "TYGERBERG", "BELLVILLE", "KUILS RIVER", "BLACKHEATH", "MELTONROSE", "EERSTE RIVER", "FAURE", "FIRGROVE", "SOMERSET WEST", "VAN DER STEL", "STRAND"],
+            'eerst-dtoit': ["CAPE TOWN", "WOODSTOCK", "SALT RIVER", "KOEBERG RD", "MAITLAND", "WOLTEMADE", "MUTUAL", "THORNTON", "GOODWOOD", "VASCO", "ELSIES RIVER", "PAROW", "TYGERBERG", "BELLVILLE", "KUILS RIVER", "BLACKHEATH", "MELTONROSE", "EERSTE RIVER", "LYNEDOCH", "VLOTTENBURG", "STELLENBOSCH", "DU TOIT"],
+            'ct-simon': ["CAPE TOWN", "WOODSTOCK", "SALT RIVER", "OBSERVATORY", "MOWBRAY", "ROSEBANK", "RONDEBOSCH", "NEWLANDS", "CLAREMONT", "HARFIELD ROAD", "KENILWORTH", "WYNBERG", "WITTEBOME", "PLUMSTEAD", "STEURHOF", "DIEPRIVIER", "HEATHFIELD", "RETREAT", "STEENBERG", "LAKESIDE", "FALSE BAY", "MUIZENBERG", "ST JAMES", "KALK BAY", "FISH HOEK", "SUNNY COVE", "GLENCAIRN", "SIMON'S TOWN"],
 
             // --- KWAZULU-NATAL ---
             'kzn-umlazi': ["DURBAN YARD", "DURBAN", "BEREA ROAD", "DALBRIDGE", "CONGELLA", "UMBILO", "ROSSBURGH", "CLAIRWOOD", "MONTCLAIR", "MEREBANK", "REUNION", "ZWELETHU", "KWAMNYANDU", "LINDOKUHLE", "UMLAZI"],
@@ -1294,6 +1302,11 @@
 
             // Guardian UX: Disabled Leaflet's rigid zoom control for horizontal bar layout
             const map = L.map('map', { zoomControl: false }).setView([initLat, initLon], initZoom);
+            map.on('click', function () {
+                try {
+                    (window.parent || window).postMessage({ type: 'nt-map-close-tracking' }, '*');
+                } catch (_) {}
+            });
             map.createPane('nt-stations');
             const stationPane = map.getPane('nt-stations');
             if (stationPane) stationPane.style.zIndex = 450;
@@ -2696,7 +2709,6 @@
                     + '<span class="nt-live-train-ring" aria-hidden="true"></span>'
                     + '<span class="nt-live-train-ring nt-live-train-ring--delay" aria-hidden="true"></span>'
                     + '<span class="' + cls + '" style="transform:rotate(' + yaw + 'deg)">'
-                    + '<span class="nt-live-train-wake" aria-hidden="true"><span class="nt-live-train-wake-ripple"><i></i><i></i></span><span class="nt-live-train-wake-ripple"><i></i><i></i></span><span class="nt-live-train-wake-ripple"><i></i><i></i></span></span>'
                     + '<span class="nt-live-train-shell" aria-hidden="true"></span>'
                     + '<span class="nt-live-train-oval nt-live-train-oval--a" aria-hidden="true"></span>'
                     + '<span class="nt-live-train-oval nt-live-train-oval--b" aria-hidden="true"></span>'
@@ -2947,14 +2959,18 @@
                 var path = ridePathForRoute(opts && opts.routeId);
                 if (path.length < 2) return null;
                 var p = projectOntoRidePath(path, lat, lng);
-                if (!p || p.offM > 250) return null;
+                if (!p) return null;
                 var stations = stationsAlongRidePath(path, opts && opts.routeId);
                 var destAlong = Number(opts && opts.destAlong);
                 if (!Number.isFinite(destAlong)) destAlong = alongMForStationName(stations, opts && opts.destination);
+                // Always sit on the painted corridor when one exists. A 250 m
+                // cutoff left Pretoria GPS (yards / concourse) off the green
+                // line with a raw heading instead of the rail tangent.
                 return {
                     lat: p.lat,
                     lng: p.lng,
                     alongM: p.alongM,
+                    offM: p.offM,
                     facing: rideFacingAlongPath(path, p.alongM, destAlong),
                     destAlong: destAlong,
                     path: path
@@ -3283,7 +3299,6 @@
                     const newest = row.newest;
                     const speedValue = (list.find(function (p) { return typeof p.speedMps === 'number'; }) || newest || {}).speedMps;
                     const speed = typeof speedValue === 'number' ? speedValue : null;
-                    const heading = row.bearing;
                     const spec = liveTrainIconSpec(map.getZoom(), trainId, Object.assign({}, newest, { bearing: row.bearing }));
                     const icon = L.divIcon({
                         className: 'nt-live-train',
@@ -3291,62 +3306,29 @@
                         iconSize: [spec.w, spec.h],
                         iconAnchor: [Math.round(spec.w / 2), Math.round(spec.h / 2)]
                     });
-                    const joinId = 'nt-join-train-' + String(trainId).replace(/[^a-zA-Z0-9_-]/g, '');
-                    const sheetId = 'nt-tt-train-' + String(trainId).replace(/[^a-zA-Z0-9_-]/g, '');
-                    const resumeId = 'nt-resume-train-' + String(trainId).replace(/[^a-zA-Z0-9_-]/g, '');
                     const paused = newest.trackingState === 'paused' || isPingGpsStale(newest);
-                    const actionBtn = mine
-                        ? (paused
-                            ? "<button type='button' id='" + resumeId + "' class='nt-live-train-pop-btn nt-live-train-pop-btn--resume'>Restart</button>"
-                                + "<button type='button' id='" + joinId + "' class='nt-live-train-pop-btn nt-live-train-pop-btn--stop'>Stop sharing</button>"
-                            : "<button type='button' id='" + joinId + "' class='nt-live-train-pop-btn nt-live-train-pop-btn--stop'>Stop sharing</button>")
-                        : "<button type='button' id='" + joinId + "' class='nt-live-train-pop-btn'>I’m on this train</button>";
-                    const status = paused ? 'Paused' : 'Active';
-                    const detailsId = 'nt-track-details-' + String(trainId).replace(/[^a-zA-Z0-9_-]/g, '');
-                    const pingAt = gpsPingSuccessAt(newest);
-                    const lastPlace = newest.lastSeenLabel || newest.station || 'on the route';
                     const dest = String(newest.destination || '').replace(/\s+STATION$/i, '').trim();
-                    const toward = dest ? ('Toward ' + dest) : '';
-                    const popupHtml =
-                        "<div class='nt-live-train-pop'>"
-                        + "<div class='nt-live-train-pop-head'><p class='nt-live-train-pop-title'>Train " + escapePing(trainId) + "</p>"
-                        + "<span class='nt-live-train-status nt-live-train-status--" + (paused ? 'paused' : 'active') + "'>" + status + "</span></div>"
-                        + "<p class='nt-live-train-pop-sub'>" + escapePing(sharingStatusCopy(n, mine)) + (toward ? (' · ' + escapePing(toward)) : '') + "</p>"
-                        + "<dl class='nt-live-train-metrics'>"
-                        + "<div><dt>Speed</dt><dd>" + escapePing(speed == null ? 'Unknown' : (Math.max(0, speed) * 3.6).toFixed(0) + ' km/h') + "</dd></div>"
-                        + "<div><dt>Heading</dt><dd>" + escapePing(headingMetric(heading)) + "</dd></div>"
-                        + "<div><dt>Rail distance</dt><dd>" + escapePing(distanceMetric(Number(newest.railDistanceM))) + "</dd></div>"
-                        + "<div><dt>GPS age</dt><dd data-nt-gps-at='" + pingAt + "' data-nt-gps-kind='age'>" + escapePing(ageMetric(pingAt)) + "</dd></div>"
-                        + "<div><dt>GPS accuracy</dt><dd>" + escapePing(Number.isFinite(newest.accuracy) ? '±' + Math.round(newest.accuracy) + ' m' : 'Unknown') + "</dd></div>"
-                        + "<div><dt>Contributors</dt><dd>" + escapePing(metricValue(n, '0')) + "</dd></div>"
-                        + "</dl>"
-                        + "<p class='nt-live-train-last' data-nt-gps-at='" + pingAt + "' data-nt-gps-kind='last' data-nt-last-seen='" + escapePing(lastPlace) + "'>" + escapePing(lastSeenMetric(lastPlace, pingAt)) + "</p>"
-                        + "<div class='nt-live-train-pop-actions'>"
-                        + "<button type='button' id='" + detailsId + "' class='nt-live-train-pop-btn nt-live-train-pop-btn--details'>Show tracking details</button>"
-                        + actionBtn
-                        + "<button type='button' id='" + sheetId + "' class='nt-live-train-pop-btn nt-live-train-pop-btn--sheet'>Timetable</button>"
-                        + "</div></div>";
                     let marker = rideTrainMarkers[trainId];
                     if (!marker) {
                         marker = L.marker([lat, lng], { icon: icon, zIndexOffset: 800, keyboard: true });
-                        marker.bindPopup(popupHtml);
-                        marker.on('popupopen', function () { bindRideTrainPopupActions(marker); });
+                        marker.on('click', function (ev) {
+                            L.DomEvent.stop(ev);
+                            try {
+                                (window.parent || window).postMessage({
+                                    type: 'nt-map-show-tracking-details',
+                                    trainId: trainId,
+                                    routeId: newest.routeId || list[0].routeId || null,
+                                    ping: newest,
+                                    n: n,
+                                    mine: mine
+                                }, '*');
+                            } catch (_) {}
+                        });
                         marker.addTo(ridePingLayer);
                         rideTrainMarkers[trainId] = marker;
                     } else {
                         marker.setIcon(icon);
-                        marker.setPopupContent(popupHtml);
                     }
-                    marker._ntRidePopupContext = {
-                        trainId: trainId,
-                        joinId: joinId,
-                        detailsId: detailsId,
-                        sheetId: sheetId,
-                        resumeId: resumeId,
-                        mine: mine,
-                        station: list[0].station || '',
-                        routeId: list[0].routeId || null
-                    };
                     interpolateRideMarkerLatLng(marker, [lat, lng], paused, {
                         routeId: newest.routeId || list[0].routeId,
                         speedMps: speed,
@@ -3355,9 +3337,6 @@
                         destAlong: row.destAlong,
                         bearing: row.bearing
                     });
-                    if (marker.isPopupOpen && marker.isPopupOpen()) {
-                        requestAnimationFrame(function () { bindRideTrainPopupActions(marker); });
-                    }
                 });
                 updateStationCallouts(placedTrains);
 
@@ -3401,7 +3380,9 @@
                     const marker = rideTrainMarkers[String(data.trainId)];
                     if (marker) {
                         map.flyTo(marker.getLatLng(), 15, { duration: 1.0 });
-                        marker.openPopup();
+                        try {
+                            marker.fire('click');
+                        } catch (_) {}
                     }
                     return;
                 }

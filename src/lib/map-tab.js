@@ -61,6 +61,7 @@ const PINGS_POLL_WITH_LISTENER_MS = 120 * 1000;
 let pingsTimer = 0;
 let lastMapPingSig = '';
 let trackingCardMode = 'expanded';
+let viewedTrain = null;
 let lastShareRequest = null;
 let shareRestartInFlight = false;
 let restoreDragMoved = false;
@@ -244,43 +245,86 @@ function positionTrackingCardFromPill() {
     card.style.marginRight = '0';
 }
 
+function paintSharePill(active, paused) {
+    const restore = document.getElementById('map-tracking-restore');
+    if (!restore) return;
+    const live = !!(active?.trainId) && !paused;
+    restore.classList.toggle('bg-emerald-600', live);
+    restore.classList.toggle('bg-gray-900/95', !live);
+}
+
+function setTrackingOwnerChrome(mine) {
+    ['map-tracking-stop', 'map-tracking-toggle', 'map-tracking-share'].forEach((id) => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.classList.toggle('hidden', !mine);
+        if (mine) {
+            el.removeAttribute('hidden');
+        } else {
+            el.setAttribute('hidden', '');
+        }
+    });
+}
+
+function hideTrackingDetailsCard() {
+    viewedTrain = null;
+    import('./ride-pings.js').then((ride) => {
+        const active = ride.getActiveShare?.();
+        trackingCardMode = active?.trainId ? 'minimized' : 'dismissed';
+        const own = active
+            ? (ride.getCachedRidePings?.(active.routeId) || []).find((p) => p.deviceId === getDeviceId())
+            : null;
+        renderTrackingStatusCard(active, own || null);
+    }).catch(() => {});
+}
+
 function renderTrackingStatusCard(active, marker = null) {
     const card = document.getElementById('map-tracking-card');
     const restore = document.getElementById('map-tracking-restore');
     if (!card || !restore) return;
-    if (!active?.trainId) {
+    const subject = viewedTrain?.trainId
+        ? { ...(viewedTrain.ping || {}), trainId: viewedTrain.trainId, destination: viewedTrain.ping?.destination || viewedTrain.destination, n: viewedTrain.n }
+        : active;
+    const subjectMarker = viewedTrain?.trainId ? (viewedTrain.ping || marker) : marker;
+    const mine = !viewedTrain?.trainId || !!viewedTrain.mine || !!(active?.trainId && String(active.trainId) === String(subject?.trainId));
+    if (!subject?.trainId && !active?.trainId) {
+        card.classList.add('hidden');
+        restore.classList.add('hidden');
+        return;
+    }
+    if (!subject?.trainId) {
         card.classList.add('hidden');
         restore.classList.add('hidden');
         return;
     }
     const pingAt = gpsPingSuccessAt({
-        ...(active || {}),
-        ...(marker || {}),
-        fixAt: marker?.fixAt || active?.fixAt,
-        acceptedAt: marker?.acceptedAt || active?.acceptedAt,
-        lastPingAt: marker?.lastPingAt || active?.lastPingAt,
-        at: marker?.at || active?.at,
+        ...(subject || {}),
+        ...(subjectMarker || {}),
+        fixAt: subjectMarker?.fixAt || subject?.fixAt,
+        acceptedAt: subjectMarker?.acceptedAt || subject?.acceptedAt,
+        lastPingAt: subjectMarker?.lastPingAt || subject?.lastPingAt,
+        at: subjectMarker?.at || subject?.at,
     });
-    const paused = trackingIsPaused(active, marker, pingAt);
-    const progress = marker?.projectedProgress ?? active.projectedProgress;
-    const journeyH = journeyHeadingAtProgress(active.trainId, progress);
-    const bearing = Number.isFinite(journeyH) ? journeyH : (marker?.bearing ?? active.bearing);
-    const speed = marker?.speedMps ?? active.speedMps;
-    const accuracy = marker?.accuracy ?? active.accuracy;
-    const place = marker?.lastSeenLabel || active.lastSeenLabel || active.station || 'on the route';
-    const toward = trainTowardLabel(active.trainId, active.destination);
-    setTrackingText('map-tracking-title', `Train ${active.trainId}`);
+    const paused = trackingIsPaused(subject, subjectMarker, pingAt);
+    const progress = subjectMarker?.projectedProgress ?? subject.projectedProgress;
+    const journeyH = journeyHeadingAtProgress(subject.trainId, progress);
+    const bearing = Number.isFinite(journeyH) ? journeyH : (subjectMarker?.bearing ?? subject.bearing);
+    const speed = subjectMarker?.speedMps ?? subject.speedMps;
+    const accuracy = subjectMarker?.accuracy ?? subject.accuracy;
+    const place = subjectMarker?.lastSeenLabel || subject.lastSeenLabel || subject.station || 'on the route';
+    const toward = trainTowardLabel(subject.trainId, subject.destination);
+    setTrackingText('map-tracking-title', `Train ${subject.trainId}`);
     setTrackingText('map-tracking-toward', toward);
     setTrackingText('map-tracking-state', paused ? 'Paused' : 'Active');
     setTrackingText('map-tracking-last-seen', formatLastSeenWithPingClock(place, pingAt));
     setTrackingText('map-tracking-speed', Number.isFinite(speed) ? `${Math.round(Math.max(0, speed) * 3.6)} km/h` : 'Unknown');
     setTrackingText('map-tracking-heading', trackingHeadingLabel(bearing));
     setTrackingText('map-tracking-gps', formatGpsPingAge(pingAt));
-    setTrackingText('map-tracking-rail', trackingDistanceLabel(marker?.railDistanceM ?? active.railDistanceM));
+    setTrackingText('map-tracking-rail', trackingDistanceLabel(subjectMarker?.railDistanceM ?? subject.railDistanceM));
     setTrackingText('map-tracking-accuracy', Number.isFinite(accuracy) ? `±${Math.round(accuracy)} m` : 'Unknown');
-    setTrackingText('map-tracking-count', String(Math.max(1, Number(marker?.n) || 1)));
-    document.getElementById('map-tracking-warning')?.classList.toggle('hidden', !active.directionWarning);
-    setTrackingText('map-tracking-restore-label', `Train ${active.trainId} · ${paused ? 'paused' : 'active'}`);
+    setTrackingText('map-tracking-count', String(Math.max(1, Number(subjectMarker?.n || subject.n) || 1)));
+    document.getElementById('map-tracking-warning')?.classList.toggle('hidden', !subject.directionWarning);
+    setTrackingText('map-tracking-restore-label', `Train ${active?.trainId || subject.trainId} · ${paused ? 'paused' : 'active'}`);
     const stateEl = document.getElementById('map-tracking-state');
     stateEl?.classList.toggle('bg-green-100', !paused);
     stateEl?.classList.toggle('dark:bg-green-950', !paused);
@@ -295,21 +339,29 @@ function renderTrackingStatusCard(active, marker = null) {
         toggle.textContent = paused ? 'Restart' : 'Pause';
         toggle.setAttribute('aria-label', paused ? 'Restart sharing' : 'Pause sharing');
     }
+    setTrackingOwnerChrome(mine && !!active?.trainId && String(active.trainId) === String(subject.trainId));
     card.classList.toggle('hidden', trackingCardMode !== 'expanded');
-    restore.classList.toggle('hidden', trackingCardMode !== 'minimized');
+    restore.classList.toggle('hidden', trackingCardMode !== 'minimized' || !active?.trainId);
+    paintSharePill(active, active ? trackingIsPaused(active, marker, gpsPingSuccessAt({ ...(active || {}), ...(marker || {}) })) : true);
 }
 
-export function showTrackingStatusCard() {
+export function showTrackingStatusCard(opts = {}) {
+    if (opts.viewed?.trainId) viewedTrain = opts.viewed;
+    else if (!opts.keepViewed) viewedTrain = null;
     const pill = document.getElementById('map-tracking-restore');
     const fromPill = !!(pill && !pill.classList.contains('hidden'));
     trackingCardMode = 'expanded';
     import('./ride-pings.js').then((ride) => {
         const active = ride.getActiveShare?.();
-        const trainPings = active?.trainId
-            ? (ride.getCachedRidePings?.(active.routeId) || []).filter((p) => String(p.trainId || '') === String(active.trainId))
+        const trainId = viewedTrain?.trainId || active?.trainId;
+        const routeId = viewedTrain?.routeId || active?.routeId;
+        const trainPings = trainId
+            ? (ride.getCachedRidePings?.(routeId) || []).filter((p) => String(p.trainId || '') === String(trainId))
             : [];
         const own = trainPings.find((p) => p.deviceId === getDeviceId());
-        const marker = own ? { ...own, n: trainPings.length || 1 } : null;
+        const marker = viewedTrain?.ping
+            ? { ...viewedTrain.ping, n: viewedTrain.n || trainPings.length || 1 }
+            : (own ? { ...own, n: trainPings.length || 1 } : null);
         renderTrackingStatusCard(active, marker);
         if (fromPill) {
             requestAnimationFrame(() => positionTrackingCardFromPill());
@@ -1969,8 +2021,9 @@ async function finishRideShare({
         if (trainId) {
             const { startOnboardPingLoop } = await import('./ride-pings.js');
             startOnboardPingLoop();
-            trackingCardMode = 'expanded';
-            showTrackingStatusCard();
+            viewedTrain = null;
+            trackingCardMode = 'minimized';
+            syncMapShareChrome();
         }
         return { ok: true, trainId };
     } catch (e) {
@@ -2828,12 +2881,20 @@ export function bindMapTabUi() {
         if (data.type === 'nt-map-show-tracking-details' && data.trainId) {
             import('./ride-pings.js').then((ride) => {
                 const active = ride.getActiveShare?.();
-                if (active?.trainId && String(active.trainId) === String(data.trainId)) {
-                    showTrackingStatusCard();
-                    return;
-                }
-                ride.openLiveTrackerSheet?.(String(data.trainId), data.routeId || $currentRouteId.get());
+                const mine = !!(active?.trainId && String(active.trainId) === String(data.trainId));
+                showTrackingStatusCard({
+                    viewed: {
+                        trainId: String(data.trainId),
+                        routeId: data.routeId || $currentRouteId.get(),
+                        ping: data.ping || null,
+                        n: data.n || 1,
+                        mine,
+                    },
+                });
             }).catch(() => {});
+        }
+        if (data.type === 'nt-map-close-tracking') {
+            hideTrackingDetailsCard();
         }
     });
 }

@@ -17658,7 +17658,7 @@ const Admin = {
                     ? `${p.distanceKm.toFixed(1)} km`
                     : '-';
                 const srcBit = p?.distanceSource
-                    ? ({ path: 'path', km_mark: 'km mark', crow: 'crow-flies' }[p.distanceSource] || p.distanceSource)
+                    ? ({ path: 'path', stops: 'stops', rail: 'rail', km_mark: 'km mark', crow: 'crow-flies' }[p.distanceSource] || p.distanceSource)
                     : '';
                 const assigned = p?.assignedZone || (r.zones?.[0] || '-');
                 const suggested = p?.suggestedZone || '-';
@@ -17689,7 +17689,8 @@ const Admin = {
                                 <span>${d.distanceKm != null ? d.distanceKm.toFixed(1) + ' km' : '-'} - ${esc(d.assignedZone || '-')}/${esc(d.suggestedZone || '-')}${monthlyBit}${d.mismatch ? ' !' : ''}</span>
                             </div>
                             <div class="text-[8px] opacity-70 mt-0.5">
-                                path ${m.pathKm != null ? m.pathKm + ' km' : '-'}
+                                path ${m.pathKm != null ? m.pathKm + ' km' : '-'} (${esc(m.chainSource || 'stops')})
+                                - rail ${m.bakedKm != null ? m.bakedKm + ' km' : '-'}
                                 - crow ${m.crowKm != null ? m.crowKm + ' km' : '-'}
                                 - km-mark ${m.kmMarkDelta != null ? m.kmMarkDelta + ' km' : '-'}
                                 - coords ${m.withCoords || 0}/${m.stationCount || 0}
@@ -17753,9 +17754,22 @@ const Admin = {
                         throw new Error('Zone audit engine not loaded (runZoneDistanceAudit missing).');
                     }
                     const db = await fetchDbForZoneAudit(targetRegion, scanSource);
+                    let bakedFeatures = [];
+                    try {
+                        const trackPath = `tracks/rail-tracks-${targetRegion}.geojson`;
+                        const trackUrl = (typeof window.withBase === 'function')
+                            ? window.withBase(trackPath)
+                            : new URL(trackPath, document.baseURI).href;
+                        const trackRes = await fetch(trackUrl, { cache: 'no-store' });
+                        if (trackRes.ok) {
+                            const fc = await trackRes.json();
+                            bakedFeatures = Array.isArray(fc?.features) ? fc.features : [];
+                        }
+                    } catch { /* dump / stops still work */ }
                     const report = runZoneDistanceAudit(db, targetRegion, {
                         bands,
                         parseJSONSchedule: typeof parseJSONSchedule === 'function' ? parseJSONSchedule : null,
+                        bakedFeatures,
                     });
                     report.meta = {
                         region: targetRegion,

@@ -348,6 +348,8 @@ assert(legacyHourly === new Date(2026, 8, 7, 7, 0, 0).getTime(), 'legacy hourly 
 assert(admin.includes('zone-audit-monthly-legend'), 'zone audit shows a monthly ticket legend');
 assert(admin.includes('formatZoneMonthlyLegend'), 'zone audit legend reads FARE_CONFIG monthlies');
 assert(admin.includes('monthly R${Number(d.monthly)}'), 'zone audit direction rows show monthly');
+assert(admin.includes('tracks/rail-tracks-${targetRegion}.geojson'), 'zone audit loads painted rail corridors');
+assert(admin.includes('m.chainSource'), 'zone audit shows whether the stop list is the static map');
 
 assert(admin.includes('openRoadmapOriginal'), 'roadmap can open the original item');
 assert(admin.includes('data-fb-ids'), 'feedback threads expose ids for deep-link');

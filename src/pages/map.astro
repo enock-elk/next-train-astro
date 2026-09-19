@@ -269,46 +269,6 @@ const regionSeoSlugs = Object.fromEntries(
         z-index: 0;
       }
       .nt-live-train-ring--delay { animation-delay: 1.15s; }
-      .nt-live-train-wake {
-        position: absolute;
-        right: -2px;
-        top: 50%;
-        width: 34px;
-        height: 40px;
-        transform: translate(42%, -50%);
-        pointer-events: none;
-        z-index: 0;
-        overflow: visible;
-      }
-      .nt-live-train-wake-ripple {
-        position: absolute;
-        right: 0;
-        top: 50%;
-        width: 2px;
-        height: 2px;
-        transform: translateY(-50%);
-        animation: nt-live-train-wake 1.65s ease-out infinite;
-      }
-      .nt-live-train-wake-ripple:nth-child(2) { animation-delay: 0.22s; opacity: 0.8; }
-      .nt-live-train-wake-ripple:nth-child(3) { animation-delay: 0.44s; opacity: 0.55; }
-      .nt-live-train-wake-ripple i {
-        position: absolute;
-        right: 0;
-        top: 0;
-        width: 18px;
-        height: 2px;
-        border-radius: 999px;
-        background: rgba(37, 99, 235, 0.7);
-        transform-origin: right center;
-      }
-      .nt-live-train-wake-ripple i:first-child { transform: rotate(24deg); }
-      .nt-live-train-wake-ripple i:last-child { transform: rotate(-24deg); }
-      .nt-live-train-wrap--compact .nt-live-train-wake {
-        width: 26px;
-        height: 32px;
-        transform: translate(38%, -50%) scale(0.82);
-      }
-      .nt-live-train-wrap--paused .nt-live-train-wake { display: none; }
       .nt-live-train-wrap--paused .nt-live-train-ring {
         background: rgba(100, 116, 139, 0.18);
         animation: none;
@@ -396,23 +356,13 @@ const regionSeoSlugs = Object.fromEntries(
       .nt-live-train-glyph--far .nt-live-train-nose { width: 5px; height: 5px; margin-top: -2.5px; }
       .nt-live-train-glyph--far .nt-live-train-num { font-size: 6px; letter-spacing: 0.01em; }
       .nt-live-train-wrap--far .nt-live-train-ring { width: 22px; height: 22px; }
-      .nt-live-train-wrap--far .nt-live-train-wake { display: none; }
       @keyframes nt-live-train-halo {
         0% { transform: scale(0.55); opacity: 0.42; }
         100% { transform: scale(1.7); opacity: 0; }
       }
-      @keyframes nt-live-train-wake {
-        0% { transform: translate(-2px, -50%) scale(0.28); opacity: 0.92; }
-        100% { transform: translate(-26px, -50%) scale(1.2); opacity: 0; }
-      }
       @media (prefers-reduced-motion: reduce) {
-        .nt-live-train-ring,
-        .nt-live-train-wake-ripple {
+        .nt-live-train-ring {
           animation: none !important;
-        }
-        .nt-live-train-wake-ripple {
-          transform: translate(-10px, -50%) scale(0.85);
-          opacity: 0.45;
         }
       }
       .nt-live-train-pop { text-align: left; color: #111827; min-width: 13.5rem; padding: 0.1rem 0.15rem; }

@@ -13,6 +13,9 @@ import {
   extractStationChain,
   measureStationChain,
   primaryDistanceKm,
+  bakedDestToDestKm,
+  corridorNameList,
+  mapCorridorsFromFeatures,
 } from './zone-distance-audit.js';
 
 const IGNORE_KEYS = new Set(['STATION', 'COORDINATES', 'KM_MARK', 'row_index']);
@@ -598,9 +601,41 @@ export function buildRouteBoardAppPath(routeId) {
 }
 
 const DISTANCE_SHEET_ORDER = ['weekday_to_b', 'weekday_to_a', 'saturday_to_b', 'saturday_to_a'];
+const TRACK_FILE = {
+    GP: 'rail-tracks-GP.geojson',
+    WC: 'rail-tracks-WC.geojson',
+    KZN: 'rail-tracks-KZN.geojson',
+    EC: 'rail-tracks-EC.geojson',
+};
+const bakedCache = new Map();
+
+function loadBakedFeature(route) {
+    const region = String(route?.region || '').toUpperCase();
+    const file = TRACK_FILE[region];
+    if (!file) return null;
+    if (!bakedCache.has(region)) {
+        const here = dirname(fileURLToPath(import.meta.url));
+        const candidates = [
+            join(process.cwd(), 'public/tracks', file),
+            join(here, '../../public/tracks', file),
+        ];
+        const path = candidates.find((p) => existsSync(p));
+        if (!path) {
+            bakedCache.set(region, null);
+        } else {
+            try {
+                bakedCache.set(region, JSON.parse(readFileSync(path, 'utf8')));
+            } catch {
+                bakedCache.set(region, null);
+            }
+        }
+    }
+    const fc = bakedCache.get(region);
+    return (fc?.features || []).find((f) => f?.properties?.routeId === route?.id) || null;
+}
 
 /**
- * Along-published-stops km from the dump (KM_MARK span, else station-to-station path).
+ * destA→destB km: painted rail when present, else timed published stops.
  * Same primary figure as the zone-distance audit.
  */
 export function seoRouteDistanceKm(route, dump = loadScheduleDump()) {
@@ -614,10 +649,25 @@ export function seoRouteDistanceKm(route, dump = loadScheduleDump()) {
         if (!sheet) continue;
         const rows = Array.isArray(sheet) ? sheet : sheet.rows;
         if (!rows?.length) continue;
-        const km = primaryDistanceKm(measureStationChain(extractStationChain({
+        const baked = loadBakedFeature(route);
+        const regionFc = bakedCache.get(String(route?.region || '').toUpperCase());
+        const chain = extractStationChain({
             rows,
             stationColumnName: 'STATION',
-        })));
+        }, {
+            destA: route.destA,
+            destB: route.destB,
+            mapCorridor: corridorNameList(baked).length >= 2 ? corridorNameList(baked) : undefined,
+            mapCorridors: mapCorridorsFromFeatures(regionFc?.features || []),
+            bakedFeature: baked,
+            bakedFeatures: regionFc?.features || [],
+        });
+        const measure = measureStationChain(chain);
+        const ends = chain.filter((s) => s.lat != null && s.lon != null);
+        if (baked && ends.length >= 2) {
+            measure.bakedKm = bakedDestToDestKm(baked, ends[0], ends[ends.length - 1]);
+        }
+        const km = primaryDistanceKm(measure);
         if (km != null && Number.isFinite(km) && km > 0) {
             return Math.round(km * 10) / 10;
         }

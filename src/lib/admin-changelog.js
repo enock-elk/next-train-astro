@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_09.19.4': [
+        'Service Alerts drill titles: Notifications (not push-notifications-panel), In-app alerts, Service Alerts. Header id is push-notifications-header-btn so tile chrome hides. applyAlertHubView runs before the quiet Back return so hub tiles cannot sit above compose. Inbox Options stays top-right; long emails/phones wrap in the left column (break-all, no 220px cap). No What’s New. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
+    ],
     'V9_09.19.3': [
         'Alert lightbox: Close lives in a bottom bar so an empty img cannot center it. Full view copies the decoded poster currentSrc/blob instead of refetching. Pinch/pan is CSS transform on the image stage with touch-action none and gesture preventDefault so the Close chrome does not page-zoom. tripPrice defaults enabled + * for lab, prod, and seed; enabled with an empty routeIds list still means all corridors. Matching fare vote thanks only; ticket photo stays on the disagree path. Planner telemetry Fares tab no longer inherits Trip Plans infinite-scroll (load-more and paint are trips-tab only). No What’s New. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
     ],

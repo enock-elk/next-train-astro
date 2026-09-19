@@ -313,6 +313,17 @@ function ntAdminCanonicalPanelId(panelId) {
     return id;
 }
 
+/** Human drill title. Never show a raw panel id like `push-notifications-panel`. */
+function ntAdminDrillPanelTitle(panelId, headerText) {
+    const id = String(panelId || '');
+    if (id === 'push-notifications-panel') return 'Notifications';
+    if (id === 'alert-panel--inapp') return 'In-app alerts';
+    const fromHeader = String(headerText || '').replace(/\s+/g, ' ').trim();
+    if (fromHeader) return fromHeader;
+    if (id === 'alert-panel') return 'Service Alerts';
+    return id;
+}
+
 /** Push a drilled admin panel onto the in-memory stack (no duplicate of the current top). */
 function ntAdminPushDrillPanel(stack, panelId) {
     const id = String(panelId || '');
@@ -4644,12 +4655,13 @@ const Admin = {
             if (titleH3) {
                 if (!devHeaderRow.dataset.originalHtml) devHeaderRow.dataset.originalHtml = titleH3.innerHTML;
                 const headerSpan = targetPanel.querySelector('[id$="-header-btn"] > span');
-                let cardTitle = panelId;
+                let headerText = '';
                 if (headerSpan) {
                     const titleClone = headerSpan.cloneNode(true);
                     titleClone.querySelectorAll('span[id$="-last-sync"], span[id$="-unread-badge"]').forEach((el) => el.remove());
-                    cardTitle = (titleClone.textContent || '').replace(/\s+/g, ' ').trim() || panelId;
+                    headerText = (titleClone.textContent || '').replace(/\s+/g, ' ').trim();
                 }
+                const cardTitle = ntAdminDrillPanelTitle(requestedId, headerText);
                 titleH3.innerHTML = `
                     <button id="drill-back-btn" class="mr-3 p-1.5 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-500 hover:text-gray-900 dark:hover:text-white transition-colors focus:outline-none shadow-sm shrink-0">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
@@ -4674,6 +4686,28 @@ const Admin = {
                 Admin.renderGlobalStateMonitor(banner, Admin._gsmItems || [], { keepOpen: true });
             }
         }
+        if (domId === 'alert-panel') {
+            const skipHub = !!(
+                opts.alertView === 'inapp'
+                || requestedId === 'alert-panel--inapp'
+                || Admin._pendingAdminRoute
+                || Admin._pendingReviewItemId
+            );
+            Admin.applyAlertHubView(skipHub ? 'inapp' : 'hub');
+            if (skipHub && !quiet) {
+                if (typeof Admin.setAlertManagerTab === 'function' && Admin._pendingAdminRoute) {
+                    Admin.setAlertManagerTab('compose');
+                }
+                Admin.applyPendingAdminRoute('alert-panel');
+                const targetEl = document.getElementById('alert-target');
+                if (targetEl && !Admin._pendingAdminRoute && typeof Admin.fetchCurrentAlertsForTargets === 'function') {
+                    Admin.fetchCurrentAlertsForTargets();
+                }
+            }
+        }
+        if (domId === 'push-notifications-panel') {
+            Admin.paintDrillTitle('Notifications');
+        }
         if (quiet) return true;
         if (panelId === 'feedback-panel' && typeof Admin.fetchFeedback === 'function') Admin.fetchFeedback();
         if (panelId === 'delay-reports-panel' && typeof Admin.fetchDelayReports === 'function') Admin.fetchDelayReports();
@@ -4691,25 +4725,6 @@ const Admin = {
         if (panelId === 'holiday-approvals-panel' && typeof Admin.fetchHolidayApprovals === 'function') Admin.fetchHolidayApprovals();
         if (panelId === 'maint-panel') {
             Admin.collapseSystemControlAccordions();
-        }
-        if (domId === 'alert-panel') {
-            const skipHub = !!(
-                opts.alertView === 'inapp'
-                || requestedId === 'alert-panel--inapp'
-                || Admin._pendingAdminRoute
-                || Admin._pendingReviewItemId
-            );
-            Admin.applyAlertHubView(skipHub ? 'inapp' : 'hub');
-            if (skipHub) {
-                if (typeof Admin.setAlertManagerTab === 'function' && Admin._pendingAdminRoute) {
-                    Admin.setAlertManagerTab('compose');
-                }
-                Admin.applyPendingAdminRoute('alert-panel');
-                const targetEl = document.getElementById('alert-target');
-                if (targetEl && !Admin._pendingAdminRoute && typeof Admin.fetchCurrentAlertsForTargets === 'function') {
-                    Admin.fetchCurrentAlertsForTargets();
-                }
-            }
         }
         return true;
     },
@@ -7555,12 +7570,12 @@ const Admin = {
 
                 let contactHtml = '';
                 if (allEmails.size > 0 || allPhones.size > 0) {
-                    contactHtml = '<div class="flex flex-wrap gap-1.5">';
+                    contactHtml = '<div class="flex flex-wrap gap-1.5 min-w-0">';
                     allEmails.forEach(em => {
                         contactHtml += `
-                            <div class="flex items-center bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded px-1.5 py-0.5 max-w-[220px] sm:max-w-[300px]">
-                                <a href="mailto:${em}" onclick="event.stopPropagation()" class="text-[10px] text-blue-500 hover:underline font-mono tracking-tight lowercase truncate inline-flex items-center gap-1">${Admin.icon('mail', 'w-3 h-3 shrink-0')} ${em}</a>
-                                <button onclick="event.stopPropagation(); navigator.clipboard.writeText('${em}'); if(typeof showToast === 'function') showToast('Copied!', 'success', 1000);" class="ml-1.5 text-gray-400 hover:text-blue-500 transition-colors focus:outline-none inline-flex" title="Copy">${Admin.icon('copy', 'w-3 h-3')}</button>
+                            <div class="flex items-center min-w-0 max-w-full bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded px-1.5 py-0.5">
+                                <a href="mailto:${em}" onclick="event.stopPropagation()" class="text-[10px] text-blue-500 hover:underline font-mono tracking-tight lowercase break-all whitespace-normal inline-flex items-center gap-1 min-w-0">${Admin.icon('mail', 'w-3 h-3 shrink-0')} ${em}</a>
+                                <button onclick="event.stopPropagation(); navigator.clipboard.writeText('${em}'); if(typeof showToast === 'function') showToast('Copied!', 'success', 1000);" class="ml-1.5 text-gray-400 hover:text-blue-500 transition-colors focus:outline-none inline-flex shrink-0" title="Copy">${Admin.icon('copy', 'w-3 h-3')}</button>
                             </div>`;
                     });
                     allPhones.forEach(ph => {
@@ -7570,9 +7585,9 @@ const Admin = {
                         const aClass = isNum ? 'text-emerald-700 dark:text-emerald-300 hover:underline' : 'text-gray-500 dark:text-gray-400';
                         
                         contactHtml += `
-                            <div class="flex items-center bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800/50 rounded px-2 py-1 max-w-[220px] sm:max-w-[300px] shadow-sm">
-                                <a href="${link}" ${target} onclick="event.stopPropagation()" class="text-[10px] ${aClass} font-mono tracking-tight truncate inline-flex items-center gap-1">${Admin.icon(isNum ? 'message' : 'phone', 'w-3 h-3 shrink-0')} ${ph}</a>
-                                <button onclick="event.stopPropagation(); navigator.clipboard.writeText('${ph}'); if(typeof showToast === 'function') showToast('Copied!', 'success', 1000);" class="ml-1.5 text-gray-400 hover:text-emerald-500 transition-colors focus:outline-none inline-flex" title="Copy">${Admin.icon('copy', 'w-3 h-3')}</button>
+                            <div class="flex items-center min-w-0 max-w-full bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800/50 rounded px-2 py-1 shadow-sm">
+                                <a href="${link}" ${target} onclick="event.stopPropagation()" class="text-[10px] ${aClass} font-mono tracking-tight break-all whitespace-normal inline-flex items-center gap-1 min-w-0">${Admin.icon(isNum ? 'message' : 'phone', 'w-3 h-3 shrink-0')} ${ph}</a>
+                                <button onclick="event.stopPropagation(); navigator.clipboard.writeText('${ph}'); if(typeof showToast === 'function') showToast('Copied!', 'success', 1000);" class="ml-1.5 text-gray-400 hover:text-emerald-500 transition-colors focus:outline-none inline-flex shrink-0" title="Copy">${Admin.icon('copy', 'w-3 h-3')}</button>
                             </div>`;
                     });
                     contactHtml += '</div>';
@@ -16059,11 +16074,11 @@ const Admin = {
             });
         };
         let groupHTML = `
-                        <div class="flex flex-wrap items-center gap-2 shrink-0 mb-0 bg-gray-50 dark:bg-gray-800/50 p-2 rounded-t-lg border border-gray-100 dark:border-gray-700 border-b-0">
-                            <div class="flex-grow min-w-0">
+                        <div class="flex items-start gap-2 shrink-0 mb-0 bg-gray-50 dark:bg-gray-800/50 p-2 rounded-t-lg border border-gray-100 dark:border-gray-700 border-b-0">
+                            <div class="flex-1 min-w-0">
                                 ${contactHtml || '<span class="text-[10px] text-gray-400 italic font-medium px-1">No contact info provided</span>'}
                             </div>
-                            <div class="relative shrink-0" data-fb-more-wrap>
+                            <div class="relative shrink-0 ml-auto" data-fb-more-wrap>
                                 <button type="button" data-fb-more-toggle class="flex items-center gap-1 px-2.5 py-1.5 bg-white dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 border border-gray-200 dark:border-gray-600 rounded-lg transition-colors focus:outline-none shadow-sm text-[10px] font-bold uppercase tracking-wider" title="Options">
                                     Options
                                     <svg class="w-3 h-3 opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
@@ -16907,7 +16922,7 @@ const Admin = {
         panel.dataset.loaded = 'true';
         panel.className = 'bg-white dark:bg-gray-800 rounded-xl shadow-md border border-gray-200 dark:border-gray-700 p-4 mb-4 relative overflow-hidden transition-all duration-300';
         panel.innerHTML = `
-            <button type="button" id="push-notifications-header" class="w-full text-left text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center justify-center focus:outline-none">
+            <button type="button" id="push-notifications-header-btn" class="w-full text-left text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center justify-center focus:outline-none">
                 <span class="flex flex-col items-center">
                     ${Admin.tileIcon('megaphone', 'text-blue-600 dark:text-blue-400')}
                     <span>Notifications</span>
@@ -17003,7 +17018,7 @@ const Admin = {
             </div>`;
 
         const body = panel.querySelector('#push-notifications-body');
-        const header = panel.querySelector('#push-notifications-header');
+        const header = panel.querySelector('#push-notifications-header-btn');
         const environment = panel.querySelector('#push-notifications-environment');
         const audience = panel.querySelector('#push-notifications-audience');
         const category = panel.querySelector('#push-notifications-category');

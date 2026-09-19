@@ -32,6 +32,7 @@ this.ntAdminNormalizeRoadmapText = ntAdminNormalizeRoadmapText;
 this.ntAdminParseRoadmapSource = ntAdminParseRoadmapSource;
 this.ntAdminDevPanelIdFromHash = ntAdminDevPanelIdFromHash;
 this.ntAdminCanonicalPanelId = ntAdminCanonicalPanelId;
+this.ntAdminDrillPanelTitle = ntAdminDrillPanelTitle;
 this.ntAdminPushDrillPanel = ntAdminPushDrillPanel;
 this.ntAdminTrimDrillStackTo = ntAdminTrimDrillStackTo;
 this.ntAdminDrillBackAction = ntAdminDrillBackAction;
@@ -207,6 +208,16 @@ assert(helpers.ntAdminDevPanelIdFromHash('#dev') === '', 'grid hash is not a pan
 assert(helpers.ntAdminDevPanelIdFromHash('#roadmap-ticket') === '', 'ticket overlay hash is not a panel');
 assert(helpers.ntAdminCanonicalPanelId('alert-panel--inapp') === 'alert-panel', 'in-app hub hash still mounts Service Alerts');
 assert(helpers.ntAdminCanonicalPanelId('feedback-panel') === 'feedback-panel', 'other panel ids stay unchanged');
+assert(helpers.ntAdminDrillPanelTitle('push-notifications-panel') === 'Notifications', 'FCM drill title is Notifications, not the panel id');
+assert(helpers.ntAdminDrillPanelTitle('alert-panel--inapp') === 'In-app alerts', 'in-app drill title is In-app alerts');
+assert(helpers.ntAdminDrillPanelTitle('alert-panel', 'Service Alerts') === 'Service Alerts', 'hub drill title stays Service Alerts');
+assert(admin.includes('id="push-notifications-header-btn"'), 'Notifications header uses -header-btn so the drill title can hide the tile chrome');
+{
+    const showAt = admin.indexOf('showDrilledPanel: (panelId, opts = {})');
+    const hubAt = admin.indexOf("Admin.applyAlertHubView(skipHub ? 'inapp' : 'hub')", showAt);
+    const quietAt = admin.indexOf('if (quiet) return true;', showAt);
+    assert(showAt > -1 && hubAt > showAt && quietAt > hubAt, 'Back restores hub/inapp before the quiet return so tiles do not stack on compose');
+}
 assert(admin.includes('id="alert-hub"'), 'Service Alerts drill opens an inner hub');
 assert(admin.includes('In-app alerts'), 'hub tile for channel posts');
 assert(admin.includes('alert-hub-push'), 'hub tile for FCM notifications');

@@ -7,16 +7,15 @@
  *   delayReportsUi:    { enabled: true, routeIds: ["*"] },
  *   pushNotify:        { enabled: true, routeIds: ["pta-pien", "ct-bellv"] },
  *   mapTab:            { enabled: true, routeIds: ["pta-kempton"] },
- *   communityTab:      { enabled: true, routeIds: ["pta-kempton"] },
- *   tripPrice:         { enabled: true, routeIds: ["*"] }
+ *   communityTab:      { enabled: true, routeIds: ["pta-kempton"] }
  * }
  *
  * Lab (`lab.nexttrain.co.za` or PUBLIC_LAB_MODE=true): missing/empty config →
  * realtime / delay / push / ride-checkin on (sharing still works for admins).
  * Map and Community tabs stay off until config/features lists pinned routes.
  * The green live-share chip uses `isRideCheckInPinned` (RTDB pins only, no
- * lab `*` default). Production: missing config → other flags off. tripPrice
- * is on for all unless RTDB sets enabled:false.
+ * lab `*` default). Production: missing config → other flags off. Planner
+ * trip fare is always on and is not a config/features flag.
  */
 import { DYNAMIC_BASE_URL, PILOT_ROUTE_IDS } from './config.js';
 
@@ -27,6 +26,7 @@ export const FEATURE_KEYS = {
     RIDE_CHECKIN: 'rideCheckIn',
     MAP_TAB: 'mapTab',
     COMMUNITY_TAB: 'communityTab',
+    /** Always-on planner fare. Kept so leftover RTDB / grants cannot hide it. */
     TRIP_PRICE: 'tripPrice',
 };
 
@@ -39,7 +39,6 @@ export const GRANTABLE_FEATURES = [
     { key: FEATURE_KEYS.DELAY_REPORTS_UI, label: 'Delay reports' },
     { key: FEATURE_KEYS.COMMUNITY_REALTIME, label: 'Community realtime' },
     { key: FEATURE_KEYS.PUSH_NOTIFY, label: 'Push notifications' },
-    { key: FEATURE_KEYS.TRIP_PRICE, label: 'Trip price' },
 ];
 
 const CACHE_TTL_MS = 60 * 1000;
@@ -59,10 +58,9 @@ const LAB_DEFAULTS = {
     rideCheckIn: { enabled: true, routeIds: ['*'] },
     mapTab: { enabled: false, routeIds: [] },
     communityTab: { enabled: false, routeIds: [] },
-    tripPrice: { enabled: true, routeIds: ['*'] },
 };
 
-/** Production defaults stay off until RTDB config/features is set (see docs/config-features-pilot.json). tripPrice is public. */
+/** Production defaults stay off until RTDB config/features is set (see docs/config-features-pilot.json). */
 const PROD_DEFAULTS = {
     communityRealtime: { enabled: false, routeIds: [] },
     delayReportsUi: { enabled: false, routeIds: [] },
@@ -70,7 +68,6 @@ const PROD_DEFAULTS = {
     rideCheckIn: { enabled: false, routeIds: [] },
     mapTab: { enabled: false, routeIds: [] },
     communityTab: { enabled: false, routeIds: [] },
-    tripPrice: { enabled: true, routeIds: ['*'] },
 };
 
 /** Suggested first production allow-list (paste into RTDB config/features). */
@@ -81,7 +78,6 @@ export const PILOT_FEATURES_SEED = {
     rideCheckIn: { enabled: true, routeIds: [...PILOT_ROUTE_IDS] },
     mapTab: { enabled: false, routeIds: [] },
     communityTab: { enabled: false, routeIds: [] },
-    tripPrice: { enabled: true, routeIds: ['*'] },
 };
 
 /**
@@ -219,6 +215,8 @@ export async function fetchFeatures(force = false) {
  * @returns {boolean}
  */
 export function isFeatureEnabled(name, routeId = '') {
+    // Planner trip fare is public. Ignore leftover RTDB tripPrice flags and grants.
+    if (name === FEATURE_KEYS.TRIP_PRICE) return true;
     if (grantedFeatures[name] === true) return true;
     // Lab testers need ride sharing on every corridor, even if RTDB still
     // has the production allow-list. The green chip does not use this shortcut.
@@ -227,13 +225,6 @@ export function isFeatureEnabled(name, routeId = '') {
     const entry = normalizeEntry(name, bag?.[name]);
     if (!entry.enabled) return false;
     const ids = entry.routeIds || [];
-    // Trip price is a public planner surface. Empty allow-list still means all
-    // corridors so an RTDB {enabled:true, routeIds:[]} cannot hide it.
-    if (name === FEATURE_KEYS.TRIP_PRICE) {
-        if (!ids.length || ids.includes('*')) return true;
-        if (!routeId) return true;
-        return ids.includes(routeId);
-    }
     if (!ids.length) return false;
     if (ids.includes('*')) return true;
     if (!routeId) return ids.length > 0; // enabled for some routes; caller may gate further

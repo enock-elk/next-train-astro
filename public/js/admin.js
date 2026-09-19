@@ -16531,7 +16531,6 @@ const Admin = {
             { key: 'delayReportsUi', label: 'Delay reports' },
             { key: 'communityRealtime', label: 'Community realtime' },
             { key: 'pushNotify', label: 'Push notifications' },
-            { key: 'tripPrice', label: 'Trip price' },
         ];
     },
 

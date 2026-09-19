@@ -55,8 +55,6 @@ export function canAccessPilotSurface(surface, routeId = '') {
     if (isAdminAuthed()) return true;
     if (surface === 'map' && isFeatureGranted(FEATURE_KEYS.MAP_TAB)) return true;
     if (surface === 'community' && isFeatureGranted(FEATURE_KEYS.COMMUNITY_TAB)) return true;
-    if (surface === 'tripPrice' && isFeatureGranted(FEATURE_KEYS.TRIP_PRICE)) return true;
-    if (surface === 'tripPrice' && routeId) return isFeatureEnabled(FEATURE_KEYS.TRIP_PRICE, routeId);
     // A signed-in commuter must always reach Account, even if extra features
     // (Map / Community / ride check-in) are switched off in Dev Hub.
     if (surface === 'account' && isSignedInAccount()) return true;
@@ -70,7 +68,6 @@ export function canAccessPilotSurface(surface, routeId = '') {
     const hit = (key) => pins.some((id) => isFeatureEnabled(key, id));
     if (surface === 'map') return hit(FEATURE_KEYS.MAP_TAB);
     if (surface === 'community') return hit(FEATURE_KEYS.COMMUNITY_TAB);
-    if (surface === 'tripPrice') return hit(FEATURE_KEYS.TRIP_PRICE);
     if (surface === 'account') {
         return hit(FEATURE_KEYS.MAP_TAB) || hit(FEATURE_KEYS.COMMUNITY_TAB);
     }

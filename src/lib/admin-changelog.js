@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_09.19.6': [
+        'Planner trip fare is always on. canShowTripPrice returns true. isFeatureEnabled(tripPrice) ignores leftover RTDB config/features and device grants. Trip price is removed from GRANTABLE_FEATURES and the System Controls experimental accordion. No What’s New. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
+    ],
     'V9_09.19.5': [
         'Live trains glide along the painted rail between commuter GPS fixes (source of truth). They slow in the last ~160m of an active station and dwell briefly when the ping is at the platform, then leave with the next GPS. Installed PWA/TWA eagerly locates on startup even when Permissions API says prompt/unknown (denied still blocks). Failed silent locates retry instead of sitting on the 120s debounce. Welcome close kicks auto-locate. Next Train Found: toast uses force so Locating’s 1.2s gap cannot swallow it. No What’s New. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
     ],

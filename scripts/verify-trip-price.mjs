@@ -6,7 +6,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { FARE_CONFIG, fareMultiplierForProfile } from '../src/lib/config.js';
-import { FEATURE_KEYS, GRANTABLE_FEATURES } from '../src/lib/features.js';
+import { FEATURE_KEYS, GRANTABLE_FEATURES, isFeatureEnabled } from '../src/lib/features.js';
 import { suggestZoneFromKm, DEFAULT_ZONE_KM_BANDS } from '../src/lib/zone-distance-audit.js';
 import { computeZoneFareForTrip, getCrowFliesTripKm } from '../src/lib/planner-ui.js';
 import {
@@ -24,17 +24,18 @@ const failures = [];
 const assert = (cond, msg) => { if (!cond) failures.push(msg); };
 
 assert(FEATURE_KEYS.TRIP_PRICE === 'tripPrice', 'FEATURE_KEYS.TRIP_PRICE is tripPrice');
-assert(GRANTABLE_FEATURES.some((row) => row.key === 'tripPrice' && row.label === 'Trip price'), 'GRANTABLE_FEATURES includes Trip price');
+assert(!GRANTABLE_FEATURES.some((row) => row.key === 'tripPrice'), 'Trip price is not an experimental grant');
+assert(isFeatureEnabled(FEATURE_KEYS.TRIP_PRICE) === true, 'trip fare is always on');
+assert(isFeatureEnabled(FEATURE_KEYS.TRIP_PRICE, 'pta-pien') === true, 'trip fare is on for every corridor');
 
 const featuresSrc = readFileSync(join(ROOT, 'src/lib/features.js'), 'utf8');
-assert((featuresSrc.match(/tripPrice: \{ enabled: true, routeIds: \['\*'\] \}/g) || []).length >= 3, 'lab, prod, and seed default tripPrice on for all');
-assert(!/tripPrice:\s*\{\s*enabled:\s*false/.test(featuresSrc), 'tripPrice is not default-off');
-assert(featuresSrc.includes('Empty allow-list still means all'), 'enabled tripPrice with empty routeIds still shows fares');
+assert(!/tripPrice:\s*\{/.test(featuresSrc.split('export function isFeatureEnabled')[0]), 'tripPrice is not a default / seed flag');
+assert(featuresSrc.includes('if (name === FEATURE_KEYS.TRIP_PRICE) return true'), 'isFeatureEnabled ignores leftover RTDB tripPrice');
 
 const chrome = readFileSync(join(ROOT, 'src/lib/admin-chrome.js'), 'utf8');
-assert(chrome.includes("surface === 'tripPrice'"), 'admin-chrome unlocks tripPrice for granted devices');
-assert(chrome.includes('FEATURE_KEYS.TRIP_PRICE'), 'trip price reads the tripPrice allow-list');
-assert(chrome.includes('isAdminAuthed()'), 'admins still unlock all pilot surfaces');
+assert(!chrome.includes("surface === 'tripPrice'"), 'admin-chrome no longer gates tripPrice as a pilot surface');
+assert(!chrome.includes('FEATURE_KEYS.TRIP_PRICE'), 'trip price is not a pin-gated pilot surface');
+assert(chrome.includes('isAdminAuthed()'), 'admins still unlock remaining pilot surfaces');
 
 assert(suggestZoneFromKm(15) === 'Z1', '15 km is Z1');
 assert(suggestZoneFromKm(15.1) === 'Z2', 'just over 15 km is Z2');
@@ -114,7 +115,9 @@ assert(fareMultiplierForProfile('Pensioner', true) === 0.5, 'Pensioner off-peak 
 }
 
 const ui = readFileSync(join(ROOT, 'src/lib/planner-ui.js'), 'utf8');
-assert(ui.includes('isFeatureEnabled(FEATURE_KEYS.TRIP_PRICE)'), 'trip fare shows when tripPrice is on for all');
+assert(ui.includes('function canShowTripPrice() {\n    return true;\n}'), 'trip fare is not feature-gated');
+assert(!ui.includes('isFeatureEnabled(FEATURE_KEYS.TRIP_PRICE)'), 'planner does not read the tripPrice flag');
+assert(!ui.includes("canAccessPilotSurface('tripPrice')"), 'planner does not use the tripPrice pilot surface');
 assert(ui.includes('Trip fare:'), 'fare label is Trip fare on one line');
 assert(!ui.includes('TRIP FARE:'), 'fare label is not all-caps TRIP FARE');
 assert(ui.includes('text-xs font-black text-gray-800'), 'Trip fare is 12px gray-800');

@@ -48,8 +48,7 @@ import { sniffAttachmentFile } from './attachments.js';
 import { enterFeedbackReplyMode, openFeedbackModal } from './hub.js';
 import { prepareRichHtml } from './rich-text.js';
 import { trackAnalyticsEvent } from './analytics.js';
-import { canAccessPilotSurface, isAdminAuthed, applyAdminAuthedChrome } from './admin-chrome.js';
-import { FEATURE_KEYS, isFeatureEnabled } from './features.js';
+import { isAdminAuthed, applyAdminAuthedChrome } from './admin-chrome.js';
 import { suggestZoneFromKm, ZONE_KM_RANGE_LABELS } from './zone-distance-audit.js';
 
 /** Last planner results view — survive map modal / hash pops */
@@ -421,18 +420,8 @@ function openPassengerTypePicker() {
 /** @type {{ trip: object, km: number|null, crowKm: number|null, zone: string } | null} */
 let lastPlannerFareContext = null;
 
-function canShowTripPrice(trip) {
-    try {
-        if (isFeatureEnabled(FEATURE_KEYS.TRIP_PRICE)) return true;
-        if (canAccessPilotSurface('tripPrice')) return true;
-        const routes = trip ? collectTripRoutes(trip) : [];
-        if (routes.some((r) => canAccessPilotSurface('tripPrice', r.id) || isFeatureEnabled(FEATURE_KEYS.TRIP_PRICE, r.id))) {
-            return true;
-        }
-        return false;
-    } catch {
-        return false;
-    }
+function canShowTripPrice() {
+    return true;
 }
 
 async function getSmoothTripDistanceKm(trip) {

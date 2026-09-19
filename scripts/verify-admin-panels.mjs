@@ -169,7 +169,8 @@ for (const id of requiredIds) {
 assert(admin.includes("'exp-map-enabled'") && admin.includes("'exp-community-enabled'"), 'experimental Map and Community toggles exist');
 
 assert(admin.includes('renderExpFeatureAccordions'), 'experimental features render as per-type accordions');
-assert(admin.includes("I'm on it / live share") && admin.includes('Delay reports') && admin.includes('Community realtime') && admin.includes('Push notifications') && admin.includes('Trip price'), 'System Controls lists every experimental feature type');
+assert(admin.includes("I'm on it / live share") && admin.includes('Delay reports') && admin.includes('Community realtime') && admin.includes('Push notifications'), 'System Controls lists remaining experimental feature types');
+assert(!/Trip price/.test(admin.split('grantableFeatures')[1] || admin), 'Trip price is not an experimental feature accordion');
 assert(admin.includes('exp-feat-${key}-header') || admin.includes('expFeatureControlIds'), 'each feature type has an accordion header');
 
 assert(admin.includes('showCancelledOnMap'), 'incidents persist the map cancelled-station toggle');

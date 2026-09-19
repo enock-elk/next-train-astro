@@ -8,14 +8,15 @@
  *   pushNotify:        { enabled: true, routeIds: ["pta-pien", "ct-bellv"] },
  *   mapTab:            { enabled: true, routeIds: ["pta-kempton"] },
  *   communityTab:      { enabled: true, routeIds: ["pta-kempton"] },
- *   tripPrice:         { enabled: true, routeIds: ["pta-pien"] }
+ *   tripPrice:         { enabled: true, routeIds: ["*"] }
  * }
  *
  * Lab (`lab.nexttrain.co.za` or PUBLIC_LAB_MODE=true): missing/empty config →
  * realtime / delay / push / ride-checkin on (sharing still works for admins).
  * Map and Community tabs stay off until config/features lists pinned routes.
  * The green live-share chip uses `isRideCheckInPinned` (RTDB pins only, no
- * lab `*` default). Production: missing config → all off (safe merge).
+ * lab `*` default). Production: missing config → other flags off. tripPrice
+ * is on for all unless RTDB sets enabled:false.
  */
 import { DYNAMIC_BASE_URL, PILOT_ROUTE_IDS } from './config.js';
 
@@ -58,10 +59,10 @@ const LAB_DEFAULTS = {
     rideCheckIn: { enabled: true, routeIds: ['*'] },
     mapTab: { enabled: false, routeIds: [] },
     communityTab: { enabled: false, routeIds: [] },
-    tripPrice: { enabled: false, routeIds: [] },
+    tripPrice: { enabled: true, routeIds: ['*'] },
 };
 
-/** Production defaults stay off until RTDB config/features is set (see docs/config-features-pilot.json). */
+/** Production defaults stay off until RTDB config/features is set (see docs/config-features-pilot.json). tripPrice is public. */
 const PROD_DEFAULTS = {
     communityRealtime: { enabled: false, routeIds: [] },
     delayReportsUi: { enabled: false, routeIds: [] },
@@ -69,7 +70,7 @@ const PROD_DEFAULTS = {
     rideCheckIn: { enabled: false, routeIds: [] },
     mapTab: { enabled: false, routeIds: [] },
     communityTab: { enabled: false, routeIds: [] },
-    tripPrice: { enabled: false, routeIds: [] },
+    tripPrice: { enabled: true, routeIds: ['*'] },
 };
 
 /** Suggested first production allow-list (paste into RTDB config/features). */
@@ -80,7 +81,7 @@ export const PILOT_FEATURES_SEED = {
     rideCheckIn: { enabled: true, routeIds: [...PILOT_ROUTE_IDS] },
     mapTab: { enabled: false, routeIds: [] },
     communityTab: { enabled: false, routeIds: [] },
-    tripPrice: { enabled: false, routeIds: [] },
+    tripPrice: { enabled: true, routeIds: ['*'] },
 };
 
 /**
@@ -226,6 +227,13 @@ export function isFeatureEnabled(name, routeId = '') {
     const entry = normalizeEntry(name, bag?.[name]);
     if (!entry.enabled) return false;
     const ids = entry.routeIds || [];
+    // Trip price is a public planner surface. Empty allow-list still means all
+    // corridors so an RTDB {enabled:true, routeIds:[]} cannot hide it.
+    if (name === FEATURE_KEYS.TRIP_PRICE) {
+        if (!ids.length || ids.includes('*')) return true;
+        if (!routeId) return true;
+        return ids.includes(routeId);
+    }
     if (!ids.length) return false;
     if (ids.includes('*')) return true;
     if (!routeId) return ids.length > 0; // enabled for some routes; caller may gate further

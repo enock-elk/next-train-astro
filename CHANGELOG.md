@@ -2,6 +2,10 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin, Dev Hub, Alerts, Trains near me, community chat, or other hidden-test work. No emoji and no em dashes in What’s New. Keep `APP_VERSION`, `package.json` `version`, and `public/app-version.json` aligned on each release. Changelog / What’s New may be skipped, or the heading may be only **no release notes.** Every bump must add `ADMIN_CHANGELOG[APP_VERSION]` (System Health Build notes).
 
+## V9_09.19.3 — no release notes
+
+Alert image preview Close stays at the bottom, reuses the already-loaded poster, and pinch-zooms only the image. Trip planner fares show for everyone. Agreeing with the quoted price thanks the commuter without a ticket photo. Planner telemetry Fares no longer appends trip plans. No What’s New.
+
 ## V9_09.19.2 — no release notes
 
 West-side SEO notes for Naledi, Randfontein and Lenz, De Wildt connections, off-peak fare lines on route landings. No What’s New.

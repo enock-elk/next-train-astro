@@ -6348,6 +6348,7 @@ const Admin = {
                     if (typeof window.setRouteFaresCache === 'function') {
                         window.setRouteFaresCache(liveRouteFares);
                     }
+                    if (Admin._deActiveTab !== 'fares') return;
                     const secureEscape = (str) => {
                         if (!str) return '';
                         if (typeof escapeHTML === 'function') return escapeHTML(str);
@@ -6625,6 +6626,7 @@ const Admin = {
         };
 
         Admin.appendTripCorridorCards = (listDiv, items) => {
+            if (Admin._deActiveTab !== 'trips' || !listDiv) return;
             const countMode = Admin._deCountMode === 'hits' ? 'hits' : 'users';
             const esc = Admin.secureDeEscape;
             const frag = document.createDocumentFragment();
@@ -6682,6 +6684,7 @@ const Admin = {
             listDiv.dataset.deScrollBound = '1';
             const nearBottom = () => listDiv.scrollHeight - listDiv.scrollTop - listDiv.clientHeight < 80;
             const onScroll = () => {
+                if (Admin._deActiveTab !== 'trips') return;
                 if (!nearBottom()) return;
                 Admin.loadMoreTripCorridors(listDiv);
             };
@@ -6689,6 +6692,7 @@ const Admin = {
         };
 
         Admin.loadMoreTripCorridors = async (listDiv) => {
+            if (Admin._deActiveTab !== 'trips') return;
             const sorted = Admin._deTripSorted || [];
             const pageSize = Admin._deTripPageSize || 40;
             const painted = Admin._deTripPainted || 0;
@@ -6713,6 +6717,10 @@ const Admin = {
         };
 
         Admin.syncTripLoadMoreChrome = (listDiv) => {
+            if (!listDiv || Admin._deActiveTab !== 'trips') {
+                listDiv?.querySelector('#de-trip-scroll-sentinel')?.remove();
+                return;
+            }
             const sorted = Admin._deTripSorted || [];
             const painted = Admin._deTripPainted || 0;
             const canFetch = !!Admin._deTripMeta?.canLoadMore;
@@ -6958,6 +6966,7 @@ const Admin = {
         };
 
         Admin.paintTripCorridorPage = (listDiv, sorted, meta) => {
+            if (Admin._deActiveTab !== 'trips' || !listDiv) return;
             const esc = Admin.secureDeEscape;
             const usersWindow = Number(meta.uniqueUsers || 0);
             const usersEver = Number(meta.usersEver || 0);
@@ -7009,6 +7018,7 @@ const Admin = {
                     Admin._deTripWindowFull = Object.keys(Admin._cachedTripPlans || {}).length >= windowSize;
                 }
                 const data = Admin._cachedTripPlans;
+                if (Admin._deActiveTab !== 'trips') return;
                 if (!data) {
                     listDiv.innerHTML = '<div class="text-xs text-gray-500 italic text-center py-4">No batched trip plans yet.<br><span class="text-[9px]">Clients flush every 10 successful plans.</span></div>';
                     return;
@@ -7058,6 +7068,7 @@ const Admin = {
 
                 const totalRows = allRows.length;
                 const uniqueUsers = new Set(allRows.map((r) => r.userId).filter(Boolean)).size;
+                if (Admin._deActiveTab !== 'trips') return;
                 if (!sorted.length) {
                     listDiv.innerHTML = `<div class="text-xs text-gray-500 italic text-center py-4">${totalRows ? 'No trip plans match these filters.' : 'Batches present but no trip rows to merge.'}</div>`;
                     return;

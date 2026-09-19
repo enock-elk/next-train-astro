@@ -88,6 +88,7 @@ ok(adminJs.includes('See ${Admin._deTripWindowStep') || adminJs.includes('more b
 ok(adminJs.includes("`${entry.origin}|${entry.destination}|${entry.dayType || ''}|${entry.region || ''}`"), 'trip corridor key includes day type');
 ok(adminJs.includes('_deTripWindowSize || 80') || adminJs.includes('_deTripWindowSize = Admin._deTripWindowSize || 80'), 'first Firebase window is 80 batches');
 ok(adminJs.includes('bindTripScrollLoadMore') && adminJs.includes('loadMoreTripCorridors'), 'trip list loads more on scroll');
+ok(adminJs.includes("if (Admin._deActiveTab !== 'trips') return") && adminJs.includes('appendTripCorridorCards'), 'trip infinite-scroll does not paint onto Fares');
 ok(adminJs.includes('_deTripPageSize = 40') || adminJs.includes('_deTripPageSize || 40'), 'first paint is 40 corridor cards');
 ok(adminJs.includes('parseJoinedAtFromUserId'), 'usr_ epoch suffix is first-install time');
 {

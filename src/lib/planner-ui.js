@@ -423,6 +423,7 @@ let lastPlannerFareContext = null;
 
 function canShowTripPrice(trip) {
     try {
+        if (isFeatureEnabled(FEATURE_KEYS.TRIP_PRICE)) return true;
         if (canAccessPilotSurface('tripPrice')) return true;
         const routes = trip ? collectTripRoutes(trip) : [];
         if (routes.some((r) => canAccessPilotSurface('tripPrice', r.id) || isFeatureEnabled(FEATURE_KEYS.TRIP_PRICE, r.id))) {
@@ -573,8 +574,8 @@ function bindPlannerFareVote(trip, detail) {
         if (crowKm == null) crowKm = getCrowFliesTripKm(trip);
         return submitFareVote(plannerFareVoteInput(trip, { ...detail, km, crowKm }, extra));
     };
-    const afterVote = (res) => {
-        if (res?.ok && res.voteId) showPlannerFareTicketPrompt(wrap, res.voteId);
+    const afterVote = (res, extra = {}) => {
+        if (res?.ok && res.voteId && extra.agree === false) showPlannerFareTicketPrompt(wrap, res.voteId);
         else showPlannerFareVoteThanks(wrap);
     };
     yesBtn?.addEventListener('click', async (ev) => {
@@ -585,7 +586,7 @@ function bindPlannerFareVote(trip, detail) {
         yesBtn.disabled = true;
         noBtn && (noBtn.disabled = true);
         try {
-            afterVote(await sendVote({ agree: true }));
+            afterVote(await sendVote({ agree: true }), { agree: true });
         } catch {
             showPlannerFareVoteThanks(wrap);
         }
@@ -608,7 +609,7 @@ function bindPlannerFareVote(trip, detail) {
         voting = true;
         sendBtn.disabled = true;
         try {
-            afterVote(await sendVote({ agree: false, reportedPrice: reported }));
+            afterVote(await sendVote({ agree: false, reportedPrice: reported }), { agree: false });
         } catch {
             showPlannerFareVoteThanks(wrap);
         }

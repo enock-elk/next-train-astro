@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_09.19.3': [
+        'Alert lightbox: Close lives in a bottom bar so an empty img cannot center it. Full view copies the decoded poster currentSrc/blob instead of refetching. Pinch/pan is CSS transform on the image stage with touch-action none and gesture preventDefault so the Close chrome does not page-zoom. tripPrice defaults enabled + * for lab, prod, and seed; enabled with an empty routeIds list still means all corridors. Matching fare vote thanks only; ticket photo stays on the disagree path. Planner telemetry Fares tab no longer inherits Trip Plans infinite-scroll (load-more and paint are trips-tab only). No What’s New. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
+    ],
     'V9_09.19.2': [
         'SEO insights: Randfontein / Lenz / Naledi Langlaagte manual-authorisation and Croesus turnback; De Wildt connection tips plus off-peak test-train caveat (no pasted clock list). SeoFareTable states weekday 09:30 to 14:30 40% adult and 50% pensioner, military veteran, scholar. Window stays 09:30 to 14:30 (not the 09:00 to 14:00 WhatsApp shorthand). No What’s New. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
     ],

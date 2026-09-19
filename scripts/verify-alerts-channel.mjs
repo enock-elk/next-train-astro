@@ -270,6 +270,8 @@ const now = 1_700_000_000_000;
     assert(hub.includes('noticesPromise'), 'notice fetch does not wait on inbox');
     const ui = readFileSync(new URL('../src/lib/ui.js', import.meta.url), 'utf8');
     assert(ui.includes("modalId === 'alerts-channel'"), 'alerts Close fades before popping history');
+    assert(ui.includes('resolveLightboxDisplaySrc'), 'alert full view reuses the feed poster bitmap');
+    assert(ui.includes('alert-image-lightbox-stage'), 'alert full view pinch is isolated to the image stage');
     assert(!/class="[^"]*nt-alert-reply[^"]*\bw-full\b/.test(js), 'Reply is not a full-width button');
     assert(!/class="[^"]*\bw-full\b[^"]*nt-alert-reply/.test(js), 'Reply does not pick up w-full from a twin CTA');
 

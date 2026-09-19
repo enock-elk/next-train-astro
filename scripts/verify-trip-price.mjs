@@ -27,7 +27,9 @@ assert(FEATURE_KEYS.TRIP_PRICE === 'tripPrice', 'FEATURE_KEYS.TRIP_PRICE is trip
 assert(GRANTABLE_FEATURES.some((row) => row.key === 'tripPrice' && row.label === 'Trip price'), 'GRANTABLE_FEATURES includes Trip price');
 
 const featuresSrc = readFileSync(join(ROOT, 'src/lib/features.js'), 'utf8');
-assert((featuresSrc.match(/tripPrice:\s*\{\s*enabled:\s*false/g) || []).length >= 2, 'lab and prod defaults keep tripPrice off');
+assert((featuresSrc.match(/tripPrice: \{ enabled: true, routeIds: \['\*'\] \}/g) || []).length >= 3, 'lab, prod, and seed default tripPrice on for all');
+assert(!/tripPrice:\s*\{\s*enabled:\s*false/.test(featuresSrc), 'tripPrice is not default-off');
+assert(featuresSrc.includes('Empty allow-list still means all'), 'enabled tripPrice with empty routeIds still shows fares');
 
 const chrome = readFileSync(join(ROOT, 'src/lib/admin-chrome.js'), 'utf8');
 assert(chrome.includes("surface === 'tripPrice'"), 'admin-chrome unlocks tripPrice for granted devices');
@@ -112,7 +114,7 @@ assert(fareMultiplierForProfile('Pensioner', true) === 0.5, 'Pensioner off-peak 
 }
 
 const ui = readFileSync(join(ROOT, 'src/lib/planner-ui.js'), 'utf8');
-assert(ui.includes('data-nt-trip-fare'), 'planner header has the fare button');
+assert(ui.includes('isFeatureEnabled(FEATURE_KEYS.TRIP_PRICE)'), 'trip fare shows when tripPrice is on for all');
 assert(ui.includes('Trip fare:'), 'fare label is Trip fare on one line');
 assert(!ui.includes('TRIP FARE:'), 'fare label is not all-caps TRIP FARE');
 assert(ui.includes('text-xs font-black text-gray-800'), 'Trip fare is 12px gray-800');

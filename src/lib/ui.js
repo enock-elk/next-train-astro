@@ -893,12 +893,172 @@ export function hideCheckToast() {
 
 
 // --- LIGHTBOX ENGINE ---
+let lbScale = 1;
+let lbX = 0;
+let lbY = 0;
+let lbPanning = false;
+let lbStartX = 0;
+let lbStartY = 0;
+let lbPinchDist = null;
+let lbPinchScale = 1;
+
+function lightboxEls() {
+    return {
+        overlay: document.getElementById('alert-image-lightbox'),
+        stage: document.getElementById('alert-image-lightbox-stage'),
+        img: document.getElementById('alert-image-lightbox-img'),
+    };
+}
+
+function resetAlertLightboxTransform() {
+    lbScale = 1;
+    lbX = 0;
+    lbY = 0;
+    lbPanning = false;
+    lbPinchDist = null;
+    const { img } = lightboxEls();
+    if (img) img.style.transform = 'translate(0px, 0px) scale(1)';
+}
+
+function applyAlertLightboxTransform() {
+    const { img } = lightboxEls();
+    if (img) img.style.transform = `translate(${lbX}px, ${lbY}px) scale(${lbScale})`;
+}
+
+function clampAlertLightboxPan() {
+    const { stage } = lightboxEls();
+    if (!stage) return;
+    const limitX = Math.max(0, (stage.offsetWidth * lbScale - stage.offsetWidth) / 2);
+    const limitY = Math.max(0, (stage.offsetHeight * lbScale - stage.offsetHeight) / 2);
+    if (lbX > limitX) lbX = limitX;
+    if (lbX < -limitX) lbX = -limitX;
+    if (lbY > limitY) lbY = limitY;
+    if (lbY < -limitY) lbY = -limitY;
+}
+
+/** Reuse the already-decoded poster (blob or HTTP cache) so full view does not refetch. */
+function resolveLightboxDisplaySrc(src) {
+    try {
+        const posters = document.querySelectorAll('[data-alert-lightbox]');
+        for (const el of posters) {
+            if (el.getAttribute('data-alert-lightbox') !== src) continue;
+            const poster = el.querySelector('img');
+            if (!poster) continue;
+            const live = poster.currentSrc || poster.getAttribute('src') || poster.src || '';
+            if (live && poster.naturalWidth > 0) return live;
+        }
+        const imgs = document.querySelectorAll('img');
+        for (const poster of imgs) {
+            if (poster.id === 'alert-image-lightbox-img') continue;
+            const live = poster.currentSrc || poster.src || '';
+            if ((live === src || poster.getAttribute('src') === src) && poster.naturalWidth > 0) {
+                return live || src;
+            }
+        }
+    } catch { /* ignore */ }
+    return src;
+}
+
 function bindAlertImageLightbox() {
     if (typeof document === 'undefined' || window._alertLightboxBound) return;
     window._alertLightboxBound = true;
+    const { overlay, stage } = lightboxEls();
     document.getElementById('alert-image-lightbox-close')?.addEventListener('click', (e) => {
         e.preventDefault();
         closeLightbox();
+    });
+    const blockPageZoom = (e) => {
+        if (e.touches && e.touches.length > 1) e.preventDefault();
+    };
+    if (overlay) {
+        overlay.style.touchAction = 'none';
+        overlay.addEventListener('touchstart', blockPageZoom, { passive: false });
+        overlay.addEventListener('touchmove', blockPageZoom, { passive: false });
+        overlay.addEventListener('gesturestart', (e) => e.preventDefault());
+        overlay.addEventListener('gesturechange', (e) => e.preventDefault());
+        overlay.addEventListener('gestureend', (e) => e.preventDefault());
+    }
+    if (!stage) return;
+    stage.style.touchAction = 'none';
+    stage.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        lbStartX = e.clientX - lbX;
+        lbStartY = e.clientY - lbY;
+        lbPanning = true;
+    });
+    stage.addEventListener('mouseup', () => { lbPanning = false; });
+    stage.addEventListener('mouseleave', () => { lbPanning = false; });
+    stage.addEventListener('mousemove', (e) => {
+        if (!lbPanning) return;
+        e.preventDefault();
+        if (lbScale <= 1) {
+            lbX = 0;
+            lbY = 0;
+            applyAlertLightboxTransform();
+            return;
+        }
+        lbX = e.clientX - lbStartX;
+        lbY = e.clientY - lbStartY;
+        clampAlertLightboxPan();
+        applyAlertLightboxTransform();
+    });
+    stage.addEventListener('touchstart', (e) => {
+        if (e.touches.length === 2) {
+            e.preventDefault();
+            lbPanning = false;
+            lbPinchDist = Math.hypot(
+                e.touches[0].pageX - e.touches[1].pageX,
+                e.touches[0].pageY - e.touches[1].pageY
+            );
+            lbPinchScale = lbScale;
+            return;
+        }
+        if (e.touches.length === 1) {
+            lbStartX = e.touches[0].clientX - lbX;
+            lbStartY = e.touches[0].clientY - lbY;
+            lbPanning = true;
+        }
+    }, { passive: false });
+    stage.addEventListener('touchmove', (e) => {
+        if (e.touches.length === 2 && lbPinchDist) {
+            e.preventDefault();
+            const currentDistance = Math.hypot(
+                e.touches[0].pageX - e.touches[1].pageX,
+                e.touches[0].pageY - e.touches[1].pageY
+            );
+            let next = lbPinchScale * (currentDistance / lbPinchDist);
+            if (next < 1) next = 1;
+            if (next > 5) next = 5;
+            lbScale = next;
+            if (lbScale === 1) {
+                lbX = 0;
+                lbY = 0;
+            }
+            clampAlertLightboxPan();
+            applyAlertLightboxTransform();
+            return;
+        }
+        if (!lbPanning || e.touches.length !== 1) return;
+        if (lbScale <= 1) {
+            lbX = 0;
+            lbY = 0;
+            applyAlertLightboxTransform();
+            return;
+        }
+        e.preventDefault();
+        lbX = e.touches[0].clientX - lbStartX;
+        lbY = e.touches[0].clientY - lbStartY;
+        clampAlertLightboxPan();
+        applyAlertLightboxTransform();
+    }, { passive: false });
+    stage.addEventListener('touchend', (e) => {
+        if (e.touches.length < 2) lbPinchDist = null;
+        if (e.touches.length === 1) {
+            lbStartX = e.touches[0].clientX - lbX;
+            lbStartY = e.touches[0].clientY - lbY;
+            lbPanning = true;
+        }
+        if (e.touches.length === 0) lbPanning = false;
     });
 }
 
@@ -914,17 +1074,17 @@ export function openLightbox(url) {
     } catch { /* ignore */ }
     triggerHaptic();
     bindAlertImageLightbox();
-    const overlay = document.getElementById('alert-image-lightbox');
-    const img = document.getElementById('alert-image-lightbox-img');
+    const { overlay, img } = lightboxEls();
     if (!overlay || !img) return;
     history.pushState({ modal: 'lightbox' }, '', '#lightbox');
     lockBackgroundScroll();
     window._isLightboxMode = true;
-    img.removeAttribute('src');
+    resetAlertLightboxTransform();
     img.alt = 'Image Preview';
+    const displaySrc = resolveLightboxDisplaySrc(src);
+    if (img.getAttribute('src') !== displaySrc) img.src = displaySrc;
     overlay.classList.remove('hidden');
     overlay.classList.add('flex');
-    img.src = src;
 }
 
 export function closeLightbox(fromPopState = false) {
@@ -934,11 +1094,11 @@ export function closeLightbox(fromPopState = false) {
         return;
     }
 
-    const overlay = document.getElementById('alert-image-lightbox');
+    const { overlay, img } = lightboxEls();
     if (overlay && !overlay.classList.contains('hidden')) {
         overlay.classList.add('hidden');
         overlay.classList.remove('flex');
-        const img = document.getElementById('alert-image-lightbox-img');
+        resetAlertLightboxTransform();
         if (img) {
             img.removeAttribute('src');
             img.alt = '';

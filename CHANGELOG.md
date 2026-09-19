@@ -2,6 +2,10 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin, Dev Hub, Alerts, Trains near me, community chat, or other hidden-test work. No emoji and no em dashes in What’s New. Keep `APP_VERSION`, `package.json` `version`, and `public/app-version.json` aligned on each release. Changelog / What’s New may be skipped, or the heading may be only **no release notes.** Every bump must add `ADMIN_CHANGELOG[APP_VERSION]` (System Health Build notes).
 
+## V9_09.19.13 — no release notes
+
+Live trains use the previous GPS-on-rail collection again. They no longer glide along the painted map line. Oval marker and tracking card stay. No What’s New.
+
 ## V9_09.19.12 — no release notes
 
 Live trains follow the painted rail axis at termini. Tracking card keeps last GPS metrics while paused. Alert full view reuses the feed poster without a second encode. Plan for R2 images and trip-plan RTDB archival is in docs. No What’s New.

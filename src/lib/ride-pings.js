@@ -430,10 +430,7 @@ export async function projectTrainTrackerFix({
         routeProgressM: snap.routeM,
         distanceM: snap.distanceM,
         lastSeenLabel: journeyPositionLabel(stops, progress),
-        // Station-to-station timetable heading, not GPS/campus tangent.
-        bearing: Number.isFinite(journeyH)
-            ? journeyH
-            : alignBearingToJourney(snap.trackBearing, journeyH),
+        bearing: alignBearingToJourney(snap.trackBearing, journeyH),
     };
 }
 
@@ -634,11 +631,9 @@ export async function compactPingsForMap(pings, { mineDeviceId = '', routeId = '
             speedMps: typeof newest.speedMps === 'number' ? newest.speedMps : metricPing('speedMps'),
             station: newest.station,
             routeId: newest.routeId,
-            bearing: (() => {
-                if (Number.isFinite(driver.bearing)) return driver.bearing;
-                const journeyH = journeyHeadingAtProgress(trainId, medianProgress);
-                return Number.isFinite(journeyH) ? journeyH : null;
-            })(),
+            bearing: Number.isFinite(driver.bearing)
+                ? driver.bearing
+                : journeyHeadingAtProgress(trainId, driver.projectedProgress),
             onRails: true,
             projectedProgress: medianProgress,
             routeProgressM: driver.routeProgressM,
@@ -1435,12 +1430,10 @@ export async function submitRideCheckIn({
             routeProgressM: Number.isFinite(overrideProjected.routeM) ? overrideProjected.routeM : 0,
             distanceM: Number.isFinite(overrideProjected.distanceM) ? overrideProjected.distanceM : 0,
             lastSeenLabel: st,
-            bearing: (() => {
-                const journeyH = journeyHeadingAtProgress(trainId, overrideProjected.pathFraction);
-                return Number.isFinite(journeyH)
-                    ? journeyH
-                    : alignBearingToJourney(overrideProjected.trackBearing, heading);
-            })(),
+            bearing: alignBearingToJourney(
+                overrideProjected.trackBearing,
+                Number.isFinite(heading) ? heading : journeyHeadingAtProgress(trainId, overrideProjected.pathFraction)
+            ),
         };
         resolvedState = TRACKING_STATE.ACTIVE;
         resolvedPauseReason = '';

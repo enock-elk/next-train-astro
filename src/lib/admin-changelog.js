@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_09.19.13': [
+        'Live trains sit on lab projected GPS (scoreFixToRailPath) again. Map no longer re-snaps or interpolates along the painted corridor. Oval glyph and unified tracking card stay. Collected bearing is rail tangent aligned to the journey. No What’s New. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
+    ],
     'V9_09.19.12': [
         'Live train oval looks ~80 m along the painted corridor so a Pretoria yard wiggle cannot yaw it across the green line. Tracking card prefers rail bearing and last GPS (speed, accuracy, on-rail, ping clock) instead of Unknown after pause. Alert full view shows the feed poster currentSrc immediately, no canvas toDataURL hitch, and keeps src on close. R2 image worker and trip_plans TTL are documented in docs/R2-AND-TRIP-PLANS.md; live trip_plans PUT path is unchanged. No What’s New. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
     ],

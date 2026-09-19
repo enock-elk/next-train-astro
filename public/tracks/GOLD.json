@@ -1,8 +1,8 @@
 {
   "branch": "map-gold",
   "frozenAt": "5995a62727a7f63bd932a336680616598e5a2e6c",
-  "version": "V9_09.19.12",
-  "note": "Gold snapshot of this build: live trains look ~80 m along the painted corridor; tracking card keeps last GPS metrics; baked tracks and advert handling unchanged. Diff against origin/map-gold. Fast-forward map-gold after this lands on main. Never force-push map-gold.",
+  "version": "V9_09.19.13",
+  "note": "Gold snapshot of this build: live trains sit on lab projected GPS, no painted-rail interpolation; oval glyph and tracking card stay; baked tracks and advert handling unchanged. Diff against origin/map-gold. Fast-forward map-gold after this lands on main. Never force-push map-gold.",
   "files": {
     "public/tracks/rail-tracks-EC.geojson": {
       "md5": "43409bfd05405205e596f0d03345ab18",
@@ -21,8 +21,8 @@
       "sha256": "090a5d7fc45cafb8c7b81dc583ae24978540f38278cab447953bc90c8821f01f"
     },
     "public/js/map-app.js": {
-      "md5": "a3da0f71377a36ed1192ec79f0040242",
-      "sha256": "393c680bca7ce5ef492f06dbd64d8d67731cb9a1c8272a0dcaf87f36a2d7d632"
+      "md5": "52e54b9dfb2b5760461cf1eae719b5f2",
+      "sha256": "a0da35fe839037a30f27e9bad43cc952f8bc806358d876dd0fb4731fae1ab4e4"
     },
     "src/pages/map.astro": {
       "md5": "e3baceb290d5fd25cdb13ba838e5391f",

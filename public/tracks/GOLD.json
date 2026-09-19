@@ -1,8 +1,8 @@
 {
   "branch": "map-gold",
-  "frozenAt": "8f61f82dda8a6620f93f8b3d657dc455ef3dfc0b",
-  "version": "V9_09.19.8",
-  "note": "Gold snapshot of this build: static-map station hops for zone km, rail-tangent trains without Leaflet tooltip, baked tracks, map runtime, advert handling. Diff against origin/map-gold. Fast-forward map-gold after this lands on main. Never force-push map-gold.",
+  "frozenAt": "55b9fe0d596fcaf2ba01d36c8bc13fb85556816e",
+  "version": "V9_09.19.9",
+  "note": "Gold snapshot of this build: planner fare uses painted corridor km, static-map station hops, rail-tangent trains, baked tracks, map runtime, advert handling. Diff against origin/map-gold. Fast-forward map-gold after this lands on main. Never force-push map-gold.",
   "files": {
     "public/tracks/rail-tracks-EC.geojson": {
       "md5": "43409bfd05405205e596f0d03345ab18",
@@ -33,8 +33,8 @@
       "sha256": "ec85edb1da8d3b3b46e946b61c901c25288710fe4dc6a5ec79e4491b47112528"
     },
     "src/lib/rail-tracks.js": {
-      "md5": "74c1bca1657f9f4724719153ca7b9270",
-      "sha256": "e455896967c7a45bec29eaf1db3828065f8ac82beb8c1669b5771e2b302b728f"
+      "md5": "58c997a104d488d50fd86ae340178e6a",
+      "sha256": "f7828c3e4a6388eb4612df00b52b6e5f34dd2c36730679ffdcf85a23416c4e7a"
     },
     "src/lib/map-tab.js": {
       "md5": "5cea717bd5c2e473eecf23f0af69b1ae",

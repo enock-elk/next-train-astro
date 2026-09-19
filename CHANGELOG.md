@@ -2,6 +2,10 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin, Dev Hub, Alerts, Trains near me, community chat, or other hidden-test work. No emoji and no em dashes in What’s New. Keep `APP_VERSION`, `package.json` `version`, and `public/app-version.json` aligned on each release. Changelog / What’s New may be skipped, or the heading may be only **no release notes.** Every bump must add `ADMIN_CHANGELOG[APP_VERSION]` (System Health Build notes).
 
+## V9_09.19.9 — no release notes
+
+Planner trip fare uses painted network-map corridors, not every branch printed on a shared WC sheet. Cape Town to Wellington is about 72 km, not 156 km via Strand and Stellenbosch placeholders. No What’s New.
+
 ## V9_09.19.8 — no release notes
 
 Zone distances follow the static network maps and painted rails. Live trains stay on the corridor and open the tracking card. No What’s New.

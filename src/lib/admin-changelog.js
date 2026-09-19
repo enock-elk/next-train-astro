@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_09.19.9': [
+        'Planner trip fare distance uses baked destA to destB km and drops --- fork rows from shared WC sheets (Cape Town-Wellington ~72 km, not 156 km via Strand/Stellenbosch). Same static-map hop graph as the zone audit. loadRegionBundle is exported from rail-tracks.js for that lookup. No What’s New. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
+    ],
     'V9_09.19.8': [
         'Zone km follows static PRASA network maps (network-map_wc.png forks: Century City vs Mutual, Strand vs Stellenbosch vs Northern Line) via baked stationNames and STATIC_ROUTE_PATHS, then painted-rail destA to destB. Cape Town-Wellington is ~72 km, not the 144 km sheet union. Live trains always sit on the painted corridor. Leaflet train tooltip and wake chevrons are gone; tap a train for the tracking card, tap the map to close it, share pill is green while sharing. No What’s New. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
     ],

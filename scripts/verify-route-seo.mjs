@@ -697,8 +697,18 @@ if (existsSync(DIST)) {
   if (!/works offline/i.test(indexHtml) || !/ticket prices/i.test(indexHtml)) {
     fail('homepage meta should mention offline and ticket prices');
   }
-  if (/live train tracking/i.test(indexHtml)) {
-    fail('homepage meta must not advertise live train tracking');
+  const homepageMeta = [];
+  for (const m of indexHtml.matchAll(/<meta\b[^>]*>/gi)) {
+    const tag = m[0];
+    if (!/(?:name|property)="(?:description|og:description|twitter:description)"/i.test(tag)) continue;
+    const content = tag.match(/\bcontent="([^"]*)"/i);
+    if (content) homepageMeta.push(content[1]);
+  }
+  if (!homepageMeta.length) fail('homepage missing description meta');
+  for (const bit of homepageMeta) {
+    if (/live train tracking/i.test(bit)) {
+      fail(`homepage meta must not advertise live train tracking: "${bit}"`);
+    }
   }
   if (!indexHtml.includes('Commuters can send a delay note, and some testers can share a trip location.')) {
     fail('homepage FAQ must mention delay notes and optional trip sharing');

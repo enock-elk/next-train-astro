@@ -394,11 +394,14 @@ function isNoticePayload(value) {
     );
 }
 
-async function noticeExists(rtdb, scope, noticeId) {
-    const direct = (await rtdb.get(`notices/${scope}/${noticeId}`)).value;
+export async function noticeExists(rtdb, scope, noticeId) {
+    const id = String(noticeId || '');
+    const direct = (await rtdb.get(`notices/${scope}/${id}`)).value;
     if (isNoticePayload(direct)) return true;
     const bucket = (await rtdb.get(`notices/${scope}`)).value;
-    return isNoticePayload(bucket) && String(bucket.id || '') === noticeId;
+    if (!bucket || typeof bucket !== 'object') return false;
+    if (isNoticePayload(bucket) && String(bucket.id || '') === id) return true;
+    return Object.values(bucket).some((child) => isNoticePayload(child) && String(child.id || '') === id);
 }
 
 /**

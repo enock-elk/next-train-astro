@@ -76,10 +76,17 @@ export function createAlertImpressionInstallationId(cryptoApi = globalThis.crypt
 export function shouldCountAlertIntersection({
     isIntersecting,
     intersectionRatio,
+    visibleHeight = 0,
+    rootHeight = 0,
     pageVisible,
     channelVisible,
 }) {
-    return !!isIntersecting && Number(intersectionRatio) >= 0.5 && !!pageVisible && !!channelVisible;
+    if (!isIntersecting || !pageVisible || !channelVisible) return false;
+    if (Number(intersectionRatio) >= 0.5) return true;
+    const vis = Number(visibleHeight) || 0;
+    const root = Number(rootHeight) || 0;
+    // Poster cards are often taller than the scroller, so 50% of the card is impossible.
+    return root > 0 && vis >= Math.min(root * 0.45, 180);
 }
 
 function getAlertImpressionInstallationId() {
@@ -645,6 +652,7 @@ async function postAlertImpression(card) {
     try {
         const res = await fetch(`${ALERT_IMPRESSION_WORKER}/alerts/impression`, {
             method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 scope,
                 noticeId,
@@ -678,6 +686,8 @@ export function observeRenderedAlertImpressions(feed) {
             const visible = shouldCountAlertIntersection({
                 isIntersecting: entry.isIntersecting,
                 intersectionRatio: entry.intersectionRatio,
+                visibleHeight: entry.intersectionRect?.height,
+                rootHeight: entry.rootBounds?.height,
                 pageVisible: document.visibilityState !== 'hidden',
                 channelVisible: !document.getElementById('alerts-channel')?.classList.contains('hidden'),
             });
@@ -882,6 +892,8 @@ export function openAlertsChannel(opts = {}) {
     setTimeout(() => {
         if (highlightNoticeId) scrollFeedTo(highlightNoticeId, false);
         else scrollFeedTo(null, true);
+        const feed = document.getElementById('alerts-feed');
+        if (feed) observeRenderedAlertImpressions(feed);
     }, 80);
     bindAlertsChannelOnce();
 }

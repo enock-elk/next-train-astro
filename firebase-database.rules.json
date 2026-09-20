@@ -223,8 +223,13 @@
     },
 
     "notice_impressions": {
-      ".read": "auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')",
-      ".write": false
+      ".read": "auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com' || auth.token.email === 'nexttrain-telemetry@metrorail-next-train.iam.gserviceaccount.com')",
+      ".write": "auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com' || auth.token.email === 'nexttrain-telemetry@metrorail-next-train.iam.gserviceaccount.com')",
+      "$scope": {
+        "$noticeId": {
+          ".validate": "!newData.exists() || (newData.hasChildren(['count', 'updatedAt']) && newData.child('count').isNumber() && newData.child('count').val() >= 0 && newData.child('count').val() < 100000000 && newData.child('updatedAt').isNumber())"
+        }
+      }
     },
 
     "notices_archive": {

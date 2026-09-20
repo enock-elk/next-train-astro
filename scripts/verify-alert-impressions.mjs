@@ -10,6 +10,7 @@ const {
     hashInstallationId,
     isValidImpressionNoticeId,
     isValidImpressionScope,
+    noticeExists,
     recordAlertImpression,
 } = await import('../workers/nexttrain-community/worker.js');
 const {
@@ -70,7 +71,23 @@ ok(isValidImpressionScope('pta-mabopane') && isValidImpressionScope('bellville-m
 ok(isValidImpressionScope('pta-mabopane') && !isValidImpressionScope('../bad'), 'route scope validation blocks unsafe paths');
 ok(isValidImpressionNoticeId('sched_abc_123') && !isValidImpressionNoticeId('bad/id'), 'notice id validation blocks path injection');
 ok(shouldCountAlertIntersection({ isIntersecting: true, intersectionRatio: 0.5, pageVisible: true, channelVisible: true }), '50% visible qualifies');
-ok(!shouldCountAlertIntersection({ isIntersecting: true, intersectionRatio: 0.49, pageVisible: true, channelVisible: true }), 'less than 50% does not qualify');
+ok(!shouldCountAlertIntersection({ isIntersecting: true, intersectionRatio: 0.49, pageVisible: true, channelVisible: true }), 'less than 50% of a short card does not qualify');
+ok(shouldCountAlertIntersection({
+    isIntersecting: true,
+    intersectionRatio: 0.3,
+    visibleHeight: 220,
+    rootHeight: 400,
+    pageVisible: true,
+    channelVisible: true,
+}), 'a tall poster that fills the scroller still qualifies');
+ok(!shouldCountAlertIntersection({
+    isIntersecting: true,
+    intersectionRatio: 0.3,
+    visibleHeight: 40,
+    rootHeight: 400,
+    pageVisible: true,
+    channelVisible: true,
+}), 'a sliver of a tall card does not qualify');
 ok(!shouldCountAlertIntersection({ isIntersecting: true, intersectionRatio: 1, pageVisible: false, channelVisible: true }), 'hidden page never qualifies');
 ok(alertImpressionStorageKey('all_GP', 'n1') === 'nt_alert_impression_v1:all_GP:n1', 'persistent dedupe key includes scope and notice');
 
@@ -113,6 +130,10 @@ ok(secondInstall.counted && secondInstall.count === 2, 'a second installation in
 const missing = await recordAlertImpression({ ...request, noticeId: 'missing' });
 ok(!missing.found && !missing.counted, 'nonexistent notice is rejected without a count');
 
+rtdb.nodes.set('notices/all_WC', { childkey: { id: 'real-id', message: 'WC poster' } });
+ok(await noticeExists(rtdb, 'all_WC', 'real-id'), 'noticeExists finds a map child by payload id');
+ok(!(await noticeExists(rtdb, 'all_WC', 'childkey-only')), 'noticeExists does not invent a missing id');
+
 const cleanup = await cleanupAlertImpressionDedupe({}, {
     rtdb,
     now: request.now + request.retentionMs + 1,
@@ -130,9 +151,18 @@ ok(channelJs.includes('safeStorage.setItem(alertImpressionStorageKey'), 'client 
 ok(channelJs.includes('/admin/alert-impressions'), 'admin cards request authenticated counts');
 ok(channelJs.includes('0 views'), 'admin cards start at 0 views instead of a dash placeholder');
 ok(channelJs.includes('notice_impressions/'), 'admin counts fall back to RTDB when the worker batch fails');
+ok(channelJs.includes("'Content-Type': 'application/json'"), 'impression POST sends JSON content type');
+ok(channelJs.includes('if (feed) observeRenderedAlertImpressions(feed);'), 'opening Alerts restarts the observer after the overlay is visible');
 ok(workerJs.includes("url.pathname === '/alerts/impression'"), 'worker exposes the impression POST endpoint');
 ok(workerJs.includes('.filter((item) => isValidImpressionScope'), 'admin impression lookup skips invalid scopes instead of failing the batch');
 ok(workerJs.includes('cleanupAlertImpressionDedupe(env)'), 'hourly cron includes impression dedupe cleanup');
+ok(workerJs.includes('Object.values(bucket).some'), 'notice lookup also scans map children by payload id');
+
+const rules = JSON.parse(readFileSync(join(ROOT, 'firebase-database.rules.json'), 'utf8'));
+const impressionWrite = String(rules.rules?.notice_impressions?.['.write'] || '');
+ok(impressionWrite.includes('nexttrain-telemetry@metrorail-next-train.iam.gserviceaccount.com'), 'RTDB lets the community worker service account write counts');
+ok(impressionWrite.includes('enockelk@gmail.com') && impressionWrite.includes('thandeka05nxumalo@gmail.com'), 'RTDB still lets operators read and write counts');
+ok(impressionWrite !== 'false', 'notice_impressions is no longer a hard write deny');
 
 if (failures.length) {
     console.error('verify-alert-impressions failed:\n - ' + failures.join('\n - '));

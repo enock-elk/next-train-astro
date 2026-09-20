@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_09.21.2': [
+        'Alert view counts were stuck at 0 because notice_impressions was .write false and the community worker authenticates as nexttrain-telemetry@metrorail-next-train.iam.gserviceaccount.com (Google OAuth is scored as that user, not an admin bypass). Rules now allow that SA plus operator emails to write count/updatedAt nodes. Client POST sends JSON, restarts the dwell observer after Alerts is visible, and counts tall poster cards that fill the scroller. Worker noticeExists also matches map children by payload id. Deploy firebase-database.rules.json and the community worker or counts stay 0. No What’s New (Alerts stay hidden). forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
+    ],
     'V9_09.21.1': [
         'PWA/TWA cold start no longer paints a white canvas then a blank blue sheet after the OS splash. First inline CSS keeps html/body/#loading-overlay at #1d4ed8 with the train logo visible before nt-boot-installed is stamped (hashed html,body canvas !important is #e8eef4). Starting copy stays hidden until 8s installed / 2s browser. Browser still shows the site immediately. Overlay default is inline #1d4ed8, not bg-gray-100. What’s New: splash to board, Starting if slow. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
     ],

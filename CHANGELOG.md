@@ -2,6 +2,10 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin, Dev Hub, Alerts, Trains near me, community chat, or other hidden-test work. No emoji and no em dashes in What’s New. Keep `APP_VERSION`, `package.json` `version`, and `public/app-version.json` aligned on each release. Changelog / What’s New may be skipped, or the heading may be only **no release notes.** Every bump must add `ADMIN_CHANGELOG[APP_VERSION]` (System Health Build notes).
 
+## V9_09.21.2 — no release notes
+
+Alert impression writes were denied on `notice_impressions` (worker service account is scored as a user; `.write` was false). Rules + dwell observer + notice lookup. No What’s New.
+
 ## V9_09.21.1
 
 Installed cold start keeps the OS splash color and train logo until dest names paint. The 20.8 hold hid the logo (`display:none`) on a blank `#1d4ed8` sheet, and first paint used hashed canvas `#e8eef4` (white) before `nt-boot-installed`. Starting copy still waits 8s installed / 2s browser. Browser still shows the site immediately.

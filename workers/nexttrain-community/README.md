@@ -3,7 +3,7 @@
 Cloudflare Worker that:
 
 1. **`POST /community/post`** — verifies Firebase ID token, rate-limits, refuses non-`nexttrain.co.za` URLs and profanity, writes via service-account Admin access to RTDB.
-2. **`POST /alerts/impression`** — validates a live notice, hashes the installation ID, and atomically counts one impression per installation and notice.
+2. **`POST /alerts/impression`** — validates a live notice, hashes the installation ID, and atomically counts one impression per installation and notice. RTDB `notice_impressions` must allow writes from `nexttrain-telemetry@metrorail-next-train.iam.gserviceaccount.com` (this Worker’s `FIREBASE_CLIENT_EMAIL`). A hard `.write: false` leaves every card at 0 views. Deploy `firebase-database.rules.json` after changing that node.
 3. **`POST /admin/alert-impressions`** — returns counts for up to 50 notices to an allowlisted Firebase-authenticated operator.
 4. **Five-minute cron** — claims and publishes due `notices_scheduled` alerts.
 5. **Hourly cron** — deletes stale community posts and expired alert-impression dedupe records while preserving aggregate counts.

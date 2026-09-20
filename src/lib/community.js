@@ -1792,8 +1792,23 @@ export function bindCommunityUi() {
 
     let typingTimer = null;
     const composerEl = document.getElementById('community-composer');
+    const keepCommunityComposerVisible = () => {
+        const el = document.getElementById('community-composer');
+        const dock = document.getElementById('community-composer-dock');
+        const scroller = document.getElementById('app-scroll');
+        if (!el || !scroller) return;
+        const vv = window.visualViewport;
+        const visBottom = vv ? (vv.offsetTop + vv.height) : window.innerHeight;
+        const rect = (dock || el).getBoundingClientRect();
+        const pad = 12;
+        if (rect.bottom > visBottom - pad) {
+            scroller.scrollTop += rect.bottom - visBottom + pad;
+        }
+    };
     composerEl?.addEventListener('focus', () => {
         if ($account.get().status === 'signed-in') composerEl.placeholder = '';
+        requestAnimationFrame(keepCommunityComposerVisible);
+        [80, 220, 450].forEach((ms) => setTimeout(keepCommunityComposerVisible, ms));
     });
     composerEl?.addEventListener('blur', () => {
         syncComposerChrome($account.get().status === 'signed-in');

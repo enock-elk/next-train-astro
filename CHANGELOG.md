@@ -2,6 +2,14 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin, Dev Hub, Alerts, Trains near me, community chat, or other hidden-test work. No emoji and no em dashes in What’s New. Keep `APP_VERSION`, `package.json` `version`, and `public/app-version.json` aligned on each release. Changelog / What’s New may be skipped, or the heading may be only **no release notes.** Every bump must add `ADMIN_CHANGELOG[APP_VERSION]` (System Health Build notes).
 
+## V9_09.20.2 — no release notes
+
+Page headers scroll away with the rest of the column (Home, Planner, Community, Map, Feedback Hub, Account, About). Typing pads the column for the keyboard instead of pinning a title to the top. Oval bounce guards from 20.1 stay. No What’s New.
+
+## V9_09.20.1 — Scroll and typing
+
+iPhone: the tab bar no longer drifts with rubber-band scroll, and Feedback Hub stays above the keyboard. Android Chrome path unchanged (oval still hidden while typing, layout height still does not follow the IME).
+
 ## V9_09.19.13 — no release notes
 
 Live trains use the previous GPS-on-rail collection again. They no longer glide along the painted map line. Oval marker and tracking card stay. No What’s New.

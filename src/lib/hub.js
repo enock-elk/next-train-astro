@@ -227,31 +227,34 @@ let feedbackViewportBound = false;
 
 function keepFeedbackFieldVisible(field) {
     if (!field?.closest?.('#feedback-modal, #messages-thread-modal, #account-modal')) return;
-    // Hub composer docks above the IME like Community. Do not scroll the sheet.
-    if (field.closest?.('#messages-thread-form')) return;
     const scroller = field.closest('[data-feedback-scroll]')
         || field.closest('#messages-thread-modal > div')
         || field.closest('#feedback-modal > div');
     if (!scroller) return;
     const fieldRect = field.getBoundingClientRect();
-    const scrollRect = scroller.getBoundingClientRect();
+    const form = field.closest('#messages-thread-form');
+    const target = form || field;
+    const targetRect = target.getBoundingClientRect();
+    const vv = window.visualViewport;
+    const visTop = vv ? vv.offsetTop : 0;
+    const visBottom = vv ? (vv.offsetTop + vv.height) : window.innerHeight;
     const pad = 12;
-    const availableHeight = Math.max(0, scrollRect.height - (pad * 2));
+    const availableHeight = Math.max(0, visBottom - visTop - (pad * 2));
     if (fieldRect.height > availableHeight) {
-        scroller.scrollTop += fieldRect.top - scrollRect.top - pad;
+        scroller.scrollTop += fieldRect.top - visTop - pad;
         return;
     }
-    if (fieldRect.bottom > scrollRect.bottom - pad) {
-        scroller.scrollTop += fieldRect.bottom - scrollRect.bottom + pad;
-    } else if (fieldRect.top < scrollRect.top + pad) {
-        scroller.scrollTop -= scrollRect.top - fieldRect.top + pad;
+    if (targetRect.bottom > visBottom - pad) {
+        scroller.scrollTop += targetRect.bottom - visBottom + pad;
+    } else if (fieldRect.top < visTop + pad) {
+        scroller.scrollTop -= visTop - fieldRect.top + pad;
     }
 }
 
 /**
- * Feedback Hub is sized by CSS alone: absolute inset:0 over #nt-shell, the
- * same box the Community tab fills, with the composer docking to --nt-kb-h.
- * Clear anything an older build left inline so those pixels cannot win.
+ * Feedback Hub is sized by CSS alone: absolute inset:0 over #nt-shell.
+ * One overflow column (title + thread + form). Clear leftover inline
+ * geometry so an older build cannot pin the title to the visual hole.
  */
 function clearHubInlineGeometry(modal, card) {
     [
@@ -320,6 +323,7 @@ function bindFeedbackViewportHandling() {
     document.addEventListener('focusin', (event) => {
         if (!event.target?.closest?.('#feedback-modal, #messages-thread-modal, #account-modal')) return;
         syncFeedbackModalViewport();
+        requestAnimationFrame(() => keepFeedbackFieldVisible(event.target));
         [80, 220, 450].forEach((ms) => {
             setTimeout(() => {
                 syncFeedbackModalViewport();
@@ -1349,7 +1353,8 @@ function renderMessagesThread(list) {
     host._ntInboxList = list;
     bindInboxThreadReactions(host);
     hydrateAlertPosterImages(host);
-    host.scrollTop = host.scrollHeight;
+    const column = host.closest('[data-feedback-scroll]') || host;
+    column.scrollTop = column.scrollHeight;
 }
 
 function hideInboxReactionPicker() {

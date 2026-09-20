@@ -329,6 +329,10 @@ assert(hubModals.includes('aria-label="Privacy Policy"'), 'privacy control is th
 assert(hubModals.includes('Feedback Hub'), 'thread modal is titled Feedback Hub');
 assert(hubModals.includes('id="messages-thread-send"') && hubModals.includes('rounded-full bg-blue-600'), 'Feedback Hub send is a circular button');
 assert(hubModals.includes('data-feedback-scroll'), 'long feedback form has its own keyboard-safe scroller');
+assert(hubModals.includes('id="messages-thread-modal"') && /id="messages-thread-modal"[\s\S]*?data-feedback-scroll/.test(hubModals), 'Feedback Hub card is the only scroller');
+assert(!/id="messages-thread-list"[^>]*overflow-y-auto/.test(hubModals), 'Feedback Hub thread is not a nested scroller');
+assert(!hubModals.includes('sticky top-0'), 'About Close is not a sticky header');
+assert(!/id="account-modal"[\s\S]*?shrink-0 z-10[\s\S]*?id="account-modal-close"/.test(hubModals), 'Account Back is not pinned above a nested scroller');
 assert(hubModals.includes('--nt-feedback-vv-height'), 'feedback overlays use visible viewport height');
 assert(hubModals.includes('align-items: stretch'), 'Feedback Hub fills the screen');
 assert(hubModals.includes('padding-bottom: 0'), 'Feedback Hub has no gap above the keyboard');
@@ -422,14 +426,13 @@ const hubJs = readFileSync(new URL('../src/lib/hub.js', import.meta.url), 'utf8'
 assert(hubJs.includes('collapsePrefsAccordion'), 'opening Options collapses Theme & Preferences');
 assert(hubJs.includes('autosizeMessagesThreadInput'), 'Feedback Hub composer grows before scrolling');
 assert(hubJs.includes('syncFeedbackModalViewport'), 'feedback overlays resize when the keyboard opens');
-assert(hubJs.includes('clearHubInlineGeometry'), 'Feedback Hub clears inline geometry from older builds');
-assert(
-    /if \(id === 'messages-thread-modal'\) \{\s*clearHubInlineGeometry\(modal, card\);\s*return;\s*\}/.test(hubJs),
-    'Feedback Hub geometry is CSS only, never a measured pixel height'
-);
-assert(hubJs.includes("field.closest?.('#messages-thread-form')"), 'Hub composer does not scroll the sheet while typing');
-assert(!hubJs.includes('const coverH = Math.max(height, height + top)'), 'Feedback Hub does not stretch past the visual hole');
+assert(hubJs.includes('clearHubInlineGeometry(modal, card)'), 'Feedback Hub clears inline geometry from older builds');
 assert(hubJs.includes("id === 'messages-thread-modal'"), 'Feedback Hub is sized separately from Send Feedback');
+assert(!hubJs.includes('hubTyping'), 'Feedback Hub does not pin visual-hole tokens while typing');
+assert(hubJs.includes("field.closest('#messages-thread-form')"), 'Hub composer scrolls the sheet so the title can leave');
+assert(hubJs.includes('vv.offsetTop + vv.height'), 'Hub typing aligns the composer to the visual hole');
+assert(!hubJs.includes("scrollIntoView({ block: 'nearest'"), 'Hub typing does not jump the focused field with scrollIntoView');
+assert(!hubJs.includes('const coverH = Math.max(height, height + top)'), 'Feedback Hub does not stretch past the visual hole');
 assert(!hubJs.includes("id === 'messages-thread-modal' || id === 'account-modal'"), 'Account is not keyboard-shrunk with Feedback Hub');
 assert(hubJs.includes('keepFeedbackFieldVisible'), 'focused feedback fields scroll inside the modal');
 assert(hubJs.includes('editing && vv?.height'), 'Feedback Hub uses live visualViewport height while typing');
@@ -494,16 +497,29 @@ assert(layout.includes('--nt-shell-top'), 'shell is pinned below overlay chrome'
 assert(layout.includes('--nt-shell-h'), 'shell height follows the visible hole');
 assert(layout.includes('missing < 180'), 'URL-bar overlay uses the missing layout strip, not an invented tray');
 assert(layout.includes('Pin #nt-shell to the LIVE visual hole'), 'keyboard sizes the shell to the live visual hole');
-assert(layout.includes('#app-scroll:has(#view-map.active)'), 'Map still locks #app-scroll');
+assert(!/#app-scroll:has\(#view-map\.active\) \{\s*overflow:\s*hidden/.test(layout), 'Map does not freeze #app-scroll');
+assert(/#view-map\.view-section\.active \{[\s\S]*?min-height:\s*100%;/.test(layout), 'Map view is at least the scrollport so Next Train can leave');
 assert(layout.includes('#view-community.view-section.active'), 'Community composer sits above the IME');
 assert(/#view-community \.community-pane \{\s*flex: 1 1 auto;/.test(layout), 'Community pane fills leftover height like Feedback Hub');
 assert(/html\.nt-keyboard\.nt-in-app body\.nav-bottom:not\(\.nt-immersive\) #view-community\.view-section\.active \{[\s\S]*?flex:\s*1 1 auto;[\s\S]*?height:\s*auto;/.test(layout), 'Community keyboard keeps the stable lab flex-height logic');
-assert(!/html\.nt-keyboard\.nt-in-app body\.nav-bottom:not\(\.nt-immersive\) #view-community\.view-section\.active \{[\s\S]*?height:\s*var\(--nt-vv-h/.test(layout), 'Community view is not double-positioned by visualViewport height');
+assert(!/html\.nt-keyboard\.nt-in-app body\.nav-bottom:not\(\.nt-immersive\) #view-community\.view-section\.active \{[^}]*height:\s*var\(--nt-vv-h/.test(layout), 'Community view is not double-positioned by visualViewport height');
 assert(/html\.nt-keyboard\.nt-in-app body\.nav-bottom:not\(\.nt-immersive\) #view-community \.community-pane \{\s*flex: 1 1 auto;/.test(layout), 'Community keyboard pane does not shrink to fit the Next Train header');
 assert(!/#view-community \.community-feed-scroll \{\s*padding-bottom:\s*6\.5rem/.test(layout), 'Community feed does not reserve a second composer gap');
 assert(layout.includes('#community-composer-dock'), 'Community composer docks above the IME');
-assert(layout.includes('html.nt-keyboard #messages-thread-form'), 'Feedback Hub composer docks above the IME like Community');
-assert(layout.includes('--nt-kb-h'), 'keyboard exposes IME height for the composer dock');
+assert(/html\.nt-keyboard\.nt-in-app body\.nav-bottom:not\(\.nt-immersive\) #community-composer-dock \{[\s\S]*?position:\s*relative;/.test(layout), 'Community composer stays in flow while typing');
+assert(!/html\.nt-keyboard\.nt-in-app body\.nav-bottom:not\(\.nt-immersive\) #community-composer-dock \{[\s\S]*?position:\s*fixed;/.test(layout), 'Community composer is not position:fixed against the IME');
+assert(layout.includes('html.nt-keyboard #messages-thread-form'), 'Feedback Hub composer has an IME rule');
+assert(!/html\.nt-keyboard #nt-shell #messages-thread-modal\.fixed \{[\s\S]*?height:\s*var\(--nt-vv-h/.test(layout), 'Hub IME does not pin the sheet to the visual hole');
+assert(/html\.nt-keyboard #messages-thread-modal > div \{[\s\S]*?padding-bottom:\s*var\(--nt-kb-h/.test(layout), 'Hub IME pads the one column so the title can leave');
+assert(/html\.nt-keyboard #messages-thread-form \{[\s\S]*?position:\s*relative;/.test(layout), 'Hub composer stays in flow');
+assert(!/html\.nt-keyboard #messages-thread-form \{[\s\S]*?position:\s*fixed;/.test(layout), 'Hub composer is not position:fixed against a guessed keyboard inset');
+assert(!layout.includes('heightDelta'), 'IME inset does not use full-minus-vv heightDelta');
+assert(layout.includes('--nt-kb-h'), 'keyboard exposes IME height for the Community composer dock');
+assert(layout.includes('applyFromVvScroll'), 'visualViewport.scroll does not move the shell while scrolling');
+assert(layout.includes('Visible bottom of the visual viewport'), 'Community IME inset uses visual bottom, not full minus vv.height');
+assert(/html\.nt-in-app, html\.nt-in-app body \{[\s\S]*?overscroll-behavior:\s*none;/.test(layout), 'in-app html/body do not rubber-band');
+assert(/#app-scroll\.app-scroll \{[\s\S]*?overscroll-behavior:\s*none;/.test(layout), 'board scroller does not rubber-band the oval');
+assert(!/#app-scroll\.app-scroll \{[\s\S]*?overscroll-behavior:\s*contain;/.test(layout), 'board scroller dropped contain overscroll');
 assert(layout.includes('Community must not: leave the shell at full size'), 'Community keyboard leaves Next Train free to scroll away');
 assert(!/html\.nt-keyboard[\s\S]{0,500}#app-scroll:has\(#view-community\.active\) \{\s*overflow:\s*hidden/.test(layout), 'Community keyboard does not freeze #app-scroll');
 assert(!/html\.nt-keyboard[\s\S]{0,220}calc\(var\(--nt-shell-h/.test(layout), 'Community keyboard does not pad by frozen shell minus visual');

@@ -8635,7 +8635,7 @@ const Admin = {
                 }
                 liveEl.innerHTML = liveRows.length
                     ? liveRows.slice(0, 80).map((p) => {
-                        const stale = (p.fixAt || p.acceptedAt || p.at) && (now - (p.fixAt || p.acceptedAt || p.at)) >= 7000;
+                        const stale = (p.fixAt || p.acceptedAt || p.at) && (now - (p.fixAt || p.acceptedAt || p.at)) >= 12000;
                         const acc = Number.isFinite(p.accuracy) ? Math.round(p.accuracy) + ' m' : '';
                         const speed = Number.isFinite(p.speedMps) ? (p.speedMps * 3.6).toFixed(0) + ' km/h' : '';
                         const bits = [p.source || '', p.station || '', acc, speed].filter(Boolean).join(' · ');

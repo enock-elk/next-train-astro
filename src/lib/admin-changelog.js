@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_09.20.5': [
+        'Boot logo stays until dest names (or Welcome) paint, then two frames, then the overlay drops. holdReturningShell no longer adds nt-shell-ready from welcomeSeen, which hid the logo over a white empty card. Live-train interpolation and grey stale window are 12s (was 7s); 4s GPS publish stays. No What’s New. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
+    ],
     'V9_09.20.4': [
         'PWA/TWA update: FORCE_UPDATE peeks published app-version.json from origin plus jsDelivr/raw/github.io and newest-wins, so a stale SW/HTTP cache cannot report 20.1 when 20.3+ is live. Install the incoming worker before skipWaiting. Do not write app_installed_version before the new shell runs. Same-URL reload (no numeric ?v=) so iOS home-screen bookmarks keep localStorage. Leftover ?v= hops to the clean start URL before minting a device id. Pin/welcomeSeen/userRegion mirror into IndexedDB and resurrect; any defaultRoute_* counts as welcomeSeen. Force-update restart cap 3 plus one unstick. Check for Updates names the published version. NUKE polls every 15s while visible and logs when found, whether the incoming shell downloaded, and when restart implements it. Console logs new versions found, downloaded yes/no, and restart timing. No What’s New. forceShow stays false. FORCE_UPDATE_REQUIRED stays true. nexttrain-edge now no-store for /app-version.json and /sw.js (needs wrangler deploy).',
     ],

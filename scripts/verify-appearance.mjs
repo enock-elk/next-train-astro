@@ -88,7 +88,10 @@ assert(indexPage.includes('id="offline-refresh-btn"'), 'offline dock has Refresh
 assert(indexPage.includes('id="offline-dismiss-btn"'), 'offline dock has Close');
 assert(!indexPage.includes('id="bottom-nav" class="hidden shrink-0 border-t'), 'bottom nav dropped the boxy top border');
 assert(!/#main-content[^>]*style="visibility:\s*hidden"/.test(indexPage), 'home shell is not inline-hidden (WebKit keeps that layer blank)');
-assert(indexPage.includes("window.addEventListener('pageshow', revealAppShell)"), 'returning PWA resume re-reveals the shell');
+assert(indexPage.includes("window.addEventListener('pageshow'"), 'returning PWA resume re-reveals the shell');
+assert(indexPage.includes('boardChromeReady'), 'boot logo stays until dest names or Welcome paint');
+assert(indexPage.includes('dropLoadingLogo'), 'logo covers the white card until the board chrome is ready');
+assert(!indexPage.includes('setTimeout(revealAppShell, 700)'), 'boot no longer drops the logo at 700ms over a white card');
 
 const sidenav = readFileSync(new URL('../src/components/Sidenav.astro', import.meta.url), 'utf8');
 assert(sidenav.includes('id="settings-account-btn"'), 'Account row exists in Options');
@@ -495,6 +498,7 @@ assert(layout.includes('lastShellH'), 'keyboard keeps a last-visible shell fallb
 assert(layout.includes('function atLeastFull'), 'shell height ignores sub-240 first readings');
 assert(layout.includes('html:not(.nt-shell-ready) #main-content.app-shell'), 'cold boot hides the board with CSS, not an inline style');
 assert(layout.includes('holdReturningShell'), 'returning users re-assert the visible shell on pageshow');
+assert(layout.includes('if (!document.documentElement.classList.contains(\'nt-shell-ready\')) return;'), 'pageshow does not hide the logo before dest names paint');
 assert(layout.includes('--nt-shell-top'), 'shell is pinned below overlay chrome');
 assert(layout.includes('--nt-shell-h'), 'shell height follows the visible hole');
 assert(layout.includes('missing < 180'), 'URL-bar overlay uses the missing layout strip, not an invented tray');

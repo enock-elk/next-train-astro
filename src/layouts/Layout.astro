@@ -374,18 +374,17 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
     {unlockShellEarly && (
       <>
         <script is:inline>
-          // Returning users / same-session navigations (e.g. map.html → home) must not
-          // sit behind "Loading schedules…". Decide before first paint.
+          // After the logo has handed off (nt-shell-ready), pageshow / bfcache
+          // must re-assert the visible shell. Do not add nt-shell-ready from
+          // welcomeSeen alone: that hid the logo over a white empty card
+          // before "Next train to …" painted.
           // Do not hide #main-content with an inline style: WebKit often keeps that
           // layer blank after CSS unhides it (app shows, then white, until Back).
           (function () {
             function holdReturningShell() {
               try {
                 if (document.documentElement.classList.contains('nt-map-iframe-escape')) return;
-                var seen = localStorage.getItem('welcomeSeen') === 'true';
-                var warm = sessionStorage.getItem('nt_shell_warm') === '1';
-                if (!seen && !warm) return;
-                document.documentElement.classList.add('nt-shell-ready');
+                if (!document.documentElement.classList.contains('nt-shell-ready')) return;
                 var main = document.getElementById('main-content');
                 if (main) {
                   main.style.visibility = 'visible';

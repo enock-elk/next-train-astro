@@ -229,13 +229,13 @@ assert(
     )?.lat === -25.751,
     'trusted high-accuracy locate wins over the map pin'
 );
-assert(RIDE_GPS_STALE_MS === 7000 && RIDE_INTERPOLATION_MAX_MS === 7000, 'grey pause and interpolation share a 7 second window');
+assert(RIDE_GPS_STALE_MS === 12000 && RIDE_INTERPOLATION_MAX_MS === 12000, 'grey pause and interpolation share a 12 second window');
 assert(ONBOARD_FAST_PING_MS === 4000 && ONBOARD_MOVING_PING_MS === 4000 && ONBOARD_STATIONARY_PING_MS === 4000, 'all onboard bands publish every 4 seconds while testing');
 assert(adaptiveOnboardPingMs(12) === ONBOARD_FAST_PING_MS, 'fast train broadcasts every 4 seconds');
 assert(adaptiveOnboardPingMs(2) === ONBOARD_MOVING_PING_MS, 'slow movement broadcasts every 4 seconds');
 assert(adaptiveOnboardPingMs(0) === ONBOARD_STATIONARY_PING_MS, 'stationary share heartbeats every 4 seconds');
-assert(!isRidePingGpsStale({ acceptedAt: Date.now() - 6000 }), 'a 6 second GPS ping is still live');
-assert(isRidePingGpsStale({ acceptedAt: Date.now() - 8000 }), 'an 8 second GPS ping is stale');
+assert(!isRidePingGpsStale({ acceptedAt: Date.now() - 11000 }), 'an 11 second GPS ping is still live');
+assert(isRidePingGpsStale({ acceptedAt: Date.now() - 13000 }), 'a 13 second GPS ping is stale');
 assert(!terminusStopShouldFire({
     atLast: true, lastIndex: 12, minProgressSeen: 12,
 }), 'sitting at the last station when sharing starts does not end the share');
@@ -471,9 +471,9 @@ assert(mapAppSource.includes('interpolateRideMarkerLatLng'), 'remote map marker 
 assert(mapAppSource.includes('interpolateAlongRidePath'), 'train interpolation follows the painted rail, not a Euclidean jump');
 assert(mapAppSource.includes('STATION_APPROACH_M'), 'trains slow approaching a station');
 assert(mapAppSource.includes('STATION_DWELL_SEC'), 'trains dwell when GPS is at a station');
-assert(mapAppSource.includes('RIDE_INTERPOLATION_MAX_MS = 7000'), 'map interpolation caps at 7 seconds');
+assert(mapAppSource.includes('RIDE_INTERPOLATION_MAX_MS = 12000'), 'map interpolation caps at 12 seconds');
 assert(mapAppSource.includes('A successful GPS ping always cancels'), 'a new GPS ping retargets and cancels the previous glide');
-assert(mapAppSource.includes('applyRideTrainStalePause'), 'receivers grey the glyph after 7s without a ping');
+assert(mapAppSource.includes('applyRideTrainStalePause'), 'receivers grey the glyph after 12s without a ping');
 assert(mapTabSource.includes('if (mapOn) syncRidePingsToMap()'), 'map tab recompacts pings so a fresh rider can take over');
 assert(ridePingsSource.includes('}, ONBOARD_FAST_PING_MS)'), 'onboard loop ticks at the 4 second publish cadence');
 assert(ridePingsSource.includes('autoPaused'), 'a successful GPS ping after grey pause broadcasts immediately');

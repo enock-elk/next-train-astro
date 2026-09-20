@@ -257,7 +257,24 @@ const faqLd = {
     import { ROUTES, withBase } from '../lib/config.js';
     import { safeStorage, restorePinnedSession } from '../lib/utils.js';
 
-    const revealAppShell = () => {
+    let revealCommitted = false;
+    const boardChromeReady = () => {
+        const dests = document.querySelectorAll('#pretoria-header [data-header-dest], #pienaarspoort-header [data-header-dest]');
+        for (const el of dests) {
+            const text = String(el.textContent || '').trim();
+            if (text && text !== '…') return true;
+        }
+        const welcome = document.getElementById('welcome-modal');
+        if (welcome && !welcome.classList.contains('hidden')) return true;
+        const mapView = document.getElementById('view-map');
+        if (mapView && mapView.classList.contains('active')) return true;
+        const plannerView = document.getElementById('view-trip-planner');
+        if (plannerView && plannerView.classList.contains('active')) return true;
+        return false;
+    };
+    const dropLoadingLogo = () => {
+        if (revealCommitted) return;
+        revealCommitted = true;
         const main = document.getElementById('main-content');
         const overlay = document.getElementById('loading-overlay');
         if (main) {
@@ -269,19 +286,46 @@ const faqLd = {
         try { sessionStorage.setItem('nt_shell_warm', '1'); } catch (e) {}
         try { window.ntFitAppViewport?.(); } catch (e) {}
     };
+    // Keep the logo over the white card until dest names (or Welcome) are on
+    // screen, then wait two frames so that paint lands under the overlay.
+    const revealAppShell = (force = false) => {
+        if (revealCommitted) {
+            dropLoadingLogo();
+            return true;
+        }
+        if (!force && !boardChromeReady()) return false;
+        requestAnimationFrame(() => {
+            requestAnimationFrame(dropLoadingLogo);
+        });
+        return true;
+    };
+    const revealWhenBoardReady = () => {
+        if (revealAppShell()) return;
+        const destA = document.getElementById('pretoria-header');
+        if (destA && !destA.dataset.ntRevealWatch) {
+            destA.dataset.ntRevealWatch = '1';
+            const mo = new MutationObserver(() => {
+                if (revealAppShell()) mo.disconnect();
+            });
+            mo.observe(destA, { subtree: true, childList: true, characterData: true });
+        }
+        const welcome = document.getElementById('welcome-modal');
+        if (welcome && !welcome.dataset.ntRevealWatch) {
+            welcome.dataset.ntRevealWatch = '1';
+            const mo = new MutationObserver(() => {
+                if (revealAppShell()) mo.disconnect();
+            });
+            mo.observe(welcome, { attributes: true, attributeFilter: ['class'] });
+        }
+    };
     // Fix loader image base path for GitHub Pages preview (small WebP for cold-boot LCP)
     const loaderImg = document.querySelector('#loading-overlay img');
     if (loaderImg) loaderImg.setAttribute('src', withBase('icons/loading-logo-splash.webp'));
 
-    // Paint header + tabs + board shell for 2 frames before dropping the logo overlay
-    // (avoids the “Next Train / Loading… + pure white” flash on slow devices).
-    requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-            revealAppShell();
-        });
+    window.addEventListener('pageshow', () => {
+        if (document.documentElement.classList.contains('nt-shell-ready')) dropLoadingLogo();
     });
-    setTimeout(revealAppShell, 700);
-    window.addEventListener('pageshow', revealAppShell);
+    setTimeout(() => revealAppShell(true), 4000);
 
     // Early reachability probe — radio up ≠ usable internet
     try { ensureReachabilityProbed(); } catch (e) { /* ignore */ }
@@ -327,6 +371,16 @@ const faqLd = {
     };
 
     hydrateStores();
+    restorePinnedSession().then((pinned) => {
+        if (pinned?.userRegion) $userRegion.set(pinned.userRegion);
+        const region = $userRegion.get() || 'GP';
+        const savedDefault = safeStorage.getItem('defaultRoute_' + region);
+        if (savedDefault && ROUTES[savedDefault] && ROUTES[savedDefault].isActive) {
+            $currentRouteId.set(savedDefault);
+        }
+        if (typeof window.updateNextTrainView === 'function') window.updateNextTrainView();
+        revealWhenBoardReady();
+    }).catch(() => {});
     // Align sidenav + route-modal region labels with hydrated localStorage region
     syncRegionDisplayDom($userRegion.get() || 'GP');
     syncCrmRegionAnalytics($userRegion.get() || 'GP');
@@ -429,6 +483,7 @@ const faqLd = {
     bindPlannerShellModals();
     bindMaintenanceBanner();
     initLiveBoardUi();
+    revealWhenBoardReady();
     initPlanner();
     initHub();
     // Admin + Firebase SDK stay off the critical home chunk (CWV / SW precache).
@@ -449,8 +504,8 @@ const faqLd = {
     window.revealAppShell = revealAppShell;
 
     const igniteDataEngine = async () => {
-        // Shell is already visible — schedules hydrate in the background.
-        revealAppShell();
+        // Logo stays until dest names (or Welcome) paint, so the white card
+        // never shows through. Schedules still hydrate in the background.
         try {
             bindKillswitchWatch();
             if (await applyLiveTrainDeepLink()) {
@@ -496,6 +551,7 @@ const faqLd = {
             const welcomeSeen = safeStorage.getItem('welcomeSeen') === 'true';
             if (!welcomeSeen) {
                 console.log("🛡️ Guardian: New session detected. Postponing automatic schedule downloads until welcome configuration completes.");
+                revealWhenBoardReady();
                 return;
             }
 
@@ -521,6 +577,8 @@ const faqLd = {
 
             if (pinnedOk) {
                 $currentRouteId.set(savedDefault);
+                if (typeof window.updateNextTrainView === 'function') window.updateNextTrainView();
+                revealWhenBoardReady();
                 console.log("🛡️ Guardian: Igniting Data Engine (background)…");
                 // Do not await — poor networks must not block chrome / map→home return.
                 loadAllSchedules(false)
@@ -534,9 +592,10 @@ const faqLd = {
                 // Unpin / no default: never invent first-in-list as pinned.
                 // Open this region's route picker so the user chooses.
                 openRegionRoutePicker();
+                revealAppShell(true);
             }
         } finally {
-            revealAppShell();
+            revealWhenBoardReady();
         }
     };
 

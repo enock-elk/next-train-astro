@@ -2,6 +2,10 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin, Dev Hub, Alerts, Trains near me, community chat, or other hidden-test work. No emoji and no em dashes in What’s New. Keep `APP_VERSION`, `package.json` `version`, and `public/app-version.json` aligned on each release. Changelog / What’s New may be skipped, or the heading may be only **no release notes.** Every bump must add `ADMIN_CHANGELOG[APP_VERSION]` (System Health Build notes).
 
+## V9_09.20.5 — no release notes
+
+Loading logo stays until the board dest names are on screen, so the white card does not flash through. Live-train interpolation is 12 seconds. No What’s New.
+
 ## V9_09.20.4 — no release notes
 
 PWA and Play TWA update path peeks the published version from several URLs, installs the incoming service worker, then restarts on the same URL so iOS bookmarks keep the pinned route. NUKE is polled every 15 seconds. No What’s New.

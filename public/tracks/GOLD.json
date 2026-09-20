@@ -1,8 +1,8 @@
 {
   "branch": "map-gold",
   "frozenAt": "fae7cdbde2266f07bab5839a566599af490dd700",
-  "version": "V9_09.20.4",
-  "note": "Gold snapshot of this build: planner fare uses painted corridor km, static-map station hops, rail-tangent trains, baked tracks, map runtime, advert handling. Live trains slow on station approach, interpolate at most 7s, and grey after 7s without a GPS ping; a successful ping cancels the glide. Broadcast every 4s while testing. Diff against origin/map-gold. Fast-forward map-gold after this lands on main. Never force-push map-gold.",
+  "version": "V9_09.20.5",
+  "note": "Gold snapshot of this build: planner fare uses painted corridor km, static-map station hops, rail-tangent trains, baked tracks, map runtime, advert handling. Live trains slow on station approach, interpolate at most 12s, and grey after 12s without a GPS ping; a successful ping cancels the glide. Broadcast every 4s while testing. Diff against origin/map-gold. Fast-forward map-gold after this lands on main. Never force-push map-gold.",
   "files": {
     "public/tracks/rail-tracks-EC.geojson": {
       "md5": "43409bfd05405205e596f0d03345ab18",
@@ -21,8 +21,8 @@
       "sha256": "090a5d7fc45cafb8c7b81dc583ae24978540f38278cab447953bc90c8821f01f"
     },
     "public/js/map-app.js": {
-      "md5": "73f9e7f7fbfe09869d33370e4c819c2f",
-      "sha256": "721e7caa75d717b67aa61bd324c40639910f5282f65dc80f65fef7787c88c29f"
+      "md5": "ab9246f511610567162e9a1bc7de6bae",
+      "sha256": "75bc116f8de81b9d95e6230d7dd57a65e8eb58a3414511b51258428e154926f5"
     },
     "src/pages/map.astro": {
       "md5": "e3baceb290d5fd25cdb13ba838e5391f",

@@ -45,19 +45,29 @@ import {
 import { TRACKER_SNAP_MAX_M } from './rail-tracks.js';
 import { peekCachedRouteReports, isReportStillLive, routeHasNoScheduledTrains } from './delay-reports.js';
 import { awardShareMarks } from './rider-marks.js';
+import {
+    formatGpsPingAge,
+    formatGpsPingClock,
+    formatLastSeenWithPingClock,
+    gpsPingSuccessAt,
+    isRidePingGpsStale,
+    RIDE_GPS_STALE_MS,
+    RIDE_INTERPOLATION_MAX_MS,
+} from './gps-freshness.js';
 
 /** Sliding share TTL. Last successful ping + this window, then the session ends. */
 export const RIDE_SHARE_IDLE_MS = 30 * 60 * 1000;
 /** Alias kept for callers / verifies: idle window is the write TTL. */
 export const RIDE_PING_TTL_MS = RIDE_SHARE_IDLE_MS;
-/** Two missed onboard pings (loop is 45s). Map glyph goes slate. */
-export const RIDE_GPS_STALE_MS = 90 * 1000;
 export {
     formatGpsPingAge,
     formatGpsPingClock,
     formatLastSeenWithPingClock,
     gpsPingSuccessAt,
-} from './gps-freshness.js';
+    isRidePingGpsStale,
+    RIDE_GPS_STALE_MS,
+    RIDE_INTERPOLATION_MAX_MS,
+};
 /** Pause, then drop the train share if the rider stays off the rails this long. */
 export const RIDE_OFFTRACK_GRACE_MS = 3 * 60 * 1000;
 /** Drop immediately if GPS is this far from the selected rail, even inside the grace window. */
@@ -98,9 +108,10 @@ const REVERSE_PROGRESS_TOLERANCE = 0.08;
 const CONSENSUS_MIN_BAND = 0.2;
 const ACTIVE_KEY = 'ridePingActiveV1';
 const SHARE_SESSION_KEY = 'nt_ride_share_session';
-export const ONBOARD_FAST_PING_MS = 5 * 1000;
-export const ONBOARD_MOVING_PING_MS = 10 * 1000;
-export const ONBOARD_STATIONARY_PING_MS = 10 * 1000;
+/** Test cadence: publish every 4s so a ping can land before the 7s glide/grey cap. */
+export const ONBOARD_FAST_PING_MS = 4 * 1000;
+export const ONBOARD_MOVING_PING_MS = 4 * 1000;
+export const ONBOARD_STATIONARY_PING_MS = 4 * 1000;
 const DIRECTION_CONFLICT_MIN_SAMPLES = 3;
 const DIRECTION_CONFLICT_MIN_MS = 20 * 1000;
 
@@ -358,10 +369,6 @@ function peekStoredShare() {
     }
 }
 
-export function isRidePingGpsStale(at, now = Date.now()) {
-    const t = Number(at || 0);
-    return !t || (now - t) >= RIDE_GPS_STALE_MS;
-}
 
 function roundCoord(value) {
     return Math.round(value * 100000) / 100000;
@@ -601,22 +608,28 @@ export async function compactPingsForMap(pings, { mineDeviceId = '', routeId = '
             .filter((p) =>
                 (
                     p.trackingState === TRACKING_STATE.PAUSED
-                    || (p.trackingState === TRACKING_STATE.ACTIVE && isRidePingGpsStale(p.acceptedAt || p.at))
+                    || (p.trackingState === TRACKING_STATE.ACTIVE && isRidePingGpsStale(p))
                 )
                 && Number.isFinite(p.projectedProgress)
                 && Number.isFinite(p.lat)
                 && Number.isFinite(p.lng)
             )
-            .sort((a, b) => (b.at || 0) - (a.at || 0));
+            .sort((a, b) => gpsPingSuccessAt(b) - gpsPingSuccessAt(a));
+        // Fresh GPS wins. Stale/unreachable sharers drop out of `active`; another
+        // rider's accurate ping becomes the driver. If nobody is reachable, keep
+        // the last projected point and paint it paused (grey).
         const kept = active.length ? active : paused.slice(0, 1);
         if (!kept.length) continue;
         const medianProgress = median(kept.map((p) => p.projectedProgress));
         const driver = [...kept].sort((a, b) => {
+            const fa = gpsPingSuccessAt(a);
+            const fb = gpsPingSuccessAt(b);
+            if (fb !== fa) return fb - fa;
             const da = Math.abs(a.projectedProgress - medianProgress);
             const db = Math.abs(b.projectedProgress - medianProgress);
-            return da - db || (b.at || 0) - (a.at || 0);
+            return da - db;
         })[0];
-        const newest = kept.reduce((a, b) => ((a.at || 0) >= (b.at || 0) ? a : b), kept[0]);
+        const newest = kept.reduce((a, b) => (gpsPingSuccessAt(a) >= gpsPingSuccessAt(b) ? a : b), kept[0]);
         const metricPing = (key) => {
             const hit = [...kept, ...list].find((p) => typeof p?.[key] === 'number' && Number.isFinite(p[key]));
             return hit ? hit[key] : null;
@@ -651,7 +664,7 @@ export async function compactPingsForMap(pings, { mineDeviceId = '', routeId = '
             lastSeenLabel: newest.lastSeenLabel || driver.lastSeenLabel,
             destination: trainTerminusName(trainId, newest.destination || driver.lastSeenLabel),
             accuracy: typeof newest.accuracy === 'number' ? newest.accuracy : metricPing('accuracy'),
-            pauseReason: pausedOnly ? newest.pauseReason : '',
+            pauseReason: pausedOnly ? (newest.pauseReason || 'staleGps') : '',
         });
     }
     return out.concat(loose);
@@ -668,7 +681,7 @@ function median(values) {
 export function consensusProjectedPings(pings) {
     const valid = (pings || []).filter((p) =>
         p?.trackingState === TRACKING_STATE.ACTIVE
-        && !isRidePingGpsStale(p.acceptedAt || p.at)
+        && !isRidePingGpsStale(p)
         && Number.isFinite(p.projectedProgress)
         && Number.isFinite(p.lat ?? p.projectedLat)
         && Number.isFinite(p.lng ?? p.projectedLng)
@@ -760,7 +773,7 @@ function pingTracksTrain(p, trainId, opts = {}) {
     const id = String(trainId || '');
     if (!id || String(p?.trainId || '') !== id) return false;
     if (relaxLiveShareGuards()) return true;
-    if (p.trackingState !== TRACKING_STATE.ACTIVE || isRidePingGpsStale(p.acceptedAt || p.at)) return false;
+    if (p.trackingState !== TRACKING_STATE.ACTIVE || isRidePingGpsStale(p)) return false;
     const lat = typeof p.projectedLat === 'number' ? p.projectedLat : null;
     const lng = typeof p.projectedLng === 'number' ? p.projectedLng : null;
     if (lat == null || lng == null) return false;
@@ -768,8 +781,9 @@ function pingTracksTrain(p, trainId, opts = {}) {
     if (p.adminOverrideRole === 'train') return true;
     const metres = Number(p.railDistanceM);
     if (!Number.isFinite(metres) || metres > TRACKER_SNAP_MAX_M) return false;
-    if (typeof p.speedMps !== 'number' || p.speedMps < 1.5) return false;
-    if (typeof p.heading === 'number') {
+    const speed = typeof p.speedMps === 'number' ? p.speedMps : 0;
+    // Station / crawl GPS is still an accurate ping. Heading only when moving.
+    if (speed >= 1.5 && typeof p.heading === 'number') {
         const scheduledHeading = journeyHeadingAtProgress(id, p.projectedProgress, opts);
         if (!headingAgrees(p.heading, scheduledHeading)) return false;
     }
@@ -781,6 +795,8 @@ export function compareRankedPings(a, b) {
     if (!!a.headingOk !== !!b.headingOk) return a.headingOk ? -1 : 1;
     const dm = (a.metres || Infinity) - (b.metres || Infinity);
     if (dm) return dm;
+    const df = (b.fixAt || 0) - (a.fixAt || 0);
+    if (df) return df;
     if (!!a.trainLike !== !!b.trainLike) return a.trainLike ? -1 : 1;
     const ds = (a.speedScore || 0) - (b.speedScore || 0);
     if (ds) return ds;
@@ -804,6 +820,7 @@ function scoreTrackedPing(p, trainId, opts = {}) {
         trainLike,
         speedScore,
         speed,
+        fixAt: gpsPingSuccessAt(p),
         at: p.at || 0,
     };
 }
@@ -1816,6 +1833,7 @@ async function processOnboardFix(pos, { forceBroadcast = false, generation = onb
     if (active.trackingState === TRACKING_STATE.PAUSED && active.pauseReason === 'user') {
         return;
     }
+    const autoPaused = active.trackingState === TRACKING_STATE.PAUSED && active.pauseReason !== 'user';
     const near = nearestStationOnRoute(pos.lat, pos.lng, active.routeId);
     const minProgressSeen = nextMinProgressSeen(active, active.trainId, pos.lat, pos.lng);
     if (Number.isFinite(minProgressSeen) && minProgressSeen !== active.minProgressSeen) {
@@ -1933,7 +1951,7 @@ async function processOnboardFix(pos, { forceBroadcast = false, generation = onb
         active.leftTrainPrompted = true;
     }
     if (active.adminOverrideRole === 'train' && isAdminAuthed()) {
-        const due = forceBroadcast || Date.now() - onboardLastBroadcastAt >= adaptiveOnboardPingMs(pos.speedMps);
+        const due = forceBroadcast || autoPaused || Date.now() - onboardLastBroadcastAt >= adaptiveOnboardPingMs(pos.speedMps);
         if (!due) return;
         if (generation !== onboardGeneration) return;
         const result = await submitRideCheckIn({
@@ -2035,7 +2053,7 @@ async function processOnboardFix(pos, { forceBroadcast = false, generation = onb
     }
     const local = cacheLocalProjectedFix(active, pos, projection, near, observation);
     const interval = adaptiveOnboardPingMs(pos.speedMps);
-    if (!navigator.onLine || (!forceBroadcast && Date.now() - onboardLastBroadcastAt < interval)) return;
+    if (!navigator.onLine || (!forceBroadcast && !autoPaused && Date.now() - onboardLastBroadcastAt < interval)) return;
     if (generation !== onboardGeneration) return;
     const result = await submitRideCheckIn({
         routeId: local.routeId,
@@ -2099,7 +2117,7 @@ function queueOnboardPause(reason, pos = null) {
     return onboardProjectionChain;
 }
 
-/** Every accepted fix moves the local pill; Firebase receives adaptive coalesced pings. */
+/** Every accepted fix moves the local pill; Firebase receives coalesced pings (4s while testing). */
 export function startOnboardPingLoop() {
     stopOnboardPingLoop();
     startShareIdleWatch();
@@ -2132,7 +2150,7 @@ export function startOnboardPingLoop() {
         }
         const due = Date.now() - onboardLastBroadcastAt >= adaptiveOnboardPingMs(onboardLatestFix?.speedMps);
         if (due && onboardLatestFix) queueOnboardFix(onboardLatestFix, { forceBroadcast: true });
-    }, 5000);
+    }, ONBOARD_FAST_PING_MS);
 }
 
 /**

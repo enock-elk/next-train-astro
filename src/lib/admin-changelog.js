@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_09.20.3': [
+        'Live trains: station-approach slowing stays. Interpolation caps at 7s; a successful GPS ping cancels the glide and retargets. Broadcast every 4s while testing (all speed bands) so a ping can land before the 7s cap. After 7s without a successful ping, sharer and listeners pause to grey (staleGps). compactPingsForMap switches the train glyph to another rider’s fresh ping; if nobody is reachable the last point stays grey. Receivers locally grey even if the sharer cannot write. Slow/station GPS still counts as an accurate ping. No What’s New (live location stays hidden). forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
+    ],
     'V9_09.20.2': [
         'Planner fare: No left, Yes right. Fare - Single Trip plus Return, Weekly Mon-Fri, Weekly Mon-Sat, Monthly from zones_detailed (peak table, profile multiplier). Peak clock uses compactTime so 5:10:00 is not 5:10:. Service Alerts catalog poster preview sits in the message field with withBase. Tracking card title is dest Train id, opens from the green pill, and is draggable. GPS speed: displacement inside the accuracy circle is 0 even when the OS reports ~5 km/h; real 5 km/h walking still reports once the fix leaves that circle. Live OG image is /og/train/{id}/...png (no SVG fallback, cache bust wa11) so WhatsApp cannot wrap live.png query strings. No What’s New for alerts, OG, or live tracking. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
     ],

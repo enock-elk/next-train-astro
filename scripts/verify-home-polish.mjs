@@ -420,6 +420,7 @@ assert(hubModals.includes('id="nt-admin-publish-train"'), 'admin nearby sheet ca
     const mapApp = readFileSync(new URL('../public/js/map-app.js', import.meta.url), 'utf8');
     const mapPage = readFileSync(new URL('../src/pages/map.astro', import.meta.url), 'utf8');
     const ridePings = readFileSync(new URL('../src/lib/ride-pings.js', import.meta.url), 'utf8');
+    const gpsFreshness = readFileSync(new URL('../src/lib/gps-freshness.js', import.meta.url), 'utf8');
     const adminJs = readFileSync(new URL('../public/js/admin.js', import.meta.url), 'utf8');
     assert(mapView.includes('id="map-tab-stop-btn"'), 'Map tab has Stop sharing');
     assert(mapView.includes('id="map-tracking-share"'), 'tracking card has a share control');
@@ -464,8 +465,14 @@ assert(hubModals.includes('id="nt-admin-publish-train"'), 'admin nearby sheet ca
     assert(mapPage.includes('nt-live-train-halo'), 'map train ring animation is slow and faint');
     assert(mapPage.includes('overflow: visible'), 'leaflet icon does not clip the pulse');
     assert(mapPage.includes('nt-live-train-num'), 'map page styles the train number');
+    assert(gpsFreshness.includes('RIDE_INTERPOLATION_MAX_MS = 7 * 1000'), 'interpolation caps at 7 seconds');
+    assert(gpsFreshness.includes('RIDE_GPS_STALE_MS = RIDE_INTERPOLATION_MAX_MS'), 'GPS stale window matches the 7 second interpolation cap');
     assert(ridePings.includes('RIDE_SHARE_IDLE_MS = 30 * 60 * 1000'), 'share stops after 30 minutes idle');
-    assert(ridePings.includes('RIDE_GPS_STALE_MS = 90 * 1000'), 'GPS stale window is 90 seconds');
+    assert(ridePings.includes('RIDE_GPS_STALE_MS'), 'GPS stale window is exported');
+    assert(ridePings.includes('ONBOARD_FAST_PING_MS = 4 * 1000'), 'onboard GPS publishes every 4 seconds while testing');
+    assert(mapApp.includes('RIDE_INTERPOLATION_MAX_MS = 7000'), 'map glide matches the 7 second cap');
+    assert(mapApp.includes('applyRideTrainStalePause'), 'listeners grey the train when GPS goes stale locally');
+    assert(mapTab.includes('RIDE_GPS_STALE_MS'), 'tracking card uses the shared GPS stale window');
     assert(ridePings.includes('compactPingsForMap'), 'map pings are compacted per train');
     assert(ridePings.includes('snapToRail'), 'compact pings snap to rails before averaging');
     assert(ridePings.includes('RIDE_OFFTRACK_GRACE_MS = 3 * 60 * 1000'), 'off-track train share has a 3 minute grace');

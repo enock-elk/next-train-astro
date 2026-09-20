@@ -17,7 +17,7 @@ import { currentScheduleData } from './live-board.js';
 import { trainGoingLabel, trainGoingFullLabel, trainTowardLabel, trainTerminusName, trainHeadboardTitle, journeyHeadingAtProgress, TRACKING_WINDOW_SEC, compareNearbyTrainLikelihood, isGhostTrackable, trainIdsInSchedule } from './train-ghosts.js';
 import { relaxLiveShareGuards } from './features.js';
 import { isAdminAuthed } from './admin-chrome.js';
-import { formatGpsPingAge, formatLastSeenWithPingClock, gpsPingSuccessAt } from './gps-freshness.js';
+import { formatGpsPingAge, formatLastSeenWithPingClock, gpsPingSuccessAt, RIDE_GPS_STALE_MS } from './gps-freshness.js';
 import {
     acquireGeoWatch,
     releaseGeoWatch,
@@ -218,7 +218,7 @@ function firstFiniteMetric(...vals) {
 function trackingIsPaused(active, marker = null, pingAt = 0) {
     if ((marker?.trackingState || active?.trackingState) === 'paused') return true;
     const t = Number(pingAt || 0);
-    return !!(active?.trainId) && (!t || (Date.now() - t) >= 90 * 1000);
+    return !!(active?.trainId) && (!t || (Date.now() - t) >= RIDE_GPS_STALE_MS);
 }
 
 function readMapOverlayPos(key) {
@@ -2735,6 +2735,8 @@ export function bindMapTabUi() {
         }
     });
     setInterval(() => {
+        const mapOn = document.getElementById('view-map')?.classList.contains('active');
+        if (mapOn) syncRidePingsToMap();
         const card = document.getElementById('map-tracking-card');
         const restore = document.getElementById('map-tracking-restore');
         if (card?.classList.contains('hidden') && restore?.classList.contains('hidden')) return;

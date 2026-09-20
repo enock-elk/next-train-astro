@@ -21,6 +21,7 @@ import {
     adaptiveOnboardPingMs,
     compactPingsForMap,
     consensusProjectedPings,
+    isRidePingGpsStale,
     isTrackingInterchange,
     ONBOARD_FAST_PING_MS,
     ONBOARD_MOVING_PING_MS,
@@ -39,6 +40,8 @@ import {
     formatGpsPingClock,
     formatLastSeenWithPingClock,
     gpsPingSuccessAt,
+    RIDE_GPS_STALE_MS,
+    RIDE_INTERPOLATION_MAX_MS,
 } from '../src/lib/gps-freshness.js';
 import { refineMotionFix, confirmStationaryWatchTick, reusableGeoFix, locateFixOrLast, GEO_REUSE_MAX_AGE_MS } from '../src/lib/geo-watch.js';
 import { readFileSync } from 'node:fs';
@@ -226,9 +229,13 @@ assert(
     )?.lat === -25.751,
     'trusted high-accuracy locate wins over the map pin'
 );
-assert(adaptiveOnboardPingMs(12) === ONBOARD_FAST_PING_MS, 'fast train broadcasts every 5 seconds');
-assert(adaptiveOnboardPingMs(2) === ONBOARD_MOVING_PING_MS, 'slow movement broadcasts every 10 seconds');
-assert(adaptiveOnboardPingMs(0) === ONBOARD_STATIONARY_PING_MS, 'stationary share heartbeats every 10 seconds');
+assert(RIDE_GPS_STALE_MS === 7000 && RIDE_INTERPOLATION_MAX_MS === 7000, 'grey pause and interpolation share a 7 second window');
+assert(ONBOARD_FAST_PING_MS === 4000 && ONBOARD_MOVING_PING_MS === 4000 && ONBOARD_STATIONARY_PING_MS === 4000, 'all onboard bands publish every 4 seconds while testing');
+assert(adaptiveOnboardPingMs(12) === ONBOARD_FAST_PING_MS, 'fast train broadcasts every 4 seconds');
+assert(adaptiveOnboardPingMs(2) === ONBOARD_MOVING_PING_MS, 'slow movement broadcasts every 4 seconds');
+assert(adaptiveOnboardPingMs(0) === ONBOARD_STATIONARY_PING_MS, 'stationary share heartbeats every 4 seconds');
+assert(!isRidePingGpsStale({ acceptedAt: Date.now() - 6000 }), 'a 6 second GPS ping is still live');
+assert(isRidePingGpsStale({ acceptedAt: Date.now() - 8000 }), 'an 8 second GPS ping is stale');
 assert(!terminusStopShouldFire({
     atLast: true, lastIndex: 12, minProgressSeen: 12,
 }), 'sitting at the last station when sharing starts does not end the share');
@@ -362,6 +369,64 @@ assert(
     staleActiveMarkers[0]?.trackingState === TRACKING_STATE.PAUSED,
     'a stale active write remains visible as a stationary paused marker'
 );
+const nowSwitch = Date.now();
+const switchedMarkers = await compactPingsForMap([
+    {
+        deviceId: 'stale-rider',
+        routeId: 'pta-pien',
+        trainId: '1000',
+        station: 'ORIGIN',
+        coarseLat: -25.1,
+        coarseLng: 28.1,
+        projectedLat: -25.0,
+        projectedLng: 28.0,
+        projectedProgress: 0.4,
+        acceptedAt: nowSwitch - 8000,
+        fixAt: nowSwitch - 8000,
+        at: nowSwitch - 8000,
+        expiresAt: nowSwitch + 600000,
+        speedMps: 12,
+        railDistanceM: 8,
+        trackingState: TRACKING_STATE.ACTIVE,
+    },
+    {
+        deviceId: 'fresh-rider',
+        routeId: 'pta-pien',
+        trainId: '1000',
+        station: 'MIDDLE',
+        coarseLat: -25.2,
+        coarseLng: 28.2,
+        projectedLat: -25.02,
+        projectedLng: 28.02,
+        projectedProgress: 1.1,
+        acceptedAt: nowSwitch - 1000,
+        fixAt: nowSwitch - 1000,
+        at: nowSwitch - 1000,
+        expiresAt: nowSwitch + 600000,
+        speedMps: 0,
+        railDistanceM: 6,
+        trackingState: TRACKING_STATE.ACTIVE,
+    },
+], { mineDeviceId: 'observer', routeId: 'pta-pien' });
+assert(switchedMarkers.length === 1, 'one train marker when two riders share it');
+assert(switchedMarkers[0]?.trackingState === TRACKING_STATE.ACTIVE, 'a fresh rider keeps the train live');
+assert(
+    switchedMarkers[0]?.lat === -25.02 && switchedMarkers[0]?.lng === 28.02,
+    'the train switches to the reachable rider’s last GPS'
+);
+assert(
+    pingPublicTrainId({
+        trainId: '1000',
+        trackingState: TRACKING_STATE.ACTIVE,
+        acceptedAt: Date.now(),
+        projectedLat: -25,
+        projectedLng: 28,
+        projectedProgress: 1,
+        railDistanceM: 10,
+        speedMps: 0,
+    }) === '1000',
+    'a stationary on-rail GPS ping still counts as an accurate train ping'
+);
 
 const mapAppSource = readFileSync(new URL('../public/js/map-app.js', import.meta.url), 'utf8');
 const mapPageSource = readFileSync(new URL('../src/pages/map.astro', import.meta.url), 'utf8');
@@ -406,6 +471,12 @@ assert(mapAppSource.includes('interpolateRideMarkerLatLng'), 'remote map marker 
 assert(mapAppSource.includes('interpolateAlongRidePath'), 'train interpolation follows the painted rail, not a Euclidean jump');
 assert(mapAppSource.includes('STATION_APPROACH_M'), 'trains slow approaching a station');
 assert(mapAppSource.includes('STATION_DWELL_SEC'), 'trains dwell when GPS is at a station');
+assert(mapAppSource.includes('RIDE_INTERPOLATION_MAX_MS = 7000'), 'map interpolation caps at 7 seconds');
+assert(mapAppSource.includes('A successful GPS ping always cancels'), 'a new GPS ping retargets and cancels the previous glide');
+assert(mapAppSource.includes('applyRideTrainStalePause'), 'receivers grey the glyph after 7s without a ping');
+assert(mapTabSource.includes('if (mapOn) syncRidePingsToMap()'), 'map tab recompacts pings so a fresh rider can take over');
+assert(ridePingsSource.includes('}, ONBOARD_FAST_PING_MS)'), 'onboard loop ticks at the 4 second publish cadence');
+assert(ridePingsSource.includes('autoPaused'), 'a successful GPS ping after grey pause broadcasts immediately');
 assert(mapAppSource.includes('rideFacingAlongPath'), 'train yaw follows the painted-rail tangent');
 assert(mapAppSource.includes('snapTrainToRail'), 'train centre is snapped onto the painted rail');
 assert(mapAppSource.includes('applyTrainGlyphYaw'), 'glyph rotates with the rail while interpolating');

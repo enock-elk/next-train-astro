@@ -2592,9 +2592,9 @@
                     return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c];
                 });
             }
-            function isPingGpsStale(ping) {
-                var at = Number(ping && (ping.acceptedAt || ping.fixAt || ping.at) || 0);
-                return !at || (Date.now() - at) >= 90000;
+            function isPingGpsStale(ping, now) {
+                var at = Number(ping && (ping.fixAt || ping.acceptedAt || ping.lastPingAt || ping.at) || 0);
+                return !at || ((now || Date.now()) - at) >= RIDE_GPS_STALE_MS;
             }
             function applyShareHidesUserDot(hide) {
                 hideUserDotForShare = !!hide;
@@ -2769,7 +2769,33 @@
             }
             if (!window.__ntRideFreshnessTick) {
                 window.__ntRideFreshnessTick = true;
-                setInterval(tickRidePopupFreshness, 1000);
+                setInterval(function () {
+                    tickRidePopupFreshness();
+                    applyRideTrainStalePause();
+                }, 1000);
+            }
+            function applyRideTrainStalePause() {
+                var now = Date.now();
+                Object.keys(rideTrainMarkers).forEach(function (trainId) {
+                    var marker = rideTrainMarkers[trainId];
+                    var ping = marker && marker._ntRidePing;
+                    if (!marker || !ping) return;
+                    var stale = ping.trackingState === 'paused' || isPingGpsStale(ping, now);
+                    if (!stale || marker._ntRideGrey) return;
+                    marker._ntRideGrey = true;
+                    ping.trackingState = 'paused';
+                    ping.pauseReason = ping.pauseReason || 'staleGps';
+                    stopRideMarkerInterpolation(marker, marker._ntRideTarget);
+                    var spec = liveTrainIconSpec(map.getZoom(), trainId, ping);
+                    var n = Number(marker._ntRideN) || 1;
+                    var mine = !!marker._ntRideMine;
+                    marker.setIcon(L.divIcon({
+                        className: 'nt-live-train',
+                        html: liveTrainGlyphHtml(trainId, n, mine, spec),
+                        iconSize: [spec.w, spec.h],
+                        iconAnchor: [Math.round(spec.w / 2), Math.round(spec.h / 2)]
+                    }));
+                });
             }
             function headingMetric(deg) {
                 if (!Number.isFinite(deg)) return 'Unknown';
@@ -2789,6 +2815,9 @@
                 }
                 if (target) marker.setLatLng(target);
             }
+            // Keep in sync with src/lib/gps-freshness.js (RIDE_GPS_STALE_MS / RIDE_INTERPOLATION_MAX_MS).
+            var RIDE_GPS_STALE_MS = 7000;
+            var RIDE_INTERPOLATION_MAX_MS = 7000;
             var STATION_APPROACH_M = 160;
             var STATION_DWELL_SEC = 0.7;
             var STATION_CRAWL_SEC = 0.22;
@@ -3103,11 +3132,13 @@
             }
             function interpolateRideMarkerLatLng(marker, target, immediate, opts) {
                 if (!marker || !target) return;
+                // A successful GPS ping always cancels the previous glide and retargets.
                 stopRideMarkerInterpolation(marker);
                 var end = L.latLng(target);
                 var start = marker.getLatLng();
                 var snap = snapTrainToRail(end.lat, end.lng, opts || {});
                 if (snap) end = L.latLng(snap.lat, snap.lng);
+                marker._ntRideTarget = end;
                 var reduceMotion = false;
                 try { reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (_) {}
                 var along = (!immediate && !reduceMotion)
@@ -3118,7 +3149,7 @@
                     applyTrainGlyphYaw(marker, snap ? snap.facing : (opts && Number(opts.bearing)));
                     return;
                 }
-                var duration = Math.max(450, Math.min(8000, along.samples.totalSec * 1000));
+                var duration = Math.max(450, Math.min(RIDE_INTERPOLATION_MAX_MS, along.samples.totalSec * 1000));
                 var startedAt = performance.now();
                 function frame(now) {
                     var t = Math.max(0, Math.min(1, (now - startedAt) / duration));
@@ -3350,6 +3381,20 @@
                     } else {
                         marker.setIcon(icon);
                     }
+                    marker._ntRidePing = Object.assign({}, newest, {
+                        bearing: row.bearing,
+                        lat: lat,
+                        lng: lng,
+                        speedMps: speed,
+                        accuracy: accuracyValue != null ? accuracyValue : newest.accuracy,
+                        railDistanceM: railDistanceValue != null ? railDistanceValue : newest.railDistanceM,
+                        fixAt: pingAtValue || newest.fixAt,
+                        acceptedAt: newest.acceptedAt || pingAtValue,
+                        at: newest.at || pingAtValue
+                    });
+                    marker._ntRideN = n;
+                    marker._ntRideMine = mine;
+                    marker._ntRideGrey = paused;
                     interpolateRideMarkerLatLng(marker, [lat, lng], paused, {
                         routeId: newest.routeId || list[0].routeId,
                         speedMps: speed,

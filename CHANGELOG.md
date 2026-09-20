@@ -2,6 +2,10 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin, Dev Hub, Alerts, Trains near me, community chat, or other hidden-test work. No emoji and no em dashes in What’s New. Keep `APP_VERSION`, `package.json` `version`, and `public/app-version.json` aligned on each release. Changelog / What’s New may be skipped, or the heading may be only **no release notes.** Every bump must add `ADMIN_CHANGELOG[APP_VERSION]` (System Health Build notes).
 
+## V9_09.20.3 — no release notes
+
+Live trains keep station-approach slowing. Interpolation is capped at 7 seconds; a successful GPS ping cancels the glide. Firebase publish is 4 seconds while testing. After 7 seconds without a ping the glyph goes grey; another rider’s fresh ping takes over. No What’s New.
+
 ## V9_09.20.2
 
 Planner trip fare: Yes on the right, No on the left. Single Trip plus Return / Weekly / Monthly rows. Peak weekday clock uses compactTime (no trailing colon on 5:10:00). Service Alerts catalog poster preview is inside the message field. Tracking card title is `{dest} Train {id}`, opens from the green pill, and is draggable. Sitting still no longer paints GPS jitter as 5 km/h; real 5 km/h walking still reports. Live train OG image is a path PNG (`/og/train/…png`) like grid and trip-plan cards.

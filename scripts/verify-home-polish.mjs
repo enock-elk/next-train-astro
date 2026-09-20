@@ -256,10 +256,14 @@ assert(admin.includes('id="alert-force-popup"') && admin.includes('id="alert-pol
 assert(
     admin.includes('id="excl-grid-notice-in-app"')
     && admin.includes('id="excl-grid-notice-export"')
+    && admin.includes('id="excl-grid-notice-day-weekday"')
+    && admin.includes('id="excl-grid-notice-day-saturday"')
+    && admin.includes('id="excl-grid-notice-day-sunday"')
+    && admin.includes('id="excl-grid-notice-day-public_holiday"')
     && admin.includes('id="excl-in-app-toggle"')
     && admin.includes('id="excl-export-toggle"')
     && admin.includes("const surface = showInApp && showOnGrid ? 'both'"),
-    'banner and train exceptions support in-app, grid-only, or both'
+    'banner and train exceptions support in-app, grid-only, or both, plus schedule-day isolate'
 );
 assert(admin.includes('openRoadmapOriginal'), 'roadmap opens original feedback or crash');
 assert(admin.includes('roadmap-refine-v2'), 'roadmap card redesign is loaded');

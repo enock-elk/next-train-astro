@@ -1,8 +1,8 @@
 {
   "branch": "map-gold",
   "frozenAt": "fae7cdbde2266f07bab5839a566599af490dd700",
-  "version": "V9_09.20.8",
-  "note": "Gold snapshot of this build: planner fare uses painted corridor km, static-map station hops, rail-tangent trains, baked tracks, map runtime, advert handling. GP jhb-midway is the operator 702-vert Midway/Lenz patch. Tracking Map opens for admins, experimental Map pins, or a session-only live-share link. Live trains sit on the baked rail-tracks GeoJSON (ridePathForRoute), not Leaflet OSM rail tiles. Diff against origin/map-gold. Fast-forward map-gold after this lands on main. Never force-push map-gold.",
+  "version": "V9_09.20.10",
+  "note": "Gold snapshot of this build: planner fare uses painted corridor km, static-map station hops, rail-tangent trains, baked tracks, map runtime, advert handling. GP jhb-midway is the operator 702-vert Midway/Lenz patch. Tracking Map opens for admins, experimental Map pins, or a session-only live-share link. Live trains stay on the baked rail-tracks GeoJSON (commitRailPose / ridePathForRoute), never geographic-lerp or GPS yaw. Diff against origin/map-gold. Fast-forward map-gold after this lands on main. Never force-push map-gold.",
   "files": {
     "public/tracks/rail-tracks-EC.geojson": {
       "md5": "43409bfd05405205e596f0d03345ab18",
@@ -21,8 +21,8 @@
       "sha256": "090a5d7fc45cafb8c7b81dc583ae24978540f38278cab447953bc90c8821f01f"
     },
     "public/js/map-app.js": {
-      "md5": "ab9246f511610567162e9a1bc7de6bae",
-      "sha256": "75bc116f8de81b9d95e6230d7dd57a65e8eb58a3414511b51258428e154926f5"
+      "md5": "cfcb768dabe554c88ee9131bede25277",
+      "sha256": "1a980eec97abe57d87a6f43442d2e7eae882d50ff216137d5e2fe48372368dd6"
     },
     "src/pages/map.astro": {
       "md5": "e3baceb290d5fd25cdb13ba838e5391f",
@@ -37,8 +37,8 @@
       "sha256": "f7828c3e4a6388eb4612df00b52b6e5f34dd2c36730679ffdcf85a23416c4e7a"
     },
     "src/lib/map-tab.js": {
-      "md5": "bf40c3d1d7cd5f0ebcacf3f6e4527cfd",
-      "sha256": "002ad9848e5e2a99402b1ebeb8d7ffa4eef4f8d4bda627ab621ad527cc743b86"
+      "md5": "0ad15fbd5820e0135eb23df10d2d3a76",
+      "sha256": "f94240ca4dbb9c42c765b83c468ba1ebde84f2fcd1d28e3e01cab44ca66ef5e1"
     },
     "src/lib/clever-ads.js": {
       "md5": "4d78da253d60d3ba285de6c41d697cad",

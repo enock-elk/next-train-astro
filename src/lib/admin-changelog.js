@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_09.20.10': [
+        'Schedule exception step 2 banner can isolate weekday, Saturday, Sunday, and public-holiday grids via exclusions/{route}/_grid_notice.days. Missing days still shows on every schedule. Community name-row marks are 77 then the medal SVG (no asterisk, no Points). Live-share checks paint green pass, amber defer, red block; Decision is an Outcome strip (train / deferred / blocked), not a list row. Direction-until-movement and no-speed are defer; person outcome is defer. Live-train pill stays on the painted LineString: interpolation never geographic-lerps, never aborts at 180 m, never yaws from phone GPS. No What’s New. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
+    ],
     'V9_09.20.9': [
         'Live-share links check ride_pings first. If that train is no longer being shared (Stop or expired), the app toasts Train {id} is no longer being shared and stays off Map. Paused shares still open view-only Map. Scheduled alerts: Refresh is no longer the only publisher. Worker cron still runs every 5 minutes; /cron/scheduled-alerts plus GitHub Actions every 5 minutes call the same runScheduledAlerts when ALERT_CRON_SECRET or TTL_WIPE_SECRET is set. Pushing workers/nexttrain-community on main deploys the Worker so Cloudflare cron triggers actually update. Ad inject is unchanged: 4 attempts after stabilize (now, +30s, +1m, +2m), each with a 15s script timeout, then stop until the next page load. No What’s New. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
     ],

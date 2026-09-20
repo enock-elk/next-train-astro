@@ -4,7 +4,7 @@
  */
 import { readFileSync } from 'node:fs';
 import { DEFAULT_EXCLUSIONS, APP_VERSION } from '../src/lib/config.js';
-import { simUsesSpecificDate, resolveOperatingDayType, resolvePlannerStationInput, plannerStationDisplayName, formatThreadDateLabel, formatAppTime, routePrimaryGridDirection, exclusionAppliesToSurface, STATION_ALIASES, pruneExclusionsTree } from '../src/lib/utils.js';
+import { simUsesSpecificDate, resolveOperatingDayType, resolvePlannerStationInput, plannerStationDisplayName, formatThreadDateLabel, formatAppTime, routePrimaryGridDirection, exclusionAppliesToSurface, gridNoticeShowsOnDay, STATION_ALIASES, pruneExclusionsTree } from '../src/lib/utils.js';
 
 let failed = 0;
 function assert(cond, msg) {
@@ -162,6 +162,12 @@ assert(shouldOpenRoutePicker({ swapGen: 1, currentGen: 2, currentRouteId: null }
     assert(!renderer.includes('nt-excl-head'), 'NO SVC number uses the same header box as other trains');
     assert(renderer.includes("isExport ? 'export' : 'grid'"), 'grid visibility uses the selected exclusion surface');
     assert(renderer.includes('noticeNode.showInApp !== false'), 'in-app grid banner honours its visibility checkbox');
+    assert(renderer.includes('gridNoticeShowsOnDay(noticeNode, gridDayType)'), 'in-app grid banner honours selected schedule days');
+    assert(renderer.includes('gridNoticeShowsOnDay(noticeNode, selectedDay)'), 'export grid banner honours selected schedule days');
+    assert(gridNoticeShowsOnDay({ text: 'x' }, 'saturday') === true, 'legacy banner without days shows on every schedule');
+    assert(gridNoticeShowsOnDay({ days: { weekday: true, saturday: false, sunday: false, public_holiday: true } }, 'weekday') === true, 'ticked weekday banner shows on weekday');
+    assert(gridNoticeShowsOnDay({ days: { weekday: true, saturday: false, sunday: false, public_holiday: true } }, 'saturday') === false, 'unticked Saturday banner is hidden');
+    assert(gridNoticeShowsOnDay({ days: { weekday: true, saturday: false, sunday: false, public_holiday: true } }, 'public_holiday') === true, 'ticked public-holiday banner shows on holiday grids');
     assert(renderer.includes('routePrimaryGridDirection(route)') && renderer.includes('primarySection.html'), 'download grid starts with the route-name direction');
     assert(renderer.includes('nt-export-direction--primary') && renderer.includes('nt-export-direction--return'), 'outbound and return direction strips stay labeled');
     assert(renderer.includes('NOTE:') && !renderer.includes('font-size: 12px;">Service Update</div>'), 'export notice uses NOTE: and does not grow the in-app Service Update banner');

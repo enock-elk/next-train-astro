@@ -96,6 +96,10 @@ function ensureShareChecksModal() {
                 </button>
             </div>
             <ol id="nt-share-checks-list" class="flex-1 overflow-y-auto custom-scrollbar px-5 py-4 space-y-2"></ol>
+            <div id="nt-share-checks-outcome" hidden class="mx-5 mb-3 rounded-xl border px-3 py-3">
+                <p data-share-outcome-label class="text-[9px] font-black uppercase tracking-widest text-gray-500">Outcome</p>
+                <p id="nt-share-checks-outcome-text" class="mt-1 text-[12px] font-bold leading-snug text-gray-900 dark:text-white"></p>
+            </div>
             <div class="shrink-0 p-4 border-t border-gray-100 dark:border-gray-800 space-y-2">
                 <button type="button" id="nt-share-checks-share-anyway" class="hidden w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-black focus:outline-none">Share on the map as this train</button>
                 <div class="grid grid-cols-2 gap-2">
@@ -135,6 +139,13 @@ function openShareChecks(trainId) {
     if (title) title.textContent = `Checking Train ${trainId}`;
     if (status) status.textContent = 'Starting checks…';
     if (list) list.innerHTML = '';
+    const outcome = modal.querySelector('#nt-share-checks-outcome');
+    const outcomeText = modal.querySelector('#nt-share-checks-outcome-text');
+    if (outcome) {
+        outcome.hidden = true;
+        outcome.className = 'mx-5 mb-3 rounded-xl border px-3 py-3';
+    }
+    if (outcomeText) outcomeText.textContent = '';
     const shareAnyway = modal.querySelector('#nt-share-checks-share-anyway');
     const restart = modal.querySelector('#nt-share-checks-restart');
     if (shareAnyway) {
@@ -156,9 +167,9 @@ function addShareCheck(label, detail, state = 'pass') {
     const row = document.createElement('li');
     const tone = state === 'fail'
         ? 'border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/30'
-        : state === 'decision'
-            ? 'border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/30'
-            : 'border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800';
+        : state === 'defer'
+            ? 'border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30'
+            : 'border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-950/30';
     row.className = `rounded-xl border ${tone} px-3 py-2.5`;
     const heading = document.createElement('p');
     heading.className = 'text-[11px] font-black text-gray-900 dark:text-white';
@@ -171,10 +182,50 @@ function addShareCheck(label, detail, state = 'pass') {
     row.scrollIntoView({ block: 'nearest' });
 }
 
-function setShareDecision(text, accepted) {
-    const status = ensureShareChecksModal().querySelector('#nt-share-checks-status');
+function setShareOutcome(text, outcome = 'fail') {
+    const modal = ensureShareChecksModal();
+    const status = modal.querySelector('#nt-share-checks-status');
     if (status) status.textContent = text;
-    addShareCheck('Decision', text, accepted ? 'decision' : 'fail');
+    const box = modal.querySelector('#nt-share-checks-outcome');
+    const body = modal.querySelector('#nt-share-checks-outcome-text');
+    const label = modal.querySelector('[data-share-outcome-label]');
+    if (!box || !body) return;
+    const tone = outcome === 'pass'
+        ? 'border-green-300 dark:border-green-700 bg-green-50 dark:bg-green-950/40'
+        : outcome === 'defer'
+            ? 'border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/40'
+            : 'border-red-300 dark:border-red-700 bg-red-50 dark:bg-red-950/40';
+    const labelTone = outcome === 'pass'
+        ? 'text-green-700 dark:text-green-300'
+        : outcome === 'defer'
+            ? 'text-amber-800 dark:text-amber-300'
+            : 'text-red-700 dark:text-red-300';
+    const bodyTone = outcome === 'pass'
+        ? 'text-green-900 dark:text-green-100'
+        : outcome === 'defer'
+            ? 'text-amber-950 dark:text-amber-100'
+            : 'text-red-900 dark:text-red-100';
+    box.hidden = false;
+    box.className = `mx-5 mb-3 rounded-xl border px-3 py-3 ${tone}`;
+    if (label) {
+        label.textContent = outcome === 'pass'
+            ? 'Outcome · train'
+            : outcome === 'defer'
+                ? 'Outcome · deferred'
+                : 'Outcome · blocked';
+        label.className = `text-[9px] font-black uppercase tracking-widest ${labelTone}`;
+    }
+    body.className = `mt-1 text-[12px] font-bold leading-snug ${bodyTone}`;
+    body.textContent = text;
+}
+
+function setShareDecision(text, accepted) {
+    const outcome = accepted === 'defer'
+        ? 'defer'
+        : (accepted === true || accepted === 'pass')
+            ? 'pass'
+            : 'fail';
+    setShareOutcome(text, outcome);
 }
 
 function frameEl() {
@@ -816,7 +867,7 @@ export async function runOnboardToastVet(trainId) {
         const kmh = Math.max(0, Math.round(speedMps * 3.6));
         addShareCheck('Movement', `GPS reports about ${kmh} km/h over ${Math.round(displacement)} m.`);
     } else {
-        addShareCheck('Movement', 'No reliable speed from GPS yet.', 'fail');
+        addShareCheck('Movement', 'No reliable speed from GPS yet.', 'defer');
     }
 
     let heading = last.heading;
@@ -835,7 +886,7 @@ export async function runOnboardToastVet(trainId) {
         !moving
             ? 'Direction is deferred until movement is detected.'
             : (headingPass ? `Heading agrees with Train ${trainId}’s journey.` : `Heading does not agree with Train ${trainId}’s journey yet.`),
-        headingPass ? 'pass' : 'fail'
+        !moving ? 'defer' : (headingPass ? 'pass' : 'fail')
     );
     const tooFar = !Number.isFinite(metres) || metres > TRAIN_TRACKER_MAX_M;
     lastCoords = {
@@ -852,7 +903,7 @@ export async function runOnboardToastVet(trainId) {
             : tooFar
                 ? `You’re too far from Train ${trainId}’s rail path`
                 : `Heading doesn’t match Train ${trainId}`;
-        setShareDecision(`${msg}. You will not appear as the train.`, false);
+        setShareOutcome(`${msg}. You will not appear as the train.`, 'fail');
         return {
             ok: false,
             message: msg,
@@ -874,9 +925,9 @@ export async function runOnboardToastVet(trainId) {
         };
     }
 
-    setShareDecision(attach
+    setShareOutcome(attach
         ? `Checks passed. You can appear as Train ${trainId}.`
-        : `Checks passed, but movement is not confirmed; you will appear as a person.`, attach);
+        : `Checks passed, but movement is not confirmed; you will appear as a person.`, attach ? 'pass' : 'defer');
     return {
         ok: true,
         lat: lastCoords.lat,
@@ -1844,7 +1895,7 @@ export async function startOnTrainShare({
             (overrideRole === 'train' || overrideRole === 'person')
             && (!Number.isFinite(lat) || !Number.isFinite(lng))
         ) {
-            setShareDecision(`Admin ${overrideRole} override still needs a GPS fix.`, false);
+            setShareOutcome(`Admin ${overrideRole} override still needs a GPS fix.`, 'fail');
             return vet;
         }
         if (overrideRole === 'train' || overrideRole === 'person') {
@@ -1899,7 +1950,7 @@ export async function startOnTrainShare({
             source: 'admin_override_person',
             adminOverrideRole: 'person',
         });
-        setShareDecision(`Admin override applied. You appear as a person waiting for Train ${id}.`, !!result?.ok);
+        setShareOutcome(`Admin override applied. You appear as a person waiting for Train ${id}.`, result?.ok ? 'defer' : 'fail');
         return { ...result, asPerson: true, adminOverride: 'person' };
     }
 
@@ -2041,11 +2092,11 @@ export async function startOnTrainShare({
         overrideProjected: overrideRole === 'train' ? vet.pathPoint : null,
     });
     if (shared?.ok) {
-        setShareDecision(
+        setShareOutcome(
             overrideRole === 'train'
                 ? `Admin override applied. You appear as Train ${finalId}.`
                 : `Sharing accepted. You appear as Train ${finalId}.`,
-            true
+            'pass'
         );
         scheduleTripWatch({
             trainId: finalId,

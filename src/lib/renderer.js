@@ -19,7 +19,7 @@ import { orderGridTrainIds } from './grid-order.js';
 import { 
     normalizeStationName, timeToSeconds, formatTimeDisplay, isRealTime, escapeHTML, safeStorage,
     formatRouteLabelHtml, formatRouteLabelPlain, routePrimaryGridDirection, shortSharedSourceLabel,
-    scheduleCacheSlot, routeSheetKeyForDay, warningTriangleSvg
+    scheduleCacheSlot, routeSheetKeyForDay, warningTriangleSvg, gridNoticeShowsOnDay
 } from './utils.js';
 
 import { 
@@ -959,7 +959,7 @@ export const Renderer = {
         if (!isExport && globalExclData && globalExclData[routeId] && globalExclData[routeId]['_grid_notice']) {
             const noticeNode = globalExclData[routeId]['_grid_notice'];
             const noticeText = noticeNode.text;
-            if (noticeNode.showInApp !== false && noticeText && noticeText.trim() !== '') {
+            if (noticeNode.showInApp !== false && noticeText && noticeText.trim() !== '' && gridNoticeShowsOnDay(noticeNode, gridDayType)) {
                 const cleanText = escapeHTML(noticeText);
                 gridNoticeHtml = `
                     <div class="bg-blue-50 dark:bg-blue-900/30 border-l-4 border-blue-500 p-3 mx-3 my-4 text-[11px] sm:text-xs text-blue-800 dark:text-blue-300 font-medium shadow-sm rounded-r flex items-start">
@@ -1406,7 +1406,7 @@ export async function takeGridSnapshot(direction = 'A', dayType = 'weekday') {
     if (globalExclData && globalExclData[activeRouteId] && globalExclData[activeRouteId]['_grid_notice']) {
         const noticeNode = globalExclData[activeRouteId]['_grid_notice'];
         const noticeText = noticeNode.text;
-        if (noticeText && noticeText.trim() !== '' && noticeNode.showOnExport !== false) {
+        if (noticeText && noticeText.trim() !== '' && noticeNode.showOnExport !== false && gridNoticeShowsOnDay(noticeNode, selectedDay)) {
             const cleanText = escapeHTML(noticeText);
             exportGridNoticeHtml = `
                 <div class="nt-export-note" style="background-color:#fff7ed;border-left:5px solid #c2410c;margin:12px 0 0;font-size:15px;color:#9a3412;border-radius:0 6px 6px 0;box-shadow:0 1px 2px rgba(0,0,0,0.05);display:table;width:100%;min-height:44px;box-sizing:border-box;">

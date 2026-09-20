@@ -64,8 +64,12 @@ assert.equal(twoOfThree.total, 3);
 assert.equal(twoOfThree.ratio, 2 / 3);
 assert.equal(twoOfThree.unlocked, false);
 assert.equal(showMarksInCommunity(), true, 'Community level is on by default');
-assert.equal(marksBubbleLabel({ points: 77 }), '* 77 Points', 'bubble brag uses * N Points');
+assert.equal(marksBubbleLabel({ points: 77 }), '77', 'bubble brag is the point number');
 assert(medalSvg('bronze').includes('svg'), 'bronze medal is an SVG');
-assert(renderBubbleMarksHtml({ points: 77, tier: 'bronze' }).includes('community-bubble-marks'), 'bubble marks wrap the medal and points');
+const bubbleHtml = renderBubbleMarksHtml({ points: 77, tier: 'bronze' });
+assert(bubbleHtml.includes('community-bubble-marks'), 'bubble marks wrap the medal and points');
+assert(bubbleHtml.indexOf('>77<') < bubbleHtml.indexOf('<svg'), 'points sit before the medal SVG');
+assert(!bubbleHtml.includes('Points'), 'bubble marks omit the Points word');
+assert(!bubbleHtml.includes('*'), 'bubble marks omit the asterisk');
 
 console.log('Rider marks verified: slower curve, history dedupe, day groups, streak fill.');

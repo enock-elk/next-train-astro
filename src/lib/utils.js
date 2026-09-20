@@ -284,6 +284,37 @@ export function routePrimaryGridDirection(route) {
     return 'A';
 }
 
+/** Day keys an admin can isolate for `_grid_notice` banners. */
+export const GRID_NOTICE_DAY_KEYS = ['weekday', 'saturday', 'sunday', 'public_holiday'];
+
+function normalizeGridNoticeDay(dayType) {
+    const key = String(dayType || '').trim().toLowerCase();
+    if (key === 'public_holiday' || key === 'holiday') return 'public_holiday';
+    if (key === 'saturday') return 'saturday';
+    if (key === 'sunday') return 'sunday';
+    return 'weekday';
+}
+
+/**
+ * Route-wide timetable banner: missing `days` means every schedule (legacy).
+ * Once any weekday / Saturday / Sunday / public-holiday flag is stored, only
+ * the ticked schedules paint the banner.
+ */
+export function gridNoticeShowsOnDay(notice, dayType) {
+    if (!notice) return false;
+    const days = notice.days;
+    if (days == null) return true;
+    const key = normalizeGridNoticeDay(dayType);
+    if (Array.isArray(days)) {
+        if (!days.length) return true;
+        return days.map((d) => normalizeGridNoticeDay(d)).includes(key);
+    }
+    if (typeof days !== 'object') return true;
+    const configured = GRID_NOTICE_DAY_KEYS.some((k) => days[k] === true || days[k] === false);
+    if (!configured) return true;
+    return days[key] === true;
+}
+
 /** Omitted surface keeps legacy exclusions visible in both the app and timetable grid. */
 export function exclusionAppliesToSurface(rule, surface = 'in_app') {
     if (!rule) return false;

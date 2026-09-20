@@ -536,6 +536,12 @@ assert(ridePingsSource.includes('onboardWatchStartedAt'), 'share can become stal
 assert(ridePingsSource.includes('Math.min(350'), 'interchange GPS leniency has a bounded radius');
 assert(ridePingsSource.includes('firebaseGetIdToken(window.firebaseAuth.currentUser, forceRefresh)'), 'adaptive pings reuse cached auth tokens');
 assert(mapTabSource.includes("modal.id = 'nt-share-checks-modal'"), 'train sharing opens the live checks bottom sheet');
+assert(mapTabSource.includes('nt-share-checks-outcome'), 'live checks paint a separate Outcome strip');
+assert(mapTabSource.includes("state === 'defer'"), 'deferred checks use an amber tone');
+assert(mapTabSource.includes('border-green-200'), 'successful checks paint green');
+assert(mapTabSource.includes('border-amber-200'), 'deferred checks paint orange');
+assert(mapTabSource.includes('border-red-200'), 'blocking checks paint red');
+assert(!mapTabSource.includes("addShareCheck('Decision'"), 'Decision is the outcome, not a check row');
 assert(mapTabSource.includes('Restart checks'), 'live checks can be restarted');
 assert(mapTabSource.includes('Distance to selected rail path'), 'checks measure the selected train path');
 assert(!mapTabSource.includes('from Train ${finalId} - sharing as a commuter'), 'share result does not describe distance from a train');

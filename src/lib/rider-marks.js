@@ -228,9 +228,9 @@ export function medalSvg(tierId = 'bronze') {
     return `<svg class="community-bubble-medal" viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><circle cx="8" cy="8" r="6.4" fill="${fill}" stroke="rgba(0,0,0,0.28)" stroke-width="1.1"/><path d="M8 4.15l1.05 2.14 2.36.34-1.7 1.66.4 2.35L8 9.55l-2.11 1.09.4-2.35-1.7-1.66 2.36-.34z" fill="#fff" opacity="0.95"/></svg>`;
 }
 
-/** Name-row brag: "[svg] * 77 Points". */
+/** Name-row brag: "77 [svg]". */
 export function marksBubbleLabel(state = readMarks()) {
-    return `* ${Number(state.points) || 0} Points`;
+    return String(Number(state.points) || 0);
 }
 
 export function marksPublicSnapshot(state = readMarks()) {
@@ -244,7 +244,8 @@ export function renderBubbleMarksHtml(stateOrSnap) {
     const points = Number(stateOrSnap.points);
     if (!Number.isFinite(points)) return '';
     const tierId = stateOrSnap.tier || tierForPoints(points).id;
-    return `<span class="community-bubble-marks" aria-label="${escapeAttr(`${tierForPoints(points).label} ${marksBubbleLabel({ points })}`)}">${medalSvg(tierId)} <span>${escapeAttr(marksBubbleLabel({ points }))}</span></span>`;
+    const label = marksBubbleLabel({ points });
+    return `<span class="community-bubble-marks" aria-label="${escapeAttr(`${label} ${tierForPoints(points).label}`)}"><span>${escapeAttr(label)}</span> ${medalSvg(tierId)}</span>`;
 }
 
 function escapeAttr(s) {

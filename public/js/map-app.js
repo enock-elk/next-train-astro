@@ -2813,7 +2813,10 @@
                     cancelAnimationFrame(marker._ntRideFrame);
                     marker._ntRideFrame = 0;
                 }
-                if (target) marker.setLatLng(target);
+                if (target) {
+                    var hold = L.latLng(target);
+                    commitRailPose(marker, hold.lat, hold.lng, marker._ntRailBearing, marker._ntRailAlongM, marker._ntRailRouteId);
+                }
             }
             // Keep in sync with src/lib/gps-freshness.js (RIDE_GPS_STALE_MS / RIDE_INTERPOLATION_MAX_MS).
             var RIDE_GPS_STALE_MS = 12000;
@@ -2969,6 +2972,16 @@
                 if (num) num.style.transform = 'rotate(' + (readableTrainLabelDeg(bearingDeg) - yaw) + 'deg)';
                 marker._ntRailBearing = bearingDeg;
             }
+            // Outcome of a rail snap: the pill stays on the painted LineString.
+            // Never fall back to raw GPS or a phone heading.
+            function commitRailPose(marker, lat, lng, facing, alongM, routeId) {
+                if (!marker || !Number.isFinite(lat) || !Number.isFinite(lng)) return;
+                marker.setLatLng([lat, lng]);
+                marker._ntRailLatLng = { lat: lat, lng: lng };
+                if (Number.isFinite(alongM)) marker._ntRailAlongM = alongM;
+                if (routeId) marker._ntRailRouteId = String(routeId);
+                if (Number.isFinite(facing)) applyTrainGlyphYaw(marker, facing);
+            }
             function rideAlongAtWarpedTime(samples, t01) {
                 if (!samples) return NaN;
                 var t = Math.max(0, Math.min(1, t01)) * samples.totalSec;
@@ -3095,14 +3108,26 @@
                 return pointAtRideAlongM(path, metres[metres.length - 1]);
             }
             function interpolateAlongRidePath(marker, start, end, opts) {
-                // Commuter phone GPS (already projected onto rail) is the source of truth.
+                // Commuter phone GPS is the source of truth, but the hull never
+                // leaves the painted rail. Project both ends onto the LineString.
                 var routeId = opts && opts.routeId;
                 var path = ridePathForRoute(routeId);
                 if (path.length < 2) return null;
                 var from = projectOntoRidePath(path, start.lat, start.lng);
                 var to = projectOntoRidePath(path, end.lat, end.lng);
                 if (!from || !to) return null;
-                if (from.offM > 180 || to.offM > 180) return null;
+                if (marker && Number.isFinite(marker._ntRailAlongM) && String(marker._ntRailRouteId || '') === String(routeId || '')) {
+                    var locked = pointAtRideAlongM(path, marker._ntRailAlongM);
+                    if (locked) {
+                        from = {
+                            alongM: marker._ntRailAlongM,
+                            lat: locked[0],
+                            lng: locked[1],
+                            offM: 0,
+                            lengthM: from.lengthM
+                        };
+                    }
+                }
                 if (Math.abs(to.alongM - from.alongM) < 2) return null;
                 var stations = stationsAlongRidePath(path, routeId);
                 var destAlong = Number(opts && opts.destAlong);
@@ -3134,50 +3159,59 @@
                 if (!marker || !target) return;
                 // A successful GPS ping always cancels the previous glide and retargets.
                 stopRideMarkerInterpolation(marker);
-                var end = L.latLng(target);
-                var start = marker.getLatLng();
-                var snap = snapTrainToRail(end.lat, end.lng, opts || {});
-                if (snap) end = L.latLng(snap.lat, snap.lng);
+                var rawEnd = L.latLng(target);
+                var snap = snapTrainToRail(rawEnd.lat, rawEnd.lng, opts || {});
+                if (!snap) {
+                    // No painted path yet: keep the last on-rail pose. Never jump off the line.
+                    if (marker._ntRailLatLng) {
+                        applyTrainGlyphYaw(marker, marker._ntRailBearing);
+                    }
+                    return;
+                }
+                var end = L.latLng(snap.lat, snap.lng);
                 marker._ntRideTarget = end;
+                var startSrc = marker._ntRailLatLng || marker.getLatLng();
+                var start = L.latLng(startSrc.lat, startSrc.lng);
+                var startSnap = projectOntoRidePath(snap.path, start.lat, start.lng);
+                if (startSnap) start = L.latLng(startSnap.lat, startSnap.lng);
                 var reduceMotion = false;
                 try { reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (_) {}
                 var along = (!immediate && !reduceMotion)
                     ? interpolateAlongRidePath(marker, start, end, opts || {})
                     : null;
+                var endFacing = Number.isFinite(snap.facing) ? snap.facing : marker._ntRailBearing;
                 if (immediate || reduceMotion || !along || (start.lat === end.lat && start.lng === end.lng)) {
-                    marker.setLatLng(end);
-                    applyTrainGlyphYaw(marker, snap ? snap.facing : (opts && Number(opts.bearing)));
+                    commitRailPose(marker, end.lat, end.lng, endFacing, snap.alongM, opts && opts.routeId);
                     return;
                 }
                 var duration = Math.max(450, Math.min(RIDE_INTERPOLATION_MAX_MS, along.samples.totalSec * 1000));
                 var startedAt = performance.now();
                 function frame(now) {
                     var t = Math.max(0, Math.min(1, (now - startedAt) / duration));
-                    var eased = 1 - Math.pow(1 - t, 3);
-                    var pos = along ? ridePosAtWarpedTime(along.path, along.samples, t) : null;
+                    var alongNow = rideAlongAtWarpedTime(along.samples, t);
+                    var pos = ridePosAtWarpedTime(along.path, along.samples, t)
+                        || pointAtRideAlongM(along.path, alongNow);
+                    var facing = rideTangentAlongPath(along.path, alongNow);
+                    if (along.travelDir < 0 && Number.isFinite(facing)) facing = (facing + 180) % 360;
+                    if (!Number.isFinite(facing)) {
+                        facing = rideFacingAlongPath(along.path, alongNow, along.destAlong);
+                    }
                     if (pos) {
-                        marker.setLatLng(pos);
-                        var alongNow = rideAlongAtWarpedTime(along.samples, t);
-                        var facing = rideTangentAlongPath(along.path, alongNow);
-                        if (along.travelDir < 0 && Number.isFinite(facing)) facing = (facing + 180) % 360;
-                        else if (!Number.isFinite(along.travelDir)) {
-                            facing = rideFacingAlongPath(along.path, alongNow, along.destAlong);
-                        }
-                        applyTrainGlyphYaw(marker, facing);
-                    } else {
-                        marker.setLatLng([
-                            start.lat + ((end.lat - start.lat) * eased),
-                            start.lng + ((end.lng - start.lng) * eased)
-                        ]);
+                        commitRailPose(marker, pos[0], pos[1], facing, alongNow, opts && opts.routeId);
                     }
                     if (t < 1) {
                         marker._ntRideFrame = requestAnimationFrame(frame);
                     } else {
                         marker._ntRideFrame = 0;
-                        marker.setLatLng(end);
-                        applyTrainGlyphYaw(marker, along
-                            ? rideFacingAlongPath(along.path, along.endAlong, along.destAlong)
-                            : (opts && Number(opts.bearing)));
+                        var finishFacing = rideFacingAlongPath(along.path, along.endAlong, along.destAlong);
+                        commitRailPose(
+                            marker,
+                            end.lat,
+                            end.lng,
+                            Number.isFinite(finishFacing) ? finishFacing : endFacing,
+                            along.endAlong,
+                            opts && opts.routeId
+                        );
                     }
                 }
                 marker._ntRideFrame = requestAnimationFrame(frame);
@@ -3281,28 +3315,33 @@
                     const mine = list.some(function (p) { return !!p.mine; });
                     const newest = consensus;
                     const destName = String(newest.destination || '').replace(/\s+STATION$/i, '').trim();
+                    const prevMarker = rideTrainMarkers[trainId];
+                    const prevLl = prevMarker && prevMarker._ntRailLatLng;
+                    const prevBr = prevMarker && prevMarker._ntRailBearing;
+                    const prevAlong = prevMarker && prevMarker._ntRailAlongM;
                     const rail = snapTrainToRail(consensus.lat, consensus.lng, {
                         routeId: newest.routeId || list[0].routeId,
                         destination: destName
                     });
+                    if (!rail && !prevLl) return null;
                     const bearing = Number.isFinite(rail && rail.facing)
                         ? rail.facing
-                        : (Number.isFinite(newest.bearing) ? newest.bearing : 0);
+                        : (Number.isFinite(prevBr) ? prevBr : 0);
                     return {
                         trainId: trainId,
                         list: list,
                         newest: newest,
                         n: n,
                         mine: mine,
-                        lat: rail ? rail.lat : consensus.lat,
-                        lng: rail ? rail.lng : consensus.lng,
-                        alongM: rail ? rail.alongM : 0,
+                        lat: rail ? rail.lat : prevLl.lat,
+                        lng: rail ? rail.lng : prevLl.lng,
+                        alongM: rail ? rail.alongM : (Number.isFinite(prevAlong) ? prevAlong : 0),
                         destAlong: rail ? rail.destAlong : NaN,
                         routeId: newest.routeId || list[0].routeId,
                         destination: destName,
                         bearing: bearing
                     };
-                });
+                }).filter(Boolean);
                 for (var pi = 0; pi < placedTrains.length; pi += 1) {
                     for (var pj = pi + 1; pj < placedTrains.length; pj += 1) {
                         var pa = placedTrains[pi];
@@ -3352,6 +3391,10 @@
                     let marker = rideTrainMarkers[trainId];
                     if (!marker) {
                         marker = L.marker([lat, lng], { icon: icon, zIndexOffset: 800, keyboard: true });
+                        marker._ntRailLatLng = { lat: lat, lng: lng };
+                        marker._ntRailAlongM = row.alongM;
+                        marker._ntRailRouteId = String(row.routeId || '');
+                        marker._ntRailBearing = row.bearing;
                         marker.on('click', function (ev) {
                             L.DomEvent.stop(ev);
                             try {

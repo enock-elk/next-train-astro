@@ -828,6 +828,17 @@ async function handleAlertImpression(request, env) {
     }
 }
 
+function cronSecret(env) {
+    return String(env?.ALERT_CRON_SECRET || env?.TTL_WIPE_SECRET || env?.CRON_SECRET || '').trim();
+}
+
+function cronSecretOk(request, env) {
+    const expected = cronSecret(env);
+    if (!expected) return false;
+    const header = String(request.headers.get('X-Cron-Secret') || '').trim();
+    return header.length > 0 && header === expected;
+}
+
 async function requireAdmin(request, env) {
     const authHeader = request.headers.get('Authorization') || '';
     if (!authHeader.startsWith('Bearer ')) return { error: 'Missing Authorization', status: 401 };
@@ -1363,6 +1374,23 @@ export default {
         }
         if (
             (request.method === 'GET' || request.method === 'POST')
+            && url.pathname === '/cron/scheduled-alerts'
+        ) {
+            if (!cronSecretOk(request, env)) {
+                return json(env, request, 401, { ok: false, error: 'Unauthorized' });
+            }
+            try {
+                if (!hasFirebaseAdminEnv(env)) {
+                    return json(env, request, 500, { ok: false, error: 'Firebase Admin env incomplete' });
+                }
+                const result = await runScheduledAlerts(env);
+                return json(env, request, 200, { ok: true, via: 'http-cron', ...result });
+            } catch (e) {
+                return json(env, request, 500, { ok: false, error: e.message || 'Scheduled alert run failed' });
+            }
+        }
+        if (
+            (request.method === 'GET' || request.method === 'POST')
             && url.pathname === '/admin/scheduled-alerts'
         ) {
             try {
@@ -1392,6 +1420,10 @@ export default {
         // Always publish due alerts on every cron tick. Do not require an exact
         // `event.cron === '*/5 * * * *'` match — Cloudflare can normalize the
         // expression, and a no-op here leaves Monday 00:00 jobs sitting in the queue.
+        if (!hasFirebaseAdminEnv(env)) {
+            console.error('Scheduled alerts skipped: FIREBASE_PRIVATE_KEY / Admin env incomplete');
+            return;
+        }
         const tasks = [
             runScheduledAlerts(env).catch((e) => console.error('Scheduled alert run failed', e)),
         ];

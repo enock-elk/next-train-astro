@@ -167,6 +167,27 @@ const missingAuth = await communityWorker.fetch(
     {}
 );
 assert.equal(missingAuth.status, 401, 'status endpoint requires authentication');
+const cronUnauthorized = await communityWorker.fetch(
+    new Request('https://worker.example/cron/scheduled-alerts', { method: 'POST' }),
+    { ALERT_CRON_SECRET: 's3cret' }
+);
+assert.equal(cronUnauthorized.status, 401, 'HTTP cron requires X-Cron-Secret');
+const cronNoSecret = await communityWorker.fetch(
+    new Request('https://worker.example/cron/scheduled-alerts', {
+        method: 'POST',
+        headers: { 'X-Cron-Secret': 's3cret' },
+    }),
+    {}
+);
+assert.equal(cronNoSecret.status, 401, 'HTTP cron is closed when no Worker secret is set');
+const cronIncomplete = await communityWorker.fetch(
+    new Request('https://worker.example/cron/scheduled-alerts', {
+        method: 'POST',
+        headers: { 'X-Cron-Secret': 's3cret' },
+    }),
+    { ALERT_CRON_SECRET: 's3cret' }
+);
+assert.equal(cronIncomplete.status, 500, 'HTTP cron reports missing Firebase Admin env');
 const realFetch = globalThis.fetch;
 globalThis.fetch = async (url) => {
     assert.match(String(url), /accounts:lookup/);
@@ -223,5 +244,15 @@ assert.match(workerSource, /runScheduledAlerts\(env\)/);
 assert.match(workerSource, /await Promise\.all\(tasks\)/);
 assert.match(workerSource, /Cloudflare can normalize/);
 assert.match(workerSource, /endsWith\('\.github\.io'\)/);
+assert.match(workerSource, /\/cron\/scheduled-alerts/);
+assert.match(workerSource, /X-Cron-Secret/);
+assert.match(workerSource, /ALERT_CRON_SECRET/);
+assert.match(workerSource, /Scheduled alerts skipped: FIREBASE_PRIVATE_KEY/);
+const cronWorkflow = await readFile(new URL('../.github/workflows/scheduled-alerts.yml', import.meta.url), 'utf8');
+assert.match(cronWorkflow, /\/cron\/scheduled-alerts/);
+assert.match(cronWorkflow, /'\*\/5 \* \* \* \*'/);
+const workerDeploy = await readFile(new URL('../.github/workflows/deploy-community-worker.yml', import.meta.url), 'utf8');
+assert.match(workerDeploy, /wrangler deploy/);
+assert.match(workerDeploy, /workers\/nexttrain-community/);
 
 console.log('Scheduled alerts verified: Johannesburg recurrence, stale skipping, ETag overlap, deterministic partial-failure retry, admin Worker handoff, and split cron triggers.');

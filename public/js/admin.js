@@ -11797,6 +11797,8 @@ const Admin = {
             }
             if (!publishNote && due && due.published) {
                 publishNote = ` - posted ${due.published}`;
+            } else if (!publishNote && due && Number(due.at)) {
+                publishNote = ` - worker ${Admin.formatDate(due.at)}`;
             }
             Admin.renderScheduledAlertsList(items);
             if (statusEl) statusEl.textContent = `${items.length} scheduled${publishNote}`;
@@ -12206,7 +12208,7 @@ const Admin = {
                 <div id="alert-schedule-pane" class="hidden space-y-3">
                     <div class="bg-indigo-50 dark:bg-indigo-900/20 p-3 rounded-lg border border-indigo-200 dark:border-indigo-800">
                         <p class="text-[10px] text-indigo-800 dark:text-indigo-300 font-medium leading-snug">
-                            Live queue of scheduled alerts. Create them under <b>New Alert</b> with Later, Weekly, or Monthly. Refresh publishes any that are due.
+                            Live queue of scheduled alerts. Create them under <b>New Alert</b> with Later, Weekly, or Monthly. The worker posts due jobs every 5 minutes. Refresh also publishes now.
                         </p>
                     </div>
                     <div class="flex justify-between items-center">

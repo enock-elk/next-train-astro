@@ -4,7 +4,7 @@
  * Snapshots share query params early so Welcome/URL cleanup cannot drop legacy SPA links.
  */
 import { safeStorage } from './utils.js';
-import { setLiveTrainFollow } from './live-train-follow.js';
+import { clearLiveTrainFollow, setLiveTrainFollow } from './live-train-follow.js';
 import { whenSettledForAutoNotices } from './session-stability.js';
 import {
     parsePlannerDeepLink,
@@ -366,10 +366,6 @@ export async function applyLiveTrainDeepLink() {
     if (!link || link.kind !== 'live' || !link.trainId) return false;
     if (snap && snap.kind === 'live') consumeShareDeeplinkSnapshot();
 
-    if (typeof window.showToast === 'function') {
-        window.showToast('Opening live train…', 'info', 4000);
-    }
-
     if (safeStorage.getItem('welcomeSeen') !== 'true') {
         safeStorage.setItem('welcomeSeen', 'true');
     }
@@ -387,6 +383,35 @@ export async function applyLiveTrainDeepLink() {
     }
 
     stripShareParamsFromUrl();
+
+    let share = { status: 'stopped' };
+    try {
+        const ride = await import('./ride-pings.js');
+        share = await ride.findLiveTrainShare(link.trainId, link.routeId || '');
+    } catch { /* treat as stopped */ }
+
+    if (share.status !== 'live') {
+        clearLiveTrainFollow();
+        if (typeof window.showToast === 'function') {
+            window.showToast(
+                share.status === 'offline'
+                    ? `Could not check Train ${link.trainId} right now`
+                    : `Train ${link.trainId} is no longer being shared`,
+                'info',
+                5000
+            );
+        }
+        if (typeof window.trackAnalyticsEvent === 'function') {
+            window.trackAnalyticsEvent('deep_link_open', {
+                type: 'live',
+                train_id: link.trainId,
+                route_id: link.routeId || '',
+                live_state: share.status,
+            });
+        }
+        return true;
+    }
+
     setLiveTrainFollow({
         trainId: link.trainId,
         routeId: link.routeId || '',
@@ -404,7 +429,7 @@ export async function applyLiveTrainDeepLink() {
         });
     } catch { /* map optional */ }
     if (typeof window.trackAnalyticsEvent === 'function') {
-        window.trackAnalyticsEvent('deep_link_open', { type: 'live', train_id: link.trainId, route_id: link.routeId || '' });
+        window.trackAnalyticsEvent('deep_link_open', { type: 'live', train_id: link.trainId, route_id: link.routeId || '', live_state: 'live' });
     }
     if (typeof window.showToast === 'function') {
         const dest = String(link.dest || '').replace(/\s+STATION$/i, '').trim();

@@ -1052,6 +1052,37 @@ export function summarizeRidePings(pings, focusStation = '') {
     };
 }
 
+/** True while a rider is still sharing this train (paused counts; Stop / expiry does not). */
+export function isLiveTrainShareActive(ping) {
+    if (!ping) return false;
+    if (String(ping.trackingState || '') === TRACKING_STATE.STOPPED) return false;
+    return activePings([ping]).length > 0;
+}
+
+/**
+ * Look up whether Train `trainId` is still being shared on `routeId`.
+ * @returns {Promise<{ status: 'live'|'stopped'|'offline'|'missing', ping?: object }>}
+ */
+export async function findLiveTrainShare(trainId, routeId) {
+    const id = String(trainId || '');
+    const rid = String(routeId || '');
+    if (!id) return { status: 'missing' };
+    const pick = (list) => (list || [])
+        .filter((p) => String(p.trainId || '') === id && isLiveTrainShareActive(p))
+        .sort((a, b) => (b.at || 0) - (a.at || 0))[0] || null;
+    const online = typeof navigator === 'undefined' || navigator.onLine !== false;
+    if (rid && online) {
+        const pings = await fetchRouteRidePings(rid);
+        const hit = pick(pings);
+        if (hit) return { status: 'live', ping: hit };
+        return { status: 'stopped' };
+    }
+    const cached = pick(getCachedRidePings(rid));
+    if (cached) return { status: 'live', ping: cached };
+    if (!online) return { status: 'offline' };
+    return { status: 'stopped' };
+}
+
 export async function fetchRouteRidePings(routeId) {
     if (!routeId || !navigator.onLine) return [];
     try {

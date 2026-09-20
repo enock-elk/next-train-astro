@@ -155,8 +155,14 @@ ok(legalShell.includes("get('from') === 'account'"), 'legal pages detect an Acco
 const deeplink = readFileSync(join(ROOT, 'src/lib/deeplink.js'), 'utf8');
 ok(deeplink.includes("hash === '#account'"), ' /#account opens Account');
 ok(deeplink.includes('setLiveTrainFollow'), 'live share starts view-only follow');
+ok(deeplink.includes('findLiveTrainShare'), 'live share checks ride_pings before opening Map');
+ok(deeplink.includes('is no longer being shared'), 'stopped live share tells the commuter');
+ok(deeplink.includes('clearLiveTrainFollow'), 'stopped live share does not leave a Map permit');
 ok(deeplink.includes('viewed: true'), 'live share asks for the view-only tracking card');
 ok(!deeplink.includes('allowHiddenTabs'), 'live share does not use a generic hidden-tab bypass');
+const ridePings = readFileSync(join(ROOT, 'src/lib/ride-pings.js'), 'utf8');
+ok(ridePings.includes('export async function findLiveTrainShare'), 'ride-pings can look up a live share');
+ok(ridePings.includes('TRACKING_STATE.STOPPED'), 'stopped pings do not count as live');
 const mapTab = readFileSync(join(ROOT, 'src/lib/map-tab.js'), 'utf8');
 ok(mapTab.includes('setTrackingOwnerChrome'), 'tracking card still hides owner chrome for viewers');
 ok(mapTab.includes('getLiveTrainFollow'), 'map tab honors inbound live follow');

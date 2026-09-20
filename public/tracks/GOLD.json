@@ -1,8 +1,8 @@
 {
   "branch": "map-gold",
-  "frozenAt": "b34aa5b139f628bd762e733e02fdc651cf17fae1",
-  "version": "V9_09.20.2",
-  "note": "Gold snapshot of this build: planner fare uses painted corridor km, static-map station hops, rail-tangent trains, baked tracks, map runtime, advert handling. Tracking card title is dest Train id, opens from the green pill, and is draggable. GPS jitter inside the accuracy circle is 0 km/h. Diff against origin/map-gold. Fast-forward map-gold after this lands on main. Never force-push map-gold.",
+  "frozenAt": "fae7cdbde2266f07bab5839a566599af490dd700",
+  "version": "V9_09.20.3",
+  "note": "Gold snapshot of this build: planner fare uses painted corridor km, static-map station hops, rail-tangent trains, baked tracks, map runtime, advert handling. Live trains slow on station approach, interpolate at most 7s, and grey after 7s without a GPS ping; a successful ping cancels the glide. Broadcast every 4s while testing. Diff against origin/map-gold. Fast-forward map-gold after this lands on main. Never force-push map-gold.",
   "files": {
     "public/tracks/rail-tracks-EC.geojson": {
       "md5": "43409bfd05405205e596f0d03345ab18",
@@ -21,8 +21,8 @@
       "sha256": "090a5d7fc45cafb8c7b81dc583ae24978540f38278cab447953bc90c8821f01f"
     },
     "public/js/map-app.js": {
-      "md5": "dc8a1ff67667cd1639b8da60b6adfb3b",
-      "sha256": "58b7ab5bcccbde35c94e6a1c647e9594ed0ca6aff69468d3647ccf9322f4be03"
+      "md5": "73f9e7f7fbfe09869d33370e4c819c2f",
+      "sha256": "721e7caa75d717b67aa61bd324c40639910f5282f65dc80f65fef7787c88c29f"
     },
     "src/pages/map.astro": {
       "md5": "e3baceb290d5fd25cdb13ba838e5391f",
@@ -37,8 +37,8 @@
       "sha256": "f7828c3e4a6388eb4612df00b52b6e5f34dd2c36730679ffdcf85a23416c4e7a"
     },
     "src/lib/map-tab.js": {
-      "md5": "ccb7bdb98b415d1e210a5f82cbe85368",
-      "sha256": "9dae4c403c4a8b01100334b221f2f0bc2cfb23e4cae6050ab42f0b4f14c964a5"
+      "md5": "718704e1348d50ead7c7cc6d6a277938",
+      "sha256": "76eb365b9d5aefed6e0bcc3362aad91f5d231b83d6328b8d12bc3f3439851799"
     },
     "src/lib/clever-ads.js": {
       "md5": "4d78da253d60d3ba285de6c41d697cad",

@@ -505,7 +505,10 @@ assert(layout.includes('holdReturningShell'), 'returning users re-assert the vis
 assert(layout.includes('if (!document.documentElement.classList.contains(\'nt-shell-ready\')) return;'), 'pageshow does not hide the logo before dest names paint');
 assert(layout.includes('nt-boot-installed'), 'installed PWA stamps a splash-hold class before first paint');
 assert(layout.includes('nt-boot-browser'), 'browser sessions stamp a no-splash class before first paint');
-assert(layout.includes('html.nt-boot-installed:not(.nt-shell-ready) #loading-overlay'), 'installed splash cover is inline CSS, not hashed Tailwind');
+assert(layout.includes('html:not(.nt-shell-ready):not(.nt-boot-browser) #loading-overlay'), 'splash cover is inline CSS, not hashed Tailwind');
+assert(layout.includes('html:not(.nt-shell-ready):not(.nt-boot-browser) #loading-overlay img'), 'installed splash keeps the train logo');
+assert(!layout.includes('html.nt-boot-installed:not(.nt-boot-starting) #loading-overlay img'), 'installed splash no longer hides the train logo');
+assert(layout.includes('html:not(.nt-boot-starting) #loading-overlay [data-nt-boot-starting-copy]'), 'Starting copy stays off until the slow-boot clock');
 assert(layout.includes('html.nt-boot-browser:not(.nt-boot-starting):not(.nt-shell-ready) #loading-overlay'), 'browser hides Starting until a slow cold start');
 assert(layout.includes('installed ? 8000 : 2000'), 'splash / Starting clocks start from the first inline script');
 assert(layout.includes('--nt-shell-top'), 'shell is pinned below overlay chrome');

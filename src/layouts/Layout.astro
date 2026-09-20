@@ -65,6 +65,17 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
         font-size: max(16px, 1rem) !important;
       }
     </style>
+    {unlockShellEarly && (
+      <style is:inline>
+        /* First paint, before JS stamps nt-boot-installed. Hashed
+           html,body { canvas !important } is #e8eef4 and flashes white
+           between the OS splash and the board. */
+        html:not(.nt-shell-ready):not(.nt-boot-browser),
+        html:not(.nt-shell-ready):not(.nt-boot-browser) body {
+          background-color: #1d4ed8 !important;
+        }
+      </style>
+    )}
     <ShellFallbackStyles surface="app" />
     <StuckUpdateGuard />
     <script is:inline>
@@ -417,13 +428,14 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
           html:not(.nt-shell-ready) #main-content.app-shell { visibility: hidden; }
           html.nt-shell-ready #loading-overlay { display: none !important; }
           html.nt-shell-ready #main-content.app-shell { visibility: visible !important; }
-          /* Installed PWA / TWA: keep the manifest splash color (#1d4ed8) until
-             the board is ready. Starting copy stays off until the 8s timeout. */
-          html.nt-boot-installed:not(.nt-shell-ready),
-          html.nt-boot-installed:not(.nt-shell-ready) body {
+          /* Installed / not-yet-classified: keep OS splash color AND the train
+             logo until dest names paint. Do not hide the logo for a blank blue
+             sheet. Starting copy stays off until the 8s timeout. */
+          html:not(.nt-shell-ready):not(.nt-boot-browser),
+          html:not(.nt-shell-ready):not(.nt-boot-browser) body {
             background-color: #1d4ed8 !important;
           }
-          html.nt-boot-installed:not(.nt-shell-ready) #loading-overlay {
+          html:not(.nt-shell-ready):not(.nt-boot-browser) #loading-overlay {
             position: fixed !important;
             inset: 0 !important;
             z-index: 90 !important;
@@ -434,11 +446,13 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
             background: #1d4ed8 !important;
             margin: 0 !important;
           }
-          html.nt-boot-installed:not(.nt-boot-starting) #loading-overlay img,
-          html.nt-boot-installed:not(.nt-boot-starting) #loading-overlay [data-nt-boot-starting-copy] {
+          html:not(.nt-shell-ready):not(.nt-boot-browser) #loading-overlay img {
+            display: block !important;
+          }
+          html:not(.nt-boot-starting) #loading-overlay [data-nt-boot-starting-copy] {
             display: none !important;
           }
-          html.nt-boot-installed.nt-boot-starting:not(.nt-shell-ready) #loading-overlay [data-nt-boot-starting-copy] {
+          html.nt-boot-starting:not(.nt-shell-ready) #loading-overlay [data-nt-boot-starting-copy] {
             color: #e5e7eb;
           }
           /* Browser: no splash. Show the site immediately. Starting cover only

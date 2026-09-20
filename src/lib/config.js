@@ -14,7 +14,7 @@
  * Changelog / What’s New is optional: skip both, or write only "no release notes."
  * Always add ADMIN_CHANGELOG[APP_VERSION] (System Health Build notes).
  */
-export const APP_VERSION = "V9_09.20.11";
+export const APP_VERSION = "V9_09.20.12";
 
 /** Public support channels (About modal, lifeboat help.html, Safe Mode). */
 export const SUPPORT_EMAIL = 'admin@nexttrain.co.za';
@@ -964,6 +964,15 @@ export const HERC_KOED_JUNCTIONS = ['KOEDOESPOORT', 'HERCULES'];
 // comma, a period, or a hyphen. Do not explain strategy or "we fixed."
 // Leave every forceShow false. Never auto-open What's New over the welcome screen.
 export const CHANGELOG_DATA = [
+    {
+        id: "V9_09.20.12",
+        title: "Open to the board",
+        date: "20 Sep 2026",
+        forceShow: false,
+        features: [
+            "Opening the app goes from the splash screen to the board. If startup takes longer, Starting Next Train stays on screen."
+        ]
+    },
     {
         id: "V9_09.20.2",
         title: "Trip fare tickets",

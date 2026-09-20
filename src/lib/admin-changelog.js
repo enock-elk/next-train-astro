@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_09.20.12': [
+        'PWA/TWA cold start no longer paints a white canvas then a blank blue sheet after the OS splash. First inline CSS keeps html/body/#loading-overlay at #1d4ed8 with the train logo visible before nt-boot-installed is stamped (hashed html,body canvas !important is #e8eef4). Starting copy stays hidden until 8s installed / 2s browser. Browser still shows the site immediately. Overlay default is inline #1d4ed8, not bg-gray-100. What’s New: splash to board, Starting if slow. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
+    ],
     'V9_09.20.11': [
         'Live share fuses DeviceMotion / DeviceOrientation (accelerometer, gyro, compass) on the sender after a tap (iOS requestPermission). GPS stays the place source of truth. Fused heading and speed fill existing ride_pings heading/speedMps; motionClass still/walk/ride is an extra field on the same node. Sender IMU ticks predict from the last GPS rail pose only (ride class) and never compound a previous IMU step. Still writes speed 0. Receivers compact and paint motionClass: still pins the hull, ride uses fused speed for the 12s rail glide, missing/junk class stays GPS-only. Tracking card never invents a cruise speed. No What’s New. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
     ],

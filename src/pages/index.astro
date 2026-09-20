@@ -142,7 +142,7 @@ const faqLd = {
     <AlertsChannel />
 
     <!-- Cold-boot only: returning sessions skip via html.nt-shell-ready (Layout head). -->
-    <div id="loading-overlay" class="fixed inset-0 z-[90] flex flex-col items-center justify-center bg-gray-100 dark:bg-gray-900">
+    <div id="loading-overlay" class="fixed inset-0 z-[90] flex flex-col items-center justify-center" style="background:#1d4ed8">
         <img
             src={withBase('icons/loading-logo-splash.webp')}
             alt=""
@@ -288,7 +288,7 @@ const faqLd = {
     };
     // Drop the cover as soon as dest names (or Welcome) are on screen, then
     // wait two frames so that paint lands under the overlay. Installed PWA
-    // keeps a splash-colored sheet until then; browsers show the site.
+    // keeps the splash color and train logo until then; browsers show the site.
     const revealAppShell = (force = false) => {
         if (revealCommitted) {
             dropLoadingLogo();
@@ -361,7 +361,7 @@ const faqLd = {
 
     window.openLegal = openLegal;
     initRecoveryWatchdog();
-    // Installed: splash color absorbs the wait; Starting only after 8s.
+    // Installed: splash color + logo absorb the wait; Starting copy after 8s.
     // Browser: no splash; Starting only if this cold start is still empty.
     // Fast boards still reveal as soon as dest names paint.
     setTimeout(() => {

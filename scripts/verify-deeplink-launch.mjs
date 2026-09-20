@@ -155,14 +155,20 @@ ok(legalShell.includes("get('from') === 'account'"), 'legal pages detect an Acco
 const deeplink = readFileSync(join(ROOT, 'src/lib/deeplink.js'), 'utf8');
 ok(deeplink.includes("hash === '#account'"), ' /#account opens Account');
 ok(deeplink.includes('setLiveTrainFollow'), 'live share starts view-only follow');
-ok(deeplink.includes('allowHiddenTabs: true'), 'live share opens Map even when the tab is hidden');
 ok(deeplink.includes('viewed: true'), 'live share asks for the view-only tracking card');
+ok(!deeplink.includes('allowHiddenTabs'), 'live share does not use a generic hidden-tab bypass');
 const mapTab = readFileSync(join(ROOT, 'src/lib/map-tab.js'), 'utf8');
-ok(mapTab.includes('allowHiddenTabs'), 'focusTrainOnMap can keep a hidden Map tab open');
 ok(mapTab.includes('setTrackingOwnerChrome'), 'tracking card still hides owner chrome for viewers');
 ok(mapTab.includes('getLiveTrainFollow'), 'map tab honors inbound live follow');
+ok(!mapTab.includes('allowHiddenTabs'), 'focusTrainOnMap does not bypass Map gating');
 const chrome = readFileSync(join(ROOT, 'src/lib/admin-chrome.js'), 'utf8');
-ok(chrome.includes('isLiveTrainFollowActive'), 'pilot chrome does not bounce a live-share viewer off Map');
+ok(chrome.includes('canOpenTrackingMap'), 'Map open is a single gate');
+ok(chrome.includes("canAccessPilotSurface('map') || isLiveTrainFollowActive()"), 'Map is admin/pin or this-session live follow');
+const follow = readFileSync(join(ROOT, 'src/lib/live-train-follow.js'), 'utf8');
+ok(follow.includes('sessionStorage'), 'live follow is session-only');
+ok(!follow.includes('localStorage'), 'live follow is not written to localStorage');
+ok(ui.includes('canOpenTrackingMap()'), 'switchTab refuses Map without admin, pin, or live follow');
+ok(!ui.includes('allowHiddenTabs'), 'switchTab has no hidden-tab bypass');
 
 const deletePage = readFileSync(join(ROOT, 'src/pages/account-delete.astro'), 'utf8');
 ok(deletePage.includes('SUPPORT_EMAIL'), 'deletion page names the support email');

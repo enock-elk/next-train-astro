@@ -7,7 +7,7 @@
  */
 
 import { safeStorage, escapeHTML } from './utils.js';
-import { isAdminAuthed, canAccessPilotSurface } from './admin-chrome.js';
+import { isAdminAuthed, canAccessPilotSurface, canOpenTrackingMap } from './admin-chrome.js';
 import { trackAnalyticsEvent, sendAnalyticsNow } from './analytics.js';
 import { DYNAMIC_BASE_URL, APP_VERSION, LEGAL_TEXTS, withBase } from './config.js';
 import { $deviceId, $currentRouteId, $userRegion } from '../store.js';
@@ -529,8 +529,8 @@ export function bindHistoryBackNavigation() {
             if (canAccessPilotSurface('community') && safeStorage.getItem('activeTab') !== 'community') switchTab('community');
             else if (!canAccessPilotSurface('community')) switchTab('next-train');
         } else if (hash === '#map') {
-            if (canAccessPilotSurface('map') && safeStorage.getItem('activeTab') !== 'map') switchTab('map');
-            else if (!canAccessPilotSurface('map')) switchTab('next-train');
+            if (canOpenTrackingMap() && safeStorage.getItem('activeTab') !== 'map') switchTab('map');
+            else if (!canOpenTrackingMap()) switchTab('next-train');
         }
     });
 }
@@ -1441,10 +1441,9 @@ export function setImmersiveChrome(on) {
 export function switchTab(tab, opts = null) {
     if (typeof document === 'undefined') return;
 
-    const allowHiddenTabs = !!(opts && opts.allowHiddenTabs);
-    const liveFollowMap = tab === 'map' && (allowHiddenTabs || isLiveTrainFollowActive());
-    if ((tab === 'map' || tab === 'community') && !isAdminAuthed() && !allowHiddenTabs && !liveFollowMap) {
-        if (!canAccessPilotSurface(tab)) tab = 'next-train';
+    if (tab === 'map' && !canOpenTrackingMap()) tab = 'next-train';
+    if (tab === 'community' && !isAdminAuthed() && !canAccessPilotSurface('community')) {
+        tab = 'next-train';
     }
 
     if (document.body.classList.contains('sidenav-open') && typeof window.closeAppHub === 'function') {

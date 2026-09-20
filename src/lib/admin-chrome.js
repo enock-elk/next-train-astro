@@ -75,6 +75,14 @@ export function canAccessPilotSurface(surface, routeId = '') {
     return false;
 }
 
+/**
+ * Interactive tracking Map: authenticated admins, experimental Map pins/grants,
+ * or a live-share follow for this browser session only.
+ */
+export function canOpenTrackingMap() {
+    return canAccessPilotSurface('map') || isLiveTrainFollowActive();
+}
+
 /** Passenger Type + Theme live in Account when that row is visible. */
 export function placeAccountSettings(accountOn) {
     if (typeof document === 'undefined') return;
@@ -148,8 +156,7 @@ export function applyPilotChrome() {
     html.setAttribute('data-pilot-community', !isAdminAuthed() && communityOn ? '1' : '0');
 
     const tab = safeStorage.getItem('activeTab');
-    const keepLiveMap = tab === 'map' && isLiveTrainFollowActive();
-    if (!isAdminAuthed() && ((tab === 'map' && !mapOn && !keepLiveMap) || (tab === 'community' && !communityOn))) {
+    if (!isAdminAuthed() && ((tab === 'map' && !canOpenTrackingMap()) || (tab === 'community' && !communityOn))) {
         if (typeof window.switchTab === 'function') window.switchTab('next-train');
         else safeStorage.setItem('activeTab', 'next-train');
     }
@@ -182,7 +189,7 @@ export function applyAdminAuthedChrome(authed) {
 }
 
 function bindPilotChromeListeners() {
-    if (typeof window === 'undefined' || window.__ntPilotChromeBound) return;
+    if (typeof window === 'undefined' || typeof window.addEventListener !== 'function' || window.__ntPilotChromeBound) return;
     window.__ntPilotChromeBound = true;
     window.addEventListener('nt-features-updated', () => {
         try { applyPilotChrome(); } catch { /* ignore */ }
@@ -211,6 +218,7 @@ if (typeof window !== 'undefined') {
     window.applyAdminAuthedChrome = applyAdminAuthedChrome;
     window.applyPilotChrome = applyPilotChrome;
     window.canAccessPilotSurface = canAccessPilotSurface;
+    window.canOpenTrackingMap = canOpenTrackingMap;
     window.getPinnedRouteIds = getPinnedRouteIds;
     window.placeAccountSettings = placeAccountSettings;
     bindPilotChromeListeners();

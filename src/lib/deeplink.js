@@ -393,12 +393,11 @@ export async function applyLiveTrainDeepLink() {
         dest: link.dest || '',
     });
     if (typeof window.switchTab === 'function') {
-        window.switchTab('map', { allowHiddenTabs: true });
+        window.switchTab('map');
     }
     try {
         const map = await import('./map-tab.js');
         await map.focusTrainOnMap?.(link.trainId, {
-            allowHiddenTabs: true,
             routeId: link.routeId || '',
             dest: link.dest || '',
             viewed: true,
@@ -544,7 +543,6 @@ export function bindPwaSameOriginLinks() {
             }
             if (hash === '#map') {
                 if (typeof window.switchTab === 'function') window.switchTab('map');
-                if (location.hash !== '#map') history.pushState({ tab: 'map' }, '', '#map');
                 return;
             }
             if (hash === '#prasa-map') {

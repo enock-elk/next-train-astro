@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_09.20.7': [
+        'Tracking Map gate is canOpenTrackingMap: canAccessPilotSurface(map) (admin + experimental Map pin/grant) or session-only live-share follow. allowHiddenTabs is no longer a bypass. #map hash, last-tab restore, popstate, and in-app #map clicks use the same gate. Follow stays in sessionStorage and clears when the recipient leaves Map. Bottom nav Map stays hidden for follow-only. No What’s New. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
+    ],
     'V9_09.20.6': [
         'Inbound /og/l/{train}/… and ?live= open Map view-only (allowHiddenTabs, live-follow session flag so applyPilotChrome cannot bounce commuters). focusTrainOnMap keeps allowHiddenTabs and paints the tracking card without Share/Pause/Stop. Community title chip stays hidden; named bubbles show medal SVG + " * N Points" on the name row far right; grouped consecutive messages omit both name and marks. New posts snapshot marks when showMarksInCommunity. Force-open Alerts and holiday reminders wait for isSettledForAutoNotices (stable + no force-update + no in-flight ad inject). clever-ads.js untouched. No What’s New. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
     ],

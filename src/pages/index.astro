@@ -343,7 +343,7 @@ const faqLd = {
         bindMaintenanceBanner
     } from '../lib/ui.js';
     import { hydratePrefs, syncCrmRegionAnalytics } from '../lib/prefs.js';
-    import { canAccessPilotSurface, applyPilotChrome } from '../lib/admin-chrome.js';
+    import { canAccessPilotSurface, canOpenTrackingMap, applyPilotChrome } from '../lib/admin-chrome.js';
     import { fetchFeatures } from '../lib/features.js';
     import {
         prepareDeeplinkIntents,
@@ -472,12 +472,12 @@ const faqLd = {
             m.whenSettledForAutoNotices?.(() => window.openAlertsChannel?.());
         }).catch(() => window.openAlertsChannel?.());
     } else if (hash === '#map') {
-        if (canAccessPilotSurface('map')) switchTab('map');
+        if (canOpenTrackingMap()) switchTab('map');
         else switchTab('next-train');
     } else {
         const lastTab = safeStorage.getItem('activeTab');
         if (lastTab === 'trip-planner') switchTab('trip-planner');
-        else if (lastTab === 'map' && canAccessPilotSurface('map')) switchTab('map');
+        else if (lastTab === 'map' && canOpenTrackingMap()) switchTab('map');
         else if (lastTab === 'community' && canAccessPilotSurface('community')) switchTab('community');
         else switchTab('next-train');
     }

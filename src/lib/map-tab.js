@@ -1512,9 +1512,8 @@ export async function focusTrainOnMap(trainId, opts = {}) {
     const follow = getLiveTrainFollow();
     const routeId = String(opts.routeId || follow?.routeId || $currentRouteId.get() || '');
     const dest = String(opts.dest || follow?.dest || '');
-    const allowHidden = !!(opts.allowHiddenTabs || follow?.trainId);
     const { switchTab } = await import('./ui.js');
-    switchTab('map', allowHidden ? { allowHiddenTabs: true } : undefined);
+    switchTab('map');
     const ride = await import('./ride-pings.js');
     if (routeId && !ride.hasRidePingsListener?.(routeId)) {
         ride.startRidePingsListener?.(routeId, { force: true });

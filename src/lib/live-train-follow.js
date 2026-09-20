@@ -1,6 +1,8 @@
 /**
  * Inbound live-share follow (`/og/l/{train}/…` or `?live=`).
- * Lets a recipient open the Map tab view-only without making Map a public tab.
+ * Session-only permit to open the tracking Map view-only. Not a public tab.
+ * Stored in sessionStorage so a later visit cannot reopen Map without the link,
+ * an authenticated admin session, or an experimental Map pin/grant.
  */
 const FOLLOW_KEY = 'nt_live_train_follow';
 

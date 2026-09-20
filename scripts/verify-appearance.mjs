@@ -504,6 +504,12 @@ assert(!/#view-community \.community-feed-scroll \{\s*padding-bottom:\s*6\.5rem/
 assert(layout.includes('#community-composer-dock'), 'Community composer docks above the IME');
 assert(layout.includes('html.nt-keyboard #messages-thread-form'), 'Feedback Hub composer docks above the IME like Community');
 assert(layout.includes('--nt-kb-h'), 'keyboard exposes IME height for the composer dock');
+assert(layout.includes('heightDelta'), 'IME inset uses visualViewport height delta so iOS offsetTop pan cannot zero --nt-kb-h');
+assert(layout.includes('applyFromVvScroll'), 'visualViewport.scroll does not move the shell while scrolling');
+assert(layout.includes('env(keyboard-inset-bottom, 0px)'), 'composer dock also reads keyboard-inset-bottom');
+assert(/html\.nt-in-app, html\.nt-in-app body \{[\s\S]*?overscroll-behavior:\s*none;/.test(layout), 'in-app html/body do not rubber-band');
+assert(/#app-scroll\.app-scroll \{[\s\S]*?overscroll-behavior:\s*none;/.test(layout), 'board scroller does not rubber-band the oval');
+assert(!/#app-scroll\.app-scroll \{[\s\S]*?overscroll-behavior:\s*contain;/.test(layout), 'board scroller dropped contain overscroll');
 assert(layout.includes('Community must not: leave the shell at full size'), 'Community keyboard leaves Next Train free to scroll away');
 assert(!/html\.nt-keyboard[\s\S]{0,500}#app-scroll:has\(#view-community\.active\) \{\s*overflow:\s*hidden/.test(layout), 'Community keyboard does not freeze #app-scroll');
 assert(!/html\.nt-keyboard[\s\S]{0,220}calc\(var\(--nt-shell-h/.test(layout), 'Community keyboard does not pad by frozen shell minus visual');

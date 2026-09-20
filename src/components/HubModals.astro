@@ -792,7 +792,7 @@ import { withBase } from '../lib/config.js';
     position: fixed;
     left: 0;
     right: 0;
-    bottom: var(--nt-kb-h, 0px);
+    bottom: max(var(--nt-kb-h, 0px), env(keyboard-inset-bottom, 0px));
     z-index: 136;
     width: 100%;
   }

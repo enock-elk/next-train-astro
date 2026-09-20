@@ -14,7 +14,7 @@
  * Changelog / What’s New is optional: skip both, or write only "no release notes."
  * Always add ADMIN_CHANGELOG[APP_VERSION] (System Health Build notes).
  */
-export const APP_VERSION = "V9_09.19.13";
+export const APP_VERSION = "V9_09.20.1";
 
 /** Public support channels (About modal, lifeboat help.html, Safe Mode). */
 export const SUPPORT_EMAIL = 'admin@nexttrain.co.za';
@@ -963,6 +963,16 @@ export const HERC_KOED_JUNCTIONS = ['KOEDOESPOORT', 'HERCULES'];
 // comma, a period, or a hyphen. Do not explain strategy or "we fixed."
 // Leave every forceShow false. Never auto-open What's New over the welcome screen.
 export const CHANGELOG_DATA = [
+    {
+        id: "V9_09.20.1",
+        title: "Scroll and typing",
+        date: "20 Sep 2026",
+        forceShow: false,
+        features: [
+            "The tab bar stays still while you scroll.",
+            "Feedback Hub stays above the keyboard when you type a message."
+        ]
+    },
     {
         id: "V9_09.18.11",
         title: "Points and badges",

@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_09.20.1': [
+        'iOS: --nt-kb-h uses visualViewport height delta so offsetTop pan cannot leave Feedback Hub behind the keys (Android offsetTop stays ~0). visualViewport.scroll no longer rewrites --nt-shell-top unless the IME is open, so the oval does not drift. overscroll-behavior none on html/body/#nt-shell/#app-scroll kills rubber-band. Composer dock also uses env(keyboard-inset-bottom). Oval stays position:absolute on #nt-shell. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
+    ],
     'V9_09.19.13': [
         'Live trains sit on lab projected GPS (scoreFixToRailPath) again. Map no longer re-snaps or interpolates along the painted corridor. Oval glyph and unified tracking card stay. Collected bearing is rail tangent aligned to the journey. No What’s New. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
     ],

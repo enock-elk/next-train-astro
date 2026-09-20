@@ -225,6 +225,13 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
             if (vv && vv.height) {
               var covered = Math.round((full || layoutH) - (off + vv.height));
               if (covered > kbH) kbH = covered;
+              // iOS pans visualViewport.offsetTop to "show" the focused field.
+              // That zeroes gap/covered while the IME still covers the layout
+              // bottom. Hub/Community freeze overflow, so the pan does not
+              // move the composer. Use the height delta as the inset. Android
+              // keeps offsetTop near 0, so this matches covered.
+              var heightDelta = Math.round((full || layoutH) - vv.height);
+              if (heightDelta > kbH) kbH = heightDelta;
             }
           }
           root.style.setProperty('--nt-kb-h', kbH + 'px');
@@ -235,6 +242,18 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
             root.classList.toggle('nt-twa', sessionStorage.getItem('nt_twa') === '1');
           } catch (e) {}
         }
+        function applyFromVvScroll() {
+          var ae = document.activeElement;
+          var editing = !!(ae && (
+            ae.tagName === 'TEXTAREA' ||
+            ae.tagName === 'INPUT' ||
+            ae.isContentEditable
+          ));
+          // Rubber-band and URL-bar collapse fire visualViewport.scroll and
+          // were rewriting --nt-shell-top, so the oval drifted with the board.
+          // Keep IME dock updates; leave the shell still while scrolling.
+          if (editing || root.classList.contains('nt-keyboard')) apply();
+        }
         window.ntFitAppViewport = apply;
         apply();
         window.addEventListener('resize', apply, { passive: true });
@@ -243,7 +262,7 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
         document.addEventListener('focusout', function () { setTimeout(apply, 50); }, { passive: true });
         if (window.visualViewport) {
           window.visualViewport.addEventListener('resize', apply, { passive: true });
-          window.visualViewport.addEventListener('scroll', apply, { passive: true });
+          window.visualViewport.addEventListener('scroll', applyFromVvScroll, { passive: true });
         }
         document.addEventListener('visibilitychange', function () {
           if (document.visibilityState === 'visible') apply();
@@ -963,6 +982,7 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
       html.nt-in-app, html.nt-in-app body {
         height: var(--nt-app-h, 100svh);
         overflow: hidden;
+        overscroll-behavior: none;
         background-color: var(--nt-chrome-header, #1d4ed8);
       }
 
@@ -983,6 +1003,7 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
         padding-bottom: 0 !important;
         background-color: var(--nt-canvas);
         overflow: hidden;
+        overscroll-behavior: none;
         position: relative;
       }
       #main-content.app-shell {
@@ -1044,7 +1065,7 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
         overflow-x: hidden;
         overflow-y: auto;
         -webkit-overflow-scrolling: touch;
-        overscroll-behavior: contain;
+        overscroll-behavior: none;
         display: flex;
         flex-direction: column;
       }
@@ -1189,7 +1210,7 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
         position: fixed;
         left: 0;
         right: 0;
-        bottom: var(--nt-kb-h, 0px);
+        bottom: max(var(--nt-kb-h, 0px), env(keyboard-inset-bottom, 0px));
         z-index: 112;
         width: 100%;
         max-width: 28rem;
@@ -1203,7 +1224,7 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
         position: fixed;
         left: 0;
         right: 0;
-        bottom: var(--nt-kb-h, 0px);
+        bottom: max(var(--nt-kb-h, 0px), env(keyboard-inset-bottom, 0px));
         z-index: 136;
         width: 100%;
         max-width: none;

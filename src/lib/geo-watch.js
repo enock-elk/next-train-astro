@@ -53,19 +53,21 @@ function bearingDeg(a, b) {
 }
 
 /**
- * Accuracy-aware motion sample. Low-speed OS readings inside the combined GPS
- * uncertainty are stationary, while meaningful displacement can supply a
- * speed / heading when Android leaves those fields null.
+ * Accuracy-aware motion sample. Displacement inside the combined GPS circle is
+ * stationary even when the OS reports ~5 km/h jitter. Real walking at 5 km/h
+ * still reports once the fix leaves that circle. Cruise-speed first samples
+ * (~14 km/h+) are trusted before a second point exists.
  */
 export function refineMotionFix(raw, previous = null) {
     if (!raw || !Number.isFinite(raw.lat) || !Number.isFinite(raw.lng)) return null;
     if (Number.isFinite(raw.accuracy) && raw.accuracy > 250) return null;
     if (!previous || !Number.isFinite(previous.t)) {
+        const reported = Number.isFinite(raw.speedMps) ? raw.speedMps : 0;
+        const cruise = reported >= 4;
         return {
             ...raw,
-            speedMps: Number.isFinite(raw.speedMps) && raw.speedMps < STATIONARY_SPEED_MPS
-                ? 0
-                : raw.speedMps,
+            speedMps: cruise ? reported : 0,
+            stationary: !cruise,
         };
     }
     if (raw.t <= previous.t) return null;
@@ -81,13 +83,8 @@ export function refineMotionFix(raw, previous = null) {
         Math.min(200, Math.hypot(accuracy, previousAccuracy) * 0.75)
     );
     const reportedSpeed = Number.isFinite(raw.speedMps) ? raw.speedMps : null;
-    const stationary = movedM <= uncertaintyM
-        && (
-            accuracy > 50
-            || previousAccuracy > 50
-            || reportedSpeed == null
-            || reportedSpeed < STATIONARY_SPEED_MPS
-        );
+    // Sitting still: the pin has not left the accuracy blob. Ignore OS speed.
+    const stationary = movedM <= uncertaintyM;
     if (stationary) {
         return {
             ...raw,
@@ -101,7 +98,9 @@ export function refineMotionFix(raw, previous = null) {
     const measuredSpeed = reportedSpeed != null && reportedSpeed >= STATIONARY_SPEED_MPS
         ? reportedSpeed
         : derivedSpeed;
-    const previousSpeed = Number.isFinite(previous.speedMps) ? previous.speedMps : measuredSpeed;
+    const previousSpeed = previous.stationary
+        ? measuredSpeed
+        : (Number.isFinite(previous.speedMps) ? previous.speedMps : measuredSpeed);
     return {
         ...raw,
         speedMps: Math.max(0, previousSpeed * 0.35 + measuredSpeed * 0.65),
@@ -111,6 +110,17 @@ export function refineMotionFix(raw, previous = null) {
         movedM,
         stationary: false,
     };
+}
+
+/**
+ * Card / ping display: prefer the refined stationary flag. Do not floor real
+ * 5 km/h walking; only hide a sample already marked stationary.
+ */
+export function trustedDisplaySpeedMps({ speedMps, stationary } = {}) {
+    if (stationary) return 0;
+    const speed = Number(speedMps);
+    if (!Number.isFinite(speed) || speed < 0) return NaN;
+    return speed;
 }
 
 /**

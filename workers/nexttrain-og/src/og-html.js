@@ -2,7 +2,7 @@ import { dayLabel, stationLabel } from './parse.js';
 import { OG_IMAGE_HEIGHT, OG_IMAGE_WIDTH } from './og-size.js';
 
 /** Bump when OG art/meta changes so WhatsApp/Facebook re-fetch the image. */
-const OG_IMAGE_CACHE_BUST = 'wa10';
+const OG_IMAGE_CACHE_BUST = 'wa11';
 
 function esc(s) {
   return String(s ?? '')
@@ -130,10 +130,14 @@ export function buildLiveTrainOgMeta(intent, site) {
   const description = dest
     ? `A rider is sharing Train ${id} toward ${dest} in real time. Open Next Train to follow it on the map.`
     : `A rider is sharing Train ${id} in real time. Open Next Train to follow it on the map.`;
-  const img = new URL('/og/live.png', site);
-  img.searchParams.set('train', id);
-  if (dest) img.searchParams.set('to', dest);
-  if (intent.routeId) img.searchParams.set('rt', intent.routeId);
+  const rt = encodeURIComponent(String(intent.routeId || '').trim() || '-');
+  const destSeg = encodeURIComponent(dest || '');
+  const idSeg = encodeURIComponent(id || 'Train');
+  let imgPath = `/og/train/${idSeg}.png`;
+  if (intent.routeId || dest) {
+    imgPath = `/og/train/${idSeg}/${rt}${destSeg ? `/${destSeg}` : ''}.png`;
+  }
+  const img = new URL(imgPath, site);
   return {
     title,
     description,
@@ -175,6 +179,7 @@ export function renderOgHtml({
 <meta property="og:image:width" content="${OG_IMAGE_WIDTH}"/>
 <meta property="og:image:height" content="${OG_IMAGE_HEIGHT}"/>
 <meta property="og:image:alt" content="${esc(alt)}"/>
+<link rel="image_src" href="${esc(image)}"/>
 <meta name="twitter:card" content="summary_large_image"/>
 <meta name="twitter:title" content="${esc(title)}"/>
 <meta name="twitter:description" content="${esc(description)}"/>

@@ -1,8 +1,8 @@
 {
   "branch": "map-gold",
   "frozenAt": "5756de776563f35de44a7e2194c94107099cadfd",
-  "version": "V9_09.20.1",
-  "note": "Gold snapshot of this build: planner fare uses painted corridor km, static-map station hops, rail-tangent trains, baked tracks, map runtime, advert handling. Tracking card pause metrics pass through map-app click payload. Diff against origin/map-gold. Fast-forward map-gold after this lands on main. Never force-push map-gold.",
+  "version": "V9_09.20.2",
+  "note": "Gold snapshot of this build: planner fare uses painted corridor km, static-map station hops, rail-tangent trains, baked tracks, map runtime, advert handling. Tracking card title is dest Train id, opens from the green pill, and is draggable. GPS jitter inside the accuracy circle is 0 km/h. Diff against origin/map-gold. Fast-forward map-gold after this lands on main. Never force-push map-gold.",
   "files": {
     "public/tracks/rail-tracks-EC.geojson": {
       "md5": "43409bfd05405205e596f0d03345ab18",
@@ -29,16 +29,16 @@
       "sha256": "4abd77d437281509601822305d8dd557fcb2024c1c446a2d61062eb758fa4cbd"
     },
     "src/components/MapView.astro": {
-      "md5": "2262680ca793ed94bec21a821433c1e7",
-      "sha256": "ec85edb1da8d3b3b46e946b61c901c25288710fe4dc6a5ec79e4491b47112528"
+      "md5": "6add9b0874cf805dddfd3fa6db5ea020",
+      "sha256": "4b1343b2210cff147999760c7d629b5a84d5b9ff3db21250d8c34a80da655f26"
     },
     "src/lib/rail-tracks.js": {
       "md5": "58c997a104d488d50fd86ae340178e6a",
       "sha256": "f7828c3e4a6388eb4612df00b52b6e5f34dd2c36730679ffdcf85a23416c4e7a"
     },
     "src/lib/map-tab.js": {
-      "md5": "aa0f6e30c7bf134d43a109b9de782dde",
-      "sha256": "87ebda4caac660bf9fc4f0ef69e968b20550fc8390eba391ec6b544d973f2559"
+      "md5": "ccb7bdb98b415d1e210a5f82cbe85368",
+      "sha256": "9dae4c403c4a8b01100334b221f2f0bc2cfb23e4cae6050ab42f0b4f14c964a5"
     },
     "src/lib/clever-ads.js": {
       "md5": "4d78da253d60d3ba285de6c41d697cad",

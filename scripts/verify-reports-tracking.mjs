@@ -176,6 +176,20 @@ const poorAccuracyFix = refineMotionFix(
     { lat: -25, lng: 28, accuracy: 200, heading: null, speedMps: 0, t: 1000 }
 );
 assert(poorAccuracyFix?.speedMps === 0 && poorAccuracyFix.stationary, 'poor-accuracy displacement cannot impersonate train speed');
+const homeJitter = refineMotionFix(
+    { lat: -25, lng: 28.00008, accuracy: 18, heading: null, speedMps: 1.6, t: 11000 },
+    { lat: -25, lng: 28, accuracy: 18, heading: null, speedMps: 0, t: 1000 }
+);
+assert(homeJitter?.speedMps === 0 && homeJitter.stationary, '5 km/h OS jitter inside the accuracy circle is stationary');
+const walkFive = refineMotionFix(
+    { lat: -25, lng: 28.00014, accuracy: 6, heading: null, speedMps: 1.39, t: 11000 },
+    { lat: -25, lng: 28, accuracy: 6, heading: null, speedMps: 0, stationary: true, t: 1000 }
+);
+assert(walkFive && !walkFive.stationary && walkFive.speedMps >= 1.2 && walkFive.speedMps < 2, 'real 5 km/h walking still reports speed');
+assert(refineMotionFix(
+    { lat: -25, lng: 28, accuracy: 20, heading: null, speedMps: 1.6, t: 1000 },
+    null
+)?.speedMps === 0, 'first GPS sample does not show jitter as speed');
 assert(refineMotionFix(
     { lat: -25, lng: 28.01, accuracy: 5, heading: 90, speedMps: 10, t: 1000 },
     { lat: -25, lng: 28, accuracy: 5, heading: 90, speedMps: 10, t: 1000 }

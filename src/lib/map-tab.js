@@ -14,7 +14,7 @@ import {
 } from './utils.js';
 import { currentTime } from './logic.js';
 import { currentScheduleData } from './live-board.js';
-import { trainGoingLabel, trainGoingFullLabel, trainTowardLabel, trainTerminusName, journeyHeadingAtProgress, TRACKING_WINDOW_SEC, compareNearbyTrainLikelihood, isGhostTrackable, trainIdsInSchedule } from './train-ghosts.js';
+import { trainGoingLabel, trainGoingFullLabel, trainTowardLabel, trainTerminusName, trainHeadboardTitle, journeyHeadingAtProgress, TRACKING_WINDOW_SEC, compareNearbyTrainLikelihood, isGhostTrackable, trainIdsInSchedule } from './train-ghosts.js';
 import { relaxLiveShareGuards } from './features.js';
 import { isAdminAuthed } from './admin-chrome.js';
 import { formatGpsPingAge, formatLastSeenWithPingClock, gpsPingSuccessAt } from './gps-freshness.js';
@@ -27,6 +27,7 @@ import {
     waitForGeoFix,
     reusableGeoFix,
     GEO_REUSE_MAX_AGE_MS,
+    trustedDisplaySpeedMps,
 } from './geo-watch.js';
 
 /**
@@ -65,6 +66,8 @@ let viewedTrain = null;
 let lastShareRequest = null;
 let shareRestartInFlight = false;
 let restoreDragMoved = false;
+let cardDragMoved = false;
+const MAP_PILL_POS_KEY = 'nt_map_restore_pos';
 
 let frameLoaded = false;
 /** @type {{ lat: number, lng: number, accuracy?: number } | null} */
@@ -218,6 +221,39 @@ function trackingIsPaused(active, marker = null, pingAt = 0) {
     return !!(active?.trainId) && (!t || (Date.now() - t) >= 90 * 1000);
 }
 
+function readMapOverlayPos(key) {
+    try {
+        const saved = JSON.parse(sessionStorage.getItem(key) || 'null');
+        if (saved && Number.isFinite(saved.left) && Number.isFinite(saved.top)) return saved;
+    } catch { /* ignore */ }
+    return null;
+}
+
+function pillAnchorRect(host) {
+    const pill = document.getElementById('map-tracking-restore');
+    if (!pill || !host) return null;
+    const hostR = host.getBoundingClientRect();
+    const visible = !pill.classList.contains('hidden');
+    if (visible) {
+        const r = pill.getBoundingClientRect();
+        if (r.width > 1 && r.height > 1) return r;
+    }
+    const w = 180;
+    const h = 40;
+    const fromStyle = Number.isFinite(parseFloat(pill.style.left)) && Number.isFinite(parseFloat(pill.style.top));
+    const saved = fromStyle
+        ? { left: parseFloat(pill.style.left), top: parseFloat(pill.style.top) }
+        : readMapOverlayPos(MAP_PILL_POS_KEY);
+    if (saved) {
+        const left = hostR.left + saved.left;
+        const top = hostR.top + saved.top;
+        return { left, top, right: left + w, bottom: top + h, width: w, height: h };
+    }
+    const left = hostR.left + 12;
+    const top = hostR.bottom - 12 - h;
+    return { left, top, right: left + w, bottom: top + h, width: w, height: h };
+}
+
 function resetTrackingCardDock() {
     const card = document.getElementById('map-tracking-card');
     if (!card) return;
@@ -225,19 +261,24 @@ function resetTrackingCardDock() {
     card.style.top = '';
     card.style.right = '';
     card.style.bottom = '';
+    card.style.width = '';
     card.style.marginLeft = '';
     card.style.marginRight = '';
 }
 
 function positionTrackingCardFromPill() {
     const card = document.getElementById('map-tracking-card');
-    const pill = document.getElementById('map-tracking-restore');
     const host = card?.parentElement;
-    if (!card || !pill || !host) return;
+    if (!card || !host) return;
     const hostR = host.getBoundingClientRect();
-    const pillR = pill.getBoundingClientRect();
-    const cardW = Math.min(card.offsetWidth || hostR.width - 24, hostR.width - 16);
+    const pillR = pillAnchorRect(host);
+    if (!pillR) {
+        resetTrackingCardDock();
+        return;
+    }
+    const cardW = Math.min(card.offsetWidth || Math.min(hostR.width - 16, 384), hostR.width - 16);
     const cardH = card.offsetHeight || 240;
+    card.style.width = `${cardW}px`;
     let left = pillR.left - hostR.left;
     left = Math.max(8, Math.min(left, hostR.width - cardW - 8));
     const spaceBelow = hostR.bottom - pillR.bottom;
@@ -318,13 +359,17 @@ function renderTrackingStatusCard(active, marker = null) {
     const progress = subjectMarker?.projectedProgress ?? subject.projectedProgress;
     const journeyH = journeyHeadingAtProgress(subject.trainId, progress);
     const bearing = firstFiniteMetric(subjectMarker?.bearing, subject.bearing, journeyH);
-    const speed = firstFiniteMetric(
+    const liveFix = mine ? (peekLastGeoFix() || lastCoords) : null;
+    const liveSpeed = mine ? firstFiniteMetric(liveFix?.speedMps, lastCoords?.speedMps) : NaN;
+    const pingSpeed = firstFiniteMetric(
         subjectMarker?.speedMps,
         subject.speedMps,
         mine ? active?.speedMps : NaN,
-        mine ? lastCoords?.speedMps : NaN,
-        mine ? lastCoords?.speed : NaN,
     );
+    const speed = trustedDisplaySpeedMps({
+        speedMps: mine && Number.isFinite(liveSpeed) ? liveSpeed : pingSpeed,
+        stationary: !!(liveFix?.stationary || lastCoords?.stationary || subjectMarker?.stationary || subject.stationary),
+    });
     const accuracy = firstFiniteMetric(
         subjectMarker?.accuracy,
         subject.accuracy,
@@ -338,12 +383,13 @@ function renderTrackingStatusCard(active, marker = null) {
         (subjectMarker?.onRails || subject.onRails) ? 0 : NaN,
     );
     const place = subjectMarker?.lastSeenLabel || subject.lastSeenLabel || subject.station || 'on the route';
-    const toward = trainTowardLabel(subject.trainId, subject.destination);
     const speedLabel = Number.isFinite(speed)
         ? `${Math.round(Math.max(0, (paused && speed < 0.5) ? 0 : speed) * 3.6)} km/h`
         : (paused ? '0 km/h' : 'Unknown');
-    setTrackingText('map-tracking-title', `Train ${subject.trainId}`);
-    setTrackingText('map-tracking-toward', toward);
+    const title = trainHeadboardTitle(subject.trainId, subject.destination);
+    setTrackingText('map-tracking-title', title);
+    setTrackingText('map-tracking-toward', '');
+    document.getElementById('map-tracking-toward')?.classList.add('hidden');
     setTrackingText('map-tracking-state', paused ? 'Paused' : 'Active');
     setTrackingText('map-tracking-last-seen', formatLastSeenWithPingClock(place, pingAt));
     setTrackingText('map-tracking-speed', speedLabel);
@@ -353,7 +399,7 @@ function renderTrackingStatusCard(active, marker = null) {
     setTrackingText('map-tracking-accuracy', Number.isFinite(accuracy) ? `±${Math.round(accuracy)} m` : 'Unknown');
     setTrackingText('map-tracking-count', String(Math.max(1, Number(subjectMarker?.n || subject.n) || 1)));
     document.getElementById('map-tracking-warning')?.classList.toggle('hidden', !subject.directionWarning);
-    setTrackingText('map-tracking-restore-label', `Train ${active?.trainId || subject.trainId} · ${paused ? 'paused' : 'active'}`);
+    setTrackingText('map-tracking-restore-label', `${trainHeadboardTitle(active?.trainId || subject.trainId, active?.destination || subject.destination)} · ${paused ? 'paused' : 'active'}`);
     const stateEl = document.getElementById('map-tracking-state');
     stateEl?.classList.toggle('bg-green-100', !paused);
     stateEl?.classList.toggle('dark:bg-green-950', !paused);
@@ -377,8 +423,6 @@ function renderTrackingStatusCard(active, marker = null) {
 export function showTrackingStatusCard(opts = {}) {
     if (opts.viewed?.trainId) viewedTrain = opts.viewed;
     else if (!opts.keepViewed) viewedTrain = null;
-    const pill = document.getElementById('map-tracking-restore');
-    const fromPill = !!(pill && !pill.classList.contains('hidden'));
     trackingCardMode = 'expanded';
     import('./ride-pings.js').then((ride) => {
         const active = ride.getActiveShare?.();
@@ -392,11 +436,7 @@ export function showTrackingStatusCard(opts = {}) {
             ? { ...viewedTrain.ping, n: viewedTrain.n || trainPings.length || 1 }
             : (own ? { ...own, n: trainPings.length || 1 } : null);
         renderTrackingStatusCard(active, marker);
-        if (fromPill) {
-            requestAnimationFrame(() => positionTrackingCardFromPill());
-        } else {
-            resetTrackingCardDock();
-        }
+        requestAnimationFrame(() => positionTrackingCardFromPill());
     }).catch(() => {});
 }
 
@@ -1313,6 +1353,7 @@ function applyGeoFix(fix) {
         accuracy: fix.accuracy,
         heading: fix.heading,
         speedMps: fix.speedMps,
+        stationary: !!fix.stationary,
         t: Number.isFinite(fix.t) ? fix.t : Date.now(),
     };
 }
@@ -2537,16 +2578,13 @@ function bindTrackingRestoreDrag() {
     const host = el?.parentElement;
     if (!el || !host || el.dataset.ntDragBound === '1') return;
     el.dataset.ntDragBound = '1';
-    const KEY = 'nt_map_restore_pos';
-    try {
-        const saved = JSON.parse(sessionStorage.getItem(KEY) || 'null');
-        if (saved && Number.isFinite(saved.left) && Number.isFinite(saved.top)) {
-            el.style.left = `${saved.left}px`;
-            el.style.top = `${saved.top}px`;
-            el.style.right = 'auto';
-            el.style.bottom = 'auto';
-        }
-    } catch { /* ignore */ }
+    const saved = readMapOverlayPos(MAP_PILL_POS_KEY);
+    if (saved) {
+        el.style.left = `${saved.left}px`;
+        el.style.top = `${saved.top}px`;
+        el.style.right = 'auto';
+        el.style.bottom = 'auto';
+    }
     let dragging = false;
     let grabX = 0;
     let grabY = 0;
@@ -2583,12 +2621,62 @@ function bindTrackingRestoreDrag() {
         dragging = false;
         if (!restoreDragMoved) return;
         try {
-            sessionStorage.setItem(KEY, JSON.stringify({
+            sessionStorage.setItem(MAP_PILL_POS_KEY, JSON.stringify({
                 left: parseFloat(el.style.left),
                 top: parseFloat(el.style.top),
             }));
         } catch { /* ignore */ }
     });
+}
+
+function bindTrackingCardDrag() {
+    const el = document.getElementById('map-tracking-card');
+    const host = el?.parentElement;
+    if (!el || !host || el.dataset.ntDragBound === '1') return;
+    el.dataset.ntDragBound = '1';
+    let dragging = false;
+    let grabX = 0;
+    let grabY = 0;
+    let startX = 0;
+    let startY = 0;
+    el.addEventListener('pointerdown', (ev) => {
+        if (ev.button != null && ev.button !== 0) return;
+        if (ev.target?.closest?.('button, a, input, textarea, select')) return;
+        const r = el.getBoundingClientRect();
+        dragging = true;
+        cardDragMoved = false;
+        startX = ev.clientX;
+        startY = ev.clientY;
+        grabX = ev.clientX - r.left;
+        grabY = ev.clientY - r.top;
+        try { el.setPointerCapture(ev.pointerId); } catch { /* ignore */ }
+    });
+    el.addEventListener('pointermove', (ev) => {
+        if (!dragging) return;
+        if (Math.hypot(ev.clientX - startX, ev.clientY - startY) > 6) cardDragMoved = true;
+        if (!cardDragMoved) return;
+        ev.preventDefault();
+        const box = host.getBoundingClientRect();
+        const left = ev.clientX - box.left - grabX;
+        const top = ev.clientY - box.top - grabY;
+        const maxL = Math.max(8, box.width - el.offsetWidth - 8);
+        const maxT = Math.max(8, box.height - el.offsetHeight - 8);
+        el.style.left = `${Math.min(maxL, Math.max(8, left))}px`;
+        el.style.top = `${Math.min(maxT, Math.max(8, top))}px`;
+        el.style.right = 'auto';
+        el.style.bottom = 'auto';
+        el.style.marginLeft = '0';
+        el.style.marginRight = '0';
+    });
+    el.addEventListener('pointerup', () => {
+        dragging = false;
+    });
+    el.addEventListener('click', (ev) => {
+        if (!cardDragMoved) return;
+        ev.preventDefault();
+        ev.stopPropagation();
+        cardDragMoved = false;
+    }, true);
 }
 
 async function shareLiveTrain() {
@@ -2636,6 +2724,7 @@ export function bindMapTabUi() {
     window.__ntFullscreenMapTab = fullscreenMapTab;
     exposeEmbedBridge();
     bindTrackingRestoreDrag();
+    bindTrackingCardDrag();
     bindMapFullscreenChrome();
     subscribeGeoFix((fix) => {
         applyGeoFix(fix);

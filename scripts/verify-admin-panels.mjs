@@ -388,7 +388,13 @@ assert(admin.includes('fb-version-chip'), 'feedback version chips are dedicated 
 assert(admin.includes('holiday-region-save'), 'approved holiday notices can be re-saved');
 assert(admin.includes('holiday-region-unapprove'), 'approved holiday notices can return to pending');
 assert(admin.includes('layoutInboxMedia'), 'feedback bubbles hoist unique images');
-assert(admin.includes('hydrateAlertPosterImages'), 'feedback posters use the alerts loader');
+assert(admin.includes('id="alert-poster-preview"'), 'compose has a catalog poster preview');
+assert(
+    admin.indexOf('id="alert-msg"') < admin.indexOf('id="alert-poster-preview"')
+        && admin.indexOf('id="alert-poster-preview"') < admin.indexOf('id="alert-poster-selected"'),
+    'poster preview sits in the message field, not only under the picker'
+);
+assert(admin.includes('window.withBase === \'function\' ? window.withBase(path)'), 'poster preview uses withBase so github.io still loads the jpg');
 assert(admin.includes("style.zIndex = '260'"), 'build notes sit above Dev Hub');
 assert(admin.includes("if (e.target.closest?.('[data-admin-changelog]')) return;"), 'hold-to-react ignores the version chip');
 assert(admin.includes("data-fb-lazy=\"1\""), 'archive threads defer chat HTML');

@@ -2,6 +2,12 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin, Dev Hub, Alerts, Trains near me, community chat, or other hidden-test work. No emoji and no em dashes in What’s New. Keep `APP_VERSION`, `package.json` `version`, and `public/app-version.json` aligned on each release. Changelog / What’s New may be skipped, or the heading may be only **no release notes.** Every bump must add `ADMIN_CHANGELOG[APP_VERSION]` (System Health Build notes).
 
+## V9_09.20.2
+
+Planner trip fare: Yes on the right, No on the left. Single Trip plus Return / Weekly / Monthly rows. Peak weekday clock uses compactTime (no trailing colon on 5:10:00). Service Alerts catalog poster preview is inside the message field. Tracking card title is `{dest} Train {id}`, opens from the green pill, and is draggable. Sitting still no longer paints GPS jitter as 5 km/h; real 5 km/h walking still reports. Live train OG image is a path PNG (`/og/train/…png`) like grid and trip-plan cards.
+
+Commuter What’s New covers the fare sheet only.
+
 ## V9_09.20.1 — no release notes
 
 Tracking card keeps last GPS metrics after Pause. Alert full view reuses the feed poster URL. Returning-user startup no longer sticks on a white shell. No What’s New.

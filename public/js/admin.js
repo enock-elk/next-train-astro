@@ -11237,10 +11237,10 @@ const Admin = {
             });
         }
         if (preview) {
-            const last = selected[selected.length - 1];
-            preview.innerHTML = last
-                ? `<img src="${last}" alt="" class="w-full max-h-28 object-contain rounded-lg bg-gray-100 dark:bg-gray-900">`
-                : '';
+            const srcFor = (path) => (typeof window.withBase === 'function' ? window.withBase(path) : path);
+            preview.innerHTML = selected.map((p) => (
+                `<img src="${srcFor(p)}" alt="${esc(labelFor(p))}" class="mt-2 first:mt-0 w-full max-h-36 object-contain rounded-lg bg-gray-100 dark:bg-gray-900">`
+            )).join('');
         }
     },
 
@@ -11944,6 +11944,7 @@ const Admin = {
                     <div class="border border-gray-300 dark:border-gray-600 rounded-lg overflow-hidden min-w-0 max-w-full focus-within:ring-2 focus-within:ring-blue-500">
                         ${Admin.wysiwygToolbarHtml('alert-msg', { fileInputId: 'alert-upload-file', fileLabelId: 'alert-upload-label' })}
                         <div contenteditable="true" id="alert-msg" class="nt-rich-body w-full max-w-full min-w-0 overflow-x-hidden min-h-[120px] p-2.5 bg-gray-50 dark:bg-gray-900 border-0 text-gray-900 dark:text-white text-xs focus:ring-0 outline-none whitespace-pre-wrap empty:before:content-[attr(placeholder)] empty:before:text-gray-400" placeholder="e.g. Delays of 45min due to cable theft..."></div>
+                        <div id="alert-poster-preview" class="px-2.5 pb-2.5 empty:hidden"></div>
                     </div>
                 </div>
 
@@ -11961,7 +11962,6 @@ const Admin = {
                         </button>
                         <ul id="alert-poster-list" class="absolute z-[200] left-0 right-0 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl hidden mt-1 max-h-64 overflow-y-auto custom-scrollbar text-left"></ul>
                     </div>
-                    <div id="alert-poster-preview" class="mt-2"></div>
                 </div>
                 </div>
 

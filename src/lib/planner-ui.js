@@ -23,7 +23,7 @@ import {
 } from './utils.js';
 import { planUnifiedTrip, extractTrainSheetStops } from './planner-core.js';
 import { saturdayNoServiceCopy, buildSaturdayAdvisoryCopy, stationDisplayName } from './saturday-service.js';
-import { buildPlannerShareUrl, buildRouteShareUrl, parsePlannerDeepLink, stripShareParamsFromUrl } from './share-links.js';
+import { buildPlannerShareUrl, buildRouteShareUrl, parsePlannerDeepLink, stripShareParamsFromUrl, compactTime } from './share-links.js';
 import { consumeShareDeeplinkSnapshot, peekShareDeeplinkSnapshot } from './deeplink.js';
 import { ensureRoutePinnedForRegion, loadAllSchedules } from './logic.js';
 import { showToast, switchTab, triggerHaptic, openSmoothModal, closeSmoothModal, unlockBackgroundScroll } from './ui.js';
@@ -413,6 +413,23 @@ function formatRawFareLabel(raw) {
     return String(rounded);
 }
 
+/** Board-style ticket rows under the trip's Single price (peak table, profile multiplier). */
+function plannerTicketRowsHtml(zone, fare) {
+    const single = `
+            <div class="flex justify-between gap-3 pt-2 border-t border-gray-100 dark:border-gray-800"><dt class="text-gray-500 dark:text-gray-400">Fare - Single Trip</dt><dd><button type="button" id="planner-fare-raw-toggle" class="font-black text-gray-900 dark:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 rounded" aria-pressed="false" title="Show calculated price">R${escapeHTML(fare.priceLabel)}</button></dd></div>`;
+    const prices = zone && FARE_CONFIG.zones_detailed?.[zone];
+    if (!prices) return single;
+    const profileName = fare.profile || 'Adult';
+    const peakMult = fareMultiplierForProfile(profileName, false);
+    const money = (base) => formatBoardFareLabel(Number(base) * peakMult);
+    const row = (label, extra, base) => {
+        if (base == null || !Number.isFinite(Number(base))) return '';
+        return `
+            <div class="flex justify-between gap-3"><dt class="text-gray-500 dark:text-gray-400">${label}${extra || ''}</dt><dd class="font-black text-gray-900 dark:text-white">R${escapeHTML(money(base))}</dd></div>`;
+    };
+    return `${single}${row('Return Trip', '', prices.return)}${row('Weekly', ' <span class="opacity-70 font-normal">(Mon-Fri)</span>', prices.weekly_mon_fri)}${row('Weekly', ' <span class="opacity-70 font-normal">(Mon-Sat)</span>', prices.weekly_mon_sat)}${row('Monthly Pass', '', prices.monthly)}`;
+}
+
 function plannerMoneySvg(className = 'w-3.5 h-3.5') {
     return `<svg class="${className} shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7.5h13.5A1.5 1.5 0 0118 9v9a1.5 1.5 0 01-1.5 1.5H3A1.5 1.5 0 011.5 18V9A1.5 1.5 0 013 7.5z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 7.5V6A1.5 1.5 0 017.5 4.5H21A1.5 1.5 0 0122.5 6v9A1.5 1.5 0 0121 16.5h-3"/><circle cx="10.5" cy="13.5" r="1.75"/></svg>`;
 }
@@ -733,7 +750,7 @@ function fillPlannerFareBreakdown(trip, { km, crowKm, zone, fare } = {}) {
         : fare.dayType === 'sunday' ? 'Sunday'
         : fare.dayType === 'public_holiday' ? 'Public holiday'
         : 'Weekday';
-    const depLabel = fare.depTime ? String(fare.depTime).slice(0, 5) : '';
+    const depLabel = fare.depTime ? compactTime(fare.depTime) : '';
     const peakLabel = fare.alwaysDiscount
         ? '50% all day'
         : (fare.isOffPeak ? 'Off-peak' : 'Peak');
@@ -753,13 +770,13 @@ function fillPlannerFareBreakdown(trip, { km, crowKm, zone, fare } = {}) {
         <div id="planner-fare-vote" class="pt-3 mt-1 border-t border-gray-100 dark:border-gray-800">
             <p class="text-sm font-semibold text-gray-800 dark:text-gray-100">Is this what you paid?</p>
             <div class="mt-2 grid grid-cols-2 gap-2">
-                <button type="button" id="planner-fare-vote-yes" class="inline-flex items-center justify-center gap-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-3 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400">
-                    <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
-                    Yes
-                </button>
                 <button type="button" id="planner-fare-vote-no" class="inline-flex items-center justify-center gap-1.5 rounded-xl bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-100 font-bold py-2.5 px-3 text-sm border border-gray-200 dark:border-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400">
                     <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
                     No
+                </button>
+                <button type="button" id="planner-fare-vote-yes" class="inline-flex items-center justify-center gap-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-3 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400">
+                    <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                    Yes
                 </button>
             </div>
             <div id="planner-fare-vote-correct" class="hidden mt-3 space-y-2">
@@ -779,7 +796,7 @@ function fillPlannerFareBreakdown(trip, { km, crowKm, zone, fare } = {}) {
             <div data-admin-authed-only hidden inert aria-hidden="true" class="flex justify-between gap-3"><dt class="text-gray-500 dark:text-gray-400">Zone</dt><dd class="font-bold">${escapeHTML(zone || '-')}${band ? ` <span class="font-medium text-gray-500 dark:text-gray-400">(${escapeHTML(band)})</span>` : ''}</dd></div>
             <div class="flex justify-between gap-3"><dt class="text-gray-500 dark:text-gray-400">${escapeHTML(peakTitle)}</dt><dd class="font-bold">${escapeHTML(peakLabel)} <span class="font-medium text-gray-500 dark:text-gray-400">${escapeHTML(dayLabel)}${depLabel ? ` ${escapeHTML(depLabel)}` : ''}</span></dd></div>
             <div class="flex justify-between gap-3 items-center"><dt class="text-gray-500 dark:text-gray-400">Profile</dt><dd><button type="button" id="planner-fare-profile-btn" class="font-bold text-blue-600 dark:text-blue-400 underline decoration-dotted underline-offset-2 hover:text-blue-700 dark:hover:text-blue-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 rounded px-1">${profileLabel}</button></dd></div>
-            <div class="flex justify-between gap-3 pt-2 border-t border-gray-100 dark:border-gray-800"><dt class="text-gray-500 dark:text-gray-400">Fare</dt><dd><button type="button" id="planner-fare-raw-toggle" class="font-black text-gray-900 dark:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 rounded" aria-pressed="false" title="Show calculated price">R${escapeHTML(fare.priceLabel)}</button></dd></div>
+            ${plannerTicketRowsHtml(zone, fare)}
         </dl>
         ${voteHtml}
     `;

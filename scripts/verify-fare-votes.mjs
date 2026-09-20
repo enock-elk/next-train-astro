@@ -186,6 +186,11 @@ try {
 const ui = readFileSync(join(ROOT, 'src/lib/planner-ui.js'), 'utf8');
 assert(ui.includes('Is this what you paid?'), 'fare sheet asks Is this what you paid?');
 assert(ui.includes('planner-fare-vote-yes') && ui.includes('planner-fare-vote-no'), 'fare sheet has Yes / No');
+{
+    const noBtn = ui.indexOf('id="planner-fare-vote-no" class="inline-flex');
+    const yesBtn = ui.indexOf('id="planner-fare-vote-yes" class="inline-flex');
+    assert(noBtn > 0 && yesBtn > noBtn, 'No sits on the left, Yes on the right');
+}
 assert(ui.includes('planner-fare-vote-send'), 'No path has Send');
 assert(ui.includes('roundFareVoteRand'), 'correction uses the board whole-rand floor');
 assert(ui.includes('submitFareVote'), 'fare sheet writes votes immediately');

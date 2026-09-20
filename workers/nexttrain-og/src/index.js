@@ -11,7 +11,7 @@
  * goes to the zone origin and does not re-enter this Worker.
  */
 import catalog from './catalog.json';
-import { isSocialCrawler, parseShareIntent, parseLiveSharePath, dayLabel, stationLabel, decodeDay } from './parse.js';
+import { isSocialCrawler, parseShareIntent, parseLiveSharePath, parseLiveTrainImagePath, dayLabel, stationLabel, decodeDay } from './parse.js';
 import { buildRouteOgMeta, buildPlannerOgMeta, buildLiveTrainOgMeta, renderOgHtml, buildAppDeepLink } from './og-html.js';
 import { extractGridPreview, loadRegionDb, loadRegionGridOrder } from './schedule.js';
 import { timetablePng, plannerPng, liveTrainPng, buildTimetableSvg, buildPlannerSvg, buildLiveTrainSvg } from './og-images.js';
@@ -121,8 +121,12 @@ async function handleOgPlan(url, env) {
 }
 
 async function handleOgLive(url) {
-  const trainId = url.searchParams.get('train') || url.searchParams.get('live') || 'Train';
-  const dest = stationLabel(url.searchParams.get('to') || '');
+  const pathLive = parseLiveTrainImagePath(url.pathname);
+  const trainId = pathLive?.trainId
+    || url.searchParams.get('train')
+    || url.searchParams.get('live')
+    || 'Train';
+  const dest = stationLabel(pathLive?.dest || url.searchParams.get('to') || '');
   const wantSvg = url.searchParams.get('format') === 'svg';
   const opts = { trainId, dest };
   if (wantSvg) return svgResponse(buildLiveTrainSvg(opts));
@@ -130,8 +134,14 @@ async function handleOgLive(url) {
     const png = await liveTrainPng(opts);
     return pngResponse(png);
   } catch (e) {
-    console.error('Live train PNG failed, SVG fallback', e.message || e);
-    return svgResponse(buildLiveTrainSvg(opts));
+    console.error('Live train PNG failed', e.message || e);
+    try {
+      const png = await liveTrainPng({ trainId: String(trainId || 'Train'), dest: dest || '' });
+      return pngResponse(png);
+    } catch (retryErr) {
+      console.error('Live train PNG retry failed', retryErr.message || retryErr);
+      return new Response('Live train preview unavailable', { status: 502 });
+    }
   }
 }
 
@@ -209,7 +219,7 @@ async function handleFetch(request, env, ctx) {
       if (url.pathname.endsWith('.svg')) url.searchParams.set('format', 'svg');
       return handleOgPlan(url, env);
     }
-    if (url.pathname === '/og/live.png' || url.pathname === '/og/live.svg') {
+    if (url.pathname === '/og/live.png' || url.pathname === '/og/live.svg' || parseLiveTrainImagePath(url.pathname)) {
       if (url.pathname.endsWith('.svg')) url.searchParams.set('format', 'svg');
       return handleOgLive(url);
     }

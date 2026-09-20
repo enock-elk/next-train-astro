@@ -5,7 +5,7 @@
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { parseShareIntent, isSocialCrawler } from '../workers/nexttrain-og/src/parse.js';
+import { parseShareIntent, isSocialCrawler, parseLiveTrainImagePath } from '../workers/nexttrain-og/src/parse.js';
 import { buildAppDeepLink, buildOgShareLink } from '../workers/nexttrain-og/src/og-html.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -86,6 +86,8 @@ ok(liveApp.includes('live=9115') && liveApp.includes('to=Pienaarspoort'), 'human
 const liveOg = buildOgShareLink(liveIntent, 'https://nexttrain.co.za');
 ok(liveOg.includes('/og/l/9115/pta-pien'), 'canonical live OG URL is the short path, not a timetable share');
 ok(!liveOg.includes('v=g'), 'live OG canonical is not a grid share');
+const liveImg = parseLiveTrainImagePath('/og/train/9115/pta-pien/Pienaarspoort.png');
+ok(liveImg && liveImg.trainId === '9115' && liveImg.dest === 'Pienaarspoort', 'live OG PNG path carries train and dest');
 
 consumeShareDeeplinkSnapshot();
 const pathLaunch = ingestLaunchTargetUrl('https://nexttrain.co.za/og/l/9115/pta-pien/PIENAARSPOORT');
@@ -99,10 +101,12 @@ ok(shareLinks.includes("params.get('live')"), 'route parser ignores live shares'
 
 const ogHtml = readFileSync(join(ROOT, 'workers/nexttrain-og/src/og-html.js'), 'utf8');
 ok(ogHtml.includes('A rider is sharing Train'), 'live OG describes a rider sharing the train');
-ok(ogHtml.includes('/og/live.png'), 'live OG image is /og/live.png');
+ok(ogHtml.includes('/og/train/'), 'live OG image is a path PNG, not a query string WhatsApp can wrap');
+ok(ogHtml.includes('rel="image_src"'), 'OG HTML includes image_src for crawlers');
 
 const ogIndex = readFileSync(join(ROOT, 'workers/nexttrain-og/src/index.js'), 'utf8');
-ok(ogIndex.includes("/og/live.png"), 'worker serves /og/live.png');
+ok(ogIndex.includes("/og/live.png"), 'worker still serves /og/live.png');
+ok(ogIndex.includes('parseLiveTrainImagePath'), 'worker serves /og/train/*.png');
 ok(ogIndex.includes('buildLiveTrainOgMeta'), 'worker emits live OG HTML');
 ok(ogIndex.includes('isOgSharePath') && ogIndex.includes('parseLiveSharePath'), 'worker treats /og/l/ as a share path');
 ok(ogIndex.includes('private, no-store'), 'OG HTML is not CDN-cached (live vs timetable UA mix)');

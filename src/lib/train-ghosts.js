@@ -587,6 +587,15 @@ export function trainTowardLabel(trainId, destination) {
     return dest ? `Toward ${dest}` : '';
 }
 
+/** Tracking card title, e.g. "PIENAARSPOORT Train 9123". */
+export function trainHeadboardTitle(trainId, destination) {
+    const id = String(trainId || '').trim();
+    const dest = trainTerminusName(trainId, destination);
+    if (dest && id) return `${dest} Train ${id}`;
+    if (id) return `Train ${id}`;
+    return dest || 'Tracking train';
+}
+
 /** Where the timetable says this train should be right now. */
 export function timetableWhereLabel(trainId, opts = {}) {
     const ghost = expectedPosition(trainId, opts.now, opts);

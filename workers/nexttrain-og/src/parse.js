@@ -79,6 +79,21 @@ export function parseLiveSharePath(pathname) {
   };
 }
 
+/** PNG path `/og/train/9115.png` or `/og/train/9115/pta-pien/Pienaarspoort.png` — no query for WhatsApp. */
+export function parseLiveTrainImagePath(pathname) {
+  const m = String(pathname || '').match(/^\/og\/train\/([^/]+?)(?:\/([^/]+))?(?:\/([^/]+))?\.png$/i);
+  if (!m) return null;
+  let trainId = '';
+  let routeId = '';
+  let dest = '';
+  try { trainId = decodeURIComponent(m[1] || '').trim(); } catch { trainId = String(m[1] || '').trim(); }
+  if (!trainId) return null;
+  try { routeId = m[2] ? decodeURIComponent(m[2]).trim() : ''; } catch { routeId = String(m[2] || '').trim(); }
+  try { dest = m[3] ? decodeURIComponent(m[3]).trim() : ''; } catch { dest = String(m[3] || '').trim(); }
+  if (routeId === '-') routeId = '';
+  return { trainId, routeId, dest: stationLabel(dest) };
+}
+
 export function parseShareIntent(url) {
   const params = url.searchParams;
   const pathLive = parseLiveSharePath(url.pathname);

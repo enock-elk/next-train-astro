@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_09.20.2': [
+        'Planner fare: No left, Yes right. Fare - Single Trip plus Return, Weekly Mon-Fri, Weekly Mon-Sat, Monthly from zones_detailed (peak table, profile multiplier). Peak clock uses compactTime so 5:10:00 is not 5:10:. Service Alerts catalog poster preview sits in the message field with withBase. Tracking card title is dest Train id, opens from the green pill, and is draggable. GPS speed: displacement inside the accuracy circle is 0 even when the OS reports ~5 km/h; real 5 km/h walking still reports once the fix leaves that circle. Live OG image is /og/train/{id}/...png (no SVG fallback, cache bust wa11) so WhatsApp cannot wrap live.png query strings. No What’s New for alerts, OG, or live tracking. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
+    ],
     'V9_09.20.1': [
         'From 19.11: tracking card keeps last finite GPS Speed / GPS / On rail / Accuracy after Pause (0 km/h when stopped). Pause pings keep heading, speed, and accuracy; map click payload passes those metrics. Alert full view uses the feed poster currentSrc and keeps src on close (no canvas toDataURL). Returning-user white screen: board is no longer inline visibility:hidden (CSS hide until nt-shell-ready; pageshow re-reveals; shell height ignores sub-240 first readings). Did not bring 19.12 80 m yaw look-ahead or 19.13 interpolation removal. No What’s New. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
     ],

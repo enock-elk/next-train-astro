@@ -9,6 +9,7 @@ import { FARE_CONFIG, fareMultiplierForProfile } from '../src/lib/config.js';
 import { FEATURE_KEYS, GRANTABLE_FEATURES, isFeatureEnabled } from '../src/lib/features.js';
 import { suggestZoneFromKm, DEFAULT_ZONE_KM_BANDS, bakedDestToDestKm } from '../src/lib/zone-distance-audit.js';
 import { computeZoneFareForTrip, getCrowFliesTripKm, collectTripStopsForDistance } from '../src/lib/planner-ui.js';
+import { compactTime } from '../src/lib/share-links.js';
 import {
     cheaperZone,
     capZoneForSingleRoute,
@@ -123,6 +124,13 @@ assert(!ui.includes('TRIP FARE:'), 'fare label is not all-caps TRIP FARE');
 assert(ui.includes('text-xs font-black text-gray-800'), 'Trip fare is 12px gray-800');
 assert(ui.includes('plannerMoneySvg') || ui.includes('M3 7.5h13.5'), 'trip fare button has a money SVG');
 assert(ui.includes('planner-fare-profile-btn'), 'Adult in the fare sheet is a profile button');
+assert(ui.includes('Fare - Single Trip'), 'fare sheet labels the trip price as Single Trip');
+assert(ui.includes('Return Trip') && ui.includes('Weekly') && ui.includes('Monthly Pass'), 'fare sheet lists Return, Weekly, and Monthly');
+assert(ui.includes('plannerTicketRowsHtml'), 'other ticket types come from the zone table');
+assert(ui.includes('compactTime(fare.depTime)'), 'peak clock uses compactTime so 5:10:00 is not 5:10:');
+assert(!ui.includes("String(fare.depTime).slice(0, 5)"), 'do not slice HH:MM:SS to a trailing colon');
+assert(compactTime('5:10:00') === '5:10', '5:10:00 compactTime is 5:10');
+assert(compactTime('05:10') === '05:10', 'HH:MM compactTime stays HH:MM');
 assert(ui.includes('openPassengerTypePicker'), 'Adult opens the passenger profile picker');
 assert(ui.includes('roundBoardFare'), 'planner uses the board whole-rand floor');
 assert(ui.includes('border-b border-dotted'), 'Trip fare uses a dotted underline');

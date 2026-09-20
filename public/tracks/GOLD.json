@@ -1,6 +1,6 @@
 {
   "branch": "map-gold",
-  "frozenAt": "55b9fe0d596fcaf2ba01d36c8bc13fb85556816e",
+  "frozenAt": "5756de776563f35de44a7e2194c94107099cadfd",
   "version": "V9_09.20.1",
   "note": "Gold snapshot of this build: planner fare uses painted corridor km, static-map station hops, rail-tangent trains, baked tracks, map runtime, advert handling. Tracking card pause metrics pass through map-app click payload. Diff against origin/map-gold. Fast-forward map-gold after this lands on main. Never force-push map-gold.",
   "files": {

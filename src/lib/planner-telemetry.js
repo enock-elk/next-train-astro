@@ -13,10 +13,6 @@
  *
  * RTDB sys_logs/trip_plans/$batchId allows create-once (!data.exists).
  * Auth token preferred; anonymous create-once still works without email claim.
- *
- * Live write path stays `sys_logs/trip_plans/$batchId`. Do not move or stop
- * that PUT. Archival / TTL for the ~20k-batch bloat is documented in
- * docs/R2-AND-TRIP-PLANS.md and ships later without changing this flush.
  */
 import { DYNAMIC_BASE_URL, APP_VERSION, FARE_CONFIG } from './config.js';
 import { safeStorage, normalizeStationName } from './utils.js';

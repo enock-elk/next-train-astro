@@ -44,7 +44,7 @@ import { withBase } from '../lib/config.js';
      Close stays in a bottom bar so an empty img cannot center it. Pinch/pan lives on the stage. -->
 <div id="alert-image-lightbox" class="fixed inset-0 bg-black z-[160] hidden flex-col [touch-action:none]" role="dialog" aria-modal="true" aria-label="Image Preview">
     <div id="alert-image-lightbox-stage" class="relative flex-1 min-h-0 overflow-hidden flex items-center justify-center [touch-action:none]">
-        <img id="alert-image-lightbox-img" alt="Image Preview" draggable="false" decoding="async" class="max-w-full max-h-full object-contain select-none pointer-events-none">
+        <img id="alert-image-lightbox-img" alt="Image Preview" draggable="false" decoding="sync" class="max-w-full max-h-full object-contain select-none pointer-events-none">
     </div>
     <div class="shrink-0 z-10 w-full px-4 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))] bg-black">
         <button type="button" id="alert-image-lightbox-close" class="w-full max-w-sm mx-auto block bg-white hover:bg-gray-100 text-gray-900 font-bold py-3 px-4 rounded-lg focus:outline-none [touch-action:manipulation]">Close</button>

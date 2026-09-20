@@ -430,7 +430,10 @@ export async function projectTrainTrackerFix({
         routeProgressM: snap.routeM,
         distanceM: snap.distanceM,
         lastSeenLabel: journeyPositionLabel(stops, progress),
-        bearing: alignBearingToJourney(snap.trackBearing, journeyH),
+        // Station-to-station timetable heading, not GPS/campus tangent.
+        bearing: Number.isFinite(journeyH)
+            ? journeyH
+            : alignBearingToJourney(snap.trackBearing, journeyH),
     };
 }
 
@@ -614,10 +617,6 @@ export async function compactPingsForMap(pings, { mineDeviceId = '', routeId = '
             return da - db || (b.at || 0) - (a.at || 0);
         })[0];
         const newest = kept.reduce((a, b) => ((a.at || 0) >= (b.at || 0) ? a : b), kept[0]);
-        const metricPing = (key) => {
-            const hit = [...kept, ...list].find((p) => typeof p?.[key] === 'number' && Number.isFinite(p[key]));
-            return hit ? hit[key] : null;
-        };
         const pausedOnly = active.length === 0;
         out.push({
             lat: driver.lat,
@@ -627,24 +626,27 @@ export async function compactPingsForMap(pings, { mineDeviceId = '', routeId = '
             mine: list.some((p) => p.mine),
             at: newest.at,
             expiresAt: newest.expiresAt,
-            heading: newest.heading ?? metricPing('heading'),
-            speedMps: typeof newest.speedMps === 'number' ? newest.speedMps : metricPing('speedMps'),
+            heading: newest.heading,
+            speedMps: newest.speedMps,
             station: newest.station,
             routeId: newest.routeId,
-            bearing: Number.isFinite(driver.bearing)
-                ? driver.bearing
-                : journeyHeadingAtProgress(trainId, driver.projectedProgress),
+            bearing: (() => {
+                const journeyH = journeyHeadingAtProgress(trainId, medianProgress);
+                return Number.isFinite(journeyH)
+                    ? journeyH
+                    : (Number.isFinite(driver.bearing) ? driver.bearing : null);
+            })(),
             onRails: true,
             projectedProgress: medianProgress,
             routeProgressM: driver.routeProgressM,
-            railDistanceM: typeof newest.railDistanceM === 'number' ? newest.railDistanceM : metricPing('railDistanceM'),
+            railDistanceM: newest.railDistanceM,
             trackingState: pausedOnly ? TRACKING_STATE.PAUSED : TRACKING_STATE.ACTIVE,
-            acceptedAt: newest.acceptedAt || driver.acceptedAt || metricPing('acceptedAt'),
-            fixAt: newest.fixAt || driver.fixAt || metricPing('fixAt'),
+            acceptedAt: newest.acceptedAt || driver.acceptedAt,
+            fixAt: newest.fixAt || driver.fixAt,
             lastPingAt: newest.lastPingAt || driver.lastPingAt,
             lastSeenLabel: newest.lastSeenLabel || driver.lastSeenLabel,
             destination: trainTerminusName(trainId, newest.destination || driver.lastSeenLabel),
-            accuracy: typeof newest.accuracy === 'number' ? newest.accuracy : metricPing('accuracy'),
+            accuracy: newest.accuracy,
             pauseReason: pausedOnly ? newest.pauseReason : '',
         });
     }
@@ -1430,10 +1432,12 @@ export async function submitRideCheckIn({
             routeProgressM: Number.isFinite(overrideProjected.routeM) ? overrideProjected.routeM : 0,
             distanceM: Number.isFinite(overrideProjected.distanceM) ? overrideProjected.distanceM : 0,
             lastSeenLabel: st,
-            bearing: alignBearingToJourney(
-                overrideProjected.trackBearing,
-                Number.isFinite(heading) ? heading : journeyHeadingAtProgress(trainId, overrideProjected.pathFraction)
-            ),
+            bearing: (() => {
+                const journeyH = journeyHeadingAtProgress(trainId, overrideProjected.pathFraction);
+                return Number.isFinite(journeyH)
+                    ? journeyH
+                    : alignBearingToJourney(overrideProjected.trackBearing, heading);
+            })(),
         };
         resolvedState = TRACKING_STATE.ACTIVE;
         resolvedPauseReason = '';
@@ -1452,9 +1456,9 @@ export async function submitRideCheckIn({
         email,
         coarseLat: typeof coarseLat === 'number' ? Math.round(coarseLat * 1000) / 1000 : null,
         coarseLng: typeof coarseLng === 'number' ? Math.round(coarseLng * 1000) / 1000 : null,
-        heading: typeof heading === 'number' ? Math.round(heading) : (typeof previous?.heading === 'number' ? previous.heading : null),
-        speedMps: typeof speedMps === 'number' ? Math.round(speedMps * 10) / 10 : (typeof previous?.speedMps === 'number' ? previous.speedMps : null),
-        accuracy: typeof accuracy === 'number' ? Math.round(accuracy) : (typeof previous?.accuracy === 'number' ? previous.accuracy : null),
+        heading: typeof heading === 'number' ? Math.round(heading) : null,
+        speedMps: typeof speedMps === 'number' ? Math.round(speedMps * 10) / 10 : null,
+        accuracy: typeof accuracy === 'number' ? Math.round(accuracy) : null,
         appVersion: APP_VERSION,
         source: source || 'board_checkin',
         trackingState: resolvedState,
@@ -1472,8 +1476,8 @@ export async function submitRideCheckIn({
         payload.lastSeenLabel = projection.lastSeenLabel || st;
         if (Number.isFinite(projection.bearing)) payload.bearing = Math.round(projection.bearing);
     } else if (resolvedState === TRACKING_STATE.PAUSED && previous) {
-        for (const key of ['projectedLat', 'projectedLng', 'projectedProgress', 'routeProgressM', 'railDistanceM', 'acceptedAt', 'fixAt', 'lastSeenLabel', 'bearing', 'speedMps', 'accuracy', 'heading']) {
-            if (payload[key] == null && previous[key] != null) payload[key] = previous[key];
+        for (const key of ['projectedLat', 'projectedLng', 'projectedProgress', 'routeProgressM', 'railDistanceM', 'acceptedAt', 'fixAt', 'lastSeenLabel', 'bearing']) {
+            if (previous[key] != null) payload[key] = previous[key];
         }
     }
 
@@ -1672,8 +1676,8 @@ async function pauseActiveTracker(active, reason, pos = null) {
         destination: active.destination || null,
         coarseLat: pos?.lat ?? active.projectedLat ?? null,
         coarseLng: pos?.lng ?? active.projectedLng ?? null,
-        heading: pos?.heading ?? active.heading ?? null,
-        speedMps: pos?.speedMps ?? active.speedMps ?? null,
+        heading: pos?.heading ?? null,
+        speedMps: pos?.speedMps ?? null,
         accuracy: pos?.accuracy ?? active.accuracy ?? null,
         source: 'onboard_paused',
         quiet: true,
@@ -1686,7 +1690,7 @@ async function pauseActiveTracker(active, reason, pos = null) {
 export async function pauseRideShare({ reason = 'user', quiet = false } = {}) {
     const active = getActiveShare();
     if (!active?.trainId) return { ok: false, message: 'You’re not sharing' };
-    const result = await pauseActiveTracker(active, reason, onboardLatestFix);
+    const result = await pauseActiveTracker(active, reason);
     if (!quiet && reason === 'user') {
         showToast('Sharing paused. Restart when you are ready.', 'info');
     }

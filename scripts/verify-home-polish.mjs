@@ -633,11 +633,8 @@ assert(refuseDisplayName('Enock').ok === true, 'ordinary first names are still a
     assert(plannerModals.includes('id="alert-image-lightbox-close"') && plannerModals.indexOf('alert-image-lightbox-stage') < plannerModals.indexOf('alert-image-lightbox-close'), 'Close sits after the image stage');
     assert(plannerModals.includes('shrink-0') && plannerModals.includes('pb-[max(1rem,env(safe-area-inset-bottom))]'), 'Close stays in a bottom bar');
     assert(uiJs.includes('resolveLightboxDisplaySrc') && uiJs.includes('currentSrc'), 'full view reuses the already-decoded poster');
-    assert(uiJs.includes('poster.currentSrc'), 'full view paints the feed poster URL first');
-    assert(!uiJs.includes('snapshotDecodedImage'), 'full view does not canvas-snapshot the poster');
-    assert(!uiJs.includes('toDataURL'), 'full view does not JPEG-encode on open');
+    assert(uiJs.includes('snapshotDecodedImage'), 'full view can snapshot the decoded poster');
     assert(!/img\.removeAttribute\('src'\);\s*img\.alt = 'Image Preview'/.test(uiJs), 'openLightbox does not clear src before showing');
-    assert(!/closeLightbox[\s\S]*img\.removeAttribute\('src'\)/.test(uiJs), 'closeLightbox keeps the last poster in memory');
     assert(uiJs.includes('blockPageZoom') && uiJs.includes('gesturestart'), 'alert preview pinch does not zoom the Close chrome');
     const adsJs = readFileSync(new URL('../src/lib/clever-ads.js', import.meta.url), 'utf8');
     assert(adsJs.includes("'account-modal'"), 'ads cloak while Account is open');

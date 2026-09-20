@@ -954,23 +954,41 @@ function lightboxPosterHost(src, host) {
     return null;
 }
 
-/** Reuse the on-screen poster URL so full view does not re-encode or refetch. */
+/** Copy decoded pixels so full view never waits on a second network decode. */
+function snapshotDecodedImage(img) {
+    if (!img || !(img.naturalWidth > 0)) return '';
+    try {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.naturalWidth;
+        canvas.height = img.naturalHeight;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return '';
+        ctx.drawImage(img, 0, 0);
+        return canvas.toDataURL('image/jpeg', 0.92);
+    } catch {
+        return '';
+    }
+}
+
+/** Reuse the already-decoded poster (object URL, snapshot, or live src). */
 function resolveLightboxDisplaySrc(src, host) {
     try {
         const wrap = lightboxPosterHost(src, host);
+        const objectUrl = wrap?.getAttribute('data-alert-object-url') || '';
+        if (objectUrl) return objectUrl;
         const poster = wrap?.querySelector?.('img') || null;
+        const snap = snapshotDecodedImage(poster);
+        if (snap) return snap;
         if (poster && poster.naturalWidth > 0) {
             const live = poster.currentSrc || poster.getAttribute('src') || poster.src || '';
             if (live) return live;
         }
-        const objectUrl = wrap?.getAttribute('data-alert-object-url') || '';
-        if (objectUrl) return objectUrl;
         const imgs = document.querySelectorAll('img');
         for (const node of imgs) {
             if (node.id === 'alert-image-lightbox-img') continue;
             const live = node.currentSrc || node.src || '';
             if ((live === src || node.getAttribute('src') === src) && node.naturalWidth > 0) {
-                return live || src;
+                return snapshotDecodedImage(node) || live || src;
             }
         }
     } catch { /* ignore */ }
@@ -1095,11 +1113,11 @@ export function openLightbox(url, host) {
     window._isLightboxMode = true;
     resetAlertLightboxTransform();
     img.alt = 'Image Preview';
-    img.decoding = 'async';
+    img.decoding = 'sync';
     const displaySrc = resolveLightboxDisplaySrc(src, wrap || host);
+    if (img.getAttribute('src') !== displaySrc) img.src = displaySrc;
     overlay.classList.remove('hidden');
     overlay.classList.add('flex');
-    if (img.getAttribute('src') !== displaySrc) img.src = displaySrc;
 }
 
 export function closeLightbox(fromPopState = false) {
@@ -1114,7 +1132,10 @@ export function closeLightbox(fromPopState = false) {
         overlay.classList.add('hidden');
         overlay.classList.remove('flex');
         resetAlertLightboxTransform();
-        if (img) img.alt = '';
+        if (img) {
+            img.removeAttribute('src');
+            img.alt = '';
+        }
         window._isLightboxMode = false;
         if (!anyFixedModalOpen() && !document.body.classList.contains('sidenav-open')) {
             unlockBackgroundScroll();

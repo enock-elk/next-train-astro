@@ -204,14 +204,6 @@ function setTrackingText(id, value) {
     if (el) el.textContent = value;
 }
 
-function firstFiniteMetric(...vals) {
-    for (const v of vals) {
-        const n = Number(v);
-        if (Number.isFinite(n)) return n;
-    }
-    return NaN;
-}
-
 function trackingIsPaused(active, marker = null, pingAt = 0) {
     if ((marker?.trackingState || active?.trackingState) === 'paused') return true;
     const t = Number(pingAt || 0);
@@ -306,50 +298,29 @@ function renderTrackingStatusCard(active, marker = null) {
         return;
     }
     const pingAt = gpsPingSuccessAt({
-        ...(active || {}),
         ...(subject || {}),
         ...(subjectMarker || {}),
-        fixAt: subjectMarker?.fixAt || subject?.fixAt || active?.fixAt,
-        acceptedAt: subjectMarker?.acceptedAt || subject?.acceptedAt || active?.acceptedAt,
-        lastPingAt: subjectMarker?.lastPingAt || subject?.lastPingAt || active?.lastPingAt,
-        at: subjectMarker?.at || subject?.at || active?.at,
-    }) || (mine && Number(lastCoords?.t)) || 0;
+        fixAt: subjectMarker?.fixAt || subject?.fixAt,
+        acceptedAt: subjectMarker?.acceptedAt || subject?.acceptedAt,
+        lastPingAt: subjectMarker?.lastPingAt || subject?.lastPingAt,
+        at: subjectMarker?.at || subject?.at,
+    });
     const paused = trackingIsPaused(subject, subjectMarker, pingAt);
     const progress = subjectMarker?.projectedProgress ?? subject.projectedProgress;
     const journeyH = journeyHeadingAtProgress(subject.trainId, progress);
-    const bearing = firstFiniteMetric(subjectMarker?.bearing, subject.bearing, journeyH);
-    const speed = firstFiniteMetric(
-        subjectMarker?.speedMps,
-        subject.speedMps,
-        mine ? active?.speedMps : NaN,
-        mine ? lastCoords?.speedMps : NaN,
-        mine ? lastCoords?.speed : NaN,
-    );
-    const accuracy = firstFiniteMetric(
-        subjectMarker?.accuracy,
-        subject.accuracy,
-        mine ? active?.accuracy : NaN,
-        mine ? lastCoords?.accuracy : NaN,
-    );
-    const railM = firstFiniteMetric(
-        subjectMarker?.railDistanceM,
-        subject.railDistanceM,
-        mine ? active?.railDistanceM : NaN,
-        (subjectMarker?.onRails || subject.onRails) ? 0 : NaN,
-    );
+    const bearing = Number.isFinite(journeyH) ? journeyH : (subjectMarker?.bearing ?? subject.bearing);
+    const speed = subjectMarker?.speedMps ?? subject.speedMps;
+    const accuracy = subjectMarker?.accuracy ?? subject.accuracy;
     const place = subjectMarker?.lastSeenLabel || subject.lastSeenLabel || subject.station || 'on the route';
     const toward = trainTowardLabel(subject.trainId, subject.destination);
-    const speedLabel = Number.isFinite(speed)
-        ? `${Math.round(Math.max(0, (paused && speed < 0.5) ? 0 : speed) * 3.6)} km/h`
-        : (paused ? '0 km/h' : 'Unknown');
     setTrackingText('map-tracking-title', `Train ${subject.trainId}`);
     setTrackingText('map-tracking-toward', toward);
     setTrackingText('map-tracking-state', paused ? 'Paused' : 'Active');
     setTrackingText('map-tracking-last-seen', formatLastSeenWithPingClock(place, pingAt));
-    setTrackingText('map-tracking-speed', speedLabel);
+    setTrackingText('map-tracking-speed', Number.isFinite(speed) ? `${Math.round(Math.max(0, speed) * 3.6)} km/h` : 'Unknown');
     setTrackingText('map-tracking-heading', trackingHeadingLabel(bearing));
     setTrackingText('map-tracking-gps', formatGpsPingAge(pingAt));
-    setTrackingText('map-tracking-rail', trackingDistanceLabel(railM));
+    setTrackingText('map-tracking-rail', trackingDistanceLabel(subjectMarker?.railDistanceM ?? subject.railDistanceM));
     setTrackingText('map-tracking-accuracy', Number.isFinite(accuracy) ? `±${Math.round(accuracy)} m` : 'Unknown');
     setTrackingText('map-tracking-count', String(Math.max(1, Number(subjectMarker?.n || subject.n) || 1)));
     document.getElementById('map-tracking-warning')?.classList.toggle('hidden', !subject.directionWarning);

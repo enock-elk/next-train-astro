@@ -1,3 +1,5 @@
+import { applyMotionFusionToFix } from './motion-fusion.js';
+
 /**
  * One geolocation watch for the map tab and an active share.
  *
@@ -162,9 +164,10 @@ function fromCoords(coords, timestamp = Date.now()) {
 }
 
 function emit(fix) {
-    lastFix = fix;
+    const next = applyMotionFusionToFix(fix);
+    lastFix = next;
     listeners.forEach((fn) => {
-        try { fn(fix); } catch { /* listener */ }
+        try { fn(next); } catch { /* listener */ }
     });
 }
 

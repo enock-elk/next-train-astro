@@ -30,6 +30,13 @@ import {
     GEO_REUSE_MAX_AGE_MS,
     trustedDisplaySpeedMps,
 } from './geo-watch.js';
+import {
+    fusedHeadingFromPing,
+    fusedSpeedFromPing,
+    peekMotionFusion,
+    readPingMotionClass,
+    requestMotionPermission,
+} from './motion-fusion.js';
 
 /**
  * Map / board “Share my location” UI. Off until the feature ships to commuters.
@@ -410,17 +417,27 @@ function renderTrackingStatusCard(active, marker = null) {
     const paused = trackingIsPaused(subject, subjectMarker, pingAt);
     const progress = subjectMarker?.projectedProgress ?? subject.projectedProgress;
     const journeyH = journeyHeadingAtProgress(subject.trainId, progress);
-    const bearing = firstFiniteMetric(subjectMarker?.bearing, subject.bearing, journeyH);
+    const bearing = firstFiniteMetric(
+        subjectMarker?.bearing,
+        subject.bearing,
+        journeyH,
+        fusedHeadingFromPing(subjectMarker),
+        fusedHeadingFromPing(subject),
+    );
     const liveFix = mine ? (peekLastGeoFix() || lastCoords) : null;
-    const liveSpeed = mine ? firstFiniteMetric(liveFix?.speedMps, lastCoords?.speedMps) : NaN;
+    const liveSpeed = mine ? firstFiniteMetric(liveFix?.speedMps, lastCoords?.speedMps, peekMotionFusion().speedMps) : NaN;
     const pingSpeed = firstFiniteMetric(
+        fusedSpeedFromPing(subjectMarker, NaN),
+        fusedSpeedFromPing(subject, NaN),
         subjectMarker?.speedMps,
         subject.speedMps,
         mine ? active?.speedMps : NaN,
     );
     const speed = trustedDisplaySpeedMps({
         speedMps: mine && Number.isFinite(liveSpeed) ? liveSpeed : pingSpeed,
-        stationary: !!(liveFix?.stationary || lastCoords?.stationary || subjectMarker?.stationary || subject.stationary),
+        stationary: !!(liveFix?.stationary || lastCoords?.stationary || subjectMarker?.stationary || subject.stationary)
+            || readPingMotionClass(subjectMarker) === 'still'
+            || readPingMotionClass(subject) === 'still',
     });
     const accuracy = firstFiniteMetric(
         subjectMarker?.accuracy,
@@ -795,6 +812,19 @@ export async function runOnboardToastVet(trainId) {
     } = await import('./train-ghosts.js');
     const routeId = $currentRouteId.get();
     openShareChecks(trainId);
+    await requestMotionPermission();
+    const fusionWarm = peekMotionFusion();
+    addShareCheck(
+        'Motion sensors',
+        fusionWarm.sensorsLive || fusionWarm.permission === 'granted'
+            ? 'Compass and motion sensors will fill heading between GPS pings.'
+            : (fusionWarm.permission === 'denied'
+                ? 'Motion sensors were not allowed. Tracking still uses GPS.'
+                : 'Motion sensors unavailable. Tracking still uses GPS.'),
+        fusionWarm.sensorsLive || fusionWarm.permission === 'granted' || fusionWarm.permission === 'unknown'
+            ? 'pass'
+            : 'defer'
+    );
     if (!routeHasStationCoords(routeId)) {
         addShareCheck('Rail geometry', NO_COORDS_MESSAGE, 'fail');
         setShareDecision(NO_COORDS_MESSAGE, false);
@@ -862,7 +892,11 @@ export async function runOnboardToastVet(trainId) {
     const hasGpsSpeed = typeof last.speed === 'number' && last.speed >= 0 && !Number.isNaN(last.speed);
     const derivedSpeed = displacement / dt;
     const hasDerivedSpeed = samples.length >= 2 && displacement >= MOVE_MIN_M;
-    const speedMps = hasGpsSpeed ? last.speed : (hasDerivedSpeed ? derivedSpeed : null);
+    const fusion = peekMotionFusion();
+    let speedMps = hasGpsSpeed ? last.speed : (hasDerivedSpeed ? derivedSpeed : null);
+    if (speedMps == null && fusion.motionClass === 'ride' && Number.isFinite(fusion.speedMps) && fusion.speedMps >= 1.5) {
+        speedMps = fusion.speedMps;
+    }
     if (speedMps != null) {
         const kmh = Math.max(0, Math.round(speedMps * 3.6));
         addShareCheck('Movement', `GPS reports about ${kmh} km/h over ${Math.round(displacement)} m.`);
@@ -871,6 +905,9 @@ export async function runOnboardToastVet(trainId) {
     }
 
     let heading = last.heading;
+    if ((heading == null || Number.isNaN(heading)) && Number.isFinite(fusion.heading)) {
+        heading = fusion.heading;
+    }
     if ((heading == null || Number.isNaN(heading)) && samples.length >= 2) {
         heading = (Math.atan2(last.lng - first.lng, last.lat - first.lat) * 180) / Math.PI;
     }
@@ -878,7 +915,9 @@ export async function runOnboardToastVet(trainId) {
     const journeyH = journeyHeadingDeg(trainId);
     const ghostH = ghostHeadingDeg(ghost);
     const targetH = Number.isFinite(journeyH) ? journeyH : ghostH;
-    const moving = (speedMps != null && speedMps >= 1.5) || displacement >= MOVE_MIN_M;
+    const moving = (speedMps != null && speedMps >= 1.5)
+        || displacement >= MOVE_MIN_M
+        || (fusion.motionClass === 'ride' && Number.isFinite(fusion.speedMps) && fusion.speedMps >= 1.5);
     const agrees = headingAgrees(heading, targetH);
     const headingPass = !moving || atPlatform || agrees;
     addShareCheck(
@@ -1405,6 +1444,7 @@ function applyGeoFix(fix) {
         accuracy: fix.accuracy,
         heading: fix.heading,
         speedMps: fix.speedMps,
+        motionClass: fix.motionClass || '',
         stationary: !!fix.stationary,
         t: Number.isFinite(fix.t) ? fix.t : Date.now(),
     };
@@ -1812,6 +1852,7 @@ export async function startOnTrainShare({
 } = {}) {
     lastShareRequest = { trainId, station, destination, routeId, source, scheduledTime, intent: 'onboard', adminOverrideRole };
     triggerHaptic();
+    requestMotionPermission();
     const id = trainId === 'trip' ? null : (trainId || null);
     if (!routeId) {
         showToast('Pick a corridor first', 'error');
@@ -2112,7 +2153,7 @@ export async function startOnTrainShare({
 }
 
 async function finishRideShare({
-    trainId, station, destination, routeId, lat, lng, heading, speedMps, accuracy, source, waitingFor,
+    trainId, station, destination, routeId, lat, lng, heading, speedMps, accuracy, motionClass, source, waitingFor,
     quiet = false, adminOverrideRole = '', overrideProjected = null,
 }) {
     try {
@@ -2139,6 +2180,7 @@ async function finishRideShare({
             heading,
             speedMps,
             accuracy: accuracy ?? lastCoords?.accuracy ?? null,
+            motionClass: motionClass || lastCoords?.motionClass || peekMotionFusion().motionClass || '',
             source: source || 'board_on_train',
             waitingFor: waitingFor || null,
             quiet,
@@ -2221,7 +2263,8 @@ export async function syncRidePingsToMap(routeId = $currentRouteId.get()) {
                     lastSeenLabel: p.lastSeenLabel || p.station || '',
                     expiresAt: p.expiresAt,
                     heading: p.heading,
-                    speedMps: p.speedMps,
+                    speedMps: readPingMotionClass(p) === 'still' ? 0 : p.speedMps,
+                    motionClass: readPingMotionClass(p),
                     mine: p.deviceId === mine,
                     n: 1,
                     routeId: p.routeId || routeId,
@@ -2232,7 +2275,7 @@ export async function syncRidePingsToMap(routeId = $currentRouteId.get()) {
             ? { ...ownPing, ...groupedMine, n: groupedMine?.n || 1 }
             : ownPing;
         renderTrackingStatusCard(ride.getActiveShare?.(), ownMetrics);
-        const sig = markers.map((m) => `${m.trainId || ''}:${m.lat}:${m.lng}:${m.n || 1}:${m.mine ? 1 : 0}:${m.at || 0}:${m.fixAt || ''}:${m.acceptedAt || ''}:${m.bearing || ''}:${m.trackingState || ''}:${m.accuracy || ''}:${m.railDistanceM || ''}`).join('|');
+        const sig = markers.map((m) => `${m.trainId || ''}:${m.lat}:${m.lng}:${m.n || 1}:${m.mine ? 1 : 0}:${m.at || 0}:${m.fixAt || ''}:${m.acceptedAt || ''}:${m.bearing || ''}:${m.trackingState || ''}:${m.accuracy || ''}:${m.railDistanceM || ''}:${m.speedMps || ''}:${m.heading || ''}:${m.motionClass || ''}`).join('|');
         if (sig === lastMapPingSig) return;
         lastMapPingSig = sig;
         postToMap({ type: 'nt-map-ride-pings', pings: markers });

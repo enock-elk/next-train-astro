@@ -44,6 +44,21 @@ import {
     RIDE_INTERPOLATION_MAX_MS,
 } from '../src/lib/gps-freshness.js';
 import { refineMotionFix, confirmStationaryWatchTick, reusableGeoFix, locateFixOrLast, GEO_REUSE_MAX_AGE_MS } from '../src/lib/geo-watch.js';
+import {
+    applyMotionFusionToFix,
+    classifyMotion,
+    deadReckonFix,
+    fusedHeadingFromPing,
+    fusedSpeedFromPing,
+    imuPredictFromGpsAnchor,
+    ingestMotionGpsFix,
+    mixHeading,
+    peekMotionFusion,
+    readPingMotionClass,
+    resetMotionFusionForTest,
+    startMotionFusion,
+    wrap360,
+} from '../src/lib/motion-fusion.js';
 import { readFileSync } from 'node:fs';
 import {
     WEEKDAY_REPORT_MAX_AGE_MS,
@@ -349,6 +364,86 @@ assert(
 assert(pausedMarkers[0]?.bearing === 92, 'paused map marker preserves accepted bearing');
 assert(pausedMarkers[0]?.routeProgressM === 12400, 'paused map marker exposes rail distance');
 assert(pausedMarkers[0]?.accuracy === 18, 'paused map marker exposes GPS accuracy');
+assert(pausedMarkers[0]?.motionClass === '', 'legacy paused pings without motionClass still compact');
+
+resetMotionFusionForTest();
+assert(wrap360(-90) === 270, 'heading wrap stays 0-360');
+assert(Math.abs(mixHeading(350, 10, 1) - 10) < 0.01, 'heading mix crosses 0');
+assert(classifyMotion({ accelVar: 0.1, speedMps: 0, meanAccel: 0.1 }) === 'still', 'low accel is still');
+assert(classifyMotion({ accelVar: 0.2, speedMps: 8 }) === 'ride', 'cruise speed is ride');
+assert(classifyMotion({ accelVar: 1.2, speedMps: 1.4 }) === 'walk', 'bouncy low speed is walk');
+assert(readPingMotionClass({ motionClass: 'RIDE' }) === 'ride', 'receivers normalise motionClass');
+assert(readPingMotionClass({ motionClass: 'nope' }) === '', 'junk motionClass is ignored');
+assert(readPingMotionClass({}) === '', 'missing motionClass is legacy GPS');
+assert(fusedSpeedFromPing({ motionClass: 'still', speedMps: 12 }) === 0, 'still pins receiver speed at 0');
+assert(fusedSpeedFromPing({ motionClass: 'ride' }, 12) === 12, 'ride without speed uses fallback');
+assert(!Number.isFinite(fusedSpeedFromPing({ motionClass: 'ride' }, NaN)), 'display speed does not invent a ride cruise');
+assert(fusedSpeedFromPing({ speedMps: 7.2 }) === 7.2, 'legacy speed still interpolates');
+assert(fusedHeadingFromPing({ heading: 450 }) === 90, 'receiver heading wraps');
+const imuAnchor = { lat: -25, lng: 28, t: 1000 };
+const imuFusion = { motionClass: 'ride', heading: 0, speedMps: 10 };
+const imuOne = imuPredictFromGpsAnchor(imuAnchor, imuFusion, 2000);
+const imuTwo = imuPredictFromGpsAnchor(imuAnchor, imuFusion, 3000);
+assert(imuOne && imuTwo && imuOne.fromImu && imuTwo.t === 1000, 'IMU predict stays on the GPS clock');
+assert(
+    Math.abs((imuTwo.lat - imuAnchor.lat) - 2 * (imuOne.lat - imuAnchor.lat)) < 1e-8,
+    'repeated IMU ticks from the same GPS rail pose do not compound'
+);
+assert(imuPredictFromGpsAnchor(imuAnchor, { motionClass: 'walk', heading: 0, speedMps: 1.4 }, 2000) == null, 'walk does not dead-reckon the train');
+assert(imuPredictFromGpsAnchor(imuAnchor, { motionClass: 'still', heading: 90, speedMps: 0 }, 2000) == null, 'still does not dead-reckon the train');
+startMotionFusion();
+ingestMotionGpsFix({ lat: -25, lng: 28, heading: 90, speedMps: 10, t: 1000 }, 1000);
+const fusedFix = applyMotionFusionToFix({ lat: -25, lng: 28.001, heading: null, speedMps: 10, t: 2000 }, 2000);
+assert(Number.isFinite(fusedFix.heading), 'sender fusion fills an empty GPS heading');
+const predicted = deadReckonFix({ lat: -25, lng: 28, t: 1000 }, { heading: 90, speedMps: 10 }, 2000);
+assert(predicted && predicted.fromImu && predicted.t === 1000, 'IMU predict keeps the GPS clock');
+assert(deadReckonFix({ lat: -25, lng: 28, t: 1000 }, { heading: 90, speedMps: 10 }, 1000 + 6000) == null, 'IMU predict stops after 4.8s');
+resetMotionFusionForTest();
+assert(peekMotionFusion().running === false, 'fusion resets in tests');
+
+const fusedMarkers = await compactPingsForMap([{
+    deviceId: 'fused-device',
+    routeId: 'pta-pien',
+    trainId: '1000',
+    station: 'MIDDLE',
+    coarseLat: -25.1,
+    coarseLng: 28.1,
+    projectedLat: -25,
+    projectedLng: 28.01,
+    projectedProgress: 1,
+    acceptedAt: Date.now(),
+    fixAt: Date.now(),
+    at: Date.now(),
+    expiresAt: Date.now() + 600000,
+    heading: 88,
+    speedMps: 9.4,
+    motionClass: 'ride',
+    trackingState: TRACKING_STATE.ACTIVE,
+}], { mineDeviceId: 'fused-device', routeId: 'pta-pien' });
+assert(fusedMarkers[0]?.motionClass === 'ride', 'receivers keep sender motionClass');
+assert(fusedMarkers[0]?.speedMps === 9.4, 'receivers keep fused speed');
+assert(fusedMarkers[0]?.heading === 88, 'receivers keep fused heading');
+const stillMarkers = await compactPingsForMap([{
+    deviceId: 'still-device',
+    routeId: 'pta-pien',
+    trainId: '1000',
+    station: 'MIDDLE',
+    coarseLat: -25.1,
+    coarseLng: 28.1,
+    projectedLat: -25,
+    projectedLng: 28.01,
+    projectedProgress: 1,
+    acceptedAt: Date.now(),
+    fixAt: Date.now(),
+    at: Date.now(),
+    expiresAt: Date.now() + 600000,
+    heading: 88,
+    speedMps: 11,
+    motionClass: 'STILL',
+    trackingState: TRACKING_STATE.ACTIVE,
+}], { mineDeviceId: 'still-device', routeId: 'pta-pien' });
+assert(stillMarkers[0]?.motionClass === 'still', 'receivers normalise sender STILL');
+assert(stillMarkers[0]?.speedMps === 0, 'compact still pings pin receiver speed at 0');
 const staleActiveMarkers = await compactPingsForMap([{
     deviceId: 'stale-active',
     routeId: 'pta-pien',
@@ -448,6 +543,22 @@ assert(!mapAppSource.includes('enableHighAccuracy: true});'), 'map no longer sta
 assert(mapTabSource.includes('acquireGeoWatch'), 'map tab holds the fused geo watch while visible');
 assert(mapTabSource.includes('releaseGeoWatch'), 'leaving the map tab drops the map geo-watch holder');
 assert(ridePingsSource.includes("acquireGeoWatch('share')"), 'an active share keeps the geo watch');
+assert(ridePingsSource.includes('payload.motionClass'), 'sender writes motionClass on the existing ride_pings node');
+assert(ridePingsSource.includes('tickOnboardImu'), 'sender dead-reckons locally between GPS pings');
+assert(ridePingsSource.includes('onboardGpsRailAnchor'), 'IMU ticks start from the last GPS rail pose');
+assert(ridePingsSource.includes('imuPredictFromGpsAnchor'), 'sender uses the shared IMU predict helper');
+assert(ridePingsSource.includes('motionClass: pos.motionClass'), 'onboard writes the fused class from that GPS fix');
+assert(ridePingsSource.includes("resolvedMotion === 'still'"), 'sender still pings write speed 0');
+assert(ridePingsSource.includes('readPingMotionClass(fusion)'), 'live fusion class wins over a stale GPS tag');
+assert(ridePingsSource.includes('startMotionFusion'), 'an active share starts device-motion fusion');
+assert(ridePingsSource.includes('motionClass: readPingMotionClass'), 'compacted map pings carry motionClass to receivers');
+assert(geoWatchSource.includes('applyMotionFusionToFix'), 'GPS watch applies fusion before listeners see a fix');
+assert(mapTabSource.includes('requestMotionPermission'), 'share tap requests iOS motion permission');
+assert(mapTabSource.includes('fusedSpeedFromPing(subjectMarker, NaN)'), 'tracking card does not invent a ride cruise');
+assert(mapTabSource.includes('readPingMotionClass(p)'), 'map fallback compact sanitises motionClass');
+assert(mapAppSource.includes("motionClass === 'still'"), 'map iframe pins a still ping');
+assert(mapAppSource.includes("newest.motionClass || '').trim().toLowerCase()"), 'map iframe normalises sender motionClass');
+assert(mapAppSource.includes('motionClass: motionClass'), 'map iframe forwards motionClass to the tracking card');
 assert(!ridePingsSource.includes("document.hidden) {\n            await queueOnboardPause('staleGps')"), 'hidden documents do not pause an active share');
 assert(ridePingsSource.includes('queueOnboardPause(\'staleGps\', onboardLatestFix)'), 'share still pauses when GPS is actually stale');
 assert(ridePingsSource.includes('alignBearingToJourney'), 'projected pings use rail tangent aligned to travel');

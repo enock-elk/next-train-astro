@@ -3135,6 +3135,7 @@
                     destAlong = alongMForStationName(stations, opts && opts.destination);
                 }
                 var speed = Number(opts && opts.speedMps);
+                if (opts && opts.motionClass === 'still') return null;
                 var label = String((opts && opts.lastSeenLabel) || '');
                 var atStation = /^at\s/i.test(label) || (Number.isFinite(speed) && speed < 1.5 && (function () {
                     for (var i = 0; i < stations.length; i++) {
@@ -3374,7 +3375,17 @@
                         }
                         return null;
                     }
-                    const speedValue = firstFinitePingField('speedMps');
+                    const motionClass = (function () {
+                        var raw = String(newest.motionClass || '').trim().toLowerCase();
+                        return (raw === 'still' || raw === 'walk' || raw === 'ride') ? raw : '';
+                    })();
+                    const speedValue = (function () {
+                        if (motionClass === 'still') return 0;
+                        var s = firstFinitePingField('speedMps');
+                        if (typeof s === 'number' && Number.isFinite(s)) return s;
+                        if (motionClass === 'ride') return RIDE_CRUISE_MPS;
+                        return s;
+                    })();
                     const speed = typeof speedValue === 'number' ? speedValue : null;
                     const accuracyValue = firstFinitePingField('accuracy');
                     const railDistanceValue = firstFinitePingField('railDistanceM');
@@ -3407,6 +3418,7 @@
                                         lat: lat,
                                         lng: lng,
                                         speedMps: speed,
+                                        motionClass: motionClass,
                                         accuracy: accuracyValue != null ? accuracyValue : newest.accuracy,
                                         railDistanceM: railDistanceValue != null ? railDistanceValue : newest.railDistanceM,
                                         onRails: true,
@@ -3429,6 +3441,7 @@
                         lat: lat,
                         lng: lng,
                         speedMps: speed,
+                        motionClass: motionClass,
                         accuracy: accuracyValue != null ? accuracyValue : newest.accuracy,
                         railDistanceM: railDistanceValue != null ? railDistanceValue : newest.railDistanceM,
                         fixAt: pingAtValue || newest.fixAt,
@@ -3438,9 +3451,10 @@
                     marker._ntRideN = n;
                     marker._ntRideMine = mine;
                     marker._ntRideGrey = paused;
-                    interpolateRideMarkerLatLng(marker, [lat, lng], paused, {
+                    interpolateRideMarkerLatLng(marker, [lat, lng], paused || motionClass === 'still', {
                         routeId: newest.routeId || list[0].routeId,
                         speedMps: speed,
+                        motionClass: motionClass,
                         lastSeenLabel: newest.lastSeenLabel || newest.station || '',
                         destination: dest,
                         destAlong: row.destAlong,

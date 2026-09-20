@@ -54,6 +54,15 @@ import {
     RIDE_GPS_STALE_MS,
     RIDE_INTERPOLATION_MAX_MS,
 } from './gps-freshness.js';
+import {
+    imuPredictFromGpsAnchor,
+    IMU_LOCAL_TICK_MS,
+    peekMotionFusion,
+    readPingMotionClass,
+    requestMotionPermission,
+    startMotionFusion,
+    stopMotionFusion,
+} from './motion-fusion.js';
 
 /** Sliding share TTL. Last successful ping + this window, then the session ends. */
 export const RIDE_SHARE_IDLE_MS = 30 * 60 * 1000;
@@ -578,7 +587,8 @@ export async function compactPingsForMap(pings, { mineDeviceId = '', routeId = '
             at: p.at || 0,
             expiresAt: p.expiresAt,
             heading: p.heading,
-            speedMps: p.speedMps,
+            speedMps: readPingMotionClass(p) === 'still' ? 0 : p.speedMps,
+            motionClass: readPingMotionClass(p),
             mine: p.deviceId === mineDeviceId,
             routeId: p.routeId || routeId,
             projectedProgress: p.projectedProgress,
@@ -644,7 +654,12 @@ export async function compactPingsForMap(pings, { mineDeviceId = '', routeId = '
             at: newest.at,
             expiresAt: newest.expiresAt,
             heading: newest.heading ?? metricPing('heading'),
-            speedMps: typeof newest.speedMps === 'number' ? newest.speedMps : metricPing('speedMps'),
+            speedMps: (() => {
+                const cls = readPingMotionClass(newest) || readPingMotionClass(driver);
+                if (cls === 'still') return 0;
+                return typeof newest.speedMps === 'number' ? newest.speedMps : metricPing('speedMps');
+            })(),
+            motionClass: readPingMotionClass(newest) || readPingMotionClass(driver),
             station: newest.station,
             routeId: newest.routeId,
             bearing: (() => {
@@ -1385,6 +1400,7 @@ export async function submitRideCheckIn({
     heading = null,
     speedMps = null,
     accuracy = null,
+    motionClass = '',
     source = 'board_checkin',
     waitingFor = null,
     quiet = false,
@@ -1495,6 +1511,20 @@ export async function submitRideCheckIn({
         resolvedPauseReason = '';
     }
     if (!resolvedState) resolvedState = TRACKING_STATE.ACTIVE;
+    const fusion = peekMotionFusion();
+    if (!(typeof heading === 'number' && Number.isFinite(heading)) && Number.isFinite(fusion.heading)) {
+        heading = fusion.heading;
+    }
+    if (!(typeof speedMps === 'number' && Number.isFinite(speedMps) && speedMps >= 1.5)
+        && fusion.motionClass === 'ride'
+        && Number.isFinite(fusion.speedMps)
+        && fusion.speedMps >= 1.5) {
+        speedMps = fusion.speedMps;
+    }
+    const resolvedMotion = readPingMotionClass(fusion)
+        || readPingMotionClass({ motionClass })
+        || readPingMotionClass(previous);
+    if (resolvedMotion === 'still') speedMps = 0;
     const payload = {
         routeId,
         deviceId,
@@ -1515,6 +1545,7 @@ export async function submitRideCheckIn({
         source: source || 'board_checkin',
         trackingState: resolvedState,
     };
+    if (resolvedMotion) payload.motionClass = resolvedMotion;
     if (trustedAdminOverride) payload.adminOverrideRole = trustedAdminOverride;
     if (resolvedPauseReason) payload.pauseReason = resolvedPauseReason;
     if (projection?.ok) {
@@ -1528,7 +1559,7 @@ export async function submitRideCheckIn({
         payload.lastSeenLabel = projection.lastSeenLabel || st;
         if (Number.isFinite(projection.bearing)) payload.bearing = Math.round(projection.bearing);
     } else if (resolvedState === TRACKING_STATE.PAUSED && previous) {
-        for (const key of ['projectedLat', 'projectedLng', 'projectedProgress', 'routeProgressM', 'railDistanceM', 'acceptedAt', 'fixAt', 'lastSeenLabel', 'bearing', 'speedMps', 'accuracy', 'heading']) {
+        for (const key of ['projectedLat', 'projectedLng', 'projectedProgress', 'routeProgressM', 'railDistanceM', 'acceptedAt', 'fixAt', 'lastSeenLabel', 'bearing', 'speedMps', 'accuracy', 'heading', 'motionClass']) {
             if (payload[key] == null && previous[key] != null) payload[key] = previous[key];
         }
     }
@@ -1557,6 +1588,7 @@ export async function submitRideCheckIn({
             accuracy: payload.accuracy,
             speedMps: payload.speedMps,
             heading: payload.heading,
+            motionClass: payload.motionClass || '',
             fixAt: payload.fixAt || previous?.fixAt || now,
             directionObservation: previous?.directionObservation || null,
             directionWarning: !!previous?.directionWarning,
@@ -1684,6 +1716,9 @@ export async function stopRideShare({ quiet = false, reason = '', waitForOnboard
 }
 
 let onboardPingTimer = 0;
+let onboardImuTimer = 0;
+let onboardImuBusy = false;
+let onboardGpsRailAnchor = null;
 let onboardGeoUnsub = null;
 let onboardProjectionChain = Promise.resolve();
 let onboardLatestFix = null;
@@ -1700,6 +1735,13 @@ export function stopOnboardPingLoop() {
         clearInterval(onboardPingTimer);
         onboardPingTimer = 0;
     }
+    if (onboardImuTimer) {
+        clearInterval(onboardImuTimer);
+        onboardImuTimer = 0;
+    }
+    onboardImuBusy = false;
+    onboardGpsRailAnchor = null;
+    stopMotionFusion();
     if (onboardGeoUnsub) {
         onboardGeoUnsub();
         onboardGeoUnsub = null;
@@ -1731,6 +1773,7 @@ async function pauseActiveTracker(active, reason, pos = null) {
         heading: pos?.heading ?? active.heading ?? null,
         speedMps: pos?.speedMps ?? active.speedMps ?? null,
         accuracy: pos?.accuracy ?? active.accuracy ?? null,
+        motionClass: pos?.motionClass || active.motionClass || '',
         source: 'onboard_paused',
         quiet: true,
         trackingState: TRACKING_STATE.PAUSED,
@@ -1785,6 +1828,7 @@ function cacheLocalProjectedFix(active, pos, projection, near, observation) {
         coarseLng: pos.lng,
         heading: Number.isFinite(pos.heading) ? pos.heading : null,
         speedMps: Number.isFinite(pos.speedMps) ? pos.speedMps : null,
+        motionClass: readPingMotionClass(pos) || readPingMotionClass(peekMotionFusion()),
         accuracy: Number.isFinite(pos.accuracy) ? pos.accuracy : null,
         trackingState: TRACKING_STATE.ACTIVE,
         projectedLat: projection.projectedLat,
@@ -1812,6 +1856,7 @@ function cacheLocalProjectedFix(active, pos, projection, near, observation) {
         bearing: local.bearing,
         heading: local.heading,
         speedMps: local.speedMps,
+        motionClass: local.motionClass || '',
         accuracy: local.accuracy,
         offTrackSince: 0,
         offTrackStayUntil: 0,
@@ -1995,6 +2040,7 @@ async function processOnboardFix(pos, { forceBroadcast = false, generation = onb
             heading: pos.heading,
             speedMps: pos.speedMps,
             accuracy: pos.accuracy,
+            motionClass: pos.motionClass || '',
             source: 'admin_override_train',
             quiet: true,
             adminOverrideRole: 'train',
@@ -2082,6 +2128,11 @@ async function processOnboardFix(pos, { forceBroadcast = false, generation = onb
         persistActiveSharePatch({ directionStay: false });
         active.directionStay = false;
     }
+    onboardGpsRailAnchor = {
+        lat: projection.projectedLat,
+        lng: projection.projectedLng,
+        t: Number(pos.t || Date.now()),
+    };
     const local = cacheLocalProjectedFix(active, pos, projection, near, observation);
     const interval = adaptiveOnboardPingMs(pos.speedMps);
     if (!navigator.onLine || (!forceBroadcast && !autoPaused && Date.now() - onboardLastBroadcastAt < interval)) return;
@@ -2096,6 +2147,7 @@ async function processOnboardFix(pos, { forceBroadcast = false, generation = onb
         heading: pos.heading,
         speedMps: pos.speedMps,
         accuracy: pos.accuracy,
+        motionClass: pos.motionClass || '',
         source: active.trackingState === TRACKING_STATE.PAUSED ? 'onboard_resume' : 'onboard_ping',
         quiet: true,
         projectedFix: projection,
@@ -2148,19 +2200,73 @@ function queueOnboardPause(reason, pos = null) {
     return onboardProjectionChain;
 }
 
+async function tickOnboardImu() {
+    if (onboardImuBusy) return;
+    const generation = onboardGeneration;
+    const active = getActiveShare();
+    if (!active?.trainId || active.trackingState === TRACKING_STATE.PAUSED) return;
+    const fusion = peekMotionFusion();
+    if (!fusion.running) return;
+    const lastGps = onboardLatestFix;
+    if (!lastGps || lastGps.fromImu) return;
+    const gpsAge = Date.now() - Number(lastGps.t || 0);
+    if (!Number.isFinite(gpsAge) || gpsAge < 200 || gpsAge >= RIDE_GPS_STALE_MS) return;
+    if (!onboardGpsRailAnchor || !Number.isFinite(onboardGpsRailAnchor.lat) || !Number.isFinite(onboardGpsRailAnchor.lng)) return;
+    const heading = Number.isFinite(fusion.heading)
+        ? fusion.heading
+        : (Number.isFinite(active.bearing) ? active.bearing : lastGps.heading);
+    const speedMps = Number.isFinite(fusion.speedMps) ? fusion.speedMps : lastGps.speedMps;
+    const predicted = imuPredictFromGpsAnchor(onboardGpsRailAnchor, {
+        motionClass: fusion.motionClass,
+        heading,
+        speedMps,
+    }, Date.now());
+    if (!predicted) return;
+    onboardImuBusy = true;
+    try {
+        const projection = await projectTrainTrackerFix({
+            lat: predicted.lat,
+            lng: predicted.lng,
+            trainId: active.trainId,
+            routeId: active.routeId,
+            previousProgress: active.projectedProgress,
+        });
+        if (!projection.ok || generation !== onboardGeneration) return;
+        const current = getActiveShare();
+        if (!current?.trainId || current.trackingState === TRACKING_STATE.PAUSED) return;
+        cacheLocalProjectedFix(current, {
+            ...lastGps,
+            lat: predicted.lat,
+            lng: predicted.lng,
+            heading,
+            speedMps,
+            motionClass: fusion.motionClass,
+            fromImu: true,
+        }, projection, null, current.directionObservation);
+    } finally {
+        onboardImuBusy = false;
+    }
+}
+
 /** Every accepted fix moves the local pill; Firebase receives coalesced pings (4s while testing). */
 export function startOnboardPingLoop() {
     stopOnboardPingLoop();
+    startMotionFusion();
     startShareIdleWatch();
     const active = getActiveShare();
     onboardLastBroadcastAt = Number(active?.lastPingAt || active?.at || 0);
     onboardWatchStartedAt = Date.now();
     import('./geo-watch.js').then((g) => {
         g.acquireGeoWatch('share');
-        onboardGeoUnsub = g.subscribeGeoFix((fix) => queueOnboardFix(fix));
+        onboardGeoUnsub = g.subscribeGeoFix((fix) => {
+            if (fix && !fix.fromImu) queueOnboardFix(fix);
+        });
         const last = g.peekLastGeoFix();
         if (last) queueOnboardFix(last);
     }).catch(() => {});
+    onboardImuTimer = setInterval(() => {
+        tickOnboardImu().catch(() => {});
+    }, IMU_LOCAL_TICK_MS);
     onboardPingTimer = setInterval(async () => {
         const current = getActiveShare();
         if (!current?.trainId) {
@@ -2198,6 +2304,7 @@ export async function startPresenceShare({
         return { ok: false, disabled: true };
     }
     triggerHaptic();
+    requestMotionPermission();
     const routeId = $currentRouteId.get();
     if (!routeId) {
         showToast('Pick a corridor first', 'error');
@@ -2249,6 +2356,7 @@ export async function startPresenceShare({
         coarseLng: coords?.lng ?? null,
         heading: coords?.heading,
         speedMps: coords?.speedMps,
+        motionClass: coords?.motionClass || '',
         source,
     });
     if (!result.ok) {

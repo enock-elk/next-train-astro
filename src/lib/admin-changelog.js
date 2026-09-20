@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_09.20.11': [
+        'Live share fuses DeviceMotion / DeviceOrientation (accelerometer, gyro, compass) on the sender after a tap (iOS requestPermission). GPS stays the place source of truth. Fused heading and speed fill existing ride_pings heading/speedMps; motionClass still/walk/ride is an extra field on the same node. Sender IMU ticks predict from the last GPS rail pose only (ride class) and never compound a previous IMU step. Still writes speed 0. Receivers compact and paint motionClass: still pins the hull, ride uses fused speed for the 12s rail glide, missing/junk class stays GPS-only. Tracking card never invents a cruise speed. No What’s New. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
+    ],
     'V9_09.20.10': [
         'Schedule exception step 2 banner can isolate weekday, Saturday, Sunday, and public-holiday grids via exclusions/{route}/_grid_notice.days. Missing days still shows on every schedule. Community name-row marks are 77 then the medal SVG (no asterisk, no Points). Live-share checks paint green pass, amber defer, red block; Decision is an Outcome strip (train / deferred / blocked), not a list row. Direction-until-movement and no-speed are defer; person outcome is defer. Live-train pill stays on the painted LineString: interpolation never geographic-lerps, never aborts at 180 m, never yaws from phone GPS. No What’s New. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
     ],

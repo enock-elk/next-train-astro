@@ -87,6 +87,8 @@ assert(indexPage.includes('You are offline.'), 'offline dock copy matches the mo
 assert(indexPage.includes('id="offline-refresh-btn"'), 'offline dock has Refresh');
 assert(indexPage.includes('id="offline-dismiss-btn"'), 'offline dock has Close');
 assert(!indexPage.includes('id="bottom-nav" class="hidden shrink-0 border-t'), 'bottom nav dropped the boxy top border');
+assert(!/#main-content[^>]*style="visibility:\s*hidden"/.test(indexPage), 'home shell is not inline-hidden (WebKit keeps that layer blank)');
+assert(indexPage.includes("window.addEventListener('pageshow', revealAppShell)"), 'returning PWA resume re-reveals the shell');
 
 const sidenav = readFileSync(new URL('../src/components/Sidenav.astro', import.meta.url), 'utf8');
 assert(sidenav.includes('id="settings-account-btn"'), 'Account row exists in Options');
@@ -490,6 +492,9 @@ assert(!layout.includes('interactive-widget=overlays-content'), 'layout viewport
 assert(layout.includes('lastLayoutH'), 'keyboard keeps full-screen layout height so the oval stays put');
 assert(layout.includes('lastFullLayoutH'), 'keyboard does not overwrite the full-screen layout height');
 assert(layout.includes('lastShellH'), 'keyboard keeps a last-visible shell fallback');
+assert(layout.includes('function atLeastFull'), 'shell height ignores sub-240 first readings');
+assert(layout.includes('html:not(.nt-shell-ready) #main-content.app-shell'), 'cold boot hides the board with CSS, not an inline style');
+assert(layout.includes('holdReturningShell'), 'returning users re-assert the visible shell on pageshow');
 assert(layout.includes('--nt-shell-top'), 'shell is pinned below overlay chrome');
 assert(layout.includes('--nt-shell-h'), 'shell height follows the visible hole');
 assert(layout.includes('missing < 180'), 'URL-bar overlay uses the missing layout strip, not an invented tray');

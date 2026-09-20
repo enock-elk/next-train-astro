@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_09.20.1': [
+        'From 19.11: tracking card keeps last finite GPS Speed / GPS / On rail / Accuracy after Pause (0 km/h when stopped). Pause pings keep heading, speed, and accuracy; map click payload passes those metrics. Alert full view uses the feed poster currentSrc and keeps src on close (no canvas toDataURL). Returning-user white screen: board is no longer inline visibility:hidden (CSS hide until nt-shell-ready; pageshow re-reveals; shell height ignores sub-240 first readings). Did not bring 19.12 80 m yaw look-ahead or 19.13 interpolation removal. No What’s New. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
+    ],
     'V9_09.19.11': [
         'Schedule QA uses Target Region (Matrix & Scan); the extra QA region select is gone. Alert full view paints the already-decoded feed poster (object URL / canvas snapshot) instead of refetching. Earthy Close Timetable, fare Close, planner tips Got it, and View trip plan on map use the same readable CTA ink as Alerts Close. Classic dark Max. Single Fare chip stays white with navy text. Admin NUKE keeps Classic/Earthy, light/dark, and holiday Got it seen keys (no boot remap when the pack FLAG is missing; holiday dismiss map in IndexedDB). No What’s New. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
     ],

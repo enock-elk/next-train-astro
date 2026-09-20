@@ -407,6 +407,11 @@ assert(!mapAppSource.includes('nt-live-train-wake-ripple'), 'train glyph does no
 assert(!mapPageSource.includes('nt-live-train-wake'), 'map CSS does not keep the wake chevrons');
 assert(mapPageSource.includes('prefers-reduced-motion: reduce'), 'train motion respects reduced-motion preference');
 assert(mapAppSource.includes("type: 'nt-map-show-tracking-details'"), 'train click opens the tracking details card');
+assert(mapAppSource.includes("ping: Object.assign({}, newest"), 'train click sends the snapped rail ping, not a thin newest row');
+assert(mapTabSource.includes('firstFiniteMetric'), 'tracking card fills speed/accuracy/rail from last GPS instead of Unknown');
+assert(mapTabSource.includes('mine ? lastCoords?.accuracy'), 'own-share accuracy can fall back to the map pin');
+assert(ridePingsSource.includes("'speedMps', 'accuracy', 'heading'"), 'paused pings keep last speed/accuracy/heading');
+assert(ridePingsSource.includes('onboardLatestFix'), 'user Pause passes the last GPS sample');
 assert(!mapAppSource.includes('marker.bindPopup'), 'train markers do not use the Leaflet popup tooltip');
 assert(mapAppSource.includes("type: 'nt-map-close-tracking'"), 'tapping the map closes tracking details');
 assert(mapAppSource.includes('Always sit on the painted corridor'), 'trains snap to the painted rail even when GPS is off the yard');

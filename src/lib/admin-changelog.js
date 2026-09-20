@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_09.20.2': [
+        'Drop sticky/frozen chrome: Feedback Hub is one overflow column (title + thread + form) so the Hub title leaves with the rest when the IME opens. Same unstick for Community chrome, Map (#app-scroll no longer overflow:hidden), Account Back, and About Close. Composer stays in flow; pad --nt-kb-h and scroll to the visual hole. Reverted 20.1 heightDelta and the 20.2 vv-pin that glued the Hub title. Oval overscroll-none and visualViewport.scroll skip stay. Timetable thead sticky stays. No new What’s New. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
+    ],
     'V9_09.20.1': [
         'iOS: --nt-kb-h uses visualViewport height delta so offsetTop pan cannot leave Feedback Hub behind the keys (Android offsetTop stays ~0). visualViewport.scroll no longer rewrites --nt-shell-top unless the IME is open, so the oval does not drift. overscroll-behavior none on html/body/#nt-shell/#app-scroll kills rubber-band. Composer dock also uses env(keyboard-inset-bottom). Oval stays position:absolute on #nt-shell. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
     ],

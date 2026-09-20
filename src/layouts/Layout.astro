@@ -187,7 +187,8 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
             // collapse under the IME. Pin #nt-shell to the LIVE visual hole
             // on other tabs. Community must not: leave the shell at full size
             // so #app-scroll can carry the Next Train header away. Feedback
-            // Hub also keeps the last shell so the composer can dock to --nt-kb-h.
+            // Hub keeps the last shell so its one column can scroll the title
+            // off while the composer sits above the keys.
             layoutH = full;
             lastLayoutH = full;
             if (communityOn || hubOn) {
@@ -216,22 +217,21 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
             root.style.setProperty('--nt-sys-bottom', sys + 'px');
           }
           var vvH = Math.round((vv && vv.height) ? vv.height : (inner || 240));
-          if (vvH < 240) vvH = 240;
+          // Do not floor to 240 while the IME is open: WhatsApp-in-Safari
+          // holes can be short, and a fake 240px stretched Hub past the keys.
+          if (!keyboard && vvH < 240) vvH = 240;
+          if (keyboard && vvH < 120) vvH = 120;
           root.style.setProperty('--nt-vv-h', vvH + 'px');
           root.style.setProperty('--nt-vv-top', Math.max(0, off) + 'px');
           var kbH = 0;
           if (keyboard) {
+            // Visible bottom of the visual viewport, in layout coordinates.
+            // Do NOT use (full - vv.height): on iOS that includes Safari /
+            // in-app chrome and parked the Hub composer at the top of the hole.
             kbH = Math.max(0, Math.round(gap));
             if (vv && vv.height) {
               var covered = Math.round((full || layoutH) - (off + vv.height));
               if (covered > kbH) kbH = covered;
-              // iOS pans visualViewport.offsetTop to "show" the focused field.
-              // That zeroes gap/covered while the IME still covers the layout
-              // bottom. Hub/Community freeze overflow, so the pan does not
-              // move the composer. Use the height delta as the inset. Android
-              // keeps offsetTop near 0, so this matches covered.
-              var heightDelta = Math.round((full || layoutH) - vv.height);
-              if (heightDelta > kbH) kbH = heightDelta;
             }
           }
           root.style.setProperty('--nt-kb-h', kbH + 'px');
@@ -911,14 +911,14 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
         min-height: min-content;
       }
 
-      /* Map fills the scrollport and keeps chrome still. Community fills
-         leftover height like Feedback Hub (composer on the oval, feed grows)
-         so the tab does not open with a blank slab under Post. */
+      /* Map fills leftover at rest. min-height 100% of #app-scroll lets the
+         Next Train header leave; do not freeze #app-scroll. Community is the
+         same one-column scroller (chrome + feed + composer in flow). */
       #view-map.view-section.active {
         display: flex;
         flex-direction: column;
         flex: 1 1 auto;
-        min-height: 0;
+        min-height: 100%;
         height: auto;
         max-height: none;
         overflow: hidden;
@@ -945,10 +945,10 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
         display: flex;
         flex-direction: column;
         flex: 1 1 auto;
-        min-height: 0;
+        min-height: 100%;
         height: auto;
         max-height: none;
-        overflow: hidden;
+        overflow: visible;
         padding: 0;
       }
       #view-map .map-tab-pane {
@@ -958,11 +958,9 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
       }
       #view-community .community-pane {
         flex: 1 1 auto;
-        min-height: 0;
-        height: 100%;
-      }
-      #app-scroll:has(#view-map.active) {
-        overflow: hidden;
+        min-height: 100%;
+        height: auto;
+        overflow: visible;
       }
 
       /* Travel Day / inline menus must paint below the trigger without clipping.
@@ -1190,48 +1188,57 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
         padding-bottom: 4.75rem;
         box-sizing: border-box;
       }
-      /* Keyboard: keep Community filling leftover height (no gray slab)
-         without shrinking the room chrome to fit Next Train. The composer
-         docks to --nt-kb-h. Oval stays hidden. #app-scroll stays scrollable
-         so the header can leave. */
+      /* Keyboard: Community stays one #app-scroll column. Pad the board
+         scroller by the IME so Post can sit above the keys and the Next
+         Train / room headers leave. Composer stays in flow. Oval hidden. */
       html.nt-keyboard.nt-in-app body.nav-bottom:not(.nt-immersive) #view-community.view-section.active {
         flex: 1 1 auto;
-        min-height: 0;
-        overflow: hidden;
+        min-height: 100%;
+        overflow: visible;
         height: auto;
-        padding-bottom: 0;
+        padding-bottom: var(--nt-kb-h, 0px);
       }
       html.nt-keyboard.nt-in-app body.nav-bottom:not(.nt-immersive) #view-community .community-pane {
         flex: 1 1 auto;
-        min-height: 0;
-        height: 100%;
+        min-height: 100%;
+        height: auto;
+        overflow: visible;
       }
       html.nt-keyboard.nt-in-app body.nav-bottom:not(.nt-immersive) #community-composer-dock {
-        position: fixed;
-        left: 0;
-        right: 0;
-        bottom: max(var(--nt-kb-h, 0px), env(keyboard-inset-bottom, 0px));
-        z-index: 112;
+        position: relative;
+        left: auto;
+        right: auto;
+        bottom: auto;
+        z-index: 1;
         width: 100%;
-        max-width: 28rem;
-        margin-left: auto;
-        margin-right: auto;
+        max-width: none;
+        margin-left: 0;
+        margin-right: 0;
       }
-      /* Feedback Hub composer: same IME dock as Community. iOS ignores
-         visualViewport height on position:fixed overlays, so shrinking the
-         hub sheet left the field behind the keyboard. */
+      /* Hub IME: keep the sheet filling #nt-shell (not the visual hole) so
+         the title can scroll away. Composer stays in flow. Pad the column
+         by --nt-kb-h. position:fixed + vv height glued the title to the top
+         and (full - vv.height) parked the form at the top of the hole. */
       html.nt-keyboard #messages-thread-form {
-        position: fixed;
-        left: 0;
-        right: 0;
-        bottom: max(var(--nt-kb-h, 0px), env(keyboard-inset-bottom, 0px));
-        z-index: 136;
+        position: relative;
+        left: auto;
+        right: auto;
+        bottom: auto;
         width: 100%;
         max-width: none;
         margin: 0;
+        z-index: 1;
       }
       html.nt-keyboard #messages-thread-modal > div {
         transform: none !important;
+        height: 100%;
+        max-height: 100%;
+        overflow-y: auto;
+        padding-bottom: var(--nt-kb-h, 0px);
+      }
+      html.nt-keyboard #messages-thread-list {
+        flex: 0 0 auto;
+        min-height: var(--nt-vv-h, 50vh);
       }
       html.nt-in-app body.nav-bottom:not(.nt-immersive) #offline-wrapper:not(.hidden) {
         position: absolute;

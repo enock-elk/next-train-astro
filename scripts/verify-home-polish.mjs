@@ -327,6 +327,8 @@ assert(presence.includes('s_${presenceHostTag()}_${base}'), 'presence sessions a
 const communityView = readFileSync(new URL('../src/components/CommunityView.astro', import.meta.url), 'utf8');
 assert(communityView.includes('community-pane relative'), 'Community wallpaper is pinned to the pane');
 assert(/community-pane[\s\S]*?nt-pack-wallpaper[\s\S]*?community-feed-scroll/.test(communityView), 'wallpaper sits on the pane, not the flex feed child');
+assert(communityView.includes('overflow-visible'), 'Community feed is not a nested scroller');
+assert(!communityView.includes('overflow-y-auto px-3 sm:px-4 pt-3 pb-4 custom-scrollbar'), 'Community feed dropped its private overflow');
 assert(communityView.includes('>Just you here</button>'), 'Community tab placeholder is Just you here');
 assert(communityView.indexOf('Community</p>') < communityView.indexOf('id="community-presence"'), 'presence sits on the Community label row');
 assert(communityView.includes('id="community-marks-chip"'), 'Community chrome can show the signed-in level');
@@ -339,6 +341,7 @@ assert(communityJs.includes('No posts on this line yet'), 'Community empty headi
 assert(communityJs.includes('Be the first to share a heads-up for fellow passengers.'), 'Community empty state keeps the first-post invitation');
 assert(!/shouting match/i.test(communityJs), 'Community empty copy dropped the shouting-match lecture');
 assert(communityJs.includes('Please be kind and respectful.'), 'composer kindness placeholder stays');
+assert(communityJs.includes('keepCommunityComposerVisible'), 'Community composer scrolls #app-scroll above the IME');
 const hubModals = readFileSync(new URL('../src/components/HubModals.astro', import.meta.url), 'utf8');
 assert(hubModals.includes('#feedback-panel .feedback-thread-chat.nt-pack-wallpaper'), 'feedback wallpaper is scoped darker than bubbles');
 assert(hubModals.includes('background-color: #6f8070'), 'feedback wallpaper is darker than white bubbles');

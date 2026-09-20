@@ -1,16 +1,16 @@
 {
   "branch": "map-gold",
   "frozenAt": "fae7cdbde2266f07bab5839a566599af490dd700",
-  "version": "V9_09.20.7",
-  "note": "Gold snapshot of this build: planner fare uses painted corridor km, static-map station hops, rail-tangent trains, baked tracks, map runtime, advert handling. Tracking Map opens for admins, experimental Map pins, or a session-only live-share link. Live trains slow on station approach, interpolate at most 12s, and grey after 12s without a GPS ping; a successful ping cancels the glide. Broadcast every 4s while testing. Diff against origin/map-gold. Fast-forward map-gold after this lands on main. Never force-push map-gold.",
+  "version": "V9_09.20.8",
+  "note": "Gold snapshot of this build: planner fare uses painted corridor km, static-map station hops, rail-tangent trains, baked tracks, map runtime, advert handling. GP jhb-midway is the operator 702-vert Midway/Lenz patch. Tracking Map opens for admins, experimental Map pins, or a session-only live-share link. Live trains sit on the baked rail-tracks GeoJSON (ridePathForRoute), not Leaflet OSM rail tiles. Diff against origin/map-gold. Fast-forward map-gold after this lands on main. Never force-push map-gold.",
   "files": {
     "public/tracks/rail-tracks-EC.geojson": {
       "md5": "43409bfd05405205e596f0d03345ab18",
       "sha256": "ba0ae80e8c6955ae99288ac5c06e85ea3075383f13f813f40375b78395812108"
     },
     "public/tracks/rail-tracks-GP.geojson": {
-      "md5": "8dc57c7bcf1bdc5201d08397b0d41920",
-      "sha256": "e411cdadeef27245ef24b578622f400507c556a9e57f5d70e9482bb1a3f76c59"
+      "md5": "be07424ae4c16cf3ae5561bae22d3f8e",
+      "sha256": "1b9de6d992d8eb2980238f164cca78b612316e326a4a44e3e6e2797900d37cf2"
     },
     "public/tracks/rail-tracks-KZN.geojson": {
       "md5": "36e4df5f583f1dc663266cb4c2b0672f",

@@ -92,6 +92,10 @@ assert(indexPage.includes("window.addEventListener('pageshow'"), 'returning PWA 
 assert(indexPage.includes('boardChromeReady'), 'boot logo stays until dest names or Welcome paint');
 assert(indexPage.includes('dropLoadingLogo'), 'logo covers the white card until the board chrome is ready');
 assert(!indexPage.includes('setTimeout(revealAppShell, 700)'), 'boot no longer drops the logo at 700ms over a white card');
+assert(!indexPage.includes('setTimeout(() => revealAppShell(true), 4000)'), 'boot does not force-drop the overlay at 4s');
+assert(indexPage.includes('data-nt-boot-starting-copy'), 'Starting Next Train copy is gated off the splash hold');
+assert(indexPage.includes('INSTALLED_SPLASH_MS'), 'installed splash hold uses the shared 8s constant');
+assert(indexPage.includes('BROWSER_SLOW_BOOT_MS'), 'browser Starting cover uses the shared slow-cold constant');
 
 const sidenav = readFileSync(new URL('../src/components/Sidenav.astro', import.meta.url), 'utf8');
 assert(sidenav.includes('id="settings-account-btn"'), 'Account row exists in Options');
@@ -499,6 +503,11 @@ assert(layout.includes('function atLeastFull'), 'shell height ignores sub-240 fi
 assert(layout.includes('html:not(.nt-shell-ready) #main-content.app-shell'), 'cold boot hides the board with CSS, not an inline style');
 assert(layout.includes('holdReturningShell'), 'returning users re-assert the visible shell on pageshow');
 assert(layout.includes('if (!document.documentElement.classList.contains(\'nt-shell-ready\')) return;'), 'pageshow does not hide the logo before dest names paint');
+assert(layout.includes('nt-boot-installed'), 'installed PWA stamps a splash-hold class before first paint');
+assert(layout.includes('nt-boot-browser'), 'browser sessions stamp a no-splash class before first paint');
+assert(layout.includes('html.nt-boot-installed:not(.nt-shell-ready) #loading-overlay'), 'installed splash cover is inline CSS, not hashed Tailwind');
+assert(layout.includes('html.nt-boot-browser:not(.nt-boot-starting):not(.nt-shell-ready) #loading-overlay'), 'browser hides Starting until a slow cold start');
+assert(layout.includes('installed ? 8000 : 2000'), 'splash / Starting clocks start from the first inline script');
 assert(layout.includes('--nt-shell-top'), 'shell is pinned below overlay chrome');
 assert(layout.includes('--nt-shell-h'), 'shell height follows the visible hole');
 assert(layout.includes('missing < 180'), 'URL-bar overlay uses the missing layout strip, not an invented tray');
@@ -538,6 +547,9 @@ assert(recovery.includes('overlayStillBlocking'), 'auto-lifeboat requires the lo
 assert(!recovery.includes("if (!board || !tabs) return true"), 'recovery does not treat hidden top tabs as a crash');
 assert(recovery.includes('view-trip-planner'), 'planner tab is a healthy shell');
 assert(recovery.includes('LOADER_ESCAPE_MS = 15_000'), 'App stuck on Starting Next Train waits 15s visible');
+assert(recovery.includes('INSTALLED_SPLASH_MS = 8_000'), 'installed splash holds 8s before Starting');
+assert(recovery.includes('BROWSER_SLOW_BOOT_MS = 2_000'), 'browser Starting waits 2s on a still-empty cold start');
+assert(recovery.includes('onStartingCoverElapsed'), 'App stuck clock starts only after Starting is showing');
 
 const bootLogic = readFileSync(new URL('../src/lib/logic.js', import.meta.url), 'utf8');
 assert(bootLogic.includes('markSchedulesCoreReady'), 'cached schedules stabilize the shell immediately');

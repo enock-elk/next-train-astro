@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_09.20.8': [
+        'Applied the operator gold-track patch for JHB ↔ Midway/Lenz (jhb-midway) into public/tracks/rail-tracks-GP.geojson only. Station list is JOHANNESBURG through MIDWAY, LENZ. Vertex count stays 702. WC/KZN/EC and other GP corridors untouched. Live-train snap and the tracking pill path already use ridePathForRoute from the baked rail-tracks GeoJSON (painted corridor), not Leaflet OSM rail tiles. Installed PWA/TWA keep the #1d4ed8 splash color over the board until dest names paint, or 8s, then Starting Next Train; App stuck? Get help waits a further 15s of that Starting screen. Browser has no splash and shows the site immediately; Starting only after a 2s empty cold start. Fast boards still reveal as soon as dest names paint. No splash-to-content transition. No What’s New. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
+    ],
     'V9_09.20.7': [
         'Tracking Map gate is canOpenTrackingMap: canAccessPilotSurface(map) (admin + experimental Map pin/grant) or session-only live-share follow. allowHiddenTabs is no longer a bypass. #map hash, last-tab restore, popstate, and in-app #map clicks use the same gate. Follow stays in sessionStorage and clears when the recipient leaves Map. Bottom nav Map stays hidden for follow-only. No What’s New. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
     ],

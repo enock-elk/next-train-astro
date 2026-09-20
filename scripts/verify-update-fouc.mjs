@@ -135,6 +135,8 @@ assert(!help.includes('#0f172a'), 'Reset and Recover is not the old dark stacked
 
 const recoverySrc = readFileSync(new URL('../src/lib/recovery.js', import.meta.url), 'utf8');
 assert(recoverySrc.includes('LOADER_ESCAPE_MS = 15_000'), 'App stuck waits 15s of visible time');
+assert(recoverySrc.includes('INSTALLED_SPLASH_MS = 8_000'), 'installed splash holds 8s before Starting');
+assert(recoverySrc.includes('onStartingCoverElapsed'), 'App stuck does not count the splash-color hold');
 assert(recoverySrc.includes('setLoaderEscapeVisible(true)'), 'App stuck is revealed after the delay');
 const indexSrc = readFileSync(new URL('../src/pages/index.astro', import.meta.url), 'utf8');
 assert(indexSrc.includes('data-nt-help-escape="1"'), 'Starting Next Train has the App stuck link');

@@ -152,7 +152,7 @@ const faqLd = {
             fetchpriority="high"
             decoding="async"
         />
-        <p class="text-xs font-bold uppercase tracking-widest text-gray-400">Starting Next Train…</p>
+        <p class="text-xs font-bold uppercase tracking-widest text-gray-400" data-nt-boot-starting-copy>Starting Next Train…</p>
         <a
             href={withBase('help.html') + '?reason=boot'}
             class="absolute bottom-8 left-1/2 -translate-x-1/2 text-xs font-bold text-slate-500 underline underline-offset-2 hidden"
@@ -286,8 +286,9 @@ const faqLd = {
         try { sessionStorage.setItem('nt_shell_warm', '1'); } catch (e) {}
         try { window.ntFitAppViewport?.(); } catch (e) {}
     };
-    // Keep the logo over the white card until dest names (or Welcome) are on
-    // screen, then wait two frames so that paint lands under the overlay.
+    // Drop the cover as soon as dest names (or Welcome) are on screen, then
+    // wait two frames so that paint lands under the overlay. Installed PWA
+    // keeps a splash-colored sheet until then; browsers show the site.
     const revealAppShell = (force = false) => {
         if (revealCommitted) {
             dropLoadingLogo();
@@ -325,7 +326,6 @@ const faqLd = {
     window.addEventListener('pageshow', () => {
         if (document.documentElement.classList.contains('nt-shell-ready')) dropLoadingLogo();
     });
-    setTimeout(() => revealAppShell(true), 4000);
 
     // Early reachability probe — radio up ≠ usable internet
     try { ensureReachabilityProbed(); } catch (e) { /* ignore */ }
@@ -357,10 +357,22 @@ const faqLd = {
         bindWebViewDeeplinkResume,
     } from '../lib/deeplink.js';
     import { setupBlackBoxLogger } from '../lib/blackbox.js';
-    import { initRecoveryWatchdog } from '../lib/recovery.js';
+    import { initRecoveryWatchdog, INSTALLED_SPLASH_MS, BROWSER_SLOW_BOOT_MS } from '../lib/recovery.js';
 
     window.openLegal = openLegal;
     initRecoveryWatchdog();
+    // Installed: splash color absorbs the wait; Starting only after 8s.
+    // Browser: no splash; Starting only if this cold start is still empty.
+    // Fast boards still reveal as soon as dest names paint.
+    setTimeout(() => {
+        if (revealCommitted) return;
+        try { document.documentElement.classList.add('nt-boot-starting'); } catch (e) {}
+        const overlay = document.getElementById('loading-overlay');
+        if (overlay) {
+            overlay.style.removeProperty('display');
+            overlay.classList.remove('hidden');
+        }
+    }, document.documentElement.classList.contains('nt-boot-installed') ? INSTALLED_SPLASH_MS : BROWSER_SLOW_BOOT_MS);
     // Empathy modal "Try Again" (and admin) can call this before/without bridge
     window.loadAllSchedules = loadAllSchedules;
     prepareDeeplinkIntents();

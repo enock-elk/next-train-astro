@@ -46,7 +46,7 @@ assert(existsSync(GOLD_PATH), 'public/tracks/GOLD.json is the gold lockfile');
 const gold = JSON.parse(readFileSync(GOLD_PATH, 'utf8'));
 assert(gold.branch === 'map-gold', 'GOLD.json points at the map-gold branch');
 assert(typeof gold.frozenAt === 'string' && /^[0-9a-f]{40}$/.test(gold.frozenAt), 'frozenAt is a full git SHA');
-assert(gold.version === 'V9_09.20.7', 'gold freeze is this build (V9_09.20.7)');
+assert(gold.version === 'V9_09.20.8', 'gold freeze is this build (V9_09.20.8)');
 
 for (const rel of REQUIRED) {
     const path = join(ROOT, rel);
@@ -91,6 +91,14 @@ assert(
     mapApp.includes("GHOST_GEOMETRY_REGIONS = new Set(['KZN'])"),
     'KZN keeps ghost-row geometry; other regions paint served stops'
 );
+assert(
+    mapApp.includes('tracks/rail-tracks-${region}.geojson'),
+    'map paints baked Next Train rail GeoJSON, not Leaflet OSM rail tiles'
+);
+assert(mapApp.includes('function ridePathForRoute'), 'live train snap uses the painted corridor path');
+assert(mapApp.includes('Always sit on the painted corridor'), 'tracking glyph stays on custom rail points');
+const mapTab = readFileSync(join(ROOT, 'src/lib/map-tab.js'), 'utf8');
+assert(mapTab.includes('railPathForTrain'), 'tracking pill path is built from custom rail points');
 
 const ads = readFileSync(join(ROOT, 'src/lib/clever-ads.js'), 'utf8');
 assert(ads.includes('#clever-core') || ads.includes('clever-core'), 'ads still overlay from #clever-core');

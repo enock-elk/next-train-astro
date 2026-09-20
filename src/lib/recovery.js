@@ -17,7 +17,11 @@ export { SUPPORT_EMAIL, SUPPORT_FACEBOOK_URL };
 const RECOVERY_AUTO_REDIRECT_MS = 55_000;
 /** Soft “connection struggling” strip while still “online” but not stabilized. */
 const SLOW_BOOT_HINT_MS = 18_000;
-/** “App stuck? Get help” on Starting Next Train. Hidden until this visible time. */
+/** Installed PWA / TWA: keep the OS splash color this long before Starting. */
+export const INSTALLED_SPLASH_MS = 8_000;
+/** Browser cold start: show Starting only if dest names have not painted yet. */
+export const BROWSER_SLOW_BOOT_MS = 2_000;
+/** “App stuck? Get help” after Starting Next Train has been visible this long. */
 export const LOADER_ESCAPE_MS = 15_000;
 
 /** @param {string} [reason] */
@@ -127,6 +131,21 @@ function overlayStillBlocking() {
     return true;
 }
 
+/** True while “Starting Next Train” is actually on screen (not the splash-color hold). */
+function startingCoverVisible() {
+    if (!overlayStillBlocking()) return false;
+    if (typeof document === 'undefined') return false;
+    if (!document.documentElement.classList.contains('nt-boot-starting')) return false;
+    const overlay = document.getElementById('loading-overlay');
+    const label = overlay?.querySelector('[data-nt-boot-starting-copy]');
+    if (!label) return true;
+    try {
+        const style = window.getComputedStyle(label);
+        if (style.display === 'none' || style.visibility === 'hidden') return false;
+    } catch { /* ignore */ }
+    return true;
+}
+
 function coreUiIsUsable() {
     if (typeof document === 'undefined') return false;
     if (document.documentElement.classList.contains('nt-onboarding')) return true;
@@ -217,6 +236,73 @@ function onVisibleElapsed(ms, fn) {
 }
 
 /**
+ * Same as onVisibleElapsed, but only ticks while Starting Next Train is showing.
+ * The installed splash-color hold must not count toward App stuck? Get help.
+ */
+function onStartingCoverElapsed(ms, fn) {
+    if (typeof document === 'undefined') return;
+    let elapsed = 0;
+    let last = Date.now();
+    let timer = null;
+    let done = false;
+
+    const clear = () => {
+        if (timer) {
+            clearTimeout(timer);
+            timer = null;
+        }
+    };
+
+    const arm = () => {
+        clear();
+        if (done) return;
+        if (!isForeground() || !startingCoverVisible()) {
+            last = Date.now();
+            return;
+        }
+        last = Date.now();
+        const remaining = Math.max(0, ms - elapsed);
+        timer = setTimeout(() => {
+            if (done) return;
+            if (!isForeground() || !startingCoverVisible()) {
+                last = Date.now();
+                return;
+            }
+            elapsed += Date.now() - last;
+            last = Date.now();
+            if (elapsed >= ms) {
+                done = true;
+                clear();
+                fn();
+                return;
+            }
+            arm();
+        }, remaining);
+    };
+
+    document.addEventListener('visibilitychange', () => {
+        if (done) return;
+        if (!isForeground()) {
+            clear();
+            last = Date.now();
+            return;
+        }
+        last = Date.now();
+        arm();
+    });
+
+    try {
+        const mo = new MutationObserver(() => {
+            if (done) return;
+            arm();
+        });
+        mo.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+    } catch { /* ignore */ }
+
+    if (isForeground()) arm();
+}
+
+/**
  * Boot watchdog + loader escape hatch.
  * Manual escape is immediate; auto-lifeboat only if the logo overlay is still
  * covering a broken shell after 55s of on-screen time.
@@ -234,9 +320,9 @@ export function initRecoveryWatchdog() {
     // Remove any leftover soft banner from older builds
     try { document.getElementById('nt-recovery-banner')?.remove(); } catch { /* ignore */ }
 
-    onVisibleElapsed(LOADER_ESCAPE_MS, () => {
+    onStartingCoverElapsed(LOADER_ESCAPE_MS, () => {
         if (window._appStabilized) return;
-        if (!overlayStillBlocking()) return;
+        if (!startingCoverVisible()) return;
         ensureLoaderEscape();
         setLoaderEscapeVisible(true);
     });

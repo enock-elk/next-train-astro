@@ -37,3 +37,42 @@ export function isStableForThirdParty() {
     if (!window._appStabilized) return false;
     return true;
 }
+
+/** Force-update is queued or currently applying a newer shell. */
+export function isForcedUpdatePending() {
+    if (typeof window === 'undefined') return false;
+    return !!window.__ntForcedUpdateVersion;
+}
+
+/**
+ * Read-only: an ad inject is in flight. Do not change ad code — only wait.
+ * `_adScriptInjected` / `_adScriptLoaded` / `nt-ads-entering` are set by clever-ads.
+ */
+export function isAdInjectionPending() {
+    if (typeof window === 'undefined' || typeof document === 'undefined') return false;
+    if (window._adNetworkDestroyed) return false;
+    if (document.documentElement.classList.contains('nt-ads-entering')) return true;
+    if (window._adScriptInjected && !window._adScriptLoaded) return true;
+    return false;
+}
+
+/** Phone is quiet enough for force-open Alerts / holiday reminders. */
+export function isSettledForAutoNotices() {
+    if (!isStableForThirdParty()) return false;
+    if (isForcedUpdatePending()) return false;
+    if (isAdInjectionPending()) return false;
+    return true;
+}
+
+const AUTO_NOTICE_SETTLE_MAX_MS = 20000;
+
+/** Run `fn` once the phone has settled, or after the wait cap. */
+export function whenSettledForAutoNotices(fn, startedAt = Date.now()) {
+    if (typeof window === 'undefined') return;
+    if (typeof fn !== 'function') return;
+    if (isSettledForAutoNotices() || (Date.now() - startedAt) >= AUTO_NOTICE_SETTLE_MAX_MS) {
+        try { fn(); } catch { /* ignore */ }
+        return;
+    }
+    setTimeout(() => whenSettledForAutoNotices(fn, startedAt), 400);
+}

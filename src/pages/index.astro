@@ -468,7 +468,9 @@ const faqLd = {
         else switchTab('next-train');
     } else if (hash === '#alerts') {
         switchTab('next-train');
-        setTimeout(() => window.openAlertsChannel?.(), 400);
+        import('../lib/session-stability.js').then((m) => {
+            m.whenSettledForAutoNotices?.(() => window.openAlertsChannel?.());
+        }).catch(() => window.openAlertsChannel?.());
     } else if (hash === '#map') {
         if (canAccessPilotSurface('map')) switchTab('map');
         else switchTab('next-train');

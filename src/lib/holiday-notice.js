@@ -12,7 +12,7 @@
 import { SPECIAL_DATES, HOLIDAY_NAMES } from './config.js';
 import { safeStorage, scheduleDayTypeLabel } from './utils.js';
 import { openSmoothModal, closeSmoothModal, canAutoOpenHomeNotices } from './ui.js';
-import { isReloadPending } from './session-stability.js';
+import { isReloadPending, isSettledForAutoNotices } from './session-stability.js';
 import { $userRegion, $currentRouteId } from '../store.js';
 import {
     loadHolidayApprovals,
@@ -165,7 +165,7 @@ export function maybeShowHolidayNotice() {
         if (welcome && !welcome.classList.contains('hidden')) return false;
         if (safeStorage.getItem('welcomeSeen') !== 'true') return false;
 
-        const stabilized = typeof window !== 'undefined' && !!window._appStabilized && !isReloadPending();
+        const stabilized = typeof window !== 'undefined' && isSettledForAutoNotices() && !isReloadPending();
         if (!holidayStabilityWaitStartedAt) holidayStabilityWaitStartedAt = Date.now();
         const waitedTooLong = (Date.now() - holidayStabilityWaitStartedAt) >= HOLIDAY_STABILITY_MAX_WAIT_MS;
 

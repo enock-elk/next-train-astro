@@ -11,7 +11,8 @@ import { isAdminAuthed, canAccessPilotSurface } from './admin-chrome.js';
 import { trackAnalyticsEvent, sendAnalyticsNow } from './analytics.js';
 import { DYNAMIC_BASE_URL, APP_VERSION, LEGAL_TEXTS, withBase } from './config.js';
 import { $deviceId, $currentRouteId, $userRegion } from '../store.js';
-import { markPendingReload, isReloadPending } from './session-stability.js';
+import { markPendingReload, isSettledForAutoNotices, whenSettledForAutoNotices } from './session-stability.js';
+import { clearLiveTrainFollow, isLiveTrainFollowActive } from './live-train-follow.js';
 import {
     helpUrl,
     mailtoSupportUrl,
@@ -1378,7 +1379,7 @@ export function syncBottomNavActive(tab = safeStorage.getItem('activeTab') || 'n
  */
 export function canAutoOpenHomeNotices() {
     if (typeof window === 'undefined' || typeof document === 'undefined') return false;
-    if (!window._appStabilized || isReloadPending()) return false;
+    if (!isSettledForAutoNotices()) return false;
 
     const routeId = typeof $currentRouteId?.get === 'function' ? $currentRouteId.get() : null;
     if (!routeId) return false;
@@ -1414,9 +1415,11 @@ export function nudgeHomeAutoNotices() {
     if (_homeNoticeNudgeTimer) clearTimeout(_homeNoticeNudgeTimer);
     _homeNoticeNudgeTimer = setTimeout(() => {
         _homeNoticeNudgeTimer = 0;
-        if (!canAutoOpenHomeNotices()) return;
-        try { window.checkServiceAlerts?.(); } catch { /* ignore */ }
-        try { window.maybeShowHolidayNotice?.(); } catch { /* ignore */ }
+        whenSettledForAutoNotices(() => {
+            if (!canAutoOpenHomeNotices()) return;
+            try { window.checkServiceAlerts?.(); } catch { /* ignore */ }
+            try { window.maybeShowHolidayNotice?.(); } catch { /* ignore */ }
+        });
     }, 450);
 }
 
@@ -1439,7 +1442,8 @@ export function switchTab(tab, opts = null) {
     if (typeof document === 'undefined') return;
 
     const allowHiddenTabs = !!(opts && opts.allowHiddenTabs);
-    if ((tab === 'map' || tab === 'community') && !isAdminAuthed() && !allowHiddenTabs) {
+    const liveFollowMap = tab === 'map' && (allowHiddenTabs || isLiveTrainFollowActive());
+    if ((tab === 'map' || tab === 'community') && !isAdminAuthed() && !allowHiddenTabs && !liveFollowMap) {
         if (!canAccessPilotSurface(tab)) tab = 'next-train';
     }
 
@@ -1518,6 +1522,7 @@ export function switchTab(tab, opts = null) {
     if (tab === 'map') {
         import('./map-tab.js').then((m) => m.activateMapTab?.()).catch(() => {});
     } else if (prev === 'map') {
+        if (isLiveTrainFollowActive()) clearLiveTrainFollow();
         import('./map-tab.js').then((m) => m.deactivateMapTab?.()).catch(() => {});
     }
 

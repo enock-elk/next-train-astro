@@ -329,12 +329,16 @@ assert(communityView.includes('community-pane relative'), 'Community wallpaper i
 assert(/community-pane[\s\S]*?nt-pack-wallpaper[\s\S]*?community-feed-scroll/.test(communityView), 'wallpaper sits on the pane, not the flex feed child');
 assert(communityView.includes('>Just you here</button>'), 'Community tab placeholder is Just you here');
 assert(communityView.indexOf('Community</p>') < communityView.indexOf('id="community-presence"'), 'presence sits on the Community label row');
-assert(communityView.includes('id="community-marks-chip"'), 'Community chrome can show the signed-in level');
+assert(communityView.includes('id="community-marks-chip"'), 'Community chrome keeps the leftover title chip id');
+assert(communityView.includes('community-bubble-marks'), 'Community name row can hold medal and points');
 assert(communityView.indexOf('id="community-presence"') < communityView.indexOf('community-route-select'), 'presence sits above the route dropdown');
 assert(!communityView.includes('mt-6 p-2 rounded-full'), 'refresh button is not padded down to the dropdown');
 assert(!communityView.includes('min-h-[1rem]'), 'composer error does not reserve a blank line');
 assert(communityView.includes('min-h-[2.75rem]'), 'composer field is compact');
 const communityJs = readFileSync(new URL('../src/lib/community.js', import.meta.url), 'utf8');
+assert(communityJs.includes('community-bubble-marks'), 'points render on named bubbles');
+assert(communityJs.includes('grouped'), 'consecutive same-author posts still omit the name row');
+assert(communityJs.includes('renderBubbleMarksHtml'), 'marks sit on the name row, not the title');
 assert(communityJs.includes('No posts on this line yet'), 'Community empty heading stays');
 assert(communityJs.includes('Be the first to share a heads-up for fellow passengers.'), 'Community empty state keeps the first-post invitation');
 assert(!/shouting match/i.test(communityJs), 'Community empty copy dropped the shouting-match lecture');

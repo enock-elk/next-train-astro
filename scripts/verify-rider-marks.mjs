@@ -6,6 +6,9 @@ import {
     listContributionDays,
     mergeMarksStates,
     showMarksInCommunity,
+    marksBubbleLabel,
+    medalSvg,
+    renderBubbleMarksHtml,
 } from '../src/lib/rider-marks.js';
 
 assert.equal(MARK_POINTS.first_share_day, 2);
@@ -61,5 +64,8 @@ assert.equal(twoOfThree.total, 3);
 assert.equal(twoOfThree.ratio, 2 / 3);
 assert.equal(twoOfThree.unlocked, false);
 assert.equal(showMarksInCommunity(), true, 'Community level is on by default');
+assert.equal(marksBubbleLabel({ points: 77 }), '* 77 Points', 'bubble brag uses * N Points');
+assert(medalSvg('bronze').includes('svg'), 'bronze medal is an SVG');
+assert(renderBubbleMarksHtml({ points: 77, tier: 'bronze' }).includes('community-bubble-marks'), 'bubble marks wrap the medal and points');
 
 console.log('Rider marks verified: slower curve, history dedupe, day groups, streak fill.');

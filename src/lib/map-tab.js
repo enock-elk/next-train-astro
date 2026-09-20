@@ -17,6 +17,7 @@ import { currentScheduleData } from './live-board.js';
 import { trainGoingLabel, trainGoingFullLabel, trainTowardLabel, trainTerminusName, trainHeadboardTitle, journeyHeadingAtProgress, TRACKING_WINDOW_SEC, compareNearbyTrainLikelihood, isGhostTrackable, trainIdsInSchedule } from './train-ghosts.js';
 import { relaxLiveShareGuards } from './features.js';
 import { isAdminAuthed } from './admin-chrome.js';
+import { getLiveTrainFollow } from './live-train-follow.js';
 import { formatGpsPingAge, formatLastSeenWithPingClock, gpsPingSuccessAt, RIDE_GPS_STALE_MS } from './gps-freshness.js';
 import {
     acquireGeoWatch,
@@ -1505,16 +1506,41 @@ export function promptOnTrainSheet({ title, body, primary, secondary, tertiary }
     });
 }
 
-export async function focusTrainOnMap(trainId) {
+export async function focusTrainOnMap(trainId, opts = {}) {
     if (!trainId) return;
     triggerHaptic();
+    const follow = getLiveTrainFollow();
+    const routeId = String(opts.routeId || follow?.routeId || $currentRouteId.get() || '');
+    const dest = String(opts.dest || follow?.dest || '');
+    const allowHidden = !!(opts.allowHiddenTabs || follow?.trainId);
     const { switchTab } = await import('./ui.js');
-    switchTab('map');
-    await syncRidePingsToMap();
+    switchTab('map', allowHidden ? { allowHiddenTabs: true } : undefined);
+    const ride = await import('./ride-pings.js');
+    if (routeId && !ride.hasRidePingsListener?.(routeId)) {
+        ride.startRidePingsListener?.(routeId, { force: true });
+    }
+    await syncRidePingsToMap(routeId);
     const send = () => postToMap({ type: 'nt-map-focus-train', trainId: String(trainId) });
     send();
     setTimeout(send, 500);
     setTimeout(send, 1400);
+    if (opts.viewed !== false) {
+        const pings = ride.getCachedRidePings?.(routeId) || [];
+        const trainPings = pings.filter((p) => String(p.trainId || '') === String(trainId));
+        const ping = trainPings[0] || null;
+        const active = ride.getActiveShare?.();
+        const mine = !!(active?.trainId && String(active.trainId) === String(trainId));
+        showTrackingStatusCard({
+            viewed: {
+                trainId: String(trainId),
+                routeId,
+                destination: dest || ping?.destination || '',
+                ping: ping || (dest ? { trainId: String(trainId), destination: dest } : null),
+                n: trainPings.length || 1,
+                mine,
+            },
+        });
+    }
 }
 
 const locatePromptSeen = new Set();
@@ -2742,10 +2768,20 @@ export function bindMapTabUi() {
         if (card?.classList.contains('hidden') && restore?.classList.contains('hidden')) return;
         import('./ride-pings.js').then((ride) => {
             const active = ride.getActiveShare?.();
-            if (!active?.trainId) return;
-            const own = (ride.getCachedRidePings?.(active.routeId) || [])
-                .find((p) => p.deviceId === getDeviceId());
-            renderTrackingStatusCard(active, own || null);
+            const follow = getLiveTrainFollow();
+            const trainId = viewedTrain?.trainId || follow?.trainId || active?.trainId;
+            if (!trainId) return;
+            const routeId = viewedTrain?.routeId || follow?.routeId || active?.routeId;
+            const pings = ride.getCachedRidePings?.(routeId) || [];
+            const trainPings = pings.filter((p) => String(p.trainId || '') === String(trainId));
+            const own = trainPings.find((p) => p.deviceId === getDeviceId());
+            const ping = viewedTrain?.trainId
+                ? (trainPings[0] || viewedTrain.ping || null)
+                : (own || null);
+            if (viewedTrain?.trainId && ping) {
+                viewedTrain = { ...viewedTrain, ping, n: trainPings.length || viewedTrain.n || 1 };
+            }
+            renderTrackingStatusCard(active, ping);
         }).catch(() => {});
     }, 1000);
     if (document.getElementById('view-map')?.classList.contains('active')) {

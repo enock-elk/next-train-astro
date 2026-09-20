@@ -215,6 +215,46 @@ export function marksLabel(state = readMarks()) {
     return `${tier.label} · ${state.points} ${pointsWord(state.points)}`;
 }
 
+const MEDAL_FILL = {
+    bronze: '#cd7f32',
+    silver: '#c0c0c0',
+    gold: '#e6b800',
+    platinum: '#9aa4b2',
+};
+
+/** Compact medal for a community name row. */
+export function medalSvg(tierId = 'bronze') {
+    const fill = MEDAL_FILL[tierId] || MEDAL_FILL.bronze;
+    return `<svg class="community-bubble-medal" viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><circle cx="8" cy="8" r="6.4" fill="${fill}" stroke="rgba(0,0,0,0.28)" stroke-width="1.1"/><path d="M8 4.15l1.05 2.14 2.36.34-1.7 1.66.4 2.35L8 9.55l-2.11 1.09.4-2.35-1.7-1.66 2.36-.34z" fill="#fff" opacity="0.95"/></svg>`;
+}
+
+/** Name-row brag: "[svg] * 77 Points". */
+export function marksBubbleLabel(state = readMarks()) {
+    return `* ${Number(state.points) || 0} Points`;
+}
+
+export function marksPublicSnapshot(state = readMarks()) {
+    if (!showMarksInCommunity()) return null;
+    const points = Number(state.points) || 0;
+    return { points, tier: tierForPoints(points).id };
+}
+
+export function renderBubbleMarksHtml(stateOrSnap) {
+    if (!stateOrSnap) return '';
+    const points = Number(stateOrSnap.points);
+    if (!Number.isFinite(points)) return '';
+    const tierId = stateOrSnap.tier || tierForPoints(points).id;
+    return `<span class="community-bubble-marks" aria-label="${escapeAttr(`${tierForPoints(points).label} ${marksBubbleLabel({ points })}`)}">${medalSvg(tierId)} <span>${escapeAttr(marksBubbleLabel({ points }))}</span></span>`;
+}
+
+function escapeAttr(s) {
+    return String(s || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+}
+
 export function catalogFor(action) {
     return MARK_CATALOG.find((c) => c.id === action) || null;
 }
@@ -569,10 +609,12 @@ export function paintCommunityMarksChip(state = readMarks()) {
     if (typeof document === 'undefined') return;
     const el = document.getElementById('community-marks-chip');
     if (!el) return;
-    const signedIn = typeof window !== 'undefined' && window.$account?.get?.()?.status === 'signed-in';
-    const show = signedIn && showMarksInCommunity();
-    el.classList.toggle('hidden', !show);
-    if (show) el.textContent = marksLabel(state);
+    // Title chip is leftover chrome. Points live on named message bubbles.
+    el.textContent = '';
+    el.classList.add('hidden');
+    el.setAttribute('hidden', '');
+    el.setAttribute('aria-hidden', 'true');
+    void state;
 }
 
 export function badgeUnlocked(action, state = readMarks()) {

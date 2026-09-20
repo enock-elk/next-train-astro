@@ -45,6 +45,7 @@ import {
     showToast, triggerHaptic, openSmoothModal, closeSmoothModal, canAutoOpenHomeNotices,
     hapticsAreEnabled, bindPasswordReveal
 } from './ui.js';
+import { whenSettledForAutoNotices } from './session-stability.js';
 import {
     fetchUnionNotices,
     setCachedLiveNotices,
@@ -1923,9 +1924,9 @@ export async function checkServiceAlerts() {
         if (!validNotices || validNotices.length === 0) return;
 
         const autoNotice = pickAutoOpenNotice(validNotices);
-        if (autoNotice && !window._alertsChannelOpening && canAutoOpenHomeNotices()) {
+        if (autoNotice && !window._alertsChannelOpening) {
             window._alertsChannelOpening = true;
-            setTimeout(() => {
+            whenSettledForAutoNotices(() => {
                 if (!canAutoOpenHomeNotices()) {
                     window._alertsChannelOpening = false;
                     return;
@@ -1942,7 +1943,7 @@ export async function checkServiceAlerts() {
                     resetVisible: true,
                 });
                 window._alertsChannelOpening = false;
-            }, 400);
+            });
         }
         const pushNotice = autoNotice || validNotices[0];
         if (pushNotice) {

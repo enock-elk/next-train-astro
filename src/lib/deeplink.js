@@ -4,6 +4,8 @@
  * Snapshots share query params early so Welcome/URL cleanup cannot drop legacy SPA links.
  */
 import { safeStorage } from './utils.js';
+import { setLiveTrainFollow } from './live-train-follow.js';
+import { whenSettledForAutoNotices } from './session-stability.js';
 import {
     parsePlannerDeepLink,
     parseRouteDeepLinkParams,
@@ -385,12 +387,22 @@ export async function applyLiveTrainDeepLink() {
     }
 
     stripShareParamsFromUrl();
+    setLiveTrainFollow({
+        trainId: link.trainId,
+        routeId: link.routeId || '',
+        dest: link.dest || '',
+    });
     if (typeof window.switchTab === 'function') {
         window.switchTab('map', { allowHiddenTabs: true });
     }
     try {
         const map = await import('./map-tab.js');
-        await map.focusTrainOnMap?.(link.trainId);
+        await map.focusTrainOnMap?.(link.trainId, {
+            allowHiddenTabs: true,
+            routeId: link.routeId || '',
+            dest: link.dest || '',
+            viewed: true,
+        });
     } catch { /* map optional */ }
     if (typeof window.trackAnalyticsEvent === 'function') {
         window.trackAnalyticsEvent('deep_link_open', { type: 'live', train_id: link.trainId, route_id: link.routeId || '' });
@@ -541,7 +553,9 @@ export function bindPwaSameOriginLinks() {
                 return;
             }
             if (hash === '#alerts') {
-                if (typeof window.openAlertsChannel === 'function') window.openAlertsChannel();
+                whenSettledForAutoNotices(() => {
+                    if (typeof window.openAlertsChannel === 'function') window.openAlertsChannel();
+                });
                 return;
             }
         }

@@ -8,6 +8,7 @@ import { safeStorage } from './utils.js';
 import { $currentRouteId } from '../store.js';
 import { $account } from './account.js';
 import { FEATURE_KEYS, isFeatureEnabled, isFeatureGranted } from './features.js';
+import { isLiveTrainFollowActive } from './live-train-follow.js';
 
 function isSignedInAccount() {
     return $account.get()?.status === 'signed-in';
@@ -147,7 +148,8 @@ export function applyPilotChrome() {
     html.setAttribute('data-pilot-community', !isAdminAuthed() && communityOn ? '1' : '0');
 
     const tab = safeStorage.getItem('activeTab');
-    if (!isAdminAuthed() && ((tab === 'map' && !mapOn) || (tab === 'community' && !communityOn))) {
+    const keepLiveMap = tab === 'map' && isLiveTrainFollowActive();
+    if (!isAdminAuthed() && ((tab === 'map' && !mapOn && !keepLiveMap) || (tab === 'community' && !communityOn))) {
         if (typeof window.switchTab === 'function') window.switchTab('next-train');
         else safeStorage.setItem('activeTab', 'next-train');
     }

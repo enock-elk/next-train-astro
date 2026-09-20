@@ -30,6 +30,12 @@ import {
 } from './trust.js';
 import { joinCommunityPresence, leaveCommunityPresence, signalCommunityTyping } from './community-presence.js';
 import { FEATURE_KEYS, fetchFeatures, isFeatureEnabled } from './features.js';
+import {
+    marksPublicSnapshot,
+    readMarks,
+    renderBubbleMarksHtml,
+    showMarksInCommunity,
+} from './rider-marks.js';
 
 const BODY_MAX = 280;
 /** Blaze cost control — plan: limitToLast(5–10). */
@@ -549,6 +555,7 @@ export async function submitCommunityPost(body, routeId = $currentRouteId.get())
                     hidden: false,
                     replyCount: 0,
                     appVersion: APP_VERSION,
+                    ...(marksPublicSnapshot() ? { marks: marksPublicSnapshot() } : {}),
                     ...replyToPayload,
                 },
             },
@@ -576,6 +583,7 @@ export async function submitCommunityPost(body, routeId = $currentRouteId.get())
         hidden: false,
         replyCount: 0,
         appVersion: APP_VERSION,
+        ...(marksPublicSnapshot() ? { marks: marksPublicSnapshot() } : {}),
         ...replyToPayload,
     };
 
@@ -1021,9 +1029,13 @@ function renderPostCard(post, routeId, { grouped = false } = {}) {
             : `<div class="community-avatar">${renderAvatarHtml(photoURL)}</div>`;
     const bubbleCls = isOwn ? 'community-bubble community-bubble-own' : 'community-bubble community-bubble-other';
     const displayName = isOwn ? 'You' : (post.displayName || 'Passenger');
+    const marksSnap = isOwn
+        ? (showMarksInCommunity() ? marksPublicSnapshot(readMarks()) : null)
+        : (post.marks && Number.isFinite(Number(post.marks.points)) ? post.marks : null);
+    const marksHtml = !grouped && marksSnap ? renderBubbleMarksHtml(marksSnap) : '';
     const nameHtml = grouped
         ? ''
-        : `<div class="community-bubble-name-row truncate" style="color:${isOwn ? 'inherit' : nameColor}">${escapeHTML(displayName)}</div>`;
+        : `<div class="community-bubble-name-row" style="color:${isOwn ? 'inherit' : nameColor}"><span class="community-bubble-name truncate">${escapeHTML(displayName)}</span>${marksHtml}</div>`;
 
     return `
       <div class="community-post-row ${isOwn ? 'justify-end' : 'justify-start gap-2'}${grouped ? ' is-grouped' : ''}" data-post-id="${postId}" data-route="${escapeHTML(routeId)}" data-uid="${uid}">

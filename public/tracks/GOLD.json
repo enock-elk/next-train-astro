@@ -1,8 +1,8 @@
 {
   "branch": "map-gold",
   "frozenAt": "55b9fe0d596fcaf2ba01d36c8bc13fb85556816e",
-  "version": "V9_09.19.10",
-  "note": "Gold snapshot of this build: planner fare uses painted corridor km, static-map station hops, rail-tangent trains, baked tracks, map runtime, advert handling. Diff against origin/map-gold. Fast-forward map-gold after this lands on main. Never force-push map-gold.",
+  "version": "V9_09.20.1",
+  "note": "Gold snapshot of this build: planner fare uses painted corridor km, static-map station hops, rail-tangent trains, baked tracks, map runtime, advert handling. Tracking card pause metrics pass through map-app click payload. Diff against origin/map-gold. Fast-forward map-gold after this lands on main. Never force-push map-gold.",
   "files": {
     "public/tracks/rail-tracks-EC.geojson": {
       "md5": "43409bfd05405205e596f0d03345ab18",
@@ -21,8 +21,8 @@
       "sha256": "090a5d7fc45cafb8c7b81dc583ae24978540f38278cab447953bc90c8821f01f"
     },
     "public/js/map-app.js": {
-      "md5": "fa5c79c9696a10794420944c71a620b7",
-      "sha256": "08acde51a5444b586f3a2977bc0e9af003b773d53982cb773832120ed2d444c8"
+      "md5": "dc8a1ff67667cd1639b8da60b6adfb3b",
+      "sha256": "58b7ab5bcccbde35c94e6a1c647e9594ed0ca6aff69468d3647ccf9322f4be03"
     },
     "src/pages/map.astro": {
       "md5": "e3baceb290d5fd25cdb13ba838e5391f",
@@ -37,8 +37,8 @@
       "sha256": "f7828c3e4a6388eb4612df00b52b6e5f34dd2c36730679ffdcf85a23416c4e7a"
     },
     "src/lib/map-tab.js": {
-      "md5": "5cea717bd5c2e473eecf23f0af69b1ae",
-      "sha256": "85cd951742145ac4814c2b47c9e4bebd2abe7bb5abcdac6b05bae2fbd728a784"
+      "md5": "aa0f6e30c7bf134d43a109b9de782dde",
+      "sha256": "87ebda4caac660bf9fc4f0ef69e968b20550fc8390eba391ec6b544d973f2559"
     },
     "src/lib/clever-ads.js": {
       "md5": "4d78da253d60d3ba285de6c41d697cad",

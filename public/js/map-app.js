@@ -3297,8 +3297,18 @@
                     const n = row.n;
                     const mine = row.mine;
                     const newest = row.newest;
-                    const speedValue = (list.find(function (p) { return typeof p.speedMps === 'number'; }) || newest || {}).speedMps;
+                    function firstFinitePingField(key) {
+                        for (var fi = 0; fi < list.length; fi++) {
+                            var fv = list[fi] && list[fi][key];
+                            if (typeof fv === 'number' && Number.isFinite(fv)) return fv;
+                        }
+                        return null;
+                    }
+                    const speedValue = firstFinitePingField('speedMps');
                     const speed = typeof speedValue === 'number' ? speedValue : null;
+                    const accuracyValue = firstFinitePingField('accuracy');
+                    const railDistanceValue = firstFinitePingField('railDistanceM');
+                    const pingAtValue = Number(newest.fixAt || newest.acceptedAt || newest.lastPingAt || newest.at || 0) || firstFinitePingField('fixAt') || firstFinitePingField('acceptedAt') || firstFinitePingField('at');
                     const spec = liveTrainIconSpec(map.getZoom(), trainId, Object.assign({}, newest, { bearing: row.bearing }));
                     const icon = L.divIcon({
                         className: 'nt-live-train',
@@ -3318,7 +3328,18 @@
                                     type: 'nt-map-show-tracking-details',
                                     trainId: trainId,
                                     routeId: newest.routeId || list[0].routeId || null,
-                                    ping: newest,
+                                    ping: Object.assign({}, newest, {
+                                        bearing: row.bearing,
+                                        lat: lat,
+                                        lng: lng,
+                                        speedMps: speed,
+                                        accuracy: accuracyValue != null ? accuracyValue : newest.accuracy,
+                                        railDistanceM: railDistanceValue != null ? railDistanceValue : newest.railDistanceM,
+                                        onRails: true,
+                                        fixAt: pingAtValue || newest.fixAt,
+                                        acceptedAt: newest.acceptedAt || pingAtValue,
+                                        at: newest.at || pingAtValue
+                                    }),
                                     n: n,
                                     mine: mine
                                 }, '*');

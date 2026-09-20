@@ -143,8 +143,13 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
           // keys. Overlays (planner list, Feedback Hub) read visualViewport
           // themselves. Never use Math.max(inner, client): a tall document
           // would push #nt-shell (and the oval) below the screen (S9+).
+          function atLeastFull(n) {
+            n = Math.round(Number(n) || 0);
+            return n >= 240 ? n : 0;
+          }
           var layoutH = inner || client || vh || 240;
           if (client > 0) layoutH = Math.min(layoutH, client);
+          if (layoutH < 240) layoutH = atLeastFull(lastFullLayoutH) || atLeastFull(lastLayoutH) || 240;
           var full = lastFullLayoutH || lastLayoutH || layoutH;
           // visualViewport shrinks first on Android. Do not treat that as the
           // new full-screen height or the oval rides up with the IME.
@@ -166,7 +171,9 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
           } catch (e) {}
           var shellTop = Math.max(0, off);
           var shellH = Math.round(vh || layoutH);
-          if (shellH < 240) shellH = lastShellH || lastFullLayoutH || layoutH || 240;
+          // Do not keep a 1px first reading: iOS PWA often reports 0/1 before
+          // layout, and `last || tiny || 240` would collapse the shell to white.
+          if (shellH < 240) shellH = atLeastFull(lastShellH) || atLeastFull(lastFullLayoutH) || atLeastFull(layoutH) || 240;
           if (!keyboard) {
             // Pin #nt-shell to the visible hole. Shrinking --nt-app-h to
             // visualViewport while leaving the shell at top:0 put NEXT TRAIN
@@ -199,7 +206,7 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
           }
           var h = layoutH;
           if (shellTop + shellH > h) h = shellTop + shellH;
-          if (h < 240) h = lastFullLayoutH || lastLayoutH || inner || vh || 240;
+          if (h < 240) h = atLeastFull(lastFullLayoutH) || atLeastFull(lastLayoutH) || atLeastFull(inner) || atLeastFull(vh) || 240;
           // Only a real safe-area inset. Do not invent 48px — that pad was a
           // white/black tray under the floating pill while the system nav
           // already sat outside the webview.
@@ -248,6 +255,7 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
         document.addEventListener('visibilitychange', function () {
           if (document.visibilityState === 'visible') apply();
         });
+        window.addEventListener('pageshow', function () { apply(); });
         if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', apply);
       })();
     </script>
@@ -368,15 +376,33 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
         <script is:inline>
           // Returning users / same-session navigations (e.g. map.html → home) must not
           // sit behind "Loading schedules…". Decide before first paint.
+          // Do not hide #main-content with an inline style: WebKit often keeps that
+          // layer blank after CSS unhides it (app shows, then white, until Back).
           (function () {
-            try {
-              var seen = localStorage.getItem('welcomeSeen') === 'true';
-              var warm = sessionStorage.getItem('nt_shell_warm') === '1';
-              if (seen || warm) document.documentElement.classList.add('nt-shell-ready');
-            } catch (e) {}
+            function holdReturningShell() {
+              try {
+                if (document.documentElement.classList.contains('nt-map-iframe-escape')) return;
+                var seen = localStorage.getItem('welcomeSeen') === 'true';
+                var warm = sessionStorage.getItem('nt_shell_warm') === '1';
+                if (!seen && !warm) return;
+                document.documentElement.classList.add('nt-shell-ready');
+                var main = document.getElementById('main-content');
+                if (main) {
+                  main.style.visibility = 'visible';
+                  if (main.style.display === 'none') main.style.display = '';
+                }
+                var overlay = document.getElementById('loading-overlay');
+                if (overlay) overlay.style.display = 'none';
+                if (typeof window.ntFitAppViewport === 'function') window.ntFitAppViewport();
+              } catch (e) {}
+            }
+            holdReturningShell();
+            document.addEventListener('DOMContentLoaded', holdReturningShell);
+            window.addEventListener('pageshow', holdReturningShell);
           })();
         </script>
         <style is:inline>
+          html:not(.nt-shell-ready) #main-content.app-shell { visibility: hidden; }
           html.nt-shell-ready #loading-overlay { display: none !important; }
           html.nt-shell-ready #main-content.app-shell { visibility: visible !important; }
         </style>

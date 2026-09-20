@@ -589,14 +589,21 @@ async function runKillswitchCheck() {
 
         // Write-ahead marker: a terminated tab retries this timestamp next boot.
         safeStorage.setItem(KILLSWITCH_PENDING_KEY, String(targetTimestamp));
-        console.log("☢️ GUARDIAN KILLSWITCH ACTIVATED. Retiring volatile caches safely...");
+        console.log(`☢️ GUARDIAN NUKE found: killswitch timestamp ${targetTimestamp} (last applied ${applied || 'none'}). Downloading retirement, then restart to implement the clean shell.`);
 
-        if (typeof window.performHardCacheClear !== 'function') return false;
+        if (typeof window.performHardCacheClear !== 'function') {
+            console.warn('☢️ GUARDIAN NUKE found but performHardCacheClear is not ready. Will retry.');
+            return false;
+        }
         const cleared = await window.performHardCacheClear('system_killswitch');
-        if (cleared !== true) return false;
+        if (cleared !== true) {
+            console.warn('☢️ GUARDIAN NUKE: cleanup did not finish. Will retry. Incoming version not applied yet.');
+            return false;
+        }
 
         safeStorage.setItem(KILLSWITCH_APPLIED_KEY, String(targetTimestamp));
         safeStorage.removeItem(KILLSWITCH_PENDING_KEY);
+        console.log(`☢️ GUARDIAN NUKE: timestamp ${targetTimestamp} applied. Restart implements the new shell.`);
         return true;
     });
 }
@@ -623,7 +630,8 @@ export function bindKillswitchWatch() {
         if (document.visibilityState === 'visible') poke();
     });
     poke();
-    setInterval(() => poke({ visibleOnly: true }), 60_000);
+    setInterval(() => poke({ visibleOnly: true }), 15_000);
+    console.log('🛡️ Guardian: NUKE listener armed (every 15s while visible, and on focus/online).');
 }
 
 /** Remote special-event route activation without a deploy. */

@@ -71,6 +71,8 @@ import {
     peekIncomingVersion,
     installIncomingServiceWorker,
     activateWaitingServiceWorker,
+    reloadToApplyUpdate,
+    unstickStaleServiceWorker,
 } from './app-update.js';
 import { setupMapLogic } from './map-viewer.js';
 import { applyShadowBanCloak, checkContentSafety, queueAutoModeration, checkRateLimit, recordRateHit, startRateLimitCountdown } from './trust.js';
@@ -582,23 +584,38 @@ export async function performHardCacheClear(source = 'modal_confirm', { latestVe
     trackAnalyticsEvent('execute_hard_cache_clear', { source });
 
     if (policy.downloadThenSwap) {
-        showToast('Downloading the update…', 'info', 5000);
+        const incoming = await peekIncomingVersion();
+        if (incoming && isAppVersionNewer(incoming, APP_VERSION)) {
+            console.log(`🛡️ Guardian: NEW APP VERSION found: ${incoming} (running ${APP_VERSION}). Not downloaded yet. Check for Updates will download, then restart to implement it.`);
+            showToast(`Downloading ${incoming}…`, 'info', 5000);
+        } else {
+            console.log(`🛡️ Guardian: Check for Updates — running ${APP_VERSION}, published ${incoming || 'unknown'}. Downloading the worker, then restart.`);
+            showToast('Downloading the update…', 'info', 5000);
+        }
         const installed = await installIncomingServiceWorker();
         if (!installed.ok) {
+            console.warn(`🛡️ Guardian: Incoming version ${incoming || APP_VERSION} NOT downloaded (${installed.reason}). Keeping ${APP_VERSION}.`);
             showToast('Kept your saved app. Try again on a stronger connection.', 'error', 4500);
             return false;
+        }
+        console.log(`🛡️ Guardian: Incoming version ${incoming || APP_VERSION} downloaded (${installed.reason}).`);
+        if (installed.reason === 'already_current' && incoming && isAppVersionNewer(incoming, APP_VERSION)) {
+            console.warn(`🛡️ Guardian: Service worker still ${APP_VERSION} while published ${incoming}. Unsticking so Check for Updates can land one shell.`);
+            await unstickStaleServiceWorker();
+        } else {
+            try { await activateWaitingServiceWorker(); } catch { /* reload still applies the new shell */ }
         }
         closeAppHub(true);
         const updateModal = document.getElementById('cache-clear-modal');
         if (updateModal) closeSmoothModal('cache-clear-modal');
-        try { await activateWaitingServiceWorker(); } catch { /* reload still applies the new shell */ }
         markPendingReload('cache_sync', 500);
         if (policy.showUpdatedToast) {
             if (latestVersion) markLatestVersionToast();
             else markAppUpdatedToast();
         }
+        console.log(`🛡️ Guardian: Restarting in 500ms to implement ${incoming || APP_VERSION} (Check for Updates).`);
         setTimeout(() => {
-            window.location.href = window.location.pathname + '?v=' + Date.now();
+            reloadToApplyUpdate('check_updates');
         }, 500);
         return true;
     }
@@ -610,6 +627,22 @@ export async function performHardCacheClear(source = 'modal_confirm', { latestVe
     closeAppHub(true);
     const modal = document.getElementById('cache-clear-modal');
     if (modal) closeSmoothModal('cache-clear-modal');
+
+    if (policy.systemKillswitch) {
+        console.log('☢️ GUARDIAN NUKE: installing incoming shell before restart so clients do not mix hashed bundles.');
+        try {
+            const installed = await installIncomingServiceWorker();
+            console.log(`☢️ GUARDIAN NUKE: incoming shell downloaded: ${installed.ok ? 'yes' : 'no'} (${installed.reason}).`);
+            if (installed.ok && installed.reason === 'already_current') {
+                await unstickStaleServiceWorker();
+                console.log('☢️ GUARDIAN NUKE: unstuck cached sw.js so the restart can fetch one codebase.');
+            } else if (installed.ok) {
+                try { await activateWaitingServiceWorker(); } catch { /* restart still hops */ }
+            }
+        } catch (e) {
+            console.warn('☢️ GUARDIAN NUKE: incoming install failed; restart will still drop volatile caches.', e);
+        }
+    }
 
     try {
         if (policy.unregisterServiceWorkers && 'serviceWorker' in navigator) {
@@ -648,8 +681,11 @@ export async function performHardCacheClear(source = 'modal_confirm', { latestVe
         if (latestVersion) markLatestVersionToast();
         else markAppUpdatedToast();
     }
+    if (policy.systemKillswitch) {
+        console.log('☢️ GUARDIAN NUKE: cleanup finished. Restarting in 500ms to implement the clean shell.');
+    }
     setTimeout(() => {
-        window.location.href = window.location.pathname + '?v=' + Date.now();
+        reloadToApplyUpdate(policy.systemKillswitch ? 'killswitch' : 'cache_sync');
     }, 500);
     return true;
 }
@@ -697,6 +733,11 @@ export async function showCacheClearWarning() {
     const incomingVersion = (typeof navigator === 'undefined' || navigator.onLine)
         ? await peekIncomingVersion()
         : null;
+    if (incomingVersion && isAppVersionNewer(incomingVersion, APP_VERSION)) {
+        console.log(`🛡️ Guardian: Check for Updates — NEW APP VERSION found: ${incomingVersion} (running ${APP_VERSION}). Not downloaded yet.`);
+    } else {
+        console.log(`🛡️ Guardian: Check for Updates — running ${APP_VERSION}, published ${incomingVersion || 'unknown'}.`);
+    }
     const runReset = (skipNetworkPreflight) => performHardCacheClear('check_updates', {
         latestVersion: !!(incomingVersion && !isAppVersionNewer(incomingVersion, APP_VERSION)),
         skipNetworkPreflight,

@@ -483,8 +483,25 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
       var gaConfig = {};
       var isDevAnalytics = false;
       var deviceId = null;
+      var ntLeavingCacheBust = false;
 
       try {
+        var urlParamsEarly = new URLSearchParams(window.location.search);
+        var vParamEarly = urlParamsEarly.get('v');
+        if (vParamEarly && /^\d{8,}$/.test(vParamEarly)) {
+          // iOS home-screen PWAs sandbox localStorage per start-URL query.
+          // Hop to the clean URL *before* minting a device id or writing nt_did.
+          ntLeavingCacheBust = true;
+          urlParamsEarly.delete('v');
+          var cleanEarly = window.location.pathname
+            + (urlParamsEarly.toString() ? '?' + urlParamsEarly.toString() : '')
+            + window.location.hash;
+          window.location.replace(cleanEarly);
+        }
+      } catch (eEarly) {}
+
+      try {
+        if (ntLeavingCacheBust) throw new Error('nt_skip_identity_on_v_hop');
         isDevAnalytics = localStorage.getItem('analytics_ignore') === 'true';
 
         // SPA Identity Bridge: WebView → Chrome handoff via ?uid=
@@ -541,6 +558,7 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
       var PLAY_TWA_PACKAGE = 'za.co.nexttrain.app';
       function persistTwa(pkg) {
         pkg = pkg || PLAY_TWA_PACKAGE;
+        if (ntLeavingCacheBust) return pkg;
         try {
           sessionStorage.setItem('nt_twa', '1');
           sessionStorage.setItem('nt_twa_package', pkg);

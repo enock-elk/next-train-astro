@@ -1,7 +1,8 @@
 # Cache-Control for hosts that honor this file (Cloudflare Pages).
 # GitHub Pages ignores it — nexttrain-edge Worker sets the same headers on
-# nexttrain.co.za/_astro/* and /icons/*. HTML / sw.js / app-version.json stay
-# short-lived so NUKE + deploys can take effect.
+# nexttrain.co.za/_astro/* and /icons/* (long TTL) and on /sw.js plus
+# /app-version.json (no-store, so PWA/TWA are not stuck on max-age=600).
+# HTML stays off that Worker so NUKE + deploys can take effect.
 #
 # Every HTML entry below is no-cache for one reason: a cached page outliving the
 # hashed /_astro/ bundle it links to is what paints the unstyled shell. The host
@@ -18,10 +19,10 @@
   Cache-Control: public, max-age=2592000
 
 /sw.js
-  Cache-Control: no-cache
+  Cache-Control: no-store, no-cache, must-revalidate
 
 /app-version.json
-  Cache-Control: no-cache
+  Cache-Control: no-store, no-cache, must-revalidate
 
 /
   Cache-Control: no-cache

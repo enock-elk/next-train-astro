@@ -600,6 +600,35 @@ export function destructiveNetworkIsSafe({ online = true, lieFi = false, preflig
     return online === true && lieFi !== true && preflight === 'ok';
 }
 
+export const PINNED_SESSION_KEYS = Object.freeze([
+    'welcomeSeen',
+    'userRegion',
+    'defaultRoute_GP',
+    'defaultRoute_WC',
+    'defaultRoute_KZN',
+    'defaultRoute_EC',
+    'defaultRoute',
+]);
+
+const PINNED_SESSION_KEY_SET = new Set(PINNED_SESSION_KEYS);
+
+export function welcomeSeenFromPinnedSession(getItem) {
+    const read = typeof getItem === 'function' ? getItem : (key) => safeStorage.getItem(key);
+    if (read('welcomeSeen') === 'true') return true;
+    if (read('defaultRoute')) return true;
+    return ['GP', 'WC', 'KZN', 'EC'].some((region) => !!read(`defaultRoute_${region}`));
+}
+
+export function inferRegionFromPins(getItem) {
+    const read = typeof getItem === 'function' ? getItem : (key) => safeStorage.getItem(key);
+    const stored = read('userRegion');
+    if (stored === 'GP' || stored === 'WC' || stored === 'KZN' || stored === 'EC') return stored;
+    for (const region of ['GP', 'WC', 'KZN', 'EC']) {
+        if (read(`defaultRoute_${region}`)) return region;
+    }
+    return null;
+}
+
 export const VOLATILE_FLUSH_PROTECTED_KEYS = Object.freeze([
     'next_train_device_id',
     'userProfile',
@@ -677,6 +706,32 @@ export function shouldDeleteCacheForPolicy(name, policy = cacheClearPolicy()) {
 
 export const safeStorage = {
     memoryFallback: {},
+
+    _writeLocal: function(key, value) {
+        if (typeof window === 'undefined') {
+            this.memoryFallback[key] = value;
+            return;
+        }
+        try {
+            localStorage.setItem(key, value);
+        } catch (e) {
+            console.warn(`🛡️ Guardian: localStorage.setItem blocked (Quota/Privacy). Using RAM fallback for ${key}.`);
+            this.memoryFallback[key] = value;
+        }
+    },
+
+    _removeLocal: function(key) {
+        if (typeof window === 'undefined') {
+            delete this.memoryFallback[key];
+            return;
+        }
+        try {
+            localStorage.removeItem(key);
+        } catch (e) {
+            console.warn(`🛡️ Guardian: localStorage.removeItem blocked. Using RAM fallback for ${key}.`);
+            delete this.memoryFallback[key];
+        }
+    },
     
     // Standard Synchronous Get (For UI state, preferences, etc.)
     getItem: function(key) {
@@ -691,28 +746,16 @@ export const safeStorage = {
     
     // Standard Synchronous Set
     setItem: function(key, value) {
-        if (typeof window === 'undefined') {
-            this.memoryFallback[key] = value;
-            return;
-        }
-        try {
-            localStorage.setItem(key, value);
-        } catch (e) {
-            console.warn(`🛡️ Guardian: localStorage.setItem blocked (Quota/Privacy). Using RAM fallback for ${key}.`);
-            this.memoryFallback[key] = value;
+        this._writeLocal(key, value);
+        if (PINNED_SESSION_KEY_SET.has(key) && value != null && value !== '') {
+            this._putIdb(key, value).catch(() => {});
         }
     },
     
     removeItem: function(key) {
-        if (typeof window === 'undefined') {
-            delete this.memoryFallback[key];
-            return;
-        }
-        try {
-            localStorage.removeItem(key);
-        } catch (e) {
-            console.warn(`🛡️ Guardian: localStorage.removeItem blocked. Using RAM fallback for ${key}.`);
-            delete this.memoryFallback[key];
+        this._removeLocal(key);
+        if (PINNED_SESSION_KEY_SET.has(key)) {
+            this._deleteIdb(key).catch(() => {});
         }
     },
 
@@ -809,7 +852,7 @@ export const safeStorage = {
             // Background sync to ensure IDB is up-to-date (Only once per session to prevent IO storm)
             if (!this._mirroredKeys.has(key)) {
                 this._mirroredKeys.add(key);
-                this.setResilientItem(key, val);
+                this._putIdb(key, val).catch(() => {});
             }
             return val;
         }
@@ -824,7 +867,7 @@ export const safeStorage = {
                     if (request.result && request.result.value) {
                         console.log(`🛡️ Guardian: Resurrected ${key} from IndexedDB after ITP purge.`);
                         // Restore it to fast synchronous storage for the rest of the session
-                        this.setItem(key, request.result.value);
+                        this._writeLocal(key, request.result.value);
                         resolve(request.result.value);
                     } else {
                         resolve(null);
@@ -838,9 +881,7 @@ export const safeStorage = {
         }
     },
 
-    // Synchronously saves to localStorage, then asynchronously mirrors to IndexedDB
-    setResilientItem: async function(key, value) {
-        this.setItem(key, value); // Instant UI availability
+    _putIdb: async function(key, value) {
         try {
             const db = await this._initIDB();
             return new Promise((resolve) => {
@@ -853,6 +894,33 @@ export const safeStorage = {
             console.warn("🛡️ Guardian: IDB mirror write failed.", e);
             return false;
         }
+    },
+
+    _deleteIdb: async function(key) {
+        try {
+            const db = await this._initIDB();
+            return new Promise((resolve) => {
+                const tx = db.transaction('IdentityStore', 'readwrite');
+                tx.objectStore('IdentityStore').delete(key);
+                tx.oncomplete = () => resolve(true);
+                tx.onerror = () => resolve(false);
+            });
+        } catch {
+            return false;
+        }
+    },
+
+    // Synchronously saves to localStorage, then asynchronously mirrors to IndexedDB
+    setResilientItem: async function(key, value) {
+        this._writeLocal(key, value); // Instant UI availability
+        this._mirroredKeys.add(key);
+        return this._putIdb(key, value);
+    },
+
+    removeResilientItem: async function(key) {
+        this._removeLocal(key);
+        this._mirroredKeys.delete(key);
+        return this._deleteIdb(key);
     }
 };
 
@@ -955,6 +1023,40 @@ export function restoreDeviceIdentity() {
     return restoreDevicePromise;
 }
 
+let restorePinnedPromise = null;
+
+/**
+ * iOS home-screen PWAs that hopped onto `/?v=` lost localStorage (new site
+ * sandbox) while IndexedDB on the origin still held the pin. Resurrect, then
+ * treat any defaultRoute_* as welcomeSeen so Check for Updates cannot dump a
+ * returning commuter on Welcome.
+ */
+export function restorePinnedSession() {
+    if (typeof window === 'undefined') return Promise.resolve({ welcomeSeen: false, userRegion: null });
+    if (restorePinnedPromise) return restorePinnedPromise;
+    restorePinnedPromise = (async () => {
+        await withTimeout(Promise.all(
+            PINNED_SESSION_KEYS.map((key) => safeStorage.getResilientItem(key).catch(() => null))
+        ), 2000, null);
+        if (welcomeSeenFromPinnedSession()) {
+            if (safeStorage.getItem('welcomeSeen') !== 'true') {
+                safeStorage.setItem('welcomeSeen', 'true');
+                console.log('🛡️ Guardian: Restored welcomeSeen from pinned route (iOS storage hop / ITP).');
+            }
+        }
+        const region = inferRegionFromPins();
+        if (region && !safeStorage.getItem('userRegion')) {
+            safeStorage.setItem('userRegion', region);
+            console.log(`🛡️ Guardian: Restored userRegion ${region} from pinned route.`);
+        }
+        return {
+            welcomeSeen: safeStorage.getItem('welcomeSeen') === 'true',
+            userRegion: safeStorage.getItem('userRegion') || region,
+        };
+    })();
+    return restorePinnedPromise;
+}
+
 export const _mirrorDeviceId = () => {
     if (typeof window === 'undefined') return;
     const currentId = safeStorage.getItem('next_train_device_id');
@@ -965,6 +1067,7 @@ export const _mirrorDeviceId = () => {
 
 if (typeof window !== 'undefined') {
     restoreDeviceIdentity().then(() => _mirrorDeviceId()).catch(() => _mirrorDeviceId());
+    restorePinnedSession().catch(() => {});
 
     document.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'hidden') {

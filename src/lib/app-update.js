@@ -57,30 +57,76 @@ function armQuietSkipWaiting(getRegistration) {
     schedule();
 }
 
-function hardReloadWithCacheBust(reason = 'force_update') {
+/**
+ * Same-document restart. Numeric `?v=` used to be a cache-bust; iOS home-screen
+ * PWAs treat that query as a new site (empty localStorage → Welcome + reload loop).
+ * If this boot still has a leftover numeric `?v=`, hop to the clean start URL.
+ */
+export function reloadToApplyUpdate(reason = 'force_update') {
     markPendingReload(reason, 800);
-    const path = window.location.pathname || withBase('/');
-    window.location.href = path + '?v=' + Date.now();
+    if (typeof window === 'undefined') return;
+    try {
+        const url = new URL(window.location.href);
+        const v = url.searchParams.get('v');
+        if (v && /^\d{8,}$/.test(v)) {
+            url.searchParams.delete('v');
+            const next = `${url.pathname}${url.search}${url.hash}`;
+            console.log(`🛡️ Guardian: Restarting to implement the new version (${reason}). Stripping leftover ?v= so iOS keeps the pinned route.`);
+            window.location.replace(next);
+            return;
+        }
+    } catch { /* fall through to reload */ }
+    console.log(`🛡️ Guardian: Restarting now to implement the new version (${reason}). Same URL (no ?v= hop).`);
+    window.location.reload();
 }
 
-/**
- * Incoming = version on the CDN (`app-version.json`), not the shell currently running.
- * Returns null when the probe fails so callers do not treat this shell as "incoming".
- */
-export async function peekIncomingVersion() {
+const FORCE_RELOAD_CAP_KEY = 'nt_force_update_cap';
+const MAX_FORCE_RELOADS_PER_VERSION = 3;
+const MAX_UNSTICKS_PER_VERSION = 1;
+const VERSION_PROBE_TIMEOUT_MS = 4000;
+
+function readForceCap(version) {
     try {
-        const res = await fetch(withBase('app-version.json') + '?v=' + Date.now(), {
-            cache: 'no-store',
-            headers: { Accept: 'application/json' },
-        });
-        if (res.ok) {
-            const data = await res.json();
-            if (data && data.version) return String(data.version).split(' - ')[0];
-        }
-    } catch (e) {
-        console.warn('🛡️ Guardian: Failed to peek at incoming update version.', e);
+        const raw = sessionStorage.getItem(FORCE_RELOAD_CAP_KEY);
+        const data = raw ? JSON.parse(raw) : null;
+        if (!data || data.version !== version) return { version, reloads: 0, unsticks: 0 };
+        return {
+            version,
+            reloads: Number(data.reloads) || 0,
+            unsticks: Number(data.unsticks) || 0,
+        };
+    } catch {
+        return { version, reloads: 0, unsticks: 0 };
     }
-    return null;
+}
+
+function writeForceCap(cap) {
+    try { sessionStorage.setItem(FORCE_RELOAD_CAP_KEY, JSON.stringify(cap)); } catch { /* ignore */ }
+}
+
+function probeTimeout(promise, ms, fallback = null) {
+    return new Promise((resolve) => {
+        let settled = false;
+        const timer = setTimeout(() => {
+            if (settled) return;
+            settled = true;
+            resolve(fallback);
+        }, ms);
+        Promise.resolve(promise).then(
+            (value) => {
+                if (settled) return;
+                settled = true;
+                clearTimeout(timer);
+                resolve(value);
+            },
+            () => {
+                if (settled) return;
+                settled = true;
+                clearTimeout(timer);
+                resolve(fallback);
+            },
+        );
+    });
 }
 
 /** Compare release ids shaped like V9_09.12.1. Invalid ids are never newer. */
@@ -96,6 +142,121 @@ export function isAppVersionNewer(candidate, current = APP_VERSION) {
         if (next[i] !== active[i]) return next[i] > active[i];
     }
     return false;
+}
+
+export function normalizeAppVersionId(value) {
+    const id = String(value || '').split(' - ')[0].trim();
+    return /^V?\d+_\d{2}\.\d{2}\.\d+$/i.test(id) ? id : '';
+}
+
+/** Newest-wins across probe sources so a stale SW/HTTP cache cannot hide a live ship. */
+export function pickNewestAppVersion(versions, fallback = null) {
+    let best = normalizeAppVersionId(fallback);
+    for (const raw of versions || []) {
+        const id = normalizeAppVersionId(raw);
+        if (!id) continue;
+        if (!best || isAppVersionNewer(id, best)) best = id;
+    }
+    return best || null;
+}
+
+/**
+ * Same-origin plus dump mirrors. An old controlling SW can serve a stale
+ * `/app-version.json`; jsDelivr/raw are outside that precache.
+ */
+export function listAppVersionProbeUrls() {
+    const seen = new Set();
+    const urls = [];
+    const add = (value) => {
+        const raw = String(value || '').trim();
+        if (!raw) return;
+        let abs = raw;
+        try {
+            if (typeof location !== 'undefined' && location.origin) {
+                abs = new URL(raw, location.origin).href;
+            }
+        } catch { /* keep raw */ }
+        if (seen.has(abs)) return;
+        seen.add(abs);
+        urls.push(abs);
+    };
+    add(withBase('app-version.json'));
+    add('https://nexttrain.co.za/app-version.json');
+    add('https://cdn.jsdelivr.net/gh/enock-elk/next-train-astro@main/public/app-version.json');
+    add('https://raw.githubusercontent.com/enock-elk/next-train-astro/main/public/app-version.json');
+    add('https://enock-elk.github.io/next-train-astro/app-version.json');
+    return urls;
+}
+
+function isOriginVersionProbe(url) {
+    try {
+        if (typeof location === 'undefined' || !location.origin) return /nexttrain\.co\.za\/app-version\.json$/i.test(url);
+        return new URL(url).origin === location.origin;
+    } catch {
+        return false;
+    }
+}
+
+async function fetchPublishedVersion(url) {
+    const bust = url.includes('?') ? `&ntv=${Date.now()}` : `?ntv=${Date.now()}`;
+    const res = await fetch(url + bust, {
+        cache: 'no-store',
+        headers: {
+            Accept: 'application/json',
+            'Cache-Control': 'no-cache',
+            Pragma: 'no-cache',
+        },
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return normalizeAppVersionId(data && (data.version || data.appVersion || data.APP_VERSION));
+}
+
+/**
+ * Incoming = newest published `app-version.json` across origin + dump mirrors.
+ * Returns null when every probe fails so callers do not treat this shell as "incoming".
+ */
+export async function peekIncomingVersionReport() {
+    const urls = listAppVersionProbeUrls();
+    const sources = await Promise.all(urls.map(async (url) => {
+        const version = await probeTimeout(fetchPublishedVersion(url), VERSION_PROBE_TIMEOUT_MS, null);
+        return { url, version };
+    }));
+    const newest = pickNewestAppVersion(sources.map((row) => row.version));
+    const originRow = sources.find((row) => isOriginVersionProbe(row.url) && row.version);
+    const summary = sources
+        .map((row) => {
+            let host = row.url;
+            try { host = new URL(row.url).host + new URL(row.url).pathname; } catch { /* raw */ }
+            return `${host}=${row.version || 'fail'}`;
+        })
+        .join(' | ');
+    console.log(`🛡️ Guardian: Version probe → ${summary} | newest ${newest || 'none'} | running ${APP_VERSION}`);
+    return { version: newest, originVersion: originRow?.version || null, sources };
+}
+
+export async function peekIncomingVersion() {
+    try {
+        const report = await peekIncomingVersionReport();
+        return report.version;
+    } catch (e) {
+        console.warn('🛡️ Guardian: Failed to peek at incoming update version.', e);
+        return null;
+    }
+}
+
+/**
+ * Auto force-update target. Always return a published version newer than the
+ * running shell so we *try* to install. Dump-ahead of production is handled
+ * by already_current (no auto unstick / no reload). Stale origin JSON still
+ * yields the dump.
+ */
+export function pickForceUpdateTarget(report, running = APP_VERSION) {
+    const newest = report?.version || null;
+    const originVersion = report?.originVersion || null;
+    if (originVersion && isAppVersionNewer(originVersion, running)) return originVersion;
+    if (newest && isAppVersionNewer(newest, running)) return newest;
+    return null;
 }
 
 /** Visible force-update toast (SPA parity) — always names the *incoming* version. */
@@ -215,6 +376,32 @@ export async function installIncomingServiceWorker(timeoutMs = INCOMING_UPDATE_F
     });
 }
 
+/** Drop a stuck controlling worker so the next load can fetch a fresh sw.js. Pins stay. */
+export async function unstickStaleServiceWorker() {
+    if (typeof window === 'undefined') return false;
+    try {
+        if ('serviceWorker' in navigator) {
+            const regs = await navigator.serviceWorker.getRegistrations();
+            for (const reg of regs) {
+                console.log('🛡️ Guardian: Unsticking stale service worker →', reg.active?.scriptURL || reg.waiting?.scriptURL || '(registration)');
+                await reg.unregister();
+            }
+        }
+    } catch (e) {
+        console.warn('🛡️ Guardian: Unstick unregister failed', e);
+    }
+    try {
+        if ('caches' in window) {
+            const names = await caches.keys();
+            await Promise.all(names.map((name) => caches.delete(name)));
+            console.log('🛡️ Guardian: Unstick dropped Cache Storage so the next boot cannot mix hashed shells.');
+        }
+    } catch (e) {
+        console.warn('🛡️ Guardian: Unstick cache delete failed', e);
+    }
+    return true;
+}
+
 export async function activateWaitingServiceWorker() {
     if (!('serviceWorker' in navigator)) return true;
     try {
@@ -245,20 +432,70 @@ export async function activateWaitingServiceWorker() {
 }
 
 export async function handleUpdateClick(newVersion, options = {}) {
-    // Never wipe Cache Storage / unregister the SW here. That left returning
-    // commuters with no shell if the reload raced a lock-screen or drop.
-    // Activate a waiting worker when we can, then cache-bust navigate.
+    // Never wipe identity here. Activate a waiting worker when we can, then
+    // same-URL reload. Do not write app_installed_version before the new shell
+    // is actually running (that was the stored-20.3 / running-20.1 reload loop).
     if (!await updateNetworkPreflight()) {
         showSavedTimesToast();
         return false;
     }
-    if (options.announce === true) showCrucialUpdateToast(newVersion || APP_VERSION);
+
+    const target = normalizeAppVersionId(newVersion) || await peekIncomingVersion() || APP_VERSION;
+    const newer = isAppVersionNewer(target, APP_VERSION);
+    const cap = readForceCap(target);
+    const ignoreCap = options.ignoreCap === true;
+    const unstickMode = options.unstick === 'always';
+
+    if (newer) {
+        console.log(`🛡️ Guardian: NEW APP VERSION found: ${target} (running ${APP_VERSION}). Not downloaded yet.`);
+    } else {
+        console.log(`🛡️ Guardian: Update check — running ${APP_VERSION}, published ${target}.`);
+    }
+
+    if (!ignoreCap && newer && cap.reloads >= MAX_FORCE_RELOADS_PER_VERSION) {
+        console.warn(`🛡️ Guardian: Force-update restart cap (${MAX_FORCE_RELOADS_PER_VERSION}) reached for ${target}. Stopping so this session cannot loop.`);
+        return false;
+    }
+
+    if (options.announce === true && newer) showCrucialUpdateToast(target);
 
     markPendingReload('version_enforce', 10000);
-    if (!await activateWaitingServiceWorker()) return false;
+    const installed = await installIncomingServiceWorker();
+    if (!installed.ok) {
+        console.warn(`🛡️ Guardian: Incoming version ${target} NOT downloaded (${installed.reason}). Keeping ${APP_VERSION}. Will retry.`);
+        return false;
+    }
+    console.log(`🛡️ Guardian: Incoming version ${target} downloaded (${installed.reason}).`);
 
-    safeStorage.setItem('app_installed_version', newVersion || APP_VERSION);
-    hardReloadWithCacheBust('version_enforce');
+    if (installed.reason === 'already_current') {
+        if (newer && unstickMode) {
+            if (!ignoreCap && cap.unsticks >= MAX_UNSTICKS_PER_VERSION) {
+                console.warn(`🛡️ Guardian: Service worker still ${APP_VERSION} while published ${target}, but unstick already ran. Not looping.`);
+                return false;
+            }
+            console.warn(`🛡️ Guardian: Service worker still ${APP_VERSION} while published ${target} (cached sw.js). Unsticking: unregister + drop Cache Storage. Pin kept. Restart will fetch the new shell.`);
+            await unstickStaleServiceWorker();
+            writeForceCap({ version: target, reloads: cap.reloads + 1, unsticks: cap.unsticks + 1 });
+            console.log(`🛡️ Guardian: Restarting in this tick to implement ${target}.`);
+            reloadToApplyUpdate('version_unstick');
+            return true;
+        }
+        if (!newer) {
+            console.log(`🛡️ Guardian: Already on ${APP_VERSION}. No restart.`);
+            return false;
+        }
+        console.log(`🛡️ Guardian: Published ${target} is newer than ${APP_VERSION} but the origin service worker is already_current (dump-ahead of production, or cached sw.js). Auto force-update will not restart until the worker actually installs. Check for Updates and NUKE can unstick.`);
+        return false;
+    }
+
+    if (!await activateWaitingServiceWorker()) {
+        console.warn(`🛡️ Guardian: Incoming version ${target} downloaded but skipWaiting did not activate. Keeping ${APP_VERSION}.`);
+        return false;
+    }
+
+    writeForceCap({ version: target, reloads: cap.reloads + 1, unsticks: cap.unsticks });
+    console.log(`🛡️ Guardian: Incoming version ${target} is active. Restarting now to implement it (running was ${APP_VERSION}).`);
+    reloadToApplyUpdate('version_enforce');
     return true;
 }
 
@@ -275,7 +512,7 @@ function scheduleForcedUpdate(version) {
         if (typeof navigator !== 'undefined' && !navigator.onLine) return;
         const announce = !forcedUpdateAnnounced;
         forcedUpdateAnnounced = true;
-        forcedUpdatePromise = handleUpdateClick(window.__ntForcedUpdateVersion, { announce })
+        forcedUpdatePromise = handleUpdateClick(window.__ntForcedUpdateVersion, { announce, unstick: false })
             .then((started) => {
                 if (started) window.__ntForcedUpdateVersion = null;
             })
@@ -293,6 +530,18 @@ function scheduleForcedUpdate(version) {
         setInterval(attempt, 60_000);
     }
     setTimeout(attempt, 1600);
+}
+
+async function probeNetworkAndForceUpdate() {
+    if (!FORCE_UPDATE_REQUIRED) return;
+    const report = await peekIncomingVersionReport();
+    const target = pickForceUpdateTarget(report, APP_VERSION);
+    if (!target) {
+        console.log(`🛡️ Guardian: No newer app version than ${APP_VERSION}. Published ${report.version || 'unknown'}.`);
+        return;
+    }
+    console.log(`🛡️ Guardian: NEW APP VERSION found: ${target} (running ${APP_VERSION}). Not downloaded yet. Force-update will download, then restart to implement it.`);
+    scheduleForcedUpdate(target);
 }
 
 export function markAppUpdatedToast() {
@@ -333,7 +582,7 @@ export function maybeShowLatestVersionToast() {
     showToast(`You’re on the latest version, ${APP_VERSION}.`, 'info', 3000);
 }
 
-/** Boot check: stored shell version vs bundled APP_VERSION. */
+/** Boot check: record the running shell, then peek the network for a newer ship. */
 export function enforceAppVersion() {
     if (typeof window === 'undefined') return;
 
@@ -344,19 +593,15 @@ export function enforceAppVersion() {
     const storedVersion = safeStorage.getItem('app_installed_version');
 
     if (storedVersion && storedVersion !== currentVersion) {
-        console.log(`[Guardian] Version Upgrade Available: ${storedVersion} -> ${currentVersion}`);
-
-        if (FORCE_UPDATE_REQUIRED) {
-            scheduleForcedUpdate(currentVersion);
-            return;
-        }
-
-        // New shell is already running — record it. Do not prompt or reload.
-        safeStorage.setItem('app_installed_version', currentVersion);
-        return;
+        console.log(`[Guardian] Running shell is ${currentVersion} (was stored ${storedVersion}). Recording this shell — not looping on stored vs running.`);
     }
+    safeStorage.setItem('app_installed_version', currentVersion);
 
-    if (!storedVersion) safeStorage.setItem('app_installed_version', currentVersion);
+    if (FORCE_UPDATE_REQUIRED) {
+        probeNetworkAndForceUpdate().catch((e) => {
+            console.warn('🛡️ Guardian: Force-update probe failed', e);
+        });
+    }
 }
 
 /**
@@ -366,21 +611,24 @@ export function enforceAppVersion() {
 export function bindAppUpdateLifecycle(registerSW) {
     if (typeof window === 'undefined' || typeof registerSW !== 'function') return;
 
-    // reloadPage:false — skipWaiting only; controllerchange does SPA-style ?v= hard reload
+    // reloadPage:false — skipWaiting only; controllerchange reloads the same URL
     const api = { updateSW: async () => {} };
 
     api.updateSW = registerSW({
         immediate: true,
         async onNeedRefresh() {
-            // New SW is waiting (precached). Do not toast and do not
-            // skipWaiting while this tab is in the foreground — that used to
-            // fire a red "Crucial system update" banner and a ?v= reload on
-            // top of a shell that was already running. The waiting worker
-            // activates after a stretch of background time (below) or on the
-            // next cold launch. FORCE_UPDATE_REQUIRED is a separate, last-resort
+            // New SW is waiting (precached). Same-version hash updates stay quiet.
+            // A *newer* APP_VERSION is a force-update: log download state and restart.
             // path in enforceAppVersion(); it is not how FOUC is fixed.
             const incomingVersion = await peekIncomingVersion();
+            const downloaded = true;
+            if (incomingVersion && isAppVersionNewer(incomingVersion, APP_VERSION) && FORCE_UPDATE_REQUIRED) {
+                console.log(`🛡️ Guardian: NEW APP VERSION found: ${incomingVersion} (running ${APP_VERSION}). Downloaded: yes (waiting SW). Restart will implement it.`);
+                scheduleForcedUpdate(incomingVersion);
+                return;
+            }
             console.log('GUARDIAN: Incoming update waiting (quiet) →', incomingVersion);
+            console.log(`🛡️ Guardian: Incoming SW downloaded: ${downloaded ? 'yes' : 'no'}. Quiet — applies after idle skipWaiting or next launch.`);
         },
         onRegisteredSW(swUrl, registration) {
             console.log(`🛡️ Guardian PWA: Service worker registered at ${swUrl}`);
@@ -393,8 +641,17 @@ export function bindAppUpdateLifecycle(registerSW) {
                     setTimeout(() => reject(new Error('sw_update_timeout')), 4000);
                 });
                 Promise.race([update, timeout]).catch(() => {});
+                if (FORCE_UPDATE_REQUIRED) {
+                    peekIncomingVersionReport().then((report) => {
+                        const target = pickForceUpdateTarget(report, APP_VERSION);
+                        if (!target) return;
+                        const waiting = !!(registration.waiting || registration.installing);
+                        console.log(`🛡️ Guardian: NEW APP VERSION found: ${target} (running ${APP_VERSION}). Downloaded: ${waiting ? 'yes (waiting/installing)' : 'not yet'}. ${waiting ? 'Restart will implement it.' : 'Downloading, then restart.'}`);
+                        scheduleForcedUpdate(target);
+                    }).catch(() => {});
+                }
             };
-            setInterval(checkForWaitingSw, 60 * 60 * 1000);
+            setInterval(checkForWaitingSw, 5 * 60 * 1000);
             document.addEventListener('visibilitychange', () => {
                 if (document.visibilityState === 'visible') checkForWaitingSw();
             });
@@ -460,7 +717,7 @@ export function bindAppUpdateLifecycle(registerSW) {
 
         refreshing = true;
         window.__ntPendingUpdateToken = null;
-        hardReloadWithCacheBust('sw_controllerchange');
+        reloadToApplyUpdate('sw_controllerchange');
     };
 
     navigator.serviceWorker.addEventListener('controllerchange', () => {

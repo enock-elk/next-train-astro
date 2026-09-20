@@ -41,7 +41,7 @@ import { withBase } from '../lib/config.js';
     // @ts-nocheck — pre-existing bridge; typed globals live in env.d.ts
     import { $userRegion, $currentRouteId } from '../store.js';
     import { ROUTES, getCorridorLabel } from '../lib/config.js';
-    import { safeStorage, formatRouteLabelHtml } from '../lib/utils.js';
+    import { safeStorage, formatRouteLabelHtml, restorePinnedSession } from '../lib/utils.js';
     import { loadAllSchedules, executeRegionSwap } from '../lib/logic.js';
     import { prepareDeeplinkIntents, flushPendingDeeplinkIntents } from '../lib/deeplink.js';
 
@@ -111,7 +111,7 @@ import { withBase } from '../lib/config.js';
                         window._suppressReloads = true;
                     }
 
-                    // 1. Persist selection to persistent memory
+                    // 1. Persist selection to persistent memory (localStorage + IndexedDB)
                     safeStorage.setItem('userRegion', region);
                     safeStorage.setItem('defaultRoute_' + region, route.id);
                     safeStorage.setItem('welcomeSeen', 'true');
@@ -174,12 +174,20 @@ import { withBase } from '../lib/config.js';
         });
     };
 
-    const initWelcomeScreen = () => {
+    const initWelcomeScreen = async () => {
         const modal = document.getElementById('welcome-modal');
         if (!modal) return;
 
+        try { await restorePinnedSession(); } catch (e) {}
+
         let isOnboardMap = false;
         try { isOnboardMap = new URLSearchParams(window.location.search).get('onboard') === 'map'; } catch (e) {}
+
+        const restoredRegion = $userRegion.get();
+        const lsRegion = safeStorage.getItem('userRegion');
+        if (lsRegion && lsRegion !== restoredRegion) {
+            $userRegion.set(lsRegion);
+        }
 
         const welcomeSeen = safeStorage.getItem('welcomeSeen') === 'true';
         let activeRegion = $userRegion.get() || 'GP';

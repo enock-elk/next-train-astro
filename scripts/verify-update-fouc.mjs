@@ -149,7 +149,12 @@ assert(!needRefresh.includes('showCrucialUpdateToast'), 'onNeedRefresh does not 
 assert(!needRefresh.includes('__ntPendingUpdateToken'), 'onNeedRefresh does not force a reload token');
 assert(appUpdate.includes('it is not how FOUC is fixed'), 'app-update comments that force-update is not the FOUC fix');
 assert(appUpdate.includes('export async function peekIncomingVersion'), 'incoming version peek is shared');
-assert(appUpdate.includes('return null;'), 'failed version peek does not pretend this shell is incoming');
+assert(appUpdate.includes('return report.version;'), 'failed version peek does not pretend this shell is incoming');
+assert(appUpdate.includes('listAppVersionProbeUrls'), 'version peek uses several published URLs');
+assert(appUpdate.includes('reloadToApplyUpdate'), 'update restart stays on the same URL');
+assert(!appUpdate.includes("path + '?v=' + Date.now()"), 'app-update does not invent numeric ?v=');
+assert(layout.includes('ntLeavingCacheBust'), 'Layout hops off leftover numeric ?v= before minting a device id');
+assert(layout.includes('window.location.replace(cleanEarly)'), 'Layout uses location.replace for the iOS start-URL hop');
 assert(appUpdate.includes('markLatestVersionToast'), 'current-version reset schedules a distinct post-reload toast');
 assert(appUpdate.includes('maybeShowLatestVersionToast'), 'current-version toast is shown after the reset reload');
 assert(isAppVersionNewer('V9_09.12.2', 'V9_09.12.1'), 'same-day higher release is newer');
@@ -168,6 +173,8 @@ assert(hubJs.includes('skipNetworkPreflight'), 'confirmed Check for Updates can 
 assert(hubModals.includes('id="network-slow-confirm-modal"'), 'slow-network confirm lives next to region confirm');
 assert(hubModals.includes('Your network seems slow. Are you sure?'), 'slow-network confirm copy is a question, not a hard stop');
 assert(hubJs.includes('peekIncomingVersion'), 'Check for Updates probes the published version before restart');
+assert(hubJs.includes('reloadToApplyUpdate'), 'Check for Updates restarts without a numeric ?v= hop');
+assert(!hubJs.includes("pathname + '?v=' + Date.now()"), 'Check for Updates does not invent numeric ?v=');
 assert(hubJs.includes('latestVersion: !!(incomingVersion && !isAppVersionNewer(incomingVersion, APP_VERSION))'), 'Check for Updates always resets and classifies the post-reload toast');
 assert(hubJs.includes("policy.systemKillswitch || (source === 'check_updates' && !skipNetworkPreflight)"), 'Check for Updates still preflights unless the commuter confirmed');
 assert(appUpdate.includes('You’re on the latest version'), 'current release gets a grey informational toast after restart');
@@ -274,6 +281,19 @@ try {
 } finally {
     rmSync(dir, { recursive: true, force: true });
 }
+
+const worker = readFileSync(new URL('../workers/nexttrain-edge/worker.js', import.meta.url), 'utf8');
+assert(worker.includes("url.pathname === '/app-version.json'"), 'edge worker intercepts app-version.json');
+assert(worker.includes("url.pathname === '/sw.js'"), 'edge worker intercepts sw.js');
+assert(worker.includes('no-store, no-cache, must-revalidate'), 'edge worker serves update probes with no-store');
+const wrangler = readFileSync(new URL('../workers/nexttrain-edge/wrangler.jsonc', import.meta.url), 'utf8');
+assert(wrangler.includes('nexttrain.co.za/app-version.json'), 'wrangler routes app-version.json');
+assert(wrangler.includes('nexttrain.co.za/sw.js'), 'wrangler routes sw.js');
+const welcome = readFileSync(new URL('../src/components/WelcomeModal.astro', import.meta.url), 'utf8');
+assert(welcome.includes('restorePinnedSession'), 'Welcome waits for IDB pin resurrection');
+const utilsSrc = readFileSync(new URL('../src/lib/utils.js', import.meta.url), 'utf8');
+assert(utilsSrc.includes('PINNED_SESSION_KEYS'), 'pin/welcome keys are mirrored to IndexedDB');
+assert(utilsSrc.includes('export function restorePinnedSession'), 'pinned session restore is exported');
 
 if (failures.length) {
     console.error(`verify-update-fouc: ${failures.length} failed`);

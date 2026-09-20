@@ -14,7 +14,7 @@
  * Changelog / What’s New is optional: skip both, or write only "no release notes."
  * Always add ADMIN_CHANGELOG[APP_VERSION] (System Health Build notes).
  */
-export const APP_VERSION = "V9_09.20.3";
+export const APP_VERSION = "V9_09.20.4";
 
 /** Public support channels (About modal, lifeboat help.html, Safe Mode). */
 export const SUPPORT_EMAIL = 'admin@nexttrain.co.za';
@@ -59,9 +59,10 @@ export function withBase(path = '/') {
 // Set to 'false' for silent background updates (Stale-While-Revalidate).
 // Admin NUKE (killswitch.json) still wipes caches for online clients.
 //
-// This build requires the forced path. app-update.js defers it until an active
-// reachability preflight succeeds, keeps the current shell offline, and activates
-// an already-waiting worker before the cache-bust navigation.
+// This build requires the forced path. app-update.js peeks published
+// app-version.json (origin + dump mirrors), defers until an active
+// reachability preflight succeeds, keeps the current shell offline, installs
+// the incoming worker, then reloads the same URL (no numeric ?v= hop).
 export const FORCE_UPDATE_REQUIRED = true;
 
 // --- 🛡️ GUARDIAN PHASE 5: WATERFALL DATA PIPELINE. ---

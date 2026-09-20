@@ -1,7 +1,7 @@
 {
   "branch": "map-gold",
   "frozenAt": "fae7cdbde2266f07bab5839a566599af490dd700",
-  "version": "V9_09.20.3",
+  "version": "V9_09.20.4",
   "note": "Gold snapshot of this build: planner fare uses painted corridor km, static-map station hops, rail-tangent trains, baked tracks, map runtime, advert handling. Live trains slow on station approach, interpolate at most 7s, and grey after 7s without a GPS ping; a successful ping cancels the glide. Broadcast every 4s while testing. Diff against origin/map-gold. Fast-forward map-gold after this lands on main. Never force-push map-gold.",
   "files": {
     "public/tracks/rail-tracks-EC.geojson": {

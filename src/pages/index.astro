@@ -255,7 +255,7 @@ const faqLd = {
     import { loadAllSchedules, startClock, currentTime, currentDayType, syncRegionDisplayDom, ensureReachabilityProbed, bindKillswitchWatch } from '../lib/logic.js';
     import { $currentRouteId, $userRegion, hydrateStores } from '../store.js';
     import { ROUTES, withBase } from '../lib/config.js';
-    import { safeStorage } from '../lib/utils.js';
+    import { safeStorage, restorePinnedSession } from '../lib/utils.js';
 
     const revealAppShell = () => {
         const main = document.getElementById('main-content');
@@ -489,6 +489,9 @@ const faqLd = {
                 await flushPendingDeeplinkIntents();
                 return;
             }
+
+            const pinned = await restorePinnedSession();
+            if (pinned?.userRegion) $userRegion.set(pinned.userRegion);
 
             const welcomeSeen = safeStorage.getItem('welcomeSeen') === 'true';
             if (!welcomeSeen) {

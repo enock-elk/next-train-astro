@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_09.20.4': [
+        'PWA/TWA update: FORCE_UPDATE peeks published app-version.json from origin plus jsDelivr/raw/github.io and newest-wins, so a stale SW/HTTP cache cannot report 20.1 when 20.3+ is live. Install the incoming worker before skipWaiting. Do not write app_installed_version before the new shell runs. Same-URL reload (no numeric ?v=) so iOS home-screen bookmarks keep localStorage. Leftover ?v= hops to the clean start URL before minting a device id. Pin/welcomeSeen/userRegion mirror into IndexedDB and resurrect; any defaultRoute_* counts as welcomeSeen. Force-update restart cap 3 plus one unstick. Check for Updates names the published version. NUKE polls every 15s while visible and logs when found, whether the incoming shell downloaded, and when restart implements it. Console logs new versions found, downloaded yes/no, and restart timing. No What’s New. forceShow stays false. FORCE_UPDATE_REQUIRED stays true. nexttrain-edge now no-store for /app-version.json and /sw.js (needs wrangler deploy).',
+    ],
     'V9_09.20.3': [
         'Live trains: station-approach slowing stays. Interpolation caps at 7s; a successful GPS ping cancels the glide and retargets. Broadcast every 4s while testing (all speed bands) so a ping can land before the 7s cap. After 7s without a successful ping, sharer and listeners pause to grey (staleGps). compactPingsForMap switches the train glyph to another rider’s fresh ping; if nobody is reachable the last point stays grey. Receivers locally grey even if the sharer cannot write. Slow/station GPS still counts as an accurate ping. No What’s New (live location stays hidden). forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
     ],

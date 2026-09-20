@@ -336,9 +336,9 @@ assert(!communityView.includes('mt-6 p-2 rounded-full'), 'refresh button is not 
 assert(!communityView.includes('min-h-[1rem]'), 'composer error does not reserve a blank line');
 assert(communityView.includes('min-h-[2.75rem]'), 'composer field is compact');
 const communityJs = readFileSync(new URL('../src/lib/community.js', import.meta.url), 'utf8');
-assert(communityJs.includes('community-bubble-marks'), 'points render on named bubbles');
+assert(communityJs.includes('community-bubble-name'), 'name stays on the far left of the bubble row');
 assert(communityJs.includes('grouped'), 'consecutive same-author posts still omit the name row');
-assert(communityJs.includes('renderBubbleMarksHtml'), 'marks sit on the name row, not the title');
+assert(communityJs.includes('renderBubbleMarksHtml'), 'points render on named bubbles');
 assert(communityJs.includes('No posts on this line yet'), 'Community empty heading stays');
 assert(communityJs.includes('Be the first to share a heads-up for fellow passengers.'), 'Community empty state keeps the first-post invitation');
 assert(!/shouting match/i.test(communityJs), 'Community empty copy dropped the shouting-match lecture');

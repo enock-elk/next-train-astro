@@ -1,6 +1,6 @@
 {
   "branch": "map-gold",
-  "frozenAt": "5756de776563f35de44a7e2194c94107099cadfd",
+  "frozenAt": "b34aa5b139f628bd762e733e02fdc651cf17fae1",
   "version": "V9_09.20.2",
   "note": "Gold snapshot of this build: planner fare uses painted corridor km, static-map station hops, rail-tangent trains, baked tracks, map runtime, advert handling. Tracking card title is dest Train id, opens from the green pill, and is draggable. GPS jitter inside the accuracy circle is 0 km/h. Diff against origin/map-gold. Fast-forward map-gold after this lands on main. Never force-push map-gold.",
   "files": {

@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_09.21.15': [
+        'INP: VIEW FULL TIMETABLE and Select Route open the modal first, then yield (scheduler.yield or double rAF) before building the grid or route list. Corridor label on the route pill keeps a reserved row (invisible, not display:none) so the pill does not grow. Ads, splash, and board paint are unchanged. No What’s New. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
+    ],
     'V9_09.21.14': [
         'Pretoria-JHB corridor Open / Plan links go to ?plan=PRETORIA~JOHANNESBURG so a first visit skips Welcome and opens the trip plan. Corridor page ships a weekday 10:00 trip-plan screenshot like route landings. SW navigateFallback now denylists sitemap.xml and robots.txt so an installed PWA cannot paint #home over the urlset. Admin inbox version chips no longer start hold-to-edit. Sentry also ignores ResizeObserver loop completed with undelivered notifications. No What’s New. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
     ],

@@ -1290,6 +1290,12 @@ html:not([data-admin-authed="1"]) #ride-nearby-btn {
   color: var(--nt-text) !important;
 }
 
+/* Reserve the corridor row so the pill does not grow when a label appears. */
+#route-corridor-label {
+  display: block;
+  min-height: 0.75rem;
+}
+
 /* Classic: white title on blue (light); pack-blue title on navy (dark).
    Nav items must not stay slate/gray on a blue bar. */
 html[data-colour-pack="classic"] #current-day,

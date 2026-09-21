@@ -244,6 +244,19 @@ assert(shouldOpenRoutePicker({ swapGen: 1, currentGen: 2, currentRouteId: null }
 {
     const { readFileSync } = await import('node:fs');
     const ui = readFileSync(new URL('../src/lib/ui.js', import.meta.url), 'utf8');
+    assert(ui.includes('export function yieldToPaint'), 'yieldToPaint is exported for INP yields');
+    assert(ui.includes('scheduler') && ui.includes('requestAnimationFrame'), 'yieldToPaint uses scheduler.yield or double rAF');
+    const gridJs = readFileSync(new URL('../src/lib/timetable-grid.js', import.meta.url), 'utf8');
+    assert(gridJs.includes('await yieldToPaint()'), 'full timetable yields after opening the modal');
+    assert(gridJs.includes('Loading timetable'), 'full timetable shows a short placeholder on first open');
+    const openIdx = gridJs.indexOf("openSmoothModal('full-schedule-modal')");
+    const buildIdx = gridJs.lastIndexOf('_buildGridHTML');
+    assert(openIdx > -1 && buildIdx > openIdx, 'full timetable opens the modal before building the grid HTML');
+    const boardUi = readFileSync(new URL('../src/lib/live-board-ui.js', import.meta.url), 'utf8');
+    const picker = boardUi.match(/export function openRegionRoutePicker\(\) \{[\s\S]*?\n\}/);
+    assert(!!picker, 'openRegionRoutePicker is a function');
+    assert(picker[0].indexOf('openSmoothModal') < picker[0].indexOf('renderRouteMenu'), 'Select Route opens before renderRouteMenu');
+    assert(picker[0].includes('yieldToPaint'), 'Select Route yields before the route list');
     assert(ui.includes('xbrowser'), 'crash shield ignores xbrowser extension noise');
     assert(ui.includes('swbrowser'), 'crash shield ignores swbrowser extension noise');
     assert(ui.includes("text === 'Uncaught'"), 'crash shield ignores empty Uncaught');

@@ -44,6 +44,7 @@ import { withBase } from '../lib/config.js';
     import { safeStorage, formatRouteLabelHtml, restorePinnedSession } from '../lib/utils.js';
     import { loadAllSchedules, executeRegionSwap } from '../lib/logic.js';
     import { prepareDeeplinkIntents, flushPendingDeeplinkIntents } from '../lib/deeplink.js';
+    import { markWelcomeShownThisVisit, snapshotReturningForStartupLocate, maybeAutoLocateBoard } from '../lib/auto-locate.js';
 
     prepareDeeplinkIntents();
 
@@ -179,6 +180,7 @@ import { withBase } from '../lib/config.js';
         if (!modal) return;
 
         try { await restorePinnedSession(); } catch (e) {}
+        const returningAtBoot = snapshotReturningForStartupLocate();
 
         let isOnboardMap = false;
         try { isOnboardMap = new URLSearchParams(window.location.search).get('onboard') === 'map'; } catch (e) {}
@@ -222,6 +224,7 @@ import { withBase } from '../lib/config.js';
         // Brand-new users + legacy map onboarding deep-links
         // Shared route/planner links skip Welcome so the destination opens immediately
         if ((!welcomeSeen || isOnboardMap) && !hasInboundShare) {
+            markWelcomeShownThisVisit();
             if (isOnboardMap) {
                 try {
                     const urlObj = new URL(window.location.href);
@@ -253,6 +256,8 @@ import { withBase } from '../lib/config.js';
                     }
                 });
             });
+        } else if (returningAtBoot) {
+            maybeAutoLocateBoard().catch(() => {});
         }
     };
 

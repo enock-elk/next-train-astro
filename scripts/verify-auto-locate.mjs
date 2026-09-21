@@ -9,6 +9,10 @@ import {
     maybeAutoLocateBoard,
     resetAutoLocateDebounce,
     resetStartupLocateOverwrite,
+    resetStartupLocateReturningState,
+    markWelcomeShownThisVisit,
+    snapshotReturningForStartupLocate,
+    isReturningForStartupLocate,
     AUTO_LOCATE_DEBOUNCE_MS,
     GEO_GRANTED_KEY,
     stationPickerIsEngaged,
@@ -96,18 +100,75 @@ assert(boardIsReadyForAutoLocate({
     fromAlreadySet: true,
     startupOverwrite: true,
 }) === true, 'installed-app startup may refresh a restored station once');
+assert(boardIsReadyForAutoLocate({
+    welcomeActive: false,
+    returningCommuter: false,
+    routeId: 'pta-pien',
+    nextTrainActive: true,
+    visible: true,
+}) === false, 'brand-new commuters block startup auto-locate');
+
+resetStartupLocateReturningState();
+assert(isReturningForStartupLocate({ getItem: () => null }) === false, 'empty storage is a first visit');
+assert(isReturningForStartupLocate({
+    getItem: (key) => (key === 'welcomeSeen' ? 'true' : null),
+}) === true, 'welcomeSeen without Welcome this visit is returning');
+assert(isReturningForStartupLocate({
+    getItem: (key) => (key === 'defaultRoute_GP' ? 'pta-pien' : null),
+}) === true, 'a pinned route without welcomeSeen is returning');
+assert(isReturningForStartupLocate({
+    getItem: (key) => (key === 'welcomeSeen' ? 'true' : null),
+    welcomeShown: true,
+}) === false, 'Welcome shown this visit is not returning');
+assert(snapshotReturningForStartupLocate(() => null) === false, 'first-visit snapshot is new');
+assert(isReturningForStartupLocate({
+    getItem: (key) => (key === 'welcomeSeen' ? 'true' : null),
+}) === false, 'minted welcomeSeen after a new-user snapshot still blocks locate');
+resetStartupLocateReturningState();
+assert(snapshotReturningForStartupLocate((key) => (key === 'welcomeSeen' ? 'true' : null)) === true, 'pinned snapshot is returning');
+markWelcomeShownThisVisit();
+assert(isReturningForStartupLocate() === false, 'Welcome this visit wins over a returning snapshot');
+resetStartupLocateReturningState();
 
 resetAutoLocateDebounce();
 let called = [];
 const locate = (flag) => { called.push(flag); };
 const readyOpts = {
     welcomeActive: false,
+    returningCommuter: true,
     routeId: 'pta-pien',
     nextTrainActive: true,
     visible: true,
     locate,
     now: 1_000_000,
 };
+
+resetStartupLocateReturningState();
+assert(await maybeAutoLocateBoard({
+    welcomeActive: false,
+    routeId: 'pta-pien',
+    nextTrainActive: true,
+    visible: true,
+    locate,
+    granted: true,
+    now: 500_000,
+    getItem: () => null,
+}) === false, 'brand-new granted session does not startup-locate');
+assert(called.length === 0, 'locate is not called for a first visit');
+resetStartupLocateReturningState();
+snapshotReturningForStartupLocate(() => null);
+assert(await maybeAutoLocateBoard({
+    welcomeActive: false,
+    routeId: 'pta-pien',
+    nextTrainActive: true,
+    visible: true,
+    locate,
+    granted: true,
+    now: 500_000,
+    getItem: (key) => (key === 'welcomeSeen' ? 'true' : null),
+}) === false, 'first-session Welcome close does not locate');
+assert(called.length === 0, 'locate is not called after first-session Welcome close');
+resetStartupLocateReturningState();
 
 assert(await maybeAutoLocateBoard({ ...readyOpts, granted: false }) === false, 'prompt/denied does not locate');
 assert(called.length === 0, 'locate is not called without granted permission');
@@ -210,11 +271,17 @@ assert(locateSrc.includes("state === 'denied'"), 'denied permission never locate
 assert(locateSrc.includes("installed && state !== 'denied'"), 'installed apps locate unless OS geolocation is denied');
 assert(locateSrc.includes("addEventListener('pageshow'"), 'pageshow retriggers auto-locate after PWA restore');
 assert(locateSrc.includes("nt-welcome-closed"), 'welcome close retriggers auto-locate');
+assert(locateSrc.includes('isReturningForStartupLocate'), 'startup locate requires a returning commuter');
+assert(locateSrc.includes('snapshotReturningForStartupLocate'), 'returning status is frozen after pin restore');
+assert(locateSrc.includes('markWelcomeShownThisVisit'), 'Welcome this visit blocks startup locate');
 assert(!/navigator\.geolocation\.getCurrentPosition/.test(locateSrc), 'auto-locate helper never calls getCurrentPosition itself');
 assert(locateSrc.includes("tab === 'next-train' || tab === 'trip-planner'"), 'tab trigger includes Trip Planner');
 
 const welcomeSrc = readFileSync(new URL('../src/components/WelcomeModal.astro', import.meta.url), 'utf8');
 assert(welcomeSrc.includes('nt-welcome-closed'), 'finishing Welcome dispatches auto-locate kick');
+assert(welcomeSrc.includes('snapshotReturningForStartupLocate'), 'Welcome freezes returning status after pin restore');
+assert(welcomeSrc.includes('markWelcomeShownThisVisit'), 'showing Welcome stamps a first visit');
+assert(welcomeSrc.includes('returningAtBoot'), 'skipped Welcome still locates only returning commuters');
 
 function fakeDoc({
     ntListHidden = true,

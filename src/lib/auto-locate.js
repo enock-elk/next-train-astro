@@ -2,13 +2,16 @@
  * Silent nearest-station locate on the live board and Trip Planner From field.
  * Coordinates stay on-device (findNearestStation).
  *
- * Installed PWA / Play Store TWA eagerly request a fused fix on startup (the OS
- * sheet appears only if location was never allowed). Permissions API is often
- * missing or stuck on "prompt" after the OS already granted location. A Chrome
- * tab still requires query=granted (or nt_geo_granted) and will not overwrite a
- * station the commuter set, except the one-shot installed startup refresh.
+ * Startup locate runs only for returning commuters (welcomeSeen or a pinned
+ * route after IDB restore, and Welcome was not shown this page load). Brand-new
+ * cold starts must not open the OS location sheet — they may decline before
+ * they know it is useful. Installed PWA / Play Store TWA still treat
+ * prompt/unknown as granted after that returning gate. A Chrome tab still
+ * requires query=granted (or nt_geo_granted) and will not overwrite a station
+ * the commuter set, except the one-shot installed startup refresh.
  */
 import { $currentRouteId } from '../store.js';
+import { welcomeSeenFromPinnedSession } from './utils.js';
 
 export const AUTO_LOCATE_DEBOUNCE_MS = 120_000;
 export const AUTO_LOCATE_RETRY_MS = 4_000;
@@ -20,6 +23,8 @@ let lastAutoLocateFailAt = 0;
 let autoLocateFailCount = 0;
 let autoLocateRetryTimer = 0;
 let startupOverwriteArmed = true;
+let welcomeShownThisVisit = false;
+let returningAtBoot = null;
 
 export function resetAutoLocateDebounce() {
     lastAutoLocateAt = 0;
@@ -55,6 +60,37 @@ export function resetStartupLocateOverwrite() {
 
 export function disarmStartupLocateOverwrite() {
     startupOverwriteArmed = false;
+}
+
+export function markWelcomeShownThisVisit() {
+    welcomeShownThisVisit = true;
+}
+
+export function welcomeWasShownThisVisit() {
+    return welcomeShownThisVisit;
+}
+
+/**
+ * Freeze returning-vs-new after pin restore and before Welcome or a share
+ * deeplink can mint welcomeSeen for a first-time visitor.
+ */
+export function snapshotReturningForStartupLocate(getItem) {
+    if (returningAtBoot !== null) return returningAtBoot;
+    returningAtBoot = welcomeSeenFromPinnedSession(getItem);
+    return returningAtBoot;
+}
+
+export function isReturningForStartupLocate({ getItem, returning, welcomeShown } = {}) {
+    if (returning != null) return !!returning;
+    const shown = welcomeShown != null ? !!welcomeShown : welcomeShownThisVisit;
+    if (shown) return false;
+    if (returningAtBoot !== null) return returningAtBoot;
+    return welcomeSeenFromPinnedSession(getItem);
+}
+
+export function resetStartupLocateReturningState() {
+    welcomeShownThisVisit = false;
+    returningAtBoot = null;
 }
 
 export function welcomeIsActive(doc = typeof document !== 'undefined' ? document : null) {
@@ -218,6 +254,7 @@ export function shouldApplySilentLocate(doc = typeof document !== 'undefined' ? 
 /** Pure gate used by tests. Does not read Permissions API. */
 export function boardIsReadyForAutoLocate({
     welcomeActive = false,
+    returningCommuter = true,
     routeId = '',
     nextTrainActive = false,
     plannerActive = false,
@@ -227,6 +264,7 @@ export function boardIsReadyForAutoLocate({
     startupOverwrite = false,
 } = {}) {
     if (welcomeActive) return false;
+    if (!returningCommuter) return false;
     if (!String(routeId || '').trim()) return false;
     if (!nextTrainActive && !plannerActive) return false;
     if (visible === false) return false;
@@ -257,8 +295,12 @@ export async function maybeAutoLocateBoard(opts = {}) {
         : (startupOverwriteArmed && installed && !pickerEngaged);
     const nextTrainActive = opts.nextTrainActive ?? nextTrainTabIsActive(doc);
     const plannerActive = opts.plannerActive ?? tripPlannerTabIsActive(doc);
+    const returningCommuter = opts.returningCommuter != null
+        ? !!opts.returningCommuter
+        : isReturningForStartupLocate({ getItem: opts.getItem });
     const ready = boardIsReadyForAutoLocate({
         welcomeActive: opts.welcomeActive ?? welcomeIsActive(doc),
+        returningCommuter,
         routeId: opts.routeId ?? $currentRouteId.get(),
         nextTrainActive,
         plannerActive,

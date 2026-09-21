@@ -2,6 +2,10 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin, Dev Hub, Alerts, Trains near me, community chat, or other hidden-test work. No emoji and no em dashes in What’s New. Keep `APP_VERSION`, `package.json` `version`, and `public/app-version.json` aligned on each release. Changelog / What’s New may be skipped, or the heading may be only **no release notes.** Every bump must add `ADMIN_CHANGELOG[APP_VERSION]` (System Health Build notes).
 
+## V9_09.21.7 — no release notes
+
+Startup auto-locate waits until the commuter is returning. First-visit Welcome and a minted welcomeSeen on the same load do not open the location sheet. No What’s New.
+
 ## V9_09.21.6 — no release notes
 
 Restores the 14 Sep splash: gray 64px train, Starting copy, two frames plus 700ms. No What’s New.

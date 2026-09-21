@@ -106,7 +106,7 @@ const SEO_OVERRIDES = {
     'ct-bellv': {
         slug: 'cape-town-to-bellville',
         blurb: 'Cape Town to Bellville Metrorail times for the Northern Line corridor (Western Cape).',
-        operatingNote: 'Western Cape uses a dedicated Public Holiday timetable on most public holidays. Sundays and a few holidays such as Christmas Day have no service.',
+        operatingNote: 'Western Cape public holidays may use a Public Holiday sheet or the Saturday timetable. Check Next Train when PRASA announces the day. Sundays and a few holidays such as Christmas Day have no service.',
     },
     'kzn-umlazi': {
         slug: 'durban-to-umlazi',
@@ -334,7 +334,7 @@ function buildSeedForRoute(route) {
         operatingNote:
             override?.operatingNote ||
             (route.region === 'WC' && route.sheetKeys?.pub_to_a
-                ? 'Western Cape uses a dedicated Public Holiday timetable on most public holidays. Sundays and a few holidays such as Christmas Day have no service.'
+                ? 'Western Cape public holidays may use a Public Holiday sheet or the Saturday timetable. Check Next Train when PRASA announces the day. Sundays and a few holidays such as Christmas Day have no service.'
                 : DEFAULT_OPERATING_NOTE),
         serves: serve?.body || '',
         nearby: serve?.meta || '',

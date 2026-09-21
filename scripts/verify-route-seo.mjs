@@ -365,6 +365,9 @@ if (!gridPathSa.includes('d=sa') || gridPathSa.includes('dir=')) {
   if (!holidayPage.includes('Western Cape public holiday timetable')) {
     fail('WC holiday landing missing H1 copy');
   }
+  if (!holidayPage.includes('Saturday timetable') || !holidayPage.includes('Check Next Train')) {
+    fail('WC holiday landing must say some holidays use Saturday and to check Next Train');
+  }
   if (!holidayPage.includes('seoPageType="region_holidays"')) {
     fail('WC holiday landing must tag seoPageType region_holidays');
   }

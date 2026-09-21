@@ -86,7 +86,7 @@ assert(
 );
 
 const receiptBlock = admin.slice(admin.indexOf('receiptHtml'), admin.indexOf('receiptHtml') + 1800);
-assert(admin.includes("title=\"Sent\"") && admin.includes("title=\"Delivered\"") && admin.includes("title=\"Read\""), 'admin paints sent/delivered/read titles');
+assert(admin.includes('data-fb-receipt') && admin.includes('Hold for delivery status'), 'admin ticks hold for sent/delivered/seen');
 assert(admin.includes('item.read || item.acknowledged'), 'legacy acknowledged rows still count as read ticks');
 assert(!receiptBlock.includes('>R</span>'), 'admin receipts do not append an R chip');
 assert(!admin.includes('Acknowledged by Commuter'), 'admin receipts no longer label R');

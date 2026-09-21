@@ -973,6 +973,76 @@ const Admin = {
         return `<svg class="${className}" viewBox="0 0 16 11" width="16" height="11" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M1.2 6.1L3.85 8.7 8.9 2.35" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M6.35 6.1L9 8.7 14.05 2.35" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
     },
 
+    isBlankInboxRoute: (routeId) => {
+        const s = String(routeId || '').trim();
+        return !s || /^(none|null|undefined|-)$/i.test(s);
+    },
+
+    inboxRouteLabel: (routeId) => {
+        if (Admin.isBlankInboxRoute(routeId)) return '';
+        if (typeof ROUTES !== 'undefined' && ROUTES[routeId]?.name) {
+            return (typeof formatRouteLabelPlain === 'function')
+                ? formatRouteLabelPlain(ROUTES[routeId].name)
+                : String(ROUTES[routeId].name);
+        }
+        return String(routeId);
+    },
+
+    threadCommuterRoute: (items) => {
+        const list = Array.isArray(items) ? items : [];
+        for (let i = list.length - 1; i >= 0; i--) {
+            const it = list[i];
+            if (!it || it.isFromAdmin) continue;
+            if (!Admin.isBlankInboxRoute(it.routeId)) return it.routeId;
+        }
+        return '';
+    },
+
+    formatInboxStamp: (ts) => {
+        const n = Number(ts);
+        if (!n) return '';
+        const d = new Date(n);
+        if (Number.isNaN(d.getTime())) return '';
+        const datePart = (typeof formatAppDate === 'function')
+            ? formatAppDate(d)
+            : d.toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' });
+        const timePart = (typeof formatAppTime === 'function')
+            ? formatAppTime(d)
+            : d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        return `${datePart}, ${timePart}`;
+    },
+
+    hideInboxReceiptSheet: () => {
+        document.getElementById('inbox-receipt-sheet')?.classList.add('hidden');
+    },
+
+    showInboxReceiptSheet: (anchor) => {
+        if (!anchor) return;
+        let sheet = document.getElementById('inbox-receipt-sheet');
+        if (!sheet) {
+            sheet = document.createElement('div');
+            sheet.id = 'inbox-receipt-sheet';
+            sheet.className = 'hidden fixed z-[280] min-w-[11rem] max-w-[16rem] px-3 py-2 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 shadow-xl text-[11px] leading-snug text-gray-700 dark:text-gray-200';
+            document.body.appendChild(sheet);
+        }
+        const row = (label, value) => {
+            const when = Admin.formatInboxStamp(value);
+            return `<div class="flex justify-between gap-3 py-0.5"><span class="font-bold text-gray-500 dark:text-gray-400">${label}</span><span class="font-mono text-right">${when || '—'}</span></div>`;
+        };
+        sheet.innerHTML = `
+            <p class="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1">Delivery</p>
+            ${row('Sent', anchor.getAttribute('data-fb-sent'))}
+            ${row('Delivered', anchor.getAttribute('data-fb-delivered'))}
+            ${row('Seen', anchor.getAttribute('data-fb-read'))}
+        `;
+        const rect = anchor.getBoundingClientRect();
+        sheet.classList.remove('hidden');
+        const top = Math.max(12, rect.top - sheet.offsetHeight - 8);
+        const left = Math.max(12, Math.min(window.innerWidth - sheet.offsetWidth - 12, rect.right - sheet.offsetWidth));
+        sheet.style.top = `${top}px`;
+        sheet.style.left = `${left}px`;
+    },
+
     tileIcon: (name, colorClass = 'text-blue-600 dark:text-blue-400') =>
         `<span class="admin-tile-icon mb-2 inline-flex items-center justify-center ${colorClass}">${Admin.icon(name, 'w-7 h-7')}</span>`,
 
@@ -2133,6 +2203,9 @@ const Admin = {
         };
         host.addEventListener('pointerdown', (e) => {
             if (e.target.closest?.('[data-admin-changelog]')) return;
+            if (e.target.closest?.('[data-fb-receipt]')) return;
+            if (e.target.closest?.('[data-alert-lightbox]')) return;
+            if (e.target.closest?.('[data-fb-edit-admin]')) return;
             const bubble = e.target.closest?.('[data-inbox-react-host]');
             if (!bubble || e.target.closest?.('[data-inbox-react]')) return;
             const row = bubble.closest('[data-inbox-msg-id]');
@@ -2148,10 +2221,10 @@ const Admin = {
             if (poster && host.contains(poster)) {
                 e.preventDefault();
                 e.stopPropagation();
-                if (poster.getAttribute('data-alert-ready') !== '1') return;
-                const src = poster.getAttribute('data-alert-lightbox');
-                if (src && typeof window.openLightbox === 'function') window.openLightbox(src, poster);
-                else if (src && Admin.openLightbox) Admin.openLightbox(src);
+                const src = poster.getAttribute('data-alert-object-url')
+                    || poster.getAttribute('data-alert-lightbox');
+                if (src && Admin.openLightbox) Admin.openLightbox(src);
+                else if (src && typeof window.openLightbox === 'function') window.openLightbox(src, poster);
                 return;
             }
             const chip = e.target.closest?.('[data-inbox-react]');
@@ -7857,10 +7930,20 @@ const Admin = {
                 };
                 listContainer.addEventListener('pointerdown', (e) => {
                     if (e.target.closest?.('[data-admin-changelog]')) return;
-                    const bubble = e.target.closest('[data-fb-edit-admin]');
-                    if (!bubble || !listContainer.contains(bubble) || e.button) return;
+                    if (e.target.closest?.('[data-alert-lightbox]')) return;
+                    if (e.button) return;
                     holdFired = false;
                     clearHold();
+                    const receipt = e.target.closest?.('[data-fb-receipt]');
+                    if (receipt && listContainer.contains(receipt)) {
+                        holdTimer = setTimeout(() => {
+                            holdFired = true;
+                            Admin.showInboxReceiptSheet(receipt);
+                        }, 400);
+                        return;
+                    }
+                    const bubble = e.target.closest('[data-fb-edit-admin]');
+                    if (!bubble || !listContainer.contains(bubble)) return;
                     holdTimer = setTimeout(() => {
                         holdFired = true;
                         const row = bubble.closest('[data-fb-msg-id]');
@@ -7878,6 +7961,8 @@ const Admin = {
                     if (Math.abs(e.movementX) + Math.abs(e.movementY) > 12) clearHold();
                 });
                 listContainer.addEventListener('click', (e) => {
+                    if (e.target.closest?.('#inbox-receipt-sheet')) return;
+                    if (!e.target.closest?.('[data-fb-receipt]')) Admin.hideInboxReceiptSheet();
                     if (!holdFired) return;
                     holdFired = false;
                     e.preventDefault();
@@ -7954,6 +8039,10 @@ const Admin = {
                     item.inboxMsgId = hit.msgKey;
                     item.reactions = hit.msg.reactions;
                     item.reactedBy = hit.msg.reactedBy;
+                    if (!item.appVersion && hit.msg.appVersion) item.appVersion = hit.msg.appVersion;
+                    if (Admin.isBlankInboxRoute(item.routeId) && hit.msg.routeId) item.routeId = hit.msg.routeId;
+                    if (!item.attachmentUrl && hit.msg.attachmentUrl) item.attachmentUrl = hit.msg.attachmentUrl;
+                    if (!item.attachmentUrls && hit.msg.attachmentUrls) item.attachmentUrls = hit.msg.attachmentUrls;
                     usedInboxKeys.add(`${did}/${hit.msgKey}`);
                 });
 
@@ -7982,10 +8071,15 @@ const Admin = {
                                 status: parentStatus,
                                 read: msg.read,
                                 delivered: msg.delivered,
+                                deliveredAt: msg.deliveredAt,
+                                readAt: msg.readAt,
+                                viewedAt: msg.viewedAt,
                                 acknowledged: msg.acknowledged,
                                 feedbackId: msg.feedbackId,
                                 appVersion: msg.appVersion,
                                 routeId: msg.routeId,
+                                attachmentUrl: msg.attachmentUrl,
+                                attachmentUrls: msg.attachmentUrls,
                                 fromName: msg.fromName,
                                 editedAt: msg.editedAt,
                                 reactions: msg.reactions,
@@ -16297,6 +16391,8 @@ const Admin = {
                 `;
 
                 let lastRenderedDate = "";
+                const threadRouteId = Admin.threadCommuterRoute(groupItems);
+                const threadRouteLabel = Admin.inboxRouteLabel(threadRouteId);
 
                 groupItems.forEach(item => {
                     const date = new Date(item.timestamp || Date.now());
@@ -16332,11 +16428,15 @@ const Admin = {
                     
                     if (item.isFromAdmin) {
                         // ADMIN BUBBLE (Right) — 1 grey sent, 2 grey delivered, 2 blue read. No R.
-                        let receiptHtml = `<span class="inline-flex items-center text-gray-400 ml-1 shrink-0" title="Sent">${Admin.receiptTicks('single', 'w-3 h-2.5')}</span>`;
+                        const sentAt = item.timestamp || '';
+                        const deliveredAt = item.deliveredAt || (item.delivered ? item.timestamp : '');
+                        const readAt = item.readAt || item.viewedAt || ((item.read || item.acknowledged) ? item.timestamp : '');
+                        const receiptAttrs = `data-fb-receipt data-fb-sent="${secureEscape(String(sentAt))}" data-fb-delivered="${secureEscape(String(deliveredAt))}" data-fb-read="${secureEscape(String(readAt))}"`;
+                        let receiptHtml = `<span class="inline-flex items-center text-gray-400 ml-1 shrink-0 cursor-pointer" title="Hold for delivery status" ${receiptAttrs}>${Admin.receiptTicks('single', 'w-3 h-2.5')}</span>`;
                         if (item.read || item.acknowledged) {
-                            receiptHtml = `<span class="inline-flex items-center text-sky-400 ml-1 shrink-0" title="Read">${Admin.receiptTicks('double', 'w-3.5 h-2.5')}</span>`;
+                            receiptHtml = `<span class="inline-flex items-center text-sky-400 ml-1 shrink-0 cursor-pointer" title="Hold for delivery status" ${receiptAttrs}>${Admin.receiptTicks('double', 'w-3.5 h-2.5')}</span>`;
                         } else if (item.delivered) {
-                            receiptHtml = `<span class="inline-flex items-center text-gray-400 ml-1 shrink-0" title="Delivered">${Admin.receiptTicks('double', 'w-3.5 h-2.5')}</span>`;
+                            receiptHtml = `<span class="inline-flex items-center text-gray-400 ml-1 shrink-0 cursor-pointer" title="Hold for delivery status" ${receiptAttrs}>${Admin.receiptTicks('double', 'w-3.5 h-2.5')}</span>`;
                         }
 
                         // REGEX: Extract Admin Signoff Name ("- Enock") including ASCII hyphen
@@ -16365,11 +16465,13 @@ const Admin = {
                         const msgAnchor = secureEscape(rawMsgKey);
                         const rawAdminVer = String(item.appVersion || (typeof APP_VERSION !== 'undefined' ? APP_VERSION : '') || '').split(' - ')[0] || 'Admin';
                         const adminVer = secureEscape(rawAdminVer);
-                        const adminRoute = secureEscape(item.routeId || '');
-                        const adminMetaLabel = adminRoute ? `${adminVer} · ${adminRoute}` : adminVer;
+                        const userRouteLabel = Admin.inboxRouteLabel(item.routeId) || threadRouteLabel;
+                        const userRouteHtml = userRouteLabel
+                            ? `<div class="inbox-bubble-route-row">${secureEscape(userRouteLabel)}</div>`
+                            : '';
                         const adminMeta = /^V\d+_/i.test(rawAdminVer)
-                            ? `<button type="button" class="fb-version-chip relative z-[2] font-mono font-medium opacity-80 ml-2 truncate underline decoration-dotted underline-offset-2 hover:opacity-100 focus:outline-none" data-admin-changelog="${adminVer}" onclick="event.preventDefault();event.stopPropagation();if(window.Admin&amp;&amp;Admin.openAdminChangelogLookup)Admin.openAdminChangelogLookup(this.getAttribute('data-admin-changelog')||this.textContent);">${adminMetaLabel}</button>`
-                            : `<span class="font-mono font-medium opacity-60 truncate">${adminMetaLabel}</span>`;
+                            ? `<button type="button" class="fb-version-chip relative z-[2] font-mono font-medium opacity-80 ml-2 shrink-0 underline decoration-dotted underline-offset-2 hover:opacity-100 focus:outline-none" data-admin-changelog="${adminVer}" onclick="event.preventDefault();event.stopPropagation();if(window.Admin&amp;&amp;Admin.openAdminChangelogLookup)Admin.openAdminChangelogLookup(this.getAttribute('data-admin-changelog')||this.textContent);">${adminVer}</button>`
+                            : `<span class="font-mono font-medium opacity-60 shrink-0">${adminVer}</span>`;
                         const editedLabel = item.editedAt ? `<span class="ml-1 opacity-70">edited</span>` : '';
                         const inboxReactId = item.inboxMsgId || String(item.id || '');
                         const reactChips = (typeof window.renderInboxReactionChips === 'function' && inboxReactId)
@@ -16383,6 +16485,7 @@ const Admin = {
                                             <span>${secureEscape(adminName)}</span>
                                             ${adminMeta}
                                         </div>
+                                        ${userRouteHtml}
                                         <div class="inbox-bubble-body">
                                             <div class="inbox-msg-text">${parsedAdminText}<span class="inbox-msg-time">${dateStr}${receiptHtml}${editedLabel}</span></div>
                                         </div>
@@ -16625,7 +16728,6 @@ const Admin = {
                         rawText = rawText.replace(/\n/g, '<br>');
 
                         const safeAppVersion = secureEscape(item.appVersion || 'Unknown');
-                        const safeRouteId = secureEscape(item.routeId || 'None');
                         const rawAttach = [];
                         if (item.attachmentUrl) rawAttach.push(item.attachmentUrl);
                         if (item.attachmentUrls && Array.isArray(item.attachmentUrls)) {
@@ -16655,11 +16757,19 @@ const Admin = {
                         let headerColorClass = isReply ? "text-blue-600 dark:text-blue-400" : "text-gray-500 dark:text-gray-400";
 
                         const verLabel = safeAppVersion.split(' - ')[0];
+                        const commuterRouteLabel = Admin.inboxRouteLabel(item.routeId) || threadRouteLabel;
+                        const commuterRouteHtml = commuterRouteLabel
+                            ? `<div class="inbox-bubble-route-row">${secureEscape(commuterRouteLabel)}</div>`
+                            : '';
+                        const commuterVerBtn = /^V\d+_/i.test(verLabel)
+                            ? `<button type="button" class="fb-version-chip relative z-[2] font-mono font-medium opacity-80 ml-2 shrink-0 underline decoration-dotted underline-offset-2 hover:opacity-100 focus:outline-none" data-admin-changelog="${verLabel}" onclick="event.preventDefault();event.stopPropagation();if(window.Admin&amp;&amp;Admin.openAdminChangelogLookup)Admin.openAdminChangelogLookup(this.getAttribute('data-admin-changelog')||this.textContent);">${verLabel}</button>`
+                            : `<span class="font-mono font-medium opacity-60 ml-2 shrink-0">${verLabel}</span>`;
                         const integratedHeaderHtml = `
                             <div class="inbox-bubble-name-row">
                                 <span class="whitespace-nowrap inline-flex items-center gap-1 ${headerColorClass} uppercase tracking-widest text-[10px]">${headerLabelText}</span>
-                                <button type="button" class="fb-version-chip relative z-[2] font-mono font-medium opacity-80 ml-2 truncate underline decoration-dotted underline-offset-2 hover:opacity-100 focus:outline-none" data-admin-changelog="${verLabel}" onclick="event.preventDefault();event.stopPropagation();if(window.Admin&amp;&amp;Admin.openAdminChangelogLookup)Admin.openAdminChangelogLookup(this.getAttribute('data-admin-changelog')||this.textContent);">${verLabel} · ${safeRouteId}</button>
+                                ${commuterVerBtn}
                             </div>
+                            ${commuterRouteHtml}
                         `;
 
                         const inboxReactId = item.inboxMsgId || '';

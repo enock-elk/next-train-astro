@@ -403,6 +403,12 @@ assert(
 assert(admin.includes('window.withBase === \'function\' ? window.withBase(path)'), 'poster preview uses withBase so github.io still loads the jpg');
 assert(admin.includes("style.zIndex = '260'"), 'build notes sit above Dev Hub');
 assert(admin.includes("if (e.target.closest?.('[data-admin-changelog]')) return;"), 'hold-to-react ignores the version chip');
+assert(admin.includes("if (e.target.closest?.('[data-fb-edit-admin]')) return;"), 'hold-to-react does not steal admin hold-to-edit');
+assert(admin.includes('data-fb-receipt'), 'admin ticks expose hold-for-delivery');
+assert(admin.includes('showInboxReceiptSheet'), 'admin can hold ticks for sent/delivered/seen');
+assert(admin.includes('inbox-bubble-route-row'), 'feedback bubbles keep the saved route on its own row');
+assert(admin.includes('threadCommuterRoute'), 'feedback thread falls back to the commuter saved route');
+assert(admin.includes("if (src && Admin.openLightbox) Admin.openLightbox(src);"), 'feedback posters open the admin lightbox');
 {
     const holdStart = admin.indexOf("dataset.fbHoldBound");
     const holdBlock = holdStart >= 0 ? admin.slice(holdStart, holdStart + 900) : '';

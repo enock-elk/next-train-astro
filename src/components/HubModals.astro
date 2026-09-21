@@ -878,6 +878,21 @@ import { withBase } from '../lib/config.js';
     pointer-events: auto;
     cursor: pointer;
   }
+  #feedback-panel .inbox-bubble-route-row,
+  #messages-thread-modal .inbox-bubble-route-row {
+    padding: 0.2rem 0.65rem 0.25rem;
+    font-size: 0.68rem;
+    font-weight: 700;
+    line-height: 1.25;
+    color: #334155;
+    word-break: break-word;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+  }
+  html.dark #feedback-panel .inbox-bubble-route-row,
+  html.dark #messages-thread-modal .inbox-bubble-route-row {
+    color: #e2e8f0;
+    border-bottom-color: rgba(255, 255, 255, 0.08);
+  }
   html.dark #messages-thread-modal .inbox-bubble-name-row,
   html.dark #feedback-panel .inbox-bubble-name-row {
     background: rgba(255, 255, 255, 0.07);

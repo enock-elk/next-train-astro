@@ -185,6 +185,17 @@ ok(adminJs.includes('Admin.saveRouteFare'), 'Fares tab can confirm a corridor lo
 ok(adminJs.includes('config/route_fares/'), 'Confirm writes config/route_fares/$routeId');
 ok(adminJs.includes('de-fare-ticket'), 'vote cards can show a ticket thumb');
 ok(adminJs.includes('fare_ticket_photos'), 'Fares tab reads ticket photo sidecars');
+ok(adminJs.includes("Admin._deSortMode = Admin._deSortMode || 'recent'"), 'planner telemetry starts on recent sort');
+ok(!adminJs.includes("Admin._deSortMode = 'count';"), 'opening planner telemetry does not reset sort to count');
+ok(adminJs.includes('expandFailCorridorHits'), 'Fails expand contributor user ids on click');
+ok(adminJs.includes('expandFareContributor'), 'Fares expand contributor user ids on click');
+ok(adminJs.includes('de-fail-contributors'), 'fail cards have a contributor panel');
+ok(adminJs.includes('de-fare-contributors'), 'fare cards have a contributor panel');
+ok(adminJs.includes('failCorridorKey'), 'fail corridor key matches origin dest reason day');
+ok(/class="hidden divide-y[\s\S]{0,180}\$\{resolveAllHtml\}/.test(adminJs), 'Resolve All sits inside the opened crash log');
+ok(!/flex items-center shrink-0">\s*\$\{resolveAllHtml\}/.test(adminJs), 'Resolve All is not on the collapsed crash header');
+ok(adminJs.includes('App: ${appVersionHtml}'), 'crash app version is a dedicated chip field');
+ok(adminJs.includes('data-admin-changelog="${safeAppVersion}"'), 'crash app version opens build notes');
 {
     const bridge = readFileSync(join(ROOT, 'src/lib/admin-bridge.js'), 'utf8');
     ok(bridge.includes('window.plannerFareOverrideKey'), 'admin bridge exposes override keys');

@@ -389,6 +389,8 @@ assert(admin.includes("e.target.closest?.('#admin-changelog-notes')"), 'build no
 assert(admin.includes('overflow-y-auto custom-scrollbar overscroll-contain'), 'build notes scroll inside the card');
 assert(admin.includes("addEventListener('touchmove', stopBgScroll, { passive: false })"), 'build notes swallow backdrop touchmove');
 assert(admin.includes('fb-version-chip'), 'feedback version chips are dedicated buttons');
+assert(admin.includes('data-admin-changelog="${safeAppVersion}"'), 'crash app version opens build notes');
+assert(admin.includes('App: ${appVersionHtml}'), 'crash app version is a clickable field');
 assert(admin.includes('holiday-region-save'), 'approved holiday notices can be re-saved');
 assert(admin.includes('holiday-region-unapprove'), 'approved holiday notices can return to pending');
 assert(admin.includes('layoutInboxMedia'), 'feedback bubbles hoist unique images');

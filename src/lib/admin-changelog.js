@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_09.21.12': [
+        'Planner Telemetry Fails and Fares expand on click to show contributor user ids, same pattern as Trip Plans hit history. All three tabs start on Sort: Recent; opening the panel no longer resets to Count. Crash Analytics app version is a build-notes chip like Feedback. Resolve All sits inside the opened device log, not on the collapsed header. No What’s New. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
+    ],
     'V9_09.21.11': [
         'Live share GPS was greying at 15s because a silent Android watch never one-shot a new fix, pagehide cleared the share watch, and cached OS timestamps made a live callback look 50s stale. Sender now eager-refreshes GPS at 8s (getCurrentPosition maximumAge 0 + watch restart), keeps the share watch across pagehide, stamps callback time to now when the OS timestamp is old, and has a Refresh GPS button on the tracking card. Share checks no longer block when a train stop list cannot be built: fall back to the painted GOLD corridor (9113 at Pretoria). Projection does the same. No What’s New (live share stays hidden). forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
     ],

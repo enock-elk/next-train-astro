@@ -4716,9 +4716,9 @@ const Admin = {
         if (panelId === 'moderation-queue-panel' && typeof Admin.fetchModerationQueue === 'function') Admin.fetchModerationQueue();
         if (panelId === 'user-trust-panel' && typeof Admin.fetchActiveBans === 'function') Admin.fetchActiveBans();
         if (panelId === 'deadends-panel' && typeof Admin.fetchDeadEnds === 'function') {
-            Admin._deSortMode = 'count';
+            Admin._deSortMode = Admin._deSortMode || 'recent';
             const sortBtn = document.getElementById('de-sort-btn');
-            if (sortBtn) sortBtn.textContent = 'Sort: Count';
+            if (sortBtn) sortBtn.textContent = Admin._deSortMode === 'count' ? 'Sort: Count' : 'Sort: Recent';
             Admin.fetchDeadEnds();
         }
         if (panelId === 'crashes-panel' && typeof Admin.fetchCrashes === 'function') Admin.fetchCrashes();
@@ -4982,6 +4982,7 @@ const Admin = {
 
         if (crashPanel.dataset.adminLoaded === "true") return;
         crashPanel.dataset.adminLoaded = "true";
+        Admin.bindAdminChangelogClicks();
         
         Admin.cachedCrashData = [];
         Admin.currentCrashTab = 'inbox';
@@ -5175,9 +5176,11 @@ const Admin = {
                 const did = secureEscape(rawDid);
                 const safeJsDid = rawDid.replace(/'/g, "\\'");
                 
-                // GUARDIAN PHASE 1: Bulk Resolve Button & HTML Fix (button inside button is invalid, changed outer to div)
+                // Resolve All lives inside the opened log so it only shows after an admin expands the device group.
                 const resolveAllHtml = isInbox 
-                    ? `<button onclick="event.stopPropagation(); Admin.resolveAllDeviceCrashes('${safeJsDid}')" class="mr-3 bg-green-100 dark:bg-green-900/50 hover:bg-green-200 dark:hover:bg-green-800 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-700 px-2 py-1.5 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-colors shadow-sm focus:outline-none flex items-center shrink-0"><span class="mr-1 inline-flex">${Admin.icon('check', 'w-3 h-3')}</span> Resolve All (${groupCrashes.length})</button>` 
+                    ? `<div class="px-2.5 py-2 border-b border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/60">
+                            <button type="button" onclick="event.stopPropagation(); Admin.resolveAllDeviceCrashes('${safeJsDid}')" class="w-full bg-green-100 dark:bg-green-900/50 hover:bg-green-200 dark:hover:bg-green-800 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-700 px-2 py-1.5 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-colors shadow-sm focus:outline-none inline-flex items-center justify-center"><span class="mr-1 inline-flex">${Admin.icon('check', 'w-3 h-3')}</span> Resolve All (${groupCrashes.length})</button>
+                       </div>` 
                     : '';
 
                 let groupHTML = `
@@ -5187,11 +5190,11 @@ const Admin = {
                             <span class="text-[9px] text-gray-500 font-mono mt-0.5 truncate w-full">${groupCrashes.length} Crash${groupCrashes.length > 1 ? 'es' : ''} | Last: ${latestDate}</span>
                         </div>
                         <div class="flex items-center shrink-0">
-                            ${resolveAllHtml}
                             <svg class="chevron-icon w-4 h-4 text-gray-400 transform transition-transform shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
                         </div>
                     </div>
                     <div class="hidden divide-y divide-gray-100 dark:divide-gray-800 bg-white dark:bg-gray-900">
+                    ${resolveAllHtml}
                 `;
                 
                 groupCrashes.forEach(crash => {
@@ -5200,7 +5203,11 @@ const Admin = {
                     const safeErr = secureEscape(crash.error);
                     const safeRoute = secureEscape(crash.routeId || "Global");
                     const safeOS = secureEscape(crash.userAgent || "Unknown OS");
-                    const safeAppVersion = secureEscape(String(crash.appVersion || 'Unknown'));
+                    const rawAppVersion = String(crash.appVersion || 'Unknown').split(' - ')[0];
+                    const safeAppVersion = secureEscape(rawAppVersion);
+                    const appVersionHtml = /^V\d+_/i.test(rawAppVersion)
+                        ? `<button type="button" class="fb-version-chip relative z-[2] font-mono font-medium underline decoration-dotted underline-offset-2 hover:opacity-80 focus:outline-none" data-admin-changelog="${safeAppVersion}" onclick="event.preventDefault();event.stopPropagation();if(window.Admin&amp;&amp;Admin.openAdminChangelogLookup)Admin.openAdminChangelogLookup(this.getAttribute('data-admin-changelog')||this.textContent);">${safeAppVersion}</button>`
+                        : `<span class="text-gray-800 dark:text-gray-200">${safeAppVersion}</span>`;
                     const safeJsCrashId = String(crash.id || '').replace(/'/g, "\\'");
                     const safeLine = secureEscape(crash.line == null ? '' : String(crash.line));
                     const safeUrl = secureEscape(crash.url || '');
@@ -5322,7 +5329,6 @@ const Admin = {
                             '</div>';
                     }
 
-                    const appLabel = String(safeAppVersion || '').split(' - ')[0];
                     groupHTML += `
                         <div class="p-2.5 flex flex-col" data-crash-id="${secureEscape(crash.id || '')}">
                             <div class="flex justify-between items-start mb-1.5">
@@ -5339,7 +5345,7 @@ const Admin = {
                             </details>
                             <div class="flex flex-col space-y-1 bg-gray-50 dark:bg-gray-800/50 p-2 rounded border border-gray-100 dark:border-gray-700">
                                 <span class="text-[9px] text-gray-600 dark:text-gray-400 font-bold uppercase tracking-wider">Route: <span class="text-blue-500">${safeRoute}</span></span>
-                                <span class="text-[9px] text-gray-600 dark:text-gray-400 font-bold uppercase tracking-wider">App: <span class="text-gray-800 dark:text-gray-200">${appLabel}</span></span>
+                                <span class="text-[9px] text-gray-600 dark:text-gray-400 font-bold uppercase tracking-wider inline-flex items-center gap-1 flex-wrap">App: ${appVersionHtml}</span>
                                 ${safeLine ? `<span class="text-[9px] text-gray-600 dark:text-gray-400 font-bold uppercase tracking-wider">Line: <span class="text-gray-800 dark:text-gray-200">${safeLine}</span></span>` : ''}
                                 ${safeUrl ? `<span class="text-[9px] text-gray-600 dark:text-gray-400 font-bold uppercase tracking-wider leading-tight">URL: <span class="text-gray-800 dark:text-gray-200 whitespace-normal break-words">${safeUrl}</span></span>` : ''}
                                 <span class="text-[9px] text-gray-600 dark:text-gray-400 font-bold uppercase tracking-wider leading-tight">OS: <span class="text-gray-800 dark:text-gray-200 whitespace-normal break-words">${safeOS}</span></span>
@@ -6117,8 +6123,8 @@ const Admin = {
             exportBtn.onclick = () => Admin.exportPlannerTelemetryTab();
         }
 
-        // Default: sort corridors by volume (count), not most recent.
-        Admin._deSortMode = 'count';
+        // Default: all planner telemetry tabs start on most recent.
+        Admin._deSortMode = Admin._deSortMode || 'recent';
 
         if (sortBtn) {
             sortBtn.textContent = Admin._deSortMode === 'count' ? 'Sort: Count' : 'Sort: Recent';
@@ -6385,7 +6391,7 @@ const Admin = {
                     entries.sort((a, b) => (Number(b.at) || 0) - (Number(a.at) || 0));
                     entries.forEach((item) => {
                         const card = document.createElement('div');
-                        card.className = "bg-white dark:bg-gray-900 p-3 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm flex items-start justify-between gap-2";
+                        card.className = "de-fare-card bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden cursor-pointer transition-colors hover:border-amber-300";
                         const quoted = item.quotedPrice != null ? `R${item.quotedPrice}` : '-';
                         const reported = item.reportedPrice != null ? `R${item.reportedPrice}` : '-';
                         const peakLabel = item.isOffPeak ? 'Off-peak' : 'Peak';
@@ -6404,26 +6410,40 @@ const Admin = {
                             ? `<div class="mt-2 de-fare-ticket">${window.attachmentPreviewHtml(ticketUrl, { admin: true, imgClass: 'w-12 h-12 object-cover rounded-md border border-gray-200 dark:border-gray-700 hover:opacity-90 cursor-zoom-in', alt: 'Ticket' })}</div>`
                             : '';
                         card.innerHTML = `
-                            <div class="min-w-0 flex-1">
-                                <div class="text-xs font-bold text-gray-900 dark:text-white whitespace-normal break-words leading-snug">${secureEscape(item.origin)} ${Admin.routeArrowSvg('inline-block w-3.5 h-3.5 mx-1 align-middle text-gray-400 shrink-0')} ${secureEscape(item.destination)}</div>
-                                <div class="flex flex-wrap items-center mt-1.5 gap-1.5">
-                                    <span class="text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded ${item.agree ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300' : 'bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-200'}">${secureEscape(vsLabel)}</span>
-                                    <span class="text-[9px] font-bold text-indigo-600 dark:text-indigo-400 uppercase">${secureEscape(peakLabel)}</span>
-                                    <span class="text-[9px] text-gray-400 font-mono">${secureEscape(kmLabel)}</span>
-                                    <span class="text-[9px] text-gray-500 font-bold">${secureEscape(profileLabel)}</span>
-                                    <span class="text-[9px] text-gray-400 font-mono">${Admin.formatDate(item.at)}</span>
-                                    ${isLive ? `<span class="text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300">Live R${secureEscape(String(livePrice))}</span>` : ''}
+                            <div class="de-fare-card-btn p-3 flex items-start justify-between gap-2">
+                                <div class="min-w-0 flex-1">
+                                    <div class="text-xs font-bold text-gray-900 dark:text-white whitespace-normal break-words leading-snug">${secureEscape(item.origin)} ${Admin.routeArrowSvg('inline-block w-3.5 h-3.5 mx-1 align-middle text-gray-400 shrink-0')} ${secureEscape(item.destination)}</div>
+                                    <div class="flex flex-wrap items-center mt-1.5 gap-1.5">
+                                        <span class="text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded ${item.agree ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300' : 'bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-200'}">${secureEscape(vsLabel)}</span>
+                                        <span class="text-[9px] font-bold text-indigo-600 dark:text-indigo-400 uppercase">${secureEscape(peakLabel)}</span>
+                                        <span class="text-[9px] text-gray-400 font-mono">${secureEscape(kmLabel)}</span>
+                                        <span class="text-[9px] text-gray-500 font-bold">${secureEscape(profileLabel)}</span>
+                                        <span class="text-[9px] text-gray-400 font-mono">${Admin.formatDate(item.at)}</span>
+                                        ${isLive ? `<span class="text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300">Live R${secureEscape(String(livePrice))}</span>` : ''}
+                                    </div>
+                                    ${ticketHtml}
                                 </div>
-                                ${ticketHtml}
+                                ${canApprove && !isLive ? `<button type="button" class="de-fare-approve shrink-0 text-emerald-700 dark:text-emerald-400 hover:text-white hover:bg-emerald-600 text-[9px] font-black bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 px-3 py-1.5 rounded transition-colors focus:outline-none uppercase tracking-widest shadow-sm">Approve ${secureEscape(reported)}</button>` : ''}
                             </div>
-                            ${canApprove && !isLive ? `<button type="button" class="de-fare-approve shrink-0 text-emerald-700 dark:text-emerald-400 hover:text-white hover:bg-emerald-600 text-[9px] font-black bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 px-3 py-1.5 rounded transition-colors focus:outline-none uppercase tracking-widest shadow-sm">Approve ${secureEscape(reported)}</button>` : ''}
+                            <div class="de-fare-contributors hidden px-3 pb-3 border-t border-gray-100 dark:border-gray-800 bg-gray-50/80 dark:bg-gray-950/40"></div>
                         `;
-                        card.querySelector('.de-fare-approve')?.addEventListener('click', async () => {
+                        card.querySelector('.de-fare-approve')?.addEventListener('click', async (ev) => {
+                            ev.stopPropagation();
                             try {
                                 await Admin.approvePlannerFare(item);
                             } catch (e) {
                                 console.error('Approve planner fare failed', e);
                                 if (typeof showToast === 'function') showToast(e.message || 'Approve failed', 'error');
+                            }
+                        });
+                        card.addEventListener('click', (ev) => {
+                            if (ev.target.closest('.de-fare-approve, .de-fare-ticket, [data-alert-lightbox], a, button.de-fare-approve')) return;
+                            const panel = card.querySelector('.de-fare-contributors');
+                            if (!panel) return;
+                            const open = panel.classList.toggle('hidden') === false;
+                            if (open && !panel.dataset.loaded) {
+                                panel.dataset.loaded = '1';
+                                Admin.expandFareContributor(panel, item);
                             }
                         });
                         listDiv.appendChild(card);
@@ -6493,7 +6513,7 @@ const Admin = {
                 sorted.forEach(item => {
                     const dateStr = Admin.formatDate(item.lastSeen);
                     const card = document.createElement('div');
-                    card.className = "bg-white dark:bg-gray-900 p-3 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm flex items-center justify-between transition-colors hover:border-blue-300";
+                    card.className = "de-fail-card bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden cursor-pointer transition-colors hover:border-blue-300";
                     
                     let reasonBadge = "bg-gray-100 text-gray-600";
                     let reasonText = "Unknown";
@@ -6509,6 +6529,12 @@ const Admin = {
                     const dayLabel = secureEscape(item.dayType || 'unknown');
                     const timeLabel = secureEscape(item.timeOfDay || '-');
                     const countLabel = countMode === 'hits' ? 'Hits' : 'Users';
+                    const corridorKey = Admin.failCorridorKey({
+                        origin: item.origin,
+                        destination: item.dest,
+                        reason: item.reason,
+                        dayType: item.dayType,
+                    });
                     
                     const escalateAttr = Admin.encodeEscalatePayload({
                         type: 'route',
@@ -6522,23 +6548,36 @@ const Admin = {
                     });
 
                     card.innerHTML = `
-                        <div class="min-w-0 flex-1 pr-2">
-                            <div class="text-xs font-bold text-gray-900 dark:text-white whitespace-normal break-words leading-snug">${safeOrigin} ${Admin.routeArrowSvg('inline-block w-3.5 h-3.5 mx-1 align-middle text-gray-400 shrink-0')} ${safeDest}</div>
-                            <div class="flex flex-wrap items-center mt-1.5 gap-1.5">
-                                <span class="text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded ${reasonBadge}">${reasonText}</span>
-                                <span class="text-[9px] font-bold text-indigo-600 dark:text-indigo-400 uppercase">${dayLabel}</span>
-                                <span class="text-[9px] text-gray-400 font-mono">${timeLabel}</span>
-                                <span class="text-[9px] text-gray-400 font-mono">Last: ${dateStr}</span>
+                        <div class="de-fail-card-btn p-3 flex items-center justify-between">
+                            <div class="min-w-0 flex-1 pr-2">
+                                <div class="text-xs font-bold text-gray-900 dark:text-white whitespace-normal break-words leading-snug">${safeOrigin} ${Admin.routeArrowSvg('inline-block w-3.5 h-3.5 mx-1 align-middle text-gray-400 shrink-0')} ${safeDest}</div>
+                                <div class="flex flex-wrap items-center mt-1.5 gap-1.5">
+                                    <span class="text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded ${reasonBadge}">${reasonText}</span>
+                                    <span class="text-[9px] font-bold text-indigo-600 dark:text-indigo-400 uppercase">${dayLabel}</span>
+                                    <span class="text-[9px] text-gray-400 font-mono">${timeLabel}</span>
+                                    <span class="text-[9px] text-gray-400 font-mono">Last: ${dateStr}</span>
+                                </div>
+                            </div>
+                            <div class="flex flex-col items-end shrink-0 gap-1.5 ml-2">
+                                <div class="flex items-center justify-center bg-gray-50 dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-lg px-2.5 py-1.5 shadow-sm min-w-[4.5rem]">
+                                    <span class="text-[9px] text-gray-400 uppercase font-bold mr-1.5">${countLabel}</span>
+                                    <span class="text-sm font-black text-gray-700 dark:text-gray-300 leading-none">${item.displayCount}</span>
+                                </div>
+                                <button type="button" class="text-orange-600 dark:text-orange-400 hover:text-white hover:bg-orange-600 text-[9px] font-bold bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 px-3 py-1.5 rounded transition-colors focus:outline-none uppercase tracking-widest shadow-sm w-full text-center" onclick="event.stopPropagation(); Admin.escalateFromEl(this)" data-escalate="${escalateAttr}">Ticket</button>
                             </div>
                         </div>
-                        <div class="flex flex-col items-end shrink-0 gap-1.5 ml-2">
-                            <div class="flex items-center justify-center bg-gray-50 dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-lg px-2.5 py-1.5 shadow-sm min-w-[4.5rem]">
-                                <span class="text-[9px] text-gray-400 uppercase font-bold mr-1.5">${countLabel}</span>
-                                <span class="text-sm font-black text-gray-700 dark:text-gray-300 leading-none">${item.displayCount}</span>
-                            </div>
-                            <button class="text-orange-600 dark:text-orange-400 hover:text-white hover:bg-orange-600 text-[9px] font-bold bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 px-3 py-1.5 rounded transition-colors focus:outline-none uppercase tracking-widest shadow-sm w-full text-center" onclick="Admin.escalateFromEl(this)" data-escalate="${escalateAttr}">Ticket</button>
-                        </div>
+                        <div class="de-fail-contributors hidden px-3 pb-3 border-t border-gray-100 dark:border-gray-800 bg-gray-50/80 dark:bg-gray-950/40"></div>
                     `;
+                    card.addEventListener('click', (ev) => {
+                        if (ev.target.closest('[data-escalate]')) return;
+                        const panel = card.querySelector('.de-fail-contributors');
+                        if (!panel) return;
+                        const open = panel.classList.toggle('hidden') === false;
+                        if (open && !panel.dataset.loaded) {
+                            panel.dataset.loaded = '1';
+                            Admin.expandFailCorridorHits(panel, corridorKey);
+                        }
+                    });
                     listDiv.appendChild(card);
                 });
             } catch(e) {
@@ -6552,6 +6591,9 @@ const Admin = {
 
         Admin.tripCorridorKey = (entry) =>
             `${entry.origin}|${entry.destination}|${entry.dayType || ''}|${entry.region || ''}`;
+
+        Admin.failCorridorKey = (entry) =>
+            `${entry.origin}|${entry.destination}|${entry.reason || 'UNKNOWN'}|${entry.dayType || 'unknown'}`;
 
         Admin.getFilteredTripPlanRows = () => {
             const f = Admin._deTripFilters || {};
@@ -6620,6 +6662,55 @@ const Admin = {
                 uidOptions.appendChild(more);
             }
             if (uidDisplay) uidDisplay.textContent = userSel.value || 'All users';
+        };
+
+        Admin.expandFailCorridorHits = (panel, corridorKey) => {
+            if (!panel) return;
+            const cap = Admin._deHitPreviewCap || 25;
+            const byUser = {};
+            Object.values(Admin._cachedRoutingFails || {}).forEach((entry) => {
+                if (!entry || Admin.failCorridorKey(entry) !== corridorKey) return;
+                const uid = String(entry.userId || entry.deviceId || '').trim();
+                if (!uid) return;
+                const ts = Number(entry.timestamp) || 0;
+                const prev = byUser[uid];
+                if (!prev) byUser[uid] = { userId: uid, lastSeen: ts, hitCount: 1 };
+                else {
+                    prev.hitCount += 1;
+                    if (ts > prev.lastSeen) prev.lastSeen = ts;
+                }
+            });
+            const hits = Object.values(byUser).sort((a, b) => (b.lastSeen || 0) - (a.lastSeen || 0));
+            const slice = hits.slice(0, cap);
+            const esc = Admin.secureDeEscape;
+            panel.innerHTML = `
+                <p class="text-[9px] font-black uppercase tracking-wider text-gray-400 pt-2 mb-1">Contributors${hits.length > cap ? ` (latest ${cap} of ${hits.length})` : ''}</p>
+                ${slice.map((h) => `
+                    <div class="flex justify-between gap-2 py-1.5 border-b border-gray-100 dark:border-gray-800 last:border-0 text-[10px]">
+                        <span class="font-mono text-gray-500 truncate inline-flex items-center min-w-0">${esc(h.userId)}${Admin.userIdJoinHintHtml(h.userId)}</span>
+                        <span class="font-mono text-gray-600 dark:text-gray-300 shrink-0">${esc(Admin.formatDate(h.lastSeen))} · ${h.hitCount}</span>
+                    </div>
+                `).join('') || '<p class="text-[10px] text-gray-400 italic">No user ids on these fails.</p>'}
+            `;
+        };
+
+        Admin.expandFareContributor = (panel, item) => {
+            if (!panel) return;
+            const esc = Admin.secureDeEscape;
+            const did = String(item?.deviceId || item?.userId || '').trim();
+            const auth = String(item?.authUid || '').trim();
+            const rows = [];
+            if (did) rows.push({ label: 'User ID', value: did });
+            if (auth && auth !== did) rows.push({ label: 'Auth UID', value: auth });
+            panel.innerHTML = `
+                <p class="text-[9px] font-black uppercase tracking-wider text-gray-400 pt-2 mb-1">Contributor</p>
+                ${rows.map((r) => `
+                    <div class="flex justify-between gap-2 py-1.5 border-b border-gray-100 dark:border-gray-800 last:border-0 text-[10px]">
+                        <span class="text-[9px] font-bold uppercase tracking-wider text-gray-400 shrink-0">${esc(r.label)}</span>
+                        <span class="font-mono text-gray-600 dark:text-gray-300 break-all text-right inline-flex items-center min-w-0">${esc(r.value)}${r.label === 'User ID' ? Admin.userIdJoinHintHtml(r.value) : ''}</span>
+                    </div>
+                `).join('') || '<p class="text-[10px] text-gray-400 italic">No user id on this vote.</p>'}
+            `;
         };
 
         Admin.expandTripCorridorHits = (panel, corridorKey) => {

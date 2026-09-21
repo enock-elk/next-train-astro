@@ -393,7 +393,7 @@ function paintSharePill(active, paused) {
 }
 
 function setTrackingOwnerChrome(mine) {
-    ['map-tracking-stop', 'map-tracking-toggle', 'map-tracking-share'].forEach((id) => {
+    ['map-tracking-stop', 'map-tracking-toggle', 'map-tracking-share', 'map-tracking-refresh'].forEach((id) => {
         const el = document.getElementById(id);
         if (!el) return;
         el.classList.toggle('hidden', !mine);
@@ -868,12 +868,14 @@ export async function runOnboardToastVet(trainId) {
     addShareCheck('Rail geometry', `Station coordinates are available for Train ${trainId}.`);
     const railPath = await railPathForTrain(trainId, { routeId, region: $userRegion.get() || 'GP' });
     if (!railPath?.length) {
-        const message = 'Couldn’t build the selected train’s rail path.';
-        addShareCheck('Selected train path', message, 'fail');
-        setShareDecision(message, false);
-        return { ok: false, noCoords: true, message };
+        addShareCheck(
+            'Selected train path',
+            'Using the painted corridor rail. This train’s stop list could not be built, so sharing still uses the line you are on.',
+            'defer'
+        );
+    } else {
+        addShareCheck('Selected train path', `Built an origin-to-terminus path with ${railPath.length} rail points.`);
     }
-    addShareCheck('Selected train path', `Built an origin-to-terminus path with ${railPath.length} rail points.`);
     let samples;
     try {
         samples = await sampleGpsFor(ONBOARD_SAMPLE_MS, (list) => {
@@ -2977,6 +2979,26 @@ export function bindMapTabUi() {
         }
         syncMapShareChrome();
         syncRidePingsToMap();
+    });
+    document.getElementById('map-tracking-refresh')?.addEventListener('click', async () => {
+        triggerHaptic();
+        const btn = document.getElementById('map-tracking-refresh');
+        if (btn) {
+            btn.disabled = true;
+            btn.textContent = 'Refreshing…';
+        }
+        try {
+            const ride = await import('./ride-pings.js');
+            const result = await ride.refreshRideShareGps?.();
+            if (!result?.ok && result?.message) showToast(result.message, 'error');
+        } finally {
+            if (btn) {
+                btn.disabled = false;
+                btn.textContent = 'Refresh GPS';
+            }
+            syncMapShareChrome();
+            syncRidePingsToMap();
+        }
     });
     document.getElementById('map-tracking-share')?.addEventListener('click', () => {
         shareLiveTrain();

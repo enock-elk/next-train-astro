@@ -121,6 +121,8 @@ const SHARE_SESSION_KEY = 'nt_ride_share_session';
 export const ONBOARD_FAST_PING_MS = 4 * 1000;
 export const ONBOARD_MOVING_PING_MS = 4 * 1000;
 export const ONBOARD_STATIONARY_PING_MS = 4 * 1000;
+/** Pull a fresh GPS sample before the 15s grey window. */
+const SHARE_EAGER_GPS_MS = 8 * 1000;
 const DIRECTION_CONFLICT_MIN_SAMPLES = 3;
 const DIRECTION_CONFLICT_MIN_MS = 20 * 1000;
 
@@ -399,8 +401,8 @@ export async function projectTrainTrackerFix({
 } = {}) {
     const id = String(trainId || '');
     const route = ROUTES[routeId];
-    const { stops } = findStopsForTrain(id, schedules ? { schedules } : {});
-    if (!id || !route || stops.length < 2) {
+    const { stops } = findStopsForTrain(id, schedules ? { schedules, routeId } : { routeId });
+    if (!id || !route) {
         return { ok: false, state: TRACKING_STATE.PAUSED, reason: 'geometryUnavailable', geometryUnavailable: true };
     }
     let snap;
@@ -419,9 +421,24 @@ export async function projectTrainTrackerFix({
             distanceM: snap.distanceM,
         };
     }
-    const projected = progressAlongStopsDetailed(snap.lat, snap.lon, stops, stationIndex);
+    const projected = stops.length >= 2
+        ? progressAlongStopsDetailed(snap.lat, snap.lon, stops, stationIndex)
+        : null;
     if (!projected) {
-        return { ok: false, state: TRACKING_STATE.PAUSED, reason: 'geometryUnavailable', geometryUnavailable: true };
+        const near = nearestStationOnRoute(snap.lat, snap.lon, routeId);
+        return {
+            ok: true,
+            state: TRACKING_STATE.ACTIVE,
+            geometryUnavailable: false,
+            usedCorridorFallback: true,
+            projectedLat: roundCoord(snap.lat),
+            projectedLng: roundCoord(snap.lon),
+            projectedProgress: Number.isFinite(snap.routeFraction) ? snap.routeFraction : 0,
+            routeProgressM: snap.routeM,
+            distanceM: snap.distanceM,
+            lastSeenLabel: near?.stationName || 'on the route',
+            bearing: snap.trackBearing,
+        };
     }
     const progress = projected.progress;
     const reverseTolerance = allowReverse ? 0.35 : REVERSE_PROGRESS_TOLERANCE;
@@ -1718,6 +1735,7 @@ export async function stopRideShare({ quiet = false, reason = '', waitForOnboard
 let onboardPingTimer = 0;
 let onboardImuTimer = 0;
 let onboardImuBusy = false;
+let onboardGpsRefreshBusy = false;
 let onboardGpsRailAnchor = null;
 let onboardGeoUnsub = null;
 let onboardProjectionChain = Promise.resolve();
@@ -1740,6 +1758,7 @@ export function stopOnboardPingLoop() {
         onboardImuTimer = 0;
     }
     onboardImuBusy = false;
+    onboardGpsRefreshBusy = false;
     onboardGpsRailAnchor = null;
     stopMotionFusion();
     if (onboardGeoUnsub) {
@@ -1809,6 +1828,41 @@ export async function resumeRideShare({ quiet = false } = {}) {
     if (!quiet) showToast('Sharing restarted', 'success');
     notifyPingsUpdated(active.routeId);
     return { ok: true };
+}
+
+/** Sender Refresh GPS: restart the watch, pull a new fix, and push it. */
+export async function refreshRideShareGps({ quiet = false } = {}) {
+    const active = getActiveShare();
+    if (!active?.trainId) {
+        return { ok: false, message: 'You’re not sharing' };
+    }
+    if (onboardGpsRefreshBusy) return { ok: true, busy: true };
+    onboardGpsRefreshBusy = true;
+    try {
+        const g = await import('./geo-watch.js');
+        g.acquireGeoWatch('share');
+        g.restartShareWatch();
+        const fix = await g.requestFreshShareFix();
+        if (!fix || !Number.isFinite(fix.lat) || !Number.isFinite(fix.lng)) {
+            if (!quiet) showToast('Couldn’t get a fresh GPS fix', 'error');
+            return { ok: false, message: 'Couldn’t get a fresh GPS fix' };
+        }
+        onboardLatestFix = fix;
+        if (active.trackingState === TRACKING_STATE.PAUSED && active.pauseReason === 'user') {
+            if (!quiet) showToast('GPS updated', 'success');
+            return { ok: true, paused: true };
+        }
+        if (!onboardGeoUnsub) startOnboardPingLoop();
+        queueOnboardFix(fix, { forceBroadcast: true });
+        if (!quiet) showToast('GPS refreshed', 'success');
+        return { ok: true };
+    } catch (err) {
+        const msg = err?.message || 'Couldn’t get a fresh GPS fix';
+        if (!quiet) showToast(msg, 'error');
+        return { ok: false, message: msg };
+    } finally {
+        onboardGpsRefreshBusy = false;
+    }
 }
 
 function cacheLocalProjectedFix(active, pos, projection, near, observation) {
@@ -2280,12 +2334,19 @@ export function startOnboardPingLoop() {
             await queueOnboardPause('offline');
             return;
         }
-        const lastFixAt = Number(onboardLatestFix?.t || onboardWatchStartedAt || 0);
-        if (lastFixAt && Date.now() - lastFixAt >= RIDE_GPS_STALE_MS) {
+        const lastFixAt = Number(onboardLatestFix?.t || 0);
+        const age = lastFixAt ? Date.now() - lastFixAt : Infinity;
+        if (age >= SHARE_EAGER_GPS_MS) {
+            await refreshRideShareGps({ quiet: true });
+        }
+        const freshAt = Number(onboardLatestFix?.t || 0);
+        const freshAge = freshAt ? Date.now() - freshAt : Infinity;
+        if (freshAge >= RIDE_GPS_STALE_MS) {
             await queueOnboardPause('staleGps', onboardLatestFix);
             return;
         }
-        const due = Date.now() - onboardLastBroadcastAt >= adaptiveOnboardPingMs(onboardLatestFix?.speedMps);
+        const due = Date.now() - onboardLastBroadcastAt >= adaptiveOnboardPingMs(onboardLatestFix?.speedMps)
+            || current.trackingState === TRACKING_STATE.PAUSED;
         if (due && onboardLatestFix) queueOnboardFix(onboardLatestFix, { forceBroadcast: true });
     }, ONBOARD_FAST_PING_MS);
 }
@@ -2647,6 +2708,7 @@ if (typeof window !== 'undefined') {
     window.stopRideShare = stopRideShare;
     window.pauseRideShare = pauseRideShare;
     window.resumeRideShare = resumeRideShare;
+    window.refreshRideShareGps = refreshRideShareGps;
     window.refreshRideSeenSurface = refreshRideSeenSurface;
     window.renderRideSeenChip = renderRideSeenChip;
     window.bindRideCheckInUi = bindRideCheckInUi;

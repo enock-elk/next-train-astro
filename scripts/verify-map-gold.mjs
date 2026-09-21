@@ -103,6 +103,9 @@ assert(mapApp.includes('function paintLiveTrainIcon'), 'train icon refresh keeps
 assert(!mapApp.includes('from.offM > 180'), 'interpolation does not abort off the painted rail');
 const mapTab = readFileSync(join(ROOT, 'src/lib/map-tab.js'), 'utf8');
 assert(mapTab.includes('railPathForTrain'), 'tracking pill path is built from custom rail points');
+assert(mapTab.includes('refreshRideShareGps'), 'sender tracking card can force a GPS ping');
+const railTracks = readFileSync(join(ROOT, 'src/lib/rail-tracks.js'), 'utf8');
+assert(railTracks.includes('export async function paintedPathForRoute'), 'corridor GOLD path is exported for share fallback');
 assert(mapApp.includes("motionClass === 'still'"), 'receivers pin a still fused ping on the rail');
 assert(mapTab.includes('requestMotionPermission'), 'share tap asks for motion sensors');
 

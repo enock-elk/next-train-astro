@@ -435,6 +435,8 @@ assert(hubModals.includes('id="nt-admin-publish-train"'), 'admin nearby sheet ca
     assert(mapView.includes('id="map-tracking-share"'), 'tracking card has a share control');
     assert(mapView.includes('id="map-tracking-locate"'), 'tracking pill can centre on the train');
     assert(mapView.includes('id="map-tracking-toggle"'), 'tracking card can pause or restart');
+    assert(mapView.includes('id="map-tracking-refresh"'), 'sender tracking card has Refresh GPS');
+    assert(mapTab.includes('refreshRideShareGps'), 'Refresh GPS pushes a new location ping');
     assert(mapView.includes('id="map-tracking-restore-open"'), 'tracking pill opens the card from its position');
     assert(mapTab.includes('ENFORCE_LIVE_SHARE_VET = true'), 'live-share GPS vet is enforced');
     assert(mapTab.includes("'nearby_modal'"), 'Trains near you still starts a share');

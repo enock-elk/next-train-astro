@@ -30,6 +30,8 @@ const STATIONARY_SPEED_MPS = 1.5;
 const MAX_PLAUSIBLE_SPEED_MPS = 70;
 /** Restart a silent share watch so Android cannot freeze fused GPS for minutes. */
 const SHARE_SILENT_RESTART_MS = 8 * 1000;
+/** One-shot GPS before the 15s grey window. */
+const SHARE_FRESH_OPTS = { enableHighAccuracy: true, maximumAge: 0, timeout: 12000 };
 
 /** Map pin / last fused sample is still good enough to attach or list nearby trains. */
 export const GEO_REUSE_MAX_AGE_MS = 30 * 1000;
@@ -189,8 +191,17 @@ function desiredWatchKind() {
 function ingestWatchPosition(pos) {
     lastWatchCallbackAt = Date.now();
     if (!pos?.coords) return;
-    const raw = fromCoords(pos.coords, pos.timestamp);
-    const fix = refineMotionFix(raw, lastFix) || confirmStationaryWatchTick(raw, lastFix);
+    const osT = Number(pos.timestamp);
+    const now = Date.now();
+    // Cached OS timestamps make a live callback look 30-60s stale.
+    const t = Number.isFinite(osT) && (now - osT) <= 2000 ? osT : now;
+    const raw = fromCoords(pos.coords, t);
+    const fix = refineMotionFix(raw, lastFix) || confirmStationaryWatchTick(raw, lastFix) || {
+        ...raw,
+        t: now,
+        speedMps: Number.isFinite(raw.speedMps) ? raw.speedMps : 0,
+        stationary: true,
+    };
     if (fix) emit(fix);
 }
 
@@ -221,9 +232,9 @@ function syncShareWatchdog(on) {
         if (desiredWatchKind() !== 'share') return;
         const last = lastWatchCallbackAt || lastFix?.t || 0;
         if (last && Date.now() - last < SHARE_SILENT_RESTART_MS) return;
-        lastWatchCallbackAt = Date.now();
         clearWatch();
         startWatch('share');
+        requestFreshShareFix().catch(() => {});
     }, 4000);
 }
 
@@ -263,6 +274,12 @@ function bindLifecycle() {
         applyWatch();
     });
     window.addEventListener('pagehide', () => {
+        // Keep an active share watch alive. Clearing here is why GPS went
+        // 30-60s stale after Android TWA lifecycle events.
+        if (holders.has('share')) {
+            applyWatch();
+            return;
+        }
         clearWatch();
         syncShareWatchdog(false);
         syncShareWakeLock(false);
@@ -313,7 +330,59 @@ export function geoWatchHolders() {
     return [...holders];
 }
 
-/** Recenter-quality fix. Reuses a recent watch sample when the OS still has one. */
+/** Restart the high-accuracy share watch without dropping the share holder. */
+export function restartShareWatch() {
+    if (desiredWatchKind() !== 'share') {
+        acquireGeoWatch('share');
+        return;
+    }
+    clearWatch();
+    startWatch('share');
+}
+
+/**
+ * Force a new GPS sample for an active share (Refresh GPS / silent watchdog).
+ * Stamps `t` to now so a cached OS position cannot grey the card.
+ */
+export function requestFreshShareFix() {
+    return new Promise((resolve, reject) => {
+        if (typeof navigator === 'undefined' || !navigator.geolocation) {
+            if (lastFix) {
+                resolve(lastFix);
+                return;
+            }
+            reject(Object.assign(new Error('Location isn’t available on this device.'), { code: 2 }));
+            return;
+        }
+        acquireGeoWatch('share');
+        navigator.geolocation.getCurrentPosition(
+            (pos) => {
+                lastWatchCallbackAt = Date.now();
+                if (!pos?.coords) {
+                    if (lastFix) {
+                        resolve(lastFix);
+                        return;
+                    }
+                    reject(Object.assign(new Error('Couldn’t get a GPS fix.'), { code: 2 }));
+                    return;
+                }
+                const raw = fromCoords(pos.coords, Date.now());
+                const fix = refineMotionFix(raw, lastFix) || confirmStationaryWatchTick(raw, lastFix) || raw;
+                emit(fix);
+                resolve(fix);
+            },
+            (err) => {
+                if (lastFix) {
+                    resolve(lastFix);
+                    return;
+                }
+                reject(err);
+            },
+            SHARE_FRESH_OPTS
+        );
+    });
+}
+
 export function requestGeoLocateFix() {
     return new Promise((resolve, reject) => {
         const reuse = () => reusableGeoFix(lastFix);

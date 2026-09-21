@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_09.21.11': [
+        'Live share GPS was greying at 15s because a silent Android watch never one-shot a new fix, pagehide cleared the share watch, and cached OS timestamps made a live callback look 50s stale. Sender now eager-refreshes GPS at 8s (getCurrentPosition maximumAge 0 + watch restart), keeps the share watch across pagehide, stamps callback time to now when the OS timestamp is old, and has a Refresh GPS button on the tracking card. Share checks no longer block when a train stop list cannot be built: fall back to the painted GOLD corridor (9113 at Pretoria). Projection does the same. No What’s New (live share stays hidden). forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
+    ],
     'V9_09.21.10': [
         'Removed the Points and badges What’s New card (hidden while operators test it). forceShow stays false on every card, including V9_09.21.1 Open to the board. Unread badge still uses CHANGELOG_DATA[0].id, so that splash card is what lights Options What’s New after a force-update, not an auto-open. No new commuter card. FORCE_UPDATE_REQUIRED stays true.',
     ],

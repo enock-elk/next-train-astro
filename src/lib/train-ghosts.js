@@ -2,7 +2,8 @@
  * Timetable ghosts — each schedule column is a simulated train.
  * Position is interpolated between the last stop whose clock ≤ now and the next.
  */
-import { $schedules, $globalStationIndex, $userRegion } from '../store.js';
+import { $schedules, $globalStationIndex, $userRegion, $fullDatabase } from '../store.js';
+import { ROUTES } from './config.js';
 import {
     normalizeStationName,
     timeToSeconds,
@@ -10,7 +11,7 @@ import {
     scheduleCacheSlot,
     getDistanceFromLatLonInKm,
 } from './utils.js';
-import { closestPointOnPath, smoothPathFromStops } from './rail-tracks.js';
+import { closestPointOnPath, paintedPathForRoute, smoothPathFromStops } from './rail-tracks.js';
 
 /** Trains stay trackable for 45 minutes either side of timetable time. */
 export const TRACKING_WINDOW_SEC = 45 * 60;
@@ -103,15 +104,79 @@ export function currentDirectionSchedules(schedules = $schedules.get() || {}) {
         .filter((s) => s?.rows?.length);
 }
 
+function dumpRowsToSchedule(rows) {
+    if (Array.isArray(rows) && rows.length) {
+        return { stationColumnName: 'STATION', headers: Object.keys(rows[0] || {}), rows };
+    }
+    if (rows && typeof rows === 'object' && Array.isArray(rows.rows)) return rows;
+    return null;
+}
+
+function dumpStopsForTrain(trainId, opts = {}) {
+    const id = String(trainId || '').trim();
+    const routeId = String(opts.routeId || '');
+    const route = ROUTES[routeId];
+    const db = opts.database || $fullDatabase.get();
+    if (!id || !route?.sheetKeys || !db) return [];
+    for (const key of Object.values(route.sheetKeys)) {
+        const parsed = dumpRowsToSchedule(db[key]);
+        if (!parsed) continue;
+        const stops = stopsForTrain(parsed, id);
+        if (stops.length) return stops;
+    }
+    return [];
+}
+
 export function findStopsForTrain(trainId, opts = {}) {
-    const schedules = opts.schedules
-        ? (Array.isArray(opts.schedules) ? opts.schedules : Object.values(opts.schedules).filter(Boolean))
-        : currentDirectionSchedules();
-    for (const schedule of schedules) {
+    if (opts.schedules) {
+        const schedules = Array.isArray(opts.schedules)
+            ? opts.schedules
+            : Object.values(opts.schedules).filter(Boolean);
+        for (const schedule of schedules) {
+            const stops = stopsForTrain(schedule, trainId);
+            if (stops.length) return { schedule, stops };
+        }
+        return { schedule: null, stops: [] };
+    }
+    const loaded = $schedules.get() || {};
+    const preferred = currentDirectionSchedules(loaded);
+    for (const schedule of preferred) {
         const stops = stopsForTrain(schedule, trainId);
         if (stops.length) return { schedule, stops };
     }
-    return { schedule: null, stops: [] };
+    for (const schedule of Object.values(loaded)) {
+        if (!schedule?.rows?.length) continue;
+        const stops = stopsForTrain(schedule, trainId);
+        if (stops.length) return { schedule, stops };
+    }
+    const dumpStops = dumpStopsForTrain(trainId, opts);
+    return { schedule: null, stops: dumpStops };
+}
+
+function stationPointsOnRoute(routeId, stationIndex) {
+    const id = String(routeId || '');
+    const points = [];
+    for (const coords of Object.values(stationIndex || {})) {
+        if (!coords || typeof coords.lat !== 'number') continue;
+        const lng = coords.lon ?? coords.lng;
+        if (typeof lng !== 'number') continue;
+        const routes = coords.routes;
+        const onRoute = !id
+            || (routes && typeof routes.has === 'function' && routes.has(id))
+            || (Array.isArray(routes) && routes.includes(id));
+        if (!onRoute) continue;
+        points.push({ lat: coords.lat, lon: lng, routeId: id });
+    }
+    return points;
+}
+
+async function corridorFallbackPath(routeId, region, stationIndex) {
+    const painted = await paintedPathForRoute(routeId, region);
+    if (painted?.length >= 2) return painted;
+    const points = stationPointsOnRoute(routeId, stationIndex);
+    if (points.length < 2) return null;
+    const smoothed = await smoothPathFromStops(points, region);
+    return smoothed || points.map((point) => [point.lat, point.lon]);
 }
 
 /** Build the selected service's origin-to-terminus rail path. */
@@ -119,15 +184,18 @@ export async function railPathForTrain(trainId, opts = {}) {
     const { stops } = findStopsForTrain(trainId, opts);
     const stationIndex = opts.stationIndex || $globalStationIndex.get() || {};
     const routeId = String(opts.routeId || '');
+    const region = opts.region || $userRegion.get() || 'GP';
     const points = stops
         .map((stop) => {
             const coords = coordsForStation(stop.station, stationIndex);
             return coords ? { lat: coords.lat, lon: coords.lng, routeId } : null;
         })
         .filter(Boolean);
-    if (points.length < 2) return null;
-    const smoothed = await smoothPathFromStops(points, opts.region || $userRegion.get() || 'GP');
-    return smoothed || points.map((point) => [point.lat, point.lon]);
+    if (points.length >= 2) {
+        const smoothed = await smoothPathFromStops(points, region);
+        return smoothed || points.map((point) => [point.lat, point.lon]);
+    }
+    return corridorFallbackPath(routeId, region, stationIndex);
 }
 
 /** Metres from a GPS fix to the closest rail point on this selected service. */

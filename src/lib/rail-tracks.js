@@ -395,6 +395,32 @@ export async function loadRegionBundle(region) {
     }
 }
 
+/**
+ * Painted GOLD LineString for one corridor, as [lat, lon][].
+ * Share checks and live snap fall back to this when a train's stop list is thin.
+ */
+export async function paintedPathForRoute(routeId, region = 'GP') {
+    const id = String(routeId || '');
+    if (!id) return null;
+    const bundle = await loadRegionBundle(region);
+    const feature = bundle?.byId?.get(id);
+    if (!feature) return null;
+    const out = [];
+    for (const line of featureLines(feature)) {
+        if (!Array.isArray(line)) continue;
+        for (const pair of line) {
+            if (!pair || pair.length < 2) continue;
+            const lon = Number(pair[0]);
+            const lat = Number(pair[1]);
+            if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+            const prev = out[out.length - 1];
+            if (prev && prev[0] === lat && prev[1] === lon) continue;
+            out.push([lat, lon]);
+        }
+    }
+    return out.length >= 2 ? out : null;
+}
+
 function featureLatLngs(feature) {
     const coords = feature?.geometry?.coordinates;
     if (!Array.isArray(coords) || coords.length < 2) return null;

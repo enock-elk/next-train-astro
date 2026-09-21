@@ -9,6 +9,7 @@ import {
     progressAlongStopsDetailed,
     journeyPositionLabel,
     alignBearingToJourney,
+    railPathForTrain,
 } from '../src/lib/train-ghosts.js';
 import {
     closestPointOnPath,
@@ -16,6 +17,7 @@ import {
     projectToTrustedFeature,
     trackBearingDeg,
     TRACKER_SNAP_MAX_M,
+    paintedPathForRoute,
 } from '../src/lib/rail-tracks.js';
 import {
     adaptiveOnboardPingMs,
@@ -567,6 +569,17 @@ assert(geoWatchSource.includes('enableHighAccuracy: false'), 'seek watch is fuse
 assert(geoWatchSource.includes('enableHighAccuracy: true'), 'an active share uses a high-accuracy watch');
 assert(geoWatchSource.includes("holders.has('share')"), 'share keeps GPS running while the document is hidden');
 assert(geoWatchSource.includes('SHARE_SILENT_RESTART_MS'), 'a silent share watch is restarted');
+assert(geoWatchSource.includes('requestFreshShareFix'), 'silent share watch also one-shots GPS');
+assert(geoWatchSource.includes('SHARE_FRESH_OPTS'), 'share one-shot GPS uses maximumAge 0');
+assert(geoWatchSource.includes("holders.has('share')") && geoWatchSource.includes('pagehide'), 'pagehide keeps an active share watch');
+assert(geoWatchSource.includes('now - osT'), 'cached OS GPS timestamps are not treated as stale');
+assert(ridePingsSource.includes('SHARE_EAGER_GPS_MS'), 'onboard loop refreshes GPS before the 15s grey window');
+assert(ridePingsSource.includes('refreshRideShareGps'), 'sender can force a GPS ping');
+assert(ridePingsSource.includes('usedCorridorFallback'), 'missing train stop list still snaps to the corridor');
+assert(mapViewSource.includes('id="map-tracking-refresh"'), 'tracking card has Refresh GPS');
+assert(mapTabSource.includes('map-tracking-refresh'), 'Refresh GPS is wired on the sender card');
+assert(!mapTabSource.includes('Couldn’t build the selected train'), 'share checks do not block on a missing train path');
+assert(mapTabSource.includes('painted corridor rail'), 'share checks fall back to the painted corridor');
 assert(geoWatchSource.includes('wakeLock.request'), 'sharing requests a screen wake lock to keep GPS live');
 assert(geoWatchSource.includes('confirmStationaryWatchTick'), 'repeated stationary GPS callbacks stay live');
 assert(geoWatchSource.includes("holders.add"), 'geo watch is reference-counted by map and share');
@@ -759,6 +772,24 @@ assert(
     !missingRouteGeometry.ok && missingRouteGeometry.geometryUnavailable,
     'missing route geometry is distinct from an off-track fix'
 );
+const painted = await paintedPathForRoute('pta-pien', 'GP');
+assert(painted?.length >= 2, 'painted GOLD path is available for pta-pien in the mock');
+const fallbackPath = await railPathForTrain('9999', {
+    routeId: 'pta-pien',
+    region: 'GP',
+    schedules: [{ headers: ['STATION'], rows: [{ STATION: 'ORIGIN' }] }],
+    stationIndex: {},
+});
+assert(fallbackPath?.length >= 2, 'missing train stop list still uses the painted corridor');
+const corridorFix = await projectTrainTrackerFix({
+    lat: -25.0002,
+    lng: 28.005,
+    trainId: '9999',
+    routeId: 'pta-pien',
+    stationIndex,
+    schedules: [{ headers: ['STATION'], rows: [{ STATION: 'ORIGIN' }] }],
+});
+assert(corridorFix.ok && corridorFix.usedCorridorFallback, 'thin stop list still snaps to the corridor');
 globalThis.fetch = originalFetch;
 
 assert(routeHasNoScheduledTrains('sunday'), 'Sunday has no trains to report');

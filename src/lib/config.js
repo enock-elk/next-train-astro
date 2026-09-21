@@ -14,7 +14,7 @@
  * Changelog / What’s New is optional: skip both, or write only "no release notes."
  * Always add ADMIN_CHANGELOG[APP_VERSION] (System Health Build notes).
  */
-export const APP_VERSION = "V9_09.21.9";
+export const APP_VERSION = "V9_09.21.10";
 
 /** Public support channels (About modal, lifeboat help.html, Safe Mode). */
 export const SUPPORT_EMAIL = 'admin@nexttrain.co.za';
@@ -959,7 +959,7 @@ export const HERC_KOED_JUNCTIONS = ['KOEDOESPOORT', 'HERCULES'];
 // app configuration.
 // Never mention work that is still hidden while operators test it: Alerts /
 // the bell / notices / hold-to-react, Trains near me, I'm on it, live location,
-// ride sharing, community chat, route chat.
+// ride sharing, community chat, route chat, points, badges.
 // Never use emoji. Never use em dashes (U+2014) or en dashes (U+2013). Use a
 // comma, a period, or a hyphen. Do not explain strategy or "we fixed."
 // Leave every forceShow false. Never auto-open What's New over the welcome screen.
@@ -980,15 +980,6 @@ export const CHANGELOG_DATA = [
         forceShow: false,
         features: [
             "Trip fare lists Single, Return, Weekly, and Monthly. Peak time no longer shows a stray colon. Yes sits on the right."
-        ]
-    },
-    {
-        id: "V9_09.18.11",
-        title: "Points and badges",
-        date: "18 Sep 2026",
-        forceShow: false,
-        features: [
-            "Points take longer to earn. Same-day contributions group together. Badge tiles fill as you work toward a streak."
         ]
     },
     {

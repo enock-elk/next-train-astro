@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_09.21.10': [
+        'Removed the Points and badges What’s New card (hidden while operators test it). forceShow stays false on every card, including V9_09.21.1 Open to the board. Unread badge still uses CHANGELOG_DATA[0].id, so that splash card is what lights Options What’s New after a force-update, not an auto-open. No new commuter card. FORCE_UPDATE_REQUIRED stays true.',
+    ],
     'V9_09.21.9': [
         'Tracking card title is Train {id} with destination and Paused/Active on the next row so the share/min/close cluster no longer eats the headboard. Open card drag uses touch-none plus a saved session position so it stays movable and does not snap back to the pill. Live interpolation and grey stale window are 15s (was 12s); 4s GPS publish stays. No What’s New. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
     ],

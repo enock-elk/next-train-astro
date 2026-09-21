@@ -33,12 +33,13 @@ assert(packageFile.version === packageVersionFromApp, `package.json ${packageFil
 assert(FORCE_UPDATE_REQUIRED === true, 'this ship forces existing shells onto V9_09.17.15');
 assert(CHANGELOG_DATA[0].forceShow === false, 'What’s New does not auto-open');
 assert(!CHANGELOG_DATA.some((e) => e.forceShow), 'no What’s New card opts into auto-open');
-assert(CHANGELOG_DATA[0].id === 'V9_09.20.2' && CHANGELOG_DATA[0].features.length === 1, 'What’s New latest card is V9_09.20.2');
-assert(CHANGELOG_DATA[0].features[0].includes('Trip fare lists Single'), 'V9_09.20.2 What’s New mentions Single Return Weekly Monthly');
-assert(CHANGELOG_DATA[0].features[0].includes('Yes sits on the right'), 'V9_09.20.2 What’s New mentions Yes on the right');
-assert(CHANGELOG_DATA[1].id === 'V9_09.18.11' && CHANGELOG_DATA[1].features.length === 1, 'keep V9_09.18.11 as the previous What’s New card');
-assert(CHANGELOG_DATA[1].features[0].includes('Points take longer to earn'), 'V9_09.18.11 What’s New mentions slower points');
-assert(CHANGELOG_DATA[1].features[0].includes('group together'), 'V9_09.18.11 What’s New mentions grouped contributions');
+assert(CHANGELOG_DATA[0].id === 'V9_09.21.1' && CHANGELOG_DATA[0].features.length === 1, 'What’s New latest card is V9_09.21.1');
+assert(CHANGELOG_DATA[0].features[0].includes('Opening the app goes from the splash screen'), 'V9_09.21.1 What’s New mentions splash to board');
+assert(CHANGELOG_DATA[0].features[0].includes('Starting Next Train stays on screen'), 'V9_09.21.1 What’s New mentions Starting Next Train');
+assert(CHANGELOG_DATA[1].id === 'V9_09.20.2' && CHANGELOG_DATA[1].features.length === 1, 'keep V9_09.20.2 as the previous What’s New card');
+assert(CHANGELOG_DATA[1].features[0].includes('Trip fare lists Single'), 'V9_09.20.2 What’s New mentions Single Return Weekly Monthly');
+assert(CHANGELOG_DATA[1].features[0].includes('Yes sits on the right'), 'V9_09.20.2 What’s New mentions Yes on the right');
+assert(!CHANGELOG_DATA.some((e) => e.id === 'V9_09.18.11'), 'points and badges card is gone from What’s New');
 assert(CHANGELOG_DATA[2].id === 'V9_09.18.4' && CHANGELOG_DATA[2].features.length === 1, 'keep V9_09.18.4 as the previous What’s New card');
 assert(CHANGELOG_DATA[2].features[0].includes('scroll away with the page'), 'V9_09.18.4 What’s New mentions ads scrolling with the page');
 assert(CHANGELOG_DATA[3].id === 'V9_09.17.14' && CHANGELOG_DATA[3].features.length === 1, 'keep V9_09.17.14 as the previous What’s New card');
@@ -90,7 +91,7 @@ assert(!CHANGELOG_DATA.some((e) => e.id === 'V8_08.16.1' || e.id === 'V8_08.15.1
 assert(!CHANGELOG_DATA.some((e) => ['V8_08.28.5', 'V8_08.28.4', 'V8_08.28.3', 'V8_08.28.2', 'V8_08.28.1', 'V8_08.27.9', 'V8_08.27.8', 'V8_08.27.7', 'V8_08.27.6', 'V8_08.27.5', 'V8_08.27.4', 'V8_08.27.3', 'V8_08.26.2', 'V8_08.26.1'].includes(e.id)), 'folded 28.5–26.1 into V9_08.28.1');
 assert(!CHANGELOG_DATA.some((e) => e.id === 'V8_08.18.1'), 'Alerts channel card is gone from What’s New');
 {
-    const hidden = /alert|the bell|hold to react|trains near|i['’]m on it|community chat|route chat|live location|ride sharing|firebase|global state/i;
+    const hidden = /alert|the bell|hold to react|trains near|i['’]m on it|community chat|route chat|live location|ride sharing|firebase|global state|\bpoints\b|\bbadges?\b/i;
     const dash = /[\u2014\u2013]/;
     const emoji = /\p{Extended_Pictographic}/u;
     for (const entry of CHANGELOG_DATA) {

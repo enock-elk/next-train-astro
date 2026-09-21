@@ -138,6 +138,12 @@ ok(astroCfg.includes("url.pathname === '/og/share'") && astroCfg.includes('Netwo
 ok(astroCfg.includes('/og/l'), 'SW does not cache /og/l live shares');
 ok(astroCfg.includes('privacy\\.html'), 'SW does not treat /privacy.html as the app shell');
 ok(astroCfg.includes('account-delete\\.html'), 'SW does not treat /account-delete.html as the app shell');
+ok(astroCfg.includes('sitemap\\.xml'), 'SW does not treat /sitemap.xml as the app shell');
+ok(astroCfg.includes('robots\\.txt'), 'SW does not treat /robots.txt as the app shell');
+const welcomeDeeplink = readFileSync(join(ROOT, 'src/components/WelcomeModal.astro'), 'utf8');
+ok(welcomeDeeplink.includes('hasInboundShareIntent()'), 'Welcome skips inbound planner/route snapshots');
+const plannerDeeplink = readFileSync(join(ROOT, 'src/lib/planner-ui.js'), 'utf8');
+ok(plannerDeeplink.includes('if (attempts < maxAttempts) return;'), 'planner deep link retries station resolve');
 
 const ui = readFileSync(join(ROOT, 'src/lib/ui.js'), 'utf8');
 ok(ui.includes("location.hash === '#privacy'"), 'home tab paint keeps #privacy');

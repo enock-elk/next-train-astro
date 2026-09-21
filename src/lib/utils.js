@@ -429,6 +429,13 @@ export function resolvePlannerStationInput(raw, list) {
         return b.includes(want) || want.includes(b);
     });
     if (matches.length === 1) return matches[0];
+    if (matches.length > 1) {
+        const prefer = matches.find((s) => normalizeStationName(s) === want)
+            || matches.find((s) => normalizeStationName(s) === norm);
+        if (prefer) return prefer;
+        const shortest = [...matches].sort((a, b) => normalizeStationName(a).length - normalizeStationName(b).length)[0];
+        if (shortest && normalizeStationName(shortest) === want) return shortest;
+    }
 
     // Prefix on an alias key (BOSMA → BOSMAN). Skip short tokens like PARK.
     if (norm.length >= 5) {

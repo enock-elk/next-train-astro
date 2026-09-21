@@ -1,20 +1,29 @@
 ---
 import { withBase } from '../lib/config.js';
-import { getSeoAppPreview } from '../lib/seo-app-previews.js';
+import { getSeoAppPreview, getSeoPlannerPreview } from '../lib/seo-app-previews.js';
 
 interface Props {
-  routeId: string;
+  routeId?: string;
+  previewId?: string;
   href: string;
 }
 
 const href = Astro.props.href;
-const preview = getSeoAppPreview(Astro.props.routeId);
+const preview = Astro.props.previewId === 'pretoria-johannesburg'
+  ? getSeoPlannerPreview()
+  : getSeoAppPreview(Astro.props.routeId || '');
+const previewKey = preview?.id || Astro.props.routeId || '';
+const bullets = preview?.bullets || [
+  'Upcoming departures and connections',
+  'Full timetable and estimated fare',
+  'Trip Planner and network map',
+];
 ---
 
 {preview && (
   <section
     id="seo-app-preview"
-    data-seo-app-preview={Astro.props.routeId}
+    data-seo-app-preview={previewKey}
     class="mt-8 overflow-hidden rounded-2xl border border-blue-100 bg-white shadow-lg shadow-blue-900/10"
     aria-labelledby="seo-app-preview-title"
   >
@@ -26,9 +35,9 @@ const preview = getSeoAppPreview(Astro.props.routeId);
         </h2>
         <p class="mt-3 text-sm leading-relaxed text-slate-600">{preview.body}</p>
         <ul class="mt-3 space-y-1.5 text-sm text-slate-700">
-          <li>Upcoming departures and connections</li>
-          <li>Full timetable and estimated fare</li>
-          <li>Trip Planner and network map</li>
+          {bullets.map((item: string) => (
+            <li>{item}</li>
+          ))}
         </ul>
         <a
           href={href}

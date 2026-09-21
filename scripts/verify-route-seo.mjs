@@ -48,7 +48,7 @@ import {
   seoRouteDistanceLabel,
   SEO_SCHEDULE_YEAR,
 } from '../src/lib/seo-timetable.js';
-import { listSeoAppPreviews, seoPreviewImageAbsPath } from '../src/lib/seo-app-previews.js';
+import { listSeoAppPreviews, seoPreviewImageAbsPath, getSeoPlannerPreview, seoPlannerPreviewImageAbsPath } from '../src/lib/seo-app-previews.js';
 import { extractGridPreview } from '../workers/nexttrain-og/src/schedule.js';
 
 const DIST = process.argv[2] || 'dist';
@@ -144,6 +144,15 @@ for (const { id, slug } of FLAGSHIP) {
     const imagePath = seoPreviewImageAbsPath(preview.routeId);
     if (!existsSync(imagePath)) fail(`missing SEO preview image ${imagePath}`);
   }
+  const plannerPreview = getSeoPlannerPreview();
+  if (!plannerPreview || plannerPreview.id !== 'pretoria-johannesburg') {
+    fail('planner preview id must stay pretoria-johannesburg');
+  }
+  if (!plannerPreview.image.includes('pretoria-johannesburg-trip-plan.webp')) {
+    fail('planner preview image path must be trip-plan specific');
+  }
+  const plannerImage = seoPlannerPreviewImageAbsPath();
+  if (!existsSync(plannerImage)) fail(`missing SEO planner preview image ${plannerImage}`);
 }
 
 const featured = listFeaturedSeoRoutes();
@@ -377,6 +386,20 @@ if (!gridPathSa.includes('d=sa') || gridPathSa.includes('dir=')) {
   const appPreview = readFileSync(new URL('../src/components/SeoAppPreview.astro', import.meta.url), 'utf8');
   if (!appPreview.includes('getSeoAppPreview') || !appPreview.includes('preview.image')) {
     fail('app preview catalog must map screenshots by route id');
+  }
+  if (!appPreview.includes('getSeoPlannerPreview') || !appPreview.includes("previewId === 'pretoria-johannesburg'")) {
+    fail('app preview must render the Pretoria-JHB trip-plan screenshot');
+  }
+  const corridorPage = readFileSync(new URL('../src/pages/corridors/[slug].astro', import.meta.url), 'utf8');
+  if (!corridorPage.includes('previewId="pretoria-johannesburg"')) {
+    fail('Pretoria-JHB corridor must embed the trip-plan preview');
+  }
+  if (!corridorPage.includes('isPtaJhb ? ptaJhbPlannerHref')) {
+    fail('Pretoria-JHB corridor Open CTA must go to the planner, not ?region=');
+  }
+  const welcomeSrc = readFileSync(new URL('../src/components/WelcomeModal.astro', import.meta.url), 'utf8');
+  if (!welcomeSrc.includes('hasInboundShareIntent()')) {
+    fail('Welcome must skip when a planner/route snapshot is inbound');
   }
   if (!appPreview.includes('sm:grid-cols-') || !appPreview.includes('max-w-[15rem]')) {
     fail('app preview must adapt from stacked mobile to capped desktop columns');
@@ -858,6 +881,15 @@ if (existsSync(DIST)) {
     }
     if (!html.includes('plan=PRETORIA~JOHANNESBURG')) {
       fail('Pretoria-JHB corridor HTML missing Pretoria to Johannesburg planner link');
+    }
+    if (!html.includes('data-seo-app-preview="pretoria-johannesburg"')) {
+      fail('Pretoria-JHB corridor HTML missing trip-plan screenshot');
+    }
+    if (!html.includes('pretoria-johannesburg-trip-plan.webp')) {
+      fail('Pretoria-JHB corridor HTML missing trip-plan webp');
+    }
+    if (!/Plan Pretoria to Johannesburg/.test(html)) {
+      fail('Pretoria-JHB corridor CTA must say Plan Pretoria to Johannesburg');
     }
   }
 

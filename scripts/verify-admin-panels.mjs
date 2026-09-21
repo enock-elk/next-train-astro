@@ -403,6 +403,11 @@ assert(
 assert(admin.includes('window.withBase === \'function\' ? window.withBase(path)'), 'poster preview uses withBase so github.io still loads the jpg');
 assert(admin.includes("style.zIndex = '260'"), 'build notes sit above Dev Hub');
 assert(admin.includes("if (e.target.closest?.('[data-admin-changelog]')) return;"), 'hold-to-react ignores the version chip');
+{
+    const holdStart = admin.indexOf("dataset.fbHoldBound");
+    const holdBlock = holdStart >= 0 ? admin.slice(holdStart, holdStart + 900) : '';
+    assert(holdBlock.includes("if (e.target.closest?.('[data-admin-changelog]')) return;"), 'hold-to-edit ignores the version chip');
+}
 assert(admin.includes("data-fb-lazy=\"1\""), 'archive threads defer chat HTML');
 assert(admin.includes('hydrateFeedbackThreadBody'), 'archive hydrates a thread on first expand');
 assert(admin.includes('buildFeedbackThreadInnerHtml'), 'inbox and archive share the same thread renderer');

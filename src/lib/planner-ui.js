@@ -4476,14 +4476,16 @@ export async function applyPlannerDeepLink() {
             }
             const list = getMasterStationList();
             if (list && list.length > 0) {
-                clearInterval(checkReady);
                 const fromId = resolvePlannerStationInput(link.from, list);
                 const toId = resolvePlannerStationInput(link.to, list);
                 if (!fromId || !toId) {
+                    if (attempts < maxAttempts) return;
+                    clearInterval(checkReady);
                     showToast('Could not resolve stations for shared trip.', 'error');
                     resolve(false);
                     return;
                 }
+                clearInterval(checkReady);
 
                 const fromSelect = document.getElementById('planner-from');
                 const toSelect = document.getElementById('planner-to');

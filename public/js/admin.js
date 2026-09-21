@@ -7856,6 +7856,7 @@ const Admin = {
                     }
                 };
                 listContainer.addEventListener('pointerdown', (e) => {
+                    if (e.target.closest?.('[data-admin-changelog]')) return;
                     const bubble = e.target.closest('[data-fb-edit-admin]');
                     if (!bubble || !listContainer.contains(bubble) || e.button) return;
                     holdFired = false;

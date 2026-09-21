@@ -43,7 +43,7 @@ import { withBase } from '../lib/config.js';
     import { ROUTES, getCorridorLabel } from '../lib/config.js';
     import { safeStorage, formatRouteLabelHtml, restorePinnedSession } from '../lib/utils.js';
     import { loadAllSchedules, executeRegionSwap } from '../lib/logic.js';
-    import { prepareDeeplinkIntents, flushPendingDeeplinkIntents } from '../lib/deeplink.js';
+    import { prepareDeeplinkIntents, flushPendingDeeplinkIntents, hasInboundShareIntent } from '../lib/deeplink.js';
     import { markWelcomeShownThisVisit, snapshotReturningForStartupLocate, maybeAutoLocateBoard } from '../lib/auto-locate.js';
 
     prepareDeeplinkIntents();
@@ -201,7 +201,9 @@ import { withBase } from '../lib/config.js';
         const hasPlannerShortcut = params.get('action') === 'planner' && !params.get('from') && !params.get('to') && !params.get('plan');
         const hasMapDeepLink = String(params.get('action') || '').toLowerCase() === 'map';
         const hasShareTarget = !!(params.get('title') || params.get('text') || params.get('url'));
-        const hasInboundShare = hasRouteDeepLink || hasPlannerDeepLink || hasPlannerShortcut || hasMapDeepLink || hasShareTarget;
+        // Search plus launchQueue/session snapshot — a late Facebook hop can
+        // already have frozen plan= before this script reads location.search.
+        const hasInboundShare = hasRouteDeepLink || hasPlannerDeepLink || hasPlannerShortcut || hasMapDeepLink || hasShareTarget || hasInboundShareIntent();
         // Soft SEO hint for first-time only — never override a returning user's region
         const seoRegion = (params.get('region') || params.get('r') || '').toUpperCase();
         if (!welcomeSeen && ['GP', 'WC', 'KZN', 'EC'].includes(seoRegion) && !safeStorage.getItem('userRegion')) {

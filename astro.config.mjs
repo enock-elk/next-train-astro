@@ -91,6 +91,8 @@ export default defineConfig({
           /map\.html/,
           /status\.html/,
           /marketing\.html/,
+          /sitemap\.xml(?:$|[?#])/,
+          /robots\.txt(?:$|[?#])/,
         ],
         // @vite-pwa/astro strips `.html` from page entries, but build.format is
         // 'file' so the emitted files — and every internal link and canonical URL —

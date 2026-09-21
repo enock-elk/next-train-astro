@@ -163,3 +163,46 @@ export function getSeoAppPreview(routeId) {
 export function listSeoAppPreviews() {
     return listSeoRoutes().map(({ route }) => getSeoAppPreview(route.id)).filter(Boolean);
 }
+
+/** Pretoria-JHB corridor phone preview of Trip Planner at weekday 10:00. */
+export const SEO_PLANNER_PREVIEW_ID = 'pretoria-johannesburg';
+
+export function seoPlannerPreviewImageRelPath() {
+    return 'images/seo/pretoria-johannesburg-trip-plan.webp';
+}
+
+export function seoPlannerPreviewImageAbsPath(root = process.cwd()) {
+    return join(root, 'public', seoPlannerPreviewImageRelPath());
+}
+
+function plannerPreviewImageExists() {
+    const here = dirname(fileURLToPath(import.meta.url));
+    const candidates = [
+        seoPlannerPreviewImageAbsPath(process.cwd()),
+        join(here, '../../public', seoPlannerPreviewImageRelPath()),
+        join(process.cwd(), 'dist', seoPlannerPreviewImageRelPath()),
+    ];
+    return candidates.some((path) => existsSync(path));
+}
+
+export function getSeoPlannerPreview() {
+    return {
+        id: SEO_PLANNER_PREVIEW_ID,
+        from: 'PRETORIA',
+        to: 'JOHANNESBURG',
+        region: 'GP',
+        time: '10:00',
+        day: 'weekday',
+        title: 'See Pretoria to Johannesburg at a glance',
+        body: 'Trip Planner builds the three-train journey from the published sheets.',
+        image: seoPlannerPreviewImageRelPath(),
+        alt: 'Next Train trip plan from Pretoria to Johannesburg on a weekday, showing the three-train journey via Kempton Park and Germiston',
+        linkLabel: 'Plan Pretoria to Johannesburg in Next Train',
+        bullets: [
+            'Three-train Pretoria to Johannesburg plan',
+            'Weekday midday connections',
+            'Estimated fare and full journey',
+        ],
+        hasImage: plannerPreviewImageExists(),
+    };
+}

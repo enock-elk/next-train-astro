@@ -98,6 +98,8 @@ assert(css.includes('Do not make this the only copy again'), 'appearance warns t
 
 const layout = readFileSync(new URL('../src/layouts/Layout.astro', import.meta.url), 'utf8');
 const content = readFileSync(new URL('../src/layouts/ContentLayout.astro', import.meta.url), 'utf8');
+assert(layout.includes('ResizeObserver loop completed with undelivered notifications.'), 'app Sentry ignores the Chrome ResizeObserver loop');
+assert(content.includes('ResizeObserver loop completed with undelivered notifications.'), 'content Sentry ignores the Chrome ResizeObserver loop');
 assert(layout.includes('<StuckUpdateGuard />'), 'app layout wires the inline guard');
 assert(content.includes('<StuckUpdateGuard />'), 'map layout wires the inline guard');
 assert(layout.includes('<ShellFallbackStyles surface="app" />'), 'app layout wires the inline fallback styles');
@@ -311,6 +313,10 @@ assert(worker.includes('no-store, no-cache, must-revalidate'), 'edge worker serv
 const wrangler = readFileSync(new URL('../workers/nexttrain-edge/wrangler.jsonc', import.meta.url), 'utf8');
 assert(wrangler.includes('nexttrain.co.za/app-version.json'), 'wrangler routes app-version.json');
 assert(wrangler.includes('nexttrain.co.za/sw.js'), 'wrangler routes sw.js');
+const astroCfgFouc = readFileSync(new URL('../astro.config.mjs', import.meta.url), 'utf8');
+assert(astroCfgFouc.includes('sitemap\\.xml'), 'SW navigateFallback does not treat /sitemap.xml as the app shell');
+assert(astroCfgFouc.includes('robots\\.txt'), 'SW navigateFallback does not treat /robots.txt as the app shell');
+
 const welcome = readFileSync(new URL('../src/components/WelcomeModal.astro', import.meta.url), 'utf8');
 assert(welcome.includes('restorePinnedSession'), 'Welcome waits for IDB pin resurrection');
 const utilsSrc = readFileSync(new URL('../src/lib/utils.js', import.meta.url), 'utf8');

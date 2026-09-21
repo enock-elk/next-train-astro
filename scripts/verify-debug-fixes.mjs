@@ -200,6 +200,9 @@ assert(shouldOpenRoutePicker({ swapGen: 1, currentGen: 2, currentRouteId: null }
     assert(resolvePlannerStationInput('park station', gp) === 'JOHANNESBURG', 'park station → JOHANNESBURG');
     assert(resolvePlannerStationInput('Kempton Park', gp) === 'KEMPTON PARK', 'Kempton Park stays Kempton Park');
     assert(resolvePlannerStationInput('Ellis Park', gp) === 'ELLIS PARK', 'Ellis Park stays Ellis Park');
+    const jhbBoth = ['PRETORIA', 'JOHANNESBURG PARK', 'JOHANNESBURG', 'GERMISTON'];
+    assert(resolvePlannerStationInput('JOHANNESBURG', jhbBoth) === 'JOHANNESBURG', 'bare JOHANNESBURG is not ambiguous with Park');
+    assert(resolvePlannerStationInput('PRETORIA', jhbBoth) === 'PRETORIA', 'PRETORIA still resolves next to Johannesburg');
     const gpNorth = ['PRETORIA', 'PRETORIA-N', 'PRETORIA WES', 'MABOPANE', 'KEMPTON PARK'];
     assert(resolvePlannerStationInput('Pretoria North', gpNorth) === 'PRETORIA-N', 'Pretoria North → PRETORIA-N');
     assert(resolvePlannerStationInput('Pretoria West', gpNorth) === 'PRETORIA WES', 'Pretoria West → PRETORIA WES');

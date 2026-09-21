@@ -1139,6 +1139,7 @@ export function initGlobalErrorHandler() {
         if (!text || text === 'Uncaught' || /^Uncaught\s*$/i.test(text)) return true;
         const IGNORED_ERRORS = [
             "Script error.", "_AutofillCallbackHandler", "ResizeObserver loop limit exceeded",
+            "ResizeObserver loop completed with undelivered notifications.",
             "Unexpected end of input", "Unexpected token", "Unexpected token '<'",
             "Unexpected end of JSON input", "JSON.parse: unexpected end of data",
             "chrome-extension", "ethereum", "__firefox__", "DarkReader",

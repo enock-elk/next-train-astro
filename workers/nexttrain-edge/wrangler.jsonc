@@ -7,10 +7,8 @@
   "observability": {
     "enabled": true
   },
-  "routes": [
-    { "pattern": "nexttrain.co.za/_astro/*", "zone_name": "nexttrain.co.za" },
-    { "pattern": "nexttrain.co.za/icons/*", "zone_name": "nexttrain.co.za" },
-    { "pattern": "nexttrain.co.za/app-version.json", "zone_name": "nexttrain.co.za" },
-    { "pattern": "nexttrain.co.za/sw.js", "zone_name": "nexttrain.co.za" }
-  ]
+  // Detached. Cache Rules + header transforms own nexttrain.co.za/_astro,
+  // /icons, /sw.js, and /app-version.json. Re-adding routes brings Worker
+  // invocations back and fights the zone rules. See zone-rules.json.
+  "routes": []
 }

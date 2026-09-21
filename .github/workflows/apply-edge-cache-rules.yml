@@ -1,0 +1,38 @@
+# Apply nexttrain-edge Cache Rules + header transforms, then detach Worker routes.
+# Does not deploy the Worker. Token must be able to edit Cache Rules and Transform Rules
+# on the nexttrain.co.za zone (Pages Edit alone is not enough).
+name: Apply nexttrain-edge cache rules
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: apply-edge-cache-rules
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Apply zone rules and detach worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_ZONE_ID: ${{ secrets.CF_ZONE_ID }}
+        run: |
+          set -euo pipefail
+          if [ -z "${CLOUDFLARE_API_TOKEN:-}" ]; then
+            echo "::error::CLOUDFLARE_API_TOKEN is not set. Need Zone Cache Rules Edit + Transform Rules Write on nexttrain.co.za."
+            exit 1
+          fi
+          node scripts/apply-nexttrain-edge-cache-rules.mjs --detach-worker

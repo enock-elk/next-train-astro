@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_09.21.18': [
+        'nexttrain-edge is detached. Production Cache-Control for /_astro, /icons, sw.js, and app-version.json is zone Cache Rules plus header transforms (zero Worker invocations). HTML is still not long-cached. Apply with apply-nexttrain-edge-cache-rules.mjs. No What’s New. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
+    ],
     'V9_09.21.17': [
         'The i next to a user id opens a quick User sheet modal (joined, alias, trip last seen, feedback, contacts) from cheap per-id reads. Look up more still runs the full User Trust search. No What’s New. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
     ],

@@ -1,5 +1,6 @@
 {
   "branch": "map-gold",
+  "frozenAt": "d236728fd7bdbcf70ffafb94fc056416ed131e04",
   "version": "V9_09.20.11",
   "note": "Gold snapshot of this build: share GPS eager refresh + Refresh GPS button; train path falls back to painted GOLD corridor. Diff against origin/map-gold. Fast-forward map-gold after this lands on main. Never force-push map-gold.",
   "files": {

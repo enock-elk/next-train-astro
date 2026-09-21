@@ -2274,6 +2274,257 @@ const Admin = {
         return `<button type="button" onclick="event.stopPropagation(); Admin.showJoinedHint('${safeId}')" class="nt-uid-joined inline-flex items-center justify-center w-3.5 h-3.5 rounded-full border border-gray-300 dark:border-gray-600 text-[8px] font-black leading-none text-gray-500 dark:text-gray-400 hover:border-blue-400 hover:text-blue-600 dark:hover:text-blue-300 align-middle ml-0.5 shrink-0 focus:outline-none" title="${title}" aria-label="${title}">i</button>`;
     },
 
+    commuterAlias: (id) => {
+        const raw = String(id || '').trim();
+        if (!raw || raw === 'Anonymous / Legacy') return '';
+        const map = Admin.cachedAliases;
+        if (!map || typeof map !== 'object') return '';
+        const alias = map[raw];
+        return alias ? String(alias).trim() : '';
+    },
+
+    commuterLabel: (id) => Admin.commuterAlias(id) || String(id || '').trim(),
+
+    commuterEsc: (str) => {
+        if (str == null) return '';
+        if (typeof escapeHTML === 'function') return escapeHTML(str);
+        return String(str).replace(/[&<>"']/g, (m) => ({
+            '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+        }[m]));
+    },
+
+    commuterLabelHtml: (id, opts = {}) => {
+        const raw = String(id || '').trim();
+        if (!raw) return '';
+        const alias = Admin.commuterAlias(raw);
+        const hint = opts.hint === false ? '' : Admin.userIdJoinHintHtml(raw);
+        const title = alias ? ` title="${Admin.commuterEsc(raw)}"` : '';
+        const text = Admin.commuterEsc(alias || raw);
+        const weight = alias ? 'font-bold text-gray-800 dark:text-gray-100' : 'font-mono text-gray-600 dark:text-gray-300';
+        return `<span class="inline-flex items-center min-w-0 max-w-full ${weight} break-all"${title}>${text}${hint}</span>`;
+    },
+
+    commuterIdSet: (...vals) => {
+        const out = new Set();
+        vals.flat(Infinity).forEach((v) => {
+            const s = String(v || '').trim();
+            if (s && s !== 'Anonymous / Legacy') out.add(s);
+        });
+        return out;
+    },
+
+    ensureAliasesLoaded: async () => {
+        if (Admin.cachedAliases && typeof Admin.cachedAliases === 'object' && Object.keys(Admin.cachedAliases).length) {
+            return Admin.cachedAliases;
+        }
+        if (Admin._aliasesLoadInflight) return Admin._aliasesLoadInflight;
+        Admin._aliasesLoadInflight = (async () => {
+            try {
+                const secret = await Admin.getAuthKey();
+                if (!secret) {
+                    Admin.cachedAliases = Admin.cachedAliases || {};
+                    return Admin.cachedAliases;
+                }
+                const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
+                const res = await window.guardianFetch(`${dynamicEndpoint}admin_state/aliases.json?auth=${secret}`, {}, 8000);
+                Admin.cachedAliases = res.ok ? ((await res.json()) || {}) : (Admin.cachedAliases || {});
+                if (!Admin.cachedAliases || typeof Admin.cachedAliases !== 'object') Admin.cachedAliases = {};
+            } catch {
+                Admin.cachedAliases = Admin.cachedAliases || {};
+            } finally {
+                Admin._aliasesLoadInflight = null;
+            }
+            return Admin.cachedAliases;
+        })();
+        return Admin._aliasesLoadInflight;
+    },
+
+    inferCommuterDefaultRoute: (deviceId, item) => {
+        const ids = Admin.commuterIdSet(deviceId, item?.deviceId, item?.userId);
+        const fromFeedback = (Admin.cachedFeedbackData || []).filter((i) => {
+            if (!i || i.isFromAdmin) return false;
+            const did = i.deviceId || i.device_id;
+            return ids.has(String(did || '').trim()) && !Admin.isBlankInboxRoute(i.routeId);
+        }).sort((a, b) => (Number(b.timestamp) || 0) - (Number(a.timestamp) || 0));
+        if (fromFeedback[0]?.routeId) return fromFeedback[0].routeId;
+        const voteRoutes = Array.isArray(item?.routeIds) ? item.routeIds.map((r) => String(r || '').trim()).filter(Boolean) : [];
+        if (voteRoutes[0]) return voteRoutes[0];
+        const votes = Admin._cachedFareVotes && typeof Admin._cachedFareVotes === 'object'
+            ? Object.values(Admin._cachedFareVotes) : [];
+        for (const v of votes) {
+            const did = String(v?.deviceId || v?.userId || '').trim();
+            if (!ids.has(did)) continue;
+            if (Array.isArray(v.routeIds) && v.routeIds[0]) return String(v.routeIds[0]);
+        }
+        return '';
+    },
+
+    stackedContributorRowHtml: (userId, meta) => {
+        const esc = Admin.secureDeEscape || Admin.commuterEsc;
+        return `<div class="flex flex-col gap-0.5 py-1.5 border-b border-gray-100 dark:border-gray-800 last:border-0 text-[10px]">
+            <span class="min-w-0">${Admin.commuterLabelHtml(userId)}</span>
+            ${meta ? `<span class="font-mono text-gray-500 dark:text-gray-400 break-words">${esc(meta)}</span>` : ''}
+        </div>`;
+    },
+
+    openFeedbackForDevice: (deviceId, feedbackId) => {
+        const did = String(deviceId || '').trim();
+        if (!did || did === 'Anonymous / Legacy') {
+            if (typeof showToast === 'function') showToast('No user id to open chat.', 'warning');
+            return;
+        }
+        Admin._pendingFeedbackOpen = { feedbackId: String(feedbackId || ''), deviceId: did };
+        if (typeof Admin.deepLinkToPanel === 'function') Admin.deepLinkToPanel('feedback-panel');
+        else if (typeof Admin.fetchFeedback === 'function') Admin.fetchFeedback();
+        else if (typeof showToast === 'function') showToast('Open Feedback first.', 'info');
+    },
+
+    startFeedbackChat: (deviceId, feedbackId) => {
+        const did = String(deviceId || '').trim();
+        if (!did || did === 'Anonymous / Legacy') {
+            if (typeof showToast === 'function') showToast('No user id to start chat.', 'warning');
+            return;
+        }
+        Admin._pendingFeedbackOpen = { feedbackId: String(feedbackId || ''), deviceId: did };
+        Admin.openReplyModal(feedbackId || '', did);
+    },
+
+    collectCommuterProfile: async ({ uid, deviceId, extraIds = [] } = {}) => {
+        await Admin.ensureAliasesLoaded();
+        const ids = Admin.commuterIdSet(uid, deviceId, extraIds);
+        const secret = await Admin.getAuthKey();
+        const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
+        const auth = secret ? `?auth=${encodeURIComponent(secret)}` : '';
+        const fetchJson = async (path) => {
+            try {
+                const res = await fetch(`${dynamicEndpoint}${path}${auth}`);
+                if (!res.ok) return null;
+                return res.json();
+            } catch {
+                return null;
+            }
+        };
+        const deviceLooks = [...ids].filter((id) => /^usr_/i.test(id)).slice(0, 6);
+        const lookIds = [...ids].slice(0, 8);
+        const needFares = !(Admin._cachedFareVotes && typeof Admin._cachedFareVotes === 'object');
+        const needFails = !(Admin._cachedRoutingFails && typeof Admin._cachedRoutingFails === 'object');
+        const [inboxRows, tripRows, pings, activity, fareData, failData] = await Promise.all([
+            Promise.all(deviceLooks.map(async (did) => ({ did, data: await fetchJson(`inbox/${encodeURIComponent(did)}.json`) }))),
+            Promise.all(lookIds.map(async (id) => ({ id, data: await fetchJson(`sys_logs/trip_plan_users/${encodeURIComponent(id)}.json`) }))),
+            fetchJson('ride_pings.json'),
+            fetchJson('community_activity.json'),
+            needFares ? fetchJson('sys_logs/fare_votes.json') : null,
+            needFails ? fetchJson('sys_logs/routing_fails.json') : null,
+        ]);
+        if (fareData && typeof fareData === 'object') Admin._cachedFareVotes = fareData;
+        if (failData && typeof failData === 'object') Admin._cachedRoutingFails = failData;
+
+        const inboxHits = inboxRows.filter((row) => row.data && typeof row.data === 'object');
+        const feedbackItems = (Admin.cachedFeedbackData || []).filter((i) => {
+            const did = String(i?.deviceId || i?.device_id || '').trim();
+            return ids.has(did);
+        });
+        const chatDevice = deviceLooks.find((did) => inboxHits.some((row) => row.did === did))
+            || feedbackItems.map((i) => String(i.deviceId || i.device_id || '').trim()).find(Boolean)
+            || deviceLooks[0]
+            || '';
+        const latestFeedback = feedbackItems.filter((i) => !i.isFromAdmin).sort((a, b) => (Number(b.timestamp) || 0) - (Number(a.timestamp) || 0))[0] || null;
+        const contacts = chatDevice && typeof Admin.collectFeedbackContacts === 'function'
+            ? Admin.collectFeedbackContacts(chatDevice)
+            : { emails: [], phones: [] };
+
+        let tripLast = 0;
+        let tripRegion = '';
+        let tripPresent = 0;
+        tripRows.forEach((row) => {
+            if (!row.data) return;
+            tripPresent += 1;
+            const last = Number(row.data.lastSeen) || 0;
+            if (last > tripLast) {
+                tripLast = last;
+                tripRegion = row.data.region || tripRegion;
+            }
+        });
+        if (!tripPresent && Admin._fbTripPlanUsers && typeof Admin._fbTripPlanUsers === 'object') {
+            lookIds.forEach((id) => {
+                const node = Admin._fbTripPlanUsers[id] || Admin._fbTripPlanUsers[String(id).replace(/[.#$[\]/]/g, '_')];
+                if (!node) return;
+                tripPresent += 1;
+                const last = Number(node.lastSeen) || 0;
+                if (last > tripLast) {
+                    tripLast = last;
+                    tripRegion = node.region || tripRegion;
+                }
+            });
+        }
+
+        const fareVotes = Object.values(Admin._cachedFareVotes || {}).filter((v) => {
+            const did = String(v?.deviceId || v?.userId || '').trim();
+            const authUid = String(v?.authUid || '').trim();
+            return ids.has(did) || ids.has(authUid);
+        });
+        const fails = Object.values(Admin._cachedRoutingFails || {}).filter((v) => {
+            const did = String(v?.userId || v?.deviceId || '').trim();
+            return ids.has(did);
+        });
+        const crashes = (Admin.cachedCrashData || []).filter((c) => {
+            const did = String(c?.deviceId || c?.device_id || '').trim();
+            return ids.has(did);
+        });
+
+        const now = Date.now();
+        const liveShares = [];
+        if (pings && typeof pings === 'object') {
+            Object.entries(pings).forEach(([routeId, nodes]) => {
+                if (!nodes || typeof nodes !== 'object') return;
+                Object.values(nodes).forEach((p) => {
+                    if (!p) return;
+                    const did = String(p.deviceId || '').trim();
+                    const pUid = String(p.uid || '').trim();
+                    if (!ids.has(did) && !ids.has(pUid)) return;
+                    liveShares.push({ ...p, routeId: p.routeId || routeId, live: (p.expiresAt || 0) > now });
+                });
+            });
+        }
+        liveShares.sort((a, b) => (Number(b.at) || 0) - (Number(a.at) || 0));
+
+        const community = [];
+        if (activity && typeof activity === 'object') {
+            Object.entries(activity).forEach(([routeId, msgs]) => {
+                if (!msgs || typeof msgs !== 'object') return;
+                Object.values(msgs).forEach((a) => {
+                    if (!a) return;
+                    const aUid = String(a.uid || '').trim();
+                    if (!ids.has(aUid)) return;
+                    community.push({ routeId, kind: a.kind || 'post', postId: a.postId, timestamp: a.timestamp });
+                });
+            });
+        }
+        community.sort((a, b) => (Number(b.timestamp) || 0) - (Number(a.timestamp) || 0));
+
+        const defaultRoute = Admin.inferCommuterDefaultRoute(chatDevice || deviceId, fareVotes[0] || latestFeedback || {});
+        const alias = Admin.commuterAlias(chatDevice) || Admin.commuterAlias(deviceId) || Admin.commuterAlias(uid);
+        return {
+            ids: [...ids],
+            alias,
+            chatDevice,
+            hasChat: inboxHits.length > 0 || feedbackItems.length > 0,
+            feedbackCount: feedbackItems.filter((i) => !i.isFromAdmin).length,
+            latestFeedbackAt: latestFeedback ? Number(latestFeedback.timestamp) || 0 : 0,
+            latestFeedbackId: latestFeedback?.id || latestFeedback?.feedbackId || '',
+            contacts,
+            defaultRoute,
+            tripPresent,
+            tripLast,
+            tripRegion,
+            fareVotes,
+            fails,
+            crashes,
+            liveShares,
+            community,
+        };
+    },
+
     /** Cheap trip-plan presence from sys_logs/trip_plan_users (loaded once with feedback). */
     feedbackDeviceHasTripPlans: (did) => {
         const index = Admin._fbTripPlanUsers;
@@ -5270,7 +5521,7 @@ const Admin = {
                 let groupHTML = `
                     <div data-crash-group-toggle class="w-full flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors cursor-pointer border-b border-transparent" onclick="this.nextElementSibling.classList.toggle('hidden'); this.classList.toggle('border-gray-200'); this.classList.toggle('dark:border-gray-700'); this.querySelector('.chevron-icon').classList.toggle('rotate-180')">
                         <div class="flex flex-col items-start min-w-0 pr-2">
-                            <span class="text-xs font-bold text-gray-900 dark:text-white truncate w-full inline-flex items-center">Device: <span class="text-blue-600">${did.substring(0,15)}${did.length>15?'...':''}</span>${Admin.userIdJoinHintHtml(rawDid)}</span>
+                            <span class="text-xs font-bold text-gray-900 dark:text-white w-full inline-flex items-center min-w-0">Device: <span class="text-blue-600 min-w-0">${Admin.commuterLabelHtml(rawDid)}</span></span>
                             <span class="text-[9px] text-gray-500 font-mono mt-0.5 truncate w-full">${groupCrashes.length} Crash${groupCrashes.length > 1 ? 'es' : ''} | Last: ${latestDate}</span>
                         </div>
                         <div class="flex items-center shrink-0">
@@ -5458,6 +5709,7 @@ const Admin = {
         Admin.fetchCrashes = async () => {
             const secret = await Admin.getAuthKey();
             if (!secret) return;
+            await Admin.ensureAliasesLoaded();
             
             // GUARDIAN PHASE 11 & 12: Mark as seen instantly in Firebase (Cross-Device Sync) AND Local Storage
             try { 
@@ -6398,6 +6650,7 @@ const Admin = {
         Admin.fetchDeadEnds = async () => {
             const secret = await Admin.getAuthKey();
             if (!secret) return;
+            await Admin.ensureAliasesLoaded();
             
             // GUARDIAN PHASE 11 & 12: Mark as seen instantly in Firebase (Cross-Device Sync) AND Local Storage
             try { 
@@ -6484,6 +6737,9 @@ const Admin = {
                         const kmLabel = `smooth ${smoothKm != null && smoothKm !== '' ? smoothKm : '-'} km · A-B ${abKm != null && abKm !== '' ? abKm : '-'} km`;
                         const profileLabel = item.profile || 'Adult';
                         const vsLabel = item.agree ? `${quoted} (yes)` : `${quoted} → ${reported}`;
+                        const fareDid = String(item.deviceId || item.userId || '').trim();
+                        const defaultRouteId = Admin.inferCommuterDefaultRoute(fareDid, item);
+                        const defaultRouteLabel = Admin.inboxRouteLabel(defaultRouteId) || defaultRouteId;
                         const fareKey = typeof window.plannerFareOverrideKey === 'function' ? window.plannerFareOverrideKey(item) : '';
                         const liveRow = fareKey ? liveData[fareKey] : null;
                         const livePrice = liveRow ? Number(liveRow.price) : NaN;
@@ -6502,6 +6758,7 @@ const Admin = {
                                         <span class="text-[9px] font-bold text-indigo-600 dark:text-indigo-400 uppercase">${secureEscape(peakLabel)}</span>
                                         <span class="text-[9px] text-gray-400 font-mono">${secureEscape(kmLabel)}</span>
                                         <span class="text-[9px] text-gray-500 font-bold">${secureEscape(profileLabel)}</span>
+                                        ${defaultRouteLabel ? `<span class="text-[9px] font-bold text-slate-600 dark:text-slate-300">Route: ${secureEscape(defaultRouteLabel)}</span>` : ''}
                                         <span class="text-[9px] text-gray-400 font-mono">${Admin.formatDate(item.at)}</span>
                                         ${isLive ? `<span class="text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300">Live R${secureEscape(String(livePrice))}</span>` : ''}
                                     </div>
@@ -6688,7 +6945,7 @@ const Admin = {
                 if (region && String(r.region || '').toUpperCase() !== region) return false;
                 if (dayType && String(r.dayType || '').toLowerCase() !== dayType) return false;
                 if (userId) {
-                    const hay = `${r.userId || ''} ${r.authUid || ''}`.toLowerCase();
+                    const hay = `${r.userId || ''} ${r.authUid || ''} ${Admin.commuterAlias(r.userId)} ${Admin.commuterAlias(r.authUid)}`.toLowerCase();
                     if (!hay.includes(userId)) return false;
                 }
                 return true;
@@ -6713,7 +6970,10 @@ const Admin = {
             const q = String(Admin._deUserQuery || '').toLowerCase();
             const prev = Admin._deTripFilters?.userId || userSel.value || '';
             const users = Admin._deTripUserIds || [];
-            const matched = q ? users.filter((u) => u.toLowerCase().includes(q)) : users;
+            const matched = q ? users.filter((u) => {
+                const alias = Admin.commuterAlias(u).toLowerCase();
+                return u.toLowerCase().includes(q) || (alias && alias.includes(q));
+            }) : users;
             const shown = matched.slice(0, cap);
             userSel.innerHTML = `<option value="">All users</option>` + shown.map((u) =>
                 `<option value="${String(u).replace(/"/g, '&quot;')}">${Admin.secureDeEscape(u)}</option>`
@@ -6738,14 +6998,14 @@ const Admin = {
                 uidOptions.appendChild(li);
             };
             addLi('', 'All users');
-            shown.forEach((u) => addLi(u, u));
+            shown.forEach((u) => addLi(u, Admin.commuterAlias(u) || u));
             if (matched.length > shown.length) {
                 const more = document.createElement('li');
                 more.className = 'px-3 py-2 text-[10px] text-gray-400 italic';
                 more.textContent = `Showing ${shown.length} of ${matched.length} — type to narrow`;
                 uidOptions.appendChild(more);
             }
-            if (uidDisplay) uidDisplay.textContent = userSel.value || 'All users';
+            if (uidDisplay) uidDisplay.textContent = userSel.value ? (Admin.commuterAlias(userSel.value) || userSel.value) : 'All users';
         };
 
         Admin.expandFailCorridorHits = (panel, corridorKey) => {
@@ -6766,15 +7026,9 @@ const Admin = {
             });
             const hits = Object.values(byUser).sort((a, b) => (b.lastSeen || 0) - (a.lastSeen || 0));
             const slice = hits.slice(0, cap);
-            const esc = Admin.secureDeEscape;
             panel.innerHTML = `
                 <p class="text-[9px] font-black uppercase tracking-wider text-gray-400 pt-2 mb-1">Contributors${hits.length > cap ? ` (latest ${cap} of ${hits.length})` : ''}</p>
-                ${slice.map((h) => `
-                    <div class="flex justify-between gap-2 py-1.5 border-b border-gray-100 dark:border-gray-800 last:border-0 text-[10px]">
-                        <span class="font-mono text-gray-500 truncate inline-flex items-center min-w-0">${esc(h.userId)}${Admin.userIdJoinHintHtml(h.userId)}</span>
-                        <span class="font-mono text-gray-600 dark:text-gray-300 shrink-0">${esc(Admin.formatDate(h.lastSeen))} · ${h.hitCount}</span>
-                    </div>
-                `).join('') || '<p class="text-[10px] text-gray-400 italic">No user ids on these fails.</p>'}
+                ${slice.map((h) => Admin.stackedContributorRowHtml(h.userId, `${Admin.formatDate(h.lastSeen)} · ${h.hitCount}`)).join('') || '<p class="text-[10px] text-gray-400 italic">No user ids on these fails.</p>'}
             `;
         };
 
@@ -6783,15 +7037,18 @@ const Admin = {
             const esc = Admin.secureDeEscape;
             const did = String(item?.deviceId || item?.userId || '').trim();
             const auth = String(item?.authUid || '').trim();
+            const defaultRouteId = Admin.inferCommuterDefaultRoute(did, item);
+            const defaultRouteLabel = Admin.inboxRouteLabel(defaultRouteId) || defaultRouteId;
             const rows = [];
-            if (did) rows.push({ label: 'User ID', value: did });
-            if (auth && auth !== did) rows.push({ label: 'Auth UID', value: auth });
+            if (did) rows.push({ label: 'User', html: Admin.commuterLabelHtml(did) });
+            if (auth && auth !== did) rows.push({ label: 'Auth UID', html: `<span class="font-mono break-all">${esc(auth)}</span>` });
+            if (defaultRouteLabel) rows.push({ label: 'Default route', html: `<span class="break-words">${esc(defaultRouteLabel)}</span>` });
             panel.innerHTML = `
                 <p class="text-[9px] font-black uppercase tracking-wider text-gray-400 pt-2 mb-1">Contributor</p>
                 ${rows.map((r) => `
-                    <div class="flex justify-between gap-2 py-1.5 border-b border-gray-100 dark:border-gray-800 last:border-0 text-[10px]">
-                        <span class="text-[9px] font-bold uppercase tracking-wider text-gray-400 shrink-0">${esc(r.label)}</span>
-                        <span class="font-mono text-gray-600 dark:text-gray-300 break-all text-right inline-flex items-center min-w-0">${esc(r.value)}${r.label === 'User ID' ? Admin.userIdJoinHintHtml(r.value) : ''}</span>
+                    <div class="flex flex-col gap-0.5 py-1.5 border-b border-gray-100 dark:border-gray-800 last:border-0 text-[10px]">
+                        <span class="text-[9px] font-bold uppercase tracking-wider text-gray-400">${esc(r.label)}</span>
+                        <span class="text-gray-600 dark:text-gray-300 min-w-0">${r.html}</span>
                     </div>
                 `).join('') || '<p class="text-[10px] text-gray-400 italic">No user id on this vote.</p>'}
             `;
@@ -6807,12 +7064,7 @@ const Admin = {
             const esc = Admin.secureDeEscape;
             panel.innerHTML = `
                 <p class="text-[9px] font-black uppercase tracking-wider text-gray-400 pt-2 mb-1">Hit history${hits.length > cap ? ` (latest ${cap} of ${hits.length})` : ''}</p>
-                ${slice.map((h) => `
-                    <div class="flex justify-between gap-2 py-1.5 border-b border-gray-100 dark:border-gray-800 last:border-0 text-[10px]">
-                        <span class="font-mono text-gray-500 truncate inline-flex items-center min-w-0">${esc(Admin.formatDate(h.timestamp))} / ${esc((h.userId || '').slice(0, 14))}${Admin.userIdJoinHintHtml(h.userId)}</span>
-                        <span class="font-mono text-gray-600 dark:text-gray-300 shrink-0">dep ${esc(h.depTime || '-')}</span>
-                    </div>
-                `).join('') || '<p class="text-[10px] text-gray-400 italic">No hit details.</p>'}
+                ${slice.map((h) => Admin.stackedContributorRowHtml(h.userId, `${Admin.formatDate(h.timestamp)} · dep ${esc(h.depTime || '-')}`)).join('') || '<p class="text-[10px] text-gray-400 italic">No hit details.</p>'}
             `;
         };
 
@@ -8799,6 +9051,7 @@ const Admin = {
         };
 
         Admin.fetchRideShareLog = async (opts = {}) => {
+            await Admin.ensureAliasesLoaded();
             const quiet = !!opts.quiet;
             const liveEl = document.getElementById('ls-live-list');
             const logEl = document.getElementById('ls-log-list');
@@ -8857,7 +9110,7 @@ const Admin = {
                                 </p>
                                 <span class="text-[9px] font-mono ${stale ? 'text-amber-600 dark:text-amber-400' : 'text-blue-600 dark:text-blue-300'} shrink-0">${stale ? 'GPS stale · ' : 'LIVE · '}${esc(fmtAge(p.at, now))}</span>
                             </div>
-                            <p class="text-[10px] font-mono text-gray-500 dark:text-gray-400 mt-1">uid ${esc(p.uid || 'guest')} · ${esc(p.email || '')} · device ${esc((p.deviceId || '').slice(0, 10))}</p>
+                            <p class="text-[10px] font-mono text-gray-500 dark:text-gray-400 mt-1">uid ${esc(p.uid || 'guest')} · ${esc(p.email || '')} · device ${Admin.commuterLabelHtml(p.deviceId)}</p>
                             <p class="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5">${esc(bits)}</p>
                             <button type="button" class="ls-stop-share mt-2 text-[10px] font-bold text-red-600 dark:text-red-400 underline" data-route="${esc(p.routeId)}" data-device="${esc(p.deviceId)}">Stop share</button>
                         </div>`;
@@ -8920,7 +9173,7 @@ const Admin = {
                             </summary>
                             <div class="px-3 pb-3 pt-0 text-[10px] font-mono text-gray-500 dark:text-gray-400 space-y-0.5" data-ls-session-body>
                                 <p>uid ${esc(s.uid || '')} · ${esc(s.email || '')}</p>
-                                <p>device ${esc(s.deviceId || '')}</p>
+                                <p>device ${Admin.commuterLabelHtml(s.deviceId)}</p>
                                 <p>start ${esc(s.startSource || '—')} · stop ${esc(s.stopSource || (live ? 'still live' : '—'))}</p>
                                 ${s.appVersion ? `<p>build ${esc(s.appVersion)}</p>` : ''}
                             </div>
@@ -9200,6 +9453,7 @@ const Admin = {
             const list = document.getElementById('mq-list');
             if (!list) return;
             list.innerHTML = '<p class="text-xs text-gray-400 text-center py-4">Loading...</p>';
+            await Admin.ensureAliasesLoaded();
             try {
                 const secret = await Admin.getAuthKey();
                 if (!secret || !Admin.currentUser?.uid) throw new Error('Not signed in');
@@ -9246,8 +9500,8 @@ const Admin = {
                     const contact = r.contact || r.publish?.payload?.email || '';
                     const sourceLabel = r.source || (isFeedbackHold ? 'feedback' : 'report');
                     const metaLine = isFeedbackHold
-                        ? `source: ${String(sourceLabel).replace(/</g, '')} · device: ${(deviceId || '-').toString().slice(0, 22)} · contact: ${(contact || '-').toString().slice(0, 24)}`
-                        : `target uid: ${(r.targetUid || '-').toString().slice(0, 16)} - post: ${(r.targetPostId || '-').toString().slice(0, 18)}`;
+                        ? `source: ${String(sourceLabel).replace(/</g, '')} · device: ${Admin.commuterLabel(deviceId) || '-'} · contact: ${(contact || '-').toString().slice(0, 24)}`
+                        : `target uid: ${Admin.commuterLabel(r.targetUid) || '-'} - post: ${(r.targetPostId || '-').toString().slice(0, 18)}`;
                     const statusLabel = status === 'approved'
                         ? (isFeedbackHold ? 'Approved to Feedback Hub' : 'Approved')
                         : (status === 'rejected' ? 'Rejected' : (closed ? 'Closed' : ''));
@@ -9996,6 +10250,7 @@ const Admin = {
             const list = document.getElementById('ut-bans-list');
             if (!list) return;
             list.innerHTML = '<p class="text-xs text-gray-400 text-center py-3 animate-pulse">Scanning bans...</p>';
+            await Admin.ensureAliasesLoaded();
             try {
                 const secret = await Admin.getAuthKey();
                 if (!secret) throw new Error('not signed in - open Admin while logged in as an admin account');
@@ -10059,14 +10314,15 @@ const Admin = {
                         })()
                         : 'no expiry';
                     const modeStr = banModeLabel(b.mode);
-                    const name = String(b.displayName || '-').replace(/</g, '&lt;');
+                    const alias = Admin.commuterAlias(b.id) || Admin.commuterAlias(b.deviceId);
+                    const name = String(alias || b.displayName || '-').replace(/</g, '&lt;');
                     const email = b.email ? String(b.email).replace(/</g, '&lt;') : '';
                     const card = document.createElement('div');
                     card.className = 'border border-red-200 dark:border-red-900/50 bg-red-50/40 dark:bg-red-950/20 rounded-xl p-3 space-y-1';
                     card.innerHTML = `
                         <div class="flex items-start justify-between gap-2">
                             <div class="min-w-0">
-                                <p class="text-xs font-black text-gray-900 dark:text-white truncate">${name}</p>
+                                <p class="text-xs font-black text-gray-900 dark:text-white break-words">${name}</p>
                                 <p class="font-mono text-[9px] text-gray-400 break-all">${b.id}</p>
                                 ${email ? `<p class="text-[10px] text-gray-500">${email}</p>` : ''}
                             </div>
@@ -10093,9 +10349,23 @@ const Admin = {
         Admin.resolveTrustTarget = async (query) => {
             const q = String(query || '').trim();
             if (!q) return null;
+            await Admin.ensureAliasesLoaded();
             const secret = await Admin.getAuthKey();
             const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
             const auth = secret ? `?auth=${secret}` : '';
+            let viaHint = '';
+            let resolvedQuery = q;
+            const needle = q.toLowerCase();
+            const aliases = Admin.cachedAliases && typeof Admin.cachedAliases === 'object' ? Admin.cachedAliases : {};
+            if (!q.includes('@')) {
+                for (const [did, alias] of Object.entries(aliases)) {
+                    if (String(alias || '').trim().toLowerCase() === needle) {
+                        resolvedQuery = did;
+                        viaHint = 'alias';
+                        break;
+                    }
+                }
+            }
 
             const fetchJson = async (path) => {
                 const res = await fetch(`${dynamicEndpoint}${path}${auth}`);
@@ -10104,35 +10374,35 @@ const Admin = {
             };
 
             // 1) Direct users/{id}
-            let user = await fetchJson(`users/${encodeURIComponent(q)}.json`);
+            let user = await fetchJson(`users/${encodeURIComponent(resolvedQuery)}.json`);
             if (user) {
-                return { uid: q, user, via: 'uid', deviceId: null };
+                return { uid: resolvedQuery, user, via: viaHint || 'uid', deviceId: /^usr_/i.test(resolvedQuery) ? resolvedQuery : null };
             }
 
             // 2) Device ID ? linked Firebase uid (devices/{deviceId}.uid)
-            const looksLikeDevice = /^usr_/i.test(q);
+            const looksLikeDevice = /^usr_/i.test(resolvedQuery);
             if (looksLikeDevice) {
-                const device = await fetchJson(`devices/${encodeURIComponent(q)}.json`);
+                const device = await fetchJson(`devices/${encodeURIComponent(resolvedQuery)}.json`);
                 if (device?.uid) {
                     user = await fetchJson(`users/${encodeURIComponent(device.uid)}.json`);
                     if (user) {
-                        return { uid: device.uid, user, via: 'device?uid', deviceId: q, device };
+                        return { uid: device.uid, user, via: viaHint || 'device?uid', deviceId: resolvedQuery, device };
                     }
                 }
                 // Guest / pre-account: allow banning the device id itself
                 const deviceFlags = device?.flags || null;
                 return {
-                    uid: q,
+                    uid: resolvedQuery,
                     user: {
                         displayName: device?.uid ? `Device linked to ${device.uid}` : 'Device (no account yet)',
                         email: null,
                         trustScore: 0,
                         flags: deviceFlags || { shadowBanned: false, shadowBannedUntil: 0, role: 'device' },
-                        deviceIds: { [q]: true },
+                        deviceIds: { [resolvedQuery]: true },
                         _isDeviceStub: true,
                     },
-                    via: 'device',
-                    deviceId: q,
+                    via: viaHint || 'device',
+                    deviceId: resolvedQuery,
                     device,
                 };
             }
@@ -10175,7 +10445,10 @@ const Admin = {
                 const score = typeof user.trustScore === 'number' ? user.trustScore : 0;
                 const name = (user.displayName || (user._isDeviceStub ? 'Device guest' : '-')).toString().replace(/</g, '&lt;');
                 const email = (user.email || '-').toString().replace(/</g, '&lt;');
-                const viaLabel = via === 'email' ? 'matched by email' : (via === 'device' ? 'device record' : (via === 'device?uid' ? 'device → account' : 'user id'));
+                const viaLabel = via === 'email' ? 'matched by email'
+                    : (via === 'alias' ? 'feedback alias'
+                    : (via === 'device' ? 'device record'
+                    : (via === 'device?uid' ? 'device → account' : 'user id')));
                 const joinedMs = Number(user.createdAt)
                     || Admin.parseJoinedAtFromUserId(deviceId)
                     || Admin.parseJoinedAtFromUserId(uid);
@@ -10183,36 +10456,87 @@ const Admin = {
                 const linkedIds = user.deviceIds && typeof user.deviceIds === 'object'
                     ? Object.keys(user.deviceIds).filter(Boolean)
                     : (deviceId ? [deviceId] : []);
-                try {
-                    const secret = await Admin.getAuthKey();
-                    const lookIds = [...new Set([deviceId, ...linkedIds].filter(Boolean))];
-                    const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
-                    const auth = secret ? `?auth=${encodeURIComponent(secret)}` : '';
-                    for (const lookId of lookIds) {
-                        const idxRes = await fetch(`${dynamicEndpoint}sys_logs/trip_plan_users/${encodeURIComponent(lookId)}.json${auth}`);
-                        if (!idxRes.ok) continue;
-                        const idx = await idxRes.json();
-                        if (idx && Number(idx.lastSeen) > lastSeenMs) lastSeenMs = Number(idx.lastSeen);
-                    }
-                } catch { /* optional */ }
+                const profile = await Admin.collectCommuterProfile({
+                    uid,
+                    deviceId,
+                    extraIds: linkedIds,
+                });
+                if (profile.tripLast > lastSeenMs) lastSeenMs = profile.tripLast;
+                const liveAt = Number(profile.liveShares[0]?.at) || 0;
+                if (liveAt > lastSeenMs) lastSeenMs = liveAt;
                 const joinedLabel = joinedMs ? Admin.formatDate(joinedMs) : 'unknown';
                 const lastSeenLabel = lastSeenMs ? Admin.formatDate(lastSeenMs) : 'unknown';
-                const devicesLabel = linkedIds.length ? linkedIds.map((id) => String(id).replace(/</g, '&lt;')).join(', ') : 'none';
+                const devicesLabel = linkedIds.length
+                    ? linkedIds.map((id) => Admin.commuterLabelHtml(id)).join('<span class="text-gray-300">, </span>')
+                    : 'none';
+                const heading = profile.alias
+                    ? Admin.commuterEsc(profile.alias)
+                    : name;
+                const chatDid = profile.chatDevice || deviceId || (/^usr_/i.test(uid) ? uid : '');
+                const safeChatDid = String(chatDid).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+                const defaultRouteLabel = Admin.inboxRouteLabel(profile.defaultRoute) || profile.defaultRoute;
+                const contactBits = [
+                    ...(profile.contacts.emails || []).map((em) => Admin.commuterEsc(em)),
+                    ...(profile.contacts.phones || []).map((ph) => Admin.commuterEsc(ph)),
+                ];
+                const liveHtml = profile.liveShares.length
+                    ? profile.liveShares.slice(0, 4).map((p) => {
+                        const routeLabel = Admin.inboxRouteLabel(p.routeId) || p.routeId || '';
+                        const state = p.live ? 'Live now' : 'Last share';
+                        return `<p class="text-[11px]">${state}: <b>${Admin.commuterEsc(routeLabel)}</b> · train ${Admin.commuterEsc(p.trainId || '-')} · ${Admin.commuterEsc(p.station || '')} · ${Admin.formatDate(p.at)}</p>`;
+                    }).join('')
+                    : '<p class="text-[11px] text-gray-400">No live location share on file.</p>';
+                const communityHtml = profile.community.length
+                    ? profile.community.slice(0, 6).map((c) => {
+                        const routeLabel = Admin.inboxRouteLabel(c.routeId) || c.routeId || '';
+                        return `<p class="text-[11px]">${Admin.commuterEsc(c.kind || 'post')} on <b>${Admin.commuterEsc(routeLabel)}</b> · ${Admin.formatDate(c.timestamp)}</p>`;
+                    }).join('')
+                    : '<p class="text-[11px] text-gray-400">No community posts matched this id.</p>';
+                const fareHtml = profile.fareVotes.length
+                    ? `<p class="text-[11px]">Fare votes: <b>${profile.fareVotes.length}</b>${defaultRouteLabel ? ` · default route <b>${Admin.commuterEsc(defaultRouteLabel)}</b>` : ''}</p>`
+                    : `<p class="text-[11px]">Fare votes: <b>0</b>${defaultRouteLabel ? ` · default route <b>${Admin.commuterEsc(defaultRouteLabel)}</b>` : ''}</p>`;
                 out.innerHTML = `
                     <div class="border border-gray-200 dark:border-gray-700 rounded-xl p-3 space-y-2">
-                        <p class="font-black text-gray-900 dark:text-white">${name}</p>
-                        <p class="font-mono text-[10px] text-gray-400 break-all">${uid}</p>
-                        <p class="text-[11px]">Email: <b>${email}</b> - Found via <b>${viaLabel}</b>${deviceId && deviceId !== uid ? ` - device <span class="font-mono">${deviceId}</span>` : ''}</p>
+                        <p class="font-black text-gray-900 dark:text-white break-words">${heading}</p>
+                        ${profile.alias ? `<p class="text-[11px]">Alias: <b>${Admin.commuterEsc(profile.alias)}</b></p>` : '<p class="text-[11px] text-gray-400">No feedback alias yet.</p>'}
+                        <p class="font-mono text-[10px] text-gray-400 break-all">${Admin.commuterEsc(uid)}</p>
+                        <p class="text-[11px]">Email: <b>${email}</b> - Found via <b>${viaLabel}</b>${deviceId && deviceId !== uid ? ` - device <span class="font-mono break-all">${Admin.commuterEsc(deviceId)}</span>` : ''}</p>
                         <p class="text-[11px]">Joined: <b>${joinedLabel}</b> · Last seen: <b>${lastSeenLabel}</b></p>
-                        <p class="text-[11px]">Linked devices: <span class="font-mono break-all">${devicesLabel}</span></p>
+                        <p class="text-[11px]">Linked devices: <span class="break-all">${devicesLabel}</span></p>
                         <p class="text-[11px]">Role: <b>${flags.role || 'user'}</b> - Trust score: <b>${score}</b></p>
                         <p class="text-[11px]">Shadow banned: <b class="${banned && !expired ? 'text-red-600' : 'text-green-600'}">${banned ? (expired ? 'expired' : 'yes') : 'no'}</b>${banned ? ` - until ${untilStr}` : ''}</p>
                         ${banned && !expired ? `<p class="text-[11px]">Ban type: <b>${modeStr}</b></p>` : ''}
-                        <div class="flex flex-wrap gap-3 pt-1">
+                        ${contactBits.length ? `<p class="text-[11px]">Contacts: <b>${contactBits.join(', ')}</b></p>` : ''}
+                        <p class="text-[11px]">Feedback: <b>${profile.hasChat ? `${profile.feedbackCount || 'open'} thread` : 'none'}</b>${profile.latestFeedbackAt ? ` · last ${Admin.formatDate(profile.latestFeedbackAt)}` : ''}</p>
+                        <p class="text-[11px]">Trip plans: <b>${profile.tripPresent ? 'yes' : 'none'}</b>${profile.tripRegion ? ` · ${Admin.commuterEsc(profile.tripRegion)}` : ''}${profile.tripLast ? ` · ${Admin.formatDate(profile.tripLast)}` : ''}</p>
+                        ${fareHtml}
+                        <p class="text-[11px]">Routing fails: <b>${profile.fails.length}</b> · Crashes: <b>${profile.crashes.length}</b></p>
+                        <div class="pt-1 space-y-0.5">
+                            <p class="text-[9px] font-black uppercase tracking-wider text-gray-400">Live location</p>
+                            ${liveHtml}
+                        </div>
+                        <div class="pt-1 space-y-0.5">
+                            <p class="text-[9px] font-black uppercase tracking-wider text-gray-400">Community</p>
+                            ${communityHtml}
+                        </div>
+                        <div class="flex flex-wrap gap-2 pt-2">
+                            ${profile.hasChat && chatDid ? `<button type="button" id="ut-open-chat-btn" class="text-[10px] font-black uppercase tracking-wider text-white bg-blue-600 hover:bg-blue-700 px-3 py-1.5 rounded-lg">Open chat</button>` : ''}
+                            ${chatDid ? `<button type="button" id="ut-start-chat-btn" class="text-[10px] font-black uppercase tracking-wider text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 px-3 py-1.5 rounded-lg">${profile.hasChat ? 'Reply' : 'Start chat'}</button>` : ''}
+                            ${chatDid ? `<button type="button" id="ut-alias-btn" class="text-[10px] font-bold text-gray-600 dark:text-gray-300 underline">Edit alias</button>` : ''}
                             <button type="button" id="ut-ban-btn" class="text-[10px] font-bold text-red-600 underline">Shadow ban</button>
                             <button type="button" id="ut-lift-btn" class="text-[10px] font-bold text-blue-600 underline">Lift ban</button>
                         </div>
                     </div>`;
+                document.getElementById('ut-open-chat-btn')?.addEventListener('click', () => {
+                    Admin.openFeedbackForDevice(chatDid, profile.latestFeedbackId);
+                });
+                document.getElementById('ut-start-chat-btn')?.addEventListener('click', () => {
+                    Admin.startFeedbackChat(chatDid, profile.latestFeedbackId);
+                });
+                document.getElementById('ut-alias-btn')?.addEventListener('click', async () => {
+                    await Admin.setCommuterAlias(chatDid, profile.alias || '');
+                    Admin.lookupUserTrust();
+                });
                 document.getElementById('ut-ban-btn').onclick = async () => {
                     await Admin.applyShadowBan(uid, { deviceId: deviceId || (/^usr_/i.test(uid) ? uid : null) });
                     Admin.lookupUserTrust();
@@ -10614,20 +10938,26 @@ const Admin = {
                 const res = await fetch(url, { method: 'POST', body: JSON.stringify(payload) });
                 if (!res.ok) throw new Error("Failed to send");
                 
-                // Flag the original ticket as replied to
-                await fetch(`${dynamicEndpoint}feedback/${replyFeedbackId}.json?auth=${secret}`, {
-                    method: 'PATCH',
-                    body: JSON.stringify({ hasAdminReply: true })
-                });
+                if (replyFeedbackId) {
+                    await fetch(`${dynamicEndpoint}feedback/${replyFeedbackId}.json?auth=${secret}`, {
+                        method: 'PATCH',
+                        body: JSON.stringify({ hasAdminReply: true })
+                    });
+                }
 
                 // Collect contacts before archive refresh replaces the cache
                 const contacts = Admin.collectFeedbackContacts(replyDeviceId);
                 const commuterName = (Admin.cachedAliases && Admin.cachedAliases[replyDeviceId]) || 'this commuter';
 
-                // Auto-resolve the feedback item (stays on the current Inbox/Archive tab)
-                await Admin.resolveFeedback(replyFeedbackId, true); 
+                if (replyFeedbackId) {
+                    await Admin.resolveFeedback(replyFeedbackId, true);
+                } else if (typeof Admin.fetchFeedback === 'function') {
+                    Admin.fetchFeedback();
+                } 
                 
-                if (typeof showToast === 'function') showToast("Reply sent & archived!", "success");
+                if (typeof showToast === 'function') {
+                    showToast(replyFeedbackId ? 'Reply sent & archived!' : 'Message sent to their inbox.', 'success');
+                }
                 cleanup();
                 if (contacts.emails.length || contacts.phones.length) {
                     Admin.showOutreachModal({ ...contacts, commuterName });

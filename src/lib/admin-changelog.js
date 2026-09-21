@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_09.21.16': [
+        'User Trust lookup now builds a profile (alias, contacts, trip/fare/fail/crash counts, live share, community) and can Open chat or Start chat into Feedback. Planner Fails/Trips/Fares stack user id above the date so the date cannot hide the id, and Fares shows the inferred default route. Feedback aliases replace raw user ids across admin lists. No What’s New. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
+    ],
     'V9_09.21.15': [
         'WC public-holiday landing now says some holidays use the Saturday timetable and to check Next Train when PRASA announces the day. Admin hold-to-edit is back (hold-to-react no longer steals admin bubbles). Hold the blue ticks for sent/delivered/seen times. Version and saved route sit on separate rows so the route is readable. Feedback photos open the admin lightbox without waiting for data-alert-ready. No What’s New. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
     ],

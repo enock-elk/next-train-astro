@@ -191,6 +191,18 @@ ok(adminJs.includes('fare_ticket_photos'), 'Fares tab reads ticket photo sidecar
 ok(adminJs.includes("Admin._deSortMode = Admin._deSortMode || 'recent'"), 'planner telemetry starts on recent sort');
 ok(!adminJs.includes("Admin._deSortMode = 'count';"), 'opening planner telemetry does not reset sort to count');
 ok(adminJs.includes('expandFailCorridorHits'), 'Fails expand contributor user ids on click');
+ok(adminJs.includes('stackedContributorRowHtml'), 'planner contributor rows stack id above date');
+ok(!adminJs.includes("(h.userId || '').slice(0, 14)"), 'trip hit history does not slice user ids');
+ok(!/font-mono text-gray-500 truncate inline-flex[\s\S]{0,80}esc\(h\.userId\)/.test(adminJs), 'fail contributors no longer truncate user id against the date');
+ok(adminJs.includes('inferCommuterDefaultRoute'), 'fares infer a default/saved route');
+ok(adminJs.includes('Route: ${secureEscape(defaultRouteLabel)}'), 'Fares cards paint default route');
+ok(adminJs.includes('commuterLabelHtml'), 'admin paints feedback alias instead of raw user id');
+ok(adminJs.includes('ensureAliasesLoaded'), 'aliases load without opening Feedback first');
+ok(adminJs.includes('openFeedbackForDevice'), 'user lookup can jump to the feedback thread');
+ok(adminJs.includes('startFeedbackChat'), 'user lookup can start a feedback chat');
+ok(adminJs.includes('collectCommuterProfile'), 'user lookup builds a profile from known user data');
+ok(adminJs.includes('ut-open-chat-btn'), 'user lookup has Open chat');
+ok(adminJs.includes('ut-start-chat-btn'), 'user lookup has Start chat / Reply');
 ok(adminJs.includes('expandFareContributor'), 'Fares expand contributor user ids on click');
 ok(adminJs.includes('de-fail-contributors'), 'fail cards have a contributor panel');
 ok(adminJs.includes('de-fare-contributors'), 'fare cards have a contributor panel');

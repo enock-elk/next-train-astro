@@ -184,6 +184,26 @@ assert(appUpdate.includes('lastSavedTimesToastAt'), 'forced-update saved-times t
 assert(appUpdate.includes('SAVED_TIMES_TOAST_COOLDOWN_MS = 10 * 60 * 1000'), 'red saved-times toast waits 10 minutes');
 assert(appUpdate.includes('crucialUpdateToastShown'), 'crucial-update toast is once per session');
 assert(appUpdate.includes('forcedUpdateAnnounced'), 'forced-update retries do not re-announce every minute');
+const handleUpdate = appUpdate.split('export async function handleUpdateClick')[1]?.split('const UPDATED_TOAST_KEY')[0] || '';
+assert(handleUpdate.includes('installIncomingServiceWorker'), 'forced update installs before it toasts');
+assert(
+    handleUpdate.indexOf('installIncomingServiceWorker') < handleUpdate.indexOf('showCrucialUpdateToast'),
+    'automatic toast waits until the incoming worker is downloaded'
+);
+assert(
+    !/if \(options\.announce === true && newer\) showCrucialUpdateToast/.test(handleUpdate),
+    'forced update does not toast before installIncomingServiceWorker'
+);
+assert(handleUpdate.includes('isIncomingWorkerDownloaded'), 'toast requires waiting or installed');
+assert(handleUpdate.includes('shouldToastAutomaticUpdate'), 'auto toast is gated on downloaded + host version');
+assert(handleUpdate.includes('will not toast or restart until the worker actually installs'), 'dump-ahead already_current stays silent');
+assert(handleUpdate.includes('No toast until that download finishes'), 'origin-newer unstick does not toast');
+const scheduleUpdate = appUpdate.split('function scheduleForcedUpdate')[1]?.split('async function probeNetworkAndForceUpdate')[0] || '';
+assert(
+    !/forcedUpdateAnnounced = true;/.test(scheduleUpdate),
+    'retries do not mark the toast announced before the download finishes'
+);
+assert(scheduleUpdate.includes('announce: !forcedUpdateAnnounced && !crucialUpdateToastShown'), 'auto retries still announce once after download');
 assert(isAppVersionNewer('V9_09.18.3', 'V9_09.17.12'), 'this release is newer than live V9_09.17.12');
 assert(appUpdate.includes('You are offline. Using saved times until you reconnect.'), 'offline saved-times copy is unchanged');
 assert(appUpdate.includes('Network is slow. Using saved times until you reconnect.'), 'a slow probe is not called offline');

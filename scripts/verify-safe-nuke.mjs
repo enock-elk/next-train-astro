@@ -21,6 +21,9 @@ import {
     pickNewestAppVersion,
     pickForceUpdateTarget,
     isAppVersionNewer,
+    isDumpAheadOfOrigin,
+    isIncomingWorkerDownloaded,
+    shouldToastAutomaticUpdate,
     listAppVersionProbeUrls,
 } from '../src/lib/app-update.js';
 import {
@@ -168,6 +171,35 @@ assert(
 assert(
     pickForceUpdateTarget({ version: 'V9_09.20.3', originVersion: 'V9_09.20.1' }, 'V9_09.20.1') === 'V9_09.20.3',
     'stale origin JSON still yields the dump so PWA/TWA can install'
+);
+assert(
+    isDumpAheadOfOrigin({ version: 'V9_09.21.3', originVersion: 'V9_09.21.1' }, 'V9_09.21.1'),
+    'github dump newer than production origin is dump-ahead'
+);
+assert(
+    !isDumpAheadOfOrigin({ version: 'V9_09.21.3', originVersion: 'V9_09.21.3' }, 'V9_09.21.1'),
+    'origin matching the dump is not dump-ahead'
+);
+assert(isIncomingWorkerDownloaded({ ok: true, reason: 'waiting' }), 'waiting SW counts as downloaded');
+assert(isIncomingWorkerDownloaded({ ok: true, reason: 'installed' }), 'installed SW counts as downloaded');
+assert(!isIncomingWorkerDownloaded({ ok: true, reason: 'already_current' }), 'already_current is not a downloaded shell');
+assert(!isIncomingWorkerDownloaded({ ok: false, reason: 'timeout' }), 'timeout is not a downloaded shell');
+assert(
+    shouldToastAutomaticUpdate({ downloaded: true, newer: true, dumpAhead: false }),
+    'auto toast after a newer host shell is on disk'
+);
+assert(
+    !shouldToastAutomaticUpdate({ downloaded: false, newer: true, dumpAhead: false }),
+    'auto toast does not fire before download'
+);
+assert(
+    !shouldToastAutomaticUpdate({ downloaded: true, newer: true, dumpAhead: true }),
+    'dump-ahead never toasts even if some other worker is waiting'
+);
+assert(update.includes('will not toast or restart until the worker actually installs'), 'dump-ahead already_current stays silent');
+assert(
+    update.indexOf('isIncomingWorkerDownloaded') < update.indexOf('showCrucialUpdateToast'),
+    'forced update checks download before the crucial toast'
 );
 const probeUrls = listAppVersionProbeUrls();
 assert(probeUrls.some((url) => url.includes('app-version.json')), 'probe list includes app-version.json');

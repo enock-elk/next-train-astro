@@ -248,8 +248,8 @@ export async function peekIncomingVersion() {
 /**
  * Auto force-update target. Always return a published version newer than the
  * running shell so we *try* to install. Dump-ahead of production is handled
- * by already_current (no auto unstick / no reload). Stale origin JSON still
- * yields the dump.
+ * by already_current (no toast / no auto unstick / no reload). Stale origin
+ * JSON still yields the dump so install can run.
  */
 export function pickForceUpdateTarget(report, running = APP_VERSION) {
     const newest = report?.version || null;
@@ -257,6 +257,28 @@ export function pickForceUpdateTarget(report, running = APP_VERSION) {
     if (originVersion && isAppVersionNewer(originVersion, running)) return originVersion;
     if (newest && isAppVersionNewer(newest, running)) return newest;
     return null;
+}
+
+/** True when GitHub/jsDelivr is newer than the host the TWA/PWA is actually on. */
+export function isDumpAheadOfOrigin(report, running = APP_VERSION) {
+    const newest = normalizeAppVersionId(report?.version);
+    const origin = normalizeAppVersionId(report?.originVersion);
+    if (!newest || !origin) return false;
+    return isAppVersionNewer(newest, origin) && !isAppVersionNewer(origin, running);
+}
+
+/** Precache finished. already_current / no_sw / timeout are not a downloaded shell. */
+export function isIncomingWorkerDownloaded(installed) {
+    const reason = installed && installed.reason;
+    return !!(installed && installed.ok && (reason === 'waiting' || reason === 'installed'));
+}
+
+/**
+ * Automatic toast only after a newer host shell is already on disk.
+ * Dump-ahead of production must stay silent even if some other worker is waiting.
+ */
+export function shouldToastAutomaticUpdate({ downloaded, newer, dumpAhead } = {}) {
+    return !!(downloaded && newer && !dumpAhead);
 }
 
 /** Visible force-update toast (SPA parity) — always names the *incoming* version. */
@@ -435,6 +457,7 @@ export async function handleUpdateClick(newVersion, options = {}) {
     // Never wipe identity here. Activate a waiting worker when we can, then
     // same-URL reload. Do not write app_installed_version before the new shell
     // is actually running (that was the stored-20.3 / running-20.1 reload loop).
+    // Automatic toasts wait until waiting/installed. Never toast dump-ahead.
     if (!await updateNetworkPreflight()) {
         showSavedTimesToast();
         return false;
@@ -445,6 +468,10 @@ export async function handleUpdateClick(newVersion, options = {}) {
     const cap = readForceCap(target);
     const ignoreCap = options.ignoreCap === true;
     const unstickMode = options.unstick === 'always';
+    const originVersion = normalizeAppVersionId(options.originVersion);
+    const originNewer = !!(originVersion && isAppVersionNewer(originVersion, APP_VERSION));
+    const dumpAhead = options.dumpAhead === true
+        || (!!originVersion && isAppVersionNewer(target, originVersion) && !originNewer);
 
     if (newer) {
         console.log(`🛡️ Guardian: NEW APP VERSION found: ${target} (running ${APP_VERSION}). Not downloaded yet.`);
@@ -457,15 +484,14 @@ export async function handleUpdateClick(newVersion, options = {}) {
         return false;
     }
 
-    if (options.announce === true && newer) showCrucialUpdateToast(target);
-
     markPendingReload('version_enforce', 10000);
     const installed = await installIncomingServiceWorker();
     if (!installed.ok) {
         console.warn(`🛡️ Guardian: Incoming version ${target} NOT downloaded (${installed.reason}). Keeping ${APP_VERSION}. Will retry.`);
         return false;
     }
-    console.log(`🛡️ Guardian: Incoming version ${target} downloaded (${installed.reason}).`);
+    const downloaded = isIncomingWorkerDownloaded(installed);
+    console.log(`🛡️ Guardian: Incoming version ${target} ${downloaded ? 'downloaded' : 'checked'} (${installed.reason}).`);
 
     if (installed.reason === 'already_current') {
         if (newer && unstickMode) {
@@ -484,8 +510,44 @@ export async function handleUpdateClick(newVersion, options = {}) {
             console.log(`🛡️ Guardian: Already on ${APP_VERSION}. No restart.`);
             return false;
         }
-        console.log(`🛡️ Guardian: Published ${target} is newer than ${APP_VERSION} but the origin service worker is already_current (dump-ahead of production, or cached sw.js). Auto force-update will not restart until the worker actually installs. Check for Updates and NUKE can unstick.`);
+        if (originNewer) {
+            if (!ignoreCap && cap.unsticks >= MAX_UNSTICKS_PER_VERSION) {
+                console.warn(`🛡️ Guardian: Origin ${originVersion} is live but the worker is already_current and unstick already ran. Not looping.`);
+                return false;
+            }
+            console.warn(`🛡️ Guardian: Origin ${originVersion} is live but the worker is already_current (cached sw.js). Unsticking silently so the next boot can download ${originVersion}. No toast until that download finishes.`);
+            await unstickStaleServiceWorker();
+            writeForceCap({ version: target, reloads: cap.reloads + 1, unsticks: cap.unsticks + 1 });
+            reloadToApplyUpdate('version_unstick');
+            return true;
+        }
+        console.log(`🛡️ Guardian: Published ${target} is newer than ${APP_VERSION} but the origin service worker is already_current (dump-ahead of production, or cached sw.js). Auto force-update will not toast or restart until the worker actually installs. Check for Updates and NUKE can unstick.`);
+        if (typeof window !== 'undefined' && window.__ntForcedUpdateVersion === target) {
+            window.__ntForcedUpdateVersion = null;
+        }
         return false;
+    }
+
+    if (!downloaded) {
+        console.warn(`🛡️ Guardian: Incoming version ${target} NOT downloaded (${installed.reason}). Keeping ${APP_VERSION}. Will retry.`);
+        return false;
+    }
+
+    if (dumpAhead && !originNewer) {
+        console.log(`🛡️ Guardian: Dump ${target} is ahead of origin ${originVersion || 'unknown'}. Waiting worker is not that host shell. No toast. Quiet skipWaiting can still apply a same-generation hash.`);
+        if (typeof window !== 'undefined' && window.__ntForcedUpdateVersion === target) {
+            window.__ntForcedUpdateVersion = null;
+        }
+        return false;
+    }
+
+    if (shouldToastAutomaticUpdate({
+        downloaded,
+        newer,
+        dumpAhead: dumpAhead && !originNewer,
+    }) && options.announce === true) {
+        showCrucialUpdateToast(originNewer ? originVersion : target);
+        forcedUpdateAnnounced = true;
     }
 
     if (!await activateWaitingServiceWorker()) {
@@ -503,16 +565,22 @@ const UPDATED_TOAST_KEY = 'nt_show_updated_toast';
 const LATEST_TOAST_KEY = 'nt_show_latest_toast';
 let forcedUpdatePromise = null;
 
-function scheduleForcedUpdate(version) {
+function scheduleForcedUpdate(version, extras = {}) {
     if (typeof window === 'undefined') return;
     window.__ntForcedUpdateVersion = version;
+    window.__ntForcedUpdateOriginVersion = extras.originVersion || null;
+    window.__ntForcedUpdateDumpAhead = extras.dumpAhead === true;
     const attempt = () => {
         if (!window.__ntForcedUpdateVersion || forcedUpdatePromise) return;
         if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
         if (typeof navigator !== 'undefined' && !navigator.onLine) return;
-        const announce = !forcedUpdateAnnounced;
-        forcedUpdateAnnounced = true;
-        forcedUpdatePromise = handleUpdateClick(window.__ntForcedUpdateVersion, { announce, unstick: false })
+        const announce = !forcedUpdateAnnounced && !crucialUpdateToastShown;
+        forcedUpdatePromise = handleUpdateClick(window.__ntForcedUpdateVersion, {
+            announce,
+            unstick: false,
+            originVersion: window.__ntForcedUpdateOriginVersion,
+            dumpAhead: window.__ntForcedUpdateDumpAhead === true,
+        })
             .then((started) => {
                 if (started) window.__ntForcedUpdateVersion = null;
             })
@@ -540,8 +608,9 @@ async function probeNetworkAndForceUpdate() {
         console.log(`🛡️ Guardian: No newer app version than ${APP_VERSION}. Published ${report.version || 'unknown'}.`);
         return;
     }
-    console.log(`🛡️ Guardian: NEW APP VERSION found: ${target} (running ${APP_VERSION}). Not downloaded yet. Force-update will download, then restart to implement it.`);
-    scheduleForcedUpdate(target);
+    const dumpAhead = isDumpAheadOfOrigin(report, APP_VERSION);
+    console.log(`🛡️ Guardian: NEW APP VERSION found: ${target} (running ${APP_VERSION}). Not downloaded yet.${dumpAhead ? ' Dump is ahead of the host — will download if the origin worker actually updates; no toast until then.' : ' Force-update will download, then toast and restart to implement it.'}`);
+    scheduleForcedUpdate(target, { originVersion: report.originVersion, dumpAhead });
 }
 
 export function markAppUpdatedToast() {
@@ -618,13 +687,19 @@ export function bindAppUpdateLifecycle(registerSW) {
         immediate: true,
         async onNeedRefresh() {
             // New SW is waiting (precached). Same-version hash updates stay quiet.
-            // A *newer* APP_VERSION is a force-update: log download state and restart.
-            // path in enforceAppVersion(); it is not how FOUC is fixed.
-            const incomingVersion = await peekIncomingVersion();
+            // A *newer* APP_VERSION is a force-update: toast only after this
+            // download, then restart. path in enforceAppVersion(); it is not how FOUC is fixed.
+            const report = await peekIncomingVersionReport();
+            const incomingVersion = report.version;
             const downloaded = true;
+            const dumpAhead = isDumpAheadOfOrigin(report, APP_VERSION);
             if (incomingVersion && isAppVersionNewer(incomingVersion, APP_VERSION) && FORCE_UPDATE_REQUIRED) {
+                if (dumpAhead) {
+                    console.log(`🛡️ Guardian: Dump ${incomingVersion} is ahead of origin ${report.originVersion || 'unknown'} (running ${APP_VERSION}). Waiting SW is not that host shell. No toast.`);
+                    return;
+                }
                 console.log(`🛡️ Guardian: NEW APP VERSION found: ${incomingVersion} (running ${APP_VERSION}). Downloaded: yes (waiting SW). Restart will implement it.`);
-                scheduleForcedUpdate(incomingVersion);
+                scheduleForcedUpdate(incomingVersion, { originVersion: report.originVersion, dumpAhead: false });
                 return;
             }
             console.log('GUARDIAN: Incoming update waiting (quiet) →', incomingVersion);
@@ -645,9 +720,10 @@ export function bindAppUpdateLifecycle(registerSW) {
                     peekIncomingVersionReport().then((report) => {
                         const target = pickForceUpdateTarget(report, APP_VERSION);
                         if (!target) return;
+                        const dumpAhead = isDumpAheadOfOrigin(report, APP_VERSION);
                         const waiting = !!(registration.waiting || registration.installing);
-                        console.log(`🛡️ Guardian: NEW APP VERSION found: ${target} (running ${APP_VERSION}). Downloaded: ${waiting ? 'yes (waiting/installing)' : 'not yet'}. ${waiting ? 'Restart will implement it.' : 'Downloading, then restart.'}`);
-                        scheduleForcedUpdate(target);
+                        console.log(`🛡️ Guardian: NEW APP VERSION found: ${target} (running ${APP_VERSION}). Downloaded: ${waiting ? 'yes (waiting/installing)' : 'not yet'}.${dumpAhead ? ' Dump is ahead of the host — no toast until the origin worker installs.' : waiting ? ' Restart will implement it.' : ' Downloading, then toast and restart.'}`);
+                        scheduleForcedUpdate(target, { originVersion: report.originVersion, dumpAhead });
                     }).catch(() => {});
                 }
             };

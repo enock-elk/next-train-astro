@@ -510,7 +510,9 @@ assert(layout.includes('if (isAndroid()) return false'), 'Android stays unclassi
 assert(layout.includes("style={unlockShellEarly ? 'background-color:#1d4ed8' : undefined}"), 'html first bytes are the OS splash color');
 assert(layout.includes('html:not(.nt-shell-ready),\n        html:not(.nt-shell-ready) body'), 'first head rule beats hashed canvas until the board is ready');
 assert(!layout.includes('html:not(.nt-shell-ready):not(.nt-boot-browser),\n        html:not(.nt-shell-ready):not(.nt-boot-browser) body'), 'boot blue is no longer gated on nt-boot-browser');
-assert(layout.includes('id="loading-overlay"'), 'boot cover is the first body child');
+assert(/<body[^>]*>\s*<RecoveryLifeline \/>/.test(layout), 'lifeline stays the first app body node');
+assert(layout.includes('id="loading-overlay"'), 'boot cover is in the layout body, before the slot');
+assert(layout.indexOf('<RecoveryLifeline />') < layout.indexOf('id="loading-overlay"'), 'boot cover sits after the lifeline, not after the modal pile');
 assert(layout.includes('html:not(.nt-shell-ready):not(.nt-boot-browser) #loading-overlay'), 'splash cover is inline CSS, not hashed Tailwind');
 assert(layout.includes('html:not(.nt-shell-ready):not(.nt-boot-browser) #loading-overlay img {\n            display: none !important;'), 'installed / unknown boot does not show a second train logo');
 assert(!layout.includes('loading-logo-splash.webp'), 'layout no longer preloads the small splash logo');

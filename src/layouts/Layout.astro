@@ -1583,6 +1583,8 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
 
   <body class="bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 min-h-screen overflow-hidden transition-colors duration-300" style={unlockShellEarly ? 'background-color:#1d4ed8' : undefined}>
 
+    <RecoveryLifeline />
+
     {unlockShellEarly && (
       <div id="loading-overlay" class="fixed inset-0 z-[90] flex flex-col items-center justify-center" style="background:#1d4ed8">
         <p class="text-xs font-bold uppercase tracking-widest text-gray-400" data-nt-boot-starting-copy>Starting Next Train…</p>
@@ -1595,8 +1597,6 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
         >App stuck? Get help</a>
       </div>
     )}
-
-    <RecoveryLifeline />
 
     <!-- Offline drop-tab lives inside Header (SPA parity). Toast stays page-level. -->
 

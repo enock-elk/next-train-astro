@@ -1,6 +1,6 @@
 {
   "branch": "map-gold",
-  "frozenAt": "37e0c533555b84de3bdc255ea305578775cb18a4",
+  "frozenAt": "057bc7b60b23b4dc350306d8bde6f1b6070615da",
   "version": "V9_09.20.11",
   "note": "Gold snapshot of this build: tracking card title is Train id with dest/state on the next row; open card drag persists. Live glide/grey 15s. live-train snap uses painted GOLD LineString (trackCoords). planner fare uses painted corridor km, baked tracks, map runtime, advert handling. Diff against origin/map-gold. Fast-forward map-gold after this lands on main. Never force-push map-gold.",
   "files": {

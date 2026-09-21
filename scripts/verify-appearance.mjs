@@ -93,9 +93,10 @@ assert(indexPage.includes('boardChromeReady'), 'boot logo stays until dest names
 assert(indexPage.includes('dropLoadingLogo'), 'logo covers the white card until the board chrome is ready');
 assert(!indexPage.includes('setTimeout(revealAppShell, 700)'), 'boot no longer drops the logo at 700ms over a white card');
 assert(!indexPage.includes('setTimeout(() => revealAppShell(true), 4000)'), 'boot does not force-drop the overlay at 4s');
-assert(indexPage.includes('data-nt-boot-starting-copy'), 'Starting Next Train copy is gated off the splash hold');
+assert(!indexPage.includes('id="loading-overlay"'), 'boot cover is not late in the index slot after the modal pile');
 assert(indexPage.includes('INSTALLED_SPLASH_MS'), 'installed splash hold uses the shared 8s constant');
 assert(indexPage.includes('BROWSER_SLOW_BOOT_MS'), 'browser Starting cover uses the shared slow-cold constant');
+assert(indexPage.includes("classList.contains('nt-boot-browser') ? BROWSER_SLOW_BOOT_MS : INSTALLED_SPLASH_MS"), 'unknown Android boot uses the 8s hold, not the 2s browser clock');
 
 const sidenav = readFileSync(new URL('../src/components/Sidenav.astro', import.meta.url), 'utf8');
 assert(sidenav.includes('id="settings-account-btn"'), 'Account row exists in Options');
@@ -504,13 +505,19 @@ assert(layout.includes('html:not(.nt-shell-ready) #main-content.app-shell'), 'co
 assert(layout.includes('holdReturningShell'), 'returning users re-assert the visible shell on pageshow');
 assert(layout.includes('if (!document.documentElement.classList.contains(\'nt-shell-ready\')) return;'), 'pageshow does not hide the logo before dest names paint');
 assert(layout.includes('nt-boot-installed'), 'installed PWA stamps a splash-hold class before first paint');
-assert(layout.includes('nt-boot-browser'), 'browser sessions stamp a no-splash class before first paint');
+assert(layout.includes('isDefiniteBrowser'), 'browser splash skip waits for a definite tab, not unknown Android');
+assert(layout.includes('if (isAndroid()) return false'), 'Android stays unclassified (blue) until TWA signals exist');
+assert(layout.includes("style={unlockShellEarly ? 'background-color:#1d4ed8' : undefined}"), 'html first bytes are the OS splash color');
+assert(layout.includes('html:not(.nt-shell-ready),\n        html:not(.nt-shell-ready) body'), 'first head rule beats hashed canvas until the board is ready');
+assert(!layout.includes('html:not(.nt-shell-ready):not(.nt-boot-browser),\n        html:not(.nt-shell-ready):not(.nt-boot-browser) body'), 'boot blue is no longer gated on nt-boot-browser');
+assert(layout.includes('id="loading-overlay"'), 'boot cover is the first body child');
 assert(layout.includes('html:not(.nt-shell-ready):not(.nt-boot-browser) #loading-overlay'), 'splash cover is inline CSS, not hashed Tailwind');
-assert(layout.includes('html:not(.nt-shell-ready):not(.nt-boot-browser) #loading-overlay img'), 'installed splash keeps the train logo');
-assert(!layout.includes('html.nt-boot-installed:not(.nt-boot-starting) #loading-overlay img'), 'installed splash no longer hides the train logo');
+assert(layout.includes('html:not(.nt-shell-ready):not(.nt-boot-browser) #loading-overlay img {\n            display: none !important;'), 'installed / unknown boot does not show a second train logo');
+assert(!layout.includes('loading-logo-splash.webp'), 'layout no longer preloads the small splash logo');
+assert(layout.includes('data-nt-boot-starting-copy'), 'Starting Next Train copy is gated off the splash hold');
 assert(layout.includes('html:not(.nt-boot-starting) #loading-overlay [data-nt-boot-starting-copy]'), 'Starting copy stays off until the slow-boot clock');
 assert(layout.includes('html.nt-boot-browser:not(.nt-boot-starting):not(.nt-shell-ready) #loading-overlay'), 'browser hides Starting until a slow cold start');
-assert(layout.includes('installed ? 8000 : 2000'), 'splash / Starting clocks start from the first inline script');
+assert(layout.includes('definiteBrowser ? 2000 : 8000'), 'splash / Starting clocks start from the first inline script');
 assert(layout.includes('--nt-shell-top'), 'shell is pinned below overlay chrome');
 assert(layout.includes('--nt-shell-h'), 'shell height follows the visible hole');
 assert(layout.includes('missing < 180'), 'URL-bar overlay uses the missing layout strip, not an invented tray');

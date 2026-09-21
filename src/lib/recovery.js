@@ -17,7 +17,7 @@ export { SUPPORT_EMAIL, SUPPORT_FACEBOOK_URL };
 const RECOVERY_AUTO_REDIRECT_MS = 55_000;
 /** Soft “connection struggling” strip while still “online” but not stabilized. */
 const SLOW_BOOT_HINT_MS = 18_000;
-/** Installed PWA / TWA: keep the OS splash color and logo this long before Starting copy. */
+/** Installed PWA / TWA: keep the OS splash color this long before Starting copy. */
 export const INSTALLED_SPLASH_MS = 8_000;
 /** Browser cold start: show Starting only if dest names have not painted yet. */
 export const BROWSER_SLOW_BOOT_MS = 2_000;

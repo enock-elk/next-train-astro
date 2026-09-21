@@ -141,27 +141,6 @@ const faqLd = {
     <HubModals />
     <AlertsChannel />
 
-    <!-- Cold-boot only: returning sessions skip via html.nt-shell-ready (Layout head). -->
-    <div id="loading-overlay" class="fixed inset-0 z-[90] flex flex-col items-center justify-center" style="background:#1d4ed8">
-        <img
-            src={withBase('icons/loading-logo-splash.webp')}
-            alt=""
-            class="w-16 h-16 mb-4 animate-pulse"
-            width="64"
-            height="64"
-            fetchpriority="high"
-            decoding="async"
-        />
-        <p class="text-xs font-bold uppercase tracking-widest text-gray-400" data-nt-boot-starting-copy>Starting Next Train…</p>
-        <a
-            href={withBase('help.html') + '?reason=boot'}
-            class="absolute bottom-8 left-1/2 -translate-x-1/2 text-xs font-bold text-slate-500 underline underline-offset-2 hidden"
-            data-nt-help-escape="1"
-            hidden
-            aria-hidden="true"
-        >App stuck? Get help</a>
-    </div>
-
     <!-- MAIN APP — viewport frame; header + views scroll; bottom nav stays put -->
     <main id="main-content" class="app-shell w-full max-w-md mx-auto bg-white dark:bg-gray-800 rounded-lg shadow-2xl overflow-hidden relative flex flex-col border border-gray-200 dark:border-gray-700">
 
@@ -287,8 +266,8 @@ const faqLd = {
         try { window.ntFitAppViewport?.(); } catch (e) {}
     };
     // Drop the cover as soon as dest names (or Welcome) are on screen, then
-    // wait two frames so that paint lands under the overlay. Installed PWA
-    // keeps the splash color and train logo until then; browsers show the site.
+    // wait two frames so that paint lands under the overlay. Installed / unknown
+    // keeps the OS splash color until then; definite browser tabs show the site.
     const revealAppShell = (force = false) => {
         if (revealCommitted) {
             dropLoadingLogo();
@@ -319,10 +298,6 @@ const faqLd = {
             mo.observe(welcome, { attributes: true, attributeFilter: ['class'] });
         }
     };
-    // Fix loader image base path for GitHub Pages preview (small WebP for cold-boot LCP)
-    const loaderImg = document.querySelector('#loading-overlay img');
-    if (loaderImg) loaderImg.setAttribute('src', withBase('icons/loading-logo-splash.webp'));
-
     window.addEventListener('pageshow', () => {
         if (document.documentElement.classList.contains('nt-shell-ready')) dropLoadingLogo();
     });
@@ -361,8 +336,8 @@ const faqLd = {
 
     window.openLegal = openLegal;
     initRecoveryWatchdog();
-    // Installed: splash color + logo absorb the wait; Starting copy after 8s.
-    // Browser: no splash; Starting only if this cold start is still empty.
+    // Installed / unknown: splash color absorbs the wait; Starting copy after 8s.
+    // Definite browser tab: no splash; Starting only if this cold start is still empty.
     // Fast boards still reveal as soon as dest names paint.
     setTimeout(() => {
         if (revealCommitted) return;
@@ -372,7 +347,7 @@ const faqLd = {
             overlay.style.removeProperty('display');
             overlay.classList.remove('hidden');
         }
-    }, document.documentElement.classList.contains('nt-boot-installed') ? INSTALLED_SPLASH_MS : BROWSER_SLOW_BOOT_MS);
+    }, document.documentElement.classList.contains('nt-boot-browser') ? BROWSER_SLOW_BOOT_MS : INSTALLED_SPLASH_MS);
     // Empathy modal "Try Again" (and admin) can call this before/without bridge
     window.loadAllSchedules = loadAllSchedules;
     prepareDeeplinkIntents();

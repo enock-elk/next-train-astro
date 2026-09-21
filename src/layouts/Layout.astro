@@ -40,10 +40,22 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
 ---
 
 <!DOCTYPE html>
-<html lang="en" data-lab-mode={labModeBoot ? 'true' : 'false'}>
+<html lang="en" data-lab-mode={labModeBoot ? 'true' : 'false'} style={unlockShellEarly ? 'background-color:#1d4ed8' : undefined}>
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, minimum-scale=1.0, viewport-fit=cover" />
+    {unlockShellEarly && (
+      <style is:inline>
+        /* First bytes, before hashed appearance.css. That bundle sets
+           html,body { canvas !important } to #e8eef4. Beat it until the board
+           is ready. Do not gate on nt-boot-browser: TWA first tick looks like
+           a tab and that exception painted white after the OS splash. */
+        html:not(.nt-shell-ready),
+        html:not(.nt-shell-ready) body {
+          background-color: #1d4ed8 !important;
+        }
+      </style>
+    )}
     <style is:inline>
       /* Phone width scale before the hashed bundle. Design 390. Floor 320 (SE).
          Tablets/desktop keep 16px rem; the shell stays max-w-md (28rem). */
@@ -65,17 +77,6 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
         font-size: max(16px, 1rem) !important;
       }
     </style>
-    {unlockShellEarly && (
-      <style is:inline>
-        /* First paint, before JS stamps nt-boot-installed. Hashed
-           html,body { canvas !important } is #e8eef4 and flashes white
-           between the OS splash and the board. */
-        html:not(.nt-shell-ready):not(.nt-boot-browser),
-        html:not(.nt-shell-ready):not(.nt-boot-browser) body {
-          background-color: #1d4ed8 !important;
-        }
-      </style>
-    )}
     <ShellFallbackStyles surface="app" />
     <StuckUpdateGuard />
     <script is:inline>
@@ -117,6 +118,22 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
         }
         function isAndroid() {
           return /Android/i.test((window.navigator && window.navigator.userAgent) || '');
+        }
+        function isDefiniteBrowser() {
+          if (markStandalone()) return false;
+          try {
+            if (window.matchMedia('(display-mode: standalone)').matches) return false;
+            if (window.matchMedia('(display-mode: fullscreen)').matches) return false;
+            if (window.matchMedia('(display-mode: minimal-ui)').matches) return false;
+          } catch (e) {}
+          if (window.navigator && window.navigator.standalone) return false;
+          try {
+            if (sessionStorage.getItem('nt_twa') === '1' || localStorage.getItem('nt_twa') === '1') return false;
+          } catch (e) {}
+          if (String(document.referrer || '').indexOf('android-app://') === 0) return false;
+          // Android TWA's first document often looks like a tab. Stay blue.
+          if (isAndroid()) return false;
+          return true;
         }
         function envBottom() {
           try {
@@ -250,7 +267,13 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
           var installed = markStandalone();
           root.classList.toggle('nt-standalone', installed);
           root.classList.toggle('nt-boot-installed', installed);
-          root.classList.toggle('nt-boot-browser', !installed);
+          // Unknown (Android TWA first tick) stays unclassified = blue cover.
+          // Only a definite browser tab hides the cover.
+          if (installed) {
+            root.classList.remove('nt-boot-browser');
+          } else if (isDefiniteBrowser()) {
+            root.classList.add('nt-boot-browser');
+          }
           root.classList.toggle('nt-android', isAndroid());
           try {
             root.classList.toggle('nt-twa', sessionStorage.getItem('nt_twa') === '1');
@@ -413,13 +436,14 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
             document.addEventListener('DOMContentLoaded', holdReturningShell);
             window.addEventListener('pageshow', holdReturningShell);
             // Splash / Starting clocks start at first paint, not after modules.
-            var installed = document.documentElement.classList.contains('nt-boot-installed');
+            // Unknown (not a definite browser tab) uses the installed 8s hold.
+            var definiteBrowser = document.documentElement.classList.contains('nt-boot-browser');
             setTimeout(function () {
               try {
                 if (document.documentElement.classList.contains('nt-shell-ready')) return;
                 document.documentElement.classList.add('nt-boot-starting');
               } catch (e) {}
-            }, installed ? 8000 : 2000);
+            }, definiteBrowser ? 2000 : 8000);
           })();
         </script>
         <style is:inline>
@@ -428,11 +452,10 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
           html:not(.nt-shell-ready) #main-content.app-shell { visibility: hidden; }
           html.nt-shell-ready #loading-overlay { display: none !important; }
           html.nt-shell-ready #main-content.app-shell { visibility: visible !important; }
-          /* Installed / not-yet-classified: keep OS splash color AND the train
-             logo until dest names paint. Do not hide the logo for a blank blue
-             sheet. Starting copy stays off until the 8s timeout. */
-          html:not(.nt-shell-ready):not(.nt-boot-browser),
-          html:not(.nt-shell-ready):not(.nt-boot-browser) body {
+          /* Installed / unknown: same #1d4ed8 as the OS splash. No second
+             train logo. Starting copy stays off until the 8s timeout. */
+          html:not(.nt-shell-ready),
+          html:not(.nt-shell-ready) body {
             background-color: #1d4ed8 !important;
           }
           html:not(.nt-shell-ready):not(.nt-boot-browser) #loading-overlay {
@@ -447,7 +470,7 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
             margin: 0 !important;
           }
           html:not(.nt-shell-ready):not(.nt-boot-browser) #loading-overlay img {
-            display: block !important;
+            display: none !important;
           }
           html:not(.nt-boot-starting) #loading-overlay [data-nt-boot-starting-copy] {
             display: none !important;
@@ -544,9 +567,6 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
 
     <!-- Google Fonts — non-blocking so FCP/LCP are not gated on fonts.googleapis.com -->
     <AppFonts />
-    {unlockShellEarly && (
-      <link rel="preload" as="image" href={withBase('icons/loading-logo-splash.webp')} type="image/webp" fetchpriority="high" />
-    )}
 
     <!-- Device identity sync; GA4 script+config idle-deferred so mobile LCP keeps the pipe -->
     <script is:inline>
@@ -1561,7 +1581,20 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
     </script>
   </head>
 
-  <body class="bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 min-h-screen overflow-hidden transition-colors duration-300">
+  <body class="bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 min-h-screen overflow-hidden transition-colors duration-300" style={unlockShellEarly ? 'background-color:#1d4ed8' : undefined}>
+
+    {unlockShellEarly && (
+      <div id="loading-overlay" class="fixed inset-0 z-[90] flex flex-col items-center justify-center" style="background:#1d4ed8">
+        <p class="text-xs font-bold uppercase tracking-widest text-gray-400" data-nt-boot-starting-copy>Starting Next Train…</p>
+        <a
+          href={withBase('help.html') + '?reason=boot'}
+          class="absolute bottom-8 left-1/2 -translate-x-1/2 text-xs font-bold text-slate-500 underline underline-offset-2 hidden"
+          data-nt-help-escape="1"
+          hidden
+          aria-hidden="true"
+        >App stuck? Get help</a>
+      </div>
+    )}
 
     <RecoveryLifeline />
 

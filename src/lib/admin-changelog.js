@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_09.21.3': [
+        'TWA boot no longer invents a second 64px splash. html/body first bytes and the first head rule stay #1d4ed8 until dest names paint so hashed canvas #e8eef4 cannot flash white. Unknown Android (TWA first tick) stays unclassified and keeps the blue cover; only a definite desktop/iOS browser tab hides it. Overlay is the first body child. No train logo on the hold. Starting copy still waits 8s installed/unknown, 2s definite browser. No What’s New. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
+    ],
     'V9_09.21.2': [
         'Alert view counts were stuck at 0 because notice_impressions was .write false and the community worker authenticates as nexttrain-telemetry@metrorail-next-train.iam.gserviceaccount.com (Google OAuth is scored as that user, not an admin bypass). Rules now allow that SA plus operator emails to write count/updatedAt nodes. Client POST sends JSON, restarts the dwell observer after Alerts is visible, and counts tall poster cards that fill the scroller. Worker noticeExists also matches map children by payload id. Deploy firebase-database.rules.json and the community worker or counts stay 0. No What’s New (Alerts stay hidden). forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
     ],

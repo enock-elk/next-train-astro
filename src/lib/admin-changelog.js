@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_09.21.19': [
+        'nexttrain-edge routes are attached again (/_astro, /icons, sw.js, app-version.json). Cache Rules were never applied; do not run apply-nexttrain-edge-cache-rules.mjs while the Worker is live. No What’s New. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
+    ],
     'V9_09.21.18': [
         'nexttrain-edge is detached. Production Cache-Control for /_astro, /icons, sw.js, and app-version.json is zone Cache Rules plus header transforms (zero Worker invocations). HTML is still not long-cached. Apply with apply-nexttrain-edge-cache-rules.mjs. No What’s New. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
     ],

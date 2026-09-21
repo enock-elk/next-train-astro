@@ -312,15 +312,14 @@ try {
 }
 
 const worker = readFileSync(new URL('../workers/nexttrain-edge/worker.js', import.meta.url), 'utf8');
-assert(worker.includes("url.pathname === '/app-version.json'"), 'rollback worker still knows app-version.json');
-assert(worker.includes("url.pathname === '/sw.js'"), 'rollback worker still knows sw.js');
-assert(worker.includes('no-store, no-cache, must-revalidate'), 'rollback worker still serves update probes with no-store');
-assert(worker.includes('rollback only') || worker.includes('routes are detached'), 'edge worker is documented as detached');
+assert(worker.includes("url.pathname === '/app-version.json'"), 'edge worker intercepts app-version.json');
+assert(worker.includes("url.pathname === '/sw.js'"), 'edge worker intercepts sw.js');
+assert(worker.includes('no-store, no-cache, must-revalidate'), 'edge worker serves update probes with no-store');
+assert(!worker.includes('rollback only') && !worker.includes('routes are detached'), 'edge worker is attached, not documented as detached');
 const wrangler = readFileSync(new URL('../workers/nexttrain-edge/wrangler.jsonc', import.meta.url), 'utf8');
-assert(/"routes":\s*\[\s*\]/.test(wrangler), 'nexttrain-edge wrangler routes stay empty');
-assert(!wrangler.includes('nexttrain.co.za/_astro/'), 'do not re-attach the Worker to /_astro/');
-assert(!wrangler.includes('nexttrain.co.za/app-version.json'), 'do not re-attach the Worker to app-version.json');
-assert(!wrangler.includes('nexttrain.co.za/sw.js'), 'do not re-attach the Worker to sw.js');
+assert(wrangler.includes('nexttrain.co.za/_astro/'), 'wrangler routes hashed /_astro/');
+assert(wrangler.includes('nexttrain.co.za/app-version.json'), 'wrangler routes app-version.json');
+assert(wrangler.includes('nexttrain.co.za/sw.js'), 'wrangler routes sw.js');
 const spec = loadEdgeZoneSpec();
 const refs = managedRefs(spec);
 assert(spec.cache.some((r) => r.ref === 'nt-edge-astro' && r.expression.includes('/_astro/')), 'Cache Rule covers hashed /_astro/');

@@ -1,13 +1,11 @@
 /**
- * nexttrain-edge — rollback only. Production routes are detached.
+ * nexttrain-edge — Cache-Control for hashed Astro assets + icons, and
+ * no-store for the update probes.
  *
- * Cache-Control now comes from Cloudflare Cache Rules + response header
- * transforms in zone-rules.json (zero Worker invocations). GitHub Pages
- * still sends max-age=600; the zone rules override that.
- *
- * Keep this Worker as a one-deploy rollback if the ruleset apply fails:
- * restore wrangler.jsonc routes and `npx wrangler deploy`. HTML must stay
- * off those routes. /app-version.json and /sw.js stay no-store.
+ * GitHub Pages sends max-age=600 (the PSI "efficient cache lifetimes" hit).
+ * This Worker sits on nexttrain.co.za/_astro/* and /icons/* (long TTL) plus
+ * /app-version.json and /sw.js (no-store so PWA/TWA Check for Updates and
+ * NUKE are not stuck on a 10-minute origin cache). HTML is not routed here.
  */
 export default {
   async fetch(request) {

@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_09.21.8': [
+        'Live-train pill snaps to the painted GOLD LineString (trackCoords / the green polyline), not the station-to-station chord. That chord is why 1100 sat south of Koedoespoort with both ends off the rail. setIcon now reapplies rail-tangent yaw so the long axis stays on the line when the share greys. Tap locate and Welcome autolocate are unchanged. No What’s New (live share stays hidden). forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
+    ],
     'V9_09.21.7': [
         'Startup auto-locate runs only for returning commuters. After pin restore, Welcome freezes returning-vs-new before a first visit can mint welcomeSeen. Showing Welcome this page load blocks the OS location sheet even after route pick. Installed PWA/TWA prompt/unknown still counts as granted after that gate. Tap locate is unchanged. No What’s New. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
     ],

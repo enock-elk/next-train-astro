@@ -2,7 +2,7 @@
   "branch": "map-gold",
   "frozenAt": "fae7cdbde2266f07bab5839a566599af490dd700",
   "version": "V9_09.20.11",
-  "note": "Gold snapshot of this build: planner fare uses painted corridor km, static-map station hops, rail-tangent trains, baked tracks, map runtime, advert handling. GP jhb-midway is the operator 702-vert Midway/Lenz patch. Tracking Map opens for admins, experimental Map pins, or a session-only live-share link. Live trains stay on the baked rail-tracks GeoJSON (commitRailPose / ridePathForRoute), never geographic-lerp or GPS yaw. Receivers pin motionClass still and glide ride with fused speed. Diff against origin/map-gold. Fast-forward map-gold after this lands on main. Never force-push map-gold.",
+  "note": "Gold snapshot of this build: live-train snap uses painted GOLD LineString (trackCoords), not station chords. planner fare uses painted corridor km, static-map station hops, rail-tangent trains, baked tracks, map runtime, advert handling. GP jhb-midway is the operator 702-vert Midway/Lenz patch. Tracking Map opens for admins, experimental Map pins, or a session-only live-share link. Diff against origin/map-gold. Fast-forward map-gold after this lands on main. Never force-push map-gold.",
   "files": {
     "public/tracks/rail-tracks-EC.geojson": {
       "md5": "43409bfd05405205e596f0d03345ab18",
@@ -21,8 +21,8 @@
       "sha256": "090a5d7fc45cafb8c7b81dc583ae24978540f38278cab447953bc90c8821f01f"
     },
     "public/js/map-app.js": {
-      "md5": "5404ec42caaf979be6233a31c8c93701",
-      "sha256": "e56a1bae2d012d1195380dfe887a7cd487c0164bf0898bc701f83d1dd2944f69"
+      "md5": "a2bb18fa7debfc0066e66a6bf11c91aa",
+      "sha256": "6972b5f542c1f8a6e6de696bbef41f31acbcde9f6a7d6e279cdfdb468c4dfee0"
     },
     "src/pages/map.astro": {
       "md5": "e3baceb290d5fd25cdb13ba838e5391f",

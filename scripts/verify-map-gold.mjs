@@ -96,8 +96,10 @@ assert(
     'map paints baked Next Train rail GeoJSON, not Leaflet OSM rail tiles'
 );
 assert(mapApp.includes('function ridePathForRoute'), 'live train snap uses the painted corridor path');
+assert(mapApp.includes('found.trackCoords'), 'live train snap prefers the painted GOLD LineString over station chords');
 assert(mapApp.includes('Always sit on the painted corridor'), 'tracking glyph stays on custom rail points');
 assert(mapApp.includes('function commitRailPose'), 'rail pose is the snap outcome, not a raw GPS lerp');
+assert(mapApp.includes('function paintLiveTrainIcon'), 'train icon refresh keeps rail-tangent yaw');
 assert(!mapApp.includes('from.offM > 180'), 'interpolation does not abort off the painted rail');
 const mapTab = readFileSync(join(ROOT, 'src/lib/map-tab.js'), 'utf8');
 assert(mapTab.includes('railPathForTrain'), 'tracking pill path is built from custom rail points');

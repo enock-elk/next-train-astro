@@ -590,6 +590,8 @@ assert(ridePingsSource.includes('}, ONBOARD_FAST_PING_MS)'), 'onboard loop ticks
 assert(ridePingsSource.includes('autoPaused'), 'a successful GPS ping after grey pause broadcasts immediately');
 assert(mapAppSource.includes('rideFacingAlongPath'), 'train yaw follows the painted-rail tangent');
 assert(mapAppSource.includes('snapTrainToRail'), 'train centre is snapped onto the painted rail');
+assert(mapAppSource.includes('found.trackCoords'), 'train snap uses the painted GOLD line, not a station chord');
+assert(mapAppSource.includes('paintLiveTrainIcon'), 'pill yaw is reapplied after setIcon');
 assert(mapAppSource.includes('applyTrainGlyphYaw'), 'glyph rotates with the rail while interpolating');
 assert(mapAppSource.includes('separate along-track'), 'opposing trains stay on the rail instead of offsetting sideways');
 assert(mapAppSource.includes('source of truth'), 'animation stays tied to commuter GPS fixes');

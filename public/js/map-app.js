@@ -2786,15 +2786,7 @@
                     ping.trackingState = 'paused';
                     ping.pauseReason = ping.pauseReason || 'staleGps';
                     stopRideMarkerInterpolation(marker, marker._ntRideTarget);
-                    var spec = liveTrainIconSpec(map.getZoom(), trainId, ping);
-                    var n = Number(marker._ntRideN) || 1;
-                    var mine = !!marker._ntRideMine;
-                    marker.setIcon(L.divIcon({
-                        className: 'nt-live-train',
-                        html: liveTrainGlyphHtml(trainId, n, mine, spec),
-                        iconSize: [spec.w, spec.h],
-                        iconAnchor: [Math.round(spec.w / 2), Math.round(spec.h / 2)]
-                    }));
+                    paintLiveTrainIcon(marker, trainId, Number(marker._ntRideN) || 1, !!marker._ntRideMine, ping);
                 });
             }
             function headingMetric(deg) {
@@ -2854,9 +2846,17 @@
                         if (drawnRoutes[j].routeId === selectedRouteId) { found = drawnRoutes[j]; break; }
                     }
                 }
-                var coords = found && found.coords;
-                if ((!coords || coords.length < 2) && found && found._polyline) {
+                if (!found) return [];
+                // Same LineString as the green paint. Station-to-station `coords`
+                // are straight chords, so the pill sits off the baked rail.
+                var coords = (found.trackCoords && found.trackCoords.length > 1)
+                    ? found.trackCoords
+                    : null;
+                if ((!coords || coords.length < 2) && found._polyline) {
                     try { coords = found._polyline.getLatLngs(); } catch (_) {}
+                }
+                if ((!coords || coords.length < 2) && found.coords && found.coords.length > 1) {
+                    coords = found.coords;
                 }
                 return flattenRidePath(coords);
             }
@@ -2971,6 +2971,23 @@
                 if (glyph) glyph.style.transform = 'rotate(' + yaw + 'deg)';
                 if (num) num.style.transform = 'rotate(' + (readableTrainLabelDeg(bearingDeg) - yaw) + 'deg)';
                 marker._ntRailBearing = bearingDeg;
+            }
+            function railBearingForMarker(marker, ping) {
+                if (marker && Number.isFinite(marker._ntRailBearing)) return marker._ntRailBearing;
+                if (ping && Number.isFinite(ping.bearing)) return ping.bearing;
+                return 0;
+            }
+            function paintLiveTrainIcon(marker, trainId, n, mine, ping) {
+                if (!marker) return;
+                var bearing = railBearingForMarker(marker, ping);
+                var spec = liveTrainIconSpec(map.getZoom(), trainId, Object.assign({}, ping || {}, { bearing: bearing }));
+                marker.setIcon(L.divIcon({
+                    className: 'nt-live-train',
+                    html: liveTrainGlyphHtml(trainId, n, mine, spec),
+                    iconSize: [spec.w, spec.h],
+                    iconAnchor: [Math.round(spec.w / 2), Math.round(spec.h / 2)]
+                }));
+                if (Number.isFinite(bearing)) applyTrainGlyphYaw(marker, bearing);
             }
             // Outcome of a rail snap: the pill stays on the painted LineString.
             // Never fall back to raw GPS or a phone heading.
@@ -3390,6 +3407,8 @@
                     const accuracyValue = firstFinitePingField('accuracy');
                     const railDistanceValue = firstFinitePingField('railDistanceM');
                     const pingAtValue = Number(newest.fixAt || newest.acceptedAt || newest.lastPingAt || newest.at || 0) || firstFinitePingField('fixAt') || firstFinitePingField('acceptedAt') || firstFinitePingField('at');
+                    const paused = newest.trackingState === 'paused' || isPingGpsStale(newest);
+                    const dest = String(newest.destination || '').replace(/\s+STATION$/i, '').trim();
                     const spec = liveTrainIconSpec(map.getZoom(), trainId, Object.assign({}, newest, { bearing: row.bearing }));
                     const icon = L.divIcon({
                         className: 'nt-live-train',
@@ -3397,8 +3416,6 @@
                         iconSize: [spec.w, spec.h],
                         iconAnchor: [Math.round(spec.w / 2), Math.round(spec.h / 2)]
                     });
-                    const paused = newest.trackingState === 'paused' || isPingGpsStale(newest);
-                    const dest = String(newest.destination || '').replace(/\s+STATION$/i, '').trim();
                     let marker = rideTrainMarkers[trainId];
                     if (!marker) {
                         marker = L.marker([lat, lng], { icon: icon, zIndexOffset: 800, keyboard: true });
@@ -3433,9 +3450,9 @@
                         });
                         marker.addTo(ridePingLayer);
                         rideTrainMarkers[trainId] = marker;
-                    } else {
-                        marker.setIcon(icon);
                     }
+                    marker._ntRailBearing = row.bearing;
+                    paintLiveTrainIcon(marker, trainId, n, mine, Object.assign({}, newest, { bearing: row.bearing, trackingState: paused ? 'paused' : newest.trackingState }));
                     marker._ntRidePing = Object.assign({}, newest, {
                         bearing: row.bearing,
                         lat: lat,

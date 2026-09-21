@@ -1,6 +1,6 @@
 {
   "branch": "map-gold",
-  "frozenAt": "fae7cdbde2266f07bab5839a566599af490dd700",
+  "frozenAt": "37e0c533555b84de3bdc255ea305578775cb18a4",
   "version": "V9_09.20.11",
   "note": "Gold snapshot of this build: live-train snap uses painted GOLD LineString (trackCoords), not station chords. planner fare uses painted corridor km, static-map station hops, rail-tangent trains, baked tracks, map runtime, advert handling. GP jhb-midway is the operator 702-vert Midway/Lenz patch. Tracking Map opens for admins, experimental Map pins, or a session-only live-share link. Diff against origin/map-gold. Fast-forward map-gold after this lands on main. Never force-push map-gold.",
   "files": {

@@ -41,6 +41,20 @@ export function triggerHaptic() {
     } catch(e) {}
 }
 
+/** Let the next frame paint before heavy DOM work (INP). */
+export function yieldToPaint() {
+    const sched = typeof globalThis !== 'undefined' ? globalThis.scheduler : undefined;
+    if (sched && typeof sched.yield === 'function') return sched.yield();
+    if (typeof requestAnimationFrame === 'function') {
+        return new Promise((resolve) => {
+            requestAnimationFrame(() => {
+                requestAnimationFrame(() => resolve());
+            });
+        });
+    }
+    return Promise.resolve();
+}
+
 /**
  * Show/hide a password field. Bind after the input exists in the document
  * (admin login lives in a stamped <template>, so boot-time getElementById misses it).

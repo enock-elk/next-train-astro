@@ -5,7 +5,7 @@ import { ROUTES } from './config.js';
 import { safeStorage, escapeHTML, routeArrowSvg, routePrimaryGridDirection, scheduleCacheSlot, normalizeScheduleSheetDay } from './utils.js';
 import { $currentRouteId, $userRegion, $schedules, $globalExclusions, $globalDisruptions, $opsOverlaysReady } from '../store.js';
 import { loadAllSchedules, ensureRoutePinnedForRegion } from './logic.js';
-import { showToast, triggerHaptic, openSmoothModal, closeSmoothModal, toggleDropdownScrim } from './ui.js';
+import { showToast, triggerHaptic, openSmoothModal, closeSmoothModal, toggleDropdownScrim, yieldToPaint } from './ui.js';
 import { simulateNextActiveService, routeHasSaturdayService, scheduleHasService } from './live-board.js';
 import {
     buildRouteShareUrl,
@@ -16,6 +16,54 @@ import { consumeShareDeeplinkSnapshot, peekShareDeeplinkSnapshot } from './deepl
 
 let lastGridBody = null;
 let gridExclRefreshBound = false;
+let gridRenderGen = 0;
+
+const GRID_LOADING_HTML = '<div class="p-6 text-center text-sm text-gray-500 dark:text-gray-400 font-bold">Loading timetable…</div>';
+
+function ensureFullGridModal() {
+    let modal = document.getElementById('full-schedule-modal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'full-schedule-modal';
+        modal.className = 'fixed inset-0 bg-white dark:bg-gray-900 z-[125] hidden flex items-center justify-center p-0 full-screen backdrop-blur-md transition-opacity duration-300';
+        modal.innerHTML = `
+            <div class="bg-white dark:bg-gray-900 rounded-none shadow-2xl w-full h-full flex flex-col overflow-hidden relative transform">
+                <div class="px-3 py-1.5 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center gap-2 bg-gray-50 dark:bg-gray-800 z-20 shrink-0">
+                    <h3 class="flex-grow min-w-0"></h3>
+                    <button type="button" id="close-full-grid-btn" class="p-1.5 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-500 shrink-0" aria-label="Close">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                    </button>
+                </div>
+                <div id="grid-controls" class="px-2 py-1.5 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 flex items-center shadow-sm relative z-10 shrink-0"></div>
+                <div id="grid-container" class="flex-grow overflow-auto bg-white dark:bg-gray-900 relative z-10"></div>
+                <div class="shrink-0 p-3 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 z-20">
+                    <button type="button" id="close-timetable-footer-btn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-4 rounded-lg shadow-md transition-colors text-sm focus:outline-none">Close Timetable</button>
+                </div>
+            </div>`;
+        document.body.appendChild(modal);
+        const closeGrid = () => {
+            triggerHaptic();
+            closeFullGridModal();
+        };
+        document.getElementById('close-full-grid-btn')?.addEventListener('click', closeGrid);
+        document.getElementById('close-timetable-footer-btn')?.addEventListener('click', closeGrid);
+        return modal;
+    }
+    if (!document.getElementById('close-timetable-footer-btn')) {
+        const shell = modal.firstElementChild;
+        if (shell && !shell.querySelector('#close-timetable-footer-btn')) {
+            const footer = document.createElement('div');
+            footer.className = 'shrink-0 p-3 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 z-20';
+            footer.innerHTML = '<button type="button" id="close-timetable-footer-btn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-4 rounded-lg shadow-md transition-colors text-sm focus:outline-none">Close Timetable</button>';
+            shell.appendChild(footer);
+            document.getElementById('close-timetable-footer-btn')?.addEventListener('click', () => {
+                triggerHaptic();
+                closeFullGridModal();
+            });
+        }
+    }
+    return modal;
+}
 
 /** Wait briefly for exclusions so VIEW FULL TIMETABLE is not race-blind. */
 function ensureOpsOverlaysReady(timeoutMs = 2800) {
@@ -185,7 +233,8 @@ export async function applyRouteDeepLink() {
     return true;
 }
 
-export function renderFullScheduleGrid(direction = null, dayOverride = null) {
+export async function renderFullScheduleGrid(direction = null, dayOverride = null) {
+    const renderGen = ++gridRenderGen;
     triggerHaptic();
     const routeId = $currentRouteId.get();
     const route = ROUTES[routeId];
@@ -262,9 +311,9 @@ export function renderFullScheduleGrid(direction = null, dayOverride = null) {
         return;
     }
 
-    let modal = document.getElementById('full-schedule-modal');
-    const isFirstOpen = !modal || modal.classList.contains('hidden');
-    if (isFirstOpen && typeof window.trackAnalyticsEvent === 'function') {
+    const existingModal = document.getElementById('full-schedule-modal');
+    const alreadyOpen = !!(existingModal && !existingModal.classList.contains('hidden'));
+    if (!alreadyOpen && typeof window.trackAnalyticsEvent === 'function') {
         window.trackAnalyticsEvent('view_full_grid', {
             route: route.name,
             direction,
@@ -272,43 +321,23 @@ export function renderFullScheduleGrid(direction = null, dayOverride = null) {
         });
     }
 
-    if (!modal) {
-        modal = document.createElement('div');
-        modal.id = 'full-schedule-modal';
-        modal.className = 'fixed inset-0 bg-white dark:bg-gray-900 z-[125] hidden flex items-center justify-center p-0 full-screen backdrop-blur-md transition-opacity duration-300';
-        modal.innerHTML = `
-            <div class="bg-white dark:bg-gray-900 rounded-none shadow-2xl w-full h-full flex flex-col overflow-hidden relative transform">
-                <div class="px-3 py-1.5 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center gap-2 bg-gray-50 dark:bg-gray-800 z-20 shrink-0">
-                    <h3 class="flex-grow min-w-0"></h3>
-                    <button type="button" id="close-full-grid-btn" class="p-1.5 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-500 shrink-0" aria-label="Close">
-                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-                    </button>
-                </div>
-                <div id="grid-controls" class="px-2 py-1.5 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 flex items-center shadow-sm relative z-10 shrink-0"></div>
-                <div id="grid-container" class="flex-grow overflow-auto bg-white dark:bg-gray-900 relative z-10"></div>
-                <div class="shrink-0 p-3 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 z-20">
-                    <button type="button" id="close-timetable-footer-btn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-4 rounded-lg shadow-md transition-colors text-sm focus:outline-none">Close Timetable</button>
-                </div>
-            </div>`;
-        document.body.appendChild(modal);
-        const closeGrid = () => {
-            triggerHaptic();
-            closeFullGridModal();
-        };
-        document.getElementById('close-full-grid-btn')?.addEventListener('click', closeGrid);
-        document.getElementById('close-timetable-footer-btn')?.addEventListener('click', closeGrid);
-    } else if (!document.getElementById('close-timetable-footer-btn')) {
-        const shell = modal.firstElementChild;
-        if (shell && !shell.querySelector('#close-timetable-footer-btn')) {
-            const footer = document.createElement('div');
-            footer.className = 'shrink-0 p-3 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 z-20';
-            footer.innerHTML = '<button type="button" id="close-timetable-footer-btn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-4 rounded-lg shadow-md transition-colors text-sm focus:outline-none">Close Timetable</button>';
-            shell.appendChild(footer);
-            document.getElementById('close-timetable-footer-btn')?.addEventListener('click', () => {
-                triggerHaptic();
-                closeFullGridModal();
-            });
+    const modal = ensureFullGridModal();
+    if (!alreadyOpen) {
+        const gridEl = document.getElementById('grid-container');
+        const sameBody = !!(lastGridBody
+            && lastGridBody.routeId === routeId
+            && lastGridBody.direction === direction
+            && lastGridBody.selectedDay === selectedDay);
+        if (gridEl && (!gridEl.innerHTML.trim() || !sameBody)) {
+            gridEl.innerHTML = GRID_LOADING_HTML;
         }
+        openSmoothModal('full-schedule-modal');
+        if (typeof location !== 'undefined' && location.hash !== '#grid') {
+            history.pushState({ modal: 'grid' }, '', '#grid');
+        }
+        await yieldToPaint();
+        if (renderGen !== gridRenderGen) return;
+        if (!modal || modal.classList.contains('hidden')) return;
     }
 
     const destName = window.Renderer._applyUIIntercepts(direction === 'A' ? route.destA : route.destB).toUpperCase();
@@ -475,8 +504,7 @@ export function renderFullScheduleGrid(direction = null, dayOverride = null) {
     if (noServiceSheet) bindNoWeekendWeekdaySwitch(direction);
     bindGridExclusionRefresh();
 
-    openSmoothModal('full-schedule-modal');
-    if (location.hash !== '#grid') {
+    if (typeof location !== 'undefined' && location.hash !== '#grid') {
         history.pushState({ modal: 'grid' }, '', '#grid');
     }
     if (!$opsOverlaysReady.get()) {

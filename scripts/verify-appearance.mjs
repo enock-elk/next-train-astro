@@ -399,6 +399,10 @@ assert(!mapPage.includes("typeof window.parent.__ntCloseInAppSheet === 'function
 
 const board = readFileSync(new URL('../src/components/LiveBoard.astro', import.meta.url), 'utf8');
 assert(board.includes('min-h-[2.875rem]'), 'route pill min-height follows rem scale');
+assert(board.includes('id="route-corridor-label"'), 'route pill has a corridor row');
+assert(!/id="route-corridor-label" class="hidden /.test(board), 'corridor row is not display:none');
+assert(board.includes('min-h-[0.75rem]'), 'corridor row reserves height');
+assert(css.includes('#route-corridor-label'), 'appearance reserves corridor label height');
 assert(board.includes('h-[3.375rem]'), 'station field height follows rem scale');
 assert(board.includes('id="view-full-timetable-btn"'), 'timetable CTA present');
 assert(board.includes('grid-cols-[3rem_1fr_3rem]'), 'timetable CTA is calendar | centred copy | chevron');

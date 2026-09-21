@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_09.21.6': [
+        'Restores the V9_09.14.1 splash and startup path on this branch: gray overlay with the 64px pulsing train and Starting Next Train visible immediately, two animation frames then a 700ms drop, welcomeSeen or nt_shell_warm skip before first paint, overlay back in index.astro. Removes the 21.3 blank #1d4ed8 hold, dest-name wait, TWA/browser classifier, and hidden Starting copy. RecoveryLifeline stays the first body node. No What’s New. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
+    ],
     'V9_09.21.5': [
         'Scheduled alerts were only posting when an operator opened Service Alerts. The live community Worker had no /cron/scheduled-alerts route (404) and the GitHub Actions backup exited 0 because ALERT_CRON_SECRET was unset. Worker cron still publishes due jobs every 5 minutes. HTTP cron now accepts GitHub Actions OIDC (audience nexttrain-community) so the five-minute workflow can publish without a shared secret. Admin also arms a 60s publisher after sign-in so a signed-in hub does not wait for the accordion. No What’s New. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
     ],

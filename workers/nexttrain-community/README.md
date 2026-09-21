@@ -7,13 +7,13 @@ Cloudflare Worker that:
 3. **`POST /admin/alert-impressions`** — returns counts for up to 50 notices to an allowlisted Firebase-authenticated operator.
 4. **Five-minute cron** — claims and publishes due `notices_scheduled` alerts.
 5. **Hourly cron** — deletes stale community posts and expired alert-impression dedupe records while preserving aggregate counts.
-6. **`GET|POST /cron/scheduled-alerts`** — same publisher as the five-minute cron, for GitHub Actions backup. Header `X-Cron-Secret` must match Worker secret `ALERT_CRON_SECRET` (or `TTL_WIPE_SECRET` / `CRON_SECRET`).
+6. **`GET|POST /cron/scheduled-alerts`** — same publisher as the five-minute cron, for GitHub Actions backup. Accepts GitHub Actions OIDC (`Authorization: Bearer`, audience `nexttrain-community`, workflow `scheduled-alerts.yml`) or header `X-Cron-Secret` matching Worker secret `ALERT_CRON_SECRET` (or `TTL_WIPE_SECRET` / `CRON_SECRET`).
 
 Allowlisted operators can use `GET /admin/scheduled-alerts` for queue/last-run status and
 `POST /admin/scheduled-alerts` to run the scheduler immediately. Both require a Firebase
 ID token in `Authorization: Bearer …`.
 
-Cron triggers apply only after `npx wrangler deploy`. GitHub Actions also calls `/cron/scheduled-alerts` every 5 minutes when `ALERT_CRON_SECRET` or `TTL_WIPE_SECRET` is set on the repo.
+Cron triggers apply only after `npx wrangler deploy`. GitHub Actions calls `/cron/scheduled-alerts` every 5 minutes with an OIDC token (no shared secret required). `ALERT_CRON_SECRET` remains an optional fallback.
 
 ## Deploy
 

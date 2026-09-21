@@ -56,7 +56,7 @@ function corsHeaders(env, request) {
     return {
         'Access-Control-Allow-Origin': ok ? (origin || '*') : (allowed[0] || '*'),
         'Access-Control-Allow-Methods': 'POST, OPTIONS, GET',
-        'Access-Control-Allow-Headers': 'Authorization, Content-Type',
+        'Access-Control-Allow-Headers': 'Authorization, Content-Type, X-Cron-Secret',
         'Access-Control-Max-Age': '86400',
         Vary: 'Origin',
     };
@@ -842,6 +842,74 @@ function cronSecretOk(request, env) {
     return header.length > 0 && header === expected;
 }
 
+const GITHUB_ACTIONS_OIDC_ISS = 'https://token.actions.githubusercontent.com';
+const GITHUB_ACTIONS_OIDC_AUD = 'nexttrain-community';
+const GITHUB_ACTIONS_OIDC_REPO = 'enock-elk/next-train-astro';
+const GITHUB_ACTIONS_OIDC_WORKFLOW = 'enock-elk/next-train-astro/.github/workflows/scheduled-alerts.yml';
+
+function decodeJwtPart(part) {
+    const pad = '='.repeat((4 - (part.length % 4)) % 4);
+    const b64 = `${part}${pad}`.replace(/-/g, '+').replace(/_/g, '/');
+    return JSON.parse(atob(b64));
+}
+
+function jwtSignatureBytes(part) {
+    const pad = '='.repeat((4 - (part.length % 4)) % 4);
+    const b64 = `${part}${pad}`.replace(/-/g, '+').replace(/_/g, '/');
+    const bin = atob(b64);
+    return Uint8Array.from(bin, (ch) => ch.charCodeAt(0));
+}
+
+export async function verifyGithubActionsOidc(token) {
+    const parts = String(token || '').split('.');
+    if (parts.length !== 3) throw new Error('Invalid OIDC token');
+    const header = decodeJwtPart(parts[0]);
+    const payload = decodeJwtPart(parts[1]);
+    if (header.alg !== 'RS256') throw new Error('OIDC alg must be RS256');
+    const now = Math.floor(Date.now() / 1000);
+    if (Number(payload.exp || 0) <= now) throw new Error('OIDC token expired');
+    if (Number(payload.nbf || 0) > now + 30) throw new Error('OIDC token not yet valid');
+    if (payload.iss !== GITHUB_ACTIONS_OIDC_ISS) throw new Error('OIDC issuer mismatch');
+    const aud = Array.isArray(payload.aud) ? payload.aud : [payload.aud];
+    if (!aud.includes(GITHUB_ACTIONS_OIDC_AUD)) throw new Error('OIDC audience mismatch');
+    if (payload.repository !== GITHUB_ACTIONS_OIDC_REPO) throw new Error('OIDC repository mismatch');
+    const workflow = String(payload.job_workflow_ref || payload.workflow_ref || '');
+    if (!workflow.startsWith(`${GITHUB_ACTIONS_OIDC_WORKFLOW}@`)) throw new Error('OIDC workflow mismatch');
+    const jwksRes = await fetch(`${GITHUB_ACTIONS_OIDC_ISS}/.well-known/jwks`);
+    if (!jwksRes.ok) throw new Error('OIDC JWKS unavailable');
+    const jwks = await jwksRes.json();
+    const jwk = (jwks.keys || []).find((key) => key.kid === header.kid);
+    if (!jwk) throw new Error('OIDC key not found');
+    const cryptoKey = await crypto.subtle.importKey(
+        'jwk',
+        jwk,
+        { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' },
+        false,
+        ['verify'],
+    );
+    const data = new TextEncoder().encode(`${parts[0]}.${parts[1]}`);
+    const ok = await crypto.subtle.verify('RSASSA-PKCS1-v1_5', cryptoKey, jwtSignatureBytes(parts[2]), data);
+    if (!ok) throw new Error('OIDC signature mismatch');
+    return payload;
+}
+
+async function githubActionsOidcOk(request) {
+    const auth = request.headers.get('Authorization') || '';
+    if (!auth.startsWith('Bearer ')) return false;
+    try {
+        await verifyGithubActionsOidc(auth.slice(7).trim());
+        return true;
+    } catch (error) {
+        console.warn('GitHub Actions OIDC rejected', error?.message || error);
+        return false;
+    }
+}
+
+async function cronAuthorized(request, env) {
+    if (cronSecretOk(request, env)) return true;
+    return githubActionsOidcOk(request);
+}
+
 async function requireAdmin(request, env) {
     const authHeader = request.headers.get('Authorization') || '';
     if (!authHeader.startsWith('Bearer ')) return { error: 'Missing Authorization', status: 401 };
@@ -1379,7 +1447,7 @@ export default {
             (request.method === 'GET' || request.method === 'POST')
             && url.pathname === '/cron/scheduled-alerts'
         ) {
-            if (!cronSecretOk(request, env)) {
+            if (!await cronAuthorized(request, env)) {
                 return json(env, request, 401, { ok: false, error: 'Unauthorized' });
             }
             try {

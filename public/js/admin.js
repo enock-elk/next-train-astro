@@ -11769,6 +11769,30 @@ const Admin = {
         });
     },
 
+    armScheduledAlertPublisher: () => {
+        if (window.__ntSchedAlertArmed) return;
+        window.__ntSchedAlertArmed = true;
+        const tick = () => {
+            Admin.publishDueScheduledAlerts()
+                .then((due) => {
+                    if (due && Number(due.published) > 0) return null;
+                    return Admin.fetchScheduledAlerts().then((items) => {
+                        const stillDue = (items || []).filter((job) => job && job.enabled !== false && Number(job.nextRunAt || 0) <= Date.now());
+                        if (!stillDue.length) return null;
+                        return Admin.publishDueScheduledAlertsDirect(null, stillDue);
+                    });
+                })
+                .catch((err) => {
+                    console.warn('armScheduledAlertPublisher optional', err);
+                });
+        };
+        setTimeout(tick, 4000);
+        setInterval(tick, 60_000);
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible') tick();
+        });
+    },
+
     refreshScheduledAlerts: async () => {
         const statusEl = document.getElementById('alert-schedule-status');
         if (statusEl) statusEl.textContent = 'Loading...';
@@ -11844,6 +11868,7 @@ const Admin = {
 
         const alertPanel = document.getElementById('alert-panel');
         if (!alertPanel) return;
+        if (typeof Admin.armScheduledAlertPublisher === 'function') Admin.armScheduledAlertPublisher();
         
         const alertHeaderLen = (alertPanel.querySelector('#alert-header-btn')?.textContent || '').trim().length;
         const alertShellEmpty = !(alertPanel.innerHTML || '').trim() || alertHeaderLen < 3;

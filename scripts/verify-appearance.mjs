@@ -87,7 +87,7 @@ assert(indexPage.includes('You are offline.'), 'offline dock copy matches the mo
 assert(indexPage.includes('id="offline-refresh-btn"'), 'offline dock has Refresh');
 assert(indexPage.includes('id="offline-dismiss-btn"'), 'offline dock has Close');
 assert(!indexPage.includes('id="bottom-nav" class="hidden shrink-0 border-t'), 'bottom nav dropped the boxy top border');
-assert(/#main-content[^>]*style="visibility:\s*hidden"/.test(indexPage), '14.1 home shell starts inline-hidden until the two-frame drop');
+assert(/id="main-content"[^>]*style="visibility:\s*hidden;?"/.test(indexPage), '14.1 home shell starts inline-hidden until the two-frame drop');
 assert(indexPage.includes('id="loading-overlay"'), '14.1 boot cover lives on the home page');
 assert(indexPage.includes('loading-logo-splash.webp'), '14.1 boot shows the 64px train logo');
 assert(indexPage.includes('Starting Next Train…'), '14.1 Starting copy is visible on the gray overlay');

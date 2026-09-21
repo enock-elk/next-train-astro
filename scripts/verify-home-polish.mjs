@@ -456,7 +456,11 @@ assert(hubModals.includes('id="nt-admin-publish-train"'), 'admin nearby sheet ca
     assert(mapView.includes('id="map-tracking-toward"'), 'tracking card keeps toward slot');
     assert(mapTab.includes('trainHeadboardTitle'), 'tracking card title is dest Train id');
     assert(mapTab.includes('bindTrackingCardDrag'), 'tracking card can be moved around the map');
+    assert(mapTab.includes('MAP_CARD_POS_KEY'), 'open tracking card keeps its dragged position');
+    assert(mapTab.includes('applyTrackingCardPos'), 'tracking card opens from a saved spot or the green pill');
     assert(mapTab.includes('positionTrackingCardFromPill'), 'tracking card opens from the green pill');
+    assert(mapView.includes('id="map-tracking-dest"'), 'tracking card destination is off the title row');
+    assert(mapView.includes('id="map-tracking-card-drag"'), 'tracking card header is the drag handle');
     assert(mapTab.includes('trustedDisplaySpeedMps'), 'tracking card speed uses refined GPS not jitter');
     assert(mapApp.includes('nt-live-train-ring'), 'map train has a pulse ring around the oval');
     assert(mapApp.includes('applyShareHidesUserDot'), 'sharing a train hides the GPS pulse');
@@ -473,12 +477,12 @@ assert(hubModals.includes('id="nt-admin-publish-train"'), 'admin nearby sheet ca
     assert(mapPage.includes('nt-live-train-halo'), 'map train ring animation is slow and faint');
     assert(mapPage.includes('overflow: visible'), 'leaflet icon does not clip the pulse');
     assert(mapPage.includes('nt-live-train-num'), 'map page styles the train number');
-    assert(gpsFreshness.includes('RIDE_INTERPOLATION_MAX_MS = 12 * 1000'), 'interpolation caps at 12 seconds');
-    assert(gpsFreshness.includes('RIDE_GPS_STALE_MS = RIDE_INTERPOLATION_MAX_MS'), 'GPS stale window matches the 12 second interpolation cap');
+    assert(gpsFreshness.includes('RIDE_INTERPOLATION_MAX_MS = 15 * 1000'), 'interpolation caps at 15 seconds');
+    assert(gpsFreshness.includes('RIDE_GPS_STALE_MS = RIDE_INTERPOLATION_MAX_MS'), 'GPS stale window matches the 15 second interpolation cap');
     assert(ridePings.includes('RIDE_SHARE_IDLE_MS = 30 * 60 * 1000'), 'share stops after 30 minutes idle');
     assert(ridePings.includes('RIDE_GPS_STALE_MS'), 'GPS stale window is exported');
     assert(ridePings.includes('ONBOARD_FAST_PING_MS = 4 * 1000'), 'onboard GPS publishes every 4 seconds while testing');
-    assert(mapApp.includes('RIDE_INTERPOLATION_MAX_MS = 12000'), 'map glide matches the 12 second cap');
+    assert(mapApp.includes('RIDE_INTERPOLATION_MAX_MS = 15000'), 'map glide matches the 15 second cap');
     assert(mapApp.includes('applyRideTrainStalePause'), 'listeners grey the train when GPS goes stale locally');
     assert(mapTab.includes('RIDE_GPS_STALE_MS'), 'tracking card uses the shared GPS stale window');
     assert(ridePings.includes('compactPingsForMap'), 'map pings are compacted per train');

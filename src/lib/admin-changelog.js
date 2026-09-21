@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_09.21.9': [
+        'Tracking card title is Train {id} with destination and Paused/Active on the next row so the share/min/close cluster no longer eats the headboard. Open card drag uses touch-none plus a saved session position so it stays movable and does not snap back to the pill. Live interpolation and grey stale window are 15s (was 12s); 4s GPS publish stays. No What’s New. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
+    ],
     'V9_09.21.8': [
         'Live-train pill snaps to the painted GOLD LineString (trackCoords / the green polyline), not the station-to-station chord. That chord is why 1100 sat south of Koedoespoort with both ends off the rail. setIcon now reapplies rail-tangent yaw so the long axis stays on the line when the share greys. Tap locate and Welcome autolocate are unchanged. No What’s New (live share stays hidden). forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
     ],

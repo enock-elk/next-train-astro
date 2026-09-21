@@ -117,7 +117,7 @@ const REVERSE_PROGRESS_TOLERANCE = 0.08;
 const CONSENSUS_MIN_BAND = 0.2;
 const ACTIVE_KEY = 'ridePingActiveV1';
 const SHARE_SESSION_KEY = 'nt_ride_share_session';
-/** Test cadence: publish every 4s so a ping can land before the 12s glide/grey cap. */
+/** Test cadence: publish every 4s so a ping can land before the 15s glide/grey cap. */
 export const ONBOARD_FAST_PING_MS = 4 * 1000;
 export const ONBOARD_MOVING_PING_MS = 4 * 1000;
 export const ONBOARD_STATIONARY_PING_MS = 4 * 1000;

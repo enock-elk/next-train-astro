@@ -2811,8 +2811,8 @@
                 }
             }
             // Keep in sync with src/lib/gps-freshness.js (RIDE_GPS_STALE_MS / RIDE_INTERPOLATION_MAX_MS).
-            var RIDE_GPS_STALE_MS = 12000;
-            var RIDE_INTERPOLATION_MAX_MS = 12000;
+            var RIDE_GPS_STALE_MS = 15000;
+            var RIDE_INTERPOLATION_MAX_MS = 15000;
             var STATION_APPROACH_M = 160;
             var STATION_DWELL_SEC = 0.7;
             var STATION_CRAWL_SEC = 0.22;

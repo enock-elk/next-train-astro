@@ -76,6 +76,7 @@ let shareRestartInFlight = false;
 let restoreDragMoved = false;
 let cardDragMoved = false;
 const MAP_PILL_POS_KEY = 'nt_map_restore_pos';
+const MAP_CARD_POS_KEY = 'nt_map_card_pos';
 
 let frameLoaded = false;
 /** @type {{ lat: number, lng: number, accuracy?: number } | null} */
@@ -325,6 +326,36 @@ function resetTrackingCardDock() {
     card.style.marginRight = '';
 }
 
+function clampOverlayPos(el, left, top) {
+    const host = el?.parentElement;
+    if (!el || !host) return null;
+    const box = host.getBoundingClientRect();
+    const maxL = Math.max(8, box.width - el.offsetWidth - 8);
+    const maxT = Math.max(8, box.height - el.offsetHeight - 8);
+    const next = {
+        left: Math.min(maxL, Math.max(8, left)),
+        top: Math.min(maxT, Math.max(8, top)),
+    };
+    el.style.left = `${next.left}px`;
+    el.style.top = `${next.top}px`;
+    el.style.right = 'auto';
+    el.style.bottom = 'auto';
+    el.style.marginLeft = '0';
+    el.style.marginRight = '0';
+    return next;
+}
+
+function applyTrackingCardPos() {
+    const card = document.getElementById('map-tracking-card');
+    if (!card) return;
+    const saved = readMapOverlayPos(MAP_CARD_POS_KEY);
+    if (saved) {
+        clampOverlayPos(card, saved.left, saved.top);
+        return;
+    }
+    positionTrackingCardFromPill();
+}
+
 function positionTrackingCardFromPill() {
     const card = document.getElementById('map-tracking-card');
     const host = card?.parentElement;
@@ -455,8 +486,10 @@ function renderTrackingStatusCard(active, marker = null) {
     const speedLabel = Number.isFinite(speed)
         ? `${Math.round(Math.max(0, (paused && speed < 0.5) ? 0 : speed) * 3.6)} km/h`
         : (paused ? '0 km/h' : 'Unknown');
-    const title = trainHeadboardTitle(subject.trainId, subject.destination);
-    setTrackingText('map-tracking-title', title);
+    const destName = trainTerminusName(subject.trainId, subject.destination);
+    const trainId = String(subject.trainId || '').trim();
+    setTrackingText('map-tracking-title', trainId ? `Train ${trainId}` : 'Tracking train');
+    setTrackingText('map-tracking-dest', destName || '');
     setTrackingText('map-tracking-toward', '');
     document.getElementById('map-tracking-toward')?.classList.add('hidden');
     setTrackingText('map-tracking-state', paused ? 'Paused' : 'Active');
@@ -505,7 +538,7 @@ export function showTrackingStatusCard(opts = {}) {
             ? { ...viewedTrain.ping, n: viewedTrain.n || trainPings.length || 1 }
             : (own ? { ...own, n: trainPings.length || 1 } : null);
         renderTrackingStatusCard(active, marker);
-        requestAnimationFrame(() => positionTrackingCardFromPill());
+        requestAnimationFrame(() => applyTrackingCardPos());
     }).catch(() => {});
 }
 
@@ -2753,6 +2786,8 @@ function bindTrackingCardDrag() {
     const host = el?.parentElement;
     if (!el || !host || el.dataset.ntDragBound === '1') return;
     el.dataset.ntDragBound = '1';
+    const saved = readMapOverlayPos(MAP_CARD_POS_KEY);
+    if (saved) clampOverlayPos(el, saved.left, saved.top);
     let dragging = false;
     let grabX = 0;
     let grabY = 0;
@@ -2776,20 +2811,21 @@ function bindTrackingCardDrag() {
         if (!cardDragMoved) return;
         ev.preventDefault();
         const box = host.getBoundingClientRect();
-        const left = ev.clientX - box.left - grabX;
-        const top = ev.clientY - box.top - grabY;
-        const maxL = Math.max(8, box.width - el.offsetWidth - 8);
-        const maxT = Math.max(8, box.height - el.offsetHeight - 8);
-        el.style.left = `${Math.min(maxL, Math.max(8, left))}px`;
-        el.style.top = `${Math.min(maxT, Math.max(8, top))}px`;
-        el.style.right = 'auto';
-        el.style.bottom = 'auto';
-        el.style.marginLeft = '0';
-        el.style.marginRight = '0';
-    });
-    el.addEventListener('pointerup', () => {
+        clampOverlayPos(el, ev.clientX - box.left - grabX, ev.clientY - box.top - grabY);
+    }, { passive: false });
+    const endDrag = () => {
+        if (!dragging) return;
         dragging = false;
-    });
+        if (!cardDragMoved) return;
+        try {
+            sessionStorage.setItem(MAP_CARD_POS_KEY, JSON.stringify({
+                left: parseFloat(el.style.left),
+                top: parseFloat(el.style.top),
+            }));
+        } catch { /* ignore */ }
+    };
+    el.addEventListener('pointerup', endDrag);
+    el.addEventListener('pointercancel', endDrag);
     el.addEventListener('click', (ev) => {
         if (!cardDragMoved) return;
         ev.preventDefault();

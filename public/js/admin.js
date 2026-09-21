@@ -2201,6 +2201,17 @@ const Admin = {
         return `<button type="button" onclick="event.stopPropagation(); Admin.showJoinedHint('${safeId}')" class="nt-uid-joined inline-flex items-center justify-center w-3.5 h-3.5 rounded-full border border-gray-300 dark:border-gray-600 text-[8px] font-black leading-none text-gray-500 dark:text-gray-400 hover:border-blue-400 hover:text-blue-600 dark:hover:text-blue-300 align-middle ml-0.5 shrink-0 focus:outline-none" title="${title}" aria-label="${title}">i</button>`;
     },
 
+    /** Cheap trip-plan presence from sys_logs/trip_plan_users (loaded once with feedback). */
+    feedbackDeviceHasTripPlans: (did) => {
+        const index = Admin._fbTripPlanUsers;
+        if (!index || typeof index !== 'object') return false;
+        const raw = String(did || '').trim();
+        if (!raw || raw === 'Anonymous / Legacy') return false;
+        if (index[raw]) return true;
+        const key = raw.replace(/[.#$[\]/]/g, '_');
+        return !!(key && index[key]);
+    },
+
     // --- GUARDIAN PHASE 11 & 12: MASTER NOTIFICATION ENGINE (SEEN PROTOCOL) ---
     syncAllBadges: async () => {
         const secret = await Admin.getAuthKey();
@@ -7640,6 +7651,9 @@ const Admin = {
                 if (allPhones.size > 0) {
                     contactScanHtml += `<span class="inline-flex text-emerald-600 dark:text-emerald-400" title="${allPhones.size} phone${allPhones.size > 1 ? 's' : ''}">${Admin.icon('phone', 'w-3 h-3')}</span>`;
                 }
+                if (Admin.feedbackDeviceHasTripPlans(did)) {
+                    contactScanHtml += `<span class="inline-flex text-sky-600 dark:text-sky-400" title="Has trip plans">${Admin.icon('map', 'w-3 h-3')}</span>`;
+                }
                 if (hasAttachments) {
                     contactScanHtml += `<span class="inline-flex text-purple-500 dark:text-purple-400" title="Has attachments">${Admin.icon('paperclip', 'w-3 h-3')}</span>`;
                 }
@@ -7896,16 +7910,25 @@ const Admin = {
                 const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
                 
                 // Fetch Commuter Messages AND Admin Sent Messages concurrently
-                const [res, inboxRes, aliasesRes] = await Promise.all([
+                const [res, inboxRes, aliasesRes, tripUsersRes] = await Promise.all([
                     window.guardianFetch(`${dynamicEndpoint}feedback.json?auth=${secret}`, {}, 10000),
                     window.guardianFetch(`${dynamicEndpoint}inbox.json?auth=${secret}`, {}, 10000),
-                    window.guardianFetch(`${dynamicEndpoint}admin_state/aliases.json?auth=${secret}`, {}, 10000)
+                    window.guardianFetch(`${dynamicEndpoint}admin_state/aliases.json?auth=${secret}`, {}, 10000),
+                    window.guardianFetch(`${dynamicEndpoint}sys_logs/trip_plan_users.json?auth=${secret}`, {}, 15000).catch(() => null),
                 ]);
                 
                 if (!res.ok) throw new Error("Failed to fetch feedback (" + res.status + ")");
                 const data = await res.json();
                 const inboxData = inboxRes.ok ? await inboxRes.json() : {};
                 Admin.cachedAliases = aliasesRes.ok ? (await aliasesRes.json()) || {} : {};
+                try {
+                    Admin._fbTripPlanUsers = (tripUsersRes && tripUsersRes.ok)
+                        ? ((await tripUsersRes.json()) || {})
+                        : {};
+                    if (!Admin._fbTripPlanUsers || typeof Admin._fbTripPlanUsers !== 'object') Admin._fbTripPlanUsers = {};
+                } catch {
+                    Admin._fbTripPlanUsers = {};
+                }
 
                 let mergedData = (data && typeof data === 'object') ? Object.keys(data).map(key => ({ id: key, ...data[key] })) : [];
                 const usedInboxKeys = new Set();

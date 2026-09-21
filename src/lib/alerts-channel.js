@@ -1,7 +1,7 @@
 /**
  * Alerts channel UI — bell gateway, WhatsApp-style column, reactions.
  */
-import { COMMUNITY_WORKER_URL, DYNAMIC_BASE_URL, ROUTES, withBase } from './config.js';
+import { DYNAMIC_BASE_URL, ROUTES, withBase } from './config.js';
 import { safeStorage, escapeHTML, repairMojibake, formatAppTime, formatThreadDateLabel } from './utils.js';
 import { prepareRichHtml, injectRichTextStyles } from './rich-text.js';
 import { showToast, triggerHaptic, openSmoothModal, closeSmoothModal } from './ui.js';
@@ -55,57 +55,6 @@ let cachedLiveNotices = [];
 let visibleCount = ALERTS_PAGE_SIZE;
 let highlightNoticeId = null;
 let channelBound = false;
-let impressionObserver = null;
-const impressionTimers = new Map();
-const impressionsInFlight = new Set();
-const ALERT_IMPRESSION_DWELL_MS = 900;
-const ALERT_IMPRESSION_INSTALLATION_KEY = 'nt_alert_impression_installation_v1';
-const ALERT_IMPRESSION_WORKER = COMMUNITY_WORKER_URL || 'https://nexttrain-community.enock.workers.dev';
-
-export function alertImpressionStorageKey(scope, noticeId) {
-    return `nt_alert_impression_v1:${String(scope || '')}:${String(noticeId || '')}`;
-}
-
-export function createAlertImpressionInstallationId(cryptoApi = globalThis.crypto) {
-    if (typeof cryptoApi?.randomUUID === 'function') return `nti_${cryptoApi.randomUUID()}`;
-    const bytes = new Uint8Array(24);
-    cryptoApi?.getRandomValues?.(bytes);
-    return `nti_${Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('')}`;
-}
-
-export function shouldCountAlertIntersection({
-    isIntersecting,
-    intersectionRatio,
-    visibleHeight = 0,
-    rootHeight = 0,
-    pageVisible,
-    channelVisible,
-}) {
-    if (!isIntersecting || !pageVisible || !channelVisible) return false;
-    if (Number(intersectionRatio) >= 0.5) return true;
-    const vis = Number(visibleHeight) || 0;
-    const root = Number(rootHeight) || 0;
-    // Poster cards are often taller than the scroller, so 50% of the card is impossible.
-    return root > 0 && vis >= Math.min(root * 0.45, 180);
-}
-
-function getAlertImpressionInstallationId() {
-    let id = '';
-    try { id = safeStorage.getItem(ALERT_IMPRESSION_INSTALLATION_KEY) || ''; } catch { id = ''; }
-    if (/^nti_[A-Za-z0-9_-]{12,124}$/.test(id)) return id;
-    id = createAlertImpressionInstallationId();
-    try { safeStorage.setItem(ALERT_IMPRESSION_INSTALLATION_KEY, id); } catch { /* ignore */ }
-    return id;
-}
-
-function hasRecordedAlertImpression(scope, noticeId) {
-    try { return safeStorage.getItem(alertImpressionStorageKey(scope, noticeId)) === 'true'; }
-    catch { return false; }
-}
-
-function markAlertImpressionRecorded(scope, noticeId) {
-    try { safeStorage.setItem(alertImpressionStorageKey(scope, noticeId), 'true'); } catch { /* ignore */ }
-}
 
 export function noticeScopeKeys(region, routeId) {
     return scopeKeysFor(region, routeId && ROUTES[routeId] ? routeId : '');
@@ -567,7 +516,7 @@ function renderPostCard(notice, opts = {}) {
         ? `<time class="nt-alert-time" datetime="${escapeHTML(ts ? new Date(ts).toISOString() : '')}">${escapeHTML(when)}</time>`
         : '';
     const adminMetaHtml = scope
-        ? `<span class="nt-alert-scope">${escapeHTML(scope)} <span aria-hidden="true">·</span> <span data-alert-impression-count>0 views</span></span>`
+        ? `<span class="nt-alert-scope">${escapeHTML(scope)}</span>`
         : '';
     const replyBtn = `<button type="button" class="nt-alert-reply text-xs font-bold inline-flex items-center gap-1 px-3 py-1.5 rounded-full shrink-0 focus:outline-none" data-alert-reply="${escapeHTML(String(notice.id || ''))}" data-alert-snippet="${escapeHTML(snippet)}"><svg class="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>Reply</button>`;
     const footerHtml = `<div class="nt-alert-card-footer">
@@ -636,155 +585,6 @@ function renderPinStrip(notices) {
     }).join('');
 }
 
-function clearAlertImpressionObserver() {
-    impressionObserver?.disconnect();
-    impressionObserver = null;
-    impressionTimers.forEach((timer) => clearTimeout(timer));
-    impressionTimers.clear();
-}
-
-async function postAlertImpression(card) {
-    const scope = card?.getAttribute('data-alert-src') || '';
-    const noticeId = card?.getAttribute('data-alert-id') || '';
-    const key = alertImpressionStorageKey(scope, noticeId);
-    if (!scope || !noticeId || hasRecordedAlertImpression(scope, noticeId) || impressionsInFlight.has(key)) return;
-    impressionsInFlight.add(key);
-    try {
-        const res = await fetch(`${ALERT_IMPRESSION_WORKER}/alerts/impression`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                scope,
-                noticeId,
-                installationId: getAlertImpressionInstallationId(),
-            }),
-            keepalive: true,
-        });
-        if (!res.ok) return;
-        const data = await res.json();
-        if (!data?.ok) return;
-        markAlertImpressionRecorded(scope, noticeId);
-        impressionObserver?.unobserve(card);
-        const count = card.querySelector('[data-alert-impression-count]');
-        if (count && Number.isFinite(Number(data.count))) {
-            count.textContent = `${Number(data.count).toLocaleString('en-US')} views`;
-        }
-    } catch {
-        /* best-effort approximate metric */
-    } finally {
-        impressionsInFlight.delete(key);
-    }
-}
-
-export function observeRenderedAlertImpressions(feed) {
-    clearAlertImpressionObserver();
-    if (!feed?.querySelectorAll || typeof IntersectionObserver === 'undefined') return;
-    const scroller = document.getElementById('alerts-channel-scroll');
-    impressionObserver = new IntersectionObserver((entries) => {
-        entries.forEach((entry) => {
-            const card = entry.target;
-            const visible = shouldCountAlertIntersection({
-                isIntersecting: entry.isIntersecting,
-                intersectionRatio: entry.intersectionRatio,
-                visibleHeight: entry.intersectionRect?.height,
-                rootHeight: entry.rootBounds?.height,
-                pageVisible: document.visibilityState !== 'hidden',
-                channelVisible: !document.getElementById('alerts-channel')?.classList.contains('hidden'),
-            });
-            const existing = impressionTimers.get(card);
-            if (!visible) {
-                card.removeAttribute('data-alert-impression-visible');
-                if (existing) clearTimeout(existing);
-                impressionTimers.delete(card);
-                return;
-            }
-            card.setAttribute('data-alert-impression-visible', 'true');
-            if (existing) return;
-            const timer = setTimeout(() => {
-                impressionTimers.delete(card);
-                if (card.isConnected
-                    && card.getAttribute('data-alert-impression-visible') === 'true'
-                    && document.visibilityState !== 'hidden'
-                    && !document.getElementById('alerts-channel')?.classList.contains('hidden')) {
-                    postAlertImpression(card);
-                }
-            }, ALERT_IMPRESSION_DWELL_MS);
-            impressionTimers.set(card, timer);
-        });
-    }, { root: scroller || null, threshold: [0, 0.5, 1] });
-
-    feed.querySelectorAll('.nt-alert-card[data-alert-id][data-alert-src]').forEach((card) => {
-        const scope = card.getAttribute('data-alert-src') || '';
-        const noticeId = card.getAttribute('data-alert-id') || '';
-        if (!hasRecordedAlertImpression(scope, noticeId)) impressionObserver.observe(card);
-    });
-}
-
-function paintAlertImpressionCount(scope, noticeId, value) {
-    const latest = Math.max(0, Number(value) || 0);
-    feedCardsForNotice(scope, noticeId).forEach((card) => {
-        const count = card.querySelector('[data-alert-impression-count]');
-        if (!count) return;
-        const current = Number(String(count.textContent || '').replace(/[^\d]/g, '')) || 0;
-        count.textContent = `${Math.max(current, latest).toLocaleString('en-US')} views`;
-    });
-}
-
-async function hydrateAdminAlertImpressionCounts(notices) {
-    if (!isAdminAuthed() || !Array.isArray(notices) || !notices.length) return;
-    let token = '';
-    try {
-        if (typeof window.Admin?.getAuthKey === 'function') token = await window.Admin.getAuthKey();
-    } catch { /* fall through */ }
-    if (!token) token = await ensureReactAuthToken();
-    if (!token) return;
-    const query = notices.slice(-50).map((notice) => ({
-        scope: String(notice._sourceKey || ''),
-        noticeId: String(notice.id || ''),
-    })).filter((item) => item.scope && item.noticeId);
-    if (!query.length) return;
-    let painted = false;
-    try {
-        const res = await fetch(`${ALERT_IMPRESSION_WORKER}/admin/alert-impressions`, {
-            method: 'POST',
-            headers: {
-                Authorization: `Bearer ${token}`,
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ notices: query }),
-        });
-        if (res.ok) {
-            const data = await res.json();
-            (data.notices || []).forEach((row) => {
-                paintAlertImpressionCount(row.scope, row.noticeId, row.count);
-                painted = true;
-            });
-        }
-    } catch {
-        /* fall through to RTDB */
-    }
-    if (painted) return;
-    await Promise.all(query.map(async (item) => {
-        try {
-            const res = await fetch(
-                `${DYNAMIC_BASE_URL}notice_impressions/${encodeURIComponent(item.scope)}/${encodeURIComponent(item.noticeId)}.json?auth=${encodeURIComponent(token)}`
-            );
-            if (!res.ok) return;
-            const node = await res.json();
-            paintAlertImpressionCount(item.scope, item.noticeId, node?.count);
-        } catch {
-            /* admin-only enhancement */
-        }
-    }));
-}
-
-function feedCardsForNotice(scope, noticeId) {
-    return Array.from(document.querySelectorAll('.nt-alert-card')).filter((card) =>
-        card.getAttribute('data-alert-src') === String(scope)
-        && card.getAttribute('data-alert-id') === String(noticeId)
-    );
-}
-
 export function renderAlertsChannel(notices = cachedLiveNotices, opts = {}) {
     injectRichTextStyles();
     const feed = document.getElementById('alerts-feed');
@@ -801,7 +601,6 @@ export function renderAlertsChannel(notices = cachedLiveNotices, opts = {}) {
     renderPinStrip(list);
 
     if (!list.length) {
-        clearAlertImpressionObserver();
         feed.innerHTML = '';
         empty?.classList.remove('hidden');
         earlierBtn?.classList.add('hidden');
@@ -831,8 +630,6 @@ export function renderAlertsChannel(notices = cachedLiveNotices, opts = {}) {
     const html = parts.join('');
     if (feed.dataset.ntAlertsSig === html) {
         hydrateAlertPosterImages(feed);
-        observeRenderedAlertImpressions(feed);
-        hydrateAdminAlertImpressionCounts(page.visible);
         return true;
     }
     feed.dataset.ntAlertsSig = html;
@@ -840,8 +637,6 @@ export function renderAlertsChannel(notices = cachedLiveNotices, opts = {}) {
     pruneExpiredAlertImages(list);
     list.forEach((n) => cacheAlertImages(n, resolveAlertImageSrc));
     hydrateAlertPosterImages(feed);
-    observeRenderedAlertImpressions(feed);
-    hydrateAdminAlertImpressionCounts(page.visible);
     return true;
 }
 
@@ -864,7 +659,6 @@ function scrollFeedTo(noticeId, toBottom = false) {
 
 export function closeAlertsChannel() {
     const el = document.getElementById('alerts-channel');
-    clearAlertImpressionObserver();
     hideAlertReactionPicker();
     hideAlertReactionBreakdown();
     if (!el || el.classList.contains('hidden')) {
@@ -892,8 +686,6 @@ export function openAlertsChannel(opts = {}) {
     setTimeout(() => {
         if (highlightNoticeId) scrollFeedTo(highlightNoticeId, false);
         else scrollFeedTo(null, true);
-        const feed = document.getElementById('alerts-feed');
-        if (feed) observeRenderedAlertImpressions(feed);
     }, 80);
     bindAlertsChannelOnce();
 }

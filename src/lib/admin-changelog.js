@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_09.21.13': [
+        'Feedback inbox shows a map SVG next to email and phone when sys_logs/trip_plan_users has that device, using one index GET with the feedback load (no trip_plans dump, no per-thread search). Alert view counts are gone: the Alerts overlay no longer POSTs /alerts/impression or /admin/alert-impressions, and the community Worker no longer serves those routes or hourly impression-dedupe cleanup. No What’s New. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
+    ],
     'V9_09.21.12': [
         'Planner Telemetry Fails and Fares expand on click to show contributor user ids, same pattern as Trip Plans hit history. All three tabs start on Sort: Recent; opening the panel no longer resets to Count. Crash Analytics app version is a build-notes chip like Feedback. Resolve All sits inside the opened device log, not on the collapsed header. No What’s New. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
     ],

@@ -120,6 +120,9 @@ ok(adminJs.includes('Expected — no Saturday service'), 'placeholder Saturday s
 ok(adminJs.includes('Joined:') && adminJs.includes('Last seen:'), 'device lookup shows joined + last seen');
 ok(adminJs.includes('Linked devices:'), 'device lookup lists linked device ids');
 ok(adminJs.includes('sys_logs/trip_plan_users'), 'admin reads trip_plan_users index');
+ok(adminJs.includes('feedbackDeviceHasTripPlans'), 'feedback list can mark devices that have trip plans');
+ok(adminJs.includes("title=\"Has trip plans\""), 'trip-plans presence uses the same scan-icon row as email and phone');
+ok(adminJs.includes("Admin.icon('map', 'w-3 h-3')"), 'trip-plans indicator is the map SVG at mail/phone size');
 {
     const rules = readFileSync(join(ROOT, 'firebase-database.rules.json'), 'utf8');
     ok(rules.includes('"trip_plan_users"'), 'rules allow trip_plan_users index');

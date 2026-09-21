@@ -2260,18 +2260,164 @@ const Admin = {
     },
 
     showJoinedHint: (id) => {
-        const label = Admin.formatJoinedLabel(id);
-        if (!label) return;
-        if (typeof showToast === 'function') showToast(label, 'info', 2800);
+        Admin.openCommuterPeek(id);
     },
 
-    /** Compact “i” next to a user/device id — title + tap toast, does not replace the id. */
+    /** Compact “i” next to a user/device id — opens the peek sheet, does not replace the id. */
     userIdJoinHintHtml: (id) => {
-        const label = Admin.formatJoinedLabel(id);
-        if (!label) return '';
-        const safeId = String(id || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+        const raw = String(id || '').trim();
+        if (!raw || raw === 'Anonymous / Legacy' || raw === 'unknown') return '';
+        const label = Admin.formatJoinedLabel(raw) || 'User info';
+        const safeId = raw.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
         const title = (typeof escapeHTML === 'function' ? escapeHTML(label) : label.replace(/"/g, '&quot;'));
         return `<button type="button" onclick="event.stopPropagation(); Admin.showJoinedHint('${safeId}')" class="nt-uid-joined inline-flex items-center justify-center w-3.5 h-3.5 rounded-full border border-gray-300 dark:border-gray-600 text-[8px] font-black leading-none text-gray-500 dark:text-gray-400 hover:border-blue-400 hover:text-blue-600 dark:hover:text-blue-300 align-middle ml-0.5 shrink-0 focus:outline-none" title="${title}" aria-label="${title}">i</button>`;
+    },
+
+    collectCommuterPeek: async (id) => {
+        const did = String(id || '').trim();
+        await Admin.ensureAliasesLoaded();
+        const secret = await Admin.getAuthKey();
+        const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
+        const auth = secret ? `?auth=${encodeURIComponent(secret)}` : '';
+        const fetchJson = async (path) => {
+            try {
+                const res = await fetch(`${dynamicEndpoint}${path}${auth}`);
+                if (!res.ok) return null;
+                return res.json();
+            } catch {
+                return null;
+            }
+        };
+        const looksDevice = /^usr_/i.test(did);
+        const [tripNode, inboxNode, deviceNode, userNode] = await Promise.all([
+            fetchJson(`sys_logs/trip_plan_users/${encodeURIComponent(did)}.json`),
+            looksDevice ? fetchJson(`inbox/${encodeURIComponent(did)}.json`) : Promise.resolve(null),
+            looksDevice ? fetchJson(`devices/${encodeURIComponent(did)}.json`) : Promise.resolve(null),
+            fetchJson(`users/${encodeURIComponent(did)}.json`),
+        ]);
+        const ids = Admin.commuterIdSet(did, deviceNode?.uid, userNode && looksDevice ? null : did);
+        const feedbackItems = (Admin.cachedFeedbackData || []).filter((i) => {
+            const fbDid = String(i?.deviceId || i?.device_id || '').trim();
+            return ids.has(fbDid) || fbDid === did;
+        });
+        const latestFeedback = feedbackItems.filter((i) => !i.isFromAdmin)
+            .sort((a, b) => (Number(b.timestamp) || 0) - (Number(a.timestamp) || 0))[0] || null;
+        const contacts = typeof Admin.collectFeedbackContacts === 'function'
+            ? Admin.collectFeedbackContacts(did)
+            : { emails: [], phones: [] };
+        let tripLast = Number(tripNode?.lastSeen) || 0;
+        let tripRegion = tripNode?.region || '';
+        const tripIndex = Admin._fbTripPlanUsers && typeof Admin._fbTripPlanUsers === 'object'
+            ? (Admin._fbTripPlanUsers[did] || Admin._fbTripPlanUsers[did.replace(/[.#$[\]/]/g, '_')])
+            : null;
+        if (tripIndex) {
+            const last = Number(tripIndex.lastSeen) || 0;
+            if (last > tripLast) tripLast = last;
+            tripRegion = tripRegion || tripIndex.region || '';
+        }
+        const inboxHas = !!(inboxNode && typeof inboxNode === 'object' && Object.keys(inboxNode).length);
+        const crashCount = (Admin.cachedCrashData || []).filter((c) => {
+            const cDid = String(c?.deviceId || c?.device_id || '').trim();
+            return ids.has(cDid) || cDid === did;
+        }).length;
+        const fareCount = Admin._cachedFareVotes && typeof Admin._cachedFareVotes === 'object'
+            ? Object.values(Admin._cachedFareVotes).filter((v) => ids.has(String(v?.deviceId || v?.userId || '').trim())).length
+            : null;
+        const failCount = Admin._cachedRoutingFails && typeof Admin._cachedRoutingFails === 'object'
+            ? Object.values(Admin._cachedRoutingFails).filter((v) => ids.has(String(v?.userId || v?.deviceId || '').trim())).length
+            : null;
+        return {
+            id: did,
+            alias: Admin.commuterAlias(did),
+            joinedMs: Admin.parseJoinedAtFromUserId(did) || Number(userNode?.createdAt) || null,
+            displayName: userNode?.displayName || deviceNode?.displayName || '',
+            email: userNode?.email || deviceNode?.email || '',
+            linkedUid: deviceNode?.uid || '',
+            tripLast,
+            tripRegion,
+            hasChat: inboxHas || feedbackItems.length > 0,
+            feedbackCount: feedbackItems.filter((i) => !i.isFromAdmin).length,
+            latestFeedbackAt: latestFeedback ? Number(latestFeedback.timestamp) || 0 : 0,
+            latestFeedbackId: latestFeedback?.id || latestFeedback?.feedbackId || '',
+            contacts,
+            defaultRoute: Admin.inferCommuterDefaultRoute(did, latestFeedback || {}),
+            crashCount,
+            fareCount,
+            failCount,
+        };
+    },
+
+    openCommuterPeek: async (id) => {
+        const did = String(id || '').trim();
+        if (!did || did === 'Anonymous / Legacy' || did === 'unknown') return;
+        document.getElementById('admin-commuter-peek')?.remove();
+        const modal = document.createElement('div');
+        modal.id = 'admin-commuter-peek';
+        modal.className = 'fixed inset-0 bg-black/80 z-[220] flex items-center justify-center p-4 backdrop-blur-sm';
+        const close = () => modal.remove();
+        modal.innerHTML = `
+            <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md p-5 border border-gray-200 dark:border-gray-700" role="dialog" aria-labelledby="commuter-peek-title" aria-modal="true">
+                <h3 id="commuter-peek-title" class="text-lg font-black text-gray-900 dark:text-white mb-1">User sheet</h3>
+                <p class="text-[11px] text-gray-500 dark:text-gray-400 mb-3 leading-relaxed">Quick facts for this id. Search User Trust if you need the full profile.</p>
+                <div id="commuter-peek-body" class="space-y-1.5 text-[11px] text-gray-700 dark:text-gray-200">
+                    <p class="animate-pulse text-gray-400">Loading...</p>
+                </div>
+                <div class="flex flex-wrap gap-2 mt-4">
+                    <button type="button" id="commuter-peek-lookup" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded-lg text-sm">Look up more</button>
+                    <button type="button" id="commuter-peek-close" class="flex-1 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 font-bold py-2.5 rounded-lg text-sm">Close</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+        document.getElementById('commuter-peek-close').onclick = close;
+        modal.addEventListener('click', (e) => { if (e.target === modal) close(); });
+        document.getElementById('commuter-peek-lookup').onclick = () => {
+            close();
+            if (typeof Admin.openUserTrustLookup === 'function') Admin.openUserTrustLookup({ uid: did });
+            else if (typeof showToast === 'function') showToast('Open User Trust to search this id.', 'info');
+        };
+        const body = document.getElementById('commuter-peek-body');
+        try {
+            const peek = await Admin.collectCommuterPeek(did);
+            if (!body.isConnected) return;
+            const esc = Admin.commuterEsc;
+            const heading = peek.alias || peek.displayName || did;
+            const joinedLabel = peek.joinedMs ? Admin.formatDate(peek.joinedMs) : 'unknown';
+            const contactBits = [
+                ...(peek.contacts.emails || []).map((em) => esc(em)),
+                ...(peek.contacts.phones || []).map((ph) => esc(ph)),
+            ];
+            const routeLabel = Admin.inboxRouteLabel(peek.defaultRoute) || peek.defaultRoute;
+            const extraCounts = [];
+            if (peek.fareCount != null) extraCounts.push(`Fares ${peek.fareCount}`);
+            if (peek.failCount != null) extraCounts.push(`Fails ${peek.failCount}`);
+            if (peek.crashCount) extraCounts.push(`Crashes ${peek.crashCount}`);
+            body.innerHTML = `
+                <p class="font-black text-sm text-gray-900 dark:text-white break-words">${esc(heading)}</p>
+                ${peek.alias ? `<p>Alias: <b>${esc(peek.alias)}</b></p>` : '<p class="text-gray-400">No feedback alias.</p>'}
+                <p class="font-mono text-[10px] text-gray-400 break-all">${esc(did)}</p>
+                <p>Joined: <b>${esc(joinedLabel)}</b></p>
+                ${peek.email ? `<p>Email: <b>${esc(peek.email)}</b></p>` : ''}
+                ${peek.linkedUid ? `<p>Account: <span class="font-mono break-all">${esc(peek.linkedUid)}</span></p>` : ''}
+                <p>Trip plans: <b>${peek.tripLast ? 'yes' : 'none'}</b>${peek.tripRegion ? ` · ${esc(peek.tripRegion)}` : ''}${peek.tripLast ? ` · last ${esc(Admin.formatDate(peek.tripLast))}` : ''}</p>
+                <p>Feedback: <b>${peek.hasChat ? (peek.feedbackCount ? `${peek.feedbackCount} messages` : 'open thread') : 'none'}</b>${peek.latestFeedbackAt ? ` · last ${esc(Admin.formatDate(peek.latestFeedbackAt))}` : ''}</p>
+                ${contactBits.length ? `<p>Contacts: <b>${contactBits.join(', ')}</b></p>` : ''}
+                ${routeLabel ? `<p>Default route: <b>${esc(routeLabel)}</b></p>` : ''}
+                ${extraCounts.length ? `<p>${esc(extraCounts.join(' · '))}</p>` : ''}
+            `;
+            if (peek.hasChat) {
+                const actions = document.createElement('div');
+                actions.className = 'flex flex-wrap gap-2 pt-2';
+                actions.innerHTML = `<button type="button" id="commuter-peek-chat" class="text-[10px] font-black uppercase tracking-wider text-white bg-blue-600 hover:bg-blue-700 px-3 py-1.5 rounded-lg">Open chat</button>`;
+                body.appendChild(actions);
+                document.getElementById('commuter-peek-chat').onclick = () => {
+                    close();
+                    Admin.openFeedbackForDevice(did, peek.latestFeedbackId);
+                };
+            }
+        } catch (e) {
+            if (body.isConnected) body.innerHTML = `<p class="text-red-500">Could not load this sheet: ${Admin.commuterEsc(e.message || e)}</p>`;
+        }
     },
 
     commuterAlias: (id) => {

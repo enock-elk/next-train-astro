@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_09.21.17': [
+        'The i next to a user id opens a quick User sheet modal (joined, alias, trip last seen, feedback, contacts) from cheap per-id reads. Look up more still runs the full User Trust search. No What’s New. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
+    ],
     'V9_09.21.16': [
         'User Trust lookup now builds a profile (alias, contacts, trip/fare/fail/crash counts, live share, community) and can Open chat or Start chat into Feedback. Planner Fails/Trips/Fares stack user id above the date so the date cannot hide the id, and Fares shows the inferred default route. Feedback aliases replace raw user ids across admin lists. No What’s New. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
     ],

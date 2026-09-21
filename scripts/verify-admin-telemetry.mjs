@@ -104,6 +104,11 @@ ok(adminJs.includes('parseJoinedAtFromUserId'), 'usr_ epoch suffix is first-inst
     ok(parseJoined('Anonymous / Legacy') == null, 'legacy ids have no join time');
 }
 ok(adminJs.includes('userIdJoinHintHtml'), 'admin shows an i next to user ids');
+ok(adminJs.includes('openCommuterPeek'), 'i opens a user sheet modal');
+ok(adminJs.includes("modal.id = 'admin-commuter-peek'"), 'user sheet modal id is admin-commuter-peek');
+ok(adminJs.includes('collectCommuterPeek'), 'user sheet uses cheap per-id reads');
+ok(adminJs.includes('Look up more'), 'user sheet can hand off to User Trust search');
+ok(!/showJoinedHint:[\s\S]{0,180}showToast\(label/.test(adminJs), 'i no longer only toasts the join date');
 ok(adminJs.includes('de-filter-day') && adminJs.includes('All days'), 'day-type filter stays off (All days)');
 ok(adminJs.includes('expandTripCorridorHits'), 'hit history is lazy-loaded on expand');
 ok(adminJs.includes('_deTripPageSize'), 'corridor list is paginated');

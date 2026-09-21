@@ -203,7 +203,7 @@ assert(
     !/forcedUpdateAnnounced = true;/.test(scheduleUpdate),
     'retries do not mark the toast announced before the download finishes'
 );
-assert(scheduleUpdate.includes('announce: !forcedUpdateAnnounced && !crucialUpdateToastShown'), 'auto retries still announce once after download');
+assert(scheduleUpdate.includes('const announce = !forcedUpdateAnnounced && !crucialUpdateToastShown'), 'auto retries still announce once after download');
 assert(isAppVersionNewer('V9_09.18.3', 'V9_09.17.12'), 'this release is newer than live V9_09.17.12');
 assert(appUpdate.includes('You are offline. Using saved times until you reconnect.'), 'offline saved-times copy is unchanged');
 assert(appUpdate.includes('Network is slow. Using saved times until you reconnect.'), 'a slow probe is not called offline');

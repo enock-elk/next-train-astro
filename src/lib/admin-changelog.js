@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_09.22.1': [
+        'Ship label is V9_09.22.1 (not 21.19). nexttrain-edge routes stay attached. CHANGELOG_DATA[0] stays V9_09.21.1 Open to the board. No What’s New after 21.1. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
+    ],
     'V9_09.21.19': [
         'nexttrain-edge routes are attached again (/_astro, /icons, sw.js, app-version.json). Cache Rules were never applied; do not run apply-nexttrain-edge-cache-rules.mjs while the Worker is live. No What’s New. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
     ],

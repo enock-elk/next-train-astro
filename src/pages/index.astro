@@ -141,8 +141,27 @@ const faqLd = {
     <HubModals />
     <AlertsChannel />
 
+    <!-- Cold-boot only: returning sessions skip via html.nt-shell-ready (Layout head). -->
+    <div id="loading-overlay" class="fixed inset-0 z-[90] flex flex-col items-center justify-center bg-gray-100 dark:bg-gray-900">
+        <img
+            src={withBase('icons/loading-logo-splash.webp')}
+            alt=""
+            class="w-16 h-16 mb-4 animate-pulse"
+            width="64"
+            height="64"
+            fetchpriority="high"
+            decoding="async"
+        />
+        <p class="text-xs font-bold uppercase tracking-widest text-gray-400">Starting Next Train…</p>
+        <a
+            href={withBase('help.html') + '?reason=boot'}
+            class="absolute bottom-8 left-1/2 -translate-x-1/2 text-xs font-bold text-slate-500 underline underline-offset-2"
+            data-nt-help-escape="1"
+        >App stuck? Get help</a>
+    </div>
+
     <!-- MAIN APP — viewport frame; header + views scroll; bottom nav stays put -->
-    <main id="main-content" class="app-shell w-full max-w-md mx-auto bg-white dark:bg-gray-800 rounded-lg shadow-2xl overflow-hidden relative flex flex-col border border-gray-200 dark:border-gray-700">
+    <main id="main-content" class="app-shell w-full max-w-md mx-auto bg-white dark:bg-gray-800 rounded-lg shadow-2xl overflow-hidden relative flex flex-col border border-gray-200 dark:border-gray-700" style="visibility: hidden;">
 
         <div id="app-scroll" class="app-scroll">
         <!-- Top of the Next Train frame. Empty until a top ad docks here. -->
@@ -236,71 +255,27 @@ const faqLd = {
     import { ROUTES, withBase } from '../lib/config.js';
     import { safeStorage, restorePinnedSession } from '../lib/utils.js';
 
-    let revealCommitted = false;
-    const boardChromeReady = () => {
-        const dests = document.querySelectorAll('#pretoria-header [data-header-dest], #pienaarspoort-header [data-header-dest]');
-        for (const el of dests) {
-            const text = String(el.textContent || '').trim();
-            if (text && text !== '…') return true;
-        }
-        const welcome = document.getElementById('welcome-modal');
-        if (welcome && !welcome.classList.contains('hidden')) return true;
-        const mapView = document.getElementById('view-map');
-        if (mapView && mapView.classList.contains('active')) return true;
-        const plannerView = document.getElementById('view-trip-planner');
-        if (plannerView && plannerView.classList.contains('active')) return true;
-        return false;
-    };
-    const dropLoadingLogo = () => {
-        if (revealCommitted) return;
-        revealCommitted = true;
+    const revealAppShell = () => {
         const main = document.getElementById('main-content');
         const overlay = document.getElementById('loading-overlay');
-        if (main) {
-            main.style.visibility = 'visible';
-            if (main.style.display === 'none') main.style.display = '';
-        }
+        if (main) main.style.visibility = '';
         if (overlay) overlay.style.display = 'none';
         try { document.documentElement.classList.add('nt-shell-ready'); } catch (e) {}
         try { sessionStorage.setItem('nt_shell_warm', '1'); } catch (e) {}
-        try { window.ntFitAppViewport?.(); } catch (e) {}
     };
-    // Drop the cover as soon as dest names (or Welcome) are on screen, then
-    // wait two frames so that paint lands under the overlay. Installed / unknown
-    // keeps the OS splash color until then; definite browser tabs show the site.
-    const revealAppShell = (force = false) => {
-        if (revealCommitted) {
-            dropLoadingLogo();
-            return true;
-        }
-        if (!force && !boardChromeReady()) return false;
+    const revealWhenBoardReady = () => revealAppShell();
+    // Fix loader image base path for GitHub Pages preview (small WebP for cold-boot LCP)
+    const loaderImg = document.querySelector('#loading-overlay img');
+    if (loaderImg) loaderImg.setAttribute('src', withBase('icons/loading-logo-splash.webp'));
+
+    // Paint header + tabs + board shell for 2 frames before dropping the logo overlay
+    // (avoids the “Next Train / Loading… + pure white” flash on slow devices).
+    requestAnimationFrame(() => {
         requestAnimationFrame(() => {
-            requestAnimationFrame(dropLoadingLogo);
+            revealAppShell();
         });
-        return true;
-    };
-    const revealWhenBoardReady = () => {
-        if (revealAppShell()) return;
-        const destA = document.getElementById('pretoria-header');
-        if (destA && !destA.dataset.ntRevealWatch) {
-            destA.dataset.ntRevealWatch = '1';
-            const mo = new MutationObserver(() => {
-                if (revealAppShell()) mo.disconnect();
-            });
-            mo.observe(destA, { subtree: true, childList: true, characterData: true });
-        }
-        const welcome = document.getElementById('welcome-modal');
-        if (welcome && !welcome.dataset.ntRevealWatch) {
-            welcome.dataset.ntRevealWatch = '1';
-            const mo = new MutationObserver(() => {
-                if (revealAppShell()) mo.disconnect();
-            });
-            mo.observe(welcome, { attributes: true, attributeFilter: ['class'] });
-        }
-    };
-    window.addEventListener('pageshow', () => {
-        if (document.documentElement.classList.contains('nt-shell-ready')) dropLoadingLogo();
     });
+    setTimeout(revealAppShell, 700);
 
     // Early reachability probe — radio up ≠ usable internet
     try { ensureReachabilityProbed(); } catch (e) { /* ignore */ }
@@ -332,22 +307,10 @@ const faqLd = {
         bindWebViewDeeplinkResume,
     } from '../lib/deeplink.js';
     import { setupBlackBoxLogger } from '../lib/blackbox.js';
-    import { initRecoveryWatchdog, INSTALLED_SPLASH_MS, BROWSER_SLOW_BOOT_MS } from '../lib/recovery.js';
+    import { initRecoveryWatchdog } from '../lib/recovery.js';
 
     window.openLegal = openLegal;
     initRecoveryWatchdog();
-    // Installed / unknown: splash color absorbs the wait; Starting copy after 8s.
-    // Definite browser tab: no splash; Starting only if this cold start is still empty.
-    // Fast boards still reveal as soon as dest names paint.
-    setTimeout(() => {
-        if (revealCommitted) return;
-        try { document.documentElement.classList.add('nt-boot-starting'); } catch (e) {}
-        const overlay = document.getElementById('loading-overlay');
-        if (overlay) {
-            overlay.style.removeProperty('display');
-            overlay.classList.remove('hidden');
-        }
-    }, document.documentElement.classList.contains('nt-boot-browser') ? BROWSER_SLOW_BOOT_MS : INSTALLED_SPLASH_MS);
     // Empathy modal "Try Again" (and admin) can call this before/without bridge
     window.loadAllSchedules = loadAllSchedules;
     prepareDeeplinkIntents();
@@ -493,8 +456,7 @@ const faqLd = {
     window.revealAppShell = revealAppShell;
 
     const igniteDataEngine = async () => {
-        // Logo stays until dest names (or Welcome) paint, so the white card
-        // never shows through. Schedules still hydrate in the background.
+        // 14.1: two-frame / 700ms drop already ran. Later reveals are no-ops.
         try {
             bindKillswitchWatch();
             if (await applyLiveTrainDeepLink()) {

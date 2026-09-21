@@ -17,12 +17,6 @@ export { SUPPORT_EMAIL, SUPPORT_FACEBOOK_URL };
 const RECOVERY_AUTO_REDIRECT_MS = 55_000;
 /** Soft “connection struggling” strip while still “online” but not stabilized. */
 const SLOW_BOOT_HINT_MS = 18_000;
-/** Installed PWA / TWA: keep the OS splash color this long before Starting copy. */
-export const INSTALLED_SPLASH_MS = 8_000;
-/** Browser cold start: show Starting only if dest names have not painted yet. */
-export const BROWSER_SLOW_BOOT_MS = 2_000;
-/** “App stuck? Get help” after Starting Next Train has been visible this long. */
-export const LOADER_ESCAPE_MS = 15_000;
 
 /** @param {string} [reason] */
 export function helpUrl(reason = 'broken_install') {
@@ -66,54 +60,31 @@ function isForeground() {
     return typeof document !== 'undefined' && document.visibilityState === 'visible';
 }
 
-function setLoaderEscapeVisible(show) {
-    if (typeof document === 'undefined') return;
-    const overlay = document.getElementById('loading-overlay');
-    const link = overlay?.querySelector('[data-nt-help-escape]');
-    if (!link) return;
-    if (show) {
-        link.hidden = false;
-        link.removeAttribute('hidden');
-        link.classList.remove('hidden');
-        link.setAttribute('aria-hidden', 'false');
-        link.style.removeProperty('visibility');
-        link.style.removeProperty('display');
-    } else {
-        link.hidden = true;
-        link.setAttribute('hidden', '');
-        link.classList.add('hidden');
-        link.setAttribute('aria-hidden', 'true');
-    }
-}
-
 function ensureLoaderEscape() {
     if (typeof document === 'undefined') return;
     const overlay = document.getElementById('loading-overlay');
-    if (!overlay) return;
-    let link = overlay.querySelector('[data-nt-help-escape]');
-    if (!link) {
-        link = document.createElement('a');
-        link.setAttribute('data-nt-help-escape', '1');
-        link.href = helpUrl('boot');
-        link.textContent = 'App stuck? Get help';
-        link.style.cssText = [
-            'position:absolute',
-            'bottom:max(24px,var(--nt-sys-bottom,env(safe-area-inset-bottom)))',
-            'left:50%',
-            'transform:translateX(-50%)',
-            'font-size:12px',
-            'font-weight:700',
-            'color:#64748b',
-            'text-decoration:underline',
-            'z-index:2',
-            'padding:8px 12px',
-        ].join(';');
-        if (getComputedStyle(overlay).position === 'static') {
-            overlay.style.position = 'fixed';
-        }
-        overlay.appendChild(link);
+    if (!overlay || overlay.querySelector('[data-nt-help-escape]')) return;
+
+    const link = document.createElement('a');
+    link.setAttribute('data-nt-help-escape', '1');
+    link.href = helpUrl('boot');
+    link.textContent = 'App stuck? Get help';
+    link.style.cssText = [
+        'position:absolute',
+        'bottom:max(24px,var(--nt-sys-bottom,env(safe-area-inset-bottom)))',
+        'left:50%',
+        'transform:translateX(-50%)',
+        'font-size:12px',
+        'font-weight:700',
+        'color:#64748b',
+        'text-decoration:underline',
+        'z-index:2',
+        'padding:8px 12px',
+    ].join(';');
+    if (getComputedStyle(overlay).position === 'static') {
+        overlay.style.position = 'fixed';
     }
-    setLoaderEscapeVisible(false);
+    overlay.appendChild(link);
 }
 
 /** True while the boot logo is still covering the board. */
@@ -127,21 +98,6 @@ function overlayStillBlocking() {
         if (style.display === 'none' || style.visibility === 'hidden' || Number(style.opacity) === 0) {
             return false;
         }
-    } catch { /* ignore */ }
-    return true;
-}
-
-/** True while “Starting Next Train” is actually on screen (not the splash-color hold). */
-function startingCoverVisible() {
-    if (!overlayStillBlocking()) return false;
-    if (typeof document === 'undefined') return false;
-    if (!document.documentElement.classList.contains('nt-boot-starting')) return false;
-    const overlay = document.getElementById('loading-overlay');
-    const label = overlay?.querySelector('[data-nt-boot-starting-copy]');
-    if (!label) return true;
-    try {
-        const style = window.getComputedStyle(label);
-        if (style.display === 'none' || style.visibility === 'hidden') return false;
     } catch { /* ignore */ }
     return true;
 }
@@ -236,73 +192,6 @@ function onVisibleElapsed(ms, fn) {
 }
 
 /**
- * Same as onVisibleElapsed, but only ticks while Starting Next Train is showing.
- * The installed splash-color hold must not count toward App stuck? Get help.
- */
-function onStartingCoverElapsed(ms, fn) {
-    if (typeof document === 'undefined') return;
-    let elapsed = 0;
-    let last = Date.now();
-    let timer = null;
-    let done = false;
-
-    const clear = () => {
-        if (timer) {
-            clearTimeout(timer);
-            timer = null;
-        }
-    };
-
-    const arm = () => {
-        clear();
-        if (done) return;
-        if (!isForeground() || !startingCoverVisible()) {
-            last = Date.now();
-            return;
-        }
-        last = Date.now();
-        const remaining = Math.max(0, ms - elapsed);
-        timer = setTimeout(() => {
-            if (done) return;
-            if (!isForeground() || !startingCoverVisible()) {
-                last = Date.now();
-                return;
-            }
-            elapsed += Date.now() - last;
-            last = Date.now();
-            if (elapsed >= ms) {
-                done = true;
-                clear();
-                fn();
-                return;
-            }
-            arm();
-        }, remaining);
-    };
-
-    document.addEventListener('visibilitychange', () => {
-        if (done) return;
-        if (!isForeground()) {
-            clear();
-            last = Date.now();
-            return;
-        }
-        last = Date.now();
-        arm();
-    });
-
-    try {
-        const mo = new MutationObserver(() => {
-            if (done) return;
-            arm();
-        });
-        mo.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
-    } catch { /* ignore */ }
-
-    if (isForeground()) arm();
-}
-
-/**
  * Boot watchdog + loader escape hatch.
  * Manual escape is immediate; auto-lifeboat only if the logo overlay is still
  * covering a broken shell after 55s of on-screen time.
@@ -319,13 +208,6 @@ export function initRecoveryWatchdog() {
     setTimeout(ensureLoaderEscape, 500);
     // Remove any leftover soft banner from older builds
     try { document.getElementById('nt-recovery-banner')?.remove(); } catch { /* ignore */ }
-
-    onStartingCoverElapsed(LOADER_ESCAPE_MS, () => {
-        if (window._appStabilized) return;
-        if (!startingCoverVisible()) return;
-        ensureLoaderEscape();
-        setLoaderEscapeVisible(true);
-    });
 
     onVisibleElapsed(SLOW_BOOT_HINT_MS, () => {
         if (window._appStabilized) return;

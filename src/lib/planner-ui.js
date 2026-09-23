@@ -14,6 +14,7 @@ import {
 import { ROUTES, FARE_CONFIG, fareMultiplierForProfile, withBase, SPECIAL_DATES, HOLIDAY_NAMES } from './config.js';
 import { resolveHolidayDayType } from './holiday-approvals.js';
 import { smoothPathFromStops, nearestPathIndex, loadRegionBundle } from './rail-tracks.js';
+import { applyForksToStops, fetchTrackForks } from './map-overrides.js';
 import { 
     normalizeStationName, timeToSeconds, formatTimeDisplay, 
     escapeHTML, getDistanceFromLatLonInKm, safeStorage, usesWeekdayScheduleSheet,
@@ -597,6 +598,7 @@ function plannerFareVoteInput(trip, { km, crowKm, zone, fare } = {}, extra = {})
         quotedPrice: fare?.price,
         reportedPrice: extra.reportedPrice != null ? extra.reportedPrice : fare?.price,
         agree: extra.agree !== false,
+        ticketType: extra.ticketType || 'single',
         isOffPeak: !!fare?.isOffPeak,
         dayType: fare?.dayType || null,
         depTime: fare?.depTime || '',
@@ -678,6 +680,7 @@ function bindPlannerFareVote(trip, detail) {
     const noBtn = document.getElementById('planner-fare-vote-no');
     const correct = document.getElementById('planner-fare-vote-correct');
     const amount = document.getElementById('planner-fare-vote-amount');
+    const ticketTypeEl = document.getElementById('planner-fare-vote-type');
     const sendBtn = document.getElementById('planner-fare-vote-send');
     let voting = false;
     const sendVote = async (extra) => {
@@ -685,7 +688,8 @@ function bindPlannerFareVote(trip, detail) {
         let crowKm = detail?.crowKm;
         if (km == null) km = await getSmoothTripDistanceKm(trip);
         if (crowKm == null) crowKm = getCrowFliesTripKm(trip);
-        return submitFareVote(plannerFareVoteInput(trip, { ...detail, km, crowKm }, extra));
+        const ticketType = ticketTypeEl?.value || 'single';
+        return submitFareVote(plannerFareVoteInput(trip, { ...detail, km, crowKm }, { ...extra, ticketType }));
     };
     const afterVote = (res, extra = {}) => {
         if (res?.ok && res.voteId && extra.agree === false) showPlannerFareTicketPrompt(wrap, res.voteId);
@@ -708,7 +712,7 @@ function bindPlannerFareVote(trip, detail) {
         ev.preventDefault();
         ev.stopPropagation();
         correct?.classList.remove('hidden');
-        amount?.focus();
+        ticketTypeEl?.focus();
     });
     sendBtn?.addEventListener('click', async (ev) => {
         ev.preventDefault();
@@ -780,7 +784,15 @@ function fillPlannerFareBreakdown(trip, { km, crowKm, zone, fare } = {}) {
                 </button>
             </div>
             <div id="planner-fare-vote-correct" class="hidden mt-3 space-y-2">
-                <label for="planner-fare-vote-amount" class="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">What did you pay?</label>
+                <label for="planner-fare-vote-type" class="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Which ticket?</label>
+                <select id="planner-fare-vote-type" class="w-full h-11 px-3 rounded-xl bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-sm font-bold text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-400">
+                    <option value="single">Single</option>
+                    <option value="return">Return</option>
+                    <option value="weekly_mon_fri">Weekly Mon-Fri</option>
+                    <option value="weekly_mon_sat">Weekly Mon-Sat</option>
+                    <option value="monthly">Monthly</option>
+                </select>
+                <label for="planner-fare-vote-amount" class="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">What did you pay for that ticket?</label>
                 <div class="flex items-center gap-2">
                     <span class="text-sm font-black text-gray-900 dark:text-white">R</span>
                     <input id="planner-fare-vote-amount" type="number" inputmode="numeric" min="1" max="500" step="1" class="min-w-0 flex-1 h-11 px-3 rounded-xl bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-sm font-bold text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-400" />
@@ -2338,16 +2350,23 @@ export async function openTripMapRenderer(routeData) {
                 iconAnchor: [size / 2, size / 2]
             });
 
-            // Prefer OSM rail geometry for the blue journey line (station dots stay on coords)
-            const stationPath = (routeData.path || []).filter((p) => p && p.length === 2 && !isNaN(p[0]) && !isNaN(p[1]));
+            // Prefer baked rail geometry. A saved fork draws only the branch this trip uses.
             const region = $userRegion.get() || 'GP';
+            let drawStops = routeData.validStops || [];
+            try {
+                const forks = await fetchTrackForks();
+                const forked = applyForksToStops(drawStops, forks);
+                if (forked && forked.length > 1) drawStops = forked;
+            } catch { /* draw the full stop list */ }
+            const stationPath = drawStops
+                .map((s) => [s.lat, s.lon])
+                .filter((p) => p && p.length === 2 && !isNaN(p[0]) && !isNaN(p[1]));
             let drawPath = stationPath;
             try {
-                const stops = routeData.validStops || [];
-                const smoothed = await smoothPathFromStops(stops, region);
+                const smoothed = await smoothPathFromStops(drawStops, region);
                 if (smoothed && smoothed.length > 1) {
                     drawPath = smoothed;
-                } else if (stops.length > 1) {
+                } else if (drawStops.length > 1) {
                     console.warn('Guardian: trip map rail snap returned null — drawing station chords.');
                 }
             } catch (e) {
@@ -2359,7 +2378,7 @@ export async function openTripMapRenderer(routeData) {
                 const currentPath = drawPath;
                 const currentOrigin = routeData.origin || '';
                 const currentDest = routeData.destination || '';
-                const currentValidStops = routeData.validStops || [];
+                const currentValidStops = drawStops;
 
                 const titleEl = document.getElementById('trip-map-title');
                 if (titleEl) {
@@ -5156,7 +5175,7 @@ export function openFeedbackForMissingRoute(origin, dest) {
     }, 350); 
 }
 
-export async function restorePlannerSearch(fullFrom, fullTo, region) {
+export async function restorePlannerSearch(fullFrom, fullTo, region, opts = {}) {
     const fromSelect = document.getElementById('planner-from');
     const toSelect = document.getElementById('planner-to');
     const fromInput = document.getElementById('planner-from-search');
@@ -5186,15 +5205,26 @@ export async function restorePlannerSearch(fullFrom, fullTo, region) {
             try { await loadAllSchedules(true); } catch { /* still try the restore */ }
         }
 
-        if (typeof showToast === 'function') showToast("Restored recent search", "info", 1000);
+        if (!opts.quiet && typeof showToast === 'function') showToast("Restored recent search", "info", 1000);
 
-        if (typeof trackAnalyticsEvent === 'function') {
+        if (!opts.quiet && typeof trackAnalyticsEvent === 'function') {
             trackAnalyticsEvent('planner_history_restore', { origin: fullFrom, destination: fullTo, region: target || '' });
         }
 
         // History is recorded when executeTripPlan starts (canonical names)
         executeTripPlan(fullFrom, fullTo);
     }
+}
+
+/** Empty Saturday grid → planner on Saturday, using this corridor's two ends. */
+export async function planFromEmptyWeekendGrid(origin, dest, region) {
+    selectedPlannerDay = 'saturday';
+    if (typeof window !== 'undefined') window.selectedPlannerDay = 'saturday';
+    const mainDayDisplay = document.getElementById('main-day-display');
+    if (mainDayDisplay) mainDayDisplay.textContent = plannerDayDisplayText('saturday');
+    const headerDayDisplay = document.getElementById('header-day-display');
+    if (headerDayDisplay) headerDayDisplay.textContent = 'Saturday';
+    await restorePlannerSearch(origin, dest, region, { quiet: true });
 }
 
 export function swapPlannerResults() {

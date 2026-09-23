@@ -1532,6 +1532,7 @@
                         const hasData = servedTrains > 0;
 
                         const sName = sNameOrig.replace(/ STATION/gi, '').toUpperCase();
+                        if (sName === 'VARIANT') continue;
 
                         let lat = null, lon = null;
                         const cVal = row[coordKey];
@@ -2007,6 +2008,33 @@
                 applyEmbedCorridorFocus(pinned);
             }
 
+            async function applyPublishedStationPins(index) {
+                try {
+                    const endpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
+                    const res = await fetch(`${endpoint}config/map_stations.json`);
+                    if (!res.ok) return;
+                    const data = await res.json();
+                    if (!data || typeof data !== 'object') return;
+                    const byNorm = {};
+                    Object.keys(data).forEach((key) => {
+                        const value = data[key];
+                        const lat = Number(value && value.lat);
+                        const lon = Number(value && value.lon);
+                        if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
+                        const raw = String((value && value.name) || key).replace(/ STATION/gi, '').trim().toUpperCase();
+                        if (raw) byNorm[raw] = { lat, lon };
+                    });
+                    Object.keys(index).forEach((name) => {
+                        const norm = String(name).replace(/ STATION/gi, '').trim().toUpperCase();
+                        const hit = byNorm[norm];
+                        if (!hit || !index[name]) return;
+                        index[name].lat = hit.lat;
+                        index[name].lon = hit.lon;
+                    });
+                } catch (_) {}
+            }
+            await applyPublishedStationPins(globalStations);
+
             // --- DRAW MARKERS (WITH NAKED HALO TOOLTIPS) ---
             Object.entries(globalStations).forEach(([name, data]) => {
                 // Inactive / ghost stops keep coords for incident cuts, never a name label.
@@ -2124,14 +2152,24 @@
             }
 
             const trackEditLayer = L.layerGroup().addTo(map);
+            const brushLayer = L.layerGroup().addTo(map);
             const vertexIcon = L.divIcon({ className: 'nt-track-vertex', iconSize: [16, 16], iconAnchor: [8, 8] });
             const vertexEndIcon = L.divIcon({ className: 'nt-track-vertex is-end', iconSize: [16, 16], iconAnchor: [8, 8] });
             const TRACK_EDIT_HINTS = {
                 move: 'Drag a dot along the rails. Zoom in for more dots.',
                 add: 'Tap the line where the extra dot should go.',
-                delete: 'Tap a dot to remove it.'
+                delete: 'Tap a dot to remove it.',
+                brush: 'Drag the circle. Dots inside it move with you.',
+                stations: 'Drag a station pin. The rail line stays where it is.',
+                fork: 'Tap the split station, then the stops on each branch.'
             };
+            const TRACK_EDIT_TOOLS = ['move', 'add', 'delete', 'brush', 'stations', 'fork'];
             let trackEditTool = 'move';
+            let brushCircle = null;
+            let brushHandle = null;
+            let brushRadiusM = 700;
+            let brushDrag = null;
+            let stationPinDragBound = false;
 
             function parseEditorStationNames(text) {
                 return String(text || '')
@@ -2175,17 +2213,21 @@
             }
 
             function setTrackEditTool(tool) {
-                trackEditTool = (tool === 'add' || tool === 'delete') ? tool : 'move';
+                trackEditTool = TRACK_EDIT_TOOLS.indexOf(tool) >= 0 ? tool : 'move';
                 const html = document.documentElement;
                 html.classList.toggle('nt-track-tool-add', trackEditTool === 'add');
                 html.classList.toggle('nt-track-tool-delete', trackEditTool === 'delete');
+                html.classList.toggle('nt-track-tool-brush', trackEditTool === 'brush');
+                html.classList.toggle('nt-track-tool-stations', trackEditTool === 'stations');
+                html.classList.toggle('nt-track-tool-fork', trackEditTool === 'fork');
                 document.querySelectorAll('#nt-track-editor-tools [data-track-tool]').forEach((btn) => {
                     const on = btn.getAttribute('data-track-tool') === trackEditTool;
                     btn.classList.toggle('is-on', on);
                     btn.setAttribute('aria-pressed', on ? 'true' : 'false');
                 });
                 const hint = document.getElementById('nt-track-editor-hint');
-                if (hint) hint.textContent = TRACK_EDIT_HINTS[trackEditTool];
+                if (hint) hint.textContent = TRACK_EDIT_HINTS[trackEditTool] || TRACK_EDIT_HINTS.move;
+                syncBrush();
                 if (trackEdit) rebuildTrackVertices();
             }
 
@@ -2247,7 +2289,7 @@
                 if (!trackEdit || !trackEdit.coords) return;
                 const coords = trackEdit.coords;
                 const stride = vertexStride(map.getZoom(), coords.length);
-                const canDrag = trackEditTool !== 'delete';
+                const canDrag = trackEditTool === 'move';
                 for (let i = 0; i < coords.length; i++) {
                     const isEnd = i === 0 || i === coords.length - 1;
                     if (!isEnd && i % stride !== 0) continue;
@@ -2345,9 +2387,17 @@
                 const r = drawnRoutes.find((x) => x.routeId === id);
                 if (r?._polyline) r._polyline.off('click', onEditLineClick);
                 trackEditLayer.clearLayers();
+                clearBrush();
                 trackEdit = null;
                 trackEditTool = 'move';
-                document.documentElement.classList.remove('nt-track-editing', 'nt-track-tool-add', 'nt-track-tool-delete');
+                document.documentElement.classList.remove(
+                    'nt-track-editing',
+                    'nt-track-tool-add',
+                    'nt-track-tool-delete',
+                    'nt-track-tool-brush',
+                    'nt-track-tool-stations',
+                    'nt-track-tool-fork'
+                );
                 setStationsOpen(false);
                 paintRouteLines(liveTrackBundle);
                 syncTrackEditorChrome();
@@ -2395,6 +2445,216 @@
                 }
             }
 
+            function stationOverrideKey(name) {
+                return String(name || 'station').replace(/[^A-Za-z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 60) || 'station';
+            }
+
+            function setEditorStatus(text, ok) {
+                const el = document.getElementById('nt-track-editor-cover');
+                if (!el) return;
+                el.textContent = text;
+                el.classList.toggle('is-ok', !!ok);
+                el.classList.toggle('is-warn', !ok);
+            }
+
+            function rememberStationMove(name, lat, lon) {
+                if (!trackEdit) return;
+                if (!trackEdit.stationMoves) trackEdit.stationMoves = {};
+                const key = stationOverrideKey(name);
+                trackEdit.stationMoves[key] = {
+                    lat: Math.round(lat * 1e6) / 1e6,
+                    lon: Math.round(lon * 1e6) / 1e6,
+                    name
+                };
+                if (globalStations[name]) {
+                    globalStations[name].lat = lat;
+                    globalStations[name].lon = lon;
+                }
+            }
+
+            function requestMapSave(node, body, routeId) {
+                const id = String(Date.now());
+                const parentWin = window.parent;
+                if (!parentWin || parentWin === window) {
+                    setEditorStatus('Open this map from the app while signed in to save.', false);
+                    return;
+                }
+                window.__ntMapSaveWait = id;
+                parentWin.postMessage({ type: 'nt-map-save', id, node, body, routeId: routeId || '' }, '*');
+                setEditorStatus('Saving…', true);
+                setTimeout(() => {
+                    if (window.__ntMapSaveWait === id) {
+                        setEditorStatus('Save did not reach the app. Sign in and try again.', false);
+                    }
+                }, 8000);
+            }
+
+            function paintForkStatus() {
+                const el = document.getElementById('nt-track-editor-fork-status');
+                const fork = trackEdit && trackEdit.fork;
+                if (!el || !fork) return;
+                if (!fork.at) {
+                    el.textContent = 'Tap the split station on this line.';
+                    return;
+                }
+                const which = fork.which === 1 ? 'Branch B' : 'Branch A';
+                const a = (fork.branches[0] || []).join(', ') || 'none yet';
+                const b = (fork.branches[1] || []).join(', ') || 'none yet';
+                el.textContent = `Split at ${fork.at}. ${which}. A: ${a}. B: ${b}.`;
+            }
+
+            function recordForkStation(name) {
+                if (!trackEdit || trackEditTool !== 'fork') return;
+                if (!trackEdit.fork) trackEdit.fork = { at: '', which: 0, branches: [[], []] };
+                const fork = trackEdit.fork;
+                if (!fork.at) fork.at = name;
+                else if (name !== fork.at) {
+                    const list = fork.branches[fork.which] || (fork.branches[fork.which] = []);
+                    if (list.indexOf(name) < 0) list.push(name);
+                }
+                paintForkStatus();
+            }
+
+            function beginStationDrag(item, ev) {
+                if (trackEditTool !== 'stations' || !trackEdit) return;
+                if (ev.originalEvent) L.DomEvent.stop(ev.originalEvent);
+                try { item.marker.closePopup(); } catch (_) {}
+                map.dragging.disable();
+                const move = (e) => {
+                    item.marker.setLatLng(map.mouseEventToLatLng(e));
+                };
+                const up = (e) => {
+                    document.removeEventListener('pointermove', move);
+                    document.removeEventListener('pointerup', up);
+                    map.dragging.enable();
+                    const ll = e && e.clientX != null ? map.mouseEventToLatLng(e) : item.marker.getLatLng();
+                    item.marker.setLatLng(ll);
+                    rememberStationMove(item.name, ll.lat, ll.lng);
+                    setEditorStatus(`Moved ${item.name}. Save pins to keep it. The rail line stays put.`, true);
+                };
+                document.addEventListener('pointermove', move);
+                document.addEventListener('pointerup', up);
+            }
+
+            function bindStationPinDrag() {
+                if (stationPinDragBound) return;
+                stationPinDragBound = true;
+                stationLayerItems.forEach((item) => {
+                    item.marker.on('mousedown', (ev) => beginStationDrag(item, ev));
+                    item.marker.on('click', (ev) => {
+                        if (trackEditTool !== 'stations' && trackEditTool !== 'fork') return;
+                        L.DomEvent.stop(ev);
+                        try { item.marker.closePopup(); } catch (_) {}
+                        if (trackEditTool === 'fork') recordForkStation(item.name);
+                    });
+                });
+            }
+
+            function clearBrush() {
+                brushLayer.clearLayers();
+                brushCircle = null;
+                brushHandle = null;
+                brushDrag = null;
+            }
+
+            function syncBrush() {
+                if (trackEditTool !== 'brush' || !trackEdit) {
+                    clearBrush();
+                    return;
+                }
+                bindStationPinDrag();
+                if (brushCircle) return;
+                const center = map.getCenter();
+                brushCircle = L.circle(center, {
+                    radius: brushRadiusM,
+                    color: '#2563eb',
+                    weight: 2,
+                    fillColor: '#2563eb',
+                    fillOpacity: 0.12,
+                    interactive: false
+                }).addTo(brushLayer);
+                brushHandle = L.marker(center, {
+                    icon: vertexEndIcon,
+                    draggable: true,
+                    pane: 'nt-track-edit',
+                    keyboard: false
+                }).addTo(brushLayer);
+                brushHandle.on('dragstart', () => {
+                    const c = brushHandle.getLatLng();
+                    brushDrag = { start: c, verts: [], pins: [] };
+                    snapshotTrackEdit();
+                    (trackEdit.coords || []).forEach((p, i) => {
+                        if (map.distance(L.latLng(p[0], p[1]), c) <= brushRadiusM) {
+                            brushDrag.verts.push({ i, lat: p[0], lon: p[1] });
+                        }
+                    });
+                    if (document.getElementById('nt-track-editor-move-pins')?.checked) {
+                        stationLayerItems.forEach((item) => {
+                            const ll = item.marker.getLatLng();
+                            if (map.distance(ll, c) <= brushRadiusM) {
+                                brushDrag.pins.push({ item, lat: ll.lat, lng: ll.lng });
+                            }
+                        });
+                    }
+                });
+                brushHandle.on('drag', (ev) => {
+                    if (!brushDrag || !trackEdit) return;
+                    const ll = ev.latlng;
+                    const dLat = ll.lat - brushDrag.start.lat;
+                    const dLng = ll.lng - brushDrag.start.lng;
+                    brushDrag.verts.forEach((v) => {
+                        trackEdit.coords[v.i] = [v.lat + dLat, v.lon + dLng];
+                    });
+                    const line = drawnRoutes.find((x) => x.routeId === trackEdit.routeId);
+                    if (line?._polyline) line._polyline.setLatLngs(trackEdit.coords);
+                    if (brushCircle) brushCircle.setLatLng(ll);
+                    brushDrag.pins.forEach((p) => {
+                        p.item.marker.setLatLng([p.lat + dLat, p.lng + dLng]);
+                    });
+                });
+                brushHandle.on('dragend', () => {
+                    if (brushDrag && trackEdit) {
+                        brushDrag.pins.forEach((p) => {
+                            const ll = p.item.marker.getLatLng();
+                            rememberStationMove(p.item.name, ll.lat, ll.lng);
+                        });
+                    }
+                    brushDrag = null;
+                    applyEditPreview({ rebuild: true });
+                    if (brushHandle && brushCircle) brushCircle.setLatLng(brushHandle.getLatLng());
+                });
+            }
+
+            function resizeBrush(delta) {
+                brushRadiusM = Math.max(120, Math.min(4000, brushRadiusM + delta));
+                if (brushCircle) brushCircle.setRadius(brushRadiusM);
+            }
+
+            function saveStationPins() {
+                const moves = trackEdit && trackEdit.stationMoves;
+                if (!moves || !Object.keys(moves).length) {
+                    setEditorStatus('Drag a pin first.', false);
+                    return;
+                }
+                requestMapSave('config/map_stations', moves);
+            }
+
+            function saveTrackFork() {
+                const fork = trackEdit && trackEdit.fork;
+                if (!fork || !fork.at || !(fork.branches[0] || []).length || !(fork.branches[1] || []).length) {
+                    setEditorStatus('Mark the split and both branches before saving.', false);
+                    return;
+                }
+                requestMapSave('config/track_forks', {
+                    routeId: trackEdit.routeId,
+                    at: fork.at,
+                    branches: {
+                        a: { id: 'a', stops: fork.branches[0].slice() },
+                        b: { id: 'b', stops: fork.branches[1].slice() }
+                    }
+                }, trackEdit.routeId);
+            }
+
             function setMapOperatorAuthed(on) {
                 mapOperatorAuthed = !!on;
                 syncTrackEditorChrome();
@@ -2416,6 +2676,30 @@
                 e.stopPropagation();
                 downloadTrackPatch();
             });
+            document.getElementById('nt-track-editor-save-pins')?.addEventListener('click', (e) => {
+                e.stopPropagation();
+                saveStationPins();
+            });
+            document.getElementById('nt-track-fork-branch')?.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (!trackEdit) return;
+                if (!trackEdit.fork) trackEdit.fork = { at: '', which: 0, branches: [[], []] };
+                trackEdit.fork.which = 1;
+                paintForkStatus();
+            });
+            document.getElementById('nt-track-fork-save')?.addEventListener('click', (e) => {
+                e.stopPropagation();
+                saveTrackFork();
+            });
+            document.getElementById('nt-track-brush-smaller')?.addEventListener('click', (e) => {
+                e.stopPropagation();
+                resizeBrush(-150);
+            });
+            document.getElementById('nt-track-brush-larger')?.addEventListener('click', (e) => {
+                e.stopPropagation();
+                resizeBrush(150);
+            });
+            bindStationPinDrag();
             document.getElementById('nt-track-editor-stations-toggle')?.addEventListener('click', (e) => {
                 e.stopPropagation();
                 const wrap = document.getElementById('nt-track-editor-stations-wrap');
@@ -3510,6 +3794,12 @@
                 if (!data || typeof data !== 'object') return;
                 if (data.type === 'nt-map-admin') {
                     setMapOperatorAuthed(!!data.authed);
+                    return;
+                }
+                if (data.type === 'nt-map-save-result') {
+                    if (window.__ntMapSaveWait && data.id && String(data.id) !== String(window.__ntMapSaveWait)) return;
+                    window.__ntMapSaveWait = '';
+                    setEditorStatus(data.ok ? 'Saved.' : 'Could not save. Sign in from the app and try again.', !!data.ok);
                     return;
                 }
                 if (data.type === 'nt-map-ride-pings') {

@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_09.23.1': [
+        'Empty Saturday grids name the open route and add Plan this trip. EXPRESS cells render as EXPR (tap explains the skip; export and SEO use the same text). A VARIANT row with MONTE_VISTA labels the column Via Monte Vista and is not a station. Fare No asks for ticket type before the amount and stores ticketType; approving a quote writes config/planner_fares only for single. Track editor can drag station pins (config/map_stations), save a y-junction (config/track_forks), and push vertices inside a circle. SEO landings keep every fact and add a sticky Open in Next Train bar. Version probes fetch same-origin /app-version.json only. Map iframe drops the duplicate allowfullscreen attribute. What’s New covers the weekend board and EXPR only. forceShow stays false.',
+    ],
     'V9_09.22.1': [
         'Ship label is V9_09.22.1 (not 21.19). nexttrain-edge routes stay attached. CHANGELOG_DATA[0] stays V9_09.21.1 Open to the board. No What’s New after 21.1. forceShow stays false. FORCE_UPDATE_REQUIRED stays true.',
     ],

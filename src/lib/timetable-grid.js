@@ -5,7 +5,7 @@ import { ROUTES } from './config.js';
 import { safeStorage, escapeHTML, routeArrowSvg, routePrimaryGridDirection, scheduleCacheSlot, normalizeScheduleSheetDay } from './utils.js';
 import { $currentRouteId, $userRegion, $schedules, $globalExclusions, $globalDisruptions, $opsOverlaysReady } from '../store.js';
 import { loadAllSchedules, ensureRoutePinnedForRegion } from './logic.js';
-import { showToast, triggerHaptic, openSmoothModal, closeSmoothModal, toggleDropdownScrim } from './ui.js';
+import { showToast, triggerHaptic, openSmoothModal, closeSmoothModal, switchTab, toggleDropdownScrim } from './ui.js';
 import { simulateNextActiveService, routeHasSaturdayService, scheduleHasService } from './live-board.js';
 import {
     buildRouteShareUrl,
@@ -50,11 +50,45 @@ function paintOpenGridBody() {
             : grid.innerHTML)
         : window.Renderer._buildGridHTML(schedule, routeSheetKey, routeId, targetDayIdx, isTodayType, false, lastGridBody.selectedDay);
     if (noServiceSheet) bindNoWeekendWeekdaySwitch(lastGridBody.direction || window._gridSwapDir || 'A');
+    bindGridExpressSkips();
+}
+
+function bindGridExpressSkips() {
+    const grid = document.getElementById('grid-container');
+    if (!grid || grid.dataset.exprBound === '1') return;
+    grid.dataset.exprBound = '1';
+    grid.addEventListener('click', (e) => {
+        const btn = e.target?.closest?.('[data-expr-skip="1"]');
+        if (!btn) return;
+        e.preventDefault();
+        e.stopPropagation();
+        const station = btn.getAttribute('data-expr-station') || 'this station';
+        const train = btn.getAttribute('data-expr-train') || 'This train';
+        showToast(`Train ${train} does not stop at ${station}.`, 'info', 3500);
+    });
 }
 
 function bindNoWeekendWeekdaySwitch(direction) {
     document.getElementById('grid-switch-weekday-btn')?.addEventListener('click', () => {
         renderFullScheduleGrid(direction, 'weekday');
+    });
+    document.getElementById('grid-plan-trip-btn')?.addEventListener('click', () => {
+        const routeId = lastGridBody?.routeId;
+        const route = ROUTES[routeId];
+        const dir = direction === 'B' ? 'B' : 'A';
+        closeSmoothModal('full-schedule-modal', true);
+        if (typeof location !== 'undefined' && location.hash === '#grid') {
+            try { history.replaceState({ tab: 'planner' }, '', '#planner'); } catch { /* ignore */ }
+        }
+        switchTab('trip-planner');
+        if (!route) return;
+        const origin = dir === 'A' ? route.destB : route.destA;
+        const dest = dir === 'A' ? route.destA : route.destB;
+        import('./planner-ui.js').then((mod) => {
+            mod.planFromEmptyWeekendGrid(origin, dest, route.region);
+        }).catch(() => {
+            showToast('Could not open the trip planner.', 'info', 2500);
+        });
     });
 }
 
@@ -473,6 +507,7 @@ export function renderFullScheduleGrid(direction = null, dayOverride = null) {
     const grid = document.getElementById('grid-container');
     if (grid) grid.innerHTML = html;
     if (noServiceSheet) bindNoWeekendWeekdaySwitch(direction);
+    bindGridExpressSkips();
     bindGridExclusionRefresh();
 
     openSmoothModal('full-schedule-modal');

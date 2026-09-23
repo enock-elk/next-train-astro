@@ -17,6 +17,7 @@ import {
 } from '../src/lib/saturday-service.js';
 import { extractTrainSheetStops } from '../src/lib/planner-core.js';
 import { Renderer } from '../src/lib/renderer.js';
+import { filterStopsForFork } from '../src/lib/map-overrides.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const failures = [];
@@ -169,6 +170,14 @@ const ecc = saturdayNoServiceCopy('ec-berlin');
 if (!/Eastern Cape/i.test(ecc.body) || !/East London to Berlin/i.test(ecc.body)) {
     fail(`ec-berlin modal copy drifted: ${ecc.body}`);
 }
+const cape = saturdayNoServiceCopy('eerst-dtoit');
+if (!/Western Cape/i.test(cape.body) || !/Eerste River/i.test(cape.body) || !/Du Toit/i.test(cape.body)) {
+    fail(`eerst-dtoit copy must name the Cape corridor: ${cape.body}`);
+}
+if (/Hercules to Koedoespoort/i.test(cape.body)) fail('eerst-dtoit must not use the Hercules sentence');
+if (cape.body !== 'Metrorail Western Cape does not have a Saturday timetable for the Eerste River to Du Toit line. The trip planner can check other routes for a way through.') {
+    fail(`eerst-dtoit sentence drifted: ${cape.body}`);
+}
 
 const boarding = buildSaturdayAdvisoryCopy({
     routeId: 'herc-koed',
@@ -239,6 +248,48 @@ if (noWeekend.includes('onclick=')) fail('no-weekend switch must not use inline 
 if (!/Gauteng/i.test(noWeekend) || !/Hercules to Koedoespoort/i.test(noWeekend)) {
     fail(`no-weekend notice must use saturdayNoServiceCopy: ${noWeekend}`);
 }
+if (!noWeekend.includes('id="grid-plan-trip-btn"')) fail('no-weekend grid must offer Plan this trip');
+const capeGrid = Renderer._buildNoSaturdayGridHTML(weekdaySheet, 'Du Toit to Eerste River', 'eerst-dtoit');
+if (!/Western Cape/i.test(capeGrid) || !/Du Toit/i.test(capeGrid) || !capeGrid.includes('id="grid-plan-trip-btn"')) {
+    fail(`Cape no-weekend grid must name the route and offer the planner: ${capeGrid}`);
+}
+if (capeGrid.includes('onclick=')) fail('Cape no-weekend buttons must not use inline onclick');
+
+const expressSheet = {
+    headers: ['STATION', '2630'],
+    stationColumnName: 'STATION',
+    rows: [
+        { STATION: 'VARIANT', '2630': 'MONTE_VISTA' },
+        { STATION: 'TYGERBERG', '2630': 'EXPRESS' },
+        { STATION: 'BELLVILLE', '2630': '08:10:00' },
+        { STATION: 'MUTUAL', '2630': 'Via MV' },
+    ],
+};
+const expressHtml = Renderer._buildGridHTML(expressSheet, 'sheet', 'ct-bellv', 1, false, false, 'weekday');
+if (!expressHtml.includes('>EXPR<') || !expressHtml.includes('Via Monte Vista')) {
+    fail('grid must render EXPR and Via Monte Vista');
+}
+if (/<td[^>]*>VARIANT</i.test(expressHtml) || />Via MV</.test(expressHtml)) {
+    fail('grid must not paint VARIANT as a station or leftover Via MV prose');
+}
+const expressExport = Renderer._buildGridHTML(expressSheet, 'sheet', 'ct-bellv', 1, false, true, 'weekday');
+if (!expressExport.includes('EXPR') || expressExport.includes('nt-expr-btn')) {
+    fail('export grid must keep the text EXPR and not a button');
+}
+const forked = filterStopsForFork(
+    [
+        { name: 'DURBAN' },
+        { name: "DUFF'S ROAD" },
+        { name: 'KWAMASHU' },
+        { name: 'BRIDGE CITY' },
+    ],
+    { at: "DUFF'S ROAD", branches: { a: { stops: ['KWAMASHU'] }, b: { stops: ['BRIDGE CITY'] } } },
+).map((s) => s.name);
+if (forked.includes('KWAMASHU') || !forked.includes('BRIDGE CITY') || !forked.includes('DURBAN') || !forked.includes("DUFF'S ROAD")) {
+    fail(`fork filter must keep one branch plus the trunk: ${forked.join(', ')}`);
+}
+const logicSrc = readFileSync(join(ROOT, 'src/lib/logic.js'), 'utf8');
+if (!logicSrc.includes("bare === 'VARIANT'")) fail('VARIANT must stay a sheet meta row');
 
 const gridJs = readFileSync(join(ROOT, 'src/lib/timetable-grid.js'), 'utf8');
 if (!gridJs.includes('bindNoWeekendWeekdaySwitch')) fail('timetable-grid must bind Switch to Mon - Fri');

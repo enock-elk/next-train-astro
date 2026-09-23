@@ -7,7 +7,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { FARE_CONFIG, ROUTES } from './config.js';
 import { getGridOrderManifest, orderGridTrainIds } from './grid-order.js';
-import { isRealTime, timeToSeconds, flattenPublicHolidays } from './utils.js';
+import { isRealTime, isExpressSkip, isVariantStationName, timeToSeconds, flattenPublicHolidays } from './utils.js';
 import { gridStationLabel, stationLabel } from './seo-routes.js';
 import {
   extractStationChain,
@@ -102,6 +102,7 @@ function isMetaStation(name) {
     if (!s) return true;
     if (/^Last Updated/i.test(s)) return true;
     if (s.toUpperCase() === 'STATION') return true;
+    if (isVariantStationName(s)) return true;
     return false;
 }
 
@@ -237,7 +238,7 @@ export function extractSeoGrid(db, sheetKey, originName, options = {}) {
         const name = stationNameFromRow(row);
         if (!name) continue;
         stations.push(name);
-        cells.push(trainIds.map((id) => formatClock(row[id]) || '-'));
+        cells.push(trainIds.map((id) => (isExpressSkip(row[id]) ? 'EXPR' : (formatClock(row[id]) || '-'))));
         keptRows.push(row);
     }
     if (!stations.length) return null;

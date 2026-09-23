@@ -343,6 +343,39 @@ export function isRealTime(val) {
     return /^([01]?\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/.test(s);
 }
 
+/** Sheet cell EXPRESS means the train does not call at that station. */
+export function isExpressSkip(val) {
+    return String(val || '').trim().toUpperCase() === 'EXPRESS';
+}
+
+/** Reserved timetable row. Not a station. Cells name the branch a train takes. */
+export function isVariantStationName(rawName) {
+    const bare = String(rawName || '').replace(/ STATION$/i, '').trim().toUpperCase();
+    return bare === 'VARIANT';
+}
+
+/** Known VARIANT cell codes. Unknown prose is ignored. */
+export function variantViaLabel(code) {
+    const key = String(code || '').trim().toUpperCase().replace(/[\s-]+/g, '_');
+    if (key === 'MONTE_VISTA') return 'Monte Vista';
+    return '';
+}
+
+/** Train id → "Monte Vista" from a VARIANT row. */
+export function variantMapFromSchedule(schedule) {
+    const map = {};
+    const rows = schedule?.rows || [];
+    for (const row of rows) {
+        if (!isVariantStationName(row?.STATION)) continue;
+        for (const [col, val] of Object.entries(row)) {
+            if (col === 'STATION' || col === 'COORDINATES' || col === 'KM_MARK' || col === 'row_index') continue;
+            const label = variantViaLabel(val);
+            if (label) map[String(col)] = label;
+        }
+    }
+    return map;
+}
+
 export function formatTimeDisplay(timeStr) {
     if (!isRealTime(timeStr)) return "--:--";
     const s = String(timeStr).trim();

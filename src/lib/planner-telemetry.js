@@ -384,6 +384,22 @@ function clipStr(value, max) {
     return String(value || '').slice(0, max);
 }
 
+const FARE_TICKET_TYPES = new Set(['single', 'return', 'weekly_mon_fri', 'weekly_mon_sat', 'monthly']);
+
+export function normalizeFareTicketType(value) {
+    const key = String(value || '').trim().toLowerCase();
+    return FARE_TICKET_TYPES.has(key) ? key : 'single';
+}
+
+export function fareTicketTypeLabel(value) {
+    const key = normalizeFareTicketType(value);
+    if (key === 'return') return 'Return';
+    if (key === 'weekly_mon_fri') return 'Weekly Mon-Fri';
+    if (key === 'weekly_mon_sat') return 'Weekly Mon-Sat';
+    if (key === 'monthly') return 'Monthly';
+    return 'Single';
+}
+
 export function buildFareVotePayload({
     origin,
     destination,
@@ -396,6 +412,7 @@ export function buildFareVotePayload({
     quotedPrice,
     reportedPrice,
     agree,
+    ticketType,
     isOffPeak,
     dayType,
     depTime,
@@ -427,6 +444,7 @@ export function buildFareVotePayload({
         quotedPrice: quoted,
         reportedPrice: reported,
         agree: !!agree,
+        ticketType: normalizeFareTicketType(ticketType),
         isOffPeak: !!isOffPeak,
         dayType: clipStr(dayType, 24) || null,
         depTime: clipStr(depTime, 8) || null,

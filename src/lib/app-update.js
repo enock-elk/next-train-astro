@@ -161,8 +161,8 @@ export function pickNewestAppVersion(versions, fallback = null) {
 }
 
 /**
- * Same-origin plus dump mirrors. An old controlling SW can serve a stale
- * `/app-version.json`; jsDelivr/raw are outside that precache.
+ * Same-origin `/app-version.json` only. The edge already serves that file
+ * no-store. Cross-origin dump hosts reject the probe preflight.
  */
 export function listAppVersionProbeUrls() {
     const seen = new Set();
@@ -181,10 +181,6 @@ export function listAppVersionProbeUrls() {
         urls.push(abs);
     };
     add(withBase('app-version.json'));
-    add('https://nexttrain.co.za/app-version.json');
-    add('https://cdn.jsdelivr.net/gh/enock-elk/next-train-astro@main/public/app-version.json');
-    add('https://raw.githubusercontent.com/enock-elk/next-train-astro/main/public/app-version.json');
-    add('https://enock-elk.github.io/next-train-astro/app-version.json');
     return urls;
 }
 
@@ -201,11 +197,7 @@ async function fetchPublishedVersion(url) {
     const bust = url.includes('?') ? `&ntv=${Date.now()}` : `?ntv=${Date.now()}`;
     const res = await fetch(url + bust, {
         cache: 'no-store',
-        headers: {
-            Accept: 'application/json',
-            'Cache-Control': 'no-cache',
-            Pragma: 'no-cache',
-        },
+        headers: { Accept: 'application/json' },
     });
     if (!res.ok) return null;
     const data = await res.json();
@@ -213,8 +205,8 @@ async function fetchPublishedVersion(url) {
 }
 
 /**
- * Incoming = newest published `app-version.json` across origin + dump mirrors.
- * Returns null when every probe fails so callers do not treat this shell as "incoming".
+ * Incoming = the published same-origin `app-version.json`.
+ * Returns null when the probe fails so callers do not treat this shell as "incoming".
  */
 export async function peekIncomingVersionReport() {
     const urls = listAppVersionProbeUrls();
@@ -224,14 +216,7 @@ export async function peekIncomingVersionReport() {
     }));
     const newest = pickNewestAppVersion(sources.map((row) => row.version));
     const originRow = sources.find((row) => isOriginVersionProbe(row.url) && row.version);
-    const summary = sources
-        .map((row) => {
-            let host = row.url;
-            try { host = new URL(row.url).host + new URL(row.url).pathname; } catch { /* raw */ }
-            return `${host}=${row.version || 'fail'}`;
-        })
-        .join(' | ');
-    console.log(`🛡️ Guardian: Version probe → ${summary} | newest ${newest || 'none'} | running ${APP_VERSION}`);
+    console.log(`🛡️ Guardian: Version probe → newest ${newest || 'none'} | running ${APP_VERSION}`);
     return { version: newest, originVersion: originRow?.version || null, sources };
 }
 

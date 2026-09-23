@@ -6653,6 +6653,10 @@ const Admin = {
                 throw new Error('Correction needs a whole rand between 1 and 500');
             }
             if (item.agree !== false) throw new Error('Only price corrections can be approved');
+            const ticketType = String(item.ticketType || 'single').toLowerCase();
+            if (ticketType && ticketType !== 'single') {
+                throw new Error('Only a single ticket can update the planner quote');
+            }
             const key = window.plannerFareOverrideKey(item);
             const record = window.buildPlannerFareOverrideRecord(item, {
                 approvedBy: Admin.currentUser?.email || Admin.currentUser?.uid || 'Admin',
@@ -6714,14 +6718,18 @@ const Admin = {
             const regions = typeof REGIONS !== 'undefined' ? Object.keys(REGIONS) : ['GP', 'WC', 'KZN', 'EC'];
             const region = Admin._deRouteFaresRegion || 'GP';
             wrap.innerHTML = `
-                <div class="flex items-center justify-between gap-2">
-                    <p class="text-[10px] font-black uppercase tracking-widest text-gray-500">Confirmed corridor fares</p>
-                    <select id="de-route-fares-region" class="h-7 px-2 rounded-md bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-[10px] font-bold text-gray-700 dark:text-gray-200">
-                        ${regions.map((code) => `<option value="${code}" ${code === region ? 'selected' : ''}>${code}</option>`).join('')}
-                    </select>
-                </div>
-                <p class="text-[10px] text-gray-500 leading-snug">Single-route quotes cannot exceed a confirmed long fare. Gauteng dump zones are confirmed until you un-confirm them.</p>
-                <div id="de-route-fares-list" class="space-y-2"></div>
+                <details class="rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50/80 dark:bg-gray-950/40">
+                    <summary class="cursor-pointer list-none px-3 py-2 text-[10px] font-black uppercase tracking-widest text-gray-500">Confirmed corridor fares</summary>
+                    <div class="px-3 pb-3 space-y-2">
+                        <div class="flex items-center justify-end">
+                            <select id="de-route-fares-region" class="h-7 px-2 rounded-md bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-[10px] font-bold text-gray-700 dark:text-gray-200">
+                                ${regions.map((code) => `<option value="${code}" ${code === region ? 'selected' : ''}>${code}</option>`).join('')}
+                            </select>
+                        </div>
+                        <p class="text-[10px] text-gray-500 leading-snug">Single-route quotes cannot exceed a confirmed long fare. Gauteng dump zones are confirmed until you un-confirm them.</p>
+                        <div id="de-route-fares-list" class="space-y-2"></div>
+                    </div>
+                </details>
             `;
             const list = wrap.querySelector('#de-route-fares-list');
             const dumpDb = typeof fullDatabase !== 'undefined' ? fullDatabase : window.fullDatabase;
@@ -6890,7 +6898,13 @@ const Admin = {
                         const liveRow = fareKey ? liveData[fareKey] : null;
                         const livePrice = liveRow ? Number(liveRow.price) : NaN;
                         const isLive = Number.isFinite(livePrice) && livePrice === Number(item.reportedPrice);
-                        const canApprove = item.agree === false && Number(item.reportedPrice) >= 1 && Number(item.reportedPrice) <= 500;
+                        const ticketTypeKey = String(item.ticketType || 'single').toLowerCase();
+                        const ticketTypeLabel = ticketTypeKey === 'return' ? 'Return'
+                            : ticketTypeKey === 'weekly_mon_fri' ? 'Weekly Mon-Fri'
+                            : ticketTypeKey === 'weekly_mon_sat' ? 'Weekly Mon-Sat'
+                            : ticketTypeKey === 'monthly' ? 'Monthly'
+                            : 'Single';
+                        const canApprove = item.agree === false && ticketTypeKey === 'single' && Number(item.reportedPrice) >= 1 && Number(item.reportedPrice) <= 500;
                         const ticketUrl = item.ticketUrl || ticketPhotos[item.id]?.ticketUrl || '';
                         const ticketHtml = ticketUrl && typeof window.attachmentPreviewHtml === 'function'
                             ? `<div class="mt-2 de-fare-ticket">${window.attachmentPreviewHtml(ticketUrl, { admin: true, imgClass: 'w-12 h-12 object-cover rounded-md border border-gray-200 dark:border-gray-700 hover:opacity-90 cursor-zoom-in', alt: 'Ticket' })}</div>`
@@ -6902,6 +6916,7 @@ const Admin = {
                                     <div class="flex flex-wrap items-center mt-1.5 gap-1.5">
                                         <span class="text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded ${item.agree ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300' : 'bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-200'}">${secureEscape(vsLabel)}</span>
                                         <span class="text-[9px] font-bold text-indigo-600 dark:text-indigo-400 uppercase">${secureEscape(peakLabel)}</span>
+                                        <span class="text-[9px] font-bold text-gray-600 dark:text-gray-300">${secureEscape(ticketTypeLabel)}</span>
                                         <span class="text-[9px] text-gray-400 font-mono">${secureEscape(kmLabel)}</span>
                                         <span class="text-[9px] text-gray-500 font-bold">${secureEscape(profileLabel)}</span>
                                         ${defaultRouteLabel ? `<span class="text-[9px] font-bold text-slate-600 dark:text-slate-300">Route: ${secureEscape(defaultRouteLabel)}</span>` : ''}

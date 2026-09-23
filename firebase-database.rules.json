@@ -17,6 +17,18 @@
           ".validate": "!newData.exists() || (newData.hasChildren(['origin', 'destination', 'price', 'approvedAt']) && newData.child('origin').isString() && newData.child('origin').val().length > 0 && newData.child('origin').val().length < 80 && newData.child('destination').isString() && newData.child('destination').val().length > 0 && newData.child('destination').val().length < 80 && newData.child('price').isNumber() && newData.child('price').val() >= 1 && newData.child('price').val() <= 500 && newData.child('approvedAt').isNumber())"
         }
       },
+      "map_stations": {
+        ".read": true,
+        "$stationKey": {
+          ".validate": "!newData.exists() || (newData.hasChildren(['lat', 'lon']) && newData.child('lat').isNumber() && newData.child('lat').val() >= -35 && newData.child('lat').val() <= -22 && newData.child('lon').isNumber() && newData.child('lon').val() >= 16 && newData.child('lon').val() <= 33)"
+        }
+      },
+      "track_forks": {
+        ".read": true,
+        "$routeId": {
+          ".validate": "!newData.exists() || (newData.child('at').isString() && newData.child('at').val().length > 0 && newData.child('at').val().length < 80 && newData.hasChild('branches'))"
+        }
+      },
       "route_fares": {
         ".read": true,
         "$routeId": {
@@ -179,7 +191,7 @@
         ".write": "auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')",
         "$voteId": {
           ".write": "!data.exists()",
-          ".validate": "newData.hasChildren(['origin','destination','quotedPrice','reportedPrice','agree','deviceId','at']) && newData.child('origin').isString() && newData.child('origin').val().length > 0 && newData.child('origin').val().length < 80 && newData.child('destination').isString() && newData.child('destination').val().length > 0 && newData.child('destination').val().length < 80 && newData.child('quotedPrice').isNumber() && newData.child('quotedPrice').val() >= 1 && newData.child('quotedPrice').val() <= 500 && newData.child('reportedPrice').isNumber() && newData.child('reportedPrice').val() >= 1 && newData.child('reportedPrice').val() <= 500 && newData.child('agree').isBoolean() && newData.child('deviceId').isString() && newData.child('deviceId').val().length > 0 && newData.child('deviceId').val().length < 80 && newData.child('at').isNumber() && (!newData.hasChild('ticketUrl') || (newData.child('ticketUrl').isString() && newData.child('ticketUrl').val().length > 12 && newData.child('ticketUrl').val().length < 2000))"
+          ".validate": "newData.hasChildren(['origin','destination','quotedPrice','reportedPrice','agree','deviceId','at']) && newData.child('origin').isString() && newData.child('origin').val().length > 0 && newData.child('origin').val().length < 80 && newData.child('destination').isString() && newData.child('destination').val().length > 0 && newData.child('destination').val().length < 80 && newData.child('quotedPrice').isNumber() && newData.child('quotedPrice').val() >= 1 && newData.child('quotedPrice').val() <= 500 && newData.child('reportedPrice').isNumber() && newData.child('reportedPrice').val() >= 1 && newData.child('reportedPrice').val() <= 500 && newData.child('agree').isBoolean() && newData.child('deviceId').isString() && newData.child('deviceId').val().length > 0 && newData.child('deviceId').val().length < 80 && newData.child('at').isNumber() && (!newData.hasChild('ticketUrl') || (newData.child('ticketUrl').isString() && newData.child('ticketUrl').val().length > 12 && newData.child('ticketUrl').val().length < 2000)) && (!newData.hasChild('ticketType') || newData.child('ticketType').val() === 'single' || newData.child('ticketType').val() === 'return' || newData.child('ticketType').val() === 'weekly_mon_fri' || newData.child('ticketType').val() === 'weekly_mon_sat' || newData.child('ticketType').val() === 'monthly')"
         }
       },
       "fare_ticket_photos": {

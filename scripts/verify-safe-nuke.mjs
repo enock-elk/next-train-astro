@@ -143,9 +143,10 @@ assert(update.indexOf('await activateWaitingServiceWorker()') < update.indexOf("
 assert(update.includes("window.addEventListener('online', attempt)"), 'forced update retries immediately when online');
 assert(update.includes("document.visibilityState === 'visible'"), 'forced update defers until visible');
 assert(update.includes('peekIncomingVersionReport'), 'force update peeks published versions on the network');
-assert(update.includes('listAppVersionProbeUrls'), 'version peek uses origin plus dump mirrors');
-assert(update.includes('jsdelivr.net/gh/enock-elk/next-train-astro@main/public/app-version.json'), 'version peek includes jsDelivr dump');
-assert(update.includes('raw.githubusercontent.com/enock-elk/next-train-astro/main/public/app-version.json'), 'version peek includes GitHub raw dump');
+assert(update.includes('listAppVersionProbeUrls'), 'version peek lists same-origin app-version.json');
+assert(!update.includes('jsdelivr.net/gh/enock-elk/next-train-astro@main/public/app-version.json'), 'version peek does not call jsDelivr');
+assert(!update.includes('raw.githubusercontent.com/enock-elk/next-train-astro/main/public/app-version.json'), 'version peek does not call GitHub raw');
+assert(!update.includes('enock-elk.github.io/next-train-astro/app-version.json'), 'version peek does not call GitHub Pages');
 assert(update.includes('reloadToApplyUpdate'), 'updates reload the same URL');
 assert(!update.includes("path + '?v=' + Date.now()"), 'forced update does not invent a numeric ?v= hop');
 assert(update.includes("NEW APP VERSION found"), 'console logs when a new app version is found');

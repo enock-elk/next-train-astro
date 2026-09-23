@@ -38,6 +38,7 @@ import {
     setRuntimeGridOrderConfig,
 } from './grid-order.js';
 import { recordRouteScheduleRevision } from './schedule-revision.js';
+import { applyMapStationOverrides, fetchMapStationOverrides } from './map-overrides.js';
 
 // --- MODULE STATE VARIABLES ---
 export let regionCheckPromise = Promise.resolve();
@@ -904,6 +905,7 @@ export async function buildGlobalStationIndexAsync(targetDB) {
             .toUpperCase();
         if (!bare) return true;
         if (bare === 'STATION' || bare === 'COORDINATES' || bare === 'KM_MARK' || bare === 'KM MARK') return true;
+        if (bare === 'VARIANT') return true;
         if (bare.startsWith('LAST U') || bare.startsWith('LAST UPDATED')) return true;
         if (bare.startsWith('UPDATED:') || bare === 'UPDATED') return true;
         return false;
@@ -1050,6 +1052,12 @@ export async function buildGlobalStationIndexAsync(targetDB) {
         window.GHOST_STATION_LIST = ghosts;
         window.GHOST_STATION_INDEX = ghostIndex;
     }
+
+    try {
+        const stationOverrides = await fetchMapStationOverrides();
+        applyMapStationOverrides(tempIndex, stationOverrides);
+        applyMapStationOverrides(ghostIndex, stationOverrides);
+    } catch { /* timetable coords still stand */ }
 
     return tempIndex;
 }

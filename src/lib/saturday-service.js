@@ -7,7 +7,7 @@
  * Dijkstra / direct planning take over. Stubs on the closed corridor stay cut.
  * The moment live data appears on the placeholder itself, this path is skipped.
  */
-import { ROUTES, SATURDAY_PLACEHOLDER_ROUTES, HERC_KOED_JUNCTIONS } from './config.js';
+import { ROUTES, REGIONS, SATURDAY_PLACEHOLDER_ROUTES, HERC_KOED_JUNCTIONS } from './config.js';
 import { $fullDatabase, $globalStationIndex } from '../store.js';
 import { getScheduleFromDb } from './logic.js';
 import { isRealTime, normalizeStationName, usesSaturdayScheduleSheet } from './utils.js';
@@ -134,10 +134,30 @@ export function saturdayNoServiceCopy(routeId) {
             body: 'Metrorail Eastern Cape does not have Saturday train service on the East London to Berlin line.',
         };
     }
+    if (routeId === 'herc-koed') {
+        return {
+            regionLabel: 'Gauteng',
+            lineLabel: 'Hercules to Koedoespoort',
+            body: 'Metrorail Gauteng does not have Saturday train service on the Hercules to Koedoespoort line.',
+        };
+    }
+    const route = ROUTES[routeId];
+    if (!route) {
+        return {
+            regionLabel: 'Gauteng',
+            lineLabel: 'Hercules to Koedoespoort',
+            body: 'Metrorail Gauteng does not have Saturday train service on the Hercules to Koedoespoort line.',
+        };
+    }
+    const regionLabel = REGIONS[route.region]?.name || 'Metrorail';
+    const titleEnd = (raw) => stationDisplayName(raw).toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
+    const endA = titleEnd(route.destA);
+    const endB = titleEnd(route.destB);
+    const lineLabel = endA && endB ? `${endA} to ${endB}` : (route.name || routeId);
     return {
-        regionLabel: 'Gauteng',
-        lineLabel: 'Hercules to Koedoespoort',
-        body: 'Metrorail Gauteng does not have Saturday train service on the Hercules to Koedoespoort line.',
+        regionLabel,
+        lineLabel,
+        body: `Metrorail ${regionLabel} does not have a Saturday timetable for the ${lineLabel} line. The trip planner can check other routes for a way through.`,
     };
 }
 

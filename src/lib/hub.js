@@ -39,6 +39,7 @@ import {
     submitInboxReaction,
 } from './inbox-reactions.js';
 import { isAdminAuthed } from './admin-chrome.js';
+import { bindMapOverrideSaveListener } from './map-overrides.js';
 import { trackAnalyticsEvent } from './analytics.js';
 import { prepareRichHtml, injectRichTextStyles, isSafeHref } from './rich-text.js';
 import {
@@ -1986,6 +1987,7 @@ export function initHub() {
     window.syncFeedbackModalViewport = syncFeedbackModalViewport;
     injectRichTextStyles();
     initAlertsChannel();
+    bindMapOverrideSaveListener();
     bindPasswordReveal({
         inputId: 'account-password',
         buttonId: 'account-toggle-password-btn',

@@ -455,6 +455,8 @@ const regionSeoSlugs = Object.fromEntries(
         display: none;
         position: fixed;
         left: 10px; right: 10px;
+        max-height: 46vh;
+        overflow: auto;
         bottom: max(0.6rem, env(safe-area-inset-bottom, 0px));
         z-index: 1105;
         pointer-events: auto;
@@ -490,11 +492,14 @@ const regionSeoSlugs = Object.fromEntries(
       }
       #nt-track-editor-tools {
         display: flex;
+        flex-wrap: wrap;
         gap: 0.3rem;
         margin-top: 0.5rem;
       }
       #nt-track-editor-tools button,
       #nt-track-editor-actions button,
+      #nt-track-editor-fork button,
+      #nt-track-editor-move-pins-wrap button,
       #nt-track-editor-stations-toggle,
       #nt-track-editor-done {
         font-family: inherit;
@@ -509,6 +514,8 @@ const regionSeoSlugs = Object.fromEntries(
       }
       html.dark #nt-track-editor-tools button,
       html.dark #nt-track-editor-actions button,
+      html.dark #nt-track-editor-fork button,
+      html.dark #nt-track-editor-move-pins-wrap button,
       html.dark #nt-track-editor-stations-toggle,
       html.dark #nt-track-editor-done {
         background: #1f2937;
@@ -516,8 +523,20 @@ const regionSeoSlugs = Object.fromEntries(
         border-color: #4b5563;
       }
       #nt-track-editor-tools button {
-        flex: 1;
+        flex: 1 1 30%;
       }
+      #nt-track-editor-fork,
+      #nt-track-editor-move-pins-wrap { display: none; margin-top: 0.4rem; }
+      html.nt-track-tool-fork #nt-track-editor-fork { display: block; }
+      html.nt-track-tool-brush #nt-track-editor-move-pins-wrap {
+        display: flex;
+        align-items: center;
+        gap: 0.35rem;
+        flex-wrap: wrap;
+        font-size: 12px;
+        font-weight: 700;
+      }
+      #nt-track-editor-fork-status { margin: 0 0 0.35rem; font-size: 12px; font-weight: 700; line-height: 1.35; }
       #nt-track-editor-tools button.is-on {
         background: #111827;
         color: #fff;
@@ -726,8 +745,23 @@ const regionSeoSlugs = Object.fromEntries(
       <button type="button" data-track-tool="move" class="is-on">Move</button>
       <button type="button" data-track-tool="add">Add</button>
       <button type="button" data-track-tool="delete">Delete</button>
+      <button type="button" data-track-tool="brush">Push</button>
+      <button type="button" data-track-tool="stations">Pins</button>
+      <button type="button" data-track-tool="fork">Fork</button>
     </div>
     <p id="nt-track-editor-hint">Drag a dot along the rails. Zoom in for more dots.</p>
+    <div id="nt-track-editor-move-pins-wrap">
+      <label for="nt-track-editor-move-pins"><input type="checkbox" id="nt-track-editor-move-pins" /> Move station pins</label>
+      <button type="button" id="nt-track-brush-smaller">Smaller</button>
+      <button type="button" id="nt-track-brush-larger">Larger</button>
+    </div>
+    <div id="nt-track-editor-fork">
+      <p id="nt-track-editor-fork-status">Tap the split station on this line.</p>
+      <div id="nt-track-editor-fork-actions">
+        <button type="button" id="nt-track-fork-branch">Next branch</button>
+        <button type="button" id="nt-track-fork-save">Save fork</button>
+      </div>
+    </div>
     <p id="nt-track-editor-cover"></p>
     <div id="nt-track-editor-stations-row">
       <button type="button" id="nt-track-editor-stations-toggle" aria-expanded="false" aria-controls="nt-track-editor-stations-wrap">Stations</button>
@@ -739,6 +773,7 @@ const regionSeoSlugs = Object.fromEntries(
     </div>
     <div id="nt-track-editor-actions">
       <button type="button" id="nt-track-editor-undo">Undo</button>
+      <button type="button" id="nt-track-editor-save-pins">Save pins</button>
       <button type="button" id="nt-track-editor-download">Save</button>
     </div>
   </div>

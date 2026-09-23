@@ -17,7 +17,8 @@ import {
 import { orderGridTrainIds } from './grid-order.js';
 
 import { 
-    normalizeStationName, timeToSeconds, formatTimeDisplay, isRealTime, escapeHTML, safeStorage,
+    normalizeStationName, timeToSeconds, formatTimeDisplay, isRealTime, isExpressSkip,
+    isVariantStationName, variantMapFromSchedule, escapeHTML, safeStorage,
     formatRouteLabelHtml, formatRouteLabelPlain, routePrimaryGridDirection, shortSharedSourceLabel,
     scheduleCacheSlot, routeSheetKeyForDay, warningTriangleSvg, gridNoticeShowsOnDay
 } from './utils.js';
@@ -973,6 +974,8 @@ export const Renderer = {
             }
         }
 
+        const variantByTrain = variantMapFromSchedule(schedule);
+
         let html = `
             ${gridNoticeHtml}
             <table class="w-full ${fontSizeClass} text-left border-collapse ${tableClass}">
@@ -981,6 +984,7 @@ export const Renderer = {
                         <th class="nt-station-col sticky left-0 z-30 ${stickyHeaderClass} ${paddingClass} border-b border-r font-bold min-w-[140px] shadow-lg text-left pl-3">Station</th>
                         ${sortedCols.map((h, i) => {
                             const isHighlight = i === activeColIndex;
+                            const viaLabel = variantByTrain[h] || '';
                             const exclusionType = isTrainExcluded(h, routeId, dayIdx, isExport ? 'export' : 'grid');
                             const paintExclusion = !!exclusionType && (!isExport || exclusionShowsOnExport(h, routeId, dayIdx));
                             
@@ -990,6 +994,9 @@ export const Renderer = {
                                 : 'display:block;font-weight:inherit;color:inherit;line-height:14px;';
                             const stack = (statusHtml, statusStyle = '') => `<span class="nt-grid-train-head" style="display:grid;grid-template-rows:11px ${isExport ? '21px' : '14px'};align-items:center;justify-items:center;gap:2px;line-height:1;white-space:nowrap;"><span class="nt-grid-train-status" style="display:flex;height:11px;align-items:center;justify-content:center;${statusStyle}">${statusHtml}</span><span class="nt-grid-train-id" style="${trainIdStyle}">${h}</span></span>`;
                             let headerContent = stack('&nbsp;', 'visibility:hidden;');
+                            const viaHtml = viaLabel
+                                ? `<span class="nt-grid-via" title="Via ${escapeHTML(viaLabel)}" style="display:block;margin-top:2px;font-size:8px;font-weight:800;letter-spacing:0.02em;line-height:1.15;white-space:normal;">Via ${escapeHTML(viaLabel)}</span>`
+                                : '';
                             
                             if (paintExclusion && exclusionType === 'special') {
                                 const splIcon = `<svg class="inline-block w-2 h-2 mr-0.5 mb-[1px]" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>`;
@@ -1016,6 +1023,7 @@ export const Renderer = {
                             const exclHeadAttrs = (!isExport && paintExclusion && exclusionType !== 'special')
                                 ? ` data-excl-open="1" data-excl-route="${escapeHTML(String(routeId || ''))}" data-excl-train="${escapeHTML(String(h || ''))}" data-excl-day="${Number(dayIdx)}" tabindex="0" role="button" aria-label="Why train ${escapeHTML(String(h))} has no service"`
                                 : '';
+                            headerContent += viaHtml;
                             const wrapClass = (isExport && paintExclusion && exclusionType !== 'special') ? 'whitespace-normal' : 'whitespace-nowrap';
                             return `<th class="${paddingClass} border-b border-r ${borderClass} ${wrapClass} text-center ${bgClass} ${minWidthClass}" ${isHighlight ? 'id="grid-active-col"' : ''} ${!isExport ? `data-nt-live-host="${escapeHTML(String(h || ''))}"` : ''}${exclHeadAttrs}>${headerContent}</th>`;
                         }).join('')}
@@ -1027,7 +1035,8 @@ export const Renderer = {
 
         let validRowIndex = 0;
         schedule.rows.forEach(row => {
-            if (!row.STATION || row.STATION.toLowerCase().includes('updated')) return; 
+            if (!row.STATION || row.STATION.toLowerCase().includes('updated')) return;
+            if (isVariantStationName(row.STATION)) return; 
             const cleanStation = row.STATION.replace(' STATION', '');
             let hasData = false;
             sortedCols.forEach(col => { if (row[col] && row[col] !== "-" && row[col] !== "") hasData = true; });
@@ -1072,7 +1081,12 @@ export const Renderer = {
                     <td class="sticky left-0 z-10 ${currentStickyCellClass} ${paddingClass} border-r font-bold truncate max-w-[140px] shadow-lg border-b text-left pl-3">${cleanStation}</td>
                     ${sortedCols.map((col, i) => {
                         let val = row[col] || "-";
-                        if (val !== "-") {
+                        const expressSkip = isExpressSkip(val);
+                        if (expressSkip) {
+                            val = isExport
+                                ? 'EXPR'
+                                : `<button type="button" class="nt-expr-btn text-[10px] font-black tracking-wide text-amber-700 dark:text-amber-300 underline decoration-dotted focus:outline-none" data-expr-skip="1" data-expr-station="${escapeHTML(cleanStation)}" data-expr-train="${escapeHTML(String(col))}" aria-label="Train ${escapeHTML(String(col))} does not stop at ${escapeHTML(cleanStation)}">EXPR</button>`;
+                        } else if (val !== "-") {
                             if (isRealTime(val)) {
                                 val = formatTimeDisplay(val); 
                             } else {
@@ -1183,9 +1197,14 @@ export const Renderer = {
             <div class="w-full h-full overflow-auto">
                 <div class="bg-blue-50 dark:bg-blue-900/30 border-l-4 border-blue-500 p-3 mx-3 my-3 text-[11px] sm:text-xs text-blue-800 dark:text-blue-300 font-medium shadow-sm rounded-r">
                     <p class="leading-relaxed">${escapeHTML(noticeBody)}</p>
-                    <button type="button" id="grid-switch-weekday-btn" class="mt-2 inline-flex items-center justify-center px-3 py-1.5 rounded-md bg-white dark:bg-gray-800 border border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300 text-[11px] font-bold shadow-sm focus:outline-none">
+                    <div class="mt-2 flex flex-wrap gap-2">
+                    <button type="button" id="grid-switch-weekday-btn" class="inline-flex items-center justify-center px-3 py-1.5 rounded-md bg-white dark:bg-gray-800 border border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300 text-[11px] font-bold shadow-sm focus:outline-none">
                         Switch to Mon - Fri
                     </button>
+                    <button type="button" id="grid-plan-trip-btn" class="inline-flex items-center justify-center px-3 py-1.5 rounded-md bg-blue-600 text-white text-[11px] font-bold shadow-sm focus:outline-none">
+                        Plan this trip
+                    </button>
+                    </div>
                 </div>
                 <table class="w-full text-xs text-left border-collapse bg-white dark:bg-gray-900">
                     <thead class="text-[10px] uppercase bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-200 sticky top-0 z-20 shadow-sm">

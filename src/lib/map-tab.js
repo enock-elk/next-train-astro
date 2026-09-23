@@ -17,6 +17,7 @@ import { currentScheduleData } from './live-board.js';
 import { trainGoingLabel, trainGoingFullLabel, trainTowardLabel, trainTerminusName, trainHeadboardTitle, journeyHeadingAtProgress, TRACKING_WINDOW_SEC, compareNearbyTrainLikelihood, isGhostTrackable, trainIdsInSchedule } from './train-ghosts.js';
 import { relaxLiveShareGuards } from './features.js';
 import { isAdminAuthed } from './admin-chrome.js';
+import { bindMapOverrideSaveListener } from './map-overrides.js';
 import { getLiveTrainFollow } from './live-train-follow.js';
 import { formatGpsPingAge, formatLastSeenWithPingClock, gpsPingSuccessAt, RIDE_GPS_STALE_MS } from './gps-freshness.js';
 import {
@@ -2878,6 +2879,7 @@ function locateSharedTrainOnMap() {
 export function bindMapTabUi() {
     if (typeof document === 'undefined' || window.__ntMapTabBound) return;
     window.__ntMapTabBound = true;
+    bindMapOverrideSaveListener();
     window.__ntFullscreenMapTab = fullscreenMapTab;
     exposeEmbedBridge();
     bindTrackingRestoreDrag();

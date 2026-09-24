@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_09.24.1': [
+        'SEO route first and last are departures from the origin station (Pretoria 5:12 towards Mabopane, not the Mabopane arrival). Desktop landings use the width of the window. Phones stay a single column. Header region CTA is gone. The blurb button is gone. Download line is “To Download this time table, Open Next Train online”. Fare note says weekly and monthly include the return. Province and line in the facts card link to their SEO pages. Insight copy is an About this route card above the station list, omitted when empty. Preview copy says the timetable works offline. Slow network confirm stays: it only appears when the update did not download, and Proceed can still clear the offline copy. No What’s New. forceShow stays false.',
+    ],
     'V9_09.23.1': [
         'Empty Saturday grids name the open route and add Plan this trip. EXPRESS cells render as EXPR (tap explains the skip; export and SEO use the same text). A VARIANT row with MONTE_VISTA labels the column Via Monte Vista and is not a station. Fare No asks for ticket type before the amount and stores ticketType; approving a quote writes config/planner_fares only for single. Track editor can drag station pins (config/map_stations), save a y-junction (config/track_forks), and push vertices inside a circle. SEO landings keep every fact and add a sticky Open in Next Train bar. Version probes fetch same-origin /app-version.json only. Map iframe drops the duplicate allowfullscreen attribute. What’s New covers the weekend board and EXPR only. forceShow stays false.',
     ],

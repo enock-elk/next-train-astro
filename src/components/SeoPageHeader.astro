@@ -1,7 +1,7 @@
 ---
 /**
- * Crawlable landings use the in-app header chrome: Next Train left,
- * Open Next Train · region on the right (bell slot). No logo, no theme toggle.
+ * Crawlable landings use the in-app header chrome: Next Train left.
+ * The region shortcut stays off this row. No logo, no theme toggle.
  */
 import { withBase } from '../lib/config.js';
 
@@ -20,9 +20,6 @@ const homeHref = region
   ? withBase(`/?region=${encodeURIComponent(region)}`)
   : withBase('/');
 const ctaHref = Astro.props.ctaHref || homeHref;
-const ctaLabel =
-  Astro.props.ctaLabel ||
-  (regionLabel ? `Open Next Train · ${regionLabel}` : 'Open Next Train');
 ---
 
 <header id="app-header" class="app-header shrink-0 px-3 py-2.5 z-30 relative flex items-start justify-between gap-2 border-b">
@@ -40,12 +37,6 @@ const ctaLabel =
       <p id="current-day" class="text-[11px] sm:text-xs font-medium text-gray-500 dark:text-gray-400 leading-tight">Getting schedules…</p>
     </div>
   </div>
-  <a
-    href={ctaHref}
-    class="seo-open-app shrink-0 mt-1 max-w-[9.5rem] sm:max-w-none text-[11px] sm:text-xs font-bold text-right leading-tight underline-offset-2 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70 rounded-sm"
-  >
-    {ctaLabel}
-  </a>
 </header>
 <a id="seo-open-bar" class="seo-open-bar" href={ctaHref}>Open in Next Train</a>
 
@@ -72,28 +63,24 @@ const ctaLabel =
   body:has(#seo-open-bar) {
     padding-bottom: calc(4.5rem + env(safe-area-inset-bottom));
   }
-  #app-header ~ main {
-    max-width: 46rem;
-    margin-inline: auto;
-  }
-  #app-header ~ main .max-w-6xl,
-  #app-header ~ main .max-w-5xl,
-  #app-header ~ main .max-w-4xl,
-  #app-header ~ main .max-w-3xl,
-  #app-header ~ main .max-w-2xl {
-    max-width: none;
-  }
-  #app-header ~ main [class*="grid-cols-"] {
-    grid-template-columns: minmax(0, 1fr);
-  }
   #app-header ~ main h1 {
-    font-size: clamp(1.9rem, 4.2vw, 2.7rem);
-    letter-spacing: -0.035em;
-    line-height: 1.08;
+    font-size: clamp(1.35rem, 0.85rem + 2.2vw, 2.15rem);
+    letter-spacing: -0.03em;
+    line-height: 1.15;
   }
-  #app-header ~ main h2 {
-    font-size: 1.35rem;
-    letter-spacing: -0.02em;
+  @media (min-width: 1024px) {
+    #app-header ~ main {
+      max-width: 76rem;
+      margin-inline: auto;
+    }
+    #app-header ~ main .max-w-2xl,
+    #app-header ~ main .max-w-6xl {
+      max-width: none;
+    }
+    #app-header ~ main h2 {
+      font-size: 1.35rem;
+      letter-spacing: -0.02em;
+    }
   }
   #app-header ~ main .rounded-2xl,
   #app-header ~ main .rounded-xl {

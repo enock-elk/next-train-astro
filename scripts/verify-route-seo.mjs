@@ -536,11 +536,11 @@ if (!gridPathSa.includes('d=sa') || gridPathSa.includes('dir=')) {
     if (!towardB?.stations?.includes('Durban')) fail('kzn-umlazi weekday-B missing Durban');
     if (durbanCount !== 1) fail(`kzn-umlazi weekday-B should have one Durban row, got ${durbanCount}`);
     if (towardB.last === '11:22') fail('kzn-umlazi first/last still uses Durban Yard origin last 11:22');
-    if (towardB.first !== '6:15' || towardB.last !== '21:17') {
-      fail(`kzn-umlazi dest-row first/last should be 6:15/21:17, got ${towardB.first}/${towardB.last}`);
+    if (towardB.first !== '4:57' || towardB.last !== '19:59') {
+      fail(`kzn-umlazi origin first/last should be 4:57/19:59 at Durban, got ${towardB.first}/${towardB.last}`);
     }
-    if (towardA?.first !== '5:15' || towardA?.last !== '21:45') {
-      fail(`kzn-umlazi weekday-A dest Durban first/last should be 5:15/21:45, got ${towardA?.first}/${towardA?.last}`);
+    if (towardA?.first !== '3:57' || towardA?.last !== '20:27') {
+      fail(`kzn-umlazi weekday-A origin first/last should be 3:57/20:27 at Umlazi, got ${towardA?.first}/${towardA?.last}`);
     }
   }
 }
@@ -682,8 +682,8 @@ if (existsSync(DIST)) {
     if (!/Langlaagte/.test(html) || !/Croesus/.test(html)) {
       fail('Naledi route HTML missing Langlaagte / Croesus through-train note');
     }
-    if (!html.includes('Open Next Train · Gauteng')) {
-      fail('Naledi route HTML missing header Open Next Train · Gauteng');
+    if (html.includes('Open Next Train · Gauteng')) {
+      fail('Naledi route HTML should not put Open Next Train · Gauteng in the header');
     }
     if (html.includes('seo-theme-toggle') || html.includes('SeoThemeToggle')) {
       fail('Naledi route HTML must not include the SEO dark-mode toggle');
@@ -784,8 +784,8 @@ if (existsSync(DIST)) {
     if (!html.includes('<table')) fail('Kempton route HTML has no <table>');
     if (!html.includes('From Pretoria towards Kempton Park')) fail('Kempton route HTML missing destA-first grid heading');
     if (!html.includes('Open live timetable in Next Train')) fail('Kempton route HTML missing live-board CTA');
-    if ((html.match(/Open live timetable in Next Train/g) || []).length !== 2) {
-      fail('Kempton route HTML should keep exactly two “Open live timetable in Next Train” CTAs');
+    if ((html.match(/Open live timetable in Next Train/g) || []).length !== 1) {
+      fail('Kempton route HTML should keep one “Open live timetable in Next Train” CTA');
     }
     if (html.includes('Download and Share are there.')) {
       fail('Kempton route HTML still has per-grid Download and Share lines');
@@ -818,8 +818,7 @@ if (existsSync(DIST)) {
     if (!html.includes('Durban Yard')) fail('Umlazi route HTML missing Durban Yard');
     if ((html.match(/>Durban</g) || []).length < 1) fail('Umlazi route HTML missing Durban passenger stop');
     if (/last 11:22/.test(html)) fail('Umlazi first/last still shows Yard last 11:22');
-    if (!html.includes('21:17')) fail('Umlazi route HTML missing dest last 21:17');
-    if (!html.includes('join along the line')) fail('Umlazi first/last copy missing joiner note');
+    if (!html.includes('departures from the origin station')) fail('Umlazi first/last copy must name the origin station');
     if (!html.includes('Durban Yard, then the passenger stop at Durban')) {
       fail('Umlazi route HTML missing Durban Yard vs Durban commentary');
     }
@@ -943,8 +942,8 @@ if (existsSync(DIST)) {
       fail('Gauteng network map image must not be wrapped in a map.html link');
     }
     if (!html.includes('Interactive map')) fail('Gauteng region page missing Interactive map control');
-    if (!html.includes('Open Next Train · Gauteng')) {
-      fail('Gauteng region page missing Open Next Train · Gauteng');
+    if (html.includes('Open Next Train · Gauteng')) {
+      fail('Gauteng region page should not put Open Next Train · Gauteng in the header');
     }
     if (/href="[^"]*western-cape-public-holidays/.test(html)) {
       fail('Gauteng region page must not link a Western Cape public-holiday timetable');

@@ -206,7 +206,7 @@ function departuresFromRow(row, trainIds) {
  * @param {string} sheetKey
  * @param {string} [originName]  Terminus we depart from (label, e.g. "Pretoria")
  * @param {{ destName?: string }} [options]
- * First/last prefer the destination row (trains that join along the line still count).
+ * First/last are clocks on the origin row (the station named in "From … towards").
  * @returns {{
  *   sheetKey: string,
  *   stations: string[],
@@ -249,9 +249,9 @@ export function extractSeoGrid(db, sheetKey, originName, options = {}) {
         || keptRows.filter((r) => rowHasClockInColumns(r, trainIds)).at(-1)
         || null;
     const destStation = destRow ? stationNameFromRow(destRow) : stations[stations.length - 1];
-    const destClocks = destRow ? firstLastFromRow(destRow, trainIds) : { first: null, last: null };
-    const { first, last } = destClocks.first
-        ? destClocks
+    const originClocks = originRow ? firstLastFromRow(originRow, trainIds) : { first: null, last: null };
+    const { first, last } = originClocks.first
+        ? originClocks
         : firstLastFromTrainsFirstClock(keptRows, trainIds);
     return {
         sheetKey,
@@ -554,8 +554,10 @@ export function firstLastSummaryLine(grid) {
     if (grid.first) bits.push(`first ${grid.first}`);
     if (grid.last) bits.push(`last ${grid.last}`);
     if (!bits.length) return null;
-    const toward = grid.destName || String(grid.heading || '').replace(/^From .+ towards\s+/i, '').replace(/^Showing trains to\s+/i, '');
-    return `${grid.heading}: ${bits.join(', ')} at ${toward}`;
+    const at = grid.originStation
+        || String(grid.heading || '').replace(/^From\s+/i, '').replace(/\s+towards\s+.+$/i, '')
+        || '';
+    return `${grid.heading}: ${bits.join(', ')} at ${at}`;
 }
 
 /** Ordered stop names for one corridor (weekday B, else weekday A). */

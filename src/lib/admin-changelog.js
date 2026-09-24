@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_09.24.6': [
+        'Timetable extract time cells no longer use border-gray-200, which dark mode paints as --nt-border. Every extract cell border is forced to #e5e7eb, the same light line as the station column. Blue and white row shading stays. No What’s New. forceShow stays false.',
+    ],
     'V9_09.24.5': [
         'Timetable extracts alternate white and light blue rows again. Cell borders stay the light grey line, without the darker shadow. Dark Ticket Prices frame is a slight mix of the surface toward white so it separates from the canvas. What’s New mentions the fare sheet. forceShow stays false.',
     ],

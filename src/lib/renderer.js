@@ -983,7 +983,7 @@ export const Renderer = {
         let tableClass = isExport ? (showRightAnchor ? 'export-compact' : '') : 'bg-white dark:bg-gray-900';
         let theadClass = isExport ? '' : 'bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-200'; 
         let stickyHeaderClass = isExport ? '' : 'bg-gray-200 dark:bg-gray-700 border-gray-300 dark:border-gray-600'; 
-        let borderClass = isExport ? 'border-gray-200' : 'border-gray-300 dark:border-gray-700';
+        let borderClass = isExport ? '' : 'border-gray-300 dark:border-gray-700';
         let tbodyClass = isExport ? '' : 'bg-white dark:bg-gray-900';
         let stickyCellClass = isExport ? 'nt-station-col' : 'nt-station-col bg-gray-100 dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-white';
 
@@ -1551,7 +1551,7 @@ export async function takeGridSnapshot(direction = 'A', dayType = 'weekday') {
             headerCell.style.position = 'relative'; 
             headerCell.style.backgroundColor = tableHeaderBg;
             headerCell.style.color = headerTextColor;
-            headerCell.style.border = `1px solid ${borderColor}`;
+            headerCell.style.setProperty('border', `1px solid ${borderColor}`, 'important');
             headerCell.style.padding = isCompact ? '8px 3px' : '8px 6px'; 
             headerCell.style.fontSize = isCompact ? '17px' : '18px';
             headerCell.style.fontWeight = headerCell.querySelector('.nt-grid-train-id') ? '400' : '900';
@@ -1560,7 +1560,7 @@ export async function takeGridSnapshot(direction = 'A', dayType = 'weekday') {
         });
         
         t.querySelectorAll('td').forEach(td => {
-            td.style.border = `1px solid ${borderColor}`;
+            td.style.setProperty('border', `1px solid ${borderColor}`, 'important');
             td.style.padding = isCompact ? '6px 2.5px' : '6px'; 
             td.style.color = textColor;
             td.style.fontSize = isCompact ? '13.5px' : '15px'; 

@@ -1102,6 +1102,7 @@ export const Renderer = {
             let rowClass = shadeWholeRow && !isExport
                 ? 'bg-gray-100 dark:bg-gray-800'
                 : (isSelectedRow ? 'bg-blue-50 dark:bg-blue-900/20' : (isZebra && !isExport ? 'bg-gray-50 dark:bg-gray-800/40' : ''));
+            if (isZebra && isExport) rowClass += ' export-zebra';
             if (shadeWholeRow && isExport) rowClass += ' export-disrupted-row';
             const disrRowAttrs = (!isExport && isDisruptedRow)
                 ? ` data-disr-open="1" data-disr-id="${escapeHTML(String(rowDisr.id || ''))}" tabindex="0" role="button" aria-label="Service incident at ${escapeHTML(cleanStation)}"`
@@ -1404,7 +1405,8 @@ export async function takeGridSnapshot(direction = 'A', dayType = 'weekday') {
     const mutedColor = '#6b7280';
     const tableHeaderBg = '#f1f5f9'; 
     const headerTextColor = '#1e293b'; 
-    const cellBg = '#ffffff'; 
+    const cellBg = '#ffffff';
+    const zebraBg = '#eff6ff'; 
 
     let dummyDayIdx = (selectedDay === 'weekday' || selectedDay === 'sunday') ? 1 : 6;
 
@@ -1589,6 +1591,10 @@ export async function takeGridSnapshot(direction = 'A', dayType = 'weekday') {
             td.style.color = '#ef4444'; 
             td.style.opacity = '0.5'; 
         });
+        t.querySelectorAll('tr.export-zebra td:not(.export-spl-cell):not(.export-banned-cell):not(.export-disrupted-cell)').forEach(td => {
+            td.style.backgroundColor = zebraBg;
+        });
+
         t.querySelectorAll('tr.export-disrupted-row td, td.export-disrupted-cell').forEach(td => {
             td.style.backgroundColor = '#f3f4f6';
             td.style.color = '#9ca3af';

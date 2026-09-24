@@ -34,6 +34,7 @@ assert(FORCE_UPDATE_REQUIRED === true, 'this ship forces existing shells onto V9
 assert(CHANGELOG_DATA[0].forceShow === false, 'What’s New does not auto-open');
 assert(!CHANGELOG_DATA.some((e) => e.forceShow), 'no What’s New card opts into auto-open');
 const wn = (id) => CHANGELOG_DATA.find((e) => e.id === id);
+assert(wn('V9_09.24.5')?.features?.[0]?.includes('Ticket Prices'), 'V9_09.24.5 What’s New mentions Ticket Prices');
 assert(wn('V9_09.24.4')?.features?.[0]?.includes('holiday timetable'), 'V9_09.24.4 What’s New names the holiday timetable');
 assert(wn('V9_09.21.1')?.id === 'V9_09.21.1' && wn('V9_09.21.1').features.length === 1, 'What’s New still has V9_09.21.1');
 assert(wn('V9_09.21.1').features[0].includes('Opening the app goes from the splash screen'), 'V9_09.21.1 What’s New mentions splash to board');
@@ -146,9 +147,10 @@ const board = readFileSync(new URL('../src/lib/live-board-ui.js', import.meta.ur
 const renderer = readFileSync(new URL('../src/lib/renderer.js', import.meta.url), 'utf8');
 assert(renderer.includes("const borderColor = '#e5e7eb'"), 'export table margins stay light grey');
 assert(!renderer.includes("const borderColor = '#cbd5e1'"), 'export must not use the darker slate cell border');
-assert(renderer.includes("const cellBg = '#ffffff'"), 'export time cells stay white');
-assert(!renderer.includes('export-zebra'), 'export must not zebra-fill time cells');
-assert(!renderer.includes('zebraBg'), 'export must not paint the slate zebra background');
+assert(renderer.includes("const cellBg = '#ffffff'"), 'export even rows stay white');
+assert(renderer.includes("const zebraBg = '#eff6ff'"), 'export odd rows use a light blue shade');
+assert(renderer.includes('export-zebra'), 'export alternates blue and white rows');
+assert(renderer.includes("td.style.boxShadow = 'none'"), 'export time borders stay a flat light line');
 assert(renderer.includes('boardHolidayName'), 'empty board names a public holiday');
 assert(renderer.includes('This route does not run on ${holidayName}'), 'holiday empty board does not say Saturday');
 assert(renderer.includes('APP_VERSION'), 'export footer includes the app version');

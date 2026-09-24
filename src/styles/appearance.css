@@ -1018,6 +1018,14 @@ body.nav-bottom:not(.nt-immersive) #sidenav {
   color: var(--nt-primary-fg) !important;
   border-color: transparent !important;
 }
+html.dark #fare-modal > div {
+  background-color: color-mix(in srgb, var(--nt-surface) 86%, #ffffff) !important;
+  box-shadow: 0 0 0 1px color-mix(in srgb, #ffffff 22%, var(--nt-border)), 0 18px 40px rgba(0, 0, 0, 0.45) !important;
+}
+html.dark #fare-modal > div > .rounded-t-2xl,
+html.dark #fare-modal > div > .rounded-b-2xl {
+  background-color: color-mix(in srgb, var(--nt-surface) 90%, #ffffff) !important;
+}
 #planner-train-sheet-fare {
   background-color: #ffffff !important;
   color: #1e3a8a !important;

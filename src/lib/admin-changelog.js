@@ -27,6 +27,7 @@ export const ADMIN_CHANGELOG = {
         'Timetable extracts stay on the light sheet. Time cells use only a right and bottom #e5e7eb line, the same edges as the station column, so the grid is not a doubled dark box. Blue and white rows stay. No What’s New. forceShow stays false.',
     ],
     'V9_09.24.6': [
+        'Wide timetable exports that show the STN column shrink the train number from 18px to 17px. Exports without that column stay at 18px. No What’s New. forceShow stays false.',
         'Timetable extract time cells no longer use border-gray-200, which dark mode paints as --nt-border. Every extract cell border is forced to #e5e7eb, the same light line as the station column. Blue and white row shading stays. No What’s New. forceShow stays false.',
     ],
     'V9_09.24.5': [

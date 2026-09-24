@@ -602,8 +602,20 @@ assert(
     'network map paints Berea Road to Bridge City on the trunk, not via kwaMashu',
 );
 assert(
-    mapApp.includes('KZN_KWAMASHU_SPUR'),
-    'Duff\'s Road to kwaMashu is a second kzn-bridgecity polyline',
+    mapApp.includes('KZN_KWAMASHU_MAIN'),
+    'Duff\'s Road to kwaMashu is a second selectable KZN map line',
+);
+assert(
+    mapApp.includes("KZN_MAP_KWAMASHU_ID = 'kzn-kwamashu'"),
+    'the kwaMashu working is its own Leaflet line, not a detour of Bridge City',
+);
+assert(
+    mapApp.includes('function splitKznNorthMapRoutes'),
+    'Berea Road splits at Duff\'s Road into Bridge City and kwaMashu map lines',
+);
+assert(
+    mapApp.includes("name: 'Berea Road ↔ KwaMashu'"),
+    'the map dropdown lists Berea Road to KwaMashu',
 );
 assert(
     mapApp.includes('function stitchBakedStops') && mapApp.includes('function dropOutAndBack'),
@@ -618,7 +630,7 @@ assert(
     'fork paint keeps the gold bake so the kwaMashu spur can still be sliced',
 );
 {
-    const stitchAt = mapApp.indexOf("routeObj.routeId === 'kzn-bridgecity' && !preferBakeId");
+    const stitchAt = mapApp.indexOf("isKznNorthMapLine(routeObj.routeId) && !preferBakeId");
     const graphAt = mapApp.indexOf('smoothStopsOnRailGraph(bundle.graph, stops, baked)');
     assert(stitchAt >= 0 && graphAt >= 0 && stitchAt < graphAt, 'kzn-bridgecity is hop-stitched before graph smooth');
 }

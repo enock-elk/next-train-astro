@@ -2,7 +2,7 @@
   "branch": "map-gold",
   "frozenAt": "b7328ca04618438a5e57812eaf29e7d48ce0d980",
   "version": "V9_09.20.11",
-  "note": "Gold snapshot of this build: kzn-bridgecity network paint hop-stitches the Duff's Road fork (Bridge City trunk + kwaMashu spur). Diff against origin/map-gold. Fast-forward map-gold after this lands on main. Never force-push map-gold.",
+  "note": "Gold snapshot of this build: Leaflet splits kzn-bridgecity at Duff's Road into Berea Road to kwaMashu and Berea Road to Bridge City. Diff against origin/map-gold. Fast-forward map-gold after this lands on main. Never force-push map-gold.",
   "files": {
     "public/tracks/rail-tracks-EC.geojson": {
       "md5": "43409bfd05405205e596f0d03345ab18",
@@ -21,8 +21,8 @@
       "sha256": "090a5d7fc45cafb8c7b81dc583ae24978540f38278cab447953bc90c8821f01f"
     },
     "public/js/map-app.js": {
-      "md5": "f17d10e3d09e20bb0f260ac837c73047",
-      "sha256": "a9a304e1f4208588f2e898c47a77bcfe6a9d4d29d14ca39c50507d0c0c525aad"
+      "md5": "d75a1e058e1660893aefc579da905fe5",
+      "sha256": "ee5f5168fa32d5dd141fcfc572dddac7b18bcb41999466fabea0464beb285c1f"
     },
     "src/pages/map.astro": {
       "md5": "c5803baefaa46dcc66c0fe34389c4b4d",

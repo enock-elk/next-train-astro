@@ -331,6 +331,7 @@
             // --- KWAZULU-NATAL ---
             'kzn-umlazi': ["DURBAN YARD", "DURBAN", "BEREA ROAD", "DALBRIDGE", "CONGELLA", "UMBILO", "ROSSBURGH", "CLAIRWOOD", "MONTCLAIR", "MEREBANK", "REUNION", "ZWELETHU", "KWAMNYANDU", "LINDOKUHLE", "UMLAZI"],
             'kzn-bridgecity': ["BEREA ROAD", "DURBAN", "MOSES MABHIDA", "UMGENI", "BRIARDENE", "GREENWOOD PARK", "RED HILL", "AVOCA", "DUFF'S ROAD", "TEMBALIHLE", "KWAMASHU", "BRIDGE CITY"],
+            'kzn-kwamashu': ["BEREA ROAD", "DURBAN", "MOSES MABHIDA", "UMGENI", "BRIARDENE", "GREENWOOD PARK", "RED HILL", "AVOCA", "DUFF'S ROAD", "TEMBALIHLE", "KWAMASHU"],
             'kzn-winklespruit': ["DURBAN YARD", "DURBAN", "BEREA ROAD", "DALBRIDGE", "CONGELLA", "UMBILO", "ROSSBURGH", "CLAIRWOOD", "MONTCLAIR", "MEREBANK", "PELGRIM", "ISIPINGO", "UMBOGINTWINI", "PAHLA", "AMANZIMTOTI", "DOONSIDE", "WARNER BEACH", "WINKLESPRUIT"],
             'kzn-catoridge': ["DURBAN YARD", "DURBAN", "BEREA ROAD", "DALBRIDGE", "CONGELLA", "UMBILO", "ROSSBURGH", "MOUNT VERNON", "CAVENDISH", "BURLINGTON", "SHALLCROSS", "KLAARWATER", "MARIANNHILL", "THORNWOOD", "SITUNDU HILLS", "DASSENHOEK", "KWANDENGEZI", "DELVILLE WOOD", "NSHONGWENI", "CLIFFDALE", "HAMMARSDALE", "KWATANDAZA", "GEORGEDALE", "CATO RIDGE"],
             'kzn-pinetown': ["DURBAN YARD", "DURBAN", "BEREA ROAD", "DALBRIDGE", "CONGELLA", "UMBILO", "ROSSBURGH", "SEA VIEW", "BELLAIR", "POET'S CORNER", "MALVERN", "ESCOMBE", "NORTHDENE", "MOSELEY", "GLEN PARK", "SARNIA", "PINETOWN"],
@@ -836,8 +837,11 @@
         const BRANCH_TRAIN_THRESHOLD = 2;
         const MIN_TRAINS_TO_JUDGE = 4;
         const NOLU_KAPTEINSKLIP_SPUR = ["PHILIPPI", "LENTEGEUR", "MITCHELL'S PLAIN", "KAPTEINSKLIP"];
-        const KZN_BRIDGE_CITY_MAIN = ["BEREA ROAD", "DURBAN", "MOSES MABHIDA", "UMGENI", "BRIARDENE", "GREENWOOD PARK", "RED HILL", "AVOCA", "DUFF'S ROAD", "BRIDGE CITY"];
+        const KZN_NORTH_TRUNK = ["BEREA ROAD", "DURBAN", "MOSES MABHIDA", "UMGENI", "BRIARDENE", "GREENWOOD PARK", "RED HILL", "AVOCA", "DUFF'S ROAD"];
+        const KZN_BRIDGE_CITY_MAIN = [...KZN_NORTH_TRUNK, "BRIDGE CITY"];
+        const KZN_KWAMASHU_MAIN = [...KZN_NORTH_TRUNK, "TEMBALIHLE", "KWAMASHU"];
         const KZN_KWAMASHU_SPUR = ["DUFF'S ROAD", "TEMBALIHLE", "KWAMASHU"];
+        const KZN_MAP_KWAMASHU_ID = 'kzn-kwamashu';
         const DEFAULT_KZN_BRIDGE_FORK = {
             at: "DUFF'S ROAD",
             branches: {
@@ -873,13 +877,23 @@
             return null;
         }
 
+        function isKznNorthMapLine(routeId) {
+            return routeId === 'kzn-bridgecity' || routeId === KZN_MAP_KWAMASHU_ID;
+        }
+
+        function kznNorthBakeId(routeId) {
+            return isKznNorthMapLine(routeId) ? 'kzn-bridgecity' : routeId;
+        }
+
         function bakedLineFor(routeId, trackBundle) {
-            if (trackEdit && trackEdit.routeId === routeId && trackEdit.goldCoords && trackEdit.goldCoords.length > 1) {
+            const bakeId = kznNorthBakeId(routeId);
+            if (trackEdit && trackEdit.goldCoords && trackEdit.goldCoords.length > 1
+                && kznNorthBakeId(trackEdit.routeId) === bakeId) {
                 return trackEdit.goldCoords;
             }
-            const gold = trackBundle?.goldById?.get(routeId);
+            const gold = trackBundle?.goldById?.get(bakeId);
             if (gold && gold.length > 1) return gold;
-            return trackBundle?.byId?.get(routeId);
+            return trackBundle?.byId?.get(bakeId);
         }
 
         function forkArmNames(fork, destName) {
@@ -920,6 +934,10 @@
                 return trackEdit.stops;
             }
             const all = routeObj.validStops || [];
+            if (routeObj.routeId === KZN_MAP_KWAMASHU_ID) {
+                const main = namedRouteStops(routeObj, KZN_KWAMASHU_MAIN);
+                if (main.length >= 2) return main;
+            }
             if (routeObj.routeId === 'kzn-bridgecity') {
                 const main = kznBridgeCityMainStops(routeObj);
                 if (main.length >= 2) return main;
@@ -959,7 +977,7 @@
                 ? stops.map((s) => [s.lat, s.lon])
                 : (routeObj.coords || []);
             const bundle = trackBundle || { byId: new Map(), goldById: new Map(), graph: null };
-            const bakedId = preferBakeId || routeObj.routeId;
+            const bakedId = preferBakeId || kznNorthBakeId(routeObj.routeId);
             const baked = bakedLineFor(bakedId, bundle);
             const held = GHOST_GEOMETRY_REGIONS.has(routeObj.region);
             const bakedIsUsable = baked && baked.length > 1 && bakedLineCoversStops(baked, stops);
@@ -969,7 +987,7 @@
             // the whole bake, or graph-smoothing that bake, paints Berea Road
             // to Bridge City via kwaMashu. Hop-stitch with dropOutAndBack keeps
             // the Bridge City trunk and the kwaMashu spur as two lines.
-            if (routeObj.routeId === 'kzn-bridgecity' && !preferBakeId && baked) {
+            if (isKznNorthMapLine(routeObj.routeId) && !preferBakeId && baked) {
                 const stitched = stitchBakedStops(baked, stops);
                 if (stitched && stitched.length > 1) return stitched;
             }
@@ -1636,6 +1654,49 @@
                 };
             }
 
+            /** Leaflet only: one gold LineString becomes two selectable lines at Duff's Road. */
+            function splitKznNorthMapRoutes() {
+                const i = drawnRoutes.findIndex((r) => r.routeId === 'kzn-bridgecity');
+                if (i < 0) return;
+                const src = drawnRoutes[i];
+                const pool = [...(src.sheetStops || []), ...(src.validStops || [])];
+                const bridgeStops = namedRouteStops({ validStops: pool }, KZN_BRIDGE_CITY_MAIN);
+                const kwaStops = namedRouteStops({ validStops: pool }, KZN_KWAMASHU_MAIN);
+                if (bridgeStops.length >= 2) {
+                    src.validStops = bridgeStops;
+                    src.coords = bridgeStops.map((s) => [s.lat, s.lon]);
+                }
+                src.destB = 'BRIDGE CITY';
+                src.bakeId = 'kzn-bridgecity';
+                src.name = 'Berea Road ↔ Bridge City';
+                ends.add('BRIDGE CITY');
+                if (kwaStops.length < 2) return;
+                drawnRoutes.splice(i + 1, 0, {
+                    routeId: KZN_MAP_KWAMASHU_ID,
+                    bakeId: 'kzn-bridgecity',
+                    name: 'Berea Road ↔ KwaMashu',
+                    color: src.color,
+                    isActive: src.isActive,
+                    region: src.region,
+                    trainCount: src.trainCount,
+                    destB: 'KWAMASHU',
+                    coords: kwaStops.map((s) => [s.lat, s.lon]),
+                    validStops: kwaStops,
+                    sheetStops: src.sheetStops
+                });
+                ends.add('KWAMASHU');
+                const bridgeSet = new Set(KZN_BRIDGE_CITY_MAIN);
+                const kwaSet = new Set(KZN_KWAMASHU_MAIN);
+                [...KZN_BRIDGE_CITY_MAIN, ...KZN_KWAMASHU_MAIN].forEach((name) => {
+                    const data = globalStations[name];
+                    if (!data || !data.routes) return;
+                    if (bridgeSet.has(name)) data.routes.add('kzn-bridgecity');
+                    else data.routes.delete('kzn-bridgecity');
+                    if (kwaSet.has(name)) data.routes.add(KZN_MAP_KWAMASHU_ID);
+                    else data.routes.delete(KZN_MAP_KWAMASHU_ID);
+                });
+            }
+
             Object.values(ROUTES).forEach(route => {
                 if (route.region !== currentRegion || route.id === 'special_event') return;
 
@@ -1779,12 +1840,15 @@
                          isActive: route.isActive,
                          region: route.region,
                          trainCount: sheetTrainKeys.size,
+                         destB: route.destB,
                          coords: routeCoords,
                          validStops: validStops,
                          sheetStops: sheetStops
                      });
                 }
             });
+
+            splitKznNorthMapRoutes();
 
             if (currentRegion === 'WC' && !drawnRoutes.some((r) => stopsAreAdjacent(r.validStops, 'MAITLAND', 'MUTUAL'))) {
                 const mai = STATION_COORDINATES.MAITLAND;
@@ -1822,6 +1886,7 @@
                 const orders = trackBundle?.stationOrderById;
                 if (!orders || !orders.size) return;
                 drawnRoutes.forEach((r) => {
+                    if (isKznNorthMapLine(r.routeId)) return;
                     const names = orders.get(r.routeId);
                     if (!names || names.length < 2) return;
                     const pool = [...(r.sheetStops || []), ...(r.validStops || [])];
@@ -1862,8 +1927,7 @@
                         map.removeLayer(r._spurPolyline);
                         r._spurPolyline = null;
                     }
-                    const spurCoords = resolveNoluKapteinsklipSpurLatLngs(r, trackBundle)
-                        || resolveKznKwamashuSpurLatLngs(r, trackBundle);
+                    const spurCoords = resolveNoluKapteinsklipSpurLatLngs(r, trackBundle);
                     if (spurCoords && spurCoords.length > 1) {
                         r._spurPolyline = L.polyline(spurCoords, lineStyle);
                         if (!selectedRouteId || r.routeId === selectedRouteId) r._spurPolyline.addTo(map);
@@ -2433,7 +2497,8 @@
                 const html = document.documentElement;
                 const can = mapOperatorAuthed && !isMapTabEmbed();
                 const route = drawnRoutes.find((x) => x.routeId === selectedRouteId);
-                const baked = !!(route && liveTrackBundle?.byId?.has(route.routeId));
+                const bakeId = route ? (route.bakeId || kznNorthBakeId(route.routeId)) : '';
+                const baked = !!(route && bakeId && liveTrackBundle?.byId?.has(bakeId));
                 const ready = can && !!route && baked;
                 html.classList.toggle('nt-track-editor-ready', ready && !trackEdit);
                 html.classList.toggle('nt-track-editing', !!trackEdit);
@@ -2548,8 +2613,9 @@
             function startTrackEditor() {
                 if (isMapTabEmbed() || !mapOperatorAuthed) return;
                 const r = drawnRoutes.find((x) => x.routeId === selectedRouteId);
-                if (!r || !liveTrackBundle?.byId?.has(r.routeId)) return;
-                const gold = cloneLatLngs((liveTrackBundle.goldById && liveTrackBundle.goldById.get(r.routeId)) || liveTrackBundle.byId.get(r.routeId));
+                const bakeId = r ? (r.bakeId || kznNorthBakeId(r.routeId)) : '';
+                if (!r || !bakeId || !liveTrackBundle?.byId?.has(bakeId)) return;
+                const gold = cloneLatLngs((liveTrackBundle.goldById && liveTrackBundle.goldById.get(bakeId)) || liveTrackBundle.byId.get(bakeId));
                 const coords = cloneLatLngs(r.trackCoords && r.trackCoords.length > 1 ? r.trackCoords : gold);
                 if (coords.length < 2) return;
                 const names = (r.validStops || []).map((s) => s.name);
@@ -2746,7 +2812,12 @@
                         }
                     };
                 }
-                if (r && r.routeId === 'kzn-bridgecity') {
+                if (r && r.routeId === KZN_MAP_KWAMASHU_ID) {
+                    const baked = trackEdit.goldCoords || bakedLineFor(r.routeId, liveTrackBundle);
+                    const mainStops = namedRouteStops(r, KZN_KWAMASHU_MAIN);
+                    const stitched = baked && mainStops.length >= 2 ? stitchBakedStops(baked, mainStops) : null;
+                    if (stitched && stitched.length > 1) trackEdit.coords = cloneLatLngs(stitched);
+                } else if (r && r.routeId === 'kzn-bridgecity') {
                     const baked = trackEdit.goldCoords || bakedLineFor(r.routeId, liveTrackBundle);
                     const mainStops = kznBridgeCityMainStops(r);
                     const stitched = baked && mainStops.length >= 2 ? stitchBakedStops(baked, mainStops) : null;

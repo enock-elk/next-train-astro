@@ -30,7 +30,7 @@ export const ADMIN_CHANGELOG = {
         'Timetable extract time cells no longer use border-gray-200, which dark mode paints as --nt-border. Every extract cell border is forced to #e5e7eb, the same light line as the station column. Blue and white row shading stays. No What’s New. forceShow stays false.',
     ],
     'V9_09.24.5': [
-        'Timetable extracts alternate white and light blue rows again. Cell borders stay the light grey line, without the darker shadow. Dark Ticket Prices frame is a slight mix of the surface toward white so it separates from the canvas. What’s New mentions the fare sheet. forceShow stays false.',
+        'Leaflet only: Berea Road splits at Duff\'s Road into two selectable lines that reuse the kzn-bridgecity gold vertices, Berea Road to kwaMashu and Berea Road to Bridge City. The kwaMashu line has its own editor points. No new GeoJSON. Timetable route stays one kzn-bridgecity sheet. No new What’s New card (Ticket Prices keeps id V9_09.24.5). forceShow stays false.',
     ],
     'V9_09.24.4': [
         'Network map hop-stitches kzn-bridgecity: Berea Road to Bridge City stays on the trunk, Duff\'s Road to kwaMashu is a second polyline. Fork editor: kwaMashu / Bridge City arms, one-tap Duff\'s Road split, live preview, Clear resets the split. Gold bake is kept so the spur can still be sliced. Export direction titles are a 22px line with padding html2canvas actually paints. Relabel of this ship (live is V9_09.24.3). Header day chip still painted once from the saved region and holiday map. No new What’s New card (holiday card keeps id V9_09.24.4). forceShow stays false.',

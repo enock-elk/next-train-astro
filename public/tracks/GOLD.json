@@ -1,6 +1,6 @@
 {
   "branch": "map-gold",
-  "frozenAt": "bb86663310ad922d4cec36c2df86ae8ea4ee438f",
+  "frozenAt": "035abeac8b13d7489eb0d239cbaf4a2ac56fb290",
   "version": "V9_09.20.11",
   "note": "Gold snapshot of this build: Pretoria-Mabopane operator patch, push circle sweeps points to the rim. Diff against origin/map-gold. Fast-forward map-gold after this lands on main. Never force-push map-gold.",
   "files": {

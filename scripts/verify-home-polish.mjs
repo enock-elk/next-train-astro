@@ -147,7 +147,8 @@ const board = readFileSync(new URL('../src/lib/live-board-ui.js', import.meta.ur
 const renderer = readFileSync(new URL('../src/lib/renderer.js', import.meta.url), 'utf8');
 assert(renderer.includes("const borderColor = '#e5e7eb'"), 'export table margins stay light grey');
 assert(renderer.includes("let borderClass = isExport ? ''"), 'export cells do not take the dark-mode border class');
-assert(renderer.includes("setProperty('border', `1px solid ${borderColor}`, 'important')"), 'export border colour wins over pack border rules');
+assert(renderer.includes("setProperty('border-right', `1px solid ${borderColor}`, 'important')"), 'export time lines use the station column edge only');
+assert(renderer.includes("setProperty('--nt-border', borderColor)"), 'export sheet keeps the light border token');
 assert(!renderer.includes("const borderColor = '#cbd5e1'"), 'export must not use the darker slate cell border');
 assert(renderer.includes("const cellBg = '#ffffff'"), 'export even rows stay white');
 assert(renderer.includes("const zebraBg = '#eff6ff'"), 'export odd rows use a light blue shade');

@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_09.24.7': [
+        'Timetable extracts stay on the light sheet. Time cells use only a right and bottom #e5e7eb line, the same edges as the station column, so the grid is not a doubled dark box. Blue and white rows stay. No What’s New. forceShow stays false.',
+    ],
     'V9_09.24.6': [
         'Timetable extract time cells no longer use border-gray-200, which dark mode paints as --nt-border. Every extract cell border is forced to #e5e7eb, the same light line as the station column. Blue and white row shading stays. No What’s New. forceShow stays false.',
     ],

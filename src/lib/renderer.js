@@ -1436,6 +1436,8 @@ export async function takeGridSnapshot(direction = 'A', dayType = 'weekday') {
     exportContainer.style.color = textColor;
     
     exportContainer.classList.remove('dark');
+    exportContainer.style.colorScheme = 'light';
+    exportContainer.style.setProperty('--nt-border', borderColor);
 
     const destAName = Renderer._applyUIIntercepts(route.destA).toUpperCase();
     const destBName = Renderer._applyUIIntercepts(route.destB).toUpperCase();
@@ -1551,7 +1553,10 @@ export async function takeGridSnapshot(direction = 'A', dayType = 'weekday') {
             headerCell.style.position = 'relative'; 
             headerCell.style.backgroundColor = tableHeaderBg;
             headerCell.style.color = headerTextColor;
-            headerCell.style.setProperty('border', `1px solid ${borderColor}`, 'important');
+            headerCell.style.setProperty('border', '0', 'important');
+            headerCell.style.setProperty('border-right', `1px solid ${borderColor}`, 'important');
+            headerCell.style.setProperty('border-bottom', `1px solid ${borderColor}`, 'important');
+            headerCell.style.boxShadow = 'none';
             headerCell.style.padding = isCompact ? '8px 3px' : '8px 6px'; 
             headerCell.style.fontSize = isCompact ? '17px' : '18px';
             headerCell.style.fontWeight = headerCell.querySelector('.nt-grid-train-id') ? '400' : '900';
@@ -1560,7 +1565,9 @@ export async function takeGridSnapshot(direction = 'A', dayType = 'weekday') {
         });
         
         t.querySelectorAll('td').forEach(td => {
-            td.style.setProperty('border', `1px solid ${borderColor}`, 'important');
+            td.style.setProperty('border', '0', 'important');
+            td.style.setProperty('border-right', `1px solid ${borderColor}`, 'important');
+            td.style.setProperty('border-bottom', `1px solid ${borderColor}`, 'important');
             td.style.padding = isCompact ? '6px 2.5px' : '6px'; 
             td.style.color = textColor;
             td.style.fontSize = isCompact ? '13.5px' : '15px'; 

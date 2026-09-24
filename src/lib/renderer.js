@@ -1024,7 +1024,13 @@ export const Renderer = {
                             const trainIdStyle = isExport
                                 ? 'display:block;font-family:system-ui,-apple-system,"Segoe UI",sans-serif;font-size:18px;font-weight:400;letter-spacing:normal;color:#0f172a;line-height:21px;'
                                 : 'display:block;font-weight:inherit;color:inherit;line-height:14px;';
-                            const stack = (statusHtml, statusStyle = '') => `<span class="nt-grid-train-head" style="display:grid;grid-template-rows:11px ${isExport ? '21px' : '14px'};align-items:center;justify-items:center;gap:2px;line-height:1;white-space:nowrap;"><span class="nt-grid-train-status" style="display:flex;height:11px;align-items:center;justify-content:center;${statusStyle}">${statusHtml}</span><span class="nt-grid-train-id" style="${trainIdStyle}">${h}</span></span>`;
+                            const stack = (statusHtml, statusStyle = '') => {
+                                const statusHidden = !statusHtml || statusHtml === '&nbsp;' || /visibility:\s*hidden/.test(statusStyle);
+                                if (isExport && statusHidden) {
+                                    return `<span class="nt-grid-train-id" style="${trainIdStyle}">${h}</span>`;
+                                }
+                                return `<span class="nt-grid-train-head" style="display:grid;grid-template-rows:11px ${isExport ? '21px' : '14px'};align-items:center;justify-items:center;gap:2px;line-height:1;white-space:nowrap;"><span class="nt-grid-train-status" style="display:flex;height:11px;align-items:center;justify-content:center;${statusStyle}">${statusHtml}</span><span class="nt-grid-train-id" style="${trainIdStyle}">${h}</span></span>`;
+                            };
                             let headerContent = stack('&nbsp;', 'visibility:hidden;');
                             const viaHtml = viaLabel
                                 ? `<span class="nt-grid-via" title="Via ${escapeHTML(viaLabel)}" style="display:block;margin-top:2px;font-size:8px;font-weight:800;letter-spacing:0.02em;line-height:1.15;white-space:normal;">Via ${escapeHTML(viaLabel)}</span>`
@@ -1507,7 +1513,7 @@ export async function takeGridSnapshot(direction = 'A', dayType = 'weekday') {
         </div>
 
         <div class="mb-4">
-            <div class="nt-export-direction nt-export-direction--primary border-l-4" style="background-color:#eaf2ff;border-color:${accentColor};padding:10px 12px;min-height:42px;display:flex;align-items:center;">
+            <div class="nt-export-direction nt-export-direction--primary border-l-4" style="background-color:#eaf2ff;border-color:${accentColor};padding:7px 12px 13px;min-height:42px;display:flex;align-items:center;">
                 <h3 class="nt-export-route-title font-bold uppercase" style="color:${textColor};margin:0;letter-spacing:0.015em;font-size:26px;line-height:1.15;white-space:nowrap;">${primarySection.from} ➔ ${primarySection.to}</h3>
             </div>
             <div class="schedule-table-wrapper">
@@ -1522,7 +1528,7 @@ export async function takeGridSnapshot(direction = 'A', dayType = 'weekday') {
         </div>
 
         <div class="mb-8">
-            <div class="nt-export-direction nt-export-direction--return border-l-4" style="background-color:#eaf2ff;border-color:${accentColor};padding:10px 12px;min-height:42px;display:flex;align-items:center;">
+            <div class="nt-export-direction nt-export-direction--return border-l-4" style="background-color:#eaf2ff;border-color:${accentColor};padding:7px 12px 13px;min-height:42px;display:flex;align-items:center;">
                 <h3 class="nt-export-route-title font-bold uppercase" style="color:${textColor};margin:0;letter-spacing:0.015em;font-size:26px;line-height:1.15;white-space:nowrap;">${returnSection.from} ➔ ${returnSection.to}</h3>
             </div>
             <div class="schedule-table-wrapper">
@@ -1562,7 +1568,7 @@ export async function takeGridSnapshot(direction = 'A', dayType = 'weekday') {
             headerCell.style.setProperty('border-right', `1px solid ${borderColor}`, 'important');
             headerCell.style.setProperty('border-bottom', `1px solid ${borderColor}`, 'important');
             headerCell.style.boxShadow = 'none';
-            headerCell.style.padding = isCompact ? '8px 3px' : '8px 6px'; 
+            headerCell.style.padding = isCompact ? '4px 3px 11px' : '4px 6px 12px'; 
             headerCell.style.fontSize = isCompact ? '17px' : '18px';
             headerCell.style.fontWeight = headerCell.querySelector('.nt-grid-train-id') ? '400' : '900';
             headerCell.style.textAlign = 'center';
@@ -1583,7 +1589,7 @@ export async function takeGridSnapshot(direction = 'A', dayType = 'weekday') {
             td.style.setProperty('border', '0', 'important');
             td.style.setProperty('border-right', `1px solid ${borderColor}`, 'important');
             td.style.setProperty('border-bottom', `1px solid ${borderColor}`, 'important');
-            td.style.padding = isCompact ? '6px 2.5px' : '6px'; 
+            td.style.padding = isCompact ? '3px 2.5px 9px' : '3px 6px 10px'; 
             td.style.color = textColor;
             td.style.fontSize = isCompact ? '13.5px' : '15px'; 
             td.style.fontFamily = 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace';
@@ -1629,7 +1635,7 @@ export async function takeGridSnapshot(direction = 'A', dayType = 'weekday') {
             headerCell.style.backgroundColor = '#e2e8f0'; 
             headerCell.style.color = '#475569';
             headerCell.style.letterSpacing = 'normal'; 
-            headerCell.style.padding = '8px 6px'; 
+            headerCell.style.padding = '4px 6px 12px'; 
         });
         
         t.querySelectorAll('.right-anchor-col').forEach(td => {
@@ -1638,7 +1644,7 @@ export async function takeGridSnapshot(direction = 'A', dayType = 'weekday') {
             td.style.fontWeight = '800';
             td.style.fontSize = '13px';
             td.style.letterSpacing = 'normal'; 
-            td.style.padding = '6px 6px'; 
+            td.style.padding = '3px 6px 10px'; 
         });
 
         t.querySelectorAll('.sticky').forEach(el => {

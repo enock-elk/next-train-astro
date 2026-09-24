@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_09.24.11': [
+        'Export cells lift ink with extra bottom padding. html2canvas ignores vertical-align middle and still paints on the baseline. Empty train-status rows are dropped on export so numbers are not pinned under an 11px gap. Direction strips use the same padding. Light rows and borders stay. No What’s New. forceShow stays false.',
+    ],
     'V9_09.24.10': [
         'Timetable export cells vertically center station names, times, and train numbers. The corridor double arrow is a type mark, because the SVG was painting as a small left arrow. Light rows, borders, and the route-title fit stay. No What’s New. forceShow stays false.',
     ],

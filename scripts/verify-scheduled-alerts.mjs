@@ -260,6 +260,7 @@ assert.match(cronWorkflow, /'\*\/5 \* \* \* \*'/);
 assert.match(cronWorkflow, /id-token: write/);
 assert.match(cronWorkflow, /audience=nexttrain-community/);
 assert.match(cronWorkflow, /Scheduled alerts did not publish/);
+assert.match(cronWorkflow, /scheduled-alerts-publish-v2/);
 assert.match(cronWorkflow, /sleep 60/);
 assert.match(cronWorkflow, /timeout-minutes: 360/);
 assert.doesNotMatch(cronWorkflow, /Worker cron must publish on its own/);

@@ -19,7 +19,7 @@ permissions:
   id-token: write
 
 concurrency:
-  group: scheduled-alerts-publish
+  group: scheduled-alerts-publish-v2
   cancel-in-progress: false
 
 jobs:
@@ -27,7 +27,37 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 360
     steps:
-      - name: Call community worker cron
+      - name: Publish due alerts once
+        id: once
+        env:
+          ALERT_CRON_SECRET: ${{ secrets.ALERT_CRON_SECRET }}
+          TTL_WIPE_SECRET: ${{ secrets.TTL_WIPE_SECRET }}
+        run: |
+          set -u
+          URL="https://nexttrain-community.enock.workers.dev/cron/scheduled-alerts"
+          SECRET="${ALERT_CRON_SECRET:-${TTL_WIPE_SECRET:-}}"
+          post() {
+            curl -fsS --max-time 30 -X POST \
+              -H "$1" \
+              -H "Content-Type: application/json" \
+              --data '{}' \
+              "$URL"
+          }
+          if [ -n "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" ] && [ -n "${ACTIONS_ID_TOKEN_REQUEST_TOKEN:-}" ]; then
+            OIDC="$(curl -fsS --max-time 20 -H "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" \
+              "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=nexttrain-community" \
+              | python3 -c 'import json,sys; print(json.load(sys.stdin)["value"])')" || OIDC=""
+            if [ -n "$OIDC" ] && post "Authorization: Bearer ${OIDC}"; then
+              exit 0
+            fi
+            echo "::warning::OIDC cron call failed. Trying shared secret."
+          fi
+          if [ -n "$SECRET" ] && post "X-Cron-Secret: ${SECRET}"; then
+            exit 0
+          fi
+          echo "::error::Scheduled alerts did not publish. OIDC failed and ALERT_CRON_SECRET is not set."
+          exit 1
+      - name: Keep publishing due alerts
         env:
           ALERT_CRON_SECRET: ${{ secrets.ALERT_CRON_SECRET }}
           TTL_WIPE_SECRET: ${{ secrets.TTL_WIPE_SECRET }}
@@ -38,12 +68,14 @@ jobs:
           deadline=$((SECONDS + 330 * 60))
           failures=0
           while [ "$SECONDS" -lt "$deadline" ]; do
+            sleep 60
             ok=0
+            OIDC=""
             if [ -n "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" ] && [ -n "${ACTIONS_ID_TOKEN_REQUEST_TOKEN:-}" ]; then
-              OIDC="$(curl -fsS -H "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" \
+              OIDC="$(curl -fsS --max-time 20 -H "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" \
                 "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=nexttrain-community" \
                 | python3 -c 'import json,sys; print(json.load(sys.stdin)["value"])')" || OIDC=""
-              if [ -n "$OIDC" ] && curl -fsS -X POST \
+              if [ -n "$OIDC" ] && curl -fsS --max-time 30 -X POST \
                 -H "Authorization: Bearer ${OIDC}" \
                 -H "Content-Type: application/json" \
                 --data '{}' \
@@ -54,7 +86,7 @@ jobs:
               fi
             fi
             if [ "$ok" -ne 1 ] && [ -n "$SECRET" ]; then
-              if curl -fsS -X POST \
+              if curl -fsS --max-time 30 -X POST \
                 -H "X-Cron-Secret: ${SECRET}" \
                 -H "Content-Type: application/json" \
                 --data '{}' \
@@ -65,12 +97,7 @@ jobs:
             if [ "$ok" -ne 1 ]; then
               failures=$((failures + 1))
               echo "::warning::Scheduled alerts tick failed (${failures})."
-              if [ "$failures" -ge 5 ] && [ "$ok" -ne 1 ] && [ -z "$SECRET" ] && [ -z "${OIDC:-}" ]; then
-                echo "::error::Scheduled alerts did not publish. OIDC failed and ALERT_CRON_SECRET is not set."
-                exit 1
-              fi
             else
               failures=0
             fi
-            sleep 60
           done

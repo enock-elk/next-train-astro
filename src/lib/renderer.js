@@ -1578,7 +1578,7 @@ export async function takeGridSnapshot(direction = 'A', dayType = 'weekday') {
             headerCell.querySelectorAll('.nt-grid-train-id').forEach((idEl) => {
                 idEl.style.fontFamily = 'system-ui, -apple-system, "Segoe UI", sans-serif';
                 idEl.style.fontWeight = '400';
-                idEl.style.fontSize = '18px';
+                idEl.style.fontSize = isCompact ? '17px' : '18px';
                 idEl.style.letterSpacing = 'normal';
                 idEl.style.lineHeight = '21px';
                 idEl.style.color = '#0f172a';

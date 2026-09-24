@@ -16,6 +16,7 @@ This is a **commuter PWA**. Prefer small, reversible changes. Do not “clean up
 
 - **This repo (`enock-elk/next-train-astro`)** is the Astro source of truth, GitHub Pages preview, and GitHub schedule dump (`public/data/`).
 - **Live site** is `https://nexttrain.co.za`, hosted by **`enock-elk/metrorail-app`** (GitHub Pages + CNAME). Production publish is `.github/workflows/deploy-production.yml`.
+- **Branch / PR testing** uses Cloudflare Pages Git previews: `https://<id>.next-train-lab.pages.dev`. `github.io` only updates from `main`. Do not tell the owner to merge to main just to try a branch.
 - **Do not** treat the old vanilla SPA checkout (`Train Schedule` / a stale `metrorail-app` working tree) as something to rebase onto live. That pull deletes `css/` and old icon folders and fights OneDrive locks. Abort those rebases (`git rebase --abort`). Never force-push `metrorail-app`.
 - **Lab** is the long-lived `lab` branch (lab.nexttrain.co.za). Do not wholesale-merge lab (or PR #8) into `main`.
 

@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_09.24.14': [
+        'html2canvas ignores flex, table-cell, and vertical-align, and a fixed 42px heading height pins the baseline to the floor of the blue strip. Direction titles are now a 22px line with even padding, left-aligned. Agent rules: test branches on *.next-train-lab.pages.dev, not github.io. No What’s New. forceShow stays false.',
+    ],
     'V9_09.24.13': [
         'Export direction titles (PRETORIA to PIENAARSPOORT) are 22px and vertically centered in the blue strip with a table-cell. They stay left-aligned. Nothing else in the extract changes. No What’s New. forceShow stays false.',
     ],

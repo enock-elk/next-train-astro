@@ -1,6 +1,12 @@
 ---
 // Header: brand left · alerts right. Options / sidenav live on the bottom nav.
 // Offline status is NOT here — it docks above the bottom nav (see index.astro).
+import { SPECIAL_DATES, HOLIDAY_NAMES, SATURDAY_PLACEHOLDER_ROUTES, ROUTES } from '../lib/config.js';
+
+const routeRegions = {};
+for (const [id, route] of Object.entries(ROUTES)) {
+    if (route?.region) routeRegions[id] = route.region;
+}
 ---
 
 <header id="app-header" class="app-header shrink-0 px-3 py-2.5 bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl z-30 relative flex items-start justify-between gap-2 border-b border-gray-200/80 dark:border-gray-700/80 transition-[padding] duration-300">
@@ -28,8 +34,8 @@
     </div>
 </header>
 
-<script is:inline>
-    // Instant day label so cold boot never shows a blank shell
+<script is:inline define:vars={{ SPECIAL_DATES, HOLIDAY_NAMES, SATURDAY_PLACEHOLDER_ROUTES, routeRegions }}>
+    // Instant day label. Same holiday map as the module so the chip does not flip.
     (function () {
       try {
         var el = document.getElementById('current-day');
@@ -37,8 +43,33 @@
         var names = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
         var d = new Date();
         var day = d.getDay();
-        var type = day === 0 ? 'No Service' : (day === 6 ? 'Saturday Schedule' : 'Weekday Schedule');
-        var typeClass = day === 0
+        var key = String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+        var region = 'GP';
+        var routeId = '';
+        try {
+          var saved = localStorage.getItem('userRegion');
+          if (saved === 'GP' || saved === 'WC' || saved === 'KZN' || saved === 'EC') region = saved;
+          routeId = localStorage.getItem('defaultRoute_' + region) || '';
+        } catch (err) { /* keep GP */ }
+        if (routeId && routeRegions && routeRegions[routeId]) region = routeRegions[routeId];
+        var holidayType = (SPECIAL_DATES && SPECIAL_DATES[key]) || null;
+        var dayType = day === 0 ? 'sunday'
+          : (holidayType === 'sunday' ? 'sunday'
+          : ((holidayType === 'saturday' || holidayType === 'public_holiday')
+            ? (region === 'WC' ? 'public_holiday' : 'saturday')
+            : (holidayType === 'weekday' ? 'weekday' : (day === 6 ? 'saturday' : 'weekday'))));
+        var holidayName = HOLIDAY_NAMES && HOLIDAY_NAMES[key];
+        var satClosed = !!(routeId && SATURDAY_PLACEHOLDER_ROUTES && SATURDAY_PLACEHOLDER_ROUTES.indexOf(routeId) !== -1)
+          && dayType !== 'sunday' && dayType !== 'weekday';
+        var type = dayType === 'sunday' ? 'No Service'
+          : (dayType === 'public_holiday' ? 'Public Holiday Schedule'
+          : (dayType === 'saturday' ? 'Saturday Schedule' : 'Weekday Schedule'));
+        if (holidayName) {
+          type = dayType === 'sunday' ? (holidayName + ' · No Service')
+            : (dayType === 'public_holiday' ? (holidayName + ' · Public Holiday') : (holidayName + ' Schedule'));
+        }
+        if (satClosed) type = holidayName ? (holidayName + ' · No Service') : 'No Service';
+        var typeClass = (dayType === 'sunday' || satClosed)
           ? 'font-bold text-red-600 dark:text-red-400'
           : 'font-bold text-blue-600 dark:text-blue-400';
         el.innerHTML = names[day] + ' · <span class="' + typeClass + '">' + type + '</span>';

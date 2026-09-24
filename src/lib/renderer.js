@@ -11,7 +11,7 @@ import {
 } from '../store.js';
 
 import { 
-    ROUTES, CHANGELOG_DATA, CORRIDOR_META, getCorridorLabel, APP_VERSION
+    ROUTES, CHANGELOG_DATA, CORRIDOR_META, getCorridorLabel, APP_VERSION, SPECIAL_DATES, HOLIDAY_NAMES
 } from './config.js';
 
 import { orderGridTrainIds } from './grid-order.js';
@@ -20,7 +20,8 @@ import {
     normalizeStationName, timeToSeconds, formatTimeDisplay, isRealTime, isExpressSkip,
     isVariantStationName, variantMapFromSchedule, escapeHTML, safeStorage,
     formatRouteLabelHtml, formatRouteLabelPlain, routePrimaryGridDirection, shortSharedSourceLabel,
-    scheduleCacheSlot, routeSheetKeyForDay, warningTriangleSvg, gridNoticeShowsOnDay
+    scheduleCacheSlot, routeSheetKeyForDay, warningTriangleSvg, gridNoticeShowsOnDay,
+    resolveOperatingDayType, simUsesSpecificDate
 } from './utils.js';
 
 import { 
@@ -37,6 +38,7 @@ import {
     resolveTransferHubName,
 } from './transfer-card.js';
 import { saturdayNoServiceCopy } from './saturday-service.js';
+import { resolveHolidayDayType } from './holiday-approvals.js';
 import {
     liveBoardJourneyKey,
     liveBoardNextAvailKey,
@@ -69,11 +71,35 @@ function firstTrainDayBit(dayName) {
     return name === 'Tomorrow' ? 'tomorrow' : `on ${name}`;
 }
 
-function emptyBoardHeadline(kind, dayName, _departureTime) {
+function emptyBoardHeadline(kind, dayName, holidayName) {
     const dayBit = firstTrainDayBit(dayName);
+    if (kind === 'holiday' && holidayName) return `No ${holidayName} service · first ${dayBit}:`;
     if (kind === 'weekend') return `No weekend service · first ${dayBit}:`;
     if (kind === 'noservice') return `No service today · first ${dayBit}:`;
     return `No more trains today · first ${dayBit}:`;
+}
+
+/** Named public holiday for the board the commuter is looking at. Generic sim days stay unnamed. */
+function boardHolidayName() {
+    const simActive = typeof window !== 'undefined' && !!window.isSimMode;
+    if (simActive && !simUsesSpecificDate()) return '';
+    let dateToCheck = new Date();
+    if (simActive && simUsesSpecificDate() && typeof document !== 'undefined') {
+        const dateInput = document.getElementById('sim-date');
+        if (dateInput instanceof HTMLInputElement && /^\d{4}-\d{2}-\d{2}$/.test(dateInput.value || '')) {
+            const parts = dateInput.value.split('-').map(Number);
+            dateToCheck = new Date(parts[0], parts[1] - 1, parts[2]);
+        }
+    }
+    const dateKey = `${String(dateToCheck.getMonth() + 1).padStart(2, '0')}-${String(dateToCheck.getDate()).padStart(2, '0')}`;
+    const name = HOLIDAY_NAMES?.[dateKey] || '';
+    if (!name) return '';
+    const route = ROUTES[$currentRouteId.get()];
+    const region = route?.region || $userRegion.get() || 'GP';
+    const holidayType = resolveHolidayDayType(dateKey, region, dateToCheck.getFullYear()) || SPECIAL_DATES?.[dateKey] || null;
+    const operating = resolveOperatingDayType(dateToCheck.getDay(), holidayType, region);
+    if (operating !== 'saturday' && operating !== 'public_holiday') return '';
+    return name;
 }
 
 /** What's New copy must read as human: no em/en dashes. */
@@ -409,7 +435,13 @@ export const Renderer = {
         const firstTime = firstNextTrain
             ? formatTimeDisplay(firstNextTrain.departureTime || firstNextTrain.train1.departureTime)
             : '';
-        const headline = emptyBoardHeadline('weekend', nextDayInfo.name, firstTime);
+        const holidayName = boardHolidayName();
+        const headline = holidayName
+            ? emptyBoardHeadline('holiday', nextDayInfo.name, holidayName)
+            : emptyBoardHeadline('weekend', nextDayInfo.name, firstTime);
+        const closedCopy = holidayName
+            ? `This route does not run on ${holidayName}`
+            : 'This route does not run on Saturdays';
         const weekendKey = liveBoardStaticKey('weekend', destination, firstTime);
         if (tryPatchLiveBoardCountdown(element, weekendKey, timeDiffStr)) return;
 
@@ -417,7 +449,7 @@ export const Renderer = {
         element.innerHTML = `
             <div class="flex flex-col justify-center items-center w-full py-3 px-2 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700${weekendAnim}">
                 <div class="text-sm font-bold text-red-600 dark:text-red-400 text-center px-2 leading-snug">${headline}</div>
-                <p class="text-[10px] text-gray-500 dark:text-gray-400 mt-1 text-center px-2 leading-snug">This route does not run on Saturdays</p>
+                <p class="text-[10px] text-gray-500 dark:text-gray-400 mt-1 text-center px-2 leading-snug">${closedCopy}</p>
                 <div class="text-center p-2 bg-gray-50 dark:bg-gray-900/50 rounded-md transition-all mt-1 w-3/4 shadow-sm border border-gray-100 dark:border-gray-800">
                     ${timeHTML}
                 </div>
@@ -1070,7 +1102,6 @@ export const Renderer = {
             let rowClass = shadeWholeRow && !isExport
                 ? 'bg-gray-100 dark:bg-gray-800'
                 : (isSelectedRow ? 'bg-blue-50 dark:bg-blue-900/20' : (isZebra && !isExport ? 'bg-gray-50 dark:bg-gray-800/40' : ''));
-            if (isZebra && isExport) rowClass += ' export-zebra';
             if (shadeWholeRow && isExport) rowClass += ' export-disrupted-row';
             const disrRowAttrs = (!isExport && isDisruptedRow)
                 ? ` data-disr-open="1" data-disr-id="${escapeHTML(String(rowDisr.id || ''))}" tabindex="0" role="button" aria-label="Service incident at ${escapeHTML(cleanStation)}"`
@@ -1373,7 +1404,7 @@ export async function takeGridSnapshot(direction = 'A', dayType = 'weekday') {
     const mutedColor = '#6b7280';
     const tableHeaderBg = '#f1f5f9'; 
     const headerTextColor = '#1e293b'; 
-    const zebraBg = '#f8fafc'; 
+    const cellBg = '#ffffff'; 
 
     let dummyDayIdx = (selectedDay === 'weekday' || selectedDay === 'sunday') ? 1 : 6;
 
@@ -1534,6 +1565,8 @@ export async function takeGridSnapshot(direction = 'A', dayType = 'weekday') {
             td.style.fontFamily = 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace';
             td.style.textAlign = 'center'; 
             td.style.fontWeight = '700'; 
+            td.style.backgroundColor = cellBg;
+            td.style.boxShadow = 'none';
             if (isCompact) td.style.letterSpacing = '-0.5px'; 
         });
 
@@ -1560,10 +1593,6 @@ export async function takeGridSnapshot(direction = 'A', dayType = 'weekday') {
             td.style.backgroundColor = '#f3f4f6';
             td.style.color = '#9ca3af';
             td.style.opacity = '0.7';
-        });
-
-        t.querySelectorAll('tr.export-zebra td:not(.export-spl-cell):not(.export-banned-cell):not(.export-disrupted-cell)').forEach(td => {
-            td.style.backgroundColor = zebraBg;
         });
 
         t.querySelectorAll('.right-anchor-header').forEach(headerCell => {

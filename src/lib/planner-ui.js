@@ -1341,10 +1341,24 @@ function buildHolidayNoticeHtml(trip = null, { absorbSunday = false } = {}) {
         if (trip?.dayLabel || trip?.dayOffset) {
             bodyHtml += `<p>${showingTrainsForLine(trip)}</p>`;
         }
-    } else if (holiday.scheduleType === 'saturday') {
-        bodyHtml = `<p class="text-sm font-semibold text-gray-900 dark:text-gray-100 leading-snug">Metrorail is running trains on the <span class="text-blue-700 dark:text-blue-300">Saturday schedule</span> for ${escapeHTML(holiday.name)}.</p>`;
     } else {
-        bodyHtml = `<p class="text-sm font-semibold text-gray-900 dark:text-gray-100 leading-snug">Metrorail is running the <span class="text-blue-700 dark:text-blue-300">weekday schedule</span> for ${escapeHTML(holiday.name)}.</p>`;
+        const region = $userRegion.get() || 'GP';
+        const iso = selectedPlannerDate && /^\d{4}-\d{2}-\d{2}$/.test(selectedPlannerDate)
+            ? selectedPlannerDate
+            : `${new Date().getFullYear()}-${holiday.dateKey}`;
+        const parts = iso.split('-').map(Number);
+        const dow = new Date(parts[0], (parts[1] || 1) - 1, parts[2] || 1).getDay();
+        const operating = resolveOperatingDayType(dow, holiday.scheduleType, region);
+        const sheetLabel = operating === 'public_holiday'
+            ? 'Public Holiday schedule'
+            : (operating === 'saturday'
+                ? 'Saturday schedule'
+                : (operating === 'sunday' ? '' : 'weekday schedule'));
+        if (operating === 'sunday' || !sheetLabel) {
+            bodyHtml = `<p class="text-sm font-semibold text-gray-900 dark:text-gray-100 leading-snug">Metrorail has <span class="text-blue-700 dark:text-blue-300">no service</span> on ${escapeHTML(holiday.name)}.</p>`;
+        } else {
+            bodyHtml = `<p class="text-sm font-semibold text-gray-900 dark:text-gray-100 leading-snug">Metrorail is running the <span class="text-blue-700 dark:text-blue-300">${sheetLabel}</span> for ${escapeHTML(holiday.name)}.</p>`;
+        }
     }
 
     return buildPlannerNotice({
@@ -2738,7 +2752,7 @@ export async function openTripMapRenderer(routeData) {
 
 function plannerSheetDayLabel(dayType) {
     if (dayType === 'saturday') return 'Saturdays';
-    if (dayType === 'public_holiday') return 'Sundays & Public Holidays';
+    if (dayType === 'public_holiday') return 'Public Holidays';
     return 'Weekdays';
 }
 

@@ -13,7 +13,7 @@ import {
 } from '../store.js';
 
 import { 
-    ROUTES, SPECIAL_DATES, HOLIDAY_NAMES, PIPELINE_SOURCES, FIREBASE_BASE_URL, 
+    ROUTES, SPECIAL_DATES, HOLIDAY_NAMES, SATURDAY_PLACEHOLDER_ROUTES, PIPELINE_SOURCES, FIREBASE_BASE_URL, 
     DYNAMIC_BASE_URL, REGIONS, REFRESH_CONFIG, FARE_CONFIG, DEFAULT_EXCLUSIONS, withBase 
 } from './config.js';
 
@@ -56,11 +56,59 @@ function saturdaySheetHasTimes(schedule) {
     return schedule.rows.some((row) => trainCols.some((col) => isRealTime(row[col])));
 }
 
-/** True only after Saturday sheets are loaded and both directions have no timed trains. */
+/** True when the pinned route has no Saturday times. Known empty corridors count before sheets arrive. */
 function currentRouteSaturdayClosed() {
     const s = $schedules.get() || {};
-    if (!('saturday_to_a' in s) && !('saturday_to_b' in s)) return false;
+    const hasSheets = ('saturday_to_a' in s) || ('saturday_to_b' in s);
+    if (!hasSheets) {
+        const id = $currentRouteId.get();
+        return !!(id && SATURDAY_PLACEHOLDER_ROUTES.includes(id));
+    }
     return !saturdaySheetHasTimes(s.saturday_to_a) && !saturdaySheetHasTimes(s.saturday_to_b);
+}
+
+function savedRegionCode() {
+    try {
+        const saved = safeStorage.getItem('userRegion');
+        if (['GP', 'WC', 'KZN', 'EC'].includes(saved)) return saved;
+    } catch { /* ignore */ }
+    return '';
+}
+
+/** GP route stays on the GP holiday line even if the region atom has not settled. */
+function headerRegion(opts = {}) {
+    const routeId = $currentRouteId.get();
+    const routeRegion = routeId && ROUTES[routeId]?.region;
+    if (['GP', 'WC', 'KZN', 'EC'].includes(routeRegion)) return routeRegion;
+    return opts.region || $userRegion.get() || savedRegionCode() || 'GP';
+}
+
+/**
+ * Holiday key for the chip. A bare paint (no dateKey arg) uses today, or the
+ * pinned sim date. A generic Weekday/Sat/Sun sim keeps dateKey null.
+ */
+function headerDateParts(opts = {}) {
+    if (Object.prototype.hasOwnProperty.call(opts, 'dateKey')) {
+        const calendarDay = Number.isFinite(opts.calendarDay) ? opts.calendarDay : currentDayIndex;
+        return { calendarDay, dateKey: opts.dateKey || null, year: opts.year || new Date().getFullYear() };
+    }
+    const simActive = $isSimMode.get() || (typeof window !== 'undefined' && !!window.isSimMode);
+    if (simActive && !simUsesSpecificDate()) {
+        const idx = (typeof window !== 'undefined' && window.__ntSimDayIndex != null)
+            ? Number(window.__ntSimDayIndex)
+            : currentDayIndex;
+        return { calendarDay: Number.isFinite(idx) ? idx : currentDayIndex, dateKey: null, year: new Date().getFullYear() };
+    }
+    let dateToCheck = new Date();
+    if (simActive && simUsesSpecificDate() && typeof document !== 'undefined') {
+        const dateInput = document.getElementById('sim-date');
+        if (dateInput instanceof HTMLInputElement && /^\d{4}-\d{2}-\d{2}$/.test(dateInput.value || '')) {
+            const parts = dateInput.value.split('-').map(Number);
+            dateToCheck = new Date(parts[0], parts[1] - 1, parts[2]);
+        }
+    }
+    const dateKey = `${String(dateToCheck.getMonth() + 1).padStart(2, '0')}-${String(dateToCheck.getDate()).padStart(2, '0')}`;
+    return { calendarDay: dateToCheck.getDay(), dateKey, year: dateToCheck.getFullYear() };
 }
 
 /**
@@ -71,10 +119,19 @@ export function paintHeaderDayLabel(opts = {}) {
     if (typeof document === 'undefined') return;
     const el = document.getElementById('current-day');
     if (!el) return;
-    const day = Number.isFinite(opts.calendarDay) ? opts.calendarDay : currentDayIndex;
-    const dayType = opts.dayType || currentDayType || 'weekday';
-    const dateKey = opts.dateKey || null;
-    const region = opts.region || $userRegion.get() || 'GP';
+    const region = headerRegion(opts);
+    const { calendarDay: day, dateKey, year } = headerDateParts(opts);
+    const holidayType = dateKey
+        ? (resolveHolidayDayType(dateKey, region, year) || SPECIAL_DATES[dateKey] || null)
+        : null;
+    let dayType = resolveOperatingDayType(day, holidayType, region);
+    dayType = resolveDayTypeWithOverride(dayType, region);
+    currentDayType = dayType;
+    currentDayIndex = day;
+    if (typeof window !== 'undefined') {
+        window.currentDayType = currentDayType;
+        window.currentDayIndex = currentDayIndex;
+    }
     const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
     const noSatOnRoute = opts.noSaturdayOnRoute != null ? !!opts.noSaturdayOnRoute : currentRouteSaturdayClosed();
     const satClosed = usesSaturdayScheduleSheet(dayType, region) && noSatOnRoute;
@@ -97,7 +154,8 @@ export function paintHeaderDayLabel(opts = {}) {
     const typeClass = (dayType === 'sunday' || satClosed)
         ? 'font-bold text-red-600 dark:text-red-400'
         : 'font-bold text-blue-600 dark:text-blue-400';
-    el.innerHTML = `${dayNames[day] || ''} · <span class="${typeClass}">${displayType}</span>`;
+    const html = `${dayNames[day] || ''} · <span class="${typeClass}">${displayType}</span>`;
+    if (el.innerHTML !== html) el.innerHTML = html;
     fitHeaderDayLabel();
     bindHeaderDayFit();
 }

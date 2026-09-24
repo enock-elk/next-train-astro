@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_09.24.4': [
+        'Header day chip is painted once from the saved region and holiday map, so GP no longer flips through Public Holiday, Saturday Schedule, and Heritage Day Schedule. Empty Saturday boards on a named public holiday say that day. Planner holiday notice uses the operating sheet (Public Holiday in the Western Cape, Saturday elsewhere). Train sheets say Public Holidays, not Sundays. Timetable extracts keep white time cells. Agent rules lock extracts and say to ask when unsure. What’s New covers the holiday line, the empty board, and the planner notice. forceShow stays false.',
+    ],
     'V9_09.24.3': [
         'Applied the operator Pretoria-Mabopane gold-track patch (public/tracks/rail-tracks-GP.geojson only). Push sweeps points out to the circle rim and pinch resizes it. The track editor panel can hide. Trip-map hubs use the network-map major dot. Trip distance uses a middle dot and the title colour. What’s New mentions the hub dot only. forceShow stays false.',
     ],

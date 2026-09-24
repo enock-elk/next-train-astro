@@ -56,6 +56,9 @@ if (!ui.includes('presentedPlannerDayType')) fail('dropdown uses the presented r
 if (ui.includes("display.textContent = 'Weekday (Mon-Fri)'")) fail('must not paint Weekday on the dropdown before results exist');
 if (!ui.includes('planner_saturday_reply')) fail('Saturday Reply must quote the advisory for admin');
 if (!ui.includes('enterFeedbackReplyMode')) fail('Saturday Reply must enter feedback reply mode');
+if (ui.includes('Sundays & Public Holidays')) fail('train sheet must not claim a Sunday timetable');
+if (!ui.includes("return 'Public Holidays'")) fail('public holiday train sheet says Public Holidays');
+if (!ui.includes('Public Holiday schedule')) fail('holiday notice must be able to name the Public Holiday schedule');
 if (!ui.includes('openPlannerTrainSheet')) fail('planner must open a train-sheet modal');
 if (!ui.includes('planner-train-name-btn')) fail('planner results must underline the train name');
 if (!ui.includes('planner-notice-details-row')) fail('Details must sit on its own row');

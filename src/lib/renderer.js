@@ -1022,7 +1022,7 @@ export const Renderer = {
                             
                             let bgClass = '';
                             const trainIdStyle = isExport
-                                ? 'display:block;font-size:18px;font-weight:400;color:#0f172a;line-height:21px;'
+                                ? 'display:block;font-family:system-ui,-apple-system,"Segoe UI",sans-serif;font-size:18px;font-weight:400;letter-spacing:normal;color:#0f172a;line-height:21px;'
                                 : 'display:block;font-weight:inherit;color:inherit;line-height:14px;';
                             const stack = (statusHtml, statusStyle = '') => `<span class="nt-grid-train-head" style="display:grid;grid-template-rows:11px ${isExport ? '21px' : '14px'};align-items:center;justify-items:center;gap:2px;line-height:1;white-space:nowrap;"><span class="nt-grid-train-status" style="display:flex;height:11px;align-items:center;justify-content:center;${statusStyle}">${statusHtml}</span><span class="nt-grid-train-id" style="${trainIdStyle}">${h}</span></span>`;
                             let headerContent = stack('&nbsp;', 'visibility:hidden;');
@@ -1449,6 +1449,11 @@ export async function takeGridSnapshot(direction = 'A', dayType = 'weekday') {
     const finalScheduleTypeLabel = hasExceptions ? `AMENDED ${scheduleTypeLabel}` : scheduleTypeLabel;
     
     const displayRouteName = formatRouteLabelPlain(route.name);
+    const corridorEnds = displayRouteName.split('↔').map((part) => part.trim()).filter(Boolean);
+    const exportBiArrow = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 36 16" width="1.35em" height="0.62em" style="display:inline-block;vertical-align:middle;margin:0 0.35em 0.12em;" aria-hidden="true"><path d="M7 8h22M10 4.2 5.2 8 10 11.8M26 4.2 30.8 8 26 11.8" fill="none" stroke="#000" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+    const corridorTitle = corridorEnds.length >= 2
+        ? `${escapeHTML(corridorEnds[0])}${exportBiArrow}${escapeHTML(corridorEnds[1])} CORRIDOR`
+        : `${escapeHTML(displayRouteName)} CORRIDOR`;
     
     let effectiveDateText = "";
     if (schedA && schedA.lastUpdated) {
@@ -1492,7 +1497,7 @@ export async function takeGridSnapshot(direction = 'A', dayType = 'weekday') {
             <div class="flex justify-between items-end">
                 <div>
                     <h1 class="text-4xl font-black uppercase tracking-tight leading-none mb-0" style="color: ${accentColor}">Commuter Notice</h1>
-                    <h2 class="text-xl font-bold uppercase tracking-widest leading-tight mt-1" style="color: ${mutedColor}">${displayRouteName} Corridor</h2>
+                    <h2 class="text-xl font-bold uppercase leading-tight mt-1" style="color:#000000;">${corridorTitle}</h2>
                 </div>
                 <div class="text-right">
                     <div class="text-2xl font-bold leading-none" style="color: ${textColor}">${finalScheduleTypeLabel} TIMETABLE</div>
@@ -1503,7 +1508,7 @@ export async function takeGridSnapshot(direction = 'A', dayType = 'weekday') {
 
         <div class="mb-4">
             <div class="nt-export-direction nt-export-direction--primary border-l-4" style="background-color:#eaf2ff;border-color:${accentColor};padding:10px 12px;min-height:42px;display:flex;align-items:center;">
-                <h3 class="font-bold text-lg uppercase" style="color:${textColor};margin:0;letter-spacing:0.015em;">${primarySection.from} ➔ ${primarySection.to}</h3>
+                <h3 class="nt-export-route-title font-bold uppercase" style="color:${textColor};margin:0;letter-spacing:0.015em;font-size:26px;line-height:1.15;white-space:nowrap;">${primarySection.from} ➔ ${primarySection.to}</h3>
             </div>
             <div class="schedule-table-wrapper">
                 ${primarySection.html}
@@ -1518,7 +1523,7 @@ export async function takeGridSnapshot(direction = 'A', dayType = 'weekday') {
 
         <div class="mb-8">
             <div class="nt-export-direction nt-export-direction--return border-l-4" style="background-color:#eaf2ff;border-color:${accentColor};padding:10px 12px;min-height:42px;display:flex;align-items:center;">
-                <h3 class="font-bold text-lg uppercase" style="color:${textColor};margin:0;letter-spacing:0.015em;">${returnSection.from} ➔ ${returnSection.to}</h3>
+                <h3 class="nt-export-route-title font-bold uppercase" style="color:${textColor};margin:0;letter-spacing:0.015em;font-size:26px;line-height:1.15;white-space:nowrap;">${returnSection.from} ➔ ${returnSection.to}</h3>
             </div>
             <div class="schedule-table-wrapper">
                 ${returnSection.html}
@@ -1561,7 +1566,15 @@ export async function takeGridSnapshot(direction = 'A', dayType = 'weekday') {
             headerCell.style.fontSize = isCompact ? '17px' : '18px';
             headerCell.style.fontWeight = headerCell.querySelector('.nt-grid-train-id') ? '400' : '900';
             headerCell.style.textAlign = 'center';
-            if (isCompact) headerCell.style.letterSpacing = '-0.5px'; 
+            if (isCompact) headerCell.style.letterSpacing = '-0.5px';
+            headerCell.querySelectorAll('.nt-grid-train-id').forEach((idEl) => {
+                idEl.style.fontFamily = 'system-ui, -apple-system, "Segoe UI", sans-serif';
+                idEl.style.fontWeight = '400';
+                idEl.style.fontSize = '18px';
+                idEl.style.letterSpacing = 'normal';
+                idEl.style.lineHeight = '21px';
+                idEl.style.color = '#0f172a';
+            }); 
         });
         
         t.querySelectorAll('td').forEach(td => {
@@ -1647,6 +1660,19 @@ export async function takeGridSnapshot(direction = 'A', dayType = 'weekday') {
 
     try {
         await new Promise(r => setTimeout(r, 100));
+
+        exportContainer.querySelectorAll('.nt-export-route-title').forEach((title) => {
+            const section = title.closest('.mb-4, .mb-8');
+            const table = section?.querySelector('table');
+            const available = Math.max(table?.offsetWidth || 0, title.parentElement?.clientWidth || 0);
+            if (!available) return;
+            let size = 26;
+            title.style.fontSize = `${size}px`;
+            while (size > 13 && title.scrollWidth > available - 24) {
+                size -= 1;
+                title.style.fontSize = `${size}px`;
+            }
+        });
 
         const canvas = await window.html2canvas(exportContainer, {
             scale: 2,

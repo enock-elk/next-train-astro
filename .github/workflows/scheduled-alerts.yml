@@ -19,7 +19,7 @@ permissions:
   id-token: write
 
 concurrency:
-  group: scheduled-alerts-publish-v3
+  group: scheduled-alerts-publish-v4
   cancel-in-progress: false
 
 jobs:
@@ -51,6 +51,8 @@ jobs:
               BODY="$(post "Authorization: Bearer ${OIDC}")" && {
                 echo "$BODY"
                 echo "$BODY" >> "$GITHUB_STEP_SUMMARY"
+                export BODY
+                python3 -c 'import os; s=os.environ.get("BODY","")[:400].replace("%","%25").replace("\r","%0D").replace("\n","%0A"); print("::notice::"+s)'
                 exit 0
               }
             fi

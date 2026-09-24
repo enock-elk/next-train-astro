@@ -260,7 +260,7 @@ assert.match(cronWorkflow, /'\*\/5 \* \* \* \*'/);
 assert.match(cronWorkflow, /id-token: write/);
 assert.match(cronWorkflow, /audience=nexttrain-community/);
 assert.match(cronWorkflow, /Scheduled alerts did not publish/);
-assert.match(cronWorkflow, /scheduled-alerts-publish-v3/);
+assert.match(cronWorkflow, /scheduled-alerts-publish-v4/);
 assert.match(cronWorkflow, /GITHUB_STEP_SUMMARY/);
 assert.match(cronWorkflow, /sleep 60/);
 assert.match(cronWorkflow, /timeout-minutes: 360/);

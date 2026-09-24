@@ -1,6 +1,6 @@
 {
   "branch": "map-gold",
-  "frozenAt": "035abeac8b13d7489eb0d239cbaf4a2ac56fb290",
+  "frozenAt": "b7328ca04618438a5e57812eaf29e7d48ce0d980",
   "version": "V9_09.20.11",
   "note": "Gold snapshot of this build: kzn-bridgecity network paint hop-stitches the Duff's Road fork (Bridge City trunk + kwaMashu spur). Diff against origin/map-gold. Fast-forward map-gold after this lands on main. Never force-push map-gold.",
   "files": {

@@ -8,7 +8,9 @@ This is a **commuter PWA**. Prefer small, reversible changes. Do not “clean up
 
 **If you are unsure, stop and ask.** Do not proceed on a critical assumption about product copy, timetable rules, holiday behaviour, or visual treatment. Ask the owner, then wait. A wrong guess on a commuter surface is worse than pausing.
 
-**Do not edit timetable extracts unless the owner asks.** The downloaded commuter notice (html2canvas export in `src/lib/renderer.js`: time-cell backgrounds, zebra rows, borders, footer, data-source line) is locked. White time cells and light grey borders (`#e5e7eb`) are the reference. Do not restyle extract cells, margins, or colours while doing other work. The in-app grid is a separate surface.
+**Grid exports are light mode only.** The downloaded timetable (html2canvas export in `src/lib/renderer.js`) is always the light sheet: white and light blue (`#eff6ff`) rows, with light grey right and bottom edges (`#e5e7eb`). Do not paint it from the commuter's dark, Classic, or Earthy pack. Dark pack tokens must not leak into the PNG.
+
+**Do not edit timetable extracts unless the owner asks.** Time-cell backgrounds, zebra rows, borders, footer, and the data-source line are locked. Do not restyle extract cells, margins, or colours while doing other work. The in-app grid is a separate surface.
 
 ## Product and repos
 

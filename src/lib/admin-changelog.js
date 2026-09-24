@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_09.24.8': [
+        'Ticket Prices uses the board card surface in every dark pack, including Classic and Earthy. The white mix on the fare sheet is gone. Check for Updates no longer says the look goes back to Classic light. Agent rules say grid exports are light mode only. What’s New covers the fare card and the update line. forceShow stays false.',
+    ],
     'V9_09.24.7': [
         'Timetable extracts stay on the light sheet. Time cells use only a right and bottom #e5e7eb line, the same edges as the station column, so the grid is not a doubled dark box. Blue and white rows stay. No What’s New. forceShow stays false.',
     ],

@@ -357,7 +357,8 @@ assert(!/#messages-thread-modal \{\s*align-items: flex-end;/.test(hubModals), 'F
 assert(hubModals.includes('id="cache-clear-modal"'), 'Check for Updates has a confirm modal');
 assert(hubModals.includes('id="cache-clear-confirm-btn"'), 'Check for Updates confirm has Update');
 assert(hubModals.includes('This downloads the latest app onto this phone, then restarts Next Train.'), 'Check for Updates confirm explains the restart');
-assert(hubModals.includes('Your pinned route stays, but the look goes back to Classic light.'), 'Check for Updates confirm mentions Classic light');
+assert(hubModals.includes('Your pinned route stays.'), 'Check for Updates confirm says the pinned route stays');
+assert(!hubModals.includes('the look goes back to Classic light'), 'Check for Updates confirm does not reset the look to Classic light');
 assert(!hubModals.includes('stuck copy'), 'Check for Updates does not mention stuck copy');
 assert(hubModals.includes('id="messages-thread-contact-hint"'), 'Feedback Hub contact hint is present');
 assert(hubModals.includes('#messages-thread-contact.nt-contact-invalid'), 'invalid contact uses a red border');
@@ -570,7 +571,8 @@ assert(!plannerModals.includes('Germiston or Koedoespoort'), 'planner instructio
 assert(!css.includes('th.nt-excl-head'), 'NO SVC header does not shift the train number with extra padding');
 
 const rendererGrid = readFileSync(new URL('../src/lib/renderer.js', import.meta.url), 'utf8');
-assert(rendererGrid.includes("isExport ? 'border-gray-200' : 'border-gray-300 dark:border-gray-700'"), 'export grid lines are softer; in-app borders stay');
+assert(rendererGrid.includes("isExport ? '' : 'border-gray-300 dark:border-gray-700'"), 'export grid skips pack border classes; in-app borders stay');
+assert(rendererGrid.includes("const borderColor = '#e5e7eb'"), 'export grid lines stay light grey');
 assert(rendererGrid.includes('isExport ? " font-mono font-bold" : " font-mono font-medium"'), 'export times are bold; in-app grid times stay medium');
 assert(rendererGrid.includes("isExport ? '21px' : '14px'") && rendererGrid.includes('headerContent = stack(`${banIcon} NO SVC`'), 'in-app NO SVC occupies the status row above the train number');
 assert(rendererGrid.includes('font-size:18px') && rendererGrid.includes('font-weight:400') && rendererGrid.includes('line-height:14px;'), 'export train IDs are larger and regular weight; in-app IDs stay 14px');

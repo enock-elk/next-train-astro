@@ -1,14 +1,18 @@
-# Backup publisher for notices_scheduled.
-# Cloudflare Worker cron (*/5) is the primary path. This hits the same
-# runScheduledAlerts handler so due jobs still post when the Worker cron
-# was not redeployed or silently failed.
-# GitHub Actions OIDC is enough — do not depend on ALERT_CRON_SECRET.
+# Publisher for notices_scheduled.
+# GitHub only starts this file every few hours, not every 5 minutes.
+# Each start keeps calling runScheduledAlerts once a minute for 5.5 hours
+# so a due post is not left waiting for the next Actions slot.
+# A push of this file starts a loop immediately. OIDC is enough.
 name: Publish due scheduled alerts
 
 on:
   schedule:
     - cron: '*/5 * * * *'
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/scheduled-alerts.yml'
 
 permissions:
   contents: read
@@ -21,35 +25,52 @@ concurrency:
 jobs:
   publish:
     runs-on: ubuntu-latest
+    timeout-minutes: 360
     steps:
       - name: Call community worker cron
         env:
           ALERT_CRON_SECRET: ${{ secrets.ALERT_CRON_SECRET }}
           TTL_WIPE_SECRET: ${{ secrets.TTL_WIPE_SECRET }}
         run: |
-          set -euo pipefail
+          set -u
           URL="https://nexttrain-community.enock.workers.dev/cron/scheduled-alerts"
           SECRET="${ALERT_CRON_SECRET:-${TTL_WIPE_SECRET:-}}"
-          if [ -n "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" ] && [ -n "${ACTIONS_ID_TOKEN_REQUEST_TOKEN:-}" ]; then
-            OIDC="$(curl -fsS -H "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" \
-              "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=nexttrain-community" \
-              | python3 -c 'import json,sys; print(json.load(sys.stdin)["value"])')"
-            if curl -fsS -X POST \
-              -H "Authorization: Bearer ${OIDC}" \
-              -H "Content-Type: application/json" \
-              --data '{}' \
-              "$URL"; then
-              exit 0
+          deadline=$((SECONDS + 330 * 60))
+          failures=0
+          while [ "$SECONDS" -lt "$deadline" ]; do
+            ok=0
+            if [ -n "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" ] && [ -n "${ACTIONS_ID_TOKEN_REQUEST_TOKEN:-}" ]; then
+              OIDC="$(curl -fsS -H "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" \
+                "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=nexttrain-community" \
+                | python3 -c 'import json,sys; print(json.load(sys.stdin)["value"])')" || OIDC=""
+              if [ -n "$OIDC" ] && curl -fsS -X POST \
+                -H "Authorization: Bearer ${OIDC}" \
+                -H "Content-Type: application/json" \
+                --data '{}' \
+                "$URL"; then
+                ok=1
+              else
+                echo "::warning::OIDC cron call failed. Trying shared secret."
+              fi
             fi
-            echo "::warning::OIDC cron call failed. Trying shared secret."
-          fi
-          if [ -n "$SECRET" ]; then
-            curl -fsS -X POST \
-              -H "X-Cron-Secret: ${SECRET}" \
-              -H "Content-Type: application/json" \
-              --data '{}' \
-              "$URL"
-            exit 0
-          fi
-          echo "::error::Scheduled alerts did not publish. OIDC failed and ALERT_CRON_SECRET is not set."
-          exit 1
+            if [ "$ok" -ne 1 ] && [ -n "$SECRET" ]; then
+              if curl -fsS -X POST \
+                -H "X-Cron-Secret: ${SECRET}" \
+                -H "Content-Type: application/json" \
+                --data '{}' \
+                "$URL"; then
+                ok=1
+              fi
+            fi
+            if [ "$ok" -ne 1 ]; then
+              failures=$((failures + 1))
+              echo "::warning::Scheduled alerts tick failed (${failures})."
+              if [ "$failures" -ge 5 ] && [ "$ok" -ne 1 ] && [ -z "$SECRET" ] && [ -z "${OIDC:-}" ]; then
+                echo "::error::Scheduled alerts did not publish. OIDC failed and ALERT_CRON_SECRET is not set."
+                exit 1
+              fi
+            else
+              failures=0
+            fi
+            sleep 60
+          done

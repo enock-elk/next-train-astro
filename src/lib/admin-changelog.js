@@ -5,9 +5,6 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
-    'V9_09.24.12': [
-        'Corridor title uses the filled double-arrow polygon SVG, cropped to the glyph so it sits on the black heading line. Direction strips center PRETORIA to PIENAARSPOORT. Type ↔ is gone from the corridor line. Cell padding and light export rows stay. No What’s New. forceShow stays false.',
-    ],
     'V9_09.24.11': [
         'Export cells lift ink with extra bottom padding. html2canvas ignores vertical-align middle and still paints on the baseline. Empty train-status rows are dropped on export so numbers are not pinned under an 11px gap. Direction strips use the same padding. Light rows and borders stay. No What’s New. forceShow stays false.',
     ],

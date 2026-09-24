@@ -1456,7 +1456,7 @@ export async function takeGridSnapshot(direction = 'A', dayType = 'weekday') {
     
     const displayRouteName = formatRouteLabelPlain(route.name);
     const corridorEnds = displayRouteName.split('↔').map((part) => part.trim()).filter(Boolean);
-    const exportBiArrow = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 165.606 492.43 161.214" width="1.45em" height="0.48em" fill="#000000" stroke="#000000" stroke-width="22.651596" overflow="visible" style="display:inline-block;vertical-align:middle;margin:0 0.34em;position:relative;top:-0.02em;" aria-hidden="true"><polygon points="411.819,165.606 390.606,186.82 435.019,231.232 57.407,231.232 101.819,186.82 80.606,165.606 0,246.213 80.606,326.82 101.819,305.606 57.445,261.232 434.981,261.232 390.606,305.606 411.819,326.82 492.426,246.213"></polygon></svg>`;
+    const exportBiArrow = `<span style="display:inline-block;vertical-align:middle;line-height:1;font-size:1.15em;font-weight:700;letter-spacing:0;margin:0 0.28em;font-family:Arial,sans-serif;position:relative;top:-0.06em;">↔</span>`;
     const corridorTitle = corridorEnds.length >= 2
         ? `${escapeHTML(corridorEnds[0])}${exportBiArrow}${escapeHTML(corridorEnds[1])} CORRIDOR`
         : `${escapeHTML(displayRouteName)} CORRIDOR`;
@@ -1513,8 +1513,8 @@ export async function takeGridSnapshot(direction = 'A', dayType = 'weekday') {
         </div>
 
         <div class="mb-4">
-            <div class="nt-export-direction nt-export-direction--primary border-l-4" style="background-color:#eaf2ff;border-color:${accentColor};padding:10px 12px;min-height:42px;display:flex;align-items:center;justify-content:center;text-align:center;">
-                <h3 class="nt-export-route-title font-bold uppercase" style="color:${textColor};margin:0;letter-spacing:0.015em;font-size:26px;line-height:1;white-space:nowrap;text-align:center;width:100%;">${primarySection.from} ➔ ${primarySection.to}</h3>
+            <div class="nt-export-direction nt-export-direction--primary border-l-4" style="background-color:#eaf2ff;border-color:${accentColor};padding:7px 12px 13px;min-height:42px;display:flex;align-items:center;">
+                <h3 class="nt-export-route-title font-bold uppercase" style="color:${textColor};margin:0;letter-spacing:0.015em;font-size:26px;line-height:1.15;white-space:nowrap;">${primarySection.from} ➔ ${primarySection.to}</h3>
             </div>
             <div class="schedule-table-wrapper">
                 ${primarySection.html}
@@ -1528,8 +1528,8 @@ export async function takeGridSnapshot(direction = 'A', dayType = 'weekday') {
         </div>
 
         <div class="mb-8">
-            <div class="nt-export-direction nt-export-direction--return border-l-4" style="background-color:#eaf2ff;border-color:${accentColor};padding:10px 12px;min-height:42px;display:flex;align-items:center;justify-content:center;text-align:center;">
-                <h3 class="nt-export-route-title font-bold uppercase" style="color:${textColor};margin:0;letter-spacing:0.015em;font-size:26px;line-height:1;white-space:nowrap;text-align:center;width:100%;">${returnSection.from} ➔ ${returnSection.to}</h3>
+            <div class="nt-export-direction nt-export-direction--return border-l-4" style="background-color:#eaf2ff;border-color:${accentColor};padding:7px 12px 13px;min-height:42px;display:flex;align-items:center;">
+                <h3 class="nt-export-route-title font-bold uppercase" style="color:${textColor};margin:0;letter-spacing:0.015em;font-size:26px;line-height:1.15;white-space:nowrap;">${returnSection.from} ➔ ${returnSection.to}</h3>
             </div>
             <div class="schedule-table-wrapper">
                 ${returnSection.html}

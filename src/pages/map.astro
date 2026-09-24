@@ -536,6 +536,13 @@ const regionSeoSlugs = Object.fromEntries(
       #nt-track-editor-fork,
       #nt-track-editor-move-pins-wrap { display: none; margin-top: 0.4rem; }
       html.nt-track-tool-fork #nt-track-editor-fork { display: block; }
+      #nt-track-editor-fork-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.3rem;
+      }
+      #nt-track-editor-fork-actions button { flex: 1 1 30%; }
+      #nt-track-editor-fork-actions #nt-track-fork-preset { flex: 1 1 100%; }
       html.nt-track-tool-brush #nt-track-editor-move-pins-wrap {
         display: flex;
         align-items: center;
@@ -550,7 +557,12 @@ const regionSeoSlugs = Object.fromEntries(
         color: #fff;
         border-color: #111827;
       }
-      html.dark #nt-track-editor-tools button.is-on {
+      #nt-track-editor-fork button.is-on {
+        background: #111827;
+        color: #fff;
+        border-color: #111827;
+      }
+      html.dark #nt-track-editor-fork button.is-on {
         background: #f3f4f6;
         color: #111827;
         border-color: #f3f4f6;
@@ -765,9 +777,12 @@ const regionSeoSlugs = Object.fromEntries(
       <button type="button" id="nt-track-brush-larger">Larger</button>
     </div>
     <div id="nt-track-editor-fork">
-      <p id="nt-track-editor-fork-status">Tap the split station on this line.</p>
+      <p id="nt-track-editor-fork-status">Tap Duff's Road split to paint kwaMashu and Bridge City as two lines.</p>
       <div id="nt-track-editor-fork-actions">
-        <button type="button" id="nt-track-fork-branch">Next branch</button>
+        <button type="button" id="nt-track-fork-a" class="is-on">Branch A</button>
+        <button type="button" id="nt-track-fork-b">Branch B</button>
+        <button type="button" id="nt-track-fork-preset">Duff's Road split</button>
+        <button type="button" id="nt-track-fork-clear">Clear</button>
         <button type="button" id="nt-track-fork-save">Save fork</button>
       </div>
     </div>

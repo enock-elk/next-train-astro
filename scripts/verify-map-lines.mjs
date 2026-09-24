@@ -598,6 +598,39 @@ assert(
     'the Kapteinsklip spur is sliced from Philippi, not the whole Cape Town bake',
 );
 assert(
+    mapApp.includes('KZN_BRIDGE_CITY_MAIN'),
+    'network map paints Berea Road to Bridge City on the trunk, not via kwaMashu',
+);
+assert(
+    mapApp.includes('KZN_KWAMASHU_SPUR'),
+    'Duff\'s Road to kwaMashu is a second kzn-bridgecity polyline',
+);
+assert(
+    mapApp.includes('function stitchBakedStops') && mapApp.includes('function dropOutAndBack'),
+    'network map hop-stitches kzn-bridgecity with dropOutAndBack, same as the planner',
+);
+assert(
+    mapApp.includes('resolveKznKwamashuSpurLatLngs'),
+    'the kwaMashu working is a second Bridge City polyline, not a detour of the main corridor',
+);
+assert(
+    mapApp.includes('goldById'),
+    'fork paint keeps the gold bake so the kwaMashu spur can still be sliced',
+);
+{
+    const stitchAt = mapApp.indexOf("routeObj.routeId === 'kzn-bridgecity' && !preferBakeId");
+    const graphAt = mapApp.indexOf('smoothStopsOnRailGraph(bundle.graph, stops, baked)');
+    assert(stitchAt >= 0 && graphAt >= 0 && stitchAt < graphAt, 'kzn-bridgecity is hop-stitched before graph smooth');
+}
+{
+    const mapPage = readFileSync(new URL('../src/pages/map.astro', import.meta.url), 'utf8');
+    assert(mapPage.includes('id="nt-track-fork-a"'), 'fork editor has Branch A');
+    assert(mapPage.includes('id="nt-track-fork-b"'), 'fork editor has Branch B');
+    assert(mapPage.includes('id="nt-track-fork-preset"') && mapPage.includes("Duff's Road split"), 'fork editor has a Duff\'s Road split preset');
+    assert(mapPage.includes('id="nt-track-fork-clear"'), 'fork editor can reset the split');
+    assert(mapPage.includes('id="nt-track-fork-save"'), 'fork editor can save both arms');
+}
+assert(
     /'ct-nolu': \[[^\]]*PHILIPPI", "STOCK ROAD", "MANDALAY", "NOLUNGILE"/.test(mapApp),
     'Nolungile main static path leaves Kapteinsklip off the Stock Road corridor',
 );

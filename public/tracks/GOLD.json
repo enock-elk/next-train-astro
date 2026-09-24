@@ -2,7 +2,7 @@
   "branch": "map-gold",
   "frozenAt": "035abeac8b13d7489eb0d239cbaf4a2ac56fb290",
   "version": "V9_09.20.11",
-  "note": "Gold snapshot of this build: Pretoria-Mabopane operator patch, push circle sweeps points to the rim. Diff against origin/map-gold. Fast-forward map-gold after this lands on main. Never force-push map-gold.",
+  "note": "Gold snapshot of this build: kzn-bridgecity network paint hop-stitches the Duff's Road fork (Bridge City trunk + kwaMashu spur). Diff against origin/map-gold. Fast-forward map-gold after this lands on main. Never force-push map-gold.",
   "files": {
     "public/tracks/rail-tracks-EC.geojson": {
       "md5": "43409bfd05405205e596f0d03345ab18",
@@ -21,12 +21,12 @@
       "sha256": "090a5d7fc45cafb8c7b81dc583ae24978540f38278cab447953bc90c8821f01f"
     },
     "public/js/map-app.js": {
-      "md5": "3f2d741bc664d8702b02358a4ccf8d3d",
-      "sha256": "0261423371a170432cb7330df752137e25836dd71ae9f3b3f12062b088240b9e"
+      "md5": "f17d10e3d09e20bb0f260ac837c73047",
+      "sha256": "a9a304e1f4208588f2e898c47a77bcfe6a9d4d29d14ca39c50507d0c0c525aad"
     },
     "src/pages/map.astro": {
-      "md5": "dda8a87d8cdab80b899efd7a1d1bd2f0",
-      "sha256": "feda00c010f6c5f94a4a3970900c0f684fb1a236c7ed096e2bb42281b5e5f83f"
+      "md5": "c5803baefaa46dcc66c0fe34389c4b4d",
+      "sha256": "e326f5639f79cc2f3384076792825fd56a7cd23b3182a185930ec3459837cc17"
     },
     "src/components/MapView.astro": {
       "md5": "9062a32a1b57dab0792a4267cc8ec231",

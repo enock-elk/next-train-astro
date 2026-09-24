@@ -544,7 +544,49 @@
                 slice.push(latlngs[i]);
                 if (i === i2) break;
             }
-            return slice.length > 2 ? slice : null;
+            const trimmed = dropOutAndBack(slice);
+            return trimmed && trimmed.length > 2 ? trimmed : null;
+        }
+
+        function dropOutAndBack(seg, toleranceM = 40) {
+            if (!Array.isArray(seg) || seg.length < 4) return seg;
+            let current = seg;
+            for (let pass = 0; pass < 6; pass++) {
+                const out = [];
+                let i = 0;
+                while (i < current.length) {
+                    const [latA, lonA] = current[i];
+                    let jump = -1;
+                    for (let j = current.length - 1; j > i + 2; j--) {
+                        if (railHaversineM(latA, lonA, current[j][0], current[j][1]) <= toleranceM) {
+                            let far = 0;
+                            for (let k = i; k <= j; k++) {
+                                const d = railHaversineM(latA, lonA, current[k][0], current[k][1]);
+                                if (d > far) far = d;
+                            }
+                            if (far > toleranceM) jump = j;
+                            break;
+                        }
+                    }
+                    out.push(current[i]);
+                    i = jump > i ? jump + 1 : i + 1;
+                }
+                if (out.length < 2 || out.length === current.length) return out.length > 1 ? out : current;
+                current = out;
+            }
+            return current;
+        }
+
+        function stitchBakedStops(baked, stops) {
+            if (!baked || baked.length < 2 || !Array.isArray(stops) || stops.length < 2) return null;
+            const out = [];
+            for (let i = 0; i < stops.length - 1; i++) {
+                const seg = clipBakedHop(baked, stops[i], stops[i + 1]);
+                if (!seg || seg.length < 2) return null;
+                if (!out.length) out.push(...seg);
+                else out.push(...seg.slice(1));
+            }
+            return out.length > 1 ? out : null;
         }
 
         function smoothStopsOnRailGraph(graph, stops, baked) {
@@ -614,6 +656,7 @@
 
         async function loadRailTrackBundle(region) {
             const byId = new Map();
+            const goldById = new Map();
             const stationOrderById = new Map();
             let graph = null;
             try {
@@ -624,7 +667,7 @@
                 // /tracks/ (not /data/) — production rsync excludes metrorail-app/data/
                 const url = `${root}tracks/rail-tracks-${region}.geojson`;
                 const res = await fetch(url, { cache: 'default' });
-                if (!res.ok) return { byId, graph: null, stationOrderById };
+                if (!res.ok) return { byId, goldById, graph: null, stationOrderById };
                 const fc = await res.json();
                 const features = fc.features || [];
                 for (const f of features) {
@@ -643,7 +686,10 @@
                         }
                         latlngs = best;
                     }
-                    if (latlngs.length > 1) byId.set(id, latlngs);
+                    if (latlngs.length > 1) {
+                        byId.set(id, latlngs);
+                        goldById.set(id, latlngs.map((p) => [p[0], p[1]]));
+                    }
                     // Manual patches set stationOrderOverride so paint follows
                     // Ndabeni/Pinelands (or any edited list) instead of STATIC.
                     const names = f.properties?.stationNames;
@@ -655,7 +701,7 @@
             } catch (e) {
                 console.warn('Guardian: OSM track GeoJSON unavailable, using station chords.', e);
             }
-            return { byId, graph, stationOrderById };
+            return { byId, goldById, graph, stationOrderById };
         }
 
         /** Baked OSM LineString may only be used if stations appear along it in list order. */
@@ -790,13 +836,94 @@
         const BRANCH_TRAIN_THRESHOLD = 2;
         const MIN_TRAINS_TO_JUDGE = 4;
         const NOLU_KAPTEINSKLIP_SPUR = ["PHILIPPI", "LENTEGEUR", "MITCHELL'S PLAIN", "KAPTEINSKLIP"];
+        const KZN_BRIDGE_CITY_MAIN = ["BEREA ROAD", "DURBAN", "MOSES MABHIDA", "UMGENI", "BRIARDENE", "GREENWOOD PARK", "RED HILL", "AVOCA", "DUFF'S ROAD", "BRIDGE CITY"];
+        const KZN_KWAMASHU_SPUR = ["DUFF'S ROAD", "TEMBALIHLE", "KWAMASHU"];
+        const DEFAULT_KZN_BRIDGE_FORK = {
+            at: "DUFF'S ROAD",
+            branches: {
+                a: { id: 'a', stops: ['TEMBALIHLE', 'KWAMASHU'] },
+                b: { id: 'b', stops: ['BRIDGE CITY'] }
+            }
+        };
+        let liveTrackForks = {};
         let trackEdit = null;
 
+        function namedRouteStops(routeObj, nameList) {
+            const byName = new Map();
+            (routeObj.validStops || []).forEach((s) => {
+                const name = String(s?.name || '').toUpperCase().trim();
+                if (name && !byName.has(name)) byName.set(name, s);
+            });
+            const stops = (nameList || [])
+                .map((name) => byName.get(String(name || '').toUpperCase().trim()))
+                .filter((s) => s && Number.isFinite(s.lat) && Number.isFinite(s.lon));
+            return stops.length >= 2 ? stops : [];
+        }
+
+        function forkIsUsable(raw) {
+            if (!raw || !raw.at) return false;
+            const branches = raw.branches && typeof raw.branches === 'object' ? Object.values(raw.branches) : [];
+            return branches.filter((b) => b && Array.isArray(b.stops) && b.stops.length).length >= 2;
+        }
+
+        function publishedForkForRoute(routeId) {
+            const raw = liveTrackForks && routeId ? liveTrackForks[routeId] : null;
+            if (forkIsUsable(raw)) return raw;
+            if (routeId === 'kzn-bridgecity') return DEFAULT_KZN_BRIDGE_FORK;
+            return null;
+        }
+
+        function bakedLineFor(routeId, trackBundle) {
+            if (trackEdit && trackEdit.routeId === routeId && trackEdit.goldCoords && trackEdit.goldCoords.length > 1) {
+                return trackEdit.goldCoords;
+            }
+            const gold = trackBundle?.goldById?.get(routeId);
+            if (gold && gold.length > 1) return gold;
+            return trackBundle?.byId?.get(routeId);
+        }
+
+        function forkArmNames(fork, destName) {
+            const at = String(fork?.at || '').toUpperCase().trim();
+            const branches = fork?.branches && typeof fork.branches === 'object'
+                ? Object.values(fork.branches).filter((b) => b && Array.isArray(b.stops) && b.stops.length)
+                : [];
+            const dest = String(destName || '').replace(/ STATION$/i, '').toUpperCase().trim();
+            const destArm = branches.find((b) => (b.stops || []).some((s) => String(s).toUpperCase().trim() === dest))
+                || branches[1]
+                || { stops: [] };
+            const otherArm = branches.find((b) => b !== destArm) || { stops: [] };
+            return { at, destArm: destArm.stops || [], otherArm: otherArm.stops || [] };
+        }
+
+        function kznBridgeCityMainStops(routeObj) {
+            const fork = publishedForkForRoute(routeObj.routeId);
+            if (fork && routeObj.routeId === 'kzn-bridgecity') {
+                const dest = String(routeObj.destB || 'BRIDGE CITY').replace(/ STATION$/i, '');
+                const { at, destArm } = forkArmNames(fork, dest);
+                const names = [];
+                for (const n of KZN_BRIDGE_CITY_MAIN) {
+                    names.push(n);
+                    if (n === at) break;
+                }
+                destArm.forEach((n) => {
+                    const up = String(n).toUpperCase().trim();
+                    if (up && names.indexOf(up) < 0) names.push(up);
+                });
+                const stops = namedRouteStops(routeObj, names);
+                if (stops.length >= 2) return stops;
+            }
+            return namedRouteStops(routeObj, KZN_BRIDGE_CITY_MAIN);
+        }
+
         function corridorGeometryStops(routeObj) {
-            if (trackEdit && trackEdit.routeId === routeObj.routeId && trackEdit.stops && trackEdit.stops.length > 1) {
+            if (trackEdit && trackEdit.routeId === (routeObj && routeObj.routeId) && trackEdit.stops && trackEdit.stops.length > 1) {
                 return trackEdit.stops;
             }
             const all = routeObj.validStops || [];
+            if (routeObj.routeId === 'kzn-bridgecity') {
+                const main = kznBridgeCityMainStops(routeObj);
+                if (main.length >= 2) return main;
+            }
             if (GHOST_GEOMETRY_REGIONS.has(routeObj.region)) return all;
             const served = all.filter((s) => s && !s.inactive);
             if (served.length < 2) return all;
@@ -831,11 +958,21 @@
             const chords = (stops.length > 1)
                 ? stops.map((s) => [s.lat, s.lon])
                 : (routeObj.coords || []);
-            const bundle = trackBundle || { byId: new Map(), graph: null };
-            const baked = (preferBakeId && bundle.byId && bundle.byId.get(preferBakeId))
-                || (bundle.byId && bundle.byId.get(routeObj.routeId));
+            const bundle = trackBundle || { byId: new Map(), goldById: new Map(), graph: null };
+            const bakedId = preferBakeId || routeObj.routeId;
+            const baked = bakedLineFor(bakedId, bundle);
             const held = GHOST_GEOMETRY_REGIONS.has(routeObj.region);
             const bakedIsUsable = baked && baked.length > 1 && bakedLineCoversStops(baked, stops);
+
+            // kzn-bridgecity is one LineString that runs Duff's Road ->
+            // Tembalihle -> kwaMashu and doubles back to Bridge City. Returning
+            // the whole bake, or graph-smoothing that bake, paints Berea Road
+            // to Bridge City via kwaMashu. Hop-stitch with dropOutAndBack keeps
+            // the Bridge City trunk and the kwaMashu spur as two lines.
+            if (routeObj.routeId === 'kzn-bridgecity' && !preferBakeId && baked) {
+                const stitched = stitchBakedStops(baked, stops);
+                if (stitched && stitched.length > 1) return stitched;
+            }
 
             // The baked corridor is one continuous OSM line for exactly this
             // route, so it is the smoothest thing we can draw. Re-deriving it
@@ -865,6 +1002,31 @@
 
         function resolveRouteLatLngs(routeObj, trackBundle) {
             return resolveStopsLatLngs(corridorGeometryStops(routeObj), routeObj, trackBundle);
+        }
+
+        function kznKwamashuSpurStops(routeObj) {
+            if (!routeObj || routeObj.routeId !== 'kzn-bridgecity') return [];
+            const fork = publishedForkForRoute(routeObj.routeId);
+            if (fork) {
+                const dest = String(routeObj.destB || 'BRIDGE CITY').replace(/ STATION$/i, '');
+                const { at, otherArm } = forkArmNames(fork, dest);
+                const names = [at, ...otherArm.map((n) => String(n).toUpperCase().trim())].filter(Boolean);
+                const unique = [];
+                names.forEach((n) => { if (unique.indexOf(n) < 0) unique.push(n); });
+                const stops = namedRouteStops(routeObj, unique);
+                if (stops.length >= 2) return stops;
+            }
+            return namedRouteStops(routeObj, KZN_KWAMASHU_SPUR);
+        }
+
+        function resolveKznKwamashuSpurLatLngs(routeObj, trackBundle) {
+            const stops = kznKwamashuSpurStops(routeObj);
+            if (stops.length < 2) return null;
+            const baked = bakedLineFor('kzn-bridgecity', trackBundle);
+            const stitched = baked ? stitchBakedStops(baked, stops) : null;
+            if (stitched && stitched.length > 1) return stitched;
+            const chords = stops.map((s) => [s.lat, s.lon]);
+            return chords.length > 1 ? chords : null;
         }
 
         function resolveNoluKapteinsklipSpurLatLngs(routeObj, trackBundle) {
@@ -1652,7 +1814,7 @@
             // --- OSM TRACK GEOMETRY (cached GeoJSON + live graph smooth) ---
             // © OpenStreetMap contributors — baked offline via scripts/build-rail-tracks.mjs
             const overlayGroup = L.layerGroup().addTo(map);
-            const emptyTracks = { byId: new Map(), graph: null, stationOrderById: new Map() };
+            const emptyTracks = { byId: new Map(), goldById: new Map(), graph: null, stationOrderById: new Map() };
             let liveTrackBundle = emptyTracks;
             let mapOperatorAuthed = false;
 
@@ -1700,7 +1862,8 @@
                         map.removeLayer(r._spurPolyline);
                         r._spurPolyline = null;
                     }
-                    const spurCoords = resolveNoluKapteinsklipSpurLatLngs(r, trackBundle);
+                    const spurCoords = resolveNoluKapteinsklipSpurLatLngs(r, trackBundle)
+                        || resolveKznKwamashuSpurLatLngs(r, trackBundle);
                     if (spurCoords && spurCoords.length > 1) {
                         r._spurPolyline = L.polyline(spurCoords, lineStyle);
                         if (!selectedRouteId || r.routeId === selectedRouteId) r._spurPolyline.addTo(map);
@@ -2037,7 +2200,21 @@
                     });
                 } catch (_) {}
             }
+
+            async function applyPublishedTrackForks() {
+                try {
+                    const endpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
+                    const res = await fetch(`${endpoint}config/track_forks.json`);
+                    if (!res.ok) return;
+                    const data = await res.json();
+                    liveTrackForks = data && typeof data === 'object' ? data : {};
+                } catch (_) {
+                    liveTrackForks = {};
+                }
+            }
             await applyPublishedStationPins(globalStations);
+            await applyPublishedTrackForks();
+            if (liveTrackBundle) paintRouteLines(liveTrackBundle);
 
             // --- DRAW MARKERS (WITH NAKED HALO TOOLTIPS) ---
             Object.entries(globalStations).forEach(([name, data]) => {
@@ -2166,7 +2343,7 @@
                 delete: 'Tap a dot to remove it.',
                 brush: 'Drag the circle. Points inside are swept out to the rim. Pinch to resize.',
                 stations: 'Drag a station pin. The rail line stays where it is.',
-                fork: 'Tap the split station, then the stops on each branch.'
+                fork: 'Tap Duff\'s Road split for the two lines. Or tap the junction, then the stations on each arm.'
             };
             const TRACK_EDIT_TOOLS = ['move', 'add', 'delete', 'brush', 'stations', 'fork'];
             let trackEditTool = 'move';
@@ -2219,6 +2396,7 @@
             }
 
             function setTrackEditTool(tool) {
+                const prev = trackEditTool;
                 trackEditTool = TRACK_EDIT_TOOLS.indexOf(tool) >= 0 ? tool : 'move';
                 const html = document.documentElement;
                 html.classList.toggle('nt-track-tool-add', trackEditTool === 'add');
@@ -2235,6 +2413,7 @@
                 if (hint) hint.textContent = TRACK_EDIT_HINTS[trackEditTool] || TRACK_EDIT_HINTS.move;
                 syncBrush();
                 if (trackEdit) rebuildTrackVertices();
+                if (trackEditTool === 'fork' && prev !== 'fork' && trackEdit) hydrateForkTool();
             }
 
             function paintEditorVia() {
@@ -2370,10 +2549,11 @@
                 if (isMapTabEmbed() || !mapOperatorAuthed) return;
                 const r = drawnRoutes.find((x) => x.routeId === selectedRouteId);
                 if (!r || !liveTrackBundle?.byId?.has(r.routeId)) return;
-                const coords = cloneLatLngs(r.trackCoords && r.trackCoords.length > 1 ? r.trackCoords : liveTrackBundle.byId.get(r.routeId));
+                const gold = cloneLatLngs((liveTrackBundle.goldById && liveTrackBundle.goldById.get(r.routeId)) || liveTrackBundle.byId.get(r.routeId));
+                const coords = cloneLatLngs(r.trackCoords && r.trackCoords.length > 1 ? r.trackCoords : gold);
                 if (coords.length < 2) return;
                 const names = (r.validStops || []).map((s) => s.name);
-                trackEdit = { routeId: r.routeId, coords, stops: editorStopsFromNames(r, names), undo: [] };
+                trackEdit = { routeId: r.routeId, coords, goldCoords: gold, stops: editorStopsFromNames(r, names), undo: [], fork: forkStateFromPublished(r.routeId) };
                 const title = document.getElementById('nt-track-editor-title');
                 if (title) title.textContent = r.name;
                 const area = document.getElementById('nt-track-editor-stations');
@@ -2384,6 +2564,7 @@
                 setSelectedLine(r.routeId, { toggle: false, fit: false });
                 applyEditPreview();
                 bindEditPolylineClicks();
+                paintForkStatus();
                 document.documentElement.classList.add('nt-track-editing');
                 document.documentElement.classList.remove('nt-track-editor-ready');
                 syncTrackEditorChrome();
@@ -2496,29 +2677,136 @@
                 }, 8000);
             }
 
+            function forkStateFromPublished(routeId) {
+                const raw = publishedForkForRoute(routeId);
+                if (!raw || !raw.at) return { at: '', which: 0, branches: [[], []] };
+                const branches = raw.branches && typeof raw.branches === 'object' ? raw.branches : {};
+                const a = Array.isArray(branches.a?.stops) ? branches.a.stops.slice()
+                    : Array.isArray(branches[0]?.stops) ? branches[0].stops.slice() : [];
+                const b = Array.isArray(branches.b?.stops) ? branches.b.stops.slice()
+                    : Array.isArray(branches[1]?.stops) ? branches[1].stops.slice() : [];
+                return {
+                    at: String(raw.at || '').toUpperCase().trim(),
+                    which: 0,
+                    branches: [a.map((s) => String(s).toUpperCase().trim()).filter(Boolean), b.map((s) => String(s).toUpperCase().trim()).filter(Boolean)]
+                };
+            }
+
+            function forkBranchLabel(which) {
+                if (trackEdit && trackEdit.routeId === 'kzn-bridgecity') {
+                    return which === 1 ? 'Bridge City' : 'kwaMashu';
+                }
+                return which === 1 ? 'Branch B' : 'Branch A';
+            }
+
+            function paintForkBranchButtons() {
+                const aBtn = document.getElementById('nt-track-fork-a');
+                const bBtn = document.getElementById('nt-track-fork-b');
+                const which = trackEdit && trackEdit.fork ? trackEdit.fork.which : 0;
+                if (aBtn) {
+                    aBtn.textContent = forkBranchLabel(0);
+                    aBtn.classList.toggle('is-on', which !== 1);
+                }
+                if (bBtn) {
+                    bBtn.textContent = forkBranchLabel(1);
+                    bBtn.classList.toggle('is-on', which === 1);
+                }
+            }
+
             function paintForkStatus() {
                 const el = document.getElementById('nt-track-editor-fork-status');
                 const fork = trackEdit && trackEdit.fork;
-                if (!el || !fork) return;
-                if (!fork.at) {
-                    el.textContent = 'Tap the split station on this line.';
+                paintForkBranchButtons();
+                if (!el) return;
+                if (!fork || !fork.at) {
+                    el.textContent = trackEdit && trackEdit.routeId === 'kzn-bridgecity'
+                        ? 'Tap Duff\'s Road split to paint kwaMashu and Bridge City as two lines.'
+                        : 'Tap the junction station, then the stations on this arm.';
                     return;
                 }
-                const which = fork.which === 1 ? 'Branch B' : 'Branch A';
+                const aName = forkBranchLabel(0);
+                const bName = forkBranchLabel(1);
+                const which = forkBranchLabel(fork.which === 1 ? 1 : 0);
                 const a = (fork.branches[0] || []).join(', ') || 'none yet';
                 const b = (fork.branches[1] || []).join(', ') || 'none yet';
-                el.textContent = `Split at ${fork.at}. ${which}. A: ${a}. B: ${b}.`;
+                el.textContent = `Two lines from ${fork.at}. Editing ${which}. ${aName}: ${a}. ${bName}: ${b}.`;
+            }
+
+            function applyForkLinePreview() {
+                if (!trackEdit || !liveTrackBundle) return;
+                const r = drawnRoutes.find((x) => x.routeId === trackEdit.routeId);
+                const fork = trackEdit.fork;
+                if (fork && fork.at && (fork.branches[0] || []).length && (fork.branches[1] || []).length) {
+                    liveTrackForks[trackEdit.routeId] = {
+                        routeId: trackEdit.routeId,
+                        at: fork.at,
+                        branches: {
+                            a: { id: 'a', stops: (fork.branches[0] || []).slice() },
+                            b: { id: 'b', stops: (fork.branches[1] || []).slice() }
+                        }
+                    };
+                }
+                if (r && r.routeId === 'kzn-bridgecity') {
+                    const baked = trackEdit.goldCoords || bakedLineFor(r.routeId, liveTrackBundle);
+                    const mainStops = kznBridgeCityMainStops(r);
+                    const stitched = baked && mainStops.length >= 2 ? stitchBakedStops(baked, mainStops) : null;
+                    if (stitched && stitched.length > 1) trackEdit.coords = cloneLatLngs(stitched);
+                }
+                paintRouteLines(liveTrackBundle);
+                if (r?._polyline) bindEditPolylineClicks();
+                rebuildTrackVertices();
+                paintEditorCover();
+            }
+
+            function hydrateForkTool() {
+                if (!trackEdit) return;
+                const fork = trackEdit.fork;
+                const empty = !fork || !fork.at || !(fork.branches[0] || []).length || !(fork.branches[1] || []).length;
+                if (empty && trackEdit.routeId === 'kzn-bridgecity') {
+                    applyDuffsRoadForkPreset();
+                    return;
+                }
+                paintForkStatus();
+                applyForkLinePreview();
             }
 
             function recordForkStation(name) {
                 if (!trackEdit || trackEditTool !== 'fork') return;
                 if (!trackEdit.fork) trackEdit.fork = { at: '', which: 0, branches: [[], []] };
                 const fork = trackEdit.fork;
-                if (!fork.at) fork.at = name;
-                else if (name !== fork.at) {
+                const up = String(name || '').toUpperCase().trim();
+                if (!up) return;
+                if (!fork.at) fork.at = up;
+                else if (up === fork.at) fork.at = up;
+                else {
                     const list = fork.branches[fork.which] || (fork.branches[fork.which] = []);
-                    if (list.indexOf(name) < 0) list.push(name);
+                    const idx = list.indexOf(up);
+                    if (idx >= 0) list.splice(idx, 1);
+                    else list.push(up);
                 }
+                paintForkStatus();
+                if (fork.at && (fork.branches[0] || []).length && (fork.branches[1] || []).length) {
+                    applyForkLinePreview();
+                }
+            }
+
+            function applyDuffsRoadForkPreset() {
+                if (!trackEdit) return;
+                trackEdit.fork = {
+                    at: "DUFF'S ROAD",
+                    which: 0,
+                    branches: [['TEMBALIHLE', 'KWAMASHU'], ['BRIDGE CITY']]
+                };
+                if (trackEditTool !== 'fork') setTrackEditTool('fork');
+                paintForkStatus();
+                applyForkLinePreview();
+                setEditorStatus("Two lines from Duff's Road: kwaMashu and Bridge City. Save fork to keep it.", true);
+            }
+
+            function setForkBranch(which) {
+                if (!trackEdit) return;
+                if (!trackEdit.fork) trackEdit.fork = { at: '', which: 0, branches: [[], []] };
+                trackEdit.fork.which = which === 1 ? 1 : 0;
                 paintForkStatus();
             }
 
@@ -2828,11 +3116,27 @@
                 e.stopPropagation();
                 saveStationPins();
             });
-            document.getElementById('nt-track-fork-branch')?.addEventListener('click', (e) => {
+            document.getElementById('nt-track-fork-a')?.addEventListener('click', (e) => {
+                e.stopPropagation();
+                setForkBranch(0);
+            });
+            document.getElementById('nt-track-fork-b')?.addEventListener('click', (e) => {
+                e.stopPropagation();
+                setForkBranch(1);
+            });
+            document.getElementById('nt-track-fork-preset')?.addEventListener('click', (e) => {
+                e.stopPropagation();
+                applyDuffsRoadForkPreset();
+            });
+            document.getElementById('nt-track-fork-clear')?.addEventListener('click', (e) => {
                 e.stopPropagation();
                 if (!trackEdit) return;
-                if (!trackEdit.fork) trackEdit.fork = { at: '', which: 0, branches: [[], []] };
-                trackEdit.fork.which = 1;
+                if (trackEdit.routeId === 'kzn-bridgecity') {
+                    applyDuffsRoadForkPreset();
+                    return;
+                }
+                trackEdit.fork = { at: '', which: 0, branches: [[], []] };
+                if (liveTrackForks && trackEdit.routeId) delete liveTrackForks[trackEdit.routeId];
                 paintForkStatus();
             });
             document.getElementById('nt-track-fork-save')?.addEventListener('click', (e) => {
@@ -3949,6 +4253,9 @@
                     if (window.__ntMapSaveWait && data.id && String(data.id) !== String(window.__ntMapSaveWait)) return;
                     window.__ntMapSaveWait = '';
                     setEditorStatus(data.ok ? 'Saved.' : 'Could not save. Sign in from the app and try again.', !!data.ok);
+                    if (data.ok && trackEdit && trackEdit.fork && trackEdit.fork.at) {
+                        applyForkLinePreview();
+                    }
                     return;
                 }
                 if (data.type === 'nt-map-ride-pings') {

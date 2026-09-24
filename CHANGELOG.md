@@ -20,6 +20,8 @@ Ticket Prices sits a little clearer on a dark screen.
 
 ## V9_09.24.4
 
+Berea Road to Bridge City stays on its own line. Duff's Road to kwaMashu is the second line from the fork.
+
 The day line shows the holiday timetable straight away. A public holiday with no trains names that day. Trip Planner names the public holiday timetable. A public holiday train sheet says Public Holidays.
 
 ## V9_09.24.3

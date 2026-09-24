@@ -1450,7 +1450,7 @@ export async function takeGridSnapshot(direction = 'A', dayType = 'weekday') {
     
     const displayRouteName = formatRouteLabelPlain(route.name);
     const corridorEnds = displayRouteName.split('↔').map((part) => part.trim()).filter(Boolean);
-    const exportBiArrow = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 36 16" width="1.35em" height="0.62em" style="display:inline-block;vertical-align:middle;margin:0 0.35em 0.12em;" aria-hidden="true"><path d="M7 8h22M10 4.2 5.2 8 10 11.8M26 4.2 30.8 8 26 11.8" fill="none" stroke="#000" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+    const exportBiArrow = `<span style="display:inline-block;vertical-align:middle;line-height:1;font-size:1.15em;font-weight:700;letter-spacing:0;margin:0 0.28em;font-family:Arial,sans-serif;position:relative;top:-0.06em;">↔</span>`;
     const corridorTitle = corridorEnds.length >= 2
         ? `${escapeHTML(corridorEnds[0])}${exportBiArrow}${escapeHTML(corridorEnds[1])} CORRIDOR`
         : `${escapeHTML(displayRouteName)} CORRIDOR`;
@@ -1566,6 +1566,8 @@ export async function takeGridSnapshot(direction = 'A', dayType = 'weekday') {
             headerCell.style.fontSize = isCompact ? '17px' : '18px';
             headerCell.style.fontWeight = headerCell.querySelector('.nt-grid-train-id') ? '400' : '900';
             headerCell.style.textAlign = 'center';
+            headerCell.style.verticalAlign = 'middle';
+            headerCell.style.lineHeight = '1';
             if (isCompact) headerCell.style.letterSpacing = '-0.5px';
             headerCell.querySelectorAll('.nt-grid-train-id').forEach((idEl) => {
                 idEl.style.fontFamily = 'system-ui, -apple-system, "Segoe UI", sans-serif';
@@ -1585,7 +1587,9 @@ export async function takeGridSnapshot(direction = 'A', dayType = 'weekday') {
             td.style.color = textColor;
             td.style.fontSize = isCompact ? '13.5px' : '15px'; 
             td.style.fontFamily = 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace';
-            td.style.textAlign = 'center'; 
+            td.style.textAlign = 'center';
+            td.style.verticalAlign = 'middle';
+            td.style.lineHeight = '1';
             td.style.fontWeight = '700'; 
             td.style.backgroundColor = cellBg;
             td.style.boxShadow = 'none';

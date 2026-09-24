@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_09.24.10': [
+        'Timetable export cells vertically center station names, times, and train numbers. The corridor double arrow is a type mark, because the SVG was painting as a small left arrow. Light rows, borders, and the route-title fit stay. No What’s New. forceShow stays false.',
+    ],
     'V9_09.24.9': [
         'Commuter Notice train numbers stay the V9_09.22.1 system-ui regular 18px face, with letter-spacing left normal. Direction titles start larger and shrink to fit a short timetable. The corridor line is black, with a middle-aligned double arrow. Light export rows and borders stay. What’s New covers the notice heading. forceShow stays false.',
     ],

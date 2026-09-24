@@ -1513,8 +1513,8 @@ export async function takeGridSnapshot(direction = 'A', dayType = 'weekday') {
         </div>
 
         <div class="mb-4">
-            <div class="nt-export-direction nt-export-direction--primary border-l-4" style="background-color:#eaf2ff;border-color:${accentColor};padding:7px 12px 13px;min-height:42px;display:flex;align-items:center;">
-                <h3 class="nt-export-route-title font-bold uppercase" style="color:${textColor};margin:0;letter-spacing:0.015em;font-size:26px;line-height:1.15;white-space:nowrap;">${primarySection.from} ➔ ${primarySection.to}</h3>
+            <div class="nt-export-direction nt-export-direction--primary border-l-4" style="background-color:#eaf2ff;border-color:${accentColor};padding:0 12px;min-height:42px;display:table;width:100%;box-sizing:border-box;">
+                <h3 class="nt-export-route-title font-bold uppercase" style="color:${textColor};margin:0;letter-spacing:0.015em;font-size:22px;line-height:1;white-space:nowrap;display:table-cell;vertical-align:middle;text-align:left;height:42px;">${primarySection.from} ➔ ${primarySection.to}</h3>
             </div>
             <div class="schedule-table-wrapper">
                 ${primarySection.html}
@@ -1528,8 +1528,8 @@ export async function takeGridSnapshot(direction = 'A', dayType = 'weekday') {
         </div>
 
         <div class="mb-8">
-            <div class="nt-export-direction nt-export-direction--return border-l-4" style="background-color:#eaf2ff;border-color:${accentColor};padding:7px 12px 13px;min-height:42px;display:flex;align-items:center;">
-                <h3 class="nt-export-route-title font-bold uppercase" style="color:${textColor};margin:0;letter-spacing:0.015em;font-size:26px;line-height:1.15;white-space:nowrap;">${returnSection.from} ➔ ${returnSection.to}</h3>
+            <div class="nt-export-direction nt-export-direction--return border-l-4" style="background-color:#eaf2ff;border-color:${accentColor};padding:0 12px;min-height:42px;display:table;width:100%;box-sizing:border-box;">
+                <h3 class="nt-export-route-title font-bold uppercase" style="color:${textColor};margin:0;letter-spacing:0.015em;font-size:22px;line-height:1;white-space:nowrap;display:table-cell;vertical-align:middle;text-align:left;height:42px;">${returnSection.from} ➔ ${returnSection.to}</h3>
             </div>
             <div class="schedule-table-wrapper">
                 ${returnSection.html}
@@ -1676,7 +1676,7 @@ export async function takeGridSnapshot(direction = 'A', dayType = 'weekday') {
             const table = section?.querySelector('table');
             const available = Math.max(table?.offsetWidth || 0, title.parentElement?.clientWidth || 0);
             if (!available) return;
-            let size = 26;
+            let size = 22;
             title.style.fontSize = `${size}px`;
             while (size > 13 && title.scrollWidth > available - 24) {
                 size -= 1;

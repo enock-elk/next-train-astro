@@ -19,7 +19,7 @@ permissions:
   id-token: write
 
 concurrency:
-  group: scheduled-alerts-publish-v2
+  group: scheduled-alerts-publish-v3
   cancel-in-progress: false
 
 jobs:
@@ -47,13 +47,21 @@ jobs:
             OIDC="$(curl -fsS --max-time 20 -H "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" \
               "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=nexttrain-community" \
               | python3 -c 'import json,sys; print(json.load(sys.stdin)["value"])')" || OIDC=""
-            if [ -n "$OIDC" ] && post "Authorization: Bearer ${OIDC}"; then
-              exit 0
+            if [ -n "$OIDC" ]; then
+              BODY="$(post "Authorization: Bearer ${OIDC}")" && {
+                echo "$BODY"
+                echo "$BODY" >> "$GITHUB_STEP_SUMMARY"
+                exit 0
+              }
             fi
             echo "::warning::OIDC cron call failed. Trying shared secret."
           fi
-          if [ -n "$SECRET" ] && post "X-Cron-Secret: ${SECRET}"; then
-            exit 0
+          if [ -n "$SECRET" ]; then
+            BODY="$(post "X-Cron-Secret: ${SECRET}")" && {
+              echo "$BODY"
+              echo "$BODY" >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            }
           fi
           echo "::error::Scheduled alerts did not publish. OIDC failed and ALERT_CRON_SECRET is not set."
           exit 1

@@ -5182,12 +5182,12 @@
       }
     },
     "killswitch": {
-      "timestamp": 1789785510927,
+      "timestamp": 1789956058090,
       "triggeredBy": "enockelk@gmail.com"
     },
     "maintenance": {
-      "active": true,
-      "expiresAt": 1789801140000,
+      "active": false,
+      "expiresAt": 1789973940000,
       "items": {
         "_legacy": {
           "active": false,
@@ -5289,7 +5289,7 @@
         "m_mt5ir6k7dnx4": {
           "active": true,
           "createdAt": 1787472130040,
-          "expiresAt": 1789801140000,
+          "expiresAt": 1789973940000,
           "id": "m_mt5ir6k7dnx4",
           "message": "Maintenance In progress",
           "regions": [
@@ -5298,7 +5298,7 @@
             "KZN",
             "EC"
           ],
-          "updatedAt": 1789766902047,
+          "updatedAt": 1789936690913,
           "updatedBy": "enockelk@gmail.com"
         }
       },
@@ -5309,7 +5309,7 @@
         "KZN",
         "EC"
       ],
-      "updatedAt": 1789766902047,
+      "updatedAt": 1789957596463,
       "updatedBy": "enockelk@gmail.com"
     },
     "planner_fares": {
@@ -5394,7 +5394,7 @@
         "postedAt": 1789563338579,
         "reactions": {
           "like": 1,
-          "love": 3,
+          "love": 4,
           "sad": 3
         },
         "severity": "info",
@@ -5436,6 +5436,39 @@
         },
         "postedAt": 1789371025676,
         "severity": "info"
+      },
+      "1789926569374": {
+        "authorName": "Next Train Ops",
+        "expiresAt": 1790114340000,
+        "forcePopup": false,
+        "id": "1789926569374",
+        "imageUrls": [
+          "/images/alerts/smoke_free_stations.jpg"
+        ],
+        "isRepost": false,
+        "message": "",
+        "poll": {
+          "active": false,
+          "showResults": false
+        },
+        "postedAt": 1789926569374,
+        "severity": "info"
+      },
+      "sched_mud52lpc_1l1uurd": {
+        "authorName": "Next Train Ops",
+        "expiresAt": 1790114340000,
+        "forcePopup": false,
+        "id": "sched_mud52lpc_1l1uurd",
+        "imageUrls": [
+          "/images/alerts/priority-seating.jpg"
+        ],
+        "message": "",
+        "poll": {
+          "active": false,
+          "showResults": false
+        },
+        "postedAt": 1790109660000,
+        "severity": "info"
       }
     },
     "all_GP": {
@@ -5458,6 +5491,37 @@
           "like": 1,
           "love": 3
         },
+        "severity": "info"
+      },
+      "1789926569374": {
+        "authorName": "Next Train Ops",
+        "expiresAt": 1790114340000,
+        "forcePopup": false,
+        "id": "1789926569374",
+        "imageUrls": [
+          "/images/alerts/smoke_free_stations.jpg"
+        ],
+        "isRepost": false,
+        "message": "",
+        "poll": {
+          "active": false,
+          "showResults": false
+        },
+        "postedAt": 1789926569374,
+        "severity": "info"
+      },
+      "1790082884429": {
+        "authorName": "Next Train Ops",
+        "expiresAt": 1790287140000,
+        "forcePopup": false,
+        "id": "1790082884429",
+        "isRepost": false,
+        "message": "<br><button type=\"button\" onclick=\"window.openLightbox(&quot;https://firebasestorage.googleapis.com/v0/b/metrorail-next-train.firebasestorage.app/o/admin_attachments%2Finline_1790082871066_40qk0.jpg?alt=media&amp;token=7262456c-4ec1-4f0a-8a21-34c19d6abb2e&quot;)\" class=\"relative block w-full focus:outline-none my-2 cursor-zoom-in rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm active:scale-[0.98] transition-transform\"><img src=\"https://firebasestorage.googleapis.com/v0/b/metrorail-next-train.firebasestorage.app/o/admin_attachments%2Finline_1790082871066_40qk0.jpg?alt=media&amp;token=7262456c-4ec1-4f0a-8a21-34c19d6abb2e\" class=\"w-full h-auto object-cover hover:opacity-90 transition-opacity\" alt=\"Admin Attachment\"><span class=\"nt-zoom-plus absolute bottom-1.5 right-1.5 w-5 h-5 rounded-full bg-black/40 text-white text-xs font-bold leading-none flex items-center justify-center border border-white/20 pointer-events-none select-none shadow-sm\" aria-hidden=\"true\">+</span></button><br><br><br><span class=\"opacity-75 text-[10px] uppercase font-bold tracking-wider\">- Next Train Ops</span>",
+        "poll": {
+          "active": false,
+          "showResults": false
+        },
+        "postedAt": 1790082884429,
         "severity": "info"
       }
     },
@@ -5545,6 +5609,39 @@
         },
         "postedAt": 1789477103049,
         "severity": "info"
+      },
+      "1789926569374": {
+        "authorName": "Next Train Ops",
+        "expiresAt": 1790114340000,
+        "forcePopup": false,
+        "id": "1789926569374",
+        "imageUrls": [
+          "/images/alerts/smoke_free_stations.jpg"
+        ],
+        "isRepost": false,
+        "message": "",
+        "poll": {
+          "active": false,
+          "showResults": false
+        },
+        "postedAt": 1789926569374,
+        "severity": "info"
+      },
+      "1789956302694": {
+        "authorName": "Next Train Ops",
+        "expiresAt": 1790287140000,
+        "forcePopup": true,
+        "id": "1789956302694",
+        "isRepost": false,
+        "message": "Heritage Day train from KwaMashu toKwaMnyandu: first train departure time 06:12. Second train departure time 07:05. <div><br></div><div>Return trip from KwaMnyandu all stops to KwaMashu: first train departure 15:27. Second train departure time 16:27. Train rules apply.</div><br><button type=\"button\" onclick=\"window.openLightbox(&quot;https://firebasestorage.googleapis.com/v0/b/metrorail-next-train.firebasestorage.app/o/admin_attachments%2Finline_1789956243941_tlxnn.jpg?alt=media&amp;token=33c2e5b5-bd10-459f-bd00-f156ca5d0d1e&quot;)\" class=\"relative block w-full focus:outline-none my-2 cursor-zoom-in rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm active:scale-[0.98] transition-transform\"><img src=\"https://firebasestorage.googleapis.com/v0/b/metrorail-next-train.firebasestorage.app/o/admin_attachments%2Finline_1789956243941_tlxnn.jpg?alt=media&amp;token=33c2e5b5-bd10-459f-bd00-f156ca5d0d1e\" class=\"w-full h-auto object-cover hover:opacity-90 transition-opacity\" alt=\"Admin Attachment\"><span class=\"nt-zoom-plus absolute bottom-1.5 right-1.5 w-5 h-5 rounded-full bg-black/40 text-white text-xs font-bold leading-none flex items-center justify-center border border-white/20 pointer-events-none select-none shadow-sm\" aria-hidden=\"true\">+</span></button><br><br><br><span class=\"opacity-75 text-[10px] uppercase font-bold tracking-wider\">- Next Train Ops</span>",
+        "poll": {
+          "active": false,
+          "showResults": false
+        },
+        "postedAt": 1789956302694,
+        "severity": "info",
+        "sourceName": "Metrorail KZN WhatsApp Channel",
+        "sourceUrl": "https://whatsapp.com/channel/0029Vao04EvLo4hldLZlPz3P"
       }
     },
     "all_WC": {
@@ -5563,6 +5660,66 @@
           "showResults": false
         },
         "postedAt": 1789371167568,
+        "severity": "info"
+      },
+      "1790082485897": {
+        "authorName": "Next Train Ops",
+        "expiresAt": 1790114340000,
+        "forcePopup": false,
+        "id": "1790082485897",
+        "isRepost": false,
+        "message": "<i>\"Overhead power failure between Muldersvlei and Klapmuts impacts the Wellington train service.</i><div><i><br></i></div><div><i>Single line working has been introduced between Kraaifontein and Wellington. </i></div><div><i><br></i></div><div><i>Allow for additional travel time of 30 - 40 minutes.</i></div><div><i><br></i></div><div><i>We apologize sincerely for the inconvenience caused and appreciate your patience and understanding during this time.\"</i></div><br><br><span class=\"opacity-75 text-[10px] uppercase font-bold tracking-wider\">- Next Train Ops</span>",
+        "poll": {
+          "active": false,
+          "showResults": false
+        },
+        "postedAt": 1790082485897,
+        "severity": "warning",
+        "sourceName": "Metrorail Region Updates channel",
+        "sourceUrl": "https://whatsapp.com/channel/0029VbBIBHgF6sn4wFFMtB24"
+      },
+      "1790089959655": {
+        "authorName": "Next Train Ops",
+        "expiresAt": 1790114340000,
+        "forcePopup": false,
+        "id": "1790089959655",
+        "isRepost": false,
+        "message": "<i>Service Update: Earlier overhead power failure between Muldersvlei and Klapmuts impacts the Wellington train service.</i><div><i><br></i></div><div><i>T3510 will operate from kraaifontein and terminate at Bellville. </i></div><div><i>T3515 - 17:05 will operate from Bellville till Kraaifontein to connect with T2519</i></div><div><i><br></i></div><div><i>Allow for additional travel time of 30 - 40 minutes.</i></div><div><i><br></i></div><div><i>We apologize sincerely for the inconvenience caused and appreciate your patience and understanding during this time.</i></div><br><br><span class=\"opacity-75 text-[10px] uppercase font-bold tracking-wider\">- Next Train Ops</span>",
+        "poll": {
+          "active": false,
+          "showResults": false
+        },
+        "postedAt": 1790089959655,
+        "severity": "warning",
+        "sourceName": "Metrorail Region Updates channel",
+        "sourceUrl": "https://whatsapp.com/channel/0029VbBIBHgF6sn4wFFMtB24"
+      },
+      "1790171145397": {
+        "authorName": "Next Train Ops",
+        "expiresAt": 1790200740000,
+        "forcePopup": true,
+        "id": "1790171145397",
+        "isRepost": false,
+        "message": "Hi everyone, <div><br></div><div>We received some schedules for tomorrow, we will be updating our times right away.</div><div><br></div><div>Thank you for using Next Train!</div><br><br><span class=\"opacity-75 text-[10px] uppercase font-bold tracking-wider\">- Next Train Ops</span>",
+        "poll": {
+          "active": false,
+          "showResults": false
+        },
+        "postedAt": 1790171145397,
+        "severity": "info"
+      },
+      "1790173622169": {
+        "authorName": "Next Train Ops",
+        "expiresAt": 1790200740000,
+        "forcePopup": false,
+        "id": "1790173622169",
+        "isRepost": false,
+        "message": "To see the public holiday timetables:<div><br></div><div><ul><li>On the <b>Next Train</b>  homescreen tab.</li><li>Click the blue \"<b>VIEW FULL TIMETABLES</b>\"</li><li>Click the top left, click \"<b>Mon-Fri</b>\" </li><li>Select \"<b>Public Holidays</b>\" </li></ul><div>That's it.</div></div><br><br><span class=\"opacity-75 text-[10px] uppercase font-bold tracking-wider\">- Next Train Ops</span>",
+        "poll": {
+          "active": false,
+          "showResults": false
+        },
+        "postedAt": 1790173622169,
         "severity": "info"
       }
     },
@@ -5704,6 +5861,22 @@
         },
         "postedAt": 1789682400000,
         "severity": "info"
+      },
+      "sched_muad0hs0_1k1ulyy": {
+        "authorName": "Next Train Ops",
+        "expiresAt": 1790027999999,
+        "forcePopup": false,
+        "id": "sched_muad0hs0_1k1ulyy",
+        "imageUrls": [
+          "/images/alerts/pta-kempton-0618-0619.jpg"
+        ],
+        "message": "",
+        "poll": {
+          "active": false,
+          "showResults": false
+        },
+        "postedAt": 1789941600000,
+        "severity": "info"
       }
     },
     "pta-kempton": {
@@ -5751,6 +5924,22 @@
           "showResults": false
         },
         "postedAt": 1789682400000,
+        "severity": "info"
+      },
+      "sched_muad0hs0_1k1ulyy": {
+        "authorName": "Next Train Ops",
+        "expiresAt": 1790027999999,
+        "forcePopup": false,
+        "id": "sched_muad0hs0_1k1ulyy",
+        "imageUrls": [
+          "/images/alerts/pta-kempton-0618-0619.jpg"
+        ],
+        "message": "",
+        "poll": {
+          "active": false,
+          "showResults": false
+        },
+        "postedAt": 1789941600000,
         "severity": "info"
       }
     },
@@ -6185,11 +6374,17 @@
         "updatedAt": 1788747569636
       },
       "_grid_notice": {
+        "days": {
+          "public_holiday": false,
+          "saturday": false,
+          "sunday": false,
+          "weekday": true
+        },
         "expiresAt": 1797544740000,
         "showInApp": false,
         "showOnExport": true,
         "text": "Trains 0618 & 0619 are cancelled on Mondays and Fridays.",
-        "updatedAt": 1789094780886
+        "updatedAt": 1789977254095
       }
     },
     "pta-mabopane": {
@@ -34051,14 +34246,14 @@
         "STATION": "BONTEHEUWEL"
       },
       {
-        "9002": "6:00",
-        "9004": "6:40",
-        "9006": "7:30",
-        "9008": "9:00",
-        "9010": "9:35",
-        "9012": "10:50",
-        "9014": "12:15",
-        "9016": "13:15",
+        "9002": "6:00:00",
+        "9004": "6:40:00",
+        "9006": "7:30:00",
+        "9008": "9:00:00",
+        "9010": "9:35:00",
+        "9012": "10:50:00",
+        "9014": "12:15:00",
+        "9016": "13:15:00",
         "9018": "13:40:00",
         "9020": "15:10:00",
         "9022": "16:05:00",
@@ -36920,6 +37115,7 @@
         "STATION": "Last Updated: 8 June 2026"
       },
       {
+        "9301": "5:12:00",
         "9401": "5:50:00",
         "9403": "7:05:00",
         "9405": "8:23:00",
@@ -36933,26 +37129,32 @@
         "STATION": "CAPE TOWN"
       },
       {
+        "9301": "5:15:00",
         "COORDINATES": "-33.925058308184404, 18.44613913370814",
         "STATION": "WOODSTOCK"
       },
       {
+        "9301": "5:18:00",
         "COORDINATES": "-33.92754558428959, 18.464689555116372",
         "STATION": "SALT RIVER"
       },
       {
+        "9301": "5:20:00",
         "COORDINATES": "-33.92570961024241, 18.47887742815667",
         "STATION": "KOEBERG RD"
       },
       {
+        "9301": "5:22:00",
         "COORDINATES": "-33.92465193392986, 18.487001988940953",
         "STATION": "MAITLAND"
       },
       {
+        "9301": "5:25:00",
         "COORDINATES": "-33.928548273196824, 18.495159894144553",
         "STATION": "NDABENI"
       },
       {
+        "9301": "5:28:00",
         "COORDINATES": "-33.93964476336891, 18.490635019900687",
         "STATION": "PINELANDS"
       },
@@ -36996,6 +37198,7 @@
         "STATION": "MUTUAL"
       },
       {
+        "9301": "5:34:00",
         "9401": "6:22:00",
         "9403": "7:37:00",
         "9405": "8:55:00",
@@ -37009,6 +37212,7 @@
         "STATION": "LANGA"
       },
       {
+        "9301": "5:36:00",
         "9401": "6:24:00",
         "9403": "7:39:00",
         "9405": "8:57:00",
@@ -37022,6 +37226,7 @@
         "STATION": "BONTEHEUWEL"
       },
       {
+        "9301": "5:38:00",
         "9401": "6:26:00",
         "9403": "7:41:00",
         "9405": "8:59:00",
@@ -37035,6 +37240,7 @@
         "STATION": "NETREG"
       },
       {
+        "9301": "5:39:00",
         "9401": "6:27:00",
         "9403": "7:42:00",
         "9405": "9:00:00",
@@ -37048,6 +37254,7 @@
         "STATION": "HEIDEVELD"
       },
       {
+        "9301": "5:43:00",
         "9401": "6:31:00",
         "9403": "7:46:00",
         "9405": "9:04:00",
@@ -37061,6 +37268,7 @@
         "STATION": "NYANGA"
       },
       {
+        "9301": "5:49:00",
         "9401": "6:37:00",
         "9403": "7:52:00",
         "9405": "9:10:00",
@@ -37086,19 +37294,21 @@
         "STATION": "KAPTEINSKLIP"
       },
       {
-        "9401": "6:41",
-        "9403": "7:56",
-        "9405": "9:14",
-        "9407": "12:46",
-        "9409": "14:58",
-        "9411": "16:26",
-        "9413": "18:14",
+        "9301": "5:53:00",
+        "9401": "6:41:00",
+        "9403": "7:56:00",
+        "9405": "9:14:00",
+        "9407": "12:46:00",
+        "9409": "14:58:00",
+        "9411": "16:26:00",
+        "9413": "18:14:00",
         "9415": "19:01:00",
-        "9703": "4:26",
+        "9703": "4:26:00",
         "COORDINATES": "-34.01412292128464, 18.606174209491407",
         "STATION": "STOCK ROAD"
       },
       {
+        "9301": "5:57:00",
         "9401": "6:45:00",
         "9403": "8:00:00",
         "9405": "9:18:00",
@@ -37112,6 +37322,7 @@
         "STATION": "MANDALAY"
       },
       {
+        "9301": "6:01:00",
         "9401": "6:49:00",
         "9403": "8:04:00",
         "9405": "9:22:00",
@@ -37167,6 +37378,7 @@
     ],
     "ct_to_nolu_weekday_columnOrder": [
       "9703",
+      "9301",
       "9401",
       "9403",
       "9405",
@@ -39126,7 +39338,7 @@
         "0121": "8:08",
         "0123": "8:23",
         "0125": "8:43",
-        "0127": "9:08",
+        "0127": "9:14",
         "0129": "9:38",
         "0131": "9:58",
         "0133": "10:38",
@@ -39167,11 +39379,10 @@
         "0111": "6:42",
         "0113": "6:57",
         "0115": "7:27",
-        "0117": "7:42",
+        "0117": "7:39",
         "0121": "8:12",
         "0123": "8:27",
         "0125": "8:47",
-        "0127": "9:12",
         "0129": "9:42",
         "0131": "10:02",
         "0133": "10:42",
@@ -39198,7 +39409,6 @@
         "0175": "18:27",
         "0177": "18:42",
         "0179": "18:57",
-        "0181": "19:12",
         "0183": "19:27",
         "0185": "19:42",
         "COORDINATES": "-34.07661752056444, 18.46365235554926",
@@ -39212,11 +39422,10 @@
         "0111": "6:44",
         "0113": "6:59",
         "0115": "7:29",
-        "0117": "7:44",
+        "0117": "7:42",
         "0121": "8:14",
         "0123": "8:29",
         "0125": "8:49",
-        "0127": "9:14",
         "0129": "9:44",
         "0131": "10:04",
         "0133": "10:44",
@@ -39243,7 +39452,6 @@
         "0175": "18:29",
         "0177": "18:44",
         "0179": "18:59",
-        "0181": "19:14",
         "0183": "19:29",
         "0185": "19:44",
         "COORDINATES": "-34.088438485802136, 18.46247303625622",
@@ -39257,11 +39465,10 @@
         "0111": "6:47",
         "0113": "7:02",
         "0115": "7:32",
-        "0117": "7:47",
+        "0117": "7:44",
         "0121": "8:17",
         "0123": "8:32",
         "0125": "8:52",
-        "0127": "9:17",
         "0129": "9:47",
         "0131": "10:07",
         "0133": "10:47",
@@ -39288,7 +39495,6 @@
         "0175": "18:32",
         "0177": "18:47",
         "0179": "19:02",
-        "0181": "19:17",
         "0183": "19:32",
         "0185": "19:47",
         "COORDINATES": "-34.10248327888581, 18.468681718650828",
@@ -39306,7 +39512,6 @@
         "0121": "8:19",
         "0123": "8:34",
         "0125": "8:54",
-        "0127": "9:19",
         "0129": "9:49",
         "0131": "10:09",
         "0133": "10:49",
@@ -39333,7 +39538,6 @@
         "0175": "18:34",
         "0177": "18:49",
         "0179": "19:04",
-        "0181": "19:19",
         "0183": "19:34",
         "0185": "19:49",
         "COORDINATES": "-34.109625875192556, 18.46795994312989",
@@ -39351,7 +39555,6 @@
         "0121": "8:22",
         "0123": "8:37",
         "0125": "8:57",
-        "0127": "9:22",
         "0129": "9:52",
         "0131": "10:12",
         "0133": "10:52",
@@ -39378,7 +39581,6 @@
         "0175": "18:37",
         "0177": "18:52",
         "0179": "19:07",
-        "0181": "19:22",
         "0183": "19:37",
         "0185": "19:52",
         "COORDINATES": "-34.11912861624361, 18.458322695803325",
@@ -39396,7 +39598,6 @@
         "0121": "8:24",
         "0123": "8:39",
         "0125": "8:59",
-        "0127": "9:24",
         "0129": "9:54",
         "0131": "10:14",
         "0133": "10:54",
@@ -39423,7 +39624,6 @@
         "0175": "18:39",
         "0177": "18:54",
         "0179": "19:09",
-        "0181": "19:24",
         "0183": "19:39",
         "0185": "19:54",
         "COORDINATES": "-34.12616436238219, 18.44995365667087",
@@ -39441,7 +39641,6 @@
         "0121": "8:33",
         "0123": "8:48",
         "0125": "9:08",
-        "0127": "9:33",
         "0129": "10:03",
         "0131": "10:23",
         "0133": "11:03",
@@ -39468,7 +39667,6 @@
         "0175": "18:48",
         "0177": "19:03",
         "0179": "19:18",
-        "0181": "19:33",
         "0183": "19:48",
         "0185": "20:03",
         "COORDINATES": "-34.13718666701449, 18.43231551625473",
@@ -40118,141 +40316,179 @@
         "STATION": "Last Updated: 28 December 2024"
       },
       {
+        "COORDINATES": "-33.92363127060243, 18.42718648501388",
         "STATION": "CAPE TOWN"
       },
       {
+        "COORDINATES": "-33.925058308184404, 18.44613913370814",
         "STATION": "WOODSTOCK"
       },
       {
+        "COORDINATES": "-33.92754558428959, 18.464689555116372",
         "STATION": "SALT RIVER"
       },
       {
+        "COORDINATES": "-33.92570961024241, 18.47887742815667",
         "STATION": "KOEBERG RD"
       },
       {
+        "COORDINATES": "-33.92465193392986, 18.487001988940953",
         "STATION": "MAITLAND"
       },
       {
+        "COORDINATES": "-33.92219529219735, 18.507010581735287",
         "STATION": "MUTUAL"
       },
       {
+        "COORDINATES": "-33.92209345116931, 18.511988082500565",
         "STATION": "THORNTON"
       },
       {
+        "COORDINATES": "-33.91899825858434, 18.532372608746943",
         "STATION": "GOODWOOD"
       },
       {
+        "COORDINATES": "-33.91452357725314, 18.547135062452178",
         "STATION": "VASCO"
       },
       {
+        "COORDINATES": "-33.910963456351396, 18.558511811261425",
         "STATION": "ELSIES RIVER"
       },
       {
+        "COORDINATES": "-33.91063655254298, 18.569073058894848",
         "STATION": "PAROW"
       },
       {
+        "COORDINATES": "-33.90972003537582, 18.58605150487192",
         "STATION": "TYGERBERG"
       },
       {
         "3501": "15:10:00",
         "3503": "13:20:00",
+        "COORDINATES": "-33.90746864928141, 18.601251455579924",
         "STATION": "BELLVILLE"
       },
       {
+        "COORDINATES": "-33.906263459762684, 18.62662128465745",
         "STATION": "KUILS RIVER"
       },
       {
+        "COORDINATES": "-33.93352364094155, 18.67754300956503",
         "STATION": "BLACKHEATH"
       },
       {
+        "COORDINATES": "-33.9643141952728, 18.701548671843643",
         "STATION": "MELTONROSE"
       },
       {
+        "COORDINATES": "-33.98901211755698, 18.72041949781896",
         "STATION": "EERSTE RIVER"
       },
       {
+        "COORDINATES": "-34.00075832740343, 18.73096117658652",
         "STATION": "FAURE"
       },
       {
+        "COORDINATES": "-34.02629322078662, 18.74703766946096",
         "STATION": "SOMERSET WEST"
       },
       {
+        "COORDINATES": "-34.0559415632047, 18.793265006888184",
         "STATION": "VAN DER STEL"
       },
       {
+        "COORDINATES": "-34.08447978768948, 18.84218338240483",
         "STATION": "STRAND"
       },
       {
+        "COORDINATES": "-34.09517018322416, 18.852427615633125",
         "STATION": "LYNEDOCH"
       },
       {
+        "COORDINATES": "-34.11501400933376, 18.83241814522109",
         "STATION": "VLOTTENBURG"
       },
       {
+        "COORDINATES": "-33.981135182294715, 18.771482767776543",
         "STATION": "STELLENBOSCH"
       },
       {
+        "COORDINATES": "-33.962118874611896, 18.79993852483128",
         "STATION": "DU TOIT"
       },
       {
+        "COORDINATES": "-33.938838693814446, 18.84974494856104",
         "STATION": "KOELENHOF"
       },
       {
+        "COORDINATES": "-33.92370031736484, 18.854173801274253",
         "STATION": "MULDERSVLEI"
       },
       {
         "3501": "15:19:00",
         "3503": "13:29:00",
+        "COORDINATES": "-33.9047695247263, 18.656536260281065",
         "STATION": "STIKLAND"
       },
       {
         "3501": "15:26:45",
         "3503": "13:36:00",
+        "COORDINATES": "-33.880926996885385, 18.68869797254891",
         "STATION": "BRACKENFELL"
       },
       {
         "3501": "15:31",
         "3503": "13:41",
+        "COORDINATES": "-33.857150054357206, 18.71115937457518",
         "STATION": "EIKENFONTEIN"
       },
       {
         "3501": "15:35",
         "3503": "13:45",
+        "COORDINATES": "-33.84688758182714, 18.724423652533385",
         "STATION": "KRAAIFONTEIN"
       },
       {
         "3501": "15:47",
         "3503": "13:57",
+        "COORDINATES": "-33.830997060529654, 18.828140321428084",
         "STATION": "MULDERSVLEI"
       },
       {
         "3501": "16:01",
         "3503": "14:11",
+        "COORDINATES": "-33.80603693098734, 18.870194550736368",
         "STATION": "KLAPMUTS"
       },
       {
         "3501": "16:16:00",
         "3503": "14:26:00",
+        "COORDINATES": "-33.7651495544123, 18.964509229033844",
         "STATION": "PAARL"
       },
       {
         "3501": "16:24:30",
         "3503": "14:34:30",
+        "COORDINATES": "-33.72990864160102, 18.976547324806557",
         "STATION": "HUGUENOT"
       },
       {
         "3501": "16:33:00",
         "3503": "14:43:00",
+        "COORDINATES": "-33.70729186118812, 18.97995087065291",
         "STATION": "DAL JOSAFAT"
       },
       {
         "3501": "16:42",
         "3503": "14:52",
+        "COORDINATES": "-33.6745835750923, 18.98548912089934",
         "STATION": "MBEKWENI"
       },
       {
         "3501": "16:56",
         "3503": "15:06",
+        "COORDINATES": "-33.634617793572524, 18.991778229234328",
         "STATION": "WELLINGTON"
       }
     ],
@@ -41244,9 +41480,6 @@
         "2302": "7:56",
         "COORDINATES": "-33.906263459762684, 18.62662128465745",
         "STATION": "BELLVILLE"
-      },
-      {
-        "STATION": ""
       },
       {
         "2300": "5:27",
@@ -42574,8 +42807,8 @@
         "STATION": "LENTEGEUR"
       },
       {
-        "9500": "5:00",
-        "9502": "6:15",
+        "9500": "5:00:00",
+        "9502": "6:15:00",
         "9504": "7:30:00",
         "9506": "8:40:00",
         "9508": "9:50:00",
@@ -42590,14 +42823,14 @@
         "STATION": "PHILIPPI"
       },
       {
-        "9500": "5:04",
-        "9502": "6:19",
-        "9504": "7:34",
-        "9506": "8:44",
-        "9508": "9:54",
-        "9510": "11:14",
-        "9512": "13:44",
-        "9514": "15:59",
+        "9500": "5:04:00",
+        "9502": "6:19:00",
+        "9504": "7:34:00",
+        "9506": "8:44:00",
+        "9508": "9:54:00",
+        "9510": "11:14:00",
+        "9512": "13:44:00",
+        "9514": "15:59:00",
         "9516": "17:11:00",
         "9518": "18:27:00",
         "9520": "19:29:00",
@@ -42606,14 +42839,14 @@
         "STATION": "NYANGA"
       },
       {
-        "9500": "5:06",
-        "9502": "6:21",
-        "9504": "7:36",
-        "9506": "8:46",
-        "9508": "9:56",
-        "9510": "11:16",
-        "9512": "13:46",
-        "9514": "16:01",
+        "9500": "5:06:00",
+        "9502": "6:21:00",
+        "9504": "7:36:00",
+        "9506": "8:46:00",
+        "9508": "9:56:00",
+        "9510": "11:16:00",
+        "9512": "13:46:00",
+        "9514": "16:01:00",
         "9516": "17:13:00",
         "9518": "18:29:00",
         "9520": "19:31:00",
@@ -42621,14 +42854,14 @@
         "STATION": "HEIDEVELD"
       },
       {
-        "9500": "5:08",
-        "9502": "6:23",
-        "9504": "7:38",
-        "9506": "8:48",
-        "9508": "9:58",
-        "9510": "11:18",
-        "9512": "13:48",
-        "9514": "16:03",
+        "9500": "5:08:00",
+        "9502": "6:23:00",
+        "9504": "7:38:00",
+        "9506": "8:48:00",
+        "9508": "9:58:00",
+        "9510": "11:18:00",
+        "9512": "13:48:00",
+        "9514": "16:03:00",
         "9516": "17:15:00",
         "9518": "18:31:00",
         "9520": "19:33:00",
@@ -42712,14 +42945,14 @@
         "STATION": "NDABENI"
       },
       {
-        "9500": "5:21",
-        "9502": "6:36",
-        "9504": "7:51",
-        "9506": "9:01",
-        "9508": "10:11",
-        "9510": "11:31",
-        "9512": "14:01",
-        "9514": "16:16",
+        "9500": "5:21:00",
+        "9502": "6:36:00",
+        "9504": "7:51:00",
+        "9506": "9:01:00",
+        "9508": "10:11:00",
+        "9510": "11:31:00",
+        "9512": "14:01:00",
+        "9514": "16:16:00",
         "9516": "17:28:00",
         "9518": "18:44:00",
         "9520": "19:46:00",
@@ -42744,14 +42977,14 @@
         "STATION": "KOEBERG RD"
       },
       {
-        "9500": "5:27",
-        "9502": "6:42",
-        "9504": "7:57",
-        "9506": "9:07",
-        "9508": "10:17",
-        "9510": "11:37",
-        "9512": "14:07",
-        "9514": "16:22",
+        "9500": "5:27:00",
+        "9502": "6:42:00",
+        "9504": "7:57:00",
+        "9506": "9:07:00",
+        "9508": "10:17:00",
+        "9510": "11:37:00",
+        "9512": "14:07:00",
+        "9514": "16:22:00",
         "9516": "17:34:00",
         "9518": "18:50:00",
         "9520": "19:52:00",
@@ -43353,7 +43586,7 @@
     ],
     "kraai_to_ct_weekday_meta": "8 June 2026",
     "kraai_to_ct_weekday_zone": "Z2",
-    "lastUpdated": "9/19/2026, 5:54:18 PM",
+    "lastUpdated": "9/23/2026, 7:09:05 PM",
     "malm_to_ct_sat": [
       {
         "STATION": "Last Updated: 8 June 2026"
@@ -43690,11 +43923,11 @@
         "STATION": "CHRIS HANI"
       },
       {
-        "9001": "6:40",
-        "9003": "8:10",
-        "9005": "9:30",
-        "9007": "11:40",
-        "9009": "13:00",
+        "9001": "6:40:00",
+        "9003": "8:10:00",
+        "9005": "9:30:00",
+        "9007": "11:40:00",
+        "9009": "13:00:00",
         "COORDINATES": "-33.943269567798055, 18.583722311337315",
         "STATION": "LAVISTOWN"
       },
@@ -44285,9 +44518,9 @@
         "9408": "9:36:00",
         "9410": "13:09:00",
         "9412": "15:24:00",
-        "9414": "17:04",
-        "9416": "18:36",
-        "9420": "6:15",
+        "9414": "17:04:00",
+        "9416": "18:36:00",
+        "9420": "6:15:00",
         "COORDINATES": "-34.019015667481014, 18.624391145998562",
         "STATION": "MANDALAY"
       },
@@ -44299,9 +44532,9 @@
         "9408": "9:39:00",
         "9410": "13:12:00",
         "9412": "15:27:00",
-        "9414": "17:07",
-        "9416": "18:39",
-        "9420": "6:18",
+        "9414": "17:07:00",
+        "9416": "18:39:00",
+        "9420": "6:18:00",
         "COORDINATES": "-34.01412292128464, 18.606174209491407",
         "STATION": "STOCK ROAD"
       },
@@ -44499,6 +44732,5412 @@
     ],
     "nolu_to_ct_weekday_meta": "8 June 2026",
     "nolu_to_ct_weekday_zone": "Z2",
+    "public_holidays": {
+      "bellv_to_ct_pub": [
+        {
+          "STATION": "Last Updated: UNSPECIFIED"
+        },
+        {
+          "2500": "7:02:00",
+          "2502": "8:39:00",
+          "2504": "10:04:00",
+          "2506": "11:54:00",
+          "2508": "13:24:00",
+          "2510": "15:09:00",
+          "2512": "16:24:00",
+          "COORDINATES": "-33.906263459762684, 18.62662128465745",
+          "STATION": "BELLVILLE"
+        },
+        {
+          "2500": "7:09:00",
+          "2502": "8:46:00",
+          "2504": "10:11:00",
+          "2506": "12:01:00",
+          "2508": "13:31:00",
+          "2510": "15:16:00",
+          "2512": "16:31:00",
+          "COORDINATES": "-33.90746864928141, 18.601251455579924",
+          "STATION": "TYGERBERG"
+        },
+        {
+          "2500": "7:14:00",
+          "2502": "8:51:00",
+          "2504": "10:16:00",
+          "2506": "12:06:00",
+          "2508": "13:36:00",
+          "2510": "15:21:00",
+          "2512": "16:36:00",
+          "COORDINATES": "-33.90972003537582, 18.58605150487192",
+          "STATION": "PAROW"
+        },
+        {
+          "2500": "7:15:00",
+          "2502": "8:52:00",
+          "2504": "10:17:00",
+          "2506": "12:07:00",
+          "2508": "13:37:00",
+          "2510": "15:22:00",
+          "2512": "16:37:00",
+          "COORDINATES": "-33.91063655254298, 18.569073058894848",
+          "STATION": "ELSIES RIVER"
+        },
+        {
+          "2500": "7:19:00",
+          "2502": "8:56:00",
+          "2504": "10:21:00",
+          "2506": "12:11:00",
+          "2508": "13:41:00",
+          "2510": "15:26:00",
+          "2512": "16:41:00",
+          "COORDINATES": "-33.910963456351396, 18.558511811261425",
+          "STATION": "VASCO"
+        },
+        {
+          "2500": "7:22:00",
+          "2502": "8:59:00",
+          "2504": "10:24:00",
+          "2506": "12:14:00",
+          "2508": "13:44:00",
+          "2510": "15:29:00",
+          "2512": "16:44:00",
+          "COORDINATES": "-33.91452357725314, 18.547135062452178",
+          "STATION": "GOODWOOD"
+        },
+        {
+          "2500": "7:27:00",
+          "2502": "9:04:00",
+          "2504": "10:29:00",
+          "2506": "12:19:00",
+          "2508": "13:49:00",
+          "2510": "15:34:00",
+          "2512": "16:49:00",
+          "COORDINATES": "-33.91899825858434, 18.532372608746943",
+          "STATION": "THORNTON"
+        },
+        {
+          "2500": "7:34:00",
+          "2502": "9:11:00",
+          "2504": "10:36:00",
+          "2506": "12:26:00",
+          "2508": "13:56:00",
+          "2510": "15:41:00",
+          "2512": "16:56:00",
+          "COORDINATES": "-33.92209345116931, 18.511988082500565",
+          "STATION": "MUTUAL"
+        },
+        {
+          "2500": "7:38:00",
+          "2502": "9:15:00",
+          "2504": "10:40:00",
+          "2506": "12:30:00",
+          "2508": "14:00:00",
+          "2510": "15:45:00",
+          "2512": "17:00:00",
+          "COORDINATES": "-33.92465193392986, 18.487001988940953",
+          "STATION": "MAITLAND"
+        },
+        {
+          "2500": "7:41:00",
+          "2502": "9:18:00",
+          "2504": "10:43:00",
+          "2506": "12:33:00",
+          "2508": "14:03:00",
+          "2510": "15:48:00",
+          "2512": "17:03:00",
+          "COORDINATES": "-33.92570961024241, 18.47887742815667",
+          "STATION": "KOEBERG RD"
+        },
+        {
+          "2500": "7:43:00",
+          "2502": "9:20:00",
+          "2504": "10:45:00",
+          "2506": "12:35:00",
+          "2508": "14:05:00",
+          "2510": "15:50:00",
+          "2512": "17:05:00",
+          "COORDINATES": "-33.92754558428959, 18.464689555116372",
+          "STATION": "SALT RIVER"
+        },
+        {
+          "2500": "7:47:00",
+          "2502": "9:24:00",
+          "2504": "10:49:00",
+          "2506": "12:39:00",
+          "2508": "14:09:00",
+          "2510": "15:54:00",
+          "2512": "17:09:00",
+          "COORDINATES": "-33.925058308184404, 18.44613913370814",
+          "STATION": "WOODSTOCK"
+        },
+        {
+          "2500": "7:52:00",
+          "2502": "9:29:00",
+          "2504": "10:54:00",
+          "2506": "12:44:00",
+          "2508": "14:14:00",
+          "2510": "15:59:00",
+          "2512": "17:14:00",
+          "COORDINATES": "-33.92363127060243, 18.42718648501388",
+          "STATION": "CAPE TOWN"
+        }
+      ],
+      "bellv_to_ct_pub_columnOrder": [
+        "2500",
+        "2502",
+        "2504",
+        "2506",
+        "2508",
+        "2510",
+        "2512"
+      ],
+      "bellv_to_ct_pub_meta": "UNSPECIFIED",
+      "bellv_to_ct_pub_zone": "Z2",
+      "bellv_to_mutul_pub": [
+        {
+          "STATION": "Last Updated: Unspecified"
+        },
+        {
+          "COORDINATES": "-33.906263459762684, 18.62662128465745",
+          "STATION": "BELLVILLE"
+        },
+        {
+          "COORDINATES": "-33.92655594121331, 18.661143180651308",
+          "STATION": "SAREPTA"
+        },
+        {
+          "COORDINATES": "-33.93468015167005, 18.646053668734744",
+          "STATION": "PENTECH"
+        },
+        {
+          "COORDINATES": "-33.93686354314193, 18.628117540172582",
+          "STATION": "UNIBELL"
+        },
+        {
+          "COORDINATES": "-33.93959717971092, 18.60894476900841",
+          "STATION": "BELHAR"
+        },
+        {
+          "COORDINATES": "-33.943269567798055, 18.583722311337315",
+          "STATION": "LAVISTOWN"
+        },
+        {
+          "COORDINATES": "-34.054706073305944, 18.710707924836054",
+          "STATION": "CHRIS HANI"
+        },
+        {
+          "COORDINATES": "-34.05489939537871, 18.692323957717754",
+          "STATION": "KUYASA"
+        },
+        {
+          "COORDINATES": "-34.047943373751565, 18.67073769040669",
+          "STATION": "KHAYELITSHA"
+        },
+        {
+          "COORDINATES": "-34.02681746271161, 18.663190611341626",
+          "STATION": "NONKQUBELA"
+        },
+        {
+          "COORDINATES": "-34.016811809063164, 18.64902361716287",
+          "STATION": "NOLUNGILE"
+        },
+        {
+          "COORDINATES": "-34.019015667481014, 18.624391145998562",
+          "STATION": "MANDALAY"
+        },
+        {
+          "COORDINATES": "-34.01412292128464, 18.606174209491407",
+          "STATION": "STOCK ROAD"
+        },
+        {
+          "COORDINATES": "-34.06755873543257, 18.620534480658506",
+          "STATION": "KAPTEINSKLIP"
+        },
+        {
+          "COORDINATES": "-34.0504610838304, 18.619222253671435",
+          "STATION": "MITCHELL'S PLAIN"
+        },
+        {
+          "COORDINATES": "-34.03418971685345, 18.611322738328173",
+          "STATION": "LENTEGEUR"
+        },
+        {
+          "COORDINATES": "-34.01328895709482, 18.584421561340882",
+          "STATION": "PHILIPPI"
+        },
+        {
+          "COORDINATES": "-33.99271379632963, 18.559776951819032",
+          "STATION": "NYANGA"
+        },
+        {
+          "COORDINATES": "-33.94185049480737, 18.549579817876847",
+          "STATION": "BONTEHEUWEL"
+        },
+        {
+          "COORDINATES": "-33.938934072196076, 18.52974423065194",
+          "STATION": "LANGA"
+        },
+        {
+          "COORDINATES": "-33.92209345116931, 18.511988082500565",
+          "STATION": "MUTUAL"
+        },
+        {
+          "COORDINATES": "-33.9199022523178, 18.476775305514295",
+          "STATION": "YSTERPLAAT"
+        },
+        {
+          "COORDINATES": "-33.923640784366874, 18.446037955514498",
+          "STATION": "ESPLANADE"
+        },
+        {
+          "COORDINATES": "-33.93964476336891, 18.490635019900687",
+          "STATION": "PINELANDS"
+        },
+        {
+          "COORDINATES": "-33.928548273196824, 18.495159894144553",
+          "STATION": "NDABENI"
+        },
+        {
+          "COORDINATES": "-33.92465193392986, 18.487001988940953",
+          "STATION": "MAITLAND"
+        },
+        {
+          "COORDINATES": "-33.92570961024241, 18.47887742815667",
+          "STATION": "KOEBERG RD"
+        },
+        {
+          "COORDINATES": "-33.92754558428959, 18.464689555116372",
+          "STATION": "SALT RIVER"
+        },
+        {
+          "COORDINATES": "-33.925058308184404, 18.44613913370814",
+          "STATION": "WOODSTOCK"
+        },
+        {
+          "COORDINATES": "-33.92363127060243, 18.42718648501388",
+          "STATION": "CAPE TOWN"
+        }
+      ],
+      "bellv_to_mutul_pub_meta": "Unspecified",
+      "bellv_to_mutul_pub_zone": "Z2",
+      "ct_to_bellv_pub": [
+        {
+          "STATION": "Last Updated: UNSPECIFIED"
+        },
+        {
+          "2501": "6:15:00",
+          "2503": "8:00:00",
+          "2505": "9:40:00",
+          "2507": "11:30:00",
+          "2509": "12:55:00",
+          "2511": "14:30:00",
+          "2513": "16:10:00",
+          "COORDINATES": "-33.92363127060243, 18.42718648501388",
+          "STATION": "CAPE TOWN"
+        },
+        {
+          "2501": "6:18:00",
+          "2503": "8:03:00",
+          "2505": "9:43:00",
+          "2507": "11:33:00",
+          "2509": "12:58:00",
+          "2511": "14:33:00",
+          "2513": "16:13:00",
+          "COORDINATES": "-33.925058308184404, 18.44613913370814",
+          "STATION": "WOODSTOCK"
+        },
+        {
+          "2501": "6:22:00",
+          "2503": "8:07:00",
+          "2505": "9:47:00",
+          "2507": "11:37:00",
+          "2509": "13:02:00",
+          "2511": "14:37:00",
+          "2513": "16:17:00",
+          "COORDINATES": "-33.92754558428959, 18.464689555116372",
+          "STATION": "SALT RIVER"
+        },
+        {
+          "2501": "6:25:00",
+          "2503": "8:10:00",
+          "2505": "9:50:00",
+          "2507": "11:40:00",
+          "2509": "13:05:00",
+          "2511": "14:40:00",
+          "2513": "16:20:00",
+          "COORDINATES": "-33.92570961024241, 18.47887742815667",
+          "STATION": "KOEBERG RD"
+        },
+        {
+          "2501": "6:28:00",
+          "2503": "8:13:00",
+          "2505": "9:53:00",
+          "2507": "11:43:00",
+          "2509": "13:08:00",
+          "2511": "14:43:00",
+          "2513": "16:23:00",
+          "COORDINATES": "-33.92465193392986, 18.487001988940953",
+          "STATION": "MAITLAND"
+        },
+        {
+          "2501": "6:33:00",
+          "2503": "8:18:00",
+          "2505": "9:58:00",
+          "2507": "11:48:00",
+          "2509": "13:13:00",
+          "2511": "14:48:00",
+          "2513": "16:28:00",
+          "COORDINATES": "-33.92209345116931, 18.511988082500565",
+          "STATION": "MUTUAL"
+        },
+        {
+          "2501": "6:36:00",
+          "2503": "8:21:00",
+          "2505": "10:01:00",
+          "2507": "11:51:00",
+          "2509": "13:16:00",
+          "2511": "14:51:00",
+          "2513": "16:31:00",
+          "COORDINATES": "-33.91899825858434, 18.532372608746943",
+          "STATION": "THORNTON"
+        },
+        {
+          "2501": "6:41:00",
+          "2503": "8:26:00",
+          "2505": "10:06:00",
+          "2507": "11:56:00",
+          "2509": "13:21:00",
+          "2511": "14:56:00",
+          "2513": "16:36:00",
+          "COORDINATES": "-33.91452357725314, 18.547135062452178",
+          "STATION": "GOODWOOD"
+        },
+        {
+          "2501": "6:48:00",
+          "2503": "8:33:00",
+          "2505": "10:13:00",
+          "2507": "12:03:00",
+          "2509": "13:28:00",
+          "2511": "15:03:00",
+          "2513": "16:43:00",
+          "COORDINATES": "-33.910963456351396, 18.558511811261425",
+          "STATION": "VASCO"
+        },
+        {
+          "2501": "6:51:00",
+          "2503": "8:36:00",
+          "2505": "10:16:00",
+          "2507": "12:06:00",
+          "2509": "13:31:00",
+          "2511": "15:06:00",
+          "2513": "16:46:00",
+          "COORDINATES": "-33.91063655254298, 18.569073058894848",
+          "STATION": "ELSIES RIVER"
+        },
+        {
+          "2501": "6:55:00",
+          "2503": "8:40:00",
+          "2505": "10:20:00",
+          "2507": "12:10:00",
+          "2509": "13:35:00",
+          "2511": "15:10:00",
+          "2513": "16:50:00",
+          "COORDINATES": "-33.90972003537582, 18.58605150487192",
+          "STATION": "PAROW"
+        },
+        {
+          "2501": "7:00:00",
+          "2503": "8:45:00",
+          "2505": "10:25:00",
+          "2507": "12:15:00",
+          "2509": "13:40:00",
+          "2511": "15:15:00",
+          "2513": "16:55:00",
+          "COORDINATES": "-33.90746864928141, 18.601251455579924",
+          "STATION": "TYGERBERG"
+        },
+        {
+          "2501": "7:06:00",
+          "2503": "8:51:00",
+          "2505": "10:31:00",
+          "2507": "12:21:00",
+          "2509": "13:46:00",
+          "2511": "15:21:00",
+          "2513": "17:01:00",
+          "COORDINATES": "-33.906263459762684, 18.62662128465745",
+          "STATION": "BELLVILLE"
+        }
+      ],
+      "ct_to_bellv_pub_columnOrder": [
+        "2501",
+        "2503",
+        "2505",
+        "2507",
+        "2509",
+        "2511",
+        "2513"
+      ],
+      "ct_to_bellv_pub_meta": "UNSPECIFIED",
+      "ct_to_bellv_pub_zone": "Z2",
+      "ct_to_eerst_pub": [
+        {
+          "STATION": "Last Updated: UNSPECIFIED"
+        },
+        {
+          "2501": "6:15:00",
+          "2503": "8:00:00",
+          "2505": "9:40:00",
+          "2507": "11:30:00",
+          "2509": "12:55:00",
+          "2511": "14:30:00",
+          "2513": "16:10:00",
+          "COORDINATES": "-33.92363127060243, 18.42718648501388",
+          "STATION": "CAPE TOWN"
+        },
+        {
+          "2501": "6:18:00",
+          "2503": "8:03:00",
+          "2505": "9:43:00",
+          "2507": "11:33:00",
+          "2509": "12:58:00",
+          "2511": "14:33:00",
+          "2513": "16:13:00",
+          "COORDINATES": "-33.925058308184404, 18.44613913370814",
+          "STATION": "WOODSTOCK"
+        },
+        {
+          "2501": "6:22:00",
+          "2503": "8:07:00",
+          "2505": "9:47:00",
+          "2507": "11:37:00",
+          "2509": "13:02:00",
+          "2511": "14:37:00",
+          "2513": "16:17:00",
+          "COORDINATES": "-33.92754558428959, 18.464689555116372",
+          "STATION": "SALT RIVER"
+        },
+        {
+          "2501": "6:25:00",
+          "2503": "8:10:00",
+          "2505": "9:50:00",
+          "2507": "11:40:00",
+          "2509": "13:05:00",
+          "2511": "14:40:00",
+          "2513": "16:20:00",
+          "COORDINATES": "-33.92570961024241, 18.47887742815667",
+          "STATION": "KOEBERG RD"
+        },
+        {
+          "2501": "6:28:00",
+          "2503": "8:13:00",
+          "2505": "9:53:00",
+          "2507": "11:43:00",
+          "2509": "13:08:00",
+          "2511": "14:43:00",
+          "2513": "16:23:00",
+          "COORDINATES": "-33.92465193392986, 18.487001988940953",
+          "STATION": "MAITLAND"
+        },
+        {
+          "2501": "6:33:00",
+          "2503": "8:18:00",
+          "2505": "9:58:00",
+          "2507": "11:48:00",
+          "2509": "13:13:00",
+          "2511": "14:48:00",
+          "2513": "16:28:00",
+          "COORDINATES": "-33.92209345116931, 18.511988082500565",
+          "STATION": "MUTUAL"
+        },
+        {
+          "2501": "6:36:00",
+          "2503": "8:21:00",
+          "2505": "10:01:00",
+          "2507": "11:51:00",
+          "2509": "13:16:00",
+          "2511": "14:51:00",
+          "2513": "16:31:00",
+          "COORDINATES": "-33.91899825858434, 18.532372608746943",
+          "STATION": "THORNTON"
+        },
+        {
+          "2501": "6:41:00",
+          "2503": "8:26:00",
+          "2505": "10:06:00",
+          "2507": "11:56:00",
+          "2509": "13:21:00",
+          "2511": "14:56:00",
+          "2513": "16:36:00",
+          "COORDINATES": "-33.91452357725314, 18.547135062452178",
+          "STATION": "GOODWOOD"
+        },
+        {
+          "2501": "6:48:00",
+          "2503": "8:33:00",
+          "2505": "10:13:00",
+          "2507": "12:03:00",
+          "2509": "13:28:00",
+          "2511": "15:03:00",
+          "2513": "16:43:00",
+          "COORDINATES": "-33.910963456351396, 18.558511811261425",
+          "STATION": "VASCO"
+        },
+        {
+          "2501": "6:51:00",
+          "2503": "8:36:00",
+          "2505": "10:16:00",
+          "2507": "12:06:00",
+          "2509": "13:31:00",
+          "2511": "15:06:00",
+          "2513": "16:46:00",
+          "COORDINATES": "-33.91063655254298, 18.569073058894848",
+          "STATION": "ELSIES RIVER"
+        },
+        {
+          "2501": "6:55:00",
+          "2503": "8:40:00",
+          "2505": "10:20:00",
+          "2507": "12:10:00",
+          "2509": "13:35:00",
+          "2511": "15:10:00",
+          "2513": "16:50:00",
+          "COORDINATES": "-33.90972003537582, 18.58605150487192",
+          "STATION": "PAROW"
+        },
+        {
+          "2501": "7:00:00",
+          "2503": "8:45:00",
+          "2505": "10:25:00",
+          "2507": "12:15:00",
+          "2509": "13:40:00",
+          "2511": "15:15:00",
+          "2513": "16:55:00",
+          "COORDINATES": "-33.90746864928141, 18.601251455579924",
+          "STATION": "TYGERBERG"
+        },
+        {
+          "2501": "7:06:00",
+          "2503": "8:51:00",
+          "2505": "10:31:00",
+          "2507": "12:21:00",
+          "2509": "13:46:00",
+          "2511": "15:21:00",
+          "2513": "17:01:00",
+          "3201": "7:20:00",
+          "3203": "9:15:00",
+          "3205": "10:40:00",
+          "3207": "12:40:00",
+          "3209": "13:55:00",
+          "3211": "16:00:00",
+          "3213": "17:15:00",
+          "COORDINATES": "-33.906263459762684, 18.62662128465745",
+          "STATION": "BELLVILLE"
+        },
+        {
+          "3201": "7:32:00",
+          "3203": "9:27:00",
+          "3205": "10:52:00",
+          "3207": "12:52:00",
+          "3209": "14:07:00",
+          "3211": "16:12:00",
+          "3213": "17:27:00",
+          "COORDINATES": "-33.93352364094155, 18.67754300956503",
+          "STATION": "KUILS RIVER"
+        },
+        {
+          "3201": "7:41:00",
+          "3203": "9:36:00",
+          "3205": "11:01:00",
+          "3207": "13:01:00",
+          "3209": "14:16:00",
+          "3211": "16:21:00",
+          "3213": "17:36:00",
+          "COORDINATES": "-33.9643141952728, 18.701548671843643",
+          "STATION": "BLACKHEATH"
+        },
+        {
+          "3201": "7:49:00",
+          "3203": "9:44:00",
+          "3205": "11:09:00",
+          "3207": "13:09:00",
+          "3209": "14:24:00",
+          "3211": "16:29:00",
+          "3213": "17:44:00",
+          "COORDINATES": "-33.98901211755698, 18.72041949781896",
+          "STATION": "MELTONROSE"
+        },
+        {
+          "3201": "7:55:00",
+          "3203": "9:50:00",
+          "3205": "11:15:00",
+          "3207": "13:15:00",
+          "3209": "14:30:00",
+          "3211": "16:35:00",
+          "3213": "17:50:00",
+          "COORDINATES": "-34.00075832740343, 18.73096117658652",
+          "STATION": "EERSTE RIVER"
+        }
+      ],
+      "ct_to_eerst_pub_columnOrder": [
+        "2501",
+        "3201",
+        "2503",
+        "3203",
+        "2505",
+        "3205",
+        "2507",
+        "3207",
+        "2509",
+        "3209",
+        "2511",
+        "3211",
+        "2513",
+        "3213"
+      ],
+      "ct_to_eerst_pub_meta": "UNSPECIFIED",
+      "ct_to_eerst_pub_zone": "Z2",
+      "ct_to_hani_pub": [
+        {
+          "STATION": "Last Updated: Unspecified"
+        },
+        {
+          "9901": "6:15:00",
+          "9903": "7:50:00",
+          "9905": "9:20:00",
+          "9907": "10:35:00",
+          "9909": "13:15:00",
+          "9911": "15:15:00",
+          "9913": "16:25:00",
+          "COORDINATES": "-33.92363127060243, 18.42718648501388",
+          "STATION": "CAPE TOWN"
+        },
+        {
+          "COORDINATES": "-33.925058308184404, 18.44613913370814",
+          "STATION": "WOODSTOCK"
+        },
+        {
+          "COORDINATES": "-33.92754558428959, 18.464689555116372",
+          "STATION": "SALT RIVER"
+        },
+        {
+          "COORDINATES": "-33.92570961024241, 18.47887742815667",
+          "STATION": "KOEBERG RD"
+        },
+        {
+          "COORDINATES": "-33.92465193392986, 18.487001988940953",
+          "STATION": "MAITLAND"
+        },
+        {
+          "COORDINATES": "-33.928548273196824, 18.495159894144553",
+          "STATION": "NDABENI"
+        },
+        {
+          "COORDINATES": "-33.93964476336891, 18.490635019900687",
+          "STATION": "PINELANDS"
+        },
+        {
+          "9901": "6:25:00",
+          "9903": "8:00:00",
+          "9905": "9:30:00",
+          "9907": "10:45:00",
+          "9909": "13:25:00",
+          "9911": "15:25:00",
+          "9913": "16:35:00",
+          "COORDINATES": "-33.923640784366874, 18.446037955514498",
+          "STATION": "ESPLANADE"
+        },
+        {
+          "9901": "6:37:00",
+          "9903": "8:12:00",
+          "9905": "9:42:00",
+          "9907": "10:57:00",
+          "9909": "13:37:00",
+          "9911": "15:37:00",
+          "9913": "16:47:00",
+          "COORDINATES": "-33.9199022523178, 18.476775305514295",
+          "STATION": "YSTERPLAAT"
+        },
+        {
+          "9901": "6:42:00",
+          "9903": "8:17:00",
+          "9905": "9:47:00",
+          "9907": "11:02:00",
+          "9909": "13:42:00",
+          "9911": "15:42:00",
+          "9913": "16:52:00",
+          "COORDINATES": "-33.92209345116931, 18.511988082500565",
+          "STATION": "MUTUAL"
+        },
+        {
+          "9901": "6:47:00",
+          "9903": "8:22:00",
+          "9905": "9:52:00",
+          "9907": "11:07:00",
+          "9909": "13:47:00",
+          "9911": "15:47:00",
+          "9913": "16:57:00",
+          "COORDINATES": "-33.938934072196076, 18.52974423065194",
+          "STATION": "LANGA"
+        },
+        {
+          "9901": "6:49:00",
+          "9903": "8:24:00",
+          "9905": "9:54:00",
+          "9907": "11:09:00",
+          "9909": "13:49:00",
+          "9911": "15:49:00",
+          "9913": "16:59:00",
+          "COORDINATES": "-33.94185049480737, 18.549579817876847",
+          "STATION": "BONTEHEUWEL"
+        },
+        {
+          "9901": "6:56:00",
+          "9903": "8:31:00",
+          "9905": "10:01:00",
+          "9907": "11:16:00",
+          "9909": "13:56:00",
+          "9911": "15:56:00",
+          "9913": "17:06:00",
+          "COORDINATES": "-33.99271379632963, 18.559776951819032",
+          "STATION": "NYANGA"
+        },
+        {
+          "9901": "7:02:00",
+          "9903": "8:37:00",
+          "9905": "10:07:00",
+          "9907": "11:22:00",
+          "9909": "14:02:00",
+          "9911": "16:02:00",
+          "9913": "17:12:00",
+          "COORDINATES": "-34.01328895709482, 18.584421561340882",
+          "STATION": "PHILIPPI"
+        },
+        {
+          "COORDINATES": "-34.03418971685345, 18.611322738328173",
+          "STATION": "LENTEGEUR"
+        },
+        {
+          "COORDINATES": "-34.0504610838304, 18.619222253671435",
+          "STATION": "MITCHELL'S PLAIN"
+        },
+        {
+          "COORDINATES": "-34.06755873543257, 18.620534480658506",
+          "STATION": "KAPTEINSKLIP"
+        },
+        {
+          "9901": "7:06:00",
+          "9903": "8:41:00",
+          "9905": "10:11:00",
+          "9907": "11:26:00",
+          "9909": "14:06:00",
+          "9911": "16:06:00",
+          "9913": "17:16:00",
+          "COORDINATES": "-34.01412292128464, 18.606174209491407",
+          "STATION": "STOCK ROAD"
+        },
+        {
+          "9901": "7:10:00",
+          "9903": "8:45:00",
+          "9905": "10:15:00",
+          "9907": "11:30:00",
+          "9909": "14:10:00",
+          "9911": "16:10:00",
+          "9913": "17:20:00",
+          "COORDINATES": "-34.019015667481014, 18.624391145998562",
+          "STATION": "MANDALAY"
+        },
+        {
+          "9901": "7:14:00",
+          "9903": "8:49:00",
+          "9905": "10:19:00",
+          "9907": "11:34:00",
+          "9909": "14:14:00",
+          "9911": "16:14:00",
+          "9913": "17:24:00",
+          "COORDINATES": "-34.016811809063164, 18.64902361716287",
+          "STATION": "NOLUNGILE"
+        },
+        {
+          "9901": "7:18:00",
+          "9903": "8:53:00",
+          "9905": "10:23:00",
+          "9907": "11:38:00",
+          "9909": "14:18:00",
+          "9911": "16:18:00",
+          "9913": "17:28:00",
+          "COORDINATES": "-34.02681746271161, 18.663190611341626",
+          "STATION": "NONKQUBELA"
+        },
+        {
+          "9901": "7:22:00",
+          "9903": "8:57:00",
+          "9905": "10:27:00",
+          "9907": "11:42:00",
+          "9909": "14:22:00",
+          "9911": "16:22:00",
+          "9913": "17:32:00",
+          "COORDINATES": "-34.047943373751565, 18.67073769040669",
+          "STATION": "KHAYELITSHA"
+        },
+        {
+          "9901": "7:25:00",
+          "9903": "9:00:00",
+          "9905": "10:30:00",
+          "9907": "11:45:00",
+          "9909": "14:25:00",
+          "9911": "16:25:00",
+          "9913": "17:35:00",
+          "COORDINATES": "-34.05489939537871, 18.692323957717754",
+          "STATION": "KUYASA"
+        },
+        {
+          "9901": "7:26:00",
+          "9903": "9:01:00",
+          "9905": "10:31:00",
+          "9907": "11:46:00",
+          "9909": "14:26:00",
+          "9911": "16:26:00",
+          "9913": "17:36:00",
+          "COORDINATES": "-34.054706073305944, 18.710707924836054",
+          "STATION": "CHRIS HANI"
+        },
+        {
+          "COORDINATES": "-33.943269567798055, 18.583722311337315",
+          "STATION": "LAVISTOWN"
+        },
+        {
+          "COORDINATES": "-33.93959717971092, 18.60894476900841",
+          "STATION": "BELHAR"
+        },
+        {
+          "COORDINATES": "-33.93686354314193, 18.628117540172582",
+          "STATION": "UNIBELL"
+        },
+        {
+          "COORDINATES": "-33.93468015167005, 18.646053668734744",
+          "STATION": "PENTECH"
+        },
+        {
+          "COORDINATES": "-33.92655594121331, 18.661143180651308",
+          "STATION": "SAREPTA"
+        },
+        {
+          "COORDINATES": "-33.906263459762684, 18.62662128465745",
+          "STATION": "BELLVILLE"
+        }
+      ],
+      "ct_to_hani_pub_columnOrder": [
+        "9901",
+        "9903",
+        "9905",
+        "9907",
+        "9909",
+        "9911",
+        "9913"
+      ],
+      "ct_to_hani_pub_meta": "Unspecified",
+      "ct_to_hani_pub_zone": "Z2",
+      "ct_to_kap_pub": [
+        {
+          "STATION": "Last Updated: Unspecified"
+        },
+        {
+          "9501": "5:50:00",
+          "9503": "8:20:00",
+          "9505": "10:55:00",
+          "9507": "13:15:00",
+          "9509": "15:50:00",
+          "COORDINATES": "-33.92363127060243, 18.42718648501388",
+          "STATION": "CAPE TOWN"
+        },
+        {
+          "9501": "5:53:00",
+          "9503": "8:23:00",
+          "9505": "10:58:00",
+          "9507": "13:18:00",
+          "9509": "15:53:00",
+          "COORDINATES": "-33.925058308184404, 18.44613913370814",
+          "STATION": "WOODSTOCK"
+        },
+        {
+          "9501": "5:56:00",
+          "9503": "8:26:00",
+          "9505": "11:01:00",
+          "9507": "13:21:00",
+          "9509": "15:56:00",
+          "COORDINATES": "-33.92754558428959, 18.464689555116372",
+          "STATION": "SALT RIVER"
+        },
+        {
+          "9501": "5:58:00",
+          "9503": "8:28:00",
+          "9505": "11:03:00",
+          "9507": "13:23:00",
+          "9509": "15:58:00",
+          "COORDINATES": "-33.92570961024241, 18.47887742815667",
+          "STATION": "KOEBERG RD"
+        },
+        {
+          "9501": "6:00:00",
+          "9503": "8:30:00",
+          "9505": "11:05:00",
+          "9507": "13:25:00",
+          "9509": "16:00:00",
+          "COORDINATES": "-33.92465193392986, 18.487001988940953",
+          "STATION": "MAITLAND"
+        },
+        {
+          "9501": "6:03:00",
+          "9503": "8:33:00",
+          "9505": "11:08:00",
+          "9507": "13:28:00",
+          "9509": "16:03:00",
+          "COORDINATES": "-33.928548273196824, 18.495159894144553",
+          "STATION": "NDABENI"
+        },
+        {
+          "9501": "6:06:00",
+          "9503": "8:36:00",
+          "9505": "11:11:00",
+          "9507": "13:31:00",
+          "9509": "16:06:00",
+          "COORDINATES": "-33.93964476336891, 18.490635019900687",
+          "STATION": "PINELANDS"
+        },
+        {
+          "COORDINATES": "-33.923640784366874, 18.446037955514498",
+          "STATION": "ESPLANADE"
+        },
+        {
+          "COORDINATES": "-33.9199022523178, 18.476775305514295",
+          "STATION": "YSTERPLAAT"
+        },
+        {
+          "COORDINATES": "-33.92209345116931, 18.511988082500565",
+          "STATION": "MUTUAL"
+        },
+        {
+          "9501": "6:12:00",
+          "9503": "8:42:00",
+          "9505": "11:17:00",
+          "9507": "13:37:00",
+          "9509": "16:12:00",
+          "COORDINATES": "-33.938934072196076, 18.52974423065194",
+          "STATION": "LANGA"
+        },
+        {
+          "9501": "6:14:00",
+          "9503": "8:44:00",
+          "9505": "11:19:00",
+          "9507": "13:39:00",
+          "9509": "16:14:00",
+          "COORDINATES": "-33.94185049480737, 18.549579817876847",
+          "STATION": "BONTEHEUWEL"
+        },
+        {
+          "9501": "6:21:00",
+          "9503": "8:51:00",
+          "9505": "11:26:00",
+          "9507": "13:46:00",
+          "9509": "16:21:00",
+          "COORDINATES": "-33.99271379632963, 18.559776951819032",
+          "STATION": "NYANGA"
+        },
+        {
+          "9501": "6:27:00",
+          "9503": "8:57:00",
+          "9505": "11:32:00",
+          "9507": "13:52:00",
+          "9509": "16:27:00",
+          "COORDINATES": "-34.01328895709482, 18.584421561340882",
+          "STATION": "PHILIPPI"
+        },
+        {
+          "9501": "6:35:00",
+          "9503": "9:05:00",
+          "9505": "11:40:00",
+          "9507": "14:00:00",
+          "9509": "16:35:00",
+          "COORDINATES": "-34.03418971685345, 18.611322738328173",
+          "STATION": "LENTEGEUR"
+        },
+        {
+          "9501": "6:42:00",
+          "9503": "9:12:00",
+          "9505": "11:47:00",
+          "9507": "14:07:00",
+          "9509": "16:42:00",
+          "COORDINATES": "-34.0504610838304, 18.619222253671435",
+          "STATION": "MITCHELL'S PLAIN"
+        },
+        {
+          "9501": "6:47:00",
+          "9503": "9:17:00",
+          "9505": "11:52:00",
+          "9507": "14:12:00",
+          "9509": "16:47:00",
+          "COORDINATES": "-34.06755873543257, 18.620534480658506",
+          "STATION": "KAPTEINSKLIP"
+        },
+        {
+          "COORDINATES": "-34.01412292128464, 18.606174209491407",
+          "STATION": "STOCK ROAD"
+        },
+        {
+          "COORDINATES": "-34.019015667481014, 18.624391145998562",
+          "STATION": "MANDALAY"
+        },
+        {
+          "COORDINATES": "-34.016811809063164, 18.64902361716287",
+          "STATION": "NOLUNGILE"
+        },
+        {
+          "COORDINATES": "-34.02681746271161, 18.663190611341626",
+          "STATION": "NONKQUBELA"
+        },
+        {
+          "COORDINATES": "-34.047943373751565, 18.67073769040669",
+          "STATION": "KHAYELITSHA"
+        },
+        {
+          "COORDINATES": "-34.05489939537871, 18.692323957717754",
+          "STATION": "KUYASA"
+        },
+        {
+          "COORDINATES": "-34.054706073305944, 18.710707924836054",
+          "STATION": "CHRIS HANI"
+        },
+        {
+          "COORDINATES": "-33.943269567798055, 18.583722311337315",
+          "STATION": "LAVISTOWN"
+        },
+        {
+          "COORDINATES": "-33.93959717971092, 18.60894476900841",
+          "STATION": "BELHAR"
+        },
+        {
+          "COORDINATES": "-33.93686354314193, 18.628117540172582",
+          "STATION": "UNIBELL"
+        },
+        {
+          "COORDINATES": "-33.93468015167005, 18.646053668734744",
+          "STATION": "PENTECH"
+        },
+        {
+          "COORDINATES": "-33.92655594121331, 18.661143180651308",
+          "STATION": "SAREPTA"
+        },
+        {
+          "COORDINATES": "-33.906263459762684, 18.62662128465745",
+          "STATION": "BELLVILLE"
+        }
+      ],
+      "ct_to_kap_pub_columnOrder": [
+        "9501",
+        "9503",
+        "9505",
+        "9507",
+        "9509"
+      ],
+      "ct_to_kap_pub_meta": "Unspecified",
+      "ct_to_kap_pub_zone": "Z2",
+      "ct_to_kraai_pub": [
+        {
+          "STATION": "Last Updated: UNSPECIFIED"
+        },
+        {
+          "2501": "6:15:00",
+          "2503": "8:00:00",
+          "2505": "9:40:00",
+          "2507": "11:30:00",
+          "2509": "12:55:00",
+          "2511": "14:30:00",
+          "2513": "16:10:00",
+          "COORDINATES": "-33.92363127060243, 18.42718648501388",
+          "STATION": "CAPE TOWN"
+        },
+        {
+          "2501": "6:18:00",
+          "2503": "8:03:00",
+          "2505": "9:43:00",
+          "2507": "11:33:00",
+          "2509": "12:58:00",
+          "2511": "14:33:00",
+          "2513": "16:13:00",
+          "COORDINATES": "-33.925058308184404, 18.44613913370814",
+          "STATION": "WOODSTOCK"
+        },
+        {
+          "2501": "6:22:00",
+          "2503": "8:07:00",
+          "2505": "9:47:00",
+          "2507": "11:37:00",
+          "2509": "13:02:00",
+          "2511": "14:37:00",
+          "2513": "16:17:00",
+          "COORDINATES": "-33.92754558428959, 18.464689555116372",
+          "STATION": "SALT RIVER"
+        },
+        {
+          "2501": "6:25:00",
+          "2503": "8:10:00",
+          "2505": "9:50:00",
+          "2507": "11:40:00",
+          "2509": "13:05:00",
+          "2511": "14:40:00",
+          "2513": "16:20:00",
+          "COORDINATES": "-33.92570961024241, 18.47887742815667",
+          "STATION": "KOEBERG RD"
+        },
+        {
+          "2501": "6:28:00",
+          "2503": "8:13:00",
+          "2505": "9:53:00",
+          "2507": "11:43:00",
+          "2509": "13:08:00",
+          "2511": "14:43:00",
+          "2513": "16:23:00",
+          "COORDINATES": "-33.92465193392986, 18.487001988940953",
+          "STATION": "MAITLAND"
+        },
+        {
+          "2501": "6:33:00",
+          "2503": "8:18:00",
+          "2505": "9:58:00",
+          "2507": "11:48:00",
+          "2509": "13:13:00",
+          "2511": "14:48:00",
+          "2513": "16:28:00",
+          "COORDINATES": "-33.92209345116931, 18.511988082500565",
+          "STATION": "MUTUAL"
+        },
+        {
+          "2501": "6:36:00",
+          "2503": "8:21:00",
+          "2505": "10:01:00",
+          "2507": "11:51:00",
+          "2509": "13:16:00",
+          "2511": "14:51:00",
+          "2513": "16:31:00",
+          "COORDINATES": "-33.91899825858434, 18.532372608746943",
+          "STATION": "THORNTON"
+        },
+        {
+          "2501": "6:41:00",
+          "2503": "8:26:00",
+          "2505": "10:06:00",
+          "2507": "11:56:00",
+          "2509": "13:21:00",
+          "2511": "14:56:00",
+          "2513": "16:36:00",
+          "COORDINATES": "-33.91452357725314, 18.547135062452178",
+          "STATION": "GOODWOOD"
+        },
+        {
+          "2501": "6:48:00",
+          "2503": "8:33:00",
+          "2505": "10:13:00",
+          "2507": "12:03:00",
+          "2509": "13:28:00",
+          "2511": "15:03:00",
+          "2513": "16:43:00",
+          "COORDINATES": "-33.910963456351396, 18.558511811261425",
+          "STATION": "VASCO"
+        },
+        {
+          "2501": "6:51:00",
+          "2503": "8:36:00",
+          "2505": "10:16:00",
+          "2507": "12:06:00",
+          "2509": "13:31:00",
+          "2511": "15:06:00",
+          "2513": "16:46:00",
+          "COORDINATES": "-33.91063655254298, 18.569073058894848",
+          "STATION": "ELSIES RIVER"
+        },
+        {
+          "2501": "6:55:00",
+          "2503": "8:40:00",
+          "2505": "10:20:00",
+          "2507": "12:10:00",
+          "2509": "13:35:00",
+          "2511": "15:10:00",
+          "2513": "16:50:00",
+          "COORDINATES": "-33.90972003537582, 18.58605150487192",
+          "STATION": "PAROW"
+        },
+        {
+          "2501": "7:00:00",
+          "2503": "8:45:00",
+          "2505": "10:25:00",
+          "2507": "12:15:00",
+          "2509": "13:40:00",
+          "2511": "15:15:00",
+          "2513": "16:55:00",
+          "COORDINATES": "-33.90746864928141, 18.601251455579924",
+          "STATION": "TYGERBERG"
+        },
+        {
+          "2501": "7:06:00",
+          "2503": "8:51:00",
+          "2505": "10:31:00",
+          "2507": "12:21:00",
+          "2509": "13:46:00",
+          "2511": "15:21:00",
+          "2513": "17:01:00",
+          "COORDINATES": "-33.906263459762684, 18.62662128465745",
+          "STATION": "BELLVILLE"
+        },
+        {
+          "COORDINATES": "-33.93352364094155, 18.67754300956503",
+          "STATION": "KUILS RIVER"
+        },
+        {
+          "COORDINATES": "-33.9643141952728, 18.701548671843643",
+          "STATION": "BLACKHEATH"
+        },
+        {
+          "COORDINATES": "-33.98901211755698, 18.72041949781896",
+          "STATION": "MELTONROSE"
+        },
+        {
+          "COORDINATES": "-34.00075832740343, 18.73096117658652",
+          "STATION": "EERSTE RIVER"
+        },
+        {
+          "COORDINATES": "-34.02629322078662, 18.74703766946096",
+          "STATION": "FAURE"
+        },
+        {
+          "COORDINATES": "-34.0559415632047, 18.793265006888184",
+          "STATION": "FIRGROVE"
+        },
+        {
+          "COORDINATES": "-34.08447978768948, 18.84218338240483",
+          "STATION": "SOMERSET WEST"
+        },
+        {
+          "COORDINATES": "-34.09517018322416, 18.852427615633125",
+          "STATION": "VAN DER STEL"
+        },
+        {
+          "COORDINATES": "-34.11501400933376, 18.83241814522109",
+          "STATION": "STRAND"
+        },
+        {
+          "2501": "7:15:00",
+          "2503": "9:00:00",
+          "2505": "10:40:00",
+          "2507": "12:30:00",
+          "2509": "13:55:00",
+          "2511": "15:30:00",
+          "2513": "17:10:00",
+          "COORDINATES": "-33.9047695247263, 18.656536260281065",
+          "STATION": "STIKLAND"
+        },
+        {
+          "2501": "7:23:00",
+          "2503": "9:08:00",
+          "2505": "10:48:00",
+          "2507": "12:38:00",
+          "2509": "14:03:00",
+          "2511": "15:38:00",
+          "2513": "17:18:00",
+          "COORDINATES": "-33.880926996885385, 18.68869797254891",
+          "STATION": "BRACKENFELL"
+        },
+        {
+          "2501": "7:28:00",
+          "2503": "9:13:00",
+          "2505": "10:53:00",
+          "2507": "12:43:00",
+          "2509": "14:08:00",
+          "2511": "15:43:00",
+          "2513": "17:23:00",
+          "COORDINATES": "-33.857150054357206, 18.71115937457518",
+          "STATION": "EIKENFONTEIN"
+        },
+        {
+          "2501": "7:31:00",
+          "2503": "9:16:00",
+          "2505": "10:56:00",
+          "2507": "12:46:00",
+          "2509": "14:11:00",
+          "2511": "15:46:00",
+          "2513": "17:26:00",
+          "COORDINATES": "-33.84688758182714, 18.724423652533385",
+          "STATION": "KRAAIFONTEIN"
+        }
+      ],
+      "ct_to_kraai_pub_columnOrder": [
+        "2501",
+        "2503",
+        "2505",
+        "2507",
+        "2509",
+        "2511",
+        "2513"
+      ],
+      "ct_to_kraai_pub_meta": "UNSPECIFIED",
+      "ct_to_kraai_pub_zone": "Z2",
+      "ct_to_malm_pub": [
+        {
+          "STATION": "Last Updated: UNSPECIFIED"
+        },
+        {
+          "COORDINATES": "-33.923639304464864, 18.42718821282366",
+          "STATION": "CAPE TOWN"
+        },
+        {
+          "COORDINATES": "-33.92386095430605, 18.445826519314583",
+          "STATION": "ESPLANADE"
+        },
+        {
+          "COORDINATES": "-33.91993715978276, 18.47654476510058",
+          "STATION": "YSTERPLAAT"
+        },
+        {
+          "COORDINATES": "-33.901116507445494, 18.511648283688643",
+          "STATION": "CENTURY CITY"
+        },
+        {
+          "COORDINATES": "-33.89166726211482, 18.54961595156625",
+          "STATION": "MONTE VISTA"
+        },
+        {
+          "COORDINATES": "-33.89778002001787, 18.59287533918825",
+          "STATION": "AVONDALE"
+        },
+        {
+          "COORDINATES": "-33.90000128762894, 18.60740313069764",
+          "STATION": "OOSTERZEE"
+        },
+        {
+          "COORDINATES": "-33.90611080547394, 18.625990390257403",
+          "STATION": "BELLVILLE"
+        },
+        {
+          "COORDINATES": "-33.9047695247263, 18.656536260281065",
+          "STATION": "STIKLAND"
+        },
+        {
+          "COORDINATES": "-33.880926996885385, 18.68869797254891",
+          "STATION": "BRACKENFELL"
+        },
+        {
+          "COORDINATES": "-33.857150054357206, 18.71115937457518",
+          "STATION": "EIKENFONTEIN"
+        },
+        {
+          "COORDINATES": "-33.84688758182714, 18.724423652533385",
+          "STATION": "KRAAIFONTEIN"
+        },
+        {
+          "COORDINATES": "-33.78626408467964, 18.71169920057285",
+          "STATION": "FISANTKRAAL"
+        },
+        {
+          "COORDINATES": "-33.76243478432612, 18.71770448779065",
+          "STATION": "MELLISH"
+        },
+        {
+          "COORDINATES": "-33.72387750914535, 18.707948887392643",
+          "STATION": "MIKPUNT"
+        },
+        {
+          "COORDINATES": "-33.69915505683154, 18.70034739164122",
+          "STATION": "KLIPHEUWEL"
+        },
+        {
+          "COORDINATES": "-33.62956288948659, 18.669952895467464",
+          "STATION": "WINTERVOGEL"
+        },
+        {
+          "COORDINATES": "-33.57255398927767, 18.647601367814676",
+          "STATION": "KALBASKRAAL"
+        },
+        {
+          "COORDINATES": "-33.4926039622881, 18.681902687224493",
+          "STATION": "ABBOTSDALE"
+        },
+        {
+          "COORDINATES": "-33.467953872147824, 18.722366078564523",
+          "STATION": "MALMESBURY"
+        }
+      ],
+      "ct_to_malm_pub_meta": "UNSPECIFIED",
+      "ct_to_malm_pub_zone": "Z3",
+      "ct_to_nolu_pub": [
+        {
+          "STATION": "Last Updated: Unspecified"
+        },
+        {
+          "COORDINATES": "-33.92363127060243, 18.42718648501388",
+          "STATION": "CAPE TOWN"
+        },
+        {
+          "COORDINATES": "-33.925058308184404, 18.44613913370814",
+          "STATION": "WOODSTOCK"
+        },
+        {
+          "COORDINATES": "-33.92754558428959, 18.464689555116372",
+          "STATION": "SALT RIVER"
+        },
+        {
+          "COORDINATES": "-33.92570961024241, 18.47887742815667",
+          "STATION": "KOEBERG RD"
+        },
+        {
+          "COORDINATES": "-33.92465193392986, 18.487001988940953",
+          "STATION": "MAITLAND"
+        },
+        {
+          "COORDINATES": "-33.928548273196824, 18.495159894144553",
+          "STATION": "NDABENI"
+        },
+        {
+          "COORDINATES": "-33.93964476336891, 18.490635019900687",
+          "STATION": "PINELANDS"
+        },
+        {
+          "COORDINATES": "-33.923640784366874, 18.446037955514498",
+          "STATION": "ESPLANADE"
+        },
+        {
+          "COORDINATES": "-33.9199022523178, 18.476775305514295",
+          "STATION": "YSTERPLAAT"
+        },
+        {
+          "COORDINATES": "-33.92209345116931, 18.511988082500565",
+          "STATION": "MUTUAL"
+        },
+        {
+          "COORDINATES": "-33.938934072196076, 18.52974423065194",
+          "STATION": "LANGA"
+        },
+        {
+          "COORDINATES": "-33.94185049480737, 18.549579817876847",
+          "STATION": "BONTEHEUWEL"
+        },
+        {
+          "COORDINATES": "-33.99271379632963, 18.559776951819032",
+          "STATION": "NYANGA"
+        },
+        {
+          "COORDINATES": "-34.01328895709482, 18.584421561340882",
+          "STATION": "PHILIPPI"
+        },
+        {
+          "COORDINATES": "-34.03418971685345, 18.611322738328173",
+          "STATION": "LENTEGEUR"
+        },
+        {
+          "COORDINATES": "-34.0504610838304, 18.619222253671435",
+          "STATION": "MITCHELL'S PLAIN"
+        },
+        {
+          "COORDINATES": "-34.06755873543257, 18.620534480658506",
+          "STATION": "KAPTEINSKLIP"
+        },
+        {
+          "COORDINATES": "-34.01412292128464, 18.606174209491407",
+          "STATION": "STOCK ROAD"
+        },
+        {
+          "COORDINATES": "-34.019015667481014, 18.624391145998562",
+          "STATION": "MANDALAY"
+        },
+        {
+          "COORDINATES": "-34.016811809063164, 18.64902361716287",
+          "STATION": "NOLUNGILE"
+        },
+        {
+          "COORDINATES": "-34.02681746271161, 18.663190611341626",
+          "STATION": "NONKQUBELA"
+        },
+        {
+          "COORDINATES": "-34.047943373751565, 18.67073769040669",
+          "STATION": "KHAYELITSHA"
+        },
+        {
+          "COORDINATES": "-34.05489939537871, 18.692323957717754",
+          "STATION": "KUYASA"
+        },
+        {
+          "COORDINATES": "-34.054706073305944, 18.710707924836054",
+          "STATION": "CHRIS HANI"
+        },
+        {
+          "COORDINATES": "-33.943269567798055, 18.583722311337315",
+          "STATION": "LAVISTOWN"
+        },
+        {
+          "COORDINATES": "-33.93959717971092, 18.60894476900841",
+          "STATION": "BELHAR"
+        },
+        {
+          "COORDINATES": "-33.93686354314193, 18.628117540172582",
+          "STATION": "UNIBELL"
+        },
+        {
+          "COORDINATES": "-33.93468015167005, 18.646053668734744",
+          "STATION": "PENTECH"
+        },
+        {
+          "COORDINATES": "-33.92655594121331, 18.661143180651308",
+          "STATION": "SAREPTA"
+        },
+        {
+          "COORDINATES": "-33.906263459762684, 18.62662128465745",
+          "STATION": "BELLVILLE"
+        }
+      ],
+      "ct_to_nolu_pub_meta": "Unspecified",
+      "ct_to_nolu_pub_zone": "Z2",
+      "ct_to_rtret_pub": [
+        {
+          "STATION": "Last Updated: UNSPECIFIED"
+        },
+        {
+          "0501": "6:00:00",
+          "0503": "7:10:00",
+          "0505": "7:40:00",
+          "0507": "8:50:00",
+          "0509": "9:30:00",
+          "0511": "10:30:00",
+          "0513": "11:30:00",
+          "0515": "12:30:00",
+          "0517": "13:30:00",
+          "0519": "14:10:00",
+          "0521": "15:10:00",
+          "0523": "16:00:00",
+          "COORDINATES": "-33.92364274076298, 18.427186832421853",
+          "STATION": "CAPE TOWN"
+        },
+        {
+          "0501": "6:03:00",
+          "0503": "7:13:00",
+          "0505": "7:43:00",
+          "0507": "8:53:00",
+          "0509": "9:33:00",
+          "0511": "10:33:00",
+          "0513": "11:33:00",
+          "0515": "12:33:00",
+          "0517": "13:33:00",
+          "0519": "14:13:00",
+          "0521": "15:13:00",
+          "0523": "16:03:00",
+          "COORDINATES": "-33.925091518292604, 18.44613476001006",
+          "STATION": "WOODSTOCK"
+        },
+        {
+          "0501": "6:06:00",
+          "0503": "7:16:00",
+          "0505": "7:46:00",
+          "0507": "8:56:00",
+          "0509": "9:36:00",
+          "0511": "10:36:00",
+          "0513": "11:36:00",
+          "0515": "12:36:00",
+          "0517": "13:36:00",
+          "0519": "14:16:00",
+          "0521": "15:16:00",
+          "0523": "16:06:00",
+          "COORDINATES": "-33.92754784267079, 18.464689103688738",
+          "STATION": "SALT RIVER"
+        },
+        {
+          "0501": "6:08:00",
+          "0503": "7:18:00",
+          "0505": "7:48:00",
+          "0507": "8:58:00",
+          "0509": "9:38:00",
+          "0511": "10:38:00",
+          "0513": "11:38:00",
+          "0515": "12:38:00",
+          "0517": "13:38:00",
+          "0519": "14:18:00",
+          "0521": "15:18:00",
+          "0523": "16:08:00",
+          "COORDINATES": "-33.925709848130694, 18.478846676639503",
+          "STATION": "KOEBERG RD"
+        },
+        {
+          "0501": "6:10:00",
+          "0503": "7:20:00",
+          "0505": "7:50:00",
+          "0507": "9:00:00",
+          "0509": "9:40:00",
+          "0511": "10:40:00",
+          "0513": "11:40:00",
+          "0515": "12:40:00",
+          "0517": "13:40:00",
+          "0519": "14:20:00",
+          "0521": "15:20:00",
+          "0523": "16:10:00",
+          "COORDINATES": "-33.92457627299822, 18.487001076360375",
+          "STATION": "MAITLAND"
+        },
+        {
+          "0501": "6:13:00",
+          "0503": "7:23:00",
+          "0505": "7:53:00",
+          "0507": "9:03:00",
+          "0509": "9:43:00",
+          "0511": "10:43:00",
+          "0513": "11:43:00",
+          "0515": "12:43:00",
+          "0517": "13:43:00",
+          "0519": "14:23:00",
+          "0521": "15:23:00",
+          "0523": "16:13:00",
+          "COORDINATES": "-33.9285724435786, 18.495175305274607",
+          "STATION": "NDABENI"
+        },
+        {
+          "0501": "6:16:00",
+          "0503": "7:26:00",
+          "0505": "7:56:00",
+          "0507": "9:06:00",
+          "0509": "9:46:00",
+          "0511": "10:46:00",
+          "0513": "11:46:00",
+          "0515": "12:46:00",
+          "0517": "13:46:00",
+          "0519": "14:26:00",
+          "0521": "15:26:00",
+          "0523": "16:16:00",
+          "COORDINATES": "-33.93963837429042, 18.490628305900564",
+          "STATION": "PINELANDS"
+        },
+        {
+          "0501": "6:18:00",
+          "0503": "7:28:00",
+          "0505": "7:58:00",
+          "0507": "9:08:00",
+          "0509": "9:48:00",
+          "0511": "10:48:00",
+          "0513": "11:48:00",
+          "0515": "12:48:00",
+          "0517": "13:48:00",
+          "0519": "14:28:00",
+          "0521": "15:28:00",
+          "0523": "16:18:00",
+          "COORDINATES": "-33.95312997367514, 18.50245242483087",
+          "STATION": "HAZENDAL"
+        },
+        {
+          "0501": "6:21:00",
+          "0503": "7:31:00",
+          "0505": "8:01:00",
+          "0507": "9:11:00",
+          "0509": "9:51:00",
+          "0511": "10:51:00",
+          "0513": "11:51:00",
+          "0515": "12:51:00",
+          "0517": "13:51:00",
+          "0519": "14:31:00",
+          "0521": "15:31:00",
+          "0523": "16:21:00",
+          "COORDINATES": "-33.962698295518024, 18.50155837334863",
+          "STATION": "ATHLONE"
+        },
+        {
+          "0501": "6:23:00",
+          "0503": "7:33:00",
+          "0505": "8:03:00",
+          "0507": "9:13:00",
+          "0509": "9:53:00",
+          "0511": "10:53:00",
+          "0513": "11:53:00",
+          "0515": "12:53:00",
+          "0517": "13:53:00",
+          "0519": "14:33:00",
+          "0521": "15:33:00",
+          "0523": "16:23:00",
+          "COORDINATES": "-33.9763722999728, 18.501211364161737",
+          "STATION": "CRAWFORD"
+        },
+        {
+          "0501": "6:25:00",
+          "0503": "7:35:00",
+          "0505": "8:05:00",
+          "0507": "9:15:00",
+          "0509": "9:55:00",
+          "0511": "10:55:00",
+          "0513": "11:55:00",
+          "0515": "12:55:00",
+          "0517": "13:55:00",
+          "0519": "14:35:00",
+          "0521": "15:35:00",
+          "0523": "16:25:00",
+          "COORDINATES": "-33.987612457591645, 18.503826638830287",
+          "STATION": "LANSDOWNE"
+        },
+        {
+          "0501": "6:28:00",
+          "0503": "7:38:00",
+          "0505": "8:08:00",
+          "0507": "9:18:00",
+          "0509": "9:58:00",
+          "0511": "10:58:00",
+          "0513": "11:58:00",
+          "0515": "12:58:00",
+          "0517": "13:58:00",
+          "0519": "14:38:00",
+          "0521": "15:38:00",
+          "0523": "16:28:00",
+          "COORDINATES": "-34.00198092036942, 18.501121431579975",
+          "STATION": "WETTON"
+        },
+        {
+          "0501": "6:30:00",
+          "0503": "7:40:00",
+          "0505": "8:10:00",
+          "0507": "9:20:00",
+          "0509": "10:00:00",
+          "0511": "11:00:00",
+          "0513": "12:00:00",
+          "0515": "13:00:00",
+          "0517": "14:00:00",
+          "0519": "14:40:00",
+          "0521": "15:40:00",
+          "0523": "16:30:00",
+          "COORDINATES": "-34.01338244383532, 18.495063044196876",
+          "STATION": "OTTERY"
+        },
+        {
+          "0501": "6:34:00",
+          "0503": "7:44:00",
+          "0505": "8:14:00",
+          "0507": "9:24:00",
+          "0509": "10:04:00",
+          "0511": "11:04:00",
+          "0513": "12:04:00",
+          "0515": "13:04:00",
+          "0517": "14:04:00",
+          "0519": "14:44:00",
+          "0521": "15:44:00",
+          "0523": "16:34:00",
+          "COORDINATES": "-34.0328559622752, 18.481922097506832",
+          "STATION": "SOUTHFIELD"
+        },
+        {
+          "0501": "6:38:00",
+          "0503": "7:48:00",
+          "0505": "8:18:00",
+          "0507": "9:28:00",
+          "0509": "10:08:00",
+          "0511": "11:08:00",
+          "0513": "12:08:00",
+          "0515": "13:08:00",
+          "0517": "14:08:00",
+          "0519": "14:48:00",
+          "0521": "15:48:00",
+          "0523": "16:38:00",
+          "COORDINATES": "-34.04591101137236, 18.465287145466693",
+          "STATION": "HEATHFIELD"
+        },
+        {
+          "0501": "6:40:00",
+          "0503": "7:50:00",
+          "0505": "8:20:00",
+          "0507": "9:30:00",
+          "0509": "10:10:00",
+          "0511": "11:10:00",
+          "0513": "12:10:00",
+          "0515": "13:10:00",
+          "0517": "14:10:00",
+          "0519": "14:50:00",
+          "0521": "15:50:00",
+          "0523": "16:40:00",
+          "COORDINATES": "-34.05973193768172, 18.463112424714808",
+          "STATION": "RETREAT"
+        }
+      ],
+      "ct_to_rtret_pub_columnOrder": [
+        "0501",
+        "0503",
+        "0505",
+        "0507",
+        "0509",
+        "0511",
+        "0513",
+        "0515",
+        "0517",
+        "0519",
+        "0521",
+        "0523"
+      ],
+      "ct_to_rtret_pub_meta": "UNSPECIFIED",
+      "ct_to_rtret_pub_zone": "Z2",
+      "ct_to_simon_pub": [
+        {
+          "STATION": "Last Updated: Unspecified"
+        },
+        {
+          "0101": "5:30:00",
+          "0103": "6:10:00",
+          "0105": "6:50:00",
+          "0107": "7:20:00",
+          "0109": "8:10:00",
+          "0111": "8:40:00",
+          "0113": "10:00:00",
+          "0117": "11:40:00",
+          "0119": "12:20:00",
+          "0121": "13:00:00",
+          "0123": "14:00:00",
+          "0125": "14:30:00",
+          "0127": "15:10:00",
+          "0129": "15:40:00",
+          "0131": "16:00:00",
+          "0133": "16:50:00",
+          "0135": "17:35:00",
+          "COORDINATES": "-33.92364274076298, 18.427186832421853",
+          "STATION": "CAPE TOWN"
+        },
+        {
+          "0101": "5:33:00",
+          "0103": "6:13:00",
+          "0105": "6:53:00",
+          "0107": "7:23:00",
+          "0109": "8:13:00",
+          "0111": "8:43:00",
+          "0113": "10:03:00",
+          "0117": "11:43:00",
+          "0119": "12:23:00",
+          "0121": "13:03:00",
+          "0123": "14:03:00",
+          "0125": "14:33:00",
+          "0127": "15:13:00",
+          "0129": "15:43:00",
+          "0131": "16:03:00",
+          "0133": "16:53:00",
+          "0135": "17:38:00",
+          "COORDINATES": "-33.925091518292604, 18.44613476001006",
+          "STATION": "WOODSTOCK"
+        },
+        {
+          "0101": "5:41:00",
+          "0103": "6:21:00",
+          "0105": "7:01:00",
+          "0107": "7:31:00",
+          "0109": "8:21:00",
+          "0111": "8:51:00",
+          "0113": "10:11:00",
+          "0117": "11:51:00",
+          "0119": "12:31:00",
+          "0121": "13:11:00",
+          "0123": "14:11:00",
+          "0125": "14:41:00",
+          "0127": "15:21:00",
+          "0129": "15:51:00",
+          "0131": "16:11:00",
+          "0133": "17:01:00",
+          "0135": "17:46:00",
+          "COORDINATES": "-33.92754784267079, 18.464689103688738",
+          "STATION": "SALT RIVER"
+        },
+        {
+          "0101": "5:44:00",
+          "0103": "6:24:00",
+          "0105": "7:04:00",
+          "0107": "7:34:00",
+          "0109": "8:24:00",
+          "0111": "8:54:00",
+          "0113": "10:14:00",
+          "0117": "11:54:00",
+          "0119": "12:34:00",
+          "0121": "13:14:00",
+          "0123": "14:14:00",
+          "0125": "14:44:00",
+          "0127": "15:24:00",
+          "0129": "15:54:00",
+          "0131": "16:14:00",
+          "0133": "17:04:00",
+          "0135": "17:49:00",
+          "COORDINATES": "-33.938380813969594, 18.47150947571787",
+          "STATION": "OBSERVATORY"
+        },
+        {
+          "0101": "5:46:00",
+          "0103": "6:26:00",
+          "0105": "7:06:00",
+          "0107": "7:36:00",
+          "0109": "8:26:00",
+          "0111": "8:56:00",
+          "0113": "10:16:00",
+          "0117": "11:56:00",
+          "0119": "12:36:00",
+          "0121": "13:16:00",
+          "0123": "14:16:00",
+          "0125": "14:46:00",
+          "0127": "15:26:00",
+          "0129": "15:56:00",
+          "0131": "16:16:00",
+          "0133": "17:06:00",
+          "0135": "17:51:00",
+          "COORDINATES": "-33.946781155732666, 18.473923102107495",
+          "STATION": "MOWBRAY"
+        },
+        {
+          "0101": "5:48:00",
+          "0103": "6:28:00",
+          "0105": "7:08:00",
+          "0107": "7:38:00",
+          "0109": "8:28:00",
+          "0111": "8:58:00",
+          "0113": "10:18:00",
+          "0117": "11:58:00",
+          "0119": "12:38:00",
+          "0121": "13:18:00",
+          "0123": "14:18:00",
+          "0125": "14:48:00",
+          "0127": "15:28:00",
+          "0129": "15:58:00",
+          "0131": "16:18:00",
+          "0133": "17:08:00",
+          "0135": "17:53:00",
+          "COORDINATES": "-33.95483322632044, 18.473123953446258",
+          "STATION": "ROSEBANK"
+        },
+        {
+          "0101": "5:50:00",
+          "0103": "6:30:00",
+          "0105": "7:10:00",
+          "0107": "7:40:00",
+          "0109": "8:30:00",
+          "0111": "9:00:00",
+          "0113": "10:20:00",
+          "0117": "12:00:00",
+          "0119": "12:40:00",
+          "0121": "13:20:00",
+          "0123": "14:20:00",
+          "0125": "14:50:00",
+          "0127": "15:30:00",
+          "0129": "16:00:00",
+          "0131": "16:20:00",
+          "0133": "17:10:00",
+          "0135": "17:55:00",
+          "COORDINATES": "-33.962154618762675, 18.472449011941002",
+          "STATION": "RONDEBOSCH"
+        },
+        {
+          "0101": "5:53:00",
+          "0103": "6:33:00",
+          "0105": "7:13:00",
+          "0107": "7:43:00",
+          "0109": "8:33:00",
+          "0111": "9:03:00",
+          "0113": "10:23:00",
+          "0117": "12:03:00",
+          "0119": "12:43:00",
+          "0121": "13:23:00",
+          "0123": "14:23:00",
+          "0125": "14:53:00",
+          "0127": "15:33:00",
+          "0129": "16:03:00",
+          "0131": "16:23:00",
+          "0133": "17:13:00",
+          "0135": "17:58:00",
+          "COORDINATES": "-33.974516172260806, 18.467522132826836",
+          "STATION": "NEWLANDS"
+        },
+        {
+          "0101": "5:55:00",
+          "0103": "6:35:00",
+          "0105": "7:15:00",
+          "0107": "7:45:00",
+          "0109": "8:35:00",
+          "0111": "9:05:00",
+          "0113": "10:25:00",
+          "0117": "12:05:00",
+          "0119": "12:45:00",
+          "0121": "13:25:00",
+          "0123": "14:25:00",
+          "0125": "14:55:00",
+          "0127": "15:35:00",
+          "0129": "16:05:00",
+          "0131": "16:25:00",
+          "0133": "17:15:00",
+          "0135": "18:00:00",
+          "COORDINATES": "-33.981692819823294, 18.467026035248768",
+          "STATION": "CLAREMONT"
+        },
+        {
+          "0101": "5:57:00",
+          "0103": "6:37:00",
+          "0105": "7:17:00",
+          "0107": "7:47:00",
+          "0109": "8:37:00",
+          "0111": "9:07:00",
+          "0113": "10:27:00",
+          "0117": "12:07:00",
+          "0119": "12:47:00",
+          "0121": "13:27:00",
+          "0123": "14:27:00",
+          "0125": "14:57:00",
+          "0127": "15:37:00",
+          "0129": "16:07:00",
+          "0131": "16:27:00",
+          "0133": "17:17:00",
+          "0135": "18:02:00",
+          "COORDINATES": "-33.98843037363466, 18.471305893701135",
+          "STATION": "HARFIELD ROAD"
+        },
+        {
+          "0101": "5:59:00",
+          "0103": "6:39:00",
+          "0105": "7:19:00",
+          "0107": "7:49:00",
+          "0109": "8:39:00",
+          "0111": "9:09:00",
+          "0113": "10:29:00",
+          "0117": "12:09:00",
+          "0119": "12:49:00",
+          "0121": "13:29:00",
+          "0123": "14:29:00",
+          "0125": "14:59:00",
+          "0127": "15:39:00",
+          "0129": "16:09:00",
+          "0131": "16:29:00",
+          "0133": "17:19:00",
+          "0135": "18:04:00",
+          "COORDINATES": "-33.995273860055164, 18.472962741199133",
+          "STATION": "KENILWORTH"
+        },
+        {
+          "0101": "6:01:00",
+          "0103": "6:41:00",
+          "0105": "7:21:00",
+          "0107": "7:51:00",
+          "0109": "8:41:00",
+          "0111": "9:11:00",
+          "0113": "10:31:00",
+          "0117": "12:11:00",
+          "0119": "12:51:00",
+          "0121": "13:31:00",
+          "0123": "14:31:00",
+          "0125": "15:01:00",
+          "0127": "15:41:00",
+          "0129": "16:11:00",
+          "0131": "16:31:00",
+          "0133": "17:21:00",
+          "0135": "18:06:00",
+          "COORDINATES": "-34.00491103995819, 18.471179319350288",
+          "STATION": "WYNBERG"
+        },
+        {
+          "0101": "6:03:00",
+          "0103": "6:43:00",
+          "0105": "7:23:00",
+          "0107": "7:53:00",
+          "0109": "8:43:00",
+          "0111": "9:13:00",
+          "0113": "10:33:00",
+          "0117": "12:13:00",
+          "0119": "12:53:00",
+          "0121": "13:33:00",
+          "0123": "14:33:00",
+          "0125": "15:03:00",
+          "0127": "15:43:00",
+          "0129": "16:13:00",
+          "0131": "16:33:00",
+          "0133": "17:23:00",
+          "0135": "18:08:00",
+          "COORDINATES": "-34.014407724869756, 18.470837241167313",
+          "STATION": "WITTEBOME"
+        },
+        {
+          "0101": "6:05:00",
+          "0103": "6:45:00",
+          "0105": "7:25:00",
+          "0107": "7:55:00",
+          "0109": "8:45:00",
+          "0111": "9:15:00",
+          "0113": "10:35:00",
+          "0117": "12:15:00",
+          "0119": "12:55:00",
+          "0121": "13:35:00",
+          "0123": "14:35:00",
+          "0125": "15:05:00",
+          "0127": "15:45:00",
+          "0129": "16:15:00",
+          "0131": "16:35:00",
+          "0133": "17:25:00",
+          "0135": "18:10:00",
+          "COORDINATES": "-34.021945461889565, 18.46957290194393",
+          "STATION": "PLUMSTEAD"
+        },
+        {
+          "0101": "6:07:00",
+          "0103": "6:47:00",
+          "0105": "7:27:00",
+          "0107": "7:57:00",
+          "0109": "8:47:00",
+          "0111": "9:17:00",
+          "0113": "10:37:00",
+          "0117": "12:17:00",
+          "0119": "12:57:00",
+          "0121": "13:37:00",
+          "0123": "14:37:00",
+          "0125": "15:07:00",
+          "0127": "15:47:00",
+          "0129": "16:17:00",
+          "0131": "16:37:00",
+          "0133": "17:27:00",
+          "0135": "18:12:00",
+          "COORDINATES": "-34.029355189733344, 18.46885236730811",
+          "STATION": "STEURHOF"
+        },
+        {
+          "0101": "6:09:00",
+          "0103": "6:49:00",
+          "0105": "7:29:00",
+          "0107": "7:59:00",
+          "0109": "8:49:00",
+          "0111": "9:19:00",
+          "0113": "10:39:00",
+          "0117": "12:19:00",
+          "0119": "12:59:00",
+          "0121": "13:39:00",
+          "0123": "14:39:00",
+          "0125": "15:09:00",
+          "0127": "15:49:00",
+          "0129": "16:19:00",
+          "0131": "16:39:00",
+          "0133": "17:29:00",
+          "0135": "18:14:00",
+          "COORDINATES": "-34.035257794113555, 18.467167090822233",
+          "STATION": "DIEPRIVIER"
+        },
+        {
+          "0101": "6:11:00",
+          "0103": "6:51:00",
+          "0105": "7:31:00",
+          "0107": "8:01:00",
+          "0109": "8:51:00",
+          "0111": "9:21:00",
+          "0113": "10:41:00",
+          "0117": "12:21:00",
+          "0119": "13:01:00",
+          "0121": "13:41:00",
+          "0123": "14:41:00",
+          "0125": "15:11:00",
+          "0127": "15:51:00",
+          "0129": "16:21:00",
+          "0131": "16:41:00",
+          "0133": "17:31:00",
+          "0135": "18:16:00",
+          "COORDINATES": "-34.04591101137236, 18.465287145466693",
+          "STATION": "HEATHFIELD"
+        },
+        {
+          "0101": "6:14:00",
+          "0103": "6:54:00",
+          "0105": "7:34:00",
+          "0107": "8:04:00",
+          "0109": "8:54:00",
+          "0111": "9:24:00",
+          "0113": "10:44:00",
+          "0117": "12:24:00",
+          "0119": "13:04:00",
+          "0121": "13:44:00",
+          "0123": "14:44:00",
+          "0125": "15:14:00",
+          "0127": "15:54:00",
+          "0129": "16:24:00",
+          "0131": "16:44:00",
+          "0133": "17:34:00",
+          "0135": "18:19:00",
+          "COORDINATES": "-34.059909390271656, 18.463013113620647",
+          "STATION": "RETREAT"
+        },
+        {
+          "0101": "6:16:00",
+          "0103": "6:56:00",
+          "0105": "7:36:00",
+          "0107": "8:06:00",
+          "0109": "8:56:00",
+          "0111": "9:26:00",
+          "0113": "10:46:00",
+          "0117": "12:26:00",
+          "0119": "13:06:00",
+          "0121": "13:46:00",
+          "0123": "14:46:00",
+          "0125": "15:16:00",
+          "0127": "15:56:00",
+          "0129": "16:26:00",
+          "0131": "16:46:00",
+          "0133": "17:36:00",
+          "0135": "18:21:00",
+          "COORDINATES": "-34.07661752056444, 18.46365235554926",
+          "STATION": "STEENBERG"
+        },
+        {
+          "0101": "6:18:00",
+          "0103": "6:58:00",
+          "0105": "7:38:00",
+          "0107": "8:08:00",
+          "0109": "8:58:00",
+          "0111": "9:28:00",
+          "0113": "10:48:00",
+          "0117": "12:28:00",
+          "0119": "13:08:00",
+          "0121": "13:48:00",
+          "0123": "14:48:00",
+          "0125": "15:18:00",
+          "0127": "15:58:00",
+          "0129": "16:28:00",
+          "0131": "16:48:00",
+          "0133": "17:38:00",
+          "0135": "18:23:00",
+          "COORDINATES": "-34.088438485802136, 18.46247303625622",
+          "STATION": "LAKESIDE"
+        },
+        {
+          "0101": "6:21:00",
+          "0103": "7:01:00",
+          "0105": "7:41:00",
+          "0107": "8:11:00",
+          "0109": "9:01:00",
+          "0111": "9:31:00",
+          "0113": "10:51:00",
+          "0117": "12:31:00",
+          "0119": "13:11:00",
+          "0121": "13:51:00",
+          "0123": "14:51:00",
+          "0125": "15:21:00",
+          "0127": "16:01:00",
+          "0129": "16:31:00",
+          "0131": "16:51:00",
+          "0133": "17:41:00",
+          "0135": "18:26:00",
+          "COORDINATES": "-34.10248327888581, 18.468681718650828",
+          "STATION": "FALSE BAY"
+        },
+        {
+          "0101": "6:23:00",
+          "0103": "7:03:00",
+          "0105": "7:43:00",
+          "0107": "8:13:00",
+          "0109": "9:03:00",
+          "0111": "9:33:00",
+          "0113": "10:53:00",
+          "0117": "12:33:00",
+          "0119": "13:13:00",
+          "0121": "13:53:00",
+          "0123": "14:53:00",
+          "0125": "15:23:00",
+          "0127": "16:03:00",
+          "0129": "16:33:00",
+          "0131": "16:53:00",
+          "0133": "17:43:00",
+          "0135": "18:28:00",
+          "COORDINATES": "-34.109625875192556, 18.46795994312989",
+          "STATION": "MUIZENBERG"
+        },
+        {
+          "0101": "6:26:00",
+          "0103": "7:06:00",
+          "0105": "7:46:00",
+          "0107": "8:16:00",
+          "0109": "9:06:00",
+          "0111": "9:36:00",
+          "0113": "10:56:00",
+          "0117": "12:36:00",
+          "0119": "13:16:00",
+          "0121": "13:56:00",
+          "0123": "14:56:00",
+          "0125": "15:26:00",
+          "0127": "16:06:00",
+          "0129": "16:36:00",
+          "0131": "16:56:00",
+          "0133": "17:46:00",
+          "0135": "18:31:00",
+          "COORDINATES": "-34.11912861624361, 18.458322695803325",
+          "STATION": "ST JAMES"
+        },
+        {
+          "0101": "6:28:00",
+          "0103": "7:08:00",
+          "0105": "7:48:00",
+          "0107": "8:18:00",
+          "0109": "9:08:00",
+          "0111": "9:38:00",
+          "0113": "10:58:00",
+          "0117": "12:38:00",
+          "0119": "13:18:00",
+          "0121": "13:58:00",
+          "0123": "14:58:00",
+          "0125": "15:28:00",
+          "0127": "16:08:00",
+          "0129": "16:38:00",
+          "0131": "16:58:00",
+          "0133": "17:48:00",
+          "0135": "18:33:00",
+          "COORDINATES": "-34.12616436238219, 18.44995365667087",
+          "STATION": "KALK BAY"
+        },
+        {
+          "0101": "6:33:00",
+          "0103": "7:13:00",
+          "0105": "7:53:00",
+          "0107": "8:23:00",
+          "0109": "9:13:00",
+          "0111": "9:43:00",
+          "0113": "11:03:00",
+          "0117": "12:43:00",
+          "0119": "13:23:00",
+          "0121": "14:03:00",
+          "0123": "15:03:00",
+          "0125": "15:33:00",
+          "0127": "16:13:00",
+          "0129": "16:43:00",
+          "0131": "17:03:00",
+          "0133": "17:53:00",
+          "0135": "18:38:00",
+          "COORDINATES": "-34.13718666701449, 18.43231551625473",
+          "STATION": "FISH HOEK"
+        },
+        {
+          "0101": "6:38:00",
+          "0105": "7:58:00",
+          "0109": "9:18:00",
+          "0113": "11:08:00",
+          "0121": "14:08:00",
+          "0125": "15:38:00",
+          "0131": "17:08:00",
+          "COORDINATES": "-34.144478065934095, 18.437248458279786",
+          "STATION": "SUNNY COVE"
+        },
+        {
+          "0101": "6:47:00",
+          "0105": "8:07:00",
+          "0109": "9:27:00",
+          "0113": "11:17:00",
+          "0121": "14:17:00",
+          "0125": "15:47:00",
+          "0131": "17:17:00",
+          "COORDINATES": "-34.16389898121592, 18.432040103477185",
+          "STATION": "GLENCAIRN"
+        },
+        {
+          "0101": "6:53:00",
+          "0105": "8:13:00",
+          "0109": "9:33:00",
+          "0113": "11:23:00",
+          "0121": "14:23:00",
+          "0125": "15:53:00",
+          "0131": "17:23:00",
+          "COORDINATES": "-34.186868345433396, 18.425371636416305",
+          "STATION": "SIMON'S TOWN"
+        }
+      ],
+      "ct_to_simon_pub_columnOrder": [
+        "0101",
+        "0103",
+        "0105",
+        "0107",
+        "0109",
+        "0111",
+        "0113",
+        "0117",
+        "0119",
+        "0121",
+        "0123",
+        "0125",
+        "0127",
+        "0129",
+        "0131",
+        "0133",
+        "0135"
+      ],
+      "ct_to_simon_pub_meta": "Unspecified",
+      "ct_to_simon_pub_zone": "Z2",
+      "ct_to_strnd_pub": [
+        {
+          "STATION": "Last Updated: UNSPECIFIED"
+        },
+        {
+          "2501": "6:15:00",
+          "2503": "8:00:00",
+          "2505": "9:40:00",
+          "2507": "11:30:00",
+          "2509": "12:55:00",
+          "2511": "14:30:00",
+          "2513": "16:10:00",
+          "COORDINATES": "-33.92363127060243, 18.42718648501388",
+          "STATION": "CAPE TOWN"
+        },
+        {
+          "2501": "6:18:00",
+          "2503": "8:03:00",
+          "2505": "9:43:00",
+          "2507": "11:33:00",
+          "2509": "12:58:00",
+          "2511": "14:33:00",
+          "2513": "16:13:00",
+          "COORDINATES": "-33.925058308184404, 18.44613913370814",
+          "STATION": "WOODSTOCK"
+        },
+        {
+          "2501": "6:22:00",
+          "2503": "8:07:00",
+          "2505": "9:47:00",
+          "2507": "11:37:00",
+          "2509": "13:02:00",
+          "2511": "14:37:00",
+          "2513": "16:17:00",
+          "COORDINATES": "-33.92754558428959, 18.464689555116372",
+          "STATION": "SALT RIVER"
+        },
+        {
+          "2501": "6:25:00",
+          "2503": "8:10:00",
+          "2505": "9:50:00",
+          "2507": "11:40:00",
+          "2509": "13:05:00",
+          "2511": "14:40:00",
+          "2513": "16:20:00",
+          "COORDINATES": "-33.92570961024241, 18.47887742815667",
+          "STATION": "KOEBERG RD"
+        },
+        {
+          "2501": "6:28:00",
+          "2503": "8:13:00",
+          "2505": "9:53:00",
+          "2507": "11:43:00",
+          "2509": "13:08:00",
+          "2511": "14:43:00",
+          "2513": "16:23:00",
+          "COORDINATES": "-33.92465193392986, 18.487001988940953",
+          "STATION": "MAITLAND"
+        },
+        {
+          "2501": "6:33:00",
+          "2503": "8:18:00",
+          "2505": "9:58:00",
+          "2507": "11:48:00",
+          "2509": "13:13:00",
+          "2511": "14:48:00",
+          "2513": "16:28:00",
+          "COORDINATES": "-33.92209345116931, 18.511988082500565",
+          "STATION": "MUTUAL"
+        },
+        {
+          "2501": "6:36:00",
+          "2503": "8:21:00",
+          "2505": "10:01:00",
+          "2507": "11:51:00",
+          "2509": "13:16:00",
+          "2511": "14:51:00",
+          "2513": "16:31:00",
+          "COORDINATES": "-33.91899825858434, 18.532372608746943",
+          "STATION": "THORNTON"
+        },
+        {
+          "2501": "6:41:00",
+          "2503": "8:26:00",
+          "2505": "10:06:00",
+          "2507": "11:56:00",
+          "2509": "13:21:00",
+          "2511": "14:56:00",
+          "2513": "16:36:00",
+          "COORDINATES": "-33.91452357725314, 18.547135062452178",
+          "STATION": "GOODWOOD"
+        },
+        {
+          "2501": "6:48:00",
+          "2503": "8:33:00",
+          "2505": "10:13:00",
+          "2507": "12:03:00",
+          "2509": "13:28:00",
+          "2511": "15:03:00",
+          "2513": "16:43:00",
+          "COORDINATES": "-33.910963456351396, 18.558511811261425",
+          "STATION": "VASCO"
+        },
+        {
+          "2501": "6:51:00",
+          "2503": "8:36:00",
+          "2505": "10:16:00",
+          "2507": "12:06:00",
+          "2509": "13:31:00",
+          "2511": "15:06:00",
+          "2513": "16:46:00",
+          "COORDINATES": "-33.91063655254298, 18.569073058894848",
+          "STATION": "ELSIES RIVER"
+        },
+        {
+          "2501": "6:55:00",
+          "2503": "8:40:00",
+          "2505": "10:20:00",
+          "2507": "12:10:00",
+          "2509": "13:35:00",
+          "2511": "15:10:00",
+          "2513": "16:50:00",
+          "COORDINATES": "-33.90972003537582, 18.58605150487192",
+          "STATION": "PAROW"
+        },
+        {
+          "2501": "7:00:00",
+          "2503": "8:45:00",
+          "2505": "10:25:00",
+          "2507": "12:15:00",
+          "2509": "13:40:00",
+          "2511": "15:15:00",
+          "2513": "16:55:00",
+          "COORDINATES": "-33.90746864928141, 18.601251455579924",
+          "STATION": "TYGERBERG"
+        },
+        {
+          "2501": "7:06:00",
+          "2503": "8:51:00",
+          "2505": "10:31:00",
+          "2507": "12:21:00",
+          "2509": "13:46:00",
+          "2511": "15:21:00",
+          "2513": "17:01:00",
+          "3201": "7:20:00",
+          "3203": "9:15:00",
+          "3205": "10:40:00",
+          "3207": "12:40:00",
+          "3209": "13:55:00",
+          "3211": "16:00:00",
+          "3213": "17:15:00",
+          "COORDINATES": "-33.906263459762684, 18.62662128465745",
+          "STATION": "BELLVILLE"
+        },
+        {
+          "3201": "7:32:00",
+          "3203": "9:27:00",
+          "3205": "10:52:00",
+          "3207": "12:52:00",
+          "3209": "14:07:00",
+          "3211": "16:12:00",
+          "3213": "17:27:00",
+          "COORDINATES": "-33.93352364094155, 18.67754300956503",
+          "STATION": "KUILS RIVER"
+        },
+        {
+          "3201": "7:41:00",
+          "3203": "9:36:00",
+          "3205": "11:01:00",
+          "3207": "13:01:00",
+          "3209": "14:16:00",
+          "3211": "16:21:00",
+          "3213": "17:36:00",
+          "COORDINATES": "-33.9643141952728, 18.701548671843643",
+          "STATION": "BLACKHEATH"
+        },
+        {
+          "3201": "7:49:00",
+          "3203": "9:44:00",
+          "3205": "11:09:00",
+          "3207": "13:09:00",
+          "3209": "14:24:00",
+          "3211": "16:29:00",
+          "3213": "17:44:00",
+          "COORDINATES": "-33.98901211755698, 18.72041949781896",
+          "STATION": "MELTONROSE"
+        },
+        {
+          "3201": "7:55:00",
+          "3203": "9:50:00",
+          "3205": "11:15:00",
+          "3207": "13:15:00",
+          "3209": "14:30:00",
+          "3211": "16:35:00",
+          "3213": "17:50:00",
+          "COORDINATES": "-34.00075832740343, 18.73096117658652",
+          "STATION": "EERSTE RIVER"
+        },
+        {
+          "3201": "7:58:00",
+          "3203": "9:53:00",
+          "3205": "11:18:00",
+          "3207": "13:18:00",
+          "3209": "14:33:00",
+          "3211": "16:38:00",
+          "3213": "17:53:00",
+          "COORDINATES": "-34.02629322078662, 18.74703766946096",
+          "STATION": "FAURE"
+        },
+        {
+          "3201": "8:02:00",
+          "3203": "9:57:00",
+          "3205": "11:22:00",
+          "3207": "13:22:00",
+          "3209": "14:37:00",
+          "3211": "16:42:00",
+          "3213": "17:57:00",
+          "COORDINATES": "-34.0559415632047, 18.793265006888184",
+          "STATION": "FIRGROVE"
+        },
+        {
+          "3201": "8:14:00",
+          "3203": "10:09:00",
+          "3205": "11:34:00",
+          "3207": "13:34:00",
+          "3209": "14:49:00",
+          "3211": "16:54:00",
+          "3213": "18:09:00",
+          "COORDINATES": "-34.08447978768948, 18.84218338240483",
+          "STATION": "SOMERSET WEST"
+        },
+        {
+          "3201": "8:17:00",
+          "3203": "10:12:00",
+          "3205": "11:37:00",
+          "3207": "13:37:00",
+          "3209": "14:52:00",
+          "3211": "16:57:00",
+          "3213": "18:12:00",
+          "COORDINATES": "-34.09517018322416, 18.852427615633125",
+          "STATION": "VAN DER STEL"
+        },
+        {
+          "3201": "8:20:00",
+          "3203": "10:15:00",
+          "3205": "11:40:00",
+          "3207": "13:40:00",
+          "3209": "14:55:00",
+          "3211": "17:00:00",
+          "3213": "18:15:00",
+          "COORDINATES": "-34.11501400933376, 18.83241814522109",
+          "STATION": "STRAND"
+        }
+      ],
+      "ct_to_strnd_pub_columnOrder": [
+        "2501",
+        "3201",
+        "2503",
+        "3203",
+        "2505",
+        "3205",
+        "2507",
+        "3207",
+        "2509",
+        "3209",
+        "2511",
+        "3211",
+        "2513",
+        "3213"
+      ],
+      "ct_to_strnd_pub_meta": "UNSPECIFIED",
+      "ct_to_strnd_pub_zone": "Z3",
+      "ct_to_well_pub": [
+        {
+          "STATION": "Last Updated: UNSPECIFIED"
+        },
+        {
+          "COORDINATES": "-33.92363127060243, 18.42718648501388",
+          "STATION": "CAPE TOWN"
+        },
+        {
+          "COORDINATES": "-33.925058308184404, 18.44613913370814",
+          "STATION": "WOODSTOCK"
+        },
+        {
+          "COORDINATES": "-33.92754558428959, 18.464689555116372",
+          "STATION": "SALT RIVER"
+        },
+        {
+          "COORDINATES": "-33.92570961024241, 18.47887742815667",
+          "STATION": "KOEBERG RD"
+        },
+        {
+          "COORDINATES": "-33.92465193392986, 18.487001988940953",
+          "STATION": "MAITLAND"
+        },
+        {
+          "COORDINATES": "-33.92219529219735, 18.507010581735287",
+          "STATION": "MUTUAL"
+        },
+        {
+          "COORDINATES": "-33.92209345116931, 18.511988082500565",
+          "STATION": "THORNTON"
+        },
+        {
+          "COORDINATES": "-33.91899825858434, 18.532372608746943",
+          "STATION": "GOODWOOD"
+        },
+        {
+          "COORDINATES": "-33.91452357725314, 18.547135062452178",
+          "STATION": "VASCO"
+        },
+        {
+          "COORDINATES": "-33.910963456351396, 18.558511811261425",
+          "STATION": "ELSIES RIVER"
+        },
+        {
+          "COORDINATES": "-33.91063655254298, 18.569073058894848",
+          "STATION": "PAROW"
+        },
+        {
+          "COORDINATES": "-33.90972003537582, 18.58605150487192",
+          "STATION": "TYGERBERG"
+        },
+        {
+          "COORDINATES": "-33.90746864928141, 18.601251455579924",
+          "STATION": "BELLVILLE"
+        },
+        {
+          "COORDINATES": "-33.906263459762684, 18.62662128465745",
+          "STATION": "KUILS RIVER"
+        },
+        {
+          "COORDINATES": "-33.93352364094155, 18.67754300956503",
+          "STATION": "BLACKHEATH"
+        },
+        {
+          "COORDINATES": "-33.9643141952728, 18.701548671843643",
+          "STATION": "MELTONROSE"
+        },
+        {
+          "COORDINATES": "-33.98901211755698, 18.72041949781896",
+          "STATION": "EERSTE RIVER"
+        },
+        {
+          "COORDINATES": "-34.00075832740343, 18.73096117658652",
+          "STATION": "FAURE"
+        },
+        {
+          "COORDINATES": "-34.02629322078662, 18.74703766946096",
+          "STATION": "SOMERSET WEST"
+        },
+        {
+          "COORDINATES": "-34.0559415632047, 18.793265006888184",
+          "STATION": "VAN DER STEL"
+        },
+        {
+          "COORDINATES": "-34.08447978768948, 18.84218338240483",
+          "STATION": "STRAND"
+        },
+        {
+          "COORDINATES": "-34.09517018322416, 18.852427615633125",
+          "STATION": "LYNEDOCH"
+        },
+        {
+          "COORDINATES": "-34.11501400933376, 18.83241814522109",
+          "STATION": "VLOTTENBURG"
+        },
+        {
+          "COORDINATES": "-33.981135182294715, 18.771482767776543",
+          "STATION": "STELLENBOSCH"
+        },
+        {
+          "COORDINATES": "-33.962118874611896, 18.79993852483128",
+          "STATION": "DU TOIT"
+        },
+        {
+          "COORDINATES": "-33.938838693814446, 18.84974494856104",
+          "STATION": "KOELENHOF"
+        },
+        {
+          "COORDINATES": "-33.92370031736484, 18.854173801274253",
+          "STATION": "MULDERSVLEI"
+        },
+        {
+          "COORDINATES": "-33.9047695247263, 18.656536260281065",
+          "STATION": "STIKLAND"
+        },
+        {
+          "COORDINATES": "-33.880926996885385, 18.68869797254891",
+          "STATION": "BRACKENFELL"
+        },
+        {
+          "COORDINATES": "-33.857150054357206, 18.71115937457518",
+          "STATION": "EIKENFONTEIN"
+        },
+        {
+          "COORDINATES": "-33.84688758182714, 18.724423652533385",
+          "STATION": "KRAAIFONTEIN"
+        },
+        {
+          "COORDINATES": "-33.830997060529654, 18.828140321428084",
+          "STATION": "MULDERSVLEI"
+        },
+        {
+          "COORDINATES": "-33.80603693098734, 18.870194550736368",
+          "STATION": "KLAPMUTS"
+        },
+        {
+          "COORDINATES": "-33.7651495544123, 18.964509229033844",
+          "STATION": "PAARL"
+        },
+        {
+          "COORDINATES": "-33.72990864160102, 18.976547324806557",
+          "STATION": "HUGUENOT"
+        },
+        {
+          "COORDINATES": "-33.70729186118812, 18.97995087065291",
+          "STATION": "DAL JOSAFAT"
+        },
+        {
+          "COORDINATES": "-33.6745835750923, 18.98548912089934",
+          "STATION": "MBEKWENI"
+        },
+        {
+          "COORDINATES": "-33.634617793572524, 18.991778229234328",
+          "STATION": "WELLINGTON"
+        }
+      ],
+      "ct_to_well_pub_meta": "UNSPECIFIED",
+      "ct_to_well_pub_zone": "Z3",
+      "dayType": "public_holiday",
+      "eerst_to_ct_pub": [
+        {
+          "STATION": "Last Updated: UNSPECIFIED"
+        },
+        {
+          "3200": "6:15:00",
+          "3202": "7:40:00",
+          "3204": "8:55:00",
+          "3206": "11:10:00",
+          "3208": "12:35:00",
+          "3210": "14:25:00",
+          "3212": "16:15:00",
+          "COORDINATES": "-34.00075832740343, 18.73096117658652",
+          "STATION": "EERSTE RIVER"
+        },
+        {
+          "3200": "6:21:00",
+          "3202": "7:46:00",
+          "3204": "9:01:00",
+          "3206": "11:16:00",
+          "3208": "12:41:00",
+          "3210": "14:31:00",
+          "3212": "16:21:00",
+          "COORDINATES": "-33.98901211755698, 18.72041949781896",
+          "STATION": "MELTONROSE"
+        },
+        {
+          "3200": "6:28:00",
+          "3202": "7:53:00",
+          "3204": "9:08:00",
+          "3206": "11:23:00",
+          "3208": "12:48:00",
+          "3210": "14:38:00",
+          "3212": "16:28:00",
+          "COORDINATES": "-33.9643141952728, 18.701548671843643",
+          "STATION": "BLACKHEATH"
+        },
+        {
+          "3200": "6:37:00",
+          "3202": "8:02:00",
+          "3204": "9:17:00",
+          "3206": "11:32:00",
+          "3208": "12:57:00",
+          "3210": "14:47:00",
+          "3212": "16:37:00",
+          "COORDINATES": "-33.93352364094155, 18.67754300956503",
+          "STATION": "KUILS RIVER"
+        },
+        {
+          "2500": "7:02:00",
+          "2502": "8:39:00",
+          "2504": "10:04:00",
+          "2506": "11:54:00",
+          "2508": "13:24:00",
+          "2510": "15:09:00",
+          "2512": "16:24:00",
+          "3200": "6:50:00",
+          "3202": "8:15:00",
+          "3204": "9:30:00",
+          "3206": "11:45:00",
+          "3208": "13:10:00",
+          "3210": "15:00:00",
+          "3212": "16:50:00",
+          "COORDINATES": "-33.906263459762684, 18.62662128465745",
+          "STATION": "BELLVILLE"
+        },
+        {
+          "2500": "7:09:00",
+          "2502": "8:46:00",
+          "2504": "10:11:00",
+          "2506": "12:01:00",
+          "2508": "13:31:00",
+          "2510": "15:16:00",
+          "2512": "16:31:00",
+          "COORDINATES": "-33.90746864928141, 18.601251455579924",
+          "STATION": "TYGERBERG"
+        },
+        {
+          "2500": "7:14:00",
+          "2502": "8:51:00",
+          "2504": "10:16:00",
+          "2506": "12:06:00",
+          "2508": "13:36:00",
+          "2510": "15:21:00",
+          "2512": "16:36:00",
+          "COORDINATES": "-33.90972003537582, 18.58605150487192",
+          "STATION": "PAROW"
+        },
+        {
+          "2500": "7:15:00",
+          "2502": "8:52:00",
+          "2504": "10:17:00",
+          "2506": "12:07:00",
+          "2508": "13:37:00",
+          "2510": "15:22:00",
+          "2512": "16:37:00",
+          "COORDINATES": "-33.91063655254298, 18.569073058894848",
+          "STATION": "ELSIES RIVER"
+        },
+        {
+          "2500": "7:19:00",
+          "2502": "8:56:00",
+          "2504": "10:21:00",
+          "2506": "12:11:00",
+          "2508": "13:41:00",
+          "2510": "15:26:00",
+          "2512": "16:41:00",
+          "COORDINATES": "-33.910963456351396, 18.558511811261425",
+          "STATION": "VASCO"
+        },
+        {
+          "2500": "7:22:00",
+          "2502": "8:59:00",
+          "2504": "10:24:00",
+          "2506": "12:14:00",
+          "2508": "13:44:00",
+          "2510": "15:29:00",
+          "2512": "16:44:00",
+          "COORDINATES": "-33.91452357725314, 18.547135062452178",
+          "STATION": "GOODWOOD"
+        },
+        {
+          "2500": "7:27:00",
+          "2502": "9:04:00",
+          "2504": "10:29:00",
+          "2506": "12:19:00",
+          "2508": "13:49:00",
+          "2510": "15:34:00",
+          "2512": "16:49:00",
+          "COORDINATES": "-33.91899825858434, 18.532372608746943",
+          "STATION": "THORNTON"
+        },
+        {
+          "2500": "7:34:00",
+          "2502": "9:11:00",
+          "2504": "10:36:00",
+          "2506": "12:26:00",
+          "2508": "13:56:00",
+          "2510": "15:41:00",
+          "2512": "16:56:00",
+          "COORDINATES": "-33.92209345116931, 18.511988082500565",
+          "STATION": "MUTUAL"
+        },
+        {
+          "2500": "7:38:00",
+          "2502": "9:15:00",
+          "2504": "10:40:00",
+          "2506": "12:30:00",
+          "2508": "14:00:00",
+          "2510": "15:45:00",
+          "2512": "17:00:00",
+          "COORDINATES": "-33.92465193392986, 18.487001988940953",
+          "STATION": "MAITLAND"
+        },
+        {
+          "2500": "7:41:00",
+          "2502": "9:18:00",
+          "2504": "10:43:00",
+          "2506": "12:33:00",
+          "2508": "14:03:00",
+          "2510": "15:48:00",
+          "2512": "17:03:00",
+          "COORDINATES": "-33.92570961024241, 18.47887742815667",
+          "STATION": "KOEBERG RD"
+        },
+        {
+          "2500": "7:43:00",
+          "2502": "9:20:00",
+          "2504": "10:45:00",
+          "2506": "12:35:00",
+          "2508": "14:05:00",
+          "2510": "15:50:00",
+          "2512": "17:05:00",
+          "COORDINATES": "-33.92754558428959, 18.464689555116372",
+          "STATION": "SALT RIVER"
+        },
+        {
+          "2500": "7:47:00",
+          "2502": "9:24:00",
+          "2504": "10:49:00",
+          "2506": "12:39:00",
+          "2508": "14:09:00",
+          "2510": "15:54:00",
+          "2512": "17:09:00",
+          "COORDINATES": "-33.925058308184404, 18.44613913370814",
+          "STATION": "WOODSTOCK"
+        },
+        {
+          "2500": "7:52:00",
+          "2502": "9:29:00",
+          "2504": "10:54:00",
+          "2506": "12:44:00",
+          "2508": "14:14:00",
+          "2510": "15:59:00",
+          "2512": "17:14:00",
+          "COORDINATES": "-33.92363127060243, 18.42718648501388",
+          "STATION": "CAPE TOWN"
+        }
+      ],
+      "eerst_to_ct_pub_columnOrder": [
+        "3200",
+        "2500",
+        "3202",
+        "2502",
+        "3204",
+        "2504",
+        "3206",
+        "2506",
+        "3208",
+        "2508",
+        "3210",
+        "2510",
+        "3212",
+        "2512"
+      ],
+      "eerst_to_ct_pub_meta": "UNSPECIFIED",
+      "eerst_to_ct_pub_zone": "Z2",
+      "hani_to_ct_pub": [
+        {
+          "STATION": "Last Updated: Unspecified"
+        },
+        {
+          "COORDINATES": "-33.906263459762684, 18.62662128465745",
+          "STATION": "BELLVILLE"
+        },
+        {
+          "COORDINATES": "-33.92655594121331, 18.661143180651308",
+          "STATION": "SAREPTA"
+        },
+        {
+          "COORDINATES": "-33.93468015167005, 18.646053668734744",
+          "STATION": "PENTECH"
+        },
+        {
+          "COORDINATES": "-33.93686354314193, 18.628117540172582",
+          "STATION": "UNIBELL"
+        },
+        {
+          "COORDINATES": "-33.93959717971092, 18.60894476900841",
+          "STATION": "BELHAR"
+        },
+        {
+          "COORDINATES": "-33.943269567798055, 18.583722311337315",
+          "STATION": "LAVISTOWN"
+        },
+        {
+          "9900": "5:45:00",
+          "9902": "7:55:00",
+          "9904": "9:10:00",
+          "9906": "10:45:00",
+          "9908": "11:55:00",
+          "9910": "14:35:00",
+          "9912": "16:35:00",
+          "9914": "17:46:00",
+          "COORDINATES": "-34.054706073305944, 18.710707924836054",
+          "STATION": "CHRIS HANI"
+        },
+        {
+          "9900": "5:49:00",
+          "9902": "7:59:00",
+          "9904": "9:14:00",
+          "9906": "10:49:00",
+          "9908": "11:59:00",
+          "9910": "14:39:00",
+          "9912": "16:39:00",
+          "9914": "17:50:00",
+          "COORDINATES": "-34.05489939537871, 18.692323957717754",
+          "STATION": "KUYASA"
+        },
+        {
+          "9900": "5:52:00",
+          "9902": "8:02:00",
+          "9904": "9:17:00",
+          "9906": "10:52:00",
+          "9908": "12:02:00",
+          "9910": "14:42:00",
+          "9912": "16:42:00",
+          "9914": "17:53:00",
+          "COORDINATES": "-34.047943373751565, 18.67073769040669",
+          "STATION": "KHAYELITSHA"
+        },
+        {
+          "9900": "5:56:00",
+          "9902": "8:06:00",
+          "9904": "9:21:00",
+          "9906": "10:56:00",
+          "9908": "12:06:00",
+          "9910": "14:46:00",
+          "9912": "16:46:00",
+          "9914": "17:57:00",
+          "COORDINATES": "-34.02681746271161, 18.663190611341626",
+          "STATION": "NONKQUBELA"
+        },
+        {
+          "9900": "6:00:00",
+          "9902": "8:10:00",
+          "9904": "9:25:00",
+          "9906": "11:00:00",
+          "9908": "12:10:00",
+          "9910": "14:50:00",
+          "9912": "16:50:00",
+          "9914": "18:01:00",
+          "COORDINATES": "-34.016811809063164, 18.64902361716287",
+          "STATION": "NOLUNGILE"
+        },
+        {
+          "9900": "6:04:00",
+          "9902": "8:14:00",
+          "9904": "9:29:00",
+          "9906": "11:04:00",
+          "9908": "12:14:00",
+          "9910": "14:54:00",
+          "9912": "16:54:00",
+          "9914": "18:05:00",
+          "COORDINATES": "-34.019015667481014, 18.624391145998562",
+          "STATION": "MANDALAY"
+        },
+        {
+          "9900": "6:07:00",
+          "9902": "8:17:00",
+          "9904": "9:32:00",
+          "9906": "11:07:00",
+          "9908": "12:17:00",
+          "9910": "14:57:00",
+          "9912": "16:57:00",
+          "9914": "18:08:00",
+          "COORDINATES": "-34.01412292128464, 18.606174209491407",
+          "STATION": "STOCK ROAD"
+        },
+        {
+          "COORDINATES": "-34.06755873543257, 18.620534480658506",
+          "STATION": "KAPTEINSKLIP"
+        },
+        {
+          "COORDINATES": "-34.0504610838304, 18.619222253671435",
+          "STATION": "MITCHELL'S PLAIN"
+        },
+        {
+          "COORDINATES": "-34.03418971685345, 18.611322738328173",
+          "STATION": "LENTEGEUR"
+        },
+        {
+          "9900": "6:12:00",
+          "9902": "8:22:00",
+          "9904": "9:37:00",
+          "9906": "11:12:00",
+          "9908": "12:22:00",
+          "9910": "15:02:00",
+          "9912": "17:02:00",
+          "9914": "18:13:00",
+          "COORDINATES": "-34.01328895709482, 18.584421561340882",
+          "STATION": "PHILIPPI"
+        },
+        {
+          "9900": "6:16:00",
+          "9902": "8:26:00",
+          "9904": "9:41:00",
+          "9906": "11:16:00",
+          "9908": "12:26:00",
+          "9910": "15:06:00",
+          "9912": "17:06:00",
+          "9914": "18:17:00",
+          "COORDINATES": "-33.99271379632963, 18.559776951819032",
+          "STATION": "NYANGA"
+        },
+        {
+          "9900": "6:22:00",
+          "9902": "8:32:00",
+          "9904": "9:47:00",
+          "9906": "11:22:00",
+          "9908": "12:32:00",
+          "9910": "15:12:00",
+          "9912": "17:12:00",
+          "9914": "18:23:00",
+          "COORDINATES": "-33.94185049480737, 18.549579817876847",
+          "STATION": "BONTEHEUWEL"
+        },
+        {
+          "9900": "6:25:00",
+          "9902": "8:35:00",
+          "9904": "9:50:00",
+          "9906": "11:25:00",
+          "9908": "12:35:00",
+          "9910": "15:15:00",
+          "9912": "17:15:00",
+          "9914": "18:26:00",
+          "COORDINATES": "-33.938934072196076, 18.52974423065194",
+          "STATION": "LANGA"
+        },
+        {
+          "9900": "6:30:00",
+          "9902": "8:40:00",
+          "9904": "9:55:00",
+          "9906": "11:30:00",
+          "9908": "12:40:00",
+          "9910": "15:20:00",
+          "9912": "17:20:00",
+          "9914": "18:31:00",
+          "COORDINATES": "-33.92209345116931, 18.511988082500565",
+          "STATION": "MUTUAL"
+        },
+        {
+          "9900": "6:39:00",
+          "9902": "8:49:00",
+          "9904": "10:04:00",
+          "9906": "11:39:00",
+          "9908": "12:49:00",
+          "9910": "15:29:00",
+          "9912": "17:29:00",
+          "9914": "18:40:00",
+          "COORDINATES": "-33.9199022523178, 18.476775305514295",
+          "STATION": "YSTERPLAAT"
+        },
+        {
+          "9900": "6:51:00",
+          "9902": "9:01:00",
+          "9904": "10:16:00",
+          "9906": "11:51:00",
+          "9908": "13:01:00",
+          "9910": "15:41:00",
+          "9912": "17:41:00",
+          "9914": "18:52:00",
+          "COORDINATES": "-33.923640784366874, 18.446037955514498",
+          "STATION": "ESPLANADE"
+        },
+        {
+          "COORDINATES": "-33.93964476336891, 18.490635019900687",
+          "STATION": "PINELANDS"
+        },
+        {
+          "COORDINATES": "-33.928548273196824, 18.495159894144553",
+          "STATION": "NDABENI"
+        },
+        {
+          "COORDINATES": "-33.92465193392986, 18.487001988940953",
+          "STATION": "MAITLAND"
+        },
+        {
+          "COORDINATES": "-33.92570961024241, 18.47887742815667",
+          "STATION": "KOEBERG RD"
+        },
+        {
+          "COORDINATES": "-33.92754558428959, 18.464689555116372",
+          "STATION": "SALT RIVER"
+        },
+        {
+          "COORDINATES": "-33.925058308184404, 18.44613913370814",
+          "STATION": "WOODSTOCK"
+        },
+        {
+          "9900": "6:54:00",
+          "9902": "9:06:00",
+          "9904": "10:21:00",
+          "9906": "11:56:00",
+          "9908": "13:06:00",
+          "9910": "15:46:00",
+          "9912": "17:46:00",
+          "9914": "18:57:00",
+          "COORDINATES": "-33.92363127060243, 18.42718648501388",
+          "STATION": "CAPE TOWN"
+        }
+      ],
+      "hani_to_ct_pub_columnOrder": [
+        "9900",
+        "9902",
+        "9904",
+        "9906",
+        "9908",
+        "9910",
+        "9912",
+        "9914"
+      ],
+      "hani_to_ct_pub_meta": "Unspecified",
+      "hani_to_ct_pub_zone": "Z2",
+      "kap_to_ct_pub": [
+        {
+          "STATION": "Last Updated: Unspecified"
+        },
+        {
+          "COORDINATES": "-33.906263459762684, 18.62662128465745",
+          "STATION": "BELLVILLE"
+        },
+        {
+          "COORDINATES": "-33.92655594121331, 18.661143180651308",
+          "STATION": "SAREPTA"
+        },
+        {
+          "COORDINATES": "-33.93468015167005, 18.646053668734744",
+          "STATION": "PENTECH"
+        },
+        {
+          "COORDINATES": "-33.93686354314193, 18.628117540172582",
+          "STATION": "UNIBELL"
+        },
+        {
+          "COORDINATES": "-33.93959717971092, 18.60894476900841",
+          "STATION": "BELHAR"
+        },
+        {
+          "COORDINATES": "-33.943269567798055, 18.583722311337315",
+          "STATION": "LAVISTOWN"
+        },
+        {
+          "COORDINATES": "-34.054706073305944, 18.710707924836054",
+          "STATION": "CHRIS HANI"
+        },
+        {
+          "COORDINATES": "-34.05489939537871, 18.692323957717754",
+          "STATION": "KUYASA"
+        },
+        {
+          "COORDINATES": "-34.047943373751565, 18.67073769040669",
+          "STATION": "KHAYELITSHA"
+        },
+        {
+          "COORDINATES": "-34.02681746271161, 18.663190611341626",
+          "STATION": "NONKQUBELA"
+        },
+        {
+          "COORDINATES": "-34.016811809063164, 18.64902361716287",
+          "STATION": "NOLUNGILE"
+        },
+        {
+          "COORDINATES": "-34.019015667481014, 18.624391145998562",
+          "STATION": "MANDALAY"
+        },
+        {
+          "COORDINATES": "-34.01412292128464, 18.606174209491407",
+          "STATION": "STOCK ROAD"
+        },
+        {
+          "9500": "6:57:00",
+          "9502": "9:30:00",
+          "9504": "12:05:00",
+          "9506": "14:22:00",
+          "9508": "17:00:00",
+          "COORDINATES": "-34.06755873543257, 18.620534480658506",
+          "STATION": "KAPTEINSKLIP"
+        },
+        {
+          "9500": "7:05:00",
+          "9502": "9:38:00",
+          "9504": "12:13:00",
+          "9506": "14:30:00",
+          "9508": "17:08:00",
+          "COORDINATES": "-34.0504610838304, 18.619222253671435",
+          "STATION": "MITCHELL'S PLAIN"
+        },
+        {
+          "9500": "7:12:00",
+          "9502": "9:45:00",
+          "9504": "12:20:00",
+          "9506": "14:37:00",
+          "9508": "17:15:00",
+          "COORDINATES": "-34.03418971685345, 18.611322738328173",
+          "STATION": "LENTEGEUR"
+        },
+        {
+          "9500": "7:17:00",
+          "9502": "9:50:00",
+          "9504": "12:25:00",
+          "9506": "14:42:00",
+          "9508": "17:20:00",
+          "COORDINATES": "-34.01328895709482, 18.584421561340882",
+          "STATION": "PHILIPPI"
+        },
+        {
+          "9500": "7:21:00",
+          "9502": "9:54:00",
+          "9504": "12:29:00",
+          "9506": "14:46:00",
+          "9508": "17:24:00",
+          "COORDINATES": "-33.99271379632963, 18.559776951819032",
+          "STATION": "NYANGA"
+        },
+        {
+          "9500": "7:27:00",
+          "9502": "10:00:00",
+          "9504": "12:35:00",
+          "9506": "14:52:00",
+          "9508": "17:30:00",
+          "COORDINATES": "-33.94185049480737, 18.549579817876847",
+          "STATION": "BONTEHEUWEL"
+        },
+        {
+          "9500": "7:30:00",
+          "9502": "10:03:00",
+          "9504": "12:38:00",
+          "9506": "14:55:00",
+          "9508": "17:33:00",
+          "COORDINATES": "-33.938934072196076, 18.52974423065194",
+          "STATION": "LANGA"
+        },
+        {
+          "COORDINATES": "-33.92209345116931, 18.511988082500565",
+          "STATION": "MUTUAL"
+        },
+        {
+          "COORDINATES": "-33.9199022523178, 18.476775305514295",
+          "STATION": "YSTERPLAAT"
+        },
+        {
+          "COORDINATES": "-33.923640784366874, 18.446037955514498",
+          "STATION": "ESPLANADE"
+        },
+        {
+          "9500": "7:33:00",
+          "9502": "10:06:00",
+          "9504": "12:41:00",
+          "9506": "14:58:00",
+          "9508": "17:36:00",
+          "COORDINATES": "-33.93964476336891, 18.490635019900687",
+          "STATION": "PINELANDS"
+        },
+        {
+          "9500": "7:35:00",
+          "9502": "10:08:00",
+          "9504": "12:43:00",
+          "9506": "15:00:00",
+          "9508": "17:38:00",
+          "COORDINATES": "-33.928548273196824, 18.495159894144553",
+          "STATION": "NDABENI"
+        },
+        {
+          "9500": "7:38:00",
+          "9502": "10:11:00",
+          "9504": "12:46:00",
+          "9506": "15:03:00",
+          "9508": "17:41:00",
+          "COORDINATES": "-33.92465193392986, 18.487001988940953",
+          "STATION": "MAITLAND"
+        },
+        {
+          "9500": "7:41:00",
+          "9502": "10:14:00",
+          "9504": "12:49:00",
+          "9506": "15:06:00",
+          "9508": "17:44:00",
+          "COORDINATES": "-33.92570961024241, 18.47887742815667",
+          "STATION": "KOEBERG RD"
+        },
+        {
+          "9500": "7:44:00",
+          "9502": "10:17:00",
+          "9504": "12:52:00",
+          "9506": "15:09:00",
+          "9508": "17:47:00",
+          "COORDINATES": "-33.92754558428959, 18.464689555116372",
+          "STATION": "SALT RIVER"
+        },
+        {
+          "9500": "7:49:00",
+          "9502": "10:22:00",
+          "9504": "12:57:00",
+          "9506": "15:14:00",
+          "9508": "17:52:00",
+          "COORDINATES": "-33.925058308184404, 18.44613913370814",
+          "STATION": "WOODSTOCK"
+        },
+        {
+          "9500": "7:55:00",
+          "9502": "10:28:00",
+          "9504": "13:03:00",
+          "9506": "15:20:00",
+          "9508": "17:58:00",
+          "COORDINATES": "-33.92363127060243, 18.42718648501388",
+          "STATION": "CAPE TOWN"
+        }
+      ],
+      "kap_to_ct_pub_columnOrder": [
+        "9500",
+        "9502",
+        "9504",
+        "9506",
+        "9508"
+      ],
+      "kap_to_ct_pub_meta": "Unspecified",
+      "kap_to_ct_pub_zone": "Z2",
+      "kraai_to_ct_pub": [
+        {
+          "STATION": "Last Updated: UNSPECIFIED"
+        },
+        {
+          "2500": "6:38:00",
+          "2502": "8:15:00",
+          "2504": "9:40:00",
+          "2506": "11:30:00",
+          "2508": "13:00:00",
+          "2510": "14:45:00",
+          "2512": "16:00:00",
+          "COORDINATES": "-33.84688758182714, 18.724423652533385",
+          "STATION": "KRAAIFONTEIN"
+        },
+        {
+          "2500": "6:43:00",
+          "2502": "8:20:00",
+          "2504": "9:45:00",
+          "2506": "11:35:00",
+          "2508": "13:05:00",
+          "2510": "14:50:00",
+          "2512": "16:05:00",
+          "COORDINATES": "-33.857150054357206, 18.71115937457518",
+          "STATION": "EIKENFONTEIN"
+        },
+        {
+          "2500": "6:49:00",
+          "2502": "8:26:00",
+          "2504": "9:51:00",
+          "2506": "11:41:00",
+          "2508": "13:11:00",
+          "2510": "14:56:00",
+          "2512": "16:11:00",
+          "COORDINATES": "-33.880926996885385, 18.68869797254891",
+          "STATION": "BRACKENFELL"
+        },
+        {
+          "2500": "6:56:00",
+          "2502": "8:33:00",
+          "2504": "9:58:00",
+          "2506": "11:48:00",
+          "2508": "13:18:00",
+          "2510": "15:03:00",
+          "2512": "16:18:00",
+          "COORDINATES": "-33.9047695247263, 18.656536260281065",
+          "STATION": "STIKLAND"
+        },
+        {
+          "COORDINATES": "-34.11501400933376, 18.83241814522109",
+          "STATION": "STRAND"
+        },
+        {
+          "COORDINATES": "-34.09517018322416, 18.852427615633125",
+          "STATION": "VAN DER STEL"
+        },
+        {
+          "COORDINATES": "-34.08447978768948, 18.84218338240483",
+          "STATION": "SOMERSET WEST"
+        },
+        {
+          "COORDINATES": "-34.0559415632047, 18.793265006888184",
+          "STATION": "FIRGROVE"
+        },
+        {
+          "COORDINATES": "-34.02629322078662, 18.74703766946096",
+          "STATION": "FAURE"
+        },
+        {
+          "COORDINATES": "-34.00075832740343, 18.73096117658652",
+          "STATION": "EERSTE RIVER"
+        },
+        {
+          "COORDINATES": "-33.98901211755698, 18.72041949781896",
+          "STATION": "MELTONROSE"
+        },
+        {
+          "COORDINATES": "-33.9643141952728, 18.701548671843643",
+          "STATION": "BLACKHEATH"
+        },
+        {
+          "COORDINATES": "-33.93352364094155, 18.67754300956503",
+          "STATION": "KUILS RIVER"
+        },
+        {
+          "2500": "7:02:00",
+          "2502": "8:39:00",
+          "2504": "10:04:00",
+          "2506": "11:54:00",
+          "2508": "13:24:00",
+          "2510": "15:09:00",
+          "2512": "16:24:00",
+          "COORDINATES": "-33.906263459762684, 18.62662128465745",
+          "STATION": "BELLVILLE"
+        },
+        {
+          "2500": "7:09:00",
+          "2502": "8:46:00",
+          "2504": "10:11:00",
+          "2506": "12:01:00",
+          "2508": "13:31:00",
+          "2510": "15:16:00",
+          "2512": "16:31:00",
+          "COORDINATES": "-33.90746864928141, 18.601251455579924",
+          "STATION": "TYGERBERG"
+        },
+        {
+          "2500": "7:14:00",
+          "2502": "8:51:00",
+          "2504": "10:16:00",
+          "2506": "12:06:00",
+          "2508": "13:36:00",
+          "2510": "15:21:00",
+          "2512": "16:36:00",
+          "COORDINATES": "-33.90972003537582, 18.58605150487192",
+          "STATION": "PAROW"
+        },
+        {
+          "2500": "7:15:00",
+          "2502": "8:52:00",
+          "2504": "10:17:00",
+          "2506": "12:07:00",
+          "2508": "13:37:00",
+          "2510": "15:22:00",
+          "2512": "16:37:00",
+          "COORDINATES": "-33.91063655254298, 18.569073058894848",
+          "STATION": "ELSIES RIVER"
+        },
+        {
+          "2500": "7:19:00",
+          "2502": "8:56:00",
+          "2504": "10:21:00",
+          "2506": "12:11:00",
+          "2508": "13:41:00",
+          "2510": "15:26:00",
+          "2512": "16:41:00",
+          "COORDINATES": "-33.910963456351396, 18.558511811261425",
+          "STATION": "VASCO"
+        },
+        {
+          "2500": "7:22:00",
+          "2502": "8:59:00",
+          "2504": "10:24:00",
+          "2506": "12:14:00",
+          "2508": "13:44:00",
+          "2510": "15:29:00",
+          "2512": "16:44:00",
+          "COORDINATES": "-33.91452357725314, 18.547135062452178",
+          "STATION": "GOODWOOD"
+        },
+        {
+          "2500": "7:27:00",
+          "2502": "9:04:00",
+          "2504": "10:29:00",
+          "2506": "12:19:00",
+          "2508": "13:49:00",
+          "2510": "15:34:00",
+          "2512": "16:49:00",
+          "COORDINATES": "-33.91899825858434, 18.532372608746943",
+          "STATION": "THORNTON"
+        },
+        {
+          "2500": "7:34:00",
+          "2502": "9:11:00",
+          "2504": "10:36:00",
+          "2506": "12:26:00",
+          "2508": "13:56:00",
+          "2510": "15:41:00",
+          "2512": "16:56:00",
+          "COORDINATES": "-33.92209345116931, 18.511988082500565",
+          "STATION": "MUTUAL"
+        },
+        {
+          "2500": "7:38:00",
+          "2502": "9:15:00",
+          "2504": "10:40:00",
+          "2506": "12:30:00",
+          "2508": "14:00:00",
+          "2510": "15:45:00",
+          "2512": "17:00:00",
+          "COORDINATES": "-33.92465193392986, 18.487001988940953",
+          "STATION": "MAITLAND"
+        },
+        {
+          "2500": "7:41:00",
+          "2502": "9:18:00",
+          "2504": "10:43:00",
+          "2506": "12:33:00",
+          "2508": "14:03:00",
+          "2510": "15:48:00",
+          "2512": "17:03:00",
+          "COORDINATES": "-33.92570961024241, 18.47887742815667",
+          "STATION": "KOEBERG RD"
+        },
+        {
+          "2500": "7:43:00",
+          "2502": "9:20:00",
+          "2504": "10:45:00",
+          "2506": "12:35:00",
+          "2508": "14:05:00",
+          "2510": "15:50:00",
+          "2512": "17:05:00",
+          "COORDINATES": "-33.92754558428959, 18.464689555116372",
+          "STATION": "SALT RIVER"
+        },
+        {
+          "2500": "7:47:00",
+          "2502": "9:24:00",
+          "2504": "10:49:00",
+          "2506": "12:39:00",
+          "2508": "14:09:00",
+          "2510": "15:54:00",
+          "2512": "17:09:00",
+          "COORDINATES": "-33.925058308184404, 18.44613913370814",
+          "STATION": "WOODSTOCK"
+        },
+        {
+          "2500": "7:52:00",
+          "2502": "9:29:00",
+          "2504": "10:54:00",
+          "2506": "12:44:00",
+          "2508": "14:14:00",
+          "2510": "15:59:00",
+          "2512": "17:14:00",
+          "COORDINATES": "-33.92363127060243, 18.42718648501388",
+          "STATION": "CAPE TOWN"
+        }
+      ],
+      "kraai_to_ct_pub_columnOrder": [
+        "2500",
+        "2502",
+        "2504",
+        "2506",
+        "2508",
+        "2510",
+        "2512"
+      ],
+      "kraai_to_ct_pub_meta": "UNSPECIFIED",
+      "kraai_to_ct_pub_zone": "Z2",
+      "lastUpdated": "9/23/2026, 7:30:03 PM",
+      "malm_to_ct_pub": [
+        {
+          "STATION": "Last Updated: UNSPECIFIED"
+        },
+        {
+          "COORDINATES": "-33.467953872147824, 18.722366078564523",
+          "STATION": "MALMESBURY"
+        },
+        {
+          "COORDINATES": "-33.4926039622881, 18.681902687224493",
+          "STATION": "ABBOTSDALE"
+        },
+        {
+          "COORDINATES": "-33.57255398927767, 18.647601367814676",
+          "STATION": "KALBASKRAAL"
+        },
+        {
+          "COORDINATES": "-33.62956288948659, 18.669952895467464",
+          "STATION": "WINTERVOGEL"
+        },
+        {
+          "COORDINATES": "-33.69915505683154, 18.70034739164122",
+          "STATION": "KLIPHEUWEL"
+        },
+        {
+          "COORDINATES": "-33.72387750914535, 18.707948887392643",
+          "STATION": "MIKPUNT"
+        },
+        {
+          "COORDINATES": "-33.76243478432612, 18.71770448779065",
+          "STATION": "MELLISH"
+        },
+        {
+          "COORDINATES": "-33.78626408467964, 18.71169920057285",
+          "STATION": "FISANTKRAAL"
+        },
+        {
+          "COORDINATES": "-33.84688758182714, 18.724423652533385",
+          "STATION": "KRAAIFONTEIN"
+        },
+        {
+          "COORDINATES": "-33.857150054357206, 18.71115937457518",
+          "STATION": "EIKENFONTEIN"
+        },
+        {
+          "COORDINATES": "-33.880926996885385, 18.68869797254891",
+          "STATION": "BRACKENFELL"
+        },
+        {
+          "COORDINATES": "-33.9047695247263, 18.656536260281065",
+          "STATION": "STIKLAND"
+        },
+        {
+          "COORDINATES": "-33.90611080547394, 18.625990390257403",
+          "STATION": "BELLVILLE"
+        },
+        {
+          "COORDINATES": "-33.90000128762894, 18.60740313069764",
+          "STATION": "OOSTERZEE"
+        },
+        {
+          "COORDINATES": "-33.89778002001787, 18.59287533918825",
+          "STATION": "AVONDALE"
+        },
+        {
+          "COORDINATES": "-33.89166726211482, 18.54961595156625",
+          "STATION": "MONTE VISTA"
+        },
+        {
+          "COORDINATES": "-33.901116507445494, 18.511648283688643",
+          "STATION": "CENTURY CITY"
+        },
+        {
+          "COORDINATES": "-33.91993715978276, 18.47654476510058",
+          "STATION": "YSTERPLAAT"
+        },
+        {
+          "COORDINATES": "-33.92386095430605, 18.445826519314583",
+          "STATION": "ESPLANADE"
+        },
+        {
+          "COORDINATES": "-33.923639304464864, 18.42718821282366",
+          "STATION": "CAPE TOWN"
+        }
+      ],
+      "malm_to_ct_pub_meta": "UNSPECIFIED",
+      "malm_to_ct_pub_zone": "Z3",
+      "mutul_to_bellv_pub": [
+        {
+          "STATION": "Last Updated: Unspecified"
+        },
+        {
+          "COORDINATES": "-33.92363127060243, 18.42718648501388",
+          "STATION": "CAPE TOWN"
+        },
+        {
+          "COORDINATES": "-33.925058308184404, 18.44613913370814",
+          "STATION": "WOODSTOCK"
+        },
+        {
+          "COORDINATES": "-33.92754558428959, 18.464689555116372",
+          "STATION": "SALT RIVER"
+        },
+        {
+          "COORDINATES": "-33.92570961024241, 18.47887742815667",
+          "STATION": "KOEBERG RD"
+        },
+        {
+          "COORDINATES": "-33.92465193392986, 18.487001988940953",
+          "STATION": "MAITLAND"
+        },
+        {
+          "COORDINATES": "-33.928548273196824, 18.495159894144553",
+          "STATION": "NDABENI"
+        },
+        {
+          "COORDINATES": "-33.93964476336891, 18.490635019900687",
+          "STATION": "PINELANDS"
+        },
+        {
+          "COORDINATES": "-33.923640784366874, 18.446037955514498",
+          "STATION": "ESPLANADE"
+        },
+        {
+          "COORDINATES": "-33.9199022523178, 18.476775305514295",
+          "STATION": "YSTERPLAAT"
+        },
+        {
+          "COORDINATES": "-33.92209345116931, 18.511988082500565",
+          "STATION": "MUTUAL"
+        },
+        {
+          "COORDINATES": "-33.938934072196076, 18.52974423065194",
+          "STATION": "LANGA"
+        },
+        {
+          "COORDINATES": "-33.94185049480737, 18.549579817876847",
+          "STATION": "BONTEHEUWEL"
+        },
+        {
+          "COORDINATES": "-33.99271379632963, 18.559776951819032",
+          "STATION": "NYANGA"
+        },
+        {
+          "COORDINATES": "-34.01328895709482, 18.584421561340882",
+          "STATION": "PHILIPPI"
+        },
+        {
+          "COORDINATES": "-34.03418971685345, 18.611322738328173",
+          "STATION": "LENTEGEUR"
+        },
+        {
+          "COORDINATES": "-34.0504610838304, 18.619222253671435",
+          "STATION": "MITCHELL'S PLAIN"
+        },
+        {
+          "COORDINATES": "-34.06755873543257, 18.620534480658506",
+          "STATION": "KAPTEINSKLIP"
+        },
+        {
+          "COORDINATES": "-34.01412292128464, 18.606174209491407",
+          "STATION": "STOCK ROAD"
+        },
+        {
+          "COORDINATES": "-34.019015667481014, 18.624391145998562",
+          "STATION": "MANDALAY"
+        },
+        {
+          "COORDINATES": "-34.016811809063164, 18.64902361716287",
+          "STATION": "NOLUNGILE"
+        },
+        {
+          "COORDINATES": "-34.02681746271161, 18.663190611341626",
+          "STATION": "NONKQUBELA"
+        },
+        {
+          "COORDINATES": "-34.047943373751565, 18.67073769040669",
+          "STATION": "KHAYELITSHA"
+        },
+        {
+          "COORDINATES": "-34.05489939537871, 18.692323957717754",
+          "STATION": "KUYASA"
+        },
+        {
+          "COORDINATES": "-34.054706073305944, 18.710707924836054",
+          "STATION": "CHRIS HANI"
+        },
+        {
+          "COORDINATES": "-33.943269567798055, 18.583722311337315",
+          "STATION": "LAVISTOWN"
+        },
+        {
+          "COORDINATES": "-33.93959717971092, 18.60894476900841",
+          "STATION": "BELHAR"
+        },
+        {
+          "COORDINATES": "-33.93686354314193, 18.628117540172582",
+          "STATION": "UNIBELL"
+        },
+        {
+          "COORDINATES": "-33.93468015167005, 18.646053668734744",
+          "STATION": "PENTECH"
+        },
+        {
+          "COORDINATES": "-33.92655594121331, 18.661143180651308",
+          "STATION": "SAREPTA"
+        },
+        {
+          "COORDINATES": "-33.906263459762684, 18.62662128465745",
+          "STATION": "BELLVILLE"
+        }
+      ],
+      "mutul_to_bellv_pub_meta": "Unspecified",
+      "mutul_to_bellv_pub_zone": "Z2",
+      "nolu_to_ct_pub": [
+        {
+          "STATION": "Last Updated: Unspecified"
+        },
+        {
+          "COORDINATES": "-33.906263459762684, 18.62662128465745",
+          "STATION": "BELLVILLE"
+        },
+        {
+          "COORDINATES": "-33.92655594121331, 18.661143180651308",
+          "STATION": "SAREPTA"
+        },
+        {
+          "COORDINATES": "-33.93468015167005, 18.646053668734744",
+          "STATION": "PENTECH"
+        },
+        {
+          "COORDINATES": "-33.93686354314193, 18.628117540172582",
+          "STATION": "UNIBELL"
+        },
+        {
+          "COORDINATES": "-33.93959717971092, 18.60894476900841",
+          "STATION": "BELHAR"
+        },
+        {
+          "COORDINATES": "-33.943269567798055, 18.583722311337315",
+          "STATION": "LAVISTOWN"
+        },
+        {
+          "COORDINATES": "-34.054706073305944, 18.710707924836054",
+          "STATION": "CHRIS HANI"
+        },
+        {
+          "COORDINATES": "-34.05489939537871, 18.692323957717754",
+          "STATION": "KUYASA"
+        },
+        {
+          "COORDINATES": "-34.047943373751565, 18.67073769040669",
+          "STATION": "KHAYELITSHA"
+        },
+        {
+          "COORDINATES": "-34.02681746271161, 18.663190611341626",
+          "STATION": "NONKQUBELA"
+        },
+        {
+          "COORDINATES": "-34.016811809063164, 18.64902361716287",
+          "STATION": "NOLUNGILE"
+        },
+        {
+          "COORDINATES": "-34.019015667481014, 18.624391145998562",
+          "STATION": "MANDALAY"
+        },
+        {
+          "COORDINATES": "-34.01412292128464, 18.606174209491407",
+          "STATION": "STOCK ROAD"
+        },
+        {
+          "COORDINATES": "-34.06755873543257, 18.620534480658506",
+          "STATION": "KAPTEINSKLIP"
+        },
+        {
+          "COORDINATES": "-34.0504610838304, 18.619222253671435",
+          "STATION": "MITCHELL'S PLAIN"
+        },
+        {
+          "COORDINATES": "-34.03418971685345, 18.611322738328173",
+          "STATION": "LENTEGEUR"
+        },
+        {
+          "COORDINATES": "-34.01328895709482, 18.584421561340882",
+          "STATION": "PHILIPPI"
+        },
+        {
+          "COORDINATES": "-33.99271379632963, 18.559776951819032",
+          "STATION": "NYANGA"
+        },
+        {
+          "COORDINATES": "-33.94185049480737, 18.549579817876847",
+          "STATION": "BONTEHEUWEL"
+        },
+        {
+          "COORDINATES": "-33.938934072196076, 18.52974423065194",
+          "STATION": "LANGA"
+        },
+        {
+          "COORDINATES": "-33.92209345116931, 18.511988082500565",
+          "STATION": "MUTUAL"
+        },
+        {
+          "COORDINATES": "-33.9199022523178, 18.476775305514295",
+          "STATION": "YSTERPLAAT"
+        },
+        {
+          "COORDINATES": "-33.923640784366874, 18.446037955514498",
+          "STATION": "ESPLANADE"
+        },
+        {
+          "COORDINATES": "-33.93964476336891, 18.490635019900687",
+          "STATION": "PINELANDS"
+        },
+        {
+          "COORDINATES": "-33.928548273196824, 18.495159894144553",
+          "STATION": "NDABENI"
+        },
+        {
+          "COORDINATES": "-33.92465193392986, 18.487001988940953",
+          "STATION": "MAITLAND"
+        },
+        {
+          "COORDINATES": "-33.92570961024241, 18.47887742815667",
+          "STATION": "KOEBERG RD"
+        },
+        {
+          "COORDINATES": "-33.92754558428959, 18.464689555116372",
+          "STATION": "SALT RIVER"
+        },
+        {
+          "COORDINATES": "-33.925058308184404, 18.44613913370814",
+          "STATION": "WOODSTOCK"
+        },
+        {
+          "COORDINATES": "-33.92363127060243, 18.42718648501388",
+          "STATION": "CAPE TOWN"
+        }
+      ],
+      "nolu_to_ct_pub_meta": "Unspecified",
+      "nolu_to_ct_pub_zone": "Z2",
+      "rtret_to_ct_pub": [
+        {
+          "STATION": "Last Updated: UNSPECIFIED"
+        },
+        {
+          "0500": "6:20:00",
+          "0502": "6:50:00",
+          "0504": "8:00:00",
+          "0506": "8:40:00",
+          "0508": "9:40:00",
+          "0510": "10:20:00",
+          "0512": "11:20:00",
+          "0514": "12:20:00",
+          "0516": "13:20:00",
+          "0518": "14:20:00",
+          "0520": "15:10:00",
+          "0522": "16:00:00",
+          "COORDINATES": "-34.05973193768172, 18.463112424714808",
+          "STATION": "RETREAT"
+        },
+        {
+          "0500": "6:23:00",
+          "0502": "6:53:00",
+          "0504": "8:03:00",
+          "0506": "8:43:00",
+          "0508": "9:43:00",
+          "0510": "10:23:00",
+          "0512": "11:23:00",
+          "0514": "12:23:00",
+          "0516": "13:23:00",
+          "0518": "14:23:00",
+          "0520": "15:13:00",
+          "0522": "16:03:00",
+          "COORDINATES": "-34.04591101137236, 18.465287145466693",
+          "STATION": "HEATHFIELD"
+        },
+        {
+          "0500": "6:26:00",
+          "0502": "6:56:00",
+          "0504": "8:06:00",
+          "0506": "8:46:00",
+          "0508": "9:46:00",
+          "0510": "10:26:00",
+          "0512": "11:26:00",
+          "0514": "12:26:00",
+          "0516": "13:26:00",
+          "0518": "14:26:00",
+          "0520": "15:16:00",
+          "0522": "16:06:00",
+          "COORDINATES": "-34.0328559622752, 18.481922097506832",
+          "STATION": "SOUTHFIELD"
+        },
+        {
+          "0500": "6:29:00",
+          "0502": "6:59:00",
+          "0504": "8:09:00",
+          "0506": "8:49:00",
+          "0508": "9:49:00",
+          "0510": "10:29:00",
+          "0512": "11:29:00",
+          "0514": "12:29:00",
+          "0516": "13:29:00",
+          "0518": "14:29:00",
+          "0520": "15:19:00",
+          "0522": "16:09:00",
+          "COORDINATES": "-34.01338244383532, 18.495063044196876",
+          "STATION": "OTTERY"
+        },
+        {
+          "0500": "6:32:00",
+          "0502": "7:02:00",
+          "0504": "8:12:00",
+          "0506": "8:52:00",
+          "0508": "9:52:00",
+          "0510": "10:32:00",
+          "0512": "11:32:00",
+          "0514": "12:32:00",
+          "0516": "13:32:00",
+          "0518": "14:32:00",
+          "0520": "15:22:00",
+          "0522": "16:12:00",
+          "COORDINATES": "-34.00198092036942, 18.501121431579975",
+          "STATION": "WETTON"
+        },
+        {
+          "0500": "6:34:00",
+          "0502": "7:04:00",
+          "0504": "8:14:00",
+          "0506": "8:54:00",
+          "0508": "9:54:00",
+          "0510": "10:34:00",
+          "0512": "11:34:00",
+          "0514": "12:34:00",
+          "0516": "13:34:00",
+          "0518": "14:34:00",
+          "0520": "15:24:00",
+          "0522": "16:14:00",
+          "COORDINATES": "-33.987612457591645, 18.503826638830287",
+          "STATION": "LANSDOWNE"
+        },
+        {
+          "0500": "6:36:00",
+          "0502": "7:06:00",
+          "0504": "8:16:00",
+          "0506": "8:56:00",
+          "0508": "9:56:00",
+          "0510": "10:36:00",
+          "0512": "11:36:00",
+          "0514": "12:36:00",
+          "0516": "13:36:00",
+          "0518": "14:36:00",
+          "0520": "15:26:00",
+          "0522": "16:16:00",
+          "COORDINATES": "-33.9763722999728, 18.501211364161737",
+          "STATION": "CRAWFORD"
+        },
+        {
+          "0500": "6:39:00",
+          "0502": "7:09:00",
+          "0504": "8:19:00",
+          "0506": "8:59:00",
+          "0508": "9:59:00",
+          "0510": "10:39:00",
+          "0512": "11:39:00",
+          "0514": "12:39:00",
+          "0516": "13:39:00",
+          "0518": "14:39:00",
+          "0520": "15:29:00",
+          "0522": "16:19:00",
+          "COORDINATES": "-33.962698295518024, 18.50155837334863",
+          "STATION": "ATHLONE"
+        },
+        {
+          "0500": "6:41:00",
+          "0502": "7:11:00",
+          "0504": "8:21:00",
+          "0506": "9:01:00",
+          "0508": "10:01:00",
+          "0510": "10:41:00",
+          "0512": "11:41:00",
+          "0514": "12:41:00",
+          "0516": "13:41:00",
+          "0518": "14:41:00",
+          "0520": "15:31:00",
+          "0522": "16:21:00",
+          "COORDINATES": "-33.95312997367514, 18.50245242483087",
+          "STATION": "HAZENDAL"
+        },
+        {
+          "0500": "6:44:00",
+          "0502": "7:14:00",
+          "0504": "8:24:00",
+          "0506": "9:04:00",
+          "0508": "10:04:00",
+          "0510": "10:44:00",
+          "0512": "11:44:00",
+          "0514": "12:44:00",
+          "0516": "13:44:00",
+          "0518": "14:44:00",
+          "0520": "15:34:00",
+          "0522": "16:24:00",
+          "COORDINATES": "-33.93963837429042, 18.490628305900564",
+          "STATION": "PINELANDS"
+        },
+        {
+          "0500": "6:46:00",
+          "0502": "7:16:00",
+          "0504": "8:26:00",
+          "0506": "9:06:00",
+          "0508": "10:06:00",
+          "0510": "10:46:00",
+          "0512": "11:46:00",
+          "0514": "12:46:00",
+          "0516": "13:46:00",
+          "0518": "14:46:00",
+          "0520": "15:36:00",
+          "0522": "16:26:00",
+          "COORDINATES": "-33.9285724435786, 18.495175305274607",
+          "STATION": "NDABENI"
+        },
+        {
+          "0500": "6:49:00",
+          "0502": "7:19:00",
+          "0504": "8:29:00",
+          "0506": "9:09:00",
+          "0508": "10:09:00",
+          "0510": "10:49:00",
+          "0512": "11:49:00",
+          "0514": "12:49:00",
+          "0516": "13:49:00",
+          "0518": "14:49:00",
+          "0520": "15:39:00",
+          "0522": "16:29:00",
+          "COORDINATES": "-33.92457627299822, 18.487001076360375",
+          "STATION": "MAITLAND"
+        },
+        {
+          "0500": "6:51:00",
+          "0502": "7:21:00",
+          "0504": "8:31:00",
+          "0506": "9:11:00",
+          "0508": "10:11:00",
+          "0510": "10:51:00",
+          "0512": "11:51:00",
+          "0514": "12:51:00",
+          "0516": "13:51:00",
+          "0518": "14:51:00",
+          "0520": "15:41:00",
+          "0522": "16:31:00",
+          "COORDINATES": "-33.925709848130694, 18.478846676639503",
+          "STATION": "KOEBERG RD"
+        },
+        {
+          "0500": "6:53:00",
+          "0502": "7:23:00",
+          "0504": "8:33:00",
+          "0506": "9:13:00",
+          "0508": "10:13:00",
+          "0510": "10:53:00",
+          "0512": "11:53:00",
+          "0514": "12:53:00",
+          "0516": "13:53:00",
+          "0518": "14:53:00",
+          "0520": "15:43:00",
+          "0522": "16:33:00",
+          "COORDINATES": "-33.92754784267079, 18.464689103688738",
+          "STATION": "SALT RIVER"
+        },
+        {
+          "0500": "6:57:00",
+          "0502": "7:27:00",
+          "0504": "8:37:00",
+          "0506": "9:17:00",
+          "0508": "10:17:00",
+          "0510": "10:57:00",
+          "0512": "11:57:00",
+          "0514": "12:57:00",
+          "0516": "13:57:00",
+          "0518": "14:57:00",
+          "0520": "15:47:00",
+          "0522": "16:37:00",
+          "COORDINATES": "-33.925091518292604, 18.44613476001006",
+          "STATION": "WOODSTOCK"
+        },
+        {
+          "0500": "7:00:00",
+          "0502": "7:30:00",
+          "0504": "8:40:00",
+          "0506": "9:20:00",
+          "0508": "10:20:00",
+          "0510": "11:00:00",
+          "0512": "12:00:00",
+          "0514": "13:00:00",
+          "0516": "14:00:00",
+          "0518": "15:00:00",
+          "0520": "15:50:00",
+          "0522": "16:40:00",
+          "COORDINATES": "-33.92364274076298, 18.427186832421853",
+          "STATION": "CAPE TOWN"
+        }
+      ],
+      "rtret_to_ct_pub_columnOrder": [
+        "0500",
+        "0502",
+        "0504",
+        "0506",
+        "0508",
+        "0510",
+        "0512",
+        "0514",
+        "0516",
+        "0518",
+        "0520",
+        "0522"
+      ],
+      "rtret_to_ct_pub_meta": "UNSPECIFIED",
+      "rtret_to_ct_pub_zone": "Z2",
+      "simon_to_ct_pub": [
+        {
+          "STATION": "Last Updated: Unspecified"
+        },
+        {
+          "0102": "5:30:00",
+          "0106": "7:10:00",
+          "0112": "8:40:00",
+          "0116": "10:10:00",
+          "0118": "11:33:00",
+          "0124": "14:33:00",
+          "0128": "16:05:00",
+          "COORDINATES": "-34.186868345433396, 18.425371636416305",
+          "STATION": "SIMON'S TOWN"
+        },
+        {
+          "0102": "5:36:00",
+          "0106": "7:16:00",
+          "0112": "8:46:00",
+          "0116": "10:16:00",
+          "0118": "11:39:00",
+          "0124": "14:39:00",
+          "0128": "16:11:00",
+          "COORDINATES": "-34.16389898121592, 18.432040103477185",
+          "STATION": "GLENCAIRN"
+        },
+        {
+          "0102": "5:45:00",
+          "0106": "7:25:00",
+          "0112": "8:55:00",
+          "0116": "10:25:00",
+          "0118": "11:48:00",
+          "0124": "14:48:00",
+          "0128": "16:20:00",
+          "COORDINATES": "-34.144478065934095, 18.437248458279786",
+          "STATION": "SUNNY COVE"
+        },
+        {
+          "0100": "5:30:00",
+          "0102": "5:50:00",
+          "0104": "6:40:00",
+          "0106": "7:30:00",
+          "0108": "7:50:00",
+          "0110": "8:30:00",
+          "0112": "9:00:00",
+          "0114": "10:00:00",
+          "0116": "10:30:00",
+          "0118": "11:53:00",
+          "0120": "13:00:00",
+          "0122": "14:00:00",
+          "0124": "14:53:00",
+          "0126": "15:30:00",
+          "0128": "16:25:00",
+          "0130": "16:50:00",
+          "0132": "17:10:00",
+          "COORDINATES": "-34.13718666701449, 18.43231551625473",
+          "STATION": "FISH HOEK"
+        },
+        {
+          "0100": "5:34:00",
+          "0102": "5:54:00",
+          "0104": "6:44:00",
+          "0106": "7:34:00",
+          "0108": "7:54:00",
+          "0110": "8:34:00",
+          "0112": "9:04:00",
+          "0114": "10:04:00",
+          "0116": "10:34:00",
+          "0118": "11:57:00",
+          "0120": "13:04:00",
+          "0122": "14:04:00",
+          "0124": "14:57:00",
+          "0126": "15:34:00",
+          "0128": "16:29:00",
+          "0130": "16:54:00",
+          "0132": "17:14:00",
+          "COORDINATES": "-34.12616436238219, 18.44995365667087",
+          "STATION": "KALK BAY"
+        },
+        {
+          "0100": "5:36:00",
+          "0102": "5:56:00",
+          "0104": "6:46:00",
+          "0106": "7:36:00",
+          "0108": "7:56:00",
+          "0110": "8:36:00",
+          "0112": "9:06:00",
+          "0114": "10:06:00",
+          "0116": "10:36:00",
+          "0118": "11:59:00",
+          "0120": "13:06:00",
+          "0122": "14:06:00",
+          "0124": "14:59:00",
+          "0126": "15:36:00",
+          "0128": "16:31:00",
+          "0130": "16:56:00",
+          "0132": "17:16:00",
+          "COORDINATES": "-34.11912861624361, 18.458322695803325",
+          "STATION": "ST JAMES"
+        },
+        {
+          "0100": "5:39:00",
+          "0102": "5:59:00",
+          "0104": "6:49:00",
+          "0106": "7:39:00",
+          "0108": "7:59:00",
+          "0110": "8:39:00",
+          "0112": "9:09:00",
+          "0114": "10:09:00",
+          "0116": "10:39:00",
+          "0118": "12:02:00",
+          "0120": "13:09:00",
+          "0122": "14:09:00",
+          "0124": "15:02:00",
+          "0126": "15:39:00",
+          "0128": "16:34:00",
+          "0130": "16:59:00",
+          "0132": "17:19:00",
+          "COORDINATES": "-34.109625875192556, 18.46795994312989",
+          "STATION": "MUIZENBERG"
+        },
+        {
+          "0100": "5:41:00",
+          "0102": "6:01:00",
+          "0104": "6:51:00",
+          "0106": "7:41:00",
+          "0108": "8:01:00",
+          "0110": "8:41:00",
+          "0112": "9:11:00",
+          "0114": "10:11:00",
+          "0116": "10:41:00",
+          "0118": "12:04:00",
+          "0120": "13:11:00",
+          "0122": "14:11:00",
+          "0124": "15:04:00",
+          "0126": "15:41:00",
+          "0128": "16:36:00",
+          "0130": "17:01:00",
+          "0132": "17:21:00",
+          "COORDINATES": "-34.10248327888581, 18.468681718650828",
+          "STATION": "FALSE BAY"
+        },
+        {
+          "0100": "5:43:00",
+          "0102": "6:03:00",
+          "0104": "6:53:00",
+          "0106": "7:43:00",
+          "0108": "8:03:00",
+          "0110": "8:43:00",
+          "0112": "9:13:00",
+          "0114": "10:13:00",
+          "0116": "10:43:00",
+          "0118": "12:06:00",
+          "0120": "13:13:00",
+          "0122": "14:13:00",
+          "0124": "15:06:00",
+          "0126": "15:43:00",
+          "0128": "16:38:00",
+          "0130": "17:03:00",
+          "0132": "17:23:00",
+          "COORDINATES": "-34.088438485802136, 18.46247303625622",
+          "STATION": "LAKESIDE"
+        },
+        {
+          "0100": "5:45:00",
+          "0102": "6:05:00",
+          "0104": "6:55:00",
+          "0106": "7:45:00",
+          "0108": "8:05:00",
+          "0110": "8:45:00",
+          "0112": "9:15:00",
+          "0114": "10:15:00",
+          "0116": "10:45:00",
+          "0118": "12:08:00",
+          "0120": "13:15:00",
+          "0122": "14:15:00",
+          "0124": "15:08:00",
+          "0126": "15:45:00",
+          "0128": "16:40:00",
+          "0130": "17:05:00",
+          "0132": "17:25:00",
+          "COORDINATES": "-34.07661752056444, 18.46365235554926",
+          "STATION": "STEENBERG"
+        },
+        {
+          "0100": "5:48:00",
+          "0102": "6:08:00",
+          "0104": "6:58:00",
+          "0106": "7:48:00",
+          "0108": "8:08:00",
+          "0110": "8:48:00",
+          "0112": "9:18:00",
+          "0114": "10:18:00",
+          "0116": "10:48:00",
+          "0118": "12:11:00",
+          "0120": "13:18:00",
+          "0122": "14:18:00",
+          "0124": "15:11:00",
+          "0126": "15:48:00",
+          "0128": "16:43:00",
+          "0130": "17:08:00",
+          "0132": "17:28:00",
+          "COORDINATES": "-34.059909390271656, 18.463013113620647",
+          "STATION": "RETREAT"
+        },
+        {
+          "0100": "5:51:00",
+          "0102": "6:11:00",
+          "0104": "7:01:00",
+          "0106": "7:51:00",
+          "0108": "8:11:00",
+          "0110": "8:51:00",
+          "0112": "9:21:00",
+          "0114": "10:21:00",
+          "0116": "10:51:00",
+          "0118": "12:14:00",
+          "0120": "13:21:00",
+          "0122": "14:21:00",
+          "0124": "15:14:00",
+          "0126": "15:51:00",
+          "0128": "16:46:00",
+          "0130": "17:11:00",
+          "0132": "17:31:00",
+          "COORDINATES": "-34.04591101137236, 18.465287145466693",
+          "STATION": "HEATHFIELD"
+        },
+        {
+          "0100": "5:54:00",
+          "0102": "6:14:00",
+          "0104": "7:04:00",
+          "0106": "7:54:00",
+          "0108": "8:14:00",
+          "0110": "8:54:00",
+          "0112": "9:24:00",
+          "0114": "10:24:00",
+          "0116": "10:54:00",
+          "0118": "12:17:00",
+          "0120": "13:24:00",
+          "0122": "14:24:00",
+          "0124": "15:17:00",
+          "0126": "15:54:00",
+          "0128": "16:49:00",
+          "0130": "17:14:00",
+          "0132": "17:34:00",
+          "COORDINATES": "-34.035257794113555, 18.467167090822233",
+          "STATION": "DIEPRIVIER"
+        },
+        {
+          "0100": "5:57:00",
+          "0102": "6:17:00",
+          "0104": "7:07:00",
+          "0106": "7:57:00",
+          "0108": "8:17:00",
+          "0110": "8:57:00",
+          "0112": "9:27:00",
+          "0114": "10:27:00",
+          "0116": "10:57:00",
+          "0118": "12:20:00",
+          "0120": "13:27:00",
+          "0122": "14:27:00",
+          "0124": "15:20:00",
+          "0126": "15:57:00",
+          "0128": "16:52:00",
+          "0130": "17:17:00",
+          "0132": "17:37:00",
+          "COORDINATES": "-34.029355189733344, 18.46885236730811",
+          "STATION": "STEURHOF"
+        },
+        {
+          "0100": "5:59:00",
+          "0102": "6:19:00",
+          "0104": "7:09:00",
+          "0106": "7:59:00",
+          "0108": "8:19:00",
+          "0110": "8:59:00",
+          "0112": "9:29:00",
+          "0114": "10:29:00",
+          "0116": "10:59:00",
+          "0118": "12:22:00",
+          "0120": "13:29:00",
+          "0122": "14:29:00",
+          "0124": "15:22:00",
+          "0126": "15:59:00",
+          "0128": "16:54:00",
+          "0130": "17:19:00",
+          "0132": "17:39:00",
+          "COORDINATES": "-34.021945461889565, 18.46957290194393",
+          "STATION": "PLUMSTEAD"
+        },
+        {
+          "0100": "6:01:00",
+          "0102": "6:21:00",
+          "0104": "7:11:00",
+          "0106": "8:01:00",
+          "0108": "8:21:00",
+          "0110": "9:01:00",
+          "0112": "9:31:00",
+          "0114": "10:31:00",
+          "0116": "11:01:00",
+          "0118": "12:24:00",
+          "0120": "13:31:00",
+          "0122": "14:31:00",
+          "0124": "15:24:00",
+          "0126": "16:01:00",
+          "0128": "16:56:00",
+          "0130": "17:21:00",
+          "0132": "17:41:00",
+          "COORDINATES": "-34.014407724869756, 18.470837241167313",
+          "STATION": "WITTEBOME"
+        },
+        {
+          "0100": "6:03:00",
+          "0102": "6:23:00",
+          "0104": "7:13:00",
+          "0106": "8:03:00",
+          "0108": "8:23:00",
+          "0110": "9:03:00",
+          "0112": "9:33:00",
+          "0114": "10:33:00",
+          "0116": "11:03:00",
+          "0118": "12:26:00",
+          "0120": "13:33:00",
+          "0122": "14:33:00",
+          "0124": "15:26:00",
+          "0126": "16:03:00",
+          "0128": "16:58:00",
+          "0130": "17:23:00",
+          "0132": "17:43:00",
+          "COORDINATES": "-34.00491103995819, 18.471179319350288",
+          "STATION": "WYNBERG"
+        },
+        {
+          "0100": "6:05:00",
+          "0102": "6:25:00",
+          "0104": "7:15:00",
+          "0106": "8:05:00",
+          "0108": "8:25:00",
+          "0110": "9:05:00",
+          "0112": "9:35:00",
+          "0114": "10:35:00",
+          "0116": "11:05:00",
+          "0118": "12:28:00",
+          "0120": "13:35:00",
+          "0122": "14:35:00",
+          "0124": "15:28:00",
+          "0126": "16:05:00",
+          "0128": "17:00:00",
+          "0130": "17:25:00",
+          "0132": "17:45:00",
+          "COORDINATES": "-33.995273860055164, 18.472962741199133",
+          "STATION": "KENILWORTH"
+        },
+        {
+          "0100": "6:07:00",
+          "0102": "6:27:00",
+          "0104": "7:17:00",
+          "0106": "8:07:00",
+          "0108": "8:27:00",
+          "0110": "9:07:00",
+          "0112": "9:37:00",
+          "0114": "10:37:00",
+          "0116": "11:07:00",
+          "0118": "12:30:00",
+          "0120": "13:37:00",
+          "0122": "14:37:00",
+          "0124": "15:30:00",
+          "0126": "16:07:00",
+          "0128": "17:02:00",
+          "0130": "17:27:00",
+          "0132": "17:47:00",
+          "COORDINATES": "-33.98843037363466, 18.471305893701135",
+          "STATION": "HARFIELD ROAD"
+        },
+        {
+          "0100": "6:09:00",
+          "0102": "6:29:00",
+          "0104": "7:19:00",
+          "0106": "8:09:00",
+          "0108": "8:29:00",
+          "0110": "9:09:00",
+          "0112": "9:39:00",
+          "0114": "10:39:00",
+          "0116": "11:09:00",
+          "0118": "12:32:00",
+          "0120": "13:39:00",
+          "0122": "14:39:00",
+          "0124": "15:32:00",
+          "0126": "16:09:00",
+          "0128": "17:04:00",
+          "0130": "17:29:00",
+          "0132": "17:49:00",
+          "COORDINATES": "-33.981692819823294, 18.467026035248768",
+          "STATION": "CLAREMONT"
+        },
+        {
+          "0100": "6:11:00",
+          "0102": "6:31:00",
+          "0104": "7:21:00",
+          "0106": "8:11:00",
+          "0108": "8:31:00",
+          "0110": "9:11:00",
+          "0112": "9:41:00",
+          "0114": "10:41:00",
+          "0116": "11:11:00",
+          "0118": "12:34:00",
+          "0120": "13:41:00",
+          "0122": "14:41:00",
+          "0124": "15:34:00",
+          "0126": "16:11:00",
+          "0128": "17:06:00",
+          "0130": "17:31:00",
+          "0132": "17:51:00",
+          "COORDINATES": "-33.974516172260806, 18.467522132826836",
+          "STATION": "NEWLANDS"
+        },
+        {
+          "0100": "6:13:00",
+          "0102": "6:33:00",
+          "0104": "7:23:00",
+          "0106": "8:13:00",
+          "0108": "8:33:00",
+          "0110": "9:13:00",
+          "0112": "9:43:00",
+          "0114": "10:43:00",
+          "0116": "11:13:00",
+          "0118": "12:36:00",
+          "0120": "13:43:00",
+          "0122": "14:43:00",
+          "0124": "15:36:00",
+          "0126": "16:13:00",
+          "0128": "17:08:00",
+          "0130": "17:33:00",
+          "0132": "17:53:00",
+          "COORDINATES": "-33.962154618762675, 18.472449011941002",
+          "STATION": "RONDEBOSCH"
+        },
+        {
+          "0100": "6:15:00",
+          "0102": "6:35:00",
+          "0104": "7:25:00",
+          "0106": "8:15:00",
+          "0108": "8:35:00",
+          "0110": "9:15:00",
+          "0112": "9:45:00",
+          "0114": "10:45:00",
+          "0116": "11:15:00",
+          "0118": "12:38:00",
+          "0120": "13:45:00",
+          "0122": "14:45:00",
+          "0124": "15:38:00",
+          "0126": "16:15:00",
+          "0128": "17:10:00",
+          "0130": "17:35:00",
+          "0132": "17:55:00",
+          "COORDINATES": "-33.95483322632044, 18.473123953446258",
+          "STATION": "ROSEBANK"
+        },
+        {
+          "0100": "6:17:00",
+          "0102": "6:37:00",
+          "0104": "7:27:00",
+          "0106": "8:17:00",
+          "0108": "8:37:00",
+          "0110": "9:17:00",
+          "0112": "9:47:00",
+          "0114": "10:47:00",
+          "0116": "11:17:00",
+          "0118": "12:40:00",
+          "0120": "13:47:00",
+          "0122": "14:47:00",
+          "0124": "15:40:00",
+          "0126": "16:17:00",
+          "0128": "17:12:00",
+          "0130": "17:37:00",
+          "0132": "17:57:00",
+          "COORDINATES": "-33.946781155732666, 18.473923102107495",
+          "STATION": "MOWBRAY"
+        },
+        {
+          "0100": "6:19:00",
+          "0102": "6:39:00",
+          "0104": "7:29:00",
+          "0106": "8:19:00",
+          "0108": "8:39:00",
+          "0110": "9:19:00",
+          "0112": "9:49:00",
+          "0114": "10:49:00",
+          "0116": "11:19:00",
+          "0118": "12:42:00",
+          "0120": "13:49:00",
+          "0122": "14:49:00",
+          "0124": "15:42:00",
+          "0126": "16:19:00",
+          "0128": "17:14:00",
+          "0130": "17:39:00",
+          "0132": "17:59:00",
+          "COORDINATES": "-33.938380813969594, 18.47150947571787",
+          "STATION": "OBSERVATORY"
+        },
+        {
+          "0100": "6:22:00",
+          "0102": "6:42:00",
+          "0104": "7:32:00",
+          "0106": "8:22:00",
+          "0108": "8:42:00",
+          "0110": "9:22:00",
+          "0112": "9:52:00",
+          "0114": "10:52:00",
+          "0116": "11:22:00",
+          "0118": "12:45:00",
+          "0120": "13:52:00",
+          "0122": "14:52:00",
+          "0124": "15:45:00",
+          "0126": "16:22:00",
+          "0128": "17:17:00",
+          "0130": "17:42:00",
+          "0132": "18:02:00",
+          "COORDINATES": "-33.92754784267079, 18.464689103688738",
+          "STATION": "SALT RIVER"
+        },
+        {
+          "0100": "6:30:00",
+          "0102": "6:50:00",
+          "0104": "7:40:00",
+          "0106": "8:30:00",
+          "0108": "8:50:00",
+          "0110": "9:30:00",
+          "0112": "10:00:00",
+          "0114": "11:00:00",
+          "0116": "11:30:00",
+          "0118": "12:53:00",
+          "0120": "14:00:00",
+          "0122": "15:00:00",
+          "0124": "15:53:00",
+          "0126": "16:30:00",
+          "0128": "17:25:00",
+          "0130": "17:50:00",
+          "0132": "18:10:00",
+          "COORDINATES": "-33.925091518292604, 18.44613476001006",
+          "STATION": "WOODSTOCK"
+        },
+        {
+          "0100": "6:33:00",
+          "0102": "6:53:00",
+          "0104": "7:43:00",
+          "0106": "8:33:00",
+          "0108": "8:53:00",
+          "0110": "9:33:00",
+          "0112": "10:03:00",
+          "0114": "11:03:00",
+          "0116": "11:33:00",
+          "0118": "12:56:00",
+          "0120": "14:03:00",
+          "0122": "15:03:00",
+          "0124": "15:56:00",
+          "0126": "16:33:00",
+          "0128": "17:28:00",
+          "0130": "17:53:00",
+          "0132": "18:13:00",
+          "COORDINATES": "-33.92364274076298, 18.427186832421853",
+          "STATION": "CAPE TOWN"
+        }
+      ],
+      "simon_to_ct_pub_columnOrder": [
+        "0100",
+        "0102",
+        "0104",
+        "0106",
+        "0108",
+        "0110",
+        "0112",
+        "0114",
+        "0116",
+        "0118",
+        "0120",
+        "0122",
+        "0124",
+        "0126",
+        "0128",
+        "0130",
+        "0132"
+      ],
+      "simon_to_ct_pub_meta": "Unspecified",
+      "simon_to_ct_pub_zone": "Z2",
+      "strnd_to_ct_pub": [
+        {
+          "STATION": "Last Updated: UNSPECIFIED"
+        },
+        {
+          "3200": "5:50:00",
+          "3202": "7:15:00",
+          "3204": "8:30:00",
+          "3206": "10:45:00",
+          "3208": "12:10:00",
+          "3210": "14:00:00",
+          "3212": "15:50:00",
+          "COORDINATES": "-34.11501400933376, 18.83241814522109",
+          "STATION": "STRAND"
+        },
+        {
+          "3200": "5:53:00",
+          "3202": "7:18:00",
+          "3204": "8:33:00",
+          "3206": "10:48:00",
+          "3208": "12:13:00",
+          "3210": "14:03:00",
+          "3212": "15:53:00",
+          "COORDINATES": "-34.09517018322416, 18.852427615633125",
+          "STATION": "VAN DER STEL"
+        },
+        {
+          "3200": "5:56:00",
+          "3202": "7:21:00",
+          "3204": "8:36:00",
+          "3206": "10:51:00",
+          "3208": "12:16:00",
+          "3210": "14:06:00",
+          "3212": "15:56:00",
+          "COORDINATES": "-34.08447978768948, 18.84218338240483",
+          "STATION": "SOMERSET WEST"
+        },
+        {
+          "3200": "6:08:00",
+          "3202": "7:33:00",
+          "3204": "8:48:00",
+          "3206": "11:03:00",
+          "3208": "12:28:00",
+          "3210": "14:18:00",
+          "3212": "16:08:00",
+          "COORDINATES": "-34.0559415632047, 18.793265006888184",
+          "STATION": "FIRGROVE"
+        },
+        {
+          "3200": "6:12:00",
+          "3202": "7:37:00",
+          "3204": "8:52:00",
+          "3206": "11:07:00",
+          "3208": "12:32:00",
+          "3210": "14:22:00",
+          "3212": "16:12:00",
+          "COORDINATES": "-34.02629322078662, 18.74703766946096",
+          "STATION": "FAURE"
+        },
+        {
+          "3200": "6:15:00",
+          "3202": "7:40:00",
+          "3204": "8:55:00",
+          "3206": "11:10:00",
+          "3208": "12:35:00",
+          "3210": "14:25:00",
+          "3212": "16:15:00",
+          "COORDINATES": "-34.00075832740343, 18.73096117658652",
+          "STATION": "EERSTE RIVER"
+        },
+        {
+          "3200": "6:21:00",
+          "3202": "7:46:00",
+          "3204": "9:01:00",
+          "3206": "11:16:00",
+          "3208": "12:41:00",
+          "3210": "14:31:00",
+          "3212": "16:21:00",
+          "COORDINATES": "-33.98901211755698, 18.72041949781896",
+          "STATION": "MELTONROSE"
+        },
+        {
+          "3200": "6:28:00",
+          "3202": "7:53:00",
+          "3204": "9:08:00",
+          "3206": "11:23:00",
+          "3208": "12:48:00",
+          "3210": "14:38:00",
+          "3212": "16:28:00",
+          "COORDINATES": "-33.9643141952728, 18.701548671843643",
+          "STATION": "BLACKHEATH"
+        },
+        {
+          "3200": "6:37:00",
+          "3202": "8:02:00",
+          "3204": "9:17:00",
+          "3206": "11:32:00",
+          "3208": "12:57:00",
+          "3210": "14:47:00",
+          "3212": "16:37:00",
+          "COORDINATES": "-33.93352364094155, 18.67754300956503",
+          "STATION": "KUILS RIVER"
+        },
+        {
+          "2500": "7:02:00",
+          "2502": "8:39:00",
+          "2504": "10:04:00",
+          "2506": "11:54:00",
+          "2508": "13:24:00",
+          "2510": "15:09:00",
+          "2512": "16:24:00",
+          "3200": "6:50:00",
+          "3202": "8:15:00",
+          "3204": "9:30:00",
+          "3206": "11:45:00",
+          "3208": "13:10:00",
+          "3210": "15:00:00",
+          "3212": "16:50:00",
+          "COORDINATES": "-33.906263459762684, 18.62662128465745",
+          "STATION": "BELLVILLE"
+        },
+        {
+          "2500": "7:09:00",
+          "2502": "8:46:00",
+          "2504": "10:11:00",
+          "2506": "12:01:00",
+          "2508": "13:31:00",
+          "2510": "15:16:00",
+          "2512": "16:31:00",
+          "COORDINATES": "-33.90746864928141, 18.601251455579924",
+          "STATION": "TYGERBERG"
+        },
+        {
+          "2500": "7:14:00",
+          "2502": "8:51:00",
+          "2504": "10:16:00",
+          "2506": "12:06:00",
+          "2508": "13:36:00",
+          "2510": "15:21:00",
+          "2512": "16:36:00",
+          "COORDINATES": "-33.90972003537582, 18.58605150487192",
+          "STATION": "PAROW"
+        },
+        {
+          "2500": "7:15:00",
+          "2502": "8:52:00",
+          "2504": "10:17:00",
+          "2506": "12:07:00",
+          "2508": "13:37:00",
+          "2510": "15:22:00",
+          "2512": "16:37:00",
+          "COORDINATES": "-33.91063655254298, 18.569073058894848",
+          "STATION": "ELSIES RIVER"
+        },
+        {
+          "2500": "7:19:00",
+          "2502": "8:56:00",
+          "2504": "10:21:00",
+          "2506": "12:11:00",
+          "2508": "13:41:00",
+          "2510": "15:26:00",
+          "2512": "16:41:00",
+          "COORDINATES": "-33.910963456351396, 18.558511811261425",
+          "STATION": "VASCO"
+        },
+        {
+          "2500": "7:22:00",
+          "2502": "8:59:00",
+          "2504": "10:24:00",
+          "2506": "12:14:00",
+          "2508": "13:44:00",
+          "2510": "15:29:00",
+          "2512": "16:44:00",
+          "COORDINATES": "-33.91452357725314, 18.547135062452178",
+          "STATION": "GOODWOOD"
+        },
+        {
+          "2500": "7:27:00",
+          "2502": "9:04:00",
+          "2504": "10:29:00",
+          "2506": "12:19:00",
+          "2508": "13:49:00",
+          "2510": "15:34:00",
+          "2512": "16:49:00",
+          "COORDINATES": "-33.91899825858434, 18.532372608746943",
+          "STATION": "THORNTON"
+        },
+        {
+          "2500": "7:34:00",
+          "2502": "9:11:00",
+          "2504": "10:36:00",
+          "2506": "12:26:00",
+          "2508": "13:56:00",
+          "2510": "15:41:00",
+          "2512": "16:56:00",
+          "COORDINATES": "-33.92209345116931, 18.511988082500565",
+          "STATION": "MUTUAL"
+        },
+        {
+          "2500": "7:38:00",
+          "2502": "9:15:00",
+          "2504": "10:40:00",
+          "2506": "12:30:00",
+          "2508": "14:00:00",
+          "2510": "15:45:00",
+          "2512": "17:00:00",
+          "COORDINATES": "-33.92465193392986, 18.487001988940953",
+          "STATION": "MAITLAND"
+        },
+        {
+          "2500": "7:41:00",
+          "2502": "9:18:00",
+          "2504": "10:43:00",
+          "2506": "12:33:00",
+          "2508": "14:03:00",
+          "2510": "15:48:00",
+          "2512": "17:03:00",
+          "COORDINATES": "-33.92570961024241, 18.47887742815667",
+          "STATION": "KOEBERG RD"
+        },
+        {
+          "2500": "7:43:00",
+          "2502": "9:20:00",
+          "2504": "10:45:00",
+          "2506": "12:35:00",
+          "2508": "14:05:00",
+          "2510": "15:50:00",
+          "2512": "17:05:00",
+          "COORDINATES": "-33.92754558428959, 18.464689555116372",
+          "STATION": "SALT RIVER"
+        },
+        {
+          "2500": "7:47:00",
+          "2502": "9:24:00",
+          "2504": "10:49:00",
+          "2506": "12:39:00",
+          "2508": "14:09:00",
+          "2510": "15:54:00",
+          "2512": "17:09:00",
+          "COORDINATES": "-33.925058308184404, 18.44613913370814",
+          "STATION": "WOODSTOCK"
+        },
+        {
+          "2500": "7:52:00",
+          "2502": "9:29:00",
+          "2504": "10:54:00",
+          "2506": "12:44:00",
+          "2508": "14:14:00",
+          "2510": "15:59:00",
+          "2512": "17:14:00",
+          "COORDINATES": "-33.92363127060243, 18.42718648501388",
+          "STATION": "CAPE TOWN"
+        }
+      ],
+      "strnd_to_ct_pub_columnOrder": [
+        "3200",
+        "2500",
+        "3202",
+        "2502",
+        "3204",
+        "2504",
+        "3206",
+        "2506",
+        "3208",
+        "2508",
+        "3210",
+        "2510",
+        "3212",
+        "2512"
+      ],
+      "strnd_to_ct_pub_meta": "UNSPECIFIED",
+      "strnd_to_ct_pub_zone": "Z3",
+      "well_to_ct_pub": [
+        {
+          "STATION": "Last Updated: UNSPECIFIED"
+        },
+        {
+          "COORDINATES": "-33.634617793572524, 18.991778229234328",
+          "STATION": "WELLINGTON"
+        },
+        {
+          "COORDINATES": "-33.6745835750923, 18.98548912089934",
+          "STATION": "MBEKWENI"
+        },
+        {
+          "COORDINATES": "-33.70729186118812, 18.97995087065291",
+          "STATION": "DAL JOSAFAT"
+        },
+        {
+          "COORDINATES": "-33.72990864160102, 18.976547324806557",
+          "STATION": "HUGUENOT"
+        },
+        {
+          "COORDINATES": "-33.7651495544123, 18.964509229033844",
+          "STATION": "PAARL"
+        },
+        {
+          "COORDINATES": "-33.80603693098734, 18.870194550736368",
+          "STATION": "KLAPMUTS"
+        },
+        {
+          "COORDINATES": "-33.830997060529654, 18.828140321428084",
+          "STATION": "MULDERSVLEI"
+        },
+        {
+          "COORDINATES": "-33.84688758182714, 18.724423652533385",
+          "STATION": "KRAAIFONTEIN"
+        },
+        {
+          "COORDINATES": "-33.857150054357206, 18.71115937457518",
+          "STATION": "EIKENFONTEIN"
+        },
+        {
+          "COORDINATES": "-33.880926996885385, 18.68869797254891",
+          "STATION": "BRACKENFELL"
+        },
+        {
+          "COORDINATES": "-33.9047695247263, 18.656536260281065",
+          "STATION": "STIKLAND"
+        },
+        {
+          "COORDINATES": "-33.92370031736484, 18.854173801274253",
+          "STATION": "MULDERSVLEI"
+        },
+        {
+          "COORDINATES": "-33.938838693814446, 18.84974494856104",
+          "STATION": "KOELENHOF"
+        },
+        {
+          "COORDINATES": "-33.962118874611896, 18.79993852483128",
+          "STATION": "DU TOIT"
+        },
+        {
+          "COORDINATES": "-33.981135182294715, 18.771482767776543",
+          "STATION": "STELLENBOSCH"
+        },
+        {
+          "COORDINATES": "-34.11501400933376, 18.83241814522109",
+          "STATION": "VLOTTENBURG"
+        },
+        {
+          "COORDINATES": "-34.09517018322416, 18.852427615633125",
+          "STATION": "LYNEDOCH"
+        },
+        {
+          "COORDINATES": "-34.08447978768948, 18.84218338240483",
+          "STATION": "STRAND"
+        },
+        {
+          "COORDINATES": "-34.0559415632047, 18.793265006888184",
+          "STATION": "VAN DER STEL"
+        },
+        {
+          "COORDINATES": "-34.02629322078662, 18.74703766946096",
+          "STATION": "SOMERSET WEST"
+        },
+        {
+          "COORDINATES": "-34.00075832740343, 18.73096117658652",
+          "STATION": "FAURE"
+        },
+        {
+          "COORDINATES": "-33.98901211755698, 18.72041949781896",
+          "STATION": "EERSTE RIVER"
+        },
+        {
+          "COORDINATES": "-33.9643141952728, 18.701548671843643",
+          "STATION": "MELTONROSE"
+        },
+        {
+          "COORDINATES": "-33.93352364094155, 18.67754300956503",
+          "STATION": "BLACKHEATH"
+        },
+        {
+          "COORDINATES": "-33.906263459762684, 18.62662128465745",
+          "STATION": "KUILS RIVER"
+        },
+        {
+          "COORDINATES": "-33.90746864928141, 18.601251455579924",
+          "STATION": "BELLVILLE"
+        },
+        {
+          "COORDINATES": "-33.90972003537582, 18.58605150487192",
+          "STATION": "TYGERBERG"
+        },
+        {
+          "COORDINATES": "-33.91063655254298, 18.569073058894848",
+          "STATION": "PAROW"
+        },
+        {
+          "COORDINATES": "-33.910963456351396, 18.558511811261425",
+          "STATION": "ELSIES RIVER"
+        },
+        {
+          "COORDINATES": "-33.91452357725314, 18.547135062452178",
+          "STATION": "VASCO"
+        },
+        {
+          "COORDINATES": "-33.91899825858434, 18.532372608746943",
+          "STATION": "GOODWOOD"
+        },
+        {
+          "COORDINATES": "-33.92209345116931, 18.511988082500565",
+          "STATION": "THORNTON"
+        },
+        {
+          "COORDINATES": "-33.92219529219735, 18.507010581735287",
+          "STATION": "MUTUAL"
+        },
+        {
+          "COORDINATES": "-33.92465193392986, 18.487001988940953",
+          "STATION": "MAITLAND"
+        },
+        {
+          "COORDINATES": "-33.92570961024241, 18.47887742815667",
+          "STATION": "KOEBERG RD"
+        },
+        {
+          "COORDINATES": "-33.92754558428959, 18.464689555116372",
+          "STATION": "SALT RIVER"
+        },
+        {
+          "COORDINATES": "-33.925058308184404, 18.44613913370814",
+          "STATION": "WOODSTOCK"
+        },
+        {
+          "COORDINATES": "-33.92363127060243, 18.42718648501388",
+          "STATION": "CAPE TOWN"
+        }
+      ],
+      "well_to_ct_pub_meta": "UNSPECIFIED",
+      "well_to_ct_pub_zone": "Z3"
+    },
     "rtret_to_ct_sat": [
       {
         "STATION": "Last Updated: 23 February 2024"
@@ -47526,137 +53165,175 @@
       {
         "3500": "4:50:00",
         "3504": "9:05:00",
+        "COORDINATES": "-33.634617793572524, 18.991778229234328",
         "STATION": "WELLINGTON"
       },
       {
         "3500": "5:03:00",
         "3504": "9:18:00",
+        "COORDINATES": "-33.6745835750923, 18.98548912089934",
         "STATION": "MBEKWENI"
       },
       {
         "3500": "5:12:15",
         "3504": "9:27:15",
+        "COORDINATES": "-33.70729186118812, 18.97995087065291",
         "STATION": "DAL JOSAFAT"
       },
       {
         "3500": "5:18:00",
         "3504": "9:33:00",
+        "COORDINATES": "-33.72990864160102, 18.976547324806557",
         "STATION": "HUGUENOT"
       },
       {
         "3500": "5:28:45",
         "3504": "9:43:45",
+        "COORDINATES": "-33.7651495544123, 18.964509229033844",
         "STATION": "PAARL"
       },
       {
         "3500": "5:43:45",
         "3504": "9:58:45",
+        "COORDINATES": "-33.80603693098734, 18.870194550736368",
         "STATION": "KLAPMUTS"
       },
       {
         "3500": "5:58:30",
         "3504": "10:13:30",
+        "COORDINATES": "-33.830997060529654, 18.828140321428084",
         "STATION": "MULDERSVLEI"
       },
       {
         "3500": "6:10:00",
         "3504": "10:25:00",
+        "COORDINATES": "-33.84688758182714, 18.724423652533385",
         "STATION": "KRAAIFONTEIN"
       },
       {
         "3500": "6:16:00",
         "3504": "10:31:00",
+        "COORDINATES": "-33.857150054357206, 18.71115937457518",
         "STATION": "EIKENFONTEIN"
       },
       {
         "3500": "6:21:30",
         "3504": "10:36:00",
+        "COORDINATES": "-33.880926996885385, 18.68869797254891",
         "STATION": "BRACKENFELL"
       },
       {
         "3500": "6:29:00",
         "3504": "10:44:00",
+        "COORDINATES": "-33.9047695247263, 18.656536260281065",
         "STATION": "STIKLAND"
       },
       {
+        "COORDINATES": "-33.92370031736484, 18.854173801274253",
         "STATION": "MULDERSVLEI"
       },
       {
+        "COORDINATES": "-33.938838693814446, 18.84974494856104",
         "STATION": "KOELENHOF"
       },
       {
+        "COORDINATES": "-33.962118874611896, 18.79993852483128",
         "STATION": "DU TOIT"
       },
       {
+        "COORDINATES": "-33.981135182294715, 18.771482767776543",
         "STATION": "STELLENBOSCH"
       },
       {
+        "COORDINATES": "-34.11501400933376, 18.83241814522109",
         "STATION": "VLOTTENBURG"
       },
       {
+        "COORDINATES": "-34.09517018322416, 18.852427615633125",
         "STATION": "LYNEDOCH"
       },
       {
+        "COORDINATES": "-34.08447978768948, 18.84218338240483",
         "STATION": "STRAND"
       },
       {
+        "COORDINATES": "-34.0559415632047, 18.793265006888184",
         "STATION": "VAN DER STEL"
       },
       {
+        "COORDINATES": "-34.02629322078662, 18.74703766946096",
         "STATION": "SOMERSET WEST"
       },
       {
+        "COORDINATES": "-34.00075832740343, 18.73096117658652",
         "STATION": "FAURE"
       },
       {
+        "COORDINATES": "-33.98901211755698, 18.72041949781896",
         "STATION": "EERSTE RIVER"
       },
       {
+        "COORDINATES": "-33.9643141952728, 18.701548671843643",
         "STATION": "MELTONROSE"
       },
       {
+        "COORDINATES": "-33.93352364094155, 18.67754300956503",
         "STATION": "BLACKHEATH"
       },
       {
+        "COORDINATES": "-33.906263459762684, 18.62662128465745",
         "STATION": "KUILS RIVER"
       },
       {
+        "COORDINATES": "-33.90746864928141, 18.601251455579924",
         "STATION": "BELLVILLE"
       },
       {
+        "COORDINATES": "-33.90972003537582, 18.58605150487192",
         "STATION": "TYGERBERG"
       },
       {
+        "COORDINATES": "-33.91063655254298, 18.569073058894848",
         "STATION": "PAROW"
       },
       {
+        "COORDINATES": "-33.910963456351396, 18.558511811261425",
         "STATION": "ELSIES RIVER"
       },
       {
+        "COORDINATES": "-33.91452357725314, 18.547135062452178",
         "STATION": "VASCO"
       },
       {
+        "COORDINATES": "-33.91899825858434, 18.532372608746943",
         "STATION": "GOODWOOD"
       },
       {
+        "COORDINATES": "-33.92209345116931, 18.511988082500565",
         "STATION": "THORNTON"
       },
       {
+        "COORDINATES": "-33.92219529219735, 18.507010581735287",
         "STATION": "MUTUAL"
       },
       {
+        "COORDINATES": "-33.92465193392986, 18.487001988940953",
         "STATION": "MAITLAND"
       },
       {
+        "COORDINATES": "-33.92570961024241, 18.47887742815667",
         "STATION": "KOEBERG RD"
       },
       {
+        "COORDINATES": "-33.92754558428959, 18.464689555116372",
         "STATION": "SALT RIVER"
       },
       {
+        "COORDINATES": "-33.925058308184404, 18.44613913370814",
         "STATION": "WOODSTOCK"
       },
       {
+        "COORDINATES": "-33.92363127060243, 18.42718648501388",
         "STATION": "CAPE TOWN"
       }
     ],

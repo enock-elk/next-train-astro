@@ -1,6 +1,6 @@
 {
   "branch": "map-gold",
-  "frozenAt": "b7328ca04618438a5e57812eaf29e7d48ce0d980",
+  "frozenAt": "39a3aef6f5a12cf646d78d4b051a542c2b69ea3d",
   "version": "V9_09.20.11",
   "note": "Gold snapshot of this build: Leaflet splits kzn-bridgecity at Duff's Road into Berea Road to kwaMashu and Berea Road to Bridge City. Diff against origin/map-gold. Fast-forward map-gold after this lands on main. Never force-push map-gold.",
   "files": {

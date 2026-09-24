@@ -1141,6 +1141,17 @@ function getPlannerHolidayContext() {
     };
 }
 
+/** Day the commuter is planning, for copy that must not always say Saturday. */
+function plannerSearchDayLabel() {
+    const holiday = getPlannerHolidayContext();
+    const day = selectedPlannerDay || getCurrentDayType();
+    if (holiday?.name && (day === 'public_holiday' || day === 'saturday' || !selectedPlannerDay)) return holiday.name;
+    if (day === 'public_holiday') return 'Public Holiday';
+    if (day === 'saturday') return 'Saturday';
+    if (day === 'sunday') return 'Sunday';
+    return 'Weekdays';
+}
+
 /**
  * Shared planner results notice — one layout, tone-driven colour.
  * Tones: schedule | critical | warning | layover
@@ -2146,7 +2157,8 @@ export function extractTripCoordinates(tripIndex) {
         path: coordinates,        
         stationNames: stationNames, 
         validStops: validStops,   
-        globalDisruptions: $globalDisruptions.get() || {} 
+        globalDisruptions: $globalDisruptions.get() || {},
+        trip,
     };
 
     if (typeof trackAnalyticsEvent === 'function') {
@@ -2361,6 +2373,9 @@ export async function openTripMapRenderer(routeData) {
             const stationPath = drawStops
                 .map((s) => [s.lat, s.lon])
                 .filter((p) => p && p.length === 2 && !isNaN(p[0]) && !isNaN(p[1]));
+            if (routeData.trip && routeData.tripKm == null) {
+                try { routeData.tripKm = await getSmoothTripDistanceKm(routeData.trip); } catch { /* subtitle omits km */ }
+            }
             let drawPath = stationPath;
             try {
                 const smoothed = await smoothPathFromStops(drawStops, region);
@@ -2392,7 +2407,8 @@ export async function openTripMapRenderer(routeData) {
                 const subTitleEl = document.getElementById('trip-map-subtitle');
                 if (subTitleEl) {
                     const stopCount = currentValidStops.length || stationPath.length;
-                    subTitleEl.textContent = `${stopCount} stops along route`;
+                    const kmText = routeData.tripKm != null ? ` * ${routeData.tripKm} km` : '';
+                    subTitleEl.textContent = `${stopCount} stops along route${kmText}`;
                 }
 
                 if (currentPath.length === 0) return null;
@@ -2473,9 +2489,13 @@ export async function openTripMapRenderer(routeData) {
                     };
                     Object.values(activeDisruptions).flat().forEach((d) => {
                         if (!d || drawnIds.has(d.id) || !d.stations || d.stations.length === 0) return;
+                        const normStationsEarly = d.stations.map((s) => normalizeStationName(s));
+                        const namedOnTrip = (normName) => currentValidStops.some((vs) => normalizeStationName(vs.name) === normName);
+                        const bothStopsOnTrip = normStationsEarly.length >= 2 && normStationsEarly.slice(0, 2).every(namedOnTrip);
                         // Empty allow-set used to paint every global cut onto this polyline
                         // (Olifantsfontein–Kempton Park snapping onto Pretoria–Rissik).
-                        if (!allowedDisrIds.has(d.id)) return;
+                        // A cut whose two stations are actually on this trip still draws.
+                        if (!allowedDisrIds.has(d.id) && !bothStopsOnTrip) return;
                         const normStations = d.stations.map((s) => normalizeStationName(s));
                         const isCritical = d.tier === 'CRITICAL';
                         const color = isCritical ? '#ef4444' : '#eab308';
@@ -4749,6 +4769,7 @@ export function executeTripPlan(origin, dest, preferredTime = null) {
             let errorTitle = "No Valid Route";
             let errorMsg = "";
             let showFeedbackBtn = false;
+            let showReplyBtn = false;
             let errorTone = 'warn';
             const cleanO = origin.replace(/ STATION/gi, '').trim();
             const cleanD = dest.replace(/ STATION/gi, '').trim();
@@ -4766,12 +4787,14 @@ export function executeTripPlan(origin, dest, preferredTime = null) {
                     errorTone = 'info';
                     errorMsg = `<p class="text-sm text-gray-600 dark:text-gray-300 leading-relaxed">Next Train routes within one province network at a time. Choose stations in the same region.</p>`;
                     break;
-                case 'ERR_NO_SERVICE_TODAY':
-                    errorTitle = "No service today";
-                    errorMsg = (selectedPlannerDay === 'saturday' || selectedPlannerDay === 'public_holiday')
-                        ? `<p class="text-sm text-gray-600 dark:text-gray-300 leading-relaxed">These stations connect on the map, but no trains run on this corridor for the selected day. Try the next weekday.</p>`
-                        : `<p class="text-sm text-gray-600 dark:text-gray-300 leading-relaxed">These stations connect on the map, but no trains run on this corridor for the selected day. Try Saturday / Holiday or the next weekday.</p>`;
+                case 'ERR_NO_SERVICE_TODAY': {
+                    errorTitle = "No timetable match";
+                    errorTone = 'warn';
+                    const dayLabel = escapeHTML(plannerSearchDayLabel());
+                    errorMsg = `<p class="text-sm text-gray-600 dark:text-gray-300 leading-relaxed">We could not find this trip in the timetables we have for ${dayLabel}. If you can make this trip on ${dayLabel}, reply below and share the timetable, or explain how you do it. You can also check the network map for cancellations.</p>`;
+                    showReplyBtn = true;
                     break;
+                }
                 case 'ERR_NO_SATURDAY_SERVICE': {
                     errorTitle = "No weekend service";
                     errorTone = 'danger';
@@ -4895,11 +4918,17 @@ export function executeTripPlan(origin, dest, preferredTime = null) {
                     break;
             }
 
+            const mapBtnClass = showReplyBtn
+                ? 'flex-1 min-w-0 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-3 rounded-xl shadow-md transition-colors flex items-center justify-center focus:outline-none text-sm'
+                : 'w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-xl shadow-md transition-colors flex items-center justify-center focus:outline-none text-sm';
             let actionBtn = `
-                <button type="button" onclick="if(typeof window.openPlannerNetworkMap==='function') window.openPlannerNetworkMap()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-xl shadow-md transition-colors flex items-center justify-center focus:outline-none text-sm">
+                <div class="${showReplyBtn ? 'flex gap-2' : ''}">
+                <button type="button" onclick="if(typeof window.openPlannerNetworkMap==='function') window.openPlannerNetworkMap()" class="${mapBtnClass}">
                     <svg class="w-5 h-5 mr-2 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"></path></svg>
                     Open Network Map
                 </button>
+                ${showReplyBtn ? `<button type="button" onclick="if(typeof window.openFeedbackForNoServiceDay==='function') window.openFeedbackForNoServiceDay('${safeO}', '${safeD}')" class="shrink-0 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-800 dark:text-gray-100 font-bold py-3 px-4 rounded-xl shadow-sm transition-colors flex items-center justify-center focus:outline-none text-sm">Reply</button>` : ''}
+                </div>
             `;
 
             if (showFeedbackBtn) {
@@ -5027,6 +5056,7 @@ if (typeof window !== 'undefined') {
     window.executeManualRollover = executeManualRollover;
     window.swapPlannerResults = swapPlannerResults;
     window.openFeedbackForMissingRoute = openFeedbackForMissingRoute;
+    window.openFeedbackForNoServiceDay = openFeedbackForNoServiceDay;
     window.restorePlannerSearch = restorePlannerSearch;
     window.openDisruptionModal = openDisruptionModal;
     window.openSaturdayServiceModal = openSaturdayServiceModal;
@@ -5159,6 +5189,24 @@ export function executeManualRollover(origin, dest) {
     window._forceManualRollover = true;
     window._plannerRolloverOffset = rolloverOffset;
     executeTripPlan(origin, dest);
+}
+
+export function openFeedbackForNoServiceDay(origin, dest) {
+    if (typeof triggerHaptic === 'function') triggerHaptic();
+    const dayLabel = plannerSearchDayLabel();
+    const from = String(origin || '').replace(/ STATION/gi, '').trim();
+    const to = String(dest || '').replace(/ STATION/gi, '').trim();
+    const snippet = `${from} to ${to} on ${dayLabel}`;
+    enterFeedbackReplyMode({
+        label: 'Replying about this trip:',
+        snippet,
+        rawMsg: snippet,
+        alertKind: 'planner',
+        location: 'planner_no_service_reply',
+    });
+    setTimeout(() => {
+        openFeedbackModal({ location: 'planner_no_service_reply', skipClear: true });
+    }, 50);
 }
 
 export function openFeedbackForMissingRoute(origin, dest) {

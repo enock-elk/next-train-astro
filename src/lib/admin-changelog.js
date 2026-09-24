@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_09.24.2': [
+        'Empty public-holiday grids name that day (or the holiday) instead of Saturday. Planner no-match copy asks for a timetable reply and sits a Reply button beside Open Network Map. Trip map subtitle adds the fare-modal distance. A hop uses a baked corridor that actually lists both stations, so Hercules to Belle Ombre follows the rail. Incident dashes paint on the network map only for lines on screen, and on the trip map when both stations are on that trip. Network is slow saved-times toast is orange. What’s New covers the holiday wording, the rail, and the distance. forceShow stays false.',
+    ],
     'V9_09.24.1': [
         'SEO route first and last are departures from the origin station (Pretoria 5:12 towards Mabopane, not the Mabopane arrival). Desktop landings use the width of the window. Phones stay a single column. Header region CTA is gone. The blurb button is gone. Download line is “To Download this time table, Open Next Train online”. Fare note says weekly and monthly include the return. Province and line in the facts card link to their SEO pages. Insight copy is an About this route card above the station list, omitted when empty. Preview copy says the timetable works offline. Slow network confirm stays: it only appears when the update did not download, and Proceed can still clear the offline copy. No What’s New. forceShow stays false.',
     ],

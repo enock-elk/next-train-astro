@@ -126,20 +126,34 @@ export function classifySaturdayPlaceholderTrip(origin, dest, dayType, db = $ful
     return null;
 }
 
-export function saturdayNoServiceCopy(routeId) {
+function noServiceDayWord(dayType, holidayName) {
+    if (dayType === 'public_holiday') {
+        const name = String(holidayName || '').trim();
+        return name || 'public holiday';
+    }
+    if (dayType === 'sunday') return 'Sunday';
+    if (dayType === 'weekday') return 'weekday';
+    return 'Saturday';
+}
+
+/**
+ * Empty-sheet notice. Saturday (the default) keeps the existing sentences.
+ * A public-holiday sheet names that day, or the holiday, instead of Saturday.
+ */
+export function saturdayNoServiceCopy(routeId, dayType = 'saturday', holidayName = '') {
+    const dayWord = noServiceDayWord(dayType, holidayName);
+    const holidaySheet = dayType === 'public_holiday';
     if (routeId === 'ec-berlin') {
-        return {
-            regionLabel: 'Eastern Cape',
-            lineLabel: 'East London to Berlin',
-            body: 'Metrorail Eastern Cape does not have Saturday train service on the East London to Berlin line.',
-        };
+        const body = holidaySheet
+            ? `Metrorail Eastern Cape does not have ${dayWord} train service on the East London to Berlin line.`
+            : 'Metrorail Eastern Cape does not have Saturday train service on the East London to Berlin line.';
+        return { regionLabel: 'Eastern Cape', lineLabel: 'East London to Berlin', body };
     }
     if (routeId === 'herc-koed') {
-        return {
-            regionLabel: 'Gauteng',
-            lineLabel: 'Hercules to Koedoespoort',
-            body: 'Metrorail Gauteng does not have Saturday train service on the Hercules to Koedoespoort line.',
-        };
+        const body = holidaySheet
+            ? `Metrorail Gauteng does not have ${dayWord} train service on the Hercules to Koedoespoort line.`
+            : 'Metrorail Gauteng does not have Saturday train service on the Hercules to Koedoespoort line.';
+        return { regionLabel: 'Gauteng', lineLabel: 'Hercules to Koedoespoort', body };
     }
     const route = ROUTES[routeId];
     if (!route) {
@@ -154,10 +168,11 @@ export function saturdayNoServiceCopy(routeId) {
     const endA = titleEnd(route.destA);
     const endB = titleEnd(route.destB);
     const lineLabel = endA && endB ? `${endA} to ${endB}` : (route.name || routeId);
+    const timetableWord = holidaySheet ? dayWord : 'Saturday';
     return {
         regionLabel,
         lineLabel,
-        body: `Metrorail ${regionLabel} does not have a Saturday timetable for the ${lineLabel} line. The trip planner can check other routes for a way through.`,
+        body: `Metrorail ${regionLabel} does not have a ${timetableWord} timetable for the ${lineLabel} line. The trip planner can check other routes for a way through.`,
     };
 }
 

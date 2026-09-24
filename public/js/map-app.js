@@ -1722,6 +1722,9 @@
                 const drawnIncidentIds = new Set();
 
                 drawnRoutes.forEach((routeObj) => {
+                    if (selectedRouteId && routeObj.routeId !== selectedRouteId) return;
+                    const lineOnMap = !routeObj._polyline || map.hasLayer(routeObj._polyline);
+                    if (!lineOnMap) return;
                     Object.values(disruptions || {}).flat().forEach((d) => {
                         if (!d || drawnIncidentIds.has(d.id + '_' + routeObj.routeId)) return;
                         const mapDay = (typeof window !== 'undefined' && window.currentDayType) || 'weekday';
@@ -1965,6 +1968,7 @@
                     }
                 });
                 raiseStationMarkers();
+                paintDisruptionOverlays(liveTrackBundle || emptyTracks, globalDisruptions);
                 syncLineFilterChrome();
                 syncTrackEditorChrome();
                 if (!fit) return;

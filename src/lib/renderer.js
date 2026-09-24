@@ -1154,7 +1154,7 @@ export const Renderer = {
      * Saturday / holiday grid for routes with no weekend timetable:
      * active weekday stations only + compact notice above a single-column table.
      */
-    _buildNoSaturdayGridHTML: (weekdaySchedule, routeName = '', routeId = '') => {
+    _buildNoSaturdayGridHTML: (weekdaySchedule, routeName = '', routeId = '', dayType = 'saturday', holidayName = '') => {
         if (!weekdaySchedule?.rows?.length) {
             return `<div class="flex items-center justify-center h-full p-6 text-center text-sm text-gray-500">No station list available.</div>`;
         }
@@ -1178,7 +1178,7 @@ export const Renderer = {
             if (clean && !stations.includes(clean)) stations.push(clean);
         });
 
-        const copy = saturdayNoServiceCopy(routeId || '');
+        const copy = saturdayNoServiceCopy(routeId || '', dayType || 'saturday', holidayName || '');
         const noticeBody = copy?.body
             || `Metrorail does not run Saturday or public-holiday trains on this route${routeName ? ` (${formatRouteLabelPlain(String(routeName))})` : ''}.`;
 

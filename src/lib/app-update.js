@@ -316,7 +316,7 @@ function showSavedTimesToast() {
     lastSavedTimesToastAt = now;
     const online = typeof navigator === 'undefined' || navigator.onLine === true;
     try {
-        showToast(online ? SLOW_SAVED_TIMES_TOAST : OFFLINE_SAVED_TIMES_TOAST, 'error', 4000, '', {
+        showToast(online ? SLOW_SAVED_TIMES_TOAST : OFFLINE_SAVED_TIMES_TOAST, online ? 'slow' : 'error', 4000, '', {
             cooldownMs: SAVED_TIMES_TOAST_COOLDOWN_MS,
         });
     } catch { /* ignore */ }

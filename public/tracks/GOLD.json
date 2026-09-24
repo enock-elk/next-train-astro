@@ -2,7 +2,7 @@
   "branch": "map-gold",
   "frozenAt": "d236728fd7bdbcf70ffafb94fc056416ed131e04",
   "version": "V9_09.20.11",
-  "note": "Gold snapshot of this build: share GPS eager refresh + Refresh GPS button; train path falls back to painted GOLD corridor. Diff against origin/map-gold. Fast-forward map-gold after this lands on main. Never force-push map-gold.",
+  "note": "Gold snapshot of this build: trip hops follow a baked corridor that lists both stations, and incident dashes stay on lines that are on the map. Diff against origin/map-gold. Fast-forward map-gold after this lands on main. Never force-push map-gold.",
   "files": {
     "public/tracks/rail-tracks-EC.geojson": {
       "md5": "43409bfd05405205e596f0d03345ab18",
@@ -21,24 +21,24 @@
       "sha256": "090a5d7fc45cafb8c7b81dc583ae24978540f38278cab447953bc90c8821f01f"
     },
     "public/js/map-app.js": {
-      "md5": "f29f89a8aa7ec31409781decf642f56d",
-      "sha256": "33d7ade35b1e0a8be0fa1c87ab2e50779601b537fa72ace12752520c2a389082"
+      "md5": "e93c824ad557bf3e548e9b6def5b3123",
+      "sha256": "d047faca1d0efc67dee1d1c7d967f4ac6faa7464a6f00f2319f32ca80f784d71"
     },
     "src/pages/map.astro": {
-      "md5": "e3baceb290d5fd25cdb13ba838e5391f",
-      "sha256": "4abd77d437281509601822305d8dd557fcb2024c1c446a2d61062eb758fa4cbd"
+      "md5": "382d672a476719261e15f75c402b8509",
+      "sha256": "ab623a2240321544a33b209fd100304eba53da30eb9980525d0a237123a63e63"
     },
     "src/components/MapView.astro": {
-      "md5": "a148b6ef542a8fce46834c1e4fcc54fa",
-      "sha256": "be364a3ad164316faad0649bbeaebc24fbbb4b542e055a5d3c097f1744a97c25"
+      "md5": "9062a32a1b57dab0792a4267cc8ec231",
+      "sha256": "a33016e733aa7ee5f16e270e48427646555cb13617d69f74a2db3da8b14095d6"
     },
     "src/lib/rail-tracks.js": {
-      "md5": "d01461519d08462fcb61987b094f485f",
-      "sha256": "1abe069d31960560fcc1d99878ae8b087e83db502ad92324fc38142b0a625d87"
+      "md5": "4d01be4e4e6347559351a8d039770d3d",
+      "sha256": "e7385a8e07415f0862e983a5ffca225fc23e68c22f550ee13bc84ffdb52cf3dc"
     },
     "src/lib/map-tab.js": {
-      "md5": "d04e22726297875612b81d805dc2eb02",
-      "sha256": "ca06c5fcec4eb8c237d8eda04ff6dadcf376bf5bf6a95962b614f2f696264621"
+      "md5": "e0bce0bfead443df21bb96a302fef1a0",
+      "sha256": "75bc21f18b6fe9332b41e9cc7c622973a010dcf40bdbf4e1b67e15ae3f134b75"
     },
     "src/lib/clever-ads.js": {
       "md5": "4d78da253d60d3ba285de6c41d697cad",

@@ -806,6 +806,10 @@ export function showToast(message, type = 'info', duration = 2500, actionHTML = 
         bgClass = "bg-red-900/95 dark:bg-red-800/95";
         borderClass = "border-red-700 dark:border-red-600";
         iconHTML = `<svg class="w-4 h-4 text-red-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>`;
+    } else if (type === 'slow') {
+        bgClass = "bg-orange-600/95 dark:bg-orange-700/95";
+        borderClass = "border-orange-500 dark:border-orange-400";
+        iconHTML = `<svg class="w-4 h-4 text-orange-100 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>`;
     } else if (type === 'warning') {
         bgClass = "bg-yellow-900/95 dark:bg-yellow-800/95";
         borderClass = "border-yellow-700 dark:border-yellow-600";

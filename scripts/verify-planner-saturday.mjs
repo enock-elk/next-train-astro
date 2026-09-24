@@ -293,8 +293,15 @@ if (!logicSrc.includes("bare === 'VARIANT'")) fail('VARIANT must stay a sheet me
 
 const gridJs = readFileSync(join(ROOT, 'src/lib/timetable-grid.js'), 'utf8');
 if (!gridJs.includes('bindNoWeekendWeekdaySwitch')) fail('timetable-grid must bind Switch to Mon - Fri');
-if (!gridJs.includes('_buildNoSaturdayGridHTML(schedule, route.name, routeId)')) {
-    fail('timetable-grid must pass routeId into the no-weekend builder');
+if (!gridJs.includes('_buildNoSaturdayGridHTML(schedule, route.name, routeId, sheetDayType')) {
+    fail('timetable-grid must pass routeId and the open day into the no-weekend builder');
+}
+const holidayCape = saturdayNoServiceCopy('eerst-dtoit', 'public_holiday', 'Heritage Day');
+if (!/Heritage Day timetable/.test(holidayCape.body) || /Saturday timetable/.test(holidayCape.body)) {
+    fail(`public holiday sheet must not say Saturday: ${holidayCape.body}`);
+}
+if (saturdayNoServiceCopy('eerst-dtoit').body !== cape.body) {
+    fail('Saturday sheet copy must stay the Saturday sentence');
 }
 if (gridJs.includes('onclick="window.renderFullScheduleGrid')) fail('timetable-grid fallback must not use inline onclick');
 

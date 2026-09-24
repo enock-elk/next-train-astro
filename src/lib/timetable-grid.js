@@ -1,7 +1,7 @@
 /**
  * Full timetable grid UI + route deep-link handling
  */
-import { ROUTES } from './config.js';
+import { ROUTES, HOLIDAY_NAMES } from './config.js';
 import { safeStorage, escapeHTML, routeArrowSvg, routePrimaryGridDirection, scheduleCacheSlot, normalizeScheduleSheetDay } from './utils.js';
 import { $currentRouteId, $userRegion, $schedules, $globalExclusions, $globalDisruptions, $opsOverlaysReady } from '../store.js';
 import { loadAllSchedules, ensureRoutePinnedForRegion } from './logic.js';
@@ -15,6 +15,13 @@ import {
 import { consumeShareDeeplinkSnapshot, peekShareDeeplinkSnapshot } from './deeplink.js';
 
 let lastGridBody = null;
+
+/** Holiday name for the calendar day, when the open sheet is a public holiday. */
+function holidayNoticeName() {
+    const now = new Date();
+    const key = `${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    return HOLIDAY_NAMES?.[key] || '';
+}
 let gridExclRefreshBound = false;
 
 /** Wait briefly for exclusions so VIEW FULL TIMETABLE is not race-blind. */
@@ -43,10 +50,11 @@ function paintOpenGridBody() {
     if (!grid || !modal || modal.classList.contains('hidden') || !lastGridBody) return;
     const {
         noServiceSheet, schedule, routeName, routeSheetKey, routeId, targetDayIdx, isTodayType,
+        sheetDayType, holidayName,
     } = lastGridBody;
     grid.innerHTML = noServiceSheet
         ? (typeof window.Renderer?._buildNoSaturdayGridHTML === 'function'
-            ? window.Renderer._buildNoSaturdayGridHTML(schedule, routeName, routeId)
+            ? window.Renderer._buildNoSaturdayGridHTML(schedule, routeName, routeId, sheetDayType || 'saturday', holidayName || '')
             : grid.innerHTML)
         : window.Renderer._buildGridHTML(schedule, routeSheetKey, routeId, targetDayIdx, isTodayType, false, lastGridBody.selectedDay);
     if (noServiceSheet) bindNoWeekendWeekdaySwitch(lastGridBody.direction || window._gridSwapDir || 'A');
@@ -497,11 +505,13 @@ export function renderFullScheduleGrid(direction = null, dayOverride = null) {
         targetDayIdx,
         isTodayType,
         selectedDay,
+        sheetDayType,
+        holidayName: sheetDayType === 'public_holiday' ? (holidayNoticeName() || '') : '',
     };
     if (typeof window !== 'undefined') window._gridSelectedDay = selectedDay;
     const html = noServiceSheet
         ? (typeof window.Renderer._buildNoSaturdayGridHTML === 'function'
-            ? window.Renderer._buildNoSaturdayGridHTML(schedule, route.name, routeId)
+            ? window.Renderer._buildNoSaturdayGridHTML(schedule, route.name, routeId, sheetDayType, sheetDayType === 'public_holiday' ? (holidayNoticeName() || '') : '')
             : `<div class="p-6 text-center text-sm text-gray-600 dark:text-gray-300">No weekend service on this route. <button type="button" id="grid-switch-weekday-btn" class="underline font-bold">Switch to Mon - Fri</button></div>`)
         : window.Renderer._buildGridHTML(schedule, routeSheetKey, routeId, targetDayIdx, isTodayType, false, selectedDay);
     const grid = document.getElementById('grid-container');

@@ -469,6 +469,12 @@ const regionSeoSlugs = Object.fromEntries(
         color: #111827;
       }
       html.nt-track-editing #nt-track-editor { display: block; }
+      #nt-track-editor.is-min {
+        max-height: none;
+        overflow: hidden;
+        padding-bottom: 0.55rem;
+      }
+      #nt-track-editor.is-min > :not(#nt-track-editor-head) { display: none !important; }
       html.dark #nt-track-editor {
         background: rgba(17, 24, 39, 0.96);
         color: #f3f4f6;
@@ -501,6 +507,7 @@ const regionSeoSlugs = Object.fromEntries(
       #nt-track-editor-fork button,
       #nt-track-editor-move-pins-wrap button,
       #nt-track-editor-stations-toggle,
+      #nt-track-editor-collapse,
       #nt-track-editor-done {
         font-family: inherit;
         font-size: 12px;
@@ -517,6 +524,7 @@ const regionSeoSlugs = Object.fromEntries(
       html.dark #nt-track-editor-fork button,
       html.dark #nt-track-editor-move-pins-wrap button,
       html.dark #nt-track-editor-stations-toggle,
+      html.dark #nt-track-editor-collapse,
       html.dark #nt-track-editor-done {
         background: #1f2937;
         color: #f3f4f6;
@@ -739,6 +747,7 @@ const regionSeoSlugs = Object.fromEntries(
   <div id="nt-track-editor">
     <div id="nt-track-editor-head">
       <p id="nt-track-editor-title">Edit line</p>
+      <button type="button" id="nt-track-editor-collapse" aria-expanded="true">Hide</button>
       <button type="button" id="nt-track-editor-done">Done</button>
     </div>
     <div id="nt-track-editor-tools" role="group" aria-label="Edit tools">

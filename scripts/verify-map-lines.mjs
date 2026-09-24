@@ -535,7 +535,12 @@ assert(railTracks.includes('sliceBakedHop'), 'planner trip map slices the baked 
     const dump = JSON.parse(readFileSync(new URL('../public/data/full-database.json', import.meta.url), 'utf8'));
     const rows = dump.westerncape?.ct_to_nolu_weekday || [];
     const trains = [...new Set(rows.flatMap((r) => Object.keys(r)))].filter((k) => k !== 'STATION' && k !== 'COORDINATES');
-    const train = trains[0];
+    const calls = (station, id) => {
+        const row = rows.find((r) => String(r.STATION || '').trim().toUpperCase() === station);
+        const v = String(row?.[id] == null ? '' : row[id]).trim();
+        return !!(v && v !== '-' && v !== '---');
+    };
+    const train = trains.find((id) => calls('ESPLANADE', id) && calls('YSTERPLAAT', id)) || trains[0];
     const stops = rows.filter((r) => {
         const n = String(r.STATION || '').trim();
         if (!n || /last updated|inter-station/i.test(n)) return false;

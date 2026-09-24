@@ -2,15 +2,15 @@
   "branch": "map-gold",
   "frozenAt": "bb86663310ad922d4cec36c2df86ae8ea4ee438f",
   "version": "V9_09.20.11",
-  "note": "Gold snapshot of this build: trip hops follow a baked corridor that lists both stations, and incident dashes stay on lines that are on the map. Diff against origin/map-gold. Fast-forward map-gold after this lands on main. Never force-push map-gold.",
+  "note": "Gold snapshot of this build: Pretoria-Mabopane operator patch, push circle sweeps points to the rim. Diff against origin/map-gold. Fast-forward map-gold after this lands on main. Never force-push map-gold.",
   "files": {
     "public/tracks/rail-tracks-EC.geojson": {
       "md5": "43409bfd05405205e596f0d03345ab18",
       "sha256": "ba0ae80e8c6955ae99288ac5c06e85ea3075383f13f813f40375b78395812108"
     },
     "public/tracks/rail-tracks-GP.geojson": {
-      "md5": "be07424ae4c16cf3ae5561bae22d3f8e",
-      "sha256": "1b9de6d992d8eb2980238f164cca78b612316e326a4a44e3e6e2797900d37cf2"
+      "md5": "b002d127081715cb4121c663e2509f9f",
+      "sha256": "498efff3f9ee0aa0a6fcf838a891b9444c52148d778a82c24b51e432c5ec512c"
     },
     "public/tracks/rail-tracks-KZN.geojson": {
       "md5": "36e4df5f583f1dc663266cb4c2b0672f",
@@ -21,12 +21,12 @@
       "sha256": "090a5d7fc45cafb8c7b81dc583ae24978540f38278cab447953bc90c8821f01f"
     },
     "public/js/map-app.js": {
-      "md5": "e93c824ad557bf3e548e9b6def5b3123",
-      "sha256": "d047faca1d0efc67dee1d1c7d967f4ac6faa7464a6f00f2319f32ca80f784d71"
+      "md5": "3f2d741bc664d8702b02358a4ccf8d3d",
+      "sha256": "0261423371a170432cb7330df752137e25836dd71ae9f3b3f12062b088240b9e"
     },
     "src/pages/map.astro": {
-      "md5": "382d672a476719261e15f75c402b8509",
-      "sha256": "ab623a2240321544a33b209fd100304eba53da30eb9980525d0a237123a63e63"
+      "md5": "dda8a87d8cdab80b899efd7a1d1bd2f0",
+      "sha256": "feda00c010f6c5f94a4a3970900c0f684fb1a236c7ed096e2bb42281b5e5f83f"
     },
     "src/components/MapView.astro": {
       "md5": "9062a32a1b57dab0792a4267cc8ec231",

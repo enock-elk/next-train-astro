@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_09.24.3': [
+        'Applied the operator Pretoria-Mabopane gold-track patch (public/tracks/rail-tracks-GP.geojson only). Push sweeps points out to the circle rim and pinch resizes it. The track editor panel can hide. Trip-map hubs use the network-map major dot. Trip distance uses a middle dot and the title colour. What’s New mentions the hub dot only. forceShow stays false.',
+    ],
     'V9_09.24.2': [
         'Empty public-holiday grids name that day (or the holiday) instead of Saturday. Planner no-match copy asks for a timetable reply and sits a Reply button beside Open Network Map. Trip map subtitle adds the fare-modal distance. A hop uses a baked corridor that actually lists both stations, so Hercules to Belle Ombre follows the rail. Incident dashes paint on the network map only for lines on screen, and on the trip map when both stations are on that trip. Network is slow saved-times toast is orange. What’s New covers the holiday wording, the rail, and the distance. forceShow stays false.',
     ],

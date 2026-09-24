@@ -2074,7 +2074,8 @@
                       offset: [0, -5],
                       className: labelClass
                   });
-                stationLayerItems.push({ name, routes: data.routes, marker, labelClass });
+                marker._ntMajor = isMajor;
+                stationLayerItems.push({ name, routes: data.routes, marker, labelClass, isMajor });
             });
             raiseStationMarkers();
 
@@ -2163,7 +2164,7 @@
                 move: 'Drag a dot along the rails. Zoom in for more dots.',
                 add: 'Tap the line where the extra dot should go.',
                 delete: 'Tap a dot to remove it.',
-                brush: 'Drag the circle. Dots inside it move with you.',
+                brush: 'Drag the circle. Points inside are swept out to the rim. Pinch to resize.',
                 stations: 'Drag a station pin. The rail line stays where it is.',
                 fork: 'Tap the split station, then the stops on each branch.'
             };
@@ -2173,6 +2174,7 @@
             let brushHandle = null;
             let brushRadiusM = 700;
             let brushDrag = null;
+            let brushDragHeading = 0;
             let stationPinDragBound = false;
 
             function parseEditorStationNames(text) {
@@ -2377,6 +2379,7 @@
                 const area = document.getElementById('nt-track-editor-stations');
                 if (area) area.value = names.join('\n');
                 setStationsOpen(false);
+                setEditorCollapsed(false);
                 setTrackEditTool('move');
                 setSelectedLine(r.routeId, { toggle: false, fit: false });
                 applyEditPreview();
@@ -2561,6 +2564,150 @@
                 brushDrag = null;
             }
 
+            function brushBearing(a, b) {
+                const lat1 = a.lat * Math.PI / 180;
+                const lat2 = b.lat * Math.PI / 180;
+                const dLon = (b.lng - a.lng) * Math.PI / 180;
+                const y = Math.sin(dLon) * Math.cos(lat2);
+                const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
+                return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+            }
+
+            function brushDestination(latlng, bearingDeg, metres) {
+                const R = 6371000;
+                const br = bearingDeg * Math.PI / 180;
+                const lat1 = latlng.lat * Math.PI / 180;
+                const lon1 = latlng.lng * Math.PI / 180;
+                const ang = metres / R;
+                const lat2 = Math.asin(Math.sin(lat1) * Math.cos(ang) + Math.cos(lat1) * Math.sin(ang) * Math.cos(br));
+                const lon2 = lon1 + Math.atan2(
+                    Math.sin(br) * Math.sin(ang) * Math.cos(lat1),
+                    Math.cos(ang) - Math.sin(lat1) * Math.sin(lat2)
+                );
+                return [lat2 * 180 / Math.PI, ((lon2 * 180 / Math.PI + 540) % 360) - 180];
+            }
+
+            function bearingDelta(fromDeg, toDeg) {
+                let d = (toDeg - fromDeg) % 360;
+                if (d > 180) d -= 360;
+                if (d < -180) d += 360;
+                return d;
+            }
+
+            function sweepPointToRim(center, lat, lon, heading) {
+                const ll = L.latLng(lat, lon);
+                const dist = map.distance(center, ll);
+                if (dist >= brushRadiusM) return null;
+                const bearing = dist < 0.8 ? (heading || 0) : brushBearing(center, ll);
+                return brushDestination(center, bearing, brushRadiusM + 0.6);
+            }
+
+            function arcSamples(center, fromLatLng, toLatLng, heading) {
+                const a = brushBearing(center, fromLatLng);
+                const b = brushBearing(center, toLatLng);
+                const forward = bearingDelta(a, b);
+                const back = bearingDelta(a, b - 360);
+                let step = forward;
+                if (Number.isFinite(heading)) {
+                    const midForward = (a + forward / 2 + 360) % 360;
+                    const midBack = (a + back / 2 + 360) % 360;
+                    const score = (mid) => Math.abs(bearingDelta(mid, heading));
+                    if (score(midBack) < score(midForward)) step = back;
+                } else if (Math.abs(back) < Math.abs(forward)) {
+                    step = back;
+                }
+                const span = Math.abs(step);
+                if (span < 12) return [];
+                const n = Math.min(16, Math.max(2, Math.round(span / 12)));
+                const out = [];
+                for (let k = 1; k < n; k++) {
+                    out.push(brushDestination(center, a + step * (k / n), brushRadiusM + 0.6));
+                }
+                return out;
+            }
+
+            function sweepBrush(center, heading) {
+                if (!trackEdit || !center) return;
+                const coords = trackEdit.coords || [];
+                if (coords.length < 2) return;
+                const movedPins = document.getElementById('nt-track-editor-move-pins')?.checked;
+                const next = [];
+                coords.forEach((p) => {
+                    const pushed = sweepPointToRim(center, p[0], p[1], heading);
+                    next.push(pushed || p);
+                });
+                const out = [next[0]];
+                for (let i = 1; i < next.length; i++) {
+                    const prev = out[out.length - 1];
+                    const cur = next[i];
+                    const midLat = (prev[0] + cur[0]) / 2;
+                    const midLon = (prev[1] + cur[1]) / 2;
+                    if (map.distance(center, L.latLng(midLat, midLon)) < brushRadiusM * 0.98) {
+                        arcSamples(center, L.latLng(prev[0], prev[1]), L.latLng(cur[0], cur[1]), heading)
+                            .forEach((pt) => out.push(pt));
+                    }
+                    const last = out[out.length - 1];
+                    if (last[0] !== cur[0] || last[1] !== cur[1]) out.push(cur);
+                }
+                trackEdit.coords = out;
+                const line = drawnRoutes.find((x) => x.routeId === trackEdit.routeId);
+                if (line?._polyline) line._polyline.setLatLngs(trackEdit.coords);
+                if (movedPins) {
+                    stationLayerItems.forEach((item) => {
+                        const ll = item.marker.getLatLng();
+                        const pushed = sweepPointToRim(center, ll.lat, ll.lng, heading);
+                        if (!pushed) return;
+                        item.marker.setLatLng(pushed);
+                        rememberStationMove(item.name, pushed[0], pushed[1]);
+                    });
+                }
+            }
+
+            function bindBrushPinch() {
+                if (map._ntBrushPinch) return;
+                map._ntBrushPinch = true;
+                const pointers = new Map();
+                let pinch = null;
+                const el = map.getContainer();
+                el.addEventListener('pointerdown', (ev) => {
+                    if (trackEditTool !== 'brush' || !brushCircle) return;
+                    pointers.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+                    if (pointers.size === 2) {
+                        const pts = [...pointers.values()];
+                        pinch = {
+                            dist: Math.max(8, Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y)),
+                            radius: brushRadiusM,
+                            snapped: false
+                        };
+                        map.dragging.disable();
+                    }
+                });
+                el.addEventListener('pointermove', (ev) => {
+                    if (!pointers.has(ev.pointerId)) return;
+                    pointers.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+                    if (!pinch || pointers.size < 2 || !brushCircle) return;
+                    const pts = [...pointers.values()];
+                    const dist = Math.max(8, Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y));
+                    if (!pinch.snapped) {
+                        snapshotTrackEdit();
+                        pinch.snapped = true;
+                    }
+                    brushRadiusM = Math.max(80, Math.min(4000, pinch.radius * (dist / pinch.dist)));
+                    brushCircle.setRadius(brushRadiusM);
+                    sweepBrush(brushCircle.getLatLng(), brushDragHeading);
+                });
+                const endPinch = (ev) => {
+                    pointers.delete(ev.pointerId);
+                    if (pointers.size < 2) {
+                        if (pinch && pinch.snapped) applyEditPreview({ rebuild: true });
+                        pinch = null;
+                        if (trackEditTool === 'brush') map.dragging.enable();
+                    }
+                };
+                el.addEventListener('pointerup', endPinch);
+                el.addEventListener('pointercancel', endPinch);
+            }
+
             function syncBrush() {
                 if (trackEditTool !== 'brush' || !trackEdit) {
                     clearBrush();
@@ -2583,46 +2730,24 @@
                     pane: 'nt-track-edit',
                     keyboard: false
                 }).addTo(brushLayer);
+                bindBrushPinch();
                 brushHandle.on('dragstart', () => {
-                    const c = brushHandle.getLatLng();
-                    brushDrag = { start: c, verts: [], pins: [] };
-                    snapshotTrackEdit();
-                    (trackEdit.coords || []).forEach((p, i) => {
-                        if (map.distance(L.latLng(p[0], p[1]), c) <= brushRadiusM) {
-                            brushDrag.verts.push({ i, lat: p[0], lon: p[1] });
-                        }
-                    });
-                    if (document.getElementById('nt-track-editor-move-pins')?.checked) {
-                        stationLayerItems.forEach((item) => {
-                            const ll = item.marker.getLatLng();
-                            if (map.distance(ll, c) <= brushRadiusM) {
-                                brushDrag.pins.push({ item, lat: ll.lat, lng: ll.lng });
-                            }
-                        });
-                    }
+                    brushDrag = { start: brushHandle.getLatLng(), snapped: false };
                 });
                 brushHandle.on('drag', (ev) => {
                     if (!brushDrag || !trackEdit) return;
                     const ll = ev.latlng;
-                    const dLat = ll.lat - brushDrag.start.lat;
-                    const dLng = ll.lng - brushDrag.start.lng;
-                    brushDrag.verts.forEach((v) => {
-                        trackEdit.coords[v.i] = [v.lat + dLat, v.lon + dLng];
-                    });
-                    const line = drawnRoutes.find((x) => x.routeId === trackEdit.routeId);
-                    if (line?._polyline) line._polyline.setLatLngs(trackEdit.coords);
+                    if (!brushDrag.snapped) {
+                        snapshotTrackEdit();
+                        brushDrag.snapped = true;
+                    }
+                    const moved = map.distance(brushDrag.start, ll);
+                    if (moved > 0.4) brushDragHeading = brushBearing(brushDrag.start, ll);
+                    brushDrag.start = ll;
                     if (brushCircle) brushCircle.setLatLng(ll);
-                    brushDrag.pins.forEach((p) => {
-                        p.item.marker.setLatLng([p.lat + dLat, p.lng + dLng]);
-                    });
+                    sweepBrush(ll, brushDragHeading);
                 });
                 brushHandle.on('dragend', () => {
-                    if (brushDrag && trackEdit) {
-                        brushDrag.pins.forEach((p) => {
-                            const ll = p.item.marker.getLatLng();
-                            rememberStationMove(p.item.name, ll.lat, ll.lng);
-                        });
-                    }
                     brushDrag = null;
                     applyEditPreview({ rebuild: true });
                     if (brushHandle && brushCircle) brushCircle.setLatLng(brushHandle.getLatLng());
@@ -2630,8 +2755,22 @@
             }
 
             function resizeBrush(delta) {
-                brushRadiusM = Math.max(120, Math.min(4000, brushRadiusM + delta));
-                if (brushCircle) brushCircle.setRadius(brushRadiusM);
+                if (trackEdit && brushCircle) snapshotTrackEdit();
+                brushRadiusM = Math.max(80, Math.min(4000, brushRadiusM + delta));
+                if (brushCircle) {
+                    brushCircle.setRadius(brushRadiusM);
+                    sweepBrush(brushCircle.getLatLng(), brushDragHeading);
+                    applyEditPreview({ rebuild: true });
+                }
+            }
+
+            function setEditorCollapsed(collapsed) {
+                const panel = document.getElementById('nt-track-editor');
+                const btn = document.getElementById('nt-track-editor-collapse');
+                if (!panel || !btn) return;
+                panel.classList.toggle('is-min', !!collapsed);
+                btn.textContent = collapsed ? 'Show' : 'Hide';
+                btn.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
             }
 
             function saveStationPins() {
@@ -2671,6 +2810,11 @@
             document.getElementById('nt-track-editor-done')?.addEventListener('click', (e) => {
                 e.stopPropagation();
                 stopTrackEditor();
+            });
+            document.getElementById('nt-track-editor-collapse')?.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const panel = document.getElementById('nt-track-editor');
+                setEditorCollapsed(!panel?.classList.contains('is-min'));
             });
             document.getElementById('nt-track-editor-undo')?.addEventListener('click', (e) => {
                 e.stopPropagation();
@@ -3775,6 +3919,7 @@
                     delete rideTrainMarkers[trainId];
                 });
 
+                keepHubMarkerSize();
                 loose.forEach(function (p) {
                     const mine = !!p.mine;
                     const marker = L.circleMarker([p.lat, p.lng], {
@@ -3858,6 +4003,18 @@
 
 
             // --- DYNAMIC TEXT RESIZING & PROGRESSIVE DISCLOSURE ---
+            function keepHubMarkerSize() {
+                stationLayerItems.forEach((item) => {
+                    if (!item.marker || typeof item.marker.setRadius !== 'function') return;
+                    const major = !!item.isMajor;
+                    item.marker.setRadius(major ? 5 : 2.5);
+                    item.marker.setStyle({
+                        color: major ? '#1f2937' : '#3b82f6',
+                        weight: major ? 2 : 1
+                    });
+                });
+            }
+
             function updateTooltipSize() {
                 const zoom = map.getZoom();
                 const allTooltips = document.querySelectorAll('.tooltip-dynamic');
@@ -3875,6 +4032,7 @@
 
             var zoomGlyphTimer = 0;
             map.on('zoomend', function () {
+                keepHubMarkerSize();
                 updateTooltipSize();
                 if (!lastRidePings.length) return;
                 if (zoomGlyphTimer) clearTimeout(zoomGlyphTimer);

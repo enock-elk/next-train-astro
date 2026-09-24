@@ -2091,6 +2091,20 @@ export function openDisruptionModal(id) {
     if (typeof openSmoothModal === 'function') openSmoothModal('disruption-modal');
 }
 
+/** Same major stops as the network map: corridor ends plus transfer and relay hubs. */
+function tripMajorStationNames() {
+    if (tripMajorStationNames.names) return tripMajorStationNames.names;
+    const names = new Set();
+    Object.values(ROUTES).forEach((route) => {
+        [route.destA, route.destB, route.transferStation, route.relayStation].forEach((raw) => {
+            const name = String(raw || '').replace(/ STATION/gi, '').trim().toUpperCase();
+            if (name) names.add(name);
+        });
+    });
+    tripMajorStationNames.names = names;
+    return names;
+}
+
 export function extractTripCoordinates(tripIndex) {
     if (typeof triggerHaptic === 'function') triggerHaptic();
     if (!currentTripOptions || !currentTripOptions[tripIndex]) return;
@@ -2244,7 +2258,7 @@ export async function openTripMapRenderer(routeData) {
                     <div class="flex items-center space-x-3 min-w-0 pr-2">
                         <div class="flex flex-col min-w-0">
                             <h3 class="text-base font-black text-gray-900 dark:text-white truncate tracking-tight mb-0.5" id="trip-map-title">Route Map</h3>
-                            <p class="text-xs text-blue-600 dark:text-blue-400 font-bold truncate" id="trip-map-subtitle">Loading...</p>
+                            <p class="text-xs font-bold truncate" id="trip-map-subtitle"><span id="trip-map-stop-count" class="text-blue-600 dark:text-blue-400">Loading...</span><span id="trip-map-distance" class="text-gray-900 dark:text-white"></span></p>
                         </div>
                     </div>
                     <button type="button" id="close-trip-map-btn" class="p-2 rounded-full bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white transition focus:outline-none shrink-0" aria-label="Close Map">
@@ -2407,8 +2421,16 @@ export async function openTripMapRenderer(routeData) {
                 const subTitleEl = document.getElementById('trip-map-subtitle');
                 if (subTitleEl) {
                     const stopCount = currentValidStops.length || stationPath.length;
-                    const kmText = routeData.tripKm != null ? ` * ${routeData.tripKm} km` : '';
-                    subTitleEl.textContent = `${stopCount} stops along route${kmText}`;
+                    const countEl = document.getElementById('trip-map-stop-count');
+                    const distEl = document.getElementById('trip-map-distance');
+                    const countText = `${stopCount} stops along route`;
+                    const distText = routeData.tripKm != null ? ` · ${routeData.tripKm} km` : '';
+                    if (countEl && distEl) {
+                        countEl.textContent = countText;
+                        distEl.textContent = distText;
+                    } else {
+                        subTitleEl.textContent = `${countText}${distText}`;
+                    }
                 }
 
                 if (currentPath.length === 0) return null;
@@ -2436,13 +2458,19 @@ export async function openTripMapRenderer(routeData) {
                 };
 
                 tripMapMarkers = [];
+                const majorStops = tripMajorStationNames();
                 if (currentValidStops.length > 0) {
                     currentValidStops.forEach((stop, idx) => {
                         if (idx !== 0 && idx !== currentValidStops.length - 1) {
+                            const major = majorStops.has(String(stop.name || '').replace(/ STATION/gi, '').trim().toUpperCase());
                             const m = L.circleMarker([stop.lat, stop.lon], {
-                                radius: 2.5, color: '#3b82f6', weight: 1, fillColor: '#ffffff', fillOpacity: 1
+                                radius: major ? 5 : 2.5,
+                                color: major ? '#1f2937' : '#3b82f6',
+                                weight: major ? 2 : 1,
+                                fillColor: '#ffffff',
+                                fillOpacity: 1
                             }).bindTooltip(stationLabel(stop.name, stop.time, stop.timeOut), {
-                                permanent: true, direction: 'top', offset: [0, -5], className: minorLabelClass
+                                permanent: true, direction: 'top', offset: [0, -5], className: major ? majorLabelClass : minorLabelClass
                             }).addTo(routeLayerGroup);
                             tripMapMarkers.push(m);
                         }

@@ -217,7 +217,11 @@ export function processAndRenderJourney(allJourneys, element, _header, destinati
     if (destination) currentScheduleData[destination] = validJourneys;
     const nowInSeconds = timeToSeconds(getCurrentTime() || '00:00:00');
     // Cancelled / no-service columns still appear in Upcoming; live board skips them.
-    const runnable = validJourneys.filter((j) => !j.isExcluded && !j.exclusionType);
+    // Special trains (exclusion type special) still run on the board.
+    const runnable = validJourneys.filter((j) => {
+        const t = j.exclusionType || (j.isExcluded ? 'banned' : null);
+        return !t || t === 'special';
+    });
     const remaining = runnable.filter(j => timeToSeconds(j.departureTime || j.train1.departureTime) >= nowInSeconds);
     const nextJourney = remaining[0] || null;
     const firstTrainName = runnable.length > 0 ? (runnable[0].train || runnable[0].train1.train) : null;
@@ -665,7 +669,7 @@ export function openScheduleModal(destination, dayOverride = null) {
 
         const div = document.createElement('div');
         div.className = divClass;
-        if (!exclusionType && !isPassed && !firstNextTrainFound && !dayOverride) {
+        if ((!exclusionType || exclusionType === 'special') && !isPassed && !firstNextTrainFound && !dayOverride) {
             div.id = 'next-train-marker';
             firstNextTrainFound = true;
         }

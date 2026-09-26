@@ -1148,7 +1148,8 @@ export function findTransfers(fromStation, schedule, terminalStation, finalDesti
 
     for (const train1 of trainHeaders) {
         if (!train1 || train1 === "") continue;
-        if (isTrainExcluded(train1, routeId, targetDayIdx)) continue; 
+        const train1Exclusion = isTrainExcluded(train1, routeId, targetDayIdx);
+        if (train1Exclusion && train1Exclusion !== 'special') continue;
 
         const departureTime = fromRow[train1]; 
         const terminationTime = termRow[train1];
@@ -1201,7 +1202,8 @@ export function findConnections(arrivalTimeAtTransfer, schedule, connectionStati
     for (const train of trainHeaders) {
         if (!train || train === "") continue;
         if (train === incomingTrainName) continue; 
-        if (isTrainExcluded(train, routeId, targetDayIdx)) continue; 
+        const connExclusion = isTrainExcluded(train, routeId, targetDayIdx);
+        if (connExclusion && connExclusion !== 'special') continue;
 
         const connectionTime = connRow[train];
         if (!isRealTime(connectionTime)) continue;

@@ -151,7 +151,16 @@ assert(shouldOpenRoutePicker({ swapGen: 1, currentGen: 2, currentRouteId: null }
     const board = readFileSync(new URL('../src/lib/live-board.js', import.meta.url), 'utf8');
     assert(board.includes('export function getTrainExclusionRule'), 'getTrainExclusionRule is exported');
     assert(board.includes('export function openTrainExclusionSheet'), 'exclusion sheet opener is exported');
+    assert(board.includes("train1Exclusion !== 'special'"), 'board transfers still allow special trains');
+    assert(board.includes("connExclusion !== 'special'"), 'board connections still allow special trains');
+    const boardUi = readFileSync(new URL('../src/lib/live-board-ui.js', import.meta.url), 'utf8');
+    assert(boardUi.includes("t === 'special'"), 'live board next train keeps special exclusions');
+    assert(boardUi.includes("exclusionType === 'special') && !isPassed"), 'upcoming next marker keeps special trains');
+    const planner = readFileSync(new URL('../src/lib/planner-core.js', import.meta.url), 'utf8');
+    assert(planner.includes("excl !== 'special'"), 'planner legs still allow special trains');
+    assert(planner.includes("graphExclusion !== 'special'"), 'planner graph still allows special trains');
     const renderer = readFileSync(new URL('../src/lib/renderer.js', import.meta.url), 'utf8');
+    assert(renderer.includes('Special Train ${safeTrainName}'), 'live board labels specials as Special Train');
     assert(renderer.includes('data-excl-open="1"'), 'cancelled columns open the exclusion sheet');
     assert(renderer.includes('exclHeadAttrs'), 'NO SVC header cell is the hit target');
     assert(renderer.includes('exclCellAttrs'), 'banned time cells open the same advisory');

@@ -50,6 +50,32 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
       @media (max-width: 639px) {
         html { font-size: clamp(13.12px, calc(100vw * 16 / 390), 16px); }
       }
+      /* First paint, before the hashed bundle: the splash covers the TWA
+         window, and the shell already fills the screen. A short first
+         viewport reading must not shrink this; JS only pins a height once
+         the screen is at least 240px. min-height follows --nt-shell-h after
+         that so the keyboard can still shrink the hole. */
+      html, body {
+        min-height: 100svh;
+        background-color: #f3f4f6;
+      }
+      #loading-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 90;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        background-color: #f3f4f6;
+      }
+      #nt-shell {
+        min-height: var(--nt-shell-h, 100svh);
+        box-sizing: border-box;
+      }
+      #main-content.app-shell {
+        min-height: 100%;
+      }
       /* iOS Safari zooms the page when a focused field computes under 16px.
          Floor the typed face only. Do not lock the viewport (maximum-scale stays 5).
          text-lg / text-base keep their rem size when that is already ≥16px. */
@@ -147,9 +173,9 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
             n = Math.round(Number(n) || 0);
             return n >= 240 ? n : 0;
           }
-          var layoutH = inner || client || vh || 240;
-          if (client > 0) layoutH = Math.min(layoutH, client);
-          if (layoutH < 240) layoutH = atLeastFull(lastFullLayoutH) || atLeastFull(lastLayoutH) || 240;
+          var layoutH = inner || client || vh || 0;
+          if (client > 0 && layoutH > 0) layoutH = Math.min(layoutH, client);
+          if (layoutH < 240) layoutH = atLeastFull(lastFullLayoutH) || atLeastFull(lastLayoutH) || 0;
           var full = lastFullLayoutH || lastLayoutH || layoutH;
           // visualViewport shrinks first on Android. Do not treat that as the
           // new full-screen height or the oval rides up with the IME.
@@ -173,8 +199,8 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
           var shellH = Math.round(vh || layoutH);
           // Do not keep a 1px first reading: iOS PWA often reports 0/1 before
           // layout, and `last || tiny || 240` would collapse the shell to white.
-          if (shellH < 240) shellH = atLeastFull(lastShellH) || atLeastFull(lastFullLayoutH) || atLeastFull(layoutH) || 240;
-          if (!keyboard) {
+          if (shellH < 240) shellH = atLeastFull(lastShellH) || atLeastFull(lastFullLayoutH) || atLeastFull(layoutH) || 0;
+          if (!keyboard && layoutH >= 240 && shellH >= 240) {
             // Pin #nt-shell to the visible hole. Shrinking --nt-app-h to
             // visualViewport while leaving the shell at top:0 put NEXT TRAIN
             // under the URL bar and left a white slab under the oval.
@@ -189,7 +215,7 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
             lastFullLayoutH = layoutH;
             lastShellTop = shellTop;
             lastShellH = shellH;
-          } else {
+          } else if (keyboard) {
             // Keep html/body at the last full layout so the page does not
             // collapse under the IME. Pin #nt-shell to the LIVE visual hole
             // on other tabs. Community must not: leave the shell at full size
@@ -206,25 +232,26 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
           }
           var h = layoutH;
           if (shellTop + shellH > h) h = shellTop + shellH;
-          if (h < 240) h = atLeastFull(lastFullLayoutH) || atLeastFull(lastLayoutH) || atLeastFull(inner) || atLeastFull(vh) || 240;
+          if (h < 240) h = atLeastFull(lastFullLayoutH) || atLeastFull(lastLayoutH) || atLeastFull(inner) || atLeastFull(vh) || 0;
           // Only a real safe-area inset. Do not invent 48px — that pad was a
           // white/black tray under the floating pill while the system nav
           // already sat outside the webview.
           var sys = env;
           if (!markStandalone()) sys = 0;
-          if (Math.abs(h - lastH) >= 1) {
-            lastH = h;
-            root.style.setProperty('--nt-app-h', h + 'px');
+          if (h >= 240 && shellH >= 240) {
+            if (Math.abs(h - lastH) >= 1) {
+              lastH = h;
+              root.style.setProperty('--nt-app-h', h + 'px');
+            }
+            root.style.setProperty('--nt-shell-top', shellTop + 'px');
+            root.style.setProperty('--nt-shell-h', shellH + 'px');
           }
-          root.style.setProperty('--nt-shell-top', shellTop + 'px');
-          root.style.setProperty('--nt-shell-h', shellH + 'px');
           if (Math.abs(sys - lastSys) >= 1) {
             lastSys = sys;
             root.style.setProperty('--nt-sys-bottom', sys + 'px');
           }
-          var vvH = Math.round((vv && vv.height) ? vv.height : (inner || 240));
-          if (vvH < 240) vvH = 240;
-          root.style.setProperty('--nt-vv-h', vvH + 'px');
+          var vvH = Math.round((vv && vv.height) ? vv.height : (inner || 0));
+          if (vvH >= 240) root.style.setProperty('--nt-vv-h', vvH + 'px');
           root.style.setProperty('--nt-vv-top', Math.max(0, off) + 'px');
           var kbH = 0;
           if (keyboard) {

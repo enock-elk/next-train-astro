@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_09.26.1': [
+        'Special trains (exclusion type special) stay on the live board, upcoming list, transfers, and Trip Planner graph. Banned / no-service exclusions stay skipped. Live board title is Special Train when that exclusion applies. Welcome and About logos use loading-logo-splash.webp with width and height; manifest and Open Graph stay on the PNG. First-paint shell keeps min-height 100svh and does not pin --nt-app-h / --nt-shell-h until the viewport is at least 240px. Planner Telemetry Fails cards and contributors show appVersion. What’s New covers special trains only. forceShow stays false.',
+    ],
     'V9_09.24.14': [
         'html2canvas ignores flex, table-cell, and vertical-align, and a fixed 42px heading height pins the baseline to the floor of the blue strip. Direction titles are now a 22px line with even padding, left-aligned. Agent rules: test branches on *.next-train-lab.pages.dev, not github.io. No What’s New. forceShow stays false.',
     ],

@@ -776,11 +776,12 @@ export const Renderer = {
             }
             const normDest = Renderer._applyUIIntercepts(normalizeStationName(destination));
             
-            let trainTitle = `Direct Train ${safeTrainName}`;
+            const isSpecialTrain = journey.exclusionType === 'special';
+            let trainTitle = isSpecialTrain ? `Special Train ${safeTrainName}` : `Direct Train ${safeTrainName}`;
             let titleColor = "text-gray-900 dark:text-white";
             
             if (journey.isLastTrain) {
-                trainTitle = `Direct Train ${safeTrainName}`;
+                trainTitle = isSpecialTrain ? `Special Train ${safeTrainName}` : `Direct Train ${safeTrainName}`;
                 titleColor = "text-red-600 dark:text-red-400";
             }
 

@@ -6971,6 +6971,7 @@ const Admin = {
                     if (!entry.origin || !entry.destination) return;
                     const dayType = entry.dayType || 'unknown';
                     const key = `${entry.origin}|${entry.destination}|${entry.reason || 'UNKNOWN'}|${dayType}`;
+                    const appVersion = String(entry.appVersion || '').split(' - ')[0].trim();
                     if (!heatMap[key]) {
                         heatMap[key] = {
                             origin: entry.origin,
@@ -6981,9 +6982,16 @@ const Admin = {
                             hitCount: 0,
                             userIds: new Set(),
                             lastSeen: 0,
+                            versions: {},
                         };
                     }
                     heatMap[key].hitCount++;
+                    if (appVersion) {
+                        const prevVer = heatMap[key].versions[appVersion] || { count: 0, lastSeen: 0 };
+                        prevVer.count += 1;
+                        if ((entry.timestamp || 0) >= prevVer.lastSeen) prevVer.lastSeen = entry.timestamp || 0;
+                        heatMap[key].versions[appVersion] = prevVer;
+                    }
                     const uid = entry.userId || entry.deviceId || entry.authUid || '';
                     if (uid) heatMap[key].userIds.add(uid);
                     if (entry.timestamp > heatMap[key].lastSeen) {
@@ -7031,6 +7039,17 @@ const Admin = {
                     const dayLabel = secureEscape(item.dayType || 'unknown');
                     const timeLabel = secureEscape(item.timeOfDay || '-');
                     const countLabel = countMode === 'hits' ? 'Hits' : 'Users';
+                    const versionEntries = Object.entries(item.versions || {}).sort((a, b) => (b[1].lastSeen || 0) - (a[1].lastSeen || 0));
+                    const versionChips = versionEntries.length
+                        ? versionEntries.slice(0, 3).map(([ver]) => {
+                            const safeVer = secureEscape(ver);
+                            if (/^V\d+_/i.test(ver)) {
+                                return `<button type="button" class="fb-version-chip text-[9px] font-mono font-medium underline decoration-dotted underline-offset-2 text-gray-600 dark:text-gray-300 focus:outline-none" data-admin-changelog="${safeVer}" onclick="event.preventDefault();event.stopPropagation();if(window.Admin&&Admin.openAdminChangelogLookup)Admin.openAdminChangelogLookup(this.getAttribute('data-admin-changelog')||this.textContent);">${safeVer}</button>`;
+                            }
+                            return `<span class="text-[9px] font-mono text-gray-500">${safeVer}</span>`;
+                        }).join('') + (versionEntries.length > 3 ? `<span class="text-[9px] font-mono text-gray-400">+${versionEntries.length - 3}</span>` : '')
+                        : '<span class="text-[9px] font-mono text-gray-400">No version</span>';
+                    const versionList = versionEntries.map(([ver, info]) => `${ver} (${info.count})`).join(', ') || 'no version';
                     const corridorKey = Admin.failCorridorKey({
                         origin: item.origin,
                         destination: item.dest,
@@ -7042,7 +7061,7 @@ const Admin = {
                         type: 'route',
                         severity: 'medium',
                         title: `Routing Fail: ${item.origin} to ${item.dest}`,
-                        description: `Failed with reason: ${item.reason || 'UNKNOWN'} (${item.dayType || 'day?'}, ~${item.timeOfDay || 'time?'}). ${item.hitCount} hits / ${item.userCount} users.`,
+                        description: `Failed with reason: ${item.reason || 'UNKNOWN'} (${item.dayType || 'day?'}, ~${item.timeOfDay || 'time?'}). ${item.hitCount} hits / ${item.userCount} users. Versions: ${versionList}.`,
                         source: 'Telemetry Data',
                         sourceKind: 'deadend',
                         sourceId: `${item.origin || ''}|${item.dest || ''}|${item.reason || ''}`,
@@ -7057,6 +7076,7 @@ const Admin = {
                                     <span class="text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded ${reasonBadge}">${reasonText}</span>
                                     <span class="text-[9px] font-bold text-indigo-600 dark:text-indigo-400 uppercase">${dayLabel}</span>
                                     <span class="text-[9px] text-gray-400 font-mono">${timeLabel}</span>
+                                    ${versionChips}
                                     <span class="text-[9px] text-gray-400 font-mono">Last: ${dateStr}</span>
                                 </div>
                             </div>
@@ -7178,18 +7198,22 @@ const Admin = {
                 const uid = String(entry.userId || entry.deviceId || '').trim();
                 if (!uid) return;
                 const ts = Number(entry.timestamp) || 0;
+                const appVersion = String(entry.appVersion || '').split(' - ')[0].trim();
                 const prev = byUser[uid];
-                if (!prev) byUser[uid] = { userId: uid, lastSeen: ts, hitCount: 1 };
+                if (!prev) byUser[uid] = { userId: uid, lastSeen: ts, hitCount: 1, appVersion };
                 else {
                     prev.hitCount += 1;
-                    if (ts > prev.lastSeen) prev.lastSeen = ts;
+                    if (ts >= prev.lastSeen) {
+                        prev.lastSeen = ts;
+                        if (appVersion) prev.appVersion = appVersion;
+                    }
                 }
             });
             const hits = Object.values(byUser).sort((a, b) => (b.lastSeen || 0) - (a.lastSeen || 0));
             const slice = hits.slice(0, cap);
             panel.innerHTML = `
                 <p class="text-[9px] font-black uppercase tracking-wider text-gray-400 pt-2 mb-1">Contributors${hits.length > cap ? ` (latest ${cap} of ${hits.length})` : ''}</p>
-                ${slice.map((h) => Admin.stackedContributorRowHtml(h.userId, `${Admin.formatDate(h.lastSeen)} · ${h.hitCount}`)).join('') || '<p class="text-[10px] text-gray-400 italic">No user ids on these fails.</p>'}
+                ${slice.map((h) => Admin.stackedContributorRowHtml(h.userId, `${Admin.formatDate(h.lastSeen)} · ${h.hitCount}${h.appVersion ? ` · ${h.appVersion}` : ' · no version'}`)).join('') || '<p class="text-[10px] text-gray-400 italic">No user ids on these fails.</p>'}
             `;
         };
 

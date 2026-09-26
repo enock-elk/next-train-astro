@@ -212,6 +212,8 @@ ok(adminJs.includes('expandFareContributor'), 'Fares expand contributor user ids
 ok(adminJs.includes('de-fail-contributors'), 'fail cards have a contributor panel');
 ok(adminJs.includes('de-fare-contributors'), 'fare cards have a contributor panel');
 ok(adminJs.includes('failCorridorKey'), 'fail corridor key matches origin dest reason day');
+ok(adminJs.includes('item.versions') && adminJs.includes('No version'), 'fail cards show the app version');
+ok(adminJs.includes('h.appVersion'), 'fail contributors show the app version');
 ok(/class="hidden divide-y[\s\S]{0,180}\$\{resolveAllHtml\}/.test(adminJs), 'Resolve All sits inside the opened crash log');
 ok(!/flex items-center shrink-0">\s*\$\{resolveAllHtml\}/.test(adminJs), 'Resolve All is not on the collapsed crash header');
 ok(adminJs.includes('App: ${appVersionHtml}'), 'crash app version is a dedicated chip field');

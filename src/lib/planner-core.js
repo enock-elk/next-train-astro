@@ -593,7 +593,10 @@ export function findUpcomingTrainsForLeg(schedule, originRow, destRow, dayType, 
 
     let upcomingTrains = [];
     schedule.headers.slice(1).forEach(trainName => {
-        if (routeId && isTrainExcluded(trainName, routeId, exclusionDayIdx)) return;
+        if (routeId) {
+            const excl = isTrainExcluded(trainName, routeId, exclusionDayIdx);
+            if (excl && excl !== 'special') return;
+        }
         const depTime = originRow[trainName], arrTime = destRow[trainName];
         if (depTime && arrTime) {
             const depSeconds = timeToSeconds(depTime);
@@ -665,7 +668,8 @@ export function buildTransitGraph(dayType, dayIdx) {
             const rows     = schedule.rows;
 
             for (const trainName of schedule.headers.slice(1)) {
-                if (isTrainExcluded(trainName, routeId, dayIdx)) continue;
+                const graphExclusion = isTrainExcluded(trainName, routeId, dayIdx);
+                if (graphExclusion && graphExclusion !== 'special') continue;
 
                 for (let i = 0; i < rows.length - 1; i++) {
                     const rawDep = rows[i][trainName];

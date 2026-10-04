@@ -136,6 +136,9 @@ const requiredIds = [
     'alert-force-popup',
     'alert-poll-toggle',
     'alert-poll-question',
+    'alert-poll-show-results',
+    'alert-live-poll-results',
+    'alert-live-poll-refresh',
     'alert-schedule-first',
     'alert-weekly-days',
     'alert-weekly-time',
@@ -259,9 +262,11 @@ assert(ui.includes("'admin-ticket-view-modal': '#roadmap-ticket'"), 'ticket view
 assert(ui.includes('Admin.syncDrillFromHash'), 'popstate restores the drilled panel from the hash');
 assert(ui.includes('Admin.stepDrillBack'), 'drilled Back steps one panel, not always the grid');
 
-assert(admin.includes('data-alert-when="weekly"'), 'compose exposes weekly when-mode');
+assert(admin.includes('paintLivePollResults'), 'admin paints live poll tallies on review');
+assert(admin.includes('hideLivePollResults'), 'admin can hide the live poll panel');
+assert((admin.match(/id="alert-live-poll-results"/g) || []).length === 1, 'one live poll results panel');
 assert(admin.includes('data-alert-when="monthly"'), 'compose exposes monthly when-mode');
-assert(admin.includes('alerts-hub-v1'), 'alert panel rebuilds after composer and schedule UX');
+assert(admin.includes('alerts-hub-v2'), 'alert panel rebuilds after live poll results wiring');
 assert(!admin.includes('Recurring schedule (optional)'), 'old recurrence accordion is gone');
 assert(admin.includes('ntAdminComputeJobNextRun'), 'scheduled publish uses job-aware next-run');
 

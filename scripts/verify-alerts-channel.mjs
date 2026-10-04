@@ -155,6 +155,8 @@ const now = 1_700_000_000_000;
     assert(shouldIgnoreAlertLongPress(fake(['[data-alert-reply]', 'button'])), 'reply button is not hold-to-react');
     assert(shouldIgnoreAlertLongPress(fake(['[data-alert-summary]', 'button'])), 'count chip is not hold-to-react');
     assert(shouldIgnoreAlertLongPress(fake(['.nt-poll-vote', 'button'])), 'poll vote is not hold-to-react');
+    assert(shouldIgnoreAlertLongPress(fake(['.nt-poll'])), 'poll results panel is not hold-to-react');
+    assert(shouldIgnoreAlertLongPress(fake(['[data-poll-shell]'])), 'poll shell is not hold-to-react');
     assert(shouldIgnoreAlertLongPress(fake(['a'])), 'links are not hold-to-react');
     assert(shouldIgnoreAlertLongPress(null), 'missing target ignored');
 }
@@ -262,7 +264,10 @@ const now = 1_700_000_000_000;
     assert(js.includes('📰</span>Source:'), 'source label includes the requested newspaper prefix');
     assert(js.includes('nt-alert-action-meta'), 'admin route/views share the roomier Reply row');
     const hub = readFileSync(new URL('../src/lib/hub.js', import.meta.url), 'utf8');
+    assert(js.includes('hydratePollResults(feed)'), 'poll results hydrate after feed paint');
+    assert(js.includes('buildPollShellHtml'), 'feed uses the shared poll shell');
     assert(js.includes('feed.dataset.ntAlertsSig'), 'alerts skip innerHTML rewrite when the feed is unchanged');
+    assert(hub.includes('paintPollShellsAfterVote'), 'a vote paints every poll shell for that notice');
     assert(js.includes('ntPosterRevealed'), 'decoded posters skip the blob URL swap');
     assert(hub.includes('inboxMediaFromHtml'), 'commuter inbox reuses alerts image hoist');
     assert(hub.includes('hydrateAlertPosterImages(host)'), 'commuter inbox hydrates posters');
@@ -288,6 +293,8 @@ const now = 1_700_000_000_000;
     assert(!/class="[^"]*\bw-full\b[^"]*nt-alert-reply/.test(js), 'Reply does not pick up w-full from a twin CTA');
 
     const appearance = readFileSync(new URL('../src/styles/appearance.css', import.meta.url), 'utf8');
+    assert(/\.nt-poll\s*\{[\s\S]*?background:\s*color-mix/.test(appearance), 'poll well uses pack tokens');
+    assert(appearance.includes('.nt-poll-row.is-mine'), 'your-vote row is a padded highlight, not a ring');
     assert(/#alerts-channel-footer-close\s*\{[\s\S]*?background-color:\s*var\(--nt-primary\)/.test(appearance), 'footer Close stays the filled --nt-primary CTA');
     assert(/#close-timetable-footer-btn,[\s\S]*?#fare-modal-close-btn\s*\{[\s\S]*?color:\s*var\(--nt-primary-fg\)/.test(appearance), 'timetable, tips, and fare Close match Alerts CTA ink');
     assert(/#planner-train-sheet-fare\s*\{[\s\S]*?background-color:\s*#ffffff/.test(appearance), 'train-sheet fare chip stays white on the blue header');
@@ -335,6 +342,60 @@ const now = 1_700_000_000_000;
     assert(rules.notices_meta?.['.read'] === true, 'notices_meta public read');
     const emojiWrite = rules.notices?.$target?.$noticeId?.reactions?.$emoji?.['.write'] || '';
     assert(emojiWrite.includes('wow') && emojiWrite.includes('sad') && emojiWrite.includes('like'), `notice reaction write ${emojiWrite}`);
+}
+
+{
+    const { buildPollShellHtml, buildPollResultsHtml, tallyPollVotes } = await import('../src/lib/alert-poll.js');
+    const tallies = tallyPollVotes({
+        a: { optionKey: 'A' },
+        b: { optionKey: 'B' },
+        c: { optionKey: 'A' },
+        skip: 'nope',
+    });
+    assert(tallies.A === 2 && tallies.B === 1 && tallies.C === 0 && tallies.total === 3, `tally ${JSON.stringify(tallies)}`);
+
+    const bars = buildPollResultsHtml({
+        poll: { question: 'Keep Saturday trains?', optionA: 'Yes', optionB: 'No', optionC: 'Not sure' },
+        counts: { A: 2, B: 1, C: 1, total: 4 },
+        votedOption: 'A',
+        includeQuestion: true,
+    });
+    assert(bars.includes('Keep Saturday trains?') && bars.includes('Your vote') && bars.includes('50%'), `results html ${bars}`);
+    assert(bars.includes('is-mine') && bars.includes('Live percentages'), 'voted row is marked');
+    assert(!bars.includes('2 vote'), 'commuter results stay percentages-only');
+
+    const notice = {
+        id: 'poll-1',
+        severity: 'info',
+        poll: {
+            active: true,
+            showResults: true,
+            question: 'Keep Saturday trains?',
+            optionA: 'Yes',
+            optionB: 'No',
+        },
+    };
+    const unvoted = buildPollShellHtml(notice, { mode: 'preview' });
+    assert(unvoted.includes('nt-poll-vote') && unvoted.includes('data-poll-hydrate="1"'), 'showResults still shows choices plus a results well');
+    assert(unvoted.includes('Keep Saturday trains?') && unvoted.includes('Yes'), 'unvoted poll keeps the question and options');
+    assert(!unvoted.includes('Thanks for voting'), 'showResults does not thank before a vote');
+
+    const hidden = buildPollShellHtml({
+        ...notice,
+        poll: { ...notice.poll, showResults: false },
+    }, { mode: 'preview' });
+    assert(hidden.includes('nt-poll-vote') && !hidden.includes('data-poll-hydrate'), 'hidden results keep vote buttons only');
+
+    const { safeStorage } = await import('../src/lib/utils.js');
+    safeStorage.setItem('poll_voted_poll-1', 'A');
+    const votedShow = buildPollShellHtml(notice, { mode: 'live' });
+    assert(votedShow.includes('data-poll-hydrate="1"') && votedShow.includes('Your vote'), 'after voting with showResults, the shell keeps a results well');
+    assert(!votedShow.includes('nt-poll-vote'), 'after voting with showResults, vote buttons are gone');
+    const votedHide = buildPollShellHtml({
+        ...notice,
+        poll: { ...notice.poll, showResults: false },
+    }, { mode: 'live' });
+    assert(votedHide.includes('Thanks for voting') && !votedHide.includes('data-poll-hydrate'), 'hidden results still thank the voter');
 }
 
 if (failures.length) {

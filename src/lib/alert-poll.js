@@ -2,6 +2,8 @@
  * Alert poll chrome — feed, notice modal, and live percentages.
  * Percentages always. Optional raw counts in brackets. Vote lists stay on Firebase polls/{id}.
  * Results stay hidden until this device has voted.
+ * poll.active means this notice has a poll. Voting window is poll.closesAt
+ * (missing inherits notice.expiresAt, or stays open).
  */
 import { DYNAMIC_BASE_URL } from './config.js';
 import { escapeHTML, safeStorage } from './utils.js';
@@ -12,12 +14,43 @@ export function pollSeverity(value) {
     return 'info';
 }
 
+export function noticeHasPoll(node) {
+    const poll = node?.poll;
+    return !!(poll && typeof poll === 'object' && (poll.active || poll.question || poll.optionA || poll.optionB));
+}
+
+export function withPollTiming(poll, notice = null) {
+    if (!poll || typeof poll !== 'object') return poll;
+    return {
+        ...poll,
+        closesAt: Number(poll.closesAt) || 0,
+        expiresAt: Number(notice?.expiresAt || poll.expiresAt) || 0,
+    };
+}
+
+/** Dedicated poll close. Missing closesAt inherits alert expiry, else stays open. */
+export function pollClosesAt(poll) {
+    const explicit = Number(poll?.closesAt);
+    if (Number.isFinite(explicit) && explicit > 0) return explicit;
+    const inherited = Number(poll?.expiresAt);
+    if (Number.isFinite(inherited) && inherited > 0) return inherited;
+    return 0;
+}
+
+export function isPollOpen(poll, now = Date.now()) {
+    if (!poll) return false;
+    const until = pollClosesAt(poll);
+    if (!until) return true;
+    return until > now;
+}
+
 export function tallyPollVotes(pollData) {
     let A = 0;
     let B = 0;
     let C = 0;
     if (pollData && typeof pollData === 'object') {
-        Object.values(pollData).forEach((vote) => {
+        Object.entries(pollData).forEach(([key, vote]) => {
+            if (key === '_meta' || String(key || '').startsWith('_')) return;
             if (!vote || typeof vote !== 'object') return;
             if (vote.optionKey === 'A') A += 1;
             else if (vote.optionKey === 'B') B += 1;
@@ -53,14 +86,20 @@ export function pollShowsRawCounts(poll) {
     return !!(poll && (poll.showRawCounts || poll.showParticipantCount));
 }
 
-/** Green CSS dot (not emoji) so cheap phones skip emoji paint. Opacity-only pulse. */
-export function buildPollLiveLabelHtml({ active = true } = {}) {
+/** Green pulse while open, red static when closed. Text is NEXT TRAIN [dot] ACTIVE/INACTIVE POLL. */
+export function buildPollLiveLabelHtml({ open = true } = {}) {
+    const on = !!open;
     return `<p class="nt-poll-foot">
         <span class="nt-poll-live">
-            <span class="nt-poll-live-dot${active ? ' is-on' : ''}" aria-hidden="true"></span>
-            <span class="nt-poll-live-text">NEXT TRAIN POLL</span>
+            <span class="nt-poll-live-text">NEXT TRAIN</span>
+            <span class="nt-poll-live-dot${on ? ' is-on' : ' is-off'}" aria-hidden="true"></span>
+            <span class="nt-poll-live-text">${on ? 'ACTIVE POLL' : 'INACTIVE POLL'}</span>
         </span>
     </p>`;
+}
+
+function pollViewResultsButton() {
+    return `<button type="button" class="nt-poll-view-results" data-poll-view-results>View Poll Results</button>`;
 }
 
 export function buildPollResultsHtml({
@@ -96,12 +135,12 @@ export function buildPollResultsHtml({
         ${row('A', poll.optionA, counts.A)}
         ${row('B', poll.optionB, counts.B)}
         ${poll.optionC ? row('C', poll.optionC, counts.C) : ''}
-        ${buildPollLiveLabelHtml({ active: poll.active !== false })}`;
+        ${buildPollLiveLabelHtml({ open: isPollOpen(poll) })}`;
 }
 
 export function buildPollThanksHtml(poll = null) {
     return `<p class="nt-poll-thanks">Thanks for voting!</p>
-        ${buildPollLiveLabelHtml({ active: poll?.active !== false })}`;
+        ${buildPollLiveLabelHtml({ open: isPollOpen(poll) })}`;
 }
 
 function pollChoiceButtons(pollId, poll) {
@@ -120,21 +159,24 @@ function pollMetaJson(poll, severity) {
         showResults: !!poll.showResults,
         showRawCounts: pollShowsRawCounts(poll),
         active: poll.active !== false,
+        closesAt: Number(poll.closesAt) || 0,
+        expiresAt: Number(poll.expiresAt) || 0,
         severity,
     });
 }
 
 export function buildPollShellHtml(notice, { mode = 'live' } = {}) {
     if (!notice?.poll?.active) return '';
-    const poll = notice.poll;
+    const poll = withPollTiming(notice.poll, notice);
     const pollId = String(notice.id || 'preview');
     const severity = pollSeverity(notice.severity || poll.severity);
     const showResults = !!poll.showResults;
+    const open = isPollOpen(poll);
     const voted = mode === 'live' ? readVotedPollOption(pollId) : '';
     const idAttr = escapeHTML(pollId);
     const metaAttr = escapeHTML(pollMetaJson(poll, severity));
-    const attrs = `id="poll-container-${idAttr}" data-poll-shell="${idAttr}" data-poll-meta="${metaAttr}" data-poll-severity="${escapeHTML(severity)}" class="nt-poll"`;
-    const liveMark = buildPollLiveLabelHtml({ active: true });
+    const attrs = `id="poll-container-${idAttr}" data-poll-shell="${idAttr}" data-poll-meta="${metaAttr}" data-poll-severity="${escapeHTML(severity)}" data-poll-open="${open ? '1' : '0'}" class="nt-poll"`;
+    const liveMark = buildPollLiveLabelHtml({ open });
 
     if (voted && !showResults) {
         return `<div ${attrs}>${buildPollThanksHtml(poll)}</div>`;
@@ -153,6 +195,7 @@ export function buildPollShellHtml(notice, { mode = 'live' } = {}) {
     return `<div ${attrs}>
         <p class="nt-poll-q">${escapeHTML(poll.question || '')}</p>
         ${pollChoiceButtons(pollId, poll)}
+        ${pollViewResultsButton()}
         ${liveMark}
     </div>`;
 }

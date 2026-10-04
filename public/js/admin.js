@@ -12081,7 +12081,23 @@ const Admin = {
         }
         const nextList = listed.filter((n) => String(n.id || n._key) !== id).concat([payload]);
         await Admin.writeNoticesMeta(target, secret, nextList);
+        await Admin.writePollVoteMeta(id, payload.poll, secret, payload.expiresAt);
         return payload;
+    },
+
+    writePollVoteMeta: async (pollId, poll, secret, fallbackExpiresAt = 0) => {
+        if (!pollId || !secret || !poll || poll.active === false) return;
+        const closesAt = Number(poll.closesAt) || Number(fallbackExpiresAt) || 0;
+        if (!closesAt) return;
+        const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
+        try {
+            await fetch(`${dynamicEndpoint}polls/${encodeURIComponent(pollId)}/_meta.json?auth=${secret}`, {
+                method: 'PUT',
+                body: JSON.stringify({ closesAt }),
+            });
+        } catch (e) {
+            console.warn('poll _meta write failed', e);
+        }
     },
 
     patchLiveNoticeFields: async (target, noticeId, fields, secret) => {
@@ -12115,6 +12131,7 @@ const Admin = {
             String(n.id || n._key) === String(key) ? { ...n, ...patch } : n
         ));
         await Admin.writeNoticesMeta(target, secret, nextList);
+        await Admin.writePollVoteMeta(noticeId, next.poll, secret, next.expiresAt);
         return next;
     },
 
@@ -12411,12 +12428,27 @@ const Admin = {
             const noticeId = ntAdminScheduledNoticeId(scheduleId, plan.occurrenceAt);
             const notice = { ...(job.notice || {}) };
             delete notice.expiresInMs;
+            if (notice.poll && typeof notice.poll === 'object') {
+                notice.poll = { ...notice.poll };
+                delete notice.poll.closesInMs;
+            }
+            const expiresAt = ntAdminJhbExpiresAt(plan.occurrenceAt, job);
             const payload = {
                 ...notice,
                 id: noticeId,
                 postedAt: plan.occurrenceAt,
-                expiresAt: ntAdminJhbExpiresAt(plan.occurrenceAt, job),
+                expiresAt,
             };
+            if (payload.poll && payload.poll.active) {
+                const closesInMs = Number(job.notice?.poll?.closesInMs) || 0;
+                const explicit = Number(job.notice?.poll?.closesAt) || 0;
+                let closesAt = 0;
+                if (closesInMs > 0) closesAt = plan.occurrenceAt + closesInMs;
+                else if (explicit > 0) closesAt = explicit;
+                else closesAt = expiresAt;
+                if (expiresAt && closesAt > expiresAt) closesAt = expiresAt;
+                if (closesAt) payload.poll.closesAt = closesAt;
+            }
             const failures = [];
             for (const target of targets) {
                 try {
@@ -12849,6 +12881,11 @@ const Admin = {
                         <input type="text" id="alert-poll-opt-c" class="w-full h-10 px-3 rounded-lg bg-white dark:bg-gray-900 border border-purple-200 dark:border-purple-700 text-gray-900 dark:text-white text-xs focus:ring-2 focus:ring-purple-500 outline-none" placeholder="e.g. Not sure">
                     </div>
                     <button type="button" id="alert-poll-add-c-btn" class="text-[10px] font-bold uppercase tracking-wider text-purple-600 dark:text-purple-400 hover:underline focus:outline-none">+ Add third option</button>
+                    <div>
+                        <label class="block text-[10px] font-bold text-purple-600 dark:text-purple-400 uppercase mb-1" for="alert-poll-closes">Poll closes</label>
+                        <input type="datetime-local" id="alert-poll-closes" class="w-full h-10 px-3 rounded-lg bg-white dark:bg-gray-900 border border-purple-200 dark:border-purple-700 text-gray-900 dark:text-white text-xs focus:ring-2 focus:ring-purple-500 outline-none">
+                        <p class="text-[10px] text-purple-600 dark:text-purple-400 mt-1">Leave blank to match the alert expiry, or stay open if the alert has none. Cannot run past the alert expiry.</p>
+                    </div>
                     <div class="flex items-center justify-between bg-white dark:bg-gray-900/60 p-3 rounded-xl border border-purple-200 dark:border-purple-800">
                         <div>
                             <span class="font-bold text-purple-800 dark:text-purple-200 text-xs">Show results to users</span>
@@ -13269,9 +13306,66 @@ const Admin = {
         const pollAddCBtn = document.getElementById('alert-poll-add-c-btn');
         const pollShowResults = document.getElementById('alert-poll-show-results');
         const pollShowCount = document.getElementById('alert-poll-show-count');
+        const pollCloses = document.getElementById('alert-poll-closes');
         let existingAlertId = null;
         Admin._alertRepostDraft = false;
         Admin._skipAlertFetchOnce = false;
+
+        const readPollClosesAt = (alertExpiresAt) => {
+            if (!pollToggle?.checked) return 0;
+            const exp = Number(alertExpiresAt) || 0;
+            const raw = pollCloses?.value ? new Date(pollCloses.value).getTime() : NaN;
+            if (!Number.isFinite(raw) || raw <= 0) return exp;
+            if (exp > 0 && raw > exp) {
+                if (pollCloses) pollCloses.value = Admin.toLocalDatetimeValue(exp);
+                return exp;
+            }
+            return raw;
+        };
+
+        const assembleComposePoll = ({ closesAt = 0, closesInMs = 0 } = {}) => {
+            if (!pollToggle?.checked) {
+                return {
+                    active: false,
+                    question: null,
+                    optionA: null,
+                    optionB: null,
+                    optionC: null,
+                    showResults: false,
+                    showRawCounts: false,
+                };
+            }
+            const optCVal = pollOptC && !pollOptCWrap?.classList.contains('hidden')
+                ? (pollOptC.value.trim() || null)
+                : null;
+            const poll = {
+                active: true,
+                question: (pollQuestion?.value || '').trim() || null,
+                optionA: (pollOptA?.value || '').trim() || null,
+                optionB: (pollOptB?.value || '').trim() || null,
+                optionC: optCVal,
+                showResults: !!(pollShowResults && pollShowResults.checked),
+                showRawCounts: !!(pollShowCount && pollShowCount.checked),
+            };
+            if (closesAt) poll.closesAt = closesAt;
+            if (closesInMs) poll.closesInMs = closesInMs;
+            return poll;
+        };
+
+        const composeNeedsContentToast = (hasBody, posters) => {
+            if (hasBody || posters.length || pollToggle?.checked) return false;
+            if (typeof showToast === 'function') showToast('Add a message, a poster, or a poll.', 'error');
+            return true;
+        };
+
+        const composePollFieldsOk = () => {
+            if (!pollToggle?.checked) return true;
+            if (!(pollQuestion?.value || '').trim() || !(pollOptA?.value || '').trim() || !(pollOptB?.value || '').trim()) {
+                if (typeof showToast === 'function') showToast('Add a poll question and two answers.', 'error');
+                return false;
+            }
+            return true;
+        };
 
         Admin.currentAlertManagerTab = 'compose';
         const setAlertTab = (tab) => {
@@ -13484,7 +13578,8 @@ const Admin = {
             const targets = Admin.getSelectedAlertTargets();
             const hasBody = Admin.alertComposeHasBody(msg);
             const posters = Admin.getSelectedAlertPosters();
-            if (!hasBody && !posters.length) { if (typeof showToast === 'function') showToast('Add a message or a poster.', 'error'); return; }
+            if (composeNeedsContentToast(hasBody, posters)) return;
+            if (!composePollFieldsOk()) return;
             if (!targets.length) { if (typeof showToast === 'function') showToast('Pick a target audience.', 'error'); return; }
             const meta = readComposeScheduleMeta();
             if (!meta.ok) { if (typeof showToast === 'function') showToast(meta.error, 'error'); return; }
@@ -13497,9 +13592,12 @@ const Admin = {
             if (hasBody && !/<span[^>]*>.*?<\/span>\s*$/i.test(msg)) {
                 msg += `<br><br><span class="opacity-75 text-[10px] uppercase font-bold tracking-wider">- ${signoff}</span>`;
             }
-            const optCVal = pollToggle?.checked && pollOptC && !pollOptCWrap?.classList.contains('hidden')
-                ? (pollOptC.value.trim() || null) : null;
             const schedId = Admin._editingSchedId || `sched_${Date.now()}`;
+            const alertExpiresAt = Number(meta.nextRunAt || 0) + Number(meta.expiresInMs || 0);
+            const pollClosesAt = readPollClosesAt(alertExpiresAt);
+            const pollClosesInMs = pollToggle?.checked && pollCloses?.value && Number(meta.nextRunAt)
+                ? Math.max(0, pollClosesAt - Number(meta.nextRunAt))
+                : 0;
             const job = {
                 id: schedId,
                 target: targets[0],
@@ -13527,15 +13625,7 @@ const Admin = {
                     sourceName: sourceNameInput ? sourceNameInput.value.trim() || null : null,
                     sourceUrl: sourceUrlInput ? sourceUrlInput.value.trim() || null : null,
                     expiresInMs: meta.expiresInMs || 0,
-                    poll: {
-                        active: !!(pollToggle && pollToggle.checked),
-                        question: pollToggle?.checked ? pollQuestion.value.trim() : null,
-                        optionA: pollToggle?.checked ? pollOptA.value.trim() : null,
-                        optionB: pollToggle?.checked ? pollOptB.value.trim() : null,
-                        optionC: optCVal,
-                        showResults: pollToggle?.checked ? !!(pollShowResults && pollShowResults.checked) : false,
-                        showRawCounts: pollToggle?.checked ? !!(pollShowCount && pollShowCount.checked) : false,
-                    },
+                    poll: assembleComposePoll({ closesInMs: pollClosesInMs }),
                 },
             };
             const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
@@ -13604,6 +13694,11 @@ const Admin = {
                 if (pollOptB) pollOptB.value = item.poll.optionB || '';
                 if (pollShowResults) pollShowResults.checked = !!item.poll.showResults;
                 if (pollShowCount) pollShowCount.checked = !!(item.poll.showRawCounts || item.poll.showParticipantCount);
+                if (item.poll.closesAt && pollCloses) {
+                    pollCloses.value = Admin.toLocalDatetimeValue(item.poll.closesAt);
+                } else if (pollCloses) {
+                    pollCloses.value = '';
+                }
                 if (item.poll.optionC) {
                     if (pollOptC) pollOptC.value = item.poll.optionC;
                     pollOptCWrap?.classList.remove('hidden');
@@ -13618,6 +13713,7 @@ const Admin = {
             } else {
                 if (pollToggle) pollToggle.checked = false;
                 pollContainer?.classList.add('hidden');
+                if (pollCloses) pollCloses.value = '';
                 Admin.hideLivePollResults();
             }
 
@@ -13638,6 +13734,9 @@ const Admin = {
                 Admin.setSelectedAlertTargets(targets, { fetch: false });
             }
             fillAlertComposeFromItem(job.notice, { mode: 'repost' });
+            if (job.notice?.poll?.closesInMs && job.nextRunAt && pollCloses) {
+                pollCloses.value = Admin.toLocalDatetimeValue(Number(job.nextRunAt) + Number(job.notice.poll.closesInMs));
+            }
             const freq = job.frequency || 'once';
             const mode = freq === 'weekly' ? 'weekly' : (freq === 'monthly' ? 'monthly' : 'later');
             syncAlertWhenMode(mode);
@@ -14069,7 +14168,8 @@ const Admin = {
             
             const hasBody = Admin.alertComposeHasBody(msg);
             const posters = Admin.getSelectedAlertPosters();
-            if (!hasBody && !posters.length) { if (typeof showToast === 'function') showToast("Add a message or a poster.", "error"); return; }
+            if (composeNeedsContentToast(hasBody, posters)) return;
+            if (!composePollFieldsOk()) return;
             if (!targets.length) { if (typeof showToast === 'function') showToast("Pick at least one route or region.", "error"); return; }
             if (!secret) { if (typeof showToast === 'function') showToast("Authentication required! Sign in again.", "error"); return; }
 
@@ -14080,9 +14180,6 @@ const Admin = {
 
             let expiresAtVal = dateInput && dateInput.value ? new Date(dateInput.value).getTime() : new Date(Admin.endOfTodayLocalValue()).getTime();
 
-            const optCVal = pollToggle.checked && pollOptC && !pollOptCWrap?.classList.contains('hidden')
-                ? (pollOptC.value.trim() || null)
-                : null;
             const isRepost = !!Admin._alertRepostDraft;
             const isUpdate = !!existingAlertId && !isRepost;
             const nowTs = Date.now();
@@ -14109,15 +14206,7 @@ const Admin = {
                 payload.postedAt = nowTs;
             }
             if (isRepost) payload.repostedAt = nowTs;
-            payload.poll = {
-                active: pollToggle.checked,
-                question: pollToggle.checked ? pollQuestion.value.trim() : null,
-                optionA: pollToggle.checked ? pollOptA.value.trim() : null,
-                optionB: pollToggle.checked ? pollOptB.value.trim() : null,
-                optionC: optCVal,
-                showResults: pollToggle.checked ? !!(pollShowResults && pollShowResults.checked) : false,
-                showRawCounts: pollToggle.checked ? !!(pollShowCount && pollShowCount.checked) : false,
-            };
+            payload.poll = assembleComposePoll({ closesAt: readPollClosesAt(expiresAtVal) });
 
             const publishAssembled = async () => {
                 try {
@@ -14229,6 +14318,7 @@ const Admin = {
                 if (pollOptC) pollOptC.value = "";
                 if (pollShowResults) pollShowResults.checked = false;
                 if (pollShowCount) pollShowCount.checked = false;
+                if (pollCloses) pollCloses.value = '';
                 pollOptCWrap?.classList.add('hidden');
                 pollAddCBtn?.classList.remove('hidden');
                 const livePoll = document.getElementById('alert-live-poll-results');

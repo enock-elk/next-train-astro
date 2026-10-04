@@ -1167,6 +1167,26 @@ a.nt-alert-source:focus-visible {
   border-color: var(--nt-primary);
   background: color-mix(in srgb, var(--nt-primary) 10%, var(--nt-surface));
 }
+.nt-poll[data-poll-open="0"] .nt-poll-vote {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.nt-poll-view-results {
+  display: block;
+  width: 100%;
+  margin: 0.45rem 0 0.1rem;
+  padding: 0.2rem 0.4rem;
+  border: 0;
+  background: none;
+  font-size: 0.6875rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  line-height: 1.3;
+  text-transform: uppercase;
+  color: var(--nt-primary);
+  text-align: center;
+  cursor: pointer;
+}
 .nt-poll-results {
   margin-top: 0.55rem;
 }
@@ -1273,6 +1293,11 @@ a.nt-alert-source:focus-visible {
 }
 .nt-poll-live-dot.is-on {
   animation: nt-poll-live-pulse 1.8s ease-in-out infinite;
+}
+.nt-poll-live-dot.is-off {
+  background: #ef4444;
+  animation: none;
+  opacity: 1;
 }
 @keyframes nt-poll-live-pulse {
   0%, 100% { opacity: 1; }

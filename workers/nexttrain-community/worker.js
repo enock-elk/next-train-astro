@@ -537,15 +537,45 @@ function scheduledTargets(job) {
     return Array.from(new Set(values.map((target) => String(target || '').trim()).filter(isSafeRtdbKey)));
 }
 
+function noticeLooksLikeRecord(value) {
+    const poll = value?.poll;
+    return !!(value && typeof value === 'object' && (
+        value.message || value.text || value.severity || value.imageUrls || value.imageUrl
+        || (poll && typeof poll === 'object' && (poll.active || poll.question || poll.optionA || poll.optionB))
+    ));
+}
+
 function listNotices(node) {
     if (!node || typeof node !== 'object') return [];
     if (Array.isArray(node)) return node.filter((item) => item && typeof item === 'object');
     const children = Object.entries(node)
-        .filter(([key, value]) => key !== 'reactions' && value && typeof value === 'object'
-            && (value.message || value.text || value.severity || value.imageUrls || value.imageUrl))
+        .filter(([key, value]) => key !== 'reactions' && noticeLooksLikeRecord(value))
         .map(([key, value]) => ({ ...value, id: value.id || key }));
     if (children.length) return children;
-    return (node.message || node.text || node.id || node.imageUrls || node.imageUrl) ? [node] : [];
+    return (node.message || node.text || node.id || node.imageUrls || node.imageUrl || noticeLooksLikeRecord(node)) ? [node] : [];
+}
+
+function scheduledPollClosesAt(runAt, job, expiresAt) {
+    const poll = job?.notice?.poll;
+    if (!poll || poll.active === false) return 0;
+    const exp = Number(expiresAt) || 0;
+    const closesInMs = Number(poll.closesInMs);
+    if (Number.isFinite(closesInMs) && closesInMs > 0) {
+        const until = Number(runAt) + closesInMs;
+        return exp > 0 && until > exp ? exp : until;
+    }
+    const explicit = Number(poll.closesAt);
+    if (Number.isFinite(explicit) && explicit > 0) {
+        return exp > 0 && explicit > exp ? exp : explicit;
+    }
+    return exp;
+}
+
+async function writePollVoteMeta(rtdb, payload) {
+    if (!payload?.id || !payload.poll || payload.poll.active === false) return;
+    const closesAt = Number(payload.poll.closesAt) || Number(payload.expiresAt) || 0;
+    if (!closesAt) return;
+    await rtdb.put(`polls/${payload.id}/_meta`, { closesAt });
 }
 
 function noticesMeta(notices, now) {
@@ -625,18 +655,34 @@ async function processScheduledJob(rtdb, scheduleId, now, leaseMs) {
 
     const notice = { ...job.notice };
     delete notice.expiresInMs;
+    if (notice.poll && typeof notice.poll === 'object') {
+        notice.poll = { ...notice.poll };
+        delete notice.poll.closesInMs;
+    }
+    const expiresAt = scheduledAlertExpiresAt(plan.occurrenceAt, job);
     const payload = {
         ...notice,
         id: noticeId,
         postedAt: plan.occurrenceAt,
-        expiresAt: scheduledAlertExpiresAt(plan.occurrenceAt, job),
+        expiresAt,
     };
+    if (payload.poll && payload.poll.active) {
+        const closesAt = scheduledPollClosesAt(plan.occurrenceAt, job, expiresAt);
+        if (closesAt) payload.poll.closesAt = closesAt;
+    }
     const failures = [];
     for (const target of targets) {
         try {
             await publishScheduledNotice(rtdb, target, payload, now);
         } catch (error) {
             failures.push({ target, error: error?.message || 'Publish failed' });
+        }
+    }
+    if (!failures.length && payload.poll && payload.poll.active) {
+        try {
+            await writePollVoteMeta(rtdb, payload);
+        } catch (error) {
+            failures.push({ target: 'polls', error: error?.message || 'Poll meta failed' });
         }
     }
     if (failures.length) return { state: 'failed', noticeId, failures };

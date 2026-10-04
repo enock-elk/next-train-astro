@@ -126,8 +126,12 @@
     "polls": {
       "$pollId": {
         ".read": true,
+        "_meta": {
+          ".write": "auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')",
+          ".validate": "!newData.exists() || (newData.hasChildren(['closesAt']) && newData.child('closesAt').isNumber() && newData.child('closesAt').val() > 0)"
+        },
         "$voteId": {
-          ".write": "(!data.exists() && auth != null) || (auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com'))",
+          ".write": "(!data.exists() && auth != null && $voteId === auth.uid && $voteId !== '_meta' && (!root.child('polls').child($pollId).child('_meta').hasChild('closesAt') || root.child('polls').child($pollId).child('_meta').child('closesAt').val() > now)) || (auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com'))",
           ".validate": "!newData.exists() || (newData.hasChildren(['optionKey', 'timestamp', 'deviceId']) && (newData.child('optionKey').val() === 'A' || newData.child('optionKey').val() === 'B' || newData.child('optionKey').val() === 'C') && newData.child('timestamp').isNumber() && newData.child('deviceId').isString() && newData.child('deviceId').val().length > 0 && newData.child('deviceId').val().length < 120 && (!newData.hasChild('optionText') || (newData.child('optionText').isString() && newData.child('optionText').val().length <= 120)))"
         }
       }

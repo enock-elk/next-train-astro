@@ -69,6 +69,13 @@ const now = 1_700_000_000_000;
     }, 'all', now);
     assert(imageOnly.length === 1 && imageOnly[0].id === 'p1', `image-only child is kept: ${imageOnly.map((n) => n.id)}`);
     assert(isNoticeRecord({ imageUrls: ['/images/alerts/a.png'] }), 'imageUrls counts as a notice');
+
+    const pollOnly = parseNoticeBucket({
+        poster: { id: 'poll-only', poll: { active: true, question: 'Keep Saturday trains?' }, postedAt: 1, expiresAt: now + 1 },
+        empty: { id: 'skip' },
+    }, 'all', now);
+    assert(pollOnly.length === 1 && pollOnly[0].id === 'poll-only', `poll-only child is kept: ${pollOnly.map((n) => n.id)}`);
+    assert(isNoticeRecord({ poll: { active: true, question: 'Q' } }), 'poll counts as a notice');
 }
 
 {
@@ -360,15 +367,20 @@ const now = 1_700_000_000_000;
     assert(rules.notices_meta?.['.read'] === true, 'notices_meta public read');
     const emojiWrite = rules.notices?.$target?.$noticeId?.reactions?.$emoji?.['.write'] || '';
     assert(emojiWrite.includes('wow') && emojiWrite.includes('sad') && emojiWrite.includes('like'), `notice reaction write ${emojiWrite}`);
+    const pollVoteWrite = String(rules.polls?.$pollId?.$voteId?.['.write'] || '');
+    assert(pollVoteWrite.includes('$voteId === auth.uid'), `poll votes are keyed to uid ${pollVoteWrite}`);
+    assert(pollVoteWrite.includes("child('_meta')") && pollVoteWrite.includes('closesAt'), 'closed polls reject new votes');
+    assert(rules.polls?.$pollId?._meta, 'polls/{id}/_meta is a dedicated admin node');
 }
 
 {
-    const { buildPollShellHtml, buildPollResultsHtml, tallyPollVotes } = await import('../src/lib/alert-poll.js');
+    const { buildPollShellHtml, buildPollResultsHtml, tallyPollVotes, isPollOpen, withPollTiming } = await import('../src/lib/alert-poll.js');
     const tallies = tallyPollVotes({
         a: { optionKey: 'A' },
         b: { optionKey: 'B' },
         c: { optionKey: 'A' },
         skip: 'nope',
+        _meta: { closesAt: 9 },
     });
     assert(tallies.A === 2 && tallies.B === 1 && tallies.C === 0 && tallies.total === 3, `tally ${JSON.stringify(tallies)}`);
 
@@ -379,7 +391,7 @@ const now = 1_700_000_000_000;
         includeQuestion: true,
     });
     assert(bars.includes('Keep Saturday trains?') && bars.includes('Your vote') && bars.includes('50%'), `results html ${bars}`);
-    assert(bars.includes('is-mine') && bars.includes('NEXT TRAIN POLL'), 'voted row is marked with live poll label');
+    assert(bars.includes('is-mine') && bars.includes('ACTIVE POLL') && bars.includes('NEXT TRAIN'), 'voted row is marked with live poll label');
     assert(!bars.includes('Live percentages'), 'old Live percentages footer is gone');
     assert(!bars.includes('(2)') && !bars.includes('(1)'), 'default results omit raw counts');
 
@@ -390,6 +402,14 @@ const now = 1_700_000_000_000;
         includeQuestion: false,
     });
     assert(rawBars.includes('67% (2)') && rawBars.includes('33% (1)') && rawBars.includes('67%'), `raw counts sit in brackets next to percentages ${rawBars}`);
+
+    const closedLabel = buildPollResultsHtml({
+        poll: { question: 'Q', optionA: 'Yes', optionB: 'No', closesAt: 1 },
+        counts: { A: 1, B: 0, total: 1 },
+        votedOption: 'A',
+        includeQuestion: false,
+    });
+    assert(closedLabel.includes('INACTIVE POLL') && closedLabel.includes('is-off'), `closed results use inactive label ${closedLabel}`);
 
     const notice = {
         id: 'poll-1',
@@ -405,7 +425,8 @@ const now = 1_700_000_000_000;
     const unvoted = buildPollShellHtml(notice, { mode: 'preview' });
     assert(unvoted.includes('nt-poll-vote') && !unvoted.includes('data-poll-hydrate="1"'), 'results stay hidden until a vote');
     assert(unvoted.includes('Keep Saturday trains?') && unvoted.includes('Yes'), 'unvoted poll keeps the question and options');
-    assert(unvoted.includes('NEXT TRAIN POLL'), 'unvoted poll still shows the live label');
+    assert(unvoted.includes('ACTIVE POLL') && unvoted.includes('NEXT TRAIN'), 'unvoted poll still shows the live label');
+    assert(unvoted.includes('View Poll Results') && unvoted.includes('data-poll-view-results'), 'unvoted poll tempts with View Poll Results');
     assert(!unvoted.includes('Thanks for voting'), 'showResults does not thank before a vote');
 
     const hidden = buildPollShellHtml({
@@ -413,6 +434,17 @@ const now = 1_700_000_000_000;
         poll: { ...notice.poll, showResults: false },
     }, { mode: 'preview' });
     assert(hidden.includes('nt-poll-vote') && !hidden.includes('data-poll-hydrate'), 'hidden results keep vote buttons only');
+
+    const closedShell = buildPollShellHtml({
+        ...notice,
+        poll: { ...notice.poll, closesAt: 1 },
+    }, { mode: 'preview' });
+    assert(closedShell.includes('data-poll-open="0"') && closedShell.includes('INACTIVE POLL'), 'closed poll is inactive without flipping poll.active');
+    assert(closedShell.includes('View Poll Results') && closedShell.includes('nt-poll-vote'), 'closed poll still shows answers and View Poll Results');
+
+    assert(isPollOpen(withPollTiming({ active: true }, { expiresAt: now - 1 }), now) === false, 'missing closesAt inherits alert expiry');
+    assert(isPollOpen(withPollTiming({ active: true }, {}), now) === true, 'no close and no alert expiry stays open');
+    assert(isPollOpen(withPollTiming({ active: true, closesAt: now + 1 }, { expiresAt: now - 1 }), now) === true, 'dedicated poll close can outlive nothing once set');
 
     const { safeStorage } = await import('../src/lib/utils.js');
     safeStorage.setItem('poll_voted_poll-1', 'A');
@@ -424,6 +456,12 @@ const now = 1_700_000_000_000;
         poll: { ...notice.poll, showResults: false },
     }, { mode: 'live' });
     assert(votedHide.includes('Thanks for voting') && !votedHide.includes('data-poll-hydrate'), 'hidden results still thank the voter');
+
+    const { readFileSync } = await import('node:fs');
+    const hubJs = readFileSync(new URL('../src/lib/hub.js', import.meta.url), 'utf8');
+    assert(hubJs.includes("method: 'PUT'"), 'votes PUT to polls/{id}/{uid}');
+    assert(hubJs.includes('Vote first to see the results.'), 'View Poll Results asks for a vote first');
+    assert(hubJs.includes('This poll is closed.'), 'closed polls tell the commuter votes are off');
 }
 
 if (failures.length) {

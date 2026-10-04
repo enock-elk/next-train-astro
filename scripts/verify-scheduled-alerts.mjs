@@ -146,6 +146,36 @@ const [overlapA, overlapB] = await Promise.all([
 assert.equal(overlapA.published + overlapB.published, 1, 'ETag claim permits one overlapping publisher');
 assert.deepEqual(Object.keys(overlapDb.read('notices/all')), [expectedId]);
 
+const pollJob = {
+    id: 'sched_poll',
+    target: 'all',
+    targets: ['all'],
+    frequency: 'once',
+    nextRunAt: occurrenceAt,
+    enabled: true,
+    expireMode: 'duration',
+    notice: {
+        poll: {
+            active: true,
+            question: 'Keep Saturday trains?',
+            optionA: 'Yes',
+            optionB: 'No',
+            closesInMs: 10 * 60 * 1000,
+        },
+        expiresInMs: 60 * 60 * 1000,
+        severity: 'info',
+    },
+};
+const pollDb = new FakeRtdb({ notices_scheduled: { sched_poll: pollJob } });
+const pollRun = await runScheduledAlerts({ ALERT_CLAIM_LEASE_MS: '120000' }, { now, rtdb: pollDb });
+assert.equal(pollRun.published, 1, 'poll-only scheduled notice publishes');
+const pollId = scheduledNoticeId('sched_poll', occurrenceAt);
+const publishedPoll = pollDb.read(`notices/all/${pollId}`);
+assert.equal(publishedPoll.poll.closesAt, occurrenceAt + 10 * 60 * 1000, 'scheduled poll gets dedicated closesAt');
+assert.equal(publishedPoll.poll.closesInMs, undefined, 'closesInMs is not copied onto the live notice');
+assert.equal(pollDb.read(`polls/${pollId}/_meta`).closesAt, occurrenceAt + 10 * 60 * 1000, 'rules meta matches poll close');
+assert.ok(publishedPoll.poll.active, 'poll.active still means the notice has a poll');
+
 const staleDb = new FakeRtdb({
     notices_scheduled: {
         stale_once: {
@@ -240,7 +270,8 @@ assert.match(workerSource, /thandeka05nxumalo@gmail\.com/);
 assert.match(wranglerSource, /"\*\/5 \* \* \* \*"/);
 assert.match(wranglerSource, /"0 \* \* \* \*"/);
 assert.match(wranglerSource, /enock-elk\.github\.io/);
-assert.match(workerSource, /runScheduledAlerts\(env\)/);
+assert.match(workerSource, /polls\/\$\{payload\.id\}\/_meta/);
+assert.match(workerSource, /closesInMs/);
 assert.match(workerSource, /await Promise\.all\(tasks\)/);
 assert.match(workerSource, /Cloudflare can normalize/);
 assert.match(workerSource, /endsWith\('\.github\.io'\)/);

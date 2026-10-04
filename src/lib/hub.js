@@ -69,6 +69,8 @@ import {
     hydratePollResults,
     paintPollShellsAfterVote,
     pollSeverity,
+    isPollOpen,
+    readVotedPollOption,
 } from './alert-poll.js';
 import { $userProfile, $currentRouteId, $userRegion, $deviceId } from '../store.js';
 import { $account } from './account.js';
@@ -1029,10 +1031,14 @@ async function ensurePollAuthToken() {
     return '';
 }
 
-/** SPA parity — notice modal poll votes (one vote per device via localStorage). */
+/** One vote per Firebase uid (anonymous install). localStorage is only a UX lock. */
 export async function submitPollVote(pollId, optionKey, optionText, pollMeta = null) {
     triggerHaptic();
     if (!pollId || !optionKey) return;
+    if (pollMeta && !isPollOpen(pollMeta)) {
+        showToast('This poll is closed.', 'info');
+        return;
+    }
     if (safeStorage.getItem('poll_voted_' + pollId)) {
         showToast('You have already voted on this poll.', 'warning');
         return;
@@ -1042,7 +1048,8 @@ export async function submitPollVote(pollId, optionKey, optionText, pollMeta = n
 
     try {
         const token = await ensurePollAuthToken();
-        if (!token) throw new Error('Auth required to vote');
+        const uid = window.firebaseAuth?.currentUser?.uid || '';
+        if (!token || !uid) throw new Error('Auth required to vote');
 
         const payload = {
             optionKey,
@@ -1051,10 +1058,20 @@ export async function submitPollVote(pollId, optionKey, optionText, pollMeta = n
             deviceId: $deviceId.get() || safeStorage.getItem('next_train_device_id') || 'unknown',
         };
         const res = await fetch(
-            `${DYNAMIC_BASE_URL}polls/${encodeURIComponent(pollId)}.json?auth=${encodeURIComponent(token)}`,
-            { method: 'POST', body: JSON.stringify(payload) }
+            `${DYNAMIC_BASE_URL}polls/${encodeURIComponent(pollId)}/${encodeURIComponent(uid)}.json?auth=${encodeURIComponent(token)}`,
+            { method: 'PUT', body: JSON.stringify(payload) }
         );
-        if (!res.ok) throw new Error(`Vote write failed (${res.status})`);
+        if (!res.ok) {
+            if (pollMeta && !isPollOpen(pollMeta)) {
+                showToast('This poll is closed.', 'info');
+                return;
+            }
+            if (res.status === 403) {
+                showToast('You have already voted on this poll.', 'warning');
+                return;
+            }
+            throw new Error(`Vote write failed (${res.status})`);
+        }
 
         try { safeStorage.setItem('poll_voted_' + pollId, optionKey); } catch { /* ignore */ }
         trackAlertEvent('alert_poll_vote', {
@@ -1900,6 +1917,21 @@ export function initHub() {
     if (!window.__ntPollVoteBound) {
         window.__ntPollVoteBound = true;
         document.addEventListener('click', (e) => {
+            const viewBtn = e.target?.closest?.('[data-poll-view-results]');
+            if (viewBtn) {
+                e.preventDefault();
+                const wrap = viewBtn.closest('[data-poll-shell], [id^="poll-container-"]');
+                let pollMeta = null;
+                try { pollMeta = JSON.parse(wrap?.dataset?.pollMeta || 'null'); } catch { pollMeta = null; }
+                const pollId = wrap?.getAttribute('data-poll-shell') || '';
+                if (pollId && readVotedPollOption(pollId)) return;
+                if (pollMeta && !isPollOpen(pollMeta)) {
+                    showToast('This poll is closed.', 'info');
+                    return;
+                }
+                showToast('Vote first to see the results.', 'info');
+                return;
+            }
             const btn = e.target?.closest?.('.nt-poll-vote');
             if (!btn) return;
             e.preventDefault();
@@ -1910,6 +1942,10 @@ export function initHub() {
             const wrap = btn.closest('[data-poll-shell], [id^="poll-container-"]');
             let pollMeta = null;
             try { pollMeta = JSON.parse(wrap?.dataset?.pollMeta || 'null'); } catch { pollMeta = null; }
+            if (wrap?.getAttribute('data-poll-open') === '0' || (pollMeta && !isPollOpen(pollMeta))) {
+                showToast('This poll is closed.', 'info');
+                return;
+            }
             submitPollVote(
                 btn.getAttribute('data-poll-id'),
                 btn.getAttribute('data-poll-opt'),

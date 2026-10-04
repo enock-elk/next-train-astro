@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_10.04.3': [
+        'Polls: View Poll Results sits under the answers and asks for a vote first (no tally fetch until this device has voted). Footer is NEXT TRAIN [green pulse] ACTIVE POLL or NEXT TRAIN [red static] INACTIVE POLL. poll.active still means the notice has a poll. Voting window is additive poll.closesAt (missing inherits alert expiresAt, or stays open). Admin compose has a dedicated poll close, clamp ≤ alert expiry, and scheduled closesInMs. Publish writes polls/{id}/_meta.closesAt so rules reject late votes. Votes PUT to polls/{id}/{uid} (one anonymous uid). Empty-body compose is allowed when a poll or poster is present. No commuter What’s New. forceShow stays false.',
+    ],
     'V9_10.04.2': [
         'VIEW FULL TIMETABLE keeps one open intent. Stay on Next Train and the grid opens once sheets land. Tab change, hub, another modal, or a route swap cancels it so a late load cannot stack overlays. Alerts: admin pin (compose, hold picker, notice modal) puts any post at the bottom of the feed with a pin SVG left of the severity chip. Polls hide results until this device votes, then always show percentages. Optional showRawCounts adds the tally in brackets, e.g. 50% (2). Live footer is NEXT TRAIN POLL with a green opacity-only pulse. What’s New covers the timetable wait only. forceShow stays false.',
     ],

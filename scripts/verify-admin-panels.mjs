@@ -139,6 +139,7 @@ const requiredIds = [
     'alert-poll-question',
     'alert-poll-show-results',
     'alert-poll-show-count',
+    'alert-poll-closes',
     'alert-live-poll-results',
     'alert-live-poll-refresh',
     'alert-schedule-first',
@@ -175,6 +176,10 @@ const requiredIds = [
 for (const id of requiredIds) {
     assert(admin.includes(`id="${id}"`), `admin still exposes #${id}`);
 }
+assert(admin.includes('Add a message, a poster, or a poll.'), 'compose allows a poll without alert body');
+assert(!admin.includes('Add a message or a poster.'), 'old body-or-poster-only toast is gone');
+assert(admin.includes('writePollVoteMeta'), 'publish writes poll close meta for rules');
+assert(admin.includes('closesInMs'), 'scheduled polls store a dedicated run length');
 assert(admin.includes("'exp-map-enabled'") && admin.includes("'exp-community-enabled'"), 'experimental Map and Community toggles exist');
 
 assert(admin.includes('renderExpFeatureAccordions'), 'experimental features render as per-type accordions');

@@ -574,8 +574,12 @@ function scheduledPollClosesAt(runAt, job, expiresAt) {
 async function writePollVoteMeta(rtdb, payload) {
     if (!payload?.id || !payload.poll || payload.poll.active === false) return;
     const closesAt = Number(payload.poll.closesAt) || Number(payload.expiresAt) || 0;
-    if (!closesAt) return;
-    await rtdb.put(`polls/${payload.id}/_meta`, { closesAt });
+    const allowMultiple = !!payload.poll.allowMultiple;
+    if (!closesAt && !allowMultiple) return;
+    const meta = {};
+    if (closesAt) meta.closesAt = closesAt;
+    if (allowMultiple) meta.allowMultiple = true;
+    await rtdb.put(`polls/${payload.id}/_meta`, meta);
 }
 
 function noticesMeta(notices, now) {

@@ -12088,12 +12088,16 @@ const Admin = {
     writePollVoteMeta: async (pollId, poll, secret, fallbackExpiresAt = 0) => {
         if (!pollId || !secret || !poll || poll.active === false) return;
         const closesAt = Number(poll.closesAt) || Number(fallbackExpiresAt) || 0;
-        if (!closesAt) return;
+        const allowMultiple = !!poll.allowMultiple;
+        if (!closesAt && !allowMultiple) return;
         const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
+        const meta = {};
+        if (closesAt) meta.closesAt = closesAt;
+        if (allowMultiple) meta.allowMultiple = true;
         try {
             await fetch(`${dynamicEndpoint}polls/${encodeURIComponent(pollId)}/_meta.json?auth=${secret}`, {
                 method: 'PUT',
-                body: JSON.stringify({ closesAt }),
+                body: JSON.stringify(meta),
             });
         } catch (e) {
             console.warn('poll _meta write failed', e);
@@ -12898,6 +12902,16 @@ const Admin = {
                     </div>
                     <div class="flex items-center justify-between bg-white dark:bg-gray-900/60 p-3 rounded-xl border border-purple-200 dark:border-purple-800">
                         <div>
+                            <span class="font-bold text-purple-800 dark:text-purple-200 text-xs">Allow multiple answers</span>
+                            <p class="text-[10px] text-purple-600 dark:text-purple-400 mt-0.5">Like WhatsApp. Off is one pick. On lets them select several, then Submit vote</p>
+                        </div>
+                        <div class="relative inline-block w-10 mr-2 align-middle select-none transition duration-200 ease-in">
+                            <input type="checkbox" id="alert-poll-allow-multiple" class="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 border-gray-300 appearance-none cursor-pointer outline-none"/>
+                            <label for="alert-poll-allow-multiple" class="toggle-label block overflow-hidden h-6 rounded-full bg-gray-300 cursor-pointer"></label>
+                        </div>
+                    </div>
+                    <div class="flex items-center justify-between bg-white dark:bg-gray-900/60 p-3 rounded-xl border border-purple-200 dark:border-purple-800">
+                        <div>
                             <span class="font-bold text-purple-800 dark:text-purple-200 text-xs">Show raw vote counts</span>
                             <p class="text-[10px] text-purple-600 dark:text-purple-400 mt-0.5">Adds the count in brackets next to each percentage</p>
                         </div>
@@ -13305,6 +13319,7 @@ const Admin = {
         const pollOptCWrap = document.getElementById('alert-poll-opt-c-wrap');
         const pollAddCBtn = document.getElementById('alert-poll-add-c-btn');
         const pollShowResults = document.getElementById('alert-poll-show-results');
+        const pollAllowMultiple = document.getElementById('alert-poll-allow-multiple');
         const pollShowCount = document.getElementById('alert-poll-show-count');
         const pollCloses = document.getElementById('alert-poll-closes');
         let existingAlertId = null;
@@ -13333,6 +13348,7 @@ const Admin = {
                     optionC: null,
                     showResults: false,
                     showRawCounts: false,
+                    allowMultiple: false,
                 };
             }
             const optCVal = pollOptC && !pollOptCWrap?.classList.contains('hidden')
@@ -13346,6 +13362,7 @@ const Admin = {
                 optionC: optCVal,
                 showResults: !!(pollShowResults && pollShowResults.checked),
                 showRawCounts: !!(pollShowCount && pollShowCount.checked),
+                allowMultiple: !!(pollAllowMultiple && pollAllowMultiple.checked),
             };
             if (closesAt) poll.closesAt = closesAt;
             if (closesInMs) poll.closesInMs = closesInMs;
@@ -13693,6 +13710,7 @@ const Admin = {
                 if (pollOptA) pollOptA.value = item.poll.optionA || '';
                 if (pollOptB) pollOptB.value = item.poll.optionB || '';
                 if (pollShowResults) pollShowResults.checked = !!item.poll.showResults;
+                if (pollAllowMultiple) pollAllowMultiple.checked = !!item.poll.allowMultiple;
                 if (pollShowCount) pollShowCount.checked = !!(item.poll.showRawCounts || item.poll.showParticipantCount);
                 if (item.poll.closesAt && pollCloses) {
                     pollCloses.value = Admin.toLocalDatetimeValue(item.poll.closesAt);
@@ -14317,6 +14335,7 @@ const Admin = {
                 pollOptB.value = "";
                 if (pollOptC) pollOptC.value = "";
                 if (pollShowResults) pollShowResults.checked = false;
+                if (pollAllowMultiple) pollAllowMultiple.checked = false;
                 if (pollShowCount) pollShowCount.checked = false;
                 if (pollCloses) pollCloses.value = '';
                 pollOptCWrap?.classList.add('hidden');

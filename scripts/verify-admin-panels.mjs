@@ -138,6 +138,7 @@ const requiredIds = [
     'alert-poll-toggle',
     'alert-poll-question',
     'alert-poll-show-results',
+    'alert-poll-allow-multiple',
     'alert-poll-show-count',
     'alert-poll-closes',
     'alert-live-poll-results',
@@ -176,6 +177,8 @@ const requiredIds = [
 for (const id of requiredIds) {
     assert(admin.includes(`id="${id}"`), `admin still exposes #${id}`);
 }
+assert(admin.includes('Allow multiple answers'), 'admin can allow WhatsApp-style multi answers');
+assert(admin.includes('allowMultiple'), 'compose writes poll.allowMultiple');
 assert(admin.includes('Add a message, a poster, or a poll.'), 'compose allows a poll without alert body');
 assert(!admin.includes('Add a message or a poster.'), 'old body-or-poster-only toast is gone');
 assert(admin.includes('writePollVoteMeta'), 'publish writes poll close meta for rules');

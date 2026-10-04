@@ -1143,10 +1143,16 @@ a.nt-alert-source:focus-visible {
 .nt-poll-thanks {
   margin-bottom: 0.2rem;
 }
+.nt-poll > .nt-poll-foot:first-child {
+  margin: 0 0 0.55rem;
+}
 .nt-poll-choices {
   display: flex;
   flex-wrap: wrap;
   gap: 0.4rem;
+}
+.nt-poll-choices--stack {
+  flex-direction: column;
 }
 .nt-poll-vote {
   flex: 1 1 30%;
@@ -1159,22 +1165,56 @@ a.nt-alert-source:focus-visible {
   color: var(--nt-text);
   font-size: 0.75rem;
   font-weight: 800;
-  line-height: 1.2;
+  line-height: 1.25;
   text-align: center;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  hyphens: auto;
+}
+.nt-poll-choices--stack .nt-poll-vote {
+  flex: 1 1 auto;
+  width: 100%;
+  min-width: 0;
 }
 .nt-poll-vote:hover,
 .nt-poll-vote:focus-visible {
   border-color: var(--nt-primary);
   background: color-mix(in srgb, var(--nt-primary) 10%, var(--nt-surface));
 }
+.nt-poll-vote.is-selected {
+  border-color: var(--nt-primary);
+  background: color-mix(in srgb, var(--nt-primary) 16%, var(--nt-surface));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--nt-primary) 35%, transparent);
+}
 .nt-poll[data-poll-open="0"] .nt-poll-vote {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.nt-poll-submit {
+  display: block;
+  width: 100%;
+  margin: 0.55rem 0 0;
+  min-height: 2.25rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.65rem;
+  border: 1px solid var(--nt-primary);
+  background: var(--nt-primary);
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  line-height: 1.2;
+  text-align: center;
+  cursor: pointer;
+}
+.nt-poll-submit:disabled {
   opacity: 0.45;
   cursor: not-allowed;
 }
 .nt-poll-view-results {
   display: block;
   width: 100%;
-  margin: 0.45rem 0 0.1rem;
+  margin: 0.85rem 0 0.1rem;
   padding: 0.2rem 0.4rem;
   border: 0;
   background: none;
@@ -1278,6 +1318,11 @@ a.nt-alert-source:focus-visible {
   justify-content: center;
   flex-wrap: wrap;
   gap: 0.35rem 0.7rem;
+}
+.nt-poll-results > .nt-poll-foot:first-child,
+.nt-poll > .nt-poll-results > .nt-poll-foot:first-child {
+  margin-top: 0;
+  margin-bottom: 0.55rem;
 }
 .nt-poll-live {
   display: inline-flex;

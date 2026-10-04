@@ -1,6 +1,8 @@
 {
   "posters": [
     { "id": "fare-adjustment", "file": "2025-fare-adjustment.jpg", "label": "Fare adjustment" },
+    { "id": "fare-adjustment-2026", "file": "2026-fare-adjustment.jpg", "label": "2026 fare adjustment" },
+    { "id": "commuter-mass-meeting-monthly-fares", "file": "commuter-mass-meeting-monthly-fares.jpg", "label": "Commuter mass meeting — monthly fares" },
     { "id": "avoid-trouble-ticket", "file": "avoid_trouble_travel_ticket.jpg", "label": "Avoid trouble — travel with a ticket" },
     { "id": "be-rail-smart", "file": "be-rail-smart-pea.jpg", "label": "Be rail smart" },
     { "id": "considerate-seating", "file": "considerate_seating.jpg", "label": "Considerate seating" },

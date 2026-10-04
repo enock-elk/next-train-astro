@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_10.04.5': [
+        'Polls: NEXT TRAIN ACTIVE/INACTIVE POLL sits above the question. More space before View Poll Results; that control shakes the answer buttons with the existing vote-first toast. Long answers stack full-width. Admin Allow multiple answers (off by default) uses select-then-Submit vote and stores optionKeys. Catalog adds 2026 fare adjustment and commuter mass meeting monthly fares posters. No commuter What’s New. forceShow stays false.',
+    ],
     'V9_10.04.4': [
         'Analytics lean-up: SEO Open in Next Train paths tag src=seo and same-origin /routes|/regions|/corridors referrers skip deep_link_open (seo_page_view stays the SEO signal). trackAnalyticsEvent always attaches region_id (and region) from the payload or userRegion. view_full_grid fires once per open session; day/dir switches and schedule repaints do not re-count; close clears the session. Sidenav Network Map fires one open_interactive_map instead of three. No commuter What’s New. forceShow stays false.',
     ],

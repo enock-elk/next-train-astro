@@ -376,15 +376,23 @@ const now = 1_700_000_000_000;
 }
 
 {
-    const { buildPollShellHtml, buildPollResultsHtml, tallyPollVotes, isPollOpen, withPollTiming } = await import('../src/lib/alert-poll.js');
+    const {
+        buildPollShellHtml,
+        buildPollResultsHtml,
+        tallyPollVotes,
+        isPollOpen,
+        withPollTiming,
+        pollChoicesNeedStack,
+    } = await import('../src/lib/alert-poll.js');
     const tallies = tallyPollVotes({
         a: { optionKey: 'A' },
         b: { optionKey: 'B' },
         c: { optionKey: 'A' },
+        multi: { optionKey: 'A', optionKeys: 'A,C' },
         skip: 'nope',
         _meta: { closesAt: 9 },
     });
-    assert(tallies.A === 2 && tallies.B === 1 && tallies.C === 0 && tallies.total === 3, `tally ${JSON.stringify(tallies)}`);
+    assert(tallies.A === 3 && tallies.B === 1 && tallies.C === 1 && tallies.total === 5, `tally ${JSON.stringify(tallies)}`);
 
     const bars = buildPollResultsHtml({
         poll: { question: 'Keep Saturday trains?', optionA: 'Yes', optionB: 'No', optionC: 'Not sure' },
@@ -394,6 +402,7 @@ const now = 1_700_000_000_000;
     });
     assert(bars.includes('Keep Saturday trains?') && bars.includes('Your vote') && bars.includes('50%'), `results html ${bars}`);
     assert(bars.includes('is-mine') && bars.includes('ACTIVE POLL') && bars.includes('NEXT TRAIN'), 'voted row is marked with live poll label');
+    assert(bars.indexOf('nt-poll-foot') < bars.indexOf('nt-poll-q'), 'live label sits above the results question');
     assert(!bars.includes('Live percentages'), 'old Live percentages footer is gone');
     assert(!bars.includes('(2)') && !bars.includes('(1)'), 'default results omit raw counts');
 
@@ -428,8 +437,27 @@ const now = 1_700_000_000_000;
     assert(unvoted.includes('nt-poll-vote') && !unvoted.includes('data-poll-hydrate="1"'), 'results stay hidden until a vote');
     assert(unvoted.includes('Keep Saturday trains?') && unvoted.includes('Yes'), 'unvoted poll keeps the question and options');
     assert(unvoted.includes('ACTIVE POLL') && unvoted.includes('NEXT TRAIN'), 'unvoted poll still shows the live label');
+    assert(unvoted.indexOf('nt-poll-foot') < unvoted.indexOf('nt-poll-q'), 'live label sits above the poll question');
     assert(unvoted.includes('View Poll Results') && unvoted.includes('data-poll-view-results'), 'unvoted poll tempts with View Poll Results');
     assert(!unvoted.includes('Thanks for voting'), 'showResults does not thank before a vote');
+    assert(!unvoted.includes('data-poll-submit'), 'single-answer polls do not show Submit vote');
+
+    const multiShell = buildPollShellHtml({
+        ...notice,
+        poll: { ...notice.poll, allowMultiple: true, optionC: 'Maybe' },
+    }, { mode: 'preview' });
+    assert(multiShell.includes('data-poll-multi="1"') && multiShell.includes('data-poll-submit'), 'multi-answer polls show Submit vote');
+
+    const longOpt = {
+        active: true,
+        showResults: true,
+        question: 'Q',
+        optionA: 'Raise monthly fares only on Zone 4 corridors',
+        optionB: 'No',
+    };
+    assert(pollChoicesNeedStack(longOpt) === true, 'long option text opts into stacked choices');
+    const longShell = buildPollShellHtml({ id: 'poll-long', poll: longOpt }, { mode: 'preview' });
+    assert(longShell.includes('nt-poll-choices--stack'), 'long answers render in a stacked column');
 
     const hidden = buildPollShellHtml({
         ...notice,
@@ -463,6 +491,7 @@ const now = 1_700_000_000_000;
     const hubJs = readFileSync(new URL('../src/lib/hub.js', import.meta.url), 'utf8');
     assert(hubJs.includes("method: 'PUT'"), 'votes PUT to polls/{id}/{uid}');
     assert(hubJs.includes('Vote first to see the results.'), 'View Poll Results asks for a vote first');
+    assert(hubJs.includes('shakePollVoteButtons'), 'View Poll Results shakes the answer buttons');
     assert(hubJs.includes('This poll is closed.'), 'closed polls tell the commuter votes are off');
 }
 

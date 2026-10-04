@@ -69,6 +69,11 @@ import {
     hydratePollResults,
     paintPollShellsAfterVote,
     pollSeverity,
+    pollAllowsMultiple,
+    parseVotedPollKeys,
+    formatVotedPollKeys,
+    shakePollVoteButtons,
+    syncPollMultiSubmitState,
     isPollOpen,
     readVotedPollOption,
 } from './alert-poll.js';
@@ -1032,9 +1037,10 @@ async function ensurePollAuthToken() {
 }
 
 /** One vote per Firebase uid (anonymous install). localStorage is only a UX lock. */
-export async function submitPollVote(pollId, optionKey, optionText, pollMeta = null) {
+export async function submitPollVote(pollId, optionKey, optionText, pollMeta = null, optionKeys = null) {
     triggerHaptic();
-    if (!pollId || !optionKey) return;
+    const keys = parseVotedPollKeys(optionKeys && optionKeys.length ? optionKeys : optionKey);
+    if (!pollId || !keys.length) return;
     if (pollMeta && !isPollOpen(pollMeta)) {
         showToast('This poll is closed.', 'info');
         return;
@@ -1044,7 +1050,16 @@ export async function submitPollVote(pollId, optionKey, optionText, pollMeta = n
         return;
     }
 
+    const primary = keys[0];
+    const stored = formatVotedPollKeys(keys);
     const severity = pollSeverity(pollMeta?.severity || 'info');
+    const labelFor = (key) => {
+        if (key === 'A') return pollMeta?.optionA || 'A';
+        if (key === 'B') return pollMeta?.optionB || 'B';
+        if (key === 'C') return pollMeta?.optionC || 'C';
+        return key;
+    };
+    const texts = keys.map(labelFor).filter(Boolean);
 
     try {
         const token = await ensurePollAuthToken();
@@ -1052,8 +1067,9 @@ export async function submitPollVote(pollId, optionKey, optionText, pollMeta = n
         if (!token || !uid) throw new Error('Auth required to vote');
 
         const payload = {
-            optionKey,
-            optionText: optionText || optionKey,
+            optionKey: primary,
+            optionKeys: stored,
+            optionText: optionText || texts.join(', ') || primary,
             timestamp: Date.now(),
             deviceId: $deviceId.get() || safeStorage.getItem('next_train_device_id') || 'unknown',
         };
@@ -1073,15 +1089,15 @@ export async function submitPollVote(pollId, optionKey, optionText, pollMeta = n
             throw new Error(`Vote write failed (${res.status})`);
         }
 
-        try { safeStorage.setItem('poll_voted_' + pollId, optionKey); } catch { /* ignore */ }
+        try { safeStorage.setItem('poll_voted_' + pollId, stored); } catch { /* ignore */ }
         trackAlertEvent('alert_poll_vote', {
             poll_id: pollId,
-            vote_option: optionKey,
-            vote_text: optionText,
+            vote_option: stored,
+            vote_text: texts.join(', '),
             route_id: $currentRouteId.get() || 'global',
         });
 
-        paintPollShellsAfterVote(pollId, pollMeta, optionKey, severity);
+        paintPollShellsAfterVote(pollId, pollMeta, stored, severity);
         showToast('Vote recorded successfully!', 'success');
     } catch (e) {
         console.warn('Poll vote failed', e);
@@ -1929,7 +1945,39 @@ export function initHub() {
                     showToast('This poll is closed.', 'info');
                     return;
                 }
+                shakePollVoteButtons(wrap);
                 showToast('Vote first to see the results.', 'info');
+                return;
+            }
+            const submitBtn = e.target?.closest?.('[data-poll-submit]');
+            if (submitBtn) {
+                e.preventDefault();
+                if (document.getElementById('notice-modal')?.dataset?.alertPreview === '1') {
+                    showToast('Preview only - votes are not recorded.', 'info');
+                    return;
+                }
+                const wrap = submitBtn.closest('[data-poll-shell], [id^="poll-container-"]');
+                let pollMeta = null;
+                try { pollMeta = JSON.parse(wrap?.dataset?.pollMeta || 'null'); } catch { pollMeta = null; }
+                if (wrap?.getAttribute('data-poll-open') === '0' || (pollMeta && !isPollOpen(pollMeta))) {
+                    showToast('This poll is closed.', 'info');
+                    return;
+                }
+                const selected = [...(wrap?.querySelectorAll('.nt-poll-vote.is-selected') || [])];
+                if (!selected.length) {
+                    shakePollVoteButtons(wrap);
+                    showToast('Pick at least one answer.', 'info');
+                    return;
+                }
+                const keys = selected.map((btn) => btn.getAttribute('data-poll-opt')).filter(Boolean);
+                const texts = selected.map((btn) => btn.getAttribute('data-poll-text')).filter(Boolean);
+                submitPollVote(
+                    selected[0].getAttribute('data-poll-id'),
+                    keys[0],
+                    texts.join(', '),
+                    pollMeta,
+                    keys
+                );
                 return;
             }
             const btn = e.target?.closest?.('.nt-poll-vote');
@@ -1944,6 +1992,15 @@ export function initHub() {
             try { pollMeta = JSON.parse(wrap?.dataset?.pollMeta || 'null'); } catch { pollMeta = null; }
             if (wrap?.getAttribute('data-poll-open') === '0' || (pollMeta && !isPollOpen(pollMeta))) {
                 showToast('This poll is closed.', 'info');
+                return;
+            }
+            if (pollAllowsMultiple(pollMeta) || wrap?.getAttribute('data-poll-multi') === '1') {
+                if (readVotedPollOption(btn.getAttribute('data-poll-id') || '')) {
+                    showToast('You have already voted on this poll.', 'warning');
+                    return;
+                }
+                btn.classList.toggle('is-selected');
+                syncPollMultiSubmitState(wrap);
                 return;
             }
             submitPollVote(

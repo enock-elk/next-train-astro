@@ -27,6 +27,8 @@ import {
     noticeScopeLabel,
     ALERTS_PAGE_SIZE,
     ALERT_REACTION_KEYS,
+    isNoticePinned,
+    sortAlertsFeed,
 } from '../src/lib/alerts-feed.js';
 
 const failures = [];
@@ -77,6 +79,13 @@ const now = 1_700_000_000_000;
     assert(merged.length === 3, `union keeps all scopes, got ${merged.length}`);
     assert(merged[0].id === 'n1' && merged[2].id === 'g1', 'chronological oldest-first');
     assert(highestSeverity(merged) === 'critical', 'highest severity is critical');
+    const pinnedFeed = sortAlertsFeed([
+        { id: 'old', postedAt: 1 },
+        { id: 'pin', postedAt: 2, pinned: true, pinnedAt: 9 },
+        { id: 'new', postedAt: 8 },
+    ]);
+    assert(pinnedFeed[2].id === 'pin' && pinnedFeed[0].id === 'old' && pinnedFeed[1].id === 'new', `pinned sits at the bottom ${pinnedFeed.map((n) => n.id)}`);
+    assert(isNoticePinned({ pinned: true }) && !isNoticePinned({}), 'pinned flag helper');
 }
 
 {
@@ -268,6 +277,8 @@ const now = 1_700_000_000_000;
     assert(js.includes('buildPollShellHtml'), 'feed uses the shared poll shell');
     assert(js.includes('feed.dataset.ntAlertsSig'), 'alerts skip innerHTML rewrite when the feed is unchanged');
     assert(hub.includes('paintPollShellsAfterVote'), 'a vote paints every poll shell for that notice');
+    assert(hub.includes('toggleAlertPinned'), 'notice modal can pin any live alert');
+    assert(hub.includes('nt-notice-admin'), 'signed-in admin gets pin and poll-count on the notice modal');
     assert(js.includes('ntPosterRevealed'), 'decoded posters skip the blob URL swap');
     assert(hub.includes('inboxMediaFromHtml'), 'commuter inbox reuses alerts image hoist');
     assert(hub.includes('hydrateAlertPosterImages(host)'), 'commuter inbox hydrates posters');
@@ -284,6 +295,7 @@ const now = 1_700_000_000_000;
     assert(stability.includes('nt-ads-entering'), 'ad-inject wait uses the existing entering class');
     assert(!stability.includes('clever-ads.js'), 'session-stability does not import ad injection code');
     assert(ui.includes("modalId === 'alerts-channel'"), 'alerts Close fades before popping history');
+    assert(ui.includes('cancelPendingGridOpenFromUi'), 'leaving the board cancels a pending timetable open');
     assert(ui.includes('resolveLightboxDisplaySrc'), 'alert full view reuses the feed poster bitmap');
     assert(ui.includes('poster.currentSrc'), 'full view prefers the already-decoded feed currentSrc');
     assert(!ui.includes('toDataURL'), 'full view does not re-encode the poster on the main thread');
@@ -308,6 +320,10 @@ const now = 1_700_000_000_000;
     assert(js.includes('formatAppTime'), 'alert stamps are time-only');
     assert(js.includes('data-alert-date-chip'), 'alerts feed inserts date chips');
     assert(js.includes('data-alert-delete'), 'admin long-press can delete for everyone');
+    assert(js.includes('data-alert-pin-toggle'), 'admin long-press can pin any alert');
+    assert(js.includes('Pin to bottom of feed'), 'pin control is labeled for any posted alert');
+    assert(js.includes('Show raw counts'), 'admin can switch poll rows to raw counts');
+    assert(!/admin && notice\?\.poll\?\.active[\s\S]{0,80}data-alert-pin-toggle/.test(js), 'pin is not limited to poll posts');
     assert(js.includes('isAdminAuthed() ? noticeScopeLabel'), 'region/scope is admin-only');
     assert(!js.includes('Posted ${'), 'Posted prefix removed from alert stamps');
 
@@ -317,6 +333,8 @@ const now = 1_700_000_000_000;
     const gridShare = readFileSync(new URL('../src/lib/timetable-grid.js', import.meta.url), 'utf8');
     assert(!gridShare.includes('Check out the weekday'), 'grid share has no caption');
     assert(gridShare.includes('{ url: shareUrl }'), 'grid share is URL-only');
+    assert(gridShare.includes('cancelPendingGridOpen'), 'stale timetable opens cancel when the commuter leaves the board');
+    assert(gridShare.includes('shouldHonorGridOpenIntent'), 'pending timetable open checks the live board context');
 
     const plannerShare = readFileSync(new URL('../src/lib/planner-ui.js', import.meta.url), 'utf8');
     assert(!plannerShare.includes('Trip Plan:'), 'planner header share has no Trip Plan caption');
@@ -361,8 +379,17 @@ const now = 1_700_000_000_000;
         includeQuestion: true,
     });
     assert(bars.includes('Keep Saturday trains?') && bars.includes('Your vote') && bars.includes('50%'), `results html ${bars}`);
-    assert(bars.includes('is-mine') && bars.includes('Live percentages'), 'voted row is marked');
-    assert(!bars.includes('2 vote'), 'commuter results stay percentages-only');
+    assert(bars.includes('is-mine') && bars.includes('NEXT TRAIN POLL'), 'voted row is marked with live poll label');
+    assert(!bars.includes('Live percentages'), 'old Live percentages footer is gone');
+    assert(!bars.includes('(2)') && !bars.includes('(1)'), 'default results omit raw counts');
+
+    const rawBars = buildPollResultsHtml({
+        poll: { question: 'Keep Saturday trains?', optionA: 'Yes', optionB: 'No', showRawCounts: true },
+        counts: { A: 2, B: 1, total: 3 },
+        votedOption: 'A',
+        includeQuestion: false,
+    });
+    assert(rawBars.includes('67% (2)') && rawBars.includes('33% (1)') && rawBars.includes('67%'), `raw counts sit in brackets next to percentages ${rawBars}`);
 
     const notice = {
         id: 'poll-1',
@@ -376,8 +403,9 @@ const now = 1_700_000_000_000;
         },
     };
     const unvoted = buildPollShellHtml(notice, { mode: 'preview' });
-    assert(unvoted.includes('nt-poll-vote') && unvoted.includes('data-poll-hydrate="1"'), 'showResults still shows choices plus a results well');
+    assert(unvoted.includes('nt-poll-vote') && !unvoted.includes('data-poll-hydrate="1"'), 'results stay hidden until a vote');
     assert(unvoted.includes('Keep Saturday trains?') && unvoted.includes('Yes'), 'unvoted poll keeps the question and options');
+    assert(unvoted.includes('NEXT TRAIN POLL'), 'unvoted poll still shows the live label');
     assert(!unvoted.includes('Thanks for voting'), 'showResults does not thank before a vote');
 
     const hidden = buildPollShellHtml({

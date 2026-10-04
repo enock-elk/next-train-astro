@@ -2,6 +2,12 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin, Dev Hub, Alerts, Trains near me, community chat, or other hidden-test work. No emoji and no em dashes in What’s New. Keep `APP_VERSION`, `package.json` `version`, and `public/app-version.json` aligned on each release. Changelog / What’s New may be skipped, or the heading may be only **no release notes.** Every bump must add `ADMIN_CHANGELOG[APP_VERSION]` (System Health Build notes).
 
+## V9_10.04.2
+
+View full timetable: one pending open. Stay on the board and it opens when sheets are ready. Leave (another tab, hub, modal, or route) and that request is dropped.
+
+Alerts pin is for every post, not only polls. Pinned cards sit at the bottom of the feed, with a pin mark left of Info. Polls hide results until the device votes, then always show percentages. Admins can also turn on raw counts, which appear in brackets next to the percentage.
+
 ## V9_10.04.1
 
 After you change route, the full timetable is for that route. Same-region swaps no longer keep the previous corridor sheet behind Mabopane (or other) chrome.

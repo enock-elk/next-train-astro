@@ -18,11 +18,69 @@ let lastGridBody = null;
 let gridSchedulesRefreshBound = false;
 let gridSchedulesRefreshPrimed = false;
 let gridReloadPendingFor = '';
+/** One pending VIEW FULL TIMETABLE tap. Tap-around clears it so load cannot stack overlays. */
+let gridOpenIntent = null;
+let gridRouteIntentPrimed = false;
+
+const GRID_INTENT_BLOCKING_MODALS = [
+    'route-modal', 'fare-modal', 'alerts-channel', 'notice-modal', 'schedule-modal',
+    'profile-modal', 'feedback-modal', 'about-modal', 'legal-modal', 'messages-thread-modal',
+    'dev-modal', 'login-modal', 'holiday-notice-modal', 'exit-modal', 'cache-clear-modal',
+    'network-slow-confirm-modal', 'region-confirm-modal', 'schedule-override-modal',
+];
 
 function scheduleBundleHasRows(scheds) {
     if (!scheds || typeof scheds !== 'object') return false;
     return ['weekday_to_a', 'weekday_to_b', 'saturday_to_a', 'saturday_to_b', 'pub_to_a', 'pub_to_b']
         .some((key) => Array.isArray(scheds[key]?.rows) && scheds[key].rows.length > 0);
+}
+
+export function shouldHonorGridOpenIntent(intent, ctx = {}) {
+    if (!intent || !intent.routeId) return false;
+    if (ctx.currentRouteId && ctx.currentRouteId !== intent.routeId) return false;
+    if (ctx.activeTab && ctx.activeTab !== 'next-train') return false;
+    if (ctx.homeTabActive === false) return false;
+    if (ctx.hubOpen) return false;
+    const open = Array.isArray(ctx.openModalIds) ? ctx.openModalIds : [];
+    if (open.some((id) => id && id !== 'full-schedule-modal')) return false;
+    return true;
+}
+
+export function collectGridIntentContext() {
+    if (typeof document === 'undefined') {
+        return { currentRouteId: '', activeTab: 'next-train', homeTabActive: true, hubOpen: false, openModalIds: [] };
+    }
+    const home = document.getElementById('view-next-train');
+    const openModalIds = GRID_INTENT_BLOCKING_MODALS.filter((id) => {
+        const el = document.getElementById(id);
+        return !!(el && !el.classList.contains('hidden'));
+    });
+    let activeTab = 'next-train';
+    try { activeTab = safeStorage.getItem('activeTab') || 'next-train'; } catch { /* ignore */ }
+    return {
+        currentRouteId: $currentRouteId.get() || '',
+        activeTab,
+        homeTabActive: !home || home.classList.contains('active'),
+        hubOpen: document.body?.classList.contains('sidenav-open'),
+        openModalIds,
+    };
+}
+
+export function cancelPendingGridOpen() {
+    gridOpenIntent = null;
+}
+
+function tryHonorPendingGridOpen(scheds = $schedules.get()) {
+    const intent = gridOpenIntent;
+    if (!intent) return false;
+    if (!shouldHonorGridOpenIntent(intent, collectGridIntentContext())) return false;
+    if (!schedulesBelongToRoute(scheds, intent.routeId) || !scheduleBundleHasRows(scheds)) return false;
+    const dir = intent.direction;
+    const day = intent.dayOverride;
+    gridOpenIntent = null;
+    if (gridReloadPendingFor === intent.routeId) gridReloadPendingFor = '';
+    renderFullScheduleGrid(dir, day, { silent: true });
+    return true;
 }
 
 function bindGridScheduleRouteRefresh() {
@@ -33,6 +91,7 @@ function bindGridScheduleRouteRefresh() {
             gridSchedulesRefreshPrimed = true;
             return;
         }
+        if (tryHonorPendingGridOpen(scheds)) return;
         const modal = document.getElementById('full-schedule-modal');
         if (!modal || modal.classList.contains('hidden')) return;
         const routeId = $currentRouteId.get();
@@ -40,6 +99,13 @@ function bindGridScheduleRouteRefresh() {
         const dir = lastGridBody?.direction || (typeof window !== 'undefined' ? window._gridSwapDir : null) || 'A';
         const day = lastGridBody?.selectedDay || null;
         renderFullScheduleGrid(dir, day, { silent: true });
+    });
+    $currentRouteId.subscribe((routeId) => {
+        if (!gridRouteIntentPrimed) {
+            gridRouteIntentPrimed = true;
+            return;
+        }
+        if (gridOpenIntent && gridOpenIntent.routeId !== routeId) cancelPendingGridOpen();
     });
 }
 
@@ -269,19 +335,20 @@ export function renderFullScheduleGrid(direction = null, dayOverride = null, opt
     // Same-region corridor swap keeps generic weekday_to_a slots until the new
     // route finishes parsing. Never paint Mabopane chrome over Pienaarspoort rows.
     if (!schedulesBelongToRoute(scheds, routeId) || !scheduleBundleHasRows(scheds)) {
-        showToast('Loading latest schedules... please wait.', 'info', 2000);
+        const alreadyWaiting = !!(gridOpenIntent && gridOpenIntent.routeId === routeId);
+        gridOpenIntent = { routeId, direction, dayOverride };
+        if (!alreadyWaiting) showToast('Loading latest schedules... please wait.', 'info', 2000);
         if (gridReloadPendingFor !== routeId) {
             gridReloadPendingFor = routeId;
             loadAllSchedules(true).then(() => {
-                if ($currentRouteId.get() !== routeId) return;
-                if (!schedulesBelongToRoute($schedules.get(), routeId)) return;
-                renderFullScheduleGrid(direction, dayOverride, { silent: true });
+                tryHonorPendingGridOpen();
             }).catch(() => { /* ignore */ }).finally(() => {
                 if (gridReloadPendingFor === routeId) gridReloadPendingFor = '';
             });
         }
         return;
     }
+    gridOpenIntent = null;
     direction = direction === 'A' || direction === 'B'
         ? direction
         : routePrimaryGridDirection(route);
@@ -583,4 +650,5 @@ export function attachTimetableGridGlobals() {
     if (typeof window === 'undefined') return;
     window.renderFullScheduleGrid = renderFullScheduleGrid;
     window.applyRouteDeepLink = applyRouteDeepLink;
+    window.cancelPendingGridOpen = cancelPendingGridOpen;
 }

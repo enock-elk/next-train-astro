@@ -283,8 +283,17 @@ export function closeSmoothModal(modalId, fromPopState = false) {
     }
 }
 
+function cancelPendingGridOpenFromUi() {
+    try {
+        if (typeof window !== 'undefined' && typeof window.cancelPendingGridOpen === 'function') {
+            window.cancelPendingGridOpen();
+        }
+    } catch { /* ignore */ }
+}
+
 export function openSmoothModal(modalId, customOrigin = null, opts = null) {
     if (typeof window === 'undefined') return;
+    if (modalId && modalId !== 'full-schedule-modal') cancelPendingGridOpenFromUi();
     window._isModalAnimating = true;
     setTimeout(() => { window._isModalAnimating = false; }, 350);
 
@@ -1447,6 +1456,7 @@ export function switchTab(tab, opts = null) {
     if (typeof document === 'undefined') return;
 
     if (tab === 'map' && !canOpenTrackingMap()) tab = 'next-train';
+    if (tab !== 'next-train') cancelPendingGridOpenFromUi();
     if (tab === 'community' && !isAdminAuthed() && !canAccessPilotSurface('community')) {
         tab = 'next-train';
     }

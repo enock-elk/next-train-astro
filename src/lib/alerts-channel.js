@@ -10,6 +10,7 @@ import { $currentRouteId, $userRegion } from '../store.js';
 import { cacheAlertImages, pruneExpiredAlertImages, resolveCachedAlertImage } from './alert-image-cache.js';
 import {
     ALERTS_PAGE_SIZE,
+    ALERT_PIN_SVG,
     ALERT_REACTION_KEYS,
     ALERT_REACTION_EMOJI,
     buildAlertReactionBreakdown,
@@ -33,6 +34,7 @@ import {
     noticeScopeLabel,
     shouldIgnoreAlertLongPress,
     buildNoticesMeta,
+    isNoticePinned,
     listNoticesInTarget,
 } from './alerts-feed.js';
 import { buildPollShellHtml, hydratePollResults } from './alert-poll.js';
@@ -344,6 +346,28 @@ function openAlertReactionPicker(notice, anchorEl) {
                 if (target) deleteAlertForEveryone(target);
                 return;
             }
+            const pin = e.target.closest?.('[data-alert-pin-toggle]');
+            if (pin) {
+                e.preventDefault();
+                e.stopPropagation();
+                const id = pin.getAttribute('data-alert-id');
+                const src = pin.getAttribute('data-alert-src');
+                const target = cachedLiveNotices.find((n) => String(n.id) === String(id) && String(n._sourceKey) === String(src));
+                hideAlertReactionPicker();
+                if (target) toggleAlertPinned(target);
+                return;
+            }
+            const votes = e.target.closest?.('[data-alert-poll-count-toggle]');
+            if (votes) {
+                e.preventDefault();
+                e.stopPropagation();
+                const id = votes.getAttribute('data-alert-id');
+                const src = votes.getAttribute('data-alert-src');
+                const target = cachedLiveNotices.find((n) => String(n.id) === String(id) && String(n._sourceKey) === String(src));
+                hideAlertReactionPicker();
+                if (target) toggleAlertPollRawCounts(target);
+                return;
+            }
             const btn = e.target.closest?.('[data-alert-react]');
             if (!btn) return;
             e.preventDefault();
@@ -366,9 +390,15 @@ function openAlertReactionPicker(notice, anchorEl) {
     const deleteBtn = admin
         ? `<button type="button" data-alert-delete data-alert-id="${escapeHTML(String(notice.id || ''))}" data-alert-src="${escapeHTML(String(notice._sourceKey || ''))}" class="px-3 py-1.5 rounded-full bg-red-600 text-white text-[11px] font-black uppercase tracking-wide shadow-lg border border-red-400/40 focus:outline-none">Delete for everyone</button>`
         : '';
+    const pinBtn = admin
+        ? `<button type="button" data-alert-pin-toggle data-alert-id="${escapeHTML(String(notice.id || ''))}" data-alert-src="${escapeHTML(String(notice._sourceKey || ''))}" class="px-3 py-1.5 rounded-full bg-gray-900 text-white text-[11px] font-black uppercase tracking-wide shadow-lg border border-white/20 focus:outline-none">${isNoticePinned(notice) ? 'Unpin from feed' : 'Pin to bottom of feed'}</button>`
+        : '';
+    const pollCountBtn = admin && notice?.poll?.active
+        ? `<button type="button" data-alert-poll-count-toggle data-alert-id="${escapeHTML(String(notice.id || ''))}" data-alert-src="${escapeHTML(String(notice._sourceKey || ''))}" class="px-3 py-1.5 rounded-full bg-gray-900 text-white text-[11px] font-black uppercase tracking-wide shadow-lg border border-white/20 focus:outline-none">${notice.poll.showRawCounts || notice.poll.showParticipantCount ? 'Hide raw counts' : 'Show raw counts'}</button>`
+        : '';
     sheet.innerHTML = `<div class="flex flex-col items-center gap-1.5">
         <div class="nt-alert-react-pill flex items-center gap-0.5 px-2 py-1.5 rounded-full bg-gray-950/95 text-white shadow-2xl border border-white/10" data-alert-picker-row>${reactBtns}</div>
-        ${deleteBtn}
+        ${deleteBtn}${pinBtn}${pollCountBtn}
     </div>`;
     const rect = anchorEl.getBoundingClientRect();
     sheet.classList.remove('hidden');
@@ -378,7 +408,7 @@ function openAlertReactionPicker(notice, anchorEl) {
     const midX = Number.isFinite(pressX) ? pressX : (rect.left + rect.width / 2);
     const anchorY = Number.isFinite(pressY) ? pressY : rect.top;
     const left = Math.max(8, Math.min(window.innerWidth - pillW - 8, midX - (pillW / 2)));
-    const pickerH = admin ? 108 : 58;
+    const pickerH = sheet.offsetHeight || (admin ? 148 : 58);
     let top = anchorY - pickerH;
     if (top < 8) top = Math.min(window.innerHeight - (pickerH + 8), anchorY + 16);
     sheet.style.left = `${left}px`;
@@ -421,6 +451,65 @@ async function deleteAlertForEveryone(notice) {
         console.warn('Alert delete failed', e);
         showToast('Could not delete this alert.', 'error');
     }
+}
+
+async function patchLiveAlert(notice, fields, { successToast, failToast } = {}) {
+    if (!notice || !isAdminAuthed()) return false;
+    try {
+        const { ensureAdminLoaded } = await import('./admin-bridge.js');
+        const Admin = await ensureAdminLoaded();
+        if (!Admin?.patchLiveNoticeFields || !Admin.getAuthKey) {
+            showToast('Admin tools unavailable.', 'error');
+            return false;
+        }
+        const secret = await Admin.getAuthKey();
+        if (!secret) {
+            showToast('Sign in as admin to update alerts.', 'error');
+            return false;
+        }
+        const sourceKey = notice._sourceKey || '';
+        const next = await Admin.patchLiveNoticeFields(sourceKey, notice.id, fields, secret);
+        if (!next) {
+            showToast(failToast || 'Could not update this alert.', 'error');
+            return false;
+        }
+        cachedLiveNotices = cachedLiveNotices.map((n) => (
+            String(n.id) === String(notice.id) && String(n._sourceKey) === String(sourceKey)
+                ? { ...n, ...next, _sourceKey: sourceKey, _reactPath: n._reactPath }
+                : n
+        ));
+        renderAlertsChannel(cachedLiveNotices);
+        applyBellFromNotices(cachedLiveNotices);
+        if (successToast) showToast(successToast, 'success');
+        triggerHaptic();
+        return true;
+    } catch (e) {
+        console.warn('Alert patch failed', e);
+        showToast(failToast || 'Could not update this alert.', 'error');
+        return false;
+    }
+}
+
+export async function toggleAlertPinned(notice) {
+    const pinned = !isNoticePinned(notice);
+    return patchLiveAlert(notice, {
+        pinned,
+        pinnedAt: pinned ? Date.now() : null,
+    }, {
+        successToast: pinned ? 'Alert pinned to the bottom of the feed.' : 'Alert unpinned.',
+        failToast: 'Could not update pin.',
+    });
+}
+
+export async function toggleAlertPollRawCounts(notice) {
+    if (!notice?.poll?.active) return false;
+    const showRawCounts = !(notice.poll.showRawCounts || notice.poll.showParticipantCount);
+    return patchLiveAlert(notice, {
+        poll: { ...notice.poll, showRawCounts },
+    }, {
+        successToast: showRawCounts ? 'Poll also shows vote counts.' : 'Poll hides vote counts.',
+        failToast: 'Could not update poll counts.',
+    });
 }
 
 function hideAlertReactionBreakdown() {
@@ -514,7 +603,10 @@ function renderPostCard(notice, opts = {}) {
     return `<article id="alert-post-${escapeHTML(String(notice.id || ''))}" data-alert-post="${escapeHTML(String(notice.id || ''))}" data-alert-id="${escapeHTML(String(notice.id || ''))}" data-alert-src="${escapeHTML(String(notice._sourceKey || ''))}" class="nt-alert-card bg-white dark:bg-gray-800 rounded-2xl shadow-md ${cardRing} border-l-4 ${chrome.bar} border border-gray-200/80 dark:border-gray-700 p-0 overflow-hidden select-none">
         <div class="nt-alert-strip flex items-center justify-between gap-2 px-3 py-1 ${chrome.strip}">
             <span class="nt-alert-signoff text-xs font-semibold leading-none tracking-wide">${escapeHTML(signoff)}</span>
-            <span class="nt-alert-chip inline-flex items-center shrink-0 px-1.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider leading-none ${chrome.chip}">${chrome.emoji} ${chrome.label}</span>
+            <span class="nt-alert-chip-wrap inline-flex items-center gap-1.5 shrink-0">
+                ${isNoticePinned(notice) ? `<span class="nt-alert-pin" title="Pinned" aria-label="Pinned">${ALERT_PIN_SVG}</span>` : ''}
+                <span class="nt-alert-chip inline-flex items-center shrink-0 px-1.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider leading-none ${chrome.chip}">${chrome.emoji} ${chrome.label}</span>
+            </span>
         </div>
         <div class="px-4 pt-3 pb-4">
         ${titleHtml}

@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_10.04.2': [
+        'VIEW FULL TIMETABLE keeps one open intent. Stay on Next Train and the grid opens once sheets land. Tab change, hub, another modal, or a route swap cancels it so a late load cannot stack overlays. Alerts: admin pin (compose, hold picker, notice modal) puts any post at the bottom of the feed with a pin SVG left of the severity chip. Polls hide results until this device votes, then always show percentages. Optional showRawCounts adds the tally in brackets, e.g. 50% (2). Live footer is NEXT TRAIN POLL with a green opacity-only pulse. What’s New covers the timetable wait only. forceShow stays false.',
+    ],
     'V9_10.04.1': [
         'Same-region corridor swap no longer paints the previous route on VIEW FULL TIMETABLE. Parsed $schedules carry _routeId; route change clears mismatched slots before reload; the grid refuses untagged or wrong-route sheets and refreshes when the matching bundle lands. What’s New covers the timetable route match. forceShow stays false.',
     ],

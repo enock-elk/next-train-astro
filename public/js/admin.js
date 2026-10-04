@@ -12084,6 +12084,40 @@ const Admin = {
         return payload;
     },
 
+    patchLiveNoticeFields: async (target, noticeId, fields, secret) => {
+        const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
+        const fetchRes = await window.guardianFetch(`${dynamicEndpoint}notices/${target}.json`, {}, 6000);
+        if (!fetchRes.ok) throw new Error('Alert not found');
+        const node = await fetchRes.json();
+        if (!node) throw new Error('Alert not found');
+        const listed = Admin.listNoticesInTarget(node);
+        const current = listed.find((n) => String(n.id || n._key) === String(noticeId))
+            || listed.find((n) => String(n.id || n._key) === String(noticeId));
+        if (!current) throw new Error('Alert not found');
+        const key = current._key || current.id;
+        const patch = fields && typeof fields === 'object' ? { ...fields } : {};
+        if (patch.poll && current.poll && typeof current.poll === 'object') {
+            patch.poll = { ...current.poll, ...patch.poll };
+        }
+        const isLegacy = node && (node.message || node.text)
+            && !Object.entries(node).some(([k, v]) => k !== 'reactions' && v && typeof v === 'object' && (v.message || v.text));
+        const url = isLegacy
+            ? `${dynamicEndpoint}notices/${target}.json?auth=${secret}`
+            : `${dynamicEndpoint}notices/${target}/${encodeURIComponent(key)}.json?auth=${secret}`;
+        const write = await window.guardianFetch(url, {
+            method: 'PATCH',
+            body: JSON.stringify(patch),
+        }, 8000);
+        if (!write.ok) throw new Error('Failed to update alert');
+        const next = { ...current, ...patch };
+        delete next._key;
+        const nextList = listed.map((n) => (
+            String(n.id || n._key) === String(key) ? { ...n, ...patch } : n
+        ));
+        await Admin.writeNoticesMeta(target, secret, nextList);
+        return next;
+    },
+
     archiveActiveNotice: async (target, secret, noticeData = null, noticeId = null) => {
         const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
         const fetchRes = await window.guardianFetch(`${dynamicEndpoint}notices/${target}.json`, {}, 6000);
@@ -12773,7 +12807,17 @@ const Admin = {
                                 <label for="alert-force-popup" class="toggle-label block overflow-hidden h-6 rounded-full bg-gray-300 cursor-pointer"></label>
                             </div>
                         </div>
-                        <div class="flex items-center justify-between bg-purple-50 dark:bg-purple-900/20 p-3 rounded-xl border border-purple-200 dark:border-purple-800">
+                        <div class="flex items-center justify-between bg-sky-50 dark:bg-sky-900/20 p-3 rounded-xl border border-sky-200 dark:border-sky-800">
+                            <div>
+                                <span class="font-bold text-sky-800 dark:text-sky-200 text-sm">Pin to bottom of feed</span>
+                                <p class="text-[10px] text-sky-600 dark:text-sky-400 mt-0.5">Any alert. Stays under the others, pin next to Info</p>
+                            </div>
+                            <div class="relative inline-block w-10 mr-2 align-middle select-none transition duration-200 ease-in">
+                                <input type="checkbox" id="alert-pin-toggle" class="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 border-gray-300 appearance-none cursor-pointer outline-none"/>
+                                <label for="alert-pin-toggle" class="toggle-label block overflow-hidden h-6 rounded-full bg-gray-300 cursor-pointer"></label>
+                            </div>
+                        </div>
+                        <div class="flex items-center justify-between bg-purple-50 dark:bg-purple-900/20 p-3 rounded-xl border border-purple-200 dark:border-purple-800 sm:col-span-2">
                             <div>
                                 <span class="font-bold text-purple-800 dark:text-purple-200 text-sm">Interactive Poll Mode</span>
                                 <p class="text-[10px] text-purple-600 dark:text-purple-400 mt-0.5">Add commuter voting buttons</p>
@@ -12808,11 +12852,21 @@ const Admin = {
                     <div class="flex items-center justify-between bg-white dark:bg-gray-900/60 p-3 rounded-xl border border-purple-200 dark:border-purple-800">
                         <div>
                             <span class="font-bold text-purple-800 dark:text-purple-200 text-xs">Show results to users</span>
-                            <p class="text-[10px] text-purple-600 dark:text-purple-400 mt-0.5">Percentages only - after they vote (or while viewing)</p>
+                            <p class="text-[10px] text-purple-600 dark:text-purple-400 mt-0.5">Percentages after they vote. Off shows thanks only</p>
                         </div>
                         <div class="relative inline-block w-10 mr-2 align-middle select-none transition duration-200 ease-in">
                             <input type="checkbox" id="alert-poll-show-results" class="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 border-gray-300 appearance-none cursor-pointer outline-none"/>
                             <label for="alert-poll-show-results" class="toggle-label block overflow-hidden h-6 rounded-full bg-gray-300 cursor-pointer"></label>
+                        </div>
+                    </div>
+                    <div class="flex items-center justify-between bg-white dark:bg-gray-900/60 p-3 rounded-xl border border-purple-200 dark:border-purple-800">
+                        <div>
+                            <span class="font-bold text-purple-800 dark:text-purple-200 text-xs">Show raw vote counts</span>
+                            <p class="text-[10px] text-purple-600 dark:text-purple-400 mt-0.5">Adds the count in brackets next to each percentage</p>
+                        </div>
+                        <div class="relative inline-block w-10 mr-2 align-middle select-none transition duration-200 ease-in">
+                            <input type="checkbox" id="alert-poll-show-count" class="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 border-gray-300 appearance-none cursor-pointer outline-none"/>
+                            <label for="alert-poll-show-count" class="toggle-label block overflow-hidden h-6 rounded-full bg-gray-300 cursor-pointer"></label>
                         </div>
                     </div>
                     <div id="alert-live-poll-results" class="hidden pt-3 border-t border-purple-100 dark:border-purple-800">
@@ -13085,6 +13139,7 @@ const Admin = {
         
         const signoffInput = document.getElementById('alert-signoff');
         const forcePopupToggle = document.getElementById('alert-force-popup');
+        const pinToggle = document.getElementById('alert-pin-toggle');
 
         const srcToggleBtn = document.getElementById('alert-source-toggle-btn');
         const srcBody = document.getElementById('alert-source-body');
@@ -13213,6 +13268,7 @@ const Admin = {
         const pollOptCWrap = document.getElementById('alert-poll-opt-c-wrap');
         const pollAddCBtn = document.getElementById('alert-poll-add-c-btn');
         const pollShowResults = document.getElementById('alert-poll-show-results');
+        const pollShowCount = document.getElementById('alert-poll-show-count');
         let existingAlertId = null;
         Admin._alertRepostDraft = false;
         Admin._skipAlertFetchOnce = false;
@@ -13461,6 +13517,8 @@ const Admin = {
                     message: msg,
                     authorName: signoff,
                     forcePopup: !!(forcePopupToggle && forcePopupToggle.checked),
+                    pinned: !!(pinToggle && pinToggle.checked),
+                    pinnedAt: pinToggle?.checked ? Date.now() : null,
                     severity: severitySelect?.value || 'info',
                     imageUrls: Admin.getSelectedAlertPosters(),
                     imageUrl: null,
@@ -13476,6 +13534,7 @@ const Admin = {
                         optionB: pollToggle?.checked ? pollOptB.value.trim() : null,
                         optionC: optCVal,
                         showResults: pollToggle?.checked ? !!(pollShowResults && pollShowResults.checked) : false,
+                        showRawCounts: pollToggle?.checked ? !!(pollShowCount && pollShowCount.checked) : false,
                     },
                 },
             };
@@ -13526,6 +13585,7 @@ const Admin = {
             }
             if (signoffInput) signoffInput.value = item.authorName || item.signoff || 'Next Train Ops';
             if (forcePopupToggle) forcePopupToggle.checked = item.forcePopup !== undefined ? !!item.forcePopup : (item.severity === 'critical');
+            if (pinToggle) pinToggle.checked = !!(item.pinned === true || item.pinned === 1 || item.pinned === 'true');
             if (sourceNameInput) sourceNameInput.value = item.sourceName || '';
             if (sourceUrlInput) sourceUrlInput.value = item.sourceUrl || '';
             syncSourceDropdownFromFields();
@@ -13543,6 +13603,7 @@ const Admin = {
                 if (pollOptA) pollOptA.value = item.poll.optionA || '';
                 if (pollOptB) pollOptB.value = item.poll.optionB || '';
                 if (pollShowResults) pollShowResults.checked = !!item.poll.showResults;
+                if (pollShowCount) pollShowCount.checked = !!(item.poll.showRawCounts || item.poll.showParticipantCount);
                 if (item.poll.optionC) {
                     if (pollOptC) pollOptC.value = item.poll.optionC;
                     pollOptCWrap?.classList.remove('hidden');
@@ -14002,6 +14063,7 @@ const Admin = {
             
             const signoff = signoffInput.value.trim() || "Next Train Ops";
             const isForcePopup = forcePopupToggle.checked;
+            const isPinned = !!(pinToggle && pinToggle.checked);
             
             const secret = await Admin.getAuthKey();
             
@@ -14029,6 +14091,8 @@ const Admin = {
                 message: msg,
                 authorName: signoff,
                 forcePopup: isForcePopup,
+                pinned: isPinned,
+                pinnedAt: isPinned ? nowTs : null,
                 expiresAt: expiresAtVal,
                 severity: severity,
                 imageUrls: Admin.getSelectedAlertPosters(),
@@ -14052,6 +14116,7 @@ const Admin = {
                 optionB: pollToggle.checked ? pollOptB.value.trim() : null,
                 optionC: optCVal,
                 showResults: pollToggle.checked ? !!(pollShowResults && pollShowResults.checked) : false,
+                showRawCounts: pollToggle.checked ? !!(pollShowCount && pollShowCount.checked) : false,
             };
 
             const publishAssembled = async () => {
@@ -14155,6 +14220,7 @@ const Admin = {
                 renderSavedSourceDropdown('');
                 if (dateInput) dateInput.value = Admin.endOfTodayLocalValue();
                 forcePopupToggle.checked = false;
+                if (pinToggle) pinToggle.checked = false;
                 pollToggle.checked = false;
                 pollContainer.classList.add('hidden');
                 pollQuestion.value = "";
@@ -14162,6 +14228,7 @@ const Admin = {
                 pollOptB.value = "";
                 if (pollOptC) pollOptC.value = "";
                 if (pollShowResults) pollShowResults.checked = false;
+                if (pollShowCount) pollShowCount.checked = false;
                 pollOptCWrap?.classList.add('hidden');
                 pollAddCBtn?.classList.remove('hidden');
                 const livePoll = document.getElementById('alert-live-poll-results');

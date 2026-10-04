@@ -2,6 +2,7 @@
  * Pure alerts-channel feed rules (no DOM). Union scoping, expiry, posters, paging.
  */
 export const ALERTS_PAGE_SIZE = 10;
+export const ALERT_PIN_SVG = `<svg class="nt-alert-pin-icon w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16 3H8v2h1v6.2L7 14v2h4v5h2v-5h4v-2l-2-2.8V5h1V3z"/></svg>`;
 export const ALERT_IMAGE_PREFIX = '/images/alerts/';
 export const ALERT_REACTION_KEYS = ['like', 'love', 'laugh', 'wow', 'sad', 'pray'];
 export const ALERT_REACTION_EMOJI = {
@@ -147,8 +148,28 @@ export function mergeUnionNotices(buckets) {
     });
 
     const out = [...byId.values(), ...unkeyed];
-    out.sort((a, b) => noticeTimestamp(a) - noticeTimestamp(b));
-    return out;
+    return sortAlertsFeed(out);
+}
+
+export function isNoticePinned(notice) {
+    return notice?.pinned === true || notice?.pinned === 1 || notice?.pinned === 'true';
+}
+
+/** Oldest-first, with admin-pinned cards last so they sit at the bottom of the WhatsApp-style feed. */
+export function sortAlertsFeed(notices) {
+    const list = Array.isArray(notices) ? notices.slice() : [];
+    list.sort((a, b) => {
+        const ap = isNoticePinned(a) ? 1 : 0;
+        const bp = isNoticePinned(b) ? 1 : 0;
+        if (ap !== bp) return ap - bp;
+        if (ap && bp) {
+            const pinA = Number(a?.pinnedAt || 0);
+            const pinB = Number(b?.pinnedAt || 0);
+            if (pinA !== pinB) return pinA - pinB;
+        }
+        return noticeTimestamp(a) - noticeTimestamp(b);
+    });
+    return list;
 }
 
 export function highestSeverity(notices) {

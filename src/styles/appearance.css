@@ -1253,6 +1253,45 @@ a.nt-alert-source:focus-visible {
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--nt-text-faint);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.7rem;
+}
+.nt-poll-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.nt-poll-live-dot {
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 999px;
+  background: #22c55e;
+  flex-shrink: 0;
+}
+.nt-poll-live-dot.is-on {
+  animation: nt-poll-live-pulse 1.8s ease-in-out infinite;
+}
+@keyframes nt-poll-live-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .nt-poll-live-dot.is-on { animation: none; }
+}
+.nt-alert-chip-wrap {
+  min-width: 0;
+}
+.nt-alert-pin {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.95;
+}
+.nt-alert-pin-icon {
+  display: block;
 }
 
 #alerts-channel .nt-alert-card-footer {

@@ -1,6 +1,7 @@
 /**
  * Alert poll chrome — feed, notice modal, and live percentages.
- * Percentages only. Vote lists stay on Firebase polls/{id}.
+ * Percentages always. Optional raw counts in brackets. Vote lists stay on Firebase polls/{id}.
+ * Results stay hidden until this device has voted.
  */
 import { DYNAMIC_BASE_URL } from './config.js';
 import { escapeHTML, safeStorage } from './utils.js';
@@ -48,6 +49,20 @@ function seedTallies(counts, seedVote) {
     return next;
 }
 
+export function pollShowsRawCounts(poll) {
+    return !!(poll && (poll.showRawCounts || poll.showParticipantCount));
+}
+
+/** Green CSS dot (not emoji) so cheap phones skip emoji paint. Opacity-only pulse. */
+export function buildPollLiveLabelHtml({ active = true } = {}) {
+    return `<p class="nt-poll-foot">
+        <span class="nt-poll-live">
+            <span class="nt-poll-live-dot${active ? ' is-on' : ''}" aria-hidden="true"></span>
+            <span class="nt-poll-live-text">NEXT TRAIN POLL</span>
+        </span>
+    </p>`;
+}
+
 export function buildPollResultsHtml({
     poll,
     counts = { A: 0, B: 0, C: 0, total: 0 },
@@ -57,15 +72,17 @@ export function buildPollResultsHtml({
     if (!poll) return '';
     const total = Number(counts.total || ((counts.A || 0) + (counts.B || 0) + (counts.C || 0)));
     const pct = (n) => (total > 0 ? Math.round((Number(n) || 0) / total * 100) : 0);
+    const raw = pollShowsRawCounts(poll);
     const row = (key, label, n) => {
         if (!label) return '';
         const p = pct(n);
         const mine = votedOption === key;
+        const value = raw ? `${p}% (${Number(n) || 0})` : `${p}%`;
         return `
             <div class="nt-poll-row${mine ? ' is-mine' : ''}">
                 <div class="nt-poll-row-head">
                     <span class="nt-poll-label">${escapeHTML(label)}${mine ? '<span class="nt-poll-yours">Your vote</span>' : ''}</span>
-                    <span class="nt-poll-pct">${p}%</span>
+                    <span class="nt-poll-pct">${escapeHTML(value)}</span>
                 </div>
                 <div class="nt-poll-track" aria-hidden="true">
                     <div class="nt-poll-fill" style="width:${p}%"></div>
@@ -79,12 +96,12 @@ export function buildPollResultsHtml({
         ${row('A', poll.optionA, counts.A)}
         ${row('B', poll.optionB, counts.B)}
         ${poll.optionC ? row('C', poll.optionC, counts.C) : ''}
-        <p class="nt-poll-foot">Live percentages</p>`;
+        ${buildPollLiveLabelHtml({ active: poll.active !== false })}`;
 }
 
-export function buildPollThanksHtml() {
+export function buildPollThanksHtml(poll = null) {
     return `<p class="nt-poll-thanks">Thanks for voting!</p>
-        <p class="nt-poll-foot">Your response has been recorded.</p>`;
+        ${buildPollLiveLabelHtml({ active: poll?.active !== false })}`;
 }
 
 function pollChoiceButtons(pollId, poll) {
@@ -101,6 +118,8 @@ function pollMetaJson(poll, severity) {
         optionB: poll.optionB || '',
         optionC: poll.optionC || '',
         showResults: !!poll.showResults,
+        showRawCounts: pollShowsRawCounts(poll),
+        active: poll.active !== false,
         severity,
     });
 }
@@ -115,28 +134,26 @@ export function buildPollShellHtml(notice, { mode = 'live' } = {}) {
     const idAttr = escapeHTML(pollId);
     const metaAttr = escapeHTML(pollMetaJson(poll, severity));
     const attrs = `id="poll-container-${idAttr}" data-poll-shell="${idAttr}" data-poll-meta="${metaAttr}" data-poll-severity="${escapeHTML(severity)}" class="nt-poll"`;
+    const liveMark = buildPollLiveLabelHtml({ active: true });
 
     if (voted && !showResults) {
-        return `<div ${attrs}>${buildPollThanksHtml()}</div>`;
+        return `<div ${attrs}>${buildPollThanksHtml(poll)}</div>`;
     }
 
-    const resultsBox = showResults
-        ? `<div class="nt-poll-results" data-poll-hydrate="1" data-poll-id="${idAttr}" data-poll-voted="${escapeHTML(voted)}">${buildPollResultsHtml({
+    // Results stay off until this device has voted. Preview is unvoted.
+    if (voted && showResults) {
+        return `<div ${attrs}><div class="nt-poll-results" data-poll-hydrate="1" data-poll-id="${idAttr}" data-poll-voted="${escapeHTML(voted)}">${buildPollResultsHtml({
             poll,
             counts: { A: 0, B: 0, C: 0, total: 0 },
             votedOption: voted,
-            includeQuestion: !!voted,
-        })}</div>`
-        : '';
-
-    if (voted && showResults) {
-        return `<div ${attrs}>${resultsBox}</div>`;
+            includeQuestion: true,
+        })}</div></div>`;
     }
 
     return `<div ${attrs}>
         <p class="nt-poll-q">${escapeHTML(poll.question || '')}</p>
         ${pollChoiceButtons(pollId, poll)}
-        ${resultsBox}
+        ${liveMark}
     </div>`;
 }
 
@@ -164,7 +181,7 @@ export async function renderPollResultsInto(container, pollId, poll, votedOption
             container.innerHTML = `<p class="nt-poll-foot">Results are not available right now.</p>`;
             return;
         }
-        container.innerHTML = buildPollThanksHtml();
+        container.innerHTML = buildPollThanksHtml(poll);
     }
 }
 
@@ -173,6 +190,8 @@ export function hydratePollResults(root) {
     root.querySelectorAll('[data-poll-hydrate="1"]').forEach((el) => {
         const pollId = el.getAttribute('data-poll-id') || '';
         if (!pollId || pollId === 'preview') return;
+        const voted = el.getAttribute('data-poll-voted') || '';
+        if (!voted) return;
         const shell = el.closest('[data-poll-shell]');
         let poll = null;
         try {
@@ -181,7 +200,6 @@ export function hydratePollResults(root) {
             poll = null;
         }
         if (!poll) return;
-        const voted = el.getAttribute('data-poll-voted') || '';
         renderPollResultsInto(el, pollId, poll, voted, poll.severity);
     });
 }
@@ -203,7 +221,7 @@ export function paintPollShellsAfterVote(pollId, pollMeta, optionKey, severity) 
             container.dataset.pollSeverity = pollSeverity(severity || pollMeta.severity);
             renderPollResultsInto(container, pollId, pollMeta, optionKey, severity, optionKey);
         } else {
-            container.innerHTML = buildPollThanksHtml();
+            container.innerHTML = buildPollThanksHtml(pollMeta);
         }
     });
 }

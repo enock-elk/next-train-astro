@@ -59,8 +59,11 @@ import {
     resolveAlertImageSrc,
     hydrateAlertPosterImages,
     renderLazyPosterHtml,
+    getCachedLiveNotices,
+    toggleAlertPinned,
+    toggleAlertPollRawCounts,
 } from './alerts-channel.js';
-import { layoutAlertPost, hoistAlertImagesFromHtml } from './alerts-feed.js';
+import { layoutAlertPost, hoistAlertImagesFromHtml, ALERT_PIN_SVG, isNoticePinned } from './alerts-feed.js';
 import {
     buildPollShellHtml,
     hydratePollResults,
@@ -519,6 +522,7 @@ export function closeAppHub(skipHistory = false) {
 
 export function openAppHub() {
     triggerHaptic();
+    try { window.cancelPendingGridOpen?.(); } catch { /* ignore */ }
     // Sign-in / account chrome lives in a deferred chunk — kick it as soon as
     // the hub is actually opened so first tap is not a no-op.
     import('./account.js')
@@ -1477,6 +1481,7 @@ export function renderServiceAlertModal(notice, options = {}) {
     const strip = document.getElementById('notice-modal-strip');
     const signoffEl = document.getElementById('notice-modal-signoff');
     const chipEl = document.getElementById('notice-modal-sev-chip');
+    const pinEl = document.getElementById('notice-modal-pin');
     const stripCls = severity === 'critical'
         ? 'nt-alert-strip-critical bg-red-600 text-white'
         : severity === 'warning'
@@ -1493,6 +1498,12 @@ export function renderServiceAlertModal(notice, options = {}) {
             : severity === 'warning'
                 ? '🟡 Warning'
                 : '🔵 Info';
+    }
+    if (pinEl) {
+        const pinned = isNoticePinned(notice);
+        pinEl.classList.toggle('hidden', !pinned);
+        if (pinned) pinEl.innerHTML = ALERT_PIN_SVG;
+        else pinEl.innerHTML = '';
     }
 
     const modalHeader = document.getElementById('notice-modal-title') || modal.querySelector('h3');
@@ -1585,7 +1596,7 @@ export function renderServiceAlertModal(notice, options = {}) {
 
     const oldCloseBtn = document.getElementById('notice-modal-close-btn')
         || modal.querySelector('button.bg-red-600, button.bg-blue-600, button.bg-yellow-600');
-    modal.querySelectorAll('.nt-notice-actions').forEach((el) => el.remove());
+    modal.querySelectorAll('.nt-notice-actions, .nt-notice-admin').forEach((el) => el.remove());
 
     let baseColorClass = 'bg-blue-600 hover:bg-blue-700';
     if (severity === 'critical') baseColorClass = 'bg-red-600 hover:bg-red-700';
@@ -1661,6 +1672,41 @@ export function renderServiceAlertModal(notice, options = {}) {
         oldCloseBtn.parentNode?.appendChild(btnContainer);
     } else {
         content.parentNode?.appendChild(btnContainer);
+    }
+
+    if (mode === 'live' && isAdminAuthed() && notice?.id) {
+        const adminWrap = document.createElement('div');
+        adminWrap.className = 'nt-notice-admin flex flex-col gap-2 mt-2 w-full';
+        const pinAdmin = document.createElement('button');
+        pinAdmin.type = 'button';
+        pinAdmin.className = 'w-full bg-gray-900 hover:bg-gray-800 text-white font-black py-2.5 px-4 rounded-lg text-[11px] uppercase tracking-wide focus:outline-none';
+        pinAdmin.textContent = isNoticePinned(notice) ? 'Unpin from feed' : 'Pin to bottom of feed';
+        pinAdmin.onclick = async () => {
+            triggerHaptic();
+            const ok = await toggleAlertPinned(notice);
+            if (!ok) return;
+            const next = getCachedLiveNotices().find((n) => String(n.id) === String(notice.id) && String(n._sourceKey || '') === String(notice._sourceKey || ''))
+                || { ...notice, pinned: !isNoticePinned(notice), pinnedAt: isNoticePinned(notice) ? null : Date.now() };
+            renderServiceAlertModal(next, options);
+        };
+        adminWrap.appendChild(pinAdmin);
+        if (notice.poll?.active) {
+            const rawOn = !!(notice.poll.showRawCounts || notice.poll.showParticipantCount);
+            const countAdmin = document.createElement('button');
+            countAdmin.type = 'button';
+            countAdmin.className = 'w-full bg-gray-900 hover:bg-gray-800 text-white font-black py-2.5 px-4 rounded-lg text-[11px] uppercase tracking-wide focus:outline-none';
+            countAdmin.textContent = rawOn ? 'Hide raw counts' : 'Show raw counts';
+            countAdmin.onclick = async () => {
+                triggerHaptic();
+                const ok = await toggleAlertPollRawCounts(notice);
+                if (!ok) return;
+                const next = getCachedLiveNotices().find((n) => String(n.id) === String(notice.id) && String(n._sourceKey || '') === String(notice._sourceKey || ''))
+                    || { ...notice, poll: { ...notice.poll, showRawCounts: !rawOn } };
+                renderServiceAlertModal(next, options);
+            };
+            adminWrap.appendChild(countAdmin);
+        }
+        btnContainer.parentNode?.appendChild(adminWrap);
     }
 
     const topCloseBtn = document.getElementById('notice-modal-x')

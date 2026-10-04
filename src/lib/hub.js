@@ -61,6 +61,12 @@ import {
     renderLazyPosterHtml,
 } from './alerts-channel.js';
 import { layoutAlertPost, hoistAlertImagesFromHtml } from './alerts-feed.js';
+import {
+    buildPollShellHtml,
+    hydratePollResults,
+    paintPollShellsAfterVote,
+    pollSeverity,
+} from './alert-poll.js';
 import { $userProfile, $currentRouteId, $userRegion, $deviceId } from '../store.js';
 import { $account } from './account.js';
 import { isLieFi } from './logic.js';
@@ -1007,44 +1013,6 @@ function trackAlertEvent(name, params) {
     trackAnalyticsEvent(name, params);
 }
 
-/** Alert-severity palette for poll chrome (info=blue, warning=amber, critical=red). */
-function pollTone(severity) {
-    if (severity === 'critical') {
-        return {
-            wrap: 'mt-4 bg-red-50 dark:bg-red-900/20 p-4 rounded-xl border border-red-200 dark:border-red-800 shadow-sm',
-            title: 'text-red-900 dark:text-red-100',
-            label: 'text-red-800 dark:text-red-200',
-            muted: 'text-red-500 dark:text-red-400',
-            track: 'bg-red-100 dark:bg-red-950',
-            bar: 'bg-red-500',
-            ring: 'ring-red-400',
-            btn: 'border-red-300 dark:border-red-700 hover:border-red-500 text-red-700 dark:text-red-300',
-        };
-    }
-    if (severity === 'warning') {
-        return {
-            wrap: 'mt-4 bg-amber-50 dark:bg-amber-900/20 p-4 rounded-xl border border-amber-200 dark:border-amber-800 shadow-sm',
-            title: 'text-amber-900 dark:text-amber-100',
-            label: 'text-amber-800 dark:text-amber-200',
-            muted: 'text-amber-600 dark:text-amber-400',
-            track: 'bg-amber-100 dark:bg-amber-950',
-            bar: 'bg-amber-500',
-            ring: 'ring-amber-400',
-            btn: 'border-amber-300 dark:border-amber-700 hover:border-amber-500 text-amber-800 dark:text-amber-300',
-        };
-    }
-    return {
-        wrap: 'mt-4 bg-blue-50 dark:bg-blue-900/20 p-4 rounded-xl border border-blue-200 dark:border-blue-800 shadow-sm',
-        title: 'text-blue-900 dark:text-blue-100',
-        label: 'text-blue-800 dark:text-blue-200',
-        muted: 'text-blue-500 dark:text-blue-400',
-        track: 'bg-blue-100 dark:bg-blue-950',
-        bar: 'bg-blue-500',
-        ring: 'ring-blue-400',
-        btn: 'border-blue-300 dark:border-blue-700 hover:border-blue-500 text-blue-700 dark:text-blue-300',
-    };
-}
-
 async function ensurePollAuthToken() {
     try {
         if (window.firebaseAuth && !window.firebaseAuth.currentUser && window.firebaseSignInAnonymously) {
@@ -1057,62 +1025,6 @@ async function ensurePollAuthToken() {
     return '';
 }
 
-/** Fetch poll tallies and render percentages (no raw vote lists). */
-async function renderPollResultsInto(container, pollId, poll, votedOption, severity = 'info', seedVote = null) {
-    if (!container || !pollId || !poll) return;
-    const tone = pollTone(severity || poll.severity || 'info');
-    try {
-        const res = await fetch(`${DYNAMIC_BASE_URL}polls/${encodeURIComponent(pollId)}.json?t=${Date.now()}`);
-        const data = res.ok ? await res.json() : null;
-        let countA = 0, countB = 0, countC = 0;
-        if (data && typeof data === 'object') {
-            Object.values(data).forEach((vote) => {
-                if (!vote || typeof vote !== 'object') return;
-                if (vote.optionKey === 'A') countA++;
-                else if (vote.optionKey === 'B') countB++;
-                else if (vote.optionKey === 'C') countC++;
-            });
-        }
-        // Seed the just-cast vote if the write hasn't appeared in the GET yet
-        if (seedVote === 'A' && countA === 0) countA = 1;
-        else if (seedVote === 'B' && countB === 0) countB = 1;
-        else if (seedVote === 'C' && countC === 0) countC = 1;
-
-        const total = countA + countB + countC;
-        const pct = (n) => (total > 0 ? Math.round((n / total) * 100) : 0);
-        const row = (key, label, n) => {
-            if (!label) return '';
-            const p = pct(n);
-            const mine = votedOption === key ? ` ring-1 ${tone.ring}` : '';
-            return `
-                <div class="mb-2${mine}">
-                    <div class="flex justify-between text-[10px] font-bold ${tone.label} mb-1">
-                        <span>${escapeHTML(label)}${votedOption === key ? ' · your vote' : ''}</span>
-                        <span>${p}%</span>
-                    </div>
-                    <div class="w-full ${tone.track} rounded-full h-2">
-                        <div class="${tone.bar} h-2 rounded-full transition-all duration-500" style="width:${p}%"></div>
-                    </div>
-                </div>`;
-        };
-        const nested = String(container.id || '').startsWith('poll-live-results');
-        container.innerHTML = `
-            ${nested ? '' : `<p class="text-xs font-black ${tone.title} mb-3 text-center leading-tight">${escapeHTML(poll.question || 'Poll results')}</p>`}
-            ${row('A', poll.optionA, countA)}
-            ${row('B', poll.optionB, countB)}
-            ${poll.optionC ? row('C', poll.optionC, countC) : ''}
-            <p class="text-[9px] text-center ${tone.muted} font-bold uppercase tracking-wider mt-1">Live percentages</p>`;
-        container.className = nested ? 'mt-1' : `${tone.wrap} shadow-inner`;
-    } catch {
-        container.innerHTML = `
-            <div class="text-center">
-                <p class="text-xs font-bold ${tone.title}">Thanks for voting!</p>
-                <p class="text-[10px] ${tone.muted} mt-0.5">Your response has been recorded.</p>
-            </div>`;
-        container.className = tone.wrap;
-    }
-}
-
 /** SPA parity — notice modal poll votes (one vote per device via localStorage). */
 export async function submitPollVote(pollId, optionKey, optionText, pollMeta = null) {
     triggerHaptic();
@@ -1122,9 +1034,7 @@ export async function submitPollVote(pollId, optionKey, optionText, pollMeta = n
         return;
     }
 
-    const severity = pollMeta?.severity || 'info';
-    const tone = pollTone(severity);
-    const container = document.getElementById(`poll-container-${pollId}`);
+    const severity = pollSeverity(pollMeta?.severity || 'info');
 
     try {
         const token = await ensurePollAuthToken();
@@ -1150,18 +1060,7 @@ export async function submitPollVote(pollId, optionKey, optionText, pollMeta = n
             route_id: $currentRouteId.get() || 'global',
         });
 
-        if (container) {
-            if (pollMeta?.showResults) {
-                await renderPollResultsInto(container, pollId, pollMeta, optionKey, severity, optionKey);
-            } else {
-                container.innerHTML = `
-                    <div class="text-center animate-fade-in-up">
-                        <p class="text-xs font-bold ${tone.title}">Thanks for voting!</p>
-                        <p class="text-[10px] ${tone.muted} mt-0.5">Your response has been recorded.</p>
-                    </div>`;
-                container.className = tone.wrap;
-            }
-        }
+        paintPollShellsAfterVote(pollId, pollMeta, optionKey, severity);
         showToast('Vote recorded successfully!', 'success');
     } catch (e) {
         console.warn('Poll vote failed', e);
@@ -1648,52 +1547,9 @@ export function renderServiceAlertModal(notice, options = {}) {
     }
 
     if (notice.poll && notice.poll.active) {
-        const pollId = notice.id || 'preview';
-        const votedOption = mode === 'live' ? safeStorage.getItem('poll_voted_' + pollId) : null;
-        const pollSeverity = severity || 'info';
-        const tone = pollTone(pollSeverity);
-        const pollMeta = {
-            question: notice.poll.question || '',
-            optionA: notice.poll.optionA || '',
-            optionB: notice.poll.optionB || '',
-            optionC: notice.poll.optionC || '',
-            showResults: !!notice.poll.showResults,
-            severity: pollSeverity,
-        };
-        content.innerHTML += `<div id="poll-container-${escapeHTML(String(pollId))}" class="${tone.wrap}"></div>`;
-        const pollEl = document.getElementById(`poll-container-${pollId}`);
-        if (pollEl) {
-            try { pollEl.dataset.pollMeta = JSON.stringify(pollMeta); } catch { /* ignore */ }
-            if (votedOption && notice.poll.showResults) {
-                renderPollResultsInto(pollEl, pollId, { ...notice.poll, ...pollMeta }, votedOption, pollSeverity);
-            } else if (votedOption) {
-                pollEl.innerHTML = `
-                    <div class="text-center">
-                        <p class="text-xs font-bold ${tone.title}">Thanks for voting!</p>
-                        <p class="text-[10px] ${tone.muted} mt-0.5">Your response has been recorded.</p>
-                    </div>`;
-            } else {
-                const voteBtn = (key, text) =>
-                    `<button type="button" data-poll-id="${escapeHTML(String(pollId))}" data-poll-opt="${key}" data-poll-text="${escapeHTML(text)}" class="nt-poll-vote flex-1 min-w-[30%] bg-white dark:bg-gray-800 border-2 ${tone.btn} font-bold py-2.5 rounded-lg transition-all text-xs focus:outline-none shadow-sm">${escapeHTML(text)}</button>`;
-                const optC = notice.poll.optionC
-                    ? voteBtn('C', notice.poll.optionC)
-                    : '';
-                pollEl.innerHTML = `
-                    <p class="text-sm font-black ${tone.title} mb-3 leading-tight text-center">${escapeHTML(notice.poll.question || '')}</p>
-                    <div class="flex flex-wrap gap-2 mb-3">
-                        ${voteBtn('A', notice.poll.optionA || 'A')}
-                        ${voteBtn('B', notice.poll.optionB || 'B')}
-                        ${optC}
-                    </div>
-                    <div id="poll-live-results-${escapeHTML(String(pollId))}" class="${notice.poll.showResults ? '' : 'hidden'}"></div>`;
-                if (notice.poll.showResults && mode === 'live') {
-                    const liveBox = document.getElementById(`poll-live-results-${pollId}`);
-                    if (liveBox) {
-                        renderPollResultsInto(liveBox, pollId, { ...notice.poll, ...pollMeta }, null, pollSeverity);
-                    }
-                }
-            }
-        }
+        content.innerHTML += buildPollShellHtml({ ...notice, severity: severity || notice.severity }, { mode });
+        const pollEl = content.querySelector('[data-poll-shell]');
+        if (pollEl && mode === 'live') hydratePollResults(pollEl);
     }
 
     if (timestamp) {
@@ -2005,7 +1861,7 @@ export function initHub() {
                 showToast('Preview only - votes are not recorded.', 'info');
                 return;
             }
-            const wrap = btn.closest('[id^="poll-container-"]');
+            const wrap = btn.closest('[data-poll-shell], [id^="poll-container-"]');
             let pollMeta = null;
             try { pollMeta = JSON.parse(wrap?.dataset?.pollMeta || 'null'); } catch { pollMeta = null; }
             submitPollVote(

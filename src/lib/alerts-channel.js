@@ -35,6 +35,7 @@ import {
     buildNoticesMeta,
     listNoticesInTarget,
 } from './alerts-feed.js';
+import { buildPollShellHtml, hydratePollResults } from './alert-poll.js';
 
 export {
     ALERTS_PAGE_SIZE,
@@ -294,29 +295,7 @@ function watchAlertPosterHydration(root) {
 }
 
 function renderPollHtml(notice) {
-    if (!notice.poll || !notice.poll.active) return '';
-    const pollId = String(notice.id || 'preview');
-    let voted = '';
-    try { voted = safeStorage.getItem('poll_voted_' + pollId) || ''; } catch { voted = ''; }
-    const meta = {
-        question: notice.poll.question || '',
-        optionA: notice.poll.optionA || '',
-        optionB: notice.poll.optionB || '',
-        optionC: notice.poll.optionC || '',
-        showResults: !!notice.poll.showResults,
-        severity: notice.severity || 'info',
-    };
-    const metaAttr = escapeHTML(JSON.stringify(meta));
-    if (voted) {
-        return `<div id="poll-container-${escapeHTML(pollId)}" data-poll-meta="${metaAttr}" class="mt-3 p-3 rounded-xl bg-gray-50 dark:bg-gray-900/60 text-center"><p class="text-xs font-bold text-gray-700 dark:text-gray-200">Thanks for voting!</p></div>`;
-    }
-    const btn = (key, text) => text
-        ? `<button type="button" data-poll-id="${escapeHTML(pollId)}" data-poll-opt="${key}" data-poll-text="${escapeHTML(text)}" class="nt-poll-vote flex-1 min-w-[30%] bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 font-bold py-2 rounded-lg text-xs">${escapeHTML(text)}</button>`
-        : '';
-    return `<div id="poll-container-${escapeHTML(pollId)}" data-poll-meta="${metaAttr}" class="mt-3 p-3 rounded-xl bg-gray-50 dark:bg-gray-900/60">
-        <p class="text-sm font-black text-gray-800 dark:text-gray-100 mb-2 text-center">${escapeHTML(notice.poll.question || '')}</p>
-        <div class="flex flex-wrap gap-2">${btn('A', notice.poll.optionA)}${btn('B', notice.poll.optionB)}${btn('C', notice.poll.optionC)}</div>
-    </div>`;
+    return buildPollShellHtml(notice, { mode: 'live' });
 }
 
 function mineReactionKey(notice) {
@@ -630,6 +609,7 @@ export function renderAlertsChannel(notices = cachedLiveNotices, opts = {}) {
     const html = parts.join('');
     if (feed.dataset.ntAlertsSig === html) {
         hydrateAlertPosterImages(feed);
+        hydratePollResults(feed);
         return true;
     }
     feed.dataset.ntAlertsSig = html;
@@ -637,6 +617,7 @@ export function renderAlertsChannel(notices = cachedLiveNotices, opts = {}) {
     pruneExpiredAlertImages(list);
     list.forEach((n) => cacheAlertImages(n, resolveAlertImageSrc));
     hydrateAlertPosterImages(feed);
+    hydratePollResults(feed);
     return true;
 }
 

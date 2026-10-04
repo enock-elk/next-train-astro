@@ -11620,6 +11620,50 @@ const Admin = {
         }
     },
 
+    hideLivePollResults: () => {
+        const wrap = document.getElementById('alert-live-poll-results');
+        if (wrap) wrap.classList.add('hidden');
+        Admin._livePollPaintId = '';
+    },
+
+    paintLivePollResults: async (pollId, poll, secret) => {
+        const wrap = document.getElementById('alert-live-poll-results');
+        if (!wrap) return;
+        if (!pollId || !poll || !poll.active) {
+            wrap.classList.add('hidden');
+            Admin._livePollPaintId = '';
+            return;
+        }
+        Admin._livePollPaintId = String(pollId);
+        wrap.classList.remove('hidden');
+        const qEl = document.getElementById('poll-result-question');
+        if (qEl) qEl.textContent = poll.question || 'Poll';
+        const tallies = await Admin.fetchPollResultsSnapshot(pollId, secret) || { A: 0, B: 0, C: 0, total: 0 };
+        const total = Number(tallies.total || 0);
+        const pct = (n) => (total > 0 ? Math.round((Number(n) || 0) / total * 100) : 0);
+        const paintRow = (letter, label, count) => {
+            const lab = document.getElementById(`poll-result-label-${letter}`);
+            const countEl = document.getElementById(`poll-result-count-${letter}`);
+            const bar = document.getElementById(`poll-result-bar-${letter}`);
+            const n = Number(count || 0);
+            const p = pct(n);
+            if (lab) lab.textContent = label || `Option ${letter.toUpperCase()}`;
+            if (countEl) countEl.textContent = `${n} vote${n === 1 ? '' : 's'} (${p}%)`;
+            if (bar) bar.style.width = `${p}%`;
+        };
+        paintRow('a', poll.optionA, tallies.A);
+        paintRow('b', poll.optionB, tallies.B);
+        const cWrap = document.getElementById('poll-result-c-wrap');
+        if (poll.optionC || Number(tallies.C || 0) > 0) {
+            cWrap?.classList.remove('hidden');
+            paintRow('c', poll.optionC, tallies.C);
+        } else {
+            cWrap?.classList.add('hidden');
+        }
+        const totalEl = document.getElementById('poll-result-total');
+        if (totalEl) totalEl.textContent = `Total Votes: ${total}`;
+    },
+
     listNoticesInTarget: (node) => {
         if (typeof window.listNoticesInTarget === 'function') return window.listNoticesInTarget(node);
         if (!node || typeof node !== 'object') return [];
@@ -12596,7 +12640,7 @@ const Admin = {
         
         const alertHeaderLen = (alertPanel.querySelector('#alert-header-btn')?.textContent || '').trim().length;
         const alertShellEmpty = !(alertPanel.innerHTML || '').trim() || alertHeaderLen < 3;
-        const ALERT_PANEL_REV = 'alerts-hub-v1';
+        const ALERT_PANEL_REV = 'alerts-hub-v2';
         if (
             alertPanel.dataset.adminLoaded === ALERT_PANEL_REV
             && (!document.getElementById('alert-poster-toggle') || !document.querySelector('#alert-body [data-nt-font-select]') || !document.getElementById('alert-source-saved'))
@@ -12771,6 +12815,49 @@ const Admin = {
                             <label for="alert-poll-show-results" class="toggle-label block overflow-hidden h-6 rounded-full bg-gray-300 cursor-pointer"></label>
                         </div>
                     </div>
+                    <div id="alert-live-poll-results" class="hidden pt-3 border-t border-purple-100 dark:border-purple-800">
+                    <div class="flex items-center justify-between gap-2 mb-3">
+                        <h4 class="text-[10px] font-bold text-purple-600 dark:text-purple-400 uppercase tracking-widest flex items-center"><span class="mr-1.5 inline-flex">${Admin.icon('chart', 'w-3.5 h-3.5')}</span> Live Poll Results</h4>
+                        <button type="button" id="alert-live-poll-refresh" class="h-7 px-2 rounded-lg bg-white dark:bg-gray-900 border border-purple-200 dark:border-purple-700 text-[9px] font-black uppercase tracking-wider text-purple-700 dark:text-purple-300 focus:outline-none">Refresh</button>
+                    </div>
+                    <div class="bg-white dark:bg-gray-900 rounded-xl p-3 border border-purple-100 dark:border-purple-800">
+                        <p id="poll-result-question" class="text-xs font-bold text-gray-800 dark:text-gray-200 mb-3 leading-snug">Question...</p>
+                        
+                        <div class="mb-2">
+                            <div class="flex justify-between text-[10px] font-bold text-gray-600 dark:text-gray-400 mb-1">
+                                <span id="poll-result-label-a">Option A</span>
+                                <span id="poll-result-count-a">0 votes (0%)</span>
+                            </div>
+                            <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                                <div id="poll-result-bar-a" class="bg-purple-500 h-2 rounded-full transition-all duration-500" style="width: 0%"></div>
+                            </div>
+                        </div>
+                        
+                        <div class="mb-2">
+                            <div class="flex justify-between text-[10px] font-bold text-gray-600 dark:text-gray-400 mb-1">
+                                <span id="poll-result-label-b">Option B</span>
+                                <span id="poll-result-count-b">0 votes (0%)</span>
+                            </div>
+                            <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                                <div id="poll-result-bar-b" class="bg-purple-400 h-2 rounded-full transition-all duration-500" style="width: 0%"></div>
+                            </div>
+                        </div>
+
+                        <div id="poll-result-c-wrap" class="hidden mb-2">
+                            <div class="flex justify-between text-[10px] font-bold text-gray-600 dark:text-gray-400 mb-1">
+                                <span id="poll-result-label-c">Option C</span>
+                                <span id="poll-result-count-c">0 votes (0%)</span>
+                            </div>
+                            <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                                <div id="poll-result-bar-c" class="bg-purple-300 h-2 rounded-full transition-all duration-500" style="width: 0%"></div>
+                            </div>
+                        </div>
+                        
+                        <div class="mt-3 text-right">
+                            <span id="poll-result-total" class="text-[9px] font-black uppercase text-gray-400 tracking-wider">Total Votes: 0</span>
+                        </div>
+                    </div>
+                    </div>
                 </div>
                 </div>
 
@@ -12897,48 +12984,6 @@ const Admin = {
                     <button id="alert-clear-btn" class="flex-1 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 font-bold py-2.5 rounded-lg shadow-sm transition-colors text-xs uppercase tracking-wide">
                         Clear
                     </button>
-                </div>
-
-                <div id="alert-live-poll-results" class="hidden pt-4 border-t border-gray-100 dark:border-gray-700 mt-4">
-                    <h4 class="text-[10px] font-bold text-purple-600 dark:text-purple-400 uppercase tracking-widest mb-3 flex items-center"><span class="mr-1.5 inline-flex">${Admin.icon('chart', 'w-3.5 h-3.5')}</span> Live Poll Results</h4>
-                    <div class="bg-gray-50 dark:bg-gray-900 rounded-xl p-3 border border-gray-200 dark:border-gray-700">
-                        <p id="poll-result-question" class="text-xs font-bold text-gray-800 dark:text-gray-200 mb-3 leading-snug">Question...</p>
-                        
-                        <div class="mb-2">
-                            <div class="flex justify-between text-[10px] font-bold text-gray-600 dark:text-gray-400 mb-1">
-                                <span id="poll-result-label-a">Option A</span>
-                                <span id="poll-result-count-a">0 votes (0%)</span>
-                            </div>
-                            <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-                                <div id="poll-result-bar-a" class="bg-purple-500 h-2 rounded-full transition-all duration-500" style="width: 0%"></div>
-                            </div>
-                        </div>
-                        
-                        <div class="mb-2">
-                            <div class="flex justify-between text-[10px] font-bold text-gray-600 dark:text-gray-400 mb-1">
-                                <span id="poll-result-label-b">Option B</span>
-                                <span id="poll-result-count-b">0 votes (0%)</span>
-                            </div>
-                            <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-                                <div id="poll-result-bar-b" class="bg-purple-400 h-2 rounded-full transition-all duration-500" style="width: 0%"></div>
-                            </div>
-                        </div>
-
-                        <div id="poll-result-c-wrap" class="hidden mb-2">
-                            <div class="flex justify-between text-[10px] font-bold text-gray-600 dark:text-gray-400 mb-1">
-                                <span id="poll-result-label-c">Option C</span>
-                                <span id="poll-result-count-c">0 votes (0%)</span>
-                            </div>
-                            <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-                                <div id="poll-result-bar-c" class="bg-purple-300 h-2 rounded-full transition-all duration-500" style="width: 0%"></div>
-                            </div>
-                        </div>
-                        
-                        <div class="mt-3 text-right">
-                            <span id="poll-result-total" class="text-[9px] font-black uppercase text-gray-400 tracking-wider">Total Votes: 0</span>
-                        </div>
-                    </div>
-                </div>
                 </div>
 
                 <div id="alert-active-pane" class="hidden space-y-3">
@@ -13503,9 +13548,16 @@ const Admin = {
                     pollOptCWrap?.classList.remove('hidden');
                     pollAddCBtn?.classList.add('hidden');
                 }
+                const livePollId = item.id || existingAlertId || '';
+                if (mode === 'review' && livePollId) {
+                    Admin.paintLivePollResults(livePollId, item.poll);
+                } else {
+                    Admin.hideLivePollResults();
+                }
             } else {
                 if (pollToggle) pollToggle.checked = false;
                 pollContainer?.classList.add('hidden');
+                Admin.hideLivePollResults();
             }
 
             composePane?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -13776,11 +13828,35 @@ const Admin = {
             pollToggle.addEventListener('change', () => {
                 if (pollToggle.checked) {
                     if (pollContainer) pollContainer.classList.remove('hidden');
+                    if (existingAlertId) {
+                        Admin.paintLivePollResults(existingAlertId, {
+                            active: true,
+                            question: pollQuestion?.value || '',
+                            optionA: pollOptA?.value || '',
+                            optionB: pollOptB?.value || '',
+                            optionC: pollOptCWrap?.classList.contains('hidden') ? '' : (pollOptC?.value || ''),
+                        });
+                    }
                 } else {
                     if (pollContainer) pollContainer.classList.add('hidden');
+                    Admin.hideLivePollResults();
                 }
             });
         }
+        document.getElementById('alert-live-poll-refresh')?.addEventListener('click', () => {
+            const id = existingAlertId || Admin._livePollPaintId;
+            if (!id) {
+                if (typeof showToast === 'function') showToast('Post or open a live poll to see results.', 'info');
+                return;
+            }
+            Admin.paintLivePollResults(id, {
+                active: true,
+                question: pollQuestion?.value || '',
+                optionA: pollOptA?.value || '',
+                optionB: pollOptB?.value || '',
+                optionC: pollOptCWrap?.classList.contains('hidden') ? '' : (pollOptC?.value || ''),
+            });
+        });
 
         async function fetchCurrentAlertsForTargets(targets) {
             if (Admin._skipAlertFetchOnce) {
@@ -14090,6 +14166,7 @@ const Admin = {
                 pollAddCBtn?.classList.remove('hidden');
                 const livePoll = document.getElementById('alert-live-poll-results');
                 if (livePoll) livePoll.classList.add('hidden');
+                Admin._livePollPaintId = '';
 
                 sendBtn.textContent = "Preview Alert";
                 if (typeof checkServiceAlerts === 'function') setTimeout(checkServiceAlerts, 500);
@@ -14124,6 +14201,12 @@ const Admin = {
                 }
             }
             items.sort((a, b) => Number(b.postedAt || b.timestamp || 0) - Number(a.postedAt || a.timestamp || 0));
+            const secret = await Admin.getAuthKey();
+            await Promise.all(items.map(async (item) => {
+                if (!item?.poll?.active || !item.id) return;
+                const tallies = await Admin.fetchPollResultsSnapshot(item.id, secret);
+                if (tallies) item.pollResults = tallies;
+            }));
             Admin._cachedActiveAlerts = items;
             Admin.renderActiveAlertsList(items);
             if (statusEl) statusEl.textContent = items.length ? `${items.length} live` : 'None live';
@@ -14160,6 +14243,12 @@ const Admin = {
                     return (d.textContent || '').trim().slice(0, 140) || '(no message)';
                 } catch { return '(no message)'; }
             })();
+            const poll = item.pollResults;
+            const pollHint = poll && poll.total
+                ? `<span class="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300">Poll - ${poll.total} vote${poll.total === 1 ? '' : 's'}</span>`
+                : (item.poll && item.poll.active
+                    ? `<span class="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300">Poll</span>`
+                    : '');
             const scope = escapeHTML(Admin.alertTargetLabel(item.target || item.clearedFrom || '-'));
             const idSafe = escapeHTML(String(item.id || item._key || idx));
             return `
@@ -14167,6 +14256,7 @@ const Admin = {
                     <div class="flex flex-wrap items-center gap-1.5 mb-1.5">
                         <span class="px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider ${sevCls}">${sevLabel}</span>
                         <span class="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400">${scope}</span>
+                        ${pollHint}
                     </div>
                     <p class="text-xs text-gray-800 dark:text-gray-200 leading-snug line-clamp-2 mb-2">${escapeHTML(plain)}</p>
                     <p class="text-[9px] font-mono text-gray-400 mb-2 truncate">${idSafe} - ${escapeHTML(whenStr)}</p>

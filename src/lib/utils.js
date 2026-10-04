@@ -121,6 +121,15 @@ export function scheduleCacheSlot(dayType, region, ab = 'a') {
     return `weekday_to_${dir}`;
 }
 
+/**
+ * Parsed `$schedules` slots are generic (weekday_to_a, …). Tag them with `_routeId`
+ * so a same-region corridor swap cannot paint Mabopane chrome over Pienaarspoort rows.
+ */
+export function schedulesBelongToRoute(schedules, routeId) {
+    if (!routeId || !schedules || typeof schedules !== 'object') return false;
+    return String(schedules._routeId || '') === String(routeId);
+}
+
 /** Firebase / sheetKeys key for a route direction on the given day type. */
 export function routeSheetKeyForDay(route, dayType, ab = 'a') {
     const dir = ab === 'b' || ab === 'B' ? 'b' : 'a';

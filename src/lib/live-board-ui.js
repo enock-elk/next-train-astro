@@ -3,7 +3,7 @@
  * Thin controller bridging DOM ↔ live-board.js engine ↔ Renderer
  */
 import { ROUTES, FARE_CONFIG, getCorridorLabel } from './config.js';
-import { normalizeStationName, timeToSeconds, safeStorage, escapeHTML, formatTimeDisplay, formatRouteLabelPlain, formatRouteLabelHtml, isRealTime, shortSharedSourceLabel, scheduleCacheSlot, warningTriangleSvg } from './utils.js';
+import { normalizeStationName, timeToSeconds, safeStorage, escapeHTML, formatTimeDisplay, formatRouteLabelPlain, formatRouteLabelHtml, isRealTime, shortSharedSourceLabel, scheduleCacheSlot, warningTriangleSvg, schedulesBelongToRoute } from './utils.js';
 import { $currentRouteId, $userRegion, $userProfile, $fullDatabase, $schedules } from '../store.js';
 import { currentTime, loadAllSchedules } from './logic.js';
 import { showToast, triggerHaptic, openSmoothModal, closeSmoothModal } from './ui.js';
@@ -832,6 +832,11 @@ export function initLiveBoardUi() {
         if (!routeId) return;
         updatePinUI();
         updateNextTrainView();
+        // Drop the previous corridor's generic weekday_to_* slots before reload so
+        // VIEW FULL TIMETABLE cannot paint Mabopane chrome over Pienaarspoort rows.
+        if (!schedulesBelongToRoute($schedules.get(), routeId)) {
+            $schedules.set({});
+        }
         // Always reload on route change — region swaps clear fullDatabase, so a
         // "only if cache exists" guard left the board empty after picking a route.
         loadAllSchedules(true).then(() => {

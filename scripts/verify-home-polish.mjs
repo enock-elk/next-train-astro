@@ -513,6 +513,14 @@ assert(hubModals.includes('id="nt-admin-publish-train"'), 'admin nearby sheet ca
     assert(!renderer.includes('nt-live-train-pulse'), 'live board has no sharing dots');
     const timetableGrid = readFileSync(new URL('../src/lib/timetable-grid.js', import.meta.url), 'utf8');
     assert(!timetableGrid.includes('paintLiveTrainDots'), 'full timetable grid has no sharing dots');
+    assert(timetableGrid.includes('schedulesBelongToRoute'), 'full timetable refuses the previous corridor sheet');
+    assert(timetableGrid.includes('bindGridScheduleRouteRefresh'), 'open timetable refreshes when the matching route bundle lands');
+    const utilsJs = readFileSync(new URL('../src/lib/utils.js', import.meta.url), 'utf8');
+    assert(utilsJs.includes('export function schedulesBelongToRoute'), 'schedule bundles can be tagged to a route');
+    const logicJs = readFileSync(new URL('../src/lib/logic.js', import.meta.url), 'utf8');
+    assert(logicJs.includes('_routeId: route.id'), 'parsed schedules carry the corridor id');
+    const liveBoardUi = readFileSync(new URL('../src/lib/live-board-ui.js', import.meta.url), 'utf8');
+    assert(liveBoardUi.includes('schedulesBelongToRoute($schedules.get(), routeId)'), 'route change clears mismatched schedule slots');
     assert(mapTab.includes('hasRidePingsListener'), 'map prefers the live listener over REST');
     assert(mapTab.includes('isMapTabFullscreen()'), 'map fullscreen can exit when already full');
     assert(mapView.includes('allow="geolocation; fullscreen"'), 'map iframe allows fullscreen');

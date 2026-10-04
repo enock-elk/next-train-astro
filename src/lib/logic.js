@@ -918,6 +918,7 @@ export async function processRouteDataFromDBAsync(route, targetDB) {
     const hasRows = (sched) => !!(sched && Array.isArray(sched.rows) && sched.rows.length > 0);
 
     const result = {
+        _routeId: route.id || '',
         weekday_to_a: await getSched(route.sheetKeys.weekday_to_a),
         weekday_to_b: await getSched(route.sheetKeys.weekday_to_b),
         saturday_to_a: await getSched(route.sheetKeys.saturday_to_a),

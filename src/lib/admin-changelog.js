@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_10.04.1': [
+        'Same-region corridor swap no longer paints the previous route on VIEW FULL TIMETABLE. Parsed $schedules carry _routeId; route change clears mismatched slots before reload; the grid refuses untagged or wrong-route sheets and refreshes when the matching bundle lands. What’s New covers the timetable route match. forceShow stays false.',
+    ],
     'V9_09.26.1': [
         'Special trains (exclusion type special) stay on the live board, upcoming list, transfers, and Trip Planner graph. Banned / no-service exclusions stay skipped. Live board title is Special Train when that exclusion applies. Welcome and About logos use loading-logo-splash.webp with width and height; manifest and Open Graph stay on the PNG. First-paint shell keeps min-height 100svh and does not pin --nt-app-h / --nt-shell-h until the viewport is at least 240px. Planner Telemetry Fails cards and contributors show appVersion. What’s New covers special trains only. forceShow stays false.',
     ],

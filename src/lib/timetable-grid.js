@@ -2,7 +2,7 @@
  * Full timetable grid UI + route deep-link handling
  */
 import { ROUTES, HOLIDAY_NAMES } from './config.js';
-import { safeStorage, escapeHTML, routeArrowSvg, routePrimaryGridDirection, scheduleCacheSlot, normalizeScheduleSheetDay } from './utils.js';
+import { safeStorage, escapeHTML, routeArrowSvg, routePrimaryGridDirection, scheduleCacheSlot, normalizeScheduleSheetDay, schedulesBelongToRoute } from './utils.js';
 import { $currentRouteId, $userRegion, $schedules, $globalExclusions, $globalDisruptions, $opsOverlaysReady } from '../store.js';
 import { loadAllSchedules, ensureRoutePinnedForRegion } from './logic.js';
 import { showToast, triggerHaptic, openSmoothModal, closeSmoothModal, switchTab, toggleDropdownScrim } from './ui.js';
@@ -15,6 +15,33 @@ import {
 import { consumeShareDeeplinkSnapshot, peekShareDeeplinkSnapshot } from './deeplink.js';
 
 let lastGridBody = null;
+let gridSchedulesRefreshBound = false;
+let gridSchedulesRefreshPrimed = false;
+let gridReloadPendingFor = '';
+
+function scheduleBundleHasRows(scheds) {
+    if (!scheds || typeof scheds !== 'object') return false;
+    return ['weekday_to_a', 'weekday_to_b', 'saturday_to_a', 'saturday_to_b', 'pub_to_a', 'pub_to_b']
+        .some((key) => Array.isArray(scheds[key]?.rows) && scheds[key].rows.length > 0);
+}
+
+function bindGridScheduleRouteRefresh() {
+    if (gridSchedulesRefreshBound) return;
+    gridSchedulesRefreshBound = true;
+    $schedules.subscribe((scheds) => {
+        if (!gridSchedulesRefreshPrimed) {
+            gridSchedulesRefreshPrimed = true;
+            return;
+        }
+        const modal = document.getElementById('full-schedule-modal');
+        if (!modal || modal.classList.contains('hidden')) return;
+        const routeId = $currentRouteId.get();
+        if (!schedulesBelongToRoute(scheds, routeId) || !scheduleBundleHasRows(scheds)) return;
+        const dir = lastGridBody?.direction || (typeof window !== 'undefined' ? window._gridSwapDir : null) || 'A';
+        const day = lastGridBody?.selectedDay || null;
+        renderFullScheduleGrid(dir, day, { silent: true });
+    });
+}
 
 /** Holiday name for the calendar day, when the open sheet is a public holiday. */
 function holidayNoticeName() {
@@ -48,6 +75,8 @@ function paintOpenGridBody() {
     const grid = document.getElementById('grid-container');
     const modal = document.getElementById('full-schedule-modal');
     if (!grid || !modal || modal.classList.contains('hidden') || !lastGridBody) return;
+    if ($currentRouteId.get() !== lastGridBody.routeId) return;
+    if (!schedulesBelongToRoute($schedules.get(), lastGridBody.routeId)) return;
     const {
         noServiceSheet, schedule, routeName, routeSheetKey, routeId, targetDayIdx, isTodayType,
         sheetDayType, holidayName,
@@ -227,13 +256,30 @@ export async function applyRouteDeepLink() {
     return true;
 }
 
-export function renderFullScheduleGrid(direction = null, dayOverride = null) {
-    triggerHaptic();
+export function renderFullScheduleGrid(direction = null, dayOverride = null, opts = {}) {
+    if (!opts.silent) triggerHaptic();
+    bindGridScheduleRouteRefresh();
     const routeId = $currentRouteId.get();
     const route = ROUTES[routeId];
     const scheds = $schedules.get() || {};
-    if (!route || !window.Renderer?._buildGridHTML || !scheds || Object.keys(scheds).length === 0) {
+    if (!route || !window.Renderer?._buildGridHTML) {
         showToast('Loading latest schedules... please wait.', 'info', 2000);
+        return;
+    }
+    // Same-region corridor swap keeps generic weekday_to_a slots until the new
+    // route finishes parsing. Never paint Mabopane chrome over Pienaarspoort rows.
+    if (!schedulesBelongToRoute(scheds, routeId) || !scheduleBundleHasRows(scheds)) {
+        showToast('Loading latest schedules... please wait.', 'info', 2000);
+        if (gridReloadPendingFor !== routeId) {
+            gridReloadPendingFor = routeId;
+            loadAllSchedules(true).then(() => {
+                if ($currentRouteId.get() !== routeId) return;
+                if (!schedulesBelongToRoute($schedules.get(), routeId)) return;
+                renderFullScheduleGrid(direction, dayOverride, { silent: true });
+            }).catch(() => { /* ignore */ }).finally(() => {
+                if (gridReloadPendingFor === routeId) gridReloadPendingFor = '';
+            });
+        }
         return;
     }
     direction = direction === 'A' || direction === 'B'

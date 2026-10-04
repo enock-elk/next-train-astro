@@ -187,6 +187,7 @@ function hideFixedModal(modalId) {
 export function closeSmoothModal(modalId, fromPopState = false) {
     if (typeof window === 'undefined') return;
     if (window._adminDrillBackLock && modalId === 'dev-modal') return;
+    if (modalId === 'full-schedule-modal') markFullGridClosedFromUi();
 
     // No corridor yet: keep Select Route up so Close / Back cannot land on the empty board.
     if (modalId === 'route-modal' && !$currentRouteId.get()) {
@@ -287,6 +288,14 @@ function cancelPendingGridOpenFromUi() {
     try {
         if (typeof window !== 'undefined' && typeof window.cancelPendingGridOpen === 'function') {
             window.cancelPendingGridOpen();
+        }
+    } catch { /* ignore */ }
+}
+
+function markFullGridClosedFromUi() {
+    try {
+        if (typeof window !== 'undefined' && typeof window.markFullGridClosed === 'function') {
+            window.markFullGridClosed();
         }
     } catch { /* ignore */ }
 }

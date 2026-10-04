@@ -2,6 +2,10 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin, Dev Hub, Alerts, Trains near me, community chat, or other hidden-test work. No emoji and no em dashes in What’s New. Keep `APP_VERSION`, `package.json` `version`, and `public/app-version.json` aligned on each release. Changelog / What’s New may be skipped, or the heading may be only **no release notes.** Every bump must add `ADMIN_CHANGELOG[APP_VERSION]` (System Health Build notes).
 
+## V9_10.04.4 — no release notes
+
+Analytics: SEO app opens no longer count as deep_link_open, events carry region_id, and view_full_grid / sidenav map opens are once-per-action. Commuter What’s New stays on the timetable wait card.
+
 ## V9_10.04.3 — no release notes
 
 Operator poll run length, View Poll Results (vote first), ACTIVE/INACTIVE footer, uid-keyed votes, and empty-body poll/poster compose. Commuter What’s New stays on the timetable wait card.

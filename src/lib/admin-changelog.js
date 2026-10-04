@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_10.04.4': [
+        'Analytics lean-up: SEO Open in Next Train paths tag src=seo and same-origin /routes|/regions|/corridors referrers skip deep_link_open (seo_page_view stays the SEO signal). trackAnalyticsEvent always attaches region_id (and region) from the payload or userRegion. view_full_grid fires once per open session; day/dir switches and schedule repaints do not re-count; close clears the session. Sidenav Network Map fires one open_interactive_map instead of three. No commuter What’s New. forceShow stays false.',
+    ],
     'V9_10.04.3': [
         'Polls: View Poll Results sits under the answers and asks for a vote first (no tally fetch until this device has voted). Footer is NEXT TRAIN [green pulse] ACTIVE POLL or NEXT TRAIN [red static] INACTIVE POLL. poll.active still means the notice has a poll. Voting window is additive poll.closesAt (missing inherits alert expiresAt, or stays open). Admin compose has a dedicated poll close, clamp ≤ alert expiry, and scheduled closesInMs. Publish writes polls/{id}/_meta.closesAt so rules reject late votes. Votes PUT to polls/{id}/{uid} (one anonymous uid). Empty-body compose is allowed when a poll or poster is present. No commuter What’s New. forceShow stays false.',
     ],

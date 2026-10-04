@@ -1,6 +1,7 @@
 /**
  * Single analytics path: GA4 (gtag) + Clarity custom events + offline queue.
  * Leaf module — do not import ui/hub/planner (cycle risk). OfflineTracker lives on window.
+ * Every event gets region_id (and region) when a GP/WC/KZN/EC code is known.
  */
 
 function scheduleIdle(fn) {
@@ -11,19 +12,38 @@ function scheduleIdle(fn) {
     }
 }
 
+function normalizeRegionCode(value) {
+    const code = String(value || '').trim().toUpperCase();
+    return (code === 'GP' || code === 'WC' || code === 'KZN' || code === 'EC') ? code : '';
+}
+
 function readRegion(params) {
     try {
-        if (params && params.region) return String(params.region);
+        const fromParams = normalizeRegionCode(
+            params?.region_id || params?.region || params?.seo_region || ''
+        );
+        if (fromParams) return fromParams;
         if (typeof localStorage === 'undefined') return '';
-        return localStorage.getItem('userRegion') || '';
+        return normalizeRegionCode(localStorage.getItem('userRegion') || '');
     } catch {
         return '';
     }
 }
 
+/** Attach region_id on every payload. Callers can still pass a more specific region. */
+export function withAnalyticsRegion(params = {}) {
+    const payload = params && typeof params === 'object' ? { ...params } : {};
+    const region = readRegion(payload);
+    if (region) {
+        if (!payload.region_id) payload.region_id = region;
+        if (!payload.region) payload.region = region;
+    }
+    return payload;
+}
+
 /** Fire gtag + Clarity now. Clarity is not gated on region. */
 export function sendAnalyticsNow(name, params = {}) {
-    const payload = params && typeof params === 'object' ? params : {};
+    const payload = withAnalyticsRegion(params);
     try {
         if (typeof window !== 'undefined' && typeof window.gtag === 'function') {
             window.gtag('event', name, payload);
@@ -43,7 +63,7 @@ export function sendAnalyticsNow(name, params = {}) {
  */
 export function trackAnalyticsEvent(name, params = {}) {
     if (typeof window === 'undefined' || !name) return;
-    const payload = params && typeof params === 'object' ? { ...params } : {};
+    const payload = withAnalyticsRegion(params);
     scheduleIdle(() => {
         try {
             const offline = typeof navigator !== 'undefined' && navigator.onLine === false;

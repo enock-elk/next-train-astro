@@ -28,7 +28,7 @@ const canonicalPath = `/corridors/${entry.slug}.html`;
 const routesIndexHref = withBase('routes.html');
 const regionEntry = listSeoRegions().find((r) => r.region === entry.region);
 const regionHref = regionEntry ? withBase(`regions/${regionEntry.slug}.html`) : routesIndexHref;
-const ptaJhbPlannerHref = withBase('/?plan=PRETORIA~JOHANNESBURG&r=GP');
+const ptaJhbPlannerHref = withBase('/?plan=PRETORIA~JOHANNESBURG&r=GP&src=seo');
 const isPtaJhb = entry.slug === 'gauteng-pretoria-jhb-line';
 const appHref = isPtaJhb
   ? ptaJhbPlannerHref

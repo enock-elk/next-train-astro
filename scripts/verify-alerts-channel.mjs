@@ -342,6 +342,8 @@ const now = 1_700_000_000_000;
     assert(gridShare.includes('{ url: shareUrl }'), 'grid share is URL-only');
     assert(gridShare.includes('cancelPendingGridOpen'), 'stale timetable opens cancel when the commuter leaves the board');
     assert(gridShare.includes('shouldHonorGridOpenIntent'), 'pending timetable open checks the live board context');
+    assert(gridShare.includes('gridViewEventOpen') && gridShare.includes('markFullGridClosed'), 'view_full_grid is once per open');
+    assert(gridShare.includes('isSeoAppHandoff'), 'SEO Open links skip deep_link_open');
 
     const plannerShare = readFileSync(new URL('../src/lib/planner-ui.js', import.meta.url), 'utf8');
     assert(!plannerShare.includes('Trip Plan:'), 'planner header share has no Trip Plan caption');

@@ -11,6 +11,7 @@ import {
     buildRouteShareUrl,
     parseRouteDeepLinkParams,
     stripShareParamsFromUrl,
+    isSeoAppHandoff,
 } from './share-links.js';
 import { consumeShareDeeplinkSnapshot, peekShareDeeplinkSnapshot } from './deeplink.js';
 
@@ -21,6 +22,8 @@ let gridReloadPendingFor = '';
 /** One pending VIEW FULL TIMETABLE tap. Tap-around clears it so load cannot stack overlays. */
 let gridOpenIntent = null;
 let gridRouteIntentPrimed = false;
+/** One view_full_grid per open; day/dir switches must not re-count. */
+let gridViewEventOpen = false;
 
 const GRID_INTENT_BLOCKING_MODALS = [
     'route-modal', 'fare-modal', 'alerts-channel', 'notice-modal', 'schedule-modal',
@@ -68,6 +71,19 @@ export function collectGridIntentContext() {
 
 export function cancelPendingGridOpen() {
     gridOpenIntent = null;
+}
+
+export function markFullGridClosed() {
+    gridViewEventOpen = false;
+}
+
+function closeFullGridModal() {
+    markFullGridClosed();
+    if (typeof location !== 'undefined' && location.hash === '#grid') {
+        history.back();
+        return;
+    }
+    closeSmoothModal('full-schedule-modal');
 }
 
 function tryHonorPendingGridOpen(scheds = $schedules.get()) {
@@ -215,14 +231,6 @@ function bindGridExclusionRefresh() {
     });
 }
 
-function closeFullGridModal() {
-    if (typeof location !== 'undefined' && location.hash === '#grid') {
-        history.back();
-        return;
-    }
-    closeSmoothModal('full-schedule-modal');
-}
-
 function buildGridShareUrl(routeId, direction, dayType) {
     const day = (dayType === 'saturday' || dayType === 'sunday' || dayType === 'public_holiday')
         ? dayType
@@ -255,6 +263,7 @@ export function parseRouteDeepLink() {
         dir: raw.dir,
         day,
         region: raw.region || null,
+        src: raw.src || '',
         fromSnapshot: !!(snap && snap.kind === 'route' && !(fromUrl && fromUrl.routeId)),
     };
 }
@@ -304,8 +313,13 @@ export async function applyRouteDeepLink() {
     if (typeof window.findNextTrains === 'function') window.findNextTrains();
     if (typeof window.updateNextTrainView === 'function') window.updateNextTrainView();
 
-    if (typeof window.trackAnalyticsEvent === 'function') {
-        window.trackAnalyticsEvent('deep_link_open', { type: 'route', route_id: link.routeId, view: link.view || 'board' });
+    if (typeof window.trackAnalyticsEvent === 'function' && !isSeoAppHandoff(link)) {
+        window.trackAnalyticsEvent('deep_link_open', {
+            type: 'route',
+            route_id: link.routeId,
+            view: link.view || 'board',
+            region_id: region || '',
+        });
     }
     showToast(`Opened shared route: ${route.name}`, 'success', 2000);
 
@@ -418,12 +432,15 @@ export function renderFullScheduleGrid(direction = null, dayOverride = null, opt
     }
 
     let modal = document.getElementById('full-schedule-modal');
-    const isFirstOpen = !modal || modal.classList.contains('hidden');
+    const isFirstOpen = !gridViewEventOpen && (!modal || modal.classList.contains('hidden'));
     if (isFirstOpen && typeof window.trackAnalyticsEvent === 'function') {
+        gridViewEventOpen = true;
         window.trackAnalyticsEvent('view_full_grid', {
             route: route.name,
+            route_id: routeId,
             direction,
             day: selectedDay,
+            region_id: route.region || '',
         });
     }
 
@@ -651,4 +668,5 @@ export function attachTimetableGridGlobals() {
     window.renderFullScheduleGrid = renderFullScheduleGrid;
     window.applyRouteDeepLink = applyRouteDeepLink;
     window.cancelPendingGridOpen = cancelPendingGridOpen;
+    window.markFullGridClosed = markFullGridClosed;
 }

@@ -16,6 +16,7 @@ import {
     parsePlannerShortcutDeepLink,
     parseShareTargetDeepLink,
     stripShareParamsFromUrl,
+    isSeoAppHandoff,
 } from './share-links.js';
 
 const INTENT_KEY = 'nt_pending_deeplink';
@@ -401,12 +402,13 @@ export async function applyLiveTrainDeepLink() {
                 5000
             );
         }
-        if (typeof window.trackAnalyticsEvent === 'function') {
+        if (typeof window.trackAnalyticsEvent === 'function' && !isSeoAppHandoff(link)) {
             window.trackAnalyticsEvent('deep_link_open', {
                 type: 'live',
                 train_id: link.trainId,
                 route_id: link.routeId || '',
                 live_state: share.status,
+                region_id: route?.region || '',
             });
         }
         return true;
@@ -428,8 +430,14 @@ export async function applyLiveTrainDeepLink() {
             viewed: true,
         });
     } catch { /* map optional */ }
-    if (typeof window.trackAnalyticsEvent === 'function') {
-        window.trackAnalyticsEvent('deep_link_open', { type: 'live', train_id: link.trainId, route_id: link.routeId || '', live_state: 'live' });
+    if (typeof window.trackAnalyticsEvent === 'function' && !isSeoAppHandoff(link)) {
+        window.trackAnalyticsEvent('deep_link_open', {
+            type: 'live',
+            train_id: link.trainId,
+            route_id: link.routeId || '',
+            live_state: 'live',
+            region_id: route?.region || '',
+        });
     }
     if (typeof window.showToast === 'function') {
         const dest = String(link.dest || '').replace(/\s+STATION$/i, '').trim();
@@ -465,7 +473,7 @@ export async function applyMapDeepLink() {
     const openTab = () => {
         if (typeof window.switchTab !== 'function' || !document.getElementById('view-map')) return false;
         window.switchTab('map');
-        if (typeof window.trackAnalyticsEvent === 'function') {
+        if (typeof window.trackAnalyticsEvent === 'function' && !isSeoAppHandoff()) {
             window.trackAnalyticsEvent('deep_link_open', { type: 'map' });
         }
         if (typeof window.showToast === 'function') {
@@ -490,7 +498,7 @@ export async function applyMapDeepLink() {
         } catch { /* ignore */ }
         const mapImage = document.getElementById('map-image');
         if (mapImage) mapImage.style.transform = 'translate(0px, 0px) scale(1)';
-        if (typeof window.trackAnalyticsEvent === 'function') {
+        if (typeof window.trackAnalyticsEvent === 'function' && !isSeoAppHandoff()) {
             window.trackAnalyticsEvent('deep_link_open', { type: 'map' });
         }
         if (typeof window.showToast === 'function') {

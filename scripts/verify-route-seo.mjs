@@ -294,6 +294,9 @@ const boardPath = buildRouteBoardAppPath('herc-koed');
 if (!boardPath.includes('rt=herc-koed') || !boardPath.includes('r=GP') || boardPath.includes('v=g')) {
   fail(`live board path must be ?rt=herc-koed&r=GP without grid view: ${boardPath}`);
 }
+if (!boardPath.includes('src=seo') || !gridPathB.includes('src=seo')) {
+  fail('SEO Open board/grid paths must tag src=seo so deep_link_open is skipped');
+}
 const gridPathSa = buildRouteGridAppPath('pta-kempton', 'A', 'saturday');
 if (!gridPathSa.includes('d=sa') || gridPathSa.includes('dir=')) {
   fail(`Saturday dir-A grid path looks wrong: ${gridPathSa}`);

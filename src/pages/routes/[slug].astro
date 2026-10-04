@@ -88,7 +88,7 @@ const ogImage = ogTimetableImageUrl(route.id, 'A');
 const stations = corridorStationList(timetable);
 const liveGridPrimary = liveGridWeekdayB || liveGridWeekdayA;
 const distanceLabel = seoRouteDistanceLabel(seoRouteDistanceKm(route));
-const pienPlannerHref = withBase('/?plan=PRETORIA~PIENAARSPOORT&r=GP');
+const pienPlannerHref = withBase('/?plan=PRETORIA~PIENAARSPOORT&r=GP&src=seo');
 
 const jsonLd = buildRouteJsonLd({
   title,

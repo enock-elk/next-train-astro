@@ -24,7 +24,7 @@ import {
 } from './utils.js';
 import { planUnifiedTrip, extractTrainSheetStops } from './planner-core.js';
 import { saturdayNoServiceCopy, buildSaturdayAdvisoryCopy, stationDisplayName } from './saturday-service.js';
-import { buildPlannerShareUrl, buildRouteShareUrl, parsePlannerDeepLink, stripShareParamsFromUrl, compactTime } from './share-links.js';
+import { buildPlannerShareUrl, buildRouteShareUrl, parsePlannerDeepLink, stripShareParamsFromUrl, compactTime, isSeoAppHandoff } from './share-links.js';
 import { consumeShareDeeplinkSnapshot, peekShareDeeplinkSnapshot } from './deeplink.js';
 import { ensureRoutePinnedForRegion, loadAllSchedules } from './logic.js';
 import { showToast, switchTab, triggerHaptic, openSmoothModal, closeSmoothModal, unlockBackgroundScroll } from './ui.js';
@@ -4609,12 +4609,13 @@ export async function applyPlannerDeepLink() {
 
                 executeTripPlan(fromId, toId, timeParam);
                 showToast('Loaded shared trip plan', 'success');
-                if (typeof window.trackAnalyticsEvent === 'function') {
+                if (typeof window.trackAnalyticsEvent === 'function' && !isSeoAppHandoff(link)) {
                     window.trackAnalyticsEvent('deep_link_open', {
                         type: 'planner',
                         from: fromId,
                         to: toId,
                         legacy: !!link.legacy,
+                        region_id: link.region || '',
                     });
                 }
                 resolve(true);

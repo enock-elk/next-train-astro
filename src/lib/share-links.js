@@ -171,6 +171,7 @@ export function parsePlannerDeepLink(search = typeof location !== 'undefined' ? 
     if (!from || !to) return null;
 
     const regionRaw = (params.get('r') || params.get('region') || '').toUpperCase();
+    const src = String(params.get('src') || params.get('source') || '').toLowerCase();
     return {
         kind: 'planner',
         from,
@@ -179,6 +180,7 @@ export function parsePlannerDeepLink(search = typeof location !== 'undefined' ? 
         day: decodeDay(params.get('d') || params.get('day') || ''),
         region: ['GP', 'WC', 'KZN', 'EC'].includes(regionRaw) ? regionRaw : null,
         legacy,
+        src: src === 'seo' ? 'seo' : '',
     };
 }
 
@@ -200,6 +202,7 @@ export function parseRouteDeepLinkParams(search = typeof location !== 'undefined
     if (!rt && !legacy && !params.get('route')) return null;
 
     const regionRaw = (params.get('r') || params.get('region') || '').toUpperCase();
+    const src = String(params.get('src') || params.get('source') || '').toLowerCase();
     return {
         kind: 'route',
         routeId,
@@ -208,7 +211,38 @@ export function parseRouteDeepLinkParams(search = typeof location !== 'undefined
         day: decodeDay(params.get('d') || params.get('day') || 'weekday'),
         region: ['GP', 'WC', 'KZN', 'EC'].includes(regionRaw) ? regionRaw : null,
         legacy: legacy || (!rt && !!params.get('route')),
+        src: src === 'seo' ? 'seo' : '',
     };
+}
+
+/**
+ * SEO landings open the app with ?rt= / ?plan=. That must not count as deep_link_open
+ * (reserved for shared WhatsApp/OG/share links). Detect src=seo and same-origin SEO referrers.
+ */
+export function isSeoAppHandoff(linkOrSearch = null) {
+    try {
+        if (linkOrSearch && typeof linkOrSearch === 'object' && !Array.isArray(linkOrSearch)
+            && !(linkOrSearch instanceof URLSearchParams)) {
+            if (String(linkOrSearch.src || '').toLowerCase() === 'seo') return true;
+        }
+        const params = linkOrSearch instanceof URLSearchParams
+            ? linkOrSearch
+            : (typeof linkOrSearch === 'string'
+                ? new URLSearchParams(linkOrSearch)
+                : (typeof location !== 'undefined' ? new URLSearchParams(location.search || '') : null));
+        if (params) {
+            const src = String(params.get('src') || params.get('source') || '').toLowerCase();
+            if (src === 'seo') return true;
+        }
+        if (typeof document === 'undefined' || typeof location === 'undefined') return false;
+        const ref = String(document.referrer || '');
+        if (!ref) return false;
+        const u = new URL(ref);
+        if (u.origin !== location.origin) return false;
+        return /^\/(?:routes|regions|corridors)(?:\.html|\/|$)/i.test(u.pathname || '');
+    } catch {
+        return false;
+    }
 }
 
 /** Legacy SPA `?action=map` — opens the static network map modal. */
@@ -325,6 +359,7 @@ export function stripShareParamsFromUrl() {
             'from', 'to', 'time', 'region',
             'plan', 'rt', 'v', 't', 'd', 'r',
             'live', 'onboard',
+            'src', 'source',
             // Web Share Target GET params
             'title', 'text', 'url',
         ].forEach((k) => urlObj.searchParams.delete(k));

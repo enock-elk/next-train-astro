@@ -2338,8 +2338,6 @@ export function initHub() {
     // "where is my train" view, so this deliberately does NOT switch tabs.
     document.getElementById('sidenav-interactive-map-btn')?.addEventListener('click', () => {
         triggerHaptic();
-        trackAnalyticsEvent('click_interactive_map', { location: 'sidenav' });
-        trackAnalyticsEvent('click_network_map', { location: 'sidenav' });
         closeAppHub(true);
         setTimeout(() => {
             trackAnalyticsEvent('open_interactive_map', { location: 'sidenav' });

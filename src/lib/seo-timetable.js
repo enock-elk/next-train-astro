@@ -591,6 +591,8 @@ export function buildRouteGridAppPath(routeId, dir = 'A', day = 'weekday') {
     params.set('d', day === 'saturday' ? 'sa' : 'wd');
     const region = ROUTES[routeId]?.region;
     if (region) params.set('r', region);
+    // SEO → app handoff. Must not count as deep_link_open.
+    params.set('src', 'seo');
     return `/?${params.toString()}`;
 }
 
@@ -600,6 +602,8 @@ export function buildRouteBoardAppPath(routeId) {
     params.set('rt', routeId || '');
     const region = ROUTES[routeId]?.region;
     if (region) params.set('r', region);
+    // SEO → app handoff. Must not count as deep_link_open.
+    params.set('src', 'seo');
     return `/?${params.toString()}`;
 }
 

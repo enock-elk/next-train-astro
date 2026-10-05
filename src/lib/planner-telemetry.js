@@ -442,6 +442,9 @@ export function buildFareVotePayload({
         abKm: ab,
         zone: clipStr(zone, 8) || null,
         quotedPrice: quoted,
+        // Live board / planner quote is always Single Trip. Weekly/monthly
+        // corrections still store that single quote here for context.
+        quotedTicketType: 'single',
         reportedPrice: reported,
         agree: !!agree,
         ticketType: normalizeFareTicketType(ticketType),

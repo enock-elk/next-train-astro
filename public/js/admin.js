@@ -2554,16 +2554,19 @@ const Admin = {
         const lookIds = [...ids].slice(0, 8);
         const needFares = !(Admin._cachedFareVotes && typeof Admin._cachedFareVotes === 'object');
         const needFails = !(Admin._cachedRoutingFails && typeof Admin._cachedRoutingFails === 'object');
-        const [inboxRows, tripRows, pings, activity, fareData, failData] = await Promise.all([
+        const needTickets = !(Admin._cachedFareTicketPhotos && typeof Admin._cachedFareTicketPhotos === 'object');
+        const [inboxRows, tripRows, pings, activity, fareData, failData, ticketData] = await Promise.all([
             Promise.all(deviceLooks.map(async (did) => ({ did, data: await fetchJson(`inbox/${encodeURIComponent(did)}.json`) }))),
             Promise.all(lookIds.map(async (id) => ({ id, data: await fetchJson(`sys_logs/trip_plan_users/${encodeURIComponent(id)}.json`) }))),
             fetchJson('ride_pings.json'),
             fetchJson('community_activity.json'),
             needFares ? fetchJson('sys_logs/fare_votes.json') : null,
             needFails ? fetchJson('sys_logs/routing_fails.json') : null,
+            needTickets ? fetchJson('sys_logs/fare_ticket_photos.json') : null,
         ]);
         if (fareData && typeof fareData === 'object') Admin._cachedFareVotes = fareData;
         if (failData && typeof failData === 'object') Admin._cachedRoutingFails = failData;
+        if (ticketData && typeof ticketData === 'object') Admin._cachedFareTicketPhotos = ticketData;
 
         const inboxHits = inboxRows.filter((row) => row.data && typeof row.data === 'object');
         const feedbackItems = (Admin.cachedFeedbackData || []).filter((i) => {
@@ -2604,11 +2607,17 @@ const Admin = {
             });
         }
 
-        const fareVotes = Object.values(Admin._cachedFareVotes || {}).filter((v) => {
+        const fareVotes = Object.entries(Admin._cachedFareVotes || {}).map(([id, v]) => ({ id, ...(v || {}) })).filter((v) => {
             const did = String(v?.deviceId || v?.userId || '').trim();
             const authUid = String(v?.authUid || '').trim();
             return ids.has(did) || ids.has(authUid);
         });
+        const ticketPhotos = Admin._cachedFareTicketPhotos || {};
+        const fareTicketUrls = fareVotes.map((v) => {
+            const id = String(v?.id || '').trim();
+            const url = v?.ticketUrl || (id && ticketPhotos[id]?.ticketUrl) || '';
+            return url ? { voteId: id, url, at: Number(v?.at) || 0 } : null;
+        }).filter(Boolean);
         const fails = Object.values(Admin._cachedRoutingFails || {}).filter((v) => {
             const did = String(v?.userId || v?.deviceId || '').trim();
             return ids.has(did);
@@ -2664,6 +2673,7 @@ const Admin = {
             tripLast,
             tripRegion,
             fareVotes,
+            fareTicketUrls,
             fails,
             crashes,
             liveShares,
@@ -6483,6 +6493,8 @@ const Admin = {
         const listDiv = document.getElementById('de-list');
         Admin._deActiveTab = 'trips';
         Admin._deTripFilters = { region: '', dayType: '', userId: '' };
+        Admin._deFareDeviceFilter = Admin._deFareDeviceFilter || '';
+        Admin._deFailDeviceFilter = Admin._deFailDeviceFilter || '';
         Admin._deTripWindowSize = Admin._deTripWindowSize || 80;
         Admin._deTripWindowStep = 80;
         Admin._deTripCacheAt = Admin._deTripCacheAt || 0;
@@ -6526,10 +6538,38 @@ const Admin = {
             syncDeFiltersVisibility();
             Admin.fetchDeadEnds();
         };
+        Admin.setDeadEndsTab = setDeTab;
         document.getElementById('de-tab-fails')?.addEventListener('click', () => setDeTab('fails'));
         document.getElementById('de-tab-trips')?.addEventListener('click', () => setDeTab('trips'));
         document.getElementById('de-tab-fares')?.addEventListener('click', () => setDeTab('fares'));
         syncDeFiltersVisibility();
+
+        /** Jump from User Trust lookup into Planner Telemetry for one device. */
+        Admin.openPlannerTelemetryForDevice = ({ tab = 'fares', deviceId = '' } = {}) => {
+            const did = String(deviceId || '').trim();
+            const which = (tab === 'fails' || tab === 'trips') ? tab : 'fares';
+            Admin._deFareDeviceFilter = which === 'fares' ? did : '';
+            Admin._deFailDeviceFilter = which === 'fails' ? did : '';
+            if (which === 'trips' && did) {
+                Admin._deTripFilters = { ...(Admin._deTripFilters || {}), userId: did };
+            }
+            if (typeof Admin.deepLinkToPanel === 'function') {
+                Admin.deepLinkToPanel('deadends-panel');
+            } else {
+                Admin.showDrilledPanel?.('deadends-panel');
+            }
+            setTimeout(() => {
+                if (typeof Admin.setDeadEndsTab === 'function') Admin.setDeadEndsTab(which);
+                else document.getElementById(`de-tab-${which}`)?.click();
+                if (which === 'trips' && did) {
+                    const userSel = document.getElementById('de-filter-user');
+                    if (userSel) {
+                        userSel.value = did;
+                        userSel.dispatchEvent(new Event('change', { bubbles: true }));
+                    }
+                }
+            }, 80);
+        };
 
         document.getElementById('de-filters-toggle')?.addEventListener('click', () => {
             const bodyEl = document.getElementById('de-filters-body');
@@ -6871,11 +6911,32 @@ const Admin = {
                     };
                     listDiv.innerHTML = '';
                     Admin.paintConfirmedCorridorFares(listDiv, liveRouteFares);
-                    const entries = Object.entries(Admin._cachedFareVotes).map(([id, v]) => ({ id, ...(v || {}) }));
+                    const fareDeviceFilter = String(Admin._deFareDeviceFilter || '').trim();
+                    if (fareDeviceFilter) {
+                        const filterBar = document.createElement('div');
+                        filterBar.className = 'mb-2 px-2 py-2 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 flex items-start justify-between gap-2';
+                        filterBar.innerHTML = `
+                            <p class="text-[10px] text-amber-900 dark:text-amber-200 leading-snug min-w-0">Showing fare votes for <span class="font-mono break-all">${secureEscape(fareDeviceFilter)}</span>. Ticket photos open from each card.</p>
+                            <button type="button" id="de-fare-clear-filter" class="shrink-0 text-[10px] font-black uppercase tracking-wider text-amber-800 dark:text-amber-200 underline">Clear</button>`;
+                        listDiv.appendChild(filterBar);
+                        filterBar.querySelector('#de-fare-clear-filter')?.addEventListener('click', () => {
+                            Admin._deFareDeviceFilter = '';
+                            Admin.fetchDeadEnds();
+                        });
+                    }
+                    let entries = Object.entries(Admin._cachedFareVotes).map(([id, v]) => ({ id, ...(v || {}) }));
+                    if (fareDeviceFilter) {
+                        const needle = fareDeviceFilter.toLowerCase();
+                        entries = entries.filter((item) => {
+                            const did = String(item.deviceId || item.userId || '').toLowerCase();
+                            const auth = String(item.authUid || '').toLowerCase();
+                            return did === needle || auth === needle;
+                        });
+                    }
                     if (!entries.length) {
                         const empty = document.createElement('div');
                         empty.className = 'text-xs text-gray-500 italic text-center py-4';
-                        empty.textContent = 'No fare votes recorded.';
+                        empty.textContent = fareDeviceFilter ? 'No fare votes for this device.' : 'No fare votes recorded.';
                         listDiv.appendChild(empty);
                         return;
                     }
@@ -6907,7 +6968,16 @@ const Admin = {
                         const canApprove = item.agree === false && ticketTypeKey === 'single' && Number(item.reportedPrice) >= 1 && Number(item.reportedPrice) <= 500;
                         const ticketUrl = item.ticketUrl || ticketPhotos[item.id]?.ticketUrl || '';
                         const ticketHtml = ticketUrl && typeof window.attachmentPreviewHtml === 'function'
-                            ? `<div class="mt-2 de-fare-ticket">${window.attachmentPreviewHtml(ticketUrl, { admin: true, imgClass: 'w-12 h-12 object-cover rounded-md border border-gray-200 dark:border-gray-700 hover:opacity-90 cursor-zoom-in', alt: 'Ticket' })}</div>`
+                            ? `<div class="mt-2 de-fare-ticket flex items-center gap-2">
+                                ${window.attachmentPreviewHtml(ticketUrl, { admin: true, imgClass: 'w-20 h-20 object-cover rounded-lg border border-gray-200 dark:border-gray-700 hover:opacity-90 cursor-zoom-in', alt: 'Ticket' })}
+                                <a href="${secureEscape(ticketUrl)}" target="_blank" rel="noopener noreferrer" class="text-[10px] font-black uppercase tracking-wider text-blue-600 dark:text-blue-400 underline">Open ticket</a>
+                               </div>`
+                            : '';
+                        const peakHint = item.agree === false
+                            ? `<p class="mt-1.5 text-[10px] leading-snug text-slate-600 dark:text-slate-300">Board was <b>${secureEscape(peakLabel)}</b>${item.depTime ? ` at <b>${secureEscape(item.depTime)}</b>` : ''}. Quoted Single ${secureEscape(quoted)}${ticketTypeKey !== 'single' ? `; user entered ${secureEscape(ticketTypeLabel)} ${secureEscape(reported)}` : ''}.</p>`
+                            : '';
+                        const typeWarn = item.agree === false && ticketTypeKey !== 'single'
+                            ? `<p class="mt-1 text-[10px] leading-snug text-amber-800 dark:text-amber-200 bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-800 rounded-md px-2 py-1">Collect-only for now. Do not Approve weekly/monthly into Single live fares. Peak/off-peak on this card is the board they viewed, not the ticket period.</p>`
                             : '';
                         card.innerHTML = `
                             <div class="de-fare-card-btn p-3 flex items-start justify-between gap-2">
@@ -6923,6 +6993,8 @@ const Admin = {
                                         <span class="text-[9px] text-gray-400 font-mono">${Admin.formatDate(item.at)}</span>
                                         ${isLive ? `<span class="text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300">Live R${secureEscape(String(livePrice))}</span>` : ''}
                                     </div>
+                                    ${peakHint}
+                                    ${typeWarn}
                                     ${ticketHtml}
                                 </div>
                                 ${canApprove && !isLive ? `<button type="button" class="de-fare-approve shrink-0 text-emerald-700 dark:text-emerald-400 hover:text-white hover:bg-emerald-600 text-[9px] font-black bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 px-3 py-1.5 rounded transition-colors focus:outline-none uppercase tracking-widest shadow-sm">Approve ${secureEscape(reported)}</button>` : ''}
@@ -6966,9 +7038,14 @@ const Admin = {
                 Admin._cachedRoutingFails = data;
 
                 // Aggregate by Origin|Dest|Reason|DayType - track hits + unique users
+                const failDeviceFilter = String(Admin._deFailDeviceFilter || '').trim().toLowerCase();
                 const heatMap = {};
                 Object.values(data).forEach(entry => {
                     if (!entry.origin || !entry.destination) return;
+                    if (failDeviceFilter) {
+                        const uid = String(entry.userId || entry.deviceId || entry.authUid || '').toLowerCase();
+                        if (uid !== failDeviceFilter) return;
+                    }
                     const dayType = entry.dayType || 'unknown';
                     const key = `${entry.origin}|${entry.destination}|${entry.reason || 'UNKNOWN'}|${dayType}`;
                     const appVersion = String(entry.appVersion || '').split(' - ')[0].trim();
@@ -7011,6 +7088,18 @@ const Admin = {
                 });
                 
                 listDiv.innerHTML = '';
+                if (failDeviceFilter) {
+                    const filterBar = document.createElement('div');
+                    filterBar.className = 'mb-2 px-2 py-2 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 flex items-start justify-between gap-2';
+                    filterBar.innerHTML = `
+                        <p class="text-[10px] text-amber-900 dark:text-amber-200 leading-snug min-w-0">Showing routing fails that include <span class="font-mono break-all">${failDeviceFilter.replace(/</g, '&lt;')}</span>.</p>
+                        <button type="button" id="de-fail-clear-filter" class="shrink-0 text-[10px] font-black uppercase tracking-wider text-amber-800 dark:text-amber-200 underline">Clear</button>`;
+                    listDiv.appendChild(filterBar);
+                    filterBar.querySelector('#de-fail-clear-filter')?.addEventListener('click', () => {
+                        Admin._deFailDeviceFilter = '';
+                        Admin.fetchDeadEnds();
+                    });
+                }
                 
                 const secureEscape = (str) => {
                     if (!str) return '';
@@ -7019,6 +7108,14 @@ const Admin = {
                         return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m];
                     });
                 };
+
+                if (!sorted.length) {
+                    const empty = document.createElement('div');
+                    empty.className = 'text-xs text-gray-500 italic text-center py-4';
+                    empty.textContent = failDeviceFilter ? 'No routing failures for this device.' : 'No routing failures recorded.';
+                    listDiv.appendChild(empty);
+                    return;
+                }
 
                 sorted.forEach(item => {
                     const dateStr = Admin.formatDate(item.lastSeen);
@@ -7777,11 +7874,13 @@ const Admin = {
                 }
                 entries.sort((a, b) => (Number(b.at) || 0) - (Number(a.at) || 0));
                 const photos = Admin._cachedFareTicketPhotos || {};
-                const headers = ['at', 'origin', 'destination', 'quotedPrice', 'reportedPrice', 'agree', 'isOffPeak', 'dayType', 'depTime', 'profile', 'km', 'crowKm', 'smoothKm', 'abKm', 'zone', 'region', 'deviceId', 'authUid', 'appVersion', 'routeIds', 'ticketUrl', 'id'];
+                const headers = ['at', 'origin', 'destination', 'quotedPrice', 'reportedPrice', 'agree', 'ticketType', 'quotedTicketType', 'isOffPeak', 'dayType', 'depTime', 'profile', 'km', 'crowKm', 'smoothKm', 'abKm', 'zone', 'region', 'deviceId', 'authUid', 'appVersion', 'routeIds', 'ticketUrl', 'id'];
                 const cell = (r, h) => {
                     if (h === 'at') return Admin.formatDate(r.at);
                     if (h === 'routeIds') return Array.isArray(r.routeIds) ? r.routeIds.join('|') : (r.routeIds || '');
                     if (h === 'ticketUrl') return r.ticketUrl || photos[r.id]?.ticketUrl || '';
+                    if (h === 'ticketType') return r.ticketType || 'single';
+                    if (h === 'quotedTicketType') return r.quotedTicketType || 'single';
                     return r[h];
                 };
                 if (format === 'csv') {
@@ -7799,8 +7898,11 @@ const Admin = {
                     entries.forEach((r, i) => {
                         txt += `#${i + 1}  ${Admin.formatDate(r.at)}\n`;
                         txt += `  ${(r.origin || '-')} -> ${(r.destination || '-')}\n`;
-                        txt += `  Quoted: R${r.quotedPrice ?? '-'}  Reported: R${r.reportedPrice ?? '-'}  Agree: ${r.agree ? 'yes' : 'no'}\n`;
-                        txt += `  ${r.isOffPeak ? 'Off-peak' : 'Peak'} - ${r.dayType || '-'} - smooth ${r.smoothKm ?? r.km ?? '-'} km - A-B ${r.abKm ?? r.crowKm ?? '-'} km - ${r.profile || 'Adult'}\n\n`;
+                        txt += `  Quoted: R${r.quotedPrice ?? '-'}  Reported: R${r.reportedPrice ?? '-'}  Agree: ${r.agree ? 'yes' : 'no'}  Ticket: ${r.ticketType || 'single'}\n`;
+                        txt += `  ${r.isOffPeak ? 'Off-peak' : 'Peak'} - ${r.dayType || '-'} - smooth ${r.smoothKm ?? r.km ?? '-'} km - A-B ${r.abKm ?? r.crowKm ?? '-'} km - ${r.profile || 'Adult'}\n`;
+                        const tipUrl = r.ticketUrl || photos[r.id]?.ticketUrl || '';
+                        if (tipUrl) txt += `  Ticket photo: ${tipUrl}\n`;
+                        txt += '\n';
                     });
                     Admin.downloadFile(`fare_votes_${dateStr}.txt`, txt);
                 }
@@ -10658,62 +10760,130 @@ const Admin = {
                     ? Admin.commuterEsc(profile.alias)
                     : name;
                 const chatDid = profile.chatDevice || deviceId || (/^usr_/i.test(uid) ? uid : '');
-                const safeChatDid = String(chatDid).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
                 const defaultRouteLabel = Admin.inboxRouteLabel(profile.defaultRoute) || profile.defaultRoute;
-                const contactBits = [
-                    ...(profile.contacts.emails || []).map((em) => Admin.commuterEsc(em)),
-                    ...(profile.contacts.phones || []).map((ph) => Admin.commuterEsc(ph)),
-                ];
+                const accountEmailRaw = String(user.email || '').trim();
+                const accountEmailHtml = accountEmailRaw.includes('@')
+                    ? `<a href="mailto:${Admin.commuterEsc(accountEmailRaw)}" class="font-bold text-blue-600 dark:text-blue-400 underline break-all">${Admin.commuterEsc(accountEmailRaw)}</a>`
+                    : `<b>${email}</b>`;
+                const contactHtml = [
+                    ...(profile.contacts.emails || []).map((em) => (
+                        `<a href="mailto:${Admin.commuterEsc(em)}" class="text-blue-600 dark:text-blue-400 underline break-all">${Admin.commuterEsc(em)}</a>`
+                    )),
+                    ...(profile.contacts.phones || []).map((ph) => {
+                        const tel = String(ph).replace(/\D/g, '');
+                        return `<a href="tel:+${Admin.commuterEsc(tel)}" class="text-blue-600 dark:text-blue-400 underline">${Admin.commuterEsc(ph)}</a>`;
+                    }),
+                ].join('<span class="text-gray-300 mx-1">·</span>');
                 const liveHtml = profile.liveShares.length
                     ? profile.liveShares.slice(0, 4).map((p) => {
                         const routeLabel = Admin.inboxRouteLabel(p.routeId) || p.routeId || '';
                         const state = p.live ? 'Live now' : 'Last share';
-                        return `<p class="text-[11px]">${state}: <b>${Admin.commuterEsc(routeLabel)}</b> · train ${Admin.commuterEsc(p.trainId || '-')} · ${Admin.commuterEsc(p.station || '')} · ${Admin.formatDate(p.at)}</p>`;
+                        return `<p class="text-[11px] text-gray-700 dark:text-gray-300">${state}: <b>${Admin.commuterEsc(routeLabel)}</b> · train ${Admin.commuterEsc(p.trainId || '-')} · ${Admin.commuterEsc(p.station || '')} · ${Admin.formatDate(p.at)}</p>`;
                     }).join('')
                     : '<p class="text-[11px] text-gray-400">No live location share on file.</p>';
                 const communityHtml = profile.community.length
                     ? profile.community.slice(0, 6).map((c) => {
                         const routeLabel = Admin.inboxRouteLabel(c.routeId) || c.routeId || '';
-                        return `<p class="text-[11px]">${Admin.commuterEsc(c.kind || 'post')} on <b>${Admin.commuterEsc(routeLabel)}</b> · ${Admin.formatDate(c.timestamp)}</p>`;
+                        return `<p class="text-[11px] text-gray-700 dark:text-gray-300">${Admin.commuterEsc(c.kind || 'post')} on <b>${Admin.commuterEsc(routeLabel)}</b> · ${Admin.formatDate(c.timestamp)}</p>`;
                     }).join('')
                     : '<p class="text-[11px] text-gray-400">No community posts matched this id.</p>';
-                const fareHtml = profile.fareVotes.length
-                    ? `<p class="text-[11px]">Fare votes: <b>${profile.fareVotes.length}</b>${defaultRouteLabel ? ` · default route <b>${Admin.commuterEsc(defaultRouteLabel)}</b>` : ''}</p>`
-                    : `<p class="text-[11px]">Fare votes: <b>0</b>${defaultRouteLabel ? ` · default route <b>${Admin.commuterEsc(defaultRouteLabel)}</b>` : ''}</p>`;
+                const bannedAtMs = Number(flags.shadowBannedAt || 0);
+                const bannedBy = flags.shadowBannedBy ? Admin.commuterEsc(String(flags.shadowBannedBy)) : '';
+                const ticketCount = (profile.fareTicketUrls || []).length;
+                const utBtn = (id, label, solid = false) => (
+                    solid
+                        ? `<button type="button" id="${id}" class="ut-action-btn text-[10px] font-black uppercase tracking-wider text-white bg-blue-600 hover:bg-blue-700 px-3 py-1.5 rounded-lg">${label}</button>`
+                        : `<button type="button" id="${id}" class="ut-action-btn text-[10px] font-black uppercase tracking-wider text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 px-3 py-1.5 rounded-lg">${label}</button>`
+                );
+                const metricRow = (label, valueHtml, openBtn = '') => `
+                    <div class="flex items-start justify-between gap-2 py-2 border-b border-gray-100 dark:border-gray-800 last:border-0">
+                        <div class="min-w-0">
+                            <p class="text-[9px] font-black uppercase tracking-wider text-gray-400">${label}</p>
+                            <div class="text-[11px] text-gray-800 dark:text-gray-200 mt-0.5 leading-snug">${valueHtml}</div>
+                        </div>
+                        ${openBtn ? `<div class="shrink-0 pt-0.5">${openBtn}</div>` : ''}
+                    </div>`;
                 out.innerHTML = `
-                    <div class="border border-gray-200 dark:border-gray-700 rounded-xl p-3 space-y-2">
-                        <p class="font-black text-gray-900 dark:text-white break-words">${heading}</p>
-                        ${profile.alias ? `<p class="text-[11px]">Alias: <b>${Admin.commuterEsc(profile.alias)}</b></p>` : '<p class="text-[11px] text-gray-400">No feedback alias yet.</p>'}
-                        <p class="font-mono text-[10px] text-gray-400 break-all">${Admin.commuterEsc(uid)}</p>
-                        <p class="text-[11px]">Email: <b>${email}</b> - Found via <b>${viaLabel}</b>${deviceId && deviceId !== uid ? ` - device <span class="font-mono break-all">${Admin.commuterEsc(deviceId)}</span>` : ''}</p>
-                        <p class="text-[11px]">Joined: <b>${joinedLabel}</b> · Last seen: <b>${lastSeenLabel}</b></p>
-                        <p class="text-[11px]">Linked devices: <span class="break-all">${devicesLabel}</span></p>
-                        <p class="text-[11px]">Role: <b>${flags.role || 'user'}</b> - Trust score: <b>${score}</b></p>
-                        <p class="text-[11px]">Shadow banned: <b class="${banned && !expired ? 'text-red-600' : 'text-green-600'}">${banned ? (expired ? 'expired' : 'yes') : 'no'}</b>${banned ? ` - until ${untilStr}` : ''}</p>
-                        ${banned && !expired ? `<p class="text-[11px]">Ban type: <b>${modeStr}</b></p>` : ''}
-                        ${contactBits.length ? `<p class="text-[11px]">Contacts: <b>${contactBits.join(', ')}</b></p>` : ''}
-                        <p class="text-[11px]">Feedback: <b>${profile.hasChat ? `${profile.feedbackCount || 'open'} thread` : 'none'}</b>${profile.latestFeedbackAt ? ` · last ${Admin.formatDate(profile.latestFeedbackAt)}` : ''}</p>
-                        <p class="text-[11px]">Trip plans: <b>${profile.tripPresent ? 'yes' : 'none'}</b>${profile.tripRegion ? ` · ${Admin.commuterEsc(profile.tripRegion)}` : ''}${profile.tripLast ? ` · ${Admin.formatDate(profile.tripLast)}` : ''}</p>
-                        ${fareHtml}
-                        <p class="text-[11px]">Routing fails: <b>${profile.fails.length}</b> · Crashes: <b>${profile.crashes.length}</b></p>
-                        <div class="pt-1 space-y-0.5">
-                            <p class="text-[9px] font-black uppercase tracking-wider text-gray-400">Live location</p>
-                            ${liveHtml}
+                    <div class="rounded-2xl border border-gray-200 dark:border-gray-700 bg-gradient-to-b from-white to-slate-50 dark:from-gray-900 dark:to-gray-950 shadow-sm overflow-hidden">
+                        <div class="px-3.5 pt-3.5 pb-3 border-b border-gray-100 dark:border-gray-800">
+                            <p class="font-black text-base text-gray-900 dark:text-white break-words leading-tight">${heading}</p>
+                            ${profile.alias ? `<p class="text-[11px] text-gray-500 mt-1">Alias <b class="text-gray-800 dark:text-gray-200">${Admin.commuterEsc(profile.alias)}</b></p>` : '<p class="text-[11px] text-gray-400 mt-1">No feedback alias yet.</p>'}
+                            <p class="font-mono text-[10px] text-gray-400 break-all mt-1.5">${Admin.commuterEsc(uid)}</p>
                         </div>
-                        <div class="pt-1 space-y-0.5">
-                            <p class="text-[9px] font-black uppercase tracking-wider text-gray-400">Community</p>
-                            ${communityHtml}
+                        <div class="px-3.5 py-2">
+                            ${metricRow('Email', `${accountEmailHtml}<span class="text-gray-400"> · via ${Admin.commuterEsc(viaLabel)}</span>${deviceId && deviceId !== uid ? ` · device <span class="font-mono break-all">${Admin.commuterEsc(deviceId)}</span>` : ''}`)}
+                            ${contactHtml ? metricRow('Contacts', contactHtml) : ''}
+                            ${metricRow('Joined / last seen', `<b>${joinedLabel}</b> · <b>${lastSeenLabel}</b>`)}
+                            ${metricRow('Linked devices', `<span class="break-all">${devicesLabel}</span>`)}
+                            ${metricRow('Role / trust', `Role <b>${flags.role || 'user'}</b> · Trust score <b>${score}</b>`)}
+                            ${metricRow(
+                                'Shadow ban',
+                                `<b class="${banned && !expired ? 'text-red-600' : 'text-green-600'}">${banned ? (expired ? 'expired' : 'yes') : 'no'}</b>${banned ? ` · until ${untilStr} · ${modeStr}` : ''}${bannedAtMs ? ` · since ${Admin.formatDate(bannedAtMs)}` : ''}${bannedBy ? ` · by <span class="font-mono">${bannedBy}</span>` : ''}`,
+                                utBtn('ut-open-bans-btn', 'Open bans')
+                            )}
+                            ${metricRow(
+                                'Feedback',
+                                `<b>${profile.hasChat ? `${profile.feedbackCount || 'open'} thread` : 'none'}</b>${profile.latestFeedbackAt ? ` · last ${Admin.formatDate(profile.latestFeedbackAt)}` : ''}`,
+                                profile.hasChat && chatDid ? utBtn('ut-open-chat-btn', 'Open chat', true) : ''
+                            )}
+                            ${metricRow(
+                                'Trip plans',
+                                `<b>${profile.tripPresent ? 'yes' : 'none'}</b>${profile.tripRegion ? ` · ${Admin.commuterEsc(profile.tripRegion)}` : ''}${profile.tripLast ? ` · ${Admin.formatDate(profile.tripLast)}` : ''}`,
+                                chatDid ? utBtn('ut-open-trips-btn', 'Open trip plans') : ''
+                            )}
+                            ${metricRow(
+                                'Fare votes',
+                                `<b>${profile.fareVotes.length}</b>${defaultRouteLabel ? ` · default <b>${Admin.commuterEsc(defaultRouteLabel)}</b>` : ''}${ticketCount ? ` · <b>${ticketCount}</b> ticket photo${ticketCount === 1 ? '' : 's'}` : ''}`,
+                                chatDid || profile.fareVotes.length ? utBtn('ut-open-fares-btn', 'Open fare votes') : ''
+                            )}
+                            ${metricRow(
+                                'Routing fails',
+                                `<b>${profile.fails.length}</b>`,
+                                chatDid || profile.fails.length ? utBtn('ut-open-fails-btn', 'Open fails') : ''
+                            )}
+                            ${metricRow(
+                                'Crashes',
+                                `<b>${profile.crashes.length}</b>`,
+                                chatDid || profile.crashes.length ? utBtn('ut-open-crashes-btn', 'Open crashes') : ''
+                            )}
                         </div>
-                        <div class="flex flex-wrap gap-2 pt-2">
-                            ${profile.hasChat && chatDid ? `<button type="button" id="ut-open-chat-btn" class="text-[10px] font-black uppercase tracking-wider text-white bg-blue-600 hover:bg-blue-700 px-3 py-1.5 rounded-lg">Open chat</button>` : ''}
-                            ${chatDid ? `<button type="button" id="ut-start-chat-btn" class="text-[10px] font-black uppercase tracking-wider text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 px-3 py-1.5 rounded-lg">${profile.hasChat ? 'Reply' : 'Start chat'}</button>` : ''}
-                            ${chatDid ? `<button type="button" id="ut-alias-btn" class="text-[10px] font-bold text-gray-600 dark:text-gray-300 underline">Edit alias</button>` : ''}
-                            <button type="button" id="ut-ban-btn" class="text-[10px] font-bold text-red-600 underline">Shadow ban</button>
-                            <button type="button" id="ut-lift-btn" class="text-[10px] font-bold text-blue-600 underline">Lift ban</button>
+                        <div class="px-3.5 py-3 border-t border-gray-100 dark:border-gray-800 space-y-3">
+                            <div>
+                                <p class="text-[9px] font-black uppercase tracking-wider text-gray-400 mb-1">Live location</p>
+                                ${liveHtml}
+                            </div>
+                            <div>
+                                <p class="text-[9px] font-black uppercase tracking-wider text-gray-400 mb-1">Community</p>
+                                ${communityHtml}
+                            </div>
+                        </div>
+                        <div class="px-3.5 py-3 bg-slate-50/80 dark:bg-gray-950/50 border-t border-gray-100 dark:border-gray-800 flex flex-wrap gap-2">
+                            ${chatDid ? `<button type="button" id="ut-start-chat-btn" class="text-[10px] font-black uppercase tracking-wider text-blue-700 dark:text-blue-300 bg-white dark:bg-gray-900 border border-blue-200 dark:border-blue-800 px-3 py-1.5 rounded-lg">${profile.hasChat ? 'Reply' : 'Start chat'}</button>` : ''}
+                            ${chatDid ? `<button type="button" id="ut-alias-btn" class="text-[10px] font-bold text-gray-600 dark:text-gray-300 underline px-1">Edit alias</button>` : ''}
+                            <button type="button" id="ut-ban-btn" class="text-[10px] font-bold text-red-600 underline px-1">Shadow ban</button>
+                            <button type="button" id="ut-lift-btn" class="text-[10px] font-bold text-blue-600 underline px-1">Lift ban</button>
                         </div>
                     </div>`;
                 document.getElementById('ut-open-chat-btn')?.addEventListener('click', () => {
                     Admin.openFeedbackForDevice(chatDid, profile.latestFeedbackId);
+                });
+                document.getElementById('ut-open-trips-btn')?.addEventListener('click', () => {
+                    Admin.openFeedbackTripPlans(chatDid);
+                });
+                document.getElementById('ut-open-fares-btn')?.addEventListener('click', () => {
+                    Admin.openPlannerTelemetryForDevice?.({ tab: 'fares', deviceId: chatDid });
+                });
+                document.getElementById('ut-open-fails-btn')?.addEventListener('click', () => {
+                    Admin.openPlannerTelemetryForDevice?.({ tab: 'fails', deviceId: chatDid });
+                });
+                document.getElementById('ut-open-crashes-btn')?.addEventListener('click', () => {
+                    Admin._pendingCrashOpen = { deviceId: chatDid };
+                    if (typeof Admin.deepLinkToPanel === 'function') Admin.deepLinkToPanel('crashes-panel');
+                    else Admin.showDrilledPanel?.('crashes-panel');
+                    setTimeout(() => Admin.consumePendingCrashOpen?.(), 100);
+                });
+                document.getElementById('ut-open-bans-btn')?.addEventListener('click', () => {
+                    Admin.setUtTab?.('bans');
                 });
                 document.getElementById('ut-start-chat-btn')?.addEventListener('click', () => {
                     Admin.startFeedbackChat(chatDid, profile.latestFeedbackId);
@@ -14045,19 +14215,35 @@ const Admin = {
             existingAlertId = null;
             const list = Admin.dedupeAlertTargets(targets || Admin.getSelectedAlertTargets());
             const countEl = document.getElementById('alert-live-count');
-            if (!list.length) {
-                if (countEl) countEl.textContent = 'Pick at least one route or region.';
-                return;
-            }
+            const fetchGen = (Admin._alertLiveCountGen = (Admin._alertLiveCountGen || 0) + 1);
+            const stillCurrent = () => fetchGen === Admin._alertLiveCountGen;
+            const paintPending = () => {
+                if (!countEl || !stillCurrent()) return;
+                if (!list.length) {
+                    countEl.textContent = 'Pick at least one route or region.';
+                    return;
+                }
+                const labels = list.map((t) => Admin.alertTargetLabel(t)).join(', ');
+                countEl.textContent = list.length === 1
+                    ? `Checking live posts on ${labels}…`
+                    : `Posting to ${list.length} targets (${labels}). Checking live posts…`;
+            };
+            paintPending();
+            if (!list.length) return;
             try {
                 const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
                 let totalLive = 0;
                 for (const target of list) {
+                    if (!stillCurrent()) return;
                     const res = await window.guardianFetch(`${dynamicEndpoint}notices/${target}.json?t=${Date.now()}`, {}, 6000);
                     const data = await res.json();
                     const listed = Admin.listNoticesInTarget(data);
                     totalLive += listed.filter((n) => !n.expiresAt || n.expiresAt > Date.now()).length;
                 }
+                if (!stillCurrent()) return;
+                // Selection may have changed mid-flight; never paint a stale audience list.
+                const latest = Admin.getSelectedAlertTargets();
+                if (latest.join('\0') !== list.join('\0')) return;
                 const labels = list.map((t) => Admin.alertTargetLabel(t)).join(', ');
                 if (countEl) {
                     countEl.textContent = list.length === 1
@@ -14068,7 +14254,7 @@ const Admin = {
                 }
                 if (sendBtn) sendBtn.textContent = 'Preview Alert';
             } catch (e) {
-                if (countEl) countEl.textContent = 'Could not read live posts for these targets.';
+                if (countEl && stillCurrent()) countEl.textContent = 'Could not read live posts for these targets.';
             }
         }
         Admin.fetchCurrentAlertsForTargets = fetchCurrentAlertsForTargets;

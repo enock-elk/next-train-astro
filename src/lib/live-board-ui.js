@@ -918,13 +918,18 @@ export function initLiveBoardUi() {
                 searchInput.value = stationSelect.value.replace(/ STATION/g, '');
                 searchInput.dataset.resolvedValue = stationSelect.value;
             }
-            trackAnalyticsEvent('select_station', {
-                station: stationSelect.value || '',
-                route_id: $currentRouteId.get() || '',
-            });
-            syncPlannerFromMain(stationSelect.value);
+            // Board paint first; planner mirror and analytics wait for the next task.
             findNextTrains();
             updateNextTrainView();
+            const station = stationSelect.value || '';
+            const routeId = $currentRouteId.get() || '';
+            setTimeout(() => {
+                trackAnalyticsEvent('select_station', {
+                    station,
+                    route_id: routeId,
+                });
+                syncPlannerFromMain(station);
+            }, 0);
         });
     }
 

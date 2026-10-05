@@ -4,12 +4,15 @@
  * Every event gets region_id (and region) when a GP/WC/KZN/EC code is known.
  */
 
+/** After the next paint when possible — microtasks still count against INP. */
 function scheduleIdle(fn) {
     try {
-        queueMicrotask(fn);
-    } catch {
-        setTimeout(fn, 0);
-    }
+        if (typeof requestIdleCallback === 'function') {
+            requestIdleCallback(() => { try { fn(); } catch { /* ignore */ } }, { timeout: 2000 });
+            return;
+        }
+    } catch { /* fall through */ }
+    setTimeout(() => { try { fn(); } catch { /* ignore */ } }, 0);
 }
 
 function normalizeRegionCode(value) {

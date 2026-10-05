@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_10.05.1': [
+        'GitHub schedule dump replaced with the operator 5 Oct 2026 export (KZN sheets dated 5 October 2026; Durban Yard rows stay coordinate-only). grid-order MANUAL table refreshed from the operator extract with runtime RTDB helpers kept, and a few extract truncations (Strand sat, Nolungile weekday, Hercules-Koedoespoort) aligned to dump columnOrder. SEO sitemap lastmod bumped. Analytics events yield past paint via requestIdleCallback/setTimeout so station taps are not blocked by gtag/Clarity. No commuter What’s New. forceShow stays false.',
+    ],
     'V9_10.04.5': [
         'Polls: NEXT TRAIN ACTIVE/INACTIVE POLL sits above the question. More space before View Poll Results; that control shakes the answer buttons with the existing vote-first toast. Long answers stack full-width. Admin Allow multiple answers (off by default) uses select-then-Submit vote and stores optionKeys. Catalog adds 2026 fare adjustment and commuter mass meeting monthly fares posters. No commuter What’s New. forceShow stays false.',
     ],

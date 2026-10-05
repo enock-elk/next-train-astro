@@ -535,15 +535,19 @@ if (!gridPathSa.includes('d=sa') || gridPathSa.includes('dir=')) {
     const towardB = tt.weekday.b;
     const towardA = tt.weekday.a;
     const durbanCount = (towardB?.stations || []).filter((s) => s === 'Durban').length;
-    if (!towardB?.stations?.includes('Durban Yard')) fail('kzn-umlazi weekday-B missing Durban Yard');
+    // Oct 2026 dump: DURBAN YARD is coordinates-only (no published clocks). SEO
+    // grids keep clocked passenger stops only; serves copy still names the Yard.
+    if (towardB?.stations?.includes('Durban Yard')) {
+      fail('kzn-umlazi weekday-B should not list unclocked Durban Yard as a passenger stop');
+    }
     if (!towardB?.stations?.includes('Durban')) fail('kzn-umlazi weekday-B missing Durban');
     if (durbanCount !== 1) fail(`kzn-umlazi weekday-B should have one Durban row, got ${durbanCount}`);
     if (towardB.last === '11:22') fail('kzn-umlazi first/last still uses Durban Yard origin last 11:22');
-    if (towardB.first !== '4:57' || towardB.last !== '19:59') {
-      fail(`kzn-umlazi origin first/last should be 4:57/19:59 at Durban, got ${towardB.first}/${towardB.last}`);
+    if (towardB.first !== '5:37' || towardB.last !== '19:40') {
+      fail(`kzn-umlazi origin first/last should be 5:37/19:40 at Durban, got ${towardB.first}/${towardB.last}`);
     }
-    if (towardA?.first !== '3:57' || towardA?.last !== '20:27') {
-      fail(`kzn-umlazi weekday-A origin first/last should be 3:57/20:27 at Umlazi, got ${towardA?.first}/${towardA?.last}`);
+    if (towardA?.first !== '3:31' || towardA?.last !== '19:51') {
+      fail(`kzn-umlazi weekday-A origin first/last should be 3:31/19:51 at Umlazi, got ${towardA?.first}/${towardA?.last}`);
     }
   }
 }

@@ -348,6 +348,7 @@ const now = 1_700_000_000_000;
     assert(js.includes('data-alert-date-chip'), 'alerts feed inserts date chips');
     assert(js.includes('data-alert-delete'), 'admin long-press can delete for everyone');
     assert(js.includes('data-alert-pin-toggle'), 'admin long-press can pin any alert');
+    assert(js.includes('nt-alert-admin-menu'), 'admin alert actions use a menu');
     assert(js.includes('Pin to bottom of feed'), 'pin control is labeled for any posted alert');
     assert(js.includes('Show raw counts'), 'admin can switch poll rows to raw counts');
     assert(!/admin && notice\?\.poll\?\.active[\s\S]{0,80}data-alert-pin-toggle/.test(js), 'pin is not limited to poll posts');

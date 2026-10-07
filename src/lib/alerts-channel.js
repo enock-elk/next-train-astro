@@ -413,18 +413,24 @@ function openAlertReactionPicker(notice, anchorEl) {
             mine === key ? 'bg-white/15 ring-1 ring-white/40' : 'hover:bg-white/10'
         }" aria-label="React ${ALERT_REACTION_EMOJI[key]}">${ALERT_REACTION_EMOJI[key]}</button>`
     )).join('');
+    const menuBtn = (attrs, label, danger = false) => (
+        `<button type="button" ${attrs} class="nt-alert-admin-item${danger ? ' is-danger' : ''}">${label}</button>`
+    );
     const deleteBtn = admin
-        ? `<button type="button" data-alert-delete data-alert-id="${escapeHTML(String(notice.id || ''))}" data-alert-src="${escapeHTML(String(notice._sourceKey || ''))}" class="px-3 py-1.5 rounded-full bg-red-600 text-white text-[11px] font-black uppercase tracking-wide shadow-lg border border-red-400/40 focus:outline-none">Delete for everyone</button>`
+        ? menuBtn(`data-alert-delete data-alert-id="${escapeHTML(String(notice.id || ''))}" data-alert-src="${escapeHTML(String(notice._sourceKey || ''))}"`, 'Delete for everyone', true)
         : '';
     const pinBtn = admin
-        ? `<button type="button" data-alert-pin-toggle data-alert-id="${escapeHTML(String(notice.id || ''))}" data-alert-src="${escapeHTML(String(notice._sourceKey || ''))}" class="px-3 py-1.5 rounded-full bg-gray-900 text-white text-[11px] font-black uppercase tracking-wide shadow-lg border border-white/20 focus:outline-none">${isNoticePinned(notice) ? 'Unpin from feed' : 'Pin to bottom of feed'}</button>`
+        ? menuBtn(`data-alert-pin-toggle data-alert-id="${escapeHTML(String(notice.id || ''))}" data-alert-src="${escapeHTML(String(notice._sourceKey || ''))}"`, isNoticePinned(notice) ? 'Unpin from feed' : 'Pin to bottom of feed')
         : '';
     const pollCountBtn = admin && notice?.poll?.active
-        ? `<button type="button" data-alert-poll-count-toggle data-alert-id="${escapeHTML(String(notice.id || ''))}" data-alert-src="${escapeHTML(String(notice._sourceKey || ''))}" class="px-3 py-1.5 rounded-full bg-gray-900 text-white text-[11px] font-black uppercase tracking-wide shadow-lg border border-white/20 focus:outline-none">${notice.poll.showRawCounts || notice.poll.showParticipantCount ? 'Hide raw counts' : 'Show raw counts'}</button>`
+        ? menuBtn(`data-alert-poll-count-toggle data-alert-id="${escapeHTML(String(notice.id || ''))}" data-alert-src="${escapeHTML(String(notice._sourceKey || ''))}"`, notice.poll.showRawCounts || notice.poll.showParticipantCount ? 'Hide raw counts' : 'Show raw counts')
         : '';
-    sheet.innerHTML = `<div class="flex flex-col items-center gap-1.5">
+    const adminMenu = admin
+        ? `<div class="nt-alert-admin-menu" role="menu">${pinBtn}${pollCountBtn}${deleteBtn}</div>`
+        : '';
+    sheet.innerHTML = `<div class="flex flex-col items-center gap-2">
         <div class="nt-alert-react-pill flex items-center gap-0.5 px-2 py-1.5 rounded-full bg-gray-950/95 text-white shadow-2xl border border-white/10" data-alert-picker-row>${reactBtns}</div>
-        ${deleteBtn}${pinBtn}${pollCountBtn}
+        ${adminMenu}
     </div>`;
     const rect = anchorEl.getBoundingClientRect();
     sheet.classList.remove('hidden');

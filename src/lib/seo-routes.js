@@ -440,6 +440,18 @@ export const WC_PUBLIC_HOLIDAYS_PATH = `regions/${WC_PUBLIC_HOLIDAYS_SLUG}.html`
  * 2026 Western Cape public-holiday service. Only WC has *_pub sheets.
  * Sunday-mapped holidays have no trains. Do not list GP / KZN / EC holiday grids.
  */
+const HOLIDAY_MONTHS = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December',
+];
+
+/** `01-01` in 2026 → `01 January 2026`. Day stays zero-padded. */
+export function formatHolidayDisplay(year, md) {
+    const [monthPart, dayPart] = String(md || '').split('-');
+    const month = HOLIDAY_MONTHS[Number(monthPart) - 1] || monthPart;
+    return `${dayPart} ${month} ${year}`;
+}
+
 export function listWcPublicHolidayDays(year = 2026) {
     return Object.keys(HOLIDAY_NAMES)
         .sort()
@@ -447,10 +459,12 @@ export function listWcPublicHolidayDays(year = 2026) {
             const name = HOLIDAY_NAMES[md];
             const mapped = SPECIAL_DATES[md];
             const iso = `${year}-${md}`;
+            const label = formatHolidayDisplay(year, md);
             if (mapped === 'sunday') {
                 return {
                     md,
                     iso,
+                    label,
                     name,
                     dayType: 'sunday',
                     runs: false,
@@ -460,6 +474,7 @@ export function listWcPublicHolidayDays(year = 2026) {
             return {
                 md,
                 iso,
+                label,
                 name,
                 dayType: 'public_holiday',
                 runs: true,

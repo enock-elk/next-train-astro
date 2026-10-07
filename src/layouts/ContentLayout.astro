@@ -6,6 +6,7 @@
 import '../styles/appearance.css';
 import AppFonts from '../components/AppFonts.astro';
 import RecoveryLifeline from '../components/RecoveryLifeline.astro';
+import SeoAlerts from '../components/SeoAlerts.astro';
 import ShellFallbackStyles from '../components/ShellFallbackStyles.astro';
 import StuckUpdateGuard from '../components/StuckUpdateGuard.astro';
 import { MANIFEST_FILENAME, normalizeBase, withBase } from '../lib/config.js';
@@ -32,6 +33,8 @@ interface Props {
   seoRegion?: string;
   seoCorridor?: string;
   seoRouteId?: string;
+  /** Extra route buckets for a region or corridor alerts sheet. Comma-separated ids. */
+  seoAlertRouteIds?: string;
   /** SEO landings fire one `seo_page_view`. Map/guide skip it (opened inside the app). */
   trackSeo?: boolean;
 }
@@ -58,8 +61,15 @@ const {
   seoRegion = '',
   seoCorridor = '',
   seoRouteId = '',
+  seoAlertRouteIds = '',
   trackSeo = true,
 } = Astro.props;
+
+const alertRouteIds = [...new Set(
+  [seoRouteId, ...String(seoAlertRouteIds || '').split(',')]
+    .map((id) => String(id || '').trim())
+    .filter(Boolean)
+)];
 
 const labNoIndex = import.meta.env.PUBLIC_LAB_MODE === 'true'
   || (Astro.site && String(Astro.site.hostname || '').toLowerCase() === 'lab.nexttrain.co.za');
@@ -403,5 +413,6 @@ const resolvedHtmlClass = [forceDark ? 'dark' : '', htmlClass].filter(Boolean).j
   <body class:list={['font-[Inter,system-ui,sans-serif] antialiased text-gray-800 dark:text-gray-200 transition-colors duration-300', bodyClass]}>
     <RecoveryLifeline />
     <slot />
+    {seoRegion && <SeoAlerts region={seoRegion} routeIds={alertRouteIds} />}
   </body>
 </html>

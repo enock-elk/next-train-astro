@@ -198,6 +198,43 @@ function ntAdminScheduleSheet(db, sheetKey) {
     return null;
 }
 
+function ntAdminScheduleRows(db, sheetKey) {
+    const raw = ntAdminScheduleSheet(db, sheetKey);
+    if (Array.isArray(raw)) return raw;
+    if (Array.isArray(raw?.rows)) return raw.rows;
+    if (raw && typeof raw === 'object') {
+        return Object.keys(raw)
+            .filter((key) => /^\d+$/.test(key))
+            .sort((a, b) => Number(a) - Number(b))
+            .map((key) => raw[key]);
+    }
+    return [];
+}
+
+const NT_ADMIN_REGION_SCHEDULE_PATHS = {
+    GP: 'schedules/gauteng.json',
+    WC: 'schedules/westerncape.json',
+    KZN: 'schedules/kzn.json',
+    EC: 'schedules/easterncape.json',
+};
+
+async function ntAdminFetchRegionScheduleDb(region) {
+    const dbPath = NT_ADMIN_REGION_SCHEDULE_PATHS[region];
+    if (!dbPath || typeof Admin === 'undefined' || typeof Admin.fetchDiagJson !== 'function') return null;
+    let rawData;
+    try {
+        rawData = await Admin.fetchDiagJson(`https://nexttrain-cache.enock.workers.dev/${dbPath}?t=${Date.now()}`);
+    } catch {
+        rawData = await Admin.fetchDiagJson(`https://metrorail-next-train-default-rtdb.firebaseio.com/${dbPath}?t=${Date.now()}`);
+    }
+    const db = ntAdminUnwrapRegionScheduleDb(region, rawData);
+    if (db) {
+        Admin._gridOrderRegionDb = Admin._gridOrderRegionDb || {};
+        Admin._gridOrderRegionDb[region] = db;
+    }
+    return db || null;
+}
+
 function ntAdminDeleteAlertSource(list, id) {
     return (Array.isArray(list) ? list : []).filter((s) => s.id !== id);
 }
@@ -6720,6 +6757,32 @@ const Admin = {
             await Admin.fetchDeadEnds();
         };
 
+        Admin.refutePlannerFare = async (vote) => {
+            const secret = await Admin.getAuthKey();
+            if (!secret) throw new Error('Not signed in');
+            const item = vote && typeof vote === 'object' ? vote : {};
+            const id = String(item.id || '').trim();
+            if (!id) throw new Error('Missing fare vote');
+            if (item.agree !== false) throw new Error('Only a price correction can be refuted');
+            const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
+            const patch = {
+                review: 'refuted',
+                reviewedAt: Date.now(),
+                reviewedBy: Admin.currentUser?.email || Admin.currentUser?.uid || 'Admin',
+            };
+            const res = await fetch(`${dynamicEndpoint}sys_logs/fare_votes/${encodeURIComponent(id)}.json?auth=${secret}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(patch),
+            });
+            if (!res.ok) throw new Error(`Refute failed (${res.status}). Deploy the fare vote rules, then try again.`);
+            if (Admin._cachedFareVotes && Admin._cachedFareVotes[id]) {
+                Admin._cachedFareVotes[id] = { ...Admin._cachedFareVotes[id], ...patch };
+            }
+            if (typeof showToast === 'function') showToast('Correction refuted', 'success');
+            await Admin.fetchDeadEnds();
+        };
+
         Admin.saveRouteFare = async (routeId, { confirmed, zone } = {}) => {
             const secret = await Admin.getAuthKey();
             if (!secret) throw new Error('Not signed in');
@@ -6941,7 +7004,24 @@ const Admin = {
                         return;
                     }
                     entries.sort((a, b) => (Number(b.at) || 0) - (Number(a.at) || 0));
-                    entries.forEach((item) => {
+                    const fareIsLive = (item) => {
+                        const fareKey = typeof window.plannerFareOverrideKey === 'function' ? window.plannerFareOverrideKey(item) : '';
+                        const liveRow = fareKey ? liveData[fareKey] : null;
+                        const livePrice = liveRow ? Number(liveRow.price) : NaN;
+                        return Number.isFinite(livePrice) && livePrice === Number(item.reportedPrice);
+                    };
+                    const fareGroups = [
+                        { title: 'Pending', items: entries.filter((item) => item.review !== 'refuted' && !fareIsLive(item)) },
+                        { title: 'Approved', items: entries.filter((item) => item.review !== 'refuted' && fareIsLive(item)) },
+                        { title: 'Refuted', items: entries.filter((item) => item.review === 'refuted') },
+                    ];
+                    fareGroups.forEach((group) => {
+                        if (!group.items.length) return;
+                        const heading = document.createElement('p');
+                        heading.className = 'text-[10px] font-black uppercase tracking-widest text-gray-500 dark:text-gray-400 pt-2';
+                        heading.textContent = `${group.title} (${group.items.length})`;
+                        listDiv.appendChild(heading);
+                        group.items.forEach((item) => {
                         const card = document.createElement('div');
                         card.className = "de-fare-card bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden cursor-pointer transition-colors hover:border-amber-300";
                         const quoted = item.quotedPrice != null ? `R${item.quotedPrice}` : '-';
@@ -6966,6 +7046,7 @@ const Admin = {
                             : ticketTypeKey === 'monthly' ? 'Monthly'
                             : 'Single';
                         const canApprove = item.agree === false && ticketTypeKey === 'single' && Number(item.reportedPrice) >= 1 && Number(item.reportedPrice) <= 500;
+                        const canRefute = item.agree === false && item.review !== 'refuted' && !isLive;
                         const ticketUrl = item.ticketUrl || ticketPhotos[item.id]?.ticketUrl || '';
                         const ticketHtml = ticketUrl && typeof window.attachmentPreviewHtml === 'function'
                             ? `<div class="mt-2 de-fare-ticket flex items-center gap-2">
@@ -6997,7 +7078,10 @@ const Admin = {
                                     ${typeWarn}
                                     ${ticketHtml}
                                 </div>
-                                ${canApprove && !isLive ? `<button type="button" class="de-fare-approve shrink-0 text-emerald-700 dark:text-emerald-400 hover:text-white hover:bg-emerald-600 text-[9px] font-black bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 px-3 py-1.5 rounded transition-colors focus:outline-none uppercase tracking-widest shadow-sm">Approve ${secureEscape(reported)}</button>` : ''}
+                                ${(canApprove && !isLive) || canRefute ? `<div class="shrink-0 flex flex-col gap-1.5">
+                                    ${canApprove && !isLive ? `<button type="button" class="de-fare-approve text-emerald-700 dark:text-emerald-400 hover:text-white hover:bg-emerald-600 text-[9px] font-black bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 px-3 py-1.5 rounded transition-colors focus:outline-none uppercase tracking-widest shadow-sm">Approve ${secureEscape(reported)}</button>` : ''}
+                                    ${canRefute ? `<button type="button" class="de-fare-refute text-rose-700 dark:text-rose-300 hover:text-white hover:bg-rose-600 text-[9px] font-black bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800 px-3 py-1.5 rounded transition-colors focus:outline-none uppercase tracking-widest shadow-sm">Refute</button>` : ''}
+                                </div>` : ''}
                             </div>
                             <div class="de-fare-contributors hidden px-3 pb-3 border-t border-gray-100 dark:border-gray-800 bg-gray-50/80 dark:bg-gray-950/40"></div>
                         `;
@@ -7010,8 +7094,17 @@ const Admin = {
                                 if (typeof showToast === 'function') showToast(e.message || 'Approve failed', 'error');
                             }
                         });
+                        card.querySelector('.de-fare-refute')?.addEventListener('click', async (ev) => {
+                            ev.stopPropagation();
+                            try {
+                                await Admin.refutePlannerFare(item);
+                            } catch (e) {
+                                console.error('Refute planner fare failed', e);
+                                if (typeof showToast === 'function') showToast(e.message || 'Refute failed', 'error');
+                            }
+                        });
                         card.addEventListener('click', (ev) => {
-                            if (ev.target.closest('.de-fare-approve, .de-fare-ticket, [data-alert-lightbox], a, button.de-fare-approve')) return;
+                            if (ev.target.closest('.de-fare-approve, .de-fare-refute, .de-fare-ticket, [data-alert-lightbox], a, button.de-fare-approve')) return;
                             const panel = card.querySelector('.de-fare-contributors');
                             if (!panel) return;
                             const open = panel.classList.toggle('hidden') === false;
@@ -7021,6 +7114,7 @@ const Admin = {
                             }
                         });
                         listDiv.appendChild(card);
+                        });
                     });
                     return;
                 }
@@ -7039,9 +7133,16 @@ const Admin = {
 
                 // Aggregate by Origin|Dest|Reason|DayType - track hits + unique users
                 const failDeviceFilter = String(Admin._deFailDeviceFilter || '').trim().toLowerCase();
+                const tripUserFilter = String(Admin._deTripFilters?.userId || '').trim().toLowerCase();
+                const failHitMatchesUser = (entry) => {
+                    if (!tripUserFilter) return true;
+                    const hay = `${entry.userId || ''} ${entry.deviceId || ''} ${entry.authUid || ''} ${Admin.commuterAlias?.(entry.userId) || ''} ${Admin.commuterAlias?.(entry.authUid) || ''}`.toLowerCase();
+                    return hay.includes(tripUserFilter);
+                };
                 const heatMap = {};
                 Object.values(data).forEach(entry => {
                     if (!entry.origin || !entry.destination) return;
+                    if (!failHitMatchesUser(entry)) return;
                     if (failDeviceFilter) {
                         const uid = String(entry.userId || entry.deviceId || entry.authUid || '').toLowerCase();
                         if (uid !== failDeviceFilter) return;
@@ -7088,15 +7189,21 @@ const Admin = {
                 });
                 
                 listDiv.innerHTML = '';
-                if (failDeviceFilter) {
+                if (failDeviceFilter || tripUserFilter) {
                     const filterBar = document.createElement('div');
                     filterBar.className = 'mb-2 px-2 py-2 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 flex items-start justify-between gap-2';
+                    const who = tripUserFilter || failDeviceFilter;
                     filterBar.innerHTML = `
-                        <p class="text-[10px] text-amber-900 dark:text-amber-200 leading-snug min-w-0">Showing routing fails that include <span class="font-mono break-all">${failDeviceFilter.replace(/</g, '&lt;')}</span>.</p>
+                        <p class="text-[10px] text-amber-900 dark:text-amber-200 leading-snug min-w-0">Showing routing fails for <span class="font-mono break-all">${who.replace(/</g, '&lt;')}</span>.</p>
                         <button type="button" id="de-fail-clear-filter" class="shrink-0 text-[10px] font-black uppercase tracking-wider text-amber-800 dark:text-amber-200 underline">Clear</button>`;
                     listDiv.appendChild(filterBar);
                     filterBar.querySelector('#de-fail-clear-filter')?.addEventListener('click', () => {
                         Admin._deFailDeviceFilter = '';
+                        if (Admin._deTripFilters) Admin._deTripFilters.userId = '';
+                        const userSel = document.getElementById('de-filter-userid');
+                        if (userSel) userSel.value = '';
+                        const uidDisplay = document.getElementById('de-filter-userid-display');
+                        if (uidDisplay) uidDisplay.textContent = 'All users';
                         Admin.fetchDeadEnds();
                     });
                 }
@@ -7112,7 +7219,7 @@ const Admin = {
                 if (!sorted.length) {
                     const empty = document.createElement('div');
                     empty.className = 'text-xs text-gray-500 italic text-center py-4';
-                    empty.textContent = failDeviceFilter ? 'No routing failures for this device.' : 'No routing failures recorded.';
+                    empty.textContent = (failDeviceFilter || tripUserFilter) ? 'No routing failures for this user.' : 'No routing failures recorded.';
                     listDiv.appendChild(empty);
                     return;
                 }
@@ -7130,6 +7237,7 @@ const Admin = {
                     else if (item.reason === 'ERR_CROSS_REGION') { reasonBadge = "bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-400"; reasonText = "Cross Region"; }
                     else if (item.reason === 'ERR_ACTIVE_SUSPENSION') { reasonBadge = "bg-orange-100 dark:bg-orange-900/50 text-orange-700 dark:text-orange-400"; reasonText = "Line Severed"; }
                     else if (item.reason === 'ERR_NO_SERVICE_TODAY') { reasonBadge = "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300"; reasonText = "No Service"; }
+                    else if (item.reason === 'ERR_NO_SATURDAY_SERVICE') { reasonBadge = "bg-rose-100 dark:bg-rose-900/50 text-rose-700 dark:text-rose-300"; reasonText = "No Weekend Service"; }
 
                     const safeOrigin = secureEscape(item.origin);
                     const safeDest = secureEscape(item.dest);
@@ -7141,7 +7249,7 @@ const Admin = {
                         ? versionEntries.slice(0, 3).map(([ver]) => {
                             const safeVer = secureEscape(ver);
                             if (/^V\d+_/i.test(ver)) {
-                                return `<button type="button" class="fb-version-chip text-[9px] font-mono font-medium underline decoration-dotted underline-offset-2 text-gray-600 dark:text-gray-300 focus:outline-none" data-admin-changelog="${safeVer}" onclick="event.preventDefault();event.stopPropagation();if(window.Admin&&Admin.openAdminChangelogLookup)Admin.openAdminChangelogLookup(this.getAttribute('data-admin-changelog')||this.textContent);">${safeVer}</button>`;
+                                return `<button type="button" class="fb-version-chip inline max-w-full whitespace-normal break-all text-left text-[9px] font-mono font-medium underline decoration-dotted underline-offset-2 text-gray-600 dark:text-gray-300 focus:outline-none" data-admin-changelog="${safeVer}" onclick="event.preventDefault();event.stopPropagation();if(window.Admin&&Admin.openAdminChangelogLookup)Admin.openAdminChangelogLookup(this.getAttribute('data-admin-changelog')||this.textContent);">${safeVer}</button>`;
                             }
                             return `<span class="text-[9px] font-mono text-gray-500">${safeVer}</span>`;
                         }).join('') + (versionEntries.length > 3 ? `<span class="text-[9px] font-mono text-gray-400">+${versionEntries.length - 3}</span>` : '')
@@ -7173,9 +7281,9 @@ const Admin = {
                                     <span class="text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded ${reasonBadge}">${reasonText}</span>
                                     <span class="text-[9px] font-bold text-indigo-600 dark:text-indigo-400 uppercase">${dayLabel}</span>
                                     <span class="text-[9px] text-gray-400 font-mono">${timeLabel}</span>
-                                    ${versionChips}
                                     <span class="text-[9px] text-gray-400 font-mono">Last: ${dateStr}</span>
                                 </div>
+                                <div class="mt-1.5 max-w-full break-all">${versionChips}</div>
                             </div>
                             <div class="flex flex-col items-end shrink-0 gap-1.5 ml-2">
                                 <div class="flex items-center justify-center bg-gray-50 dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-lg px-2.5 py-1.5 shadow-sm min-w-[4.5rem]">
@@ -9855,13 +9963,17 @@ const Admin = {
                     const category = message.category && message.category !== 'general'
                         ? `<span class="text-[9px] font-bold uppercase text-amber-700 dark:text-amber-300">${esc(message.category)}</span>`
                         : '';
+                    const authorId = message.uid || message.deviceId || '';
+                    const authorHint = authorId && typeof Admin.userIdJoinHintHtml === 'function' ? Admin.userIdJoinHintHtml(authorId) : '';
+                    const quoteUid = message.replyTo?.uid || message.replyTo?.deviceId || '';
+                    const quoteHint = quoteUid && typeof Admin.userIdJoinHintHtml === 'function' ? Admin.userIdJoinHintHtml(quoteUid) : '';
                     const quote = message.replyTo?.body
-                        ? `<div class="border-l-2 border-emerald-500 bg-gray-50 dark:bg-gray-900 rounded-r-lg px-2 py-1 mb-2 text-[10px] text-gray-500"><b>${esc(message.replyTo.displayName || 'Passenger')}</b><br>${esc(message.replyTo.body)}</div>`
+                        ? `<div class="border-l-2 border-emerald-500 bg-gray-50 dark:bg-gray-900 rounded-r-lg px-2 py-1 mb-2 text-[10px] text-gray-500"><b>${esc(message.replyTo.displayName || 'Passenger')}</b>${quoteHint}<br>${esc(message.replyTo.body)}</div>`
                         : '';
                     const postId = message.postId || '';
                     return `<div class="${isReply ? 'ml-6 bg-gray-50 dark:bg-gray-900/60' : 'bg-emerald-50/50 dark:bg-emerald-950/10'} border border-gray-200 dark:border-gray-700 rounded-xl p-3 ${message.hidden ? 'opacity-50 ring-1 ring-red-400' : ''}" data-community-message data-community-post="${esc(postId)}" ${isReply ? `data-community-reply="${esc(message.replyId || '')}"` : ''}>
                         <div class="flex items-center justify-between gap-2 mb-1">
-                            <span class="text-[11px] font-black text-gray-900 dark:text-white">${esc(message.displayName || 'Passenger')} ${category}</span>
+                            <span class="text-[11px] font-black text-gray-900 dark:text-white">${esc(message.displayName || 'Passenger')} ${authorHint} ${category}</span>
                             <span class="text-[9px] font-mono text-gray-400">${esc(formatWhen(message.timestamp))}</span>
                         </div>
                         ${quote}<p class="text-[12px] leading-relaxed text-gray-800 dark:text-gray-200 whitespace-pre-wrap">${esc(message.body || '')}</p>
@@ -13260,6 +13372,7 @@ const Admin = {
                         Clear
                     </button>
                 </div>
+                </div>
 
                 <div id="alert-active-pane" class="hidden space-y-3">
                     <div class="bg-emerald-50 dark:bg-emerald-900/20 p-3 rounded-lg border border-emerald-200 dark:border-emerald-800">
@@ -15899,20 +16012,7 @@ const Admin = {
             return route.sheetKeys[`${dayEl.value}_to_${dir}`] || '';
         };
 
-        const unwrapRegionScheduleDb = (region, raw) => ntAdminUnwrapRegionScheduleDb(region, raw);
-
-        const scheduleRowsFromDb = (db, sheetKey) => {
-            const raw = ntAdminScheduleSheet(db, sheetKey);
-            if (Array.isArray(raw)) return raw;
-            if (Array.isArray(raw?.rows)) return raw.rows;
-            if (raw && typeof raw === 'object') {
-                return Object.keys(raw)
-                    .filter((key) => /^\d+$/.test(key))
-                    .sort((a, b) => Number(a) - Number(b))
-                    .map((key) => raw[key]);
-            }
-            return [];
-        };
+        const scheduleRowsFromDb = (db, sheetKey) => ntAdminScheduleRows(db, sheetKey);
 
         const ensureGridOrderDb = async (region, sheetKey) => {
             const ram = typeof fullDatabase !== 'undefined' ? fullDatabase : null;
@@ -15928,14 +16028,7 @@ const Admin = {
             };
             const dbPath = paths[region];
             if (!dbPath || typeof Admin.fetchDiagJson !== 'function') return ram;
-            let rawData;
-            try {
-                rawData = await Admin.fetchDiagJson(`https://nexttrain-cache.enock.workers.dev/${dbPath}?t=${Date.now()}`);
-            } catch {
-                rawData = await Admin.fetchDiagJson(`https://metrorail-next-train-default-rtdb.firebaseio.com/${dbPath}?t=${Date.now()}`);
-            }
-            const db = unwrapRegionScheduleDb(region, rawData);
-            if (db) Admin._gridOrderRegionDb[region] = db;
+            const db = await ntAdminFetchRegionScheduleDb(region);
             return db || ram;
         };
 
@@ -16182,8 +16275,8 @@ const Admin = {
             
             <div id="excl-body" class="hidden mt-4 space-y-3">
                 <div id="excl-review-banner" class="hidden text-[10px] leading-snug px-2.5 py-2 rounded-lg bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 text-slate-700 dark:text-slate-200"></div>
-                <div class="rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50/70 dark:bg-gray-900/40 p-3 space-y-2">
-                    <p class="text-[10px] font-black uppercase tracking-wider text-gray-500 dark:text-gray-400">1. Route</p>
+                <details open class="rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50/70 dark:bg-gray-900/40 p-3 space-y-2">
+                    <summary class="text-[10px] font-black uppercase tracking-wider text-gray-500 dark:text-gray-400 cursor-pointer">1. Route</summary>
                 <div class="relative w-full" id="excl-route-container">
                     <select id="excl-route" class="hidden"></select>
                     <div onclick="document.getElementById('excl-route-list').classList.toggle('hidden'); document.getElementById('excl-route-chevron').classList.toggle('rotate-180');" class="w-full h-10 px-2 bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg text-xs font-bold text-gray-900 dark:text-white transition-colors shadow-sm hover:border-blue-400 dark:hover:border-blue-500 flex items-center justify-between cursor-pointer select-none">
@@ -16192,10 +16285,10 @@ const Admin = {
                     </div>
                     <ul id="excl-route-list" class="absolute z-[200] w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl hidden mt-1 flex-col overflow-y-auto max-h-60 custom-scrollbar text-left"></ul>
                 </div>
-                </div>
+                </details>
 
-                <div class="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg border border-blue-200 dark:border-blue-800 space-y-2">
-                    <p class="text-[10px] font-black uppercase tracking-wider text-blue-800 dark:text-blue-300">2. Timetable grid banner</p>
+                <details class="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg border border-blue-200 dark:border-blue-800 space-y-2">
+                    <summary class="text-[10px] font-black uppercase tracking-wider text-blue-800 dark:text-blue-300 cursor-pointer">2. Timetable grid banner</summary>
                     <p class="text-[10px] text-blue-700 dark:text-blue-400 leading-snug">Route-wide banner inside the full timetable grid. Separate from the NO SVC / SPL train tag below.</p>
                     <label class="block text-[10px] font-bold text-blue-800 dark:text-blue-300 uppercase mb-1">Banner text</label>
                     <div class="flex space-x-2">
@@ -16238,10 +16331,10 @@ const Admin = {
                             </label>
                         </div>
                     </div>
-                </div>
+                </details>
 
-                <div class="rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50/70 dark:bg-gray-900/40 p-3 space-y-3">
-                    <p class="text-[10px] font-black uppercase tracking-wider text-gray-500 dark:text-gray-400">3. Train exceptions</p>
+                <details open class="rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50/70 dark:bg-gray-900/40 p-3 space-y-3">
+                    <summary class="text-[10px] font-black uppercase tracking-wider text-gray-500 dark:text-gray-400 cursor-pointer">3. Train exceptions</summary>
                 <div class="flex space-x-2">
                     <div class="relative w-2/3" id="excl-schedule-type-container">
                         <select id="excl-schedule-type" class="hidden">
@@ -16303,10 +16396,10 @@ const Admin = {
                 </div>
 
                 <input id="excl-reason" type="text" placeholder="Reason (e.g. Testing, Easter)" class="w-full h-10 px-3 bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg text-xs text-gray-900 dark:text-white outline-none">
-                </div>
+                </details>
                 
-                <div class="rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50/70 dark:bg-gray-900/40 p-3 space-y-2">
-                    <p class="text-[10px] font-black uppercase tracking-wider text-gray-500 dark:text-gray-400">4. How this exception appears</p>
+                <details open class="rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50/70 dark:bg-gray-900/40 p-3 space-y-2">
+                    <summary class="text-[10px] font-black uppercase tracking-wider text-gray-500 dark:text-gray-400 cursor-pointer">4. How this exception appears</summary>
                     <div class="rounded-lg border border-gray-200 dark:border-gray-700 p-2.5 bg-white dark:bg-gray-800">
                         <p class="text-[10px] font-black uppercase tracking-wider text-gray-600 dark:text-gray-300 mb-1">Visibility</p>
                         <p class="text-[9px] text-gray-500 dark:text-gray-400 leading-snug mb-2">Tick one surface for in-app only or grid-only. Tick both to publish everywhere.</p>
@@ -16324,7 +16417,7 @@ const Admin = {
                         <input type="datetime-local" id="excl-expiry" class="w-full h-10 px-3 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-xs text-gray-900 dark:text-white outline-none">
                         <p class="text-[9px] text-gray-400 mt-1">Defaults to today at 23:59. If set, the train automatically returns after this date. Clear the field for no auto-return.</p>
                     </div>
-                </div>
+                </details>
                 
                 <button id="excl-save-btn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-4 rounded-lg shadow-sm transition-colors text-xs uppercase tracking-wide focus:outline-none">
                     Apply Exceptions
@@ -16462,11 +16555,10 @@ const Admin = {
             return dir === 'A' ? route.sheetKeys.saturday_to_a : route.sheetKeys.saturday_to_b;
         };
 
-        const trainsFromSheet = (sheetKey, runtimeOrder = null) => {
-            if (typeof fullDatabase === 'undefined' || !fullDatabase || !sheetKey) return [];
-            const rawData = ntAdminScheduleSheet(fullDatabase, sheetKey);
-            if (!rawData) return [];
-            const rows = Array.isArray(rawData) ? rawData : (Array.isArray(rawData.rows) ? rawData.rows : []);
+        const trainsFromSheet = (sheetKey, runtimeOrder = null, db = null) => {
+            const database = db || (typeof fullDatabase !== 'undefined' ? fullDatabase : null);
+            if (!database || !sheetKey) return [];
+            const rows = ntAdminScheduleRows(database, sheetKey);
             const set = new Set();
             try {
                 rows.forEach((row) => {
@@ -16480,7 +16572,7 @@ const Admin = {
                 region: ROUTES?.[routeSelect?.value]?.region,
                 runtimeOrder,
                 manifestOrder: typeof window.getGridOrderManifest === 'function'
-                    ? window.getGridOrderManifest(fullDatabase, sheetKey)
+                    ? window.getGridOrderManifest(database, sheetKey)
                     : null,
             });
         };
@@ -16756,11 +16848,6 @@ const Admin = {
             const route = ROUTES[rId];
             if (!route) return;
 
-            if (typeof fullDatabase === 'undefined' || !fullDatabase) {
-                if (typeof showToast === 'function') showToast("Database not ready. Refresh app.", "error");
-                return;
-            }
-
             const sheetA = sheetKeyForDir(route, type, 'A');
             const sheetB = sheetKeyForDir(route, type, 'B');
             const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : '';
@@ -16779,9 +16866,18 @@ const Admin = {
             };
             loadTrainsBtn.disabled = true;
             const [orderA, orderB] = await Promise.all([loadOrder(sheetA), loadOrder(sheetB)]);
+            let scheduleDb = (typeof fullDatabase !== 'undefined' && fullDatabase) ? fullDatabase : null;
+            const sheetHasTrains = (database) => (
+                ntAdminScheduleRows(database, sheetA).length > 0 || ntAdminScheduleRows(database, sheetB).length > 0
+            );
+            if (!sheetHasTrains(scheduleDb)) {
+                const cached = Admin._gridOrderRegionDb?.[route.region];
+                if (sheetHasTrains(cached)) scheduleDb = cached;
+                else scheduleDb = await ntAdminFetchRegionScheduleDb(route.region) || scheduleDb;
+            }
             loadTrainsBtn.disabled = false;
-            const trainsA = trainsFromSheet(sheetA, orderA);
-            const trainsB = trainsFromSheet(sheetB, orderB);
+            const trainsA = trainsFromSheet(sheetA, orderA, scheduleDb);
+            const trainsB = trainsFromSheet(sheetB, orderB, scheduleDb);
             if (!trainsA.length && !trainsB.length) {
                 if (typeof showToast === 'function') showToast(`No data found for ${type}`, "error");
                 return;

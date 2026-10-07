@@ -4,6 +4,7 @@ import SeoPageHeader from '../../components/SeoPageHeader.astro';
 import SeoAppPreview from '../../components/SeoAppPreview.astro';
 import SeoFareTable from '../../components/SeoFareTable.astro';
 import SeoTimetableGrid from '../../components/SeoTimetableGrid.astro';
+import SeoNetworkMap from '../../components/SeoNetworkMap.astro';
 import { withBase } from '../../lib/config.js';
 import {
   listSeoRoutes,
@@ -80,6 +81,8 @@ const pageUrl = `https://nexttrain.co.za${canonicalPath}`;
 const liveBoardHref = withBase(buildRouteBoardAppPath(route.id));
 const liveGridWeekdayA = withBase(buildRouteGridAppPath(route.id, 'A', 'weekday'));
 const liveGridWeekdayB = withBase(buildRouteGridAppPath(route.id, 'B', 'weekday'));
+const liveGridSaturdayA = withBase(buildRouteGridAppPath(route.id, 'A', 'saturday'));
+const liveGridSaturdayB = withBase(buildRouteGridAppPath(route.id, 'B', 'saturday'));
 const routesIndexHref = withBase('routes.html');
 const guideHref = withBase('guide.html');
 const regionHref = regionEntry ? withBase(`regions/${regionEntry.slug}.html`) : routesIndexHref;
@@ -204,6 +207,7 @@ const related = [
                 grid={timetable.weekday.a}
                 caption={`Weekday trains to ${origin}`}
               />
+              <a href={liveGridWeekdayA} class="mt-3 inline-flex items-center justify-center rounded-xl border border-blue-600 text-blue-700 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-950/40 font-bold px-4 py-2.5 text-sm transition-colors">Download</a>
             </div>
           )}
           {timetable.weekday.b && (
@@ -215,6 +219,7 @@ const related = [
                 grid={timetable.weekday.b}
                 caption={`Weekday trains to ${dest}`}
               />
+              <a href={liveGridWeekdayB} class="mt-3 inline-flex items-center justify-center rounded-xl border border-blue-600 text-blue-700 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-950/40 font-bold px-4 py-2.5 text-sm transition-colors">Download</a>
             </div>
           )}
           {liveGridPrimary && (
@@ -293,6 +298,7 @@ const related = [
                 grid={timetable.saturday.a}
                 caption={`Saturday trains to ${origin}`}
               />
+              <a href={liveGridSaturdayA} class="mt-3 inline-flex items-center justify-center rounded-xl border border-blue-600 text-blue-700 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-950/40 font-bold px-4 py-2.5 text-sm transition-colors">Download</a>
             </div>
           )}
           {timetable.saturday.b && (
@@ -304,6 +310,7 @@ const related = [
                 grid={timetable.saturday.b}
                 caption={`Saturday trains to ${dest}`}
               />
+              <a href={liveGridSaturdayB} class="mt-3 inline-flex items-center justify-center rounded-xl border border-blue-600 text-blue-700 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-950/40 font-bold px-4 py-2.5 text-sm transition-colors">Download</a>
             </div>
           )}
         </details>
@@ -367,6 +374,8 @@ const related = [
           ))}
         </ul>
       </section>
+
+      <SeoNetworkMap region={route.region} regionLabel={province} />
 
       <SeoCrossLinks region={route.region} current="route" />
 

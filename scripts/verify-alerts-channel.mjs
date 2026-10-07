@@ -250,6 +250,26 @@ const now = 1_700_000_000_000;
 
     const js = readFileSync(new URL('../src/lib/alerts-channel.js', import.meta.url), 'utf8');
     assert(js.includes('scopedLiveNotices'), 'feed filters to the current route union');
+    assert(js.includes('useNoticeScope'), 'SEO pages can pin a route or region union');
+    assert(js.includes('scopeKeyOverride'), 'pinned scope keeps corridor route buckets');
+    const { useNoticeScope, scopedLiveNotices, clearNoticeScopeOverride } = await import('../src/lib/alerts-channel.js');
+    const keys = useNoticeScope('WC', ['ct-bellv', 'ct-strnd', 'not-a-route']);
+    assert(keys.includes('all') && keys.includes('all_WC') && keys.includes('ct-bellv') && keys.includes('ct-strnd'), `seo scope keys ${keys.join(',')}`);
+    assert(!keys.includes('not-a-route'), 'unknown route ids stay out of the union');
+    const kept = scopedLiveNotices([
+        { id: '1', _sourceKey: 'ct-strnd' },
+        { id: '2', _sourceKey: 'pta-pien' },
+        { id: '3', _sourceKey: 'all_WC' },
+    ]);
+    assert(kept.length === 2 && kept.every((n) => n._sourceKey !== 'pta-pien'), 'override keeps this page only');
+    clearNoticeScopeOverride();
+    const layout = readFileSync(new URL('../src/layouts/ContentLayout.astro', import.meta.url), 'utf8');
+    const header = readFileSync(new URL('../src/components/SeoPageHeader.astro', import.meta.url), 'utf8');
+    const seoAlerts = readFileSync(new URL('../src/components/SeoAlerts.astro', import.meta.url), 'utf8');
+    assert(layout.includes('SeoAlerts') && layout.includes('seoRegion &&'), 'content pages with a region mount the alerts sheet');
+    assert(header.includes('id="notice-bell"'), 'SEO header has the alerts bell');
+    assert(seoAlerts.includes('closeSmoothModal') && seoAlerts.includes('__ntAlertsParkHome'), 'SEO Close still parks via history');
+    assert(!seoAlerts.includes('switchTab'), 'SEO alerts must not rewrite the page into the app shell');
     assert(js.includes('noticeScopeKeys(region, routeId'), 'scoped notices use union keys');
     assert(js.includes('alerts-channel-footer-close'), 'footer Close is bound');
     assert(js.includes('nt-alert-signoff'), 'card has signature class');

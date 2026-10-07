@@ -58,6 +58,32 @@ let cachedLiveNotices = [];
 let visibleCount = ALERTS_PAGE_SIZE;
 let highlightNoticeId = null;
 let channelBound = false;
+/** When set, SEO pages keep every route bucket for this page (corridor or region). */
+let scopeKeyOverride = null;
+
+/**
+ * Pin the union for this document. One route, or every route on a corridor or region page.
+ * Does not write the commuter's saved region.
+ */
+export function useNoticeScope(region, routeIds = []) {
+    const ids = (Array.isArray(routeIds) ? routeIds : [])
+        .map((id) => String(id || '').trim())
+        .filter((id) => id && ROUTES[id]);
+    const keys = scopeKeysFor(region, '');
+    ids.forEach((id) => {
+        if (!keys.includes(id)) keys.push(id);
+    });
+    scopeKeyOverride = new Set(keys);
+    try {
+        $userRegion.set(String(region || '').trim() || 'GP');
+        $currentRouteId.set(ids.length === 1 ? ids[0] : null);
+    } catch { /* atoms are optional during a bare import */ }
+    return keys;
+}
+
+export function clearNoticeScopeOverride() {
+    scopeKeyOverride = null;
+}
 
 export function noticeScopeKeys(region, routeId) {
     return scopeKeysFor(region, routeId && ROUTES[routeId] ? routeId : '');
@@ -104,7 +130,7 @@ export function setCachedLiveNotices(list) {
 
 /** Keep only notices in the current union (global + region + this route). */
 export function scopedLiveNotices(list = cachedLiveNotices, region = $userRegion.get() || 'GP', routeId = $currentRouteId.get()) {
-    const keys = new Set(noticeScopeKeys(region, routeId && ROUTES[routeId] ? routeId : ''));
+    const keys = scopeKeyOverride || new Set(noticeScopeKeys(region, routeId));
     return (Array.isArray(list) ? list : []).filter((n) => keys.has(n._sourceKey));
 }
 
@@ -122,7 +148,7 @@ async function fetchBucket(key) {
 }
 
 export async function fetchUnionNotices(region, routeId) {
-    const keys = noticeScopeKeys(region, routeId);
+    const keys = scopeKeyOverride ? [...scopeKeyOverride] : noticeScopeKeys(region, routeId);
     const buckets = await Promise.all(keys.map(fetchBucket));
     return mergeUnionNotices(buckets);
 }

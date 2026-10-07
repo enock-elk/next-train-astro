@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { FARE_CONFIG, ROUTES } from './config.js';
 import { getGridOrderManifest, orderGridTrainIds } from './grid-order.js';
 import { isRealTime, isExpressSkip, isVariantStationName, timeToSeconds, flattenPublicHolidays } from './utils.js';
-import { gridStationLabel, stationLabel } from './seo-routes.js';
+import { displayRouteName, gridStationLabel, stationLabel, wcRoutesWithHolidaySheets } from './seo-routes.js';
 import {
   extractStationChain,
   measureStationChain,
@@ -311,6 +311,50 @@ export function buildRouteSeoTimetable(route) {
     };
 }
 
+/**
+ * Western Cape public-holiday grids that actually contain times.
+ * Sheet keys with an empty placeholder are omitted. Calendar days stay elsewhere.
+ */
+export function buildWcPublicHolidayTimetables() {
+    const db = loadScheduleDump();
+    const exportedOrders = loadGridOrderDump();
+    const out = [];
+    for (const { seed, route } of wcRoutesWithHolidaySheets()) {
+        const origin = stationLabel(route.destA);
+        const dest = stationLabel(route.destB);
+        const orderOptions = {
+            region: route?.region,
+            runtimeConfig: exportedOrders?.[route?.region] || exportedOrders?.config?.grid_order?.[route?.region],
+        };
+        const labelGrid = (grid, fromName, toward) => {
+            if (!grid) return null;
+            return {
+                ...grid,
+                heading: directionGridHeading(fromName, toward),
+            };
+        };
+        const towardA = labelGrid(
+            extractSeoGrid(db, route.sheetKeys?.pub_to_a, dest, { ...orderOptions, destName: origin }),
+            dest,
+            origin
+        );
+        const towardB = labelGrid(
+            extractSeoGrid(db, route.sheetKeys?.pub_to_b, origin, { ...orderOptions, destName: dest }),
+            origin,
+            dest
+        );
+        if (!towardA && !towardB) continue;
+        out.push({
+            id: route.id,
+            slug: seed.slug,
+            name: displayRouteName(route),
+            a: towardA,
+            b: towardB,
+        });
+    }
+    return out;
+}
+
 function faqAnswer(text) {
     return { '@type': 'Answer', text };
 }
@@ -467,7 +511,7 @@ export function bothDirectionTitle(origin, dest) {
 }
 
 export function routeDocumentTitle(origin, dest) {
-    return `${bidirectionalTitle(origin, dest)} | Metrorail Next Train`;
+    return `${origin} to ${dest} ${SEO_SCHEDULE_YEAR} Metrorail Train Times | Next Train`;
 }
 
 export function routeMetaDescription(origin, dest, province, opts = {}) {

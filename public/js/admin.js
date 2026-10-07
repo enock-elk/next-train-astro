@@ -2577,10 +2577,11 @@ const Admin = {
         const ids = Admin.commuterIdSet(uid, deviceId, extraIds);
         const secret = await Admin.getAuthKey();
         const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
-        const auth = secret ? `?auth=${encodeURIComponent(secret)}` : '';
         const fetchJson = async (path) => {
             try {
-                const res = await fetch(`${dynamicEndpoint}${path}${auth}`);
+                const joiner = path.includes('?') ? '&' : '?';
+                const authed = secret ? `${path}${joiner}auth=${encodeURIComponent(secret)}` : path;
+                const res = await fetch(`${dynamicEndpoint}${authed}`);
                 if (!res.ok) return null;
                 return res.json();
             } catch {
@@ -2592,7 +2593,8 @@ const Admin = {
         const needFares = !(Admin._cachedFareVotes && typeof Admin._cachedFareVotes === 'object');
         const needFails = !(Admin._cachedRoutingFails && typeof Admin._cachedRoutingFails === 'object');
         const needTickets = !(Admin._cachedFareTicketPhotos && typeof Admin._cachedFareTicketPhotos === 'object');
-        const [inboxRows, tripRows, pings, activity, fareData, failData, ticketData] = await Promise.all([
+        const shareRegions = ['GP', 'WC', 'KZN', 'EC'];
+        const [inboxRows, tripRows, pings, activity, fareData, failData, ticketData, shareBuckets] = await Promise.all([
             Promise.all(deviceLooks.map(async (did) => ({ did, data: await fetchJson(`inbox/${encodeURIComponent(did)}.json`) }))),
             Promise.all(lookIds.map(async (id) => ({ id, data: await fetchJson(`sys_logs/trip_plan_users/${encodeURIComponent(id)}.json`) }))),
             fetchJson('ride_pings.json'),
@@ -2600,6 +2602,7 @@ const Admin = {
             needFares ? fetchJson('sys_logs/fare_votes.json') : null,
             needFails ? fetchJson('sys_logs/routing_fails.json') : null,
             needTickets ? fetchJson('sys_logs/fare_ticket_photos.json') : null,
+            Promise.all(shareRegions.map(async (region) => fetchJson(`ride_share_log/${encodeURIComponent(region)}.json?orderBy=${encodeURIComponent('"at"')}&limitToLast=40`))),
         ]);
         if (fareData && typeof fareData === 'object') Admin._cachedFareVotes = fareData;
         if (failData && typeof failData === 'object') Admin._cachedRoutingFails = failData;
@@ -2680,6 +2683,28 @@ const Admin = {
         }
         liveShares.sort((a, b) => (Number(b.at) || 0) - (Number(a.at) || 0));
 
+        const shareLog = [];
+        (shareBuckets || []).forEach((bucket) => {
+            if (!bucket || typeof bucket !== 'object') return;
+            Object.entries(bucket).forEach(([id, row]) => {
+                if (!row || typeof row !== 'object') return;
+                const did = String(row.deviceId || '').trim();
+                const pUid = String(row.uid || '').trim();
+                if (!ids.has(did) && !ids.has(pUid)) return;
+                shareLog.push({
+                    id,
+                    routeId: row.routeId || '',
+                    trainId: row.trainId || '',
+                    action: row.action || '',
+                    status: row.status || '',
+                    at: Number(row.stoppedAt || row.at || row.startedAt) || 0,
+                    startedAt: Number(row.startedAt) || 0,
+                    stoppedAt: Number(row.stoppedAt) || 0,
+                });
+            });
+        });
+        shareLog.sort((a, b) => (b.at || 0) - (a.at || 0));
+
         const community = [];
         if (activity && typeof activity === 'object') {
             Object.entries(activity).forEach(([routeId, msgs]) => {
@@ -2714,6 +2739,7 @@ const Admin = {
             fails,
             crashes,
             liveShares,
+            shareLog,
             community,
         };
     },
@@ -10851,7 +10877,6 @@ const Admin = {
                 const joinedMs = Number(user.createdAt)
                     || Admin.parseJoinedAtFromUserId(deviceId)
                     || Admin.parseJoinedAtFromUserId(uid);
-                let lastSeenMs = Number(user.updatedAt) || Number(device?.linkedAt) || 0;
                 const linkedIds = user.deviceIds && typeof user.deviceIds === 'object'
                     ? Object.keys(user.deviceIds).filter(Boolean)
                     : (deviceId ? [deviceId] : []);
@@ -10860,11 +10885,23 @@ const Admin = {
                     deviceId,
                     extraIds: linkedIds,
                 });
-                if (profile.tripLast > lastSeenMs) lastSeenMs = profile.tripLast;
-                const liveAt = Number(profile.liveShares[0]?.at) || 0;
-                if (liveAt > lastSeenMs) lastSeenMs = liveAt;
+                const fareAt = Math.max(0, ...(profile.fareVotes || []).map((v) => Number(v.at) || 0));
+                const crashAt = Math.max(0, ...(profile.crashes || []).map((c) => Number(c.timestamp || c.at || c.time) || 0));
+                const activityCandidates = [
+                    { ms: Number(user.lastSeenAt) || 0, label: 'App open' },
+                    { ms: Number(profile.tripLast) || 0, label: 'Trip plan' },
+                    { ms: Number(profile.latestFeedbackAt) || 0, label: 'Feedback' },
+                    { ms: Number(profile.liveShares[0]?.at) || 0, label: 'Live share' },
+                    { ms: Number(profile.shareLog?.[0]?.at) || 0, label: 'Live share' },
+                    { ms: Number(profile.community[0]?.timestamp) || 0, label: 'Community' },
+                    { ms: fareAt, label: 'Fare vote' },
+                    { ms: crashAt, label: 'Crash report' },
+                ].filter((row) => row.ms > 0).sort((a, b) => b.ms - a.ms);
+                const lastActivity = activityCandidates[0] || null;
                 const joinedLabel = joinedMs ? Admin.formatDate(joinedMs) : 'unknown';
-                const lastSeenLabel = lastSeenMs ? Admin.formatDate(lastSeenMs) : 'unknown';
+                const lastActivityHtml = lastActivity
+                    ? `<b>${Admin.formatDate(lastActivity.ms)}</b><span class="block text-[10px] text-gray-500 mt-0.5">${Admin.commuterEsc(lastActivity.label)}</span>`
+                    : '<span class="text-gray-400">No activity on file</span>';
                 const devicesLabel = linkedIds.length
                     ? linkedIds.map((id) => Admin.commuterLabelHtml(id)).join('<span class="text-gray-300">, </span>')
                     : 'none';
@@ -10886,13 +10923,21 @@ const Admin = {
                         return `<a href="tel:+${Admin.commuterEsc(tel)}" class="text-blue-600 dark:text-blue-400 underline">${Admin.commuterEsc(ph)}</a>`;
                     }),
                 ].join('<span class="text-gray-300 mx-1">·</span>');
-                const liveHtml = profile.liveShares.length
-                    ? profile.liveShares.slice(0, 4).map((p) => {
-                        const routeLabel = Admin.inboxRouteLabel(p.routeId) || p.routeId || '';
-                        const state = p.live ? 'Live now' : 'Last share';
-                        return `<p class="text-[11px] text-gray-700 dark:text-gray-300">${state}: <b>${Admin.commuterEsc(routeLabel)}</b> · train ${Admin.commuterEsc(p.trainId || '-')} · ${Admin.commuterEsc(p.station || '')} · ${Admin.formatDate(p.at)}</p>`;
-                    }).join('')
-                    : '<p class="text-[11px] text-gray-400">No live location share on file.</p>';
+                const shareLines = [];
+                profile.liveShares.slice(0, 3).forEach((p) => {
+                    const routeLabel = Admin.inboxRouteLabel(p.routeId) || p.routeId || '';
+                    const state = p.live ? 'Live now' : 'Last pin';
+                    shareLines.push(`<p class="text-[11px] text-gray-700 dark:text-gray-300">${state}: <b>${Admin.commuterEsc(routeLabel)}</b> · train ${Admin.commuterEsc(p.trainId || '-')} · ${Admin.commuterEsc(p.station || '')} · ${Admin.formatDate(p.at)}</p>`);
+                });
+                (profile.shareLog || []).slice(0, 4).forEach((row) => {
+                    const routeLabel = Admin.inboxRouteLabel(row.routeId) || row.routeId || '';
+                    const ended = row.status === 'stopped' || row.action === 'stop' || row.stoppedAt > 0;
+                    const state = row.status === 'live' && !ended ? 'Logged live' : 'Logged share';
+                    shareLines.push(`<p class="text-[11px] text-gray-700 dark:text-gray-300">${state}: <b>${Admin.commuterEsc(routeLabel)}</b> · train ${Admin.commuterEsc(row.trainId || '-')} · ${Admin.formatDate(row.at)}</p>`);
+                });
+                const liveHtml = shareLines.length
+                    ? shareLines.join('')
+                    : '<p class="text-[11px] text-gray-400 leading-snug">No live pin right now. Signed-in shares stay in the ride log after the pin expires. A guest device only shows here while a share is still live. Coordinates stay on the live pin, not on the account.</p>';
                 const communityHtml = profile.community.length
                     ? profile.community.slice(0, 6).map((c) => {
                         const routeLabel = Admin.inboxRouteLabel(c.routeId) || c.routeId || '';
@@ -10902,11 +10947,15 @@ const Admin = {
                 const bannedAtMs = Number(flags.shadowBannedAt || 0);
                 const bannedBy = flags.shadowBannedBy ? Admin.commuterEsc(String(flags.shadowBannedBy)) : '';
                 const ticketCount = (profile.fareTicketUrls || []).length;
-                const utBtn = (id, label, solid = false) => (
-                    solid
-                        ? `<button type="button" id="${id}" class="ut-action-btn text-[10px] font-black uppercase tracking-wider text-white bg-blue-600 hover:bg-blue-700 px-3 py-1.5 rounded-lg">${label}</button>`
-                        : `<button type="button" id="${id}" class="ut-action-btn text-[10px] font-black uppercase tracking-wider text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 px-3 py-1.5 rounded-lg">${label}</button>`
+                const utBtn = (id, label) => (
+                    `<button type="button" id="${id}" class="ut-action-btn shrink-0 text-[10px] font-black uppercase tracking-wider text-white bg-blue-600 hover:bg-blue-700 px-3 py-1.5 rounded-lg">${label}</button>`
                 );
+                const footBtn = (id, label, tone) => {
+                    const toneClass = tone === 'danger'
+                        ? 'text-red-700 dark:text-red-300 bg-white dark:bg-gray-900 border-red-200 dark:border-red-800'
+                        : 'text-blue-700 dark:text-blue-300 bg-white dark:bg-gray-900 border-blue-200 dark:border-blue-800';
+                    return `<button type="button" id="${id}" class="text-[10px] font-black uppercase tracking-wider px-3 py-1.5 rounded-lg border ${toneClass}">${label}</button>`;
+                };
                 const metricRow = (label, valueHtml, openBtn = '') => `
                     <div class="flex items-start justify-between gap-2 py-2 border-b border-gray-100 dark:border-gray-800 last:border-0">
                         <div class="min-w-0">
@@ -10925,7 +10974,8 @@ const Admin = {
                         <div class="px-3.5 py-2">
                             ${metricRow('Email', `${accountEmailHtml}<span class="text-gray-400"> · via ${Admin.commuterEsc(viaLabel)}</span>${deviceId && deviceId !== uid ? ` · device <span class="font-mono break-all">${Admin.commuterEsc(deviceId)}</span>` : ''}`)}
                             ${contactHtml ? metricRow('Contacts', contactHtml) : ''}
-                            ${metricRow('Joined / last seen', `<b>${joinedLabel}</b> · <b>${lastSeenLabel}</b>`)}
+                            ${metricRow('Joined', `<b>${joinedLabel}</b>`)}
+                            ${metricRow('Last activity', lastActivityHtml)}
                             ${metricRow('Linked devices', `<span class="break-all">${devicesLabel}</span>`)}
                             ${metricRow('Role / trust', `Role <b>${flags.role || 'user'}</b> · Trust score <b>${score}</b>`)}
                             ${metricRow(
@@ -10936,7 +10986,7 @@ const Admin = {
                             ${metricRow(
                                 'Feedback',
                                 `<b>${profile.hasChat ? `${profile.feedbackCount || 'open'} thread` : 'none'}</b>${profile.latestFeedbackAt ? ` · last ${Admin.formatDate(profile.latestFeedbackAt)}` : ''}`,
-                                profile.hasChat && chatDid ? utBtn('ut-open-chat-btn', 'Open chat', true) : ''
+                                profile.hasChat && chatDid ? utBtn('ut-open-chat-btn', 'Open chat') : ''
                             )}
                             ${metricRow(
                                 'Trip plans',
@@ -10970,10 +11020,10 @@ const Admin = {
                             </div>
                         </div>
                         <div class="px-3.5 py-3 bg-slate-50/80 dark:bg-gray-950/50 border-t border-gray-100 dark:border-gray-800 flex flex-wrap gap-2">
-                            ${chatDid ? `<button type="button" id="ut-start-chat-btn" class="text-[10px] font-black uppercase tracking-wider text-blue-700 dark:text-blue-300 bg-white dark:bg-gray-900 border border-blue-200 dark:border-blue-800 px-3 py-1.5 rounded-lg">${profile.hasChat ? 'Reply' : 'Start chat'}</button>` : ''}
-                            ${chatDid ? `<button type="button" id="ut-alias-btn" class="text-[10px] font-bold text-gray-600 dark:text-gray-300 underline px-1">Edit alias</button>` : ''}
-                            <button type="button" id="ut-ban-btn" class="text-[10px] font-bold text-red-600 underline px-1">Shadow ban</button>
-                            <button type="button" id="ut-lift-btn" class="text-[10px] font-bold text-blue-600 underline px-1">Lift ban</button>
+                            ${chatDid ? footBtn('ut-start-chat-btn', profile.hasChat ? 'Reply' : 'Start chat', 'primary') : ''}
+                            ${chatDid ? footBtn('ut-alias-btn', 'Edit alias', 'primary') : ''}
+                            ${footBtn('ut-ban-btn', 'Shadow ban', 'danger')}
+                            ${footBtn('ut-lift-btn', 'Lift ban', 'primary')}
                         </div>
                     </div>`;
                 document.getElementById('ut-open-chat-btn')?.addEventListener('click', () => {
@@ -21772,8 +21822,8 @@ const Admin = {
             adminContainer.appendChild(roadmapPanel);
         }
 
-        if (roadmapPanel.dataset.adminLoaded === "roadmap-refine-v2") return;
-        roadmapPanel.dataset.adminLoaded = "roadmap-refine-v2";
+        if (roadmapPanel.dataset.adminLoaded === "roadmap-refine-v3") return;
+        roadmapPanel.dataset.adminLoaded = "roadmap-refine-v3";
 
         Admin.cachedRoadmapData = [];
 
@@ -21787,42 +21837,36 @@ const Admin = {
                 </span>
                 <svg id="roadmap-chevron" class="w-4 h-4 transform transition-transform -rotate-90 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
             </button>
-            <div id="roadmap-body" class="nt-pack-surface hidden mt-4 flex flex-col space-y-3 rounded-xl p-3 border border-slate-200/70 dark:border-slate-800">
-                <!-- Controls Header -->
-                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-white dark:bg-slate-900 p-3 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
-                    <div class="flex items-center gap-2 w-full sm:w-auto">
-                        <span class="text-[10px] font-bold text-gray-500 uppercase tracking-wider pl-1" id="roadmap-status-display">Syncing Board...</span>
-                    </div>
-                    
-                    <div class="flex items-center gap-2 w-full sm:w-auto">
-                        <!-- Search Bar -->
-                        <div class="relative flex-grow sm:w-48">
-                            <svg class="absolute left-2.5 top-1/2 transform -translate-y-1/2 w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
-                            <input type="text" id="roadmap-search-input" placeholder="Search tickets..." class="w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 text-gray-900 dark:text-white text-xs rounded-lg focus:ring-blue-500 focus:border-blue-500 block pl-8 p-2 shadow-sm outline-none transition-colors">
-                        </div>
-                        
-                        <button id="roadmap-refresh-btn" class="p-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-500 hover:text-blue-500 transition-colors focus:outline-none shadow-sm shrink-0" title="Refresh">
+            <div id="roadmap-body" class="hidden -mx-4 sm:-mx-6 flex flex-col text-left bg-gray-50 dark:bg-gray-900">
+                <div class="px-4 pt-1 pb-3 space-y-2 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-800">
+                    <div class="flex items-center justify-between gap-2">
+                        <span class="text-[11px] font-semibold text-gray-500" id="roadmap-status-display">Syncing board</span>
+                        <button id="roadmap-refresh-btn" class="h-9 w-9 inline-flex items-center justify-center rounded-lg border border-gray-200 dark:border-gray-600 text-gray-500 hover:text-blue-600 focus:outline-none shrink-0" title="Refresh">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m-15.357-2a8.001 8.001 0 0015.357 2m0 0H15"></path></svg>
                         </button>
-                        <select id="roadmap-date-filter" class="h-9 max-w-[7.5rem] px-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-200 text-[10px] font-bold rounded-lg focus:ring-blue-500 outline-none shadow-sm shrink-0" title="Filter by date">
+                    </div>
+                    <div class="flex gap-2">
+                        <div class="relative flex-1 min-w-0">
+                            <svg class="absolute left-2.5 top-1/2 transform -translate-y-1/2 w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                            <input type="text" id="roadmap-search-input" placeholder="Search tickets" class="w-full h-10 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 text-gray-900 dark:text-white text-xs rounded-lg focus:ring-blue-500 focus:border-blue-500 block pl-8 pr-2 outline-none">
+                        </div>
+                        <select id="roadmap-date-filter" class="h-10 max-w-[8.5rem] px-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-200 text-[11px] font-semibold rounded-lg focus:ring-blue-500 outline-none shrink-0" title="Filter by date">
                             <option value="all">All dates</option>
                             <option value="7">Last 7 days</option>
                             <option value="30">Last 30 days</option>
                             <option value="90">Last 90 days</option>
                         </select>
-                        <button onclick="Admin.openTicketModal()" class="bg-blue-600 hover:bg-blue-500 text-white px-3 py-2 rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 whitespace-nowrap shadow-md focus:outline-none shrink-0">
-                            ${Admin.icon('plus', 'w-3.5 h-3.5')} New Ticket
-                        </button>
                     </div>
+                    <button type="button" id="roadmap-new-ticket" onclick="Admin.openTicketModal()" class="w-full h-10 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold inline-flex items-center justify-center gap-1.5 focus:outline-none">
+                        ${Admin.icon('plus', 'w-4 h-4')} New ticket
+                    </button>
                 </div>
 
-                <!-- Kanban Board Area (Responsive Grid) -->
-                <div class="overflow-x-auto pb-4 custom-scrollbar snap-x flex-grow w-full">
-                    <!-- GUARDIAN UX FIX: Fluid Grid on Desktop, Snap Flex on Mobile -->
-                    <div class="flex md:grid md:grid-cols-3 gap-4 h-full items-start px-1 w-full min-w-max md:min-w-0" id="roadmap-kanban-board">
+                <div class="overflow-x-auto snap-x snap-mandatory w-full">
+                    <div class="flex w-full items-start" id="roadmap-kanban-board">
                         
                         <!-- Column: Backlog -->
-                        <div class="flex flex-col w-[280px] md:w-auto md:min-w-0 max-h-[500px] bg-slate-200/70 dark:bg-slate-900/80 rounded-xl border border-slate-300 dark:border-slate-700 shadow-inner overflow-hidden snap-center shrink-0 md:shrink">
+                        <div class="flex flex-col basis-full shrink-0 grow-0 snap-start md:basis-0 md:flex-1 md:min-w-0 max-h-[70vh] bg-gray-50 dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 overflow-hidden">
                             <div class="p-3 border-b border-slate-300 dark:border-slate-700 flex justify-between items-center bg-white dark:bg-slate-800 shrink-0">
                                 <div class="flex items-center gap-2">
                                     <span class="w-2.5 h-2.5 rounded-full bg-gray-400 shadow-sm"></span>
@@ -21839,8 +21883,8 @@ const Admin = {
                         </div>
 
                         <!-- Column: In Progress -->
-                        <div class="flex flex-col w-[280px] md:w-auto md:min-w-0 max-h-[500px] bg-blue-50/80 dark:bg-slate-900/80 rounded-xl border border-blue-200 dark:border-blue-900 shadow-inner overflow-hidden snap-center shrink-0 md:shrink">
-                            <div class="p-3 border-b border-blue-200 dark:border-blue-900 flex justify-between items-center bg-white dark:bg-slate-800 shrink-0">
+                        <div class="flex flex-col basis-full shrink-0 grow-0 snap-start md:basis-0 md:flex-1 md:min-w-0 max-h-[70vh] bg-gray-50 dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 overflow-hidden">
+                            <div class="p-3 border-b border-gray-200 dark:border-gray-800 flex justify-between items-center bg-white dark:bg-gray-800 shrink-0">
                                 <div class="flex items-center gap-2">
                                     <span class="w-2.5 h-2.5 rounded-full bg-blue-500 shadow-sm ring-2 ring-blue-200 dark:ring-blue-900"></span>
                                     <h2 class="text-[10px] font-black uppercase tracking-widest text-blue-800 dark:text-blue-300">In Progress</h2>
@@ -21856,8 +21900,8 @@ const Admin = {
                         </div>
 
                         <!-- Column: Completed -->
-                        <div class="flex flex-col w-[280px] md:w-auto md:min-w-0 max-h-[500px] bg-emerald-50/80 dark:bg-slate-900/80 rounded-xl border border-emerald-200 dark:border-emerald-900 shadow-inner overflow-hidden snap-center shrink-0 md:shrink">
-                            <div class="p-3 border-b border-emerald-200 dark:border-emerald-900 flex justify-between items-center bg-white dark:bg-slate-800 shrink-0">
+                        <div class="flex flex-col basis-full shrink-0 grow-0 snap-start md:basis-0 md:flex-1 md:min-w-0 max-h-[70vh] bg-gray-50 dark:bg-gray-900 overflow-hidden">
+                            <div class="p-3 border-b border-gray-200 dark:border-gray-800 flex justify-between items-center bg-white dark:bg-gray-800 shrink-0">
                                 <div class="flex items-center gap-2">
                                     <span class="w-2.5 h-2.5 rounded-full bg-green-500 shadow-sm ring-2 ring-green-200 dark:ring-green-900"></span>
                                     <h2 class="text-[10px] font-black uppercase tracking-widest text-green-800 dark:text-green-300">Completed</h2>

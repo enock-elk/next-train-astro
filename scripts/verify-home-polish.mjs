@@ -279,8 +279,8 @@ assert(
     'banner and train exceptions support in-app, grid-only, or both, plus schedule-day isolate'
 );
 assert(admin.includes('openRoadmapOriginal'), 'roadmap opens original feedback or crash');
-assert(admin.includes('roadmap-refine-v2'), 'roadmap card redesign is loaded');
-assert(admin.includes('id="roadmap-body" class="nt-pack-surface'), 'roadmap uses the interactive feedback-style wallpaper surface');
+assert(admin.includes('roadmap-refine-v3'), 'roadmap card redesign is loaded');
+assert(admin.includes('id="roadmap-new-ticket"') && admin.includes('basis-full'), 'roadmap is full width and New ticket is its own control');
 assert(admin.includes("label: 'Public Holiday sheets'") && admin.includes("label: 'Saturday sheets (holiday default)'"), 'holiday dropdowns split WC vs other regions');
 assert(admin.includes('id="alert-poster-select"'), 'admin uses poster dropdown');
 assert(!admin.includes('alert-poster-path'), 'admin path input removed');

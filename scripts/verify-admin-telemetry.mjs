@@ -122,7 +122,7 @@ ok(!/bindDeSwipe\(\s*document\.getElementById\('de-list'\)\s*\)/.test(adminJs), 
 ok(adminJs.includes('fetchDiagJson:'), 'Admin.fetchDiagJson is hoisted');
 ok(adminJs.includes('normalizeStationName'), 'Deep Scan dest checks use normalizeStationName');
 ok(adminJs.includes('Expected — no Saturday service'), 'placeholder Saturday sheets are expected, not errors');
-ok(adminJs.includes('Joined / last seen') && adminJs.includes('joinedLabel'), 'device lookup shows joined + last seen');
+ok(adminJs.includes("metricRow('Joined'") && adminJs.includes("metricRow('Last activity'") && adminJs.includes('joinedLabel'), 'device lookup splits joined and last activity');
 ok(adminJs.includes("'Linked devices'"), 'device lookup lists linked device ids');
 ok(adminJs.includes('sys_logs/trip_plan_users'), 'admin reads trip_plan_users index');
 ok(adminJs.includes('feedbackDeviceHasTripPlans'), 'feedback list can mark devices that have trip plans');

@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_10.07.3': [
+        'User Trust splits Joined and Last activity. Last activity names the newest real event, because the old last-seen line was often just a trip plan. Open actions use the same blue button. Reply, Edit alias, Shadow ban, and Lift ban share one button shape. The profile lists live pins and the signed-in ride log. Guest shares still only appear while the pin is live, and coordinates stay off the account. Operations Roadmap is full width, with New ticket on its own row. Alert hold menu is a compact list. No commuter What’s New. forceShow stays false.',
+    ],
     'V9_10.07.2': [
         'Route timetable pages have a Download button on each sheet. It pins that route and opens the in-app grid with Opening Next Train. Route and corridor pages show a static network map and a link to the full map. Service Alerts Active, Scheduled, and Archived panes stay visible when those tabs are open. Schedule Exceptions Load reads the region timetable, and parts 1 to 4 are accordions with the grid banner closed at start. Community monitor names open the same user lookup as Planner Telemetry. A Trip Plans user filter also limits Fails to that user. Fare corrections can be Refuted into their own section. Planner treats a trailing Station as the same stop, and it will not search or log a trip that starts and ends at one station. Fail cards keep the app version inside the card. No commuter What’s New. forceShow stays false.',
     ],

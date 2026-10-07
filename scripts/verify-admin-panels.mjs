@@ -373,8 +373,8 @@ assert(admin.includes('m.chainSource'), 'zone audit shows whether the stop list 
 assert(admin.includes('openRoadmapOriginal'), 'roadmap can open the original item');
 assert(admin.includes('data-fb-ids'), 'feedback threads expose ids for deep-link');
 assert(admin.includes('data-crash-id='), 'crash rows expose ids for deep-link');
-assert(admin.includes('roadmap-refine-v2'), 'roadmap panel rebuilds after the wallpaper pass');
-assert(admin.includes('id="roadmap-body" class="nt-pack-surface'), 'roadmap body uses the interactive operations wallpaper surface');
+assert(admin.includes('roadmap-refine-v3'), 'roadmap panel rebuilds after the full-width pass');
+assert(admin.includes('id="roadmap-new-ticket"') && admin.includes('basis-full'), 'roadmap columns fill the phone and New ticket is not a floating chip');
 assert(admin.includes('roadmap-open-original'), 'ticket view has Open original');
 assert(!/font-mono text-xs sm:text-sm leading-relaxed whitespace-pre-wrap break-words min-h-\[150px\]/.test(admin), 'old centered mono description box is gone');
 

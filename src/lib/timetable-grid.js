@@ -281,7 +281,8 @@ export async function applyRouteDeepLink() {
 
     if (link.fromSnapshot || peekShareDeeplinkSnapshot()?.kind === 'route') consumeShareDeeplinkSnapshot();
 
-    showToast('Opening shared link...', 'info', 5000);
+    const seoHandoff = isSeoAppHandoff(link);
+    showToast(seoHandoff ? 'Opening Next Train' : 'Opening shared link...', 'info', 5000);
 
     const returning = safeStorage.getItem('welcomeSeen') === 'true';
     const defaultKey = 'defaultRoute_' + route.region;
@@ -292,8 +293,13 @@ export async function applyRouteDeepLink() {
         safeStorage.setItem('welcomeSeen', 'true');
     }
     try { document.getElementById('welcome-modal')?.classList.add('hidden'); } catch { /* ignore */ }
-    // Cold start / no defaults: pin the shared route as theirs
-    if (!hasUsableDefault) {
+    // SEO timetable download always pins that corridor. Shared links pin only when none exists.
+    if (seoHandoff) {
+        try {
+            safeStorage.setItem('userRegion', route.region);
+            safeStorage.setItem(defaultKey, link.routeId);
+        } catch { /* ignore */ }
+    } else if (!hasUsableDefault) {
         safeStorage.setItem(defaultKey, link.routeId);
     }
 
@@ -321,7 +327,7 @@ export async function applyRouteDeepLink() {
             region_id: region || '',
         });
     }
-    showToast(`Opened shared route: ${route.name}`, 'success', 2000);
+    if (!seoHandoff) showToast(`Opened shared route: ${route.name}`, 'success', 2000);
 
     if (link.view === 'grid') {
         setTimeout(() => renderFullScheduleGrid(link.dir, link.day), 80);

@@ -4052,7 +4052,7 @@ export function initPlanner() {
                 if (typeof showToast === 'function') showToast("Please select valid stations from the list.", "error");
                 return;
             }
-            if (from === to) {
+            if (samePlannerStation(from, to)) {
                 if (typeof showToast === 'function') showToast("Origin and Destination cannot be the same.", "error");
                 return;
             }
@@ -4629,8 +4629,32 @@ export async function applyPlannerDeepLink() {
     });
 }
 
+/** One list key for "Berlin" and "Berlin Station". */
+function canonicalPlannerStation(name) {
+    const raw = String(name || '').trim();
+    if (!raw) return '';
+    const list = getMasterStationList() || [];
+    const resolved = resolvePlannerStationInput(raw, list);
+    if (resolved) return resolved;
+    return normalizeStationName(raw) || raw;
+}
+
+function samePlannerStation(a, b) {
+    const left = normalizeStationName(a);
+    const right = normalizeStationName(b);
+    return !!(left && right && left === right);
+}
+
 // --- ORCHESTRATION ---
 export function executeTripPlan(origin, dest, preferredTime = null) {
+    const fromCanon = canonicalPlannerStation(origin);
+    const toCanon = canonicalPlannerStation(dest);
+    if (fromCanon) origin = fromCanon;
+    if (toCanon) dest = toCanon;
+    if (samePlannerStation(origin, dest)) {
+        if (typeof showToast === 'function') showToast('Origin and destination cannot be the same.', 'error');
+        return;
+    }
     lastPlannerPreferredTime = preferredTime;
     plannerOrigin = origin;
     plannerDest = dest;
@@ -4797,13 +4821,15 @@ export function executeTripPlan(origin, dest, preferredTime = null) {
                     day_type: selectedPlannerDay || null,
                 });
             }
-            logRoutingFail({
-                origin,
-                destination: dest,
-                reason: currentPlannerStatus,
-                dayType: selectedPlannerDay || getCurrentDayType(),
-                timeOfDay: (getCurrentTime() || '').slice(0, 5),
-            });
+            if (currentPlannerStatus !== 'SAME_STATION') {
+                logRoutingFail({
+                    origin,
+                    destination: dest,
+                    reason: currentPlannerStatus,
+                    dayType: selectedPlannerDay || getCurrentDayType(),
+                    timeOfDay: (getCurrentTime() || '').slice(0, 5),
+                });
+            }
             
             updatePlannerHeader("No Route Found", false);
             plannerOrigin = origin;
@@ -5309,13 +5335,15 @@ export async function restorePlannerSearch(fullFrom, fullTo, region, opts = {}) 
 
 /** Empty Saturday grid → planner on Saturday, using this corridor's two ends. */
 export async function planFromEmptyWeekendGrid(origin, dest, region) {
+    const fromCanon = canonicalPlannerStation(origin) || origin;
+    const toCanon = canonicalPlannerStation(dest) || dest;
     selectedPlannerDay = 'saturday';
     if (typeof window !== 'undefined') window.selectedPlannerDay = 'saturday';
     const mainDayDisplay = document.getElementById('main-day-display');
     if (mainDayDisplay) mainDayDisplay.textContent = plannerDayDisplayText('saturday');
     const headerDayDisplay = document.getElementById('header-day-display');
     if (headerDayDisplay) headerDayDisplay.textContent = 'Saturday';
-    await restorePlannerSearch(origin, dest, region, { quiet: true });
+    await restorePlannerSearch(fromCanon, toCanon, region, { quiet: true });
 }
 
 export function swapPlannerResults() {

@@ -389,6 +389,15 @@ if (!gridPathSa.includes('d=sa') || gridPathSa.includes('dir=')) {
   if (!routePage.includes('<SeoAppPreview routeId={route.id} href={liveBoardHref} />')) {
     fail('route landings must select app previews by route id');
   }
+  if (!routePage.includes('liveGridSaturdayA') || !routePage.includes('>Download</a>')) {
+    fail('route landings must put a Download control on each timetable');
+  }
+  if (!routePage.includes('To Download this time table, Open Next Train online')) {
+    fail('route landings must keep the existing download sentence');
+  }
+  if (!routePage.includes('<SeoNetworkMap')) {
+    fail('route landings must show the static network map');
+  }
   const appPreview = readFileSync(new URL('../src/components/SeoAppPreview.astro', import.meta.url), 'utf8');
   if (!appPreview.includes('getSeoAppPreview') || !appPreview.includes('preview.image')) {
     fail('app preview catalog must map screenshots by route id');
@@ -402,6 +411,26 @@ if (!gridPathSa.includes('d=sa') || gridPathSa.includes('dir=')) {
   }
   if (!corridorPage.includes('isPtaJhb ? ptaJhbPlannerHref')) {
     fail('Pretoria-JHB corridor Open CTA must go to the planner, not ?region=');
+  }
+  if (!corridorPage.includes('<SeoNetworkMap')) {
+    fail('corridor landings must show the static network map');
+  }
+  const mapPreview = readFileSync(new URL('../src/components/SeoNetworkMap.astro', import.meta.url), 'utf8');
+  if (!mapPreview.includes('loading="lazy"') || mapPreview.includes('fetchpriority')) {
+    fail('SEO map preview must be lazy and must not set fetchpriority');
+  }
+  if (!mapPreview.includes('Interactive map ·') || !mapPreview.includes('map.html?region=')) {
+    fail('SEO map preview must link to the Leaflet map page');
+  }
+  if (mapPreview.includes('map-app.js') || mapPreview.includes('leaflet')) {
+    fail('SEO map preview must not load Leaflet');
+  }
+  const gridHandoff = readFileSync(new URL('../src/lib/timetable-grid.js', import.meta.url), 'utf8');
+  if (!gridHandoff.includes("seoHandoff ? 'Opening Next Train'") || !gridHandoff.includes("safeStorage.setItem('userRegion', route.region)") || !gridHandoff.includes('safeStorage.setItem(defaultKey, link.routeId)')) {
+    fail('SEO grid handoff must pin the route and toast Opening Next Train');
+  }
+  if (!gridHandoff.includes('if (!seoHandoff) showToast(`Opened shared route:')) {
+    fail('shared route toast must stay off the SEO handoff');
   }
   const welcomeSrc = readFileSync(new URL('../src/components/WelcomeModal.astro', import.meta.url), 'utf8');
   if (!welcomeSrc.includes('hasInboundShareIntent()')) {
@@ -797,8 +826,14 @@ if (existsSync(DIST)) {
     if (html.includes('Download and Share are there.')) {
       fail('Kempton route HTML still has per-grid Download and Share lines');
     }
-    if (!html.includes('Open this weekday sheet in Next Train')) {
-      fail('Kempton route HTML missing the single weekday-sheet app link');
+    if (!html.includes('To Download this time table, Open Next Train online')) {
+      fail('Kempton route HTML missing the download sentence');
+    }
+    if (!html.includes('>Download</a>')) {
+      fail('Kempton route HTML missing a Download button');
+    }
+    if (!html.includes('Interactive map · GP')) {
+      fail('Kempton route HTML missing the map preview link');
     }
     if (!html.includes('v=g') || !html.includes('rt=pta-kempton')) {
       fail('Kempton route HTML missing in-app grid deep link (?rt=&v=g)');
@@ -949,7 +984,8 @@ if (existsSync(DIST)) {
       fail('Gauteng network map image must not be wrapped in a map.html link');
     }
     if (!html.includes('Interactive map')) fail('Gauteng region page missing Interactive map control');
-    if (html.includes('Open Next Train · Gauteng')) {
+    const gautengHeader = html.match(/<header\b[\s\S]*?<\/header>/i)?.[0] || '';
+    if (gautengHeader.includes('Open Next Train · Gauteng')) {
       fail('Gauteng region page should not put Open Next Train · Gauteng in the header');
     }
     if (/href="[^"]*western-cape-public-holidays/.test(html)) {

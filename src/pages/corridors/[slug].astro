@@ -12,6 +12,7 @@ import {
 } from '../../lib/seo-routes.js';
 import SeoCrossLinks from '../../components/SeoCrossLinks.astro';
 import SeoAppPreview from '../../components/SeoAppPreview.astro';
+import SeoNetworkMap from '../../components/SeoNetworkMap.astro';
 
 export function getStaticPaths() {
   return listSeoCorridors().map((c) => ({ params: { slug: c.slug } }));
@@ -115,6 +116,8 @@ const jsonLd = {
           ))}
         </ul>
       </section>
+
+      <SeoNetworkMap region={entry.region} regionLabel={province} />
 
       <a
         href={appHref}

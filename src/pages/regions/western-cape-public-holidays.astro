@@ -6,15 +6,15 @@
 import ContentLayout from '../../layouts/ContentLayout.astro';
 import SeoPageHeader from '../../components/SeoPageHeader.astro';
 import SeoCrossLinks from '../../components/SeoCrossLinks.astro';
+import SeoTimetableGrid from '../../components/SeoTimetableGrid.astro';
 import { withBase } from '../../lib/config.js';
 import {
   getSeoRegionBySlug,
-  displayRouteName,
   WC_PUBLIC_HOLIDAYS_PATH,
   WC_PUBLIC_HOLIDAYS_SLUG,
   listWcPublicHolidayDays,
-  wcRoutesWithHolidaySheets,
 } from '../../lib/seo-routes.js';
+import { buildWcPublicHolidayTimetables } from '../../lib/seo-timetable.js';
 
 const entry = getSeoRegionBySlug('western-cape');
 if (!entry) return Astro.redirect('/routes.html');
@@ -23,7 +23,7 @@ const year = 2026;
 const holidays = listWcPublicHolidayDays(year);
 const running = holidays.filter((h) => h.runs);
 const noService = holidays.filter((h) => !h.runs);
-const routes = wcRoutesWithHolidaySheets();
+const timetables = buildWcPublicHolidayTimetables();
 const title = `Western Cape Metrorail public holiday timetable ${year} | Next Train`;
 const description = `Cape Town Metrorail public holiday train times for ${year}. Some holidays use a Public Holiday sheet, others use the Saturday timetable. Check Next Train when PRASA announces the day.`;
 const canonicalPath = `/${WC_PUBLIC_HOLIDAYS_PATH}`;
@@ -72,6 +72,26 @@ const jsonLd = {
         Gauteng, KwaZulu-Natal and Eastern Cape do not have a separate public-holiday timetable here.
       </p>
 
+      {timetables.length > 0 && (
+        <nav class="mt-6" aria-label="Public holiday timetables">
+          <p class="text-sm font-black uppercase tracking-widest text-slate-500 mb-2">
+            Public Holiday timetables
+          </p>
+          <ul class="flex flex-wrap gap-2">
+            {timetables.map((item) => (
+              <li>
+                <a
+                  href={`#holiday-${item.id}`}
+                  class="inline-flex rounded-full border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900/60 px-3 py-1.5 text-sm font-semibold text-blue-700 dark:text-blue-300 hover:border-blue-500"
+                >
+                  {item.name}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </nav>
+      )}
+
       <section class="mt-10">
         <h2 class="text-sm font-black uppercase tracking-widest text-slate-500 mb-3">
           {year} days with a Public Holiday timetable
@@ -80,7 +100,7 @@ const jsonLd = {
           {running.map((h) => (
             <li class="px-4 py-3 flex items-baseline justify-between gap-3">
               <span class="font-semibold text-slate-900 dark:text-white">{h.name}</span>
-              <span class="text-sm text-slate-500 whitespace-nowrap">{h.iso}</span>
+              <time class="text-sm text-slate-500 whitespace-nowrap" datetime={h.iso}>{h.label}</time>
             </li>
           ))}
         </ul>
@@ -94,7 +114,7 @@ const jsonLd = {
           {noService.map((h) => (
             <li class="px-4 py-3 flex items-baseline justify-between gap-3">
               <span class="font-semibold text-slate-900 dark:text-white">{h.name}</span>
-              <span class="text-sm text-slate-500 whitespace-nowrap">{h.iso}</span>
+              <time class="text-sm text-slate-500 whitespace-nowrap" datetime={h.iso}>{h.label}</time>
             </li>
           ))}
         </ul>
@@ -103,28 +123,41 @@ const jsonLd = {
         </p>
       </section>
 
-      <section class="mt-10">
-        <h2 class="text-sm font-black uppercase tracking-widest text-slate-500 mb-3">
-          Western Cape routes with a Public Holiday sheet
-        </h2>
-        <ul class="space-y-2">
-          {routes.map(({ seed, route }) => (
-            <li>
-              <a
-                href={withBase(`routes/${seed.slug}.html`)}
-                class="block rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900/60 px-4 py-4 hover:border-blue-500 dark:hover:border-blue-700 transition-colors"
-              >
-                <span class="block text-base font-bold text-slate-900 dark:text-white">
-                  {displayRouteName(route)}
-                </span>
-                <span class="block text-sm text-slate-500 dark:text-slate-400 mt-1">
-                  Weekday, Saturday, and Public Holiday times
-                </span>
-              </a>
-            </li>
-          ))}
-        </ul>
-      </section>
+      {timetables.length > 0 && (
+        <section class="mt-10">
+          <h2 class="text-sm font-black uppercase tracking-widest text-slate-500 mb-3">
+            Public Holiday timetables
+          </h2>
+          <p class="mb-4 text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+            These routes have a published Public Holiday timetable.
+          </p>
+          <div class="space-y-10">
+            {timetables.map((item) => (
+              <section id={`holiday-${item.id}`} class="scroll-mt-4">
+                <h3 class="text-lg font-bold text-slate-900 dark:text-white">
+                  <a href={withBase(`routes/${item.slug}.html`)} class="hover:underline">{item.name}</a>
+                </h3>
+                {item.b && (
+                  <div class="mt-4">
+                    <h4 class="text-sm font-black uppercase tracking-widest text-slate-500">
+                      {item.b.heading}
+                    </h4>
+                    <SeoTimetableGrid grid={item.b} caption={`Public Holiday trains, ${item.b.heading}`} />
+                  </div>
+                )}
+                {item.a && (
+                  <div class="mt-4">
+                    <h4 class="text-sm font-black uppercase tracking-widest text-slate-500">
+                      {item.a.heading}
+                    </h4>
+                    <SeoTimetableGrid grid={item.a} caption={`Public Holiday trains, ${item.a.heading}`} />
+                  </div>
+                )}
+              </section>
+            ))}
+          </div>
+        </section>
+      )}
 
       <a
         href={appHref}

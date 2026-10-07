@@ -22,7 +22,7 @@ const entry = getSeoCorridorBySlug(slug);
 if (!entry) return Astro.redirect('/routes.html');
 
 const province = regionName(entry.region);
-const title = `${entry.label} Train Times | Metrorail Next Train`;
+const title = `Metrorail ${entry.label} Train Times | Next Train`;
 const description = `View and download ${entry.label} PRASA Metrorail train timetables. ${entry.blurb} Works offline in Next Train, with ticket prices and the next train.`;
 const canonicalPath = `/corridors/${entry.slug}.html`;
 const routesIndexHref = withBase('routes.html');
@@ -55,6 +55,7 @@ const jsonLd = {
   seoSlug={entry.slug}
   seoRegion={entry.region}
   seoCorridor={entry.label}
+  seoAlertRouteIds={entry.routes.map(({ route }) => route.id).join(',')}
 >
   <script type="application/ld+json" slot="head" set:html={JSON.stringify(jsonLd)} />
   <SeoPageHeader

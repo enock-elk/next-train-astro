@@ -29,6 +29,7 @@ import {
 } from '../src/lib/seo-routes.js';
 import {
   buildRouteSeoTimetable,
+  buildWcPublicHolidayTimetables,
   bidirectionalTitle,
   corridorPairLabel,
   directionPhrase,
@@ -207,7 +208,7 @@ if (directionPhrase('Pretoria', 'Mabopane') !== 'Pretoria to Mabopane') {
   fail('directionPhrase should be "Pretoria to Mabopane"');
 }
 const docTitle = routeDocumentTitle('Pretoria', 'Mabopane');
-if (!docTitle.startsWith(`Pretoria to Mabopane ${SEO_SCHEDULE_YEAR} Train Times |`)) {
+if (docTitle !== `Pretoria to Mabopane ${SEO_SCHEDULE_YEAR} Metrorail Train Times | Next Train`) {
   fail(`document title is "${docTitle}"`);
 }
 if (docTitle.includes('Mabopane to Pretoria')) {
@@ -249,6 +250,12 @@ if (!/Cape Town to Bellville/i.test(capeMeta) || !/train schedule/i.test(capeMet
 
 {
   const indexAstro = readFileSync(new URL('../src/pages/index.astro', import.meta.url), 'utf8');
+  if (!indexAstro.includes("const pageTitle = 'Metrorail Next Train | 2026 PRASA Train Times and Schedules';")) {
+    fail('homepage document title must stay Metrorail Next Train | 2026 PRASA Train Times and Schedules');
+  }
+  if (!indexAstro.includes('View and download 2026 PRASA Metrorail train timetables for Gauteng, Cape Town, Durban and East London.')) {
+    fail('homepage meta description must stay the 2026 PRASA timetable sentence');
+  }
   const faqLine = 'Commuters can send a delay note, and some testers can share a trip location.';
   if (!indexAstro.includes(faqLine)) {
     fail('homepage FAQ JSON-LD must include the delay-note sentence');
@@ -348,6 +355,17 @@ if (!gridPathSa.includes('d=sa') || gridPathSa.includes('dir=')) {
   if (!nye || !nye.runs || nye.dayType !== 'public_holiday') {
     fail('New Year\'s Day must use the Western Cape Public Holiday timetable');
   }
+  if (nye.label !== '01 January 2026' || nye.iso !== '2026-01-01') {
+    fail(`New Year's Day display must be 01 January 2026, got "${nye.label}"`);
+  }
+  const pubs = buildWcPublicHolidayTimetables();
+  if (!pubs.some((row) => row.id === 'ct-bellv' && row.a && row.b)) {
+    fail('Cape Town to Bellville must keep a Public Holiday timetable');
+  }
+  const emptyIds = ['bellville-mutual', 'ct-malm', 'ct-nolu', 'ct-well', 'eerst-dtoit'];
+  const leaked = pubs.filter((row) => emptyIds.includes(row.id)).map((row) => row.id);
+  if (leaked.length) fail(`public holiday page must omit routes without times: ${leaked.join(', ')}`);
+  if (pubs.some((row) => !row.a && !row.b)) fail('public holiday timetable rows must have at least one direction');
   const womens = days.find((d) => d.md === '08-09');
   if (!womens || womens.runs) fail("National Women's Day 2026 must be no service");
 
@@ -367,6 +385,17 @@ if (!gridPathSa.includes('d=sa') || gridPathSa.includes('dir=')) {
   const holidayPage = readFileSync(new URL('../src/pages/regions/western-cape-public-holidays.astro', import.meta.url), 'utf8');
   if (!holidayPage.includes('Western Cape public holiday timetable')) {
     fail('WC holiday landing missing H1 copy');
+  }
+  if (!holidayPage.includes('aria-label="Public holiday timetables"')) {
+    fail('WC holiday landing needs a jump list for the timetables');
+  }
+  if (!holidayPage.includes('days with a Public Holiday timetable') || !holidayPage.includes('days with no trains')) {
+    fail('WC holiday calendar sections must stay');
+  }
+  const navAt = holidayPage.indexOf('aria-label="Public holiday timetables"');
+  const daysAt = holidayPage.indexOf('days with a Public Holiday timetable');
+  if (navAt < 0 || daysAt < 0 || navAt > daysAt) {
+    fail('public holiday jump list must sit above the calendar');
   }
   if (!holidayPage.includes('Saturday timetable') || !holidayPage.includes('Check Next Train')) {
     fail('WC holiday landing must say some holidays use Saturday and to check Next Train');

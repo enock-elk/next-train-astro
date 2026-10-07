@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_10.07.1': [
+        'SEO document titles: corridors and regions lead with Metrorail and end with | Next Train. Route titles are "{A} to {B} 2026 Metrorail Train Times | Next Train". Homepage title and description stay Metrorail Next Train | 2026 PRASA Train Times and Schedules. Western Cape public holiday dates display as 01 January 2026. The holiday page keeps that calendar and lists Public Holiday timetables only for routes whose sheet has times, with a jump list at the top. Route, region, and corridor landings open the in-app Alerts sheet for that page route or region. Guide spells out Passenger Rail Agency of South Africa once, notes major disruptions inside the app, and answers how to download the app (home screen install, Android Play testing). Sitemap lastmod bumped. No commuter What’s New. forceShow stays false.',
+    ],
     'V9_10.05.2': [
         'Schedule dump: Crossmoor Saturday inbound 9673/9681 times restored to the afternoon (Montclair–Durban). User Trust lookup is a structured card with mailto/tel contacts and Open chat / trip plans / fare votes / fails / crashes / bans. Fare correction ticket photos stay under Storage fare_tickets/ with RTDB fare_ticket_photos; Open fare votes filters Planner Telemetry Fares for that device and each card has Open ticket. Admin fare cards spell board Peak/Off-peak + Quoted Single, collect weekly/monthly without Approve into live Single, and CSV exports ticketType/quotedTicketType. quotedTicketType is always single on the vote payload. Planner fare modal UI unchanged. Alert composer Channel poster line updates immediately on audience chip toggles and ignores stale live-count fetches so a deselected region cannot linger in the summary. No commuter What’s New. forceShow stays false.',
     ],

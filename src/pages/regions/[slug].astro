@@ -19,7 +19,7 @@ const { slug } = Astro.params;
 const entry = getSeoRegionBySlug(slug);
 if (!entry) return Astro.redirect('/routes.html');
 
-const title = `${entry.title} Train Times | Metrorail Next Train`;
+const title = `Metrorail ${entry.regionLabel} Train Times | Next Train`;
 const description = `View and download ${entry.title} PRASA Metrorail train timetables. ${entry.blurb} Works offline in Next Train, with ticket prices and the next train.`;
 const canonicalPath = `/regions/${entry.slug}.html`;
 const routesIndexHref = withBase('routes.html');
@@ -52,6 +52,7 @@ const jsonLd = {
   seoPageType="region"
   seoSlug={entry.slug}
   seoRegion={entry.region}
+  seoAlertRouteIds={entry.routes.map(({ route }) => route.id).join(',')}
 >
   <script type="application/ld+json" slot="head" set:html={JSON.stringify(jsonLd)} />
   <SeoPageHeader region={entry.region} regionLabel={entry.regionLabel} />

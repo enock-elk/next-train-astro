@@ -83,6 +83,14 @@ const faqJsonLd = {
         "@type": "Answer",
         "text": "Next Train maps active PRASA corridors in Gauteng (Pretoria, Johannesburg, Germiston, Kempton Park, Mabopane), Western Cape (Cape Town, Bellville, Simon's Town), KwaZulu-Natal (Durban, Umlazi, KwaMashu, Crossmoor), and Eastern Cape (East London)."
       }
+    },
+    {
+      "@type": "Question",
+      "name": "How do I download the Metrorail Next Train app?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Next Train installs from nexttrain.co.za. On iPhone, open the site in Safari, tap Share, then Add to Home Screen. On Android, open the site in Chrome and tap Install App in The Background in the main menu. Android is also in Google Play testing."
+      }
     }
   ]
 };
@@ -296,7 +304,7 @@ const faqJsonLd = {
                     <h2 class="text-xl font-black text-gray-900 dark:text-white">Built by Commuters, for Commuters</h2>
                 </div>
                 <div class="prose-custom text-sm sm:text-base text-gray-600 dark:text-gray-300">
-                    <p>Metrorail Next Train is an <strong>independent, unofficial passion project</strong> and is not affiliated with PRASA or Metrorail. I started this in late 2025 as a simple tool to help my own family avoid looking at blurry timetable photos, and it quickly grew into something much bigger.</p>
+                    <p>Metrorail Next Train is an <strong>independent, unofficial passion project</strong> and is not affiliated with PRASA (Passenger Rail Agency of South Africa) or Metrorail. I started this in late 2025 as a simple tool to help my own family avoid looking at blurry timetable photos, and it quickly grew into something much bigger.</p>
                     <p>My name is <strong>Enock Kazembe</strong>. I work as an Actuarial Analyst, but building this app is my real passion. I built Next Train to bring clear and reliable train times to the people who need it most. South African commuters deserve tools that just work and make daily travel a little bit easier. This App takes the guesswork out of planning your journey.</p>
                     <p>We are fully live across South Africa's major networks, indexing high-traffic corridors and hubs to help you plan your journey:</p>
                     <ul class="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-3 mb-4">
@@ -305,7 +313,7 @@ const faqJsonLd = {
                         <li><strong>KwaZulu-Natal:</strong> Durban Yard, Umlazi, Bridge City / KwaMashu, and Crossmoor.</li>
                         <li><strong>Eastern Cape:</strong> East London and Berlin.</li>
                     </ul>
-                    <p>The app tells you where the train <em>should</em> be based on the schedule. Because we rely on crowdsourced data alongside official PRASA releases to keep these timetables accurate, we need your help to spot errors! Commuters can send a delay note, and some testers can share a trip location.</p>
+                    <p>The app tells you where the train <em>should</em> be based on the schedule. Next Train also posts major service disruptions inside the app. Because we rely on crowdsourced data alongside official PRASA releases to keep these timetables accurate, we need your help to spot errors! Commuters can send a delay note, and some testers can share a trip location.</p>
                 </div>
                 <SeoFeaturedRoutes />
             </section>
@@ -411,8 +419,8 @@ const faqJsonLd = {
                     <p>If you are using a supported browser like Chrome, a green <strong>"Install App in The Background"</strong> button will appear at the bottom of the main menu. Simply tap it! If you don't see the button, your current browser might not support web installations.</p>
 
                     <div class="mt-5 p-4 bg-blue-50 dark:bg-blue-900/20 border-l-4 border-blue-500 rounded-r-lg">
-                        <p class="font-bold text-blue-800 dark:text-blue-300 mb-1">Coming Soon to App Stores</p>
-                        <p class="text-blue-700 dark:text-blue-200 opacity-90 mb-0">We are working hard to bring Next Train natively to both the <strong>Google Play Store</strong> and the <strong>Apple App Store</strong> in the near future!</p>
+                        <p class="font-bold text-blue-800 dark:text-blue-300 mb-1">Install on your phone</p>
+                        <p class="text-blue-700 dark:text-blue-200 opacity-90 mb-0">Next Train installs from this website: Add to Home Screen on iPhone, or the in-app install control on Android. Android is also in Google Play testing.</p>
                     </div>
 
                 </div>
@@ -482,6 +490,16 @@ const faqJsonLd = {
                             <p class="mt-2"><strong>Western Cape can use either sheet.</strong> Some holidays follow a dedicated <strong>Public Holiday</strong> timetable; others use the Saturday timetable when PRASA announces it. Check Next Train on the day. See the <a href={withBase(WC_PUBLIC_HOLIDAYS_PATH)} class="text-blue-600 dark:text-blue-400 underline">Western Cape public holiday timetable</a>.</p>
                             <p class="mt-2">A few routes, including Hercules / Koedoespoort and Eastern Cape, also have <strong>no Saturday service</strong> even when other lines are running.</p>
                             <p class="mt-2">You don't need to guess: the app's <strong>True Day Simulator</strong> applies the correct 2026 holiday and route rules automatically.</p>
+                        </div>
+                    </details>
+
+                    <details class="group bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden transition-all duration-300">
+                        <summary class="cursor-pointer flex items-center justify-between p-4 font-bold text-gray-900 dark:text-white select-none focus:outline-none hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                            How do I download the Metrorail Next Train app?
+                            <svg class="w-5 h-5 text-gray-400 transform transition-transform group-open:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                        </summary>
+                        <div class="p-4 pt-1 border-t border-gray-200 dark:border-gray-700 text-sm text-gray-600 dark:text-gray-300 leading-relaxed">
+                            <p>Next Train installs from <strong>nexttrain.co.za</strong>. On iPhone, open the site in Safari, tap Share, then <strong>Add to Home Screen</strong>. On Android, open the site in Chrome and tap <strong>Install App in The Background</strong> in the main menu. Android is also in Google Play testing.</p>
                         </div>
                     </details>
 

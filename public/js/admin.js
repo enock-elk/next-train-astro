@@ -3073,39 +3073,44 @@ const Admin = {
                             </button>
                         </div>
                         <div class="p-5 flex-grow bg-white dark:bg-gray-800 rounded-b-2xl">
-                            <p id="region-metric-label" class="text-center text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Unique users by last selected region</p>
-                            <p id="region-today-total" class="text-center text-xs font-black text-slate-800 dark:text-slate-200 mb-1">Today unique: --</p>
-                            <p id="region-today-sessions" class="text-center text-[10px] font-bold text-slate-500 mb-4">Today sessions: --</p>
+                            <p id="region-metric-label" class="text-center text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Users and sessions by region on the hit</p>
+                            <p id="region-today-total" class="text-center text-xs font-black text-slate-800 dark:text-slate-200 mb-1">People today: --</p>
+                            <p id="region-today-sessions" class="text-center text-[10px] font-bold text-slate-500 mb-4">Sessions today: --</p>
                             <div class="grid grid-cols-2 gap-3 mb-3">
                                 <div class="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg border border-blue-100 dark:border-blue-800/50 flex flex-col items-center justify-center shadow-sm">
                                     <span class="text-[10px] text-blue-600 dark:text-blue-400 font-bold uppercase tracking-wider mb-1">Gauteng</span>
                                     <span id="region-stat-gp" class="text-2xl font-black text-blue-700 dark:text-blue-300">--</span>
+                                    <span class="text-[9px] font-bold uppercase tracking-wider text-blue-600/80 dark:text-blue-300/70">users</span>
                                     <span id="region-sess-gp" class="text-[9px] font-bold text-blue-500/80 dark:text-blue-300/70 mt-0.5">-- sessions</span>
                                 </div>
                                 <div class="bg-green-50 dark:bg-green-900/20 p-3 rounded-lg border border-green-100 dark:border-green-800/50 flex flex-col items-center justify-center shadow-sm">
                                     <span class="text-[10px] text-green-600 dark:text-green-400 font-bold uppercase tracking-wider mb-1">Western Cape</span>
                                     <span id="region-stat-wc" class="text-2xl font-black text-green-700 dark:text-green-300">--</span>
+                                    <span class="text-[9px] font-bold uppercase tracking-wider text-green-600/80 dark:text-green-300/70">users</span>
                                     <span id="region-sess-wc" class="text-[9px] font-bold text-green-500/80 dark:text-green-300/70 mt-0.5">-- sessions</span>
                                 </div>
                                 <div class="bg-orange-50 dark:bg-orange-900/20 p-3 rounded-lg border border-orange-100 dark:border-orange-800/50 flex flex-col items-center justify-center shadow-sm">
                                     <span class="text-[10px] text-orange-600 dark:text-orange-400 font-bold uppercase tracking-wider mb-1">KwaZulu-Natal</span>
                                     <span id="region-stat-kzn" class="text-2xl font-black text-orange-700 dark:text-orange-300">--</span>
+                                    <span class="text-[9px] font-bold uppercase tracking-wider text-orange-600/80 dark:text-orange-300/70">users</span>
                                     <span id="region-sess-kzn" class="text-[9px] font-bold text-orange-500/80 dark:text-orange-300/70 mt-0.5">-- sessions</span>
                                 </div>
                                 <div class="bg-purple-50 dark:bg-purple-900/20 p-3 rounded-lg border border-purple-100 dark:border-purple-800/50 flex flex-col items-center justify-center shadow-sm">
                                     <span class="text-[10px] text-purple-600 dark:text-purple-400 font-bold uppercase tracking-wider mb-1">Eastern Cape</span>
                                     <span id="region-stat-ec" class="text-2xl font-black text-purple-700 dark:text-purple-300">--</span>
+                                    <span class="text-[9px] font-bold uppercase tracking-wider text-purple-600/80 dark:text-purple-300/70">users</span>
                                     <span id="region-sess-ec" class="text-[9px] font-bold text-purple-500/80 dark:text-purple-300/70 mt-0.5">-- sessions</span>
                                 </div>
                             </div>
                             <div class="bg-slate-50 dark:bg-slate-800/50 p-3 rounded-lg border border-slate-200 dark:border-slate-700 flex items-center justify-between shadow-sm mt-1 mb-3">
-                                <span id="region-stat-other-label" class="text-[10px] text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider flex items-center">No region set</span>
+                                <span id="region-stat-other-label" class="text-[10px] text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider flex items-center">No region on the hit</span>
                                 <div class="text-right">
                                     <span id="region-stat-other" class="text-lg font-black text-slate-700 dark:text-slate-300">--</span>
+                                    <span class="block text-[9px] font-bold uppercase tracking-wider text-slate-500">users</span>
                                     <span id="region-sess-other" class="block text-[9px] font-bold text-slate-500">-- sessions</span>
                                 </div>
                             </div>
-                            <p id="region-note" class="text-[10px] leading-relaxed text-slate-500 dark:text-slate-400 mb-4">TODAY is unique people. Region cards are unique users by last selected region — they are not sessions, and they will not add up to TODAY if someone switched region or sent hits before a region was set.</p>
+                            <p id="region-note" class="text-[10px] leading-relaxed text-slate-500 dark:text-slate-400 mb-4">People today and Sessions today are the totals. Each card counts a person, and their sessions, once for every region value on their hits. The cards are not a split of people today.</p>
                             
                             <!-- GROWTH SPRINT PHASE 12: Pivot to Graph CTA -->
                             <button id="region-view-graph-btn" class="w-full bg-slate-800 hover:bg-slate-900 dark:bg-slate-700 dark:hover:bg-slate-600 text-white font-bold py-3 rounded-xl shadow-md transition-colors text-xs uppercase tracking-widest focus:outline-none flex items-center justify-center border border-slate-700 dark:border-slate-600">
@@ -3959,19 +3964,31 @@ const Admin = {
         const todayUsers = data.todayUsers ?? Admin.currentTodayUsers;
         const todaySessions = data.todaySessions ?? Admin.currentTodaySessions;
         const todayEl = document.getElementById('region-today-total');
-        if (todayEl) todayEl.textContent = `Today unique: ${n(todayUsers)}`;
+        if (todayEl) todayEl.textContent = `People today: ${n(todayUsers)}`;
         const sessEl = document.getElementById('region-today-sessions');
-        if (sessEl) sessEl.textContent = `Today sessions: ${n(todaySessions)}`;
+        if (sessEl) sessEl.textContent = `Sessions today: ${n(todaySessions)}`;
+
+        const otherLabel = document.getElementById('region-stat-other-label');
+        if (otherLabel) {
+            const unset = Number(data.unsetUsers) || 0;
+            const unrecognised = Number(data.otherUsers) || 0;
+            otherLabel.textContent = unrecognised > 0 && unset === 0
+                ? 'Unrecognised region'
+                : unrecognised > 0
+                    ? 'No region on the hit, plus unrecognised'
+                    : 'No region on the hit';
+        }
 
         const assigned = (Number(data.GP) || 0) + (Number(data.WC) || 0) + (Number(data.KZN) || 0) + (Number(data.EC) || 0);
         const other = Number(data.OTHER) || 0;
-        const uniqueToday = Number(todayUsers) || 0;
+        const people = Number(todayUsers) || 0;
+        const cardUsers = assigned + other;
+        const extra = Math.max(0, cardUsers - people);
         const note = document.getElementById('region-note');
         if (note) {
-            const overlap = Math.max(0, (assigned + other) - uniqueToday);
-            note.textContent = overlap > 0
-                ? `These cards are unique users (not sessions). Region + no-region (${Admin.formatNumber(assigned + other)}) is about ${Admin.formatNumber(overlap)} above TODAY because the same commuter can appear in more than one bucket if they switched region or sent hits before a region was set.`
-                : `These cards are unique users by last selected region, not sessions. TODAY (${n(todayUsers)}) is unique people.`;
+            note.textContent = extra > 0
+                ? `People today and Sessions today are the totals. Each card counts a person, and their sessions, once for every region value on their hits, so the user numbers add up to ${Admin.formatNumber(cardUsers)}, which is ${Admin.formatNumber(extra)} above the ${Admin.formatNumber(people)} people. The cards are not a split of people today.`
+                : 'People today and Sessions today are the totals. Each card is the users who had that region on a hit today, and the sessions on those hits.';
         }
     },
 

@@ -1,8 +1,8 @@
 {
   "branch": "map-gold",
-  "frozenAt": "ab6f5a13f093595bf6914596965b09fc303f3d9d",
+  "frozenAt": "c53643832274b4667708c919572a00b8e4433946",
   "version": "V9_09.20.11",
-  "note": "Gold snapshot of this build: live train glyph faces the sharer timetable bearing, holds pose on backward GPS jitter, and glides on the painted rail only; tracking card adds state, reason, timing and votes. Tracks unchanged. Diff against origin/map-gold. Fast-forward map-gold after this lands on main. Never force-push map-gold.",
+  "note": "Gold snapshot of this build: a signed-in admin can share as the train without the commuter rail vet. Tracks unchanged. Diff against origin/map-gold. Fast-forward map-gold after this lands on main. Never force-push map-gold.",
   "files": {
     "public/tracks/rail-tracks-EC.geojson": {
       "md5": "43409bfd05405205e596f0d03345ab18",
@@ -37,8 +37,8 @@
       "sha256": "e7385a8e07415f0862e983a5ffca225fc23e68c22f550ee13bc84ffdb52cf3dc"
     },
     "src/lib/map-tab.js": {
-      "md5": "b910581b85861a698b86ff08c5ac626d",
-      "sha256": "d686f1e74ac06cd4df2aec248317f4159fc67ac6f5bc624b6ce96358f6bcd08e"
+      "md5": "1f7651ef69724a0b83ad765d6e46b0a5",
+      "sha256": "ef6c2dcdb6d35e89f5a0aa7d859496a6859c6bf63fe0f9fa36c8c8c83f84b613"
     },
     "src/lib/clever-ads.js": {
       "md5": "4d78da253d60d3ba285de6c41d697cad",

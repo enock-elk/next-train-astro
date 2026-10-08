@@ -93,6 +93,8 @@ export const RIDE_OFFTRACK_GRACE_MS = 3 * 60 * 1000;
 export const RIDE_OFFTRACK_HARD_M = 400;
 /** After “I’m still on it”, skip another off-track drop prompt for this long. */
 export const RIDE_OFFTRACK_STAY_MS = 5 * 60 * 1000;
+/** While the phone is off the rail, do not open another “Still on this train?” sheet sooner than this. */
+export const OFFTRACK_PROMPT_MS = 15 * 1000;
 const SESSION_POINTS_KEY = 'nt_ride_share_session_points';
 
 /** Pause vs drop while a regular rider is sharing as a train. */
@@ -2026,6 +2028,7 @@ export async function submitRideCheckIn({
             source: payload.source,
             offTrackSince: projection?.ok ? 0 : (previous?.offTrackSince || 0),
             offTrackStayUntil: projection?.ok ? 0 : (Number(previous?.offTrackStayUntil) || 0),
+            offTrackPromptAt: Number(previous?.offTrackPromptAt) || 0,
             terminusStay: Boolean(previous?.terminusStay),
             terminusArrived: Boolean(previous?.terminusArrived),
             leftTrainPrompted: Boolean(previous?.leftTrainPrompted),
@@ -2511,10 +2514,8 @@ async function processOnboardFix(pos, { forceBroadcast = false, generation = onb
     }
     let resumeAfterPrompt = false;
     if (active.adminOverrideRole === 'train' && isAdminAuthed()) {
-        // Operator test shares used to skip every guard, so a test share kept
-        // broadcasting after the operator walked away from the platform. They
-        // keep the relaxed projection but still get the hard off-track check,
-        // the dwell prompt and the 90s no-answer stop.
+        // Signed-in operator test only. The rail check, dwell prompt, and
+        // direction prompt must not pause or stop this share.
         let overrideProjected = null;
         try {
             const path = await railPathForTrain(active.trainId, {
@@ -2526,33 +2527,7 @@ async function processOnboardFix(pos, { forceBroadcast = false, generation = onb
             overrideProjected = null;
         }
         if (generation !== onboardGeneration) return;
-        const farM = Number(overrideProjected?.distanceM);
-        const now = Date.now();
-        if (Number.isFinite(farM) && farM >= RIDE_OFFTRACK_HARD_M
-            && !(active.offTrackStayUntil && now < Number(active.offTrackStayUntil))) {
-            const pick = await confirmShareContinue({
-                title: 'Still on this train?',
-                body: 'Your location is no longer on this train’s path. Sharing will stop unless you are still on it.',
-                keepLabel: 'I’m still on it',
-                stopLabel: 'Stop sharing',
-            });
-            if (pick === 'busy') return;
-            if (pick !== 'keep') {
-                await stopRideShare({
-                    reason: pick === 'timeout' ? 'no_answer' : 'off_track_far',
-                    waitForOnboard: false,
-                });
-                return;
-            }
-            const offTrackStayUntil = now + RIDE_OFFTRACK_STAY_MS;
-            persistActiveSharePatch({ offTrackSince: 0, offTrackStayUntil });
-            active.offTrackStayUntil = offTrackStayUntil;
-            resumeAfterPrompt = true;
-        }
-        const dwell = await handleDwellAtPlatform(active, pos, stops, progress, { generation });
-        if (dwell === 'busy' || dwell === 'stopped') return;
-        if (dwell === 'changed') resumeAfterPrompt = true;
-        const due = forceBroadcast || autoPaused || resumeAfterPrompt
+        const due = forceBroadcast || autoPaused
             || Date.now() - onboardLastBroadcastAt >= adaptiveOnboardPingMs(pos.speedMps);
         if (!due) return;
         if (generation !== onboardGeneration) return;
@@ -2643,6 +2618,10 @@ async function processOnboardFix(pos, { forceBroadcast = false, generation = onb
         });
         if (decision === 'drop_far' || decision === 'drop_grace') {
             await pauseActiveTracker({ ...active, offTrackSince }, projection.reason || 'offTrack', pos);
+            const promptedAt = Number(active.offTrackPromptAt) || 0;
+            if (now - promptedAt < OFFTRACK_PROMPT_MS) return;
+            persistActiveSharePatch({ offTrackPromptAt: now });
+            active.offTrackPromptAt = now;
             const pick = await confirmShareContinue({
                 title: 'Still on this train?',
                 body: decision === 'drop_far'

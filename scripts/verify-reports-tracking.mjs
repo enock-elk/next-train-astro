@@ -39,6 +39,7 @@ import {
     SHARE_PROMPT_TIMEOUT_MS,
     REVERSE_SUSTAIN_MS,
     DWELL_PROMPT_MS,
+    OFFTRACK_PROMPT_MS,
     TRAIN_STATUS,
     rideVoteTally,
     shareEligibilityForTrain,
@@ -259,6 +260,7 @@ assert(adaptiveOnboardPingMs(12) === ONBOARD_FAST_PING_MS, 'fast train broadcast
 assert(adaptiveOnboardPingMs(2) === ONBOARD_MOVING_PING_MS, 'slow movement broadcasts every 4 seconds');
 assert(adaptiveOnboardPingMs(0) === ONBOARD_STATIONARY_PING_MS, 'stationary share heartbeats every 6 seconds');
 assert(SHARE_PROMPT_TIMEOUT_MS === 90000, 'share prompts time out after 90 seconds');
+assert(OFFTRACK_PROMPT_MS === 15000, 'off-track still-on-this-train prompt waits 15 seconds before asking again');
 assert(REVERSE_SUSTAIN_MS === 20000, 'backward progress must persist 20 seconds before the share pauses');
 assert(DWELL_PROMPT_MS === 4 * 60 * 1000, 'parked at an intermediate platform for 4 minutes asks whether the train is stuck');
 assert(TRAIN_STATUS.STUCK === 'stuck' && TRAIN_STATUS.CANCELLED === 'cancelled', 'train status values are stable for rules and receivers');
@@ -707,6 +709,9 @@ assert(ridePingsSource.includes("title: 'Switch trains?'"), 'a shuttle that ends
 assert(ridePingsSource.includes("keepLabel: 'Still on the train'"), 'last-station prompt can keep sharing');
 assert(ridePingsSource.includes("stopLabel: 'Yes, we’ve arrived'"), 'last-station prompt can confirm arrival');
 assert(ridePingsSource.includes("title: 'Still on this train?'"), 'off-track and direction mismatch ask before stopping');
+assert(ridePingsSource.includes('OFFTRACK_PROMPT_MS'), 'off-track prompt is rate limited');
+assert(ridePingsSource.includes('must not pause or stop this share'), 'admin train test is not stopped by the rail check');
+assert(mapTabSource.includes('const adminTrainTest = isAdminAuthed()'), 'a signed-in admin can share as the train without the commuter vet');
 assert(ridePingsSource.includes('offTrackStayUntil'), 'still-on-it snoozes another off-track drop');
 assert(ridePingsSource.includes('sharePromptOpen'), 'overlapping share prompts do not stack');
 assert(ridePingsSource.includes("reason === 'direction'"), 'direction mismatch can end the share after the prompt');

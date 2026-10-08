@@ -1,8 +1,8 @@
 {
   "branch": "map-gold",
-  "frozenAt": "39a3aef6f5a12cf646d78d4b051a542c2b69ea3d",
+  "frozenAt": "ab6f5a13f093595bf6914596965b09fc303f3d9d",
   "version": "V9_09.20.11",
-  "note": "Gold snapshot of this build: Leaflet splits kzn-bridgecity at Duff's Road into Berea Road to kwaMashu and Berea Road to Bridge City. Diff against origin/map-gold. Fast-forward map-gold after this lands on main. Never force-push map-gold.",
+  "note": "Gold snapshot of this build: live train glyph faces the sharer timetable bearing, holds pose on backward GPS jitter, and glides on the painted rail only; tracking card adds state, reason, timing and votes. Tracks unchanged. Diff against origin/map-gold. Fast-forward map-gold after this lands on main. Never force-push map-gold.",
   "files": {
     "public/tracks/rail-tracks-EC.geojson": {
       "md5": "43409bfd05405205e596f0d03345ab18",
@@ -21,24 +21,24 @@
       "sha256": "090a5d7fc45cafb8c7b81dc583ae24978540f38278cab447953bc90c8821f01f"
     },
     "public/js/map-app.js": {
-      "md5": "d75a1e058e1660893aefc579da905fe5",
-      "sha256": "ee5f5168fa32d5dd141fcfc572dddac7b18bcb41999466fabea0464beb285c1f"
+      "md5": "6ddbdcd35dc63ab0d055b72f34d596b3",
+      "sha256": "c7dee6944fab0d120b38d5efe30fca3365f2fd2090d33b803911488081341720"
     },
     "src/pages/map.astro": {
-      "md5": "c5803baefaa46dcc66c0fe34389c4b4d",
-      "sha256": "e326f5639f79cc2f3384076792825fd56a7cd23b3182a185930ec3459837cc17"
+      "md5": "350c7d4f0a633b90e6e8e5b4480b95cd",
+      "sha256": "63f80d33bb996355abefd0124d0ddcd768dc320e1de997134f13e9dd16dae830"
     },
     "src/components/MapView.astro": {
-      "md5": "9062a32a1b57dab0792a4267cc8ec231",
-      "sha256": "a33016e733aa7ee5f16e270e48427646555cb13617d69f74a2db3da8b14095d6"
+      "md5": "b8ea98ce6df81d594b7e14a51d54bbba",
+      "sha256": "d96068d5753915c42592c1f243f7fc1d30b13adc69f043eed21ec300a25f1b84"
     },
     "src/lib/rail-tracks.js": {
       "md5": "4d01be4e4e6347559351a8d039770d3d",
       "sha256": "e7385a8e07415f0862e983a5ffca225fc23e68c22f550ee13bc84ffdb52cf3dc"
     },
     "src/lib/map-tab.js": {
-      "md5": "e0bce0bfead443df21bb96a302fef1a0",
-      "sha256": "75bc21f18b6fe9332b41e9cc7c622973a010dcf40bdbf4e1b67e15ae3f134b75"
+      "md5": "b910581b85861a698b86ff08c5ac626d",
+      "sha256": "d686f1e74ac06cd4df2aec248317f4159fc67ac6f5bc624b6ce96358f6bcd08e"
     },
     "src/lib/clever-ads.js": {
       "md5": "4d78da253d60d3ba285de6c41d697cad",

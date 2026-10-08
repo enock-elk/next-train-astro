@@ -1,6 +1,6 @@
 {
   "branch": "map-gold",
-  "frozenAt": "c53643832274b4667708c919572a00b8e4433946",
+  "frozenAt": "6acac9ff119a1ff6eeb2ec7bd0828d88f1822c36",
   "version": "V9_09.20.11",
   "note": "Gold snapshot of this build: a shared train paints its rail line and the map follows that train until the commuter pans. Tracks unchanged. Diff against origin/map-gold. Fast-forward map-gold after this lands on main. Never force-push map-gold.",
   "files": {

@@ -36,6 +36,12 @@ import {
     shouldPromptLeftTrain,
     TRACKING_STATE,
     updateDirectionObservation,
+    SHARE_PROMPT_TIMEOUT_MS,
+    REVERSE_SUSTAIN_MS,
+    DWELL_PROMPT_MS,
+    TRAIN_STATUS,
+    rideVoteTally,
+    shareEligibilityForTrain,
 } from '../src/lib/ride-pings.js';
 import {
     formatGpsPingAge,
@@ -247,10 +253,59 @@ assert(
     'trusted high-accuracy locate wins over the map pin'
 );
 assert(RIDE_GPS_STALE_MS === 15000 && RIDE_INTERPOLATION_MAX_MS === 15000, 'grey pause and interpolation share a 15 second window');
-assert(ONBOARD_FAST_PING_MS === 4000 && ONBOARD_MOVING_PING_MS === 4000 && ONBOARD_STATIONARY_PING_MS === 4000, 'all onboard bands publish every 4 seconds while testing');
-assert(adaptiveOnboardPingMs(12) === ONBOARD_FAST_PING_MS, 'fast train broadcasts every 4 seconds');
+assert(ONBOARD_FAST_PING_MS === 3000 && ONBOARD_MOVING_PING_MS === 4000 && ONBOARD_STATIONARY_PING_MS === 6000, 'onboard bands: 3s moving, 4s slow, 6s parked');
+assert(ONBOARD_STATIONARY_PING_MS * 2 < RIDE_GPS_STALE_MS, 'a parked heartbeat can miss once and still beat the 15s grey window');
+assert(adaptiveOnboardPingMs(12) === ONBOARD_FAST_PING_MS, 'fast train broadcasts every 3 seconds');
 assert(adaptiveOnboardPingMs(2) === ONBOARD_MOVING_PING_MS, 'slow movement broadcasts every 4 seconds');
-assert(adaptiveOnboardPingMs(0) === ONBOARD_STATIONARY_PING_MS, 'stationary share heartbeats every 4 seconds');
+assert(adaptiveOnboardPingMs(0) === ONBOARD_STATIONARY_PING_MS, 'stationary share heartbeats every 6 seconds');
+assert(SHARE_PROMPT_TIMEOUT_MS === 90000, 'share prompts time out after 90 seconds');
+assert(REVERSE_SUSTAIN_MS === 20000, 'backward progress must persist 20 seconds before the share pauses');
+assert(DWELL_PROMPT_MS === 4 * 60 * 1000, 'parked at an intermediate platform for 4 minutes asks whether the train is stuck');
+assert(TRAIN_STATUS.STUCK === 'stuck' && TRAIN_STATUS.CANCELLED === 'cancelled', 'train status values are stable for rules and receivers');
+
+{
+    const now = Date.now();
+    const votes = {
+        a: { vote: -1, at: now - 60000 },
+        b: { vote: -1, at: now - 60000 },
+        c: { vote: -1, at: now - 60000 },
+        me: { vote: 1, at: now - 60000 },
+    };
+    assert(rideVoteTally(votes, { sharerDeviceId: 'me' }).suppressed, 'three agreeing down votes hide a share');
+    assert(rideVoteTally(votes, { sharerDeviceId: 'me' }).up === 0, 'the sharer’s own vote never counts');
+    assert(!rideVoteTally({ a: { vote: -1, at: now } }).suppressed, 'one grumpy rider cannot hide a share');
+    assert(!rideVoteTally({
+        a: { vote: -1, at: now }, b: { vote: -1, at: now }, c: { vote: -1, at: now },
+        d: { vote: 1, at: now }, e: { vote: 1, at: now },
+    }).suppressed, 'down votes must outnumber up votes two to one');
+    assert(!rideVoteTally(votes, { sharerDeviceId: 'me', resetAt: now - 1000 }).suppressed, 'votes before the sharer’s reset are ignored');
+    assert(!rideVoteTally({ a: { vote: -1, at: now - 25 * 60000 }, b: { vote: -1, at: now - 25 * 60000 }, c: { vote: -1, at: now - 25 * 60000 } }).suppressed, 'votes older than 20 minutes expire');
+}
+{
+    const sheet = {
+        headers: ['STATION', '1000', '2000'],
+        rows: [
+            { STATION: 'ORIGIN', 1000: '10:00:00', 2000: '12:00:00' },
+            { STATION: 'TERMINUS', 1000: '10:30:00', 2000: '12:30:00' },
+        ],
+    };
+    const schedules = { weekday_to_a: sheet };
+    const base = { schedules, dayType: 'weekday', exclusions: {} };
+    assert(shareEligibilityForTrain('1000', 'pta-pien', { ...base, nowSec: 10 * 3600 + 600 }).ok, 'a running train on today’s sheet is shareable');
+    assert(shareEligibilityForTrain('1000', 'pta-pien', { ...base, nowSec: 9 * 3600 + 20 * 60 }).ok, 'shareable 40 minutes before departure');
+    assert(shareEligibilityForTrain('1000', 'pta-pien', { ...base, nowSec: 9 * 3600 }).reason === 'too_early', 'an hour before departure is too early');
+    assert(shareEligibilityForTrain('1000', 'pta-pien', { ...base, nowSec: 11 * 3600 + 30 * 60 }).reason === 'finished', 'an hour after arrival the trip is finished');
+    assert(shareEligibilityForTrain('3000', 'pta-pien', { ...base, nowSec: 10 * 3600 }).reason === 'not_today', 'a train not on today’s sheet cannot be shared');
+    assert(shareEligibilityForTrain('1000', 'pta-pien', {
+        ...base, nowSec: 10 * 3600, exclusions: { 'pta-pien': { 1000: { type: 'banned' } } },
+    }).reason === 'banned', 'a banned train cannot be shared');
+    assert(shareEligibilityForTrain('1000', 'pta-pien', {
+        ...base, nowSec: 10 * 3600, exclusions: { 'pta-pien': { 1000: { type: 'special' } } },
+    }).ok, 'a special train is still shareable');
+    assert(shareEligibilityForTrain('1000', 'pta-pien', {
+        ...base, nowSec: 10 * 3600, exclusions: { 'pta-pien': { 1000: { type: 'banned', expiresAt: Date.now() - 1000 } } },
+    }).ok, 'an expired ban does not block sharing');
+}
 assert(!isRidePingGpsStale({ acceptedAt: Date.now() - 14000 }), 'a 14 second GPS ping is still live');
 assert(isRidePingGpsStale({ acceptedAt: Date.now() - 16000 }), 'a 16 second GPS ping is stale');
 assert(!terminusStopShouldFire({
@@ -599,7 +654,7 @@ assert(mapAppSource.includes('RIDE_INTERPOLATION_MAX_MS = 15000'), 'map interpol
 assert(mapAppSource.includes('A successful GPS ping always cancels'), 'a new GPS ping retargets and cancels the previous glide');
 assert(mapAppSource.includes('applyRideTrainStalePause'), 'receivers grey the glyph after 15s without a ping');
 assert(mapTabSource.includes('if (mapOn) syncRidePingsToMap()'), 'map tab recompacts pings so a fresh rider can take over');
-assert(ridePingsSource.includes('}, ONBOARD_FAST_PING_MS)'), 'onboard loop ticks at the 4 second publish cadence');
+assert(ridePingsSource.includes('}, ONBOARD_LOOP_TICK_MS)'), 'onboard loop ticks on the worker-backed 3 second cadence');
 assert(ridePingsSource.includes('autoPaused'), 'a successful GPS ping after grey pause broadcasts immediately');
 assert(mapAppSource.includes('rideFacingAlongPath'), 'train yaw follows the painted-rail tangent');
 assert(mapAppSource.includes('snapTrainToRail'), 'train centre is snapped onto the painted rail');

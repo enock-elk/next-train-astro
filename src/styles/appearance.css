@@ -1635,6 +1635,13 @@ html.dark:not([data-colour-pack]) #bottom-nav .bottom-nav-item.is-active {
   max-height: calc(var(--nt-app-h, 100dvh) - 5.5rem - var(--nt-sys-bottom, env(safe-area-inset-bottom, 0px))) !important;
 }
 
+/* Live train card: community trust vote the viewer has cast. */
+#map-tracking-votes .nt-vote-btn.nt-vote-on {
+  background-color: var(--nt-primary, #2563eb);
+  border-color: var(--nt-primary, #2563eb);
+  color: var(--nt-primary-fg, #fff);
+}
+
 /* ---------------------------------------------------------------------------
    Stuck-update lifeline
    ---------------------------------------------------------------------------

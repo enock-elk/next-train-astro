@@ -1,4 +1,5 @@
 import { applyMotionFusionToFix } from './motion-fusion.js';
+import { startBackgroundTicker } from './background-ticker.js';
 
 /**
  * One geolocation watch for the map tab and an active share.
@@ -222,13 +223,14 @@ function startWatch(kind) {
 function syncShareWatchdog(on) {
     if (!on) {
         if (shareWatchdogTimer) {
-            clearInterval(shareWatchdogTimer);
+            shareWatchdogTimer.stop();
             shareWatchdogTimer = 0;
         }
         return;
     }
     if (shareWatchdogTimer) return;
-    shareWatchdogTimer = setInterval(() => {
+    // Worker-backed so a backgrounded tab cannot throttle the restart check.
+    shareWatchdogTimer = startBackgroundTicker(() => {
         if (desiredWatchKind() !== 'share') return;
         const last = lastWatchCallbackAt || lastFix?.t || 0;
         if (last && Date.now() - last < SHARE_SILENT_RESTART_MS) return;
@@ -272,6 +274,21 @@ function bindLifecycle() {
     boundLifecycle = true;
     document.addEventListener('visibilitychange', () => {
         applyWatch();
+        // Back from another app while sharing: the OS may have frozen the
+        // watch. Re-arm the wake lock and pull one fresh fix straight away.
+        if (!document.hidden && holders.has('share')) {
+            clearWatch();
+            startWatch('share');
+            requestFreshShareFix().catch(() => {});
+        }
+    });
+    // Page Lifecycle: Chrome freezes hidden tabs after ~5 min and fires
+    // `resume` when the commuter returns. Treat it like becoming visible.
+    document.addEventListener('resume', () => {
+        if (!holders.has('share')) return;
+        clearWatch();
+        startWatch('share');
+        requestFreshShareFix().catch(() => {});
     });
     window.addEventListener('pagehide', () => {
         // Keep an active share watch alive. Clearing here is why GPS went

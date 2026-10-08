@@ -3431,6 +3431,7 @@
                 var far = z < 11;
                 var compact = z < 13;
                 var paused = !!(ping && ping.trackingState === 'paused') || isPingGpsStale(ping);
+                var stuck = !!(ping && ping.trainStatus === 'stuck');
                 var box = far ? 36 : (compact ? 48 : 64);
                 var bearing = ping && Number.isFinite(ping.bearing) ? ping.bearing : 0;
                 return {
@@ -3439,6 +3440,7 @@
                     compact: compact,
                     far: far,
                     paused: paused,
+                    stuck: stuck,
                     bearing: bearing
                 };
             }
@@ -3496,6 +3498,9 @@
                 if (spec && spec.paused) {
                     cls += ' nt-live-train-glyph--paused';
                     wrapCls += ' nt-live-train-wrap--paused';
+                }
+                if (spec && spec.stuck && !(spec && spec.paused)) {
+                    cls += ' nt-live-train-glyph--stuck';
                 }
                 if (spec && spec.far) {
                     wrapCls += ' nt-live-train-wrap--far';
@@ -3624,6 +3629,10 @@
             var STATION_DWELL_SEC = 0.7;
             var STATION_CRAWL_SEC = 0.22;
             var RIDE_CRUISE_MPS = 12;
+            // A train only travels one way. A new fix that lands this far or
+            // less *behind* the glyph along the rail is GPS scatter: hold the
+            // pose rather than slide the hull backwards and flip its nose.
+            var RIDE_BACK_JITTER_M = 120;
             function flattenRidePath(coords) {
                 if (!coords) return [];
                 var out = [];
@@ -3752,11 +3761,31 @@
                 }
                 return lastGood;
             }
+            function bearingDiffDeg(a, b) {
+                var d = Math.abs(a - b) % 360;
+                return d > 180 ? 360 - d : d;
+            }
+            // Which way along the painted path this train travels: +1 with the
+            // LineString, -1 against it. The sharer's timetable bearing (origin to
+            // terminus heading at its progress) is authoritative; the terminus
+            // position along the path is the fallback. Never derived from the
+            // order two GPS fixes happened to arrive in.
+            function rideTravelDirAlongPath(path, alongM, destAlongM, journeyBearing) {
+                var tang = rideTangentAlongPath(path, alongM);
+                if (Number.isFinite(journeyBearing) && Number.isFinite(tang)) {
+                    return bearingDiffDeg(tang, journeyBearing) > 90 ? -1 : 1;
+                }
+                if (Number.isFinite(destAlongM) && Number.isFinite(alongM)) {
+                    if (destAlongM + 12 < alongM) return -1;
+                    if (destAlongM > alongM + 12) return 1;
+                }
+                return 1;
+            }
             // Face the painted rail: long axis = local tangent, tip toward travel.
-            function rideFacingAlongPath(path, alongM, destAlongM) {
+            function rideFacingAlongPath(path, alongM, destAlongM, journeyBearing) {
                 var tang = rideTangentAlongPath(path, alongM);
                 if (!Number.isFinite(tang)) return NaN;
-                if (Number.isFinite(destAlongM) && destAlongM + 12 < alongM) tang = (tang + 180) % 360;
+                if (rideTravelDirAlongPath(path, alongM, destAlongM, journeyBearing) < 0) tang = (tang + 180) % 360;
                 return tang;
             }
             function alongMForStationName(stations, name) {
@@ -3829,6 +3858,7 @@
                 var stations = stationsAlongRidePath(path, opts && opts.routeId);
                 var destAlong = Number(opts && opts.destAlong);
                 if (!Number.isFinite(destAlong)) destAlong = alongMForStationName(stations, opts && opts.destination);
+                var journeyBearing = Number(opts && opts.bearing);
                 // Always sit on the painted corridor when one exists. A 250 m
                 // cutoff left Pretoria GPS (yards / concourse) off the green
                 // line with a raw heading instead of the rail tangent.
@@ -3837,8 +3867,10 @@
                     lng: p.lng,
                     alongM: p.alongM,
                     offM: p.offM,
-                    facing: rideFacingAlongPath(path, p.alongM, destAlong),
+                    facing: rideFacingAlongPath(path, p.alongM, destAlong, journeyBearing),
+                    travelDir: rideTravelDirAlongPath(path, p.alongM, destAlong, journeyBearing),
                     destAlong: destAlong,
+                    journeyBearing: journeyBearing,
                     path: path
                 };
             }
@@ -3977,7 +4009,7 @@
                     samples: samples,
                     endAlong: to.alongM,
                     destAlong: destAlong,
-                    travelDir: to.alongM >= from.alongM ? 1 : -1
+                    journeyBearing: Number(opts && opts.bearing)
                 };
             }
             function interpolateRideMarkerLatLng(marker, target, immediate, opts) {
@@ -3995,6 +4027,23 @@
                 }
                 var end = L.latLng(snap.lat, snap.lng);
                 marker._ntRideTarget = end;
+                var endFacing = Number.isFinite(snap.facing) ? snap.facing : marker._ntRailBearing;
+                var sameRoute = String(marker._ntRailRouteId || '') === String((opts && opts.routeId) || '');
+                if (Number.isFinite(marker._ntRailAlongM) && sameRoute) {
+                    var delta = snap.alongM - marker._ntRailAlongM;
+                    var backwards = delta * (snap.travelDir || 1) < 0;
+                    if (backwards && Math.abs(delta) <= RIDE_BACK_JITTER_M) {
+                        // Scatter behind the hull: hold the rail pose, keep the nose forward.
+                        applyTrainGlyphYaw(marker, endFacing);
+                        return;
+                    }
+                    if (backwards) {
+                        // A real move against the timetable direction (the sharer is
+                        // being asked about it). Re-seat without a backwards glide.
+                        commitRailPose(marker, end.lat, end.lng, endFacing, snap.alongM, opts && opts.routeId);
+                        return;
+                    }
+                }
                 var startSrc = marker._ntRailLatLng || marker.getLatLng();
                 var start = L.latLng(startSrc.lat, startSrc.lng);
                 var startSnap = projectOntoRidePath(snap.path, start.lat, start.lng);
@@ -4004,7 +4053,6 @@
                 var along = (!immediate && !reduceMotion)
                     ? interpolateAlongRidePath(marker, start, end, opts || {})
                     : null;
-                var endFacing = Number.isFinite(snap.facing) ? snap.facing : marker._ntRailBearing;
                 if (immediate || reduceMotion || !along || (start.lat === end.lat && start.lng === end.lng)) {
                     commitRailPose(marker, end.lat, end.lng, endFacing, snap.alongM, opts && opts.routeId);
                     return;
@@ -4016,11 +4064,10 @@
                     var alongNow = rideAlongAtWarpedTime(along.samples, t);
                     var pos = ridePosAtWarpedTime(along.path, along.samples, t)
                         || pointAtRideAlongM(along.path, alongNow);
-                    var facing = rideTangentAlongPath(along.path, alongNow);
-                    if (along.travelDir < 0 && Number.isFinite(facing)) facing = (facing + 180) % 360;
-                    if (!Number.isFinite(facing)) {
-                        facing = rideFacingAlongPath(along.path, alongNow, along.destAlong);
-                    }
+                    // Nose follows the rail tangent, pointed by the timetable
+                    // direction. The glide direction itself never flips the glyph.
+                    var facing = rideFacingAlongPath(along.path, alongNow, along.destAlong, along.journeyBearing);
+                    if (!Number.isFinite(facing)) facing = endFacing;
                     if (pos) {
                         commitRailPose(marker, pos[0], pos[1], facing, alongNow, opts && opts.routeId);
                     }
@@ -4028,7 +4075,7 @@
                         marker._ntRideFrame = requestAnimationFrame(frame);
                     } else {
                         marker._ntRideFrame = 0;
-                        var finishFacing = rideFacingAlongPath(along.path, along.endAlong, along.destAlong);
+                        var finishFacing = rideFacingAlongPath(along.path, along.endAlong, along.destAlong, along.journeyBearing);
                         commitRailPose(
                             marker,
                             end.lat,
@@ -4144,9 +4191,13 @@
                     const prevLl = prevMarker && prevMarker._ntRailLatLng;
                     const prevBr = prevMarker && prevMarker._ntRailBearing;
                     const prevAlong = prevMarker && prevMarker._ntRailAlongM;
+                    // newest.bearing is the sharer's timetable heading at its
+                    // progress (origin to terminus), so the nose cannot swing
+                    // round when GPS scatter arrives out of order.
                     const rail = snapTrainToRail(consensus.lat, consensus.lng, {
                         routeId: newest.routeId || list[0].routeId,
-                        destination: destName
+                        destination: destName,
+                        bearing: Number.isFinite(Number(newest.bearing)) ? Number(newest.bearing) : NaN
                     });
                     if (!rail && !prevLl) return null;
                     const bearing = Number.isFinite(rail && rail.facing)

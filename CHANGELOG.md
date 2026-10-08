@@ -2,6 +2,10 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin, Dev Hub, Alerts, Trains near me, community chat, or other hidden-test work. No emoji and no em dashes in What’s New. Keep `APP_VERSION`, `package.json` `version`, and `public/app-version.json` aligned on each release. Changelog / What’s New may be skipped, or the heading may be only **no release notes.** Every bump must add `ADMIN_CHANGELOG[APP_VERSION]` (System Health Build notes).
 
+## V9_10.08.1 — no release notes
+
+Live tracking hardening while operators test it. Tracking card: origin → destination, state pill, pause reason, distance-based Last seen at / Approaching, timetable early/late chip with between-stop interpolation, red speed above 65 km/h. Sharer: today-only eligible trains (window, bans, specials), direction hold then pause and ask, 90 s prompt timeouts, dwell prompt with stuck / cancelled, worker-backed 3 s loop and GPS re-arm on resume. Receivers: accuracy up/down votes with suppression, timetable-bearing glyph facing with no flip and rail-only glide. Rules add `ride_votes` and `trainStatus` / `voteResetAt`. Deviation telemetry scaffolded, not written. Commuter What’s New unchanged.
+
 ## V9_10.04.5 — no release notes
 
 Poll layout, View Poll Results shake, multi-answer admin toggle, and two new catalog posters. Commuter What’s New stays on the timetable wait card.

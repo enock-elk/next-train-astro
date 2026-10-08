@@ -347,6 +347,13 @@ const regionSeoSlugs = Object.fromEntries(
       .nt-live-train-glyph--paused.nt-live-train-glyph--mine .nt-live-train-shell {
         box-shadow: 0 0 0 1px #cbd5e1, 0 1px 3px rgba(15, 23, 42, 0.28);
       }
+      /* Rider on board marked the train as stuck: amber hull, still live. */
+      .nt-live-train-glyph--stuck .nt-live-train-oval {
+        background: linear-gradient(180deg, #fbbf24 0%, #d97706 100%);
+      }
+      .nt-live-train-glyph--stuck .nt-live-train-nose {
+        background: linear-gradient(135deg, #fde68a 0%, #d97706 100%);
+      }
       .nt-live-train-glyph--compact { width: 34px; height: 16px; }
       .nt-live-train-glyph--compact .nt-live-train-oval { width: 20px; height: 13px; }
       .nt-live-train-glyph--compact .nt-live-train-nose { width: 6px; height: 6px; margin-top: -3px; }

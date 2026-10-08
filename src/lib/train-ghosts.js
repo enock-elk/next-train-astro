@@ -559,16 +559,165 @@ export function progressAlongStopsDetailed(lat, lng, stops, stationIndex) {
     };
 }
 
-export function journeyPositionLabel(stops, progress) {
-    if (!stops?.length || !Number.isFinite(progress)) return '';
+/** Within this many metres of a platform the train counts as "at" the station. */
+export const AT_STATION_M = 220;
+/** A stopped train gets a wider platform allowance (long platforms, GPS drift while stationary). */
+export const AT_STATION_STATIONARY_M = 350;
+/** Minutes either side of the timetable that still read as "On time". */
+export const ON_TIME_TOLERANCE_SEC = 90;
+
+/**
+ * Where along the stop chain a projected position really is.
+ * "at X" only when the position is within platform distance of X; everything
+ * else between two stations is "approaching" the next one. Falls back to a
+ * tight fraction split only when station coordinates are missing.
+ * @returns {{ kind: 'at'|'approaching', index: number, station: string, label: string, distanceM: number|null }|null}
+ */
+export function journeyPositionDetail(stops, progress, opts = {}) {
+    if (!stops?.length || !Number.isFinite(progress)) return null;
     const bounded = Math.max(0, Math.min(stops.length - 1, progress));
     const i = Math.floor(bounded);
     const fraction = bounded - i;
     const here = shortStation(stops[i]?.station);
-    if (i >= stops.length - 1) return here ? `at ${here}` : '';
-    if (fraction < 0.5) return here ? `at ${here}` : '';
+    const at = (index, station, distanceM) => (station
+        ? { kind: 'at', index, station, label: `at ${station}`, distanceM }
+        : null);
+    if (i >= stops.length - 1) return at(i, here, 0);
     const next = shortStation(stops[i + 1]?.station);
-    return next ? `approaching ${next}` : (here ? `at ${here}` : '');
+    const radius = Number.isFinite(opts.atStationM)
+        ? opts.atStationM
+        : (opts.stationary ? AT_STATION_STATIONARY_M : AT_STATION_M);
+    const index = opts.stationIndex || $globalStationIndex.get() || {};
+    const a = coordsForStation(stops[i]?.station, index);
+    const b = coordsForStation(stops[i + 1]?.station, index);
+    const hopM = (a && b) ? haversineM(a.lat, a.lng, b.lat, b.lng) : 0;
+    if (hopM >= 20) {
+        const fromHere = hopM * fraction;
+        const toNext = hopM * (1 - fraction);
+        if (fromHere <= radius) return at(i, here, fromHere);
+        if (toNext <= radius) return at(i + 1, next, toNext);
+        if (next) return { kind: 'approaching', index: i + 1, station: next, label: `approaching ${next}`, distanceM: toNext };
+        return at(i, here, fromHere);
+    }
+    if (fraction < 0.25) return at(i, here, null);
+    if (fraction > 0.85) return at(i + 1, next, null) || at(i, here, null);
+    if (next) return { kind: 'approaching', index: i + 1, station: next, label: `approaching ${next}`, distanceM: null };
+    return at(i, here, null);
+}
+
+export function journeyPositionLabel(stops, progress, opts = {}) {
+    return journeyPositionDetail(stops, progress, opts)?.label || '';
+}
+
+function wrapDaySeconds(delta) {
+    let d = delta % 86400;
+    if (d > 43200) d -= 86400;
+    if (d < -43200) d += 86400;
+    return d;
+}
+
+/**
+ * How early or late a train is against today's timetable, from where it is now.
+ * Between stations the scheduled clock is interpolated linearly along the hop
+ * (20% of the way from A to B = 20% of the way from A's time to B's time), so a
+ * train halfway along a 6-minute hop is compared against A + 3 min. At a platform
+ * the scheduled clock is that station's own time.
+ * Positive seconds = late, negative = early.
+ * @returns {{ seconds: number, scheduledSec: number, phase: 'before_departure'|'en_route'|'arrived', position: object }|null}
+ */
+export function timetableDeviation(stops, progress, now, opts = {}) {
+    if (!stops?.length || !Number.isFinite(progress)) return null;
+    const nowSec = nowSeconds(now);
+    const position = journeyPositionDetail(stops, progress, opts);
+    if (!position) return null;
+    const bounded = Math.max(0, Math.min(stops.length - 1, progress));
+    const i = Math.floor(bounded);
+    const fraction = bounded - i;
+    let scheduledSec;
+    let phase = 'en_route';
+    if (position.kind === 'at') {
+        scheduledSec = stops[position.index]?.seconds;
+        if (position.index >= stops.length - 1) phase = 'arrived';
+        else if (position.index === 0 && nowSec < stops[0].seconds) phase = 'before_departure';
+    } else {
+        const a = stops[i];
+        const b = stops[i + 1] || a;
+        const span = Math.max(0, (b.seconds ?? 0) - (a.seconds ?? 0));
+        scheduledSec = (a.seconds ?? 0) + span * fraction;
+    }
+    if (!Number.isFinite(scheduledSec)) return null;
+    return {
+        seconds: Math.round(wrapDaySeconds(nowSec - scheduledSec)),
+        scheduledSec,
+        phase,
+        position,
+    };
+}
+
+/** Grandmother-readable timetable chip: "On time", "4 min late", "Departs in 6 min". */
+export function formatDeviationLabel(deviation) {
+    if (!deviation || !Number.isFinite(deviation.seconds)) return '';
+    const sec = deviation.seconds;
+    const min = Math.max(1, Math.round(Math.abs(sec) / 60));
+    if (deviation.phase === 'before_departure') {
+        if (sec < -ON_TIME_TOLERANCE_SEC) return `Departs in ${min} min`;
+        if (sec > ON_TIME_TOLERANCE_SEC) return `${min} min late leaving`;
+        return 'Leaving on time';
+    }
+    const arrived = deviation.phase === 'arrived';
+    if (Math.abs(sec) <= ON_TIME_TOLERANCE_SEC) return arrived ? 'Arrived on time' : 'On time';
+    const prefix = arrived ? 'Arrived ' : '';
+    if (sec > 0) return `${prefix}${min} min late`;
+    return `${prefix}${min} min early`;
+}
+
+/**
+ * Delay-prediction scaffold (NOT wired, NOT written anywhere yet).
+ *
+ * Every accepted onboard fix can be reduced to one compact sample of
+ * "timetable said X, the train was actually here at Y". Collected over weeks,
+ * per train / per day type / per hop, these samples are the training set for
+ * a future "this train is usually 4 min late at Rissik on weekday mornings"
+ * feature and for live arrival estimates on the board.
+ *
+ * Proposed storage (owner decision, do not create until approved):
+ *   - NOT the primary RTDB used by boards and alerts. Samples arrive every few
+ *     seconds per active sharer and never need to be read live by commuters,
+ *     so they belong in a separate, append-only, analytics-shaped store:
+ *     a second RTDB instance `nexttrain-telemetry`, or Cloudflare D1/R2 behind
+ *     a Worker (cheapest for later aggregation).
+ *   - Suggested shape when it lands:
+ *     train_deviations/{region}/{yyyymmdd}/{trainId}/{sampleId} = buildDeviationSample(...)
+ *   - Trip plans (saved planner journeys) stay where they are; they are
+ *     per-user documents, not a telemetry stream, and do not share this store.
+ *
+ * Only builds the object. Nothing calls it on a write path.
+ */
+export function buildDeviationSample(input = {}) {
+    const deviation = input.deviation
+        || timetableDeviation(input.stops, input.progress, input.nowSec, { stationIndex: input.stationIndex });
+    if (!deviation) return null;
+    const stops = input.stops || [];
+    const at = Math.max(0, Math.min(stops.length - 1, Number(input.progress) || 0));
+    const hopFrom = stops[Math.floor(at)]?.station || null;
+    const hopTo = stops[Math.min(stops.length - 1, Math.floor(at) + 1)]?.station || null;
+    return {
+        v: 1,
+        trainId: String(input.trainId || ''),
+        routeId: String(input.routeId || ''),
+        region: String(input.region || ''),
+        dayType: input.dayType || currentDayType(),
+        at: Number.isFinite(input.at) ? input.at : Date.now(),
+        progress: Math.round(at * 1000) / 1000,
+        hopFrom,
+        hopTo,
+        phase: deviation.phase,
+        scheduledSec: Math.round(deviation.scheduledSec),
+        deviationSec: deviation.seconds,
+        speedMps: Number.isFinite(input.speedMps) ? Math.round(input.speedMps * 10) / 10 : null,
+        accuracyM: Number.isFinite(input.accuracy) ? Math.round(input.accuracy) : null,
+        trainStatus: input.trainStatus || 'moving',
+    };
 }
 
 function projectFraction(lat, lng, a, b) {

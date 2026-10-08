@@ -4,8 +4,11 @@
  * RTDB: ride_pings/{routeId}/{deviceId}
  * {
  *   routeId, deviceId, station, trainId?, waitingFor?, destination?,
- *   at, expiresAt, uid?, email?, coarseLat?, coarseLng?, appVersion, source
+ *   at, expiresAt, uid?, email?, coarseLat?, coarseLng?, appVersion, source,
+ *   trackingState?, pauseReason?, projected*?, bearing?, lastSeenLabel?,
+ *   trainStatus? ('stuck' | 'cancelled'), voteResetAt?
  * }
+ * Community trust: ride_votes/{routeId}/{sharerDeviceId}/{voterDeviceId} = { vote: 1|-1, at, voterDeviceId, uid? }
  * trainId is set only when the rider is on-path and moving. Waiting / far
  * shares keep trainId null so clocks and the dashboard stay off that train.
  *
@@ -35,14 +38,21 @@ import {
     journeyHeadingAtProgress,
     journeyHeadingDeg,
     journeyPositionLabel,
+    journeyPositionDetail,
+    timetableDeviation,
     trainGoingLabel,
     trainTerminusName,
     railPathForTrain,
     scoreFixToRailPath,
     coordsForStation,
     haversineM,
+    stopsForTrain,
+    TRACKING_WINDOW_SEC,
 } from './train-ghosts.js';
 import { TRACKER_SNAP_MAX_M } from './rail-tracks.js';
+import { exclusionAppliesToSurface, scheduleCacheSlot, timeToSeconds } from './utils.js';
+import { $globalExclusions, $schedules, $userRegion } from '../store.js';
+import { startBackgroundTicker } from './background-ticker.js';
 import { peekCachedRouteReports, isReportStillLive, routeHasNoScheduledTrains } from './delay-reports.js';
 import { awardShareMarks } from './rider-marks.js';
 import {
@@ -117,14 +127,44 @@ const REVERSE_PROGRESS_TOLERANCE = 0.08;
 const CONSENSUS_MIN_BAND = 0.2;
 const ACTIVE_KEY = 'ridePingActiveV1';
 const SHARE_SESSION_KEY = 'nt_ride_share_session';
-/** Test cadence: publish every 4s so a ping can land before the 15s glide/grey cap. */
-export const ONBOARD_FAST_PING_MS = 4 * 1000;
+/**
+ * Publish cadence. A moving train publishes every 3s so receivers get a new
+ * target well inside the 15s glide / grey cap; a parked train heartbeats every
+ * 6s (still inside the stale window, fewer writes while sitting at a platform).
+ */
+export const ONBOARD_FAST_PING_MS = 3 * 1000;
 export const ONBOARD_MOVING_PING_MS = 4 * 1000;
-export const ONBOARD_STATIONARY_PING_MS = 4 * 1000;
+export const ONBOARD_STATIONARY_PING_MS = 6 * 1000;
+/** Loop tick: the fastest band, so a due broadcast is never late by more than one tick. */
+const ONBOARD_LOOP_TICK_MS = ONBOARD_FAST_PING_MS;
 /** Pull a fresh GPS sample before the 15s grey window. */
 const SHARE_EAGER_GPS_MS = 8 * 1000;
 const DIRECTION_CONFLICT_MIN_SAMPLES = 3;
 const DIRECTION_CONFLICT_MIN_MS = 20 * 1000;
+/** Fixes that walk backwards along the stop chain must persist this long before we pause. */
+export const REVERSE_SUSTAIN_MS = 20 * 1000;
+/** Metres from the scheduled stop chain beyond which a fix is not on this train’s line at all. */
+export const TRAIN_CHAIN_MAX_M = 900;
+/** A share prompt nobody answers stops the share after this long. */
+export const SHARE_PROMPT_TIMEOUT_MS = 90 * 1000;
+/** Parked at an intermediate platform this long: ask whether the train is stuck. */
+export const DWELL_PROMPT_MS = 4 * 60 * 1000;
+/** Ask again about a stuck train after this long. */
+export const DWELL_REPROMPT_MS = 8 * 60 * 1000;
+/** Speed under which the sharer counts as parked. */
+const DWELL_SPEED_MPS = 1;
+export const TRAIN_STATUS = Object.freeze({
+    MOVING: 'moving',
+    STUCK: 'stuck',
+    CANCELLED: 'cancelled',
+});
+
+/** Community trust votes on a live share. RTDB: ride_votes/{routeId}/{sharerDeviceId}/{voterDeviceId}. */
+export const RIDE_VOTE_WINDOW_MS = 20 * 60 * 1000;
+/** Need at least this many down votes before a share can be suppressed. */
+export const RIDE_VOTE_MIN_DOWN = 3;
+/** Down minus up must reach this (down ≥ 2× up and net ≤ -3) before a share is hidden. */
+export const RIDE_VOTE_SUPPRESS_NET = 3;
 
 /** @type {Record<string, () => void>} */
 const routeListeners = {};
@@ -137,6 +177,97 @@ function getDeviceId() {
 
 export function isRideCheckInEnabled(routeId = $currentRouteId.get()) {
     return isFeatureEnabled(FEATURE_KEYS.RIDE_CHECKIN, routeId || '');
+}
+
+function currentDayIndexValue() {
+    if (typeof window !== 'undefined' && Number.isFinite(Number(window.currentDayIndex))) return Number(window.currentDayIndex);
+    return new Date().getDay();
+}
+
+function currentDayTypeValue() {
+    if (typeof window !== 'undefined' && window.currentDayType) return String(window.currentDayType);
+    return 'weekday';
+}
+
+function currentClockSeconds() {
+    if (typeof window !== 'undefined' && window.currentTime) {
+        const sec = timeToSeconds(window.currentTime);
+        if (Number.isFinite(sec)) return sec;
+    }
+    const d = new Date();
+    return d.getHours() * 3600 + d.getMinutes() * 60 + d.getSeconds();
+}
+
+/**
+ * RTDB `exclusions/` rule for this train today (same expiry / days / surface
+ * logic as live-board's isTrainExcluded). `'special'` is a running train that
+ * the board flags; anything else truthy is a ban.
+ */
+export function trainBanType(trainId, routeId, opts = {}) {
+    const rules = (opts.exclusions || $globalExclusions.get() || {})[String(routeId || '')];
+    const rule = rules?.[String(trainId || '')];
+    if (!rule) return false;
+    const now = Number.isFinite(opts.now) ? opts.now : Date.now();
+    if (rule.expiresAt && now > rule.expiresAt) return false;
+    const days = Array.isArray(rule.days) ? rule.days : null;
+    if (days && days.length) {
+        const idx = Number(opts.dayIdx ?? currentDayIndexValue());
+        if (!days.some((d) => Number(d) === idx)) return false;
+    }
+    if (!exclusionAppliesToSurface(rule, 'in_app')) return false;
+    return rule.type || 'banned';
+}
+
+/** Stops from today's day-type sheets only (both directions). Never yesterday's or Saturday's column. */
+export function todaysStopsForTrain(trainId, routeId, opts = {}) {
+    const dayType = opts.dayType || currentDayTypeValue();
+    const region = ROUTES[routeId]?.region || $userRegion.get() || 'GP';
+    const schedules = opts.schedules || $schedules.get() || {};
+    let anySheet = false;
+    for (const ab of ['a', 'b']) {
+        const sheet = schedules[scheduleCacheSlot(dayType, region, ab)];
+        if (!sheet?.rows?.length) continue;
+        anySheet = true;
+        const stops = stopsForTrain(sheet, trainId);
+        if (stops.length) return { stops, anySheet };
+    }
+    return { stops: [], anySheet };
+}
+
+/**
+ * Can this train be shared right now? Today's timetable only, inside the
+ * 45-minute window either side of its run, never a banned train. Specials
+ * (board-flagged but running) are fine.
+ * @returns {{ ok: boolean, reason?: string, message?: string, stops?: object[], special?: boolean }}
+ */
+export function shareEligibilityForTrain(trainId, routeId, opts = {}) {
+    const id = String(trainId || '').trim();
+    if (!id) return { ok: false, reason: 'no_train', message: 'Pick a train first.' };
+    const ban = trainBanType(id, routeId, opts);
+    if (ban && ban !== 'special') {
+        return { ok: false, reason: 'banned', message: `Train ${id} is not running today, so it can’t be shared.` };
+    }
+    const { stops, anySheet } = todaysStopsForTrain(id, routeId, opts);
+    if (!stops.length) {
+        if (!anySheet) {
+            // Timetable not loaded yet (cold start): fall back to any known column
+            // rather than blocking; the onboard loop re-checks once sheets arrive.
+            const fallback = findStopsForTrain(id, { routeId }).stops;
+            if (fallback.length) return { ok: true, stops: fallback, special: ban === 'special', unverified: true };
+        }
+        return { ok: false, reason: 'not_today', message: `Train ${id} is not on today’s timetable.` };
+    }
+    const nowSec = Number.isFinite(opts.nowSec) ? opts.nowSec : currentClockSeconds();
+    const windowSec = Number.isFinite(opts.windowSec) ? opts.windowSec : TRACKING_WINDOW_SEC;
+    const first = stops[0].seconds;
+    const last = stops[stops.length - 1].seconds;
+    if (nowSec < first - windowSec) {
+        return { ok: false, reason: 'too_early', message: `Train ${id} isn’t due yet. Sharing opens 45 minutes before it leaves.` };
+    }
+    if (nowSec > last + windowSec) {
+        return { ok: false, reason: 'finished', message: `Train ${id} has finished its trip for today.` };
+    }
+    return { ok: true, stops, special: ban === 'special' };
 }
 
 /** Green chip / tracker entry: admin, or a pinned corridor that RTDB allow-lists. */
@@ -305,18 +436,38 @@ function persistActiveSharePatch(patch) {
 
 let sharePromptOpen = false;
 
-async function confirmShareContinue({ title, body, keepLabel, stopLabel, switchLabel } = {}) {
+/**
+ * Ask the sharer before the share changes state. Every prompt times out: a
+ * phone left in a pocket must not keep a stale train on everyone's map.
+ * @returns {Promise<'keep'|'stop'|'switch'|'stuck'|'cancelled'|'timeout'|'busy'>}
+ */
+async function confirmShareContinue({
+    title,
+    body,
+    keepLabel,
+    stopLabel,
+    switchLabel,
+    choices,
+    timeoutMs = SHARE_PROMPT_TIMEOUT_MS,
+} = {}) {
     if (sharePromptOpen) return 'busy';
     sharePromptOpen = true;
     try {
         const { promptOnTrainSheet } = await import('./map-tab.js');
+        if (Array.isArray(choices) && choices.length) {
+            const choice = await promptOnTrainSheet({ title, body, choices, timeoutMs });
+            if (choice === 'timeout' || choice === 'backdrop') return 'timeout';
+            return choices.some((c) => c.id === choice) ? choice : 'stop';
+        }
         const choice = await promptOnTrainSheet({
             title,
             body,
             primary: switchLabel || keepLabel,
             secondary: switchLabel ? keepLabel : stopLabel,
             tertiary: switchLabel ? stopLabel : undefined,
+            timeoutMs,
         });
+        if (choice === 'timeout') return 'timeout';
         if (switchLabel) {
             if (choice === 'primary') return 'switch';
             if (choice === 'secondary') return 'keep';
@@ -327,6 +478,23 @@ async function confirmShareContinue({ title, body, keepLabel, stopLabel, switchL
         return 'busy';
     } finally {
         sharePromptOpen = false;
+    }
+}
+
+/** Commuter-readable reason shown on the tracking card while a share is paused. */
+export function pauseReasonCopy(reason) {
+    switch (String(reason || '')) {
+        case 'user': return 'Paused by the sharer.';
+        case 'offTrack': return 'Paused. The phone is not on this train’s rail line right now.';
+        case 'offTrain': return 'Paused. The phone is on the corridor but not on this train’s route.';
+        case 'direction': return 'Paused. The phone is moving against this train’s direction of travel.';
+        case 'reverseProgress': return 'Paused. The phone is moving against this train’s direction of travel.';
+        case 'staleGps': return 'Paused. Waiting for a fresh GPS fix from the sharer.';
+        case 'offline': return 'Paused. The sharer’s phone is offline.';
+        case 'geometryUnavailable': return 'Paused. No rail line is available for this corridor yet.';
+        case 'community': return 'Paused. Other riders reported this position as inaccurate.';
+        case 'dwell': return 'Paused. Checking whether this train is still moving.';
+        default: return reason ? 'Paused.' : '';
     }
 }
 
@@ -396,12 +564,14 @@ export async function projectTrainTrackerFix({
     routeId,
     previousProgress = null,
     allowReverse = false,
+    speedMps = null,
     stationIndex = $globalStationIndex.get() || {},
     schedules,
 } = {}) {
     const id = String(trainId || '');
     const route = ROUTES[routeId];
     const { stops } = findStopsForTrain(id, schedules ? { schedules, routeId } : { routeId });
+    const stationary = Number.isFinite(Number(speedMps)) && Number(speedMps) < 1.5;
     if (!id || !route) {
         return { ok: false, state: TRACKING_STATE.PAUSED, reason: 'geometryUnavailable', geometryUnavailable: true };
     }
@@ -437,10 +607,25 @@ export async function projectTrainTrackerFix({
             routeProgressM: snap.routeM,
             distanceM: snap.distanceM,
             lastSeenLabel: near?.stationName || 'on the route',
-            bearing: snap.trackBearing,
+            // No stop chain, so the rail tangent cannot be aligned to travel.
+            // Receivers treat payload.bearing as the travel direction; leave it
+            // out and let them fall back to the terminus position on the path.
+            bearing: null,
         };
     }
     const progress = projected.progress;
+    // On the corridor rail but nowhere near this train's own origin-to-terminus
+    // chain (beyond its terminus, on another branch): not this train.
+    if (Number.isFinite(projected.distanceM) && projected.distanceM > TRAIN_CHAIN_MAX_M) {
+        return {
+            ok: false,
+            state: TRACKING_STATE.PAUSED,
+            reason: 'offTrain',
+            geometryUnavailable: false,
+            distanceM: projected.distanceM,
+            progress,
+        };
+    }
     const reverseTolerance = allowReverse ? 0.35 : REVERSE_PROGRESS_TOLERANCE;
     if (Number.isFinite(previousProgress) && progress < previousProgress - reverseTolerance) {
         return {
@@ -449,10 +634,12 @@ export async function projectTrainTrackerFix({
             reason: 'reverseProgress',
             geometryUnavailable: false,
             progress,
+            distanceM: snap.distanceM,
         };
     }
     const journeyH = journeyHeadingAtProgress(id, progress, { stationIndex, ...(schedules ? { schedules } : {}) })
         ?? journeyHeadingDeg(id, { stationIndex, ...(schedules ? { schedules } : {}) });
+    const position = journeyPositionDetail(stops, progress, { stationIndex, stationary });
     return {
         ok: true,
         state: TRACKING_STATE.ACTIVE,
@@ -462,7 +649,9 @@ export async function projectTrainTrackerFix({
         projectedProgress: progress,
         routeProgressM: snap.routeM,
         distanceM: snap.distanceM,
-        lastSeenLabel: journeyPositionLabel(stops, progress),
+        lastSeenLabel: position?.label || journeyPositionLabel(stops, progress, { stationIndex, stationary }),
+        atStationIndex: position?.kind === 'at' ? position.index : null,
+        stopCount: stops.length,
         // Station-to-station timetable heading, not GPS/campus tangent.
         bearing: Number.isFinite(journeyH)
             ? journeyH
@@ -585,6 +774,10 @@ export async function compactPingsForMap(pings, { mineDeviceId = '', routeId = '
     (pings || []).forEach((p) => {
         if (typeof p?.coarseLat !== 'number' || typeof p?.coarseLng !== 'number') return;
         const state = p.trackingState || TRACKING_STATE.ACTIVE;
+        // Community-suppressed sharers vanish for everyone except themselves
+        // and operators' test trains.
+        const tally = tallyForPing(p, routeId);
+        if (tally.suppressed && p.deviceId !== mineDeviceId && p.adminOverrideRole !== 'train') return;
         const keepsAcceptedTrain = !!(
             p.trainId
             && (state === TRACKING_STATE.ACTIVE || state === TRACKING_STATE.PAUSED)
@@ -620,6 +813,10 @@ export async function compactPingsForMap(pings, { mineDeviceId = '', routeId = '
             destination: p.destination || '',
             accuracy: p.accuracy,
             pauseReason: p.pauseReason || '',
+            trainStatus: p.trainStatus || '',
+            deviceId: p.deviceId || '',
+            voteUp: tally.up,
+            voteDown: tally.down,
         };
         if (trainId) {
             (trains[trainId] = trains[trainId] || []).push(row);
@@ -697,6 +894,14 @@ export async function compactPingsForMap(pings, { mineDeviceId = '', routeId = '
             destination: trainTerminusName(trainId, newest.destination || driver.lastSeenLabel),
             accuracy: typeof newest.accuracy === 'number' ? newest.accuracy : metricPing('accuracy'),
             pauseReason: pausedOnly ? (newest.pauseReason || 'staleGps') : '',
+            // A stuck / cancelled flag from any rider on this train is worth surfacing.
+            trainStatus: list.find((p) => p.trainStatus === TRAIN_STATUS.CANCELLED)?.trainStatus
+                || list.find((p) => p.trainStatus === TRAIN_STATUS.STUCK)?.trainStatus
+                || newest.trainStatus || '',
+            // The driver is who a viewer's trust vote lands on.
+            deviceId: driver.deviceId || '',
+            voteUp: Number(driver.voteUp) || 0,
+            voteDown: Number(driver.voteDown) || 0,
         });
     }
     return out.concat(loose);
@@ -1148,9 +1353,203 @@ export async function fetchRouteRidePings(routeId) {
     }
 }
 
+/* ---------------------------------------------------------------------------
+ * Community trust votes
+ * RTDB: ride_votes/{routeId}/{sharerDeviceId}/{voterDeviceId} = { vote: 1|-1, at, voterDeviceId, uid? }
+ * One vote per voter per sharer (re-voting overwrites). Votes age out of the
+ * tally after RIDE_VOTE_WINDOW_MS so a bad start does not haunt a good share.
+ * ------------------------------------------------------------------------- */
+
+/** @type {Record<string, Record<string, Record<string, { vote: number, at: number }>>>} */
+const voteCache = {};
+/** @type {Record<string, () => void>} */
+const voteListeners = {};
+
+/**
+ * Up / down counts for one sharer, with the suppression decision.
+ * Suppress only with real volume: at least RIDE_VOTE_MIN_DOWN down votes, down
+ * outnumbering up two to one, and a net of RIDE_VOTE_SUPPRESS_NET or worse.
+ * A single grumpy rider cannot hide a share; three agreeing riders can.
+ * The sharer's own vote never counts. Votes before `resetAt` are ignored
+ * (the sharer confirmed "still on it" once after a suppression).
+ */
+export function rideVoteTally(votesForSharer, {
+    now = Date.now(),
+    windowMs = RIDE_VOTE_WINDOW_MS,
+    sharerDeviceId = '',
+    resetAt = 0,
+} = {}) {
+    let up = 0;
+    let down = 0;
+    for (const [voter, v] of Object.entries(votesForSharer || {})) {
+        if (!v || (sharerDeviceId && voter === sharerDeviceId)) continue;
+        const at = Number(v.at || 0);
+        if (!at || now - at > windowMs) continue;
+        if (resetAt && at < Number(resetAt)) continue;
+        const vote = Number(v.vote);
+        if (vote === 1) up += 1;
+        else if (vote === -1) down += 1;
+    }
+    const net = up - down;
+    const suppressed = down >= RIDE_VOTE_MIN_DOWN
+        && down >= up * 2
+        && (down - up) >= RIDE_VOTE_SUPPRESS_NET;
+    return { up, down, net, suppressed };
+}
+
+export function getRideVotesForSharer(routeId, sharerDeviceId) {
+    return voteCache[String(routeId || '')]?.[String(sharerDeviceId || '')] || {};
+}
+
+export function myRideVote(routeId, sharerDeviceId) {
+    const mine = getRideVotesForSharer(routeId, sharerDeviceId)[getDeviceId()];
+    const vote = Number(mine?.vote);
+    return vote === 1 || vote === -1 ? vote : 0;
+}
+
+function tallyForPing(p, routeId) {
+    if (!p?.deviceId) return { up: 0, down: 0, net: 0, suppressed: false };
+    return rideVoteTally(getRideVotesForSharer(routeId || p.routeId, p.deviceId), {
+        sharerDeviceId: p.deviceId,
+        resetAt: Number(p.voteResetAt || 0),
+    });
+}
+
+export async function fetchRouteRideVotes(routeId) {
+    if (!routeId || (typeof navigator !== 'undefined' && navigator.onLine === false)) return voteCache[routeId] || {};
+    try {
+        const res = await fetch(`${DYNAMIC_BASE_URL}ride_votes/${encodeURIComponent(routeId)}.json`, { cache: 'no-store' });
+        if (!res.ok) return voteCache[routeId] || {};
+        const data = await res.json();
+        voteCache[routeId] = data && typeof data === 'object' ? data : {};
+        return voteCache[routeId];
+    } catch {
+        return voteCache[routeId] || {};
+    }
+}
+
+export async function startRideVotesListener(routeId) {
+    if (!routeId || voteListeners[routeId]) return;
+    await bootFirebase();
+    if (!window.firebaseDb || !window.firebaseDbRef || !window.firebaseDbOnValue) return;
+    try {
+        const ref = window.firebaseDbRef(window.firebaseDb, `ride_votes/${routeId}`);
+        const unsub = window.firebaseDbOnValue(ref, (snap) => {
+            const data = snap?.val?.() || null;
+            voteCache[routeId] = data && typeof data === 'object' ? data : {};
+            if ($currentRouteId.get() === routeId) notifyPingsUpdated(routeId);
+            checkOwnShareTrust().catch(() => {});
+        }, () => stopRideVotesListener(routeId));
+        voteListeners[routeId] = typeof unsub === 'function' ? unsub : () => {};
+    } catch (e) {
+        console.warn('Ride votes listener failed', e);
+    }
+}
+
+export function stopRideVotesListener(routeId) {
+    if (routeId && voteListeners[routeId]) {
+        try { voteListeners[routeId](); } catch { /* ignore */ }
+        delete voteListeners[routeId];
+        return;
+    }
+    Object.keys(voteListeners).forEach((id) => {
+        try { voteListeners[id](); } catch { /* ignore */ }
+        delete voteListeners[id];
+    });
+}
+
+/**
+ * Up (1) or down (-1) vote on another rider's share. Voting the same way again
+ * clears the vote. You cannot vote on your own share.
+ */
+export async function castRideVote({ routeId, sharerDeviceId, vote } = {}) {
+    const rid = String(routeId || '');
+    const sharer = String(sharerDeviceId || '');
+    const me = getDeviceId();
+    const value = Number(vote);
+    if (!rid || !sharer || !me || me === 'unknown') return { ok: false, message: 'Couldn’t record your vote.' };
+    if (sharer === me) return { ok: false, message: 'You can’t vote on your own share.' };
+    if (value !== 1 && value !== -1) return { ok: false, message: 'Couldn’t record your vote.' };
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) return { ok: false, message: 'You appear offline.' };
+    const existing = myRideVote(rid, sharer);
+    const clearing = existing === value;
+    const now = Date.now();
+    const acct = $account.get();
+    const payload = clearing ? null : {
+        vote: value,
+        at: now,
+        voterDeviceId: me,
+        uid: acct.status === 'signed-in' ? (acct.uid || null) : null,
+    };
+    try {
+        const token = await ensureAuthToken();
+        if (!token) throw new Error('Sign-in required to vote (anonymous is fine).');
+        const res = await fetch(
+            `${DYNAMIC_BASE_URL}ride_votes/${encodeURIComponent(rid)}/${encodeURIComponent(sharer)}/${encodeURIComponent(me)}.json?auth=${encodeURIComponent(token)}`,
+            {
+                method: clearing ? 'DELETE' : 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: clearing ? undefined : JSON.stringify(payload),
+            }
+        );
+        if (!res.ok) throw new Error(permissionMessage(res.status));
+        const byRoute = voteCache[rid] = voteCache[rid] || {};
+        const bySharer = byRoute[sharer] = byRoute[sharer] || {};
+        if (clearing) delete bySharer[me];
+        else bySharer[me] = { vote: value, at: now };
+        triggerHaptic();
+        notifyPingsUpdated(rid);
+        return { ok: true, vote: clearing ? 0 : value };
+    } catch (e) {
+        return { ok: false, message: e?.message || 'Couldn’t record your vote.' };
+    }
+}
+
+let trustCheckInFlight = false;
+
+/**
+ * Sharer side of community trust. When riders have voted this share down
+ * past the threshold: pause (receivers already hide it), ask once, and if the
+ * sharer insists, reset the tally from now. A second suppression ends the share.
+ */
+async function checkOwnShareTrust() {
+    if (trustCheckInFlight) return;
+    const active = getActiveShare();
+    if (!active?.trainId || active.adminOverrideRole === 'train') return;
+    const tally = rideVoteTally(getRideVotesForSharer(active.routeId, getDeviceId()), {
+        sharerDeviceId: getDeviceId(),
+        resetAt: Number(active.voteResetAt || 0),
+    });
+    if (!tally.suppressed) return;
+    trustCheckInFlight = true;
+    try {
+        if ((Number(active.communityStrikes) || 0) >= 1) {
+            await stopRideShare({ reason: 'community', waitForOnboard: false });
+            return;
+        }
+        await pauseActiveTracker(active, 'community', onboardLatestFix);
+        const pick = await confirmShareContinue({
+            title: 'Still on this train?',
+            body: `${tally.down} riders say this train is not where your phone shows it. If you are on Train ${active.trainId}, keep sharing and we will check again. Otherwise stop sharing.`,
+            keepLabel: 'I’m still on it',
+            stopLabel: 'Stop sharing',
+        });
+        if (pick === 'busy') return;
+        if (pick !== 'keep') {
+            await stopRideShare({ reason: pick === 'timeout' ? 'no_answer' : 'community', waitForOnboard: false });
+            return;
+        }
+        persistActiveSharePatch({ voteResetAt: Date.now(), communityStrikes: 1 });
+        await resumeRideShare({ quiet: true });
+    } finally {
+        trustCheckInFlight = false;
+    }
+}
+
 export async function startRidePingsListener(routeId, { force = false } = {}) {
     if (!routeId) return;
     stopRidePingsListener(routeId);
+    startRideVotesListener(routeId).catch(() => {});
     await fetchFeatures();
     if (!force && !isRideCheckInEnabled(routeId) && !isAdminAuthed()) return;
 
@@ -1179,12 +1578,14 @@ export function stopRidePingsListener(routeId) {
     if (routeId && routeListeners[routeId]) {
         try { routeListeners[routeId](); } catch { /* ignore */ }
         delete routeListeners[routeId];
+        stopRideVotesListener(routeId);
         return;
     }
     Object.keys(routeListeners).forEach((id) => {
         try { routeListeners[id](); } catch { /* ignore */ }
         delete routeListeners[id];
     });
+    stopRideVotesListener();
 }
 
 function pingMatchesAccount(p, uid, emailLc) {
@@ -1427,6 +1828,7 @@ export async function submitRideCheckIn({
     overrideProjected = null,
     projectedFix = null,
     gpsFixAt = null,
+    trainStatus = '',
 } = {}) {
     await fetchFeatures();
     const trustedAdminOverride = isAdminAuthed() && (adminOverrideRole === 'train' || adminOverrideRole === 'person')
@@ -1434,6 +1836,11 @@ export async function submitRideCheckIn({
         : '';
     if (!isRideCheckInEnabled(routeId) && !trustedAdminOverride) {
         return { ok: false, message: 'Ride sharing isn’t on for this corridor yet.' };
+    }
+    const onboardSource = String(source || '').startsWith('onboard_') || source === 'stop';
+    if (trainId && !onboardSource && trustedAdminOverride !== 'train' && !relaxLiveShareGuards()) {
+        const eligible = shareEligibilityForTrain(trainId, routeId);
+        if (!eligible.ok) return { ok: false, reason: eligible.reason, message: eligible.message };
     }
     let st = (station || document.getElementById('station-select')?.value || '').trim();
     if (!st && typeof coarseLat === 'number' && typeof coarseLng === 'number') {
@@ -1504,6 +1911,7 @@ export async function submitRideCheckIn({
             trainId,
             routeId,
             previousProgress,
+            speedMps,
         });
         resolvedState = projection.ok ? TRACKING_STATE.ACTIVE : TRACKING_STATE.PAUSED;
         resolvedPauseReason = projection.ok ? '' : projection.reason;
@@ -1565,6 +1973,11 @@ export async function submitRideCheckIn({
     if (resolvedMotion) payload.motionClass = resolvedMotion;
     if (trustedAdminOverride) payload.adminOverrideRole = trustedAdminOverride;
     if (resolvedPauseReason) payload.pauseReason = resolvedPauseReason;
+    const resolvedTrainStatus = Object.values(TRAIN_STATUS).includes(trainStatus)
+        ? trainStatus
+        : (Object.values(TRAIN_STATUS).includes(previous?.trainStatus) && onboardSource ? previous.trainStatus : '');
+    if (trainId && resolvedTrainStatus && resolvedTrainStatus !== TRAIN_STATUS.MOVING) payload.trainStatus = resolvedTrainStatus;
+    if (Number.isFinite(Number(previous?.voteResetAt)) && Number(previous?.voteResetAt) > 0) payload.voteResetAt = Number(previous.voteResetAt);
     if (projection?.ok) {
         payload.projectedLat = projection.projectedLat;
         payload.projectedLng = projection.projectedLng;
@@ -1619,6 +2032,13 @@ export async function submitRideCheckIn({
             hubSwitchStay: Boolean(previous?.hubSwitchStay),
             directionStay: Boolean(previous?.directionStay),
             minProgressSeen: nextMinProgressSeen(previous, trainId, coarseLat, coarseLng),
+            trainStatus: resolvedTrainStatus || '',
+            voteResetAt: Number(previous?.voteResetAt) || 0,
+            communityStrikes: Number(previous?.communityStrikes) || 0,
+            reverseSince: projection?.ok ? 0 : (Number(previous?.reverseSince) || 0),
+            dwellSince: Number(previous?.dwellSince) || 0,
+            dwellStationIndex: Number.isFinite(previous?.dwellStationIndex) ? previous.dwellStationIndex : null,
+            dwellPromptedAt: Number(previous?.dwellPromptedAt) || 0,
         }));
         startShareIdleWatch();
         const existing = getCachedRidePings(routeId).filter((p) => p.deviceId !== deviceId);
@@ -1679,6 +2099,7 @@ export async function stopRideShare({ quiet = false, reason = '', waitForOnboard
     for (const key of ['projectedLat', 'projectedLng', 'projectedProgress', 'routeProgressM', 'railDistanceM', 'acceptedAt', 'lastSeenLabel', 'bearing']) {
         if (active?.[key] != null) payload[key] = active[key];
     }
+    if (reason === 'cancelled') payload.trainStatus = TRAIN_STATUS.CANCELLED;
     try {
         const token = await ensureAuthToken();
         if (!token) throw new Error('Couldn’t stop sharing');
@@ -1723,7 +2144,15 @@ export async function stopRideShare({ quiet = false, reason = '', waitForOnboard
                     ? 'Sharing stopped. Your movement no longer matched this train.'
                     : reason === 'idle'
                         ? 'Sharing ended after 30 minutes idle'
-                        : 'Sharing ended';
+                        : reason === 'no_answer'
+                            ? 'Sharing stopped. We didn’t hear back from you.'
+                            : reason === 'community'
+                                ? 'Sharing stopped. Other riders reported this position as inaccurate.'
+                                : reason === 'cancelled'
+                                    ? 'Thanks. Sharing stopped and the train is marked as cancelled.'
+                                    : reason === 'alighted'
+                                        ? 'Sharing stopped. Thanks for riding with us.'
+                                        : 'Sharing ended';
             showToast(msg, 'info');
         }
         return { ok: true };
@@ -1750,7 +2179,7 @@ let onboardGeneration = 0;
 export function stopOnboardPingLoop() {
     onboardGeneration++;
     if (onboardPingTimer) {
-        clearInterval(onboardPingTimer);
+        onboardPingTimer.stop();
         onboardPingTimer = 0;
     }
     if (onboardImuTimer) {
@@ -2018,8 +2447,8 @@ async function processOnboardFix(pos, { forceBroadcast = false, generation = onb
                 stopLabel: 'Stop sharing',
             });
             if (pick === 'busy') return;
-            if (pick === 'stop') {
-                await stopRideShare({ reason: 'hub_switch', waitForOnboard: false });
+            if (pick === 'stop' || pick === 'timeout') {
+                await stopRideShare({ reason: pick === 'timeout' ? 'no_answer' : 'hub_switch', waitForOnboard: false });
                 return;
             }
             if (pick === 'switch') {
@@ -2080,8 +2509,51 @@ async function processOnboardFix(pos, { forceBroadcast = false, generation = onb
         persistActiveSharePatch({ leftTrainPrompted: true });
         active.leftTrainPrompted = true;
     }
+    let resumeAfterPrompt = false;
     if (active.adminOverrideRole === 'train' && isAdminAuthed()) {
-        const due = forceBroadcast || autoPaused || Date.now() - onboardLastBroadcastAt >= adaptiveOnboardPingMs(pos.speedMps);
+        // Operator test shares used to skip every guard, so a test share kept
+        // broadcasting after the operator walked away from the platform. They
+        // keep the relaxed projection but still get the hard off-track check,
+        // the dwell prompt and the 90s no-answer stop.
+        let overrideProjected = null;
+        try {
+            const path = await railPathForTrain(active.trainId, {
+                routeId: active.routeId,
+                region: ROUTES[active.routeId]?.region || 'GP',
+            });
+            overrideProjected = scoreFixToRailPath(pos.lat, pos.lng, path);
+        } catch {
+            overrideProjected = null;
+        }
+        if (generation !== onboardGeneration) return;
+        const farM = Number(overrideProjected?.distanceM);
+        const now = Date.now();
+        if (Number.isFinite(farM) && farM >= RIDE_OFFTRACK_HARD_M
+            && !(active.offTrackStayUntil && now < Number(active.offTrackStayUntil))) {
+            const pick = await confirmShareContinue({
+                title: 'Still on this train?',
+                body: 'Your location is no longer on this train’s path. Sharing will stop unless you are still on it.',
+                keepLabel: 'I’m still on it',
+                stopLabel: 'Stop sharing',
+            });
+            if (pick === 'busy') return;
+            if (pick !== 'keep') {
+                await stopRideShare({
+                    reason: pick === 'timeout' ? 'no_answer' : 'off_track_far',
+                    waitForOnboard: false,
+                });
+                return;
+            }
+            const offTrackStayUntil = now + RIDE_OFFTRACK_STAY_MS;
+            persistActiveSharePatch({ offTrackSince: 0, offTrackStayUntil });
+            active.offTrackStayUntil = offTrackStayUntil;
+            resumeAfterPrompt = true;
+        }
+        const dwell = await handleDwellAtPlatform(active, pos, stops, progress, { generation });
+        if (dwell === 'busy' || dwell === 'stopped') return;
+        if (dwell === 'changed') resumeAfterPrompt = true;
+        const due = forceBroadcast || autoPaused || resumeAfterPrompt
+            || Date.now() - onboardLastBroadcastAt >= adaptiveOnboardPingMs(pos.speedMps);
         if (!due) return;
         if (generation !== onboardGeneration) return;
         const result = await submitRideCheckIn({
@@ -2098,6 +2570,8 @@ async function processOnboardFix(pos, { forceBroadcast = false, generation = onb
             source: 'admin_override_train',
             quiet: true,
             adminOverrideRole: 'train',
+            overrideProjected,
+            trainStatus: active.trainStatus || '',
             gpsFixAt: Number(pos.t || Date.now()),
         });
         if (result.ok) onboardLastBroadcastAt = Date.now();
@@ -2112,8 +2586,50 @@ async function processOnboardFix(pos, { forceBroadcast = false, generation = onb
         routeId: active.routeId,
         previousProgress: active.projectedProgress,
         allowReverse: nearInterchange,
+        speedMps: pos.speedMps,
     });
     if (generation !== onboardGeneration) return;
+    if (!projection.ok && projection.reason === 'reverseProgress') {
+        // A train only travels one way. Fixes that walk backwards along the
+        // stop chain are GPS scatter until they persist: hold the last on-rail
+        // pose (no glyph flip for receivers), then pause and ask.
+        const now = Date.now();
+        const reverseSince = Number(active.reverseSince) || now;
+        if (now - reverseSince < REVERSE_SUSTAIN_MS) {
+            if (!active.reverseSince) persistActiveSharePatch({ reverseSince });
+            return;
+        }
+        await pauseActiveTracker({ ...active, offTrackSince: 0 }, 'direction', pos);
+        const pick = await confirmShareContinue({
+            title: 'Still on this train?',
+            body: `Your phone is moving against Train ${active.trainId}’s direction of travel, so sharing is paused. Sharing will stop unless you are still on it.`,
+            keepLabel: 'I’m still on it',
+            stopLabel: 'Stop sharing',
+        });
+        if (pick === 'busy') return;
+        if (pick !== 'keep') {
+            await stopRideShare({ reason: pick === 'timeout' ? 'no_answer' : 'direction', waitForOnboard: false });
+            return;
+        }
+        // Trust the rider: forget the old progress so the next fix re-anchors
+        // wherever the train really is, and stay quiet about direction for now.
+        persistActiveSharePatch({
+            reverseSince: 0,
+            projectedProgress: null,
+            minProgressSeen: null,
+            directionStay: true,
+            directionWarning: false,
+            offTrackSince: 0,
+            trackingState: TRACKING_STATE.ACTIVE,
+            pauseReason: '',
+        });
+        if (onboardLatestFix) queueOnboardFix(onboardLatestFix, { forceBroadcast: true });
+        return;
+    }
+    if (active.reverseSince) {
+        persistActiveSharePatch({ reverseSince: 0 });
+        active.reverseSince = 0;
+    }
     if (!projection.ok) {
         const now = Date.now();
         if (active.offTrackStayUntil && now < Number(active.offTrackStayUntil)) {
@@ -2126,6 +2642,7 @@ async function processOnboardFix(pos, { forceBroadcast = false, generation = onb
             distanceM: projection.distanceM,
         });
         if (decision === 'drop_far' || decision === 'drop_grace') {
+            await pauseActiveTracker({ ...active, offTrackSince }, projection.reason || 'offTrack', pos);
             const pick = await confirmShareContinue({
                 title: 'Still on this train?',
                 body: decision === 'drop_far'
@@ -2137,7 +2654,9 @@ async function processOnboardFix(pos, { forceBroadcast = false, generation = onb
             if (pick === 'busy') return;
             if (pick !== 'keep') {
                 await stopRideShare({
-                    reason: decision === 'drop_far' ? 'off_track_far' : 'off_track_grace',
+                    reason: pick === 'timeout'
+                        ? 'no_answer'
+                        : (decision === 'drop_far' ? 'off_track_far' : 'off_track_grace'),
                     waitForOnboard: false,
                 });
                 return;
@@ -2164,24 +2683,40 @@ async function processOnboardFix(pos, { forceBroadcast = false, generation = onb
         nearInterchange,
     });
     if (observation.warning && !active.directionStay) {
+        // Pause first so receivers see why the glyph stopped, then ask.
+        await pauseActiveTracker({ ...active, offTrackSince: 0 }, 'direction', pos);
         const pick = await confirmShareContinue({
             title: 'Still on this train?',
-            body: 'Your movement does not match this train’s direction. Sharing will stop unless you are still on it.',
+            body: `Your movement does not match Train ${active.trainId}’s direction, so sharing is paused. Sharing will stop unless you are still on it.`,
             keepLabel: 'I’m still on it',
             stopLabel: 'Stop sharing',
         });
         if (pick === 'busy') return;
         if (pick !== 'keep') {
-            await stopRideShare({ reason: 'direction', waitForOnboard: false });
+            await stopRideShare({ reason: pick === 'timeout' ? 'no_answer' : 'direction', waitForOnboard: false });
             return;
         }
-        persistActiveSharePatch({ directionStay: true, directionWarning: false });
+        persistActiveSharePatch({
+            directionStay: true,
+            directionWarning: false,
+            offTrackSince: 0,
+            trackingState: TRACKING_STATE.ACTIVE,
+            pauseReason: '',
+        });
         active.directionStay = true;
+        active.offTrackSince = 0;
         observation = { ...observation, warning: false, conflicts: 0 };
+        resumeAfterPrompt = true;
     } else if (!observation.warning && active.directionStay) {
         persistActiveSharePatch({ directionStay: false });
         active.directionStay = false;
     }
+    const dwell = await handleDwellAtPlatform(active, pos, stops, projection.projectedProgress, {
+        generation,
+        atStationIndex: projection.atStationIndex,
+    });
+    if (dwell === 'busy' || dwell === 'stopped') return;
+    if (dwell === 'changed') resumeAfterPrompt = true;
     onboardGpsRailAnchor = {
         lat: projection.projectedLat,
         lng: projection.projectedLng,
@@ -2189,7 +2724,7 @@ async function processOnboardFix(pos, { forceBroadcast = false, generation = onb
     };
     const local = cacheLocalProjectedFix(active, pos, projection, near, observation);
     const interval = adaptiveOnboardPingMs(pos.speedMps);
-    if (!navigator.onLine || (!forceBroadcast && !autoPaused && Date.now() - onboardLastBroadcastAt < interval)) return;
+    if (!navigator.onLine || (!forceBroadcast && !autoPaused && !resumeAfterPrompt && Date.now() - onboardLastBroadcastAt < interval)) return;
     if (generation !== onboardGeneration) return;
     const result = await submitRideCheckIn({
         routeId: local.routeId,
@@ -2202,12 +2737,111 @@ async function processOnboardFix(pos, { forceBroadcast = false, generation = onb
         speedMps: pos.speedMps,
         accuracy: pos.accuracy,
         motionClass: pos.motionClass || '',
-        source: active.trackingState === TRACKING_STATE.PAUSED ? 'onboard_resume' : 'onboard_ping',
+        source: (active.trackingState === TRACKING_STATE.PAUSED || resumeAfterPrompt) ? 'onboard_resume' : 'onboard_ping',
         quiet: true,
         projectedFix: projection,
+        trainStatus: active.trainStatus || '',
         gpsFixAt: Number(pos.t || local.fixAt || Date.now()),
     });
     if (result.ok) onboardLastBroadcastAt = Date.now();
+}
+
+/**
+ * Parked at an intermediate platform for DWELL_PROMPT_MS: ask the sharer what
+ * is happening instead of leaving a silent, motionless glyph on everyone's map.
+ * Returns 'none' | 'changed' (status changed, broadcast now) | 'busy' | 'stopped'.
+ */
+async function handleDwellAtPlatform(active, pos, stops, progress, { generation, atStationIndex = null } = {}) {
+    const now = Date.now();
+    const speed = Number(pos.speedMps);
+    const parked = !Number.isFinite(speed) || speed < DWELL_SPEED_MPS;
+    const lastIndex = (stops?.length || 0) - 1;
+    let index = Number.isFinite(atStationIndex) ? atStationIndex : null;
+    if (index == null && Number.isFinite(progress) && stops?.length >= 2) {
+        const position = journeyPositionDetail(stops, progress, { stationary: parked });
+        index = position?.kind === 'at' ? position.index : null;
+    }
+    const intermediate = Number.isFinite(index) && index > 0 && index < lastIndex;
+
+    if (!parked || !intermediate) {
+        const patch = {};
+        if (active.dwellSince || active.dwellStationIndex != null) {
+            patch.dwellSince = 0;
+            patch.dwellStationIndex = null;
+            patch.dwellPromptedAt = 0;
+        }
+        // Back up to running speed: a stuck train is clearly moving again.
+        if (active.trainStatus === TRAIN_STATUS.STUCK && Number.isFinite(speed) && speed >= 3) {
+            patch.trainStatus = '';
+            active.trainStatus = '';
+            Object.assign(active, patch);
+            persistActiveSharePatch(patch);
+            return 'changed';
+        }
+        if (Object.keys(patch).length) {
+            Object.assign(active, patch);
+            persistActiveSharePatch(patch);
+        }
+        return 'none';
+    }
+
+    if (active.dwellStationIndex !== index || !active.dwellSince) {
+        const patch = { dwellSince: now, dwellStationIndex: index, dwellPromptedAt: 0 };
+        Object.assign(active, patch);
+        persistActiveSharePatch(patch);
+        return 'none';
+    }
+    const dwelledMs = now - Number(active.dwellSince);
+    const sinceAsk = active.dwellPromptedAt ? now - Number(active.dwellPromptedAt) : Infinity;
+    if (dwelledMs < DWELL_PROMPT_MS || sinceAsk < DWELL_REPROMPT_MS) return 'none';
+    if (generation !== onboardGeneration) return 'busy';
+
+    const stationName = stationShort(stops[index]?.station || active.station);
+    const minutes = Math.max(1, Math.round(dwelledMs / 60000));
+    const pick = await confirmShareContinue({
+        title: 'Is the train moving?',
+        body: `Train ${active.trainId} has been standing at ${stationName} for about ${minutes} min. Let other riders know what is happening.`,
+        choices: [
+            { id: 'keep', label: 'Still on it, moving soon' },
+            { id: 'stuck', label: 'Train is stuck here' },
+            { id: 'cancelled', label: 'Train was cancelled' },
+            { id: 'stop', label: 'I got off' },
+        ],
+    });
+    if (pick === 'busy') return 'busy';
+    if (generation !== onboardGeneration) return 'stopped';
+    if (pick === 'timeout') {
+        await stopRideShare({ reason: 'no_answer', waitForOnboard: false });
+        return 'stopped';
+    }
+    if (pick === 'stop') {
+        await stopRideShare({ reason: 'alighted', waitForOnboard: false });
+        return 'stopped';
+    }
+    if (pick === 'cancelled') {
+        try {
+            const { submitQuickDelayReport } = await import('./delay-reports.js');
+            await submitQuickDelayReport({
+                routeId: active.routeId,
+                trainId: active.trainId,
+                scheduledTime: String(stops[0]?.time || '').slice(0, 5),
+                station: stops[index]?.station || active.station,
+                destination: active.destination || stops[lastIndex]?.station || '',
+                status: 'cancelled',
+                source: 'live_share',
+            });
+        } catch { /* the stop ping still carries trainStatus cancelled */ }
+        await stopRideShare({ reason: 'cancelled', waitForOnboard: false });
+        return 'stopped';
+    }
+    const patch = { dwellPromptedAt: now };
+    if (pick === 'stuck') {
+        patch.trainStatus = TRAIN_STATUS.STUCK;
+        showToast('Thanks. Riders can see this train is stuck.', 'info');
+    }
+    Object.assign(active, patch);
+    persistActiveSharePatch(patch);
+    return pick === 'stuck' || active.trainStatus === TRAIN_STATUS.STUCK ? 'changed' : 'none';
 }
 
 function queueOnboardFix(pos, options) {
@@ -2302,7 +2936,12 @@ async function tickOnboardImu() {
     }
 }
 
-/** Every accepted fix moves the local pill; Firebase receives coalesced pings (4s while testing). */
+/**
+ * Every accepted fix moves the local pill; Firebase receives coalesced pings
+ * (3s moving, 6s parked). The loop itself ticks from a Web Worker so Chrome's
+ * background timer throttling (1 tick/min after 5 min hidden) cannot starve
+ * the heartbeat while the sharer's screen is off or another app is in front.
+ */
 export function startOnboardPingLoop() {
     stopOnboardPingLoop();
     startMotionFusion();
@@ -2321,34 +2960,45 @@ export function startOnboardPingLoop() {
     onboardImuTimer = setInterval(() => {
         tickOnboardImu().catch(() => {});
     }, IMU_LOCAL_TICK_MS);
-    onboardPingTimer = setInterval(async () => {
-        const current = getActiveShare();
-        if (!current?.trainId) {
-            stopOnboardPingLoop();
-            return;
+    let loopBusy = false;
+    onboardPingTimer = startBackgroundTicker(async () => {
+        if (loopBusy) return;
+        loopBusy = true;
+        try {
+            await onboardLoopTick();
+        } catch { /* next tick retries */ } finally {
+            loopBusy = false;
         }
-        if (current.trackingState === TRACKING_STATE.PAUSED && current.pauseReason === 'user') {
-            return;
-        }
-        if (!navigator.onLine) {
-            await queueOnboardPause('offline');
-            return;
-        }
-        const lastFixAt = Number(onboardLatestFix?.t || 0);
-        const age = lastFixAt ? Date.now() - lastFixAt : Infinity;
-        if (age >= SHARE_EAGER_GPS_MS) {
-            await refreshRideShareGps({ quiet: true });
-        }
-        const freshAt = Number(onboardLatestFix?.t || 0);
-        const freshAge = freshAt ? Date.now() - freshAt : Infinity;
-        if (freshAge >= RIDE_GPS_STALE_MS) {
-            await queueOnboardPause('staleGps', onboardLatestFix);
-            return;
-        }
-        const due = Date.now() - onboardLastBroadcastAt >= adaptiveOnboardPingMs(onboardLatestFix?.speedMps)
-            || current.trackingState === TRACKING_STATE.PAUSED;
-        if (due && onboardLatestFix) queueOnboardFix(onboardLatestFix, { forceBroadcast: true });
-    }, ONBOARD_FAST_PING_MS);
+    }, ONBOARD_LOOP_TICK_MS);
+}
+
+async function onboardLoopTick() {
+    const current = getActiveShare();
+    if (!current?.trainId) {
+        stopOnboardPingLoop();
+        return;
+    }
+    if (current.trackingState === TRACKING_STATE.PAUSED && current.pauseReason === 'user') {
+        return;
+    }
+    if (!navigator.onLine) {
+        await queueOnboardPause('offline');
+        return;
+    }
+    const lastFixAt = Number(onboardLatestFix?.t || 0);
+    const age = lastFixAt ? Date.now() - lastFixAt : Infinity;
+    if (age >= SHARE_EAGER_GPS_MS) {
+        await refreshRideShareGps({ quiet: true });
+    }
+    const freshAt = Number(onboardLatestFix?.t || 0);
+    const freshAge = freshAt ? Date.now() - freshAt : Infinity;
+    if (freshAge >= RIDE_GPS_STALE_MS) {
+        await queueOnboardPause('staleGps', onboardLatestFix);
+        return;
+    }
+    const due = Date.now() - onboardLastBroadcastAt >= adaptiveOnboardPingMs(onboardLatestFix?.speedMps)
+        || current.trackingState === TRACKING_STATE.PAUSED;
+    if (due && onboardLatestFix) queueOnboardFix(onboardLatestFix, { forceBroadcast: true });
 }
 
 /**
@@ -2726,4 +3376,8 @@ if (typeof window !== 'undefined') {
     window.nearestStationOnRoute = nearestStationOnRoute;
     window.canSeeLiveShareChrome = canSeeLiveShareChrome;
     window.sharingStatusCopy = sharingStatusCopy;
+    window.shareEligibilityForTrain = shareEligibilityForTrain;
+    window.castRideVote = castRideVote;
+    window.rideVoteTally = rideVoteTally;
+    window.pauseReasonCopy = pauseReasonCopy;
 }

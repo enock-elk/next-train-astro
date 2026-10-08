@@ -14,12 +14,21 @@ import {
 } from './utils.js';
 import { currentTime } from './logic.js';
 import { currentScheduleData } from './live-board.js';
-import { trainGoingLabel, trainGoingFullLabel, trainTowardLabel, trainTerminusName, trainHeadboardTitle, journeyHeadingAtProgress, TRACKING_WINDOW_SEC, compareNearbyTrainLikelihood, isGhostTrackable, trainIdsInSchedule } from './train-ghosts.js';
+import { trainGoingLabel, trainGoingFullLabel, trainTowardLabel, trainTerminusName, trainHeadboardTitle, journeyHeadingAtProgress, TRACKING_WINDOW_SEC, compareNearbyTrainLikelihood, isGhostTrackable, trainIdsInSchedule, findStopsForTrain, timetableDeviation, formatDeviationLabel } from './train-ghosts.js';
+import {
+    castRideVote,
+    getRideVotesForSharer,
+    myRideVote,
+    pauseReasonCopy,
+    rideVoteTally,
+    shareEligibilityForTrain,
+    TRAIN_STATUS,
+} from './ride-pings.js';
 import { relaxLiveShareGuards } from './features.js';
 import { isAdminAuthed } from './admin-chrome.js';
 import { bindMapOverrideSaveListener } from './map-overrides.js';
 import { getLiveTrainFollow } from './live-train-follow.js';
-import { formatGpsPingAge, formatLastSeenWithPingClock, gpsPingSuccessAt, RIDE_GPS_STALE_MS } from './gps-freshness.js';
+import { formatGpsPingAge, formatGpsPingClock, formatLastSeenWithPingClock, gpsPingSuccessAt, RIDE_GPS_STALE_MS } from './gps-freshness.js';
 import {
     acquireGeoWatch,
     releaseGeoWatch,
@@ -65,8 +74,12 @@ const STATION_NEAR_M = 250;
 const MOVE_MIN_M = 20;
 const HIGHWAY_KMH = 90;
 
-/** Others' pins: REST is a slow backup. Live updates come from the route listener. */
-const PINGS_POLL_MS = 45 * 1000;
+/**
+ * Others' pins: REST is a backup when the route listener is down. 20s keeps a
+ * listener-less receiver inside two glide windows (sharers publish every 3-6s,
+ * receivers glide for 15s). Live updates come from the route listener.
+ */
+const PINGS_POLL_MS = 20 * 1000;
 const PINGS_POLL_WITH_LISTENER_MS = 120 * 1000;
 let pingsTimer = 0;
 let lastMapPingSig = '';
@@ -256,11 +269,84 @@ function trackingDistanceLabel(metres) {
     return n < 1000 ? `${Math.round(n)} m` : `${(n / 1000).toFixed(1)} km`;
 }
 
+/** Plain words, not degrees: "Heading east". A grandmother does not read 96° E. */
 function trackingHeadingLabel(deg) {
     if (!Number.isFinite(Number(deg))) return 'Unknown';
     const n = ((Math.round(Number(deg)) % 360) + 360) % 360;
-    const points = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
-    return `${n}° ${points[Math.round(n / 45) % 8]}`;
+    const words = ['north', 'north-east', 'east', 'south-east', 'south', 'south-west', 'west', 'north-west'];
+    const word = words[Math.round(n / 45) % 8];
+    return word.charAt(0).toUpperCase() + word.slice(1);
+}
+
+/** Trains above this read red on the card: a Metrorail set should not be doing it. */
+export const SPEED_ALERT_KMH = 65;
+
+/** "KEMPTON PARK STATION" -> "Kempton Park". */
+export function stationTitleCase(name) {
+    const base = String(name || '').replace(/\s+STATION$/i, '').trim();
+    if (!base) return '';
+    return base.toLowerCase().replace(/(^|[\s\-'’(/])([a-z])/g, (m, sep, ch) => sep + ch.toUpperCase());
+}
+
+/**
+ * Honest position line. "Last seen at Rissik" only when the projection is on
+ * the platform; between stations it is "Approaching Rissik".
+ */
+export function trackingLastSeenLine(place, pingAt) {
+    const raw = String(place || '').trim();
+    const clock = formatGpsPingClock(pingAt);
+    const approaching = raw.match(/^approaching\s+(.+)$/i);
+    if (approaching) {
+        const station = stationTitleCase(approaching[1]);
+        return clock ? `Approaching ${station} - last seen ${clock}` : `Approaching ${station}`;
+    }
+    const at = raw.match(/^at\s+(.+)$/i);
+    if (at) return formatLastSeenWithPingClock(`at ${stationTitleCase(at[1])}`, pingAt);
+    if (!raw || /^on the route$/i.test(raw)) return formatLastSeenWithPingClock('on the route', pingAt);
+    return formatLastSeenWithPingClock(`near ${stationTitleCase(raw)}`, pingAt);
+}
+
+/** "Pretoria → Koedoespoort" from the train's own stop list. */
+function trackingRouteLine(trainId, routeId, destination) {
+    const stops = findStopsForTrain(String(trainId || ''), routeId ? { routeId } : undefined).stops || [];
+    const origin = stationTitleCase(stops[0]?.station);
+    const dest = stationTitleCase(trainTerminusName(trainId, destination) || stops[stops.length - 1]?.station);
+    if (origin && dest && origin !== dest) return `${origin} → ${dest}`;
+    if (dest) return `To ${dest}`;
+    return '';
+}
+
+function secondsOfDay(ms) {
+    const d = new Date(Number(ms) || Date.now());
+    return d.getHours() * 3600 + d.getMinutes() * 60 + d.getSeconds();
+}
+
+function trainStatusCopy(status, mine) {
+    if (status === TRAIN_STATUS.CANCELLED) {
+        return mine ? 'You marked this train as cancelled.' : 'The rider on board says this train was cancelled.';
+    }
+    if (status === TRAIN_STATUS.STUCK) {
+        return mine ? 'You marked this train as stuck. Riders can see it.' : 'The rider on board says this train is stuck here.';
+    }
+    return '';
+}
+
+function setTrackingVoteRow({ show, routeId, sharerDeviceId, up, down }) {
+    const row = document.getElementById('map-tracking-votes');
+    if (!row) return;
+    row.classList.toggle('hidden', !show);
+    if (!show) return;
+    row.dataset.routeId = String(routeId || '');
+    row.dataset.sharer = String(sharerDeviceId || '');
+    const mine = routeId && sharerDeviceId ? myRideVote(routeId, sharerDeviceId) : 0;
+    setTrackingText('map-tracking-vote-up-count', String(up || 0));
+    setTrackingText('map-tracking-vote-down-count', String(down || 0));
+    const upBtn = document.getElementById('map-tracking-vote-up');
+    const downBtn = document.getElementById('map-tracking-vote-down');
+    upBtn?.classList.toggle('nt-vote-on', mine === 1);
+    upBtn?.setAttribute('aria-pressed', mine === 1 ? 'true' : 'false');
+    downBtn?.classList.toggle('nt-vote-on', mine === -1);
+    downBtn?.setAttribute('aria-pressed', mine === -1 ? 'true' : 'false');
 }
 
 function setTrackingText(id, value) {
@@ -484,40 +570,105 @@ function renderTrackingStatusCard(active, marker = null) {
         (subjectMarker?.onRails || subject.onRails) ? 0 : NaN,
     );
     const place = subjectMarker?.lastSeenLabel || subject.lastSeenLabel || subject.station || 'on the route';
-    const speedLabel = Number.isFinite(speed)
-        ? `${Math.round(Math.max(0, (paused && speed < 0.5) ? 0 : speed) * 3.6)} km/h`
+    const speedKmh = Number.isFinite(speed) ? Math.round(Math.max(0, (paused && speed < 0.5) ? 0 : speed) * 3.6) : null;
+    const speedLabel = speedKmh != null
+        ? `${speedKmh} km/h`
         : (paused ? '0 km/h' : 'Unknown');
-    const destName = trainTerminusName(subject.trainId, subject.destination);
     const trainId = String(subject.trainId || '').trim();
+    const subjectRouteId = viewedTrain?.routeId || subjectMarker?.routeId || subject.routeId || active?.routeId || $currentRouteId.get();
+    const owner = mine && !!active?.trainId && String(active.trainId) === String(subject.trainId);
+    const trainStatus = subjectMarker?.trainStatus || subject.trainStatus || (owner ? active?.trainStatus : '') || '';
+    const stuck = trainStatus === TRAIN_STATUS.STUCK;
+    const cancelled = trainStatus === TRAIN_STATUS.CANCELLED;
+    const pauseReason = subjectMarker?.pauseReason || subject.pauseReason || (owner ? active?.pauseReason : '') || '';
     setTrackingText('map-tracking-title', trainId ? `Train ${trainId}` : 'Tracking train');
-    setTrackingText('map-tracking-dest', destName || '');
+    setTrackingText('map-tracking-dest', trackingRouteLine(trainId, subjectRouteId, subject.destination));
     setTrackingText('map-tracking-toward', '');
     document.getElementById('map-tracking-toward')?.classList.add('hidden');
-    setTrackingText('map-tracking-state', paused ? 'Paused' : 'Active');
-    setTrackingText('map-tracking-last-seen', formatLastSeenWithPingClock(place, pingAt));
+    const stateLabel = cancelled ? 'Cancelled' : stuck ? 'Stuck' : paused ? 'Paused' : 'Active';
+    setTrackingText('map-tracking-state', stateLabel);
+    setTrackingText('map-tracking-last-seen', trackingLastSeenLine(place, pingAt));
+    const reasonEl = document.getElementById('map-tracking-reason');
+    if (reasonEl) {
+        const reason = trainStatusCopy(trainStatus, owner)
+            || (paused ? (pauseReasonCopy(pauseReason) || (pingAt ? 'Paused. Waiting for a fresh GPS fix from the sharer.' : '')) : '');
+        reasonEl.textContent = reason;
+        reasonEl.classList.toggle('hidden', !reason);
+    }
+    // Timetable chip: compare the projected position with today's column,
+    // interpolating the clock between stations (see timetableDeviation).
+    const timingEl = document.getElementById('map-tracking-timing');
+    if (timingEl) {
+        let timing = '';
+        if (trainId && Number.isFinite(Number(progress)) && pingAt) {
+            const stops = findStopsForTrain(trainId, subjectRouteId ? { routeId: subjectRouteId } : undefined).stops || [];
+            const deviation = stops.length >= 2
+                ? timetableDeviation(stops, Number(progress), secondsOfDay(pingAt), { stationary: speedKmh != null && speedKmh < 5 })
+                : null;
+            timing = formatDeviationLabel(deviation);
+            const late = !!deviation && deviation.seconds > 90;
+            const early = !!deviation && deviation.seconds < -90;
+            timingEl.classList.toggle('text-red-700', late);
+            timingEl.classList.toggle('dark:text-red-300', late);
+            timingEl.classList.toggle('text-blue-700', early);
+            timingEl.classList.toggle('dark:text-blue-300', early);
+            timingEl.classList.toggle('text-green-700', !late && !early);
+            timingEl.classList.toggle('dark:text-green-300', !late && !early);
+        }
+        timingEl.textContent = timing;
+        timingEl.classList.toggle('hidden', !timing);
+    }
     setTrackingText('map-tracking-speed', speedLabel);
+    const speedEl = document.getElementById('map-tracking-speed');
+    const fast = speedKmh != null && speedKmh > SPEED_ALERT_KMH;
+    speedEl?.classList.toggle('text-red-600', fast);
+    speedEl?.classList.toggle('dark:text-red-400', fast);
+    speedEl?.classList.toggle('text-gray-800', !fast);
+    speedEl?.classList.toggle('dark:text-gray-100', !fast);
     setTrackingText('map-tracking-heading', trackingHeadingLabel(bearing));
     setTrackingText('map-tracking-gps', formatGpsPingAge(pingAt));
     setTrackingText('map-tracking-rail', trackingDistanceLabel(railM));
     setTrackingText('map-tracking-accuracy', Number.isFinite(accuracy) ? `±${Math.round(accuracy)} m` : 'Unknown');
     setTrackingText('map-tracking-count', String(Math.max(1, Number(subjectMarker?.n || subject.n) || 1)));
     document.getElementById('map-tracking-warning')?.classList.toggle('hidden', !subject.directionWarning);
-    setTrackingText('map-tracking-restore-label', `${trainHeadboardTitle(active?.trainId || subject.trainId, active?.destination || subject.destination)} · ${paused ? 'paused' : 'active'}`);
+    setTrackingText('map-tracking-restore-label', `${trainHeadboardTitle(active?.trainId || subject.trainId, active?.destination || subject.destination)} · ${stateLabel.toLowerCase()}`);
     const stateEl = document.getElementById('map-tracking-state');
-    stateEl?.classList.toggle('bg-green-100', !paused);
-    stateEl?.classList.toggle('dark:bg-green-950', !paused);
-    stateEl?.classList.toggle('text-green-700', !paused);
-    stateEl?.classList.toggle('dark:text-green-300', !paused);
-    stateEl?.classList.toggle('bg-gray-200', paused);
-    stateEl?.classList.toggle('dark:bg-gray-700', paused);
-    stateEl?.classList.toggle('text-gray-700', paused);
-    stateEl?.classList.toggle('dark:text-gray-200', paused);
+    const tone = cancelled ? 'red' : stuck ? 'amber' : paused ? 'gray' : 'green';
+    stateEl?.classList.toggle('bg-green-100', tone === 'green');
+    stateEl?.classList.toggle('dark:bg-green-950', tone === 'green');
+    stateEl?.classList.toggle('text-green-700', tone === 'green');
+    stateEl?.classList.toggle('dark:text-green-300', tone === 'green');
+    stateEl?.classList.toggle('bg-gray-200', tone === 'gray');
+    stateEl?.classList.toggle('dark:bg-gray-700', tone === 'gray');
+    stateEl?.classList.toggle('text-gray-700', tone === 'gray');
+    stateEl?.classList.toggle('dark:text-gray-200', tone === 'gray');
+    stateEl?.classList.toggle('bg-amber-100', tone === 'amber');
+    stateEl?.classList.toggle('dark:bg-amber-950', tone === 'amber');
+    stateEl?.classList.toggle('text-amber-800', tone === 'amber');
+    stateEl?.classList.toggle('dark:text-amber-200', tone === 'amber');
+    stateEl?.classList.toggle('bg-red-100', tone === 'red');
+    stateEl?.classList.toggle('dark:bg-red-950', tone === 'red');
+    stateEl?.classList.toggle('text-red-700', tone === 'red');
+    stateEl?.classList.toggle('dark:text-red-300', tone === 'red');
     const toggle = document.getElementById('map-tracking-toggle');
     if (toggle) {
         toggle.textContent = paused ? 'Restart' : 'Pause';
         toggle.setAttribute('aria-label', paused ? 'Restart sharing' : 'Pause sharing');
     }
-    setTrackingOwnerChrome(mine && !!active?.trainId && String(active.trainId) === String(subject.trainId));
+    setTrackingOwnerChrome(owner);
+    // Community trust: anyone watching someone else's train can say whether it
+    // is where the map shows it. The sharer never votes on their own share.
+    const sharerDeviceId = subjectMarker?.deviceId || subject.deviceId || '';
+    const tally = sharerDeviceId && subjectRouteId
+        ? rideVoteTally(getRideVotesForSharer(subjectRouteId, sharerDeviceId), { sharerDeviceId })
+        : { up: Number(subjectMarker?.voteUp) || 0, down: Number(subjectMarker?.voteDown) || 0 };
+    setTrackingVoteRow({
+        show: !owner && !!sharerDeviceId && sharerDeviceId !== getDeviceId() && !cancelled,
+        routeId: subjectRouteId,
+        sharerDeviceId,
+        up: tally.up,
+        down: tally.down,
+    });
     card.classList.toggle('hidden', trackingCardMode !== 'expanded');
     restore.classList.toggle('hidden', trackingCardMode !== 'minimized' || !active?.trainId);
     paintSharePill(active, active ? trackingIsPaused(active, marker, gpsPingSuccessAt({ ...(active || {}), ...(marker || {}) })) : true);
@@ -1045,6 +1196,11 @@ export function listContributeCandidates(coords = lastCoords) {
         if (Math.abs(drift) > CONTRIBUTE_WINDOW_SEC) return;
         const key = `${c.routeId}|${c.trainId}|${c.scheduledTime}|${c.station}`;
         if (seen.has(key)) return;
+        // Banned trains never show as shareable; specials and today-only columns do.
+        if (!relaxLiveShareGuards() && c.trainId !== 'trip') {
+            const eligible = shareEligibilityForTrain(c.trainId, c.routeId || routeId);
+            if (!eligible.ok && eligible.reason !== 'too_early' && eligible.reason !== 'finished') return;
+        }
         seen.add(key);
 
         const distanceKm = distanceToExpectedStation(c, coords);
@@ -1357,6 +1513,11 @@ export async function openNearbyTrainsModal({ lat, lng } = {}) {
         if (currentShare?.trainId && String(c.trainId) === String(currentShare.trainId)) return false;
         if (c.ghost && !isGhostTrackable(c.ghost, now)) return false;
         if (Number.isFinite(c.driftMin) && Math.abs(c.driftMin) * 60 > TRACKING_WINDOW_SEC) return false;
+        // Today's column, inside its 45 min window, never a banned train.
+        if (!relaxLiveShareGuards() && !isAdminAuthed()) {
+            const eligible = shareEligibilityForTrain(c.trainId, c.routeId || $currentRouteId.get(), { nowSec: now });
+            if (!eligible.ok) return false;
+        }
         return true;
     });
     nearby.sort(compareNearbyTrainLikelihood);
@@ -1584,52 +1745,108 @@ function hideOnTrainSheet() {
 }
 
 /**
- * @returns {Promise<'primary'|'secondary'|'tertiary'>}
+ * Classic mode resolves 'primary' | 'secondary' | 'tertiary'. With `choices`
+ * ([{ id, label }], up to four) it resolves the chosen id, or 'backdrop'.
+ * With `timeoutMs` it resolves 'timeout' when nobody answers; the sheet shows
+ * the countdown so the sharer knows the share will not wait forever.
+ * @returns {Promise<string>}
  */
-export function promptOnTrainSheet({ title, body, primary, secondary, tertiary } = {}) {
+export function promptOnTrainSheet({ title, body, primary, secondary, tertiary, choices, timeoutMs = 0 } = {}) {
     return new Promise((resolve) => {
         const sheet = document.getElementById('nt-on-train-sheet');
         const titleEl = document.getElementById('nt-on-train-title');
         const bodyEl = document.getElementById('nt-on-train-body');
         const primaryBtn = document.getElementById('nt-on-train-primary');
         const secondaryBtn = document.getElementById('nt-on-train-secondary');
+        const quaternaryBtn = document.getElementById('nt-on-train-quaternary');
         const tertiaryBtn = document.getElementById('nt-on-train-tertiary');
+        const timeoutEl = document.getElementById('nt-on-train-timeout');
+        const list = Array.isArray(choices) ? choices.filter((c) => c && c.id && c.label).slice(0, 4) : [];
         if (!sheet || !primaryBtn) {
-            resolve('secondary');
+            resolve(list.length ? 'backdrop' : 'secondary');
             return;
         }
         if (titleEl) titleEl.textContent = title || 'Show others where you are?';
         if (bodyEl) bodyEl.textContent = body || '';
-        primaryBtn.textContent = primary || 'Show where I am';
-        if (secondaryBtn) secondaryBtn.textContent = secondary || 'Not now';
-        if (tertiaryBtn) {
-            if (tertiary) {
-                tertiaryBtn.textContent = tertiary;
-                tertiaryBtn.classList.remove('hidden');
-            } else {
-                tertiaryBtn.classList.add('hidden');
+        const buttons = [primaryBtn, secondaryBtn, quaternaryBtn, tertiaryBtn];
+        const values = [];
+        if (list.length) {
+            buttons.forEach((btn, i) => {
+                if (!btn) return;
+                const choice = list[i];
+                if (choice) {
+                    btn.textContent = choice.label;
+                    btn.classList.remove('hidden');
+                    values[i] = choice.id;
+                } else {
+                    btn.classList.add('hidden');
+                }
+            });
+        } else {
+            primaryBtn.textContent = primary || 'Show where I am';
+            primaryBtn.classList.remove('hidden');
+            values[0] = 'primary';
+            if (secondaryBtn) {
+                secondaryBtn.textContent = secondary || 'Not now';
+                secondaryBtn.classList.remove('hidden');
+                values[1] = 'secondary';
+            }
+            quaternaryBtn?.classList.add('hidden');
+            if (tertiaryBtn) {
+                if (tertiary) {
+                    tertiaryBtn.textContent = tertiary;
+                    tertiaryBtn.classList.remove('hidden');
+                    values[3] = 'tertiary';
+                } else {
+                    tertiaryBtn.classList.add('hidden');
+                }
             }
         }
         sheet.classList.remove('hidden');
 
+        let timer = 0;
+        let countdown = 0;
+        const clearTimers = () => {
+            if (timer) clearTimeout(timer);
+            if (countdown) clearInterval(countdown);
+            timer = 0;
+            countdown = 0;
+            if (timeoutEl) {
+                timeoutEl.textContent = '';
+                timeoutEl.classList.add('hidden');
+            }
+        };
+        const handlers = [];
         const done = (value) => {
-            primaryBtn.removeEventListener('click', onPrimary);
-            secondaryBtn?.removeEventListener('click', onSecondary);
-            tertiaryBtn?.removeEventListener('click', onTertiary);
+            handlers.forEach(([btn, fn]) => btn.removeEventListener('click', fn));
             sheet.removeEventListener('click', onBackdrop);
+            clearTimers();
             hideOnTrainSheet();
             resolve(value);
         };
-        const onPrimary = () => done('primary');
-        const onSecondary = () => done('secondary');
-        const onTertiary = () => done('tertiary');
         const onBackdrop = (e) => {
-            if (e.target === sheet) done('secondary');
+            if (e.target === sheet) done(list.length ? 'backdrop' : 'secondary');
         };
-        primaryBtn.addEventListener('click', onPrimary);
-        secondaryBtn?.addEventListener('click', onSecondary);
-        tertiaryBtn?.addEventListener('click', onTertiary);
+        buttons.forEach((btn, i) => {
+            if (!btn || values[i] == null) return;
+            const fn = () => done(values[i]);
+            handlers.push([btn, fn]);
+            btn.addEventListener('click', fn);
+        });
         sheet.addEventListener('click', onBackdrop);
+        const ms = Number(timeoutMs) || 0;
+        if (ms > 0) {
+            const endAt = Date.now() + ms;
+            const paint = () => {
+                if (!timeoutEl) return;
+                const left = Math.max(0, Math.ceil((endAt - Date.now()) / 1000));
+                timeoutEl.textContent = `Sharing stops in ${left}s if you do not answer`;
+                timeoutEl.classList.remove('hidden');
+            };
+            paint();
+            countdown = setInterval(paint, 1000);
+            timer = setTimeout(() => done('timeout'), ms);
+        }
     });
 }
 
@@ -1905,6 +2122,15 @@ export async function startOnTrainShare({
     if (!adminManualTrain && routeHasNoScheduledTrains()) {
         showToast('There are no trains to share today.', 'info');
         return { ok: false };
+    }
+    // Today's timetable only, inside the 45 min window, never a banned train.
+    if (!adminManualTrain && !relaxLiveShareGuards()) {
+        const eligible = shareEligibilityForTrain(id, routeId);
+        if (!eligible.ok) {
+            showToast(eligible.message || `Train ${id} can’t be shared right now.`, 'info', 4500);
+            setStatus(eligible.message || 'This train can’t be shared right now');
+            return { ok: false, reason: eligible.reason, message: eligible.message };
+        }
     }
 
     hideContributeSheet();
@@ -2282,6 +2508,8 @@ export async function syncRidePingsToMap(routeId = $currentRouteId.get()) {
         let pings = ride.getCachedRidePings?.(routeId) || [];
         if (!ride.hasRidePingsListener?.(routeId) || !pings.length) {
             pings = await ride.fetchRouteRidePings(routeId);
+            // Votes ride along with the REST backup when the listener is down.
+            await ride.fetchRouteRideVotes?.(routeId);
         }
         const markers = typeof ride.compactPingsForMap === 'function'
             ? await ride.compactPingsForMap(pings, { mineDeviceId: mine, routeId })
@@ -2311,7 +2539,7 @@ export async function syncRidePingsToMap(routeId = $currentRouteId.get()) {
             ? { ...ownPing, ...groupedMine, n: groupedMine?.n || 1 }
             : ownPing;
         renderTrackingStatusCard(ride.getActiveShare?.(), ownMetrics);
-        const sig = markers.map((m) => `${m.trainId || ''}:${m.lat}:${m.lng}:${m.n || 1}:${m.mine ? 1 : 0}:${m.at || 0}:${m.fixAt || ''}:${m.acceptedAt || ''}:${m.bearing || ''}:${m.trackingState || ''}:${m.accuracy || ''}:${m.railDistanceM || ''}:${m.speedMps || ''}:${m.heading || ''}:${m.motionClass || ''}`).join('|');
+        const sig = markers.map((m) => `${m.trainId || ''}:${m.lat}:${m.lng}:${m.n || 1}:${m.mine ? 1 : 0}:${m.at || 0}:${m.fixAt || ''}:${m.acceptedAt || ''}:${m.bearing || ''}:${m.trackingState || ''}:${m.accuracy || ''}:${m.railDistanceM || ''}:${m.speedMps || ''}:${m.heading || ''}:${m.motionClass || ''}:${m.trainStatus || ''}`).join('|');
         if (sig === lastMapPingSig) return;
         lastMapPingSig = sig;
         postToMap({ type: 'nt-map-ride-pings', pings: markers });
@@ -2965,6 +3193,26 @@ export function bindMapTabUi() {
         syncMapShareChrome();
         syncRidePingsToMap();
     });
+    const onVote = async (vote) => {
+        const row = document.getElementById('map-tracking-votes');
+        const routeId = row?.dataset.routeId || '';
+        const sharerDeviceId = row?.dataset.sharer || '';
+        if (!routeId || !sharerDeviceId) return;
+        triggerHaptic();
+        const result = await castRideVote({ routeId, sharerDeviceId, vote });
+        if (!result.ok && result.message) {
+            showToast(result.message, 'error');
+            return;
+        }
+        if (result.vote === 1) showToast('Thanks. Marked as accurate.', 'success');
+        else if (result.vote === -1) showToast('Thanks. Marked as not here.', 'info');
+        const tally = rideVoteTally(getRideVotesForSharer(routeId, sharerDeviceId), { sharerDeviceId });
+        setTrackingVoteRow({ show: true, routeId, sharerDeviceId, up: tally.up, down: tally.down });
+        lastMapPingSig = '';
+        syncRidePingsToMap(routeId);
+    };
+    document.getElementById('map-tracking-vote-up')?.addEventListener('click', () => { onVote(1).catch(() => {}); });
+    document.getElementById('map-tracking-vote-down')?.addEventListener('click', () => { onVote(-1).catch(() => {}); });
     document.getElementById('map-tracking-toggle')?.addEventListener('click', async () => {
         triggerHaptic();
         const ride = await import('./ride-pings.js');

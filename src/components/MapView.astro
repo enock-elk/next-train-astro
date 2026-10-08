@@ -71,6 +71,8 @@ const mapSrc = `${withBase('/map.html')}?embed=1&v=${APP_VERSION}`;
                         </p>
                         <p id="map-tracking-toward" class="hidden mt-0.5 text-[11px] font-bold text-blue-700 dark:text-blue-300 truncate" hidden></p>
                         <p id="map-tracking-last-seen" class="mt-1 text-[11px] font-semibold text-gray-500 dark:text-gray-400 leading-snug">Waiting for a GPS fix</p>
+                        <p id="map-tracking-timing" class="hidden mt-0.5 text-[11px] font-black text-green-700 dark:text-green-300 leading-snug"></p>
+                        <p id="map-tracking-reason" class="hidden mt-1 text-[11px] font-semibold text-amber-800 dark:text-amber-200 leading-snug" role="status"></p>
                     </div>
                     <div class="flex items-center gap-0.5 shrink-0 pt-0.5">
                         <button type="button" id="map-tracking-share" class="p-1.5 rounded-lg text-blue-600 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-950/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500" aria-label="Share this live train">
@@ -94,6 +96,19 @@ const mapSrc = `${withBase('/map.html')}?embed=1&v=${APP_VERSION}`;
                         <div><dt class="text-[9px] font-bold uppercase text-gray-400">Riders</dt><dd id="map-tracking-count" class="text-xs font-black text-gray-800 dark:text-gray-100">-</dd></div>
                     </dl>
                     <p id="map-tracking-warning" class="hidden mt-2 rounded-lg bg-amber-50 dark:bg-amber-950/40 px-2.5 py-2 text-[10px] font-bold text-amber-800 dark:text-amber-200" role="status">Your movement does not match this train’s scheduled direction yet. Check the train number if this continues.</p>
+                    <div id="map-tracking-votes" class="hidden mt-2 flex items-center justify-between gap-2 rounded-xl border border-gray-200 dark:border-gray-700 px-3 py-2" role="group" aria-label="Is this train where the map shows it?">
+                        <span class="text-[11px] font-bold text-gray-700 dark:text-gray-200 leading-snug">Is this train really here?</span>
+                        <span class="flex items-center gap-1.5 shrink-0">
+                            <button type="button" id="map-tracking-vote-up" class="nt-vote-btn flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-200 text-[11px] font-black focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500" aria-pressed="false" aria-label="Yes, this train is here">
+                                <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M14 9V5a3 3 0 00-3-3l-4 9v11h11.28a2 2 0 002-1.7l1.38-9a2 2 0 00-2-2.3H14zM7 22H4a2 2 0 01-2-2v-7a2 2 0 012-2h3"/></svg>
+                                <span id="map-tracking-vote-up-count">0</span>
+                            </button>
+                            <button type="button" id="map-tracking-vote-down" class="nt-vote-btn flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-200 text-[11px] font-black focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500" aria-pressed="false" aria-label="No, this train is not here">
+                                <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M10 15v4a3 3 0 003 3l4-9V2H5.72a2 2 0 00-2 1.7l-1.38 9a2 2 0 002 2.3H10zM17 2h2.67A2.31 2.31 0 0122 4v7a2.31 2.31 0 01-2.33 2H17"/></svg>
+                                <span id="map-tracking-vote-down-count">0</span>
+                            </button>
+                        </span>
+                    </div>
                     <div class="mt-2.5 flex flex-col gap-2">
                         <button type="button" id="map-tracking-refresh" class="py-2 rounded-xl bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-200 text-[11px] font-black border border-blue-200 dark:border-blue-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">Refresh GPS</button>
                         <div class="grid grid-cols-2 gap-2">

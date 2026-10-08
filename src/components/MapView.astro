@@ -64,25 +64,21 @@ const mapSrc = `${withBase('/map.html')}?embed=1&v=${APP_VERSION}`;
                 <div id="map-tracking-card-handle" class="h-2 bg-gradient-to-r from-blue-600 via-sky-500 to-blue-700 cursor-grab" aria-hidden="true"></div>
                 <div class="flex items-start gap-2 px-4 pt-2.5 pb-2">
                     <div id="map-tracking-card-drag" class="min-w-0 flex-1 cursor-grab">
-                        <h3 id="map-tracking-title" class="text-base font-black text-gray-900 dark:text-white leading-tight truncate">Tracking train</h3>
-                        <p id="map-tracking-subtitle" class="mt-1 flex items-center gap-1.5 min-w-0">
-                            <span id="map-tracking-dest" class="truncate text-[11px] font-bold text-gray-500 dark:text-gray-400"></span>
-                            <span id="map-tracking-state" class="shrink-0 px-2 py-0.5 rounded-full bg-green-100 dark:bg-green-950 text-green-700 dark:text-green-300 text-[9px] font-black uppercase tracking-wider">Active</span>
-                        </p>
+                        <div class="flex items-center gap-1 min-w-0">
+                            <h3 id="map-tracking-title" class="text-base font-black text-green-700 dark:text-green-300 leading-tight truncate">Tracking train</h3>
+                            <button type="button" id="map-tracking-share" class="shrink-0 p-1.5 rounded-lg text-blue-600 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-950/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500" aria-label="Share this live train">
+                                <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"/></svg>
+                            </button>
+                        </div>
+                        <p id="map-tracking-dest" class="mt-0.5 truncate text-[11px] font-bold text-gray-500 dark:text-gray-400"></p>
                         <p id="map-tracking-toward" class="hidden mt-0.5 text-[11px] font-bold text-blue-700 dark:text-blue-300 truncate" hidden></p>
                         <p id="map-tracking-last-seen" class="mt-1 text-[11px] font-semibold text-gray-500 dark:text-gray-400 leading-snug">Waiting for a GPS fix</p>
-                        <p id="map-tracking-timing" class="hidden mt-0.5 text-[11px] font-black text-green-700 dark:text-green-300 leading-snug"></p>
+                        <button type="button" id="map-tracking-timing" class="hidden mt-0.5 text-left text-[11px] font-black text-green-700 dark:text-green-300 leading-snug underline decoration-dotted underline-offset-2 decoration-current focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-sm" hidden></button>
                         <p id="map-tracking-reason" class="hidden mt-1 text-[11px] font-semibold text-amber-800 dark:text-amber-200 leading-snug" role="status"></p>
                     </div>
                     <div class="flex items-center gap-0.5 shrink-0 pt-0.5">
-                        <button type="button" id="map-tracking-share" class="p-1.5 rounded-lg text-blue-600 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-950/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500" aria-label="Share this live train">
-                            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"/></svg>
-                        </button>
                         <button type="button" id="map-tracking-minimize" class="p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500" aria-label="Minimize tracking status">
                             <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M5 12h14"/></svg>
-                        </button>
-                        <button type="button" id="map-tracking-dismiss" class="p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500" aria-label="Dismiss tracking status">
-                            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
                         </button>
                     </div>
                 </div>

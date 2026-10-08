@@ -695,9 +695,14 @@ assert(mapViewSource.includes('id="map-tracking-card"'), 'current contributor ha
 assert(mapViewSource.includes('id="map-tracking-dest"'), 'tracking card destination sits under the train number');
 assert(mapTabSource.includes('MAP_CARD_POS_KEY'), 'open tracking card remembers where it was dragged');
 assert(mapTabSource.includes('applyTrackingCardPos'), 'open tracking card does not snap back to the pill after a drag');
-assert(mapTabSource.includes("Train ${trainId}"), 'tracking card title is the train number only');
+assert(mapTabSource.includes('Active Train') || mapTabSource.includes('${stateLabel} Train ${trainId}'), 'tracking card title is Active Train plus the number');
+assert(mapTabSource.includes('Real-Time:'), 'tracking status line is Real-Time last seen');
+assert(mapTabSource.includes('openPlannerTrainSheet'), 'late or early line opens the full timesheet');
 assert(mapViewSource.includes('id="map-tracking-minimize"'), 'tracking card is minimizable');
-assert(mapViewSource.includes('id="map-tracking-dismiss"'), 'tracking card is dismissible');
+assert(!mapViewSource.includes('id="map-tracking-dismiss"'), 'tracking card has no close button');
+assert(mapViewSource.includes('decoration-dotted'), 'late or early line is dotted');
+assert(mapAppSource.includes('function ensureSharedRailLine'), 'a shared train paints its rail line');
+assert(mapAppSource.includes('function keepFollowedTrainInView'), 'a moving shared train stays in view until the commuter pans');
 assert(mapTabSource.includes('Currently tracking'), 'Nearby trains shows the current tracked train status');
 assert(mapTabSource.includes('data-current-tracking-details'), 'Nearby current train opens tracking details');
 assert(mapTabSource.includes('renderTrackingStatusCard') && mapTabSource.includes('trackingCardMode'), 'tracking metrics keep updating while the card is minimized');

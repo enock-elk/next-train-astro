@@ -1544,6 +1544,8 @@
             const ends = new Set();
             let selectedRouteId = null;
             let networkBounds = null;
+            // Legend pick hides other corridors. Do not paint the shared line back over that.
+            let userFilteredRail = false;
 
             function escapeMapHtml(s) {
                 return String(s || '').replace(/[&<>"']/g, (c) => ({
@@ -2220,6 +2222,7 @@
             }
 
             function applySelectedLine(routeId) {
+                userFilteredRail = true;
                 if (trackEdit) {
                     if (routeId === trackEdit.routeId) return;
                     stopTrackEditor();
@@ -2333,6 +2336,7 @@
                 allBtn.innerHTML = `<span class="color-dot" style="background:#94a3b8"></span><span class="text-gray-700 dark:text-gray-200">Show all lines</span>`;
                 allBtn.addEventListener('click', (e) => {
                     e.stopPropagation();
+                    userFilteredRail = false;
                     setSelectedLine(null, { toggle: false, fit: true });
                 });
                 legendContent.appendChild(allBtn);
@@ -3394,6 +3398,107 @@
             let rideTrainMarkers = {};
             let rideLooseMarkers = [];
             let lastRidePings = [];
+            var followTrainId = '';
+            var pendingFocusTrainId = '';
+            var followInteracting = false;
+            var followUserHoldUntil = 0;
+            var followUserPannedAway = false;
+            var followPanAt = 0;
+
+            function onFollowUserGrab() {
+                followInteracting = true;
+                followUserHoldUntil = Date.now() + 6000;
+            }
+            function onFollowUserRelease() {
+                followInteracting = false;
+                followUserHoldUntil = Date.now() + 2500;
+                if (!followTrainId || !rideTrainMarkers[followTrainId]) return;
+                var ll = rideTrainMarkers[followTrainId].getLatLng();
+                if (ll && !map.getBounds().contains(ll)) followUserPannedAway = true;
+            }
+            map.on('dragstart', onFollowUserGrab);
+            map.on('zoomstart', onFollowUserGrab);
+            map.on('dragend', onFollowUserRelease);
+            map.on('zoomend', onFollowUserRelease);
+
+            function ensureSharedRailLine(routeId) {
+                if (userFilteredRail) return;
+                var rid = String(routeId || '');
+                if (!rid) return;
+                var found = null;
+                for (var i = 0; i < drawnRoutes.length; i++) {
+                    if (drawnRoutes[i].routeId === rid) { found = drawnRoutes[i]; break; }
+                }
+                if (!found) return;
+                var latlngs = (found.trackCoords && found.trackCoords.length > 1) ? found.trackCoords : null;
+                if ((!latlngs || latlngs.length < 2) && found.coords && found.coords.length > 1) latlngs = found.coords;
+                if ((!latlngs || latlngs.length < 2) && found.validStops && found.validStops.length > 1) {
+                    latlngs = found.validStops.map(function (s) {
+                        return [s.lat, s.lon];
+                    }).filter(function (p) {
+                        return Number.isFinite(p[0]) && Number.isFinite(p[1]);
+                    });
+                }
+                if (latlngs && latlngs.length > 1 && (!found.trackCoords || found.trackCoords.length < 2)) {
+                    found.trackCoords = latlngs;
+                }
+                if ((!found._polyline) && latlngs && latlngs.length > 1) {
+                    found._polyline = L.polyline(latlngs, {
+                        color: found.color || '#16a34a',
+                        weight: 5,
+                        opacity: 0.95,
+                        lineCap: 'round',
+                        lineJoin: 'round'
+                    });
+                }
+                [found._polyline, found._spurPolyline].forEach(function (layer) {
+                    if (!layer) return;
+                    if (!map.hasLayer(layer)) layer.addTo(map);
+                    try {
+                        layer.setStyle({ weight: 5, opacity: 0.95, dashArray: null });
+                        layer.bringToFront();
+                    } catch (_) {}
+                });
+            }
+            function keepFollowedTrainInView(latlng) {
+                if (!followTrainId || !latlng) return;
+                if (followInteracting || Date.now() < followUserHoldUntil) return;
+                var now = Date.now();
+                if (now - followPanAt < 500) return;
+                var bounds = map.getBounds();
+                var inside = bounds.contains(latlng);
+                if (followUserPannedAway) {
+                    if (!inside) return;
+                    followUserPannedAway = false;
+                }
+                if (!inside) {
+                    followPanAt = now;
+                    map.panTo(latlng, { animate: true, duration: 0.55 });
+                    return;
+                }
+                if (!bounds.pad(-0.18).contains(latlng)) {
+                    followPanAt = now;
+                    map.panTo(latlng, { animate: true, duration: 0.4 });
+                }
+            }
+            function focusRideTrainNow(trainId, routeId) {
+                var id = String(trainId || '');
+                if (!id) return;
+                followTrainId = id;
+                followUserPannedAway = false;
+                followUserHoldUntil = Date.now() + 1200;
+                userFilteredRail = false;
+                if (routeId) ensureSharedRailLine(routeId);
+                var marker = rideTrainMarkers[id];
+                if (marker && marker._ntRailRouteId) ensureSharedRailLine(marker._ntRailRouteId);
+                if (!marker) {
+                    pendingFocusTrainId = id;
+                    return;
+                }
+                pendingFocusTrainId = '';
+                var z = map.getZoom();
+                map.flyTo(marker.getLatLng(), z < 13 ? 14 : Math.min(z, 16), { duration: 0.8 });
+            }
             function escapePing(s) {
                 return String(s || '').replace(/[&<>"']/g, function (c) {
                     return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c];
@@ -3834,6 +3939,9 @@
                 if (Number.isFinite(alongM)) marker._ntRailAlongM = alongM;
                 if (routeId) marker._ntRailRouteId = String(routeId);
                 if (Number.isFinite(facing)) applyTrainGlyphYaw(marker, facing);
+                if (marker._ntTrainId && marker._ntTrainId === followTrainId) {
+                    keepFollowedTrainInView(L.latLng(lat, lng));
+                }
             }
             function rideAlongAtWarpedTime(samples, t01) {
                 if (!samples) return NaN;
@@ -4174,6 +4282,10 @@
                     return trains[id].some(function (p) { return !!p.mine; });
                 });
                 applyShareHidesUserDot(mineOnTrain);
+                Object.keys(trains).forEach(function (id) {
+                    var list = trains[id] || [];
+                    ensureSharedRailLine((list[0] && list[0].routeId) || '');
+                });
 
                 const renderedTrainIds = {};
                 const placedTrains = Object.keys(trains).map(function (trainId) {
@@ -4281,8 +4393,13 @@
                         marker._ntRailAlongM = row.alongM;
                         marker._ntRailRouteId = String(row.routeId || '');
                         marker._ntRailBearing = row.bearing;
+                        marker._ntTrainId = String(trainId);
                         marker.on('click', function (ev) {
                             L.DomEvent.stop(ev);
+                            followTrainId = String(trainId);
+                            followUserPannedAway = false;
+                            userFilteredRail = false;
+                            ensureSharedRailLine(row.routeId);
                             try {
                                 (window.parent || window).postMessage({
                                     type: 'nt-map-show-tracking-details',
@@ -4310,6 +4427,7 @@
                         rideTrainMarkers[trainId] = marker;
                     }
                     marker._ntRailBearing = row.bearing;
+                    marker._ntTrainId = String(trainId);
                     paintLiveTrainIcon(marker, trainId, n, mine, Object.assign({}, newest, { bearing: row.bearing, trackingState: paused ? 'paused' : newest.trackingState }));
                     marker._ntRidePing = Object.assign({}, newest, {
                         bearing: row.bearing,
@@ -4337,6 +4455,11 @@
                     });
                 });
                 updateStationCallouts(placedTrains);
+                if (pendingFocusTrainId && rideTrainMarkers[pendingFocusTrainId]) {
+                    focusRideTrainNow(pendingFocusTrainId, rideTrainMarkers[pendingFocusTrainId]._ntRailRouteId);
+                } else if (followTrainId && rideTrainMarkers[followTrainId]) {
+                    keepFollowedTrainInView(rideTrainMarkers[followTrainId].getLatLng());
+                }
 
                 Object.keys(rideTrainMarkers).forEach(function (trainId) {
                     if (renderedTrainIds[trainId]) return;
@@ -4381,20 +4504,25 @@
                     return;
                 }
                 if (data.type === 'nt-map-ride-pings') {
+                    if (typeof data.followTrainId === 'string') {
+                        if (data.followTrainId) {
+                            if (data.followTrainId !== followTrainId) {
+                                followTrainId = data.followTrainId;
+                                followUserPannedAway = false;
+                            }
+                        } else if (!pendingFocusTrainId) {
+                            followTrainId = '';
+                        }
+                    }
                     renderRidePingMarkers(data.pings || []);
                     return;
                 }
                 if (data.type === 'nt-map-focus-train' && data.trainId) {
-                    const marker = rideTrainMarkers[String(data.trainId)];
-                    if (marker) {
-                        map.flyTo(marker.getLatLng(), 15, { duration: 1.0 });
-                        try {
-                            marker.fire('click');
-                        } catch (_) {}
-                    }
+                    focusRideTrainNow(data.trainId, data.routeId || '');
                     return;
                 }
                 if (data.type === 'nt-map-focus-route') {
+                    if (followTrainId || pendingFocusTrainId) return;
                     if (isMapTabEmbed() && data.region) {
                         const next = String(data.region).toUpperCase();
                         if (VALID_MAP_REGIONS.includes(next) && next !== currentRegion) {

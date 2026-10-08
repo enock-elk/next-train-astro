@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_10.08.3': [
+        'Live map keeps a moving shared train in view until the commuter pans or zooms. A pan that leaves the train off screen stays put. Opening a live share link flies to that train and paints its rail line. If the share has ended, a toast says the train is no longer being shared and the map stays closed. The tracking card title is Active Train 1151 or Paused Train 1151, with the share button on that line and the journey underneath. The close control is gone. Minimize stays. The late or early line is a dotted button that opens the full timesheet. The status line reads Real-Time: Last seen near Pretoria - 04:25:26. No commuter What’s New. forceShow stays false.',
+    ],
     'V9_10.08.2': [
         'Admin train test is not blocked by the rail vet. A signed-in operator can share as the train from anywhere; the off-track prompt, dwell prompt, and direction prompt do not pause or stop that share. Commuters still get those checks. While a commuter is off the rail, Still on this train waits 15 seconds before it can open again. Regional breakdown labels the big number as users and the small number as sessions. People today and Sessions today are the totals. Cards count a person once per region value on their hits, so they are not a split of people today. No region on the hit is separate from an unrecognised region value. No commuter What’s New. forceShow stays false.',
     ],

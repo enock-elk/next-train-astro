@@ -65,7 +65,8 @@ export function buildPlannerShareUrl({ from, to, time, day, region, origin, path
 }
 
 export function parseLiveSharePath(pathname) {
-    const m = String(pathname || '').match(/^\/og\/(?:l|live)\/([^/]+)(?:\/([^/]+))?(?:\/([^/]+))?\/?$/i);
+    // Optional app base (`/next-train-astro/og/l/...` on the GitHub preview).
+    const m = String(pathname || '').match(/\/og\/(?:l|live)\/([^/]+)(?:\/([^/]+))?(?:\/([^/]+))?\/?$/i);
     if (!m) return null;
     let trainId = '';
     let routeId = '';
@@ -91,13 +92,26 @@ export function liveShareSearchFromUrl(url) {
 export function buildLiveTrainShareUrl({ trainId, routeId, destination, origin } = {}) {
     const baseOrigin = origin || (typeof location !== 'undefined' ? location.origin : 'https://nexttrain.co.za');
     const id = encodeURIComponent(String(trainId || '').trim());
-    if (!id) return `${baseOrigin}/og/share`;
+    const prefix = liveShareBasePrefix();
+    if (!id) return `${baseOrigin}${prefix}/og/share`;
     const rt = encodeURIComponent(String(routeId || '').trim());
     const dest = encodeURIComponent(String(destination || '').replace(/\s+STATION$/i, '').trim());
     let path = `/og/l/${id}`;
     if (rt) path += `/${rt}`;
     if (dest) path += `/${dest}`;
-    return `${baseOrigin}${path}`;
+    return `${baseOrigin}${prefix}${path}`;
+}
+
+/** GitHub Pages preview lives under `/next-train-astro`. Production base is `/`. */
+function liveShareBasePrefix() {
+    try {
+        const base = (typeof import.meta !== 'undefined' && import.meta.env?.BASE_URL) || '/';
+        const raw = String(base || '/').trim();
+        if (!raw || raw === '/') return '';
+        return `/${raw.replace(/^\/+|\/+$/g, '')}`;
+    } catch {
+        return '';
+    }
 }
 
 export function parseLiveTrainDeepLink(search = typeof location !== 'undefined' ? location.search : '') {

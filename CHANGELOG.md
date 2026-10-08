@@ -2,6 +2,10 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin, Dev Hub, Alerts, Trains near me, community chat, or other hidden-test work. No emoji and no em dashes in What’s New. Keep `APP_VERSION`, `package.json` `version`, and `public/app-version.json` aligned on each release. Changelog / What’s New may be skipped, or the heading may be only **no release notes.** Every bump must add `ADMIN_CHANGELOG[APP_VERSION]` (System Health Build notes).
 
+## V9_10.08.3 — no release notes
+
+Live map follows the shared train the commuter opened, and paints that corridor line when a train is being shared. Tracking card title carries Active or Paused. Late and early open the full timesheet. Commuter What’s New unchanged.
+
 ## V9_10.08.2 — no release notes
 
 Admin train testing is not stopped by the rail check. Commuter off-track prompts wait 15 seconds. Regional breakdown labels users and sessions as overlapping cards, not a split of people today. Commuter What’s New unchanged.

@@ -2,7 +2,7 @@
   "branch": "map-gold",
   "frozenAt": "c53643832274b4667708c919572a00b8e4433946",
   "version": "V9_09.20.11",
-  "note": "Gold snapshot of this build: a signed-in admin can share as the train without the commuter rail vet. Tracks unchanged. Diff against origin/map-gold. Fast-forward map-gold after this lands on main. Never force-push map-gold.",
+  "note": "Gold snapshot of this build: a shared train paints its rail line and the map follows that train until the commuter pans. Tracks unchanged. Diff against origin/map-gold. Fast-forward map-gold after this lands on main. Never force-push map-gold.",
   "files": {
     "public/tracks/rail-tracks-EC.geojson": {
       "md5": "43409bfd05405205e596f0d03345ab18",
@@ -21,24 +21,24 @@
       "sha256": "090a5d7fc45cafb8c7b81dc583ae24978540f38278cab447953bc90c8821f01f"
     },
     "public/js/map-app.js": {
-      "md5": "6ddbdcd35dc63ab0d055b72f34d596b3",
-      "sha256": "c7dee6944fab0d120b38d5efe30fca3365f2fd2090d33b803911488081341720"
+      "md5": "7ab8f03db2b2f0ee4d24e1f06ee1b174",
+      "sha256": "7113ed86d2dd6962dd261f7a4cd4acd178cb65c41a3e5bb054873b543549ba30"
     },
     "src/pages/map.astro": {
       "md5": "350c7d4f0a633b90e6e8e5b4480b95cd",
       "sha256": "63f80d33bb996355abefd0124d0ddcd768dc320e1de997134f13e9dd16dae830"
     },
     "src/components/MapView.astro": {
-      "md5": "b8ea98ce6df81d594b7e14a51d54bbba",
-      "sha256": "d96068d5753915c42592c1f243f7fc1d30b13adc69f043eed21ec300a25f1b84"
+      "md5": "3c193a59c9afc966bbb2ae0fcb1af1eb",
+      "sha256": "2e7059106d1cc34d1d4163edf39685dfda18a86553ca426aed6867a2058f3394"
     },
     "src/lib/rail-tracks.js": {
       "md5": "4d01be4e4e6347559351a8d039770d3d",
       "sha256": "e7385a8e07415f0862e983a5ffca225fc23e68c22f550ee13bc84ffdb52cf3dc"
     },
     "src/lib/map-tab.js": {
-      "md5": "1f7651ef69724a0b83ad765d6e46b0a5",
-      "sha256": "ef6c2dcdb6d35e89f5a0aa7d859496a6859c6bf63fe0f9fa36c8c8c83f84b613"
+      "md5": "a450de0c97b53aaaf4e35f8aaaf15100",
+      "sha256": "a9a09bd64069a8f3f60d4b40f5473ed0bd24e864d00ffef3f3c8f7e341d313aa"
     },
     "src/lib/clever-ads.js": {
       "md5": "4d78da253d60d3ba285de6c41d697cad",

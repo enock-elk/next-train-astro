@@ -148,7 +148,11 @@ ok(adminJs.includes("Admin.icon('map', 'w-3 h-3')"), 'trip-plans indicator is th
 }
 ok(adminJs.includes('confirmClearDb'), 'Clear DB uses a second confirmation popup');
 ok(adminJs.includes("telemetryRange === 'ALL'"), 'admin ALL range does not use the 7-point slicer');
-ok(adminJs.includes('Unique users by last selected region'), 'regional modal says unique users, not a partition of TODAY');
+ok(adminJs.includes('Users and sessions by region on the hit'), 'regional modal names users and sessions on the hit');
+ok(adminJs.includes('People today:'), 'regional modal calls the total people, not a unique split');
+ok(adminJs.includes('No region on the hit'), 'missing region is hits with no region, not people with no region');
+ok(adminJs.includes('The cards are not a split of people today.'), 'regional note says the cards overlap');
+ok(workerJs.includes('unsetUsers'), 'worker keeps hits with no region separate from unrecognised values');
 ok(adminJs.includes("chartPanel.id = 'telemetry-chart-panel'"), 'telemetry chart is an admin drill subview');
 ok(adminJs.includes("Admin.deepLinkToPanel('telemetry-chart-panel')"), 'chart enters through history-aware admin navigation');
 ok(adminJs.includes("chartPanel.dataset.adminSubview = 'true'"), 'analytics subview is excluded from the admin tile grid');

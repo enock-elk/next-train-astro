@@ -314,6 +314,8 @@ export default {
             chartLabels: [],
             regionalBreakdown: {
                 GP: 0, WC: 0, KZN: 0, EC: 0, OTHER: 0,
+                unsetUsers: 0,
+                otherUsers: 0,
                 sessions: { GP: 0, WC: 0, KZN: 0, EC: 0, OTHER: 0 },
                 metric: 'users',
             },
@@ -445,6 +447,8 @@ export default {
                             const bucket = classifyCrmRegion(row.dimensionValues?.[0]?.value);
                             const users = parseInt(row.metricValues?.[0]?.value) || 0;
                             const sessions = parseInt(row.metricValues?.[1]?.value) || 0;
+                            if (bucket === 'UNSET') telemetryData.regionalBreakdown.unsetUsers += users;
+                            else if (bucket === 'OTHER') telemetryData.regionalBreakdown.otherUsers += users;
                             const key = (bucket === 'UNSET' || bucket === 'OTHER') ? 'OTHER' : bucket;
                             telemetryData.regionalBreakdown[key] += users;
                             telemetryData.regionalBreakdown.sessions[key] += sessions;

@@ -2118,13 +2118,15 @@ export async function startOnTrainShare({
     const adminManualTrain = isAdminAuthed() && (
         source === 'admin_manual_train' || adminOverrideRole === 'train'
     );
+    // Any signed-in operator can publish as the train. Commuters stay on the vet.
+    const adminTrainTest = isAdminAuthed();
     const { routeHasNoScheduledTrains } = await import('./delay-reports.js');
-    if (!adminManualTrain && routeHasNoScheduledTrains()) {
+    if (!adminTrainTest && routeHasNoScheduledTrains()) {
         showToast('There are no trains to share today.', 'info');
         return { ok: false };
     }
     // Today's timetable only, inside the 45 min window, never a banned train.
-    if (!adminManualTrain && !relaxLiveShareGuards()) {
+    if (!adminTrainTest && !relaxLiveShareGuards()) {
         const eligible = shareEligibilityForTrain(id, routeId);
         if (!eligible.ok) {
             showToast(eligible.message || `Train ${id} can’t be shared right now.`, 'info', 4500);
@@ -2175,7 +2177,7 @@ export async function startOnTrainShare({
     setStatus('Checking your location…');
     const vet = await runOnboardToastVet(id);
     const enforce = ENFORCE_LIVE_SHARE_VET;
-    const overrideRole = adminManualTrain ? 'train' : 'auto';
+    const overrideRole = adminTrainTest ? 'train' : 'auto';
 
     if (!vet.ok) {
         if (enforce && overrideRole === 'auto') {

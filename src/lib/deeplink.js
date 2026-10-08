@@ -4,6 +4,7 @@
  * Snapshots share query params early so Welcome/URL cleanup cannot drop legacy SPA links.
  */
 import { safeStorage } from './utils.js';
+import { withBase } from './config.js';
 import { clearLiveTrainFollow, setLiveTrainFollow } from './live-train-follow.js';
 import { whenSettledForAutoNotices } from './session-stability.js';
 import {
@@ -162,8 +163,8 @@ export function ingestLaunchTargetUrl(targetURL) {
 
     try {
         const destPath = (/\/og\/share\/?$/.test(url.pathname) || parseLiveSharePath(url.pathname))
-            ? '/'
-            : (url.pathname || '/');
+            ? withBase('/')
+            : (url.pathname || withBase('/'));
         const destSearch = pathLive ? search : url.search;
         const next = destPath + destSearch + (url.hash || '');
         const cur = location.pathname + location.search + location.hash;

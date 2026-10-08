@@ -77,6 +77,22 @@ import { withBase } from '../lib/config.js';
   <!-- Shadow-ban "lost" mode: Home tries the app; cloak sends them back here if still banned. -->
   <script is:inline define:vars={{ homeHref: withBase('/') }}>
     (function () {
+      // GitHub Pages has no OG worker. /og/l/{train}/... 404s here; send humans
+      // into the app with ?live= so the map opens that train (or toasts if it ended).
+      var livePath = String(location.pathname || '').match(/\/og\/(?:l|live)\/([^/]+)(?:\/([^/]+))?(?:\/([^/]+))?\/?$/i);
+      if (livePath) {
+        var q = new URLSearchParams();
+        try { q.set('live', decodeURIComponent(livePath[1])); } catch (e) { q.set('live', livePath[1]); }
+        if (livePath[2]) {
+          try { q.set('rt', decodeURIComponent(livePath[2])); } catch (e2) { q.set('rt', livePath[2]); }
+        }
+        if (livePath[3]) {
+          try { q.set('to', decodeURIComponent(livePath[3])); } catch (e3) { q.set('to', livePath[3]); }
+        }
+        var home = homeHref.charAt(homeHref.length - 1) === '/' ? homeHref : (homeHref + '/');
+        location.replace(home + '?' + q.toString());
+        return;
+      }
       var KEY = 'nt_shadow_ban_lost';
       function flagged() {
         try {

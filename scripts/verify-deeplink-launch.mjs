@@ -97,6 +97,10 @@ ok(String(globalThis.location.pathname) === '/' && String(globalThis.location.se
 const shareLinks = readFileSync(join(ROOT, 'src/lib/share-links.js'), 'utf8');
 ok(shareLinks.includes('buildLiveTrainShareUrl'), 'client can mint live share URL');
 ok(shareLinks.includes('/og/l/'), 'client mints /og/l/ path shares so WhatsApp cannot wrap ?live=');
+ok(shareLinks.includes('liveShareBasePrefix'), 'preview live share URLs keep the app base');
+ok(shareLinks.includes('/og\\/(?:l|live)\\/'), 'live path parse allows a base prefix before /og/l/');
+const notFound = readFileSync(join(ROOT, 'src/pages/404.astro'), 'utf8');
+ok(notFound.includes('/og\\/(?:l|live)\\/'), 'GitHub 404 sends /og/l/ humans into ?live=');
 ok(shareLinks.includes("params.get('live')"), 'route parser ignores live shares');
 
 const ogHtml = readFileSync(join(ROOT, 'workers/nexttrain-og/src/og-html.js'), 'utf8');

@@ -814,6 +814,13 @@ function ntAdminSchedulePreviewText(meta) {
     return ntAdminFormatScheduleSummary(meta);
 }
 
+function ntAgentDebugLog(hypothesisId, location, message, data) {
+    try {
+        navigator.sendBeacon('http://127.0.0.1:4319/', JSON.stringify({ hypothesisId, location, message, data, timestamp: Date.now() }));
+    } catch { /* debug transport only */ }
+}
+window.__agentDebugLog = ntAgentDebugLog;
+
 const Admin = {
     
     // GUARDIAN PHASE 2: Dropdown Breadcrumbs State
@@ -1973,6 +1980,9 @@ const Admin = {
                 });
             }
         });
+        // #region agent log
+        ntAgentDebugLog('A', 'public/js/admin.js:layoutInboxMedia', 'feedback media rendered', { hoistedCount: (hoisted.urls || []).length, extraCount: Array.isArray(extraUrls) ? extraUrls.length : -1, imageCount: images.length, fileCount: files.length, posterRendererType: typeof window.renderLazyPosterHtml, hasLightboxButton: media.includes('data-alert-lightbox') });
+        // #endregion
         return { body: hoisted.body || '', media, urls: images };
     },
 
@@ -2280,6 +2290,9 @@ const Admin = {
             const link = !poster ? e.target.closest?.('a[href]') : null;
             const href = link?.getAttribute?.('href') || '';
             const storageLink = !!(link && host.contains(link) && /firebasestorage|googleusercontent|storage\.googleapis\.com/i.test(href));
+            // #region agent log
+            if (poster || storageLink) ntAgentDebugLog('B,C', 'public/js/admin.js:bindFeedbackInboxReactions', 'feedback attachment delegated click', { targetTag: e.target?.tagName || '', poster: !!poster, storageLink, openLightboxType: typeof window.openLightbox, defaultPrevented: e.defaultPrevented, cancelBubble: e.cancelBubble });
+            // #endregion
             if (!(poster && host.contains(poster)) && !storageLink) return;
             e.preventDefault();
             e.stopPropagation();
@@ -8614,6 +8627,9 @@ const Admin = {
             listContainer.onclick = (e) => {
                 const poster = e.target.closest?.('[data-alert-lightbox]');
                 if (poster && listContainer.contains(poster)) {
+                    // #region agent log
+                    ntAgentDebugLog('B,C', 'public/js/admin.js:listContainer.onclick', 'feedback list onclick reached poster branch', { targetTag: e.target?.tagName || '', openLightboxType: typeof window.openLightbox, defaultPrevented: e.defaultPrevented, cancelBubble: e.cancelBubble });
+                    // #endregion
                     e.preventDefault();
                     e.stopPropagation();
                     const src = poster.getAttribute('data-alert-lightbox') || poster.getAttribute('data-alert-object-url') || '';

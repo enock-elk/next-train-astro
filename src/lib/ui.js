@@ -1129,6 +1129,9 @@ export function openLightbox(url, host) {
     if (typeof window === 'undefined') return;
     const picked = lightboxCandidateSrc(url, host);
     const src = picked.src;
+    // #region agent log
+    window.__agentDebugLog?.('C,D', 'src/lib/ui.js:openLightbox', 'shared lightbox entered', { hasSrc: !!src, hostTag: host?.tagName || '', hostConnected: !!host?.isConnected, loaded: !!picked.loaded, openLightboxIdentity: window.openLightbox === openLightbox });
+    // #endregion
     if (!src) return;
     const wrap = picked.wrap;
     const loaded = picked.loaded;
@@ -1153,6 +1156,9 @@ export function openLightbox(url, host) {
     overlay.classList.remove('hidden');
     overlay.classList.add('flex');
     if (img.getAttribute('src') !== displaySrc) img.src = displaySrc;
+    // #region agent log
+    window.__agentDebugLog?.('D,E', 'src/lib/ui.js:openLightbox:shown', 'shared lightbox overlay shown', { overlayConnected: overlay.isConnected, overlayDisplay: getComputedStyle(overlay).display, overlayZ: getComputedStyle(overlay).zIndex, devOpen, hash: location.hash, imgHasSrc: !!img.getAttribute('src') });
+    // #endregion
 }
 
 export function closeLightbox(fromPopState = false) {

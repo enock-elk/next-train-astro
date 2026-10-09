@@ -72,7 +72,9 @@ const mapSrc = `${withBase('/map.html')}?embed=1&v=${APP_VERSION}`;
                         </div>
                         <p id="map-tracking-dest" class="mt-0.5 truncate text-[11px] font-bold text-gray-500 dark:text-gray-400"></p>
                         <p id="map-tracking-toward" class="hidden mt-0.5 text-[11px] font-bold text-blue-700 dark:text-blue-300 truncate" hidden></p>
-                        <p id="map-tracking-last-seen" class="mt-1 text-[11px] font-semibold text-gray-500 dark:text-gray-400 leading-snug">Waiting for a GPS fix</p>
+                        <p class="mt-1 text-[10px] font-black uppercase tracking-widest text-gray-400 leading-snug">Real-Time:</p>
+                        <p id="map-tracking-last-seen" class="text-[11px] font-semibold text-gray-500 dark:text-gray-400 leading-snug">Waiting for a GPS fix</p>
+                        <p id="map-tracking-timetable-label" class="hidden mt-1 text-[10px] font-black uppercase tracking-widest text-gray-400 leading-snug" hidden>Timetable:</p>
                         <button type="button" id="map-tracking-timing" class="hidden mt-0.5 text-left text-[11px] font-black text-green-700 dark:text-green-300 leading-snug underline decoration-dotted underline-offset-2 decoration-current focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-sm" hidden></button>
                         <p id="map-tracking-reason" class="hidden mt-1 text-[11px] font-semibold text-amber-800 dark:text-amber-200 leading-snug" role="status"></p>
                     </div>

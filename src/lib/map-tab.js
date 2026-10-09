@@ -22,6 +22,7 @@ import {
     pauseReasonCopy,
     rideVoteTally,
     shareEligibilityForTrain,
+    RIDE_OFFTRACK_HARD_M,
     TRAIN_STATUS,
 } from './ride-pings.js';
 import { relaxLiveShareGuards } from './features.js';
@@ -89,6 +90,34 @@ let viewedTrain = null;
 let pendingMapFocus = null;
 let lastShareRequest = null;
 let shareRestartInFlight = false;
+/** @type {((choice: 'proceed' | 'cancel') => void) | null} */
+let shareConfirmResolve = null;
+
+function settleShareConfirm(choice) {
+    const resolve = shareConfirmResolve;
+    shareConfirmResolve = null;
+    if (resolve) resolve(choice);
+}
+
+function waitForShareConfirm() {
+    settleShareConfirm('cancel');
+    return new Promise((resolve) => {
+        shareConfirmResolve = resolve;
+    });
+}
+
+/** running: Close only. fail: Restart + Close. confirm: Proceed + Cancel. */
+function setShareChecksMode(mode) {
+    const modal = document.getElementById('nt-share-checks-modal') || ensureShareChecksModal();
+    const restart = modal.querySelector('#nt-share-checks-restart');
+    const proceed = modal.querySelector('#nt-share-checks-proceed');
+    const shareAnyway = modal.querySelector('#nt-share-checks-share-anyway');
+    const dismiss = modal.querySelector('#nt-share-checks-dismiss');
+    restart?.classList.toggle('hidden', mode !== 'fail');
+    proceed?.classList.toggle('hidden', mode !== 'confirm');
+    shareAnyway?.classList.toggle('hidden', !(mode === 'fail' && isAdminAuthed()));
+    if (dismiss) dismiss.textContent = mode === 'confirm' ? 'Cancel' : 'Close';
+}
 let restoreDragMoved = false;
 let cardDragMoved = false;
 const MAP_PILL_POS_KEY = 'nt_map_restore_pos';
@@ -127,14 +156,22 @@ function ensureShareChecksModal() {
             <div class="shrink-0 p-4 border-t border-gray-100 dark:border-gray-800 space-y-2">
                 <button type="button" id="nt-share-checks-share-anyway" class="hidden w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-black focus:outline-none">Share on the map as this train</button>
                 <div class="grid grid-cols-2 gap-2">
-                    <button type="button" id="nt-share-checks-restart" class="py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold focus:outline-none">Restart checks</button>
-                    <button type="button" data-share-checks-close class="py-3 rounded-xl bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 text-sm font-bold focus:outline-none">Close</button>
+                    <button type="button" id="nt-share-checks-proceed" class="hidden py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-black focus:outline-none">Proceed</button>
+                    <button type="button" id="nt-share-checks-restart" class="hidden py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold focus:outline-none">Restart checks</button>
+                    <button type="button" id="nt-share-checks-dismiss" data-share-checks-close class="py-3 rounded-xl bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 text-sm font-bold focus:outline-none">Close</button>
                 </div>
             </div>
         </div>`;
     document.body.appendChild(modal);
     modal.querySelectorAll('[data-share-checks-close]').forEach((button) => {
-        button.addEventListener('click', () => modal.classList.add('hidden'));
+        button.addEventListener('click', () => {
+            modal.classList.add('hidden');
+            settleShareConfirm('cancel');
+        });
+    });
+    modal.querySelector('#nt-share-checks-proceed')?.addEventListener('click', () => {
+        modal.classList.add('hidden');
+        settleShareConfirm('proceed');
     });
     modal.querySelector('#nt-share-checks-restart')?.addEventListener('click', async () => {
         if (!lastShareRequest || shareRestartInFlight) return;
@@ -171,17 +208,11 @@ function openShareChecks(trainId) {
     }
     if (outcomeText) outcomeText.textContent = '';
     const shareAnyway = modal.querySelector('#nt-share-checks-share-anyway');
-    const restart = modal.querySelector('#nt-share-checks-restart');
-    if (shareAnyway) {
-        shareAnyway.classList.toggle('hidden', !isAdminAuthed());
-        if (isAdminAuthed()) {
-            shareAnyway.textContent = `Share on the map as Train ${trainId}`;
-            if (status) {
-                status.textContent = 'Skip the path checks. Your GPS is published as this train, even off the tracks.';
-            }
-        }
+    if (shareAnyway && isAdminAuthed()) {
+        shareAnyway.textContent = `Share on the map as Train ${trainId}`;
     }
-    if (restart) restart.classList.toggle('hidden', isAdminAuthed());
+    setShareChecksMode('running');
+    settleShareConfirm('cancel');
 }
 
 function addShareCheck(label, detail, state = 'pass') {
@@ -308,7 +339,14 @@ export function trackingLastSeenLine(place, pingAt) {
         else if (!raw || /^on the route$/i.test(raw)) line = formatLastSeenWithPingClock('on the route', pingAt);
         else line = formatLastSeenWithPingClock(`near ${stationTitleCase(raw)}`, pingAt);
     }
-    return line ? `Real-Time: ${line}` : '';
+    return line ? line.replace(/^Last seen/i, 'Last Seen') : '';
+}
+
+/** Card copy spells the unit: "47 minutes late". */
+function trackingTimetableLabel(deviation) {
+    const raw = formatDeviationLabel(deviation);
+    if (!raw) return '';
+    return raw.replace(/\b1 min\b/g, '1 minute').replace(/\b(\d+) min\b/g, '$1 minutes');
 }
 
 /** "Pretoria → Koedoespoort" from the train's own stop list. */
@@ -604,7 +642,7 @@ function renderTrackingStatusCard(active, marker = null) {
     const cancelled = trainStatus === TRAIN_STATUS.CANCELLED;
     const pauseReason = subjectMarker?.pauseReason || subject.pauseReason || (owner ? active?.pauseReason : '') || '';
     const stateLabel = cancelled ? 'Cancelled' : stuck ? 'Stuck' : paused ? 'Paused' : 'Active';
-    setTrackingText('map-tracking-title', trainId ? `${stateLabel} Train ${trainId}` : 'Tracking train');
+    setTrackingText('map-tracking-title', trainId ? `Train ${trainId} ${stateLabel}` : 'Tracking train');
     paintTrackingTitleTone(stateLabel);
     setTrackingText('map-tracking-dest', trackingRouteLine(trainId, subjectRouteId, subject.destination));
     setTrackingText('map-tracking-toward', '');
@@ -627,7 +665,7 @@ function renderTrackingStatusCard(active, marker = null) {
             const deviation = stops.length >= 2
                 ? timetableDeviation(stops, Number(progress), secondsOfDay(pingAt), { stationary: speedKmh != null && speedKmh < 5 })
                 : null;
-            timing = formatDeviationLabel(deviation);
+            timing = trackingTimetableLabel(deviation);
             const late = !!deviation && deviation.seconds > 90;
             const early = !!deviation && deviation.seconds < -90;
             timingEl.classList.toggle('text-red-700', late);
@@ -643,6 +681,10 @@ function renderTrackingStatusCard(active, marker = null) {
         timingEl.classList.toggle('hidden', !timing);
         if (timing) timingEl.removeAttribute('hidden');
         else timingEl.setAttribute('hidden', '');
+        const timetableLabel = document.getElementById('map-tracking-timetable-label');
+        timetableLabel?.classList.toggle('hidden', !timing);
+        if (timing) timetableLabel?.removeAttribute('hidden');
+        else timetableLabel?.setAttribute('hidden', '');
     }
     setTrackingText('map-tracking-speed', speedLabel);
     const speedEl = document.getElementById('map-tracking-speed');
@@ -654,6 +696,12 @@ function renderTrackingStatusCard(active, marker = null) {
     setTrackingText('map-tracking-heading', trackingHeadingLabel(bearing));
     setTrackingText('map-tracking-gps', formatGpsPingAge(pingAt));
     setTrackingText('map-tracking-rail', trackingDistanceLabel(railM));
+    const railEl = document.getElementById('map-tracking-rail');
+    const railFar = Number.isFinite(railM) && railM >= RIDE_OFFTRACK_HARD_M;
+    railEl?.classList.toggle('text-red-600', railFar);
+    railEl?.classList.toggle('dark:text-red-400', railFar);
+    railEl?.classList.toggle('text-gray-800', !railFar);
+    railEl?.classList.toggle('dark:text-gray-100', !railFar);
     setTrackingText('map-tracking-accuracy', Number.isFinite(accuracy) ? `±${Math.round(accuracy)} m` : 'Unknown');
     setTrackingText('map-tracking-count', String(Math.max(1, Number(subjectMarker?.n || subject.n) || 1)));
     document.getElementById('map-tracking-warning')?.classList.toggle('hidden', !subject.directionWarning);
@@ -1138,6 +1186,7 @@ export async function runOnboardToastVet(trainId) {
                 ? `You’re too far from Train ${trainId}’s rail path`
                 : `Heading doesn’t match Train ${trainId}`;
         setShareOutcome(`${msg}. You will not appear as the train.`, 'fail');
+        setShareChecksMode('fail');
         return {
             ok: false,
             message: msg,
@@ -1161,7 +1210,7 @@ export async function runOnboardToastVet(trainId) {
 
     setShareOutcome(attach
         ? `Checks passed. You can appear as Train ${trainId}.`
-        : `Checks passed, but movement is not confirmed; you will appear as a person.`, attach ? 'pass' : 'defer');
+        : `On the rail. Confirm you are on Train ${trainId} before sharing.`, attach ? 'pass' : 'defer');
     return {
         ok: true,
         lat: lastCoords.lat,
@@ -1611,7 +1660,7 @@ export async function openNearbyTrainsModal({ lat, lng } = {}) {
                 ENFORCE_LIVE_SHARE_VET
                     ? (c.plausible
                         ? 'Close enough to track this train'
-                        : 'Too far from this train’s path - you’ll show as a person, not a tracker')
+                        : 'Too far from this train’s path to share it')
                     : 'Tap to share as this train'
             }</p>`;
         btn.addEventListener('click', () => {
@@ -2212,144 +2261,46 @@ export async function startOnTrainShare({
     if (!skipVolunteer && !forcedIntent) {
         const choice = await promptOnTrainSheet({
             title: trainGoingLabel(id, destination),
-            body: `Are you on ${trainGoingLabel(id, destination)}, or waiting at the station? We’ll only move the live clock if you’re on it and moving.`,
+            body: `Are you on ${trainGoingLabel(id, destination)}? Your location is shared as this train so other commuters can follow it.`,
             primary: 'I’m on it',
-            secondary: 'I’m waiting',
-            tertiary: 'Not now',
+            secondary: 'Not now',
         });
-        if (choice !== 'primary' && choice !== 'secondary') {
+        if (choice !== 'primary') {
             return { ok: false, cancelled: true };
         }
-        intent = choice === 'secondary' ? 'waiting' : 'onboard';
+        intent = 'onboard';
     }
 
     if (intent === 'waiting') {
-        let pos;
-        try {
-            pos = await getPosition();
-        } catch {
-            showToast('Location is needed to show you as a commuter.', 'error');
-            return { ok: false };
-        }
-        lastCoords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-        const result = await finishRideShare({
-            trainId: null,
-            waitingFor: id,
-            station: station || document.getElementById('station-select')?.value || '',
-            destination,
-            routeId,
-            lat: lastCoords.lat,
-            lng: lastCoords.lng,
-            source: 'waiting',
-        });
-        return { ...result, asPerson: true, waiting: true };
+        showToast('Location is shared only when you are on the train.', 'info');
+        return { ok: false, cancelled: true };
     }
 
     setStatus('Checking your location…');
     const vet = await runOnboardToastVet(id);
-    const enforce = ENFORCE_LIVE_SHARE_VET;
     const overrideRole = adminTrainTest ? 'train' : 'auto';
 
     if (!vet.ok) {
-        if (enforce && overrideRole === 'auto') {
-            if (!vet.noCoords) hideCheckToast();
-            return vet;
-        }
-        let lat = lastCoords?.lat ?? null;
-        let lng = lastCoords?.lng ?? null;
-        let heading = null;
-        let speedMps = null;
-        try {
-            const pos = await getPosition();
-            lat = pos.coords.latitude;
-            lng = pos.coords.longitude;
-            heading = typeof pos.coords.heading === 'number' ? pos.coords.heading : null;
-            speedMps = typeof pos.coords.speed === 'number' ? pos.coords.speed : null;
-            lastCoords = { lat, lng, accuracy: pos.coords.accuracy };
-        } catch { /* still attach so the share is visible */ }
-        if (
-            (overrideRole === 'train' || overrideRole === 'person')
-            && (!Number.isFinite(lat) || !Number.isFinite(lng))
-        ) {
-            setShareOutcome(`Admin ${overrideRole} override still needs a GPS fix.`, 'fail');
-            return vet;
-        }
-        if (overrideRole === 'train' || overrideRole === 'person') {
-            vet.ok = true;
-            vet.lat = lat;
-            vet.lng = lng;
-            vet.actualLat = lat;
-            vet.actualLng = lng;
-            vet.heading = heading;
-            vet.speedMps = speedMps;
-            vet.isMoving = false;
-            vet.headingAgrees = false;
-            vet.metres = vet.trackM ?? Infinity;
-        } else {
-            const st = station || document.getElementById('station-select')?.value || 'here';
-            const sharedAnyway = await finishRideShare({
-                trainId: id,
-                station: st,
-                destination,
-                routeId,
-                lat,
-                lng,
-                heading,
-                speedMps,
-                source,
-            });
-            if (sharedAnyway?.ok) {
-                scheduleTripWatch({
-                    trainId: id,
-                    station: st,
-                    scheduledTime: scheduledTime || '',
-                    routeId,
-                    destination,
-                });
-            }
-            return sharedAnyway;
-        }
+        setShareChecksMode('fail');
+        if (!vet.noCoords) hideCheckToast();
+        return vet;
     }
 
-    if (overrideRole === 'person') {
-        const st = station || document.getElementById('station-select')?.value || 'here';
-        const result = await finishRideShare({
-            trainId: null,
-            waitingFor: id,
-            station: st,
-            destination,
-            routeId,
-            lat: vet.actualLat ?? vet.lat,
-            lng: vet.actualLng ?? vet.lng,
-            heading: vet.heading,
-            speedMps: vet.speedMps,
-            source: 'admin_override_person',
-            adminOverrideRole: 'person',
-        });
-        setShareOutcome(`Admin override applied. You appear as a person waiting for Train ${id}.`, result?.ok ? 'defer' : 'fail');
-        return { ...result, asPerson: true, adminOverride: 'person' };
-    }
-
-    const { TRAIN_TRACKER_MAX_M, expectedPosition, ghostHeadingDeg, headingAgrees } = await import('./train-ghosts.js');
-    let finalId = id;
-    let confirmedCloser = false;
-
-    const metres = vet.metres;
-    const tooFar = Number.isFinite(metres) && metres > TRAIN_TRACKER_MAX_M;
+    const { expectedPosition, ghostHeadingDeg, headingAgrees } = await import('./train-ghosts.js');
+    const finalId = id;
     const st = station || document.getElementById('station-select')?.value || '';
     let moving = !!(vet.isMoving || (typeof vet.speedMps === 'number' && vet.speedMps >= 1.5));
-    let headingOk = vet.headingAgrees !== false;
 
-    if (enforce && overrideRole !== 'train' && !tooFar && !moving) {
+    if (!vet.attach && !moving) {
         hideCheckToast();
         const parked = await promptOnTrainSheet({
             title: 'Is the train moving?',
-            body: 'GPS doesn’t show movement yet - trains often sit at a station. If you’re parked, we’ll thank you for sharing and watch in the background until the train starts moving the right way.',
+            body: 'This train may still be at the station. If you are on it, you can share its location for other commuters.',
             primary: 'Yes, we’re moving',
-            secondary: 'No, we’re parked',
+            secondary: 'It’s still at the station',
             tertiary: 'Cancel',
         });
-        if (parked === 'tertiary') {
+        if (parked !== 'primary' && parked !== 'secondary') {
             return { ok: false, cancelled: true };
         }
         if (parked === 'primary') {
@@ -2371,86 +2322,19 @@ export async function startOnTrainShare({
                         extraH = (Math.atan2(b.lng - a.lng, b.lat - a.lat) * 180) / Math.PI;
                     }
                     vet.heading = extraH;
-                    headingOk = headingAgrees(extraH, ghostHeadingDeg(expectedPosition(finalId)));
+                    vet.headingAgrees = headingAgrees(extraH, ghostHeadingDeg(expectedPosition(finalId)));
                     lastCoords = { lat: b.lat, lng: b.lng, accuracy: b.accuracy };
                 }
-            } catch { /* keep moving=false */ }
-            if (!moving) {
-                const result = await finishRideShare({
-                    trainId: null,
-                    waitingFor: finalId,
-                    station: st,
-                    destination,
-                    routeId,
-                    lat: vet.lat,
-                    lng: vet.lng,
-                    heading: vet.heading,
-                    speedMps: vet.speedMps,
-                    source: 'parked_station',
-                    quiet: true,
-                });
-                hideCheckToast();
-                startParkedTrainWatch({
-                    trainId: finalId,
-                    station: st,
-                    destination,
-                    routeId,
-                    scheduledTime,
-                    lat: vet.lat,
-                    lng: vet.lng,
-                });
-                showToast('Still looks parked - thanks, we’ll attach you when it moves', 'info', 5000);
-                return { ...result, asPerson: true, parked: true };
-            }
-        } else {
-            const result = await finishRideShare({
-                trainId: null,
-                waitingFor: finalId,
-                station: st,
-                destination,
-                routeId,
-                lat: vet.lat,
-                lng: vet.lng,
-                heading: vet.heading,
-                speedMps: vet.speedMps,
-                source: 'parked_station',
-                quiet: true,
-            });
-            startParkedTrainWatch({
-                trainId: finalId,
-                station: st,
-                destination,
-                routeId,
-                scheduledTime,
-                lat: vet.lat,
-                lng: vet.lng,
-            });
-            showToast('Thanks for sharing - we’ll attach you when the train starts moving', 'success', 5000);
-            return { ...result, asPerson: true, parked: true };
+            } catch { /* keep the last fix */ }
+            hideCheckToast();
         }
     }
 
-    const attach = overrideRole === 'train' || !enforce || (!tooFar && moving && headingOk);
-
-    if (!attach) {
-        const result = await finishRideShare({
-            trainId: null,
-            waitingFor: finalId,
-            station: st,
-            destination,
-            routeId,
-            lat: vet.lat,
-            lng: vet.lng,
-            heading: vet.heading,
-            speedMps: vet.speedMps,
-            source: tooFar ? 'presence_too_far' : 'waiting_not_moving',
-        });
-        hideCheckToast();
-        showToast(tooFar
-            ? `You’re about ${formatDistanceM(metres)} from the selected rail path - sharing as a commuter`
-            : 'We’ll show you as a commuter until you’re moving with the train', 'info', 5000);
-        return { ...result, asPerson: true, tooFar, waiting: !tooFar };
-    }
+    setShareOutcome(`Checks passed, you're about to share the train's location to other commuters`, 'pass');
+    setShareChecksMode('confirm');
+    hideCheckToast();
+    const confirmed = await waitForShareConfirm();
+    if (confirmed !== 'proceed') return { ok: false, cancelled: true };
 
     const shared = await finishRideShare({
         trainId: finalId,
@@ -2463,17 +2347,13 @@ export async function startOnTrainShare({
         speedMps: vet.speedMps,
         source: adminManualTrain
             ? 'admin_manual_train'
-            : (overrideRole === 'train' ? 'admin_override_train' : (confirmedCloser ? 'closer_confirm' : source)),
+            : (overrideRole === 'train' ? 'admin_override_train' : source),
         adminOverrideRole: overrideRole === 'train' ? 'train' : '',
         overrideProjected: overrideRole === 'train' ? vet.pathPoint : null,
+        quiet: true,
     });
     if (shared?.ok) {
-        setShareOutcome(
-            overrideRole === 'train'
-                ? `Admin override applied. You appear as Train ${finalId}.`
-                : `Sharing accepted. You appear as Train ${finalId}.`,
-            'pass'
-        );
+        showToast('Thank you. Other commuters can now follow this train.', 'success');
         scheduleTripWatch({
             trainId: finalId,
             station: st,
@@ -2606,6 +2486,10 @@ export async function syncRidePingsToMap(routeId = $currentRouteId.get()) {
                     n: 1,
                     routeId: p.routeId || routeId,
                 }));
+        if (viewedTrain?.trainId && !markers.some((m) => String(m.trainId || '') === String(viewedTrain.trainId))) {
+            viewedTrain = null;
+            trackingCardMode = 'dismissed';
+        }
         const groupedMine = markers.find((m) => m.mine) || null;
         const ownPing = (pings || []).find((p) => p.deviceId === mine) || null;
         const ownMetrics = groupedMine
@@ -3219,10 +3103,16 @@ export function bindMapTabUi() {
             if (!trainId) return;
             const routeId = viewedTrain?.routeId || follow?.routeId || active?.routeId;
             const pings = ride.getCachedRidePings?.(routeId) || [];
-            const trainPings = pings.filter((p) => String(p.trainId || '') === String(trainId));
+            const trainPings = pings.filter((p) => String(p.trainId || '') === String(trainId) && ride.isLiveTrainShareActive?.(p));
+            if (viewedTrain?.trainId && !trainPings.length) {
+                viewedTrain = null;
+                trackingCardMode = 'dismissed';
+                renderTrackingStatusCard(active, null);
+                return;
+            }
             const own = trainPings.find((p) => p.deviceId === getDeviceId());
             const ping = viewedTrain?.trainId
-                ? (trainPings[0] || viewedTrain.ping || null)
+                ? (trainPings[0] || null)
                 : (own || null);
             if (viewedTrain?.trainId && ping) {
                 viewedTrain = { ...viewedTrain, ping, n: trainPings.length || viewedTrain.n || 1 };

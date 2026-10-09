@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_10.09.1': [
+        'Experimental features can be allowed for a region, a route, or one device, and they stay on until an admin turns that switch off. Map for KwaZulu-Natal opens for commuters in that region, not only a pinned route or a single device grant. Within 5 seconds of open, an enabled commuter refetches the flags. If a feature was turned off and that screen is open, a toast says so and the app refreshes. Feedback inbox has a filter between Export All and Refresh for email, WhatsApp, attachments, and trip plans. Tapping a commuter photo opens the preview. Live checks show Restart only after a failed check. A pass asks Proceed or Cancel before sharing the train. Sharing is as the train only. The parked prompt no longer describes a background watch. The tracking card reads Train 0755 Paused, with Real-Time and Timetable on their own lines, and on-rail distance turns red past 400 m. Zoomed-out train glyphs hide the number. A stopped share drops the card and the glyph. No commuter What’s New. forceShow stays false.',
+    ],
     'V9_10.08.3': [
         'Live map keeps a moving shared train in view until the commuter pans or zooms. A pan that leaves the train off screen stays put. Opening a live share link flies to that train and paints its rail line. If the share has ended, a toast says the train is no longer being shared and the map stays closed. The tracking card title is Active Train 1151 or Paused Train 1151, with the share button on that line and the journey underneath. The close control is gone. Minimize stays. The late or early line is a dotted button that opens the full timesheet. The status line reads Real-Time: Last seen near Pretoria - 04:25:26. No commuter What’s New. forceShow stays false.',
     ],

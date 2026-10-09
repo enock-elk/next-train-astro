@@ -981,6 +981,7 @@ const Admin = {
             mail: '<path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><path d="M22 6l-10 7L2 6"/>',
             phone: '<path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"/>',
             paperclip: '<path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/>',
+            filter: '<path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/>',
             bug: '<path d="M8 2l1.88 1.88M14.12 3.88L16 2M9 7.13v-1a3.003 3.003 0 116 0v1"/><path d="M12 20c-3.3 0-6-2.7-6-6v-3a6 6 0 0112 0v3c0 3.3-2.7 6-6 6z"/><path d="M12 20v-9M6.53 9C4.6 9.9 3 11.6 3 14M17.47 9c1.93.9 3.53 2.6 3.53 5M3 13h2M19 13h2M4 18h2M18 18h2"/>',
             lightbulb: '<path d="M9 18h6M10 22h4M12 2a7 7 0 00-4 12.7V17h8v-2.3A7 7 0 0012 2z"/>',
             clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/>',
@@ -1784,11 +1785,19 @@ const Admin = {
     },
 
     // --- 0.16 IMAGE LIGHTBOX MODAL ---
-    openLightbox: function(url) {
+    openLightbox: function(url, blobUrl) {
         const safe = typeof window.sanitizeAttachmentDisplayUrl === 'function'
             ? window.sanitizeAttachmentDisplayUrl(url)
             : '';
-        if (!safe) return;
+        const blob = String(blobUrl || (String(url || '').startsWith('blob:') ? url : '') || '');
+        let ownedBlob = '';
+        if (blob.startsWith('blob:')) {
+            document.querySelectorAll('[data-alert-object-url]').forEach((el) => {
+                if (!ownedBlob && el.getAttribute('data-alert-object-url') === blob) ownedBlob = blob;
+            });
+        }
+        const src = safe || ownedBlob;
+        if (!src) return;
         window._adminLightboxOpen = true;
         history.pushState({ modal: 'admin-lightbox' }, '', '#admin-lightbox');
         if (typeof lockBackgroundScroll === 'function') lockBackgroundScroll();
@@ -1812,7 +1821,7 @@ const Admin = {
         }
         
         const img = document.getElementById('admin-lightbox-img');
-        if (img) img.src = safe;
+        if (img) img.src = ownedBlob || src;
         
         modal.classList.remove('hidden');
         void modal.offsetWidth; // Force Reflow
@@ -2258,10 +2267,10 @@ const Admin = {
             if (poster && host.contains(poster)) {
                 e.preventDefault();
                 e.stopPropagation();
-                const src = poster.getAttribute('data-alert-object-url')
-                    || poster.getAttribute('data-alert-lightbox');
-                if (src && Admin.openLightbox) Admin.openLightbox(src);
-                else if (src && typeof window.openLightbox === 'function') window.openLightbox(src, poster);
+                const original = poster.getAttribute('data-alert-lightbox') || '';
+                const blob = poster.getAttribute('data-alert-object-url') || '';
+                if (Admin.openLightbox && (original || blob)) Admin.openLightbox(original || blob, blob);
+                else if (original && typeof window.openLightbox === 'function') window.openLightbox(original, poster);
                 return;
             }
             const chip = e.target.closest?.('[data-inbox-react]');
@@ -8184,6 +8193,17 @@ const Admin = {
                     <button id="fb-export-global-btn" onclick="event.stopPropagation()" class="flex-1 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-800 border border-indigo-200 dark:border-indigo-800 rounded-lg px-3 py-2.5 text-xs font-bold transition-colors shadow-sm focus:outline-none flex items-center justify-center gap-1.5">
                         ${Admin.icon('download', 'w-3.5 h-3.5')} Export All
                     </button>
+                    <div id="fb-filter-wrap" class="relative flex-1">
+                        <button id="fb-filter-btn" type="button" onclick="event.stopPropagation()" class="w-full bg-violet-50 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300 hover:bg-violet-100 dark:hover:bg-violet-800 border border-violet-200 dark:border-violet-800 rounded-lg px-3 py-2.5 text-xs font-bold transition-colors shadow-sm focus:outline-none flex items-center justify-center gap-1.5">
+                            ${Admin.icon('filter', 'w-3.5 h-3.5')} Filter
+                        </button>
+                        <div id="fb-filter-menu" class="hidden absolute left-0 right-0 top-full mt-1 z-40 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-xl p-2 space-y-1">
+                            <label class="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[11px] font-bold text-gray-800 dark:text-gray-100 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800"><input type="checkbox" data-fb-filter="email" class="rounded border-gray-300 text-violet-600 focus:ring-violet-500"> Email</label>
+                            <label class="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[11px] font-bold text-gray-800 dark:text-gray-100 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800"><input type="checkbox" data-fb-filter="whatsapp" class="rounded border-gray-300 text-violet-600 focus:ring-violet-500"> WhatsApp number</label>
+                            <label class="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[11px] font-bold text-gray-800 dark:text-gray-100 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800"><input type="checkbox" data-fb-filter="attachments" class="rounded border-gray-300 text-violet-600 focus:ring-violet-500"> Attachments</label>
+                            <label class="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[11px] font-bold text-gray-800 dark:text-gray-100 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800"><input type="checkbox" data-fb-filter="trips" class="rounded border-gray-300 text-violet-600 focus:ring-violet-500"> Trip plans</label>
+                        </div>
+                    </div>
                     <button id="fb-refresh-btn" onclick="event.stopPropagation()" class="flex-1 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-800 border border-blue-200 dark:border-blue-800 rounded-lg px-3 py-2.5 text-xs font-bold transition-colors shadow-sm focus:outline-none flex items-center justify-center gap-1.5">
                         ${Admin.icon('refresh', 'w-3.5 h-3.5')} Refresh
                     </button>
@@ -8222,6 +8242,34 @@ const Admin = {
 
         refreshBtn.onclick = () => Admin.fetchFeedback();
         if (exportGlobalBtn) exportGlobalBtn.onclick = () => Admin.exportGlobalThreadsForAI();
+        const filterBtn = document.getElementById('fb-filter-btn');
+        const filterMenu = document.getElementById('fb-filter-menu');
+        const paintFilterBtn = () => {
+            if (!filterBtn) return;
+            const on = Object.values(Admin.feedbackInboxFilters || {}).some(Boolean);
+            filterBtn.classList.toggle('ring-2', on);
+            filterBtn.classList.toggle('ring-violet-400', on);
+        };
+        filterMenu?.querySelectorAll('[data-fb-filter]').forEach((box) => {
+            const key = box.getAttribute('data-fb-filter');
+            box.checked = !!Admin.feedbackInboxFilters?.[key];
+            box.addEventListener('change', () => {
+                Admin.feedbackInboxFilters[key] = !!box.checked;
+                paintFilterBtn();
+                Admin.renderFeedbackList();
+            });
+        });
+        if (filterBtn && filterMenu) {
+            filterBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                filterMenu.classList.toggle('hidden');
+            });
+            document.addEventListener('click', (e) => {
+                if (!e.target.closest?.('#fb-filter-wrap')) filterMenu.classList.add('hidden');
+            });
+        }
+        paintFilterBtn();
 
         // Dual-Tab Switcher Logic
         const switchTab = (tab) => {
@@ -8311,14 +8359,18 @@ const Admin = {
                     matchesSearch = alias.includes(searchQuery) || didLower.includes(searchQuery) || hasMatchingMsg;
                 }
 
-                if (matchesSearch) {
+                if (matchesSearch && Admin.feedbackThreadMatchesFilters(did, groupItems)) {
                     if (isInbox && isThreadActive) displayGroups.push({ did, items: groupItems });
                     if (!isInbox && !isThreadActive) displayGroups.push({ did, items: groupItems });
                 }
             });
 
             if (displayGroups.length === 0) {
-                listContainer.innerHTML = `<div class="text-xs text-gray-500 italic text-center py-6">${isInbox ? 'Inbox is completely clean.' : 'No archived threads yet.'}</div>`;
+                const filtersOn = Object.values(Admin.feedbackInboxFilters || {}).some(Boolean);
+                const emptyCopy = filtersOn
+                    ? 'No threads match these filters.'
+                    : (isInbox ? 'Inbox is completely clean.' : 'No archived threads yet.');
+                listContainer.innerHTML = `<div class="text-xs text-gray-500 italic text-center py-6">${emptyCopy}</div>`;
                 return;
             }
 
@@ -11088,6 +11140,35 @@ const Admin = {
     },
 
     // --- GROWTH SPRINT PHASE 8: ADMIN REPLY INBOX PROTOCOL ---
+    feedbackInboxFilters: { email: false, whatsapp: false, attachments: false, trips: false },
+
+    feedbackThreadContactSets: (groupItems) => {
+        const emails = new Set();
+        const phones = new Set();
+        (groupItems || []).forEach((msg) => {
+            const em = String(msg?.email || '').trim();
+            if (!em) return;
+            if (em.includes('@')) {
+                emails.add(em);
+                return;
+            }
+            const digitCount = (em.match(/\d/g) || []).length;
+            if (digitCount >= 9) phones.add(em);
+        });
+        return { emails, phones };
+    },
+
+    feedbackThreadMatchesFilters: (did, groupItems) => {
+        const filters = Admin.feedbackInboxFilters || {};
+        if (!filters.email && !filters.whatsapp && !filters.attachments && !filters.trips) return true;
+        const { emails, phones } = Admin.feedbackThreadContactSets(groupItems);
+        if (filters.email && !emails.size) return false;
+        if (filters.whatsapp && !phones.size) return false;
+        if (filters.attachments && !(groupItems || []).some((item) => Admin.feedbackItemHasAttachments(item))) return false;
+        if (filters.trips && !Admin.feedbackDeviceHasTripPlans(did)) return false;
+        return true;
+    },
+
     feedbackItemHasAttachments: (item) => {
         if (!item) return false;
         if (item.attachmentUrl) return true;
@@ -17980,6 +18061,7 @@ const Admin = {
             return {
                 enabled: 'exp-map-enabled',
                 routes: 'exp-map-routes',
+                regions: 'exp-map-regions',
                 all: 'exp-map-all',
                 header: 'exp-feat-mapTab-header',
                 body: 'exp-feat-mapTab-body',
@@ -17991,6 +18073,7 @@ const Admin = {
             return {
                 enabled: 'exp-community-enabled',
                 routes: 'exp-community-routes',
+                regions: 'exp-community-regions',
                 all: 'exp-community-all',
                 header: 'exp-feat-communityTab-header',
                 body: 'exp-feat-communityTab-body',
@@ -18001,6 +18084,7 @@ const Admin = {
         return {
             enabled: `exp-feat-${key}-enabled`,
             routes: `exp-feat-${key}-routes`,
+            regions: `exp-feat-${key}-regions`,
             all: `exp-feat-${key}-all`,
             header: `exp-feat-${key}-header`,
             body: `exp-feat-${key}-body`,
@@ -18031,6 +18115,8 @@ const Admin = {
                                     <input type="checkbox" id="${ids.all}" class="exp-feat-all rounded border-teal-400 text-teal-600 focus:ring-teal-500" data-exp-key="${f.key}">
                                     All routes
                                 </label>
+                                <p class="text-[9px] font-black uppercase tracking-widest text-teal-700 dark:text-teal-300">Allowed regions</p>
+                                <div id="${ids.regions}" class="flex flex-wrap gap-x-3 gap-y-1"></div>
                                 <p class="text-[9px] font-black uppercase tracking-widest text-teal-700 dark:text-teal-300">Allowed routes</p>
                                 <div id="${ids.routes}" class="max-h-36 overflow-y-auto custom-scrollbar space-y-1 rounded-lg border border-teal-200 dark:border-teal-800/60 bg-white/60 dark:bg-gray-900/30 p-2"></div>
                             </div>
@@ -20967,7 +21053,7 @@ const Admin = {
         const expFeatureState = {};
         let expFeaturesHydrated = false;
         Admin.grantableFeatures().forEach((f) => {
-            expFeatureState[f.key] = { enabled: false, routes: new Set(), allRoutes: false };
+            expFeatureState[f.key] = { enabled: false, routes: new Set(), regions: new Set(), allRoutes: false };
         });
 
         const listExpRoutes = () => {
@@ -20980,8 +21066,13 @@ const Admin = {
         const expFeatCountLabel = (state) => {
             if (!state?.enabled) return 'Off';
             if (state.allRoutes) return 'All routes';
-            const n = state.routes.size;
-            return n ? `${n} route${n === 1 ? '' : 's'}` : 'No routes';
+            const parts = [];
+            const regionCount = state.regions?.size || 0;
+            const routeCount = state.routes?.size || 0;
+            if (regionCount === 1) parts.push([...state.regions][0]);
+            else if (regionCount > 1) parts.push(`${regionCount} regions`);
+            if (routeCount) parts.push(`${routeCount} route${routeCount === 1 ? '' : 's'}`);
+            return parts.length ? parts.join(' · ') : 'Nothing selected';
         };
 
         const paintExpFeatCount = (key) => {
@@ -21021,6 +21112,33 @@ const Admin = {
             paintExpFeatCount(key);
         };
 
+        const EXP_REGION_LABELS = { GP: 'Gauteng', WC: 'Western Cape', KZN: 'KwaZulu-Natal', EC: 'Eastern Cape' };
+
+        const paintExpRegionBox = (key) => {
+            const ids = Admin.expFeatureControlIds(key);
+            const box = document.getElementById(ids.regions);
+            const state = expFeatureState[key];
+            if (!box || !state) return;
+            const disabled = state.allRoutes ? 'disabled' : '';
+            box.innerHTML = ['GP', 'WC', 'KZN', 'EC'].map((code) => {
+                const checked = state.allRoutes || state.regions.has(code) ? 'checked' : '';
+                return `<label class="inline-flex items-center gap-1.5 text-[10px] font-bold text-teal-900 dark:text-teal-100 cursor-pointer ${state.allRoutes ? 'opacity-60' : ''}">
+                    <input type="checkbox" class="exp-region-cb rounded border-teal-300 text-teal-600 focus:ring-teal-500" data-exp-key="${key}" value="${code}" ${checked} ${disabled}>
+                    ${EXP_REGION_LABELS[code]}
+                </label>`;
+            }).join('');
+            box.querySelectorAll('.exp-region-cb').forEach((cb) => {
+                cb.onchange = () => {
+                    const st = expFeatureState[cb.getAttribute('data-exp-key')];
+                    if (!st || st.allRoutes) return;
+                    if (cb.checked) st.regions.add(cb.value);
+                    else st.regions.delete(cb.value);
+                    paintExpFeatCount(cb.getAttribute('data-exp-key'));
+                };
+            });
+            paintExpFeatCount(key);
+        };
+
         const bindExpFeatureControls = (key) => {
             const ids = Admin.expFeatureControlIds(key);
             const header = document.getElementById(ids.header);
@@ -21044,9 +21162,11 @@ const Admin = {
             if (all) {
                 all.onchange = () => {
                     expFeatureState[key].allRoutes = !!all.checked;
+                    paintExpRegionBox(key);
                     paintExpRouteBox(key);
                 };
             }
+            paintExpRegionBox(key);
             paintExpRouteBox(key);
         };
 
@@ -21058,14 +21178,20 @@ const Admin = {
                 state.enabled = !!raw.enabled;
                 state.allRoutes = Array.isArray(raw.routeIds) && raw.routeIds.includes('*');
                 state.routes.clear();
+                state.regions.clear();
                 (Array.isArray(raw.routeIds) ? raw.routeIds : []).forEach((id) => {
                     if (id && id !== '*') state.routes.add(String(id));
+                });
+                (Array.isArray(raw.regionIds) ? raw.regionIds : []).forEach((id) => {
+                    const code = String(id || '').toUpperCase();
+                    if (code) state.regions.add(code);
                 });
                 const ids = Admin.expFeatureControlIds(f.key);
                 const enabled = document.getElementById(ids.enabled);
                 const all = document.getElementById(ids.all);
                 if (enabled) enabled.checked = state.enabled;
                 if (all) all.checked = state.allRoutes;
+                paintExpRegionBox(f.key);
                 paintExpRouteBox(f.key);
             });
             expFeaturesHydrated = true;
@@ -21356,10 +21482,11 @@ const Admin = {
                         updatedBy: Admin.currentUser?.email || 'Admin',
                     };
                     Admin.grantableFeatures().forEach((f) => {
-                        const state = expFeatureState[f.key] || { enabled: false, routes: new Set(), allRoutes: false };
+                        const state = expFeatureState[f.key] || { enabled: false, routes: new Set(), regions: new Set(), allRoutes: false };
                         payload[f.key] = {
                             enabled: !!state.enabled,
                             routeIds: state.allRoutes ? ['*'] : [...state.routes],
+                            regionIds: state.allRoutes ? [] : [...state.regions],
                         };
                     });
                     const res = await window.guardianFetch(`${dynamicEndpoint}config/features.json?auth=${secret}`, {

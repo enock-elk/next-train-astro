@@ -5,9 +5,9 @@
  * Never use five-tap unlock or the admin-ready / admin-session-active flags as the gate.
  */
 import { safeStorage } from './utils.js';
-import { $currentRouteId } from '../store.js';
+import { $currentRouteId, $userRegion } from '../store.js';
 import { $account } from './account.js';
-import { FEATURE_KEYS, isFeatureEnabled, isFeatureGranted } from './features.js';
+import { FEATURE_KEYS, fetchFeatures, getGrantedFeatures, isFeatureEnabled, isFeatureGranted, isRideCheckInPinned } from './features.js';
 import { isLiveTrainFollowActive } from './live-train-follow.js';
 
 function isSignedInAccount() {
@@ -51,7 +51,7 @@ function setReveal(el, on) {
     }
 }
 
-/** Pin-gated testers: Map / Community / Account follow pinned routes, not the viewed corridor. */
+/** Map / Community follow a region, the board route, a pin, or a device grant. */
 export function canAccessPilotSurface(surface, routeId = '') {
     if (isAdminAuthed()) return true;
     if (surface === 'map' && isFeatureGranted(FEATURE_KEYS.MAP_TAB)) return true;
@@ -64,15 +64,28 @@ export function canAccessPilotSurface(surface, routeId = '') {
         || isFeatureGranted(FEATURE_KEYS.COMMUNITY_TAB)
         || isFeatureGranted(FEATURE_KEYS.RIDE_CHECKIN)
     )) return true;
-    const pins = routeId ? [String(routeId)] : getPinnedRouteIds();
-    if (!pins.length) return false;
-    const hit = (key) => pins.some((id) => isFeatureEnabled(key, id));
+    const hit = (key) => experimentalFeatureMatches(key, routeId);
     if (surface === 'map') return hit(FEATURE_KEYS.MAP_TAB);
     if (surface === 'community') return hit(FEATURE_KEYS.COMMUNITY_TAB);
     if (surface === 'account') {
         return hit(FEATURE_KEYS.MAP_TAB) || hit(FEATURE_KEYS.COMMUNITY_TAB);
     }
     return false;
+}
+
+/**
+ * Region, the route on the board, a pinned route, or an explicit route argument.
+ * A device grant is handled before this runs.
+ */
+function experimentalFeatureMatches(key, routeId = '') {
+    const region = String($userRegion.get() || '').toUpperCase();
+    if (region && isFeatureEnabled(key, '', region)) return true;
+    const ids = new Set(routeId ? [String(routeId)] : getPinnedRouteIds());
+    if (!routeId) {
+        const current = String($currentRouteId.get() || '');
+        if (current) ids.add(current);
+    }
+    return [...ids].some((id) => isFeatureEnabled(key, id));
 }
 
 /**
@@ -188,6 +201,63 @@ export function applyAdminAuthedChrome(authed) {
     }
 }
 
+function experimentalAccessSnapshot() {
+    const routeId = String($currentRouteId.get() || '');
+    const region = String($userRegion.get() || '');
+    return {
+        map: !isAdminAuthed() && canAccessPilotSurface('map'),
+        community: !isAdminAuthed() && canAccessPilotSurface('community'),
+        ride: isRideCheckInPinned(routeId) || isFeatureEnabled(FEATURE_KEYS.RIDE_CHECKIN, routeId, region),
+    };
+}
+
+/** Fresh RTDB read soon after open. Revoke hides the surface; a live one refreshes after a toast. */
+export function scheduleExperimentalFeatureRecheck() {
+    if (typeof window === 'undefined' || window.__ntExpRecheck) return;
+    window.__ntExpRecheck = true;
+    const started = Date.now();
+    const run = async () => {
+        try {
+            await fetchFeatures();
+            const before = experimentalAccessSnapshot();
+            const grants = getGrantedFeatures();
+            const enabled = before.map || before.community || before.ride
+                || Object.values(grants).some((on) => on === true);
+            if (!enabled || isAdminAuthed()) return;
+            await fetchFeatures(true);
+            applyPilotChrome();
+            if (typeof window.renderRideSeenChip === 'function') {
+                try { window.renderRideSeenChip(); } catch { /* ignore */ }
+            }
+            const after = experimentalAccessSnapshot();
+            const lostMap = before.map && !after.map;
+            const lostCommunity = before.community && !after.community;
+            const lostRide = before.ride && !after.ride;
+            if (!lostMap && !lostCommunity && !lostRide) return;
+            const tab = safeStorage.getItem('activeTab') || '';
+            const mapOpen = lostMap && (
+                tab === 'map' || !!document.getElementById('view-map')?.classList.contains('active')
+            );
+            const communityOpen = lostCommunity && (
+                tab === 'community' || !!document.getElementById('view-community')?.classList.contains('active')
+            );
+            let sharing = false;
+            if (lostRide) {
+                try {
+                    sharing = !!JSON.parse(safeStorage.getItem('ridePingActiveV1') || 'null')?.routeId;
+                } catch { /* ignore */ }
+            }
+            if (!mapOpen && !communityOpen && !sharing) return;
+            if (typeof window.showToast === 'function') {
+                window.showToast('An experimental feature was turned off. Refreshing.', 'info', 2500);
+            }
+            window.setTimeout(() => { window.location.reload(); }, 700);
+        } catch { /* ignore */ }
+    };
+    const delay = Math.max(0, Math.min(1500, 5000 - (Date.now() - started)));
+    window.setTimeout(() => { run(); }, delay);
+}
+
 function bindPilotChromeListeners() {
     if (typeof window === 'undefined' || typeof window.addEventListener !== 'function' || window.__ntPilotChromeBound) return;
     window.__ntPilotChromeBound = true;
@@ -222,4 +292,5 @@ if (typeof window !== 'undefined') {
     window.getPinnedRouteIds = getPinnedRouteIds;
     window.placeAccountSettings = placeAccountSettings;
     bindPilotChromeListeners();
+    scheduleExperimentalFeatureRecheck();
 }

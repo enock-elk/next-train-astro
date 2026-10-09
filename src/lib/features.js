@@ -6,9 +6,12 @@
  *   communityRealtime: { enabled: true, routeIds: ["pta-pien"] | ["*"] },
  *   delayReportsUi:    { enabled: true, routeIds: ["*"] },
  *   pushNotify:        { enabled: true, routeIds: ["pta-pien", "ct-bellv"] },
- *   mapTab:            { enabled: true, routeIds: ["pta-kempton"] },
- *   communityTab:      { enabled: true, routeIds: ["pta-kempton"] }
+ *   mapTab:            { enabled: true, routeIds: ["pta-kempton"], regionIds: ["KZN"] },
+ *   communityTab:      { enabled: true, routeIds: ["pta-kempton"], regionIds: [] }
  * }
+ *
+ * A region, route, or device grant stays on until an admin turns that
+ * switch off. Empty routeIds with a region still enables the feature.
  *
  * Lab (`lab.nexttrain.co.za` or PUBLIC_LAB_MODE=true): missing/empty config →
  * realtime / delay / push / ride-checkin on (sharing still works for admins).
@@ -17,7 +20,7 @@
  * lab `*` default). Production: missing config → other flags off. Planner
  * trip fare is always on and is not a config/features flag.
  */
-import { DYNAMIC_BASE_URL, PILOT_ROUTE_IDS } from './config.js';
+import { DYNAMIC_BASE_URL, PILOT_ROUTE_IDS, ROUTES } from './config.js';
 
 export const FEATURE_KEYS = {
     COMMUNITY_REALTIME: 'communityRealtime',
@@ -42,6 +45,14 @@ export const GRANTABLE_FEATURES = [
 ];
 
 const CACHE_TTL_MS = 60 * 1000;
+const FEATURE_REGIONS = ['GP', 'WC', 'KZN', 'EC'];
+
+export function regionForRouteId(routeId) {
+    const id = String(routeId || '').trim();
+    if (!id || !ROUTES?.[id]) return '';
+    const region = String(ROUTES[id].region || '').toUpperCase();
+    return FEATURE_REGIONS.includes(region) ? region : '';
+}
 
 /** @type {Record<string, { enabled?: boolean, routeIds?: string[] }> | null} */
 let cachedFeatures = null;
@@ -157,8 +168,11 @@ function normalizeEntry(name, raw) {
     const routeIds = Array.isArray(raw.routeIds)
         ? raw.routeIds.map((id) => String(id)).filter(Boolean)
         : (fallback.routeIds || []);
+    const regionIds = Array.isArray(raw.regionIds)
+        ? [...new Set(raw.regionIds.map((id) => String(id).toUpperCase()).filter((id) => FEATURE_REGIONS.includes(id)))]
+        : (fallback.regionIds || []);
     const enabled = typeof raw.enabled === 'boolean' ? raw.enabled : !!fallback.enabled;
-    return { enabled, routeIds };
+    return { enabled, routeIds, regionIds };
 }
 
 export async function fetchFeatures(force = false) {
@@ -214,7 +228,7 @@ export async function fetchFeatures(force = false) {
  * @param {string} [routeId]
  * @returns {boolean}
  */
-export function isFeatureEnabled(name, routeId = '') {
+export function isFeatureEnabled(name, routeId = '', region = '') {
     // Planner trip fare is public. Ignore leftover RTDB tripPrice flags and grants.
     if (name === FEATURE_KEYS.TRIP_PRICE) return true;
     if (grantedFeatures[name] === true) return true;
@@ -225,10 +239,13 @@ export function isFeatureEnabled(name, routeId = '') {
     const entry = normalizeEntry(name, bag?.[name]);
     if (!entry.enabled) return false;
     const ids = entry.routeIds || [];
-    if (!ids.length) return false;
+    const regions = entry.regionIds || [];
     if (ids.includes('*')) return true;
-    if (!routeId) return ids.length > 0; // enabled for some routes; caller may gate further
-    return ids.includes(routeId);
+    const regionCode = String(region || regionForRouteId(routeId) || '').toUpperCase();
+    if (regionCode && regions.includes(regionCode)) return true;
+    if (routeId && ids.includes(String(routeId))) return true;
+    if (!routeId && !region) return ids.length > 0 || regions.length > 0;
+    return false;
 }
 
 /**
@@ -242,8 +259,11 @@ export function isRideCheckInPinned(routeId = '') {
     const entry = normalizeEntry(FEATURE_KEYS.RIDE_CHECKIN, bag?.[FEATURE_KEYS.RIDE_CHECKIN]);
     if (!entry.enabled) return false;
     const ids = entry.routeIds || [];
-    if (!ids.length) return false;
+    const regions = entry.regionIds || [];
+    if (!ids.length && !regions.length) return false;
     if (ids.includes('*')) return !isLabEnvironment();
+    const regionCode = regionForRouteId(routeId);
+    if (regionCode && regions.includes(regionCode)) return true;
     if (!routeId) return true;
     return ids.includes(String(routeId));
 }
@@ -260,6 +280,7 @@ if (typeof window !== 'undefined') {
     window.isFeatureGranted = isFeatureGranted;
     window.getGrantedFeatures = getGrantedFeatures;
     window.isRideCheckInPinned = isRideCheckInPinned;
+    window.regionForRouteId = regionForRouteId;
     window.isLabEnvironment = isLabEnvironment;
     window.relaxLiveShareGuards = relaxLiveShareGuards;
     window.GRANTABLE_FEATURES = GRANTABLE_FEATURES;

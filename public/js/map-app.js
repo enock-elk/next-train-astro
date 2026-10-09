@@ -3622,6 +3622,9 @@
                 // produce the readable final angle rather than repeat the parent yaw.
                 var labelCounterYaw = readableTrainLabelDeg(deg) - yaw;
                 var numSize = id.length >= 6 ? '8px' : (id.length >= 5 ? '9px' : '10px');
+                var numHtml = (spec && spec.far)
+                    ? ''
+                    : '<span class="nt-live-train-num" style="font-size:' + numSize + ';transform:rotate(' + labelCounterYaw + 'deg)">' + id + '</span>';
                 return '<div class="' + wrapCls + '" title="Train ' + id + '">'
                     + '<span class="nt-live-train-ring" aria-hidden="true"></span>'
                     + '<span class="nt-live-train-ring nt-live-train-ring--delay" aria-hidden="true"></span>'
@@ -3630,7 +3633,7 @@
                     + '<span class="nt-live-train-oval nt-live-train-oval--a" aria-hidden="true"></span>'
                     + '<span class="nt-live-train-oval nt-live-train-oval--b" aria-hidden="true"></span>'
                     + '<span class="nt-live-train-nose" aria-hidden="true"></span>'
-                    + '<span class="nt-live-train-num" style="font-size:' + numSize + ';transform:rotate(' + labelCounterYaw + 'deg)">' + id + '</span>'
+                    + numHtml
                     + '</span></div>';
             }
             function sharingStatusCopy(count, mine) {

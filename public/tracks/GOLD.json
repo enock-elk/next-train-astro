@@ -1,8 +1,8 @@
 {
   "branch": "map-gold",
-  "frozenAt": "6acac9ff119a1ff6eeb2ec7bd0828d88f1822c36",
+  "frozenAt": "bedc303339e113701176ba2b066ea7db1a8d5a71",
   "version": "V9_09.20.11",
-  "note": "Gold snapshot of this build: a shared train paints its rail line and the map follows that train until the commuter pans. Tracks unchanged. Diff against origin/map-gold. Fast-forward map-gold after this lands on main. Never force-push map-gold.",
+  "note": "Gold snapshot of this build: tracking card is Train 0755 Paused, Real-Time and Timetable are separate lines, far zoom hides the train number, and a stopped share drops the glyph. Tracks unchanged. Diff against origin/map-gold. Fast-forward map-gold after this lands on main. Never force-push map-gold.",
   "files": {
     "public/tracks/rail-tracks-EC.geojson": {
       "md5": "43409bfd05405205e596f0d03345ab18",
@@ -21,24 +21,24 @@
       "sha256": "090a5d7fc45cafb8c7b81dc583ae24978540f38278cab447953bc90c8821f01f"
     },
     "public/js/map-app.js": {
-      "md5": "7ab8f03db2b2f0ee4d24e1f06ee1b174",
-      "sha256": "7113ed86d2dd6962dd261f7a4cd4acd178cb65c41a3e5bb054873b543549ba30"
+      "md5": "063fa36c399bf1f5ee9fc50c3ceb187b",
+      "sha256": "b990068e26657c71d2e099728cda4b2b27b3a06b5592a1f3dde753d03d50fdb9"
     },
     "src/pages/map.astro": {
-      "md5": "350c7d4f0a633b90e6e8e5b4480b95cd",
-      "sha256": "63f80d33bb996355abefd0124d0ddcd768dc320e1de997134f13e9dd16dae830"
+      "md5": "a22e5ae6e1728561b29b57aaa64b4e88",
+      "sha256": "025b4186d5a57c09e5f5c71ff76b3969430dba6b1c64e3b2b5f1bf84e4f4d21f"
     },
     "src/components/MapView.astro": {
-      "md5": "3c193a59c9afc966bbb2ae0fcb1af1eb",
-      "sha256": "2e7059106d1cc34d1d4163edf39685dfda18a86553ca426aed6867a2058f3394"
+      "md5": "16dbaf31821bf9a3af688fc9f7a1bf56",
+      "sha256": "7d782b7a706b0020b5c64d7b7b4b2586504d06e7042d6ce92f2cf7ffde14060d"
     },
     "src/lib/rail-tracks.js": {
       "md5": "4d01be4e4e6347559351a8d039770d3d",
       "sha256": "e7385a8e07415f0862e983a5ffca225fc23e68c22f550ee13bc84ffdb52cf3dc"
     },
     "src/lib/map-tab.js": {
-      "md5": "a450de0c97b53aaaf4e35f8aaaf15100",
-      "sha256": "a9a09bd64069a8f3f60d4b40f5473ed0bd24e864d00ffef3f3c8f7e341d313aa"
+      "md5": "c6dac670db5d3052bcb8345dc1a7c630",
+      "sha256": "d82d45df6fa9b6a133a5114c0998a774a4e8696cb672311b0df02d9c1a840fe5"
     },
     "src/lib/clever-ads.js": {
       "md5": "4d78da253d60d3ba285de6c41d697cad",

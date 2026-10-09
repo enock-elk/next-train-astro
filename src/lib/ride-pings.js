@@ -272,12 +272,13 @@ export function shareEligibilityForTrain(trainId, routeId, opts = {}) {
     return { ok: true, stops, special: ban === 'special' };
 }
 
-/** Green chip / tracker entry: admin, or a pinned corridor that RTDB allow-lists. */
+/** Green chip / tracker entry: admin, a region or route allow-list, or a pinned corridor. */
 export function canSeeLiveShareChrome(routeId = $currentRouteId.get()) {
     if (isAdminAuthed()) return true;
+    const current = String(routeId || '');
+    if (current && isRideCheckInPinned(current)) return true;
     const pins = getPinnedRouteIds();
     if (!pins.length) return false;
-    const current = String(routeId || '');
     if (current && !pins.includes(current)) return false;
     const ids = current ? [current] : pins;
     return ids.some((id) => isRideCheckInPinned(id));
@@ -775,6 +776,8 @@ export async function compactPingsForMap(pings, { mineDeviceId = '', routeId = '
     const loose = [];
     (pings || []).forEach((p) => {
         if (typeof p?.coarseLat !== 'number' || typeof p?.coarseLng !== 'number') return;
+        if (String(p.trackingState || '') === TRACKING_STATE.STOPPED) return;
+        if ((p.expiresAt || 0) <= Date.now()) return;
         const state = p.trackingState || TRACKING_STATE.ACTIVE;
         // Community-suppressed sharers vanish for everyone except themselves
         // and operators' test trains.
@@ -820,11 +823,8 @@ export async function compactPingsForMap(pings, { mineDeviceId = '', routeId = '
             voteUp: tally.up,
             voteDown: tally.down,
         };
-        if (trainId) {
-            (trains[trainId] = trains[trainId] || []).push(row);
-        } else {
-            loose.push({ ...row, n: 1 });
-        }
+        if (!trainId) return;
+        (trains[trainId] = trains[trainId] || []).push(row);
     });
     const out = [];
     for (const trainId of Object.keys(trains)) {

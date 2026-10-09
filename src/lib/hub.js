@@ -975,7 +975,13 @@ async function submitFeedback() {
 
         try {
             const created = await res.json().catch(() => ({}));
-            await postCommuterInboxCopy({ text, feedbackType: type, feedbackId: created?.name });
+            await postCommuterInboxCopy({
+                text,
+                feedbackType: type,
+                feedbackId: created?.name,
+                attachmentUrl: attachmentUrls[0] || null,
+                attachmentUrls,
+            });
         } catch { /* thread copy is best-effort */ }
 
         showToast('Feedback sent! Thank you.', 'success');
@@ -1588,7 +1594,7 @@ async function applyThreadInboxReaction(row, list, emoji) {
     if (chips) chips.outerHTML = renderInboxReactionChips(entry, inboxReactionActorId(deviceId));
 }
 
-async function postCommuterInboxCopy({ text, feedbackType, feedbackId }) {
+async function postCommuterInboxCopy({ text, feedbackType, feedbackId, attachmentUrl, attachmentUrls }) {
     const deviceId = getThreadDeviceId();
     if (!deviceId || !text) return false;
     if (window.firebaseAuth && !window.firebaseAuth.currentUser && window.firebaseSignInAnonymously) {
@@ -1609,6 +1615,8 @@ async function postCommuterInboxCopy({ text, feedbackType, feedbackId }) {
         ...chatScopeFields(),
     };
     if (feedbackId) payload.feedbackId = String(feedbackId);
+    if (attachmentUrl) payload.attachmentUrl = attachmentUrl;
+    if (Array.isArray(attachmentUrls) && attachmentUrls.length) payload.attachmentUrls = attachmentUrls;
     rememberLocalInbox({ id: msgId, ...payload });
     const authParam = authToken ? `?auth=${encodeURIComponent(authToken)}` : '';
     const res = await fetch(
@@ -2746,7 +2754,13 @@ export function initHub() {
             const created = await res.json().catch(() => ({}));
             recordRateHit(FEEDBACK_RATE_KEY, { windowMs: FEEDBACK_WINDOW_MS });
             if (!signedInContactEmail()) persistValidContact(email);
-            await postCommuterInboxCopy({ text, feedbackType: 'thread_reply', feedbackId: created?.name });
+            await postCommuterInboxCopy({
+                text,
+                feedbackType: 'thread_reply',
+                feedbackId: created?.name,
+                attachmentUrl: attachmentUrls[0] || null,
+                attachmentUrls,
+            });
             if (input) input.value = '';
             if (threadFile) threadFile.value = '';
             paintThreadFileChip(threadFile);

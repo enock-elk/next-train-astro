@@ -89,6 +89,10 @@ function bytes(...vals) {
     const firebase = 'https://firebasestorage.googleapis.com/v0/b/app/o/feedback_attachments%2Fx.jpg?alt=media&token=abc';
     assert(sanitizeAttachmentDisplayUrl(firebase) === firebase, 'firebase download URL allowed');
     assert(classifyAttachmentUrl(firebase) === 'image', 'firebase jpg classified as image');
+    const bare = 'https://firebasestorage.googleapis.com/v0/b/metrorail-next-train.firebasestorage.app/o/feedback_attachments%2Ffeedback_1?alt=media&token=abc';
+    assert(classifyAttachmentUrl(bare) === 'image', 'storage photo without a file extension still previews as an image');
+    const pdf = 'https://firebasestorage.googleapis.com/v0/b/app/o/feedback_attachments%2Fx.pdf?alt=media&token=abc';
+    assert(classifyAttachmentUrl(pdf) === 'pdf', 'storage pdf stays a pdf');
     assert(sanitizeAttachmentDisplayUrl('https://evil.example/x.jpg') === null, 'foreign https blocked');
     assert(sanitizeAttachmentDisplayUrl('javascript:alert(1)') === null, 'javascript: blocked');
     assert(sanitizeAttachmentDisplayUrl('data:text/html;base64,PHNjcmlwdD4=') === null, 'data: blocked');

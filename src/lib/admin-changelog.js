@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_10.09.3': [
+        'Tapping a commuter photo in the inbox opens the original image and keeps that preview above the thread. Storage photos with no file extension still open. The preview no longer depends on a second tap or a new browser tab. No commuter What’s New. forceShow stays false.',
+    ],
     'V9_10.09.2': [
         'Tapping a commuter photo opens the original image in the preview. The feedback filter menu can use the full toolbar width so WhatsApp number stays on one line. Map station cards keep dark text on the white popup in dark mode. Signing out clears the on-screen admin chat and starts a new chat on the same device id. Signing in later merges that signed-out chat into the account thread. Admin keeps one person for that device, and those messages stay labelled Sent while signed out. No commuter What’s New. forceShow stays false.',
     ],

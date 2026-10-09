@@ -433,7 +433,7 @@ export function bindHistoryBackNavigation() {
 
         const adminLightbox = document.getElementById('admin-lightbox-modal');
         if (adminLightbox && !adminLightbox.classList.contains('hidden')) {
-            if (window.Admin?.closeLightbox) window.Admin.closeLightbox();
+            if (window.Admin?.closeLightbox) window.Admin.closeLightbox(true);
             else adminLightbox.classList.add('hidden');
             return;
         }

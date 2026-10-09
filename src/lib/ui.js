@@ -1104,26 +1104,51 @@ function bindAlertImageLightbox() {
     });
 }
 
+function lightboxCandidateSrc(url, host) {
+    const wrap = lightboxPosterHost(url, host) || (host?.nodeType === 1 ? host : null);
+    const posterImg = wrap?.querySelector?.('img') || null;
+    const loaded = !!(posterImg && posterImg.naturalWidth > 0);
+    const tries = [
+        url,
+        wrap?.getAttribute?.('data-alert-lightbox'),
+        loaded ? (posterImg.currentSrc || posterImg.getAttribute('src') || '') : '',
+    ];
+    for (const candidate of tries) {
+        const safe = sanitizeAttachmentDisplayUrl(candidate);
+        if (safe) return { src: safe, wrap, posterImg, loaded };
+    }
+    const blob = String(wrap?.getAttribute?.('data-alert-object-url') || '');
+    const live = loaded ? String(posterImg.currentSrc || posterImg.src || '') : '';
+    const objectUrl = live.startsWith('blob:') ? live : (blob.startsWith('blob:') ? blob : '');
+    if (objectUrl) return { src: objectUrl, wrap, posterImg, loaded: true };
+    return { src: '', wrap, posterImg, loaded };
+}
+
 export function openLightbox(url, host) {
     if (typeof window === 'undefined') return;
-    const src = sanitizeAttachmentDisplayUrl(url);
+    const picked = lightboxCandidateSrc(url, host);
+    const src = picked.src;
     if (!src) return;
-    const wrap = lightboxPosterHost(src, host);
-    const posterImg = wrap?.querySelector?.('img');
-    const loaded = !!(posterImg && posterImg.naturalWidth > 0);
-    const ready = !wrap || wrap.getAttribute('data-alert-ready') === '1' || loaded || /^https:\/\//i.test(src);
+    const wrap = picked.wrap;
+    const loaded = picked.loaded;
+    const ready = !wrap || wrap.getAttribute('data-alert-ready') === '1' || loaded || /^https:\/\//i.test(src) || src.startsWith('blob:');
     if (!ready) return;
     triggerHaptic();
     bindAlertImageLightbox();
     const { overlay, img } = lightboxEls();
     if (!overlay || !img) return;
+    window._isLightboxMode = true;
     history.pushState({ modal: 'lightbox' }, '', '#lightbox');
     lockBackgroundScroll();
-    window._isLightboxMode = true;
     resetAlertLightboxTransform();
     img.alt = 'Image Preview';
     img.decoding = 'async';
     const displaySrc = resolveLightboxDisplaySrc(src, wrap || host);
+    const devOpen = !!document.getElementById('dev-modal') && !document.getElementById('dev-modal').classList.contains('hidden');
+    if (devOpen) {
+        overlay.style.zIndex = '10050';
+        overlay.dataset.ntAdminLift = '1';
+    }
     overlay.classList.remove('hidden');
     overlay.classList.add('flex');
     if (img.getAttribute('src') !== displaySrc) img.src = displaySrc;
@@ -1140,6 +1165,10 @@ export function closeLightbox(fromPopState = false) {
     if (overlay && !overlay.classList.contains('hidden')) {
         overlay.classList.add('hidden');
         overlay.classList.remove('flex');
+        if (overlay.dataset.ntAdminLift) {
+            overlay.style.zIndex = '';
+            delete overlay.dataset.ntAdminLift;
+        }
         resetAlertLightboxTransform();
         if (img) img.alt = '';
         window._isLightboxMode = false;

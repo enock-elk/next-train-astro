@@ -154,7 +154,7 @@ export function attachmentPreviewHtml(url, opts = {}) {
     if (!safe) return '';
     const kind = classifyAttachmentUrl(safe);
     const attr = escapeHTML(safe);
-    const fn = opts.admin ? 'Admin.openLightbox' : 'window.openLightbox';
+    const fn = 'window.openLightbox';
     const onclick = lightboxOnclickJs(safe, fn);
     if (kind === 'image' && onclick) {
         return `<button type="button" onclick='event.stopPropagation(); ${onclick}' class="${opts.buttonClass || 'block focus:outline-none w-full text-left'}"><img src="${attr}" class="${opts.imgClass || 'w-full h-24 object-cover rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 hover:opacity-90 transition-opacity cursor-zoom-in'}" alt="${escapeHTML(opts.alt || 'Attachment')}"></button>`;

@@ -1929,7 +1929,7 @@ const Admin = {
             : '';
         if (!safe) return '';
         const js = typeof window.lightboxOnclickJs === 'function'
-            ? window.lightboxOnclickJs(safe, 'Admin.openLightbox')
+            ? window.lightboxOnclickJs(safe, 'window.openLightbox')
             : '';
         if (!js) return '';
         const href = typeof escapeHTML === 'function' ? escapeHTML(safe) : safe;
@@ -2292,8 +2292,7 @@ const Admin = {
             const original = poster?.getAttribute?.('data-alert-lightbox') || href || '';
             const blob = poster?.getAttribute?.('data-alert-object-url') || '';
             const src = original || blob;
-            Admin._lightboxPoster = el;
-            if (src && Admin.openLightbox) Admin.openLightbox(src);
+            if (src && typeof window.openLightbox === 'function') window.openLightbox(src, el);
         }, true);
         let longTimer = null;
         const clearLong = () => {
@@ -2323,9 +2322,7 @@ const Admin = {
                 const original = poster.getAttribute('data-alert-lightbox') || '';
                 const blob = poster.getAttribute('data-alert-object-url') || '';
                 const src = original || blob;
-                Admin._lightboxPoster = poster;
-                if (src && Admin.openLightbox) Admin.openLightbox(src);
-                else if (original && typeof window.openLightbox === 'function') window.openLightbox(original, poster);
+                if (src && typeof window.openLightbox === 'function') window.openLightbox(src, poster);
                 return;
             }
             const chip = e.target.closest?.('[data-inbox-react]');
@@ -8615,6 +8612,14 @@ const Admin = {
 
             // GUARDIAN PHASE 1: The Auto-Collapse "Accordion Rule" & Delegated Listener
             listContainer.onclick = (e) => {
+                const poster = e.target.closest?.('[data-alert-lightbox]');
+                if (poster && listContainer.contains(poster)) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const src = poster.getAttribute('data-alert-lightbox') || poster.getAttribute('data-alert-object-url') || '';
+                    if (src && typeof window.openLightbox === 'function') window.openLightbox(src, poster);
+                    return;
+                }
                 const clBtn = e.target.closest('[data-admin-changelog]');
                 if (clBtn && listContainer.contains(clBtn)) {
                     e.preventDefault();
@@ -15276,7 +15281,7 @@ const Admin = {
     /** Body HTML for notice-modal (no outer padded card). */
     buildNoticeBodyHtml: (data) => {
         if (!data) return '<p class="text-sm text-gray-500">No alert data.</p>';
-        // Admin.openLightbox (z-300) — never window.openLightbox/map-modal (z-160 under archive preview z-260)
+        // Same full-screen preview as the alert panel. openLightbox lifts it above Dev Mode.
         const posterUrls = Admin.collectAlertImageUrls(data);
         let imgHtml = posterUrls.map((src) => Admin.wrapLightboxImgHtml(src) || '').join('');
         let parsedMessage = data.message || data.text || 'No details provided.';

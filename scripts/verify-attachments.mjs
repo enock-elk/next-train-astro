@@ -115,7 +115,8 @@ function bytes(...vals) {
     assert(!isSafeLightboxOnclick('window.openLightbox(alert(1))'), 'bare-call onclick rejected');
     assert(!isSafeLightboxOnclick(`window.openLightbox(${JSON.stringify(firebase)}); alert(1)`), 'trailing statements rejected');
     const html = attachmentPreviewHtml(firebase, { admin: true });
-    assert(html.includes('Admin.openLightbox') && html.includes('firebasestorage.googleapis.com'), 'admin preview uses Admin lightbox');
+    assert(html.includes('window.openLightbox') && html.includes('firebasestorage.googleapis.com'), 'admin preview uses the alert lightbox');
+    assert(!html.includes('Admin.openLightbox'), 'admin preview does not use a second lightbox');
     assert(!attachmentPreviewHtml('https://evil.example/x.jpg'), 'evil preview is empty');
 }
 

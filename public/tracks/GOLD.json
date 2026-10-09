@@ -1,6 +1,6 @@
 {
   "branch": "map-gold",
-  "frozenAt": "bedc303339e113701176ba2b066ea7db1a8d5a71",
+  "frozenAt": "aed381917d74f11e7d7b45e9b36d7a903dc9ece4",
   "version": "V9_09.20.11",
   "note": "Gold snapshot of this build: station popups keep dark text on the white card in dark mode. Tracks unchanged. Diff against origin/map-gold. Fast-forward map-gold after this lands on main. Never force-push map-gold.",
   "files": {

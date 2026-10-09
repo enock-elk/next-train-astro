@@ -1,6 +1,6 @@
 {
   "branch": "map-gold",
-  "frozenAt": "6acac9ff119a1ff6eeb2ec7bd0828d88f1822c36",
+  "frozenAt": "bedc303339e113701176ba2b066ea7db1a8d5a71",
   "version": "V9_09.20.11",
   "note": "Gold snapshot of this build: tracking card is Train 0755 Paused, Real-Time and Timetable are separate lines, far zoom hides the train number, and a stopped share drops the glyph. Tracks unchanged. Diff against origin/map-gold. Fast-forward map-gold after this lands on main. Never force-push map-gold.",
   "files": {

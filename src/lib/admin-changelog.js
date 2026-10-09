@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_10.09.4': [
+        'Inbox photo taps use the same full-screen preview as service posters. The allowlist is unchanged: Firebase Storage and catalog posters only. A second admin lightbox is no longer used for those taps, and the preview sits above Dev Mode. No commuter What’s New. forceShow stays false.',
+    ],
     'V9_10.09.3': [
         'Tapping a commuter photo in the inbox opens the original image and keeps that preview above the thread. Storage photos with no file extension still open. The preview no longer depends on a second tap or a new browser tab. No commuter What’s New. forceShow stays false.',
     ],

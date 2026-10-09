@@ -210,7 +210,7 @@ export function renderLazyPosterHtml(urls, notice = null) {
         const src = escapeHTML(href);
         return `<button type="button" data-alert-lightbox="${src}" data-alert-notice-id="${noticeId}" data-alert-expires="${expiresAt}" class="relative block w-full aspect-square min-h-[10rem] max-h-72 focus:outline-none cursor-zoom-in rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm active:scale-[0.99] transition-transform">
             <span class="nt-alert-poster-loading absolute inset-0 flex items-center justify-center bg-gray-100 dark:bg-gray-900 pointer-events-none" aria-hidden="true">${spinner}</span>
-            <img src="${src}" alt="Service poster" draggable="false" fetchpriority="high" decoding="async" class="nt-alert-poster-img absolute inset-0 w-full h-full object-cover opacity-0 pointer-events-none">
+            <img src="${src}" alt="Service poster" draggable="false" fetchpriority="high" decoding="async" class="nt-alert-poster-img absolute inset-0 w-full h-full object-cover opacity-0">
             <span class="nt-zoom-plus absolute bottom-1.5 right-1.5 w-5 h-5 rounded-full bg-black/40 text-white text-xs font-bold leading-none flex items-center justify-center border border-white/20 pointer-events-none select-none shadow-sm" aria-hidden="true">+</span>
         </button>`;
     }).join('');

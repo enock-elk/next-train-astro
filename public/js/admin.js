@@ -1786,6 +1786,8 @@ const Admin = {
 
     // --- 0.16 IMAGE LIGHTBOX MODAL ---
     openLightbox: function(url, blobUrl, posterEl) {
+        if (!posterEl && Admin._lightboxPoster) posterEl = Admin._lightboxPoster;
+        Admin._lightboxPoster = null;
         const raw = String(url || '').trim();
         const safe = typeof window.sanitizeAttachmentDisplayUrl === 'function'
             ? window.sanitizeAttachmentDisplayUrl(raw)
@@ -1807,12 +1809,15 @@ const Admin = {
             });
         }
         const httpsLive = /^https:\/\//i.test(live) ? live : '';
-        const src = safe || httpsLive || ownedBlob;
+        const shown = (posterImg && posterImg.naturalWidth > 0)
+            ? (posterImg.currentSrc || posterImg.src || '')
+            : '';
+        const src = safe || (/^https:\/\//i.test(raw) ? raw : '') || httpsLive || ownedBlob || (/^blob:|^https:\/\//i.test(shown) ? shown : '');
         if (!src) return;
-        const fallback = (ownedBlob && ownedBlob !== src) ? ownedBlob : (httpsLive && httpsLive !== src ? httpsLive : '');
+        const fallback = [ownedBlob, httpsLive, shown, safe, /^https:\/\//i.test(raw) ? raw : ''].find((candidate) => candidate && candidate !== src) || '';
         window._adminLightboxOpen = true;
         try {
-            history.pushState({ modal: 'admin-lightbox', keepHash: location.hash || '' }, '', location.hash || '#admin-lightbox');
+            history.pushState({ modal: 'admin-lightbox', keepHash: location.hash || '' }, '', location.href);
         } catch { /* ignore */ }
         if (typeof lockBackgroundScroll === 'function') lockBackgroundScroll();
         let modal = document.getElementById('admin-lightbox-modal');
@@ -1833,18 +1838,21 @@ const Admin = {
             `;
             document.body.appendChild(modal);
         }
-        modal.style.zIndex = '800';
-        modal.style.display = 'flex';
+        modal.style.zIndex = '10050';
+        modal.classList.remove('hidden');
+        modal.style.setProperty('display', 'flex', 'important');
         
         const img = document.getElementById('admin-lightbox-img');
         if (img) {
+            const fallbacks = [fallback, ownedBlob, httpsLive, shown, safe].filter((candidate, index, all) => candidate && candidate !== src && all.indexOf(candidate) === index);
+            let fallbackAt = 0;
             img.onerror = () => {
-                if (fallback && img.src !== fallback) img.src = fallback;
+                const next = fallbacks[fallbackAt++];
+                if (next && img.getAttribute('src') !== next) img.src = next;
             };
             img.src = src;
         }
         
-        modal.classList.remove('hidden');
         void modal.offsetWidth; // Force Reflow
         if (img) {
             img.classList.remove('scale-95');
@@ -1852,11 +1860,12 @@ const Admin = {
         }
     },
 
-    closeLightbox: function() {
+    closeLightbox: function(fromPopState) {
+        if (!fromPopState && history.state && history.state.modal === 'admin-lightbox') {
+            history.back();
+            return;
+        }
         window._adminLightboxOpen = false;
-        const state = history.state;
-        if (state && state.modal === 'admin-lightbox') history.back();
-        else if (location.hash === '#admin-lightbox') history.back();
         if (typeof unlockBackgroundScroll === 'function') unlockBackgroundScroll();
         const modal = document.getElementById('admin-lightbox-modal');
         if (!modal) return;
@@ -1868,7 +1877,7 @@ const Admin = {
         modal.classList.add('opacity-0');
         setTimeout(() => {
             modal.classList.add('hidden');
-            modal.style.display = '';
+            modal.style.removeProperty('display');
             modal.classList.remove('opacity-0');
             if (img) img.src = '';
         }, 300);
@@ -2266,6 +2275,26 @@ const Admin = {
     bindFeedbackInboxReactions: (host) => {
         if (!host || host.dataset.inboxReactBound === '1') return;
         host.dataset.inboxReactBound = '1';
+        host.addEventListener('click', (e) => {
+            const poster = e.target.closest?.('[data-alert-lightbox]');
+            const link = !poster ? e.target.closest?.('a[href]') : null;
+            const href = link?.getAttribute?.('href') || '';
+            const storageLink = !!(link && host.contains(link) && /firebasestorage|googleusercontent|storage\.googleapis\.com/i.test(href));
+            if (!(poster && host.contains(poster)) && !storageLink) return;
+            e.preventDefault();
+            e.stopPropagation();
+            if (typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation();
+            if (storageLink && typeof window.classifyAttachmentUrl === 'function' && window.classifyAttachmentUrl(href) === 'pdf') {
+                window.open(href, '_blank', 'noopener');
+                return;
+            }
+            const el = poster || link;
+            const original = poster?.getAttribute?.('data-alert-lightbox') || href || '';
+            const blob = poster?.getAttribute?.('data-alert-object-url') || '';
+            const src = original || blob;
+            Admin._lightboxPoster = el;
+            if (src && Admin.openLightbox) Admin.openLightbox(src);
+        }, true);
         let longTimer = null;
         const clearLong = () => {
             if (longTimer) clearTimeout(longTimer);
@@ -2294,6 +2323,7 @@ const Admin = {
                 const original = poster.getAttribute('data-alert-lightbox') || '';
                 const blob = poster.getAttribute('data-alert-object-url') || '';
                 const src = original || blob;
+                Admin._lightboxPoster = poster;
                 if (src && Admin.openLightbox) Admin.openLightbox(src);
                 else if (original && typeof window.openLightbox === 'function') window.openLightbox(original, poster);
                 return;
@@ -11210,10 +11240,23 @@ const Admin = {
         return true;
     },
 
+    feedbackAttachmentList: (item) => {
+        const out = [];
+        const push = (u) => {
+            const s = String(u || '').trim();
+            if (s && !out.includes(s)) out.push(s);
+        };
+        if (!item) return out;
+        push(item.attachmentUrl);
+        const many = item.attachmentUrls;
+        if (Array.isArray(many)) many.forEach(push);
+        else if (many && typeof many === 'object') Object.values(many).forEach(push);
+        return out;
+    },
+
     feedbackItemHasAttachments: (item) => {
         if (!item) return false;
-        if (item.attachmentUrl) return true;
-        if (Array.isArray(item.attachmentUrls) && item.attachmentUrls.length) return true;
+        if (Admin.feedbackAttachmentList(item).length) return true;
         const html = String(item.text || item.message || '');
         return /admin_attachments|View Attached PDF|<img[\s>/]|openLightbox/i.test(html);
     },
@@ -17703,13 +17746,10 @@ const Admin = {
                             parsedAdminText = window.sanitizeRichHtml(parsedAdminText);
                         }
 
-                        const adminExtra = [];
-                        if (item.attachmentUrl) adminExtra.push(item.attachmentUrl);
-                        if (Array.isArray(item.attachmentUrls)) {
-                            item.attachmentUrls.forEach((u) => { if (u) adminExtra.push(u); });
-                        }
+                        const adminExtra = Admin.feedbackAttachmentList(item);
                         const adminMedia = Admin.layoutInboxMedia(parsedAdminText, adminExtra);
-                        parsedAdminText = `${adminMedia.media || ''}${adminMedia.body || ''}`;
+                        const adminAttachHtml = adminMedia.media || '';
+                        parsedAdminText = adminMedia.body || '';
 
                         // GUARDIAN UX FIX: Professional, high-contrast Admin message bubble
                         // id/data use raw inbox key (same as [REPLY TO ADMIN: key]) for quote jump
@@ -17740,6 +17780,7 @@ const Admin = {
                                         ${userRouteHtml}
                                         <div class="inbox-bubble-body">
                                             <div class="inbox-msg-text">${parsedAdminText}<span class="inbox-msg-time">${dateStr}${receiptHtml}${editedLabel}</span></div>
+                                            ${adminAttachHtml}
                                         </div>
                                     </div>
                                     ${reactChips}
@@ -17980,12 +18021,7 @@ const Admin = {
                         rawText = rawText.replace(/\n/g, '<br>');
 
                         const safeAppVersion = secureEscape(item.appVersion || 'Unknown');
-                        const rawAttach = [];
-                        if (item.attachmentUrl) rawAttach.push(item.attachmentUrl);
-                        if (item.attachmentUrls && Array.isArray(item.attachmentUrls)) {
-                            item.attachmentUrls.forEach((u) => { if (u) rawAttach.push(u); });
-                        }
-                        const uniqueAttach = [...new Set(rawAttach)];
+                        const uniqueAttach = Admin.feedbackAttachmentList(item);
 
                         // Safeguard rawText in case the replace cleared it completely
                         if (typeof rawText !== 'string') rawText = '';
@@ -18039,7 +18075,8 @@ const Admin = {
                                         ${integratedHeaderHtml}
                                         <div class="inbox-bubble-body">
                                             ${quoteBlockHtml}
-                                            <div class="inbox-msg-text">${rawText}${attachmentHtml}<span class="inbox-msg-time">${dateStr}</span></div>
+                                            <div class="inbox-msg-text">${rawText}<span class="inbox-msg-time">${dateStr}</span></div>
+                                            ${attachmentHtml}
                                         </div>
                                     </div>
                                     ${reactChips}

@@ -2,6 +2,10 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin, Dev Hub, Alerts, Trains near me, community chat, or other hidden-test work. No emoji and no em dashes in What’s New. Keep `APP_VERSION`, `package.json` `version`, and `public/app-version.json` aligned on each release. Changelog / What’s New may be skipped, or the heading may be only **no release notes.** Every bump must add `ADMIN_CHANGELOG[APP_VERSION]` (System Health Build notes).
 
+## V9_10.09.3 — no release notes
+
+Admin inbox photo taps open the original image above the thread, including storage photos that have no file extension. Commuter What’s New unchanged.
+
 ## V9_10.09.2 — no release notes
 
 Commuter photo tap opens the original image. The feedback filter menu uses the toolbar width. Station popups keep dark text on the white card in dark mode. Signing out starts a new admin chat on the same device id, and signing in merges it back. Commuter What’s New unchanged.

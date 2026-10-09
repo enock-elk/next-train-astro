@@ -106,6 +106,18 @@ export function sanitizeAttachmentDisplayUrl(url) {
     return sanitizeInlineAlertImageUrl(s);
 }
 
+function isStorageAttachmentHost(url) {
+    try {
+        const host = new URL(url, 'https://nexttrain.co.za').hostname.toLowerCase();
+        return host === 'firebasestorage.googleapis.com'
+            || host === 'storage.googleapis.com'
+            || host.endsWith('.firebasestorage.app')
+            || host.endsWith('.googleusercontent.com');
+    } catch {
+        return false;
+    }
+}
+
 export function classifyAttachmentUrl(url) {
     const safe = sanitizeAttachmentDisplayUrl(url);
     if (!safe) return null;
@@ -113,11 +125,13 @@ export function classifyAttachmentUrl(url) {
     try {
         path = decodeURIComponent(new URL(safe, 'https://nexttrain.co.za').pathname || '');
     } catch {
-        path = safe;
+        path = String(safe).split('?')[0];
     }
     const lower = withoutAppBase(path).toLowerCase();
-    if (/\.(jpe?g|png|gif|webp)$/.test(lower) || lower.includes('/images/alerts/')) return 'image';
     if (/\.pdf$/.test(lower)) return 'pdf';
+    if (/\.(jpe?g|png|gif|webp)$/.test(lower) || lower.includes('/images/alerts/')) return 'image';
+    // Commuter uploads are only photos or PDFs. A storage link with no extension is still a photo.
+    if (isStorageAttachmentHost(safe)) return 'image';
     return 'file';
 }
 

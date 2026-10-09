@@ -323,6 +323,7 @@ export function sanitizeInlineAlertImageUrl(url) {
         const host = u.hostname.toLowerCase();
         if (
             host === 'firebasestorage.googleapis.com'
+            || host === 'storage.googleapis.com'
             || host.endsWith('.firebasestorage.app')
             || host.endsWith('.googleusercontent.com')
         ) {

@@ -1785,27 +1785,41 @@ const Admin = {
     },
 
     // --- 0.16 IMAGE LIGHTBOX MODAL ---
-    openLightbox: function(url, blobUrl) {
+    openLightbox: function(url, blobUrl, posterEl) {
+        const raw = String(url || '').trim();
         const safe = typeof window.sanitizeAttachmentDisplayUrl === 'function'
-            ? window.sanitizeAttachmentDisplayUrl(url)
+            ? window.sanitizeAttachmentDisplayUrl(raw)
             : '';
-        const blob = String(blobUrl || (String(url || '').startsWith('blob:') ? url : '') || '');
+        let poster = posterEl && posterEl.getAttribute ? posterEl : null;
+        if (!poster && raw) {
+            document.querySelectorAll('[data-alert-lightbox], [data-alert-object-url]').forEach((el) => {
+                if (poster) return;
+                if (el.getAttribute('data-alert-lightbox') === raw || el.getAttribute('data-alert-object-url') === raw) poster = el;
+            });
+        }
+        const posterImg = poster?.querySelector?.('img') || null;
+        const live = posterImg ? (posterImg.currentSrc || posterImg.src || '') : '';
+        const blob = String(blobUrl || poster?.getAttribute?.('data-alert-object-url') || (raw.startsWith('blob:') ? raw : '') || '');
         let ownedBlob = '';
         if (blob.startsWith('blob:')) {
             document.querySelectorAll('[data-alert-object-url]').forEach((el) => {
                 if (!ownedBlob && el.getAttribute('data-alert-object-url') === blob) ownedBlob = blob;
             });
         }
-        const src = safe || ownedBlob;
+        const httpsLive = /^https:\/\//i.test(live) ? live : '';
+        const src = safe || httpsLive || ownedBlob;
         if (!src) return;
+        const fallback = (ownedBlob && ownedBlob !== src) ? ownedBlob : (httpsLive && httpsLive !== src ? httpsLive : '');
         window._adminLightboxOpen = true;
-        history.pushState({ modal: 'admin-lightbox' }, '', '#admin-lightbox');
+        try {
+            history.pushState({ modal: 'admin-lightbox', keepHash: location.hash || '' }, '', location.hash || '#admin-lightbox');
+        } catch { /* ignore */ }
         if (typeof lockBackgroundScroll === 'function') lockBackgroundScroll();
         let modal = document.getElementById('admin-lightbox-modal');
         if (!modal) {
             modal = document.createElement('div');
             modal.id = 'admin-lightbox-modal';
-            modal.className = 'fixed inset-0 bg-black/95 z-[300] hidden flex items-center justify-center p-2 sm:p-4 backdrop-blur-md transition-opacity duration-300';
+            modal.className = 'fixed inset-0 bg-black/95 hidden flex items-center justify-center p-2 sm:p-4 backdrop-blur-md transition-opacity duration-300';
             modal.onclick = (e) => {
                 if (e.target === modal || e.target.id === 'lightbox-close-btn' || e.target.closest('#lightbox-close-btn')) {
                     Admin.closeLightbox();
@@ -1815,13 +1829,20 @@ const Admin = {
                 <button id="lightbox-close-btn" class="absolute top-4 right-4 p-2.5 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors focus:outline-none z-10 backdrop-blur-sm">
                     <svg class="w-6 h-6 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
                 </button>
-                <img id="admin-lightbox-img" src="" class="max-w-full max-h-[90vh] object-contain rounded-lg shadow-2xl transform transition-transform scale-95 duration-300" alt="Full screen preview">
+                <img id="admin-lightbox-img" src="" class="max-w-full max-h-[90vh] object-contain rounded-lg shadow-2xl" alt="Full screen preview">
             `;
             document.body.appendChild(modal);
         }
+        modal.style.zIndex = '800';
+        modal.style.display = 'flex';
         
         const img = document.getElementById('admin-lightbox-img');
-        if (img) img.src = ownedBlob || src;
+        if (img) {
+            img.onerror = () => {
+                if (fallback && img.src !== fallback) img.src = fallback;
+            };
+            img.src = src;
+        }
         
         modal.classList.remove('hidden');
         void modal.offsetWidth; // Force Reflow
@@ -1833,7 +1854,9 @@ const Admin = {
 
     closeLightbox: function() {
         window._adminLightboxOpen = false;
-        if (location.hash === '#admin-lightbox') history.back();
+        const state = history.state;
+        if (state && state.modal === 'admin-lightbox') history.back();
+        else if (location.hash === '#admin-lightbox') history.back();
         if (typeof unlockBackgroundScroll === 'function') unlockBackgroundScroll();
         const modal = document.getElementById('admin-lightbox-modal');
         if (!modal) return;
@@ -1845,6 +1868,7 @@ const Admin = {
         modal.classList.add('opacity-0');
         setTimeout(() => {
             modal.classList.add('hidden');
+            modal.style.display = '';
             modal.classList.remove('opacity-0');
             if (img) img.src = '';
         }, 300);
@@ -2269,7 +2293,8 @@ const Admin = {
                 e.stopPropagation();
                 const original = poster.getAttribute('data-alert-lightbox') || '';
                 const blob = poster.getAttribute('data-alert-object-url') || '';
-                if (Admin.openLightbox && (original || blob)) Admin.openLightbox(original || blob, blob);
+                const src = original || blob;
+                if (src && Admin.openLightbox) Admin.openLightbox(src);
                 else if (original && typeof window.openLightbox === 'function') window.openLightbox(original, poster);
                 return;
             }
@@ -8189,24 +8214,22 @@ const Admin = {
                 </div>
 
                 <!-- GUARDIAN UX FIX: Relocated Action Buttons -->
-                <div class="grid-hidden-actions flex space-x-2 mb-3 px-1 shrink-0">
+                <div id="fb-filter-wrap" class="grid-hidden-actions relative flex space-x-2 mb-3 px-1 shrink-0">
                     <button id="fb-export-global-btn" onclick="event.stopPropagation()" class="flex-1 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-800 border border-indigo-200 dark:border-indigo-800 rounded-lg px-3 py-2.5 text-xs font-bold transition-colors shadow-sm focus:outline-none flex items-center justify-center gap-1.5">
                         ${Admin.icon('download', 'w-3.5 h-3.5')} Export All
                     </button>
-                    <div id="fb-filter-wrap" class="relative flex-1">
-                        <button id="fb-filter-btn" type="button" onclick="event.stopPropagation()" class="w-full bg-violet-50 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300 hover:bg-violet-100 dark:hover:bg-violet-800 border border-violet-200 dark:border-violet-800 rounded-lg px-3 py-2.5 text-xs font-bold transition-colors shadow-sm focus:outline-none flex items-center justify-center gap-1.5">
-                            ${Admin.icon('filter', 'w-3.5 h-3.5')} Filter
-                        </button>
-                        <div id="fb-filter-menu" class="hidden absolute left-0 right-0 top-full mt-1 z-40 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-xl p-2 space-y-1">
-                            <label class="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[11px] font-bold text-gray-800 dark:text-gray-100 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800"><input type="checkbox" data-fb-filter="email" class="rounded border-gray-300 text-violet-600 focus:ring-violet-500"> Email</label>
-                            <label class="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[11px] font-bold text-gray-800 dark:text-gray-100 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800"><input type="checkbox" data-fb-filter="whatsapp" class="rounded border-gray-300 text-violet-600 focus:ring-violet-500"> WhatsApp number</label>
-                            <label class="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[11px] font-bold text-gray-800 dark:text-gray-100 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800"><input type="checkbox" data-fb-filter="attachments" class="rounded border-gray-300 text-violet-600 focus:ring-violet-500"> Attachments</label>
-                            <label class="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[11px] font-bold text-gray-800 dark:text-gray-100 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800"><input type="checkbox" data-fb-filter="trips" class="rounded border-gray-300 text-violet-600 focus:ring-violet-500"> Trip plans</label>
-                        </div>
-                    </div>
+                    <button id="fb-filter-btn" type="button" onclick="event.stopPropagation()" class="flex-1 bg-violet-50 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300 hover:bg-violet-100 dark:hover:bg-violet-800 border border-violet-200 dark:border-violet-800 rounded-lg px-3 py-2.5 text-xs font-bold transition-colors shadow-sm focus:outline-none flex items-center justify-center gap-1.5">
+                        ${Admin.icon('filter', 'w-3.5 h-3.5')} Filter
+                    </button>
                     <button id="fb-refresh-btn" onclick="event.stopPropagation()" class="flex-1 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-800 border border-blue-200 dark:border-blue-800 rounded-lg px-3 py-2.5 text-xs font-bold transition-colors shadow-sm focus:outline-none flex items-center justify-center gap-1.5">
                         ${Admin.icon('refresh', 'w-3.5 h-3.5')} Refresh
                     </button>
+                    <div id="fb-filter-menu" class="hidden absolute left-0 top-full mt-1 z-50 w-max min-w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-xl p-2 space-y-1">
+                        <label class="flex items-center gap-2 px-2 py-2 rounded-lg text-xs font-bold text-gray-800 dark:text-gray-100 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 whitespace-nowrap"><input type="checkbox" data-fb-filter="email" class="rounded border-gray-300 text-violet-600 focus:ring-violet-500"> Email</label>
+                        <label class="flex items-center gap-2 px-2 py-2 rounded-lg text-xs font-bold text-gray-800 dark:text-gray-100 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 whitespace-nowrap"><input type="checkbox" data-fb-filter="whatsapp" class="rounded border-gray-300 text-violet-600 focus:ring-violet-500"> WhatsApp number</label>
+                        <label class="flex items-center gap-2 px-2 py-2 rounded-lg text-xs font-bold text-gray-800 dark:text-gray-100 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 whitespace-nowrap"><input type="checkbox" data-fb-filter="attachments" class="rounded border-gray-300 text-violet-600 focus:ring-violet-500"> Attachments</label>
+                        <label class="flex items-center gap-2 px-2 py-2 rounded-lg text-xs font-bold text-gray-800 dark:text-gray-100 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 whitespace-nowrap"><input type="checkbox" data-fb-filter="trips" class="rounded border-gray-300 text-violet-600 focus:ring-violet-500"> Trip plans</label>
+                    </div>
                 </div>
                 
                 <div id="fb-list" class="space-y-3 pr-1"></div>
@@ -8266,7 +8289,8 @@ const Admin = {
                 filterMenu.classList.toggle('hidden');
             });
             document.addEventListener('click', (e) => {
-                if (!e.target.closest?.('#fb-filter-wrap')) filterMenu.classList.add('hidden');
+                if (e.target.closest?.('#fb-filter-btn') || e.target.closest?.('#fb-filter-menu')) return;
+                filterMenu.classList.add('hidden');
             });
         }
         paintFilterBtn();
@@ -8781,11 +8805,21 @@ const Admin = {
                     item.inboxMsgId = hit.msgKey;
                     item.reactions = hit.msg.reactions;
                     item.reactedBy = hit.msg.reactedBy;
+                    if (hit.msg.chatScope) item.chatScope = hit.msg.chatScope;
+                    if (hit.msg.accountUid) item.accountUid = hit.msg.accountUid;
+                    if (hit.msg.sentSignedOut) item.sentSignedOut = true;
+                    if (hit.msg.mergedIntoDevice) item.mergedIntoDevice = hit.msg.mergedIntoDevice;
+                    if (hit.msg.mergedIntoId) item.mergedIntoId = hit.msg.mergedIntoId;
                     if (!item.appVersion && hit.msg.appVersion) item.appVersion = hit.msg.appVersion;
                     if (Admin.isBlankInboxRoute(item.routeId) && hit.msg.routeId) item.routeId = hit.msg.routeId;
                     if (!item.attachmentUrl && hit.msg.attachmentUrl) item.attachmentUrl = hit.msg.attachmentUrl;
                     if (!item.attachmentUrls && hit.msg.attachmentUrls) item.attachmentUrls = hit.msg.attachmentUrls;
                     usedInboxKeys.add(`${did}/${hit.msgKey}`);
+                });
+                mergedData.forEach((item) => {
+                    if (item.isFromAdmin || !item.mergedIntoDevice) return;
+                    item.device_id = item.mergedIntoDevice;
+                    item.deviceId = item.mergedIntoDevice;
                 });
 
                 // Fold Admin Replies (and unmatched commuter inbox copies) into the Thread Matrix
@@ -8796,6 +8830,8 @@ const Admin = {
                         Object.keys(deviceMessages).forEach(msgKey => {
                             const msg = deviceMessages[msgKey];
                             if (usedInboxKeys.has(`${deviceId}/${msgKey}`)) return;
+                            if (msg.mergedIntoDevice) return;
+                            if (msg.mergedFromDevice && mergedData.some((item) => !item.isFromAdmin && String(item.mergedIntoId || '') === String(msgKey))) return;
                             const fromCommuter = String(msg.from || '') === 'commuter';
                             let parentStatus = 'unread';
                             // Inherit the archive status of the parent ticket so threads collapse together
@@ -8826,6 +8862,11 @@ const Admin = {
                                 editedAt: msg.editedAt,
                                 reactions: msg.reactions,
                                 reactedBy: msg.reactedBy,
+                                chatScope: msg.chatScope,
+                                accountUid: msg.accountUid,
+                                sentSignedOut: msg.sentSignedOut,
+                                mergedFromDevice: msg.mergedFromDevice,
+                                mergedIntoDevice: msg.mergedIntoDevice,
                             });
                         });
                     });
@@ -17972,6 +18013,9 @@ const Admin = {
                         const commuterRouteHtml = commuterRouteLabel
                             ? `<div class="inbox-bubble-route-row">${secureEscape(commuterRouteLabel)}</div>`
                             : '';
+                        const signedOutHtml = (item.sentSignedOut || item.chatScope === 'guest')
+                            ? `<div class="text-[10px] font-semibold text-amber-700 dark:text-amber-300 mt-0.5">Sent while signed out</div>`
+                            : '';
                         const commuterVerBtn = /^V\d+_/i.test(verLabel)
                             ? `<button type="button" class="fb-version-chip relative z-[2] font-mono font-medium opacity-80 ml-2 shrink-0 underline decoration-dotted underline-offset-2 hover:opacity-100 focus:outline-none" data-admin-changelog="${verLabel}" onclick="event.preventDefault();event.stopPropagation();if(window.Admin&amp;&amp;Admin.openAdminChangelogLookup)Admin.openAdminChangelogLookup(this.getAttribute('data-admin-changelog')||this.textContent);">${verLabel}</button>`
                             : `<span class="font-mono font-medium opacity-60 ml-2 shrink-0">${verLabel}</span>`;
@@ -17981,6 +18025,7 @@ const Admin = {
                                 ${commuterVerBtn}
                             </div>
                             ${commuterRouteHtml}
+                            ${signedOutHtml}
                         `;
 
                         const inboxReactId = item.inboxMsgId || '';

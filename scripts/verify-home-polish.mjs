@@ -672,6 +672,10 @@ assert(refuseDisplayName('Enock').ok === true, 'ordinary first names are still a
     assert(liveBoardUi.includes("zone === 'Z1'"), 'Z1 keeps the original confirm-at-station note');
     const hubJs = readFileSync(new URL('../src/lib/hub.js', import.meta.url), 'utf8');
     assert(hubJs.includes('chatDeviceId'), 'Feedback Hub prefers the canonical oldest device');
+    assert(hubJs.includes('ntChatGuestSince'), 'logout chat is a timestamp slice, not a new user id');
+    assert(hubJs.includes('beginGuestChat'), 'logout starts a fresh admin chat on the same device');
+    assert(hubJs.includes('mergeGuestChatIntoAccount'), 'sign-in merges the signed-out chat');
+    assert(!/safeStorage\.setItem\(\s*['"]next_train_device_id['"]/.test(hubJs), 'logout chat does not replace the device id');
     const marksSrc = readFileSync(new URL('../src/lib/rider-marks.js', import.meta.url), 'utf8');
     assert(marksSrc.includes("requires: ['streak_3day']"), '5-day streak badge requires 3-day streak');
     assert(marksSrc.includes('min: 80'), 'Silver starts at 80 points');

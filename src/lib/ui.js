@@ -1105,11 +1105,12 @@ function bindAlertImageLightbox() {
 }
 
 function lightboxCandidateSrc(url, host) {
+    const direct = sanitizeAttachmentDisplayUrl(url);
     const wrap = lightboxPosterHost(url, host) || (host?.nodeType === 1 ? host : null);
     const posterImg = wrap?.querySelector?.('img') || null;
     const loaded = !!(posterImg && posterImg.naturalWidth > 0);
     const tries = [
-        url,
+        direct,
         wrap?.getAttribute?.('data-alert-lightbox'),
         loaded ? (posterImg.currentSrc || posterImg.getAttribute('src') || '') : '',
     ];

@@ -1000,7 +1000,6 @@ function bindAlertsChannelOnce() {
         const lightbox = e.target.closest?.('[data-alert-lightbox]');
         if (lightbox) {
             e.preventDefault();
-            if (lightbox.getAttribute('data-alert-ready') !== '1') return;
             const src = lightbox.getAttribute('data-alert-lightbox');
             if (src && typeof window.openLightbox === 'function') window.openLightbox(src, lightbox);
             return;

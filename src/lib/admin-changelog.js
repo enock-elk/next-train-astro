@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_10.09.2': [
+        'Tapping a commuter photo opens the original image in the preview. The feedback filter menu can use the full toolbar width so WhatsApp number stays on one line. Map station cards keep dark text on the white popup in dark mode. Signing out clears the on-screen admin chat and starts a new chat on the same device id. Signing in later merges that signed-out chat into the account thread. Admin keeps one person for that device, and those messages stay labelled Sent while signed out. No commuter What’s New. forceShow stays false.',
+    ],
     'V9_10.09.1': [
         'Experimental features can be allowed for a region, a route, or one device, and they stay on until an admin turns that switch off. Map for KwaZulu-Natal opens for commuters in that region, not only a pinned route or a single device grant. Within 5 seconds of open, an enabled commuter refetches the flags. If a feature was turned off and that screen is open, a toast says so and the app refreshes. Feedback inbox has a filter between Export All and Refresh for email, WhatsApp, attachments, and trip plans. Tapping a commuter photo opens the preview. Live checks show Restart only after a failed check. A pass asks Proceed or Cancel before sharing the train. Sharing is as the train only. The parked prompt no longer describes a background watch. The tracking card reads Train 0755 Paused, with Real-Time and Timetable on their own lines, and on-rail distance turns red past 400 m. Zoomed-out train glyphs hide the number. A stopped share drops the card and the glyph. No commuter What’s New. forceShow stays false.',
     ],

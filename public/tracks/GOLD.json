@@ -2,7 +2,7 @@
   "branch": "map-gold",
   "frozenAt": "bedc303339e113701176ba2b066ea7db1a8d5a71",
   "version": "V9_09.20.11",
-  "note": "Gold snapshot of this build: tracking card is Train 0755 Paused, Real-Time and Timetable are separate lines, far zoom hides the train number, and a stopped share drops the glyph. Tracks unchanged. Diff against origin/map-gold. Fast-forward map-gold after this lands on main. Never force-push map-gold.",
+  "note": "Gold snapshot of this build: station popups keep dark text on the white card in dark mode. Tracks unchanged. Diff against origin/map-gold. Fast-forward map-gold after this lands on main. Never force-push map-gold.",
   "files": {
     "public/tracks/rail-tracks-EC.geojson": {
       "md5": "43409bfd05405205e596f0d03345ab18",
@@ -25,8 +25,8 @@
       "sha256": "b990068e26657c71d2e099728cda4b2b27b3a06b5592a1f3dde753d03d50fdb9"
     },
     "src/pages/map.astro": {
-      "md5": "a22e5ae6e1728561b29b57aaa64b4e88",
-      "sha256": "025b4186d5a57c09e5f5c71ff76b3969430dba6b1c64e3b2b5f1bf84e4f4d21f"
+      "md5": "7f9b77f9f05d7631bf20ab165f8fdc80",
+      "sha256": "ae6d235e85fe04f39b485c31d674de3a12819d7080547f740430391250a15e00"
     },
     "src/components/MapView.astro": {
       "md5": "16dbaf31821bf9a3af688fc9f7a1bf56",

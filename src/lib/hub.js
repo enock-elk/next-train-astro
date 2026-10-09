@@ -31,6 +31,7 @@ import {
     inboxEntriesFromMap,
     markInboxDelivered,
     markInboxRead,
+    patchInboxMessageFields,
 } from './inbox-receipts.js';
 import {
     inboxReactionActorId,
@@ -866,24 +867,25 @@ async function submitFeedback() {
             routeId: $currentRouteId.get() || null,
             deviceId,
             contact: email || null,
-            publish: {
-                kind: 'feedback',
-                payload: {
-                    type,
-                    text,
-                    email,
-                    status: 'unread',
-                    appVersion: APP_VERSION,
-                    routeId: $currentRouteId.get() || 'none',
-                    region: $userRegion.get() || 'GP',
-                    timestamp: Date.now(),
-                    userAgent: navigator.userAgent,
-                    deviceId,
-                    isPWA: isStandalone,
-                    // Held messages are text-only for v1 (attachments not uploaded on hold).
-                    attachmentsHeld: hasFile,
+                publish: {
+                    kind: 'feedback',
+                    payload: {
+                        type,
+                        text,
+                        email,
+                        status: 'unread',
+                        appVersion: APP_VERSION,
+                        routeId: $currentRouteId.get() || 'none',
+                        region: $userRegion.get() || 'GP',
+                        timestamp: Date.now(),
+                        userAgent: navigator.userAgent,
+                        deviceId,
+                        isPWA: isStandalone,
+                        // Held messages are text-only for v1 (attachments not uploaded on hold).
+                        attachmentsHeld: hasFile,
+                        ...chatScopeFields(),
+                    },
                 },
-            },
         });
         recordRateHit(FEEDBACK_RATE_KEY, { windowMs: FEEDBACK_WINDOW_MS });
         showToast(safety.message, 'info');
@@ -958,7 +960,8 @@ async function submitFeedback() {
             timestamp: Date.now(),
             userAgent: navigator.userAgent,
             deviceId: $deviceId.get() || safeStorage.getItem('next_train_device_id') || 'unknown',
-            isPWA: isStandalone
+            isPWA: isStandalone,
+            ...chatScopeFields(),
         };
 
         const authParam = authToken ? `?auth=${authToken}` : '';
@@ -1136,7 +1139,9 @@ function getThreadDeviceId() {
 }
 
 const LOCAL_INBOX_KEY = 'ntInboxLocalV1';
+const CHAT_GUEST_SINCE_KEY = 'ntChatGuestSince';
 let latestPendingAdminReply = null;
+let guestMergeFlight = null;
 
 function rememberAcknowledgedInboxReplies(entries, deviceId = getThreadDeviceId()) {
     const tokens = (entries || [])
@@ -1187,6 +1192,165 @@ function mergeInboxThread(remote, local) {
 
 function isCommuterInboxMsg(m) {
     return m?.from === 'commuter' || String(m?.id || '').startsWith('cm_');
+}
+
+function signedInUid() {
+    const acct = $account.get();
+    return acct?.status === 'signed-in' && acct.uid ? String(acct.uid) : '';
+}
+
+function chatScopeFields() {
+    const uid = signedInUid();
+    if (uid) return { accountUid: uid, chatScope: 'account' };
+    return { chatScope: 'guest', sentSignedOut: true };
+}
+
+/** Signed-out view is a new chat on the same device id. Never-signed-in guests still see history. */
+function inboxMessageInScope(m) {
+    if (!m) return false;
+    const uid = signedInUid();
+    const guestSince = Number(safeStorage.getItem(CHAT_GUEST_SINCE_KEY) || 0);
+    const scope = m.chatScope || '';
+    const msgUid = m.accountUid || '';
+    if (uid) {
+        if ((scope === 'guest' || m.sentSignedOut) && msgUid && msgUid !== uid) return false;
+        return true;
+    }
+    if (!guestSince) return true;
+    if ((m.timestamp || 0) < guestSince) return false;
+    if (scope === 'account' && msgUid) return false;
+    return true;
+}
+
+function beginGuestChat() {
+    const now = String(Date.now());
+    safeStorage.setItem(CHAT_GUEST_SINCE_KEY, now);
+    safeStorage.setResilientItem?.(CHAT_GUEST_SINCE_KEY, now)?.catch?.(() => {});
+    latestPendingAdminReply = null;
+    document.getElementById('developer-reply-banner')?.classList.add('hidden');
+    syncInboxBadges(0);
+    const modal = document.getElementById('messages-thread-modal');
+    const open = modal && !modal.classList.contains('hidden');
+    if (open) renderMessagesThread([]);
+    checkServiceAlerts().catch(() => {});
+    if (open) fetchInboxThread().then((list) => renderMessagesThread(list)).catch(() => {});
+}
+
+async function fetchInboxMap(deviceId) {
+    const id = String(deviceId || '').trim();
+    if (!id) return [];
+    const res = await fetch(`${DYNAMIC_BASE_URL}inbox/${encodeURIComponent(id)}.json?t=${Date.now()}`);
+    if (!res.ok) return [];
+    const data = await res.json();
+    if (!data || typeof data !== 'object') return [];
+    return inboxEntriesFromMap(data).filter((m) => m && (m.message || m.text));
+}
+
+async function putCommuterInboxMessage(deviceId, msgId, payload) {
+    if (!deviceId || !msgId || !payload?.message) return false;
+    if (window.firebaseAuth && !window.firebaseAuth.currentUser && window.firebaseSignInAnonymously) {
+        try { await window.firebaseSignInAnonymously(window.firebaseAuth); } catch { /* optional */ }
+    }
+    let authToken = '';
+    if (window.firebaseAuth?.currentUser && window.firebaseGetIdToken) {
+        try { authToken = await window.firebaseGetIdToken(window.firebaseAuth.currentUser, true); } catch { /* ignore */ }
+    }
+    const authParam = authToken ? `?auth=${encodeURIComponent(authToken)}` : '';
+    try {
+        const res = await fetch(
+            `${DYNAMIC_BASE_URL}inbox/${encodeURIComponent(deviceId)}/${encodeURIComponent(msgId)}.json${authParam}`,
+            {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            }
+        );
+        return res.ok;
+    } catch {
+        return false;
+    }
+}
+
+async function mergeGuestChatIntoAccount() {
+    if (guestMergeFlight) return guestMergeFlight;
+    guestMergeFlight = (async () => {
+        const since = Number(safeStorage.getItem(CHAT_GUEST_SINCE_KEY) || 0);
+        const acct = $account.get();
+        const uid = acct?.status === 'signed-in' ? String(acct.uid || '') : '';
+        if (!since || !uid) return;
+        const localId = $deviceId.get() || safeStorage.getItem('next_train_device_id') || '';
+        const canonical = acct.chatDeviceId || localId;
+        if (!localId) return;
+        let remote = [];
+        try { remote = await fetchInboxMap(localId); } catch { remote = []; }
+        const slice = (remote || []).filter((m) => (m.timestamp || 0) >= since && m.id);
+        let copyFailed = false;
+        for (const m of slice) {
+            const fields = {
+                accountUid: uid,
+                chatScope: 'account',
+                mergedAt: Date.now(),
+            };
+            if (isCommuterInboxMsg(m)) fields.sentSignedOut = true;
+            if (canonical && canonical !== localId && isCommuterInboxMsg(m) && (m.message || m.text)) {
+                const copyId = `cm_m_${String(m.id)}`.replace(/[.#$[\]/]/g, '_').slice(0, 120);
+                const payload = {
+                    from: 'commuter',
+                    deviceId: canonical,
+                    message: String(m.message || m.text || '').slice(0, 2000),
+                    timestamp: m.timestamp || Date.now(),
+                    type: m.type || 'general',
+                    read: true,
+                    accountUid: uid,
+                    chatScope: 'account',
+                    sentSignedOut: true,
+                    mergedFromDevice: localId,
+                    mergedFromId: m.id,
+                };
+                if (m.feedbackId) payload.feedbackId = String(m.feedbackId);
+                if (m.attachmentUrl) payload.attachmentUrl = m.attachmentUrl;
+                if (m.attachmentUrls) payload.attachmentUrls = m.attachmentUrls;
+                const copied = await putCommuterInboxMessage(canonical, copyId, payload);
+                if (!copied) copyFailed = true;
+                else {
+                    fields.mergedIntoDevice = canonical;
+                    fields.mergedIntoId = copyId;
+                }
+            }
+            await patchInboxMessageFields(localId, m.id, fields);
+        }
+        if (copyFailed) return;
+        if (Number(safeStorage.getItem(CHAT_GUEST_SINCE_KEY) || 0) !== since) return;
+        safeStorage.removeItem(CHAT_GUEST_SINCE_KEY);
+        safeStorage.setResilientItem?.(CHAT_GUEST_SINCE_KEY, '')?.catch?.(() => {});
+        const modal = document.getElementById('messages-thread-modal');
+        if (modal && !modal.classList.contains('hidden')) {
+            try { renderMessagesThread(await fetchInboxThread()); } catch { /* keep current paint */ }
+        }
+        checkServiceAlerts().catch(() => {});
+    })().finally(() => { guestMergeFlight = null; });
+    return guestMergeFlight;
+}
+
+function bindChatAccountListener() {
+    if (typeof window === 'undefined' || window.__ntChatAccountBound) return;
+    window.__ntChatAccountBound = true;
+    let lastStatus = $account.get()?.status || '';
+    window.addEventListener('accountchange', (e) => {
+        const next = e.detail?.status || $account.get()?.status || '';
+        const prev = lastStatus;
+        lastStatus = next;
+        if (prev === 'signed-in' && next !== 'signed-in') {
+            beginGuestChat();
+            return;
+        }
+        if (next === 'signed-in' && safeStorage.getItem(CHAT_GUEST_SINCE_KEY)) {
+            mergeGuestChatIntoAccount().catch(() => {});
+        }
+    });
+    if (lastStatus === 'signed-in' && safeStorage.getItem(CHAT_GUEST_SINCE_KEY)) {
+        mergeGuestChatIntoAccount().catch(() => {});
+    }
 }
 
 function inboxMediaFromHtml(html, extraUrls = []) {
@@ -1283,7 +1447,16 @@ async function fetchInboxThread() {
     let remote = [];
     try { remote = await withTimeout(fetchRemoteInbox(), 6000, []); } catch { remote = []; }
     if (!Array.isArray(remote)) remote = [];
-    return mergeInboxThread(remote, readLocalInbox().length ? readLocalInbox() : localFirst);
+    const localId = $deviceId.get() || safeStorage.getItem('next_train_device_id') || '';
+    const threadId = getThreadDeviceId();
+    if (signedInUid() && localId && threadId && localId !== threadId) {
+        try {
+            const extra = await withTimeout(fetchInboxMap(localId), 6000, []);
+            remote = mergeInboxThread(remote, (extra || []).filter((m) => !m.mergedIntoDevice));
+        } catch { /* canonical thread still shows */ }
+    }
+    const local = readLocalInbox().length ? readLocalInbox() : localFirst;
+    return mergeInboxThread(remote, local).filter(inboxMessageInScope);
 }
 
 function renderMessagesThread(list) {
@@ -1384,7 +1557,6 @@ function bindInboxThreadReactions(host) {
         const poster = e.target.closest?.('[data-alert-lightbox]');
         if (poster && host.contains(poster)) {
             e.preventDefault();
-            if (poster.getAttribute('data-alert-ready') !== '1') return;
             const src = poster.getAttribute('data-alert-lightbox');
             if (src && typeof window.openLightbox === 'function') window.openLightbox(src, poster);
             return;
@@ -1434,6 +1606,7 @@ async function postCommuterInboxCopy({ text, feedbackType, feedbackId }) {
         timestamp: Date.now(),
         type: feedbackType || 'general',
         read: true,
+        ...chatScopeFields(),
     };
     if (feedbackId) payload.feedbackId = String(feedbackId);
     rememberLocalInbox({ id: msgId, ...payload });
@@ -1459,7 +1632,7 @@ export async function openMessagesThread(replyToAcknowledge = latestPendingAdmin
         syncInboxBadges(0);
     }
     const host = document.getElementById('messages-thread-list');
-    const local = readLocalInbox();
+    const local = readLocalInbox().filter(inboxMessageInScope);
     if (host) {
         if (local.length) renderMessagesThread(local);
         else host.innerHTML = '<p class="text-xs text-gray-400 text-center py-8">Loading…</p>';
@@ -1816,8 +1989,10 @@ export async function checkServiceAlerts() {
                     if (inboxData) {
                         markInboxDelivered(deviceId, inboxEntriesFromMap(inboxData)).catch(() => {});
                         const unreadKeys = Object.keys(inboxData).filter((k) => {
-                            const locallyAcknowledged = localAcknowledgements.has(inboxReplyAckToken(deviceId, inboxData[k], k));
-                            return inboxReplyStillVisible(inboxData[k], Date.now(), locallyAcknowledged);
+                            const entry = inboxData[k];
+                            if (!inboxMessageInScope({ ...entry, id: k })) return false;
+                            const locallyAcknowledged = localAcknowledgements.has(inboxReplyAckToken(deviceId, entry, k));
+                            return inboxReplyStillVisible(entry, Date.now(), locallyAcknowledged);
                         });
                         syncInboxBadges(unreadKeys.length);
                         if (unreadKeys.length > 0) {
@@ -1920,6 +2095,7 @@ export function initHub() {
     window.openFeedbackReplyFromOverlay = openFeedbackReplyFromOverlay;
     window.openFeedbackModal = openFeedbackModal;
     window.syncFeedbackModalViewport = syncFeedbackModalViewport;
+    bindChatAccountListener();
     injectRichTextStyles();
     initAlertsChannel();
     bindMapOverrideSaveListener();
@@ -2517,6 +2693,7 @@ export function initHub() {
                         deviceId,
                         isPWA: isStandalone,
                         attachmentsHeld: hasFile,
+                        ...chatScopeFields(),
                     },
                 },
             });
@@ -2558,6 +2735,7 @@ export function initHub() {
                 userAgent: navigator.userAgent,
                 deviceId: getThreadDeviceId() || 'unknown',
                 isPWA: window.matchMedia('(display-mode: standalone)').matches || !!window.navigator.standalone,
+                ...chatScopeFields(),
             };
             const authParam = authToken ? `?auth=${authToken}` : '';
             const res = await fetch(`${DYNAMIC_BASE_URL}feedback.json${authParam}`, {

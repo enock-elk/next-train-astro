@@ -982,6 +982,7 @@ function resolveLightboxDisplaySrc(src, host) {
     try {
         const wrap = lightboxPosterHost(src, host);
         const poster = wrap?.querySelector?.('img') || null;
+        if (/^https:\/\//i.test(src)) return src;
         if (poster && poster.naturalWidth > 0) {
             const live = poster.currentSrc || poster.getAttribute('src') || poster.src || '';
             if (live) return live;
@@ -1108,7 +1109,10 @@ export function openLightbox(url, host) {
     const src = sanitizeAttachmentDisplayUrl(url);
     if (!src) return;
     const wrap = lightboxPosterHost(src, host);
-    if (wrap && wrap.getAttribute('data-alert-ready') !== '1') return;
+    const posterImg = wrap?.querySelector?.('img');
+    const loaded = !!(posterImg && posterImg.naturalWidth > 0);
+    const ready = !wrap || wrap.getAttribute('data-alert-ready') === '1' || loaded || /^https:\/\//i.test(src);
+    if (!ready) return;
     triggerHaptic();
     bindAlertImageLightbox();
     const { overlay, img } = lightboxEls();

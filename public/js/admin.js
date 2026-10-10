@@ -22804,4 +22804,13 @@ const Admin = {
 };
 
 window.Admin = Admin;
+document.addEventListener('click', (event) => {
+    const button = event.target?.closest?.('#notice-modal button[onclick*="openLightbox"], #disruption-modal button[onclick*="openLightbox"]');
+    if (!button) return;
+    const modal = button.closest('#notice-modal, #disruption-modal');
+    const overlay = document.getElementById('alert-image-lightbox');
+    // #region agent log
+    ntAgentDebugLog('A,B,C', 'public/js/admin.js:adminAlertPreviewCapture', 'admin service alert image click captured', { targetTag: event.target?.tagName || '', modalId: modal?.id || '', modalZ: modal ? getComputedStyle(modal).zIndex : '', openLightboxType: typeof window.openLightbox, sharedUiHasAdminLift: String(window.openLightbox || '').includes('10050'), overlayHidden: !overlay || overlay.classList.contains('hidden'), overlayZ: overlay ? getComputedStyle(overlay).zIndex : '' });
+    // #endregion
+}, true);
 // Astro bootstrap calls Admin.init() after Firebase + globals are ready

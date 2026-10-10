@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_10.10.2': [
+        'Dev Mode Commuter Feedback opens an attached photo in the same full-screen preview commuters get from a service poster. The panel shows that preview itself, above Dev Mode, and keeps the feedback hash. Several photos in one message can be swiped or stepped. The commuter inbox and the alerts feed are unchanged. No commuter What’s New. forceShow stays false.',
+    ],
     'V9_10.10.1': [
         'Feedback photos still use the service-poster preview, but admin.js now lifts that shared overlay above Dev Mode itself. This covers warm GitHub preview and PWA sessions whose already-loaded hashed UI bundle predates the shared-preview lift. The attachment allowlist is unchanged. No commuter What’s New. forceShow stays false.',
     ],

@@ -2273,26 +2273,202 @@ const Admin = {
     },
 
     /**
-     * Use the shared service-poster preview, but lift it from admin.js too.
-     * A warm PWA can load this mutable admin bundle while its hashed ui.js is
-     * still an older generation that leaves the shared overlay under Dev Mode.
+     * Picture URL for a Dev Mode feedback photo. Prefer the image already on
+     * screen, then the stored attachment URL.
+     */
+    feedbackPreviewSrc: (src, poster) => {
+        const img = poster?.tagName === 'IMG' ? poster : poster?.querySelector?.('img');
+        const live = img && img.naturalWidth > 0 ? (img.currentSrc || img.src || '') : '';
+        const blob = poster?.getAttribute?.('data-alert-object-url') || '';
+        const attr = poster?.getAttribute?.('data-alert-lightbox') || '';
+        const tries = [live, blob, src, attr];
+        for (const candidate of tries) {
+            const s = String(candidate || '').trim();
+            if (!s) continue;
+            if (s.startsWith('blob:') || /^https:\/\//i.test(s)) return s;
+            if (typeof window.sanitizeAttachmentDisplayUrl === 'function') {
+                const safe = window.sanitizeAttachmentDisplayUrl(s);
+                if (safe) return safe;
+            }
+        }
+        return '';
+    },
+
+    /** Other photos in the same feedback bubble, so left/right can move between them. */
+    feedbackPreviewUrls: (poster, current) => {
+        const root = poster?.closest?.('.inbox-bubble') || poster;
+        const urls = [];
+        const push = (u) => {
+            const s = String(u || '').trim();
+            if (!s || urls.includes(s)) return;
+            if (s.startsWith('blob:') || /^https:\/\//i.test(s) || s.startsWith('/')) urls.push(s);
+        };
+        root?.querySelectorAll?.('[data-alert-lightbox]').forEach((el) => {
+            push(el.getAttribute('data-alert-lightbox'));
+        });
+        if (!urls.length) push(current);
+        else if (current && /^https:\/\//i.test(current) && !urls.includes(current)) urls.unshift(current);
+        return urls;
+    },
+
+    clearFeedbackPreviewChrome: (overlay) => {
+        if (!overlay) return;
+        overlay.querySelectorAll('[data-fb-preview-step]').forEach((node) => node.remove());
+        delete overlay.dataset.ntFeedbackGallery;
+        delete overlay.dataset.ntFeedbackIndex;
+        if (overlay.dataset.ntAdminLift) {
+            overlay.style.zIndex = '';
+            delete overlay.dataset.ntAdminLift;
+        }
+    },
+
+    paintFeedbackPreviewChrome: (overlay) => {
+        const stage = document.getElementById('alert-image-lightbox-stage');
+        if (!stage) return;
+        stage.querySelectorAll('[data-fb-preview-step]').forEach((node) => node.remove());
+        const urls = String(overlay?.dataset?.ntFeedbackGallery || '').split('\n').filter(Boolean);
+        if (urls.length < 2) return;
+        const make = (dir, label, side) => {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.setAttribute('data-fb-preview-step', String(dir));
+            btn.setAttribute('aria-label', label);
+            btn.className = `absolute top-1/2 -translate-y-1/2 ${side} z-20 w-11 h-11 rounded-full bg-black/50 text-white text-2xl leading-none`;
+            btn.textContent = dir < 0 ? '\u2039' : '\u203A';
+            return btn;
+        };
+        stage.appendChild(make(-1, 'Previous image', 'left-2'));
+        stage.appendChild(make(1, 'Next image', 'right-2'));
+    },
+
+    stepFeedbackPreview: (overlay, dir) => {
+        const urls = String(overlay?.dataset?.ntFeedbackGallery || '').split('\n').filter(Boolean);
+        if (urls.length < 2) return;
+        let index = Number(overlay.dataset.ntFeedbackIndex || 0) + dir;
+        if (index < 0) index = urls.length - 1;
+        if (index >= urls.length) index = 0;
+        overlay.dataset.ntFeedbackIndex = String(index);
+        const img = document.getElementById('alert-image-lightbox-img');
+        if (img) img.src = urls[index];
+    },
+
+    bindFeedbackPreviewChrome: (overlay) => {
+        if (!overlay || overlay.dataset.ntFbPreviewBound === '1') return;
+        overlay.dataset.ntFbPreviewBound = '1';
+        const closeBtn = document.getElementById('alert-image-lightbox-close');
+        closeBtn?.addEventListener('click', (e) => {
+            if (history.state?.modal !== 'feedback-preview') return;
+            e.preventDefault();
+            e.stopPropagation();
+            if (typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation();
+            try { history.back(); } catch { Admin.dismissFeedbackPreview(overlay); }
+        }, true);
+        let startX = 0;
+        let startY = 0;
+        const stage = document.getElementById('alert-image-lightbox-stage');
+        stage?.addEventListener('touchstart', (e) => {
+            if (!overlay.dataset.ntFeedbackGallery) return;
+            if (!e.touches || e.touches.length !== 1) return;
+            startX = e.touches[0].clientX;
+            startY = e.touches[0].clientY;
+        }, { passive: true });
+        stage?.addEventListener('touchend', (e) => {
+            if (!overlay.dataset.ntFeedbackGallery) return;
+            const touch = e.changedTouches && e.changedTouches[0];
+            if (!touch) return;
+            const dx = touch.clientX - startX;
+            const dy = touch.clientY - startY;
+            if (Math.abs(dx) < 48 || Math.abs(dx) < Math.abs(dy)) return;
+            Admin.stepFeedbackPreview(overlay, dx < 0 ? 1 : -1);
+        }, { passive: true });
+        overlay.addEventListener('click', (e) => {
+            const dirBtn = e.target?.closest?.('[data-fb-preview-step]');
+            if (!dirBtn || !overlay.contains(dirBtn)) return;
+            e.preventDefault();
+            e.stopPropagation();
+            Admin.stepFeedbackPreview(overlay, Number(dirBtn.getAttribute('data-fb-preview-step')) || 0);
+        });
+        if (typeof MutationObserver === 'function') {
+            try {
+                const watch = new MutationObserver(() => {
+                    if (overlay.classList.contains('hidden')) Admin.clearFeedbackPreviewChrome(overlay);
+                });
+                watch.observe(overlay, { attributes: true, attributeFilter: ['class'] });
+            } catch { /* non-element host */ }
+        }
+    },
+
+    dismissFeedbackPreview: (overlay) => {
+        const box = overlay || document.getElementById('alert-image-lightbox');
+        if (!box) return;
+        box.classList.add('hidden');
+        box.classList.remove('flex');
+        window._isLightboxMode = false;
+        Admin.clearFeedbackPreviewChrome(box);
+    },
+
+    /**
+     * Dev Mode feedback photos use the same full-screen preview as a service
+     * poster (#alert-image-lightbox). admin.js shows it directly so a stale
+     * hashed ui.js cannot refuse the open, and so the hash stays on the
+     * feedback panel.
      */
     openFeedbackAttachmentPreview: (src, poster) => {
-        if (!src || typeof window.openLightbox !== 'function') return false;
+        const display = Admin.feedbackPreviewSrc(src, poster);
+        if (!display) return false;
         const overlay = document.getElementById('alert-image-lightbox');
-        const devModal = document.getElementById('dev-modal');
-        const devOpen = !!devModal && !devModal.classList.contains('hidden');
-        if (overlay && devOpen) {
-            overlay.style.zIndex = '10050';
-            overlay.dataset.ntAdminLift = '1';
+        const img = document.getElementById('alert-image-lightbox-img');
+        if (!overlay || !img) {
+            if (typeof Admin.openLightbox === 'function') {
+                Admin.openLightbox(display, '', poster);
+                return true;
+            }
+            return false;
         }
-        window.openLightbox(src, poster);
-        if (!overlay || overlay.classList.contains('hidden')) return false;
-        if (devOpen) {
-            overlay.style.zIndex = '10050';
-            overlay.dataset.ntAdminLift = '1';
-        }
-        return true;
+        if (overlay.parentElement !== document.body) document.body.appendChild(overlay);
+        const urls = Admin.feedbackPreviewUrls(poster, display);
+        const marked = poster?.getAttribute?.('data-alert-lightbox') || '';
+        let index = urls.indexOf(display);
+        if (index < 0) index = urls.indexOf(marked);
+        if (index < 0) index = 0;
+        overlay.dataset.ntAdminLift = '1';
+        overlay.dataset.ntFeedbackGallery = urls.join('\n');
+        overlay.dataset.ntFeedbackIndex = String(index);
+        overlay.style.zIndex = '10050';
+        img.alt = 'Image Preview';
+        if (img.getAttribute('src') !== display) img.src = display;
+        overlay.classList.remove('hidden');
+        overlay.classList.add('flex');
+        window._isLightboxMode = true;
+        try {
+            history.pushState({ modal: 'feedback-preview' }, '', location.href);
+        } catch { /* ignore */ }
+        Admin.bindFeedbackPreviewChrome(overlay);
+        Admin.paintFeedbackPreviewChrome(overlay);
+        return !overlay.classList.contains('hidden');
+    },
+
+    /** Capture taps on photos inside the Dev Mode feedback panel only. */
+    bindFeedbackPhotoPreview: (panel) => {
+        if (!panel || panel.dataset.fbPhotoBound === '1') return;
+        panel.dataset.fbPhotoBound = '1';
+        const inThread = (node) => !!(node && panel.contains(node) && node.closest?.('.feedback-thread-body, .inbox-bubble, .feedback-thread-chat'));
+        panel.addEventListener('click', (e) => {
+            const poster = e.target?.closest?.('[data-alert-lightbox]');
+            if (poster && inThread(poster)) {
+                e.preventDefault();
+                e.stopPropagation();
+                const original = poster.getAttribute('data-alert-lightbox') || '';
+                const blob = poster.getAttribute('data-alert-object-url') || '';
+                Admin.openFeedbackAttachmentPreview(original || blob, poster);
+                return;
+            }
+            const img = e.target?.closest?.('img');
+            if (!img || !inThread(img) || img.closest?.('#alert-image-lightbox')) return;
+            e.preventDefault();
+            e.stopPropagation();
+            Admin.openFeedbackAttachmentPreview(img.currentSrc || img.getAttribute('src') || '', img);
+        }, true);
     },
 
     bindFeedbackInboxReactions: (host) => {
@@ -8292,6 +8468,7 @@ const Admin = {
         const refreshBtn = document.getElementById('fb-refresh-btn');
         const exportGlobalBtn = document.getElementById('fb-export-global-btn');
         const listContainer = document.getElementById('fb-list');
+        Admin.bindFeedbackPhotoPreview(fbPanel);
         const tabInbox = document.getElementById('fb-tab-inbox');
         const tabArchive = document.getElementById('fb-tab-archive');
         const searchInput = document.getElementById('fb-search-input');

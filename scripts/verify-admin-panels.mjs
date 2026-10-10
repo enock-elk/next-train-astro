@@ -425,7 +425,10 @@ assert(admin.includes('inbox-bubble-route-row'), 'feedback bubbles keep the save
 assert(admin.includes('threadCommuterRoute'), 'feedback thread falls back to the commuter saved route');
 assert(admin.includes('openFeedbackAttachmentPreview'), 'feedback posters have one shared-preview entry point');
 assert(admin.includes("overlay.style.zIndex = '10050'"), 'feedback preview is lifted above a stale Dev Mode shell');
-assert(admin.includes('window.openLightbox(src, poster)'), 'feedback preview still uses the service-poster lightbox');
+assert(admin.includes("document.getElementById('alert-image-lightbox')"), 'feedback preview uses the service-poster lightbox');
+assert(!admin.includes('window.openLightbox(src, poster)'), 'feedback preview does not wait on the hashed lightbox opener');
+assert(admin.includes('bindFeedbackPhotoPreview'), 'feedback panel captures photo taps itself');
+assert(admin.includes("history.pushState({ modal: 'feedback-preview' }, '', location.href)"), 'feedback preview keeps the Dev Mode hash');
 assert(admin.includes('Admin.openFeedbackAttachmentPreview(src, el)'), 'feedback capture opens the shared preview');
 assert(admin.includes('Admin.openFeedbackAttachmentPreview(src, poster)'), 'feedback bubble tap opens the shared preview');
 {
@@ -566,6 +569,135 @@ assert(
     ));
     assert(kapPubMissing.length === 0, 'QA finds WC pub sheets nested under public_holidays');
     assert(nestedPubQa.summary.sheetsScanned >= 6, 'QA scans weekday, Saturday, and pub sheets for Kapteinsklip');
+}
+
+{
+    const { createContext, runInContext } = await import('node:vm');
+    const elements = new Map();
+    const classSets = new Map();
+    function makeEl(id) {
+        const classes = new Set(id === 'alert-image-lightbox' || id === 'dev-modal' ? ['hidden'] : []);
+        const el = {
+            id,
+            nodeType: 1,
+            tagName: 'DIV',
+            style: {},
+            dataset: {},
+            parentElement: null,
+            children: [],
+            _attrs: {},
+            setAttribute(name, value) { this._attrs[name] = String(value); },
+            getAttribute(name) { return Object.prototype.hasOwnProperty.call(this._attrs, name) ? this._attrs[name] : null; },
+            appendChild(child) {
+                child.parentElement = this;
+                this.children.push(child);
+                return child;
+            },
+            querySelectorAll(sel) {
+                const walk = (node, out) => {
+                    (node.children || []).forEach((child) => {
+                        if (sel === '[data-fb-preview-step]' && child.getAttribute?.('data-fb-preview-step') != null) out.push(child);
+                        walk(child, out);
+                    });
+                    return out;
+                };
+                return walk(this, []);
+            },
+            querySelector() { return null; },
+            addEventListener() {},
+            contains(node) { return this === node || this.children.includes(node); },
+            closest() { return null; },
+            remove() {
+                const parent = this.parentElement;
+                if (!parent) return;
+                parent.children = parent.children.filter((child) => child !== this);
+                this.parentElement = null;
+            },
+        };
+        el.classList = {
+            contains: (name) => classes.has(name),
+            add: (...names) => names.forEach((name) => classes.add(name)),
+            remove: (...names) => names.forEach((name) => classes.delete(name)),
+        };
+        classSets.set(el, classes);
+        if (id) elements.set(id, el);
+        return el;
+    }
+    const body = makeEl('body');
+    const overlay = makeEl('alert-image-lightbox');
+    const stage = makeEl('alert-image-lightbox-stage');
+    const img = makeEl('alert-image-lightbox-img');
+    const closeBtn = makeEl('alert-image-lightbox-close');
+    overlay.appendChild(stage);
+    overlay.appendChild(img);
+    overlay.appendChild(closeBtn);
+    const shell = makeEl('shell');
+    shell.appendChild(overlay);
+    const photo = 'https://firebasestorage.googleapis.com/v0/b/app/o/feedback_attachments%2Fa.jpg?alt=media&token=abc';
+    const second = 'https://firebasestorage.googleapis.com/v0/b/app/o/feedback_attachments%2Fb.jpg?alt=media&token=def';
+    let openedViaHashedBundle = false;
+    const poster = {
+        nodeType: 1,
+        tagName: 'BUTTON',
+        _attrs: { 'data-alert-lightbox': photo },
+        getAttribute(name) { return this._attrs[name] || null; },
+        querySelector(sel) {
+            if (sel === 'img') return { naturalWidth: 40, currentSrc: photo, src: photo, getAttribute: () => photo };
+            return null;
+        },
+        closest() {
+            return {
+                querySelectorAll(sel) {
+                    if (sel !== '[data-alert-lightbox]') return [];
+                    return [
+                        poster,
+                        { getAttribute: (name) => (name === 'data-alert-lightbox' ? second : null) },
+                    ];
+                },
+            };
+        },
+    };
+    const sandbox = {
+        window: {
+            openLightbox() { openedViaHashedBundle = true; },
+            Admin: null,
+        },
+        document: {
+            body,
+            getElementById: (id) => elements.get(id) || null,
+            createElement: () => makeEl(''),
+            addEventListener() {},
+        },
+        history: {
+            state: null,
+            pushState(state) { this.state = state; },
+        },
+        location: { href: 'https://enock-elk.github.io/next-train-astro/#dev-feedback-panel' },
+        MutationObserver: function MutationObserver() {
+            this.observe = () => { throw new Error('not a node'); };
+        },
+        console,
+    };
+    sandbox.globalThis = sandbox;
+    sandbox.window.document = sandbox.document;
+    const context = createContext(sandbox);
+    runInContext(admin, context, { filename: 'admin.js' });
+    const opened = sandbox.window.Admin.openFeedbackAttachmentPreview(photo, poster);
+    assert(opened === true, 'feedback photo preview opens');
+    assert(openedViaHashedBundle === false, 'feedback photo preview does not call the hashed opener');
+    assert(!overlay.classList.contains('hidden'), 'service poster preview is visible');
+    assert(overlay.classList.contains('flex'), 'service poster preview uses flex');
+    assert(img.src === photo, 'preview shows the commuter attachment');
+    assert(overlay.style.zIndex === '10050', 'preview sits above Dev Mode');
+    assert(overlay.parentElement === body, 'preview is on document.body, outside the Dev Mode shell');
+    assert(sandbox.history.state?.modal === 'feedback-preview', 'preview history stays on the current feedback URL');
+    assert(String(overlay.dataset.ntFeedbackGallery).split('\n').length === 2, 'preview keeps both photos from the message');
+    sandbox.window.Admin.stepFeedbackPreview(overlay, 1);
+    assert(img.src === second, 'next photo in the same message replaces the preview');
+    assert(stage.querySelectorAll('[data-fb-preview-step]').length === 2, 'several photos get previous and next controls');
+    sandbox.window.Admin.clearFeedbackPreviewChrome(overlay);
+    assert(overlay.querySelectorAll('[data-fb-preview-step]').length === 0, 'closing the preview removes the feedback controls');
+    assert(!overlay.dataset.ntFeedbackGallery, 'closing the preview drops the feedback gallery');
 }
 
 if (failed) {

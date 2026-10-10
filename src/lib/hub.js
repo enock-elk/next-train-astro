@@ -2117,6 +2117,7 @@ export async function checkServiceAlerts() {
                     notices: validNotices,
                     highlightId: autoNotice.id || null,
                     resetVisible: true,
+                    focusTop: true,
                 });
                 window._alertsChannelOpening = false;
             });

@@ -526,6 +526,9 @@ const now = 1_700_000_000_000;
     assert(ALERT_SEE_MORE_MIN_CHARS === 700, 'See more uses the WhatsApp 700 character mark');
     const channelJs = readFileSync(new URL('../src/lib/alerts-channel.js', import.meta.url), 'utf8');
     assert(channelJs.includes('See more...'), 'long posts offer See more');
+    assert(channelJs.includes('alignAlertCardTop') && channelJs.includes('focusTop'), 'force open puts the alert top in view');
+    assert(channelJs.includes('nt-alert-force-flash'), 'force open highlight is a brief flash');
+    assert(hubJs.includes('focusTop: true'), 'auto open asks for the top of the alert');
     const pollJs = readFileSync(new URL('../src/lib/alert-poll.js', import.meta.url), 'utf8');
     assert(pollJs.includes("data-poll-closed") && pollJs.includes('if (!voted && !closed) return'), 'closed results load without a local vote');
 }

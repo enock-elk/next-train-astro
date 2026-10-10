@@ -815,6 +815,14 @@ html.dark .nt-offline-strip {
 #alert-msg {
   white-space: pre-wrap;
 }
+@keyframes nt-alert-force-flash {
+  0% { box-shadow: 0 0 0 3px color-mix(in srgb, var(--nt-primary, #2563eb) 72%, white); }
+  55% { box-shadow: 0 0 0 3px color-mix(in srgb, var(--nt-primary, #2563eb) 28%, transparent); }
+  100% { box-shadow: 0 0 0 0 transparent; }
+}
+.nt-alert-card.nt-alert-force-flash {
+  animation: nt-alert-force-flash 1.5s ease-out 1;
+}
 .nt-alert-body.is-collapsed {
   display: -webkit-box;
   -webkit-box-orient: vertical;

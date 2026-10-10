@@ -152,6 +152,10 @@ assert(renderer.includes("setProperty('--nt-border', borderColor)"), 'export she
 assert(!renderer.includes("const borderColor = '#cbd5e1'"), 'export must not use the darker slate cell border');
 assert(renderer.includes("const cellBg = '#ffffff'"), 'export even rows stay white');
 assert(renderer.includes("const zebraBg = '#eff6ff'"), 'export odd rows use a light blue shade');
+assert(!renderer.includes('dark:bg-gray-800">STN'), 'export STN header does not take the dark surface class');
+assert(!renderer.includes('dark:text-gray-400 text-[10px]'), 'export STN codes do not take the dark text class');
+assert(renderer.includes("setProperty('background-color', '#e2e8f0', 'important')"), 'export STN header stays light slate');
+assert(renderer.includes("setProperty('color', '#64748b', 'important')"), 'export STN codes stay light grey');
 assert(renderer.includes('export-zebra'), 'export alternates blue and white rows');
 assert(renderer.includes("td.style.boxShadow = 'none'"), 'export time borders stay a flat light line');
 assert(renderer.includes('boardHolidayName'), 'empty board names a public holiday');

@@ -1066,7 +1066,7 @@ export const Renderer = {
                             const wrapClass = (isExport && paintExclusion && exclusionType !== 'special') ? 'whitespace-normal' : 'whitespace-nowrap';
                             return `<th class="${paddingClass} border-b border-r ${borderClass} ${wrapClass} text-center ${bgClass} ${minWidthClass}" ${isHighlight ? 'id="grid-active-col"' : ''} ${!isExport ? `data-nt-live-host="${escapeHTML(String(h || ''))}"` : ''}${exclHeadAttrs}>${headerContent}</th>`;
                         }).join('')}
-                        ${showRightAnchor ? `<th class="right-anchor-header sticky right-0 z-30 ${stickyHeaderClass} ${paddingClass} border-b border-l ${borderClass} font-bold min-w-[50px] shadow-[-4px_0_10px_rgba(0,0,0,0.05)] text-center bg-gray-100 dark:bg-gray-800">STN</th>` : ''}
+                        ${showRightAnchor ? `<th class="right-anchor-header ${paddingClass} border-b border-l font-bold min-w-[50px] text-center">STN</th>` : ''}
                     </tr>
                 </thead>
                 <tbody class="${isExport ? '' : 'divide-y '}${borderClass} ${tbodyClass}">
@@ -1179,7 +1179,7 @@ export const Renderer = {
                         
                         return `<td class="${cellClass}"${exclCellAttrs}>${val}</td>`;
                     }).join('')}
-                    ${showRightAnchor ? `<td class="right-anchor-col sticky right-0 z-10 ${currentStickyCellClass || (isExport ? '' : 'bg-gray-50 dark:bg-gray-800/80')} ${paddingClass} border-l ${borderClass} border-b font-mono font-bold text-center shadow-[-4px_0_10px_rgba(0,0,0,0.05)] text-gray-500 dark:text-gray-400 text-[10px] sm:text-xs">${getAbbrev(cleanStation)}</td>` : ''}
+                    ${showRightAnchor ? `<td class="right-anchor-col ${paddingClass} border-l border-b font-mono font-bold text-center text-[10px] sm:text-xs">${getAbbrev(cleanStation)}</td>` : ''}
                 </tr>
             `;
             validRowIndex++;
@@ -1633,19 +1633,19 @@ export async function takeGridSnapshot(direction = 'A', dayType = 'weekday') {
         });
 
         t.querySelectorAll('.right-anchor-header').forEach(headerCell => {
-            headerCell.style.backgroundColor = '#e2e8f0'; 
-            headerCell.style.color = '#475569';
-            headerCell.style.letterSpacing = 'normal'; 
-            headerCell.style.padding = '4px 6px 12px'; 
+            headerCell.style.setProperty('background-color', '#e2e8f0', 'important');
+            headerCell.style.setProperty('color', '#475569', 'important');
+            headerCell.style.letterSpacing = 'normal';
+            headerCell.style.padding = '4px 6px 12px';
         });
-        
+
         t.querySelectorAll('.right-anchor-col').forEach(td => {
-            td.style.backgroundColor = '#f1f5f9';
-            td.style.color = '#64748b';
+            td.style.setProperty('background-color', '#f1f5f9', 'important');
+            td.style.setProperty('color', '#64748b', 'important');
             td.style.fontWeight = '800';
             td.style.fontSize = '13px';
-            td.style.letterSpacing = 'normal'; 
-            td.style.padding = '3px 6px 10px'; 
+            td.style.letterSpacing = 'normal';
+            td.style.padding = '3px 6px 10px';
         });
 
         t.querySelectorAll('.sticky').forEach(el => {

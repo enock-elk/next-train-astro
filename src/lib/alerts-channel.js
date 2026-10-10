@@ -632,9 +632,11 @@ function renderPostCard(notice, opts = {}) {
                 <div class="nt-alert-action-meta">${adminMetaHtml}${replyBtn}</div>
             </div>
         </div>`;
-    const cardRing = highlight
-        ? 'ring-2 ring-red-400 ring-offset-2 dark:ring-offset-gray-950'
-        : 'ring-1 ring-black/5 dark:ring-white/10';
+    const cardRing = opts.flash
+        ? 'nt-alert-force-flash'
+        : highlight
+            ? 'ring-2 ring-red-400 ring-offset-2 dark:ring-offset-gray-950'
+            : 'ring-1 ring-black/5 dark:ring-white/10';
     return `<article id="alert-post-${escapeHTML(String(notice.id || ''))}" data-alert-post="${escapeHTML(String(notice.id || ''))}" data-alert-id="${escapeHTML(String(notice.id || ''))}" data-alert-src="${escapeHTML(String(notice._sourceKey || ''))}" class="nt-alert-card bg-white dark:bg-gray-800 rounded-2xl shadow-md ${cardRing} border-l-4 ${chrome.bar} border border-gray-200/80 dark:border-gray-700 p-0 overflow-hidden select-none">
         <div class="nt-alert-strip flex items-center justify-between gap-2 px-3 py-1 ${chrome.strip}">
             <span class="nt-alert-signoff text-xs font-semibold leading-none tracking-wide">${escapeHTML(signoff)}</span>
@@ -731,7 +733,10 @@ export function renderAlertsChannel(notices = cachedLiveNotices, opts = {}) {
             parts.push(renderDateChip(ts));
             lastDay = day;
         }
-        parts.push(renderPostCard(n, { highlight: highlightNoticeId }));
+        parts.push(renderPostCard(n, {
+            highlight: opts.flash ? null : highlightNoticeId,
+            flash: !!opts.flash && String(n.id) === String(highlightNoticeId),
+        }));
     });
     const html = parts.join('');
     if (feed.dataset.ntAlertsSig === html) {
@@ -765,6 +770,24 @@ function scrollFeedTo(noticeId, toBottom = false) {
     }
 }
 
+/** Put the top of a force-opened card at the top of the feed scroller. */
+function alignAlertCardTop(noticeId) {
+    const scroller = document.getElementById('alerts-channel-scroll');
+    const el = document.getElementById(`alert-post-${noticeId}`);
+    if (!scroller || !el) return false;
+    const delta = el.getBoundingClientRect().top - scroller.getBoundingClientRect().top;
+    if (Math.abs(delta) < 2) return true;
+    scroller.scrollTop += delta;
+    return true;
+}
+
+function revealForceOpenNotice(list, noticeId) {
+    if (!noticeId) return;
+    const idx = (list || []).findIndex((n) => String(n.id) === String(noticeId));
+    if (idx < 0) return;
+    visibleCount = Math.max(visibleCount, list.length - idx);
+}
+
 export function closeAlertsChannel() {
     const el = document.getElementById('alerts-channel');
     hideAlertReactionPicker();
@@ -783,7 +806,9 @@ export function openAlertsChannel(opts = {}) {
     const notices = scopedLiveNotices(opts.notices || cachedLiveNotices);
     if (opts.resetVisible !== false) visibleCount = ALERTS_PAGE_SIZE;
     highlightNoticeId = opts.highlightId || null;
-    renderAlertsChannel(notices, { highlightId: highlightNoticeId });
+    const focusTop = !!opts.focusTop && !!highlightNoticeId;
+    if (focusTop) revealForceOpenNotice(notices, highlightNoticeId);
+    renderAlertsChannel(notices, { highlightId: highlightNoticeId, flash: focusTop });
     markNoticesSeen(notices);
     applyBellFromNotices(notices);
     if (typeof window !== 'undefined') {
@@ -791,10 +816,13 @@ export function openAlertsChannel(opts = {}) {
         window.__ntAlertsParkHome = false;
     }
     openSmoothModal('alerts-channel', 'top-right');
-    setTimeout(() => {
-        if (highlightNoticeId) scrollFeedTo(highlightNoticeId, false);
+    const align = () => {
+        if (focusTop) alignAlertCardTop(highlightNoticeId);
+        else if (highlightNoticeId) scrollFeedTo(highlightNoticeId, false);
         else scrollFeedTo(null, true);
-    }, 80);
+    };
+    requestAnimationFrame(() => requestAnimationFrame(align));
+    setTimeout(align, 280);
     bindAlertsChannelOnce();
 }
 

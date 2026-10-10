@@ -31,6 +31,7 @@ import {
 import { joinCommunityPresence, leaveCommunityPresence, signalCommunityTyping } from './community-presence.js';
 import { FEATURE_KEYS, fetchFeatures, isFeatureEnabled } from './features.js';
 import {
+    awardCommunityMarks,
     marksPublicSnapshot,
     readMarks,
     renderBubbleMarksHtml,
@@ -978,15 +979,20 @@ function openReactionSheet(postId, routeId) {
 
     sheet.dataset.postId = postId;
     sheet.dataset.routeId = routeId;
+    sheet.dataset.replyId = '';
     const post = findCachedPost(postId);
     sheet.dataset.uid = post?.uid || '';
     sheet.dataset.email = post?.email || '';
     const actions = sheet.querySelector('#community-reaction-sheet-actions');
     if (actions) {
+        const adminActions = isAdminAuthed()
+            ? `<button type="button" class="community-sheet-lookup col-span-2 py-2.5 rounded-xl text-xs font-bold bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300">Look up rider</button>
+                    <button type="button" class="community-sheet-delete col-span-2 py-2.5 rounded-xl text-xs font-bold bg-red-600 text-white">Delete for everyone</button>`
+            : '';
         actions.innerHTML = `
                     <button type="button" class="community-sheet-reply py-2.5 rounded-xl text-xs font-bold bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-100">Reply</button>
                     <button type="button" class="community-sheet-report py-2.5 rounded-xl text-xs font-bold bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400">Report</button>
-                    ${isAdminAuthed() ? '<button type="button" class="community-sheet-lookup col-span-2 py-2.5 rounded-xl text-xs font-bold bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300">Look up rider</button>' : ''}
+                    ${adminActions}
         `;
     }
     const { myEmoji } = summarizeReactions(postId);
@@ -1682,12 +1688,13 @@ async function handlePostSubmit() {
     } else {
         showToast('Posted to the route feed', 'success');
     }
-    import('./rider-marks.js').then((m) => {
-        m.awardMark('first_community_post', { key: 'badge:first_community_post' });
-    }).catch(() => {});
-    // Realtime listener will refresh; REST fallback still re-renders
+    if (!result.held && !result.shadowSilenced) awardCommunityMarks();
+    // Realtime listener will refresh; REST fallback still re-renders.
+    // Own bubbles read live points, so repaint after the award either way.
     if (!postsListenRouteId || postsListenRouteId !== routeId) {
         await renderCommunityFeed(routeId);
+    } else {
+        applyFeedFilter(routeId);
     }
     if (btn) btn.disabled = false;
     paintCommunityQuotaHint();
@@ -1864,6 +1871,43 @@ export function bindCommunityUi() {
             return;
         }
 
+        const sheetDelete = t.closest?.('.community-sheet-delete');
+        if (sheetDelete) {
+            e.preventDefault();
+            if (!isAdminAuthed()) return;
+            const sheet = document.getElementById('community-reaction-sheet');
+            const postId = sheet?.dataset.postId || '';
+            const routeId = sheet?.dataset.routeId || '';
+            const replyId = sheet?.dataset.replyId || '';
+            closeReactionSheet();
+            const ok = typeof window.confirm === 'function'
+                ? window.confirm(replyId ? 'Delete this reply for everyone?' : 'Delete this message for everyone?')
+                : true;
+            if (!ok || !routeId || !postId) return;
+            try {
+                const { ensureAdminLoaded } = await import('./admin-bridge.js');
+                const Admin = await ensureAdminLoaded();
+                if (!Admin?.deletePublishedCommunityMessage) {
+                    showToast('Admin tools unavailable.', 'error');
+                    return;
+                }
+                await Admin.deletePublishedCommunityMessage(routeId, postId, replyId || undefined);
+                if (!replyId) {
+                    cachedFeedPosts = cachedFeedPosts.filter((p) => String(p.postId) !== String(postId));
+                    if (localOverlayByRoute[routeId]) {
+                        localOverlayByRoute[routeId] = localOverlayByRoute[routeId].filter((p) => String(p.postId) !== String(postId));
+                    }
+                    delete cachedReactionsByPost[postId];
+                    applyFeedFilter(routeId);
+                }
+                showToast('Message deleted for everyone.', 'success');
+                triggerHaptic();
+            } catch (err) {
+                showToast(err?.message || 'Could not delete this message.', 'error');
+            }
+            return;
+        }
+
         const sheetLookup = t.closest?.('.community-sheet-lookup');
         if (sheetLookup) {
             e.preventDefault();
@@ -1927,6 +1971,7 @@ export function bindCommunityUi() {
                 showToast(result.message || 'Held for review - it won’t show until approved.', 'info');
                 return;
             }
+            if (!result.shadowSilenced) awardCommunityMarks();
             showToast('Reply posted', 'success');
             const box = document.querySelector(`.community-replies[data-replies-for="${postId}"]`);
             if (box) {

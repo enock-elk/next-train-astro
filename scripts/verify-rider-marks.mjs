@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import {
     MARK_POINTS,
     MARK_TIERS,
+    awardCommunityMarks,
     badgeProgress,
     listContributionDays,
     mergeMarksStates,
@@ -16,6 +17,7 @@ assert.equal(MARK_POINTS.join_confirm, 1);
 assert.equal(MARK_POINTS.delay_report, 2);
 assert.equal(MARK_POINTS.delay_confirm, 1);
 assert.equal(MARK_POINTS.first_community_post, 5);
+assert.equal(MARK_POINTS.community_message, 2);
 assert.equal(MARK_POINTS.streak_3day, 5);
 assert.equal(MARK_POINTS.streak_5day, 8);
 assert.deepEqual(MARK_TIERS.map((t) => t.min), [0, 80, 250, 600]);
@@ -71,5 +73,10 @@ assert(bubbleHtml.includes('community-bubble-marks'), 'bubble marks wrap the med
 assert(bubbleHtml.indexOf('>77<') < bubbleHtml.indexOf('<svg'), 'points sit before the medal SVG');
 assert(!bubbleHtml.includes('Points'), 'bubble marks omit the Points word');
 assert(!bubbleHtml.includes('*'), 'bubble marks omit the asterisk');
+
+const firstCommunity = awardCommunityMarks();
+assert.equal(firstCommunity.added, 7, 'first community message pays the badge and the daily points');
+const sameDay = awardCommunityMarks();
+assert.equal(sameDay.added, 0, 'a second community message the same service day does not pay again');
 
 console.log('Rider marks verified: slower curve, history dedupe, day groups, streak fill.');

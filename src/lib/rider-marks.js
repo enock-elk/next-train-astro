@@ -20,6 +20,7 @@ const MARKS_COMMUNITY_PREF_KEY = 'ntShowMarksInCommunity';
 
 export const MARK_POINTS = {
     first_community_post: 5,
+    community_message: 2,
     first_share_day: 2,
     join_confirm: 1,
     delay_report: 2,
@@ -42,6 +43,13 @@ export const MARK_CATALOG = [
         how: 'Post once in a route room.',
         points: MARK_POINTS.first_community_post,
         badge: true,
+    },
+    {
+        id: 'community_message',
+        title: 'Community message',
+        how: 'Post or reply in a route room. Points once per service day.',
+        points: MARK_POINTS.community_message,
+        badge: false,
     },
     {
         id: 'first_share_day',
@@ -461,8 +469,10 @@ export function awardMark(action, opts = {}) {
     }
 
     const countsAsServiceDay = action === 'first_share_day'
+        || action === 'join_confirm'
         || action === 'delay_report'
         || action === 'first_community_post'
+        || action === 'community_message'
         || action === 'delay_confirm';
 
     if (countsAsServiceDay && !opts._nested) {
@@ -488,6 +498,21 @@ export function awardMark(action, opts = {}) {
         total: state.points,
         tier: tierForPoints(state.points),
         label: marksLabel(state),
+        state,
+    };
+}
+
+/** Post or reply: the one-time badge, then the same daily points as the other features. */
+export function awardCommunityMarks() {
+    const first = awardMark('first_community_post', { key: 'badge:first_community_post' });
+    const daily = awardMark('community_message', { key: `community:${todayKey()}` });
+    const state = daily.state || first.state;
+    return {
+        awarded: !!(first.awarded || daily.awarded),
+        added: (first.added || 0) + (daily.added || 0),
+        label: marksLabel(state),
+        total: state.points,
+        tier: tierForPoints(state.points),
         state,
     };
 }

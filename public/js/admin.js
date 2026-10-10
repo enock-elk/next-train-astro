@@ -814,6 +814,38 @@ function ntAdminSchedulePreviewText(meta) {
     return ntAdminFormatScheduleSummary(meta);
 }
 
+async function ntAdminDeletePublishedCommunityMessage(routeId, postId, replyId) {
+    if (!routeId || !postId) throw new Error('Missing route/post id');
+    const token = await Admin.getAuthKey();
+    if (!token) throw new Error('Not signed in');
+    const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
+    const authQ = `?auth=${encodeURIComponent(token)}`;
+    const postPath = `route_community/${encodeURIComponent(routeId)}/posts/${encodeURIComponent(postId)}`;
+    const deleteJson = async (path) => {
+        const res = await fetch(`${dynamicEndpoint}${path}.json${authQ}`, { method: 'DELETE' });
+        if (!res.ok && res.status !== 404) throw new Error(`Delete failed (${res.status})`);
+        return res;
+    };
+    if (replyId) {
+        await deleteJson(`${postPath}/replies/${encodeURIComponent(replyId)}`);
+        await deleteJson(`community_activity/${encodeURIComponent(routeId)}/${encodeURIComponent(replyId)}`).catch(() => {});
+        return;
+    }
+    let replyIds = [];
+    try {
+        const postRes = await window.guardianFetch(`${dynamicEndpoint}${postPath}.json${authQ}`, {}, 6000);
+        const post = postRes.ok ? await postRes.json() : null;
+        replyIds = Object.keys(post?.replies || {});
+    } catch (e) {
+        console.warn('Community delete reply-index read failed', e);
+    }
+    await deleteJson(postPath);
+    await deleteJson(`community_activity/${encodeURIComponent(routeId)}/${encodeURIComponent(postId)}`).catch(() => {});
+    await Promise.all(replyIds.map((id) =>
+        deleteJson(`community_activity/${encodeURIComponent(routeId)}/${encodeURIComponent(id)}`).catch(() => {})
+    ));
+}
+
 const Admin = {
     
     // GUARDIAN PHASE 2: Dropdown Breadcrumbs State
@@ -1278,6 +1310,9 @@ const Admin = {
         }
         return null;
     },
+
+    deletePublishedCommunityMessage: (routeId, postId, replyId) =>
+        ntAdminDeletePublishedCommunityMessage(routeId, postId, replyId),
 
     /** Safe escalate payload for data-escalate attrs (avoids onclick SyntaxError ? app reload). */
     encodeEscalatePayload: (payload) => encodeURIComponent(JSON.stringify(payload || {})),
@@ -10478,34 +10513,7 @@ const Admin = {
                     };
                 }
 
-                Admin.deletePublishedCommunityMessage = async (routeId, postId, replyId) => {
-                    if (!routeId || !postId) throw new Error('Missing route/post id');
-                    const authQ = await communityAuthSuffix();
-                    const postPath = `route_community/${encodeURIComponent(routeId)}/posts/${encodeURIComponent(postId)}`;
-                    const deleteJson = async (path) => {
-                        const res = await fetch(`${dynamicEndpoint}${path}.json${authQ}`, { method: 'DELETE' });
-                        if (!res.ok && res.status !== 404) throw new Error(`Delete failed (${res.status})`);
-                        return res;
-                    };
-                    if (replyId) {
-                        await deleteJson(`${postPath}/replies/${encodeURIComponent(replyId)}`);
-                        await deleteJson(`community_activity/${encodeURIComponent(routeId)}/${encodeURIComponent(replyId)}`).catch(() => {});
-                        return;
-                    }
-                    let replyIds = [];
-                    try {
-                        const postRes = await window.guardianFetch(`${dynamicEndpoint}${postPath}.json${authQ}`, {}, 6000);
-                        const post = postRes.ok ? await postRes.json() : null;
-                        replyIds = Object.keys(post?.replies || {});
-                    } catch (e) {
-                        console.warn('Community delete reply-index read failed', e);
-                    }
-                    await deleteJson(postPath);
-                    await deleteJson(`community_activity/${encodeURIComponent(routeId)}/${encodeURIComponent(postId)}`).catch(() => {});
-                    await Promise.all(replyIds.map((id) =>
-                        deleteJson(`community_activity/${encodeURIComponent(routeId)}/${encodeURIComponent(id)}`).catch(() => {})
-                    ));
-                };
+                Admin.deletePublishedCommunityMessage = ntAdminDeletePublishedCommunityMessage;
 
                 list.onclick = async (event) => {
                     const hide = event.target.closest?.('.cm-hide-message');

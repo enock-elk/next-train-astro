@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_10.10.7': [
+        'Community tab: a signed-in operator can long-press a message and choose Delete for everyone. That removes the post, its replies, and the activity index immediately, the same RTDB delete Community Monitor already uses. A published community post or reply now awards points once per service day (2), and the first one still unlocks the 5-point badge. Share, join, and delay reports already paid once per service day; a community comment did not, so a later message added nothing. No commuter What’s New. forceShow stays false.',
+    ],
     'V9_10.10.6': [
         'Live location checks use shorter lines and tighter green rows. The sheet sits on the bottom of the screen, including the home-indicator inset, so the dim strip under the buttons is gone. The map above the sheet stays. No commuter What’s New. forceShow stays false.',
     ],

@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_10.10.1': [
+        'Feedback photos still use the service-poster preview, but admin.js now lifts that shared overlay above Dev Mode itself. This covers warm GitHub preview and PWA sessions whose already-loaded hashed UI bundle predates the shared-preview lift. The attachment allowlist is unchanged. No commuter What’s New. forceShow stays false.',
+    ],
     'V9_10.09.4': [
         'Inbox photo taps use the same full-screen preview as service posters. The allowlist is unchanged: Firebase Storage and catalog posters only. A second admin lightbox is no longer used for those taps, and the preview sits above Dev Mode. No commuter What’s New. forceShow stays false.',
     ],

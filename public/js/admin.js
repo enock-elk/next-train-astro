@@ -2272,6 +2272,29 @@ const Admin = {
         }
     },
 
+    /**
+     * Use the shared service-poster preview, but lift it from admin.js too.
+     * A warm PWA can load this mutable admin bundle while its hashed ui.js is
+     * still an older generation that leaves the shared overlay under Dev Mode.
+     */
+    openFeedbackAttachmentPreview: (src, poster) => {
+        if (!src || typeof window.openLightbox !== 'function') return false;
+        const overlay = document.getElementById('alert-image-lightbox');
+        const devModal = document.getElementById('dev-modal');
+        const devOpen = !!devModal && !devModal.classList.contains('hidden');
+        if (overlay && devOpen) {
+            overlay.style.zIndex = '10050';
+            overlay.dataset.ntAdminLift = '1';
+        }
+        window.openLightbox(src, poster);
+        if (!overlay || overlay.classList.contains('hidden')) return false;
+        if (devOpen) {
+            overlay.style.zIndex = '10050';
+            overlay.dataset.ntAdminLift = '1';
+        }
+        return true;
+    },
+
     bindFeedbackInboxReactions: (host) => {
         if (!host || host.dataset.inboxReactBound === '1') return;
         host.dataset.inboxReactBound = '1';
@@ -2292,7 +2315,7 @@ const Admin = {
             const original = poster?.getAttribute?.('data-alert-lightbox') || href || '';
             const blob = poster?.getAttribute?.('data-alert-object-url') || '';
             const src = original || blob;
-            if (src && typeof window.openLightbox === 'function') window.openLightbox(src, el);
+            if (src) Admin.openFeedbackAttachmentPreview(src, el);
         }, true);
         let longTimer = null;
         const clearLong = () => {
@@ -2322,7 +2345,7 @@ const Admin = {
                 const original = poster.getAttribute('data-alert-lightbox') || '';
                 const blob = poster.getAttribute('data-alert-object-url') || '';
                 const src = original || blob;
-                if (src && typeof window.openLightbox === 'function') window.openLightbox(src, poster);
+                if (src) Admin.openFeedbackAttachmentPreview(src, poster);
                 return;
             }
             const chip = e.target.closest?.('[data-inbox-react]');
@@ -8617,7 +8640,7 @@ const Admin = {
                     e.preventDefault();
                     e.stopPropagation();
                     const src = poster.getAttribute('data-alert-lightbox') || poster.getAttribute('data-alert-object-url') || '';
-                    if (src && typeof window.openLightbox === 'function') window.openLightbox(src, poster);
+                    if (src) Admin.openFeedbackAttachmentPreview(src, poster);
                     return;
                 }
                 const clBtn = e.target.closest('[data-admin-changelog]');

@@ -423,8 +423,11 @@ assert(admin.includes('data-fb-receipt'), 'admin ticks expose hold-for-delivery'
 assert(admin.includes('showInboxReceiptSheet'), 'admin can hold ticks for sent/delivered/seen');
 assert(admin.includes('inbox-bubble-route-row'), 'feedback bubbles keep the saved route on its own row');
 assert(admin.includes('threadCommuterRoute'), 'feedback thread falls back to the commuter saved route');
-assert(admin.includes("if (src && typeof window.openLightbox === 'function') window.openLightbox(src, el);"), 'feedback posters open the alert preview');
-assert(admin.includes("if (src && typeof window.openLightbox === 'function') window.openLightbox(src, poster);"), 'feedback bubble tap opens the alert preview');
+assert(admin.includes('openFeedbackAttachmentPreview'), 'feedback posters have one shared-preview entry point');
+assert(admin.includes("overlay.style.zIndex = '10050'"), 'feedback preview is lifted above a stale Dev Mode shell');
+assert(admin.includes('window.openLightbox(src, poster)'), 'feedback preview still uses the service-poster lightbox');
+assert(admin.includes('Admin.openFeedbackAttachmentPreview(src, el)'), 'feedback capture opens the shared preview');
+assert(admin.includes('Admin.openFeedbackAttachmentPreview(src, poster)'), 'feedback bubble tap opens the shared preview');
 {
     const holdStart = admin.indexOf("dataset.fbHoldBound");
     const holdBlock = holdStart >= 0 ? admin.slice(holdStart, holdStart + 900) : '';

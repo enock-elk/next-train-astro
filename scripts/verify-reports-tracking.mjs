@@ -636,7 +636,7 @@ assert(ridePingsSource.includes('usedCorridorFallback'), 'missing train stop lis
 assert(mapViewSource.includes('id="map-tracking-refresh"'), 'tracking card has Refresh GPS');
 assert(mapTabSource.includes('map-tracking-refresh'), 'Refresh GPS is wired on the sender card');
 assert(!mapTabSource.includes('Couldn’t build the selected train'), 'share checks do not block on a missing train path');
-assert(mapTabSource.includes('painted corridor rail'), 'share checks fall back to the painted corridor');
+assert(mapTabSource.includes('painted corridor'), 'share checks fall back to the painted corridor');
 assert(geoWatchSource.includes('wakeLock.request'), 'sharing requests a screen wake lock to keep GPS live');
 assert(geoWatchSource.includes('confirmStationaryWatchTick'), 'repeated stationary GPS callbacks stay live');
 assert(geoWatchSource.includes("holders.add"), 'geo watch is reference-counted by map and share');
@@ -703,7 +703,7 @@ assert(mapTabSource.includes('RIDE_OFFTRACK_HARD_M'), 'on-rail distance uses the
 assert(mapAppSource.includes('spec && spec.far'), 'far zoom can hide the train number');
 assert(mapAppSource.includes("var numHtml = (spec && spec.far)"), 'zoomed-out glyphs omit the train number');
 assert(mapTabSource.includes('nt-share-checks-proceed'), 'passed checks ask before sharing');
-assert(mapTabSource.includes('share the train\'s location to other commuters'), 'passed checks confirm a train share');
+assert(mapTabSource.includes('You are about to share this train’s location.'), 'passed checks confirm a train share');
 assert(!mapTabSource.includes('you will appear as a person'), 'checks do not offer a person share');
 assert(readFileSync(new URL('../src/lib/features.js', import.meta.url), 'utf8').includes('regionIds'), 'experimental features keep a region allow-list');
 assert(readFileSync(new URL('../src/lib/admin-chrome.js', import.meta.url), 'utf8').includes('scheduleExperimentalFeatureRecheck'), 'enabled users recheck experimental features after open');
@@ -743,6 +743,10 @@ assert(ridePingsSource.includes('Math.min(350'), 'interchange GPS leniency has a
 assert(ridePingsSource.includes('firebaseGetIdToken(window.firebaseAuth.currentUser, forceRefresh)'), 'adaptive pings reuse cached auth tokens');
 assert(mapTabSource.includes("modal.id = 'nt-share-checks-modal'"), 'train sharing opens the live checks bottom sheet');
 assert(mapTabSource.includes('nt-share-checks-outcome'), 'live checks paint a separate Outcome strip');
+assert(mapTabSource.includes('justify-end'), 'live checks sheet docks to the bottom of the screen');
+assert(mapTabSource.includes('env(safe-area-inset-bottom)'), 'live checks buttons sit above the home indicator');
+assert(mapTabSource.includes('Closest rail point is'), 'distance check keeps a short description');
+assert(!mapTabSource.includes('Compass and motion sensors will fill heading'), 'motion check description is shortened');
 assert(mapTabSource.includes("state === 'defer'"), 'deferred checks use an amber tone');
 assert(mapTabSource.includes('border-green-200'), 'successful checks paint green');
 assert(mapTabSource.includes('border-amber-200'), 'deferred checks paint orange');

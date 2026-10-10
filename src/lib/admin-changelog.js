@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_10.10.6': [
+        'Live location checks use shorter lines and tighter green rows. The sheet sits on the bottom of the screen, including the home-indicator inset, so the dim strip under the buttons is gone. The map above the sheet stays. No commuter What’s New. forceShow stays false.',
+    ],
     'V9_10.10.5': [
         'Force open scrolls so the top of that alert is in view, then a short blue ring fades off. It does not stay highlighted. Wide timetable exports paint the STN column in light slate even when the phone is in dark mode. No commuter What’s New. forceShow stays false.',
     ],

@@ -132,33 +132,33 @@ function ensureShareChecksModal() {
     if (modal) return modal;
     modal = document.createElement('div');
     modal.id = 'nt-share-checks-modal';
-    modal.className = 'fixed inset-0 z-[148] hidden flex items-end sm:items-center justify-center bg-gray-900/55 backdrop-blur-sm';
+    modal.className = 'fixed inset-0 z-[148] hidden flex flex-col justify-end bg-gray-900/55 backdrop-blur-sm';
     modal.setAttribute('role', 'dialog');
     modal.setAttribute('aria-modal', 'true');
     modal.setAttribute('aria-labelledby', 'nt-share-checks-title');
     modal.innerHTML = `
-        <div class="w-full max-w-md max-h-[88dvh] flex flex-col rounded-t-2xl sm:rounded-2xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 shadow-2xl">
-            <div class="shrink-0 flex items-start justify-between gap-3 px-5 pt-4 pb-3 border-b border-gray-100 dark:border-gray-800">
+        <div class="w-full max-w-md mx-auto max-h-[100dvh] flex flex-col rounded-t-2xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 shadow-2xl">
+            <div class="shrink-0 flex items-start justify-between gap-3 px-4 pt-3 pb-2 border-b border-gray-100 dark:border-gray-800">
                 <div class="min-w-0">
                     <p class="text-[9px] font-black uppercase tracking-widest text-blue-600 dark:text-blue-300">Live location checks</p>
-                    <h3 id="nt-share-checks-title" class="text-lg font-black text-gray-900 dark:text-white">Checking your train</h3>
-                    <p id="nt-share-checks-status" class="mt-1 text-[12px] text-gray-500 dark:text-gray-400">Starting checks…</p>
+                    <h3 id="nt-share-checks-title" class="text-base font-black text-gray-900 dark:text-white leading-tight">Checking your train</h3>
+                    <p id="nt-share-checks-status" class="mt-0.5 text-[11px] text-gray-500 dark:text-gray-400">Starting checks…</p>
                 </div>
-                <button type="button" data-share-checks-close class="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 focus:outline-none" aria-label="Close">
+                <button type="button" data-share-checks-close class="p-1.5 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 focus:outline-none" aria-label="Close">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
                 </button>
             </div>
-            <ol id="nt-share-checks-list" class="flex-1 overflow-y-auto custom-scrollbar px-5 py-4 space-y-2"></ol>
-            <div id="nt-share-checks-outcome" hidden class="mx-5 mb-3 rounded-xl border px-3 py-3">
+            <ol id="nt-share-checks-list" class="flex-1 overflow-y-auto custom-scrollbar px-4 py-2 space-y-1"></ol>
+            <div id="nt-share-checks-outcome" hidden class="mx-4 mb-2 rounded-lg border px-2.5 py-1.5">
                 <p data-share-outcome-label class="text-[9px] font-black uppercase tracking-widest text-gray-500">Outcome</p>
-                <p id="nt-share-checks-outcome-text" class="mt-1 text-[12px] font-bold leading-snug text-gray-900 dark:text-white"></p>
+                <p id="nt-share-checks-outcome-text" class="mt-0.5 text-[12px] font-bold leading-tight text-gray-900 dark:text-white"></p>
             </div>
-            <div class="shrink-0 p-4 border-t border-gray-100 dark:border-gray-800 space-y-2">
-                <button type="button" id="nt-share-checks-share-anyway" class="hidden w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-black focus:outline-none">Share on the map as this train</button>
+            <div class="shrink-0 px-4 pt-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] border-t border-gray-100 dark:border-gray-800 space-y-1.5">
+                <button type="button" id="nt-share-checks-share-anyway" class="hidden w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-black focus:outline-none">Share on the map as this train</button>
                 <div class="grid grid-cols-2 gap-2">
-                    <button type="button" id="nt-share-checks-proceed" class="hidden py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-black focus:outline-none">Proceed</button>
-                    <button type="button" id="nt-share-checks-restart" class="hidden py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold focus:outline-none">Restart checks</button>
-                    <button type="button" id="nt-share-checks-dismiss" data-share-checks-close class="py-3 rounded-xl bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 text-sm font-bold focus:outline-none">Close</button>
+                    <button type="button" id="nt-share-checks-proceed" class="hidden py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-black focus:outline-none">Proceed</button>
+                    <button type="button" id="nt-share-checks-restart" class="hidden py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold focus:outline-none">Restart checks</button>
+                    <button type="button" id="nt-share-checks-dismiss" data-share-checks-close class="py-2.5 rounded-xl bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 text-sm font-bold focus:outline-none">Close</button>
                 </div>
             </div>
         </div>`;
@@ -204,7 +204,7 @@ function openShareChecks(trainId) {
     const outcomeText = modal.querySelector('#nt-share-checks-outcome-text');
     if (outcome) {
         outcome.hidden = true;
-        outcome.className = 'mx-5 mb-3 rounded-xl border px-3 py-3';
+        outcome.className = 'mx-4 mb-2 rounded-lg border px-2.5 py-1.5';
     }
     if (outcomeText) outcomeText.textContent = '';
     const shareAnyway = modal.querySelector('#nt-share-checks-share-anyway');
@@ -225,12 +225,12 @@ function addShareCheck(label, detail, state = 'pass') {
         : state === 'defer'
             ? 'border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30'
             : 'border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-950/30';
-    row.className = `rounded-xl border ${tone} px-3 py-2.5`;
+    row.className = `rounded-lg border ${tone} px-2.5 py-1`;
     const heading = document.createElement('p');
-    heading.className = 'text-[11px] font-black text-gray-900 dark:text-white';
+    heading.className = 'text-[11px] font-black leading-tight text-gray-900 dark:text-white';
     heading.textContent = label;
     const body = document.createElement('p');
-    body.className = 'mt-0.5 text-[11px] leading-snug text-gray-600 dark:text-gray-300';
+    body.className = 'text-[11px] leading-tight text-gray-600 dark:text-gray-300';
     body.textContent = detail;
     row.append(heading, body);
     list.appendChild(row);
@@ -240,7 +240,13 @@ function addShareCheck(label, detail, state = 'pass') {
 function setShareOutcome(text, outcome = 'fail') {
     const modal = ensureShareChecksModal();
     const status = modal.querySelector('#nt-share-checks-status');
-    if (status) status.textContent = text;
+    if (status) {
+        status.textContent = outcome === 'pass'
+            ? 'Checks passed'
+            : outcome === 'defer'
+                ? 'Confirm to share'
+                : 'Not sharing';
+    }
     const box = modal.querySelector('#nt-share-checks-outcome');
     const body = modal.querySelector('#nt-share-checks-outcome-text');
     const label = modal.querySelector('[data-share-outcome-label]');
@@ -261,7 +267,7 @@ function setShareOutcome(text, outcome = 'fail') {
             ? 'text-amber-950 dark:text-amber-100'
             : 'text-red-900 dark:text-red-100';
     box.hidden = false;
-    box.className = `mx-5 mb-3 rounded-xl border px-3 py-3 ${tone}`;
+    box.className = `mx-4 mb-2 rounded-lg border px-2.5 py-1.5 ${tone}`;
     if (label) {
         label.textContent = outcome === 'pass'
             ? 'Outcome · train'
@@ -270,7 +276,7 @@ function setShareOutcome(text, outcome = 'fail') {
                 : 'Outcome · blocked';
         label.className = `text-[9px] font-black uppercase tracking-widest ${labelTone}`;
     }
-    body.className = `mt-1 text-[12px] font-bold leading-snug ${bodyTone}`;
+    body.className = `mt-0.5 text-[12px] font-bold leading-tight ${bodyTone}`;
     body.textContent = text;
 }
 
@@ -1058,10 +1064,10 @@ export async function runOnboardToastVet(trainId) {
     addShareCheck(
         'Motion sensors',
         fusionWarm.sensorsLive || fusionWarm.permission === 'granted'
-            ? 'Compass and motion sensors will fill heading between GPS pings.'
+            ? 'Compass fills heading between GPS pings.'
             : (fusionWarm.permission === 'denied'
-                ? 'Motion sensors were not allowed. Tracking still uses GPS.'
-                : 'Motion sensors unavailable. Tracking still uses GPS.'),
+                ? 'Sensors blocked. Tracking still uses GPS.'
+                : 'No motion sensors. Tracking still uses GPS.'),
         fusionWarm.sensorsLive || fusionWarm.permission === 'granted' || fusionWarm.permission === 'unknown'
             ? 'pass'
             : 'defer'
@@ -1073,16 +1079,16 @@ export async function runOnboardToastVet(trainId) {
         return { ok: false, noCoords: true, message: NO_COORDS_MESSAGE };
     }
 
-    addShareCheck('Rail geometry', `Station coordinates are available for Train ${trainId}.`);
+    addShareCheck('Rail geometry', `Stations are mapped for Train ${trainId}.`);
     const railPath = await railPathForTrain(trainId, { routeId, region: $userRegion.get() || 'GP' });
     if (!railPath?.length) {
         addShareCheck(
             'Selected train path',
-            'Using the painted corridor rail. This train’s stop list could not be built, so sharing still uses the line you are on.',
+            'Using the painted corridor. This train’s stops could not be built.',
             'defer'
         );
     } else {
-        addShareCheck('Selected train path', `Built an origin-to-terminus path with ${railPath.length} rail points.`);
+        addShareCheck('Selected train path', `Origin to terminus, ${railPath.length} rail points.`);
     }
     let samples;
     try {
@@ -1101,7 +1107,7 @@ export async function runOnboardToastVet(trainId) {
     }
 
     if (!samples?.length) {
-        const msg = 'Couldn’t get a GPS fix. Try again outdoors.';
+        const msg = 'No GPS fix. Try again outdoors.';
         addShareCheck('GPS samples', msg, 'fail');
         setShareDecision(msg, false);
         return { ok: false, message: msg };
@@ -1109,14 +1115,14 @@ export async function runOnboardToastVet(trainId) {
 
     const first = samples[0];
     const last = samples[samples.length - 1];
-    addShareCheck('GPS samples', `${samples.length} fixes received. Accuracy is ${Number.isFinite(last.accuracy) ? `±${Math.round(last.accuracy)} m` : 'unknown'}.`);
+    addShareCheck('GPS samples', `${samples.length} fixes. Accuracy ${Number.isFinite(last.accuracy) ? `±${Math.round(last.accuracy)} m` : 'unknown'}.`);
     const pathPoint = scoreFixToRailPath(last.lat, last.lng, railPath);
     const metres = pathPoint?.distanceM ?? Infinity;
     addShareCheck(
         'Distance to selected rail path',
         Number.isFinite(metres)
-            ? `Closest rail point on Train ${trainId}’s path is ${formatDistanceM(metres)} away.`
-            : 'Couldn’t measure distance to the selected train path.',
+            ? `Closest rail point is ${formatDistanceM(metres)} away.`
+            : 'Couldn’t measure distance to this path.',
         Number.isFinite(metres) ? 'pass' : 'fail'
     );
     const nearStation = nearestStationMeters(last.lat, last.lng);
@@ -1125,8 +1131,8 @@ export async function runOnboardToastVet(trainId) {
     addShareCheck(
         'Rail proximity',
         atPlatform
-            ? `Within ${formatDistanceM(nearStation)} of a station platform.`
-            : (onRails ? 'GPS fix is close to the selected train path.' : `GPS fix is ${formatDistanceM(metres)} from the selected train path.`),
+            ? `Within ${formatDistanceM(nearStation)} of a platform.`
+            : (onRails ? 'Close to this train’s path.' : `${formatDistanceM(metres)} from this train’s path.`),
         onRails ? 'pass' : 'fail'
     );
 
@@ -1142,9 +1148,9 @@ export async function runOnboardToastVet(trainId) {
     }
     if (speedMps != null) {
         const kmh = Math.max(0, Math.round(speedMps * 3.6));
-        addShareCheck('Movement', `GPS reports about ${kmh} km/h over ${Math.round(displacement)} m.`);
+        addShareCheck('Movement', `About ${kmh} km/h over ${Math.round(displacement)} m.`);
     } else {
-        addShareCheck('Movement', 'No reliable speed from GPS yet.', 'defer');
+        addShareCheck('Movement', 'No reliable speed yet.', 'defer');
     }
 
     let heading = last.heading;
@@ -1166,8 +1172,8 @@ export async function runOnboardToastVet(trainId) {
     addShareCheck(
         'Direction',
         !moving
-            ? 'Direction is deferred until movement is detected.'
-            : (headingPass ? `Heading agrees with Train ${trainId}’s journey.` : `Heading does not agree with Train ${trainId}’s journey yet.`),
+            ? 'Waiting until the train moves.'
+            : (headingPass ? 'Heading matches this train.' : 'Heading does not match this train.'),
         !moving ? 'defer' : (headingPass ? 'pass' : 'fail')
     );
     const tooFar = !Number.isFinite(metres) || metres > TRAIN_TRACKER_MAX_M;
@@ -1185,7 +1191,7 @@ export async function runOnboardToastVet(trainId) {
             : tooFar
                 ? `You’re too far from Train ${trainId}’s rail path`
                 : `Heading doesn’t match Train ${trainId}`;
-        setShareOutcome(`${msg}. You will not appear as the train.`, 'fail');
+        setShareOutcome(msg, 'fail');
         setShareChecksMode('fail');
         return {
             ok: false,
@@ -1209,8 +1215,8 @@ export async function runOnboardToastVet(trainId) {
     }
 
     setShareOutcome(attach
-        ? `Checks passed. You can appear as Train ${trainId}.`
-        : `On the rail. Confirm you are on Train ${trainId} before sharing.`, attach ? 'pass' : 'defer');
+        ? `You can appear as Train ${trainId}.`
+        : `Confirm you are on Train ${trainId}.`, attach ? 'pass' : 'defer');
     return {
         ok: true,
         lat: lastCoords.lat,
@@ -2330,7 +2336,7 @@ export async function startOnTrainShare({
         }
     }
 
-    setShareOutcome(`Checks passed, you're about to share the train's location to other commuters`, 'pass');
+    setShareOutcome('You are about to share this train’s location.', 'pass');
     setShareChecksMode('confirm');
     hideCheckToast();
     const confirmed = await waitForShareConfirm();

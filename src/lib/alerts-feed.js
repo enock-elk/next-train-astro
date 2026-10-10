@@ -282,6 +282,13 @@ export function shouldIgnoreAlertLongPress(target) {
     return false;
 }
 
+/** WhatsApp offers Read more once a chat bubble passes this many characters. */
+export const ALERT_SEE_MORE_MIN_CHARS = 700;
+
+export function alertCopyNeedsSeeMore(html) {
+    return stripHtmlToText(html).length > ALERT_SEE_MORE_MIN_CHARS;
+}
+
 function stripHtmlToText(html) {
     return String(html || '')
         .replace(/<[^>]+>/g, ' ')

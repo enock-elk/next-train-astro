@@ -64,7 +64,7 @@ import {
     toggleAlertPinned,
     toggleAlertPollRawCounts,
 } from './alerts-channel.js';
-import { layoutAlertPost, hoistAlertImagesFromHtml, ALERT_PIN_SVG, isNoticePinned } from './alerts-feed.js';
+import { layoutAlertPost, hoistAlertImagesFromHtml, ALERT_PIN_SVG, isNoticePinned, alertCopyNeedsSeeMore } from './alerts-feed.js';
 import {
     buildPollShellHtml,
     hydratePollResults,
@@ -77,6 +77,7 @@ import {
     syncPollMultiSubmitState,
     isPollOpen,
     readVotedPollOption,
+    renderPollResultsInto,
 } from './alert-poll.js';
 import { $userProfile, $currentRouteId, $userRegion, $deviceId } from '../store.js';
 import { $account } from './account.js';
@@ -931,12 +932,11 @@ async function submitFeedback() {
             throw new Error('Network disconnected. Cannot submit feedback while offline.');
         }
 
-        if (window.firebaseAuth && !window.firebaseAuth.currentUser && window.firebaseSignInAnonymously) {
-            await window.firebaseSignInAnonymously(window.firebaseAuth);
-        }
         let authToken = '';
-        if (window.firebaseAuth?.currentUser && window.firebaseGetIdToken) {
-            authToken = await window.firebaseGetIdToken(window.firebaseAuth.currentUser, true);
+        try {
+            authToken = await ensureAnonymousAuthToken();
+        } catch (authErr) {
+            if (!isTransientAuthError(authErr)) throw authErr;
         }
 
         let attachmentUrls = [];
@@ -998,7 +998,13 @@ async function submitFeedback() {
     } catch (e) {
         console.error(e);
         trackAnalyticsEvent('submit_feedback_error', { message: String(e?.message || e || 'error').slice(0, 80) });
-        showToast(e.message || 'Could not send feedback.', 'error');
+        const raw = String(e?.message || '');
+        showToast(
+            (isTransientAuthError(e) || raw.startsWith('Firebase:'))
+                ? 'Could not send feedback. Check your connection and try again.'
+                : (raw || 'Could not send feedback.'),
+            'error'
+        );
     } finally {
         if (submitBtn) submitBtn.disabled = false;
         if (submitText) submitText.textContent = 'Submit';
@@ -1033,16 +1039,59 @@ function trackAlertEvent(name, params) {
     trackAnalyticsEvent(name, params);
 }
 
-async function ensurePollAuthToken() {
-    try {
-        if (window.firebaseAuth && !window.firebaseAuth.currentUser && window.firebaseSignInAnonymously) {
-            await window.firebaseSignInAnonymously(window.firebaseAuth);
+function isTransientAuthError(error) {
+    const code = String(error?.code || '');
+    const text = String(error?.message || error || '');
+    return code === 'auth/network-request-failed'
+        || code === 'auth/too-many-requests'
+        || /network-request-failed|Failed to fetch|NetworkError|Load failed|network disconnected/i.test(text);
+}
+
+function waitForAuthUser(auth, ms = 1500) {
+    if (!auth || auth.currentUser) return Promise.resolve(auth?.currentUser || null);
+    if (typeof window.firebaseOnAuthStateChanged !== 'function') return Promise.resolve(null);
+    return new Promise((resolve) => {
+        let settled = false;
+        const finish = (user) => {
+            if (settled) return;
+            settled = true;
+            try { unsub(); } catch { /* ignore */ }
+            resolve(user || auth.currentUser || null);
+        };
+        const unsub = window.firebaseOnAuthStateChanged(auth, (user) => {
+            if (user) finish(user);
+        });
+        setTimeout(() => finish(auth.currentUser), ms);
+    });
+}
+
+/** Boot Firebase, reuse a saved session, then sign in anonymously. Cached token, not a forced refresh. */
+async function ensureAnonymousAuthToken() {
+    const { bootFirebase } = await import('./firebase-boot.js');
+    await bootFirebase();
+    const auth = window.firebaseAuth;
+    if (!auth || typeof window.firebaseGetIdToken !== 'function') {
+        const err = new Error('Auth required to vote');
+        err.code = 'auth/unavailable';
+        throw err;
+    }
+    let user = auth.currentUser || await waitForAuthUser(auth);
+    if (!user && typeof window.firebaseSignInAnonymously === 'function') {
+        try {
+            await window.firebaseSignInAnonymously(auth);
+        } catch (e) {
+            if (!isTransientAuthError(e)) throw e;
+            await new Promise((resolve) => setTimeout(resolve, 600));
+            await window.firebaseSignInAnonymously(auth);
         }
-        if (window.firebaseAuth?.currentUser && window.firebaseGetIdToken) {
-            return await window.firebaseGetIdToken(window.firebaseAuth.currentUser, true) || '';
-        }
-    } catch { /* ignore */ }
-    return '';
+        user = auth.currentUser;
+    }
+    if (!user) {
+        const err = new Error('Auth required to vote');
+        err.code = 'auth/unavailable';
+        throw err;
+    }
+    return await window.firebaseGetIdToken(user, false) || '';
 }
 
 /** One vote per Firebase uid (anonymous install). localStorage is only a UX lock. */
@@ -1071,7 +1120,7 @@ export async function submitPollVote(pollId, optionKey, optionText, pollMeta = n
     const texts = keys.map(labelFor).filter(Boolean);
 
     try {
-        const token = await ensurePollAuthToken();
+        const token = await ensureAnonymousAuthToken();
         const uid = window.firebaseAuth?.currentUser?.uid || '';
         if (!token || !uid) throw new Error('Auth required to vote');
 
@@ -1110,7 +1159,12 @@ export async function submitPollVote(pollId, optionKey, optionText, pollMeta = n
         showToast('Vote recorded successfully!', 'success');
     } catch (e) {
         console.warn('Poll vote failed', e);
-        showToast('Could not record your vote. Please try again.', 'error');
+        showToast(
+            isTransientAuthError(e) || String(e?.message || '') === 'Auth required to vote'
+                ? 'Could not record your vote. Check your connection and try again.'
+                : 'Could not record your vote. Please try again.',
+            'error'
+        );
     }
 }
 
@@ -1735,6 +1789,9 @@ export function renderServiceAlertModal(notice, options = {}) {
         ? `<h3 class="text-base font-black text-gray-900 dark:text-white leading-snug mb-2">${escapeHTML(layout.title)}</h3>`
         : '';
     let formattedMsg = sanitizeHTML(layout.body);
+    if (alertCopyNeedsSeeMore(layout.body)) {
+        formattedMsg = `<div class="nt-alert-copy"><div class="nt-rich-body nt-alert-body is-collapsed text-sm text-gray-800 dark:text-gray-200 leading-relaxed" data-alert-body>${formattedMsg}</div><button type="button" class="nt-alert-see-more" data-alert-see-more>See more...</button></div>`;
+    }
     if (options.prefixHtml) formattedMsg = `${options.prefixHtml}${formattedMsg}`;
 
     if (notice.sourceName) {
@@ -2117,6 +2174,13 @@ export function initHub() {
     if (!window.__ntPollVoteBound) {
         window.__ntPollVoteBound = true;
         document.addEventListener('click', (e) => {
+            const seeMore = e.target?.closest?.('[data-alert-see-more]');
+            if (seeMore) {
+                e.preventDefault();
+                seeMore.closest('.nt-alert-copy')?.querySelector('[data-alert-body]')?.classList.remove('is-collapsed');
+                seeMore.remove();
+                return;
+            }
             const viewBtn = e.target?.closest?.('[data-poll-view-results]');
             if (viewBtn) {
                 e.preventDefault();
@@ -2126,7 +2190,9 @@ export function initHub() {
                 const pollId = wrap?.getAttribute('data-poll-shell') || '';
                 if (pollId && readVotedPollOption(pollId)) return;
                 if (pollMeta && !isPollOpen(pollMeta)) {
-                    showToast('This poll is closed.', 'info');
+                    if (wrap && pollId) {
+                        renderPollResultsInto(wrap, pollId, pollMeta, '', pollMeta.severity);
+                    }
                     return;
                 }
                 shakePollVoteButtons(wrap);

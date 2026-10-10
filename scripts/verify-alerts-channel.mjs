@@ -29,6 +29,8 @@ import {
     ALERT_REACTION_KEYS,
     isNoticePinned,
     sortAlertsFeed,
+    alertCopyNeedsSeeMore,
+    ALERT_SEE_MORE_MIN_CHARS,
 } from '../src/lib/alerts-feed.js';
 
 const failures = [];
@@ -491,7 +493,8 @@ const now = 1_700_000_000_000;
         poll: { ...notice.poll, closesAt: 1 },
     }, { mode: 'preview' });
     assert(closedShell.includes('data-poll-open="0"') && closedShell.includes('INACTIVE POLL'), 'closed poll is inactive without flipping poll.active');
-    assert(closedShell.includes('View Poll Results') && closedShell.includes('nt-poll-vote'), 'closed poll still shows answers and View Poll Results');
+    assert(closedShell.includes('data-poll-hydrate="1"') && closedShell.includes('data-poll-closed="1"'), 'closed poll opens results without a vote');
+    assert(!closedShell.includes('View Poll Results') && !closedShell.includes('nt-poll-vote'), 'closed poll does not ask for a vote');
 
     assert(isPollOpen(withPollTiming({ active: true }, { expiresAt: now - 1 }), now) === false, 'missing closesAt inherits alert expiry');
     assert(isPollOpen(withPollTiming({ active: true }, {}), now) === true, 'no close and no alert expiry stays open');
@@ -514,6 +517,17 @@ const now = 1_700_000_000_000;
     assert(hubJs.includes('Vote first to see the results.'), 'View Poll Results asks for a vote first');
     assert(hubJs.includes('shakePollVoteButtons'), 'View Poll Results shakes the answer buttons');
     assert(hubJs.includes('This poll is closed.'), 'closed polls tell the commuter votes are off');
+    assert(hubJs.includes('ensureAnonymousAuthToken') && hubJs.includes('waitForAuthUser'), 'votes wait for a saved sign-in');
+    assert(hubJs.includes('firebaseGetIdToken(user, false)'), 'votes use the saved token');
+    assert(hubJs.includes('Could not record your vote. Check your connection and try again.'), 'a dropped vote names the connection');
+    assert(!hubJs.includes('Firebase: Error'), 'reply errors do not surface the raw Firebase string');
+    assert(alertCopyNeedsSeeMore(`${'word '.repeat(200)}`) === true, 'a long post needs See more');
+    assert(alertCopyNeedsSeeMore('Short advisory.') === false, 'a short post stays open');
+    assert(ALERT_SEE_MORE_MIN_CHARS === 700, 'See more uses the WhatsApp 700 character mark');
+    const channelJs = readFileSync(new URL('../src/lib/alerts-channel.js', import.meta.url), 'utf8');
+    assert(channelJs.includes('See more...'), 'long posts offer See more');
+    const pollJs = readFileSync(new URL('../src/lib/alert-poll.js', import.meta.url), 'utf8');
+    assert(pollJs.includes("data-poll-closed") && pollJs.includes('if (!voted && !closed) return'), 'closed results load without a local vote');
 }
 
 if (failures.length) {

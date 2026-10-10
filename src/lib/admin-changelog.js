@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_10.10.4': [
+        'A closed poll shows the results to everyone, including people who never got a vote in. Voting waits for the saved sign-in, uses that token, and retries once if the network drops. The vote and reply toasts no longer show the raw Firebase network code. Alert posts longer than 700 characters collapse with See more. No commuter What’s New. forceShow stays false.',
+    ],
     'V9_10.10.3': [
         'Dev Mode Commuter Feedback photos accept taps again. The chat wallpaper was swallowing the click, so the full-screen poster preview never opened. Tapping a photo now opens that same preview. The commuter inbox and the alerts feed are unchanged. No commuter What’s New. forceShow stays false.',
     ],

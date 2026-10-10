@@ -1,7 +1,8 @@
 /**
  * Alert poll chrome — feed, notice modal, and live percentages.
  * Percentages always. Optional raw counts in brackets. Vote lists stay on Firebase polls/{id}.
- * Results stay hidden until this device has voted.
+ * Results stay hidden until this device has voted, unless the poll is already closed.
+ * A closed poll shows the tally to everyone, including people who never voted.
  * poll.active means this notice has a poll. Voting window is poll.closesAt
  * (missing inherits notice.expiresAt, or stays open).
  * allowMultiple (off by default) lets one uid pick several options before submit.
@@ -224,6 +225,15 @@ export function buildPollShellHtml(notice, { mode = 'live' } = {}) {
     const attrs = `id="poll-container-${idAttr}" data-poll-shell="${idAttr}" data-poll-meta="${metaAttr}" data-poll-severity="${escapeHTML(severity)}" data-poll-open="${open ? '1' : '0'}"${multi ? ' data-poll-multi="1"' : ''} class="nt-poll"`;
     const liveMark = buildPollLiveLabelHtml({ open });
 
+    if (!open) {
+        return `<div ${attrs}><div class="nt-poll-results" data-poll-hydrate="1" data-poll-id="${idAttr}" data-poll-voted="${escapeHTML(voted)}" data-poll-closed="1">${buildPollResultsHtml({
+            poll,
+            counts: { A: 0, B: 0, C: 0, total: 0 },
+            votedOption: voted,
+            includeQuestion: true,
+        })}</div></div>`;
+    }
+
     if (voted && !showResults) {
         return `<div ${attrs}>${buildPollThanksHtml(poll)}</div>`;
     }
@@ -259,11 +269,12 @@ export async function renderPollResultsInto(container, pollId, poll, votedOption
     const nested = container.hasAttribute('data-poll-hydrate') || String(container.id || '').startsWith('poll-live-results');
     try {
         const counts = await fetchPollTallies(pollId, { seedVote });
+        const closed = container.getAttribute('data-poll-closed') === '1';
         container.innerHTML = buildPollResultsHtml({
             poll,
             counts,
             votedOption,
-            includeQuestion: !nested || !!votedOption,
+            includeQuestion: closed || !nested || !!votedOption,
         });
         if (nested) container.classList.add('nt-poll-results');
     } catch {
@@ -281,7 +292,8 @@ export function hydratePollResults(root) {
         const pollId = el.getAttribute('data-poll-id') || '';
         if (!pollId || pollId === 'preview') return;
         const voted = el.getAttribute('data-poll-voted') || '';
-        if (!voted) return;
+        const closed = el.getAttribute('data-poll-closed') === '1';
+        if (!voted && !closed) return;
         const shell = el.closest('[data-poll-shell]');
         let poll = null;
         try {

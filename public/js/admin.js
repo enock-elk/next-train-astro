@@ -814,6 +814,12 @@ function ntAdminSchedulePreviewText(meta) {
     return ntAdminFormatScheduleSummary(meta);
 }
 
+function ntAgentDebugLog(hypothesisId, location, message, data) {
+    try {
+        navigator.sendBeacon('http://127.0.0.1:4319/', JSON.stringify({ hypothesisId, location, message, data, timestamp: Date.now() }));
+    } catch { /* debug transport only */ }
+}
+
 const Admin = {
     
     // GUARDIAN PHASE 2: Dropdown Breadcrumbs State
@@ -1932,9 +1938,12 @@ const Admin = {
             ? window.lightboxOnclickJs(safe, 'window.openLightbox')
             : '';
         if (!js) return '';
+        // #region agent log
+        ntAgentDebugLog('A,D', 'public/js/admin.js:wrapLightboxImgHtml', 'admin alert image wrapper rendered', { safe: !!safe, sharedCall: js.startsWith('window.openLightbox('), openLightboxType: typeof window.openLightbox });
+        // #endregion
         const href = typeof escapeHTML === 'function' ? escapeHTML(safe) : safe;
         const border = borderClass || 'border-gray-200 dark:border-gray-700';
-        return `<button type="button" onclick='event.stopPropagation(); ${js}' class="relative block w-full focus:outline-none my-2 cursor-zoom-in rounded-lg overflow-hidden border ${border} shadow-sm active:scale-[0.98] transition-transform"><img src="${href}" class="w-full h-auto object-cover hover:opacity-90 transition-opacity" alt=""><span class="nt-zoom-plus absolute bottom-1.5 right-1.5 w-5 h-5 rounded-full bg-black/40 text-white text-xs font-bold leading-none flex items-center justify-center border border-white/20 pointer-events-none select-none shadow-sm" aria-hidden="true">+</span></button>`;
+        return `<button type="button" onclick='event.stopPropagation(); Admin._debugAlertPreviewBefore(this); ${js}; Admin._debugAlertPreviewAfter(this)' class="relative block w-full focus:outline-none my-2 cursor-zoom-in rounded-lg overflow-hidden border ${border} shadow-sm active:scale-[0.98] transition-transform"><img src="${href}" class="w-full h-auto object-cover hover:opacity-90 transition-opacity" alt=""><span class="nt-zoom-plus absolute bottom-1.5 right-1.5 w-5 h-5 rounded-full bg-black/40 text-white text-xs font-bold leading-none flex items-center justify-center border border-white/20 pointer-events-none select-none shadow-sm" aria-hidden="true">+</span></button>`;
     },
 
     /** Hoist unique image srcs out of admin/commuter HTML so one send cannot paint twice. */
@@ -2293,6 +2302,22 @@ const Admin = {
             overlay.dataset.ntAdminLift = '1';
         }
         return true;
+    },
+
+    _debugAlertPreviewBefore: (poster) => {
+        const overlay = document.getElementById('alert-image-lightbox');
+        const modal = poster?.closest?.('#notice-modal, #disruption-modal, #dev-modal');
+        // #region agent log
+        ntAgentDebugLog('A,B,C', 'public/js/admin.js:_debugAlertPreviewBefore', 'admin alert image inline click reached shared preview', { posterConnected: !!poster?.isConnected, modalId: modal?.id || '', modalZ: modal ? getComputedStyle(modal).zIndex : '', openLightboxType: typeof window.openLightbox, sharedUiHasAdminLift: String(window.openLightbox || '').includes('10050'), overlayHiddenBefore: !overlay || overlay.classList.contains('hidden'), overlayZBefore: overlay ? getComputedStyle(overlay).zIndex : '' });
+        // #endregion
+    },
+
+    _debugAlertPreviewAfter: () => {
+        const overlay = document.getElementById('alert-image-lightbox');
+        const image = document.getElementById('alert-image-lightbox-img');
+        // #region agent log
+        ntAgentDebugLog('B,C', 'public/js/admin.js:_debugAlertPreviewAfter', 'admin alert shared preview returned', { overlayPresent: !!overlay, overlayHiddenAfter: !overlay || overlay.classList.contains('hidden'), overlayDisplayAfter: overlay ? getComputedStyle(overlay).display : '', overlayZAfter: overlay ? getComputedStyle(overlay).zIndex : '', hash: location.hash, lightboxMode: !!window._isLightboxMode, imageHasSrc: !!image?.getAttribute?.('src') });
+        // #endregion
     },
 
     bindFeedbackInboxReactions: (host) => {
@@ -15206,6 +15231,9 @@ const Admin = {
 
         const posterUrls = Admin.collectAlertImageUrls(data);
         let imgHtml = posterUrls.map((src) => Admin.wrapLightboxImgHtml(src) || '').join('');
+        // #region agent log
+        ntAgentDebugLog('D,E', 'public/js/admin.js:buildAlertPreviewHtml', 'archive alert preview images built', { posterCount: posterUrls.length, wrapperCount: (imgHtml.match(/_debugAlertPreviewBefore/g) || []).length });
+        // #endregion
 
         let parsedMessage = data.message || data.longExplanation || data.buttonText || data.text || 'No details provided.';
         if (typeof window.sanitizeRichHtml === 'function') {
@@ -15295,6 +15323,9 @@ const Admin = {
         const prev = modalEl.style.zIndex;
         modalEl.dataset.adminPrevZ = prev;
         modalEl.style.zIndex = '260';
+        // #region agent log
+        ntAgentDebugLog('B', 'public/js/admin.js:_elevateModalForAdmin', 'admin alert modal elevated', { modalId: modalEl.id || '', previousInlineZ: prev || '', computedZ: getComputedStyle(modalEl).zIndex });
+        // #endregion
         return () => {
             modalEl.style.zIndex = modalEl.dataset.adminPrevZ || '';
             delete modalEl.dataset.adminPrevZ;
@@ -15307,6 +15338,9 @@ const Admin = {
         // Same full-screen preview as the alert panel. openLightbox lifts it above Dev Mode.
         const posterUrls = Admin.collectAlertImageUrls(data);
         let imgHtml = posterUrls.map((src) => Admin.wrapLightboxImgHtml(src) || '').join('');
+        // #region agent log
+        ntAgentDebugLog('D,E', 'public/js/admin.js:buildNoticeBodyHtml', 'notice modal images built', { posterCount: posterUrls.length, wrapperCount: (imgHtml.match(/_debugAlertPreviewBefore/g) || []).length });
+        // #endregion
         let parsedMessage = data.message || data.text || 'No details provided.';
         if (typeof window.sanitizeRichHtml === 'function') {
             parsedMessage = window.sanitizeRichHtml(parsedMessage);

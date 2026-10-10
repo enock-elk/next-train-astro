@@ -368,6 +368,10 @@ assert(hubModals.includes('#feedback-panel .inbox-bubble-own'), 'admin inbox sha
 assert(hubModals.includes('#feedback-panel .inbox-bubble-other'), 'admin inbox shares WhatsApp other-bubble tokens');
 assert(hubModals.includes('#feedback-panel .feedback-thread-chat'), 'admin thread wallpaper selector');
 assert(hubModals.includes('nt-pack-wallpaper'), 'Feedback Hub uses the shared pack wallpaper');
+assert(
+    /#feedback-panel \.feedback-thread-chat\.nt-pack-wallpaper > \* \{[^}]*pointer-events:\s*auto;/.test(hubModals),
+    'feedback chat children stay tappable under the inherited wallpaper pointer-events'
+);
 assert(hubModals.includes('#roadmap-body.nt-pack-surface'), 'Roadmap wallpaper styling follows the interactive surface class');
 assert(!hubModals.includes('#roadmap-body.nt-pack-wallpaper'), 'Roadmap has no stale decorative-only wallpaper selector');
 assert(!hubModals.includes('background: #efeae2'), 'Feedback Hub dropped the #efeae2 wallpaper wash');

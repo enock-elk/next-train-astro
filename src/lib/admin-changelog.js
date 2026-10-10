@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_10.10.3': [
+        'Dev Mode Commuter Feedback photos accept taps again. The chat wallpaper was swallowing the click, so the full-screen poster preview never opened. Tapping a photo now opens that same preview. The commuter inbox and the alerts feed are unchanged. No commuter What’s New. forceShow stays false.',
+    ],
     'V9_10.10.2': [
         'Dev Mode Commuter Feedback opens an attached photo in the same full-screen preview commuters get from a service poster. The panel shows that preview itself, above Dev Mode, and keeps the feedback hash. Several photos in one message can be swiped or stepped. The commuter inbox and the alerts feed are unchanged. No commuter What’s New. forceShow stays false.',
     ],

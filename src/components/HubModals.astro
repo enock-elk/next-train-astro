@@ -983,6 +983,14 @@ import { withBase } from '../lib/config.js';
       radial-gradient(circle at 62% 8%, rgba(255,255,255,0.04) 0 1px, transparent 1.8px),
       linear-gradient(180deg, rgba(255,255,255,0.03), rgba(0,0,0,0.22));
   }
+  /* .nt-pack-wallpaper is pointer-events:none and that value is inherited.
+     On Alerts the decoration is an empty sibling. Here it is the chat itself,
+     so a commuter photo was visible and untappable. Children take hits again. */
+  #feedback-panel .feedback-thread-chat.nt-pack-wallpaper > * {
+    position: relative;
+    z-index: 1;
+    pointer-events: auto;
+  }
   #roadmap-body.nt-pack-surface {
     position: relative;
     background-color: #5a6b5c;

@@ -378,10 +378,15 @@ assert(hubModals.includes('Show my photo next to my name'), 'photo opt-in is com
 assert(hubModals.includes('Show my level on Community'), 'Community level opt-out sits with photo');
 assert(hubModals.includes('id="account-photo-alerts"'), 'photo opt-in checkbox exists');
 assert(hubModals.includes('id="account-marks-community"'), 'Community level checkbox exists');
-assert(hubModals.includes('id="account-profile-toggle"') && hubModals.includes('id="account-profile-panel"'), 'signed-in name and email open a profile accordion');
+assert(hubModals.includes('id="account-name-edit-btn"') && hubModals.includes('Edit display name'), 'signed-in name opens from a pencil');
+assert(!hubModals.includes('id="account-profile-toggle"') && !hubModals.includes('id="account-profile-panel"'), 'signed-in name is not an accordion');
+assert(hubModals.includes('id="account-passenger-type-btn"') && hubModals.includes('id="account-passenger-type-display"'), 'preview shows passenger type');
+assert(hubModals.includes('id="account-modal-display-name"') && hubModals.includes('id="account-modal-email"'), 'preview shows name and email');
 assert(hubModals.includes('id="account-photo-toggle"') && hubModals.includes('toggle-checkbox'), 'photo opt-in is a settings toggle');
 assert(hubModals.includes('id="account-marks-toggle"'), 'Community level opt-out is a settings toggle');
 assert(hubModals.includes('>Save<') && hubModals.includes('id="account-save-display-name"'), 'display name and photo share one Save');
+assert(hubModals.includes('id="account-name-sheet"'), 'name edits open in a sheet');
+assert(hubModals.includes('id="account-points-sheet"') && hubModals.includes('h-[min(92dvh,100%)]'), 'points open in a tall sheet');
 assert(hubModals.includes('Continue with Facebook'), 'guest Facebook sign-in');
 assert(hubModals.includes('id="account-facebook-btn"'), 'Facebook button id');
 assert(hubModals.includes('Delete account'), 'signed-in delete row');
@@ -402,21 +407,30 @@ assert(hubModals.includes('id="messages-thread-contact-row"') && hubModals.inclu
 assert(hubModals.includes('id="account-delete-type"'), 'delete confirm requires typing DELETE');
 assert(hubModals.includes('id="account-badge-how-sheet"') && hubModals.includes('id="account-badge-how-close"'), 'badge how-to sheet exists');
 assert(
-    hubModals.indexOf('id="account-profile-toggle"') < hubModals.indexOf('id="account-photo-alerts"')
-    && hubModals.indexOf('id="account-photo-alerts"') < hubModals.indexOf('id="account-save-display-name"')
-    && hubModals.indexOf('id="account-save-display-name"') < hubModals.indexOf('id="account-points-btn"')
+    hubModals.indexOf('id="account-modal-display-name"') < hubModals.indexOf('id="account-passenger-type-btn"')
+    && hubModals.indexOf('id="account-passenger-type-btn"') < hubModals.indexOf('id="account-points-btn"')
     && hubModals.indexOf('id="account-points-btn"') < hubModals.indexOf('id="account-settings-host"')
     && hubModals.indexOf('id="account-settings-host"') < hubModals.indexOf('id="account-signout-btn"'),
-    'signed-in Account order is profile accordion, Points, theme host, sign out',
+    'signed-in Account order is identity preview, settings, sign out',
 );
 assert(hubModals.includes('?from=account'), 'Account legal links return with from=account');
 assert(hubModals.includes('account-points-panel'), 'points details live inside Account');
-assert(hubModals.indexOf('id="account-points-btn"') < hubModals.indexOf('id="account-points-panel"'), 'points panel sits under the Points row');
-assert(hubModals.indexOf('id="account-edit-display-name"') < hubModals.indexOf('id="account-photo-alerts"')
-    && hubModals.indexOf('id="account-photo-alerts"') < hubModals.indexOf('id="account-marks-community"')
-    && hubModals.indexOf('id="account-marks-community"') < hubModals.indexOf('id="account-save-display-name"')
-    && hubModals.indexOf('id="account-save-display-name"') < hubModals.indexOf('id="account-points-panel"'), 'name, photo, and Community level sit in the profile accordion with a shared Save');
-assert(accountJs.includes("insertAdjacentElement('afterend'") && accountJs.includes('account-points-panel'), 'Points toggle docks the breakdown next to the accordion button');
+assert(
+    hubModals.indexOf('id="account-points-sheet"') < hubModals.indexOf('id="account-marks-community"')
+    && hubModals.indexOf('id="account-marks-community"') < hubModals.indexOf('id="account-points-panel"'),
+    'Community level switch and the breakdown live in the points sheet',
+);
+assert(
+    hubModals.indexOf('id="account-name-sheet"') < hubModals.indexOf('id="account-edit-display-name"')
+    && hubModals.indexOf('id="account-edit-display-name"') < hubModals.indexOf('id="account-photo-alerts"')
+    && hubModals.indexOf('id="account-photo-alerts"') < hubModals.indexOf('id="account-save-display-name"')
+    && hubModals.indexOf('id="account-save-display-name"') < hubModals.indexOf('id="account-name-close"'),
+    'name sheet holds the field, photo switch, and Save',
+);
+assert(!accountJs.includes("insertAdjacentElement('afterend'"), 'points panel stays in the tall sheet');
+assert(accountJs.includes("openSmoothModal('profile-modal', null, { skipHash: true })"), 'passenger type opens the existing profile modal over Account');
+assert(accountJs.includes('setShowMarksInCommunity'), 'level switch saves on its own');
+assert(accountJs.includes("cluster.classList.toggle('hidden', signed && hosted)"), 'sidenav Passenger Type hides only while hosted for a signed-in user');
 assert(accountJs.includes('setShowPhotoInAlerts') && accountJs.includes("window.showToast('Saved', 'success')"), 'Save writes display name and photo together');
 assert(hubModals.includes('id="reports-feed-modal"'), 'VIEW opens a commuter reports list');
 assert(hubModals.includes('id="reports-feed-list"'), 'reports list has a feed host');

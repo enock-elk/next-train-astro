@@ -178,6 +178,8 @@ export async function applyAccountPrefs(prefs) {
             safeStorage.setItem('userProfile', prefs.passengerType);
             const display = document.getElementById('settings-profile-display');
             if (display) display.textContent = prefs.passengerType;
+            const accountPax = document.getElementById('account-passenger-type-display');
+            if (accountPax) accountPax.textContent = prefs.passengerType;
         }
         if (typeof prefs.showPhotoInAlerts === 'boolean') {
             safeStorage.setItem(PHOTO_PREF_KEY, prefs.showPhotoInAlerts ? '1' : '0');
@@ -614,13 +616,13 @@ export function waitForSignedIn(timeoutMs = 90000) {
     });
 }
 
+function closeAccountSheets() {
+    document.getElementById('account-name-sheet')?.classList.add('hidden');
+    document.getElementById('account-points-sheet')?.classList.add('hidden');
+}
+
 function setAccountProfileOpen(open) {
-    const toggle = document.getElementById('account-profile-toggle');
-    const panel = document.getElementById('account-profile-panel');
-    const chevron = document.getElementById('account-profile-chevron');
-    panel?.classList.toggle('hidden', !open);
-    toggle?.setAttribute('aria-expanded', open ? 'true' : 'false');
-    chevron?.classList.toggle('rotate-180', !!open);
+    if (!open) closeAccountSheets();
 }
 
 export function closeAccountModal() {
@@ -684,16 +686,7 @@ export function syncAccountSettingsUi(state = $account.get()) {
             confirmBtn.disabled = true;
             confirmBtn.classList.add('opacity-40');
         }
-        const pointsPanel = document.getElementById('account-points-panel');
-        pointsPanel?.classList.add('hidden');
-        const guestBtn = document.getElementById('account-points-guest-btn');
-        if (pointsPanel && guestBtn) guestBtn.insertAdjacentElement('afterend', pointsPanel);
-        document.querySelectorAll('#account-points-btn, #account-points-guest-btn').forEach((btn) => {
-            btn.setAttribute('aria-expanded', 'false');
-        });
-        document.querySelectorAll('#account-points-chevron, .account-points-chevron').forEach((el) => {
-            el.classList.remove('rotate-180');
-        });
+        closeAccountSheets();
         setAccountProfileOpen(false);
         const photoBox = document.getElementById('account-photo-alerts');
         if (photoBox) delete photoBox.dataset.dirty;
@@ -702,9 +695,6 @@ export function syncAccountSettingsUi(state = $account.get()) {
         if (modalName) modalName.textContent = 'Passenger';
         if (modalEmail) modalEmail.textContent = '';
     } else {
-        const pointsPanel = document.getElementById('account-points-panel');
-        const signedBtn = document.getElementById('account-points-btn');
-        if (pointsPanel && signedBtn) signedBtn.insertAdjacentElement('afterend', pointsPanel);
         if (modalName) modalName.textContent = state.displayName || 'Passenger';
         if (modalEmail) modalEmail.textContent = state.email || '';
         const nameInput = document.getElementById('account-edit-display-name');
@@ -747,11 +737,17 @@ export function syncAccountSettingsUi(state = $account.get()) {
         }).catch(() => {});
     }
     import('./rider-marks.js').then((m) => m.syncRiderMarksUi()).catch(() => {});
+    const paxLabel = $userProfile.get() || document.getElementById('settings-profile-display')?.textContent || 'Adult';
+    const accountPax = document.getElementById('account-passenger-type-display');
+    if (accountPax) accountPax.textContent = paxLabel;
     if (typeof window.placeAccountSettings === 'function') {
         const accountOn = document.documentElement.getAttribute('data-account-settings') === '1'
             || !document.getElementById('settings-account-btn')?.classList.contains('hidden');
         window.placeAccountSettings(accountOn);
     }
+    const cluster = document.getElementById('settings-profile-cluster');
+    const hosted = !!cluster?.closest('#account-settings-host');
+    if (cluster) cluster.classList.toggle('hidden', signed && hosted);
 }
 
 export function syncAuthProviderUi(providers = getAuthProviders(), busy = _accountUiBusy) {
@@ -929,7 +925,7 @@ export function paintAccountPoints(state) {
                         const id = `${day.day || 'earlier'}:${index}`;
                         painted.set(id, item);
                         const label = `${item.title} (+${item.points})`;
-                        return `<button type="button" data-contrib-id="${escapeAccountHtml(id)}" class="account-contrib-event w-full text-left rounded-lg px-2.5 py-2 text-[13px] font-semibold text-gray-800 dark:text-gray-100 bg-white dark:bg-[#2c2c2e] border border-black/10 dark:border-white/15 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400">${escapeAccountHtml(label)}</button>`;
+                        return `<button type="button" data-contrib-id="${escapeAccountHtml(id)}" class="account-contrib-event w-full text-left rounded-lg px-2.5 py-2 text-[13px] font-semibold text-gray-800 dark:text-gray-100 bg-[#f2f2f7] dark:bg-[#2c2c2e] border border-black/10 dark:border-white/15 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400">${escapeAccountHtml(label)}</button>`;
                     }).join('');
                     return `<li class="space-y-1.5">
                         <div class="flex justify-between gap-3 px-0.5">
@@ -1092,26 +1088,24 @@ export function bindAccountUi() {
     document.getElementById('account-save-display-name')?.addEventListener('click', async () => {
         const input = document.getElementById('account-edit-display-name');
         const photo = document.getElementById('account-photo-alerts');
+        const nameErr = document.getElementById('account-name-error');
+        if (nameErr) nameErr.textContent = '';
         setBusy(true);
         try {
             const next = await updateAccountDisplayName(input?.value || '');
             if (input) input.value = next;
-            const { setShowPhotoInAlerts, setShowMarksInCommunity } = await import('./rider-marks.js');
+            const { setShowPhotoInAlerts } = await import('./rider-marks.js');
             await setShowPhotoInAlerts(!!photo?.checked);
-            const marks = document.getElementById('account-marks-community');
-            await setShowMarksInCommunity(marks ? !!marks.checked : true);
-            await pushSignedInPrefs({
-                showPhotoInAlerts: !!photo?.checked,
-                showMarksInCommunity: marks ? !!marks.checked : true,
-            });
+            await pushSignedInPrefs({ showPhotoInAlerts: !!photo?.checked });
             if (photo) delete photo.dataset.dirty;
-            if (marks) delete marks.dataset.dirty;
             if (typeof window.showToast === 'function') window.showToast('Saved', 'success');
+            document.getElementById('account-name-sheet')?.classList.add('hidden');
         } catch (e) {
             const msg = e?.message || 'Could not save.';
             if (msg === DISPLAY_NAME_REFUSE_MSG && typeof window.showToast === 'function') {
                 window.showToast(DISPLAY_NAME_REFUSE_MSG);
             }
+            if (nameErr) nameErr.textContent = msg;
             showErr(msg);
         } finally {
             setBusy(false);
@@ -1169,45 +1163,37 @@ export function bindAccountUi() {
         }
     });
 
-    const attachPointsPanel = (btn) => {
-        const panel = document.getElementById('account-points-panel');
-        if (!panel || !btn) return panel;
-        btn.insertAdjacentElement('afterend', panel);
-        return panel;
+    const openPointsSheet = () => {
+        const sheet = document.getElementById('account-points-sheet');
+        if (!sheet) return;
+        sheet.classList.remove('hidden');
+        paintAccountPoints();
     };
-    const visiblePointsButton = () => {
-        const signed = document.getElementById('account-signed-in');
-        if (signed && !signed.classList.contains('hidden')) {
-            return document.getElementById('account-points-btn');
-        }
-        return document.getElementById('account-points-guest-btn');
+    const closePointsSheet = () => {
+        document.getElementById('account-points-sheet')?.classList.add('hidden');
     };
-    const togglePoints = (e) => {
-        const btn = e?.currentTarget || visiblePointsButton();
-        const panel = attachPointsPanel(btn);
-        if (!panel) return;
-        const open = panel.classList.contains('hidden');
-        panel.classList.toggle('hidden', !open);
-        document.querySelectorAll('#account-points-btn, #account-points-guest-btn').forEach((el) => {
-            el.setAttribute('aria-expanded', el === btn && open ? 'true' : 'false');
-        });
-        document.querySelectorAll('#account-points-chevron, .account-points-chevron').forEach((el) => {
-            const owner = el.closest('button');
-            el.classList.toggle('rotate-180', open && owner === btn);
-        });
-        if (open) {
-            paintAccountPoints();
-            try {
-                panel.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-            } catch { /* ignore */ }
-        }
-    };
-    document.getElementById('account-points-btn')?.addEventListener('click', togglePoints);
-    document.getElementById('account-points-guest-btn')?.addEventListener('click', togglePoints);
+    document.getElementById('account-points-btn')?.addEventListener('click', openPointsSheet);
+    document.getElementById('account-points-guest-btn')?.addEventListener('click', openPointsSheet);
+    document.getElementById('account-points-close')?.addEventListener('click', closePointsSheet);
+    document.getElementById('account-points-overlay')?.addEventListener('click', closePointsSheet);
 
-    document.getElementById('account-profile-toggle')?.addEventListener('click', () => {
-        const panel = document.getElementById('account-profile-panel');
-        setAccountProfileOpen(!!panel?.classList.contains('hidden'));
+    const openNameSheet = () => {
+        const input = document.getElementById('account-edit-display-name');
+        const nameErr = document.getElementById('account-name-error');
+        if (nameErr) nameErr.textContent = '';
+        if (input) input.value = $account.get().displayName || '';
+        document.getElementById('account-name-sheet')?.classList.remove('hidden');
+        setTimeout(() => input?.focus(), 40);
+    };
+    const closeNameSheet = () => {
+        document.getElementById('account-name-sheet')?.classList.add('hidden');
+    };
+    document.getElementById('account-name-edit-btn')?.addEventListener('click', openNameSheet);
+    document.getElementById('account-name-close')?.addEventListener('click', closeNameSheet);
+    document.getElementById('account-name-overlay')?.addEventListener('click', closeNameSheet);
+    document.getElementById('account-passenger-type-btn')?.addEventListener('click', () => {
+        if (typeof window.triggerHaptic === 'function') window.triggerHaptic();
+        if (typeof window.openSmoothModal === 'function') window.openSmoothModal('profile-modal', null, { skipHash: true });
     });
     document.getElementById('account-photo-toggle')?.addEventListener('click', (e) => {
         const t = e.target;
@@ -1220,16 +1206,25 @@ export function bindAccountUi() {
     document.getElementById('account-photo-alerts')?.addEventListener('change', (e) => {
         e.target.dataset.dirty = '1';
     });
+    const persistMarksVisibility = async (on) => {
+        try {
+            const { setShowMarksInCommunity } = await import('./rider-marks.js');
+            await setShowMarksInCommunity(!!on);
+            await pushSignedInPrefs({ showMarksInCommunity: !!on });
+        } catch { /* local switch still shows the choice */ }
+    };
     document.getElementById('account-marks-toggle')?.addEventListener('click', (e) => {
         const t = e.target;
         if (t.tagName === 'INPUT' || t.tagName === 'LABEL') return;
         const cb = document.getElementById('account-marks-community');
         if (!cb) return;
         cb.checked = !cb.checked;
-        cb.dataset.dirty = '1';
+        delete cb.dataset.dirty;
+        persistMarksVisibility(cb.checked);
     });
     document.getElementById('account-marks-community')?.addEventListener('change', (e) => {
-        e.target.dataset.dirty = '1';
+        delete e.target.dataset.dirty;
+        persistMarksVisibility(e.target.checked);
     });
 
     document.getElementById('account-badge-how-close')?.addEventListener('click', closeBadgeHowSheet);

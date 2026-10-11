@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_10.11.4': [
+        'Account preview shows the name, email, passenger type, and level with points. A pencil opens a sheet to edit the display name, with the photo switch and Save. Passenger type opens the existing profile modal. Points open a tall sheet, and the Community level switch lives there and saves on its own. The sidenav Passenger Type row hides only while that row is hosted in Account for a signed-in user. No commuter What’s New. forceShow stays false.',
+    ],
     'V9_10.11.3': [
         'Account contributions use 09 Oct 2026. Each points event is its own button, such as Share your trip (+2), and the date row shows only that day’s total. Opening a share shows the train, route, duration, and origin - destination when those were stored. Events that dropped out of the short history still list from the award keys. Account appearance adds System, which follows the phone. The side nav Dark Mode switch still sets light or dark. No commuter What’s New. forceShow stays false.',
     ],

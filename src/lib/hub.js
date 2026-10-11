@@ -777,8 +777,11 @@ export async function showCacheClearWarning() {
 }
 
 function syncProfileDisplay() {
+    const label = $userProfile.get() || 'Adult';
     const el = document.getElementById('settings-profile-display');
-    if (el) el.textContent = $userProfile.get() || 'Adult';
+    if (el) el.textContent = label;
+    const account = document.getElementById('account-passenger-type-display');
+    if (account) account.textContent = label;
 }
 
 function syncHapticsToggle() {

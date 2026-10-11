@@ -1701,13 +1701,11 @@ function openPlannerDateSheet() {
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
                     </button>
                 </div>
-                <div id="planner-date-sheet-row" class="relative mb-4">
-                    <div class="w-full p-3.5 rounded-xl bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 flex items-center justify-between pointer-events-none">
-                        <span id="planner-date-sheet-label" class="text-base font-medium text-gray-900 dark:text-white">Pick a date</span>
-                        <svg class="w-5 h-5 text-gray-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
-                    </div>
-                    <input type="date" id="planner-date-sheet-input" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" aria-label="Pick a date" />
-                </div>
+                <button type="button" id="planner-date-sheet-row" class="w-full mb-4 p-3.5 rounded-xl bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 flex items-center justify-between text-left cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500" aria-label="Pick a date">
+                    <span id="planner-date-sheet-label" class="text-base font-medium text-gray-900 dark:text-white pointer-events-none">Pick a date</span>
+                    <svg class="w-5 h-5 text-gray-400 shrink-0 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                </button>
+                <input type="date" id="planner-date-sheet-input" class="absolute w-px h-px opacity-0 pointer-events-none" tabindex="-1" aria-hidden="true" />
                 <button type="button" id="planner-date-sheet-apply" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl text-sm shadow-sm focus:outline-none">Set travel day</button>
             </div>`;
         document.body.appendChild(modal);
@@ -1736,8 +1734,7 @@ function openPlannerDateSheet() {
                 dateInput.focus();
             }
         };
-        document.getElementById('planner-date-sheet-row')?.addEventListener('click', (e) => {
-            if (e.target === dateInput) return;
+        document.getElementById('planner-date-sheet-row')?.addEventListener('click', () => {
             openDatePicker();
         });
         dateInput?.addEventListener('change', () => {

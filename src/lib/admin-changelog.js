@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_10.11.8': [
+        'The travel-day bar opens the date picker from the date text through the calendar icon. No commuter What’s New. forceShow stays false.',
+    ],
     'V9_10.11.7': [
         'A special train on the train sheet is labeled Special. A Monday-and-Friday ban still reads Tue, Wed, Thu. No commuter What’s New. forceShow stays false.',
     ],

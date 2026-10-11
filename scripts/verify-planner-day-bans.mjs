@@ -67,6 +67,8 @@ const boardUi = readFileSync(join(ROOT, 'src/lib/live-board-ui.js'), 'utf8');
 if (!ui.includes('extContext.specificDate = selectedPlannerDate')) fail('search passes the picked date');
 if (!ui.includes('restoreLastPlannerStations()')) fail('closing results restores the searched stations');
 if (!ui.includes('id="planner-date-sheet-row"')) fail('the date row is the picker hit target');
+if (!ui.includes('<button type="button" id="planner-date-sheet-row"')) fail('the whole date bar is the picker button');
+if (ui.includes('if (e.target === dateInput) return')) fail('a tap on the date text must still open the picker');
 if (!ui.includes('formatPlannerDateLabel')) fail('picked dates use the 13 Oct 2026 label');
 if (ui.includes('Date · ${')) fail('the form must not keep the ISO date label');
 if (!boardUi.includes('if (plannerFromIsSet()) return')) fail('board locate must not replace a planner From that is already set');

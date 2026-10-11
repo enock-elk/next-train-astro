@@ -1,8 +1,8 @@
 {
   "branch": "map-gold",
-  "frozenAt": "aed381917d74f11e7d7b45e9b36d7a903dc9ece4",
+  "frozenAt": "c99c6ca4743bf4338afd4954bee45a2145c685f9",
   "version": "V9_09.20.11",
-  "note": "Gold snapshot of this build: station popups keep dark text on the white card in dark mode. Tracks unchanged. Diff against origin/map-gold. Fast-forward map-gold after this lands on main. Never force-push map-gold.",
+  "note": "Gold snapshot of this build: the map tab fits Johannesburg when the line has room, and the live-location check sheet is tighter. Tracks and advert handling unchanged. Diff against origin/map-gold. Fast-forward map-gold after this lands on main. Never force-push map-gold.",
   "files": {
     "public/tracks/rail-tracks-EC.geojson": {
       "md5": "43409bfd05405205e596f0d03345ab18",
@@ -37,8 +37,8 @@
       "sha256": "e7385a8e07415f0862e983a5ffca225fc23e68c22f550ee13bc84ffdb52cf3dc"
     },
     "src/lib/map-tab.js": {
-      "md5": "c6dac670db5d3052bcb8345dc1a7c630",
-      "sha256": "d82d45df6fa9b6a133a5114c0998a774a4e8696cb672311b0df02d9c1a840fe5"
+      "md5": "ef2c2af248788396d22c4c904c5da5b2",
+      "sha256": "0d16b6b46b06dccb6e711f70f5ae9a9f2a3632a461c0c0dbd39f96e7b4d711cd"
     },
     "src/lib/clever-ads.js": {
       "md5": "4d78da253d60d3ba285de6c41d697cad",

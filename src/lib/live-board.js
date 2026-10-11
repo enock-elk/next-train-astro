@@ -323,9 +323,9 @@ export function weekdayPatternBanApplies(days) {
 const SHEET_DAY_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 /**
- * Train-sheet pill. A partial weekday ban names the days the train still runs
- * (Mon+Fri off → Tue, Wed, Thu). A full weekday ban, a special, or no rule
- * stays on the sheet's day type.
+ * Train-sheet pill. A special is labeled Special. A partial weekday ban names
+ * the days the train still runs (Mon+Fri off → Tue, Wed, Thu). A full weekday
+ * ban, or no rule, stays on the sheet's day type.
  */
 export function trainSheetOperatingLabel(dayType, routeId, trainId, now = Date.now()) {
     if (dayType === 'saturday') return 'Saturdays';
@@ -334,7 +334,7 @@ export function trainSheetOperatingLabel(dayType, routeId, trainId, now = Date.n
     const rule = getTrainExclusionRule(trainId, routeId, 1, now, { ignoreDays: true });
     if (!exclusionAppliesToSurface(rule, 'in_app')) return 'Weekdays';
     const type = rule.type || 'banned';
-    if (type === 'special') return 'Weekdays';
+    if (type === 'special') return 'Special';
     const days = Array.isArray(rule.days) ? rule.days.map((d) => Number(d)) : [];
     if (!days.length || weekdayPatternBanApplies(days)) return 'Weekdays';
     const banned = new Set(days);

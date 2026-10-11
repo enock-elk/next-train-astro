@@ -84,8 +84,8 @@ $globalExclusions.set({
 if (trainSheetOperatingLabel('weekday', 'kempton-pta', '0619') !== 'Tue, Wed, Thu') {
     fail(`0619 sheet must name Tue, Wed, Thu, got ${trainSheetOperatingLabel('weekday', 'kempton-pta', '0619')}`);
 }
-if (trainSheetOperatingLabel('weekday', 'kempton-pta', '0800') !== 'Weekdays') {
-    fail('a special stays on the weekday sheet label');
+if (trainSheetOperatingLabel('weekday', 'kempton-pta', '0800') !== 'Special') {
+    fail('a special sheet must say Special');
 }
 if (trainSheetOperatingLabel('weekday', 'kempton-pta', '9999') !== 'Weekdays') {
     fail('a train with no ban stays Weekdays');

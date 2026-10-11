@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_10.11.7': [
+        'A special train on the train sheet is labeled Special. A Monday-and-Friday ban still reads Tue, Wed, Thu. No commuter What’s New. forceShow stays false.',
+    ],
     'V9_10.11.6': [
         'Planner results keep a custom date in the day menu. Choosing it opens the date sheet on the results page, and Set travel day searches that date without leaving results. A Weekday check does not throw the date away. The train sheet names the weekdays a train still runs, so a Monday-and-Friday ban reads Tue, Wed, Thu. Live map markers and nearby trains hide a train banned today and a cancelled share. A special train still shows. An operator test of a banned train stays on that phone only. Regional breakdown uses the Gauteng card for every region. Live Telemetry follows the active colour pack. No commuter What’s New. forceShow stays false.',
     ],

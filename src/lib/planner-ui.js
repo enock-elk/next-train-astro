@@ -1455,15 +1455,24 @@ function syncPlannerDayControls(dayType) {
     }
 }
 
+function formatPlannerDateLabel(isoDate) {
+    if (!isoDate || !/^\d{4}-\d{2}-\d{2}$/.test(isoDate)) return '';
+    const [y, m, d] = isoDate.split('-').map(Number);
+    const date = new Date(y, m - 1, d);
+    if (Number.isNaN(date.getTime())) return '';
+    if (date.getFullYear() !== y || date.getMonth() !== m - 1 || date.getDate() !== d) return '';
+    return formatAppDate(date);
+}
+
 function plannerDayDisplayText(value, isoDate = selectedPlannerDate) {
     const region = (typeof $userRegion?.get === 'function' ? $userRegion.get() : null) || 'GP';
     const satLabel = region === 'WC' ? 'Saturday' : 'Saturday / Public Holiday';
     if (value === 'specific' || (isoDate && value !== 'weekday' && value !== 'saturday' && value !== 'sunday' && value !== 'public_holiday')) {
-        return isoDate ? `Date · ${isoDate}` : 'Pick a date…';
+        return formatPlannerDateLabel(isoDate) || 'Pick a date…';
     }
     if (isoDate && (value === 'weekday' || value === 'saturday' || value === 'sunday' || value === 'public_holiday')) {
-        // Specific date was resolved into a day-type — still show the date
-        if (selectedPlannerDate) return `Date · ${selectedPlannerDate}`;
+        const dated = formatPlannerDateLabel(selectedPlannerDate || isoDate);
+        if (dated) return dated;
     }
     if (value === 'weekday') return 'Weekday (Mon-Fri)';
     if (value === 'saturday') return satLabel;
@@ -1689,7 +1698,13 @@ function openPlannerDateSheet() {
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
                     </button>
                 </div>
-                <input type="date" id="planner-date-sheet-input" class="w-full p-3.5 rounded-xl bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-base font-medium text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none mb-4" />
+                <div id="planner-date-sheet-row" class="relative mb-4">
+                    <div class="w-full p-3.5 rounded-xl bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 flex items-center justify-between pointer-events-none">
+                        <span id="planner-date-sheet-label" class="text-base font-medium text-gray-900 dark:text-white">Pick a date</span>
+                        <svg class="w-5 h-5 text-gray-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                    </div>
+                    <input type="date" id="planner-date-sheet-input" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" aria-label="Pick a date" />
+                </div>
                 <button type="button" id="planner-date-sheet-apply" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl text-sm shadow-sm focus:outline-none">Set travel day</button>
             </div>`;
         document.body.appendChild(modal);
@@ -1708,6 +1723,28 @@ function openPlannerDateSheet() {
             if (typeof closeSmoothModal === 'function') closeSmoothModal('planner-date-sheet');
             else modal.classList.add('hidden');
         });
+        const dateInput = document.getElementById('planner-date-sheet-input');
+        const openDatePicker = () => {
+            if (!dateInput) return;
+            try {
+                if (typeof dateInput.showPicker === 'function') dateInput.showPicker();
+                else dateInput.focus();
+            } catch {
+                dateInput.focus();
+            }
+        };
+        document.getElementById('planner-date-sheet-row')?.addEventListener('click', (e) => {
+            if (e.target === dateInput) return;
+            openDatePicker();
+        });
+        dateInput?.addEventListener('change', () => {
+            const label = document.getElementById('planner-date-sheet-label');
+            if (label) label.textContent = formatPlannerDateLabel(dateInput.value) || 'Pick a date';
+        });
+        dateInput?.addEventListener('input', () => {
+            const label = document.getElementById('planner-date-sheet-label');
+            if (label) label.textContent = formatPlannerDateLabel(dateInput.value) || 'Pick a date';
+        });
     }
     const inp = document.getElementById('planner-date-sheet-input');
     if (inp) {
@@ -1716,6 +1753,8 @@ function openPlannerDateSheet() {
             const t = new Date();
             inp.value = `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`;
         }
+        const label = document.getElementById('planner-date-sheet-label');
+        if (label) label.textContent = formatPlannerDateLabel(inp.value) || 'Pick a date';
     }
     if (typeof openSmoothModal === 'function') openSmoothModal('planner-date-sheet');
     else modal.classList.remove('hidden');
@@ -1771,7 +1810,10 @@ export function applyPlannerSpecificDate(isoDate) {
     }
     selectedPlannerDate = isoDate;
     selectedPlannerDay = resolved.dayType;
-    if (typeof window !== 'undefined') window.selectedPlannerDay = selectedPlannerDay;
+    if (typeof window !== 'undefined') {
+        window.selectedPlannerDay = selectedPlannerDay;
+        window.selectedPlannerDate = isoDate;
+    }
     const display = document.getElementById('main-day-display');
     if (display) display.textContent = plannerDayDisplayText('specific', isoDate);
     const list = document.getElementById('main-day-list');
@@ -1815,7 +1857,12 @@ export function selectHeaderDay(e, value, text) {
     }
 
     if (typeof triggerHaptic === 'function') triggerHaptic();
+    selectedPlannerDate = null;
     selectedPlannerDay = value;
+    if (typeof window !== 'undefined') {
+        window.selectedPlannerDate = null;
+        window.selectedPlannerDay = value;
+    }
     
     const daySelectDisp = document.getElementById('main-day-display');
     if (daySelectDisp) {
@@ -1865,8 +1912,33 @@ export function hidePlannerResults() {
     if (inputSection) inputSection.classList.remove('hidden');
     if (resultsSection) resultsSection.classList.add('hidden');
     plannerExpandedState.clear();
+    restoreLastPlannerStations();
     // Recent trips live on the search screen — refresh after leaving results
     try { renderPlannerHistory(); } catch { /* ignore */ }
+}
+
+function writePlannerStationField(inputId, selectId, station) {
+    const name = String(station || '').trim();
+    if (!name) return;
+    const input = document.getElementById(inputId);
+    const select = document.getElementById(selectId);
+    if (select) {
+        if (!Array.from(select.options).some((opt) => opt.value === name)) {
+            select.appendChild(new Option(plannerStationDisplayName(name) || name, name));
+        }
+        select.value = name;
+    }
+    if (input) {
+        input.value = plannerStationDisplayName(name);
+        input.dataset.resolvedValue = name;
+    }
+}
+
+/** Put the stations from the search just run back on the form. */
+function restoreLastPlannerStations() {
+    if (!plannerOrigin || !plannerDest) return;
+    writePlannerStationField('planner-from-search', 'planner-from', plannerOrigin);
+    writePlannerStationField('planner-to-search', 'planner-to', plannerDest);
 }
 
 /** Open the sidenav GPS Network Map sheet. Never the live-tracking Map tab. */
@@ -4741,6 +4813,9 @@ export function executeTripPlan(origin, dest, preferredTime = null) {
                     extContext.simBaseDate = dateInput.value;
                 }
             }
+            if (selectedPlannerDate && /^\d{4}-\d{2}-\d{2}$/.test(selectedPlannerDate)) {
+                extContext.specificDate = selectedPlannerDate;
+            }
             try {
                 plannerResponse = await planUnifiedTrip(origin, dest, selectedPlannerDay, extContext);
             } catch (e) {
@@ -5468,28 +5543,36 @@ export function updatePlannerHeader(dayLabel, showShare = true) {
         let selDay = selectedPlannerDay || getCurrentDayType();
         const holiday = getPlannerHolidayContext();
         const headerRegion = $userRegion.get() || 'GP';
+        const dated = !!(selectedPlannerDate && /^\d{4}-\d{2}-\d{2}$/.test(selectedPlannerDate));
         let selText = selDay === 'weekday' ? 'Weekday'
             : (selDay === 'public_holiday' ? 'Pub Hol'
             : (selDay === 'saturday' ? 'Saturday' : 'Sunday'));
-        if (holiday) {
+        if (holiday && !dated) {
             selText = holiday.scheduleType === 'sunday'
                 ? 'Holiday · None'
                 : (headerRegion === 'WC' ? 'Holiday · Pub' : 'Holiday · Sat');
         }
+        if (dated) {
+            const dateLabel = formatPlannerDateLabel(selectedPlannerDate);
+            if (dateLabel) selText = dateLabel;
+        }
+        const daySelected = (day) => (!dated && selDay === day)
+            ? 'bg-blue-50 dark:bg-gray-700 text-blue-600 dark:text-blue-400'
+            : '';
         const headerPubLi = headerRegion === 'WC'
-            ? `<li onclick="if(typeof window._selectHeaderDay === 'function') window._selectHeaderDay(event, 'public_holiday', 'Public Holiday')" class="px-4 py-3 text-xs font-bold border-t border-gray-100 dark:border-gray-700 hover:bg-blue-50 dark:hover:bg-gray-700 cursor-pointer text-gray-700 dark:text-gray-200 transition-colors ${selDay === 'public_holiday' ? 'bg-blue-50 dark:bg-gray-700 text-blue-600 dark:text-blue-400' : ''}">Public Holiday</li>`
+            ? `<li onclick="if(typeof window._selectHeaderDay === 'function') window._selectHeaderDay(event, 'public_holiday', 'Public Holiday')" class="px-4 py-3 text-xs font-bold border-t border-gray-100 dark:border-gray-700 hover:bg-blue-50 dark:hover:bg-gray-700 cursor-pointer text-gray-700 dark:text-gray-200 transition-colors ${daySelected('public_holiday')}">Public Holiday</li>`
             : '';
 
         badge.innerHTML = `
-            <div onclick="if(typeof window._toggleHeaderDayDropdown === 'function') window._toggleHeaderDayDropdown(event)" class="w-full h-full flex items-center justify-center px-2 relative min-w-[4.75rem]">
-                <span id="header-day-display" class="truncate font-bold text-xs pr-1">${selText}</span>
+            <div onclick="if(typeof window._toggleHeaderDayDropdown === 'function') window._toggleHeaderDayDropdown(event)" class="w-full h-full flex items-center justify-center px-2 relative min-w-[7.25rem]">
+                <span id="header-day-display" class="truncate font-bold text-xs pr-1 whitespace-nowrap">${escapeHTML(selText)}</span>
                 <svg id="header-day-chevron" class="w-3.5 h-3.5 shrink-0 transform transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
                 
                 <ul id="header-day-list" class="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-48 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-2xl hidden flex-col overflow-y-auto max-h-[min(40vh,16rem)] custom-scrollbar z-[200] text-left">
-                    <li onclick="if(typeof window._selectHeaderDay === 'function') window._selectHeaderDay(event, 'weekday', 'Weekday')" class="px-4 py-3 text-xs font-bold hover:bg-blue-50 dark:hover:bg-gray-700 cursor-pointer text-gray-700 dark:text-gray-200 transition-colors ${selDay === 'weekday' ? 'bg-blue-50 dark:bg-gray-700 text-blue-600 dark:text-blue-400' : ''}">Weekday</li>
-                    <li onclick="if(typeof window._selectHeaderDay === 'function') window._selectHeaderDay(event, 'saturday', 'Saturday')" class="px-4 py-3 text-xs font-bold border-t border-gray-100 dark:border-gray-700 hover:bg-blue-50 dark:hover:bg-gray-700 cursor-pointer text-gray-700 dark:text-gray-200 transition-colors ${selDay === 'saturday' ? 'bg-blue-50 dark:bg-gray-700 text-blue-600 dark:text-blue-400' : ''}">Saturday</li>
+                    <li onclick="if(typeof window._selectHeaderDay === 'function') window._selectHeaderDay(event, 'weekday', 'Weekday')" class="px-4 py-3 text-xs font-bold hover:bg-blue-50 dark:hover:bg-gray-700 cursor-pointer text-gray-700 dark:text-gray-200 transition-colors ${daySelected('weekday')}">Weekday</li>
+                    <li onclick="if(typeof window._selectHeaderDay === 'function') window._selectHeaderDay(event, 'saturday', 'Saturday')" class="px-4 py-3 text-xs font-bold border-t border-gray-100 dark:border-gray-700 hover:bg-blue-50 dark:hover:bg-gray-700 cursor-pointer text-gray-700 dark:text-gray-200 transition-colors ${daySelected('saturday')}">Saturday</li>
                     ${headerPubLi}
-                    <li onclick="if(typeof window._selectHeaderDay === 'function') window._selectHeaderDay(event, 'sunday', 'Sunday')" class="px-4 py-3 text-xs font-bold border-t border-gray-100 dark:border-gray-700 hover:bg-blue-50 dark:hover:bg-gray-700 cursor-pointer text-gray-700 dark:text-gray-200 transition-colors ${selDay === 'sunday' ? 'bg-blue-50 dark:bg-gray-700 text-blue-600 dark:text-blue-400' : ''}">Sunday</li>
+                    <li onclick="if(typeof window._selectHeaderDay === 'function') window._selectHeaderDay(event, 'sunday', 'Sunday')" class="px-4 py-3 text-xs font-bold border-t border-gray-100 dark:border-gray-700 hover:bg-blue-50 dark:hover:bg-gray-700 cursor-pointer text-gray-700 dark:text-gray-200 transition-colors ${daySelected('sunday')}">Sunday</li>
                 </ul>
             </div>
         `;

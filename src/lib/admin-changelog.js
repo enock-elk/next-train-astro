@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_10.11.5': [
+        'A picked travel day uses that calendar day for train bans. Tuesday is not planned as Monday, so a Monday-and-Friday ban stays off Tuesday, Wednesday, and Thursday. A generic Weekday search only drops a train banned every Mon-Fri, or banned with no day list. The date sheet shows 13 Oct 2026 and the whole row opens the picker. Results show that date in the day control. Closing results puts the searched stations back, and board locate does not replace a From station that is already set. Sunday stays no service. No commuter What’s New. forceShow stays false.',
+    ],
     'V9_10.11.4': [
         'Account preview shows the name, email, passenger type, and level with points. A pencil opens a sheet to edit the display name, with the photo switch and Save. Passenger type opens the existing profile modal. Points open a tall sheet, and the Community level switch lives there and saves on its own. The sidenav Passenger Type row hides only while that row is hosted in Account for a signed-in user. No commuter What’s New. forceShow stays false.',
     ],

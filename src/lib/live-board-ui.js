@@ -160,9 +160,21 @@ export function setupNextTrainAutocomplete() {
     }
 }
 
+/** True when Trip Planner From already has a station the commuter chose. */
+export function plannerFromIsSet(doc = typeof document !== 'undefined' ? document : null) {
+    if (!doc) return false;
+    const input = doc.getElementById('planner-from-search');
+    const select = doc.getElementById('planner-from');
+    if (String(input?.value || '').trim()) return true;
+    if (String(input?.dataset?.resolvedValue || '').trim()) return true;
+    if (String(select?.value || '').trim()) return true;
+    return false;
+}
+
 /** Mirror Live Board station into Trip Planner "From" field (SPA ui.js parity). */
 export function syncPlannerFromMain(stationName) {
     if (!stationName) return;
+    if (plannerFromIsSet()) return;
     const plannerInput = document.getElementById('planner-from-search');
     const plannerSelect = document.getElementById('planner-from');
     if (!plannerInput || !plannerSelect) return;

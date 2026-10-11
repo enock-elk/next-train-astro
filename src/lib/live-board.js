@@ -294,7 +294,7 @@ export function hasForwardOverlap(trainName, otherSchedule, fromStation, targetS
 }
 
 /** Same expiry + days[] rules as isTrainExcluded; returns the RTDB rule or null. DEFAULT_EXCLUSIONS stays {}. */
-export function getTrainExclusionRule(trainNumber, routeId, dayIdx, now = Date.now()) {
+export function getTrainExclusionRule(trainNumber, routeId, dayIdx, now = Date.now(), opts = null) {
     if (!trainNumber) return null;
 
     // Source of truth is `$globalExclusions` (Firebase tree, or DEFAULT only
@@ -305,12 +305,33 @@ export function getTrainExclusionRule(trainNumber, routeId, dayIdx, now = Date.n
     const rule = rules[trainNumber];
     if (rule.expiresAt && now > rule.expiresAt) return null;
     const days = Array.isArray(rule.days) ? rule.days : null;
-    if (days && days.length) {
+    if (!(opts && opts.ignoreDays) && days && days.length) {
         const idx = Number(dayIdx);
         const hit = days.some((d) => Number(d) === idx);
         if (!hit) return null;
     }
     return rule;
+}
+
+/** True when a ban covers every Mon–Fri index, or has no day list (every day). */
+export function weekdayPatternBanApplies(days) {
+    if (!Array.isArray(days) || days.length === 0) return true;
+    const set = days.map((d) => Number(d));
+    return [1, 2, 3, 4, 5].every((d) => set.includes(d));
+}
+
+/**
+ * Generic Weekday chip (no picked date). A Mon/Fri-only ban does not remove
+ * the train, because it still runs Tue–Thu. A ban with no days, or all of
+ * Mon–Fri, still removes it. Special trains stay.
+ */
+export function isWeekdayPatternExcluded(trainNumber, routeId, surface = 'in_app', now = Date.now()) {
+    const rule = getTrainExclusionRule(trainNumber, routeId, 1, now, { ignoreDays: true });
+    if (!exclusionAppliesToSurface(rule, surface)) return false;
+    const type = rule.type || 'banned';
+    if (type === 'special') return false;
+    if (!weekdayPatternBanApplies(rule.days)) return false;
+    return type;
 }
 
 /** Omitted surface keeps legacy exclusions visible in both the app and timetable grid. */

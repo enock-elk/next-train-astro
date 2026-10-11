@@ -64,7 +64,7 @@ import {
     toggleAlertPinned,
     toggleAlertPollRawCounts,
 } from './alerts-channel.js';
-import { layoutAlertPost, hoistAlertImagesFromHtml, ALERT_PIN_SVG, isNoticePinned, alertCopyNeedsSeeMore, expandAlertSeeMore } from './alerts-feed.js';
+import { layoutAlertPost, hoistAlertImagesFromHtml, ALERT_PIN_SVG, isNoticePinned, alertCopyNeedsSeeMore, buildAlertSeeMoreMarkup, expandAlertSeeMore } from './alerts-feed.js';
 import {
     buildPollShellHtml,
     hydratePollResults,
@@ -1790,7 +1790,7 @@ export function renderServiceAlertModal(notice, options = {}) {
         : '';
     let formattedMsg = sanitizeHTML(layout.body);
     if (alertCopyNeedsSeeMore(layout.body)) {
-        formattedMsg = `<div class="nt-alert-copy"><div class="nt-rich-body nt-alert-body is-collapsed text-sm text-gray-800 dark:text-gray-200 leading-relaxed" data-alert-body data-see-more-step="1">${formattedMsg}</div><button type="button" class="nt-alert-see-more" data-alert-see-more>See more...</button></div>`;
+        formattedMsg = buildAlertSeeMoreMarkup(formattedMsg);
     }
     if (options.prefixHtml) formattedMsg = `${options.prefixHtml}${formattedMsg}`;
 

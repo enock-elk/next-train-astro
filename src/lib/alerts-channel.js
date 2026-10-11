@@ -31,6 +31,7 @@ import {
     hoistAlertImagesFromHtml,
     layoutAlertPost,
     alertCopyNeedsSeeMore,
+    buildAlertSeeMoreMarkup,
     expandAlertSeeMore,
     stripAlertSignoffHtml,
     noticeScopeLabel,
@@ -596,7 +597,7 @@ function renderPostCard(notice, opts = {}) {
     const mediaHtml = renderPosterHtml(layout.imageUrls, notice);
     const bodyHtml = body
         ? (alertCopyNeedsSeeMore(body)
-            ? `<div class="nt-alert-copy ${mediaHtml ? 'mt-3' : ''}"><div class="nt-rich-body nt-alert-body is-collapsed text-sm text-gray-800 dark:text-gray-200 leading-relaxed" data-alert-body data-see-more-step="1">${body}</div><button type="button" class="nt-alert-see-more" data-alert-see-more>See more...</button></div>`
+            ? buildAlertSeeMoreMarkup(body, { className: mediaHtml ? 'mt-3' : '' })
             : `<div class="nt-rich-body text-sm text-gray-800 dark:text-gray-200 leading-relaxed ${mediaHtml ? 'mt-3' : ''}" data-alert-body>${body}</div>`)
         : '';
     let extra = '';

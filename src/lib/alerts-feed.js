@@ -282,31 +282,116 @@ export function shouldIgnoreAlertLongPress(target) {
     return false;
 }
 
-/** First See more appears once the post passes this many characters. */
-export const ALERT_SEE_MORE_MIN_CHARS = 700;
-
-/** First preview is a little longer than a short clamp. Later steps double it. */
-export const ALERT_SEE_MORE_FIRST_LINES = 12;
+/**
+ * First See more lands on this many characters of the post.
+ * Sized from the commuter sample that should stay visible through
+ * "increase. Students, unemployed people a". Each later tap reveals
+ * the same number again, and drops the button when the rest is shorter.
+ */
+export const ALERT_SEE_MORE_WINDOW = 764;
 
 export function alertCopyNeedsSeeMore(html) {
-    return stripHtmlToText(html).length > ALERT_SEE_MORE_MIN_CHARS;
+    return stripHtmlToText(html).length > ALERT_SEE_MORE_WINDOW;
 }
 
-/** Character window after `step` reveals. Step 1 → 1400, step 2 → 2800, and so on. */
+/** Characters visible after `step` reveals. Step 1 is the first window. */
 export function alertSeeMoreLimit(step) {
     const n = Math.max(1, Number(step) || 1);
-    return ALERT_SEE_MORE_MIN_CHARS * (2 ** n);
+    return ALERT_SEE_MORE_WINDOW * n;
 }
 
-/** Line clamp for the preview at `step`. Step 1 → 12, step 2 → 24, step 3 → 48. */
-export function alertSeeMoreLines(step) {
-    const n = Math.max(1, Number(step) || 1);
-    return ALERT_SEE_MORE_FIRST_LINES * (2 ** (n - 1));
+function decodeBasicEntity(raw) {
+    const name = String(raw || '').slice(1, -1).toLowerCase();
+    if (name === 'amp') return '&';
+    if (name === 'lt') return '<';
+    if (name === 'gt') return '>';
+    if (name === 'quot') return '"';
+    return '';
+}
+
+/** Cut rich HTML so its plain text is `limit` characters, then an ellipsis. */
+export function clipHtmlToTextLength(html, limit) {
+    const input = String(html || '');
+    const max = Math.max(0, Number(limit) || 0);
+    if (stripHtmlToText(input).length <= max) return input;
+    let out = '';
+    let count = 0;
+    let started = false;
+    let gap = false;
+    const open = [];
+    const voidTags = new Set(['br', 'hr', 'img', 'wbr', 'input', 'meta', 'link']);
+    let i = 0;
+    const emitSpace = () => {
+        if (!started || !gap || count >= max) {
+            gap = false;
+            return count >= max;
+        }
+        out += ' ';
+        count += 1;
+        gap = false;
+        return count >= max;
+    };
+    while (i < input.length && count < max) {
+        if (input[i] === '<') {
+            const end = input.indexOf('>', i);
+            if (end < 0) break;
+            const tag = input.slice(i, end + 1);
+            const name = (tag.match(/^<\/?\s*([a-zA-Z0-9]+)/) || [])[1]?.toLowerCase() || '';
+            const closing = /^<\s*\//.test(tag);
+            const self = /\/\s*>$/.test(tag) || voidTags.has(name);
+            /* A tag is a gap, same as the space stripHtmlToText inserts.
+               Do not emit that space here. The next letter emits one space,
+               so <b> between two words does not count twice. */
+            gap = started || gap;
+            out += tag;
+            if (closing) {
+                const at = open.lastIndexOf(name);
+                if (at >= 0) open.splice(at, 1);
+            } else if (name && !self) open.push(name);
+            i = end + 1;
+            continue;
+        }
+        if (/\s/.test(input[i]) || input.slice(i, i + 6).toLowerCase() === '&nbsp;') {
+            gap = true;
+            i += input.slice(i, i + 6).toLowerCase() === '&nbsp;' ? 6 : 1;
+            continue;
+        }
+        if (input[i] === '&') {
+            const semi = input.indexOf(';', i);
+            const raw = semi > i && semi - i < 12 ? input.slice(i, semi + 1) : '';
+            const decoded = raw ? decodeBasicEntity(raw) : '';
+            if (decoded) {
+                if (emitSpace()) break;
+                if (count + decoded.length > max) break;
+                out += raw;
+                count += decoded.length;
+                started = true;
+                i = semi + 1;
+                continue;
+            }
+        }
+        if (emitSpace()) break;
+        out += input[i];
+        count += 1;
+        started = true;
+        i += 1;
+    }
+    out += '…';
+    for (let n = open.length - 1; n >= 0; n -= 1) out += `</${open[n]}>`;
+    return out;
+}
+
+export function buildAlertSeeMoreMarkup(innerHtml, opts = {}) {
+    const full = String(innerHtml || '');
+    const clipped = clipHtmlToTextLength(full, ALERT_SEE_MORE_WINDOW);
+    const extra = opts.className ? ` ${opts.className}` : '';
+    const stored = full.replace(/<\/template/gi, '<\\/template');
+    return `<div class="nt-alert-copy${extra}"><div class="nt-rich-body nt-alert-body text-sm text-gray-800 dark:text-gray-200 leading-relaxed" data-alert-body data-see-more-step="1">${clipped}</div><template data-alert-full>${stored}</template><button type="button" class="nt-alert-see-more" data-alert-see-more>See more...</button></div>`;
 }
 
 /**
- * One See more tap. If the post is still longer than the next doubled
- * window, reveal that much and keep the button. Otherwise show the rest.
+ * One See more tap. Reveal another full window when the post is still
+ * that long. Otherwise show the rest and drop the button.
  */
 export function expandAlertSeeMore(button) {
     const copy = button?.closest?.('.nt-alert-copy');
@@ -315,21 +400,28 @@ export function expandAlertSeeMore(button) {
         button?.remove?.();
         return;
     }
-    const step = Math.max(1, Number(body.getAttribute('data-see-more-step')) || 1);
-    const plain = String(body.textContent || '').replace(/\s+/g, ' ').trim();
-    if (plain.length > alertSeeMoreLimit(step)) {
-        const nextStep = step + 1;
-        body.setAttribute('data-see-more-step', String(nextStep));
-        body.classList.add('is-collapsed');
-        const lines = String(alertSeeMoreLines(nextStep));
-        body.style.webkitLineClamp = lines;
-        body.style.lineClamp = lines;
+    const template = copy.querySelector?.('template[data-alert-full]');
+    const full = template ? template.innerHTML : '';
+    if (!full) {
+        body.classList.remove('is-collapsed');
+        body.style.webkitLineClamp = '';
+        body.style.lineClamp = '';
+        button.remove();
         return;
     }
+    const step = Math.max(1, Number(body.getAttribute('data-see-more-step')) || 1);
+    const nextStep = step + 1;
+    if (stripHtmlToText(full).length > alertSeeMoreLimit(nextStep)) {
+        body.innerHTML = clipHtmlToTextLength(full, alertSeeMoreLimit(nextStep));
+        body.setAttribute('data-see-more-step', String(nextStep));
+        return;
+    }
+    body.innerHTML = full;
     body.classList.remove('is-collapsed');
     body.style.webkitLineClamp = '';
     body.style.lineClamp = '';
     body.removeAttribute('data-see-more-step');
+    template.remove();
     button.remove();
 }
 

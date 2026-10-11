@@ -30,9 +30,10 @@ import {
     isNoticePinned,
     sortAlertsFeed,
     alertCopyNeedsSeeMore,
-    ALERT_SEE_MORE_MIN_CHARS,
+    ALERT_SEE_MORE_WINDOW,
     alertSeeMoreLimit,
-    alertSeeMoreLines,
+    clipHtmlToTextLength,
+    buildAlertSeeMoreMarkup,
     expandAlertSeeMore,
 } from '../src/lib/alerts-feed.js';
 
@@ -526,15 +527,24 @@ const now = 1_700_000_000_000;
     assert(!hubJs.includes('Firebase: Error'), 'reply errors do not surface the raw Firebase string');
     assert(alertCopyNeedsSeeMore(`${'word '.repeat(200)}`) === true, 'a long post needs See more');
     assert(alertCopyNeedsSeeMore('Short advisory.') === false, 'a short post stays open');
-    assert(ALERT_SEE_MORE_MIN_CHARS === 700, 'See more uses the WhatsApp 700 character mark');
-    assert(alertSeeMoreLimit(1) === 1400 && alertSeeMoreLimit(2) === 2800, 'each See more doubles the first character window');
-    assert(alertSeeMoreLines(1) === 12 && alertSeeMoreLines(2) === 24 && alertSeeMoreLines(3) === 48, 'See more line clamp starts at 12 and doubles');
+    assert(ALERT_SEE_MORE_WINDOW === 764, 'See more uses the 764 character window');
+    assert(alertSeeMoreLimit(1) === 764 && alertSeeMoreLimit(2) === 1528 && alertSeeMoreLimit(3) === 2292, 'each See more reveals another window of the same size');
+    const phrase = 'increase. Students, unemployed people a';
+    const head = 'a'.repeat(ALERT_SEE_MORE_WINDOW - phrase.length);
+    const sample = `${head}${phrase} and the rest of the notice keeps going.`;
+    const clipped = clipHtmlToTextLength(sample, ALERT_SEE_MORE_WINDOW);
+    assert(clipped === `${head}${phrase}…`, 'the first window ends on the sample phrase');
+    const rich = clipHtmlToTextLength('hello <b>world</b> and more', 11);
+    const richPlain = rich.replace(/<[^>]+>/g, ' ').replace(/&nbsp;/gi, ' ').replace(/\s+/g, ' ').trim();
+    assert(rich.includes('<b>') && rich.includes('</b>') && richPlain === 'hello world…', `HTML clip keeps tags and stops on plain length (${richPlain})`);
+    const markup = buildAlertSeeMoreMarkup(`<p>${sample}</p>`);
+    assert(markup.includes('See more...') && markup.includes('data-see-more-step="1"') && markup.includes('data-alert-full'), 'See more markup stores the full post');
+    assert(!markup.includes('is-collapsed'), 'See more is a character window, not a line clamp');
     const seeMoreBody = (text, step = 1) => {
         const body = {
-            text,
+            html: '',
             step: String(step),
-            collapsed: true,
-            clamp: '',
+            collapsed: false,
             classList: {
                 add() { body.collapsed = true; },
                 remove() { body.collapsed = false; },
@@ -542,39 +552,44 @@ const now = 1_700_000_000_000;
             getAttribute(name) { return name === 'data-see-more-step' ? body.step : null; },
             setAttribute(name, value) { if (name === 'data-see-more-step') body.step = String(value); },
             removeAttribute(name) { if (name === 'data-see-more-step') body.step = ''; },
-            get textContent() { return body.text; },
             style: {},
         };
-        Object.defineProperty(body.style, 'webkitLineClamp', {
-            get() { return body.clamp; },
-            set(value) { body.clamp = value; },
+        Object.defineProperty(body, 'innerHTML', {
+            get() { return body.html; },
+            set(value) { body.html = value; },
         });
-        Object.defineProperty(body.style, 'lineClamp', {
-            get() { return body.clamp; },
-            set(value) { body.clamp = value; },
-        });
-        const copy = { querySelector: () => body };
+        const template = {
+            innerHTML: text,
+            removed: false,
+            remove() { template.removed = true; },
+        };
+        const copy = {
+            querySelector(sel) {
+                const q = String(sel);
+                if (q.includes('template')) return template;
+                return body;
+            },
+        };
         const button = {
             removed: false,
             remove() { button.removed = true; },
             closest: () => copy,
         };
-        return { body, button };
+        return { body, button, template };
     };
     const shortStep = seeMoreBody('x'.repeat(900), 1);
     expandAlertSeeMore(shortStep.button);
-    assert(shortStep.button.removed && !shortStep.body.collapsed, 'a post inside the next window opens fully');
+    assert(shortStep.button.removed && shortStep.template.removed && shortStep.body.html === 'x'.repeat(900), 'a post inside the next window opens fully');
     const longStep = seeMoreBody('x'.repeat(2000), 1);
     expandAlertSeeMore(longStep.button);
-    assert(!longStep.button.removed && longStep.body.step === '2' && longStep.body.clamp === '24', 'a longer post keeps See more at double the window');
+    assert(!longStep.button.removed && longStep.body.step === '2' && longStep.body.html.endsWith('…') && longStep.body.html.replace(/…$/, '').length === 1528, 'a longer post keeps See more after one more window');
     expandAlertSeeMore(longStep.button);
-    assert(longStep.button.removed && !longStep.body.collapsed, 'the next tap opens the rest once it fits');
+    assert(longStep.button.removed && longStep.body.html === 'x'.repeat(2000), 'the next tap opens the rest once it fits');
     const channelJs = readFileSync(new URL('../src/lib/alerts-channel.js', import.meta.url), 'utf8');
-    assert(channelJs.includes('See more...'), 'long posts offer See more');
-    assert(channelJs.includes('expandAlertSeeMore') && channelJs.includes('data-see-more-step="1"'), 'the feed steps See more');
-    assert(hubJs.includes('expandAlertSeeMore') && hubJs.includes('data-see-more-step="1"'), 'the notice modal steps See more');
-    const appearanceCss = readFileSync(new URL('../src/styles/appearance.css', import.meta.url), 'utf8');
-    assert(appearanceCss.includes('-webkit-line-clamp: 12'), 'the first See more preview is 12 lines');
+    const feedJs = readFileSync(new URL('../src/lib/alerts-feed.js', import.meta.url), 'utf8');
+    assert(feedJs.includes('See more...'), 'long posts offer See more');
+    assert(channelJs.includes('buildAlertSeeMoreMarkup') && channelJs.includes('expandAlertSeeMore'), 'the feed steps See more');
+    assert(hubJs.includes('buildAlertSeeMoreMarkup') && hubJs.includes('expandAlertSeeMore'), 'the notice modal steps See more');
     assert(channelJs.includes('alignAlertCardTop') && channelJs.includes('focusTop'), 'force open puts the alert top in view');
     assert(channelJs.includes('nt-alert-force-flash'), 'force open highlight is a brief flash');
     assert(hubJs.includes('focusTop: true'), 'auto open asks for the top of the alert');

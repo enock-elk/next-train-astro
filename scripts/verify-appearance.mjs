@@ -24,6 +24,15 @@ assert(css.includes('html[data-colour-pack="earthy"].dark #grid-swap-dir-btn'), 
 assert(css.includes('html[data-colour-pack="earthy"].dark #pinned-section a'), 'Earthy dark pinned route uses light ink');
 assert(css.includes('#grid-container .nt-station-col.bg-blue-100'), 'Earthy selected station stays in the in-app grid');
 assert(css.includes('#commuter-peek-lookup') && css.includes('#commuter-peek-close'), 'Earthy user sheet buttons share the dark brown');
+assert(css.includes('html[data-colour-pack="earthy"] .bg-blue-600') && css.includes('html[data-colour-pack="earthy"] .bg-blue-600 .text-white'), 'Earthy light and dark paper CTAs use dark ink, including nested white labels');
+assert(css.includes('color: var(--nt-primary-fg) !important;') && css.includes('.nt-poll-submit'), 'poll Submit uses primary ink, not hardcoded white');
+assert(/\.nt-poll-submit \{[\s\S]*?color: var\(--nt-primary-fg\);/.test(css), 'poll Submit color is --nt-primary-fg');
+assert(css.includes('html[data-colour-pack="earthy"]:not(.dark) .hover\\:bg-blue-700:hover'), 'Earthy light hover on the dark wash uses cream text');
+assert(css.includes('html[data-colour-pack="earthy"] .nt-alert-see-more'), 'Earthy See more is accent ink, not the paper fill');
+assert(css.includes('html[data-colour-pack="earthy"]:not(.dark) .toggle-checkbox:checked + .toggle-label'), 'Earthy light checked switches keep a dark track');
+assert(css.includes('#route-list a.text-blue-700.bg-blue-50'), 'Earthy light selected corridor row is readable');
+assert(css.includes('#telemetry-region-modal .bg-blue-50'), 'Earthy Gauteng tile is paper and charcoal');
+assert(!/html\[data-colour-pack="classic"\][^{]*\.bg-blue-600/.test(css), 'Classic blue-600 buttons are not restyled');
 assert(!/html\[data-colour-pack="classic"\][^{]*#planner-swap-btn/.test(css), 'Classic planner swap is not restyled');
 assert(/html\[data-colour-pack="earthy"\] #view-full-timetable-btn/.test(css), 'Earthy weakens the timetable CTA halo');
 assert(!css.includes('data-colour-pack="ember"'), 'Ember pack CSS is gone');

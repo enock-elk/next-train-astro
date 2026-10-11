@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_10.11.2': [
+        'Earthy light and dark: paper buttons (Update, Yes, Close, and the other blue-600 labels) use dark ink. Light mode only switches that ink to cream while the hover fill is actually dark. See more and View results use the accent, not the paper fill. A checked switch keeps a dark track so the knob stays visible. The selected corridor row and the Gauteng regional tile stay readable. See more shows 764 characters, then the same amount again, and drops the button when the rest is shorter. Classic is unchanged. No commuter What’s New. forceShow stays false.',
+    ],
     'V9_10.11.1': [
         'Sign-in uses auth.nexttrain.co.za now that the Hosting domain is connected. A long alert shows a little more, then See more again at double the character window until the rest fits. Crash text export always includes the script address, line, and stack, or (not recorded) when the report did not have them. Signing in toasts once when the saved theme or colour pack actually changes the screen. The user sheet always lists fares, routing fails, ticket photos, and crashes. Earthy light and dark: the zone chip, planner swap, timetable direction chip, pinned route, selected station, and the user sheet Look up more and Close buttons keep readable ink on a distinct chip. Classic is unchanged. No commuter What’s New. forceShow stays false.',
     ],

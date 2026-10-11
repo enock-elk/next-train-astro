@@ -135,6 +135,24 @@ export function formatContributionDate(dayOrAt) {
     return `${dd} ${CONTRIB_MONTHS[date.getMonth()]} ${date.getFullYear()}`;
 }
 
+/** Train, route, duration, and stations for a share. Empty when nothing was stored. */
+export function contributionDetailLines(itemOrDetail) {
+    const detail = itemOrDetail && typeof itemOrDetail === 'object' && itemOrDetail.detail
+        ? itemOrDetail.detail
+        : (itemOrDetail || {});
+    const lines = [];
+    if (detail.trainId) lines.push(`Train ${detail.trainId}`);
+    if (detail.route) lines.push(`Route ${detail.route}`);
+    const duration = formatContributionDuration(detail);
+    if (duration) lines.push(duration);
+    const origin = detail.origin || '';
+    const destination = detail.destination || '';
+    if (origin && destination) lines.push(`${origin} - ${destination}`);
+    else if (origin) lines.push(origin);
+    else if (destination) lines.push(destination);
+    return lines;
+}
+
 /** Trip length for the contribution sheet. Empty when we never stored a start. */
 export function formatContributionDuration(detail) {
     const start = Number(detail?.startedAt) || 0;

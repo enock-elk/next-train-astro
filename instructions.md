@@ -102,7 +102,7 @@ Run `npm run verify:clever-ads` before updating advert hashes. Then follow the s
 ## Alerts
 
 - Channel: WhatsApp-style feed, last 10 + Show earlier, union scoping, critical pin, hold-to-react, tap counts for the breakdown sheet.
-- Close is labeled **Close** (not a faint X). Empty copy: “When Next Train posts a notice for your region or route, it will show up here.”
+- Footer Close is labeled **Close**. The header control is an X, same as other modals. Empty copy: “When Next Train posts a notice for your region or route, it will show up here.”
 - Card order: **title → image → text**.
 - Catalog posters live in `public/images/alerts/` (manifest + JPGs). Preview and Post use the same path; posting does **not** upload images to Storage.
 - **Hold-to-react must work on catalog photos.** Poster buttons are lightbox on **tap**, picker on **hold**. Do not put `[data-alert-lightbox]` back in the long-press ignore list. Do not use inline `onclick` + `stopPropagation` on those posters (it fires before the hold can cancel the click).

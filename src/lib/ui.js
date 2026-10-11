@@ -152,6 +152,13 @@ function hashForModal(modalId) {
     return MODAL_HASH[modalId] || null;
 }
 
+/** Account sheets sit above #account. Keep in sync with account.js ACCOUNT_SHEET_HASH. */
+const ACCOUNT_SHEET_HASHES = new Set(['#account-points', '#account-name', '#account-badge', '#account-contrib']);
+
+function isAccountSheetHash(hash) {
+    return ACCOUNT_SHEET_HASHES.has(hash || '');
+}
+
 function isLegalHash(hash) {
     return hash === '#privacy' || hash === '#terms' || hash === '#legal';
 }
@@ -440,8 +447,15 @@ export function bindHistoryBackNavigation() {
 
         if (window._isSidenavClosing) return;
 
+        // Points / name / badge / trip sheets are not *-modal. Close only the top
+        // sheet so Back lands on the account screen that opened it.
+        if (typeof window.__ntAccountSheetOnPop === 'function' && window.__ntAccountSheetOnPop(hashNow)) {
+            return;
+        }
+
         // Close the top overlay first (Account over Options, archived alert over Dev Mode).
         // Never close Dev Mode while a panel is drilled in — that was jumping users to home.
+        // A pop that lands on this overlay's own hash must leave it up (profile over account).
         const openModals = Array.from(document.querySelectorAll('div[id$="-modal"].fixed:not(.hidden)'));
         if (openModals.length > 0) {
             let highestZ = -1;
@@ -463,12 +477,16 @@ export function bindHistoryBackNavigation() {
                 }
             });
             if (modalToClose && modalToClose !== 'dev-modal') {
+                const ownerHash = hashForModal(modalToClose);
+                if (ownerHash && ownerHash === hashNow) return;
+                if (modalToClose === 'account-modal' && isAccountSheetHash(hashNow)) return;
                 closeSmoothModal(modalToClose, true);
                 return;
             }
         }
 
         if (document.body.classList.contains('sidenav-open')) {
+            if (hashNow === '#sidenav') return;
             if (typeof window.closeAppHub === 'function') window.closeAppHub(true);
             return;
         }

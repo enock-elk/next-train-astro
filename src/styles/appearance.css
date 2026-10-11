@@ -1174,7 +1174,24 @@ body.nav-bottom:not(.nt-immersive) #sidenav {
 #alerts-channel-scroll {
   background-color: transparent !important;
 }
+#alerts-channel header {
+  background-color: var(--nt-chrome-header) !important;
+  border-color: var(--nt-chrome-header-border);
+  color: var(--nt-chrome-fg);
+}
 #alerts-channel header,
+#alerts-channel header #alerts-channel-title,
+#alerts-channel header p,
+#alerts-channel header #alerts-channel-back,
+#alerts-channel header #alerts-channel-close {
+  color: var(--nt-chrome-fg) !important;
+}
+#alerts-channel header p {
+  opacity: 0.82;
+}
+#alerts-channel-close {
+  background-color: color-mix(in srgb, var(--nt-chrome-fg) 18%, transparent) !important;
+}
 #alerts-channel-footer {
   background-color: color-mix(in srgb, var(--nt-surface) 92%, transparent) !important;
   border-color: var(--nt-border);

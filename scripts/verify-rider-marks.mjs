@@ -4,6 +4,7 @@ import {
     MARK_TIERS,
     awardCommunityMarks,
     badgeProgress,
+    contributionDetailLines,
     formatContributionDate,
     formatContributionDuration,
     listContributionDays,
@@ -66,6 +67,26 @@ assert.equal(formatContributionDate('2026-09-17'), '17 Sep 2026');
 assert.equal(formatContributionDuration({ startedAt: 1_000, endedAt: 1_000 + (34 * 60_000) }), '34 min');
 assert.equal(formatContributionDuration({ startedAt: 1_000, endedAt: 1_000 + (72 * 60_000) }), '1 hr 12 min');
 assert.equal(formatContributionDuration({ startedAt: 5_000 }), 'Still on this trip');
+const shareLines = contributionDetailLines({
+    action: 'first_share_day',
+    how: 'Share live location on the map while on a train. Points once per service day.',
+    detail: {
+        trainId: '0618',
+        route: 'Germiston - Kempton Park',
+        origin: 'Germiston',
+        destination: 'Kempton Park',
+        startedAt: 1_000,
+        endedAt: 1_000 + (34 * 60_000),
+    },
+});
+assert.deepEqual(shareLines, [
+    'Train 0618',
+    'Route Germiston - Kempton Park',
+    '34 min',
+    'Germiston - Kempton Park',
+]);
+assert.equal(shareLines.includes('Share live location'), false, 'trip lines omit the earn blurb');
+assert.deepEqual(contributionDetailLines({ action: 'first_share_day', how: 'Share live location' }), []);
 
 const withDetail = mergeMarksStates({
     points: 2,

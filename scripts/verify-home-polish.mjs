@@ -459,9 +459,9 @@ assert(hubModals.includes('id="account-badge-how-sheet"') && hubModals.includes(
 assert(
     hubModals.indexOf('id="account-modal-display-name"') < hubModals.indexOf('id="account-passenger-type-btn"')
     && hubModals.indexOf('id="account-passenger-type-btn"') < hubModals.indexOf('id="account-points-btn"')
-    && hubModals.indexOf('id="account-points-btn"') < hubModals.indexOf('id="account-settings-host"')
-    && hubModals.indexOf('id="account-settings-host"') < hubModals.indexOf('id="account-signout-btn"'),
-    'signed-in Account order is identity preview, settings, sign out',
+    && hubModals.indexOf('id="account-points-btn"') < hubModals.indexOf('id="account-signout-btn"')
+    && hubModals.indexOf('id="account-signout-btn"') < hubModals.indexOf('id="account-settings-host"'),
+    'signed-in Account order is identity preview, sign out, settings',
 );
 assert(hubModals.includes('?from=account'), 'Account legal links return with from=account');
 assert(hubModals.includes('account-points-panel'), 'points details live inside Account');
@@ -478,7 +478,11 @@ assert(
     'name sheet holds the field, photo switch, and Save',
 );
 assert(!accountJs.includes("insertAdjacentElement('afterend'"), 'points panel stays in the tall sheet');
-assert(accountJs.includes("openSmoothModal('profile-modal', null, { skipHash: true })"), 'passenger type opens the existing profile modal over Account');
+assert(accountJs.includes("openSmoothModal('profile-modal')"), 'passenger type opens the profile modal on the account back stack');
+assert(accountJs.includes('#account-points') && accountJs.includes('history.pushState({ accountSheet: id }'), 'account sheets push their own history entry');
+assert(accountJs.includes('Trip details were not saved for this share.'), 'a share without stored stations does not fall back to the earn blurb');
+assert(accountJs.includes('contributionDetailLines'), 'share sheets use the stored trip lines');
+assert(accountJs.includes('resolveAuthPhotoURL') && accountJs.includes('providerData'), 'account photo falls back to the provider picture');
 assert(accountJs.includes('setShowMarksInCommunity'), 'level switch saves on its own');
 assert(accountJs.includes("cluster.classList.toggle('hidden', signed && hosted)"), 'sidenav Passenger Type hides only while hosted for a signed-in user');
 assert(accountJs.includes('setShowPhotoInAlerts') && accountJs.includes("window.showToast('Saved', 'success')"), 'Save writes display name and photo together');
@@ -646,11 +650,18 @@ assert(hubModals.includes('id="nt-admin-publish-train"'), 'admin nearby sheet ca
     assert(adminCl.includes('listAdminChangelogVersions'), 'build notes list merges What’s New versions');
     assert(adminJs.includes('ntAdminSecureEscape'), 'build notes escape helper is in scope');
 }
-assert(hubModals.includes('id="account-session-actions"'), 'Account sign out sits in a bottom session block');
+assert(hubModals.includes('id="account-session-actions"'), 'delete account stays in the session block');
+{
+    const uiJs = readFileSync(new URL('../src/lib/ui.js', import.meta.url), 'utf8');
+    assert(uiJs.includes('__ntAccountSheetOnPop'), 'back closes the top account sheet before the account modal');
+    assert(uiJs.includes("hashNow === '#sidenav'"), 'back from Account leaves Options open');
+}
 assert(
-    hubModals.indexOf('id="account-settings-host"') < hubModals.indexOf('id="account-signout-btn"'),
-    'Sign out is below Account settings',
+    hubModals.indexOf('id="account-points-btn"') < hubModals.indexOf('id="account-signout-btn"')
+    && hubModals.indexOf('id="account-signout-btn"') < hubModals.indexOf('id="account-settings-host"'),
+    'Sign out is a row on the identity card, above settings',
 );
+assert(!/id="account-signout-btn"[^>]*text-center/.test(hubModals), 'Sign out is not a centered bottom bar');
 assert(
     hubModals.indexOf('id="account-signout-btn"') < hubModals.indexOf('privacy.html'),
     'Sign out is above the Account legal links',

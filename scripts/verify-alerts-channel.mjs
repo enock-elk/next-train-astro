@@ -247,7 +247,9 @@ const now = 1_700_000_000_000;
 {
     const { readFileSync } = await import('node:fs');
     const channel = readFileSync(new URL('../src/components/AlertsChannel.astro', import.meta.url), 'utf8');
-    assert(channel.includes('>Close</button>'), 'header has a labeled Close button');
+    assert(/id="alerts-channel-close"[\s\S]{0,500}M6 18L18 6M6 6l12 12/.test(channel), 'header Close is an X');
+    assert(!/id="alerts-channel-close"[^>]*>\s*Close\s*</.test(channel), 'header Close is not the word Close');
+    assert(channel.includes('>Close</button>'), 'footer Close stays labeled Close');
     assert(channel.includes('id="alerts-channel-wallpaper"'), 'alerts wallpaper sits behind the feed');
     assert(channel.includes('id="alerts-channel-footer-close"'), 'alerts has a bottom Close');
     assert(channel.includes('When Next Train posts a notice for your region or route, it will show up here.'), 'empty-state copy');
@@ -341,6 +343,7 @@ const now = 1_700_000_000_000;
     assert(/\.nt-poll\s*\{[\s\S]*?background:\s*color-mix/.test(appearance), 'poll well uses pack tokens');
     assert(appearance.includes('.nt-poll-row.is-mine'), 'your-vote row is a padded highlight, not a ring');
     assert(/#alerts-channel-footer-close\s*\{[\s\S]*?background-color:\s*var\(--nt-primary\)/.test(appearance), 'footer Close stays the filled --nt-primary CTA');
+    assert(/#alerts-channel header\s*\{[\s\S]*?background-color:\s*var\(--nt-chrome-header\)/.test(appearance), 'alerts header uses the chrome colour, not the card surface');
     assert(/#close-timetable-footer-btn,[\s\S]*?#fare-modal-close-btn\s*\{[\s\S]*?color:\s*var\(--nt-primary-fg\)/.test(appearance), 'timetable, tips, and fare Close match Alerts CTA ink');
     assert(/#planner-train-sheet-fare\s*\{[\s\S]*?background-color:\s*#ffffff/.test(appearance), 'train-sheet fare chip stays white on the blue header');
     assert(/\.nt-planner-map-btn\s*\{[\s\S]*?color:\s*var\(--nt-text\)/.test(appearance), 'View trip plan on map uses body ink');

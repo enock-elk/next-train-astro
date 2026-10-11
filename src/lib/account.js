@@ -240,6 +240,24 @@ export async function pushSignedInPrefs(partial = {}) {
     }
 }
 
+function cleanPhotoUrl(value) {
+    const url = String(value || '').trim();
+    if (!url || url === 'null' || url === 'undefined') return '';
+    return url;
+}
+
+/** Google often leaves the picture on providerData after user.photoURL is empty. */
+export function resolveAuthPhotoURL(user) {
+    const direct = cleanPhotoUrl(user?.photoURL);
+    if (direct) return direct;
+    const rows = Array.isArray(user?.providerData) ? user.providerData : [];
+    for (const row of rows) {
+        const url = cleanPhotoUrl(row?.photoURL);
+        if (url) return url;
+    }
+    return '';
+}
+
 function publishUser(user, extras = {}) {
     if (!user || user.isAnonymous) {
         $account.set({
@@ -253,16 +271,34 @@ function publishUser(user, extras = {}) {
         safeStorage.removeItem('authUid');
         return;
     }
+    const photoURL = cleanPhotoUrl(extras.photoURL) || resolveAuthPhotoURL(user) || null;
     $account.set({
         status: 'signed-in',
         uid: user.uid,
         displayName: extras.displayName || formatAccountDisplayName(user.displayName || (user.email ? user.email.split('@')[0] : 'Passenger')),
-        photoURL: user.photoURL || null,
+        photoURL,
         email: user.email || null,
         displayNameCustom: !!extras.displayNameCustom,
         chatDeviceId: extras.chatDeviceId || $account.get().chatDeviceId || null,
     });
     safeStorage.setItem('authUid', user.uid);
+}
+
+async function adoptProviderPhoto(user) {
+    if (!user || user.isAnonymous) return '';
+    let photoURL = resolveAuthPhotoURL(user);
+    const google = (user.providerData || []).some((row) => row?.providerId === 'google.com' || row?.providerId === 'facebook.com');
+    if (!photoURL && google && typeof user.reload === 'function' && !user.__ntPhotoReloaded) {
+        user.__ntPhotoReloaded = true;
+        try {
+            await user.reload();
+            photoURL = resolveAuthPhotoURL(user);
+        } catch { /* keep the letter if the provider has no picture */ }
+    }
+    if (photoURL && photoURL !== cleanPhotoUrl(user.photoURL) && window.firebaseUpdateProfile) {
+        try { await window.firebaseUpdateProfile(user, { photoURL }); } catch { /* RTDB still stores it */ }
+    }
+    return photoURL;
 }
 
 async function waitForFirebase(timeoutMs = 8000) {
@@ -311,12 +347,13 @@ export async function ensureUserProfile(user, opts = {}) {
         }
         const chatDeviceId = pickCanonicalChatDeviceId(mergedDeviceIds, deviceId);
         const ops = accountOpsFields(now);
+        const photoURL = (await adoptProviderPhoto(user)) || cleanPhotoUrl(existing?.photoURL) || null;
 
         if (!existing) {
             await window.firebaseDbSet(window.firebaseDbRef(window.firebaseDb, userPath), {
                 displayName,
                 displayNameCustom: !!customName,
-                photoURL: user.photoURL || null,
+                photoURL,
                 email: user.email || null,
                 createdAt: now,
                 deviceIds: deviceId ? { [deviceId]: now } : {},
@@ -331,7 +368,7 @@ export async function ensureUserProfile(user, opts = {}) {
             });
         } else {
             const patch = {
-                photoURL: user.photoURL || existing.photoURL || null,
+                photoURL,
                 email: user.email || existing.email || null,
                 updatedAt: now,
                 ...ops,
@@ -380,11 +417,16 @@ export async function ensureUserProfile(user, opts = {}) {
             displayName,
             displayNameCustom: !!(customName || existing?.displayNameCustom),
             chatDeviceId,
+            photoURL,
         });
     } catch (e) {
         // RTDB rules may block until deployed — Auth session still valid locally
         console.warn('Account profile sync deferred', e?.message || e);
-        publishUser(user, { chatDeviceId: pickCanonicalChatDeviceId({ [deviceId]: now }, deviceId) });
+        const photoURL = await adoptProviderPhoto(user);
+        publishUser(user, {
+            chatDeviceId: pickCanonicalChatDeviceId({ [deviceId]: now }, deviceId),
+            photoURL,
+        });
     }
 }
 
@@ -395,17 +437,22 @@ export async function updateAccountDisplayName(raw) {
     if (!check.ok) throw new Error(check.message);
     const custom = check.name;
     const displayName = custom || formatAccountDisplayName(user.displayName || (user.email ? user.email.split('@')[0] : 'Passenger'));
+    const photoURL = resolveAuthPhotoURL(user);
     if (window.firebaseUpdateProfile) {
-        try { await window.firebaseUpdateProfile(user, { displayName }); } catch { /* RTDB is source for chat */ }
+        const profilePatch = { displayName };
+        if (photoURL) profilePatch.photoURL = photoURL;
+        try { await window.firebaseUpdateProfile(user, profilePatch); } catch { /* RTDB is source for chat */ }
     }
     if (window.firebaseDb) {
-        await window.firebaseDbUpdate(window.firebaseDbRef(window.firebaseDb, `users/${user.uid}`), {
+        const profileRow = {
             displayName,
             displayNameCustom: !!custom,
             updatedAt: Date.now(),
-        });
+        };
+        if (photoURL) profileRow.photoURL = photoURL;
+        await window.firebaseDbUpdate(window.firebaseDbRef(window.firebaseDb, `users/${user.uid}`), profileRow);
     }
-    publishUser(user, { displayName, displayNameCustom: !!custom });
+    publishUser(user, { displayName, displayNameCustom: !!custom, photoURL });
     window.dispatchEvent(new CustomEvent('accountchange', { detail: $account.get() }));
     return displayName;
 }
@@ -616,9 +663,67 @@ export function waitForSignedIn(timeoutMs = 90000) {
     });
 }
 
+/** Keep in sync with ui.js ACCOUNT_SHEET_HASHES. */
+const ACCOUNT_SHEET_HASH = {
+    'account-points-sheet': '#account-points',
+    'account-name-sheet': '#account-name',
+    'account-badge-how-sheet': '#account-badge',
+    'account-contrib-sheet': '#account-contrib',
+};
+const ACCOUNT_SHEET_ORDER = ['account-contrib-sheet', 'account-badge-how-sheet', 'account-name-sheet', 'account-points-sheet'];
+const accountSheetStack = [];
+
+function hideAccountSheetEl(id) {
+    document.getElementById(id)?.classList.add('hidden');
+    const at = accountSheetStack.lastIndexOf(id);
+    if (at >= 0) accountSheetStack.splice(at, 1);
+}
+
+function topAccountSheetId() {
+    const stacked = accountSheetStack[accountSheetStack.length - 1];
+    if (stacked) {
+        const el = document.getElementById(stacked);
+        if (el && !el.classList.contains('hidden')) return stacked;
+    }
+    for (const id of ACCOUNT_SHEET_ORDER) {
+        const el = document.getElementById(id);
+        if (el && !el.classList.contains('hidden')) return id;
+    }
+    return null;
+}
+
+function showAccountSheet(id) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.classList.remove('hidden');
+    const at = accountSheetStack.indexOf(id);
+    if (at >= 0) accountSheetStack.splice(at, 1);
+    accountSheetStack.push(id);
+    const hash = ACCOUNT_SHEET_HASH[id];
+    if (hash && location.hash !== hash) {
+        try { history.pushState({ accountSheet: id }, '', hash); } catch { /* ignore */ }
+    }
+}
+
+function requestCloseAccountSheet(id) {
+    const hash = ACCOUNT_SHEET_HASH[id];
+    if (hash && location.hash === hash) {
+        try { history.back(); return; } catch { /* hide below */ }
+    }
+    hideAccountSheetEl(id);
+}
+
+function accountSheetOnPop(hashNow) {
+    const top = topAccountSheetId();
+    if (!top) return false;
+    if (ACCOUNT_SHEET_HASH[top] === hashNow) return false;
+    hideAccountSheetEl(top);
+    return true;
+}
+
 function closeAccountSheets() {
-    document.getElementById('account-name-sheet')?.classList.add('hidden');
-    document.getElementById('account-points-sheet')?.classList.add('hidden');
+    for (const id of Object.keys(ACCOUNT_SHEET_HASH)) hideAccountSheetEl(id);
+    accountSheetStack.length = 0;
 }
 
 function setAccountProfileOpen(open) {
@@ -626,6 +731,11 @@ function setAccountProfileOpen(open) {
 }
 
 export function closeAccountModal() {
+    if (accountSheetStack.length || topAccountSheetId()) {
+        const top = topAccountSheetId();
+        if (top) requestCloseAccountSheet(top);
+        return;
+    }
     setAccountProfileOpen(false);
     if (typeof window.closeSmoothModal === 'function') {
         window.closeSmoothModal('account-modal');
@@ -655,8 +765,11 @@ export function syncAccountSettingsUi(state = $account.get()) {
                 : 'Guest · Sign in optional';
     }
     if (avatarImg && avatarPh) {
-        if (signed && state.photoURL) {
-            avatarImg.src = state.photoURL;
+        const photo = signed ? (state.photoURL || '') : '';
+        const failed = avatarImg.dataset.ntPhotoFailed || '';
+        if (photo && failed !== photo) {
+            avatarImg.referrerPolicy = 'no-referrer';
+            if (avatarImg.getAttribute('src') !== photo) avatarImg.src = photo;
             avatarImg.classList.remove('hidden');
             avatarPh.classList.add('hidden');
         } else {
@@ -713,15 +826,20 @@ export function syncAccountSettingsUi(state = $account.get()) {
         letterEl.textContent = signed
             ? (state.displayName || state.email || 'P').charAt(0).toUpperCase()
             : '?';
-        letterEl.classList.toggle('hidden', !!(signed && state.photoURL && modalImg));
+        const photo = signed ? (state.photoURL || '') : '';
+        const failed = modalImg?.dataset.ntPhotoFailed || '';
+        letterEl.classList.toggle('hidden', !!(photo && modalImg && failed !== photo));
     }
     if (modalImg) {
-        if (signed && state.photoURL) {
-            modalImg.src = state.photoURL;
+        const photo = signed ? (state.photoURL || '') : '';
+        const failed = modalImg.dataset.ntPhotoFailed || '';
+        if (photo && failed !== photo) {
+            modalImg.referrerPolicy = 'no-referrer';
+            if (modalImg.getAttribute('src') !== photo) modalImg.src = photo;
             modalImg.classList.remove('hidden');
         } else {
             modalImg.classList.add('hidden');
-            modalImg.removeAttribute('src');
+            if (!photo) modalImg.removeAttribute('src');
         }
     }
     const photoToggle = document.getElementById('account-photo-alerts');
@@ -793,30 +911,41 @@ function badgeSvg(kind, ratio) {
 }
 
 function closeBadgeHowSheet() {
-    document.getElementById('account-badge-how-sheet')?.classList.add('hidden');
+    requestCloseAccountSheet('account-badge-how-sheet');
 }
 
 function closeContributionSheet() {
-    document.getElementById('account-contrib-sheet')?.classList.add('hidden');
+    requestCloseAccountSheet('account-contrib-sheet');
 }
 
 function contributionSheetLines(item, marks) {
-    const detail = item?.detail || {};
-    const lines = [];
-    if (detail.trainId) lines.push(`Train ${detail.trainId}`);
-    if (detail.route) lines.push(`Route ${detail.route}`);
-    const duration = typeof marks.formatContributionDuration === 'function'
-        ? marks.formatContributionDuration(detail)
-        : '';
-    if (duration) lines.push(duration);
-    const origin = detail.origin || '';
-    const destination = detail.destination || '';
-    if (origin && destination) lines.push(`${origin} - ${destination}`);
-    else if (origin) lines.push(origin);
-    else if (destination) lines.push(destination);
-    const rich = !!(detail.trainId || origin || destination || duration);
-    if ((!rich || item.action !== 'first_share_day') && item.how) lines.push(item.how);
+    const lines = typeof marks.contributionDetailLines === 'function'
+        ? marks.contributionDetailLines(item)
+        : [];
+    if (item?.action === 'first_share_day') {
+        if (!lines.length) lines.push('Trip details were not saved for this share.');
+        return lines;
+    }
+    if (!lines.length && item?.how) lines.push(item.how);
     return lines;
+}
+
+function shareTripBlocks(state, marks) {
+    const days = typeof marks.listContributionDays === 'function'
+        ? marks.listContributionDays(state, { limit: 30 })
+        : [];
+    const trips = [];
+    for (const day of days) {
+        for (const item of day.items || []) {
+            if (item.action !== 'first_share_day') continue;
+            const when = day.day && typeof marks.formatContributionDate === 'function'
+                ? marks.formatContributionDate(day.day)
+                : '';
+            const lines = contributionSheetLines(item, marks);
+            trips.push({ when, lines });
+        }
+    }
+    return trips;
 }
 
 function openContributionSheet(item, marks) {
@@ -836,7 +965,7 @@ function openContributionSheet(item, marks) {
             `<p>${escapeAccountHtml(line)}</p>`
         )).join('');
     }
-    sheet.classList.remove('hidden');
+    showAccountSheet('account-contrib-sheet');
 }
 
 function openBadgeHowSheet(badgeId, state, marks) {
@@ -855,7 +984,26 @@ function openBadgeHowSheet(badgeId, state, marks) {
         else if (progress.total > 1 && progress.current > 0) status.textContent = `${progress.current} of ${progress.total} service days`;
         else status.textContent = 'Not unlocked yet';
     }
-    if (body) body.textContent = `${cat.how} ${cat.points} ${marks.pointsWord(cat.points)}.`;
+    if (body) {
+        if (badgeId === 'first_share_day') {
+            const trips = shareTripBlocks(state, marks);
+            if (trips.length) {
+                body.innerHTML = trips.map((trip) => {
+                    const head = trip.when
+                        ? `<p class="font-semibold text-gray-800 dark:text-gray-100">${escapeAccountHtml(trip.when)}</p>`
+                        : '';
+                    const rest = trip.lines.map((line) => `<p>${escapeAccountHtml(line)}</p>`).join('');
+                    return `<div class="space-y-1">${head}${rest}</div>`;
+                }).join('');
+            } else if (on) {
+                body.textContent = 'Trip details were not saved for this share.';
+            } else {
+                body.textContent = `${cat.how} ${cat.points} ${marks.pointsWord(cat.points)}.`;
+            }
+        } else {
+            body.textContent = `${cat.how} ${cat.points} ${marks.pointsWord(cat.points)}.`;
+        }
+    }
     const needs = Array.isArray(cat.requires) ? cat.requires : [];
     const missing = needs.filter((id) => !marks.badgeUnlocked(id, state)).map((id) => {
         const row = marks.MARK_CATALOG.find((c) => c.id === id);
@@ -870,7 +1018,7 @@ function openBadgeHowSheet(badgeId, state, marks) {
             prereq.classList.add('hidden');
         }
     }
-    sheet.classList.remove('hidden');
+    showAccountSheet('account-badge-how-sheet');
 }
 
 export function paintAccountPoints(state) {
@@ -976,6 +1124,21 @@ export function bindAccountUi() {
         return;
     }
     window.__ntAccountUiBound = true;
+
+    const watchPhoto = (imgId, letterId) => {
+        const img = document.getElementById(imgId);
+        if (!img || img.dataset.ntPhotoWatch === '1') return;
+        img.dataset.ntPhotoWatch = '1';
+        img.referrerPolicy = 'no-referrer';
+        img.addEventListener('error', () => {
+            const failed = img.currentSrc || img.src || '';
+            if (failed) img.dataset.ntPhotoFailed = failed;
+            img.classList.add('hidden');
+            document.getElementById(letterId)?.classList.remove('hidden');
+        });
+    };
+    watchPhoto('account-modal-avatar-img', 'account-modal-avatar-letter');
+    watchPhoto('settings-account-avatar-img', 'settings-account-avatar-ph');
 
     $account.subscribe(syncAccountSettingsUi);
     syncAccountSettingsUi();
@@ -1099,7 +1262,7 @@ export function bindAccountUi() {
             await pushSignedInPrefs({ showPhotoInAlerts: !!photo?.checked });
             if (photo) delete photo.dataset.dirty;
             if (typeof window.showToast === 'function') window.showToast('Saved', 'success');
-            document.getElementById('account-name-sheet')?.classList.add('hidden');
+            requestCloseAccountSheet('account-name-sheet');
         } catch (e) {
             const msg = e?.message || 'Could not save.';
             if (msg === DISPLAY_NAME_REFUSE_MSG && typeof window.showToast === 'function') {
@@ -1164,14 +1327,11 @@ export function bindAccountUi() {
     });
 
     const openPointsSheet = () => {
-        const sheet = document.getElementById('account-points-sheet');
-        if (!sheet) return;
-        sheet.classList.remove('hidden');
+        if (!document.getElementById('account-points-sheet')) return;
         paintAccountPoints();
+        showAccountSheet('account-points-sheet');
     };
-    const closePointsSheet = () => {
-        document.getElementById('account-points-sheet')?.classList.add('hidden');
-    };
+    const closePointsSheet = () => requestCloseAccountSheet('account-points-sheet');
     document.getElementById('account-points-btn')?.addEventListener('click', openPointsSheet);
     document.getElementById('account-points-guest-btn')?.addEventListener('click', openPointsSheet);
     document.getElementById('account-points-close')?.addEventListener('click', closePointsSheet);
@@ -1182,18 +1342,16 @@ export function bindAccountUi() {
         const nameErr = document.getElementById('account-name-error');
         if (nameErr) nameErr.textContent = '';
         if (input) input.value = $account.get().displayName || '';
-        document.getElementById('account-name-sheet')?.classList.remove('hidden');
+        showAccountSheet('account-name-sheet');
         setTimeout(() => input?.focus(), 40);
     };
-    const closeNameSheet = () => {
-        document.getElementById('account-name-sheet')?.classList.add('hidden');
-    };
+    const closeNameSheet = () => requestCloseAccountSheet('account-name-sheet');
     document.getElementById('account-name-edit-btn')?.addEventListener('click', openNameSheet);
     document.getElementById('account-name-close')?.addEventListener('click', closeNameSheet);
     document.getElementById('account-name-overlay')?.addEventListener('click', closeNameSheet);
     document.getElementById('account-passenger-type-btn')?.addEventListener('click', () => {
         if (typeof window.triggerHaptic === 'function') window.triggerHaptic();
-        if (typeof window.openSmoothModal === 'function') window.openSmoothModal('profile-modal', null, { skipHash: true });
+        if (typeof window.openSmoothModal === 'function') window.openSmoothModal('profile-modal');
     });
     document.getElementById('account-photo-toggle')?.addEventListener('click', (e) => {
         const t = e.target;
@@ -1254,6 +1412,7 @@ function friendlyAuthError(e) {
 }
 
 if (typeof window !== 'undefined') {
+    window.__ntAccountSheetOnPop = accountSheetOnPop;
     window.openAccountModal = openAccountModal;
     window.waitForSignedIn = waitForSignedIn;
     window.signOutAccount = signOutAccount;

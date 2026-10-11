@@ -1353,6 +1353,7 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
       }
       /* Size overlays to the screen, not a tall transformed ancestor. */
       #nt-shell [id$="-modal"].fixed,
+      #nt-shell [id$="-sheet"].fixed,
       #nt-shell #alerts-channel {
         top: 0;
         left: 0;

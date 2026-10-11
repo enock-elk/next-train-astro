@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_10.11.10': [
+        'Account sheets (points, name, passenger type, badge, and a share) each take a back step, so Back returns to the screen that opened them. Sign out is a row on the identity card. The account circle uses the Google or Facebook picture when that sign-in has one. Opening Share your trip lists the train, route, duration, and stations. Alerts header Close is an X, and the header uses the chrome colour so it separates from the cards. No commuter What’s New. forceShow stays false.',
+    ],
     'V9_10.11.9': [
         'Route and line labels use Johannesburg when that word stays on one line, and JHB when it would wrap. Sitemap names this version and the lastmod date. No commuter What’s New. forceShow stays false.',
     ],

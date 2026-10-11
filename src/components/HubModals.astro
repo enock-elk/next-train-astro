@@ -304,7 +304,7 @@ import { withBase } from '../lib/config.js';
                 <div class="rounded-[12px] overflow-hidden bg-white dark:bg-[#1c1c1e]">
                     <div class="flex items-center gap-3.5 px-4 pt-4 pb-3.5">
                         <div class="w-16 h-16 rounded-full bg-[#e5e5ea] dark:bg-[#3a3a3c] flex items-center justify-center text-[22px] font-semibold text-gray-600 dark:text-gray-300 shrink-0 overflow-hidden ring-1 ring-black/5 dark:ring-white/10">
-                            <img id="account-modal-avatar-img" class="hidden w-full h-full object-cover" alt="">
+                            <img id="account-modal-avatar-img" class="hidden w-full h-full object-cover" alt="" referrerpolicy="no-referrer">
                             <span id="account-modal-avatar-letter" class="select-none"></span>
                         </div>
                         <div class="min-w-0 flex-1">
@@ -330,6 +330,9 @@ import { withBase } from '../lib/config.js';
                             <span data-rider-marks class="text-[13px] font-normal text-gray-500 dark:text-gray-400 truncate">Bronze · 0 points</span>
                             <svg class="w-3.5 h-3.5 text-gray-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"></path></svg>
                         </span>
+                    </button>
+                    <button type="button" id="account-signout-btn" data-account-action class="w-full flex items-center px-4 py-[13px] text-left border-t border-black/10 dark:border-white/10 focus:outline-none active:bg-black/[0.03] dark:active:bg-white/[0.04]">
+                        <span class="text-[13px] font-normal text-[#ff3b30]">Sign out</span>
                     </button>
                 </div>
             </div>
@@ -394,12 +397,6 @@ import { withBase } from '../lib/config.js';
             <div id="account-settings-host" class="space-y-3"></div>
 
             <div id="account-session-actions" class="hidden space-y-6">
-                <div class="rounded-[12px] overflow-hidden bg-white dark:bg-[#1c1c1e]">
-                    <button type="button" id="account-signout-btn" data-account-action class="w-full px-4 py-[11px] text-[13px] font-normal text-blue-600 dark:text-blue-400 text-center focus:outline-none">
-                        Sign out
-                    </button>
-                </div>
-
                 <div id="account-delete-wrap" class="hidden space-y-2">
                     <p class="px-1 text-[12px] font-normal uppercase tracking-wide text-gray-500 dark:text-gray-500">Danger zone</p>
                     <div class="rounded-[12px] overflow-hidden bg-white dark:bg-[#1c1c1e]">
@@ -432,10 +429,10 @@ import { withBase } from '../lib/config.js';
 
 <div id="account-badge-how-sheet" class="fixed inset-0 z-[130] hidden flex items-end justify-center p-0 bg-black/40" role="dialog" aria-modal="true" aria-labelledby="account-badge-how-title">
     <button type="button" id="account-badge-how-overlay" class="absolute inset-0" aria-label="Close"></button>
-    <div class="relative w-full max-w-md rounded-t-2xl bg-white dark:bg-[#1c1c1e] px-4 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))] space-y-3">
+    <div class="relative z-10 w-full max-w-md rounded-t-2xl bg-white dark:bg-[#1c1c1e] px-4 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))] space-y-3">
         <p id="account-badge-how-title" class="text-[17px] font-semibold text-gray-900 dark:text-white"></p>
         <p id="account-badge-how-status" class="text-[13px] font-normal text-gray-500 dark:text-gray-400"></p>
-        <p id="account-badge-how-body" class="text-[13px] font-normal text-gray-600 dark:text-gray-300 leading-snug"></p>
+        <div id="account-badge-how-body" class="max-h-[40vh] overflow-y-auto space-y-3 text-[13px] font-normal text-gray-600 dark:text-gray-300 leading-snug"></div>
         <p id="account-badge-how-prereq" class="hidden text-[13px] font-normal text-gray-500 dark:text-gray-400 leading-snug"></p>
         <button type="button" id="account-badge-how-close" class="w-full py-2.5 rounded-xl text-[13px] font-normal text-blue-600 dark:text-blue-400 bg-[#f2f2f7] dark:bg-[#2c2c2e] focus:outline-none">Close</button>
     </div>
@@ -443,7 +440,7 @@ import { withBase } from '../lib/config.js';
 
 <div id="account-contrib-sheet" class="fixed inset-0 z-[130] hidden flex items-end justify-center p-0 bg-black/40" role="dialog" aria-modal="true" aria-labelledby="account-contrib-title">
     <button type="button" id="account-contrib-overlay" class="absolute inset-0" aria-label="Close"></button>
-    <div class="relative w-full max-w-md rounded-t-2xl bg-white dark:bg-[#1c1c1e] px-4 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))] space-y-3">
+    <div class="relative z-10 w-full max-w-md rounded-t-2xl bg-white dark:bg-[#1c1c1e] px-4 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))] space-y-3">
         <p id="account-contrib-title" class="text-[17px] font-semibold text-gray-900 dark:text-white"></p>
         <p id="account-contrib-points" class="text-[13px] font-normal text-gray-500 dark:text-gray-400"></p>
         <div id="account-contrib-body" class="space-y-1 text-[13px] font-normal text-gray-600 dark:text-gray-300 leading-snug"></div>
@@ -453,7 +450,7 @@ import { withBase } from '../lib/config.js';
 
 <div id="account-name-sheet" class="fixed inset-0 z-[125] hidden flex items-end justify-center p-0 bg-black/40" role="dialog" aria-modal="true" aria-labelledby="account-name-sheet-title">
     <button type="button" id="account-name-overlay" class="absolute inset-0" aria-label="Close"></button>
-    <div class="relative w-full max-w-md rounded-t-2xl bg-white dark:bg-[#1c1c1e] px-4 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))] space-y-3">
+    <div class="relative z-10 w-full max-w-md rounded-t-2xl bg-white dark:bg-[#1c1c1e] px-4 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))] space-y-3">
         <p id="account-name-sheet-title" class="text-[17px] font-semibold text-gray-900 dark:text-white">Display name</p>
         <p class="text-[13px] font-normal text-gray-500 dark:text-gray-400 leading-snug">Used on the Community tab.</p>
         <div>
@@ -478,7 +475,7 @@ import { withBase } from '../lib/config.js';
 
 <div id="account-points-sheet" class="fixed inset-0 z-[125] hidden flex items-end justify-center p-0 bg-black/40" role="dialog" aria-modal="true" aria-labelledby="account-points-sheet-title">
     <button type="button" id="account-points-overlay" class="absolute inset-0" aria-label="Close"></button>
-    <div class="relative w-full max-w-md h-[min(92dvh,100%)] rounded-t-2xl bg-[#f2f2f7] dark:bg-black flex flex-col overflow-hidden">
+    <div class="relative z-10 w-full max-w-md h-[min(92dvh,100%)] rounded-t-2xl bg-[#f2f2f7] dark:bg-black flex flex-col overflow-hidden">
         <div class="shrink-0 flex items-center justify-between gap-3 px-4 pt-4 pb-3">
             <p id="account-points-sheet-title" class="text-[17px] font-semibold text-gray-900 dark:text-white">Points</p>
             <button type="button" id="account-points-close" class="text-[13px] font-normal text-blue-600 dark:text-blue-400 px-2 py-1 focus:outline-none">Close</button>

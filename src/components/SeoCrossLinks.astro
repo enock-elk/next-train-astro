@@ -4,6 +4,7 @@
  * Western Cape public-holiday timetable is WC-only (dedicated *_pub sheets).
  */
 import { withBase } from '../lib/config.js';
+import JhbFit from './JhbFit.astro';
 import {
   listSeoRegions,
   listSeoCorridors,
@@ -53,7 +54,7 @@ const corridors = region ? listSeoCorridors().filter((c) => c.region === region)
           href={withBase(`corridors/${c.slug}.html`)}
           class="text-blue-700 dark:text-blue-300 hover:underline"
         >
-          {c.label} train times
+          <JhbFit text={`${c.label} train times`} inline />
         </a>
       </li>
     ))}

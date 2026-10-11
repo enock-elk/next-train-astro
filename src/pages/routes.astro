@@ -11,6 +11,7 @@ import {
   WC_PUBLIC_HOLIDAYS_PATH,
 } from '../lib/seo-routes.js';
 import SeoCrossLinks from '../components/SeoCrossLinks.astro';
+import JhbFit from '../components/JhbFit.astro';
 
 const title = 'Metrorail Route Schedules | Metrorail Next Train';
 const description =
@@ -97,7 +98,7 @@ const regionOrder = ['GP', 'WC', 'KZN', 'EC'];
                       {displayRouteName(route)}
                     </span>
                     <span class="block text-[10px] font-semibold uppercase tracking-wider text-slate-500 mt-1">
-                      {getCorridorLabel(route) || displayRouteName(route)}
+                      <JhbFit text={getCorridorLabel(route) || displayRouteName(route)} />
                     </span>
                   </a>
                 </li>

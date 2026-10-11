@@ -41,7 +41,7 @@ import { withBase } from '../lib/config.js';
     // @ts-nocheck — pre-existing bridge; typed globals live in env.d.ts
     import { $userRegion, $currentRouteId } from '../store.js';
     import { ROUTES, getCorridorLabel } from '../lib/config.js';
-    import { safeStorage, formatRouteLabelHtml, restorePinnedSession } from '../lib/utils.js';
+    import { safeStorage, formatRouteLabelHtml, expandJhbLabel, fitRouteNameNodes, fitJhbNodes, escapeHTML, restorePinnedSession } from '../lib/utils.js';
     import { loadAllSchedules, executeRegionSwap } from '../lib/logic.js';
     import { prepareDeeplinkIntents, flushPendingDeeplinkIntents, hasInboundShareIntent } from '../lib/deeplink.js';
     import { markWelcomeShownThisVisit, snapshotReturningForStartupLocate, maybeAutoLocateBoard } from '../lib/auto-locate.js';
@@ -97,11 +97,12 @@ import { withBase } from '../lib/config.js';
                 else if (route.colorClass.includes('indigo')) borderColor = 'border-indigo-500';
 
                 const corridor = getCorridorLabel(route);
+                const corridorText = corridor || 'View schedules';
                 btn.className = `w-full text-left p-4 rounded-xl shadow-md flex items-center justify-between group transition-all transform hover:scale-[1.02] active:scale-95 bg-white dark:bg-gray-800 border-l-4 ${borderColor} focus:outline-none`;
                 btn.innerHTML = `
                     <div class="min-w-0 pr-2">
-                        <span class="block text-sm font-bold text-gray-900 dark:text-white truncate">${displayName}</span>
-                        <span class="block text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500 mt-0.5">${corridor || 'View schedules'}</span>
+                        <span class="block text-sm font-bold text-gray-900 dark:text-white truncate" data-route-raw="${escapeHTML(route.name)}">${displayName}</span>
+                        <span class="block text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500 mt-0.5 truncate" data-jhb-short="${escapeHTML(corridorText)}" data-jhb-long="${escapeHTML(expandJhbLabel(corridorText))}">${escapeHTML(corridorText)}</span>
                     </div>
                     <svg class="w-5 h-5 text-gray-400 group-hover:text-blue-500 transition-colors flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
                 `;
@@ -159,8 +160,8 @@ import { withBase } from '../lib/config.js';
                 btn.className = `w-full text-left p-4 rounded-xl shadow-md flex items-center justify-between bg-gray-50 dark:bg-gray-800/40 border-l-4 border-gray-300 dark:border-gray-700 opacity-80 cursor-not-allowed transition-all focus:outline-none`;
                 btn.innerHTML = `
                     <div class="min-w-0 pr-2">
-                        <span class="block text-sm font-bold text-gray-500 dark:text-gray-400 truncate">${displayName}</span>
-                        ${corridorSoon ? `<span class="block text-[10px] font-semibold uppercase tracking-wider text-gray-400 mt-0.5">${corridorSoon}</span>` : ''}
+                        <span class="block text-sm font-bold text-gray-500 dark:text-gray-400 truncate" data-route-raw="${escapeHTML(route.name)}">${displayName}</span>
+                        ${corridorSoon ? `<span class="block text-[10px] font-semibold uppercase tracking-wider text-gray-400 mt-0.5 truncate" data-jhb-short="${escapeHTML(corridorSoon)}" data-jhb-long="${escapeHTML(expandJhbLabel(corridorSoon))}">${escapeHTML(corridorSoon)}</span>` : ''}
                         <span class="text-[10px] font-black text-yellow-600 dark:text-yellow-500 uppercase tracking-widest mt-0.5 inline-block">🚧 Coming Soon</span>
                     </div>
                     <svg class="w-5 h-5 text-gray-300 dark:text-gray-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
@@ -173,6 +174,8 @@ import { withBase } from '../lib/config.js';
             }
             listContainer.appendChild(btn);
         });
+        fitRouteNameNodes(listContainer);
+        fitJhbNodes(listContainer);
     };
 
     const initWelcomeScreen = async () => {

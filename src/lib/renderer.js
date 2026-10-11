@@ -19,7 +19,7 @@ import { orderGridTrainIds } from './grid-order.js';
 import { 
     normalizeStationName, timeToSeconds, formatTimeDisplay, isRealTime, isExpressSkip,
     isVariantStationName, variantMapFromSchedule, escapeHTML, safeStorage,
-    formatRouteLabelHtml, formatRouteLabelPlain, routePrimaryGridDirection, shortSharedSourceLabel,
+    formatRouteLabelHtml, formatRouteLabelPlain, expandJhbLabel, fitRouteNameNodes, fitJhbNodes, routePrimaryGridDirection, shortSharedSourceLabel,
     scheduleCacheSlot, routeSheetKeyForDay, warningTriangleSvg, gridNoticeShowsOnDay,
     resolveOperatingDayType, simUsesSpecificDate
 } from './utils.js';
@@ -168,7 +168,7 @@ export const Renderer = {
                             <div class="flex items-center min-w-0 pr-2">
                                 <span class="w-3 h-3 rounded-full mr-3 flex-shrink-0 ${dotColor} ${isActive ? 'ring-2 ring-blue-300 dark:ring-blue-700' : ''}"></span>
                                 <span class="text-[10px] font-black text-blue-500 dark:text-blue-400 uppercase tracking-widest mr-2 flex-shrink-0">Pinned:</span>
-                                <span class="truncate">${formatRouteLabelHtml(r.name)}</span>
+                                <span class="truncate" data-route-raw="${escapeHTML(r.name)}">${formatRouteLabelHtml(r.name)}</span>
                             </div>
                         </a>
                     </li>
@@ -178,7 +178,7 @@ export const Renderer = {
 
         categoryOrder.forEach(cat => {
             if (groups[cat]) {
-                html += `<li class="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest text-center pb-2 pt-4 list-none select-none">${cat}</li>`;
+                html += `<li class="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest text-center pb-2 pt-4 list-none select-none" data-jhb-short="${escapeHTML(cat)}" data-jhb-long="${escapeHTML(expandJhbLabel(cat))}">${escapeHTML(cat)}</li>`;
                 html += `<div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 mb-4 overflow-hidden divide-y divide-gray-100 dark:divide-gray-700">`;
                 
                 groups[cat].forEach(r => {
@@ -194,7 +194,7 @@ export const Renderer = {
                                         <div class="w-7 h-7 rounded-md flex items-center justify-center mr-3 flex-shrink-0 bg-gray-200 dark:bg-gray-700 text-gray-400 shadow-sm">
                                             <svg class="w-4 h-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="16" rx="2" ry="2"></rect><path d="M4 11h16"></path><path d="M12 3v8"></path><path d="M8 19l-2 3"></path><path d="M18 22l-2-3"></path><path d="M8 15h0"></path><path d="M16 15h0"></path></svg>
                                         </div>
-                                        <span class="truncate">${displayName}</span>
+                                        <span class="truncate" data-route-raw="${escapeHTML(r.name)}">${displayName}</span>
                                     </div>
                                     <span class="ml-2 text-[8px] bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 px-1.5 py-0.5 rounded uppercase font-black tracking-widest flex-shrink-0">Soon</span>
                                 </a>
@@ -218,7 +218,7 @@ export const Renderer = {
                                         <div class="w-7 h-7 rounded-md flex items-center justify-center mr-3 flex-shrink-0 ${tileBg} shadow-sm group-hover:scale-105 transition-transform">
                                             <svg class="w-4 h-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="16" rx="2" ry="2"></rect><path d="M4 11h16"></path><path d="M12 3v8"></path><path d="M8 19l-2 3"></path><path d="M18 22l-2-3"></path><path d="M8 15h0"></path><path d="M16 15h0"></path></svg>
                                         </div>
-                                        <span class="truncate">${displayName}</span>
+                                        <span class="truncate" data-route-raw="${escapeHTML(r.name)}">${displayName}</span>
                                     </div>
                                     ${isActive ? '<svg class="w-4 h-4 text-blue-600 dark:text-blue-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"></path></svg>' : ''}
                                 </a>
@@ -231,6 +231,8 @@ export const Renderer = {
         });
 
         container.innerHTML = html;
+        fitRouteNameNodes(container);
+        fitJhbNodes(container);
     },
 
     renderWelcomeList: (containerId, routes, onSelectCallback) => {
@@ -260,7 +262,7 @@ export const Renderer = {
                 
                 btn.innerHTML = `
                     <div class="min-w-0 pr-2">
-                        <span class="block text-sm font-bold text-gray-900 dark:text-white truncate">${displayName}</span>
+                        <span class="block text-sm font-bold text-gray-900 dark:text-white truncate" data-route-raw="${escapeHTML(route.name)}">${displayName}</span>
                         <span class="text-xs text-gray-500 dark:text-gray-400">View schedules</span>
                     </div>
                     <svg class="w-5 h-5 text-gray-400 group-hover:text-blue-500 transition-colors flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
@@ -274,7 +276,7 @@ export const Renderer = {
                 
                 btn.innerHTML = `
                     <div class="min-w-0 pr-2">
-                        <span class="block text-sm font-bold text-gray-500 dark:text-gray-400 truncate">${displayName}</span>
+                        <span class="block text-sm font-bold text-gray-500 dark:text-gray-400 truncate" data-route-raw="${escapeHTML(route.name)}">${displayName}</span>
                         <span class="text-[10px] font-black text-yellow-600 dark:text-yellow-500 uppercase tracking-widest mt-0.5 inline-block">🚧 Coming Soon</span>
                     </div>
                     <svg class="w-5 h-5 text-gray-300 dark:text-gray-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
@@ -289,6 +291,8 @@ export const Renderer = {
 
             container.appendChild(btn);
         });
+        fitRouteNameNodes(container);
+        fitJhbNodes(container);
     },
 
     // --- 2. LAYOUT PLACEHOLDERS & ERRORS ---

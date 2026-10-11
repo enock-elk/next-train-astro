@@ -417,5 +417,37 @@ const resolvedHtmlClass = [forceDark ? 'dark' : '', htmlClass].filter(Boolean).j
     <RecoveryLifeline />
     <slot />
     {seoRegion && <SeoAlerts region={seoRegion} routeIds={alertRouteIds} />}
+    <script is:inline>
+      function ntFitJhbLabels() {
+        var nodes = document.querySelectorAll('[data-jhb-long]');
+        for (var i = 0; i < nodes.length; i++) {
+          var el = nodes[i];
+          var longText = el.getAttribute('data-jhb-long') || '';
+          var shortText = el.getAttribute('data-jhb-short') || '';
+          el.style.whiteSpace = 'nowrap';
+          el.style.overflow = 'hidden';
+          el.style.maxWidth = '100%';
+          function fits() {
+            return el.clientWidth > 0 && el.scrollWidth <= el.clientWidth + 1;
+          }
+          function release() {
+            el.style.whiteSpace = '';
+            el.style.overflow = '';
+          }
+          if (!longText || longText === shortText || el.clientWidth <= 0) {
+            el.textContent = shortText;
+            if (!fits()) release();
+            continue;
+          }
+          el.textContent = longText;
+          if (fits()) continue;
+          el.textContent = shortText;
+          if (!fits()) release();
+        }
+      }
+      if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', ntFitJhbLabels);
+      else ntFitJhbLabels();
+      window.addEventListener('resize', ntFitJhbLabels);
+    </script>
   </body>
 </html>

@@ -344,6 +344,74 @@ export function formatRouteLabelHtml(raw) {
     return parts.map((p) => escapeHTML(p.trim())).filter(Boolean).join(routeArrowSvg());
 }
 
+/** Visible "JHB" stands for Johannesburg. Ids such as JHB_WEST are left alone. */
+export function expandJhbLabel(text) {
+    return String(text ?? '').replace(/\bJHB\b/g, 'Johannesburg');
+}
+
+/**
+ * Paint the long label only when it stays on one line inside `el`.
+ * Otherwise keep the short label. Nowrap stays only when that short
+ * label also fits. A heading that still needs two lines can wrap.
+ */
+export function applyFittedLabel(el, shortValue, longValue, asHtml = false) {
+    if (!el) return;
+    const short = shortValue == null ? '' : String(shortValue);
+    const long = longValue == null ? short : String(longValue);
+    const write = (value) => {
+        if (asHtml) el.innerHTML = value;
+        else el.textContent = value;
+    };
+    el.style.whiteSpace = 'nowrap';
+    el.style.overflow = 'hidden';
+    el.style.maxWidth = '100%';
+    if (typeof window !== 'undefined' && window.getComputedStyle) {
+        const display = window.getComputedStyle(el).display;
+        if (display === 'inline') el.style.display = 'inline-block';
+    }
+    const fits = () => el.clientWidth > 0 && el.scrollWidth <= el.clientWidth + 1;
+    const release = () => {
+        el.style.whiteSpace = '';
+        el.style.overflow = '';
+    };
+    if (!long || long === short || el.clientWidth <= 0) {
+        write(short);
+        if (!fits()) release();
+        return;
+    }
+    write(long);
+    if (fits()) return;
+    write(short);
+    if (!fits()) release();
+}
+
+/** Route-name nodes marked with data-route-raw. */
+export function fitRouteNameNodes(root) {
+    if (!root || typeof root.querySelectorAll !== 'function') return;
+    root.querySelectorAll('[data-route-raw]').forEach((el) => {
+        const raw = el.getAttribute('data-route-raw') || '';
+        applyFittedLabel(
+            el,
+            formatRouteLabelHtml(raw),
+            formatRouteLabelHtml(expandJhbLabel(raw)),
+            true
+        );
+    });
+}
+
+/** Plain-text nodes marked with data-jhb-short / data-jhb-long. */
+export function fitJhbNodes(root) {
+    if (!root || typeof root.querySelectorAll !== 'function') return;
+    root.querySelectorAll('[data-jhb-long]').forEach((el) => {
+        applyFittedLabel(
+            el,
+            el.getAttribute('data-jhb-short') || '',
+            el.getAttribute('data-jhb-long') || '',
+            false
+        );
+    });
+}
+
 /** True for timetable clock cells (rejects notes like "Monte", dashes, blanks). */
 export function isRealTime(val) {
     if (val == null) return false;

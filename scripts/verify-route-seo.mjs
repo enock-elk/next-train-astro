@@ -12,7 +12,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { MANUAL_GRID_ORDER, orderGridTrainIds } from '../src/lib/grid-order.js';
-import { ROUTES } from '../src/lib/config.js';
+import { APP_VERSION, ROUTES } from '../src/lib/config.js';
 import {
   listFeaturedSeoRoutes,
   listSeoRoutes,
@@ -695,6 +695,12 @@ if (!gridPathSa.includes('d=sa') || gridPathSa.includes('dir=')) {
     const today = new Date().toISOString().slice(0, 10);
     if (!xml.includes(`<lastmod>${today}</lastmod>`)) {
       fail(`sitemap lastmod should be ${today}`);
+    }
+    if (!xml.includes(`App version: ${APP_VERSION}`)) {
+      fail(`sitemap should name app version ${APP_VERSION}`);
+    }
+    if (!xml.includes(`lastmod: ${today}`)) {
+      fail(`sitemap comment lastmod should be ${today}`);
     }
     if (!xml.includes('https://nexttrain.co.za/corridors/gauteng-pretoria-jhb-line.html')) {
       fail('sitemap missing Pretoria-JHB corridor URL');

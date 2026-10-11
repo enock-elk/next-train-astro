@@ -3,7 +3,7 @@
  * Thin controller bridging DOM ↔ live-board.js engine ↔ Renderer
  */
 import { ROUTES, FARE_CONFIG, getCorridorLabel } from './config.js';
-import { normalizeStationName, timeToSeconds, safeStorage, escapeHTML, formatTimeDisplay, formatRouteLabelPlain, formatRouteLabelHtml, isRealTime, shortSharedSourceLabel, scheduleCacheSlot, warningTriangleSvg, schedulesBelongToRoute } from './utils.js';
+import { normalizeStationName, timeToSeconds, safeStorage, escapeHTML, formatTimeDisplay, formatRouteLabelPlain, formatRouteLabelHtml, expandJhbLabel, applyFittedLabel, fitRouteNameNodes, fitJhbNodes, isRealTime, shortSharedSourceLabel, scheduleCacheSlot, warningTriangleSvg, schedulesBelongToRoute } from './utils.js';
 import { $currentRouteId, $userRegion, $userProfile, $fullDatabase, $schedules } from '../store.js';
 import { currentTime, loadAllSchedules } from './logic.js';
 import { showToast, triggerHaptic, openSmoothModal, closeSmoothModal } from './ui.js';
@@ -66,10 +66,10 @@ export function openRegionRoutePicker() {
     import('./logic.js').then(({ syncRegionDisplayDom }) => {
         syncRegionDisplayDom(region);
     }).catch(() => {});
+    openSmoothModal('route-modal');
     if (typeof window !== 'undefined' && window.Renderer?.renderRouteMenu) {
         window.Renderer.renderRouteMenu('route-list', getRoutesForCurrentRegion(), $currentRouteId.get());
     }
-    openSmoothModal('route-modal');
     syncRouteModalCloseBtn();
 }
 
@@ -507,18 +507,23 @@ export function loadUserProfile() {
 export function updateNextTrainView() {
     const routeId = $currentRouteId.get();
     const route = routeId ? ROUTES[routeId] : null;
-    const labelPlain = formatRouteLabelPlain(route?.name || 'Select a route');
-    const labelHtml = formatRouteLabelHtml(route?.name || 'Select a route');
+    const rawName = route?.name || 'Select a route';
+    const labelPlain = formatRouteLabelPlain(rawName);
+    const longPlain = expandJhbLabel(labelPlain);
+    const shortHtml = formatRouteLabelHtml(rawName);
+    const longHtml = formatRouteLabelHtml(expandJhbLabel(rawName));
+    const expands = longPlain !== labelPlain;
 
     const title = document.getElementById('route-subtitle-text');
     if (title) {
-        title.innerHTML = labelHtml;
-        title.title = labelPlain;
-        if (route?.colorClass) {
-            title.className = `text-base sm:text-lg font-medium ${route.colorClass} group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors line-clamp-2 w-full text-center leading-tight`;
-        } else {
-            title.className = 'text-base sm:text-lg font-medium text-gray-700 dark:text-gray-200 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors line-clamp-2 w-full text-center leading-tight';
-        }
+        const color = route?.colorClass
+            ? `text-base sm:text-lg font-medium ${route.colorClass}`
+            : 'text-base sm:text-lg font-medium text-gray-700 dark:text-gray-200';
+        const fitClass = expands ? 'whitespace-nowrap overflow-hidden' : 'line-clamp-2';
+        title.className = `${color} group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors ${fitClass} w-full text-center leading-tight`;
+        if (expands) applyFittedLabel(title, shortHtml, longHtml, true);
+        else title.innerHTML = shortHtml;
+        title.title = longPlain;
         try {
             if (route?.name) safeStorage.setItem('nt_last_route_label', labelPlain);
             else safeStorage.removeItem('nt_last_route_label');
@@ -530,8 +535,9 @@ export function updateNextTrainView() {
     const corridor = getCorridorLabel(route);
     if (corridorEl) {
         if (corridor) {
-            corridorEl.textContent = corridor;
             corridorEl.classList.remove('hidden');
+            applyFittedLabel(corridorEl, corridor, expandJhbLabel(corridor), false);
+            corridorEl.title = expandJhbLabel(corridor);
         } else {
             corridorEl.textContent = '';
             corridorEl.classList.add('hidden');
@@ -1040,6 +1046,28 @@ export function initLiveBoardUi() {
     try { startSmartRefresh(); } catch (e) { console.warn('Smart refresh unavailable', e); }
     bindAutoLocateTriggers();
     maybeAutoLocateBoard().catch(() => {});
+
+    if (typeof window !== 'undefined' && !window.__ntJhbFitResize) {
+        window.__ntJhbFitResize = true;
+        let fitTimer = 0;
+        const refit = () => {
+            try { updateNextTrainView(); } catch { /* ignore */ }
+            const routeList = document.getElementById('route-list');
+            const welcomeList = document.getElementById('welcome-route-list');
+            if (routeList) {
+                fitRouteNameNodes(routeList);
+                fitJhbNodes(routeList);
+            }
+            if (welcomeList) {
+                fitRouteNameNodes(welcomeList);
+                fitJhbNodes(welcomeList);
+            }
+        };
+        window.addEventListener('resize', () => {
+            clearTimeout(fitTimer);
+            fitTimer = setTimeout(refit, 80);
+        });
+    }
 
     // Keep route-modal region label in sync whenever the store changes
     $userRegion.subscribe((region) => {

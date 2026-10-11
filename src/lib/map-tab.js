@@ -11,6 +11,7 @@ import { $currentRouteId, $globalStationIndex, $schedules, $userRegion } from '.
 import {
     timeToSeconds, escapeHTML, formatTimeDisplay, isRealTime,
     normalizeStationName, getDistanceFromLatLonInKm, safeStorage, scheduleCacheSlot,
+    expandJhbLabel, applyFittedLabel,
 } from './utils.js';
 import { currentTime } from './logic.js';
 import { currentScheduleData } from './live-board.js';
@@ -299,7 +300,9 @@ function statusEl() {
 
 function setStatus(text) {
     const el = statusEl();
-    if (el) el.textContent = text;
+    if (!el) return;
+    const raw = String(text || '');
+    applyFittedLabel(el, raw, expandJhbLabel(raw), false);
 }
 
 function trackingDistanceLabel(metres) {

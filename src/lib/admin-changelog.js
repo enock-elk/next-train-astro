@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_10.11.9': [
+        'Route and line labels use Johannesburg when that word stays on one line, and JHB when it would wrap. Sitemap names this version and the lastmod date. No commuter What’s New. forceShow stays false.',
+    ],
     'V9_10.11.8': [
         'The travel-day bar opens the date picker from the date text through the calendar icon. No commuter What’s New. forceShow stays false.',
     ],

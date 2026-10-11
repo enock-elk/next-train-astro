@@ -3,7 +3,7 @@
  * Run: node scripts/verify-home-polish.mjs
  */
 import { readFileSync } from 'node:fs';
-import { warningTriangleSvg } from '../src/lib/utils.js';
+import { warningTriangleSvg, expandJhbLabel, applyFittedLabel } from '../src/lib/utils.js';
 import { APP_VERSION, CHANGELOG_DATA, FARE_CONFIG, FORCE_UPDATE_REQUIRED } from '../src/lib/config.js';
 import {
     collectHubOnwardOptions,
@@ -18,6 +18,56 @@ import { normalizeAdminChangelogKey } from '../src/lib/admin-changelog.js';
 import { hoistAlertImagesFromHtml } from '../src/lib/alerts-feed.js';
 
 const failures = [];
+
+{
+    assert(expandJhbLabel('JHB <-> Randfontein') === 'Johannesburg <-> Randfontein', 'JHB route end expands');
+    assert(expandJhbLabel('Pretoria–JHB Line') === 'Pretoria–Johannesburg Line', 'JHB inside a line name expands');
+    assert(expandJhbLabel('JHB_WEST') === 'JHB_WEST', 'corridor ids are not display labels');
+    const wide = {
+        clientWidth: 400,
+        scrollWidth: 0,
+        style: {},
+        _html: '',
+        set innerHTML(value) {
+            this._html = value;
+            this.scrollWidth = value.length > 40 ? 500 : 200;
+        },
+        get innerHTML() { return this._html; },
+    };
+    applyFittedLabel(wide, 'JHB', 'Johannesburg <-> Randfontein', true);
+    assert(wide.innerHTML.includes('Johannesburg'), 'wide line keeps Johannesburg');
+    assert(wide.style.whiteSpace === 'nowrap', 'fitted label cannot wrap');
+    const narrow = {
+        clientWidth: 120,
+        scrollWidth: 0,
+        style: {},
+        _html: '',
+        set innerHTML(value) {
+            this._html = value;
+            this.scrollWidth = value.includes('Johannesburg') ? 240 : 80;
+        },
+        get innerHTML() { return this._html; },
+    };
+    applyFittedLabel(narrow, 'JHB <-> Randfontein', 'Johannesburg <-> Randfontein', true);
+    assert(narrow.innerHTML === 'JHB <-> Randfontein', 'narrow line keeps JHB');
+    const hidden = {
+        clientWidth: 0,
+        scrollWidth: 0,
+        style: {},
+        textContent: '',
+    };
+    applyFittedLabel(hidden, 'JHB West Line', 'Johannesburg West Line', false);
+    assert(hidden.textContent === 'JHB West Line', 'unmeasured line keeps JHB');
+    const clipped = {
+        clientWidth: 80,
+        scrollWidth: 200,
+        style: { whiteSpace: '', overflow: '' },
+        textContent: '',
+    };
+    applyFittedLabel(clipped, 'JHB West Line schedules', 'Johannesburg West Line schedules', false);
+    assert(clipped.textContent === 'JHB West Line schedules', 'a short heading that cannot fit one line stays JHB');
+    assert(clipped.style.whiteSpace === '', 'a short heading that cannot fit one line is allowed to wrap');
+}
 function assert(cond, msg) {
     if (!cond) failures.push(msg);
 }

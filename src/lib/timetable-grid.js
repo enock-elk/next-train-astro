@@ -13,7 +13,7 @@ import {
     stripShareParamsFromUrl,
     isSeoAppHandoff,
 } from './share-links.js';
-import { consumeShareDeeplinkSnapshot, peekShareDeeplinkSnapshot } from './deeplink.js';
+import { consumeShareDeeplinkSnapshot, peekShareDeeplinkSnapshot, armSlowDeeplinkToast, lockShareBoot } from './deeplink.js';
 
 let lastGridBody = null;
 let gridSchedulesRefreshBound = false;
@@ -282,7 +282,8 @@ export async function applyRouteDeepLink() {
     if (link.fromSnapshot || peekShareDeeplinkSnapshot()?.kind === 'route') consumeShareDeeplinkSnapshot();
 
     const seoHandoff = isSeoAppHandoff(link);
-    showToast(seoHandoff ? 'Opening Next Train' : 'Opening shared link...', 'info', 5000);
+    lockShareBoot();
+    const slowToast = armSlowDeeplinkToast(seoHandoff ? 'Opening Next Train' : 'Still opening this link');
 
     const returning = safeStorage.getItem('welcomeSeen') === 'true';
     const defaultKey = 'defaultRoute_' + route.region;
@@ -313,31 +314,62 @@ export async function applyRouteDeepLink() {
     // Strip share params — renderFullScheduleGrid will push #grid so Close/Back stays in-app
     stripShareParamsFromUrl();
 
-    await loadAllSchedules(true);
-    // Pin restore must not win: keep the corridor from this page.
-    $currentRouteId.set(link.routeId);
-    if (typeof window.findNextTrains === 'function') window.findNextTrains();
-    if (typeof window.updateNextTrainView === 'function') window.updateNextTrainView();
+    // Cache and the bundled dump paint the sheet. Do not wait out the network waterfall
+    // (a forced reload used to hold the grid until Firebase finished).
+    loadAllSchedules(false).catch(() => {});
 
-    if (typeof window.trackAnalyticsEvent === 'function' && !isSeoAppHandoff(link)) {
-        window.trackAnalyticsEvent('deep_link_open', {
-            type: 'route',
-            route_id: link.routeId,
-            view: link.view || 'board',
-            region_id: region || '',
-        });
+    const sheetsReady = (scheds) => (
+        $currentRouteId.get() === link.routeId
+        && schedulesBelongToRoute(scheds, link.routeId)
+        && scheduleBundleHasRows(scheds)
+    );
+
+    const paint = () => {
+        $currentRouteId.set(link.routeId);
+        if (typeof window.findNextTrains === 'function') window.findNextTrains();
+        if (typeof window.updateNextTrainView === 'function') window.updateNextTrainView();
+        slowToast.cancel();
+        if (typeof window.trackAnalyticsEvent === 'function' && !isSeoAppHandoff(link)) {
+            window.trackAnalyticsEvent('deep_link_open', {
+                type: 'route',
+                route_id: link.routeId,
+                view: link.view || 'board',
+                region_id: region || '',
+            });
+        }
+        if (!seoHandoff) showToast(`Opened shared route: ${route.name}`, 'success', 2000);
+        if (link.view === 'grid') {
+            renderFullScheduleGrid(link.dir, link.day);
+        } else if (link.view === 'fares' || link.view === 'fare') {
+            import('./live-board-ui.js')
+                .then((m) => m.openFareModalForCurrentRoute?.())
+                .catch(() => { /* ignore */ });
+        }
+    };
+
+    if (sheetsReady($schedules.get())) {
+        paint();
+        return true;
     }
-    if (!seoHandoff) showToast(`Opened shared route: ${route.name}`, 'success', 2000);
 
-    if (link.view === 'grid') {
-        setTimeout(() => renderFullScheduleGrid(link.dir, link.day), 80);
-    } else if (link.view === 'fares' || link.view === 'fare') {
-        setTimeout(async () => {
-            try {
-                const { openFareModalForCurrentRoute } = await import('./live-board-ui.js');
-                openFareModalForCurrentRoute();
-            } catch (_) { /* ignore */ }
-        }, 120);
+    let unsub = () => {};
+    let painted = false;
+    const giveUp = setTimeout(() => {
+        if (painted) return;
+        painted = true;
+        try { unsub(); } catch { /* ignore */ }
+        slowToast.cancel();
+        showToast('Connection timeout: Could not load this timetable.', 'error');
+    }, 12000);
+    unsub = $schedules.subscribe((scheds) => {
+        if (painted || !sheetsReady(scheds)) return;
+        painted = true;
+        clearTimeout(giveUp);
+        try { unsub(); } catch { /* ignore */ }
+        paint();
+    });
+    if (painted) {
+        try { unsub(); } catch { /* ignore */ }
     }
     return true;
 }

@@ -107,6 +107,9 @@ function isModalPopLocked() {
     return Date.now() < (window.__ntModalPopLockUntil || 0);
 }
 
+/** One close per tap when the overlay and a button both call closeSmoothModal. */
+const modalCloseLatch = new Set();
+
 /** Modal id → history hash (SPA back-button stack). */
 const MODAL_HASH = {
     'fare-modal': '#fare',
@@ -206,6 +209,11 @@ export function closeSmoothModal(modalId, fromPopState = false) {
             return;
         }
     }
+
+    // Backdrop click and the Close control can both fire for one tap.
+    if (modalCloseLatch.has(modalId)) return;
+    modalCloseLatch.add(modalId);
+    setTimeout(() => modalCloseLatch.delete(modalId), 450);
 
     // Drilled Dev Mode: step back one panel (or to the grid) — never close the whole modal
     if (modalId === 'dev-modal' && window.Admin && window.Admin.isGridMode === false) {
@@ -799,7 +807,7 @@ export function showToast(message, type = 'info', duration = 2500, actionHTML = 
     if (!toastAllowsShow(message, type, options)) return;
 
     if (toastTimeout) clearTimeout(toastTimeout); 
-    const safeDuration = Math.min(duration, 5000);
+    const safeDuration = Math.min(duration, options.dismissible ? 12000 : 5000);
 
     // Inject Toast CSS dynamically if not present
     if (!document.getElementById('toast-guardian-style')) {
@@ -854,19 +862,45 @@ export function showToast(message, type = 'info', duration = 2500, actionHTML = 
 
     toastEl.className = `flex items-center justify-center gap-2 px-3 py-2 rounded-2xl shadow-2xl backdrop-blur-md border ${bgClass} ${borderClass} ${textClass} w-[min(22rem,calc(100vw-1.5rem))] max-w-[calc(100vw-1.5rem)]`; 
 
+    const dismissHTML = options.dismissible
+        ? `<button type="button" class="nt-toast-dismiss shrink-0 p-1 rounded-full hover:bg-white/10 focus:outline-none" aria-label="Dismiss"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg></button>`
+        : '';
+
     toastEl.innerHTML = `
         <div class="flex items-center justify-center gap-1.5 min-w-0 flex-1 text-center">
             ${iconHTML}
             <span class="text-xs font-semibold tracking-wide leading-snug text-center whitespace-normal break-words line-clamp-2">${message}</span>
         </div>
         ${actionHTML ? `<div class="pl-2 border-l border-white/20 shrink-0">${actionHTML}</div>` : ''}
+        ${dismissHTML}
     `;
+
+    toastEl.querySelector('.nt-toast-dismiss')?.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        toastEl.classList.remove('show');
+        if (toastTimeout) clearTimeout(toastTimeout);
+    });
     
     // Prevent pull-to-refresh ghost triggers
     toastEl.ontouchmove = (e) => e.stopPropagation();
     
-    toastEl.classList.add('show'); 
+    toastEl.classList.add('show');
     toastTimeout = setTimeout(() => { toastEl.classList.remove('show'); }, safeDuration); 
+}
+
+/** Hide the toast only when it is still showing this message, so a later toast stays. */
+export function hideToastIfMessage(message) {
+    if (typeof document === 'undefined') return;
+    const toastEl = document.getElementById('toast');
+    if (!toastEl || !toastEl.classList.contains('show')) return;
+    const needle = String(message || '').replace(/\s+/g, ' ').trim();
+    if (!needle) return;
+    const text = String(toastEl.innerText || '').replace(/\s+/g, ' ');
+    if (!text.includes(needle)) return;
+    toastEl.classList.remove('show');
+    if (toastTimeout) clearTimeout(toastTimeout);
+    lastToastAt = 0;
 }
 
 const CHECK_TOAST_ID = 'nt-check-toast';
@@ -2358,6 +2392,33 @@ function installAnalyticsOfflineBridge() {
     });
 }
 
+/**
+ * A click on the dimmed blur around a partial sheet closes it.
+ * Full-screen sheets have no blur strip. The sheet body is a child, so taps inside stay put.
+ * Select Route still refuses to close when no corridor is chosen (closeSmoothModal).
+ */
+function bindBlurBackdropDismiss() {
+    if (typeof document === 'undefined' || window.__ntBlurDismissBound) return;
+    window.__ntBlurDismissBound = true;
+    document.addEventListener('click', (ev) => {
+        const el = ev.target;
+        if (!el || el.nodeType !== 1 || !el.id || ev.target !== el) return;
+        if (el.id === 'nt-on-train-sheet') return;
+        if (el.classList.contains('hidden') || el.classList.contains('full-screen')) return;
+        if (!el.classList.contains('fixed')) return;
+        const cls = typeof el.className === 'string' ? el.className : '';
+        if (!cls.includes('inset-0') || !cls.includes('backdrop-blur')) return;
+        if (el.id === 'holiday-notice-modal') {
+            const btn = document.getElementById('holiday-notice-close');
+            if (btn) {
+                btn.click();
+                return;
+            }
+        }
+        closeSmoothModal(el.id);
+    });
+}
+
 // --- ATTACH EXPORTS TO WINDOW FOR GLOBAL HTML ACCESS ---
 if (typeof window !== 'undefined') {
     window.triggerHaptic = triggerHaptic;
@@ -2365,6 +2426,7 @@ if (typeof window !== 'undefined') {
     window.bindPasswordReveal = bindPasswordReveal;
     window.openSmoothModal = openSmoothModal;
     window.closeSmoothModal = closeSmoothModal;
+    window.hideToastIfMessage = hideToastIfMessage;
     window.toggleDropdownScrim = toggleDropdownScrim;
     window.showToast = showToast;
     window.showCheckToast = showCheckToast;
@@ -2394,6 +2456,7 @@ if (typeof window !== 'undefined') {
     // Boot the Error Handler immediately
     initGlobalErrorHandler();
     bindHistoryBackNavigation();
+    bindBlurBackdropDismiss();
     installAnalyticsOfflineBridge();
     // Defer until #main-content exists (this module can load before the shell)
     if (document.readyState === 'loading') {

@@ -38,7 +38,6 @@
  * 9. Nuclear Cache Wipe (Killswitch)
  * 10. Live Telemetry Bridge & Snapshot Export
  * 11. User Feedback Manager (Inbox & Archive Protocol Tabs)
- * 12. Growth & Promo Manager (QR Codes)
  *
  * CHRONOLOGICAL CHANGE LOG:
  * * GUARDIAN PHASE 5 [22 Dec 2025]: Injected basic simulation control wiring and first-pass Service Alerts/Incident layouts.
@@ -2235,7 +2234,6 @@ const Admin = {
             'auth-providers-body',
             'exp-features-body',
             'shadow-ban-default-body',
-            'promo-body',
             'deploy-live-body',
             'cf-purge-body',
             'nuke-body',
@@ -2245,7 +2243,6 @@ const Admin = {
             'auth-providers-chevron',
             'exp-features-chevron',
             'shadow-ban-default-chevron',
-            'promo-chevron',
             'deploy-live-chevron',
             'cf-purge-chevron',
             'nuke-chevron',
@@ -6801,57 +6798,6 @@ const Admin = {
                 Admin.closeDevModal();
             };
         }
-    },
-
-    // --- 2.9 GROWTH & PROMO MANAGER (QR CODE) ---
-    setupGrowthManager: () => {
-        const adminContainer = document.getElementById('admin-modules-container');
-        if (!adminContainer) return;
-
-        let growthPanel = document.getElementById('growth-panel');
-        if (!growthPanel) {
-            growthPanel = document.createElement('div');
-            growthPanel.id = 'growth-panel';
-            adminContainer.appendChild(growthPanel);
-        }
-
-        if (growthPanel.dataset.adminLoaded === "true") return;
-        growthPanel.dataset.adminLoaded = "true";
-
-        growthPanel.className = "bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-xl shadow-md border border-blue-200 dark:border-indigo-800 p-4 mb-4 relative overflow-hidden transition-all duration-300";
-
-        growthPanel.innerHTML = `
-            <button id="growth-header-btn" class="w-full text-left text-xs font-bold text-indigo-700 dark:text-indigo-400 uppercase tracking-wider flex items-center justify-center focus:outline-none relative">
-                <span class="flex flex-col items-center">${Admin.tileIcon('rocket', 'text-violet-500 dark:text-violet-400')} <span>Growth & Promo</span></span>
-                <svg id="growth-chevron" class="w-4 h-4 transform transition-transform -rotate-90 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
-            </button>
-            
-            <div id="growth-body" class="hidden mt-4">
-                <p class="text-[10px] text-indigo-800 dark:text-indigo-300 font-medium leading-snug mb-4 text-center px-2">Let commuters scan this to instantly open and install the app without typing the URL.</p>
-                <div class="flex flex-col items-center justify-center bg-white p-3 rounded-2xl shadow-sm border border-indigo-100 dark:border-gray-800 w-max mx-auto">
-                    <img src="https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=https://nexttrain.co.za&color=1e3a8a&bgcolor=ffffff" alt="Next Train QR Code" class="w-40 h-40 object-contain rounded-lg">
-                </div>
-                <div class="text-center mt-4 mb-1">
-                    <span class="text-xs font-bold text-indigo-900 dark:text-indigo-100 bg-white/60 dark:bg-black/20 px-4 py-1.5 rounded-full border border-indigo-200 dark:border-indigo-800 shadow-sm">nexttrain.co.za</span>
-                </div>
-            </div>
-        `;
-
-        const header = document.getElementById('growth-header-btn');
-        const body = document.getElementById('growth-body');
-        const chevron = document.getElementById('growth-chevron');
-
-        header.onclick = () => {
-            if (Admin.isGridMode) return; // Prevent accordion action when in grid
-            body.classList.toggle('hidden');
-            if (body.classList.contains('hidden')) {
-                chevron.classList.add('-rotate-90');
-                header.classList.remove('mb-4');
-            } else {
-                chevron.classList.remove('-rotate-90');
-                header.classList.add('mb-4');
-            }
-        };
     },
 
     // --- GROWTH SPRINT PHASE 5: SILENT ROUTING FAILURES TRACKER (DEAD ENDS) ---
@@ -21054,25 +21000,6 @@ const Admin = {
                     </div>
                 </div>
 
-                <!-- Transplanted Growth & Promo -->
-                <div class="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-xl border border-blue-200 dark:border-indigo-800 overflow-hidden shadow-sm transition-all">
-                    <button id="promo-header-btn" class="w-full px-3 py-3 bg-blue-100/50 dark:bg-indigo-900/40 text-left text-[10px] font-black text-indigo-800 dark:text-indigo-300 uppercase tracking-widest flex items-center justify-between focus:outline-none transition-colors hover:bg-blue-200/50 dark:hover:bg-indigo-900/60">
-                        <span class="flex items-center gap-2">
-                            <span class="text-indigo-600 dark:text-indigo-300">${Admin.icon('rocket', 'w-4 h-4')}</span> Growth & Promo
-                        </span>
-                        <svg id="promo-chevron" class="w-4 h-4 transform transition-transform -rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
-                    </button>
-                    <div id="promo-body" class="hidden p-4">
-                        <p class="text-[10px] text-indigo-800 dark:text-indigo-300 font-medium leading-snug mb-4 text-center px-2">Let commuters scan this to instantly open and install the app without typing the URL.</p>
-                        <div class="flex flex-col items-center justify-center bg-white p-3 rounded-2xl shadow-sm border border-indigo-100 dark:border-gray-800 w-max mx-auto">
-                            <img src="https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=https://nexttrain.co.za&color=1e3a8a&bgcolor=ffffff" alt="Next Train QR Code" class="w-40 h-40 object-contain rounded-lg">
-                        </div>
-                        <div class="text-center mt-4 mb-1">
-                            <span class="text-xs font-bold text-indigo-900 dark:text-indigo-100 bg-white/60 dark:bg-black/20 px-4 py-1.5 rounded-full border border-indigo-200 dark:border-indigo-800 shadow-sm">nexttrain.co.za</span>
-                        </div>
-                    </div>
-                </div>
-
                 <!-- Publish live (GitHub Actions → metrorail-app) -->
                 <div class="bg-emerald-50 dark:bg-emerald-900/20 rounded-xl border border-emerald-200 dark:border-emerald-800 overflow-hidden shadow-sm transition-all">
                     <button type="button" id="deploy-live-header-btn" class="w-full px-3 py-3 bg-emerald-100/50 dark:bg-emerald-900/40 text-left text-[10px] font-black text-emerald-800 dark:text-emerald-300 uppercase tracking-widest flex items-center justify-between focus:outline-none transition-colors hover:bg-emerald-200/50 dark:hover:bg-emerald-900/60">
@@ -21415,9 +21342,6 @@ const Admin = {
         const deployRefreshBtn = document.getElementById('deploy-status-refresh-btn');
         const deployRunLink = document.getElementById('deploy-github-run-link');
 
-        const promoHeader = document.getElementById('promo-header-btn');
-        const promoBody = document.getElementById('promo-body');
-        const promoChevron = document.getElementById('promo-chevron');
         const banModeSelect = document.getElementById('shadow-ban-default-mode');
         const banModeSave = document.getElementById('shadow-ban-default-save');
         const banDefaultHeader = document.getElementById('shadow-ban-default-header');
@@ -21656,14 +21580,6 @@ const Admin = {
                 deployLiveBody.classList.toggle('hidden');
                 if (deployLiveBody.classList.contains('hidden')) deployLiveChevron?.classList.add('-rotate-90');
                 else deployLiveChevron?.classList.remove('-rotate-90');
-            };
-        }
-
-        if (promoHeader) {
-            promoHeader.onclick = () => {
-                promoBody.classList.toggle('hidden');
-                if (promoBody.classList.contains('hidden')) promoChevron.classList.add('-rotate-90');
-                else promoChevron.classList.remove('-rotate-90');
             };
         }
 

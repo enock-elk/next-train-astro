@@ -26,7 +26,7 @@ import { planUnifiedTrip, extractTrainSheetStops } from './planner-core.js';
 import { trainSheetOperatingLabel } from './live-board.js';
 import { saturdayNoServiceCopy, buildSaturdayAdvisoryCopy, stationDisplayName } from './saturday-service.js';
 import { buildPlannerShareUrl, buildRouteShareUrl, parsePlannerDeepLink, stripShareParamsFromUrl, compactTime, isSeoAppHandoff } from './share-links.js';
-import { consumeShareDeeplinkSnapshot, peekShareDeeplinkSnapshot } from './deeplink.js';
+import { consumeShareDeeplinkSnapshot, peekShareDeeplinkSnapshot, armSlowDeeplinkToast, lockShareBoot } from './deeplink.js';
 import { ensureRoutePinnedForRegion, loadAllSchedules } from './logic.js';
 import { showToast, switchTab, triggerHaptic, openSmoothModal, closeSmoothModal, unlockBackgroundScroll } from './ui.js';
 import {
@@ -4605,7 +4605,8 @@ export async function applyPlannerDeepLink() {
     // Only clear snapshot when it was ours (leave route snaps for applyRouteDeepLink)
     if (snap && snap.kind === 'planner') consumeShareDeeplinkSnapshot();
 
-    showToast('Opening shared link...', 'info', 5000);
+    lockShareBoot();
+    const slowToast = armSlowDeeplinkToast('Still opening this link');
 
     if (safeStorage.getItem('welcomeSeen') !== 'true') {
         safeStorage.setItem('welcomeSeen', 'true');
@@ -4619,107 +4620,150 @@ export async function applyPlannerDeepLink() {
         : ($userRegion.get() || 'GP');
     const pinned = ensureRoutePinnedForRegion(targetRegion);
     if (!pinned) {
+        slowToast.cancel();
         showToast('Could not load trip data for this region.', 'error');
         stripShareParamsFromUrl();
         return false;
     }
 
-    // Paint-first: start schedule load but open planner immediately; poll for stations
-    // instead of awaiting the full Firebase → CF → GitHub waterfall (~15s on 3G).
-    const loadPromise = loadAllSchedules(true).catch(() => {});
+    // Paint-first: open the planner immediately. A warm station list plans in this turn.
+    // Cache / the bundled dump fill the list without waiting for the network waterfall.
+    const loadPromise = loadAllSchedules(false).catch(() => {});
 
     if (typeof switchTab === 'function') switchTab('trip-planner');
     else if (typeof window.switchTab === 'function') window.switchTab('trip-planner');
 
     stripShareParamsFromUrl();
 
+    const revealSearching = () => {
+        const resultsContainer = document.getElementById('planner-results-list');
+        if (resultsContainer && !document.getElementById('planner-spinner-text')) {
+            resultsContainer.innerHTML = `
+            <div class="min-h-[400px] flex flex-col justify-center items-center text-center p-4">
+                <svg class="w-10 h-10 animate-spin mx-auto text-blue-500 mb-4" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                <div id="planner-spinner-text" class="text-sm font-bold text-gray-600 dark:text-gray-400 animate-pulse">Searching all possible routes...</div>
+            </div>`;
+        }
+        document.getElementById('planner-input-section')?.classList.add('hidden');
+        document.getElementById('planner-results-section')?.classList.remove('hidden');
+    };
+
     return await new Promise((resolve) => {
+        let settled = false;
+        let unsub = () => {};
         let attempts = 0;
-        const maxAttempts = 30; // SPA: 20 × 500ms; allow a bit more for cold cache
-        const checkReady = setInterval(() => {
-            attempts += 1;
-            // Re-pin + reload if a race cleared the route / station list
-            if (attempts === 1 || attempts % 4 === 0) {
-                ensureRoutePinnedForRegion(targetRegion);
-                if (!getMasterStationList()?.length) {
-                    loadPromise.then(() => {
-                        if (!getMasterStationList()?.length) {
-                            loadAllSchedules(true).catch(() => {});
+        const maxAttempts = 48;
+        let checkReady = 0;
+        let giveUp = 0;
+        const finish = (ok) => {
+            if (settled) return;
+            settled = true;
+            clearInterval(checkReady);
+            clearTimeout(giveUp);
+            try { unsub(); } catch { /* ignore */ }
+            slowToast.cancel();
+            resolve(ok);
+        };
+        const tryPlan = () => {
+            if (settled) return false;
+            const list = getMasterStationList();
+            if (!list || !list.length) return false;
+            const fromId = resolvePlannerStationInput(link.from, list);
+            const toId = resolvePlannerStationInput(link.to, list);
+            if (!fromId || !toId) {
+                if (attempts < maxAttempts) return false;
+                showToast('Could not resolve stations for shared trip.', 'error');
+                finish(false);
+                return false;
+            }
+
+            const fromSelect = document.getElementById('planner-from');
+            const toSelect = document.getElementById('planner-to');
+            const fromInput = document.getElementById('planner-from-search');
+            const toInput = document.getElementById('planner-to-search');
+            if (fromSelect) fromSelect.value = fromId;
+            if (toSelect) toSelect.value = toId;
+            if (fromInput) {
+                fromInput.value = plannerStationDisplayName(fromId);
+                fromInput.dataset.resolvedValue = fromId;
+            }
+            if (toInput) {
+                toInput.value = plannerStationDisplayName(toId);
+                toInput.dataset.resolvedValue = toId;
+            }
+
+            if (link.day) {
+                selectedPlannerDay = link.day;
+                const mainDayDisplay = document.getElementById('main-day-display');
+                const headerDayDisplay = document.getElementById('header-day-display');
+                const mainTxt = link.day === 'weekday' ? 'Weekday (Mon-Fri)'
+                    : (link.day === 'saturday' ? 'Saturday / Public Holiday' : 'Sunday');
+                const headerTxt = link.day === 'weekday' ? 'Weekday'
+                    : (link.day === 'saturday' ? 'Saturday' : 'Sunday');
+                if (mainDayDisplay) mainDayDisplay.textContent = mainTxt;
+                if (headerDayDisplay) headerDayDisplay.textContent = headerTxt;
+                const mList = document.getElementById('main-day-list');
+                if (mList) {
+                    mList.querySelectorAll('li').forEach((li) => {
+                        li.classList.remove('bg-blue-50', 'dark:bg-gray-700', 'text-blue-600', 'dark:text-blue-400');
+                        if (li.textContent?.trim() === mainTxt) {
+                            li.classList.add('bg-blue-50', 'dark:bg-gray-700', 'text-blue-600', 'dark:text-blue-400');
                         }
                     });
                 }
             }
-            const list = getMasterStationList();
-            if (list && list.length > 0) {
-                const fromId = resolvePlannerStationInput(link.from, list);
-                const toId = resolvePlannerStationInput(link.to, list);
-                if (!fromId || !toId) {
-                    if (attempts < maxAttempts) return;
-                    clearInterval(checkReady);
-                    showToast('Could not resolve stations for shared trip.', 'error');
-                    resolve(false);
-                    return;
-                }
-                clearInterval(checkReady);
 
-                const fromSelect = document.getElementById('planner-from');
-                const toSelect = document.getElementById('planner-to');
-                const fromInput = document.getElementById('planner-from-search');
-                const toInput = document.getElementById('planner-to-search');
-                if (fromSelect) fromSelect.value = fromId;
-                if (toSelect) toSelect.value = toId;
-                if (fromInput) {
-                    fromInput.value = plannerStationDisplayName(fromId);
-                    fromInput.dataset.resolvedValue = fromId;
-                }
-                if (toInput) {
-                    toInput.value = plannerStationDisplayName(toId);
-                    toInput.dataset.resolvedValue = toId;
-                }
+            let timeParam = link.time || null;
+            if (timeParam && /^\d{1,2}:\d{2}$/.test(timeParam)) timeParam = `${timeParam}:00`;
 
-                if (link.day) {
-                    selectedPlannerDay = link.day;
-                    const mainDayDisplay = document.getElementById('main-day-display');
-                    const headerDayDisplay = document.getElementById('header-day-display');
-                    const mainTxt = link.day === 'weekday' ? 'Weekday (Mon-Fri)'
-                        : (link.day === 'saturday' ? 'Saturday / Public Holiday' : 'Sunday');
-                    const headerTxt = link.day === 'weekday' ? 'Weekday'
-                        : (link.day === 'saturday' ? 'Saturday' : 'Sunday');
-                    if (mainDayDisplay) mainDayDisplay.textContent = mainTxt;
-                    if (headerDayDisplay) headerDayDisplay.textContent = headerTxt;
-                    const mList = document.getElementById('main-day-list');
-                    if (mList) {
-                        mList.querySelectorAll('li').forEach((li) => {
-                            li.classList.remove('bg-blue-50', 'dark:bg-gray-700', 'text-blue-600', 'dark:text-blue-400');
-                            if (li.textContent?.trim() === mainTxt) {
-                                li.classList.add('bg-blue-50', 'dark:bg-gray-700', 'text-blue-600', 'dark:text-blue-400');
-                            }
-                        });
-                    }
-                }
+            slowToast.cancel();
+            executeTripPlan(fromId, toId, timeParam);
+            showToast('Loaded shared trip plan', 'success');
+            if (typeof window.trackAnalyticsEvent === 'function' && !isSeoAppHandoff(link)) {
+                window.trackAnalyticsEvent('deep_link_open', {
+                    type: 'planner',
+                    from: fromId,
+                    to: toId,
+                    legacy: !!link.legacy,
+                    region_id: link.region || '',
+                });
+            }
+            finish(true);
+            return true;
+        };
 
-                let timeParam = link.time || null;
-                if (timeParam && /^\d{1,2}:\d{2}$/.test(timeParam)) timeParam = `${timeParam}:00`;
+        if (tryPlan()) return;
 
-                executeTripPlan(fromId, toId, timeParam);
-                showToast('Loaded shared trip plan', 'success');
-                if (typeof window.trackAnalyticsEvent === 'function' && !isSeoAppHandoff(link)) {
-                    window.trackAnalyticsEvent('deep_link_open', {
-                        type: 'planner',
-                        from: fromId,
-                        to: toId,
-                        legacy: !!link.legacy,
-                        region_id: link.region || '',
+        revealSearching();
+        unsub = $masterStationList.subscribe(() => { tryPlan(); });
+        if (settled) {
+            try { unsub(); } catch { /* ignore */ }
+            return;
+        }
+
+        checkReady = setInterval(() => {
+            attempts += 1;
+            if (attempts % 4 === 0) {
+                ensureRoutePinnedForRegion(targetRegion);
+                if (!getMasterStationList()?.length) {
+                    loadPromise.then(() => {
+                        if (!settled && !getMasterStationList()?.length) {
+                            loadAllSchedules(false).catch(() => {});
+                        }
                     });
                 }
-                resolve(true);
-            } else if (attempts >= maxAttempts) {
-                clearInterval(checkReady);
-                console.warn('[DeepLink] Timed out waiting for station list.');
-                showToast('Connection timeout: Could not load trip data.', 'error');
-                resolve(false);
             }
-        }, 500);
+            tryPlan();
+        }, 250);
+        giveUp = setTimeout(() => {
+            if (tryPlan()) return;
+            console.warn('[DeepLink] Timed out waiting for station list.');
+            const list = getMasterStationList();
+            showToast(list?.length
+                ? 'Could not resolve stations for shared trip.'
+                : 'Connection timeout: Could not load trip data.', 'error');
+            finish(false);
+        }, 12000);
     });
 }
 

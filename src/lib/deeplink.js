@@ -141,6 +141,36 @@ export function peekShareDeeplinkSnapshot() {
     }
 }
 
+/** Tell a late pin-restore not to replace the corridor this share just opened. */
+export function lockShareBoot() {
+    if (typeof window === 'undefined') return;
+    window.__ntShareBootLock = true;
+}
+
+const SLOW_DEEPLINK_MS = 700;
+
+/**
+ * Dismissable "still working" toast, only if the handoff is still going after a short wait.
+ * Fast cache opens cancel before it appears.
+ */
+export function armSlowDeeplinkToast(message = 'Still opening this link') {
+    const text = String(message || 'Still opening this link');
+    let cancelled = false;
+    const timer = setTimeout(() => {
+        if (cancelled || typeof window === 'undefined') return;
+        if (typeof window.showToast === 'function') {
+            window.showToast(text, 'info', 10000, '', { dismissible: true, force: true });
+        }
+    }, SLOW_DEEPLINK_MS);
+    return {
+        cancel() {
+            cancelled = true;
+            clearTimeout(timer);
+            try { window.hideToastIfMessage?.(text); } catch { /* ignore */ }
+        },
+    };
+}
+
 /**
  * Installed PWA uses launch_handler: focus-existing. Chrome delivers the
  * clicked URL via launchQueue — not location.search — on the first open.
@@ -367,6 +397,8 @@ export async function applyLiveTrainDeepLink() {
         : parseLiveTrainDeepLink(location.search);
     if (!link || link.kind !== 'live' || !link.trainId) return false;
     if (snap && snap.kind === 'live') consumeShareDeeplinkSnapshot();
+    lockShareBoot();
+    const slowToast = armSlowDeeplinkToast('Still opening this link');
 
     if (safeStorage.getItem('welcomeSeen') !== 'true') {
         safeStorage.setItem('welcomeSeen', 'true');
@@ -391,6 +423,7 @@ export async function applyLiveTrainDeepLink() {
         const ride = await import('./ride-pings.js');
         share = await ride.findLiveTrainShare(link.trainId, link.routeId || '');
     } catch { /* treat as stopped */ }
+    slowToast.cancel();
 
     if (share.status !== 'live') {
         clearLiveTrainFollow();
@@ -461,9 +494,7 @@ export async function applyMapDeepLink() {
     if (!link || link.kind !== 'map') return false;
     if (snap && snap.kind === 'map') consumeShareDeeplinkSnapshot();
 
-    if (typeof window.showToast === 'function') {
-        window.showToast('Opening shared link...', 'info', 5000);
-    }
+    const slowToast = armSlowDeeplinkToast('Still opening this link');
 
     if (safeStorage.getItem('welcomeSeen') !== 'true') {
         safeStorage.setItem('welcomeSeen', 'true');
@@ -508,11 +539,19 @@ export async function applyMapDeepLink() {
         return true;
     };
 
-    if (openTab()) return true;
+    if (openTab()) {
+        slowToast.cancel();
+        return true;
+    }
     // Modal markup may still be mounting on cold start
-    if (openModal()) return true;
+    if (openModal()) {
+        slowToast.cancel();
+        return true;
+    }
     await new Promise((r) => setTimeout(r, 120));
-    return openTab() || openModal();
+    const opened = openTab() || openModal();
+    slowToast.cancel();
+    return opened;
 }
 
 export function bindDeeplinkHashChange() {

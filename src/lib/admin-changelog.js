@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_10.11.11': [
+        'A tap on the blurred edge closes a partial sheet (date picker, Select Route, full train sheet, fare, and the same kind of dialog). Select Route stays up until a corridor is chosen. Planner and timetable share links paint from the saved timetable instead of waiting for a full reload, and a dismissable toast appears only when that open is still working. System Control no longer includes Growth and Promo. No commuter What’s New. forceShow stays false.',
+    ],
     'V9_10.11.10': [
         'Account sheets (points, name, passenger type, badge, and a share) each take a back step, so Back returns to the screen that opened them. Sign out is a row on the identity card. The account circle uses the Google or Facebook picture when that sign-in has one. Opening Share your trip lists the train, route, duration, and stations. Alerts header Close is an X, and the header uses the chrome colour so it separates from the cards. No commuter What’s New. forceShow stays false.',
     ],

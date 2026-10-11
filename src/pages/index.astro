@@ -322,6 +322,10 @@ const faqLd = {
 
     hydrateStores();
     restorePinnedSession().then((pinned) => {
+        if (window.__ntShareBootLock) {
+            revealWhenBoardReady();
+            return;
+        }
         if (pinned?.userRegion) $userRegion.set(pinned.userRegion);
         const region = $userRegion.get() || 'GP';
         const savedDefault = safeStorage.getItem('defaultRoute_' + region);

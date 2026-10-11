@@ -10,6 +10,8 @@ import {
     journeyPositionLabel,
     alignBearingToJourney,
     railPathForTrain,
+    listTrainsInWindow,
+    liveMapTrainBan,
 } from '../src/lib/train-ghosts.js';
 import {
     closestPointOnPath,
@@ -53,6 +55,7 @@ import {
     RIDE_INTERPOLATION_MAX_MS,
 } from '../src/lib/gps-freshness.js';
 import { refineMotionFix, confirmStationaryWatchTick, reusableGeoFix, locateFixOrLast, GEO_REUSE_MAX_AGE_MS } from '../src/lib/geo-watch.js';
+import { $globalExclusions } from '../src/store.js';
 import {
     applyMotionFusionToFix,
     classifyMotion,
@@ -909,6 +912,64 @@ assert(expiredReportsFromToday([staleToday], { nowMs: curfewMs }).length === 0, 
     assert(formatGpsPingAge(now - 5000, now) === '5 sec', 'sub-minute GPS age keeps seconds');
     assert(formatGpsPingAge(now - 65000, now) === '1m 5 sec', 'GPS age after a minute still shows seconds');
     assert(formatLastSeenWithPingClock('PRETORIA', now) === `Last seen PRETORIA - ${clock}`, 'Last seen includes the ping clock');
+}
+
+{
+    const at = Date.now();
+    const ping = (trainId, extra = {}) => ({
+        deviceId: extra.deviceId || `dev-${trainId}`,
+        routeId: 'pta-pien',
+        trainId,
+        station: 'MIDDLE',
+        coarseLat: -25.1,
+        coarseLng: 28.1,
+        projectedLat: -25,
+        projectedLng: 28.01,
+        projectedProgress: 1,
+        acceptedAt: at,
+        at,
+        expiresAt: at + 600000,
+        trackingState: TRACKING_STATE.ACTIVE,
+        ...extra,
+    });
+    const prevWindow = globalThis.window;
+    globalThis.window = { currentDayIndex: 1 };
+    $globalExclusions.set({
+        'pta-pien': {
+            '0619': { type: 'banned', days: [1, 5] },
+            '0701': { type: 'special', days: [1] },
+        },
+    });
+    const schedule = {
+        headers: ['STATION', '0619', '0701', '0802'],
+        rows: [
+            { STATION: 'A', '0619': '08:00:00', '0701': '08:05:00', '0802': '08:10:00' },
+            { STATION: 'B', '0619': '08:30:00', '0701': '08:35:00', '0802': '08:40:00' },
+        ],
+    };
+    const monday = listTrainsInWindow(8 * 3600, { routeId: 'pta-pien', dayIdx: 1, schedules: [schedule] });
+    assert(!monday.includes('0619'), 'a Monday ban hides 0619 from live tracking');
+    assert(monday.includes('0701'), 'a special train stays in live tracking');
+    assert(monday.includes('0802'), 'a train with no ban stays in live tracking');
+    const tuesday = listTrainsInWindow(8 * 3600, { routeId: 'pta-pien', dayIdx: 2, schedules: [schedule] });
+    assert(tuesday.includes('0619'), '0619 returns on Tuesday when the ban is Mon and Fri');
+    assert(liveMapTrainBan('0701', 'pta-pien', { dayIdx: 1 }) === false, 'special is not a map ban');
+    const markers = await compactPingsForMap([
+        ping('0619'),
+        ping('0701'),
+        ping('0802', { trainStatus: TRAIN_STATUS.CANCELLED }),
+    ], { mineDeviceId: 'observer', routeId: 'pta-pien' });
+    const markerIds = markers.map((m) => m.trainId);
+    assert(!markerIds.includes('0619'), 'map hides a train banned today');
+    assert(markerIds.includes('0701'), 'map shows a special train');
+    assert(!markerIds.includes('0802'), 'map hides a cancelled share');
+    const own = await compactPingsForMap([
+        ping('0619', { deviceId: 'operator', adminOverrideRole: 'train' }),
+    ], { mineDeviceId: 'operator', routeId: 'pta-pien' });
+    assert(own.length === 1 && own[0].trainId === '0619', 'operator test of a banned train stays on that phone');
+    $globalExclusions.set({});
+    if (prevWindow === undefined) delete globalThis.window;
+    else globalThis.window = prevWindow;
 }
 
 if (failures.length) {

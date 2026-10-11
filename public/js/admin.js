@@ -3288,34 +3288,34 @@ const Admin = {
             
             const metricBoxes = telBody.querySelectorAll('.grid > div');
             metricBoxes.forEach(box => {
-                box.className = "bg-slate-50 dark:bg-slate-800/50 p-3 rounded-lg border border-slate-200 dark:border-slate-700 flex flex-col items-center justify-center shadow-sm transition-colors";
+                box.className = "bg-gray-50 dark:bg-gray-800/50 p-3 rounded-lg border border-gray-200 dark:border-gray-700 flex flex-col items-center justify-center shadow-sm transition-colors";
                 const label = box.querySelector('span:first-child');
                 const value = box.querySelector('span:last-child');
                 
                 // GUARDIAN: Identify the "Today" tile to make it interactive for Regional Breakdown
                 if (value && value.id === 'stat-today') {
-                    box.classList.add('cursor-pointer', 'hover:border-indigo-400', 'dark:hover:border-indigo-500', 'hover:shadow-md');
+                    box.classList.add('cursor-pointer', 'border-blue-300', 'dark:border-blue-400', 'hover:shadow-md');
                     box.title = "View Regional Breakdown";
                     box.onclick = () => Admin.openRegionalModal();
                 }
 
-                if (label) label.className = "text-[10px] text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider mb-1";
+                if (label) label.className = "text-[10px] text-gray-500 dark:text-gray-400 font-bold uppercase tracking-wider mb-1";
                 // No permanent pulse on Today / WAU - only refreshTelemetry adds a short loading pulse
-                if (value) value.className = "text-2xl font-black text-slate-800 dark:text-slate-200";
+                if (value) value.className = "text-2xl font-black text-gray-800 dark:text-gray-200";
             });
 
             const errorBox = telBody.querySelector('.bg-red-50') || telBody.querySelector('#stat-errors')?.closest('div');
             if (errorBox) {
-                errorBox.className = "bg-slate-50 dark:bg-slate-800/80 p-3 rounded-lg border border-slate-200 dark:border-slate-700 flex items-center justify-between shadow-sm mt-3 transition-colors cursor-pointer hover:border-red-400 dark:hover:border-red-500 hover:shadow-md";
+                errorBox.className = "bg-gray-50 dark:bg-gray-800/80 p-3 rounded-lg border border-gray-200 dark:border-gray-700 flex items-center justify-between shadow-sm mt-3 transition-colors cursor-pointer hover:border-blue-400 dark:hover:border-blue-500 hover:shadow-md";
                 errorBox.title = 'System / Sentry diagnostic errors (24h). Distress/help lives under Crash Analytics.';
                 errorBox.onclick = () => Admin.openDiagnosticErrorsModal();
                 const label = errorBox.querySelector('span:first-child');
                 const value = errorBox.querySelector('span:last-child');
                 if (label) {
-                    label.className = "text-[10px] text-slate-600 dark:text-slate-400 font-bold uppercase tracking-wider flex items-center";
+                    label.className = "text-[10px] text-gray-600 dark:text-gray-400 font-bold uppercase tracking-wider flex items-center";
                     label.innerHTML = `<span class="mr-1.5 inline-flex text-amber-500">${Admin.icon('alert', 'w-4 h-4')}</span> SYSTEM ERRORS 24H`;
                 }
-                if (value) value.className = "text-lg font-black text-slate-800 dark:text-slate-200";
+                if (value) value.className = "text-lg font-black text-gray-800 dark:text-gray-200";
             }
             
             // GUARDIAN FIX: Removed the regex SVG-replacement block here to allow the native emoji to display.
@@ -3325,24 +3325,24 @@ const Admin = {
         if (telBody && !document.getElementById('tel-export-btn')) {
             // GROWTH SPRINT PHASE 6 & 8: Fully Dynamic SVG Line Graph & Range Toggles
             const trendWrapper = document.createElement('div');
-            trendWrapper.className = "mt-4 border-t border-slate-200 dark:border-slate-700 pt-3";
+            trendWrapper.className = "mt-4 border-t border-gray-200 dark:border-gray-700 pt-3";
             trendWrapper.innerHTML = `
                 <div class="flex items-center justify-between mb-2 px-1">
-                    <button id="trend-cycle-btn" class="text-[10px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-widest focus:outline-none hover:text-blue-600 dark:hover:text-blue-400 transition-colors bg-slate-100 dark:bg-slate-800 px-2 py-1.5 rounded flex items-center shadow-sm border border-slate-200 dark:border-slate-700">
+                    <button id="trend-cycle-btn" class="text-[10px] font-bold text-gray-600 dark:text-gray-300 uppercase tracking-widest focus:outline-none hover:text-blue-600 dark:hover:text-blue-400 transition-colors bg-gray-100 dark:bg-gray-800 px-2 py-1.5 rounded flex items-center shadow-sm border border-gray-200 dark:border-gray-700">
                         <svg class="w-3.5 h-3.5 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z"></path></svg>
                         <span>${Admin.telemetryRange} Trend</span>
                     </button>
                     <div class="flex space-x-2">
-                        <button id="trend-expand-btn" class="text-sm text-slate-400 hover:text-blue-500 transition-colors focus:outline-none px-1" title="Full Screen">
+                        <button id="trend-expand-btn" class="text-sm text-gray-400 hover:text-blue-500 transition-colors focus:outline-none px-1" title="Full Screen">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"></path></svg>
                         </button>
-                        <button id="trend-inline-export-btn" class="text-sm text-slate-400 hover:text-blue-500 transition-colors focus:outline-none px-1" title="Export">
+                        <button id="trend-inline-export-btn" class="text-sm text-gray-400 hover:text-blue-500 transition-colors focus:outline-none px-1" title="Export">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
                         </button>
                     </div>
                 </div>
-                <div id="tel-trend-container" class="h-28 bg-white dark:bg-gray-900 rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden flex items-center justify-center cursor-pointer hover:border-blue-300 dark:hover:border-blue-700 transition-colors">
-                    <span class="text-xs text-slate-400 italic">Loading Graph...</span>
+                <div id="tel-trend-container" class="h-28 bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden flex items-center justify-center cursor-pointer hover:border-blue-300 dark:hover:border-blue-700 transition-colors">
+                    <span class="text-xs text-gray-400 italic">Loading Graph...</span>
                 </div>
             `;
             telBody.appendChild(trendWrapper);
@@ -3358,31 +3358,31 @@ const Admin = {
                 chartPanel.className = 'bg-gray-50 dark:bg-gray-900 min-h-[calc(100dvh-5.5rem)] h-[calc(100dvh-5.5rem)] landscape:min-h-[calc(100dvh-4.5rem)] landscape:h-[calc(100dvh-4.5rem)]';
                 chartPanel.innerHTML = `
                     <button id="telemetry-chart-header-btn" class="hidden" type="button"><span>Analytics Trends</span></button>
-                    <div id="telemetry-chart-body" class="h-full min-h-0 flex flex-col overflow-hidden bg-white dark:bg-gray-800 border border-slate-200 dark:border-slate-700 rounded-xl">
-                        <div class="p-2 sm:p-3 border-b border-slate-200 dark:border-slate-700 flex flex-wrap justify-between items-center gap-2 bg-slate-50 dark:bg-slate-900 shrink-0">
-                            <button id="analytics-trend-cycle" class="px-3 py-1.5 rounded-lg bg-white dark:bg-gray-800 text-slate-700 dark:text-slate-200 hover:bg-blue-50 dark:hover:bg-gray-700 transition-colors focus:outline-none text-[10px] font-bold uppercase tracking-widest border border-slate-200 dark:border-slate-700 shadow-sm flex items-center">
+                    <div id="telemetry-chart-body" class="h-full min-h-0 flex flex-col overflow-hidden bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl">
+                        <div class="p-2 sm:p-3 border-b border-gray-200 dark:border-gray-700 flex flex-wrap justify-between items-center gap-2 bg-gray-50 dark:bg-gray-900 shrink-0">
+                            <button id="analytics-trend-cycle" class="px-3 py-1.5 rounded-lg bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 hover:bg-blue-50 dark:hover:bg-gray-700 transition-colors focus:outline-none text-[10px] font-bold uppercase tracking-widest border border-gray-200 dark:border-gray-700 shadow-sm flex items-center">
                                 <svg class="w-3.5 h-3.5 mr-1.5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z"></path></svg>
                                 <span>${Admin.telemetryRange}</span>
                             </button>
                             <div class="flex items-center space-x-2">
-                                <button id="analytics-trend-compare-btn" class="p-2 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-slate-700 transition-colors focus:outline-none" title="Compare Previous Period" aria-label="Compare previous period">
+                                <button id="analytics-trend-compare-btn" class="p-2 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-gray-700 transition-colors focus:outline-none" title="Compare Previous Period" aria-label="Compare previous period">
                                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
                                 </button>
-                                <button id="analytics-trend-export" class="p-2 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-blue-100 dark:hover:bg-slate-700 transition-colors focus:outline-none" title="Export Chart" aria-label="Export chart">
+                                <button id="analytics-trend-export" class="p-2 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-blue-100 dark:hover:bg-gray-700 transition-colors focus:outline-none" title="Export Chart" aria-label="Export chart">
                                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
                                 </button>
                             </div>
                         </div>
-                        <div id="analytics-pagination-controls" class="p-2 bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 flex justify-center items-center space-x-4 shrink-0 shadow-inner">
-                            <button id="analytics-trend-prev" class="w-8 h-8 rounded-full bg-white dark:bg-gray-800 shadow border border-slate-200 dark:border-slate-600 flex items-center justify-center text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 focus:outline-none transition-transform active:scale-95" aria-label="Previous period"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg></button>
-                            <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest w-24 text-center">Navigate</span>
-                            <button id="analytics-trend-next" class="w-8 h-8 rounded-full bg-white dark:bg-gray-800 shadow border border-slate-200 dark:border-slate-600 flex items-center justify-center text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 focus:outline-none transition-transform active:scale-95 disabled:opacity-30" aria-label="Next period"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg></button>
+                        <div id="analytics-pagination-controls" class="p-2 bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 flex justify-center items-center space-x-4 shrink-0 shadow-inner">
+                            <button id="analytics-trend-prev" class="w-8 h-8 rounded-full bg-white dark:bg-gray-800 shadow border border-gray-200 dark:border-gray-600 flex items-center justify-center text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none transition-transform active:scale-95" aria-label="Previous period"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg></button>
+                            <span class="text-[10px] font-bold text-gray-500 uppercase tracking-widest w-24 text-center">Navigate</span>
+                            <button id="analytics-trend-next" class="w-8 h-8 rounded-full bg-white dark:bg-gray-800 shadow border border-gray-200 dark:border-gray-600 flex items-center justify-center text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none transition-transform active:scale-95 disabled:opacity-30" aria-label="Next period"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg></button>
                         </div>
                         <div class="flex-grow p-2 sm:p-4 landscape:p-2 flex flex-col items-center justify-center relative bg-white dark:bg-gray-800 min-h-0 overflow-hidden">
                             <div id="analytics-chart-svg-container" class="w-full flex-1 min-h-0 mb-2 landscape:mb-0"></div>
                             <div class="text-center shrink-0 pb-2 landscape:pb-0">
-                                <h3 class="text-base sm:text-xl font-black text-slate-900 dark:text-white tracking-tight leading-none" id="analytics-trend-title">Loading...</h3>
-                                <p class="text-[10px] text-slate-500 uppercase tracking-widest font-bold mt-1">Live Analytics Engine</p>
+                                <h3 class="text-base sm:text-xl font-black text-gray-900 dark:text-white tracking-tight leading-none" id="analytics-trend-title">Loading...</h3>
+                                <p class="text-[10px] text-gray-500 uppercase tracking-widest font-bold mt-1">Live Analytics Engine</p>
                             </div>
                         </div>
                     </div>
@@ -3400,11 +3400,11 @@ const Admin = {
                     compareBtn.onclick = () => {
                         Admin.isComparing = !Admin.isComparing;
                         if (Admin.isComparing) {
-                            compareBtn.classList.replace('text-slate-400', 'text-blue-600');
-                            compareBtn.classList.replace('dark:bg-slate-800', 'dark:bg-slate-700');
+                            compareBtn.classList.replace('text-gray-400', 'text-blue-600');
+                            compareBtn.classList.replace('dark:bg-gray-800', 'dark:bg-gray-700');
                         } else {
-                            compareBtn.classList.replace('text-blue-600', 'text-slate-400');
-                            compareBtn.classList.replace('dark:bg-slate-700', 'dark:bg-slate-800');
+                            compareBtn.classList.replace('text-blue-600', 'text-gray-400');
+                            compareBtn.classList.replace('dark:bg-gray-700', 'dark:bg-gray-800');
                         }
                         Admin.refreshTelemetry();
                     };
@@ -3417,19 +3417,19 @@ const Admin = {
                 regionModal.id = 'telemetry-region-modal';
                 regionModal.className = 'fixed inset-0 bg-black/90 z-[160] hidden flex items-center justify-center p-4 backdrop-blur-md transition-opacity duration-300';
                 regionModal.innerHTML = `
-                    <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-sm flex flex-col transform transition-all scale-95 border border-slate-200 dark:border-slate-700">
-                        <div class="p-4 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center bg-slate-50 dark:bg-slate-900 rounded-t-2xl shrink-0">
-                            <h3 class="text-lg font-black text-slate-900 dark:text-white flex items-center tracking-tight">
+                    <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-sm flex flex-col transform transition-all scale-95 border border-gray-200 dark:border-gray-700">
+                        <div class="p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center bg-gray-50 dark:bg-gray-900 rounded-t-2xl shrink-0">
+                            <h3 class="text-lg font-black text-gray-900 dark:text-white flex items-center tracking-tight">
                                 <span class="mr-2 inline-flex">${Admin.icon('globe', 'w-4 h-4')}</span> Regional Breakdown
                             </h3>
-                            <button onclick="closeSmoothModal('telemetry-region-modal'); if(location.hash === '#region-breakdown') history.replaceState({ adminPanel: 'telemetry-panel' }, '', '#dev-telemetry-panel');" class="p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500 transition-colors focus:outline-none">
+                            <button onclick="closeSmoothModal('telemetry-region-modal'); if(location.hash === '#region-breakdown') history.replaceState({ adminPanel: 'telemetry-panel' }, '', '#dev-telemetry-panel');" class="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-500 transition-colors focus:outline-none">
                                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
                             </button>
                         </div>
                         <div class="p-5 flex-grow bg-white dark:bg-gray-800 rounded-b-2xl">
-                            <p id="region-metric-label" class="text-center text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Users and sessions by region on the hit</p>
-                            <p id="region-today-total" class="text-center text-xs font-black text-slate-800 dark:text-slate-200 mb-1">People today: --</p>
-                            <p id="region-today-sessions" class="text-center text-[10px] font-bold text-slate-500 mb-4">Sessions today: --</p>
+                            <p id="region-metric-label" class="text-center text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1">Users and sessions by region on the hit</p>
+                            <p id="region-today-total" class="text-center text-xs font-black text-gray-800 dark:text-gray-200 mb-1">People today: --</p>
+                            <p id="region-today-sessions" class="text-center text-[10px] font-bold text-gray-500 mb-4">Sessions today: --</p>
                             <div class="grid grid-cols-2 gap-3 mb-3">
                                 <div class="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg border border-blue-100 dark:border-blue-800/50 flex flex-col items-center justify-center shadow-sm">
                                     <span class="text-[10px] text-blue-600 dark:text-blue-400 font-bold uppercase tracking-wider mb-1">Gauteng</span>
@@ -3437,37 +3437,37 @@ const Admin = {
                                     <span class="text-[9px] font-bold uppercase tracking-wider text-blue-600/80 dark:text-blue-300/70">users</span>
                                     <span id="region-sess-gp" class="text-[9px] font-bold text-blue-500/80 dark:text-blue-300/70 mt-0.5">-- sessions</span>
                                 </div>
-                                <div class="bg-green-50 dark:bg-green-900/20 p-3 rounded-lg border border-green-100 dark:border-green-800/50 flex flex-col items-center justify-center shadow-sm">
-                                    <span class="text-[10px] text-green-600 dark:text-green-400 font-bold uppercase tracking-wider mb-1">Western Cape</span>
-                                    <span id="region-stat-wc" class="text-2xl font-black text-green-700 dark:text-green-300">--</span>
-                                    <span class="text-[9px] font-bold uppercase tracking-wider text-green-600/80 dark:text-green-300/70">users</span>
-                                    <span id="region-sess-wc" class="text-[9px] font-bold text-green-500/80 dark:text-green-300/70 mt-0.5">-- sessions</span>
+                                <div class="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg border border-blue-100 dark:border-blue-800/50 flex flex-col items-center justify-center shadow-sm">
+                                    <span class="text-[10px] text-blue-600 dark:text-blue-400 font-bold uppercase tracking-wider mb-1">Western Cape</span>
+                                    <span id="region-stat-wc" class="text-2xl font-black text-blue-700 dark:text-blue-300">--</span>
+                                    <span class="text-[9px] font-bold uppercase tracking-wider text-blue-600/80 dark:text-blue-300/70">users</span>
+                                    <span id="region-sess-wc" class="text-[9px] font-bold text-blue-500/80 dark:text-blue-300/70 mt-0.5">-- sessions</span>
                                 </div>
-                                <div class="bg-orange-50 dark:bg-orange-900/20 p-3 rounded-lg border border-orange-100 dark:border-orange-800/50 flex flex-col items-center justify-center shadow-sm">
-                                    <span class="text-[10px] text-orange-600 dark:text-orange-400 font-bold uppercase tracking-wider mb-1">KwaZulu-Natal</span>
-                                    <span id="region-stat-kzn" class="text-2xl font-black text-orange-700 dark:text-orange-300">--</span>
-                                    <span class="text-[9px] font-bold uppercase tracking-wider text-orange-600/80 dark:text-orange-300/70">users</span>
-                                    <span id="region-sess-kzn" class="text-[9px] font-bold text-orange-500/80 dark:text-orange-300/70 mt-0.5">-- sessions</span>
+                                <div class="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg border border-blue-100 dark:border-blue-800/50 flex flex-col items-center justify-center shadow-sm">
+                                    <span class="text-[10px] text-blue-600 dark:text-blue-400 font-bold uppercase tracking-wider mb-1">KwaZulu-Natal</span>
+                                    <span id="region-stat-kzn" class="text-2xl font-black text-blue-700 dark:text-blue-300">--</span>
+                                    <span class="text-[9px] font-bold uppercase tracking-wider text-blue-600/80 dark:text-blue-300/70">users</span>
+                                    <span id="region-sess-kzn" class="text-[9px] font-bold text-blue-500/80 dark:text-blue-300/70 mt-0.5">-- sessions</span>
                                 </div>
-                                <div class="bg-purple-50 dark:bg-purple-900/20 p-3 rounded-lg border border-purple-100 dark:border-purple-800/50 flex flex-col items-center justify-center shadow-sm">
-                                    <span class="text-[10px] text-purple-600 dark:text-purple-400 font-bold uppercase tracking-wider mb-1">Eastern Cape</span>
-                                    <span id="region-stat-ec" class="text-2xl font-black text-purple-700 dark:text-purple-300">--</span>
-                                    <span class="text-[9px] font-bold uppercase tracking-wider text-purple-600/80 dark:text-purple-300/70">users</span>
-                                    <span id="region-sess-ec" class="text-[9px] font-bold text-purple-500/80 dark:text-purple-300/70 mt-0.5">-- sessions</span>
+                                <div class="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg border border-blue-100 dark:border-blue-800/50 flex flex-col items-center justify-center shadow-sm">
+                                    <span class="text-[10px] text-blue-600 dark:text-blue-400 font-bold uppercase tracking-wider mb-1">Eastern Cape</span>
+                                    <span id="region-stat-ec" class="text-2xl font-black text-blue-700 dark:text-blue-300">--</span>
+                                    <span class="text-[9px] font-bold uppercase tracking-wider text-blue-600/80 dark:text-blue-300/70">users</span>
+                                    <span id="region-sess-ec" class="text-[9px] font-bold text-blue-500/80 dark:text-blue-300/70 mt-0.5">-- sessions</span>
                                 </div>
                             </div>
-                            <div class="bg-slate-50 dark:bg-slate-800/50 p-3 rounded-lg border border-slate-200 dark:border-slate-700 flex items-center justify-between shadow-sm mt-1 mb-3">
-                                <span id="region-stat-other-label" class="text-[10px] text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider flex items-center">No region on the hit</span>
+                            <div class="bg-gray-50 dark:bg-gray-800/50 p-3 rounded-lg border border-gray-200 dark:border-gray-700 flex items-center justify-between shadow-sm mt-1 mb-3">
+                                <span id="region-stat-other-label" class="text-[10px] text-gray-500 dark:text-gray-400 font-bold uppercase tracking-wider flex items-center">No region on the hit</span>
                                 <div class="text-right">
-                                    <span id="region-stat-other" class="text-lg font-black text-slate-700 dark:text-slate-300">--</span>
-                                    <span class="block text-[9px] font-bold uppercase tracking-wider text-slate-500">users</span>
-                                    <span id="region-sess-other" class="block text-[9px] font-bold text-slate-500">-- sessions</span>
+                                    <span id="region-stat-other" class="text-lg font-black text-gray-700 dark:text-gray-300">--</span>
+                                    <span class="block text-[9px] font-bold uppercase tracking-wider text-gray-500">users</span>
+                                    <span id="region-sess-other" class="block text-[9px] font-bold text-gray-500">-- sessions</span>
                                 </div>
                             </div>
-                            <p id="region-note" class="text-[10px] leading-relaxed text-slate-500 dark:text-slate-400 mb-4">People today and Sessions today are the totals. Each card counts a person, and their sessions, once for every region value on their hits. The cards are not a split of people today.</p>
+                            <p id="region-note" class="text-[10px] leading-relaxed text-gray-500 dark:text-gray-400 mb-4">People today and Sessions today are the totals. Each card counts a person, and their sessions, once for every region value on their hits. The cards are not a split of people today.</p>
                             
                             <!-- GROWTH SPRINT PHASE 12: Pivot to Graph CTA -->
-                            <button id="region-view-graph-btn" class="w-full bg-slate-800 hover:bg-slate-900 dark:bg-slate-700 dark:hover:bg-slate-600 text-white font-bold py-3 rounded-xl shadow-md transition-colors text-xs uppercase tracking-widest focus:outline-none flex items-center justify-center border border-slate-700 dark:border-slate-600">
+                            <button id="region-view-graph-btn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl shadow-md transition-colors text-xs uppercase tracking-widest focus:outline-none flex items-center justify-center">
                                 <svg class="w-4 h-4 mr-2 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z"></path></svg>
                                 View Global Trends
                             </button>
@@ -3638,7 +3638,15 @@ const Admin = {
             : '';
         
         // Colors & Theme Independence (hardcoded hex for perfect exportability)
-        const lineColor = '#3b82f6';
+        const pack = (typeof document !== 'undefined' && document.documentElement.getAttribute('data-colour-pack')) || 'classic';
+        let lineColor = '#3b82f6';
+        if (typeof document !== 'undefined' && typeof getComputedStyle === 'function') {
+            const ink = getComputedStyle(document.documentElement);
+            lineColor = (pack === 'earthy'
+                ? ink.getPropertyValue('--nt-accent')
+                : ink.getPropertyValue('--nt-primary')
+            ).trim() || lineColor;
+        }
         const todayColor = '#f97316';
         const gridColor = '#e5e5ea';
         const labelColor = '#8e8e93';

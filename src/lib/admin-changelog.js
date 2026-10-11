@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_10.11.6': [
+        'Planner results keep a custom date in the day menu. Choosing it opens the date sheet on the results page, and Set travel day searches that date without leaving results. A Weekday check does not throw the date away. The train sheet names the weekdays a train still runs, so a Monday-and-Friday ban reads Tue, Wed, Thu. Live map markers and nearby trains hide a train banned today and a cancelled share. A special train still shows. An operator test of a banned train stays on that phone only. Regional breakdown uses the Gauteng card for every region. Live Telemetry follows the active colour pack. No commuter What’s New. forceShow stays false.',
+    ],
     'V9_10.11.5': [
         'A picked travel day uses that calendar day for train bans. Tuesday is not planned as Monday, so a Monday-and-Friday ban stays off Tuesday, Wednesday, and Thursday. A generic Weekday search only drops a train banned every Mon-Fri, or banned with no day list. The date sheet shows 13 Oct 2026 and the whole row opens the picker. Results show that date in the day control. Closing results puts the searched stations back, and board locate does not replace a From station that is already set. Sunday stays no service. No commuter What’s New. forceShow stays false.',
     ],

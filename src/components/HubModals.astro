@@ -584,37 +584,37 @@ import { withBase } from '../lib/config.js';
                 <svg id="telemetry-chevron" class="w-4 h-4 transform transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
             </button>
             <div id="telemetry-body" class="space-y-3">
-                <div id="telemetry-metrics-tray" class="rounded-2xl bg-slate-100/90 dark:bg-slate-900/50 border border-slate-200/80 dark:border-slate-700/70 p-3">
+                <div id="telemetry-metrics-tray" class="rounded-2xl bg-gray-100/90 dark:bg-gray-900/50 border border-gray-200/80 dark:border-gray-700/70 p-3">
                 <div class="grid grid-cols-2 gap-3">
-                    <div class="bg-green-50 dark:bg-green-900/20 p-3 rounded-lg border border-green-100 dark:border-green-800 flex flex-col items-center justify-center">
-                        <span class="text-[10px] text-green-600 dark:text-green-400 font-bold uppercase tracking-wider mb-1">Last 5 Mins</span>
-                        <span id="stat-5m" class="text-2xl font-black text-green-700 dark:text-green-300 animate-pulse">--</span>
+                    <div class="bg-gray-50 dark:bg-gray-800/50 p-3 rounded-lg border border-gray-200 dark:border-gray-700 flex flex-col items-center justify-center shadow-sm">
+                        <span class="text-[10px] text-gray-500 dark:text-gray-400 font-bold uppercase tracking-wider mb-1">Last 5 Mins</span>
+                        <span id="stat-5m" class="text-2xl font-black text-gray-800 dark:text-gray-200 animate-pulse">--</span>
                     </div>
-                    <div class="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg border border-blue-100 dark:border-blue-800 flex flex-col items-center justify-center">
-                        <span class="text-[10px] text-blue-600 dark:text-blue-400 font-bold uppercase tracking-wider mb-1">Last 30 Mins</span>
-                        <span id="stat-30m" class="text-2xl font-black text-blue-700 dark:text-blue-300 animate-pulse">--</span>
+                    <div class="bg-gray-50 dark:bg-gray-800/50 p-3 rounded-lg border border-gray-200 dark:border-gray-700 flex flex-col items-center justify-center shadow-sm">
+                        <span class="text-[10px] text-gray-500 dark:text-gray-400 font-bold uppercase tracking-wider mb-1">Last 30 Mins</span>
+                        <span id="stat-30m" class="text-2xl font-black text-gray-800 dark:text-gray-200 animate-pulse">--</span>
                     </div>
-                    <div class="bg-indigo-50 dark:bg-indigo-900/20 p-3 rounded-lg border border-indigo-100 dark:border-indigo-800 flex flex-col items-center justify-center">
-                        <span class="text-[10px] text-indigo-600 dark:text-indigo-400 font-bold uppercase tracking-wider mb-1">Today</span>
-                        <span id="stat-today" class="text-2xl font-black text-indigo-700 dark:text-indigo-300 animate-pulse">--</span>
+                    <div class="bg-gray-50 dark:bg-gray-800/50 p-3 rounded-lg border border-blue-300 dark:border-blue-400 flex flex-col items-center justify-center shadow-sm">
+                        <span class="text-[10px] text-gray-500 dark:text-gray-400 font-bold uppercase tracking-wider mb-1">Today</span>
+                        <span id="stat-today" class="text-2xl font-black text-gray-800 dark:text-gray-200 animate-pulse">--</span>
                     </div>
-                    <div class="bg-teal-50 dark:bg-teal-900/20 p-3 rounded-lg border border-teal-100 dark:border-teal-800 flex flex-col items-center justify-center">
-                        <span class="text-[10px] text-teal-600 dark:text-teal-400 font-bold uppercase tracking-wider mb-1">7 Days (WAU)</span>
-                        <span id="stat-weekly" class="text-2xl font-black text-teal-700 dark:text-teal-300 animate-pulse">--</span>
+                    <div class="bg-gray-50 dark:bg-gray-800/50 p-3 rounded-lg border border-gray-200 dark:border-gray-700 flex flex-col items-center justify-center shadow-sm">
+                        <span class="text-[10px] text-gray-500 dark:text-gray-400 font-bold uppercase tracking-wider mb-1">7 Days (WAU)</span>
+                        <span id="stat-weekly" class="text-2xl font-black text-gray-800 dark:text-gray-200 animate-pulse">--</span>
                     </div>
-                    <div class="bg-cyan-50 dark:bg-cyan-900/20 p-3 rounded-lg border border-cyan-100 dark:border-cyan-800 flex flex-col items-center justify-center">
-                        <span class="text-[10px] text-cyan-600 dark:text-cyan-400 font-bold uppercase tracking-wider mb-1">30 Days (MAU)</span>
-                        <span id="stat-monthly" class="text-2xl font-black text-cyan-700 dark:text-cyan-300 animate-pulse">--</span>
+                    <div class="bg-gray-50 dark:bg-gray-800/50 p-3 rounded-lg border border-gray-200 dark:border-gray-700 flex flex-col items-center justify-center shadow-sm">
+                        <span class="text-[10px] text-gray-500 dark:text-gray-400 font-bold uppercase tracking-wider mb-1">30 Days (MAU)</span>
+                        <span id="stat-monthly" class="text-2xl font-black text-gray-800 dark:text-gray-200 animate-pulse">--</span>
                     </div>
-                    <div class="bg-purple-50 dark:bg-purple-900/20 p-3 rounded-lg border border-purple-100 dark:border-purple-800 flex flex-col items-center justify-center">
-                        <span class="text-[10px] text-purple-600 dark:text-purple-400 font-bold uppercase tracking-wider mb-1">All-Time</span>
-                        <span id="stat-alltime" class="text-2xl font-black text-purple-700 dark:text-purple-300 animate-pulse">--</span>
+                    <div class="bg-gray-50 dark:bg-gray-800/50 p-3 rounded-lg border border-gray-200 dark:border-gray-700 flex flex-col items-center justify-center shadow-sm">
+                        <span class="text-[10px] text-gray-500 dark:text-gray-400 font-bold uppercase tracking-wider mb-1">All-Time</span>
+                        <span id="stat-alltime" class="text-2xl font-black text-gray-800 dark:text-gray-200 animate-pulse">--</span>
                     </div>
                 </div>
                 </div>
-                <div class="bg-red-50 dark:bg-red-900/20 p-3 rounded-lg border border-red-100 dark:border-red-800 flex items-center justify-between">
-                    <span class="text-[10px] text-red-600 dark:text-red-400 font-bold uppercase tracking-wider flex items-center"><svg class="w-3.5 h-3.5 mr-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2v2"/><path d="M6 6l-1.5-1.5"/><path d="M18 6l1.5-1.5"/><path d="M5 14a7 7 0 0114 0"/><path d="M4 20h16"/><path d="M9 20v-2a3 3 0 016 0v2"/></svg> System Errors (Today)</span>
-                    <span id="stat-errors" class="text-lg font-black text-red-700 dark:text-red-300 animate-pulse">--</span>
+                <div class="bg-gray-50 dark:bg-gray-800/80 p-3 rounded-lg border border-gray-200 dark:border-gray-700 flex items-center justify-between shadow-sm">
+                    <span class="text-[10px] text-gray-600 dark:text-gray-400 font-bold uppercase tracking-wider flex items-center"><svg class="w-3.5 h-3.5 mr-1 text-amber-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2v2"/><path d="M6 6l-1.5-1.5"/><path d="M18 6l1.5-1.5"/><path d="M5 14a7 7 0 0114 0"/><path d="M4 20h16"/><path d="M9 20v-2a3 3 0 016 0v2"/></svg> System Errors (Today)</span>
+                    <span id="stat-errors" class="text-lg font-black text-gray-800 dark:text-gray-200 animate-pulse">--</span>
                 </div>
             </div>
         </div>

@@ -2,7 +2,7 @@
  * Timetable ghosts — each schedule column is a simulated train.
  * Position is interpolated between the last stop whose clock ≤ now and the next.
  */
-import { $schedules, $globalStationIndex, $userRegion, $fullDatabase } from '../store.js';
+import { $schedules, $globalStationIndex, $userRegion, $fullDatabase, $globalExclusions, $currentRouteId } from '../store.js';
 import { ROUTES } from './config.js';
 import {
     normalizeStationName,
@@ -10,6 +10,7 @@ import {
     isRealTime,
     scheduleCacheSlot,
     getDistanceFromLatLonInKm,
+    exclusionAppliesToSurface,
 } from './utils.js';
 import { closestPointOnPath, paintedPathForRoute, smoothPathFromStops } from './rail-tracks.js';
 
@@ -36,6 +37,33 @@ function currentClock() {
 function currentDayType() {
     if (typeof window !== 'undefined' && window.currentDayType) return window.currentDayType;
     return 'weekday';
+}
+
+function liveMapDayIndex(opts = {}) {
+    if (Number.isFinite(opts.dayIdx)) return Number(opts.dayIdx);
+    if (typeof window !== 'undefined' && Number.isFinite(Number(window.currentDayIndex))) {
+        return Number(window.currentDayIndex);
+    }
+    return new Date().getDay();
+}
+
+/**
+ * Ban that should keep this train off the live map and nearby list today.
+ * A special still runs, so it returns false. No rule returns false.
+ */
+export function liveMapTrainBan(trainId, routeId, opts = {}) {
+    const rules = (opts.exclusions || $globalExclusions.get() || {})[String(routeId || '')];
+    const rule = rules?.[String(trainId || '')];
+    if (!exclusionAppliesToSurface(rule, 'in_app')) return false;
+    if (rule.expiresAt && Date.now() > rule.expiresAt) return false;
+    const days = Array.isArray(rule.days) ? rule.days : null;
+    if (days && days.length) {
+        const idx = liveMapDayIndex(opts);
+        if (!days.some((d) => Number(d) === idx)) return false;
+    }
+    const type = rule.type || 'banned';
+    if (type === 'special') return false;
+    return type;
 }
 
 function nowSeconds(now) {
@@ -442,6 +470,7 @@ export function scoreTrainForFix(lat, lng, trainId, opts = {}) {
 export function listTrainsInWindow(now, opts = {}) {
     const nowSec = nowSeconds(now);
     const windowSec = opts.windowSec ?? GHOST_WINDOW_SEC;
+    const routeId = String(opts.routeId || $currentRouteId.get() || '');
     const schedules = opts.schedules
         ? (Array.isArray(opts.schedules) ? opts.schedules : Object.values(opts.schedules).filter(Boolean))
         : currentDirectionSchedules();
@@ -450,6 +479,7 @@ export function listTrainsInWindow(now, opts = {}) {
     for (const schedule of schedules) {
         for (const id of trainIdsInSchedule(schedule)) {
             if (seen.has(id)) continue;
+            if (liveMapTrainBan(id, routeId, opts)) continue;
             const stops = stopsForTrain(schedule, id);
             if (!trainInWindow(stops, nowSec, windowSec)) continue;
             seen.add(id);

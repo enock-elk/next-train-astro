@@ -47,6 +47,7 @@ import {
     coordsForStation,
     haversineM,
     stopsForTrain,
+    liveMapTrainBan,
     TRACKING_WINDOW_SEC,
 } from './train-ghosts.js';
 import { TRACKER_SNAP_MAX_M } from './rail-tracks.js';
@@ -819,6 +820,7 @@ export async function compactPingsForMap(pings, { mineDeviceId = '', routeId = '
             accuracy: p.accuracy,
             pauseReason: p.pauseReason || '',
             trainStatus: p.trainStatus || '',
+            adminOverrideRole: p.adminOverrideRole || '',
             deviceId: p.deviceId || '',
             voteUp: tally.up,
             voteDown: tally.down,
@@ -861,6 +863,13 @@ export async function compactPingsForMap(pings, { mineDeviceId = '', routeId = '
             return hit ? hit[key] : null;
         };
         const pausedOnly = active.length === 0;
+        const mapRoute = newest.routeId || routeId;
+        // Banned trains stay off the map. A special still runs. A cancelled
+        // share is hidden. An operator's own test of a banned train stays
+        // on that phone only.
+        const ban = liveMapTrainBan(trainId, mapRoute);
+        if (ban && !list.some((p) => p.mine && p.adminOverrideRole === 'train')) continue;
+        if (list.some((p) => p.trainStatus === TRAIN_STATUS.CANCELLED)) continue;
         out.push({
             lat: driver.lat,
             lng: driver.lng,

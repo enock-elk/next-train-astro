@@ -23,6 +23,7 @@ import {
     resolveStationLatLon, weekdaySheetsForRoute
 } from './utils.js';
 import { planUnifiedTrip, extractTrainSheetStops } from './planner-core.js';
+import { trainSheetOperatingLabel } from './live-board.js';
 import { saturdayNoServiceCopy, buildSaturdayAdvisoryCopy, stationDisplayName } from './saturday-service.js';
 import { buildPlannerShareUrl, buildRouteShareUrl, parsePlannerDeepLink, stripShareParamsFromUrl, compactTime, isSeoAppHandoff } from './share-links.js';
 import { consumeShareDeeplinkSnapshot, peekShareDeeplinkSnapshot } from './deeplink.js';
@@ -1048,6 +1049,8 @@ export let currentPlannerErrorPayload = null;
 export let selectedPlannerDay = null;
 /** ISO date (YYYY-MM-DD) when user picks a specific calendar day */
 export let selectedPlannerDate = null;
+/** Last custom date, kept after a Weekday/Saturday check so results can reopen it. */
+let rememberedPlannerDate = null;
 /** Preferred depart time from the last executeTripPlan call (for disruption replan). */
 let lastPlannerPreferredTime = null;
 /** Signature of disruptions used for the currently shown planner result. */
@@ -1748,7 +1751,8 @@ function openPlannerDateSheet() {
     }
     const inp = document.getElementById('planner-date-sheet-input');
     if (inp) {
-        if (selectedPlannerDate) inp.value = selectedPlannerDate;
+        const seed = selectedPlannerDate || rememberedPlannerDate;
+        if (seed) inp.value = seed;
         else {
             const t = new Date();
             inp.value = `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`;
@@ -1809,6 +1813,7 @@ export function applyPlannerSpecificDate(isoDate) {
         return;
     }
     selectedPlannerDate = isoDate;
+    rememberedPlannerDate = isoDate;
     selectedPlannerDay = resolved.dayType;
     if (typeof window !== 'undefined') {
         window.selectedPlannerDay = selectedPlannerDay;
@@ -1824,6 +1829,36 @@ export function applyPlannerSpecificDate(isoDate) {
                 li.classList.add('bg-blue-50', 'dark:bg-gray-700', 'text-blue-600', 'dark:text-blue-400');
             }
         });
+    }
+    const results = document.getElementById('planner-results-section');
+    if (results && !results.classList.contains('hidden')) {
+        const label = formatPlannerDateLabel(isoDate) || 'that date';
+        if (typeof showToast === 'function') showToast('Switched to ' + label, 'info', 1500);
+        rerunPlannerSearch();
+    }
+}
+
+function plannerSearchStations() {
+    let fromStation = '';
+    let toStation = '';
+    if (typeof currentTripOptions !== 'undefined' && currentTripOptions.length > 0) {
+        fromStation = currentTripOptions[0].from;
+        toStation = currentTripOptions[0].to;
+    } else {
+        const fromInput = document.getElementById('planner-from-search');
+        const toInput = document.getElementById('planner-to-search');
+        fromStation = (fromInput && fromInput.dataset.resolvedValue) ? fromInput.dataset.resolvedValue : '';
+        toStation = (toInput && toInput.dataset.resolvedValue) ? toInput.dataset.resolvedValue : '';
+    }
+    return { fromStation, toStation };
+}
+
+function rerunPlannerSearch() {
+    const { fromStation, toStation } = plannerSearchStations();
+    if (fromStation && toStation) {
+        executeTripPlan(fromStation, toStation);
+    } else if (typeof showToast === 'function') {
+        showToast('Could not resolve stations for new date.', 'error');
     }
 }
 
@@ -1857,6 +1892,11 @@ export function selectHeaderDay(e, value, text) {
     }
 
     if (typeof triggerHaptic === 'function') triggerHaptic();
+    if (value === 'specific') {
+        openPlannerDateSheet();
+        return;
+    }
+    if (selectedPlannerDate) rememberedPlannerDate = selectedPlannerDate;
     selectedPlannerDate = null;
     selectedPlannerDay = value;
     if (typeof window !== 'undefined') {
@@ -1884,22 +1924,9 @@ export function selectHeaderDay(e, value, text) {
         showToast("Switched to " + text, "info", 1500);
     }
     
-    let fromStation = "";
-    let toStation = "";
-    
-    if (typeof currentTripOptions !== 'undefined' && currentTripOptions.length > 0) {
-        fromStation = currentTripOptions[0].from;
-        toStation = currentTripOptions[0].to;
-    } else {
-        const fromInput = document.getElementById('planner-from-search');
-        const toInput = document.getElementById('planner-to-search');
-        
-        fromStation = (fromInput && fromInput.dataset.resolvedValue) ? fromInput.dataset.resolvedValue : "";
-        toStation = (toInput && toInput.dataset.resolvedValue) ? toInput.dataset.resolvedValue : "";
-    }
-
-    if (fromStation && toStation) {
-        executeTripPlan(fromStation, toStation);
+    const stations = plannerSearchStations();
+    if (stations.fromStation && stations.toStation) {
+        executeTripPlan(stations.fromStation, stations.toStation);
     } else if (typeof showToast === 'function') {
         showToast("Could not resolve stations for new date.", "error");
     }
@@ -2822,10 +2849,8 @@ export async function openTripMapRenderer(routeData) {
 
 // --- TIMELINE BUILDER VIEW ENGINE ---
 
-function plannerSheetDayLabel(dayType) {
-    if (dayType === 'saturday') return 'Saturdays';
-    if (dayType === 'public_holiday') return 'Public Holidays';
-    return 'Weekdays';
+function plannerSheetDayLabel(dayType, routeId, trainId) {
+    return trainSheetOperatingLabel(dayType, routeId, trainId);
 }
 
 function plannerTrainNameButton(routeId, dest, trainId, extraClass = '') {
@@ -2873,7 +2898,7 @@ export function openPlannerTrainSheet(routeId, trainId) {
             liveEl.classList.remove('hidden');
         }).catch(() => {});
     }
-    if (dayEl) dayEl.textContent = plannerSheetDayLabel(sheet.dayType);
+    if (dayEl) dayEl.textContent = plannerSheetDayLabel(sheet.dayType, sheet.route?.id, sheet.trainId);
     const zone = resolvePlannerRouteZone(sheet.route.id);
     const detailed = zone && FARE_CONFIG.zones_detailed?.[zone];
     if (fareEl) {
@@ -5559,6 +5584,11 @@ export function updatePlannerHeader(dayLabel, showShare = true) {
         const daySelected = (day) => (!dated && selDay === day)
             ? 'bg-blue-50 dark:bg-gray-700 text-blue-600 dark:text-blue-400'
             : '';
+        const customIso = selectedPlannerDate || rememberedPlannerDate || '';
+        const customLabel = formatPlannerDateLabel(customIso) || 'Pick a date…';
+        const customSelected = dated
+            ? 'bg-blue-50 dark:bg-gray-700 text-blue-600 dark:text-blue-400'
+            : '';
         const headerPubLi = headerRegion === 'WC'
             ? `<li onclick="if(typeof window._selectHeaderDay === 'function') window._selectHeaderDay(event, 'public_holiday', 'Public Holiday')" class="px-4 py-3 text-xs font-bold border-t border-gray-100 dark:border-gray-700 hover:bg-blue-50 dark:hover:bg-gray-700 cursor-pointer text-gray-700 dark:text-gray-200 transition-colors ${daySelected('public_holiday')}">Public Holiday</li>`
             : '';
@@ -5573,6 +5603,7 @@ export function updatePlannerHeader(dayLabel, showShare = true) {
                     <li onclick="if(typeof window._selectHeaderDay === 'function') window._selectHeaderDay(event, 'saturday', 'Saturday')" class="px-4 py-3 text-xs font-bold border-t border-gray-100 dark:border-gray-700 hover:bg-blue-50 dark:hover:bg-gray-700 cursor-pointer text-gray-700 dark:text-gray-200 transition-colors ${daySelected('saturday')}">Saturday</li>
                     ${headerPubLi}
                     <li onclick="if(typeof window._selectHeaderDay === 'function') window._selectHeaderDay(event, 'sunday', 'Sunday')" class="px-4 py-3 text-xs font-bold border-t border-gray-100 dark:border-gray-700 hover:bg-blue-50 dark:hover:bg-gray-700 cursor-pointer text-gray-700 dark:text-gray-200 transition-colors ${daySelected('sunday')}">Sunday</li>
+                    <li data-day="specific" onclick="if(typeof window._selectHeaderDay === 'function') window._selectHeaderDay(event, 'specific', 'Pick a date…')" class="px-4 py-3 text-xs font-bold border-t border-gray-100 dark:border-gray-700 hover:bg-blue-50 dark:hover:bg-gray-700 cursor-pointer text-gray-700 dark:text-gray-200 transition-colors ${customSelected}">${escapeHTML(customLabel)}</li>
                 </ul>
             </div>
         `;

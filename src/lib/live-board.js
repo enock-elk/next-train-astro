@@ -320,6 +320,29 @@ export function weekdayPatternBanApplies(days) {
     return [1, 2, 3, 4, 5].every((d) => set.includes(d));
 }
 
+const SHEET_DAY_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+/**
+ * Train-sheet pill. A partial weekday ban names the days the train still runs
+ * (Mon+Fri off → Tue, Wed, Thu). A full weekday ban, a special, or no rule
+ * stays on the sheet's day type.
+ */
+export function trainSheetOperatingLabel(dayType, routeId, trainId, now = Date.now()) {
+    if (dayType === 'saturday') return 'Saturdays';
+    if (dayType === 'sunday') return 'Sundays';
+    if (dayType === 'public_holiday') return 'Public Holidays';
+    const rule = getTrainExclusionRule(trainId, routeId, 1, now, { ignoreDays: true });
+    if (!exclusionAppliesToSurface(rule, 'in_app')) return 'Weekdays';
+    const type = rule.type || 'banned';
+    if (type === 'special') return 'Weekdays';
+    const days = Array.isArray(rule.days) ? rule.days.map((d) => Number(d)) : [];
+    if (!days.length || weekdayPatternBanApplies(days)) return 'Weekdays';
+    const banned = new Set(days);
+    const runs = [1, 2, 3, 4, 5].filter((d) => !banned.has(d));
+    if (!runs.length) return 'Weekdays';
+    return runs.map((d) => SHEET_DAY_SHORT[d]).join(', ');
+}
+
 /**
  * Generic Weekday chip (no picked date). A Mon/Fri-only ban does not remove
  * the train, because it still runs Tue–Thu. A ban with no days, or all of

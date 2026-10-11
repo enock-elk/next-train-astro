@@ -7,8 +7,9 @@
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { weekdayPatternBanApplies } from '../src/lib/live-board.js';
+import { weekdayPatternBanApplies, trainSheetOperatingLabel } from '../src/lib/live-board.js';
 import { isoToWeekdayIndex, resolvePlannerExclusionDay } from '../src/lib/planner-core.js';
+import { $globalExclusions } from '../src/store.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const failures = [];
@@ -69,6 +70,30 @@ if (!ui.includes('id="planner-date-sheet-row"')) fail('the date row is the picke
 if (!ui.includes('formatPlannerDateLabel')) fail('picked dates use the 13 Oct 2026 label');
 if (ui.includes('Date · ${')) fail('the form must not keep the ISO date label');
 if (!boardUi.includes('if (plannerFromIsSet()) return')) fail('board locate must not replace a planner From that is already set');
+if (!ui.includes("selectHeaderDay(event, 'specific'")) fail('results day menu includes the custom date');
+if (!ui.includes("if (value === 'specific')")) fail('custom date on results opens the picker');
+if (!ui.includes('rememberedPlannerDate')) fail('a weekday check keeps the custom date');
+if (!ui.includes('openPlannerDateSheet();')) fail('the results custom date opens the date sheet');
+
+$globalExclusions.set({
+    'kempton-pta': {
+        '0619': { type: 'banned', days: [1, 5] },
+        '0800': { type: 'special', days: [1, 5] },
+    },
+});
+if (trainSheetOperatingLabel('weekday', 'kempton-pta', '0619') !== 'Tue, Wed, Thu') {
+    fail(`0619 sheet must name Tue, Wed, Thu, got ${trainSheetOperatingLabel('weekday', 'kempton-pta', '0619')}`);
+}
+if (trainSheetOperatingLabel('weekday', 'kempton-pta', '0800') !== 'Weekdays') {
+    fail('a special stays on the weekday sheet label');
+}
+if (trainSheetOperatingLabel('weekday', 'kempton-pta', '9999') !== 'Weekdays') {
+    fail('a train with no ban stays Weekdays');
+}
+if (trainSheetOperatingLabel('saturday', 'kempton-pta', '0619') !== 'Saturdays') {
+    fail('saturday sheet keeps Saturdays');
+}
+$globalExclusions.set({});
 
 if (failures.length) {
     console.error('verify-planner-day-bans failed:');

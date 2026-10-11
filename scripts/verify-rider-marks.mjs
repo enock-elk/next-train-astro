@@ -4,6 +4,8 @@ import {
     MARK_TIERS,
     awardCommunityMarks,
     badgeProgress,
+    formatContributionDate,
+    formatContributionDuration,
     listContributionDays,
     mergeMarksStates,
     showMarksInCommunity,
@@ -59,6 +61,60 @@ const days = listContributionDays({
 assert.equal(days.length, 2);
 assert.equal(days[0].total, 4);
 assert.equal(days[0].items.length, 2);
+assert.equal(formatContributionDate('2026-10-09'), '09 Oct 2026');
+assert.equal(formatContributionDate('2026-09-17'), '17 Sep 2026');
+assert.equal(formatContributionDuration({ startedAt: 1_000, endedAt: 1_000 + (34 * 60_000) }), '34 min');
+assert.equal(formatContributionDuration({ startedAt: 1_000, endedAt: 1_000 + (72 * 60_000) }), '1 hr 12 min');
+assert.equal(formatContributionDuration({ startedAt: 5_000 }), 'Still on this trip');
+
+const withDetail = mergeMarksStates({
+    points: 2,
+    awarded: { 'share:2026-10-09': true },
+    history: [{
+        action: 'first_share_day',
+        points: 2,
+        at: 1,
+        key: 'share:2026-10-09',
+        detail: { origin: 'Germiston', trainId: '0618', route: 'Germiston - Kempton Park' },
+    }],
+    updatedAt: 1,
+}, {
+    points: 2,
+    awarded: { 'share:2026-10-09': true },
+    history: [{
+        action: 'first_share_day',
+        points: 2,
+        at: 5,
+        key: 'share:2026-10-09',
+        detail: { destination: 'Kempton Park', origin: 'Later station', endedAt: 5, startedAt: 1 },
+    }],
+    updatedAt: 5,
+});
+const shareRow = withDetail.history.find((row) => row.key === 'share:2026-10-09');
+assert.equal(shareRow.detail.origin, 'Germiston', 'later pings keep the first boarding station');
+assert.equal(shareRow.detail.destination, 'Kempton Park');
+assert.equal(shareRow.detail.trainId, '0618');
+assert.equal(shareRow.detail.endedAt, 5);
+
+const awardedDays = listContributionDays({
+    history: [
+        { action: 'first_share_day', points: 2, at: new Date(2026, 9, 9, 8, 0, 0).getTime(), key: 'share:2026-10-09' },
+    ],
+    awarded: {
+        'share:2026-10-09': true,
+        'community:2026-10-09': true,
+        'badge:first_community_post': true,
+    },
+});
+const oct9 = awardedDays.find((day) => day.day === '2026-10-09');
+assert.ok(oct9, 'share day stays');
+assert.equal(oct9.total, 4, 'awarded community points join that day');
+assert.equal(oct9.items.length, 2);
+assert.ok(oct9.items.some((item) => item.title === 'Community message' && item.points === 2));
+assert.ok(oct9.items.some((item) => item.title === 'Share your trip' && item.points === 2));
+const badgeDay = awardedDays.find((day) => day.items.some((item) => item.action === 'first_community_post'));
+assert.ok(badgeDay, 'a one-time badge still lists when history dropped it');
+assert.equal(badgeDay.items[0].points, 5);
 
 const twoOfThree = badgeProgress('streak_3day', { shareStreak: 2, awarded: {} });
 assert.equal(twoOfThree.current, 2);

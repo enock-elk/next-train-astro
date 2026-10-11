@@ -765,12 +765,15 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
         // try/catch: Safari Private Mode / locked-down WebViews throw on localStorage
         let theme = null;
         try { theme = localStorage.getItem('theme'); } catch (e) {}
-        // Product default is light Classic — do not follow the OS colour scheme.
-        // Do not persist a missing theme here: IndexedDB may still hold Dark after a NUKE wipe.
+        // Product default is light Classic. A missing theme does not follow the phone.
+        // Stored "system" does. Do not persist a missing theme here: IndexedDB may still hold Dark after a NUKE wipe.
         if (!theme) {
           theme = 'light';
         }
-        const isDark = theme === 'dark';
+        let isDark = theme === 'dark';
+        if (theme === 'system') {
+          try { isDark = window.matchMedia('(prefers-color-scheme: dark)').matches; } catch (e) { isDark = false; }
+        }
         if (isDark) document.documentElement.classList.add('dark');
         else document.documentElement.classList.remove('dark');
 

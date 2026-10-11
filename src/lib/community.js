@@ -1688,7 +1688,7 @@ async function handlePostSubmit() {
     } else {
         showToast('Posted to the route feed', 'success');
     }
-    if (!result.held && !result.shadowSilenced) awardCommunityMarks();
+    if (!result.held && !result.shadowSilenced) awardCommunityMarks({ detail: { routeId } });
     // Realtime listener will refresh; REST fallback still re-renders.
     // Own bubbles read live points, so repaint after the award either way.
     if (!postsListenRouteId || postsListenRouteId !== routeId) {
@@ -1971,7 +1971,7 @@ export function bindCommunityUi() {
                 showToast(result.message || 'Held for review - it won’t show until approved.', 'info');
                 return;
             }
-            if (!result.shadowSilenced) awardCommunityMarks();
+            if (!result.shadowSilenced) awardCommunityMarks({ detail: { routeId } });
             showToast('Reply posted', 'success');
             const box = document.querySelector(`.community-replies[data-replies-for="${postId}"]`);
             if (box) {

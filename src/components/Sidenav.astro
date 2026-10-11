@@ -132,6 +132,16 @@ const versionBadge = String(APP_VERSION);
             </div>
           </button>
 
+          <div id="account-theme-choice" class="hidden py-3 px-4" hidden>
+            <p class="text-sm font-bold text-gray-900 dark:text-white leading-tight">Appearance</p>
+            <p class="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">Light, dark, or this phone</p>
+            <div class="grid grid-cols-3 gap-2 mt-2" role="group" aria-label="Appearance">
+              <button type="button" data-account-theme="light" class="account-theme-option" aria-pressed="false">Light</button>
+              <button type="button" data-account-theme="dark" class="account-theme-option" aria-pressed="false">Dark</button>
+              <button type="button" data-account-theme="system" class="account-theme-option" aria-pressed="false">System</button>
+            </div>
+          </div>
+
           <button type="button" id="settings-haptics-toggle" class="w-full flex justify-between items-center py-3 px-4 hover:bg-gray-100 dark:hover:bg-gray-800/50 transition-colors focus:outline-none group">
             <div class="flex items-center space-x-4">
               <svg class="w-5 h-5 text-pink-500 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">

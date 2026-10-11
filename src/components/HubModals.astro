@@ -487,6 +487,16 @@ import { withBase } from '../lib/config.js';
     </div>
 </div>
 
+<div id="account-contrib-sheet" class="fixed inset-0 z-[130] hidden flex items-end justify-center p-0 bg-black/40" role="dialog" aria-modal="true" aria-labelledby="account-contrib-title">
+    <button type="button" id="account-contrib-overlay" class="absolute inset-0" aria-label="Close"></button>
+    <div class="relative w-full max-w-md rounded-t-2xl bg-white dark:bg-[#1c1c1e] px-4 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))] space-y-3">
+        <p id="account-contrib-title" class="text-[17px] font-semibold text-gray-900 dark:text-white"></p>
+        <p id="account-contrib-points" class="text-[13px] font-normal text-gray-500 dark:text-gray-400"></p>
+        <div id="account-contrib-body" class="space-y-1 text-[13px] font-normal text-gray-600 dark:text-gray-300 leading-snug"></div>
+        <button type="button" id="account-contrib-close" class="w-full py-2.5 rounded-xl text-[13px] font-normal text-blue-600 dark:text-blue-400 bg-[#f2f2f7] dark:bg-[#2c2c2e] focus:outline-none">Close</button>
+    </div>
+</div>
+
 <!-- Operator chrome is stamped after 5-tap unlock. Keep it out of the crawlable homepage. -->
 <template id="nt-admin-chrome-template">
 <!-- LOGIN -->
@@ -725,6 +735,30 @@ import { withBase } from '../lib/config.js';
   #account-photo-toggle .toggle-checkbox,
   #account-marks-toggle .toggle-checkbox {
     z-index: 1;
+  }
+  html[data-account-settings="1"] #settings-theme-toggle {
+    display: none !important;
+  }
+  html[data-account-settings="1"] #account-theme-choice {
+    display: block !important;
+  }
+  #account-theme-choice .account-theme-option {
+    border: 1px solid rgba(0, 0, 0, 0.12);
+    border-radius: 10px;
+    padding: 8px 4px;
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1.2;
+    color: var(--nt-text);
+    background: transparent;
+  }
+  html.dark #account-theme-choice .account-theme-option {
+    border-color: rgba(255, 255, 255, 0.16);
+  }
+  #account-theme-choice .account-theme-option[aria-pressed="true"] {
+    background: var(--nt-primary);
+    color: var(--nt-primary-fg);
+    border-color: transparent;
   }
   #account-contrib-list details > summary {
     list-style: none;

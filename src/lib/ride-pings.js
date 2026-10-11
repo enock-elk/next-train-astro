@@ -54,7 +54,7 @@ import { exclusionAppliesToSurface, scheduleCacheSlot, timeToSeconds } from './u
 import { $globalExclusions, $schedules, $userRegion } from '../store.js';
 import { startBackgroundTicker } from './background-ticker.js';
 import { peekCachedRouteReports, isReportStillLive, routeHasNoScheduledTrains } from './delay-reports.js';
-import { awardShareMarks } from './rider-marks.js';
+import { awardShareMarks, contributionDayKey, rememberContributionDetail } from './rider-marks.js';
 import {
     formatGpsPingAge,
     formatGpsPingClock,
@@ -2069,6 +2069,13 @@ export async function submitRideCheckIn({
             joinedLive: !!(trainId && others.length > 0),
             confirmedCloser: source === 'closer_confirm',
             trainId: trainId || '',
+            detail: {
+                trainId: trainId || '',
+                routeId: routeId || '',
+                origin: st || '',
+                destination: destination || '',
+                startedAt: previous?.startedAt || now,
+            },
         });
         if (marks?.added) addSessionPoints(marks.added);
         if (!quiet) showToast(toastMsg, 'success');
@@ -2132,6 +2139,19 @@ export async function stopRideShare({ quiet = false, reason = '', waitForOnboard
             at: now,
         });
         notifyPingsUpdated(routeId);
+        const shareDetail = {
+            trainId: active?.trainId || '',
+            routeId: active?.routeId || routeId || '',
+            origin: active?.station || station || '',
+            destination: active?.destination || '',
+            startedAt: Number(active?.startedAt) || undefined,
+            endedAt: now,
+        };
+        const shareKeys = new Set([
+            `share:${contributionDayKey(new Date(Number(active?.startedAt) || now))}`,
+            `share:${contributionDayKey(new Date(now))}`,
+        ]);
+        shareKeys.forEach((key) => rememberContributionDetail(key, shareDetail));
         import('./map-tab.js').then((m) => m.clearTripWatch?.()).catch(() => {});
         if (reason === 'off_track_far' || reason === 'off_track_grace') {
             import('./rider-marks.js').then((m) => {

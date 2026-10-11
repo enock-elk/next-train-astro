@@ -106,6 +106,7 @@ export function placeAccountSettings(accountOn) {
     const accountSlot = document.getElementById('account-settings-host');
     const mapsBlock = document.getElementById('sidenav-maps-block');
     const themeToggle = document.getElementById('settings-theme-toggle');
+    const themeChoice = document.getElementById('account-theme-choice');
     const notifyToggle = document.getElementById('settings-notify-toggle');
     const paxNote = document.getElementById('settings-profile-community-note');
     if (accountOn && accountSlot) {
@@ -114,6 +115,11 @@ export function placeAccountSettings(accountOn) {
         }
         if (prefs) accountSlot.appendChild(prefs);
         prefs?.classList.add('nt-prefs-flat');
+        if (themeChoice) {
+            themeChoice.hidden = false;
+            themeChoice.removeAttribute('hidden');
+            themeChoice.classList.remove('hidden');
+        }
         document.getElementById('prefs-accordion-toggle')?.classList.add('hidden');
         const panel = document.getElementById('prefs-accordion-panel');
         panel?.classList.remove('hidden');
@@ -129,6 +135,11 @@ export function placeAccountSettings(accountOn) {
         paxNote?.classList.remove('hidden');
     } else {
         prefs?.classList.remove('nt-prefs-flat');
+        if (themeChoice) {
+            themeChoice.hidden = true;
+            themeChoice.setAttribute('hidden', '');
+            themeChoice.classList.add('hidden');
+        }
         document.getElementById('prefs-accordion-toggle')?.classList.remove('hidden');
         document.getElementById('prefs-accordion-toggle')?.setAttribute('aria-expanded', 'false');
         const panel = document.getElementById('prefs-accordion-panel');

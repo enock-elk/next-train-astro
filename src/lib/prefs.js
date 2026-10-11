@@ -147,13 +147,16 @@ export function syncColourPackUi(pack = getColourPack()) {
     syncPrefsAccordionSummary(pack);
 }
 
-/** Side-nav accordion subtitle: `Earthy · Dark`. */
+/** Side-nav accordion subtitle: `Earthy · Dark`. System stays labelled System. */
 export function syncPrefsAccordionSummary(pack = getColourPack()) {
     if (typeof document === 'undefined') return;
     const sub = document.getElementById('prefs-accordion-sub');
     if (!sub) return;
     const packLabel = COLOUR_PACK_LABELS[pack] || COLOUR_PACK_LABELS.classic;
-    const mode = document.documentElement.classList.contains('dark') ? 'Dark' : 'Light';
+    const stored = getThemeMode();
+    const mode = stored === 'system'
+        ? 'System'
+        : (document.documentElement.classList.contains('dark') ? 'Dark' : 'Light');
     sub.textContent = `${packLabel} · ${mode}`;
 }
 
@@ -209,10 +212,67 @@ export function bindColourPackControls() {
     syncColourPackUi(getColourPack());
 }
 
+/** Missing or unknown stays light. System is the only mode that follows the phone. */
+export function getThemeMode() {
+    const raw = safeStorage.getItem(THEME_KEY);
+    if (raw === 'dark' || raw === 'light' || raw === 'system') return raw;
+    return 'light';
+}
+
+export function resolveThemeDark(mode = getThemeMode()) {
+    if (mode === 'system' && typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
+        return window.matchMedia('(prefers-color-scheme: dark)').matches;
+    }
+    return mode === 'dark';
+}
+
+export function paintThemeMode(mode = getThemeMode()) {
+    const stored = mode === 'dark' || mode === 'system' ? mode : 'light';
+    const isDark = resolveThemeDark(stored);
+    if (typeof document !== 'undefined') {
+        document.documentElement.classList.toggle('dark', isDark);
+        const themeCb = document.getElementById('settings-theme-checkbox');
+        if (themeCb) themeCb.checked = isDark;
+        document.querySelectorAll('[data-account-theme]').forEach((btn) => {
+            const on = btn.getAttribute('data-account-theme') === stored;
+            btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+        });
+        syncPrefsAccordionSummary();
+    }
+    return isDark;
+}
+
+function bindThemeModeControls() {
+    if (typeof window === 'undefined' || window.__ntThemeModeBound) return;
+    window.__ntThemeModeBound = true;
+    document.addEventListener('click', (e) => {
+        const btn = e.target?.closest?.('[data-account-theme]');
+        if (!btn) return;
+        if (document.documentElement.getAttribute('data-account-settings') !== '1') return;
+        e.preventDefault();
+        const mode = btn.getAttribute('data-account-theme');
+        if (mode !== 'light' && mode !== 'dark' && mode !== 'system') return;
+        const prev = getThemeMode();
+        persistTheme(mode);
+        if (typeof window.triggerHaptic === 'function') window.triggerHaptic();
+        if (mode !== prev && typeof window.showToast === 'function') {
+            const label = mode === 'system' ? 'System' : mode === 'dark' ? 'Dark' : 'Light';
+            window.showToast(`${label} look applied`);
+        }
+    }, true);
+    const mq = window.matchMedia?.('(prefers-color-scheme: dark)');
+    const onScheme = () => {
+        if (getThemeMode() === 'system') paintThemeMode('system');
+    };
+    if (mq?.addEventListener) mq.addEventListener('change', onScheme);
+    else if (mq?.addListener) mq.addListener(onScheme);
+}
+
 export function persistTheme(theme) {
-    const next = theme === 'dark' ? 'dark' : 'light';
+    const next = theme === 'dark' || theme === 'system' ? theme : 'light';
     safeStorage.setItem(THEME_KEY, next);
     safeStorage.setResilientItem?.(THEME_KEY, next)?.catch?.(() => {});
+    paintThemeMode(next);
     if (typeof window !== 'undefined' && typeof window.pushSignedInPrefs === 'function') {
         window.pushSignedInPrefs({ theme: next });
     }
@@ -227,12 +287,10 @@ export async function restoreLookPrefs() {
         if (flag) safeStorage.setItem('ntProdClassicPackV1', flag);
         const theme = await safeStorage.getResilientItem?.(THEME_KEY);
         const pack = await safeStorage.getResilientItem?.(COLOUR_PACK_KEY);
-        if (theme === 'dark' || theme === 'light') {
+        if (theme === 'dark' || theme === 'light' || theme === 'system') {
             persistTheme(theme);
-            document.documentElement.classList.toggle('dark', theme === 'dark');
         } else {
             persistTheme('light');
-            document.documentElement.classList.remove('dark');
         }
         if (pack) setColourPack(pack);
     } catch { /* ignore */ }
@@ -255,6 +313,8 @@ export function resetLookToClassicLight() {
 
 export function hydratePrefs() {
     if (typeof window !== 'undefined') window.ntPersistTheme = persistTheme;
+    bindThemeModeControls();
+    paintThemeMode(getThemeMode());
     const paintStoredPack = () => {
         applyNavChrome(getNavStyle());
         const pack = normalizePack(safeStorage.getItem(COLOUR_PACK_KEY));

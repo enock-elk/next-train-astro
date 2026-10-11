@@ -94,7 +94,10 @@ export function readLocalAccountPrefs() {
         showPhotoInAlerts: safeStorage.getItem(PHOTO_PREF_KEY) === '1',
         showMarksInCommunity: safeStorage.getItem(MARKS_COMMUNITY_PREF_KEY) !== '0',
         notifyCategories,
-        theme: safeStorage.getItem('theme') === 'dark' ? 'dark' : 'light',
+        theme: (() => {
+            const stored = safeStorage.getItem('theme');
+            return stored === 'dark' || stored === 'system' ? stored : 'light';
+        })(),
         colourPack: safeStorage.getItem('colourPack') || 'classic',
         hapticsEnabled: safeStorage.getItem('hapticsEnabled') === 'true',
         passengerType: safeStorage.getItem('userProfile') || $userProfile.get() || 'Adult',
@@ -151,14 +154,13 @@ export async function applyAccountPrefs(prefs) {
     const beforePack = (root && root.getAttribute('data-colour-pack')) || 'classic';
     _hydratingPrefs = true;
     try {
-        if (prefs.theme === 'dark' || prefs.theme === 'light') {
+        if (prefs.theme === 'dark' || prefs.theme === 'light' || prefs.theme === 'system') {
             safeStorage.setItem('theme', prefs.theme);
             safeStorage.setResilientItem?.('theme', prefs.theme)?.catch?.(() => {});
-            if (typeof document !== 'undefined') {
-                document.documentElement.classList.toggle('dark', prefs.theme === 'dark');
-                const themeCb = document.getElementById('settings-theme-checkbox');
-                if (themeCb) themeCb.checked = prefs.theme === 'dark';
-            }
+            try {
+                const themeMod = await import('./prefs.js');
+                themeMod.paintThemeMode(prefs.theme);
+            } catch { /* ignore */ }
         }
         if (prefs.colourPack) {
             try {
@@ -211,7 +213,8 @@ export async function applyAccountPrefs(prefs) {
         if (root) {
             const afterDark = root.classList.contains('dark');
             const afterPack = root.getAttribute('data-colour-pack') || 'classic';
-            const themeChanged = (prefs.theme === 'dark' || prefs.theme === 'light') && afterDark !== beforeDark;
+            const themeTouched = prefs.theme === 'dark' || prefs.theme === 'light' || prefs.theme === 'system';
+            const themeChanged = themeTouched && afterDark !== beforeDark;
             const packChanged = !!prefs.colourPack && afterPack !== beforePack;
             if ((themeChanged || packChanged) && typeof window !== 'undefined' && typeof window.showToast === 'function') {
                 window.showToast('Look updated from your account.', 'info');
@@ -797,6 +800,49 @@ function closeBadgeHowSheet() {
     document.getElementById('account-badge-how-sheet')?.classList.add('hidden');
 }
 
+function closeContributionSheet() {
+    document.getElementById('account-contrib-sheet')?.classList.add('hidden');
+}
+
+function contributionSheetLines(item, marks) {
+    const detail = item?.detail || {};
+    const lines = [];
+    if (detail.trainId) lines.push(`Train ${detail.trainId}`);
+    if (detail.route) lines.push(`Route ${detail.route}`);
+    const duration = typeof marks.formatContributionDuration === 'function'
+        ? marks.formatContributionDuration(detail)
+        : '';
+    if (duration) lines.push(duration);
+    const origin = detail.origin || '';
+    const destination = detail.destination || '';
+    if (origin && destination) lines.push(`${origin} - ${destination}`);
+    else if (origin) lines.push(origin);
+    else if (destination) lines.push(destination);
+    const rich = !!(detail.trainId || origin || destination || duration);
+    if ((!rich || item.action !== 'first_share_day') && item.how) lines.push(item.how);
+    return lines;
+}
+
+function openContributionSheet(item, marks) {
+    const sheet = document.getElementById('account-contrib-sheet');
+    if (!sheet || !item) return;
+    const title = document.getElementById('account-contrib-title');
+    const points = document.getElementById('account-contrib-points');
+    const body = document.getElementById('account-contrib-body');
+    if (title) title.textContent = item.title || 'Contribution';
+    if (points) {
+        const n = Number(item.points) || 0;
+        points.textContent = `+${n} ${marks.pointsWord(n)}`;
+    }
+    if (body) {
+        const lines = contributionSheetLines(item, marks);
+        body.innerHTML = (lines.length ? lines : ['Points from this action.']).map((line) => (
+            `<p>${escapeAccountHtml(line)}</p>`
+        )).join('');
+    }
+    sheet.classList.remove('hidden');
+}
+
 function openBadgeHowSheet(badgeId, state, marks) {
     const sheet = document.getElementById('account-badge-how-sheet');
     const cat = marks.MARK_CATALOG.find((c) => c.id === badgeId);
@@ -873,23 +919,33 @@ export function paintAccountPoints(state) {
             const days = typeof m.listContributionDays === 'function'
                 ? m.listContributionDays(st)
                 : [];
+            const painted = new Map();
             contrib.innerHTML = days.length
                 ? days.map((day) => {
-                    const when = day.at ? new Date(day.at).toLocaleDateString() : day.day;
-                    const items = (day.items || []).map((item) => (
-                        `<li class="flex justify-between gap-2 pl-1"><span>${escapeAccountHtml(item.title)}</span><span class="shrink-0">+${item.points}</span></li>`
-                    )).join('');
-                    return `<li>
-                        <details class="account-contrib-day">
-                            <summary class="flex justify-between gap-2 cursor-pointer list-none">
-                                <span>${escapeAccountHtml(when)}</span>
-                                <span class="shrink-0 font-semibold">+${day.total}</span>
-                            </summary>
-                            <ul class="mt-1.5 space-y-1 text-gray-500 dark:text-gray-400">${items}</ul>
-                        </details>
+                    const when = day.day && typeof m.formatContributionDate === 'function'
+                        ? m.formatContributionDate(day.day)
+                        : (day.day ? day.day : 'Earlier');
+                    const items = (day.items || []).map((item, index) => {
+                        const id = `${day.day || 'earlier'}:${index}`;
+                        painted.set(id, item);
+                        const label = `${item.title} (+${item.points})`;
+                        return `<button type="button" data-contrib-id="${escapeAccountHtml(id)}" class="account-contrib-event w-full text-left rounded-lg px-2.5 py-2 text-[13px] font-semibold text-gray-800 dark:text-gray-100 bg-white dark:bg-[#2c2c2e] border border-black/10 dark:border-white/15 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400">${escapeAccountHtml(label)}</button>`;
+                    }).join('');
+                    return `<li class="space-y-1.5">
+                        <div class="flex justify-between gap-3 px-0.5">
+                            <span>${escapeAccountHtml(when)}</span>
+                            <span class="shrink-0 font-semibold">+${day.total}</span>
+                        </div>
+                        <div class="flex flex-col gap-1.5">${items}</div>
                     </li>`;
                 }).join('')
                 : '<li>No contributions yet. Earn points from the actions above.</li>';
+            contrib.onclick = (ev) => {
+                const btn = ev.target?.closest?.('[data-contrib-id]');
+                if (!btn) return;
+                const item = painted.get(btn.getAttribute('data-contrib-id'));
+                if (item) openContributionSheet(item, m);
+            };
         }
         const grid = document.getElementById('account-badge-grid');
         if (grid) {
@@ -1178,6 +1234,8 @@ export function bindAccountUi() {
 
     document.getElementById('account-badge-how-close')?.addEventListener('click', closeBadgeHowSheet);
     document.getElementById('account-badge-how-overlay')?.addEventListener('click', closeBadgeHowSheet);
+    document.getElementById('account-contrib-close')?.addEventListener('click', closeContributionSheet);
+    document.getElementById('account-contrib-overlay')?.addEventListener('click', closeContributionSheet);
 
     paintAccountPoints();
 }

@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_10.11.3': [
+        'Account contributions use 09 Oct 2026. Each points event is its own button, such as Share your trip (+2), and the date row shows only that day’s total. Opening a share shows the train, route, duration, and origin - destination when those were stored. Events that dropped out of the short history still list from the award keys. Account appearance adds System, which follows the phone. The side nav Dark Mode switch still sets light or dark. No commuter What’s New. forceShow stays false.',
+    ],
     'V9_10.11.2': [
         'Earthy light and dark: paper buttons (Update, Yes, Close, and the other blue-600 labels) use dark ink. Light mode only switches that ink to cream while the hover fill is actually dark. See more and View results use the accent, not the paper fill. A checked switch keeps a dark track so the knob stays visible. The selected corridor row and the Gauteng regional tile stay readable. See more shows 764 characters, then the same amount again, and drops the button when the rest is shorter. Classic is unchanged. No commuter What’s New. forceShow stays false.',
     ],

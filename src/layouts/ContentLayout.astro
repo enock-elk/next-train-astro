@@ -187,7 +187,10 @@ const resolvedHtmlClass = [forceDark ? 'dark' : '', htmlClass].filter(Boolean).j
           if (!theme) {
             theme = 'light';
           }
-          const isDark = theme === 'dark';
+          let isDark = theme === 'dark';
+          if (theme === 'system') {
+            try { isDark = window.matchMedia('(prefers-color-scheme: dark)').matches; } catch (e) { isDark = false; }
+          }
           if (isDark) document.documentElement.classList.add('dark');
           else document.documentElement.classList.remove('dark');
         }

@@ -31,6 +31,9 @@ import {
     sortAlertsFeed,
     alertCopyNeedsSeeMore,
     ALERT_SEE_MORE_MIN_CHARS,
+    alertSeeMoreLimit,
+    alertSeeMoreLines,
+    expandAlertSeeMore,
 } from '../src/lib/alerts-feed.js';
 
 const failures = [];
@@ -524,8 +527,54 @@ const now = 1_700_000_000_000;
     assert(alertCopyNeedsSeeMore(`${'word '.repeat(200)}`) === true, 'a long post needs See more');
     assert(alertCopyNeedsSeeMore('Short advisory.') === false, 'a short post stays open');
     assert(ALERT_SEE_MORE_MIN_CHARS === 700, 'See more uses the WhatsApp 700 character mark');
+    assert(alertSeeMoreLimit(1) === 1400 && alertSeeMoreLimit(2) === 2800, 'each See more doubles the first character window');
+    assert(alertSeeMoreLines(1) === 12 && alertSeeMoreLines(2) === 24 && alertSeeMoreLines(3) === 48, 'See more line clamp starts at 12 and doubles');
+    const seeMoreBody = (text, step = 1) => {
+        const body = {
+            text,
+            step: String(step),
+            collapsed: true,
+            clamp: '',
+            classList: {
+                add() { body.collapsed = true; },
+                remove() { body.collapsed = false; },
+            },
+            getAttribute(name) { return name === 'data-see-more-step' ? body.step : null; },
+            setAttribute(name, value) { if (name === 'data-see-more-step') body.step = String(value); },
+            removeAttribute(name) { if (name === 'data-see-more-step') body.step = ''; },
+            get textContent() { return body.text; },
+            style: {},
+        };
+        Object.defineProperty(body.style, 'webkitLineClamp', {
+            get() { return body.clamp; },
+            set(value) { body.clamp = value; },
+        });
+        Object.defineProperty(body.style, 'lineClamp', {
+            get() { return body.clamp; },
+            set(value) { body.clamp = value; },
+        });
+        const copy = { querySelector: () => body };
+        const button = {
+            removed: false,
+            remove() { button.removed = true; },
+            closest: () => copy,
+        };
+        return { body, button };
+    };
+    const shortStep = seeMoreBody('x'.repeat(900), 1);
+    expandAlertSeeMore(shortStep.button);
+    assert(shortStep.button.removed && !shortStep.body.collapsed, 'a post inside the next window opens fully');
+    const longStep = seeMoreBody('x'.repeat(2000), 1);
+    expandAlertSeeMore(longStep.button);
+    assert(!longStep.button.removed && longStep.body.step === '2' && longStep.body.clamp === '24', 'a longer post keeps See more at double the window');
+    expandAlertSeeMore(longStep.button);
+    assert(longStep.button.removed && !longStep.body.collapsed, 'the next tap opens the rest once it fits');
     const channelJs = readFileSync(new URL('../src/lib/alerts-channel.js', import.meta.url), 'utf8');
     assert(channelJs.includes('See more...'), 'long posts offer See more');
+    assert(channelJs.includes('expandAlertSeeMore') && channelJs.includes('data-see-more-step="1"'), 'the feed steps See more');
+    assert(hubJs.includes('expandAlertSeeMore') && hubJs.includes('data-see-more-step="1"'), 'the notice modal steps See more');
+    const appearanceCss = readFileSync(new URL('../src/styles/appearance.css', import.meta.url), 'utf8');
+    assert(appearanceCss.includes('-webkit-line-clamp: 12'), 'the first See more preview is 12 lines');
     assert(channelJs.includes('alignAlertCardTop') && channelJs.includes('focusTop'), 'force open puts the alert top in view');
     assert(channelJs.includes('nt-alert-force-flash'), 'force open highlight is a brief flash');
     assert(hubJs.includes('focusTop: true'), 'auto open asks for the top of the alert');

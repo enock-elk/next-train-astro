@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_10.11.1': [
+        'Sign-in uses auth.nexttrain.co.za now that the Hosting domain is connected. A long alert shows a little more, then See more again at double the character window until the rest fits. Crash text export always includes the script address, line, and stack, or (not recorded) when the report did not have them. Signing in toasts once when the saved theme or colour pack actually changes the screen. The user sheet always lists fares, routing fails, ticket photos, and crashes. Earthy light and dark: the zone chip, planner swap, timetable direction chip, pinned route, selected station, and the user sheet Look up more and Close buttons keep readable ink on a distinct chip. Classic is unchanged. No commuter What’s New. forceShow stays false.',
+    ],
     'V9_10.10.7': [
         'Community tab: a signed-in operator can long-press a message and choose Delete for everyone. That removes the post, its replies, and the activity index immediately, the same RTDB delete Community Monitor already uses. A published community post or reply now awards points once per service day (2), and the first one still unlocks the 5-point badge. Share, join, and delay reports already paid once per service day; a community comment did not, so a later message added nothing. No commuter What’s New. forceShow stays false.',
     ],

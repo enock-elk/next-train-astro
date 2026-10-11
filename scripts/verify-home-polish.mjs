@@ -573,6 +573,7 @@ assert(hubModals.includes('id="nt-admin-publish-train"'), 'admin nearby sheet ca
     assert(accountJs.includes("hydrateRemoteMarks({ persist: true })"), 'sign-in hydrates that uid from users/{uid}/marks');
     assert(accountJs.includes('switchMarksAccount(user.uid)'), 'sign-in drops the previous account points immediately');
     assert(accountJs.includes('updateAccountDisplayName'), 'signed-in users can save a display name');
+    assert(accountJs.includes('Look updated from your account.'), 'sign-in toasts when the saved look actually changes');
     assert(hubModals.includes('id="account-edit-display-name"') && hubModals.includes('id="account-save-display-name"'), 'Account has a display name field');
     const adminCl = readFileSync(new URL('../src/lib/admin-changelog.js', import.meta.url), 'utf8');
     assert(adminCl.includes('ADMIN_CHANGELOG'), 'operator build notes exist');

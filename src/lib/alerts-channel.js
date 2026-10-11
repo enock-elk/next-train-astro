@@ -31,6 +31,7 @@ import {
     hoistAlertImagesFromHtml,
     layoutAlertPost,
     alertCopyNeedsSeeMore,
+    expandAlertSeeMore,
     stripAlertSignoffHtml,
     noticeScopeLabel,
     shouldIgnoreAlertLongPress,
@@ -595,7 +596,7 @@ function renderPostCard(notice, opts = {}) {
     const mediaHtml = renderPosterHtml(layout.imageUrls, notice);
     const bodyHtml = body
         ? (alertCopyNeedsSeeMore(body)
-            ? `<div class="nt-alert-copy ${mediaHtml ? 'mt-3' : ''}"><div class="nt-rich-body nt-alert-body is-collapsed text-sm text-gray-800 dark:text-gray-200 leading-relaxed" data-alert-body>${body}</div><button type="button" class="nt-alert-see-more" data-alert-see-more>See more...</button></div>`
+            ? `<div class="nt-alert-copy ${mediaHtml ? 'mt-3' : ''}"><div class="nt-rich-body nt-alert-body is-collapsed text-sm text-gray-800 dark:text-gray-200 leading-relaxed" data-alert-body data-see-more-step="1">${body}</div><button type="button" class="nt-alert-see-more" data-alert-see-more>See more...</button></div>`
             : `<div class="nt-rich-body text-sm text-gray-800 dark:text-gray-200 leading-relaxed ${mediaHtml ? 'mt-3' : ''}" data-alert-body>${body}</div>`)
         : '';
     let extra = '';
@@ -1025,9 +1026,8 @@ function bindAlertsChannelOnce() {
         const seeMore = e.target.closest?.('[data-alert-see-more]');
         if (seeMore) {
             e.preventDefault();
-            const copy = seeMore.closest('.nt-alert-copy');
-            copy?.querySelector('[data-alert-body]')?.classList.remove('is-collapsed');
-            seeMore.remove();
+            e.stopPropagation();
+            expandAlertSeeMore(seeMore);
             return;
         }
         if (longFired) {

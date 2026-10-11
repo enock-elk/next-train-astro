@@ -282,11 +282,55 @@ export function shouldIgnoreAlertLongPress(target) {
     return false;
 }
 
-/** WhatsApp offers Read more once a chat bubble passes this many characters. */
+/** First See more appears once the post passes this many characters. */
 export const ALERT_SEE_MORE_MIN_CHARS = 700;
+
+/** First preview is a little longer than a short clamp. Later steps double it. */
+export const ALERT_SEE_MORE_FIRST_LINES = 12;
 
 export function alertCopyNeedsSeeMore(html) {
     return stripHtmlToText(html).length > ALERT_SEE_MORE_MIN_CHARS;
+}
+
+/** Character window after `step` reveals. Step 1 → 1400, step 2 → 2800, and so on. */
+export function alertSeeMoreLimit(step) {
+    const n = Math.max(1, Number(step) || 1);
+    return ALERT_SEE_MORE_MIN_CHARS * (2 ** n);
+}
+
+/** Line clamp for the preview at `step`. Step 1 → 12, step 2 → 24, step 3 → 48. */
+export function alertSeeMoreLines(step) {
+    const n = Math.max(1, Number(step) || 1);
+    return ALERT_SEE_MORE_FIRST_LINES * (2 ** (n - 1));
+}
+
+/**
+ * One See more tap. If the post is still longer than the next doubled
+ * window, reveal that much and keep the button. Otherwise show the rest.
+ */
+export function expandAlertSeeMore(button) {
+    const copy = button?.closest?.('.nt-alert-copy');
+    const body = copy?.querySelector?.('[data-alert-body]');
+    if (!body) {
+        button?.remove?.();
+        return;
+    }
+    const step = Math.max(1, Number(body.getAttribute('data-see-more-step')) || 1);
+    const plain = String(body.textContent || '').replace(/\s+/g, ' ').trim();
+    if (plain.length > alertSeeMoreLimit(step)) {
+        const nextStep = step + 1;
+        body.setAttribute('data-see-more-step', String(nextStep));
+        body.classList.add('is-collapsed');
+        const lines = String(alertSeeMoreLines(nextStep));
+        body.style.webkitLineClamp = lines;
+        body.style.lineClamp = lines;
+        return;
+    }
+    body.classList.remove('is-collapsed');
+    body.style.webkitLineClamp = '';
+    body.style.lineClamp = '';
+    body.removeAttribute('data-see-more-step');
+    button.remove();
 }
 
 function stripHtmlToText(html) {

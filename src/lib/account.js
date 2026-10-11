@@ -146,6 +146,9 @@ function bindSignedInOpsListeners() {
 
 export async function applyAccountPrefs(prefs) {
     if (!prefs || typeof prefs !== 'object') return;
+    const root = typeof document !== 'undefined' ? document.documentElement : null;
+    const beforeDark = !!(root && root.classList.contains('dark'));
+    const beforePack = (root && root.getAttribute('data-colour-pack')) || 'classic';
     _hydratingPrefs = true;
     try {
         if (prefs.theme === 'dark' || prefs.theme === 'light') {
@@ -205,6 +208,15 @@ export async function applyAccountPrefs(prefs) {
         } catch { /* ignore */ }
     } finally {
         _hydratingPrefs = false;
+        if (root) {
+            const afterDark = root.classList.contains('dark');
+            const afterPack = root.getAttribute('data-colour-pack') || 'classic';
+            const themeChanged = (prefs.theme === 'dark' || prefs.theme === 'light') && afterDark !== beforeDark;
+            const packChanged = !!prefs.colourPack && afterPack !== beforePack;
+            if ((themeChanged || packChanged) && typeof window !== 'undefined' && typeof window.showToast === 'function') {
+                window.showToast('Look updated from your account.', 'info');
+            }
+        }
     }
 }
 

@@ -48,7 +48,7 @@ import {
 
 const firebaseConfig = {
     apiKey: 'AIzaSyAU303BRMrH3A5n5zbJH4MVwWdkfznqxMY',
-    authDomain: 'metrorail-next-train.firebaseapp.com',
+    authDomain: 'auth.nexttrain.co.za',
     databaseURL: 'https://metrorail-next-train-default-rtdb.firebaseio.com/',
     projectId: 'metrorail-next-train',
     storageBucket: 'metrorail-next-train.firebasestorage.app',

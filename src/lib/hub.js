@@ -64,7 +64,7 @@ import {
     toggleAlertPinned,
     toggleAlertPollRawCounts,
 } from './alerts-channel.js';
-import { layoutAlertPost, hoistAlertImagesFromHtml, ALERT_PIN_SVG, isNoticePinned, alertCopyNeedsSeeMore } from './alerts-feed.js';
+import { layoutAlertPost, hoistAlertImagesFromHtml, ALERT_PIN_SVG, isNoticePinned, alertCopyNeedsSeeMore, expandAlertSeeMore } from './alerts-feed.js';
 import {
     buildPollShellHtml,
     hydratePollResults,
@@ -1790,7 +1790,7 @@ export function renderServiceAlertModal(notice, options = {}) {
         : '';
     let formattedMsg = sanitizeHTML(layout.body);
     if (alertCopyNeedsSeeMore(layout.body)) {
-        formattedMsg = `<div class="nt-alert-copy"><div class="nt-rich-body nt-alert-body is-collapsed text-sm text-gray-800 dark:text-gray-200 leading-relaxed" data-alert-body>${formattedMsg}</div><button type="button" class="nt-alert-see-more" data-alert-see-more>See more...</button></div>`;
+        formattedMsg = `<div class="nt-alert-copy"><div class="nt-rich-body nt-alert-body is-collapsed text-sm text-gray-800 dark:text-gray-200 leading-relaxed" data-alert-body data-see-more-step="1">${formattedMsg}</div><button type="button" class="nt-alert-see-more" data-alert-see-more>See more...</button></div>`;
     }
     if (options.prefixHtml) formattedMsg = `${options.prefixHtml}${formattedMsg}`;
 
@@ -2178,8 +2178,8 @@ export function initHub() {
             const seeMore = e.target?.closest?.('[data-alert-see-more]');
             if (seeMore) {
                 e.preventDefault();
-                seeMore.closest('.nt-alert-copy')?.querySelector('[data-alert-body]')?.classList.remove('is-collapsed');
-                seeMore.remove();
+                e.stopPropagation();
+                expandAlertSeeMore(seeMore);
                 return;
             }
             const viewBtn = e.target?.closest?.('[data-poll-view-results]');

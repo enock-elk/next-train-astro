@@ -592,9 +592,85 @@ html[data-colour-pack="earthy"].dark .text-blue-400,
 html[data-colour-pack="earthy"].dark .text-blue-300 {
   color: rgb(var(--nt-blue-800)) !important;
 }
+/* Earthy only. Classic keeps its blue pills and gray buttons.
+   These chips were inheriting the inverted blue scale (cream on cream,
+   white on taupe). Dark brown ink on a distinct paper chip, both modes. */
+html[data-colour-pack="earthy"]:not(.dark) .nt-fare-zone-chip {
+  background-color: #e7e1d4 !important;
+  color: #2a261f !important;
+  border: 1px solid #cfc6b4 !important;
+}
 html[data-colour-pack="earthy"].dark .nt-fare-zone-chip {
-  background-color: var(--nt-surface) !important;
-  border: 1px solid var(--nt-border);
+  background-color: #efeae0 !important;
+  color: #2a261f !important;
+  border: 1px solid #d8d0c2 !important;
+}
+html[data-colour-pack="earthy"]:not(.dark) #planner-swap-btn {
+  background-color: #e7e1d4 !important;
+  color: #2a261f !important;
+  border-color: #f3f2ee !important;
+}
+html[data-colour-pack="earthy"].dark #planner-swap-btn {
+  background-color: #3a342c !important;
+  color: #f5f1e9 !important;
+  border-color: #1c1b18 !important;
+}
+html[data-colour-pack="earthy"]:not(.dark) #grid-swap-dir-btn,
+html[data-colour-pack="earthy"]:not(.dark) #grid-share-btn {
+  background-color: #e7e1d4 !important;
+  color: #2a261f !important;
+  border-color: #cfc6b4 !important;
+}
+html[data-colour-pack="earthy"].dark #grid-swap-dir-btn,
+html[data-colour-pack="earthy"].dark #grid-share-btn {
+  background-color: #efeae0 !important;
+  color: #2a261f !important;
+  border-color: #d8d0c2 !important;
+}
+html[data-colour-pack="earthy"] #pinned-section {
+  border-color: #cfc6b4;
+}
+html[data-colour-pack="earthy"]:not(.dark) #pinned-section a {
+  background-color: #e7e1d4 !important;
+  color: #2a261f !important;
+}
+html[data-colour-pack="earthy"].dark #pinned-section {
+  border-color: #6a6458;
+}
+html[data-colour-pack="earthy"].dark #pinned-section a {
+  background-color: #3a342c !important;
+  color: #f5f1e9 !important;
+}
+html[data-colour-pack="earthy"] #pinned-section .text-blue-700,
+html[data-colour-pack="earthy"] #pinned-section .text-blue-500,
+html[data-colour-pack="earthy"] #pinned-section .text-blue-400,
+html[data-colour-pack="earthy"] #pinned-section .text-blue-300 {
+  color: inherit !important;
+}
+html[data-colour-pack="earthy"]:not(.dark) #grid-container .nt-station-col.bg-blue-100 {
+  background-color: #e7e1d4 !important;
+  color: #2a261f !important;
+}
+html[data-colour-pack="earthy"].dark #grid-container .nt-station-col.dark\:bg-blue-800 {
+  background-color: #efeae0 !important;
+  color: #2a261f !important;
+}
+html[data-colour-pack="earthy"]:not(.dark) #grid-container tr.bg-blue-50 {
+  background-color: #efeae0;
+}
+html[data-colour-pack="earthy"].dark #grid-container tr.dark\:bg-blue-900\/20 {
+  background-color: rgba(58, 52, 44, 0.95);
+}
+html[data-colour-pack="earthy"] #commuter-peek-lookup,
+html[data-colour-pack="earthy"] #commuter-peek-close {
+  background-color: #3a342c !important;
+  color: #f7f3eb !important;
+  border-color: transparent !important;
+}
+html[data-colour-pack="earthy"] #commuter-peek-lookup:hover,
+html[data-colour-pack="earthy"] #commuter-peek-close:hover {
+  background-color: #2a261f !important;
+  color: #f7f3eb !important;
 }
 #grid-trigger-container {
   padding-bottom: 0.5rem;
@@ -826,7 +902,8 @@ html.dark .nt-offline-strip {
 .nt-alert-body.is-collapsed {
   display: -webkit-box;
   -webkit-box-orient: vertical;
-  -webkit-line-clamp: 8;
+  -webkit-line-clamp: 12;
+  line-clamp: 12;
   overflow: hidden;
 }
 .nt-alert-see-more {

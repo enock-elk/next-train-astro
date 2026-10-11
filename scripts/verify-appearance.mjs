@@ -16,6 +16,15 @@ assert(css.includes('html[data-colour-pack="earthy"]:not(.dark) .text-blue-600')
 assert(css.includes('html[data-colour-pack="earthy"].dark .text-blue-400'), 'Earthy dark maps pale blue labels to light ink');
 assert(css.includes('html[data-colour-pack="earthy"].dark #planner-back-btn'), 'Earthy dark planner toolbar uses light ink');
 assert(css.includes('.nt-fare-zone-chip'), 'fare Zone chip has a pack-aware class');
+assert(css.includes('html[data-colour-pack="earthy"]:not(.dark) .nt-fare-zone-chip'), 'Earthy light zone chip is its own chip');
+assert(css.includes('html[data-colour-pack="earthy"].dark .nt-fare-zone-chip'), 'Earthy dark zone chip is a cream chip');
+assert(css.includes('#efeae0') && css.includes('#2a261f'), 'Earthy chips use paper and charcoal');
+assert(css.includes('html[data-colour-pack="earthy"].dark #planner-swap-btn'), 'Earthy dark planner swap is a dark disc');
+assert(css.includes('html[data-colour-pack="earthy"].dark #grid-swap-dir-btn'), 'Earthy dark timetable direction chip is readable');
+assert(css.includes('html[data-colour-pack="earthy"].dark #pinned-section a'), 'Earthy dark pinned route uses light ink');
+assert(css.includes('#grid-container .nt-station-col.bg-blue-100'), 'Earthy selected station stays in the in-app grid');
+assert(css.includes('#commuter-peek-lookup') && css.includes('#commuter-peek-close'), 'Earthy user sheet buttons share the dark brown');
+assert(!/html\[data-colour-pack="classic"\][^{]*#planner-swap-btn/.test(css), 'Classic planner swap is not restyled');
 assert(/html\[data-colour-pack="earthy"\] #view-full-timetable-btn/.test(css), 'Earthy weakens the timetable CTA halo');
 assert(!css.includes('data-colour-pack="ember"'), 'Ember pack CSS is gone');
 assert(/\.text-gray-400,[\s\S]*?--nt-text-faint/.test(css), 'gray-400 maps to faint, not muted');

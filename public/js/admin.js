@@ -2621,12 +2621,33 @@ const Admin = {
             }
         };
         const looksDevice = /^usr_/i.test(did);
-        const [tripNode, inboxNode, deviceNode, userNode] = await Promise.all([
+        const needFares = !(Admin._cachedFareVotes && typeof Admin._cachedFareVotes === 'object');
+        const needFails = !(Admin._cachedRoutingFails && typeof Admin._cachedRoutingFails === 'object');
+        const needTickets = !(Admin._cachedFareTicketPhotos && typeof Admin._cachedFareTicketPhotos === 'object');
+        const [tripNode, inboxNode, deviceNode, userNode, fareData, failData, ticketData] = await Promise.all([
             fetchJson(`sys_logs/trip_plan_users/${encodeURIComponent(did)}.json`),
             looksDevice ? fetchJson(`inbox/${encodeURIComponent(did)}.json`) : Promise.resolve(null),
             looksDevice ? fetchJson(`devices/${encodeURIComponent(did)}.json`) : Promise.resolve(null),
             fetchJson(`users/${encodeURIComponent(did)}.json`),
+            needFares ? fetchJson('sys_logs/fare_votes.json') : Promise.resolve(null),
+            needFails ? fetchJson('sys_logs/routing_fails.json') : Promise.resolve(null),
+            needTickets ? fetchJson('sys_logs/fare_ticket_photos.json') : Promise.resolve(null),
         ]);
+        let fareStatus = 'ready';
+        let failStatus = 'ready';
+        let ticketStatus = 'ready';
+        if (needFares) {
+            if (fareData && typeof fareData === 'object') Admin._cachedFareVotes = fareData;
+            else fareStatus = 'unavailable';
+        }
+        if (needFails) {
+            if (failData && typeof failData === 'object') Admin._cachedRoutingFails = failData;
+            else failStatus = 'unavailable';
+        }
+        if (needTickets) {
+            if (ticketData && typeof ticketData === 'object') Admin._cachedFareTicketPhotos = ticketData;
+            else ticketStatus = 'unavailable';
+        }
         const ids = Admin.commuterIdSet(did, deviceNode?.uid, userNode && looksDevice ? null : did);
         const feedbackItems = (Admin.cachedFeedbackData || []).filter((i) => {
             const fbDid = String(i?.deviceId || i?.device_id || '').trim();
@@ -2648,16 +2669,53 @@ const Admin = {
             tripRegion = tripRegion || tripIndex.region || '';
         }
         const inboxHas = !!(inboxNode && typeof inboxNode === 'object' && Object.keys(inboxNode).length);
+        const crashKnown = Array.isArray(Admin.cachedCrashData);
         const crashCount = (Admin.cachedCrashData || []).filter((c) => {
             const cDid = String(c?.deviceId || c?.device_id || '').trim();
             return ids.has(cDid) || cDid === did;
         }).length;
-        const fareCount = Admin._cachedFareVotes && typeof Admin._cachedFareVotes === 'object'
-            ? Object.values(Admin._cachedFareVotes).filter((v) => ids.has(String(v?.deviceId || v?.userId || '').trim())).length
-            : null;
-        const failCount = Admin._cachedRoutingFails && typeof Admin._cachedRoutingFails === 'object'
-            ? Object.values(Admin._cachedRoutingFails).filter((v) => ids.has(String(v?.userId || v?.deviceId || '').trim())).length
-            : null;
+        const matchesId = (row) => {
+            const rowId = String(row?.deviceId || row?.userId || '').trim();
+            const authUid = String(row?.authUid || '').trim();
+            return ids.has(rowId) || rowId === did || (authUid && ids.has(authUid));
+        };
+        const fareVotes = fareStatus === 'unavailable'
+            ? []
+            : Object.entries(Admin._cachedFareVotes || {}).map(([id, v]) => ({ id, ...(v || {}) })).filter(matchesId);
+        const fails = failStatus === 'unavailable'
+            ? []
+            : Object.values(Admin._cachedRoutingFails || {}).filter(matchesId);
+        const ticketPhotos = Admin._cachedFareTicketPhotos || {};
+        const ticketFromVotes = fareVotes.filter((v) => v.ticketUrl || (v.id && ticketPhotos[v.id]?.ticketUrl)).length;
+        const ticketFromCache = ticketStatus === 'unavailable' ? 0 : Object.values(ticketPhotos).filter(matchesId).length;
+        const ticketCount = Math.max(ticketFromVotes, ticketFromCache);
+        const formatRand = (n) => {
+            const num = Number(n);
+            if (!Number.isFinite(num)) return '';
+            return `R${Number.isInteger(num) ? num : num.toFixed(2)}`;
+        };
+        const interactionLine = (label, status, count, detail) => {
+            if (status === 'unavailable') return `${label}: unavailable`;
+            if (!count) return `${label}: none`;
+            return detail ? `${label}: ${count} · ${detail}` : `${label}: ${count}`;
+        };
+        let fareDetail = '';
+        if (fareVotes.length) {
+            const latest = [...fareVotes].sort((a, b) => (Number(b.at || b.timestamp) || 0) - (Number(a.at || a.timestamp) || 0))[0];
+            const from = String(latest.origin || '').trim();
+            const to = String(latest.destination || '').trim();
+            const od = from && to ? `${from} to ${to}` : (from || to);
+            const quoted = formatRand(latest.quotedPrice);
+            const reported = formatRand(latest.reportedPrice);
+            fareDetail = [od, quoted ? `quoted ${quoted}` : '', reported ? `reported ${reported}` : ''].filter(Boolean).join(' · ');
+        }
+        let ticketLine = interactionLine('Ticket photos', 'ready', ticketCount, '');
+        if (ticketStatus === 'unavailable' && !ticketCount) {
+            ticketLine = 'Ticket photos: unavailable';
+        }
+        const crashLine = crashKnown
+            ? (crashCount ? `Crashes: ${crashCount}` : 'Crashes: none')
+            : 'Crashes: unavailable';
         return {
             id: did,
             alias: Admin.commuterAlias(did),
@@ -2674,8 +2732,10 @@ const Admin = {
             contacts,
             defaultRoute: Admin.inferCommuterDefaultRoute(did, latestFeedback || {}),
             crashCount,
-            fareCount,
-            failCount,
+            fareLine: interactionLine('Fares', fareStatus, fareVotes.length, fareDetail),
+            failLine: interactionLine('Routing fails', failStatus, fails.length, ''),
+            ticketLine,
+            crashLine,
         };
     },
 
@@ -2720,10 +2780,6 @@ const Admin = {
                 ...(peek.contacts.phones || []).map((ph) => esc(ph)),
             ];
             const routeLabel = Admin.inboxRouteLabel(peek.defaultRoute) || peek.defaultRoute;
-            const extraCounts = [];
-            if (peek.fareCount != null) extraCounts.push(`Fares ${peek.fareCount}`);
-            if (peek.failCount != null) extraCounts.push(`Fails ${peek.failCount}`);
-            if (peek.crashCount) extraCounts.push(`Crashes ${peek.crashCount}`);
             body.innerHTML = `
                 <p class="font-black text-sm text-gray-900 dark:text-white break-words">${esc(heading)}</p>
                 ${peek.alias ? `<p>Alias: <b>${esc(peek.alias)}</b></p>` : '<p class="text-gray-400">No feedback alias.</p>'}
@@ -2735,7 +2791,10 @@ const Admin = {
                 <p>Feedback: <b>${peek.hasChat ? (peek.feedbackCount ? `${peek.feedbackCount} messages` : 'open thread') : 'none'}</b>${peek.latestFeedbackAt ? ` · last ${esc(Admin.formatDate(peek.latestFeedbackAt))}` : ''}</p>
                 ${contactBits.length ? `<p>Contacts: <b>${contactBits.join(', ')}</b></p>` : ''}
                 ${routeLabel ? `<p>Default route: <b>${esc(routeLabel)}</b></p>` : ''}
-                ${extraCounts.length ? `<p>${esc(extraCounts.join(' · '))}</p>` : ''}
+                <p>${esc(peek.fareLine)}</p>
+                <p>${esc(peek.failLine)}</p>
+                <p>${esc(peek.ticketLine)}</p>
+                <p>${esc(peek.crashLine)}</p>
             `;
             if (peek.hasChat) {
                 const actions = document.createElement('div');
@@ -5924,7 +5983,33 @@ const Admin = {
             }
             const tabLabel = tab === 'distress' ? 'Distress' : (tab === 'inbox' ? 'Inbox' : 'Archive');
             let txt = `NEXT TRAIN - CRASH ANALYTICS\nTab: ${tabLabel}\nExported: ${Admin.formatDate(Date.now())}\nRows: ${rows.length}\n${'='.repeat(48)}\n\n`;
+            const crashRecorded = (value) => {
+                const s = String(value ?? '').replace(/\r/g, '').trim();
+                if (!s || s === 'undefined' || s === 'null' || s === 'N/A' || s === 'undefined:undefined') return '';
+                return s;
+            };
+            const crashRawObject = (c) => {
+                if (!c || c.raw == null || c.raw === '') return null;
+                if (typeof c.raw === 'object') return c.raw;
+                const text = String(c.raw).replace(/\n\.\.\.\[truncated\]$/, '');
+                try {
+                    const parsed = JSON.parse(text);
+                    return parsed && typeof parsed === 'object' ? parsed : null;
+                } catch {
+                    return null;
+                }
+            };
+            const indentBlock = (value) => String(value || '(not recorded)').split('\n').map((l) => `    ${l}`).join('\n');
             rows.forEach((c, i) => {
+                const raw = crashRawObject(c);
+                let line = c.line ?? c.lineno;
+                if ((line == null || line === '') && raw) {
+                    if (raw.line != null && raw.col != null && !String(raw.line).includes(':')) line = `${raw.line}:${raw.col}`;
+                    else line = raw.line ?? raw.lineno;
+                }
+                const script = c.url || c.script || c.filename || (raw && (raw.url || raw.filename || raw.script)) || '';
+                const stack = c.stack || (raw && (raw.stack || (raw.error && raw.error.stack))) || '';
+                const msg = crashRecorded(c.message || c.error || (raw && raw.message));
                 txt += `#${i + 1}  ${Admin.formatDate(c.timestamp)}\n`;
                 txt += `  ID: ${c.id || '-'}\n`;
                 txt += `  Device: ${c.deviceId || c.device_id || '-'}\n`;
@@ -5933,8 +6018,10 @@ const Admin = {
                 if (c.contact) txt += `  Contact: ${c.contact}\n`;
                 if (c.reason) txt += `  Reason: ${c.reason}\n`;
                 if (c.note) txt += `  Note: ${c.note}\n`;
-                const msg = String(c.message || c.error || c.stack || '').replace(/\r/g, '');
-                if (msg) txt += `  Message:\n${msg.split('\n').map((l) => `    ${l}`).join('\n')}\n`;
+                txt += `  Message:\n${indentBlock(msg)}\n`;
+                txt += `  Line: ${crashRecorded(line) || '(not recorded)'}\n`;
+                txt += `  Script: ${crashRecorded(script) || '(not recorded)'}\n`;
+                txt += `  Stack:\n${indentBlock(crashRecorded(stack))}\n`;
                 txt += `\n`;
             });
             const dateStr = new Date().toISOString().slice(0, 10);

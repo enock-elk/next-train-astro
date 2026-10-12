@@ -4850,7 +4850,7 @@ const Admin = {
                 <button id="action-header-btn" type="button" class="w-full text-left text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center justify-center focus:outline-none relative">
                     <span class="flex flex-col items-center">
                         ${Admin.tileIcon('activity', 'text-blue-600 dark:text-blue-400')}
-                        <span class="text-blue-600 dark:text-blue-400">Global State Monitor</span>
+                        <span class="text-blue-600 dark:text-blue-400">State Monitor</span>
                     </span>
                     <svg id="action-chevron" class="w-4 h-4 transform transition-transform -rotate-90 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
                 </button>
@@ -4874,6 +4874,14 @@ const Admin = {
         { id: 'maint', label: 'Maint', types: ['Maintenance'] },
     ],
 
+    _GSM_SORTS: [
+        { id: 'expiry', label: 'Expiry' },
+        { id: 'newest', label: 'Newest' },
+        { id: 'severity', label: 'Severity' },
+        { id: 'type', label: 'Type' },
+        { id: 'route', label: 'Route' },
+    ],
+
     gsmTabCounts: (items) => {
         const counts = { all: (items || []).length };
         (Admin._GSM_TABS || []).forEach((tab) => {
@@ -4885,8 +4893,46 @@ const Admin = {
 
     gsmFilteredItems: (items, tabId) => {
         const tab = (Admin._GSM_TABS || []).find((t) => t.id === tabId) || Admin._GSM_TABS[0];
-        if (!tab || !tab.types) return items || [];
-        return (items || []).filter((it) => tab.types.includes(it.type));
+        const filtered = (!tab || !tab.types) ? (items || []) : (items || []).filter((it) => tab.types.includes(it.type));
+        return Admin.gsmSortedItems(filtered, Admin._gsmSort || 'expiry');
+    },
+
+    gsmSortedItems: (items, sortId) => {
+        const list = [...(items || [])];
+        const sevRank = (it) => {
+            const s = String(it.severity || '').toLowerCase();
+            if (s === 'critical') return 0;
+            if (s === 'warning') return 1;
+            return 2;
+        };
+        const created = (it) => Number(it.createdAt || it.timestamp || 0);
+        if (sortId === 'newest') {
+            list.sort((a, b) => (created(b) - created(a)) || ((b.expiresAt || 0) - (a.expiresAt || 0)));
+        } else if (sortId === 'severity') {
+            list.sort((a, b) => sevRank(a) - sevRank(b));
+        } else if (sortId === 'type') {
+            list.sort((a, b) => String(a.type || '').localeCompare(String(b.type || '')));
+        } else if (sortId === 'route') {
+            list.sort((a, b) => String(a.routeId || '').localeCompare(String(b.routeId || '')));
+        } else {
+            list.sort((a, b) => {
+                if (!a.expiresAt && !b.expiresAt) return 0;
+                if (!a.expiresAt) return 1;
+                if (!b.expiresAt) return -1;
+                return a.expiresAt - b.expiresAt;
+            });
+        }
+        return list;
+    },
+
+    gsmSortBarHtml: () => {
+        const active = Admin._gsmSort || 'expiry';
+        return `<div class="flex items-center justify-between gap-2 mb-2">
+            <label class="text-[10px] font-black uppercase tracking-wider text-gray-500 shrink-0" for="gsm-sort">Sort</label>
+            <select id="gsm-sort" class="flex-1 h-8 px-2 rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-[11px] font-bold text-gray-800 dark:text-gray-100">
+                ${(Admin._GSM_SORTS || []).map((s) => `<option value="${s.id}" ${s.id === active ? 'selected' : ''}>${s.label}</option>`).join('')}
+            </select>
+        </div>`;
     },
 
     gsmRegionBadge: (rId) => {
@@ -4927,6 +4973,8 @@ const Admin = {
                 <span class="text-sm font-black text-slate-900 dark:text-white leading-tight break-words w-full mb-2">
                     ${item.label}
                 </span>
+                ${item.imageUrl ? `<div class="w-full mb-2 rounded-lg overflow-hidden border border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-900"><img src="${String(item.imageUrl).replace(/"/g, '&quot;')}" alt="" class="w-full h-24 object-cover"></div>` : ''}
+                ${item.preview ? `<p class="text-[11px] text-gray-600 dark:text-gray-300 leading-snug break-words w-full mb-2">${String(item.preview).replace(/</g, '&lt;')}</p>` : ''}
                 <div class="flex gap-2 pt-2.5 border-t border-gray-100 dark:border-gray-700 mt-auto w-full">
                     <button onclick="event.stopPropagation(); Admin.resolveActionRequired('${safeType}', '${safeId}', '${safeRoute}')" class="flex-1 bg-white dark:bg-gray-800 hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 dark:text-red-400 border border-slate-200 dark:border-slate-600 text-xs font-bold py-1.5 rounded-lg shadow-sm transition-colors focus:outline-none flex items-center justify-center">
                         <svg class="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg> Resolve
@@ -4983,6 +5031,14 @@ const Admin = {
         bindGsmSwipe(document.getElementById('gsm-tabs'));
         bindGsmSwipe(document.getElementById('gsm-list'));
         bindGsmSwipe(document.getElementById('action-body'));
+        const sortEl = document.getElementById('gsm-sort');
+        if (sortEl) {
+            sortEl.onchange = (e) => {
+                e.stopPropagation();
+                Admin._gsmSort = sortEl.value || 'expiry';
+                Admin.renderGlobalStateMonitor(document.getElementById('action-required-panel'), Admin._gsmItems || [], { keepOpen: true });
+            };
+        }
     },
 
     renderGlobalStateMonitor: (actionBanner, activeItems, opts = {}) => {
@@ -5013,12 +5069,13 @@ const Admin = {
             <button id="action-header-btn" type="button" class="w-full text-left text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center justify-center focus:outline-none relative">
                 <span class="flex flex-col items-center">
                     ${Admin.tileIcon('activity', 'text-blue-600 dark:text-blue-400')}
-                    <span class="text-blue-600 dark:text-blue-400">Global State Monitor (${total})</span>
+                    <span class="text-blue-600 dark:text-blue-400">State Monitor (${total})</span>
                 </span>
                 <span class="admin-unread-badge ${total ? '' : 'hidden'}" aria-label="Active items">${total || ''}</span>
                 <svg id="action-chevron" class="w-4 h-4 transform transition-transform -rotate-90 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
             </button>
             <div id="action-body" class="${wasOpen ? 'mt-4 space-y-2' : 'hidden mt-4 space-y-2'}">
+                ${Admin.gsmSortBarHtml()}
                 ${Admin.gsmTabBarHtml(Admin._gsmItems)}
                 <div id="gsm-list">${listHtml}</div>
             </div>
@@ -5054,7 +5111,7 @@ const Admin = {
             <button id="action-header-btn" type="button" class="w-full text-left text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center justify-center focus:outline-none relative">
                 <span class="flex flex-col items-center">
                     ${Admin.tileIcon('activity', 'text-blue-600 dark:text-blue-400')}
-                    <span class="text-blue-600 dark:text-blue-400">Global State Monitor</span>
+                    <span class="text-blue-600 dark:text-blue-400">State Monitor</span>
                 </span>
                 <svg id="action-chevron" class="w-4 h-4 transform transition-transform -rotate-90 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
             </button>`;
@@ -5095,9 +5152,16 @@ const Admin = {
                             Admin.listNoticesInTarget(targetNotices).forEach((item) => {
                                 if (!item.expiresAt || item.expiresAt > now) {
                                     const sev = item.severity === 'critical' ? 'Critical' : (item.severity === 'warning' ? 'Warning' : 'Info');
+                                    const title = String(item.title || '').trim();
+                                    const rawBody = String(item.message || item.text || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+                                    const img = (Array.isArray(item.imageUrls) && item.imageUrls[0]) || item.imageUrl || '';
                                     activeItems.push({
                                         type: 'Alert',
-                                        label: `${sev} channel post`,
+                                        label: title || rawBody.slice(0, 72) || `${sev} channel post`,
+                                        preview: rawBody && title ? rawBody.slice(0, 160) : (title ? '' : rawBody.slice(72, 232)),
+                                        imageUrl: img,
+                                        severity: item.severity || 'info',
+                                        createdAt: item.createdAt || item.timestamp || item.postedAt || 0,
                                         expiresAt: item.expiresAt,
                                         id: item.id || item._key,
                                         panelId: 'alert-panel',
@@ -10057,10 +10121,14 @@ const Admin = {
             </div>
             <div id="mq-body" class="hidden mt-4 flex flex-col">
                 <p class="text-[10px] text-gray-500 dark:text-gray-400 mb-3 px-1 leading-snug">Routes are ordered by their latest published post, reply, or held item. Open a route to view its conversation and mark it seen for your operator account.</p>
-                <label class="px-1 mb-3">
+                <label class="px-1 mb-2">
                     <span class="sr-only">Search community routes and messages</span>
-                    <input id="mq-search" type="search" placeholder="Search routes or messages" class="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 px-3 py-2.5 text-xs text-gray-900 dark:text-white"/>
+                    <input id="mq-search" type="search" placeholder="Search routes, messages, or user id" class="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 px-3 py-2.5 text-xs text-gray-900 dark:text-white"/>
                 </label>
+                <div class="flex gap-2 px-1 mb-3">
+                    <input id="mq-lookup" type="search" placeholder="Look up uid, device, or email" class="flex-1 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 px-3 py-2.5 text-xs text-gray-900 dark:text-white"/>
+                    <button type="button" id="mq-lookup-btn" class="shrink-0 bg-blue-600 hover:bg-blue-700 text-white rounded-xl px-3 py-2.5 text-[10px] font-black uppercase tracking-wider">Look up</button>
+                </div>
                 <div class="grid-hidden-actions flex space-x-2 mb-3 px-1">
                     <button type="button" id="mq-refresh-btn" class="flex-1 bg-slate-50 dark:bg-slate-900/40 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2.5 text-xs font-bold transition-colors shadow-sm focus:outline-none">Refresh</button>
                 </div>
@@ -10106,8 +10174,8 @@ const Admin = {
             }
 
             const allowedKeys = kind === 'community_post'
-                ? ['postId', 'routeId', 'region', 'body', 'category', 'uid', 'displayName', 'photoURL', 'email', 'deviceId', 'timestamp', 'hidden', 'replyCount', 'appVersion', 'via', 'replyTo']
-                : ['replyId', 'postId', 'routeId', 'body', 'uid', 'displayName', 'deviceId', 'timestamp', 'hidden', 'appVersion'];
+                ? ['postId', 'routeId', 'region', 'body', 'category', 'uid', 'displayName', 'photoURL', 'email', 'deviceId', 'timestamp', 'hidden', 'replyCount', 'appVersion', 'via', 'replyTo', 'marks']
+                : ['replyId', 'postId', 'routeId', 'body', 'uid', 'displayName', 'deviceId', 'timestamp', 'hidden', 'appVersion', 'marks'];
             if (Object.keys(payload).some((key) => !allowedKeys.includes(key))) {
                 throw new Error('Held community payload contains unsupported fields');
             }
@@ -10119,6 +10187,12 @@ const Admin = {
                 return optionalString(value.postId, 80)
                     && optionalString(value.displayName, 80)
                     && optionalString(value.body, 120);
+            };
+            const validMarks = (value) => {
+                if (value == null) return true;
+                if (typeof value !== 'object' || Array.isArray(value)) return false;
+                if (Object.keys(value).some((key) => !['points', 'tier'].includes(key))) return false;
+                return Number.isFinite(Number(value.points)) && optionalString(value.tier, 40);
             };
             if (
                 typeof payload.body !== 'string' || !payload.body.trim() || payload.body.length > 280
@@ -10136,6 +10210,7 @@ const Admin = {
                 || (kind === 'community_post' && !optionalString(payload.photoURL, 500))
                 || (kind === 'community_post' && !optionalString(payload.email, 120))
                 || (kind === 'community_post' && !validReplyTo(payload.replyTo))
+                || !validMarks(payload.marks)
             ) {
                 throw new Error('Invalid held community payload');
             }
@@ -10204,7 +10279,6 @@ const Admin = {
             const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
             const reportId = String(report?.reportId || report?._key || '');
             if (!reportId) throw new Error('Missing moderation report id');
-            validateHeldCommunityPublish(report);
             await markModerationStatus(dynamicEndpoint, secret, reportId, {
                 status: 'rejected',
                 resolution: 'rejected',
@@ -10344,6 +10418,10 @@ const Admin = {
                     const metaLine = isFeedbackHold
                         ? `source: ${String(sourceLabel).replace(/</g, '')} · device: ${Admin.commuterLabel(deviceId) || '-'} · contact: ${(contact || '-').toString().slice(0, 24)}`
                         : `target uid: ${Admin.commuterLabel(r.targetUid) || '-'} - post: ${(r.targetPostId || '-').toString().slice(0, 18)}`;
+                    const lookupUid = r.targetUid || r.publish?.payload?.uid || '';
+                    const lookupBtn = lookupUid
+                        ? `<button type="button" class="mq-lookup-uid text-[10px] font-bold text-blue-600 dark:text-blue-400 underline" data-uid="${esc(lookupUid)}">Look up</button>`
+                        : '';
                     const statusLabel = status === 'approved'
                         ? (isFeedbackHold ? 'Approved to Feedback Hub' : 'Approved')
                         : (status === 'rejected' ? 'Rejected' : (closed ? 'Closed' : ''));
@@ -10355,6 +10433,7 @@ const Admin = {
                             <div class="flex flex-wrap gap-2 mt-1">
                                 <button type="button" class="mq-approve-community text-[10px] font-bold text-emerald-700 dark:text-emerald-400 underline" data-id="${r.reportId || r._key}">Approve</button>
                                 <button type="button" class="mq-reject-community text-[10px] font-bold text-gray-600 dark:text-gray-300 underline" data-id="${r.reportId || r._key}">Reject</button>
+                                ${lookupBtn}
                             </div>` : `
                             <div class="flex flex-wrap gap-2 mt-1">
                                 <button type="button" class="mq-hide-post text-[10px] font-bold text-amber-700 dark:text-amber-400 underline" data-route="${r.routeId || ''}" data-post="${r.targetPostId || ''}">Hide post</button>
@@ -10387,7 +10466,7 @@ const Admin = {
                 };
                 const previews = await Promise.all(rows.map(fetchPreview));
                 list.innerHTML = rows.map((row, index) => `
-                    <details class="community-monitor-route border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-800 overflow-hidden" data-community-route="${esc(row.routeId)}" data-community-search="${esc(`${row.routeName} ${row.routeId} ${previews[index]}`.toLowerCase())}">
+                    <details class="community-monitor-route border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-800 overflow-hidden" data-community-route="${esc(row.routeId)}" data-community-search="${esc(`${row.routeName} ${row.routeId} ${previews[index]} ${(row.held || []).map((h) => `${h.targetUid || ''} ${h.publish?.payload?.uid || ''} ${h.publish?.payload?.email || ''} ${h.publish?.payload?.deviceId || ''}`).join(' ')}`.toLowerCase())}">
                         <summary class="cursor-pointer list-none p-3 flex items-start justify-between gap-3">
                             <span class="min-w-0">
                                 <span class="block text-xs font-black text-gray-900 dark:text-white truncate">${esc(row.routeName)}</span>
@@ -10538,6 +10617,21 @@ const Admin = {
                     });
                 });
 
+                const runMonitorLookup = (raw) => {
+                    const q = String(raw || '').trim();
+                    if (!q) return;
+                    if (typeof Admin.openUserTrustLookup === 'function') {
+                        Admin.openUserTrustLookup({ uid: q, email: q.includes('@') ? q : undefined });
+                    }
+                };
+                const lookupInput = document.getElementById('mq-lookup');
+                document.getElementById('mq-lookup-btn')?.addEventListener('click', () => runMonitorLookup(lookupInput?.value));
+                lookupInput?.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        runMonitorLookup(lookupInput.value);
+                    }
+                });
                 const search = document.getElementById('mq-search');
                 if (search) {
                     search.oninput = async () => {
@@ -10557,6 +10651,12 @@ const Admin = {
                 Admin.deletePublishedCommunityMessage = ntAdminDeletePublishedCommunityMessage;
 
                 list.onclick = async (event) => {
+                    const lookupUidBtn = event.target.closest?.('.mq-lookup-uid');
+                    if (lookupUidBtn) {
+                        event.preventDefault();
+                        runMonitorLookup(lookupUidBtn.getAttribute('data-uid'));
+                        return;
+                    }
                     const hide = event.target.closest?.('.cm-hide-message');
                     if (hide) {
                         event.preventDefault();
@@ -10673,6 +10773,14 @@ const Admin = {
                         try {
                             await Admin.rejectHeldCommunity(report);
                             if (typeof showToast === 'function') showToast('Community message rejected', 'success');
+                            const banUid = report.targetUid || report.publish?.payload?.uid || '';
+                            if (banUid && typeof Admin.applyShadowBan === 'function') {
+                                const alsoBan = await Admin.secureConfirm(
+                                    'Warn or shadow-ban?',
+                                    `Also warn or shadow-ban ${String(banUid).slice(0, 16)}? Choose Cancel to leave them as they are.`
+                                );
+                                if (alsoBan) await Admin.applyShadowBan(banUid, { deviceId: report.publish?.payload?.deviceId || report.deviceId || '' });
+                            }
                             Admin.fetchModerationQueue();
                         } catch (e) {
                             if (typeof showToast === 'function') showToast(e?.message || 'Reject failed', 'error');
@@ -10751,6 +10859,7 @@ const Admin = {
                 { id: 'freeze', label: 'Freeze / unresponsive' },
                 { id: 'fouc', label: 'True FOUC (unstyled)' },
                 { id: 'lost', label: '404 / End of the Line' },
+                { id: 'warning', label: 'Warning (visible)' },
             ];
 
         const choice = await new Promise((resolve) => {
@@ -10852,14 +10961,16 @@ const Admin = {
                 });
                 if (!banAtRes.ok) throw new Error(`Ban write failed (${banAtRes.status}) at devices/.../bannedAt`);
             }
-            if (typeof window.trustAddToBlockList === 'function') {
-                window.trustAddToBlockList(uid);
-                if (deviceId) window.trustAddToBlockList(deviceId);
-            } else if (window.trustLocalBlockList) {
-                window.trustLocalBlockList.add(uid);
-                if (deviceId) window.trustLocalBlockList.add(deviceId);
+            if (banMode !== 'warning') {
+                if (typeof window.trustAddToBlockList === 'function') {
+                    window.trustAddToBlockList(uid);
+                    if (deviceId) window.trustAddToBlockList(deviceId);
+                } else if (window.trustLocalBlockList) {
+                    window.trustLocalBlockList.add(uid);
+                    if (deviceId) window.trustLocalBlockList.add(deviceId);
+                }
             }
-            if (typeof showToast === 'function') showToast(`Shadow-banned (${choice.label}) - mode: ${modeLabel}`, 'success');
+            if (typeof showToast === 'function') showToast(`${banMode === 'warning' ? 'Warning set' : 'Shadow-banned'} (${choice.label}) - mode: ${modeLabel}`, 'success');
             if (typeof Admin.fetchActiveBans === 'function') Admin.fetchActiveBans();
             return true;
         } catch (e) {
@@ -20995,6 +21106,7 @@ const Admin = {
                             <option value="freeze">Freeze / unresponsive</option>
                             <option value="fouc">True FOUC (unstyled)</option>
                             <option value="lost">404 / End of the Line</option>
+                            <option value="warning">Warning (visible)</option>
                         </select>
                         <button type="button" id="shadow-ban-default-save" class="w-full bg-violet-600 hover:bg-violet-700 text-white font-bold py-2.5 rounded-lg text-xs uppercase tracking-wide focus:outline-none">Save default mode</button>
                     </div>

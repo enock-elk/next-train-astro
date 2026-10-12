@@ -508,6 +508,9 @@ export async function submitCommunityPost(body, routeId = $currentRouteId.get())
     if (acct.status !== 'signed-in' || !acct.uid) {
         return { ok: false, message: 'Sign in to post in this route’s community.' };
     }
+    if (acct.authProvider === 'password' && !acct.emailVerified) {
+        return { ok: false, message: 'Verify your email to post. Open Account to resend the email.' };
+    }
     if (!routeId) return { ok: false, message: 'Select a route first.' };
     if (!text || text.length < 2) return { ok: false, message: 'Write a short message.' };
     if (text.length > BODY_MAX) return { ok: false, message: `Max ${BODY_MAX} characters.` };
@@ -693,6 +696,9 @@ export async function submitCommunityReply(postId, body, routeId = $currentRoute
     const acct = $account.get();
     if (acct.status !== 'signed-in' || !acct.uid) {
         return { ok: false, message: 'Sign in to reply.' };
+    }
+    if (acct.authProvider === 'password' && !acct.emailVerified) {
+        return { ok: false, message: 'Verify your email to reply. Open Account to resend the email.' };
     }
     if (!routeId || !postId) return { ok: false, message: 'Missing post.' };
     if (!text || text.length < 1) return { ok: false, message: 'Write a reply.' };

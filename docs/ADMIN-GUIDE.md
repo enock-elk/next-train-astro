@@ -29,7 +29,7 @@ Tiles open drill panels (`#dev-<panel-id>`). Use the hub Back control to return 
 
 Typical daily path:
 
-1. **Global State Monitor** — what is live right now  
+1. **State Monitor** — what is live right now  
 2. **Service Alerts** — post / review notices  
 3. **Commuter Feedback** — reply  
 4. **User Trust & Bans** — lookup / shadow ban  
@@ -198,11 +198,11 @@ Version bumps must sync `APP_VERSION`, `package.json`, `public/app-version.json`
 
 ---
 
-## 11. Live Telemetry & Global State Monitor
+## 11. Live Telemetry & State Monitor
 
 **Live Telemetry:** Last 5/30 mins, Today (regional), WAU, MAU, All-Time, system errors 24h, trend charts, PNG export. Worker: `workers/nexttrain-telemetry`.
 
-**Global State Monitor:** live Alerts / Incidents / Grid notices / Exclusions / Maint. **Resolve**, **Extend**, **Review →**. Swipe between tabs.
+**State Monitor:** live Alerts / Incidents / Grid notices / Exclusions / Maint. **Resolve**, **Extend**, **Review →**. Swipe between tabs. Sort by expiry, newest, severity, type, or route. Alert cards show title, text, and poster when present.
 
 ---
 

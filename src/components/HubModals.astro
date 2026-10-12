@@ -301,6 +301,7 @@ import { withBase } from '../lib/config.js';
 
             <!-- Signed-in panel -->
             <div id="account-signed-in" class="hidden space-y-5">
+                <p class="px-1 text-[12px] font-normal uppercase tracking-wide text-gray-500 dark:text-gray-500">Profile</p>
                 <div class="rounded-[12px] overflow-hidden bg-white dark:bg-[#1c1c1e]">
                     <div class="flex items-center gap-3.5 px-4 pt-4 pb-3.5">
                         <div class="w-16 h-16 rounded-full bg-[#e5e5ea] dark:bg-[#3a3a3c] flex items-center justify-center text-[22px] font-semibold text-gray-600 dark:text-gray-300 shrink-0 overflow-hidden ring-1 ring-black/5 dark:ring-white/10">
@@ -317,6 +318,12 @@ import { withBase } from '../lib/config.js';
                             <p id="account-modal-email" class="text-[13px] font-normal text-gray-500 dark:text-gray-400 truncate"></p>
                         </div>
                     </div>
+                    <div id="account-verify-row" class="hidden w-full flex items-center justify-between gap-3 px-4 py-[13px] border-t border-black/10 dark:border-white/10">
+                        <span class="text-[13px] font-normal text-gray-900 dark:text-white">Email</span>
+                        <button type="button" id="account-verify-resend-btn" class="text-[13px] font-normal text-blue-600 dark:text-blue-400 focus:outline-none">
+                            <span id="account-verify-label">Not verified</span> · Resend
+                        </button>
+                    </div>
                     <button type="button" id="account-passenger-type-btn" class="w-full flex items-center justify-between gap-3 px-4 py-[13px] text-left border-t border-black/10 dark:border-white/10 focus:outline-none active:bg-black/[0.03] dark:active:bg-white/[0.04]">
                         <span class="text-[13px] font-normal text-gray-900 dark:text-white">Passenger type</span>
                         <span class="flex items-center gap-1 min-w-0">
@@ -324,16 +331,29 @@ import { withBase } from '../lib/config.js';
                             <svg class="w-3.5 h-3.5 text-gray-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"></path></svg>
                         </span>
                     </button>
-                    <button type="button" id="account-points-btn" class="w-full flex items-center justify-between gap-3 px-4 py-[13px] text-left border-t border-black/10 dark:border-white/10 focus:outline-none active:bg-black/[0.03] dark:active:bg-white/[0.04]">
+                </div>
+                <p class="px-1 text-[12px] font-normal uppercase tracking-wide text-gray-500 dark:text-gray-500">Activity</p>
+                <div class="rounded-[12px] overflow-hidden bg-white dark:bg-[#1c1c1e]">
+                    <button type="button" id="account-points-btn" class="w-full flex items-center justify-between gap-3 px-4 py-[13px] text-left focus:outline-none active:bg-black/[0.03] dark:active:bg-white/[0.04]">
                         <span class="text-[13px] font-normal text-gray-900 dark:text-white">Points</span>
                         <span class="flex items-center gap-1 min-w-0">
                             <span data-rider-marks class="text-[13px] font-normal text-gray-500 dark:text-gray-400 truncate">Bronze · 0 points</span>
                             <svg class="w-3.5 h-3.5 text-gray-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"></path></svg>
                         </span>
                     </button>
-                    <button type="button" id="account-signout-btn" data-account-action class="w-full flex items-center px-4 py-[13px] text-left border-t border-black/10 dark:border-white/10 focus:outline-none active:bg-black/[0.03] dark:active:bg-white/[0.04]">
+                </div>
+                <p class="px-1 text-[12px] font-normal uppercase tracking-wide text-gray-500 dark:text-gray-500">Security</p>
+                <div class="rounded-[12px] overflow-hidden bg-white dark:bg-[#1c1c1e]">
+                    <button type="button" id="account-signout-btn" data-account-action class="w-full flex items-center px-4 py-[13px] text-left focus:outline-none active:bg-black/[0.03] dark:active:bg-white/[0.04]">
                         <span class="text-[13px] font-normal text-[#ff3b30]">Sign out</span>
                     </button>
+                </div>
+                <div id="account-signout-confirm" class="hidden rounded-[12px] bg-white dark:bg-[#1c1c1e] px-4 py-3 space-y-3">
+                    <p class="text-[13px] font-normal text-gray-600 dark:text-gray-300 leading-snug">Sign out of this account?</p>
+                    <div class="flex gap-2">
+                        <button type="button" id="account-signout-cancel-btn" class="flex-1 py-2 rounded-lg text-[13px] font-normal text-gray-700 dark:text-gray-200 bg-[#f2f2f7] dark:bg-[#2c2c2e] focus:outline-none">Cancel</button>
+                        <button type="button" id="account-signout-confirm-btn" class="flex-1 py-2 rounded-lg text-[13px] font-normal text-white bg-[#ff3b30] focus:outline-none">Sign out</button>
+                    </div>
                 </div>
             </div>
 
@@ -380,6 +400,8 @@ import { withBase } from '../lib/config.js';
                         </div>
                     </div>
                     <button type="button" id="account-email-signin-btn" data-account-action data-account-provider="email" class="w-full px-4 py-[11px] text-[13px] font-normal text-blue-600 dark:text-blue-400 text-center focus:outline-none">Sign in <span data-provider-unavailable class="hidden block text-[11px]">Not available yet</span></button>
+                    <button type="button" id="account-forgot-btn" class="w-full px-4 py-[11px] text-[13px] font-normal text-gray-500 dark:text-gray-400 text-center focus:outline-none">Forgot password</button>
+                    <p id="account-signin-create-hint" class="hidden px-4 py-2 text-[12px] font-normal text-gray-500 dark:text-gray-400 text-center leading-snug">No account yet? Use Create account below.</p>
                     <button type="button" id="account-email-signup-btn" data-account-action data-account-provider="email" class="w-full px-4 py-[11px] text-[13px] font-normal text-blue-600 dark:text-blue-400 text-center focus:outline-none">Create account <span data-provider-unavailable class="hidden block text-[11px]">Not available yet</span></button>
                 </div>
 
@@ -394,6 +416,7 @@ import { withBase } from '../lib/config.js';
                 </div>
             </div>
 
+            <p id="account-prefs-label" class="hidden px-1 text-[12px] font-normal uppercase tracking-wide text-gray-500 dark:text-gray-500">Preferences</p>
             <div id="account-settings-host" class="space-y-3"></div>
 
             <div id="account-session-actions" class="hidden space-y-6">

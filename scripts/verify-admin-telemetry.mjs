@@ -186,7 +186,9 @@ ok(adminJs.includes('100dvh') && adminJs.includes('landscape:'), 'analytics dril
     const astroConfig = readFileSync(join(ROOT, 'astro.config.mjs'), 'utf8');
     ok(!astroConfig.includes("orientation: 'portrait'"), 'PWA manifest no longer locks portrait orientation');
 }
-ok(adminJs.includes('data-gsm-tab'), 'Global State Monitor has feature tabs');
+ok(adminJs.includes('data-gsm-tab'), 'State Monitor has feature tabs');
+ok(adminJs.includes('State Monitor'), 'State Monitor title is State Monitor');
+ok(adminJs.includes('gsm-sort'), 'State Monitor has a sort control');
 ok(adminJs.includes("id: 'grid'") && adminJs.includes("id: 'exclusions'"), 'GSM tabs include grid notices and exclusions');
 ok(adminJs.includes("maintModeBody?.classList.add('hidden')"), 'maintenance accordion is forced closed');
 ok(adminJs.includes('collapseSystemControlAccordions'), 'System Control reopens with every accordion closed');

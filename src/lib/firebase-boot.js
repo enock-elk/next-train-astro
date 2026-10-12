@@ -18,6 +18,8 @@ import {
     FacebookAuthProvider,
     signInWithPopup,
     updateProfile,
+    sendEmailVerification,
+    sendPasswordResetEmail,
 } from 'firebase/auth';
 import { getStorage, ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import {
@@ -89,6 +91,8 @@ export async function bootFirebase() {
         // docs/facebook-login-setup.md is finished and Dev Hub enables it.
         window.firebaseFacebookProvider = FacebookAuthProvider;
         window.firebaseUpdateProfile = updateProfile;
+        window.firebaseSendEmailVerification = sendEmailVerification;
+        window.firebaseSendPasswordResetEmail = sendPasswordResetEmail;
 
         window.firebaseStorage = getStorage(app);
         window.firebaseStorageRef = ref;

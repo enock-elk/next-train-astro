@@ -1,58 +1,57 @@
 ---
 /**
- * Public legal pages (privacy, terms, delete). Same grey/white Account look.
- * Back to Account uses /#account so the hash is a real in-app return, not a
- * Facebook URL. Crawlers still get the article without JavaScript.
+ * Public legal pages. Same header chrome as the rest of Next Train.
+ * Back to Account uses /#account so the hash is a real in-app return.
+ * The footer omits the page you are already on.
  */
 import { withBase } from '../lib/config.js';
 
 interface Props {
   title: string;
-  kicker?: string;
+  current?: 'privacy' | 'terms' | 'delete';
 }
 
-const { title, kicker = 'Kazembe CodeWorks · nexttrain.co.za' } = Astro.props;
+const { title, current = '' } = Astro.props;
 const fromAccount = Astro.url.searchParams.get('from') === 'account';
 const fromQ = fromAccount ? '?from=account' : '';
 const homeHref = withBase('');
 const accountHref = `${homeHref}#account`;
 const backHref = fromAccount ? accountHref : homeHref;
-const backLabel = fromAccount ? 'Account' : 'Next Train';
+const backLabel = fromAccount ? 'Back to Account' : 'Open in Next Train';
+const links = [
+  { id: 'privacy', href: `${withBase('privacy.html')}${fromQ}`, label: 'Privacy Policy' },
+  { id: 'terms', href: `${withBase('terms.html')}${fromQ}`, label: 'Terms of Use' },
+  { id: 'delete', href: `${withBase('account-delete.html')}${fromQ}`, label: 'Delete account help' },
+].filter((link) => link.id !== current);
 ---
 
-<div class="nt-legal-shell min-h-screen bg-[#f2f2f7] dark:bg-black text-gray-900 dark:text-white">
-  <header class="px-4 pb-3 bg-[#f2f2f7] dark:bg-black" style="padding-top: max(0.75rem, env(safe-area-inset-top, 0px));">
-    <div class="flex items-center justify-between min-h-[44px]">
-      <a href={backHref} class="text-[17px] font-normal text-blue-600 dark:text-blue-400 -ml-1 px-1 py-1">{backLabel}</a>
+<div class="nt-legal-shell min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white">
+  <header id="app-header" class="app-header shrink-0 px-3 py-2.5 z-30 relative flex items-start justify-between gap-2 border-b">
+    <div class="min-w-0 header-brand-block">
+      <a href={homeHref} class="block rounded-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70" aria-label="Next Train home">
+        <p id="app-title" class="header-title text-[2.55rem] sm:text-[2.75rem] font-black select-none tracking-[-0.035em] leading-none">Next Train</p>
+      </a>
+      <p id="current-day" class="header-meta mt-1.5 text-[11px] sm:text-xs font-medium leading-tight">{title}</p>
     </div>
-    <h1 class="text-[28px] leading-tight font-bold tracking-tight">{title}</h1>
-    {kicker && <p class="mt-1 text-[13px] font-normal text-gray-500 dark:text-gray-400">{kicker}</p>}
   </header>
 
-  <main class="px-4 pb-12 space-y-4 max-w-md mx-auto">
-    <section class="nt-legal-doc rounded-[10px] bg-white dark:bg-[#1c1c1e] px-4 py-4 text-[15px] leading-relaxed text-gray-800 dark:text-gray-200">
+  <main class="px-4 pt-4 pb-28 space-y-4 max-w-md mx-auto">
+    <section class="nt-legal-doc rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-sm px-4 py-4 text-[15px] leading-relaxed text-gray-800 dark:text-gray-200">
+      <h1 class="text-xl font-black tracking-tight text-gray-900 dark:text-white mb-3">{title}</h1>
       <slot />
     </section>
-    <nav class="rounded-[10px] overflow-hidden bg-white dark:bg-[#1c1c1e] divide-y divide-black/10 dark:divide-white/10 text-[15px]">
-      <a href={`${withBase('privacy.html')}${fromQ}`} class="flex justify-between items-center px-4 py-[12px] text-gray-900 dark:text-white">
-        <span>Privacy Policy</span>
-        <span class="text-gray-300 dark:text-gray-600" aria-hidden="true">&gt;</span>
-      </a>
-      <a href={`${withBase('terms.html')}${fromQ}`} class="flex justify-between items-center px-4 py-[12px] text-gray-900 dark:text-white">
-        <span>Terms of Use</span>
-        <span class="text-gray-300 dark:text-gray-600" aria-hidden="true">&gt;</span>
-      </a>
-      <a href={`${withBase('account-delete.html')}${fromQ}`} class="flex justify-between items-center px-4 py-[12px] text-gray-900 dark:text-white">
-        <span>Delete account help</span>
-        <span class="text-gray-300 dark:text-gray-600" aria-hidden="true">&gt;</span>
-      </a>
-    </nav>
-    {fromAccount && (
-      <p class="text-center">
-        <a href={accountHref} class="text-[17px] font-normal text-blue-600 dark:text-blue-400">Back to Account</a>
-      </p>
+    {links.length > 0 && (
+      <nav class="rounded-xl overflow-hidden bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-sm divide-y divide-gray-200 dark:divide-gray-700 text-[15px]">
+        {links.map((link) => (
+          <a href={link.href} class="flex justify-between items-center px-4 py-3 text-gray-900 dark:text-white">
+            <span>{link.label}</span>
+            <span class="text-gray-300 dark:text-gray-600" aria-hidden="true">&gt;</span>
+          </a>
+        ))}
+      </nav>
     )}
   </main>
+  <a class="seo-open-bar" href={backHref}>{backLabel}</a>
 </div>
 
 <style is:global>
@@ -86,5 +85,22 @@ const backLabel = fromAccount ? 'Account' : 'Next Train';
   }
   html.dark .nt-legal-doc a {
     color: #60a5fa;
+  }
+  .seo-open-bar {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 40;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 3.25rem;
+    padding: 0.85rem 1rem calc(0.85rem + env(safe-area-inset-bottom));
+    background: var(--nt-chrome-nav, #163d96);
+    color: var(--nt-chrome-fg, #fff);
+    font-weight: 800;
+    letter-spacing: -0.01em;
+    text-decoration: none;
   }
 </style>

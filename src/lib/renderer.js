@@ -1379,7 +1379,7 @@ export async function takeGridSnapshot(direction = 'A', dayType = 'weekday') {
     if (typeof triggerHaptic === 'function') triggerHaptic(); 
 
     if (typeof window.html2canvas === 'undefined') {
-        if (typeof showToast === 'function') showToast("Loading snapshot engine...", "info", 1500);
+        if (typeof showToast === 'function') showToast('Preparing your timetable image...', 'info', 1500);
         try {
             await new Promise((resolve, reject) => {
                 const script = document.createElement('script');
@@ -1389,12 +1389,12 @@ export async function takeGridSnapshot(direction = 'A', dayType = 'weekday') {
                 document.head.appendChild(script);
             });
         } catch(e) {
-            if (typeof showToast === 'function') showToast("Failed to load snapshot engine.", "error");
+            if (typeof showToast === 'function') showToast('Could not prepare the timetable image.', 'error');
             return;
         }
     }
 
-    if (typeof showToast === 'function') showToast("📄 Generating Commuter Notice...", "info", 4000);
+    if (typeof showToast === 'function') showToast('Creating your timetable image...', 'info', 4000);
 
     const activeRouteId = $currentRouteId.get();
     const route = ROUTES[activeRouteId];

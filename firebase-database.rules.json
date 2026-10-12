@@ -384,8 +384,18 @@
       }
     },
 
+    "account_deletions": {
+      ".read": "auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')",
+      "$uid": {
+        ".read": "auth != null && (auth.uid === $uid || auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')",
+        ".write": "(auth != null && auth.uid === $uid && auth.token.firebase.sign_in_provider != 'anonymous' && newData.child('uid').val() === auth.uid && newData.child('status').val() === 'pending') || (auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com'))",
+        ".validate": "!newData.exists() || (newData.hasChildren(['uid', 'requestedAt', 'status']) && newData.child('uid').val() === $uid && newData.child('requestedAt').isNumber() && (newData.child('status').val() === 'pending' || newData.child('status').val() === 'done'))"
+      }
+    },
+
     "users": {
       ".read": "auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')",
+      ".indexOn": ["deletionRequestedAt"],
       "$uid": {
         ".read": "auth != null && (auth.uid === $uid || auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')",
         ".write": "auth != null && (auth.uid === $uid || auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')",

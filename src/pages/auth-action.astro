@@ -1,0 +1,100 @@
+---
+/**
+ * Optional Firebase action handler. Unused until the console action URL
+ * points here. The email link's continue URL already returns to Next Train.
+ */
+import ContentLayout from '../layouts/ContentLayout.astro';
+---
+
+<ContentLayout
+  title="Next Train"
+  description="Finish email verification or a password reset, then return to Next Train."
+  canonicalPath="/auth-action.html"
+  robots="noindex, nofollow"
+  trackSeo={false}
+  bodyClass="bg-gray-50 dark:bg-gray-900 text-gray-900 min-h-screen"
+>
+  <div class="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white">
+    <header id="app-header" class="app-header shrink-0 px-3 py-2.5 border-b">
+      <a href="/" class="block" aria-label="Next Train home">
+        <p class="header-title text-[2.55rem] font-black tracking-[-0.035em] leading-none">Next Train</p>
+      </a>
+    </header>
+    <main class="max-w-md mx-auto px-4 pt-6 pb-16">
+      <section id="auth-action-card" class="rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-sm px-4 py-5 space-y-3">
+        <h1 id="auth-action-title" class="text-xl font-black tracking-tight">One moment</h1>
+        <p id="auth-action-copy" class="text-[15px] leading-relaxed text-gray-600 dark:text-gray-300">Finishing this step, then opening Next Train.</p>
+        <form id="auth-reset-form" class="hidden space-y-3">
+          <label class="block text-[13px] text-gray-500" for="auth-reset-password">New password</label>
+          <input id="auth-reset-password" type="password" minlength="6" autocomplete="new-password" class="w-full h-11 px-3 rounded-xl bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-[15px] focus:outline-none">
+          <button type="submit" class="w-full py-3 rounded-xl bg-blue-600 text-white font-bold">Save password</button>
+        </form>
+        <a id="auth-action-home" href="/" class="hidden inline-flex w-full justify-center py-3 rounded-xl bg-blue-600 text-white font-bold">Open Next Train</a>
+      </section>
+    </main>
+  </div>
+</ContentLayout>
+
+<script>
+  import { bootFirebase } from '../lib/firebase-boot.js';
+
+  const params = new URLSearchParams(location.search);
+  const mode = params.get('mode') || '';
+  const code = params.get('oobCode') || '';
+  const title = document.getElementById('auth-action-title');
+  const copy = document.getElementById('auth-action-copy');
+  const form = document.getElementById('auth-reset-form');
+  const home = document.getElementById('auth-action-home');
+  const password = document.getElementById('auth-reset-password');
+
+  function showHome(heading, message) {
+    if (title) title.textContent = heading;
+    if (copy) copy.textContent = message;
+    home?.classList.remove('hidden');
+  }
+
+  await bootFirebase();
+  const auth = window.firebaseAuth;
+  if (!auth || !code) {
+    showHome('Open Next Train', 'This link is missing a step. Go back to the app and try again.');
+  } else if (mode === 'verifyEmail' && typeof window.firebaseApplyActionCode === 'function') {
+    try {
+      await window.firebaseApplyActionCode(auth, code);
+      location.replace('/?verified=1');
+    } catch {
+      showHome('Email already checked', 'If you opened the link, your email is verified. Sign in on Next Train.');
+    }
+  } else if (mode === 'resetPassword' && typeof window.firebaseVerifyPasswordResetCode === 'function') {
+    try {
+      const email = await window.firebaseVerifyPasswordResetCode(auth, code);
+      if (title) title.textContent = 'Choose a new password';
+      if (copy) copy.textContent = email ? `For ${email}.` : 'Enter a new password for this account.';
+      form?.classList.remove('hidden');
+      form?.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const next = String(password?.value || '');
+        if (next.length < 6) {
+          if (copy) copy.textContent = 'Use at least 6 characters.';
+          return;
+        }
+        try {
+          await window.firebaseConfirmPasswordReset(auth, code, next);
+          location.replace('/');
+        } catch {
+          if (copy) copy.textContent = 'That link has expired. Ask for a new password email from Account.';
+        }
+      });
+    } catch {
+      showHome('Link expired', 'Ask for a new password email from Account, then open the new link.');
+    }
+  } else if (typeof window.firebaseApplyActionCode === 'function') {
+    try {
+      await window.firebaseApplyActionCode(auth, code);
+      location.replace('/');
+    } catch {
+      showHome('Open Next Train', 'This link could not be finished. Go back to the app.');
+    }
+  } else {
+    showHome('Open Next Train', 'Go back to the app to continue.');
+  }
+</script>

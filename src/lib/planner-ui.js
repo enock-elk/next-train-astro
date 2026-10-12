@@ -2351,7 +2351,7 @@ export async function openTripMapRenderer(routeData) {
                 document.head.appendChild(script);
             });
         } catch (e) {
-            showToast('Failed to load map engine.', 'error');
+            showToast('Could not open the map.', 'error');
             window._isMapInitializing = false;
             return;
         }
@@ -3427,19 +3427,17 @@ export const PlannerRenderer = {
                           </div>`;
         } else if (isDeparted) {
             stateBadge = `
-                <div class="flex flex-col items-start mt-1 sm:mt-0 pr-2 min-w-0">
-                    <div class="text-[11px] font-bold text-gray-500 dark:text-gray-400 mb-1.5 uppercase tracking-wide">
-                        ${countdown}
-                    </div>
-                    <button type="button" onclick="if(typeof window._plannerCurrentTripIndex !== 'undefined' && typeof window._selectCustomTrip === 'function') window._selectCustomTrip(window._plannerCurrentTripIndex + 1);" class="planner-departed-next bg-blue-50 hover:bg-blue-100 dark:bg-blue-900/30 dark:hover:bg-blue-900/50 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800 font-bold py-1.5 px-3 rounded-lg shadow-sm transition-colors focus:outline-none flex justify-center items-center text-[9px] uppercase tracking-wider whitespace-nowrap">
+                <div class="flex flex-col items-start min-w-0">
+                    <p class="text-[11px] font-bold text-gray-500 dark:text-gray-400">Departed:</p>
+                    <button type="button" onclick="if(typeof window._plannerCurrentTripIndex !== 'undefined' && typeof window._selectCustomTrip === 'function') window._selectCustomTrip(window._plannerCurrentTripIndex + 1);" class="planner-departed-next mt-1 bg-blue-50 hover:bg-blue-100 dark:bg-blue-900/30 dark:hover:bg-blue-900/50 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800 font-bold py-1.5 px-3 rounded-lg shadow-sm transition-colors focus:outline-none flex justify-center items-center text-[9px] uppercase tracking-wider whitespace-nowrap">
                         Show Next Train <svg class="w-3 h-3 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 5l7 7-7 7M5 5l7 7-7 7"></path></svg>
                     </button>
                 </div>
             `;
         } else {
-             stateBadge = `<div class="flex items-center text-xs font-bold text-blue-600 dark:text-blue-400">
-                            <svg class="w-4 h-4 mr-1 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                            <span>${countdown}</span>
+             stateBadge = `<div class="flex flex-col items-start min-w-0">
+                            <p class="text-[11px] font-bold text-gray-500 dark:text-gray-400">Departs:</p>
+                            <p class="text-sm font-black text-blue-600 dark:text-blue-400 mt-0.5">${countdown}</p>
                           </div>`;
         }
 
@@ -3470,19 +3468,14 @@ export const PlannerRenderer = {
                         ${stateBadge}
                      </div>
                      <div class="flex flex-col items-end text-right shrink-0 pl-2">
-                        <div class="flex items-center text-xs font-bold text-gray-500 dark:text-gray-400 whitespace-nowrap">
-                            <svg class="w-3.5 h-3.5 mr-1 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 3h14M5 21h14M7 3v2.5c0 .8.4 1.6 1.1 2.1L12 10.5l3.9-2.9c.7-.5 1.1-1.3 1.1-2.1V3M7 21v-2.5c0-.8.4-1.6 1.1-2.1l3.9-2.9 3.9 2.9c.7.5 1.1 1.3 1.1 2.1V21"/></svg>
-                            ${duration}
-                        </div>
-                        <div class="text-[9px] text-gray-400 uppercase tracking-widest mt-0.5">Total Time</div>
+                        <p class="text-[11px] font-bold text-gray-500 dark:text-gray-400">Total Time:</p>
+                        <p class="text-sm font-black text-gray-700 dark:text-gray-200 mt-0.5 whitespace-nowrap">${duration}</p>
                      </div>
                 </div>
-                ${canShowTripPrice(step) ? `<div class="flex justify-center mt-3">
-                     <button type="button" data-nt-trip-fare="1" class="planner-trip-fare inline-flex flex-col items-center justify-center min-w-[7.5rem] px-4 py-2 rounded-xl bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400">
-                        <span class="text-[9px] font-black uppercase tracking-widest text-blue-700 dark:text-blue-300">Trip fare</span>
-                        <span class="inline-flex items-center gap-1 text-base font-black text-gray-900 dark:text-white tabular-nums leading-none mt-0.5">${plannerMoneySvg('w-4 h-4 text-gray-900 dark:text-white')}<span data-nt-trip-fare-price>R-</span></span>
-                     </button>
-                </div>` : ''}
+                ${canShowTripPrice(step) ? `<button type="button" data-nt-trip-fare="1" class="planner-trip-fare mt-3 w-full flex items-center justify-between gap-3 px-3 py-2 rounded-xl bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400">
+                        <span class="text-[11px] font-bold text-blue-700 dark:text-blue-300">Trip fare</span>
+                        <span class="inline-flex items-center gap-1 text-base font-black text-gray-900 dark:text-white tabular-nums leading-none">${plannerMoneySvg('w-4 h-4 text-gray-900 dark:text-white')}<span data-nt-trip-fare-price>R-</span></span>
+                     </button>` : ''}
             </div>
         `;
     },
@@ -3812,8 +3805,8 @@ export const PlannerRenderer = {
                 const h = Math.floor(diff / 3600);
                 const m = Math.floor((diff % 3600) / 60);
                 // Use &lt; so innerHTML never treats "< 1" as a broken tag (garbled/CJK glyphs)
-                countdown = h > 0 ? `Departs in ${PlannerRenderer.formatDuration(Math.floor(diff / 60))}` : (m === 0 ? "Departs in &lt; 1 min" : `Departs in ${m} min`);
-            } else { countdown = "Departed"; isDeparted = true; }
+                countdown = h > 0 ? PlannerRenderer.formatDuration(Math.floor(diff / 60)) : (m === 0 ? '&lt; 1 min' : `${m} min`);
+            } else { countdown = ''; isDeparted = true; }
         }
         
         const durSec = arrSec - depSec;
@@ -4283,6 +4276,48 @@ function persistMergedPlannerHistory(list) {
     safeStorage.setItem(PLANNER_HISTORY_MERGED_KEY, JSON.stringify(cap));
 }
 
+/** Recent trips stored on the signed-in account. Display cap stays 5 per region. */
+export function accountPlannerHistoryPayload() {
+    return unionPlannerHistory().slice(0, 20).map((item) => ({
+        from: String(item.from || '').slice(0, 80),
+        to: String(item.to || '').slice(0, 80),
+        fullFrom: String(item.fullFrom || item.from || '').slice(0, 120),
+        fullTo: String(item.fullTo || item.to || '').slice(0, 120),
+        at: Number(item.at) || 0,
+        region: PLANNER_HISTORY_REGIONS.includes(item.region) ? item.region : null,
+    }));
+}
+
+export function mergeAccountPlannerHistory(remoteList) {
+    const incoming = Array.isArray(remoteList)
+        ? remoteList
+        : (remoteList && typeof remoteList === 'object' ? Object.values(remoteList) : []);
+    if (!incoming.length) return;
+    const byRegion = {};
+    PLANNER_HISTORY_REGIONS.forEach((region) => {
+        byRegion[region] = readPlannerHistoryArray(`plannerHistory_${region}`);
+    });
+    incoming.forEach((raw) => {
+        const item = normalizePlannerHistoryItem(raw, raw?.region || 'GP');
+        if (!item) return;
+        const region = PLANNER_HISTORY_REGIONS.includes(item.region) ? item.region : 'GP';
+        const list = byRegion[region];
+        const key = plannerHistoryDedupeKey(item);
+        const idx = list.findIndex((row) => plannerHistoryDedupeKey(row) === key);
+        if (idx === -1) list.push(item);
+        else if ((Number(item.at) || 0) > (Number(list[idx].at) || 0)) list[idx] = item;
+    });
+    PLANNER_HISTORY_REGIONS.forEach((region) => {
+        const rows = byRegion[region]
+            .slice()
+            .sort((a, b) => (Number(b.at) || 0) - (Number(a.at) || 0))
+            .slice(0, PLANNER_HISTORY_DISPLAY_CAP);
+        safeStorage.setItem(`plannerHistory_${region}`, JSON.stringify(rows));
+    });
+    persistMergedPlannerHistory(unionPlannerHistory());
+    try { renderPlannerHistory(); } catch { /* planner view may not be open */ }
+}
+
 /** Persist every successful Plan Trip for the on-device Recent Trips list (max 5). */
 export function savePlannerHistory(from, to, opts = {}) {
     if (!from || !to || typeof from !== 'string' || typeof to !== 'string') return;
@@ -4312,6 +4347,7 @@ export function savePlannerHistory(from, to, opts = {}) {
     safeStorage.setItem(historyKey, JSON.stringify(history));
     persistMergedPlannerHistory(unionPlannerHistory());
     renderPlannerHistory();
+    import('./account.js').then((m) => m.pushAccountRecentTrips?.()).catch(() => {});
 }
 
 export function renderPlannerHistory() {

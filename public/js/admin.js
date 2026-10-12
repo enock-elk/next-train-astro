@@ -2733,6 +2733,11 @@ const Admin = {
             failLine: interactionLine('Routing fails', failStatus, fails.length, ''),
             ticketLine,
             crashLine,
+            fareCount: fareStatus === 'unavailable' ? null : fareVotes.length,
+            fareDetail,
+            failCount: failStatus === 'unavailable' ? null : fails.length,
+            ticketCount: ticketStatus === 'unavailable' && !ticketCount ? null : ticketCount,
+            crashKnown,
         };
     },
 
@@ -2777,21 +2782,32 @@ const Admin = {
                 ...(peek.contacts.phones || []).map((ph) => esc(ph)),
             ];
             const routeLabel = Admin.inboxRouteLabel(peek.defaultRoute) || peek.defaultRoute;
+            const tile = (label, value, absent) => `
+                <div class="rounded-xl border px-2 py-2 text-left ${absent ? 'opacity-55 border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-900' : 'border-blue-100 dark:border-blue-900 bg-blue-50/70 dark:bg-blue-950/20'}">
+                    <p class="text-[9px] font-black uppercase tracking-widest ${absent ? 'text-gray-400' : 'text-blue-700 dark:text-blue-300'}">${esc(label)}</p>
+                    <p class="mt-1 text-[11px] font-bold leading-snug break-words ${absent ? 'text-gray-400' : 'text-gray-900 dark:text-white'}">${value}</p>
+                </div>`;
+            const countLabel = (count, noun) => {
+                if (count == null) return 'unavailable';
+                if (!count) return 'none';
+                return `${count} ${noun}`;
+            };
             body.innerHTML = `
                 <p class="font-black text-sm text-gray-900 dark:text-white break-words">${esc(heading)}</p>
-                ${peek.alias ? `<p>Alias: <b>${esc(peek.alias)}</b></p>` : '<p class="text-gray-400">No feedback alias.</p>'}
+                ${peek.alias ? `<p class="text-[11px]">Alias: <b>${esc(peek.alias)}</b></p>` : '<p class="text-[11px] text-gray-400">No feedback alias.</p>'}
                 <p class="font-mono text-[10px] text-gray-400 break-all">${esc(did)}</p>
-                <p>Joined: <b>${esc(joinedLabel)}</b></p>
-                ${peek.email ? `<p>Email: <b>${esc(peek.email)}</b></p>` : ''}
-                ${peek.linkedUid ? `<p>Account: <span class="font-mono break-all">${esc(peek.linkedUid)}</span></p>` : ''}
-                <p>Trip plans: <b>${peek.tripLast ? 'yes' : 'none'}</b>${peek.tripRegion ? ` · ${esc(peek.tripRegion)}` : ''}${peek.tripLast ? ` · last ${esc(Admin.formatDate(peek.tripLast))}` : ''}</p>
-                <p>Feedback: <b>${peek.hasChat ? (peek.feedbackCount ? `${peek.feedbackCount} messages` : 'open thread') : 'none'}</b>${peek.latestFeedbackAt ? ` · last ${esc(Admin.formatDate(peek.latestFeedbackAt))}` : ''}</p>
-                ${contactBits.length ? `<p>Contacts: <b>${contactBits.join(', ')}</b></p>` : ''}
-                ${routeLabel ? `<p>Default route: <b>${esc(routeLabel)}</b></p>` : ''}
-                <p>${esc(peek.fareLine)}</p>
-                <p>${esc(peek.failLine)}</p>
-                <p>${esc(peek.ticketLine)}</p>
-                <p>${esc(peek.crashLine)}</p>
+                ${peek.email ? `<p class="text-[11px]">Email: <b>${esc(peek.email)}</b></p>` : ''}
+                <div class="grid grid-cols-2 gap-2 pt-1">
+                    ${tile('Joined', esc(joinedLabel), joinedLabel === 'unknown')}
+                    ${tile('Trip plans', peek.tripLast ? esc(`yes${peek.tripRegion ? ` · ${peek.tripRegion}` : ''}`) : 'none', !peek.tripLast)}
+                    ${tile('Feedback', peek.hasChat ? esc(peek.feedbackCount ? `${peek.feedbackCount} messages` : 'open thread') : 'none', !peek.hasChat)}
+                    ${tile('Contacts', contactBits.length ? contactBits.join(', ') : 'none', !contactBits.length)}
+                    ${tile('Route', routeLabel ? esc(routeLabel) : 'none', !routeLabel)}
+                    ${tile('Fares', peek.fareCount == null ? 'unavailable' : (peek.fareCount ? esc(`${peek.fareCount}${peek.fareDetail ? ` · ${peek.fareDetail}` : ''}`) : 'none'), !peek.fareCount)}
+                    ${tile('Routing fails', esc(countLabel(peek.failCount, peek.failCount === 1 ? 'fail' : 'fails')), !peek.failCount)}
+                    ${tile('Ticket photos', esc(countLabel(peek.ticketCount, peek.ticketCount === 1 ? 'photo' : 'photos')), !peek.ticketCount)}
+                    ${tile('Crashes', esc(peek.crashKnown ? countLabel(peek.crashCount, peek.crashCount === 1 ? 'crash' : 'crashes') : 'unavailable'), !(peek.crashKnown && peek.crashCount))}
+                </div>
             `;
             if (peek.hasChat) {
                 const actions = document.createElement('div');
@@ -4191,7 +4207,7 @@ const Admin = {
             </div>`,
 
     exportTelemetry: async () => {
-        if (typeof showToast === 'function') showToast("Generating Snapshot...", "info", 2000);
+        if (typeof showToast === 'function') showToast('Preparing the image...', 'info', 2000);
         
         if (typeof html2canvas === 'undefined') {
             try {
@@ -4203,7 +4219,7 @@ const Admin = {
                     document.head.appendChild(script);
                 });
             } catch(e) {
-                if (typeof showToast === 'function') showToast("Failed to load snapshot engine.", "error");
+                if (typeof showToast === 'function') showToast('Could not prepare the image.', 'error');
                 return;
             }
         }
@@ -4353,7 +4369,7 @@ const Admin = {
 
     // GROWTH SPRINT PHASE 6: Dynamic 7-Day Chart Snapshot Engine (SVG Clone Method)
     exportTrendGraph: async () => {
-        if (typeof showToast === 'function') showToast("Generating Chart Snapshot...", "info", 2000);
+        if (typeof showToast === 'function') showToast('Preparing the chart image...', 'info', 2000);
         
         if (typeof html2canvas === 'undefined') {
             try {
@@ -4365,7 +4381,7 @@ const Admin = {
                     document.head.appendChild(script);
                 });
             } catch(e) {
-                if (typeof showToast === 'function') showToast("Failed to load snapshot engine.", "error");
+                if (typeof showToast === 'function') showToast('Could not prepare the image.', 'error');
                 return;
             }
         }
@@ -4779,6 +4795,7 @@ const Admin = {
         runAdminSetup('rideShare', () => Admin.setupRideShareManager());
         runAdminSetup('moderation', () => Admin.setupModerationQueueManager());
         runAdminSetup('userTrust', () => Admin.setupUserTrustManager());
+        runAdminSetup('accountDeletions', () => Admin.setupAccountDeletionsManager());
         runAdminSetup('deadEnds', () => Admin.setupDeadEndsManager());
         runAdminSetup('crashes', () => Admin.setupCrashReportsManager());
         runAdminSetup('serviceAlerts', () => Admin.setupServiceAlertsManager());
@@ -5675,6 +5692,9 @@ const Admin = {
             }
         }
 
+        if (domId === 'account-deletions-panel' && typeof Admin.fetchAccountDeletions === 'function') {
+            Admin.fetchAccountDeletions();
+        }
         if (panelId === 'action-required-panel') {
             const banner = document.getElementById('action-required-panel');
             if (banner && typeof Admin.renderGlobalStateMonitor === 'function') {
@@ -7416,6 +7436,17 @@ const Admin = {
                         });
                     };
                     listDiv.innerHTML = '';
+                    const fareChecks = Object.values(Admin._cachedFareVotes || {}).filter((row) => typeof row?.agree === 'boolean');
+                    const fareMatches = fareChecks.filter((row) => row.agree === true).length;
+                    const fareAccuracy = document.createElement('div');
+                    fareAccuracy.className = 'mb-2 px-3 py-2.5 rounded-xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700';
+                    if (!fareChecks.length) {
+                        fareAccuracy.innerHTML = '<p class="text-[11px] font-bold text-gray-500 dark:text-gray-400">No fare checks yet.</p>';
+                    } else {
+                        const pct = Math.round((fareMatches / fareChecks.length) * 100);
+                        fareAccuracy.innerHTML = `<p class="text-[10px] font-black uppercase tracking-widest text-gray-400">Fare quote accuracy</p><p class="text-lg font-black text-gray-900 dark:text-white tabular-nums">${pct}%</p><p class="text-[11px] text-gray-500 dark:text-gray-400">${fareMatches} of ${fareChecks.length} checks said the quote was right.</p>`;
+                    }
+                    listDiv.appendChild(fareAccuracy);
                     Admin.paintConfirmedCorridorFares(listDiv, liveRouteFares);
                     const fareDeviceFilter = String(Admin._deFareDeviceFilter || '').trim();
                     if (fareDeviceFilter) {
@@ -11036,6 +11067,132 @@ const Admin = {
             method: 'PUT', body: JSON.stringify(score + 1)
         });
         if (typeof showToast === 'function') showToast(`Verified - trust score: ${score + 1}`, 'success');
+    },
+
+    setupAccountDeletionsManager: () => {
+        const adminContainer = document.getElementById('admin-modules-container');
+        if (!adminContainer) return;
+        let panel = document.getElementById('account-deletions-panel');
+        if (!panel) {
+            panel = document.createElement('div');
+            panel.id = 'account-deletions-panel';
+            const after = document.getElementById('user-trust-panel');
+            if (after && after.parentNode) after.parentNode.insertBefore(panel, after.nextSibling);
+            else adminContainer.appendChild(panel);
+        }
+        if (panel.dataset.adminLoaded === 'true') return;
+        panel.dataset.adminLoaded = 'true';
+        panel.className = 'bg-white dark:bg-gray-800 rounded-xl shadow-md border border-gray-200 dark:border-gray-700 p-4 mb-4 relative overflow-hidden transition-all duration-300';
+        panel.innerHTML = `
+            <button id="ad-header-btn" class="w-full text-left text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center justify-center focus:outline-none relative">
+                <span class="flex flex-col items-center">
+                    ${Admin.tileIcon('user', 'text-rose-500 dark:text-rose-400')}
+                    <span>Deletion requests</span>
+                </span>
+            </button>
+            <div id="ad-body" class="hidden mt-4 space-y-2 text-left">
+                <div class="flex items-center justify-between gap-2">
+                    <p class="text-[11px] text-gray-500 dark:text-gray-400 leading-snug">Requests sent from Account. Mark done after the account is removed.</p>
+                    <button type="button" id="ad-refresh-btn" class="shrink-0 text-[10px] font-bold text-blue-600 dark:text-blue-400 px-2 py-1 rounded-lg bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800">Refresh</button>
+                </div>
+                <div id="ad-list" class="space-y-2"><p class="text-xs text-gray-400 text-center py-3">Open to load requests.</p></div>
+            </div>
+        `;
+        document.getElementById('ad-refresh-btn')?.addEventListener('click', () => Admin.fetchAccountDeletions());
+    },
+
+    fetchAccountDeletions: async () => {
+        const list = document.getElementById('ad-list');
+        if (!list) return;
+        const secret = await Admin.getAuthKey();
+        if (!secret) return;
+        list.innerHTML = '<p class="text-xs text-gray-400 text-center py-3">Loading...</p>';
+        const base = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
+        const esc = (str) => Admin.commuterEsc(str);
+        const pending = new Map();
+        const absorb = (uid, row) => {
+            if (!row || row.status === 'done' || row.deletionResolvedAt) return;
+            const requestedAt = Number(row.requestedAt || row.deletionRequestedAt) || 0;
+            if (!requestedAt) return;
+            pending.set(uid, {
+                uid,
+                email: row.email || row.deletionRequestedEmail || '',
+                displayName: row.displayName || '',
+                deviceId: row.deviceId || '',
+                requestedAt,
+            });
+        };
+        try {
+            const queueRes = await fetch(`${base}account_deletions.json?auth=${encodeURIComponent(secret)}`);
+            if (queueRes.ok) {
+                const queue = await queueRes.json();
+                if (queue && typeof queue === 'object') {
+                    Object.entries(queue).forEach(([uid, row]) => absorb(uid, row));
+                }
+            }
+        } catch { /* fall through to the profile flags */ }
+        let usersLoaded = false;
+        try {
+            const usersRes = await fetch(`${base}users.json?orderBy=${encodeURIComponent('"deletionRequestedAt"')}&startAt=1&auth=${encodeURIComponent(secret)}`);
+            if (usersRes.ok) {
+                const users = await usersRes.json();
+                if (users && typeof users === 'object') {
+                    Object.entries(users).forEach(([uid, row]) => absorb(uid, row));
+                }
+                usersLoaded = true;
+            }
+        } catch { /* index may not be live until rules deploy */ }
+        if (!usersLoaded) {
+            try {
+                const usersRes = await fetch(`${base}users.json?auth=${encodeURIComponent(secret)}`);
+                if (usersRes.ok) {
+                    const users = await usersRes.json();
+                    if (users && typeof users === 'object') {
+                        Object.entries(users).forEach(([uid, row]) => absorb(uid, row));
+                    }
+                }
+            } catch { /* profile flags stay on the queue list */ }
+        }
+        const rows = [...pending.values()].sort((a, b) => b.requestedAt - a.requestedAt);
+        if (!rows.length) {
+            list.innerHTML = '<p class="text-xs text-gray-400 text-center py-3">No open deletion requests.</p>';
+            return;
+        }
+        list.innerHTML = rows.map((row) => `
+            <div class="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2.5">
+                <p class="text-sm font-black text-gray-900 dark:text-white break-words">${esc(row.displayName || row.email || row.uid)}</p>
+                <p class="text-[11px] text-gray-500 break-all">${esc(row.email || 'No email')}</p>
+                <p class="font-mono text-[10px] text-gray-400 break-all mt-0.5">${esc(row.uid)}</p>
+                <p class="text-[10px] text-gray-400 mt-1">${esc(Admin.formatDate(row.requestedAt))}</p>
+                <button type="button" data-ad-done="${esc(row.uid)}" class="mt-2 text-[10px] font-black uppercase tracking-wider text-white bg-gray-800 hover:bg-gray-900 px-3 py-1.5 rounded-lg">Mark done</button>
+            </div>
+        `).join('');
+        list.querySelectorAll('[data-ad-done]').forEach((btn) => {
+            btn.addEventListener('click', () => Admin.resolveAccountDeletion(btn.getAttribute('data-ad-done')));
+        });
+    },
+
+    resolveAccountDeletion: async (uid) => {
+        const id = String(uid || '').trim();
+        if (!id) return;
+        const secret = await Admin.getAuthKey();
+        if (!secret) return;
+        const base = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
+        const now = Date.now();
+        try {
+            await fetch(`${base}users/${encodeURIComponent(id)}/deletionResolvedAt.json?auth=${encodeURIComponent(secret)}`, {
+                method: 'PUT',
+                body: JSON.stringify(now),
+            });
+            await fetch(`${base}account_deletions/${encodeURIComponent(id)}/status.json?auth=${encodeURIComponent(secret)}`, {
+                method: 'PUT',
+                body: JSON.stringify('done'),
+            });
+            if (typeof showToast === 'function') showToast('Deletion request marked done', 'success');
+            Admin.fetchAccountDeletions();
+        } catch (e) {
+            if (typeof showToast === 'function') showToast('Could not update that request', 'error');
+        }
     },
 
     // --- PHASE 7: USER TRUST / SHADOW-BAN LOOKUP ---

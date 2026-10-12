@@ -133,7 +133,7 @@ assert(compactTime('5:10:00') === '5:10', '5:10:00 compactTime is 5:10');
 assert(compactTime('05:10') === '05:10', 'HH:MM compactTime stays HH:MM');
 assert(ui.includes('openPassengerTypePicker'), 'Adult opens the passenger profile picker');
 assert(ui.includes('roundBoardFare'), 'planner uses the board whole-rand floor');
-assert(ui.includes('flex justify-center mt-3'), 'Trip fare sits centered under the time row');
+assert(ui.includes('w-full flex items-center justify-between'), 'Trip fare is one full-width row');
 assert(ui.includes('planner-departed-next'), 'departed trips still offer Show Next Train');
 assert(ui.includes('plannerTrainColumnTerminus'), 'train names use that train column last stop');
 assert(ui.includes('getSmoothTripDistanceKm'), 'fare uses smoothed rail distance');

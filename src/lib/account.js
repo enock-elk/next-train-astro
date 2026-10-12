@@ -7,7 +7,8 @@
  *     displayName, photoURL, email?, createdAt,
  *     lastSeenAt, region, lastRouteId, appVersion,
  *     deviceIds: { [deviceId]: linkedAtMs | true },
- *     prefs: { showPhotoInAlerts, showMarksInCommunity, notifyCategories, theme, colourPack, hapticsEnabled, passengerType, updatedAt },
+ *     prefs: { showPhotoInAlerts, showMarksInCommunity, notifyCategories, notificationsOn, theme, colourPack, hapticsEnabled, passengerType, pinnedRoutes, updatedAt },
+ *     recentTrips: [{ from, to, fullFrom, fullTo, at, region }]
  *     flags: { shadowBanned: false, shadowBannedUntil: 0, role: 'user' },
  *     trustScore: 0
  *   }
@@ -103,8 +104,19 @@ export function readLocalAccountPrefs() {
         colourPack: safeStorage.getItem('colourPack') || 'classic',
         hapticsEnabled: safeStorage.getItem('hapticsEnabled') === 'true',
         passengerType: safeStorage.getItem('userProfile') || $userProfile.get() || 'Adult',
+        notificationsOn: safeStorage.getItem('notifyRoomActivity') === 'true',
+        pinnedRoutes: readPinnedRoutes(),
         updatedAt: Date.now(),
     };
+}
+
+function readPinnedRoutes() {
+    const out = {};
+    for (const region of ['GP', 'WC', 'KZN', 'EC']) {
+        const id = safeStorage.getItem(`defaultRoute_${region}`);
+        if (id) out[region] = String(id).slice(0, 40);
+    }
+    return out;
 }
 
 export const ACCOUNT_OPS_THROTTLE_MS = 60_000;
@@ -193,6 +205,18 @@ export async function applyAccountPrefs(prefs) {
             const box = document.getElementById('account-marks-community');
             if (box) box.checked = prefs.showMarksInCommunity;
             import('./rider-marks.js').then((m) => m.paintCommunityMarksChip?.()).catch(() => {});
+        }
+        if (prefs.pinnedRoutes && typeof prefs.pinnedRoutes === 'object') {
+            for (const region of ['GP', 'WC', 'KZN', 'EC']) {
+                const id = prefs.pinnedRoutes[region];
+                if (typeof id === 'string' && id.trim()) {
+                    safeStorage.setItem(`defaultRoute_${region}`, id.trim().slice(0, 40));
+                }
+            }
+        }
+        if (typeof prefs.notificationsOn === 'boolean') {
+            safeStorage.setItem('notifyRoomActivity', prefs.notificationsOn ? 'true' : 'false');
+            import('./prefs.js').then((m) => m.syncNotifyUi(prefs.notificationsOn)).catch(() => {});
         }
         if (prefs.notifyCategories && typeof prefs.notifyCategories === 'object') {
             try {
@@ -422,6 +446,8 @@ export async function ensureUserProfile(user, opts = {}) {
             );
         }
 
+        await syncAccountRecentTrips(existing?.recentTrips);
+
         publishUser(user, {
             displayName,
             displayNameCustom: !!(customName || existing?.displayNameCustom),
@@ -485,7 +511,21 @@ export async function initAccount() {
             import('./rider-marks.js').then((m) => m.switchMarksAccount(null)).catch(() => {});
             return;
         }
+        let openedFromVerifyLink = false;
+        if (user && !user.isAnonymous && typeof location !== 'undefined' && /(?:^|[?&])verified=1(?:&|$)/.test(location.search) && typeof user.reload === 'function') {
+            openedFromVerifyLink = true;
+            try { await user.reload(); } catch { /* paint the session we already have */ }
+            user = window.firebaseAuth?.currentUser || user;
+            try {
+                const url = new URL(location.href);
+                url.searchParams.delete('verified');
+                history.replaceState(history.state, '', `${url.pathname}${url.search}${url.hash}`);
+            } catch { /* keep the query */ }
+        }
         publishUser(user);
+        if (openedFromVerifyLink && typeof window.showToast === 'function') {
+            window.showToast(user?.emailVerified ? 'Email verified' : 'Open the link in your email, then come back.', user?.emailVerified ? 'success' : 'info');
+        }
         if (user && !user.isAnonymous) {
             import('./rider-marks.js').then((m) => {
                 m.switchMarksAccount(user.uid);
@@ -565,19 +605,39 @@ export async function requestAccountDeletion() {
     }
     const now = Date.now();
     const draft = deletionRequestDraft(user);
+    const record = {
+        uid: user.uid,
+        email: user.email || null,
+        displayName: state.displayName || user.displayName || null,
+        deviceId: getDeviceId(),
+        requestedAt: now,
+        status: 'pending',
+        reason: 'user_request',
+    };
+    let wrote = false;
     try {
         await window.firebaseDbUpdate(window.firebaseDbRef(window.firebaseDb, `users/${user.uid}`), {
             deletionRequestedAt: now,
             deletionRequestedEmail: user.email || null,
             deletionRequestedReason: 'user_request',
+            deletionResolvedAt: null,
         });
+        wrote = true;
     } catch (e) {
         console.warn('Account deletion flag deferred', e?.message || e);
+    }
+    try {
+        if (typeof window.firebaseDbSet === 'function') {
+            await window.firebaseDbSet(window.firebaseDbRef(window.firebaseDb, `account_deletions/${user.uid}`), record);
+            wrote = true;
+        }
+    } catch (e) {
+        console.warn('Account deletion queue deferred', e?.message || e);
     }
     trackAnalyticsEvent('account_delete', { location: 'account_delete' });
     await signOutAccount();
     closeAccountModal();
-    notifyOperatorsOfDeletion(draft);
+    if (!wrote) openDeletionMail(draft);
 }
 
 export async function signInWithEmail(email, password) {
@@ -601,10 +661,8 @@ export async function signUpWithEmail(email, password, displayName) {
     }
     const cred = await window.firebaseCreateUser(window.firebaseAuth, email.trim(), password);
     try {
-        if (cred.user && typeof window.firebaseSendEmailVerification === 'function') {
-            await window.firebaseSendEmailVerification(cred.user);
-        }
-    } catch { /* non-fatal: they can resend from Account */ }
+        if (cred.user) await sendVerificationEmail(cred.user);
+    } catch { /* non-fatal: they can send it again from Account */ }
     if (displayName?.trim()) {
         const check = refuseDisplayName(displayName);
         if (!check.ok) throw new Error(check.message);
@@ -633,10 +691,7 @@ export async function resendAccountVerification() {
     if (!ok || !window.firebaseAuth?.currentUser) throw new Error('Sign in first.');
     const user = window.firebaseAuth.currentUser;
     if (user.emailVerified) return true;
-    if (typeof window.firebaseSendEmailVerification !== 'function') {
-        throw new Error('Verification email is unavailable.');
-    }
-    await window.firebaseSendEmailVerification(user);
+    await sendVerificationEmail(user);
     return true;
 }
 
@@ -762,8 +817,107 @@ function closeAccountSheets() {
     accountSheetStack.length = 0;
 }
 
+export function openAccountProfile() {
+    setAccountProfileOpen(true);
+}
+
+let _lastTripsPush = '';
+
+/** Merge this phone's recent trips with the account, then write the union back. */
+export async function syncAccountRecentTrips(remote) {
+    if (typeof window === 'undefined' || !window.firebaseDb || !window.firebaseAuth?.currentUser) return;
+    const user = window.firebaseAuth.currentUser;
+    if (!user || user.isAnonymous) return;
+    try {
+        const planner = await import('./planner-ui.js');
+        const remoteList = Array.isArray(remote)
+            ? remote
+            : (remote && typeof remote === 'object' ? Object.values(remote) : []);
+        if (remoteList.length) planner.mergeAccountPlannerHistory(remoteList);
+        await pushAccountRecentTrips();
+    } catch { /* planner still has this phone's list */ }
+}
+
+export async function pushAccountRecentTrips() {
+    const user = window.firebaseAuth?.currentUser;
+    if (!user || user.isAnonymous || !window.firebaseDb) return;
+    try {
+        const planner = await import('./planner-ui.js');
+        const payload = planner.accountPlannerHistoryPayload();
+        const key = JSON.stringify(payload);
+        if (key === _lastTripsPush) return;
+        await window.firebaseDbUpdate(
+            window.firebaseDbRef(window.firebaseDb, `users/${user.uid}`),
+            { recentTrips: payload, recentTripsAt: Date.now() },
+        );
+        _lastTripsPush = key;
+    } catch {
+        _lastTripsPush = '';
+    }
+}
+
 function setAccountProfileOpen(open) {
-    if (!open) closeAccountSheets();
+    const panel = document.getElementById('account-profile-panel');
+    const toggle = document.getElementById('account-profile-toggle');
+    const chevron = document.getElementById('account-profile-chevron');
+    if (panel) panel.classList.toggle('hidden', !open);
+    if (toggle) toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+    if (chevron) chevron.classList.toggle('rotate-180', !!open);
+    if (open) {
+        const input = document.getElementById('account-edit-display-name');
+        if (input && document.activeElement !== input) {
+            input.value = $account.get().displayName || '';
+        }
+    }
+}
+
+/** Password accounts stay out of messages until the inbox proves the address. */
+export function accountNeedsEmailVerify(state = $account.get()) {
+    return state?.status === 'signed-in'
+        && state.authProvider === 'password'
+        && !!state.email
+        && !state.emailVerified;
+}
+
+function verificationContinueUrl() {
+    const fallback = 'https://nexttrain.co.za/?verified=1';
+    if (typeof location === 'undefined') return fallback;
+    const host = String(location.hostname || '').toLowerCase();
+    const allowed = host === 'nexttrain.co.za'
+        || host === 'www.nexttrain.co.za'
+        || host === 'lab.nexttrain.co.za'
+        || host === 'localhost'
+        || host === '127.0.0.1'
+        || host.endsWith('.next-train-lab.pages.dev')
+        || host.endsWith('.github.io');
+    if (!allowed) return fallback;
+    const path = location.pathname && location.pathname !== '/' ? location.pathname : '/';
+    return `${location.origin}${path}?verified=1`;
+}
+
+async function sendVerificationEmail(user) {
+    if (!user || typeof window.firebaseSendEmailVerification !== 'function') {
+        throw new Error('Verification email is unavailable.');
+    }
+    const settings = { url: verificationContinueUrl(), handleCodeInApp: false };
+    try {
+        await window.firebaseSendEmailVerification(user, settings);
+    } catch (e) {
+        const code = e?.code || '';
+        if (code === 'auth/unauthorized-continue-uri' || code === 'auth/invalid-continue-uri') {
+            await window.firebaseSendEmailVerification(user);
+            return;
+        }
+        throw e;
+    }
+}
+
+async function refreshVerifiedSession() {
+    const user = window.firebaseAuth?.currentUser;
+    if (!user || user.isAnonymous || typeof user.reload !== 'function') return false;
+    await user.reload();
+    publishUser(window.firebaseAuth.currentUser);
+    return !!window.firebaseAuth.currentUser?.emailVerified;
 }
 
 export function closeAccountModal() {
@@ -819,8 +973,6 @@ export function syncAccountSettingsUi(state = $account.get()) {
     if (avatarEl) avatarEl.setAttribute('data-signed-in', signed ? 'true' : 'false');
     if (signedBlock) signedBlock.classList.toggle('hidden', !signed);
     if (guestBlock) guestBlock.classList.toggle('hidden', signed || state.status === 'loading');
-    const sessionActions = document.getElementById('account-session-actions');
-    if (sessionActions) sessionActions.classList.toggle('hidden', !signed);
     document.getElementById('account-prefs-label')?.classList.toggle('hidden', !signed);
     document.getElementById('account-signin-create-hint')?.classList.add('hidden');
     const deleteWrap = document.getElementById('account-delete-wrap');
@@ -848,11 +1000,13 @@ export function syncAccountSettingsUi(state = $account.get()) {
     } else {
         if (modalName) modalName.textContent = state.displayName || 'Passenger';
         if (modalEmail) modalEmail.textContent = state.email || '';
-        const verifyRow = document.getElementById('account-verify-row');
-        const verifyLabel = document.getElementById('account-verify-label');
-        const needsVerify = !!state.email && state.authProvider === 'password' && !state.emailVerified;
-        if (verifyRow) verifyRow.classList.toggle('hidden', !needsVerify);
-        if (verifyLabel) verifyLabel.textContent = needsVerify ? 'Not verified' : 'Verified';
+        const verifyCard = document.getElementById('account-verify-card');
+        const needsVerify = accountNeedsEmailVerify(state);
+        if (verifyCard) verifyCard.classList.toggle('hidden', !needsVerify);
+        if (needsVerify && verifyCard && !verifyCard.dataset.opened) {
+            verifyCard.dataset.opened = '1';
+            setAccountProfileOpen(true);
+        }
         const nameInput = document.getElementById('account-edit-display-name');
         if (nameInput && document.activeElement !== nameInput) {
             nameInput.value = state.displayName || '';
@@ -1294,7 +1448,12 @@ export function bindAccountUi() {
         setBusy(true);
         try {
             await signUpWithEmail(email, password, displayName);
-            if (typeof window.showToast === 'function') window.showToast('Account created', 'success');
+            if (typeof window.showToast === 'function') {
+                window.showToast(
+                    accountNeedsEmailVerify() ? 'Check your email to verify this account' : 'Account created',
+                    'success',
+                );
+            }
             paintAccountPoints();
         } catch (e) {
             if (e?.message === DISPLAY_NAME_REFUSE_MSG) {
@@ -1322,7 +1481,6 @@ export function bindAccountUi() {
             await pushSignedInPrefs({ showPhotoInAlerts: !!photo?.checked });
             if (photo) delete photo.dataset.dirty;
             if (typeof window.showToast === 'function') window.showToast('Saved', 'success');
-            requestCloseAccountSheet('account-name-sheet');
         } catch (e) {
             const msg = e?.message || 'Could not save.';
             if (msg === DISPLAY_NAME_REFUSE_MSG && typeof window.showToast === 'function') {
@@ -1374,7 +1532,7 @@ export function bindAccountUi() {
         setBusy(true);
         try {
             await resendAccountVerification();
-            if (typeof window.showToast === 'function') window.showToast('Verification email sent', 'success');
+            if (typeof window.showToast === 'function') window.showToast('We sent the email again', 'success');
         } catch (e) {
             showErr(e?.message || 'Could not send verification email.');
         } finally {
@@ -1432,18 +1590,24 @@ export function bindAccountUi() {
     document.getElementById('account-points-close')?.addEventListener('click', closePointsSheet);
     document.getElementById('account-points-overlay')?.addEventListener('click', closePointsSheet);
 
-    const openNameSheet = () => {
-        const input = document.getElementById('account-edit-display-name');
-        const nameErr = document.getElementById('account-name-error');
-        if (nameErr) nameErr.textContent = '';
-        if (input) input.value = $account.get().displayName || '';
-        showAccountSheet('account-name-sheet');
-        setTimeout(() => input?.focus(), 40);
-    };
-    const closeNameSheet = () => requestCloseAccountSheet('account-name-sheet');
-    document.getElementById('account-name-edit-btn')?.addEventListener('click', openNameSheet);
-    document.getElementById('account-name-close')?.addEventListener('click', closeNameSheet);
-    document.getElementById('account-name-overlay')?.addEventListener('click', closeNameSheet);
+    document.getElementById('account-profile-toggle')?.addEventListener('click', () => {
+        const panel = document.getElementById('account-profile-panel');
+        const open = !!panel?.classList.contains('hidden');
+        setAccountProfileOpen(open);
+    });
+    document.getElementById('account-verify-check-btn')?.addEventListener('click', async () => {
+        setBusy(true);
+        try {
+            const ok = await refreshVerifiedSession();
+            if (typeof window.showToast === 'function') {
+                window.showToast(ok ? 'Email verified' : 'Open the link in your email, then try again.', ok ? 'success' : 'info');
+            }
+        } catch (e) {
+            showErr(e?.message || 'Could not check verification yet.');
+        } finally {
+            setBusy(false);
+        }
+    });
     document.getElementById('account-passenger-type-btn')?.addEventListener('click', () => {
         if (typeof window.triggerHaptic === 'function') window.triggerHaptic();
         if (typeof window.openSmoothModal === 'function') window.openSmoothModal('profile-modal');

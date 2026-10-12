@@ -68,7 +68,9 @@ if (ui.includes('planner-notice-details-row flex justify-end mt-1.5')) fail('Det
 if (!ui.includes('planner-notice-aside')) fail('banner SVG lives in a top-right aside column');
 if (!ui.includes('trainTerminatesRuleHtml')) fail('TRAIN TERMINATES is a reusable clickable rule');
 if (!ui.includes('openDisruptionModal')) fail('TRAIN TERMINATES / Details open the Line Severed modal');
-if (!ui.includes('flex-col items-start mt-1 sm:mt-0')) fail('Departed stays a status above Show Next Train');
+if (!ui.includes('Departed:')) fail('Departed stays a status above Show Next Train');
+if (!ui.includes('Departs:')) fail('upcoming trips label the wait as Departs');
+if (!ui.includes('Total Time:')) fail('duration is labelled Total Time');
 if (!ui.includes('planner-departed-next')) fail('Show Next Train is its own button');
 if (!ui.includes('Show Next Train')) fail('departed card still offers Show Next Train');
 if (ui.includes('getInjectionHtml(0) ?')) fail('must not double-call getInjectionHtml(0)');

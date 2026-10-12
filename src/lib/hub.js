@@ -80,7 +80,7 @@ import {
     renderPollResultsInto,
 } from './alert-poll.js';
 import { $userProfile, $currentRouteId, $userRegion, $deviceId } from '../store.js';
-import { $account } from './account.js';
+import { $account, accountNeedsEmailVerify, openAccountModal, openAccountProfile } from './account.js';
 import { isLieFi } from './logic.js';
 import { bindColourPackControls, setColourPack, getColourPack, resetLookToClassicLight } from './prefs.js';
 import { markPendingReload } from './session-stability.js';
@@ -1266,6 +1266,7 @@ function signedInUid() {
 }
 
 function chatScopeFields() {
+    if (accountNeedsEmailVerify()) return { chatScope: 'guest', sentSignedOut: true };
     const uid = signedInUid();
     if (uid) return { accountUid: uid, chatScope: 'account' };
     return { chatScope: 'guest', sentSignedOut: true };
@@ -1274,6 +1275,7 @@ function chatScopeFields() {
 /** Signed-out view is a new chat on the same device id. Never-signed-in guests still see history. */
 function inboxMessageInScope(m) {
     if (!m) return false;
+    if (accountNeedsEmailVerify()) return false;
     const uid = signedInUid();
     const guestSince = Number(safeStorage.getItem(CHAT_GUEST_SINCE_KEY) || 0);
     const scope = m.chatScope || '';
@@ -1340,6 +1342,7 @@ async function putCommuterInboxMessage(deviceId, msgId, payload) {
 async function mergeGuestChatIntoAccount() {
     if (guestMergeFlight) return guestMergeFlight;
     guestMergeFlight = (async () => {
+        if (accountNeedsEmailVerify()) return;
         const since = Number(safeStorage.getItem(CHAT_GUEST_SINCE_KEY) || 0);
         const acct = $account.get();
         const uid = acct?.status === 'signed-in' ? String(acct.uid || '') : '';
@@ -1410,11 +1413,11 @@ function bindChatAccountListener() {
             beginGuestChat();
             return;
         }
-        if (next === 'signed-in' && safeStorage.getItem(CHAT_GUEST_SINCE_KEY)) {
+        if (next === 'signed-in' && !accountNeedsEmailVerify() && safeStorage.getItem(CHAT_GUEST_SINCE_KEY)) {
             mergeGuestChatIntoAccount().catch(() => {});
         }
     });
-    if (lastStatus === 'signed-in' && safeStorage.getItem(CHAT_GUEST_SINCE_KEY)) {
+    if (lastStatus === 'signed-in' && !accountNeedsEmailVerify() && safeStorage.getItem(CHAT_GUEST_SINCE_KEY)) {
         mergeGuestChatIntoAccount().catch(() => {});
     }
 }
@@ -1691,6 +1694,13 @@ async function postCommuterInboxCopy({ text, feedbackType, feedbackId, attachmen
 }
 
 export async function openMessagesThread(replyToAcknowledge = latestPendingAdminReply) {
+    if (accountNeedsEmailVerify()) {
+        triggerHaptic();
+        showToast('Verify your email before opening messages.', 'info', 4000);
+        openAccountModal();
+        openAccountProfile();
+        return;
+    }
     triggerHaptic();
     closeAppHub(true);
     document.getElementById('developer-reply-banner')?.classList.add('hidden');

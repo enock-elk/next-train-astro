@@ -82,6 +82,7 @@ export default defineConfig({
           /privacy\.html/,
           /terms\.html/,
           /account-delete\.html/,
+          /auth-action\.html/,
           /offline\.html/,
           /\/routes(\.html|\/)/,
           /\/corridors\//,

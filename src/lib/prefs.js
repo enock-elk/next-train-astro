@@ -389,12 +389,7 @@ export function syncNotifyUi(enabled = getNotifyPref()) {
         } else if (Notification.permission === 'denied') {
             hint.textContent = 'Blocked in browser settings';
         } else if (enabled && Notification.permission === 'granted') {
-            const hasVapid = (() => {
-                try { return !!(import.meta.env?.PUBLIC_FIREBASE_VAPID_KEY); } catch { return false; }
-            })();
-            hint.textContent = hasVapid
-                ? 'On - alerts for your routes'
-                : 'On - browser permission saved (FCM key pending)';
+            hint.textContent = 'On - alerts for your routes';
         } else {
             hint.textContent = 'Official notices and confirmed delays';
         }

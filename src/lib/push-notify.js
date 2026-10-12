@@ -276,15 +276,13 @@ export async function enablePushNotifications() {
         return {
             ok: true,
             token: null,
-            message: isLabEnvironment()
-                ? 'Permission on - add PUBLIC_FIREBASE_VAPID_KEY to finish FCM on lab'
-                : 'Permission on - push delivery wiring completes when VAPID is configured',
+            message: 'Notifications are on. Alerts start when this phone finishes connecting.',
         };
     }
     if (!token) {
-        return { ok: true, token: null, message: 'Notifications enabled - token pending (SW / network)' };
+        return { ok: true, token: null, message: 'Notifications are on. Alerts start when this phone finishes connecting.' };
     }
-    return { ok: true, token, message: 'Push alerts enabled for your routes' };
+    return { ok: true, token, message: 'Notifications are on for your routes.' };
 }
 
 export async function disablePushNotifications() {

@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_10.12.3': [
+        'Planner result times read Departs and Total Time, with Departed above Show Next Train, and trip fare on one row. Password accounts stay out of messages until the email link is opened. The verify card says the email needs to be verified, and the link returns to Next Train. Account profile opens name, photo, Sign out, and Delete account. Delete writes account_deletions for a Dev Hub Deletion requests tile (rules deploy still required). Sign-in merges recent trips, pinned routes, and the notification switch onto the account. Commuter toasts no longer say token, SW, or FCM. Legal pages use the Next Train header and skip their own footer link. User sheet is a tile grid. Fares shows quote match percent. /auth-action.html is ready if the Firebase action URL can be changed (case 10430971). forceShow stays false.',
+    ],
     'V9_10.12.2': [
         'RTDB write-once logs and feedback now require an ID token (anonymous is enough, same as polls). replyCount can only step by one. Delay notes cap at 280 characters in rules. Community worker CORS no longer allows every pages.dev or github.io host. Community avatars only load https identity-CDN URLs. nexttrain-cache allows lab. No App Check and no CSP, so boards, ads, and Messages stay as they are. Deploy firebase-database.rules.json after this app build. No commuter What’s New. forceShow stays false.',
     ],

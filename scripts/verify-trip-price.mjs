@@ -6,9 +6,10 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { FARE_CONFIG, fareMultiplierForProfile } from '../src/lib/config.js';
-import { FEATURE_KEYS, GRANTABLE_FEATURES } from '../src/lib/features.js';
-import { suggestZoneFromKm, DEFAULT_ZONE_KM_BANDS } from '../src/lib/zone-distance-audit.js';
-import { computeZoneFareForTrip, getCrowFliesTripKm } from '../src/lib/planner-ui.js';
+import { FEATURE_KEYS, GRANTABLE_FEATURES, isFeatureEnabled } from '../src/lib/features.js';
+import { suggestZoneFromKm, DEFAULT_ZONE_KM_BANDS, bakedDestToDestKm } from '../src/lib/zone-distance-audit.js';
+import { computeZoneFareForTrip, getCrowFliesTripKm, collectTripStopsForDistance } from '../src/lib/planner-ui.js';
+import { compactTime } from '../src/lib/share-links.js';
 import {
     cheaperZone,
     capZoneForSingleRoute,
@@ -24,15 +25,18 @@ const failures = [];
 const assert = (cond, msg) => { if (!cond) failures.push(msg); };
 
 assert(FEATURE_KEYS.TRIP_PRICE === 'tripPrice', 'FEATURE_KEYS.TRIP_PRICE is tripPrice');
-assert(GRANTABLE_FEATURES.some((row) => row.key === 'tripPrice' && row.label === 'Trip price'), 'GRANTABLE_FEATURES includes Trip price');
+assert(!GRANTABLE_FEATURES.some((row) => row.key === 'tripPrice'), 'Trip price is not an experimental grant');
+assert(isFeatureEnabled(FEATURE_KEYS.TRIP_PRICE) === true, 'trip fare is always on');
+assert(isFeatureEnabled(FEATURE_KEYS.TRIP_PRICE, 'pta-pien') === true, 'trip fare is on for every corridor');
 
 const featuresSrc = readFileSync(join(ROOT, 'src/lib/features.js'), 'utf8');
-assert((featuresSrc.match(/tripPrice:\s*\{\s*enabled:\s*false/g) || []).length >= 2, 'lab and prod defaults keep tripPrice off');
+assert(!/tripPrice:\s*\{/.test(featuresSrc.split('export function isFeatureEnabled')[0]), 'tripPrice is not a default / seed flag');
+assert(featuresSrc.includes('if (name === FEATURE_KEYS.TRIP_PRICE) return true'), 'isFeatureEnabled ignores leftover RTDB tripPrice');
 
 const chrome = readFileSync(join(ROOT, 'src/lib/admin-chrome.js'), 'utf8');
-assert(chrome.includes("surface === 'tripPrice'"), 'admin-chrome unlocks tripPrice for granted devices');
-assert(chrome.includes('FEATURE_KEYS.TRIP_PRICE'), 'trip price reads the tripPrice allow-list');
-assert(chrome.includes('isAdminAuthed()'), 'admins still unlock all pilot surfaces');
+assert(!chrome.includes("surface === 'tripPrice'"), 'admin-chrome no longer gates tripPrice as a pilot surface');
+assert(!chrome.includes('FEATURE_KEYS.TRIP_PRICE'), 'trip price is not a pin-gated pilot surface');
+assert(chrome.includes('isAdminAuthed()'), 'admins still unlock remaining pilot surfaces');
 
 assert(suggestZoneFromKm(15) === 'Z1', '15 km is Z1');
 assert(suggestZoneFromKm(15.1) === 'Z2', 'just over 15 km is Z2');
@@ -112,16 +116,30 @@ assert(fareMultiplierForProfile('Pensioner', true) === 0.5, 'Pensioner off-peak 
 }
 
 const ui = readFileSync(join(ROOT, 'src/lib/planner-ui.js'), 'utf8');
-assert(ui.includes('data-nt-trip-fare'), 'planner header has the fare button');
-assert(ui.includes('Trip fare:'), 'fare label is Trip fare on one line');
+assert(ui.includes('function canShowTripPrice() {\n    return true;\n}'), 'trip fare is not feature-gated');
+assert(!ui.includes('isFeatureEnabled(FEATURE_KEYS.TRIP_PRICE)'), 'planner does not read the tripPrice flag');
+assert(!ui.includes("canAccessPilotSurface('tripPrice')"), 'planner does not use the tripPrice pilot surface');
+assert(ui.includes('Trip fare'), 'fare label is Trip fare');
 assert(!ui.includes('TRIP FARE:'), 'fare label is not all-caps TRIP FARE');
-assert(ui.includes('text-xs font-black text-gray-800'), 'Trip fare is 12px gray-800');
+assert(ui.includes('text-base font-black text-gray-900'), 'Trip fare price is conspicuous');
 assert(ui.includes('plannerMoneySvg') || ui.includes('M3 7.5h13.5'), 'trip fare button has a money SVG');
 assert(ui.includes('planner-fare-profile-btn'), 'Adult in the fare sheet is a profile button');
+assert(ui.includes('Fare - Single Trip'), 'fare sheet labels the trip price as Single Trip');
+assert(ui.includes('Return Trip') && ui.includes('Weekly') && ui.includes('Monthly Pass'), 'fare sheet lists Return, Weekly, and Monthly');
+assert(ui.includes('plannerTicketRowsHtml'), 'other ticket types come from the zone table');
+assert(ui.includes('compactTime(fare.depTime)'), 'peak clock uses compactTime so 5:10:00 is not 5:10:');
+assert(!ui.includes("String(fare.depTime).slice(0, 5)"), 'do not slice HH:MM:SS to a trailing colon');
+assert(compactTime('5:10:00') === '5:10', '5:10:00 compactTime is 5:10');
+assert(compactTime('05:10') === '05:10', 'HH:MM compactTime stays HH:MM');
 assert(ui.includes('openPassengerTypePicker'), 'Adult opens the passenger profile picker');
 assert(ui.includes('roundBoardFare'), 'planner uses the board whole-rand floor');
-assert(ui.includes('border-b border-dotted'), 'Trip fare uses a dotted underline');
+assert(ui.includes('flex justify-center mt-3'), 'Trip fare sits centered under the time row');
+assert(ui.includes('planner-departed-next'), 'departed trips still offer Show Next Train');
+assert(ui.includes('plannerTrainColumnTerminus'), 'train names use that train column last stop');
 assert(ui.includes('getSmoothTripDistanceKm'), 'fare uses smoothed rail distance');
+assert(ui.includes('bakedDestToDestKm'), 'planner fare prefers painted corridor km');
+assert(ui.includes('isTrainTime(s.time)'), 'planner fare skips --- sheet rows');
+assert(ui.includes('extractMapStationChain'), 'planner fare falls back to static-map station order');
 assert(ui.includes('getCrowFliesTripKm'), 'fare also computes first-to-last straight-line km');
 assert(ui.includes('Straight-line'), 'fare sheet still has the crow-flies line');
 assert(ui.includes('data-admin-authed-only') && ui.includes('Straight-line') && ui.includes('Zone'), 'straight-line and zone are admin-only');
@@ -149,6 +167,34 @@ assert(!/saulsville/i.test(ui), 'do not hardcode Saulsville');
         ],
     });
     assert(crow != null && hops != null && crow === hops, `crow-flies ignores intermediate hops, got ${crow} vs ${hops}`);
+}
+
+{
+    const clipped = collectTripStopsForDistance({
+        from: 'CAPE TOWN',
+        to: 'WELLINGTON',
+        route: { id: 'ct-well' },
+        stops: [
+            { station: 'CAPE TOWN STATION', time: '06:00', lat: -33.923631, lon: 18.427186 },
+            { station: 'STRAND STATION', time: '---', lat: -34.116, lon: 18.828 },
+            { station: 'DU TOIT STATION', time: '---', lat: -33.932, lon: 18.860 },
+            { station: 'STIKLAND STATION', time: '06:40', lat: -33.891, lon: 18.680 },
+            { station: 'WELLINGTON STATION', time: '07:30', lat: -33.640, lon: 19.012 },
+        ],
+    });
+    assert(!clipped.some((s) => /STRAND|DU TOIT/i.test(s.station)), 'fare stop list drops --- fork rows from the shared WC sheet');
+    assert(clipped.some((s) => /CAPE TOWN/i.test(s.station)) && clipped.some((s) => /WELLINGTON/i.test(s.station)), 'fare stop list keeps Cape Town and Wellington');
+    const wcTracks = JSON.parse(readFileSync(join(ROOT, 'public/tracks/rail-tracks-WC.geojson'), 'utf8'));
+    const well = (wcTracks.features || []).find((f) => f.properties?.routeId === 'ct-well');
+    const names = well?.properties?.stationNames || [];
+    const coords = well?.properties?.stationCoords || [];
+    const at = (want) => {
+        const i = names.findIndex((n) => String(n).toUpperCase().includes(want));
+        const c = coords[i];
+        return c ? { lat: c[0], lon: c[1] } : null;
+    };
+    const railKm = bakedDestToDestKm(well, at('CAPE TOWN'), at('WELLINGTON'));
+    assert(railKm != null && railKm >= 68 && railKm <= 78, `planner baked Cape Town-Wellington is ~72 km, got ${railKm}`);
 }
 
 const modal = readFileSync(join(ROOT, 'src/components/PlannerModals.astro'), 'utf8');

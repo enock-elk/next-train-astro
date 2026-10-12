@@ -31,6 +31,7 @@ import {
     inboxEntriesFromMap,
     markInboxDelivered,
     markInboxRead,
+    patchInboxMessageFields,
 } from './inbox-receipts.js';
 import {
     inboxReactionActorId,
@@ -39,12 +40,14 @@ import {
     submitInboxReaction,
 } from './inbox-reactions.js';
 import { isAdminAuthed } from './admin-chrome.js';
+import { bindMapOverrideSaveListener } from './map-overrides.js';
 import { trackAnalyticsEvent } from './analytics.js';
 import { prepareRichHtml, injectRichTextStyles, isSafeHref } from './rich-text.js';
 import {
     showToast, triggerHaptic, openSmoothModal, closeSmoothModal, canAutoOpenHomeNotices,
     hapticsAreEnabled, bindPasswordReveal
 } from './ui.js';
+import { whenSettledForAutoNotices } from './session-stability.js';
 import {
     fetchUnionNotices,
     setCachedLiveNotices,
@@ -57,8 +60,25 @@ import {
     resolveAlertImageSrc,
     hydrateAlertPosterImages,
     renderLazyPosterHtml,
+    getCachedLiveNotices,
+    toggleAlertPinned,
+    toggleAlertPollRawCounts,
 } from './alerts-channel.js';
-import { layoutAlertPost, hoistAlertImagesFromHtml } from './alerts-feed.js';
+import { layoutAlertPost, hoistAlertImagesFromHtml, ALERT_PIN_SVG, isNoticePinned, alertCopyNeedsSeeMore, buildAlertSeeMoreMarkup, expandAlertSeeMore } from './alerts-feed.js';
+import {
+    buildPollShellHtml,
+    hydratePollResults,
+    paintPollShellsAfterVote,
+    pollSeverity,
+    pollAllowsMultiple,
+    parseVotedPollKeys,
+    formatVotedPollKeys,
+    shakePollVoteButtons,
+    syncPollMultiSubmitState,
+    isPollOpen,
+    readVotedPollOption,
+    renderPollResultsInto,
+} from './alert-poll.js';
 import { $userProfile, $currentRouteId, $userRegion, $deviceId } from '../store.js';
 import { $account } from './account.js';
 import { isLieFi } from './logic.js';
@@ -71,6 +91,8 @@ import {
     peekIncomingVersion,
     installIncomingServiceWorker,
     activateWaitingServiceWorker,
+    reloadToApplyUpdate,
+    unstickStaleServiceWorker,
 } from './app-update.js';
 import { setupMapLogic } from './map-viewer.js';
 import { applyShadowBanCloak, checkContentSafety, queueAutoModeration, checkRateLimit, recordRateHit, startRateLimitCountdown } from './trust.js';
@@ -509,6 +531,7 @@ export function closeAppHub(skipHistory = false) {
 
 export function openAppHub() {
     triggerHaptic();
+    try { window.cancelPendingGridOpen?.(); } catch { /* ignore */ }
     // Sign-in / account chrome lives in a deferred chunk — kick it as soon as
     // the hub is actually opened so first tap is not a no-op.
     import('./account.js')
@@ -582,23 +605,38 @@ export async function performHardCacheClear(source = 'modal_confirm', { latestVe
     trackAnalyticsEvent('execute_hard_cache_clear', { source });
 
     if (policy.downloadThenSwap) {
-        showToast('Downloading the update…', 'info', 5000);
+        const incoming = await peekIncomingVersion();
+        if (incoming && isAppVersionNewer(incoming, APP_VERSION)) {
+            console.log(`🛡️ Guardian: NEW APP VERSION found: ${incoming} (running ${APP_VERSION}). Not downloaded yet. Check for Updates will download, then restart to implement it.`);
+            showToast(`Downloading ${incoming}…`, 'info', 5000);
+        } else {
+            console.log(`🛡️ Guardian: Check for Updates — running ${APP_VERSION}, published ${incoming || 'unknown'}. Downloading the worker, then restart.`);
+            showToast('Downloading the update…', 'info', 5000);
+        }
         const installed = await installIncomingServiceWorker();
         if (!installed.ok) {
+            console.warn(`🛡️ Guardian: Incoming version ${incoming || APP_VERSION} NOT downloaded (${installed.reason}). Keeping ${APP_VERSION}.`);
             showToast('Kept your saved app. Try again on a stronger connection.', 'error', 4500);
             return false;
+        }
+        console.log(`🛡️ Guardian: Incoming version ${incoming || APP_VERSION} downloaded (${installed.reason}).`);
+        if (installed.reason === 'already_current' && incoming && isAppVersionNewer(incoming, APP_VERSION)) {
+            console.warn(`🛡️ Guardian: Service worker still ${APP_VERSION} while published ${incoming}. Unsticking so Check for Updates can land one shell.`);
+            await unstickStaleServiceWorker();
+        } else {
+            try { await activateWaitingServiceWorker(); } catch { /* reload still applies the new shell */ }
         }
         closeAppHub(true);
         const updateModal = document.getElementById('cache-clear-modal');
         if (updateModal) closeSmoothModal('cache-clear-modal');
-        try { await activateWaitingServiceWorker(); } catch { /* reload still applies the new shell */ }
         markPendingReload('cache_sync', 500);
         if (policy.showUpdatedToast) {
             if (latestVersion) markLatestVersionToast();
             else markAppUpdatedToast();
         }
+        console.log(`🛡️ Guardian: Restarting in 500ms to implement ${incoming || APP_VERSION} (Check for Updates).`);
         setTimeout(() => {
-            window.location.href = window.location.pathname + '?v=' + Date.now();
+            reloadToApplyUpdate('check_updates');
         }, 500);
         return true;
     }
@@ -611,6 +649,22 @@ export async function performHardCacheClear(source = 'modal_confirm', { latestVe
     const modal = document.getElementById('cache-clear-modal');
     if (modal) closeSmoothModal('cache-clear-modal');
 
+    if (policy.systemKillswitch) {
+        console.log('☢️ GUARDIAN NUKE: installing incoming shell before restart so clients do not mix hashed bundles.');
+        try {
+            const installed = await installIncomingServiceWorker();
+            console.log(`☢️ GUARDIAN NUKE: incoming shell downloaded: ${installed.ok ? 'yes' : 'no'} (${installed.reason}).`);
+            if (installed.ok && installed.reason === 'already_current') {
+                await unstickStaleServiceWorker();
+                console.log('☢️ GUARDIAN NUKE: unstuck cached sw.js so the restart can fetch one codebase.');
+            } else if (installed.ok) {
+                try { await activateWaitingServiceWorker(); } catch { /* restart still hops */ }
+            }
+        } catch (e) {
+            console.warn('☢️ GUARDIAN NUKE: incoming install failed; restart will still drop volatile caches.', e);
+        }
+    }
+
     try {
         if (policy.unregisterServiceWorkers && 'serviceWorker' in navigator) {
             const regs = await navigator.serviceWorker.getRegistrations();
@@ -622,13 +676,13 @@ export async function performHardCacheClear(source = 'modal_confirm', { latestVe
                 if (shouldDeleteCacheForPolicy(name, policy)) await caches.delete(name);
             }
         }
-        if (policy.flushLocalStorage && typeof safeStorage.flushVolatile === 'function') {
+        if (policy.flushLocalStorage && source !== 'system_killswitch' && typeof safeStorage.flushVolatile === 'function') {
             safeStorage.flushVolatile();
-        } else if (policy.flushLocalStorage) {
+        } else if (policy.flushLocalStorage && source !== 'system_killswitch') {
             safeStorage.removeItem(`full_db_${$userRegion.get() || 'GP'}`);
             safeStorage.removeItem('app_installed_version');
         }
-        if (policy.resetLook) resetLookToClassicLight();
+        if (policy.resetLook && source !== 'system_killswitch') resetLookToClassicLight();
         if (policy.deleteScheduleDatabase && window.indexedDB) {
             await new Promise((resolve) => {
                 try {
@@ -648,8 +702,11 @@ export async function performHardCacheClear(source = 'modal_confirm', { latestVe
         if (latestVersion) markLatestVersionToast();
         else markAppUpdatedToast();
     }
+    if (policy.systemKillswitch) {
+        console.log('☢️ GUARDIAN NUKE: cleanup finished. Restarting in 500ms to implement the clean shell.');
+    }
     setTimeout(() => {
-        window.location.href = window.location.pathname + '?v=' + Date.now();
+        reloadToApplyUpdate(policy.systemKillswitch ? 'killswitch' : 'cache_sync');
     }, 500);
     return true;
 }
@@ -697,6 +754,11 @@ export async function showCacheClearWarning() {
     const incomingVersion = (typeof navigator === 'undefined' || navigator.onLine)
         ? await peekIncomingVersion()
         : null;
+    if (incomingVersion && isAppVersionNewer(incomingVersion, APP_VERSION)) {
+        console.log(`🛡️ Guardian: Check for Updates — NEW APP VERSION found: ${incomingVersion} (running ${APP_VERSION}). Not downloaded yet.`);
+    } else {
+        console.log(`🛡️ Guardian: Check for Updates — running ${APP_VERSION}, published ${incomingVersion || 'unknown'}.`);
+    }
     const runReset = (skipNetworkPreflight) => performHardCacheClear('check_updates', {
         latestVersion: !!(incomingVersion && !isAppVersionNewer(incomingVersion, APP_VERSION)),
         skipNetworkPreflight,
@@ -715,8 +777,11 @@ export async function showCacheClearWarning() {
 }
 
 function syncProfileDisplay() {
+    const label = $userProfile.get() || 'Adult';
     const el = document.getElementById('settings-profile-display');
-    if (el) el.textContent = $userProfile.get() || 'Adult';
+    if (el) el.textContent = label;
+    const account = document.getElementById('account-passenger-type-display');
+    if (account) account.textContent = label;
 }
 
 function syncHapticsToggle() {
@@ -806,24 +871,25 @@ async function submitFeedback() {
             routeId: $currentRouteId.get() || null,
             deviceId,
             contact: email || null,
-            publish: {
-                kind: 'feedback',
-                payload: {
-                    type,
-                    text,
-                    email,
-                    status: 'unread',
-                    appVersion: APP_VERSION,
-                    routeId: $currentRouteId.get() || 'none',
-                    region: $userRegion.get() || 'GP',
-                    timestamp: Date.now(),
-                    userAgent: navigator.userAgent,
-                    deviceId,
-                    isPWA: isStandalone,
-                    // Held messages are text-only for v1 (attachments not uploaded on hold).
-                    attachmentsHeld: hasFile,
+                publish: {
+                    kind: 'feedback',
+                    payload: {
+                        type,
+                        text,
+                        email,
+                        status: 'unread',
+                        appVersion: APP_VERSION,
+                        routeId: $currentRouteId.get() || 'none',
+                        region: $userRegion.get() || 'GP',
+                        timestamp: Date.now(),
+                        userAgent: navigator.userAgent,
+                        deviceId,
+                        isPWA: isStandalone,
+                        // Held messages are text-only for v1 (attachments not uploaded on hold).
+                        attachmentsHeld: hasFile,
+                        ...chatScopeFields(),
+                    },
                 },
-            },
         });
         recordRateHit(FEEDBACK_RATE_KEY, { windowMs: FEEDBACK_WINDOW_MS });
         showToast(safety.message, 'info');
@@ -869,12 +935,14 @@ async function submitFeedback() {
             throw new Error('Network disconnected. Cannot submit feedback while offline.');
         }
 
-        if (window.firebaseAuth && !window.firebaseAuth.currentUser && window.firebaseSignInAnonymously) {
-            await window.firebaseSignInAnonymously(window.firebaseAuth);
-        }
         let authToken = '';
-        if (window.firebaseAuth?.currentUser && window.firebaseGetIdToken) {
-            authToken = await window.firebaseGetIdToken(window.firebaseAuth.currentUser, true);
+        try {
+            authToken = await ensureAnonymousAuthToken();
+        } catch (authErr) {
+            if (!isTransientAuthError(authErr)) throw authErr;
+        }
+        if (!authToken) {
+            throw new Error('Could not send just now. Check your connection and try again.');
         }
 
         let attachmentUrls = [];
@@ -898,7 +966,8 @@ async function submitFeedback() {
             timestamp: Date.now(),
             userAgent: navigator.userAgent,
             deviceId: $deviceId.get() || safeStorage.getItem('next_train_device_id') || 'unknown',
-            isPWA: isStandalone
+            isPWA: isStandalone,
+            ...chatScopeFields(),
         };
 
         const authParam = authToken ? `?auth=${authToken}` : '';
@@ -912,7 +981,13 @@ async function submitFeedback() {
 
         try {
             const created = await res.json().catch(() => ({}));
-            await postCommuterInboxCopy({ text, feedbackType: type, feedbackId: created?.name });
+            await postCommuterInboxCopy({
+                text,
+                feedbackType: type,
+                feedbackId: created?.name,
+                attachmentUrl: attachmentUrls[0] || null,
+                attachmentUrls,
+            });
         } catch { /* thread copy is best-effort */ }
 
         showToast('Feedback sent! Thank you.', 'success');
@@ -929,7 +1004,13 @@ async function submitFeedback() {
     } catch (e) {
         console.error(e);
         trackAnalyticsEvent('submit_feedback_error', { message: String(e?.message || e || 'error').slice(0, 80) });
-        showToast(e.message || 'Could not send feedback.', 'error');
+        const raw = String(e?.message || '');
+        showToast(
+            (isTransientAuthError(e) || raw.startsWith('Firebase:'))
+                ? 'Could not send feedback. Check your connection and try again.'
+                : (raw || 'Could not send feedback.'),
+            'error'
+        );
     } finally {
         if (submitBtn) submitBtn.disabled = false;
         if (submitText) submitText.textContent = 'Submit';
@@ -964,165 +1045,132 @@ function trackAlertEvent(name, params) {
     trackAnalyticsEvent(name, params);
 }
 
-/** Alert-severity palette for poll chrome (info=blue, warning=amber, critical=red). */
-function pollTone(severity) {
-    if (severity === 'critical') {
-        return {
-            wrap: 'mt-4 bg-red-50 dark:bg-red-900/20 p-4 rounded-xl border border-red-200 dark:border-red-800 shadow-sm',
-            title: 'text-red-900 dark:text-red-100',
-            label: 'text-red-800 dark:text-red-200',
-            muted: 'text-red-500 dark:text-red-400',
-            track: 'bg-red-100 dark:bg-red-950',
-            bar: 'bg-red-500',
-            ring: 'ring-red-400',
-            btn: 'border-red-300 dark:border-red-700 hover:border-red-500 text-red-700 dark:text-red-300',
-        };
-    }
-    if (severity === 'warning') {
-        return {
-            wrap: 'mt-4 bg-amber-50 dark:bg-amber-900/20 p-4 rounded-xl border border-amber-200 dark:border-amber-800 shadow-sm',
-            title: 'text-amber-900 dark:text-amber-100',
-            label: 'text-amber-800 dark:text-amber-200',
-            muted: 'text-amber-600 dark:text-amber-400',
-            track: 'bg-amber-100 dark:bg-amber-950',
-            bar: 'bg-amber-500',
-            ring: 'ring-amber-400',
-            btn: 'border-amber-300 dark:border-amber-700 hover:border-amber-500 text-amber-800 dark:text-amber-300',
-        };
-    }
-    return {
-        wrap: 'mt-4 bg-blue-50 dark:bg-blue-900/20 p-4 rounded-xl border border-blue-200 dark:border-blue-800 shadow-sm',
-        title: 'text-blue-900 dark:text-blue-100',
-        label: 'text-blue-800 dark:text-blue-200',
-        muted: 'text-blue-500 dark:text-blue-400',
-        track: 'bg-blue-100 dark:bg-blue-950',
-        bar: 'bg-blue-500',
-        ring: 'ring-blue-400',
-        btn: 'border-blue-300 dark:border-blue-700 hover:border-blue-500 text-blue-700 dark:text-blue-300',
-    };
+function isTransientAuthError(error) {
+    const code = String(error?.code || '');
+    const text = String(error?.message || error || '');
+    return code === 'auth/network-request-failed'
+        || code === 'auth/too-many-requests'
+        || /network-request-failed|Failed to fetch|NetworkError|Load failed|network disconnected/i.test(text);
 }
 
-async function ensurePollAuthToken() {
-    try {
-        if (window.firebaseAuth && !window.firebaseAuth.currentUser && window.firebaseSignInAnonymously) {
-            await window.firebaseSignInAnonymously(window.firebaseAuth);
-        }
-        if (window.firebaseAuth?.currentUser && window.firebaseGetIdToken) {
-            return await window.firebaseGetIdToken(window.firebaseAuth.currentUser, true) || '';
-        }
-    } catch { /* ignore */ }
-    return '';
-}
-
-/** Fetch poll tallies and render percentages (no raw vote lists). */
-async function renderPollResultsInto(container, pollId, poll, votedOption, severity = 'info', seedVote = null) {
-    if (!container || !pollId || !poll) return;
-    const tone = pollTone(severity || poll.severity || 'info');
-    try {
-        const res = await fetch(`${DYNAMIC_BASE_URL}polls/${encodeURIComponent(pollId)}.json?t=${Date.now()}`);
-        const data = res.ok ? await res.json() : null;
-        let countA = 0, countB = 0, countC = 0;
-        if (data && typeof data === 'object') {
-            Object.values(data).forEach((vote) => {
-                if (!vote || typeof vote !== 'object') return;
-                if (vote.optionKey === 'A') countA++;
-                else if (vote.optionKey === 'B') countB++;
-                else if (vote.optionKey === 'C') countC++;
-            });
-        }
-        // Seed the just-cast vote if the write hasn't appeared in the GET yet
-        if (seedVote === 'A' && countA === 0) countA = 1;
-        else if (seedVote === 'B' && countB === 0) countB = 1;
-        else if (seedVote === 'C' && countC === 0) countC = 1;
-
-        const total = countA + countB + countC;
-        const pct = (n) => (total > 0 ? Math.round((n / total) * 100) : 0);
-        const row = (key, label, n) => {
-            if (!label) return '';
-            const p = pct(n);
-            const mine = votedOption === key ? ` ring-1 ${tone.ring}` : '';
-            return `
-                <div class="mb-2${mine}">
-                    <div class="flex justify-between text-[10px] font-bold ${tone.label} mb-1">
-                        <span>${escapeHTML(label)}${votedOption === key ? ' · your vote' : ''}</span>
-                        <span>${p}%</span>
-                    </div>
-                    <div class="w-full ${tone.track} rounded-full h-2">
-                        <div class="${tone.bar} h-2 rounded-full transition-all duration-500" style="width:${p}%"></div>
-                    </div>
-                </div>`;
+function waitForAuthUser(auth, ms = 1500) {
+    if (!auth || auth.currentUser) return Promise.resolve(auth?.currentUser || null);
+    if (typeof window.firebaseOnAuthStateChanged !== 'function') return Promise.resolve(null);
+    return new Promise((resolve) => {
+        let settled = false;
+        const finish = (user) => {
+            if (settled) return;
+            settled = true;
+            try { unsub(); } catch { /* ignore */ }
+            resolve(user || auth.currentUser || null);
         };
-        const nested = String(container.id || '').startsWith('poll-live-results');
-        container.innerHTML = `
-            ${nested ? '' : `<p class="text-xs font-black ${tone.title} mb-3 text-center leading-tight">${escapeHTML(poll.question || 'Poll results')}</p>`}
-            ${row('A', poll.optionA, countA)}
-            ${row('B', poll.optionB, countB)}
-            ${poll.optionC ? row('C', poll.optionC, countC) : ''}
-            <p class="text-[9px] text-center ${tone.muted} font-bold uppercase tracking-wider mt-1">Live percentages</p>`;
-        container.className = nested ? 'mt-1' : `${tone.wrap} shadow-inner`;
-    } catch {
-        container.innerHTML = `
-            <div class="text-center">
-                <p class="text-xs font-bold ${tone.title}">Thanks for voting!</p>
-                <p class="text-[10px] ${tone.muted} mt-0.5">Your response has been recorded.</p>
-            </div>`;
-        container.className = tone.wrap;
-    }
+        const unsub = window.firebaseOnAuthStateChanged(auth, (user) => {
+            if (user) finish(user);
+        });
+        setTimeout(() => finish(auth.currentUser), ms);
+    });
 }
 
-/** SPA parity — notice modal poll votes (one vote per device via localStorage). */
-export async function submitPollVote(pollId, optionKey, optionText, pollMeta = null) {
+/** Boot Firebase, reuse a saved session, then sign in anonymously. Cached token, not a forced refresh. */
+async function ensureAnonymousAuthToken() {
+    const { bootFirebase } = await import('./firebase-boot.js');
+    await bootFirebase();
+    const auth = window.firebaseAuth;
+    if (!auth || typeof window.firebaseGetIdToken !== 'function') {
+        const err = new Error('Auth required to vote');
+        err.code = 'auth/unavailable';
+        throw err;
+    }
+    let user = auth.currentUser || await waitForAuthUser(auth);
+    if (!user && typeof window.firebaseSignInAnonymously === 'function') {
+        try {
+            await window.firebaseSignInAnonymously(auth);
+        } catch (e) {
+            if (!isTransientAuthError(e)) throw e;
+            await new Promise((resolve) => setTimeout(resolve, 600));
+            await window.firebaseSignInAnonymously(auth);
+        }
+        user = auth.currentUser;
+    }
+    if (!user) {
+        const err = new Error('Auth required to vote');
+        err.code = 'auth/unavailable';
+        throw err;
+    }
+    return await window.firebaseGetIdToken(user, false) || '';
+}
+
+/** One vote per Firebase uid (anonymous install). localStorage is only a UX lock. */
+export async function submitPollVote(pollId, optionKey, optionText, pollMeta = null, optionKeys = null) {
     triggerHaptic();
-    if (!pollId || !optionKey) return;
+    const keys = parseVotedPollKeys(optionKeys && optionKeys.length ? optionKeys : optionKey);
+    if (!pollId || !keys.length) return;
+    if (pollMeta && !isPollOpen(pollMeta)) {
+        showToast('This poll is closed.', 'info');
+        return;
+    }
     if (safeStorage.getItem('poll_voted_' + pollId)) {
         showToast('You have already voted on this poll.', 'warning');
         return;
     }
 
-    const severity = pollMeta?.severity || 'info';
-    const tone = pollTone(severity);
-    const container = document.getElementById(`poll-container-${pollId}`);
+    const primary = keys[0];
+    const stored = formatVotedPollKeys(keys);
+    const severity = pollSeverity(pollMeta?.severity || 'info');
+    const labelFor = (key) => {
+        if (key === 'A') return pollMeta?.optionA || 'A';
+        if (key === 'B') return pollMeta?.optionB || 'B';
+        if (key === 'C') return pollMeta?.optionC || 'C';
+        return key;
+    };
+    const texts = keys.map(labelFor).filter(Boolean);
 
     try {
-        const token = await ensurePollAuthToken();
-        if (!token) throw new Error('Auth required to vote');
+        const token = await ensureAnonymousAuthToken();
+        const uid = window.firebaseAuth?.currentUser?.uid || '';
+        if (!token || !uid) throw new Error('Auth required to vote');
 
         const payload = {
-            optionKey,
-            optionText: optionText || optionKey,
+            optionKey: primary,
+            optionKeys: stored,
+            optionText: optionText || texts.join(', ') || primary,
             timestamp: Date.now(),
             deviceId: $deviceId.get() || safeStorage.getItem('next_train_device_id') || 'unknown',
         };
         const res = await fetch(
-            `${DYNAMIC_BASE_URL}polls/${encodeURIComponent(pollId)}.json?auth=${encodeURIComponent(token)}`,
-            { method: 'POST', body: JSON.stringify(payload) }
+            `${DYNAMIC_BASE_URL}polls/${encodeURIComponent(pollId)}/${encodeURIComponent(uid)}.json?auth=${encodeURIComponent(token)}`,
+            { method: 'PUT', body: JSON.stringify(payload) }
         );
-        if (!res.ok) throw new Error(`Vote write failed (${res.status})`);
+        if (!res.ok) {
+            if (pollMeta && !isPollOpen(pollMeta)) {
+                showToast('This poll is closed.', 'info');
+                return;
+            }
+            if (res.status === 403) {
+                showToast('You have already voted on this poll.', 'warning');
+                return;
+            }
+            throw new Error(`Vote write failed (${res.status})`);
+        }
 
-        try { safeStorage.setItem('poll_voted_' + pollId, optionKey); } catch { /* ignore */ }
+        try { safeStorage.setItem('poll_voted_' + pollId, stored); } catch { /* ignore */ }
         trackAlertEvent('alert_poll_vote', {
             poll_id: pollId,
-            vote_option: optionKey,
-            vote_text: optionText,
+            vote_option: stored,
+            vote_text: texts.join(', '),
             route_id: $currentRouteId.get() || 'global',
         });
 
-        if (container) {
-            if (pollMeta?.showResults) {
-                await renderPollResultsInto(container, pollId, pollMeta, optionKey, severity, optionKey);
-            } else {
-                container.innerHTML = `
-                    <div class="text-center animate-fade-in-up">
-                        <p class="text-xs font-bold ${tone.title}">Thanks for voting!</p>
-                        <p class="text-[10px] ${tone.muted} mt-0.5">Your response has been recorded.</p>
-                    </div>`;
-                container.className = tone.wrap;
-            }
-        }
+        paintPollShellsAfterVote(pollId, pollMeta, stored, severity);
         showToast('Vote recorded successfully!', 'success');
     } catch (e) {
         console.warn('Poll vote failed', e);
-        showToast('Could not record your vote. Please try again.', 'error');
+        showToast(
+            isTransientAuthError(e) || String(e?.message || '') === 'Auth required to vote'
+                ? 'Could not record your vote. Check your connection and try again.'
+                : 'Could not record your vote. Please try again.',
+            'error'
+        );
     }
 }
 
@@ -1157,7 +1205,9 @@ function getThreadDeviceId() {
 }
 
 const LOCAL_INBOX_KEY = 'ntInboxLocalV1';
+const CHAT_GUEST_SINCE_KEY = 'ntChatGuestSince';
 let latestPendingAdminReply = null;
+let guestMergeFlight = null;
 
 function rememberAcknowledgedInboxReplies(entries, deviceId = getThreadDeviceId()) {
     const tokens = (entries || [])
@@ -1208,6 +1258,165 @@ function mergeInboxThread(remote, local) {
 
 function isCommuterInboxMsg(m) {
     return m?.from === 'commuter' || String(m?.id || '').startsWith('cm_');
+}
+
+function signedInUid() {
+    const acct = $account.get();
+    return acct?.status === 'signed-in' && acct.uid ? String(acct.uid) : '';
+}
+
+function chatScopeFields() {
+    const uid = signedInUid();
+    if (uid) return { accountUid: uid, chatScope: 'account' };
+    return { chatScope: 'guest', sentSignedOut: true };
+}
+
+/** Signed-out view is a new chat on the same device id. Never-signed-in guests still see history. */
+function inboxMessageInScope(m) {
+    if (!m) return false;
+    const uid = signedInUid();
+    const guestSince = Number(safeStorage.getItem(CHAT_GUEST_SINCE_KEY) || 0);
+    const scope = m.chatScope || '';
+    const msgUid = m.accountUid || '';
+    if (uid) {
+        if ((scope === 'guest' || m.sentSignedOut) && msgUid && msgUid !== uid) return false;
+        return true;
+    }
+    if (!guestSince) return true;
+    if ((m.timestamp || 0) < guestSince) return false;
+    if (scope === 'account' && msgUid) return false;
+    return true;
+}
+
+function beginGuestChat() {
+    const now = String(Date.now());
+    safeStorage.setItem(CHAT_GUEST_SINCE_KEY, now);
+    safeStorage.setResilientItem?.(CHAT_GUEST_SINCE_KEY, now)?.catch?.(() => {});
+    latestPendingAdminReply = null;
+    document.getElementById('developer-reply-banner')?.classList.add('hidden');
+    syncInboxBadges(0);
+    const modal = document.getElementById('messages-thread-modal');
+    const open = modal && !modal.classList.contains('hidden');
+    if (open) renderMessagesThread([]);
+    checkServiceAlerts().catch(() => {});
+    if (open) fetchInboxThread().then((list) => renderMessagesThread(list)).catch(() => {});
+}
+
+async function fetchInboxMap(deviceId) {
+    const id = String(deviceId || '').trim();
+    if (!id) return [];
+    const res = await fetch(`${DYNAMIC_BASE_URL}inbox/${encodeURIComponent(id)}.json?t=${Date.now()}`);
+    if (!res.ok) return [];
+    const data = await res.json();
+    if (!data || typeof data !== 'object') return [];
+    return inboxEntriesFromMap(data).filter((m) => m && (m.message || m.text));
+}
+
+async function putCommuterInboxMessage(deviceId, msgId, payload) {
+    if (!deviceId || !msgId || !payload?.message) return false;
+    if (window.firebaseAuth && !window.firebaseAuth.currentUser && window.firebaseSignInAnonymously) {
+        try { await window.firebaseSignInAnonymously(window.firebaseAuth); } catch { /* optional */ }
+    }
+    let authToken = '';
+    if (window.firebaseAuth?.currentUser && window.firebaseGetIdToken) {
+        try { authToken = await window.firebaseGetIdToken(window.firebaseAuth.currentUser, true); } catch { /* ignore */ }
+    }
+    const authParam = authToken ? `?auth=${encodeURIComponent(authToken)}` : '';
+    try {
+        const res = await fetch(
+            `${DYNAMIC_BASE_URL}inbox/${encodeURIComponent(deviceId)}/${encodeURIComponent(msgId)}.json${authParam}`,
+            {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            }
+        );
+        return res.ok;
+    } catch {
+        return false;
+    }
+}
+
+async function mergeGuestChatIntoAccount() {
+    if (guestMergeFlight) return guestMergeFlight;
+    guestMergeFlight = (async () => {
+        const since = Number(safeStorage.getItem(CHAT_GUEST_SINCE_KEY) || 0);
+        const acct = $account.get();
+        const uid = acct?.status === 'signed-in' ? String(acct.uid || '') : '';
+        if (!since || !uid) return;
+        const localId = $deviceId.get() || safeStorage.getItem('next_train_device_id') || '';
+        const canonical = acct.chatDeviceId || localId;
+        if (!localId) return;
+        let remote = [];
+        try { remote = await fetchInboxMap(localId); } catch { remote = []; }
+        const slice = (remote || []).filter((m) => (m.timestamp || 0) >= since && m.id);
+        let copyFailed = false;
+        for (const m of slice) {
+            const fields = {
+                accountUid: uid,
+                chatScope: 'account',
+                mergedAt: Date.now(),
+            };
+            if (isCommuterInboxMsg(m)) fields.sentSignedOut = true;
+            if (canonical && canonical !== localId && isCommuterInboxMsg(m) && (m.message || m.text)) {
+                const copyId = `cm_m_${String(m.id)}`.replace(/[.#$[\]/]/g, '_').slice(0, 120);
+                const payload = {
+                    from: 'commuter',
+                    deviceId: canonical,
+                    message: String(m.message || m.text || '').slice(0, 2000),
+                    timestamp: m.timestamp || Date.now(),
+                    type: m.type || 'general',
+                    read: true,
+                    accountUid: uid,
+                    chatScope: 'account',
+                    sentSignedOut: true,
+                    mergedFromDevice: localId,
+                    mergedFromId: m.id,
+                };
+                if (m.feedbackId) payload.feedbackId = String(m.feedbackId);
+                if (m.attachmentUrl) payload.attachmentUrl = m.attachmentUrl;
+                if (m.attachmentUrls) payload.attachmentUrls = m.attachmentUrls;
+                const copied = await putCommuterInboxMessage(canonical, copyId, payload);
+                if (!copied) copyFailed = true;
+                else {
+                    fields.mergedIntoDevice = canonical;
+                    fields.mergedIntoId = copyId;
+                }
+            }
+            await patchInboxMessageFields(localId, m.id, fields);
+        }
+        if (copyFailed) return;
+        if (Number(safeStorage.getItem(CHAT_GUEST_SINCE_KEY) || 0) !== since) return;
+        safeStorage.removeItem(CHAT_GUEST_SINCE_KEY);
+        safeStorage.setResilientItem?.(CHAT_GUEST_SINCE_KEY, '')?.catch?.(() => {});
+        const modal = document.getElementById('messages-thread-modal');
+        if (modal && !modal.classList.contains('hidden')) {
+            try { renderMessagesThread(await fetchInboxThread()); } catch { /* keep current paint */ }
+        }
+        checkServiceAlerts().catch(() => {});
+    })().finally(() => { guestMergeFlight = null; });
+    return guestMergeFlight;
+}
+
+function bindChatAccountListener() {
+    if (typeof window === 'undefined' || window.__ntChatAccountBound) return;
+    window.__ntChatAccountBound = true;
+    let lastStatus = $account.get()?.status || '';
+    window.addEventListener('accountchange', (e) => {
+        const next = e.detail?.status || $account.get()?.status || '';
+        const prev = lastStatus;
+        lastStatus = next;
+        if (prev === 'signed-in' && next !== 'signed-in') {
+            beginGuestChat();
+            return;
+        }
+        if (next === 'signed-in' && safeStorage.getItem(CHAT_GUEST_SINCE_KEY)) {
+            mergeGuestChatIntoAccount().catch(() => {});
+        }
+    });
+    if (lastStatus === 'signed-in' && safeStorage.getItem(CHAT_GUEST_SINCE_KEY)) {
+        mergeGuestChatIntoAccount().catch(() => {});
+    }
 }
 
 function inboxMediaFromHtml(html, extraUrls = []) {
@@ -1304,7 +1513,16 @@ async function fetchInboxThread() {
     let remote = [];
     try { remote = await withTimeout(fetchRemoteInbox(), 6000, []); } catch { remote = []; }
     if (!Array.isArray(remote)) remote = [];
-    return mergeInboxThread(remote, readLocalInbox().length ? readLocalInbox() : localFirst);
+    const localId = $deviceId.get() || safeStorage.getItem('next_train_device_id') || '';
+    const threadId = getThreadDeviceId();
+    if (signedInUid() && localId && threadId && localId !== threadId) {
+        try {
+            const extra = await withTimeout(fetchInboxMap(localId), 6000, []);
+            remote = mergeInboxThread(remote, (extra || []).filter((m) => !m.mergedIntoDevice));
+        } catch { /* canonical thread still shows */ }
+    }
+    const local = readLocalInbox().length ? readLocalInbox() : localFirst;
+    return mergeInboxThread(remote, local).filter(inboxMessageInScope);
 }
 
 function renderMessagesThread(list) {
@@ -1405,9 +1623,8 @@ function bindInboxThreadReactions(host) {
         const poster = e.target.closest?.('[data-alert-lightbox]');
         if (poster && host.contains(poster)) {
             e.preventDefault();
-            if (poster.getAttribute('data-alert-ready') !== '1') return;
             const src = poster.getAttribute('data-alert-lightbox');
-            if (src && typeof window.openLightbox === 'function') window.openLightbox(src);
+            if (src && typeof window.openLightbox === 'function') window.openLightbox(src, poster);
             return;
         }
         const chip = e.target.closest?.('[data-inbox-react]');
@@ -1437,7 +1654,7 @@ async function applyThreadInboxReaction(row, list, emoji) {
     if (chips) chips.outerHTML = renderInboxReactionChips(entry, inboxReactionActorId(deviceId));
 }
 
-async function postCommuterInboxCopy({ text, feedbackType, feedbackId }) {
+async function postCommuterInboxCopy({ text, feedbackType, feedbackId, attachmentUrl, attachmentUrls }) {
     const deviceId = getThreadDeviceId();
     if (!deviceId || !text) return false;
     if (window.firebaseAuth && !window.firebaseAuth.currentUser && window.firebaseSignInAnonymously) {
@@ -1455,8 +1672,11 @@ async function postCommuterInboxCopy({ text, feedbackType, feedbackId }) {
         timestamp: Date.now(),
         type: feedbackType || 'general',
         read: true,
+        ...chatScopeFields(),
     };
     if (feedbackId) payload.feedbackId = String(feedbackId);
+    if (attachmentUrl) payload.attachmentUrl = attachmentUrl;
+    if (Array.isArray(attachmentUrls) && attachmentUrls.length) payload.attachmentUrls = attachmentUrls;
     rememberLocalInbox({ id: msgId, ...payload });
     const authParam = authToken ? `?auth=${encodeURIComponent(authToken)}` : '';
     const res = await fetch(
@@ -1480,7 +1700,7 @@ export async function openMessagesThread(replyToAcknowledge = latestPendingAdmin
         syncInboxBadges(0);
     }
     const host = document.getElementById('messages-thread-list');
-    const local = readLocalInbox();
+    const local = readLocalInbox().filter(inboxMessageInScope);
     if (host) {
         if (local.length) renderMessagesThread(local);
         else host.innerHTML = '<p class="text-xs text-gray-400 text-center py-8">Loading…</p>';
@@ -1535,6 +1755,7 @@ export function renderServiceAlertModal(notice, options = {}) {
     const strip = document.getElementById('notice-modal-strip');
     const signoffEl = document.getElementById('notice-modal-signoff');
     const chipEl = document.getElementById('notice-modal-sev-chip');
+    const pinEl = document.getElementById('notice-modal-pin');
     const stripCls = severity === 'critical'
         ? 'nt-alert-strip-critical bg-red-600 text-white'
         : severity === 'warning'
@@ -1552,6 +1773,12 @@ export function renderServiceAlertModal(notice, options = {}) {
                 ? '🟡 Warning'
                 : '🔵 Info';
     }
+    if (pinEl) {
+        const pinned = isNoticePinned(notice);
+        pinEl.classList.toggle('hidden', !pinned);
+        if (pinned) pinEl.innerHTML = ALERT_PIN_SVG;
+        else pinEl.innerHTML = '';
+    }
 
     const modalHeader = document.getElementById('notice-modal-title') || modal.querySelector('h3');
     if (modalHeader) {
@@ -1568,6 +1795,9 @@ export function renderServiceAlertModal(notice, options = {}) {
         ? `<h3 class="text-base font-black text-gray-900 dark:text-white leading-snug mb-2">${escapeHTML(layout.title)}</h3>`
         : '';
     let formattedMsg = sanitizeHTML(layout.body);
+    if (alertCopyNeedsSeeMore(layout.body)) {
+        formattedMsg = buildAlertSeeMoreMarkup(formattedMsg);
+    }
     if (options.prefixHtml) formattedMsg = `${options.prefixHtml}${formattedMsg}`;
 
     if (notice.sourceName) {
@@ -1605,52 +1835,9 @@ export function renderServiceAlertModal(notice, options = {}) {
     }
 
     if (notice.poll && notice.poll.active) {
-        const pollId = notice.id || 'preview';
-        const votedOption = mode === 'live' ? safeStorage.getItem('poll_voted_' + pollId) : null;
-        const pollSeverity = severity || 'info';
-        const tone = pollTone(pollSeverity);
-        const pollMeta = {
-            question: notice.poll.question || '',
-            optionA: notice.poll.optionA || '',
-            optionB: notice.poll.optionB || '',
-            optionC: notice.poll.optionC || '',
-            showResults: !!notice.poll.showResults,
-            severity: pollSeverity,
-        };
-        content.innerHTML += `<div id="poll-container-${escapeHTML(String(pollId))}" class="${tone.wrap}"></div>`;
-        const pollEl = document.getElementById(`poll-container-${pollId}`);
-        if (pollEl) {
-            try { pollEl.dataset.pollMeta = JSON.stringify(pollMeta); } catch { /* ignore */ }
-            if (votedOption && notice.poll.showResults) {
-                renderPollResultsInto(pollEl, pollId, { ...notice.poll, ...pollMeta }, votedOption, pollSeverity);
-            } else if (votedOption) {
-                pollEl.innerHTML = `
-                    <div class="text-center">
-                        <p class="text-xs font-bold ${tone.title}">Thanks for voting!</p>
-                        <p class="text-[10px] ${tone.muted} mt-0.5">Your response has been recorded.</p>
-                    </div>`;
-            } else {
-                const voteBtn = (key, text) =>
-                    `<button type="button" data-poll-id="${escapeHTML(String(pollId))}" data-poll-opt="${key}" data-poll-text="${escapeHTML(text)}" class="nt-poll-vote flex-1 min-w-[30%] bg-white dark:bg-gray-800 border-2 ${tone.btn} font-bold py-2.5 rounded-lg transition-all text-xs focus:outline-none shadow-sm">${escapeHTML(text)}</button>`;
-                const optC = notice.poll.optionC
-                    ? voteBtn('C', notice.poll.optionC)
-                    : '';
-                pollEl.innerHTML = `
-                    <p class="text-sm font-black ${tone.title} mb-3 leading-tight text-center">${escapeHTML(notice.poll.question || '')}</p>
-                    <div class="flex flex-wrap gap-2 mb-3">
-                        ${voteBtn('A', notice.poll.optionA || 'A')}
-                        ${voteBtn('B', notice.poll.optionB || 'B')}
-                        ${optC}
-                    </div>
-                    <div id="poll-live-results-${escapeHTML(String(pollId))}" class="${notice.poll.showResults ? '' : 'hidden'}"></div>`;
-                if (notice.poll.showResults && mode === 'live') {
-                    const liveBox = document.getElementById(`poll-live-results-${pollId}`);
-                    if (liveBox) {
-                        renderPollResultsInto(liveBox, pollId, { ...notice.poll, ...pollMeta }, null, pollSeverity);
-                    }
-                }
-            }
-        }
+        content.innerHTML += buildPollShellHtml({ ...notice, severity: severity || notice.severity }, { mode });
+        const pollEl = content.querySelector('[data-poll-shell]');
+        if (pollEl && mode === 'live') hydratePollResults(pollEl);
     }
 
     if (timestamp) {
@@ -1686,7 +1873,7 @@ export function renderServiceAlertModal(notice, options = {}) {
 
     const oldCloseBtn = document.getElementById('notice-modal-close-btn')
         || modal.querySelector('button.bg-red-600, button.bg-blue-600, button.bg-yellow-600');
-    modal.querySelectorAll('.nt-notice-actions').forEach((el) => el.remove());
+    modal.querySelectorAll('.nt-notice-actions, .nt-notice-admin').forEach((el) => el.remove());
 
     let baseColorClass = 'bg-blue-600 hover:bg-blue-700';
     if (severity === 'critical') baseColorClass = 'bg-red-600 hover:bg-red-700';
@@ -1764,6 +1951,41 @@ export function renderServiceAlertModal(notice, options = {}) {
         content.parentNode?.appendChild(btnContainer);
     }
 
+    if (mode === 'live' && isAdminAuthed() && notice?.id) {
+        const adminWrap = document.createElement('div');
+        adminWrap.className = 'nt-notice-admin flex flex-col gap-2 mt-2 w-full';
+        const pinAdmin = document.createElement('button');
+        pinAdmin.type = 'button';
+        pinAdmin.className = 'w-full bg-gray-900 hover:bg-gray-800 text-white font-black py-2.5 px-4 rounded-lg text-[11px] uppercase tracking-wide focus:outline-none';
+        pinAdmin.textContent = isNoticePinned(notice) ? 'Unpin from feed' : 'Pin to bottom of feed';
+        pinAdmin.onclick = async () => {
+            triggerHaptic();
+            const ok = await toggleAlertPinned(notice);
+            if (!ok) return;
+            const next = getCachedLiveNotices().find((n) => String(n.id) === String(notice.id) && String(n._sourceKey || '') === String(notice._sourceKey || ''))
+                || { ...notice, pinned: !isNoticePinned(notice), pinnedAt: isNoticePinned(notice) ? null : Date.now() };
+            renderServiceAlertModal(next, options);
+        };
+        adminWrap.appendChild(pinAdmin);
+        if (notice.poll?.active) {
+            const rawOn = !!(notice.poll.showRawCounts || notice.poll.showParticipantCount);
+            const countAdmin = document.createElement('button');
+            countAdmin.type = 'button';
+            countAdmin.className = 'w-full bg-gray-900 hover:bg-gray-800 text-white font-black py-2.5 px-4 rounded-lg text-[11px] uppercase tracking-wide focus:outline-none';
+            countAdmin.textContent = rawOn ? 'Hide raw counts' : 'Show raw counts';
+            countAdmin.onclick = async () => {
+                triggerHaptic();
+                const ok = await toggleAlertPollRawCounts(notice);
+                if (!ok) return;
+                const next = getCachedLiveNotices().find((n) => String(n.id) === String(notice.id) && String(n._sourceKey || '') === String(notice._sourceKey || ''))
+                    || { ...notice, poll: { ...notice.poll, showRawCounts: !rawOn } };
+                renderServiceAlertModal(next, options);
+            };
+            adminWrap.appendChild(countAdmin);
+        }
+        btnContainer.parentNode?.appendChild(adminWrap);
+    }
+
     const topCloseBtn = document.getElementById('notice-modal-x')
         || modal.querySelector('#notice-modal-strip button')
         || modal.querySelector('button.text-gray-400');
@@ -1838,8 +2060,10 @@ export async function checkServiceAlerts() {
                     if (inboxData) {
                         markInboxDelivered(deviceId, inboxEntriesFromMap(inboxData)).catch(() => {});
                         const unreadKeys = Object.keys(inboxData).filter((k) => {
-                            const locallyAcknowledged = localAcknowledgements.has(inboxReplyAckToken(deviceId, inboxData[k], k));
-                            return inboxReplyStillVisible(inboxData[k], Date.now(), locallyAcknowledged);
+                            const entry = inboxData[k];
+                            if (!inboxMessageInScope({ ...entry, id: k })) return false;
+                            const locallyAcknowledged = localAcknowledgements.has(inboxReplyAckToken(deviceId, entry, k));
+                            return inboxReplyStillVisible(entry, Date.now(), locallyAcknowledged);
                         });
                         syncInboxBadges(unreadKeys.length);
                         if (unreadKeys.length > 0) {
@@ -1882,9 +2106,9 @@ export async function checkServiceAlerts() {
         if (!validNotices || validNotices.length === 0) return;
 
         const autoNotice = pickAutoOpenNotice(validNotices);
-        if (autoNotice && !window._alertsChannelOpening && canAutoOpenHomeNotices()) {
+        if (autoNotice && !window._alertsChannelOpening) {
             window._alertsChannelOpening = true;
-            setTimeout(() => {
+            whenSettledForAutoNotices(() => {
                 if (!canAutoOpenHomeNotices()) {
                     window._alertsChannelOpening = false;
                     return;
@@ -1899,9 +2123,10 @@ export async function checkServiceAlerts() {
                     notices: validNotices,
                     highlightId: autoNotice.id || null,
                     resetVisible: true,
+                    focusTop: true,
                 });
                 window._alertsChannelOpening = false;
-            }, 400);
+            });
         }
         const pushNotice = autoNotice || validNotices[0];
         if (pushNotice) {
@@ -1942,8 +2167,10 @@ export function initHub() {
     window.openFeedbackReplyFromOverlay = openFeedbackReplyFromOverlay;
     window.openFeedbackModal = openFeedbackModal;
     window.syncFeedbackModalViewport = syncFeedbackModalViewport;
+    bindChatAccountListener();
     injectRichTextStyles();
     initAlertsChannel();
+    bindMapOverrideSaveListener();
     bindPasswordReveal({
         inputId: 'account-password',
         buttonId: 'account-toggle-password-btn',
@@ -1954,6 +2181,62 @@ export function initHub() {
     if (!window.__ntPollVoteBound) {
         window.__ntPollVoteBound = true;
         document.addEventListener('click', (e) => {
+            const seeMore = e.target?.closest?.('[data-alert-see-more]');
+            if (seeMore) {
+                e.preventDefault();
+                e.stopPropagation();
+                expandAlertSeeMore(seeMore);
+                return;
+            }
+            const viewBtn = e.target?.closest?.('[data-poll-view-results]');
+            if (viewBtn) {
+                e.preventDefault();
+                const wrap = viewBtn.closest('[data-poll-shell], [id^="poll-container-"]');
+                let pollMeta = null;
+                try { pollMeta = JSON.parse(wrap?.dataset?.pollMeta || 'null'); } catch { pollMeta = null; }
+                const pollId = wrap?.getAttribute('data-poll-shell') || '';
+                if (pollId && readVotedPollOption(pollId)) return;
+                if (pollMeta && !isPollOpen(pollMeta)) {
+                    if (wrap && pollId) {
+                        renderPollResultsInto(wrap, pollId, pollMeta, '', pollMeta.severity);
+                    }
+                    return;
+                }
+                shakePollVoteButtons(wrap);
+                showToast('Vote first to see the results.', 'info');
+                return;
+            }
+            const submitBtn = e.target?.closest?.('[data-poll-submit]');
+            if (submitBtn) {
+                e.preventDefault();
+                if (document.getElementById('notice-modal')?.dataset?.alertPreview === '1') {
+                    showToast('Preview only - votes are not recorded.', 'info');
+                    return;
+                }
+                const wrap = submitBtn.closest('[data-poll-shell], [id^="poll-container-"]');
+                let pollMeta = null;
+                try { pollMeta = JSON.parse(wrap?.dataset?.pollMeta || 'null'); } catch { pollMeta = null; }
+                if (wrap?.getAttribute('data-poll-open') === '0' || (pollMeta && !isPollOpen(pollMeta))) {
+                    showToast('This poll is closed.', 'info');
+                    return;
+                }
+                const selected = [...(wrap?.querySelectorAll('.nt-poll-vote.is-selected') || [])];
+                if (!selected.length) {
+                    shakePollVoteButtons(wrap);
+                    showToast('Pick at least one answer.', 'info');
+                    return;
+                }
+                const keys = selected.map((btn) => btn.getAttribute('data-poll-opt')).filter(Boolean);
+                const texts = selected.map((btn) => btn.getAttribute('data-poll-text')).filter(Boolean);
+                submitPollVote(
+                    selected[0].getAttribute('data-poll-id'),
+                    keys[0],
+                    texts.join(', '),
+                    pollMeta,
+                    keys
+                );
+                return;
+            }
             const btn = e.target?.closest?.('.nt-poll-vote');
             if (!btn) return;
             e.preventDefault();
@@ -1961,9 +2244,22 @@ export function initHub() {
                 showToast('Preview only - votes are not recorded.', 'info');
                 return;
             }
-            const wrap = btn.closest('[id^="poll-container-"]');
+            const wrap = btn.closest('[data-poll-shell], [id^="poll-container-"]');
             let pollMeta = null;
             try { pollMeta = JSON.parse(wrap?.dataset?.pollMeta || 'null'); } catch { pollMeta = null; }
+            if (wrap?.getAttribute('data-poll-open') === '0' || (pollMeta && !isPollOpen(pollMeta))) {
+                showToast('This poll is closed.', 'info');
+                return;
+            }
+            if (pollAllowsMultiple(pollMeta) || wrap?.getAttribute('data-poll-multi') === '1') {
+                if (readVotedPollOption(btn.getAttribute('data-poll-id') || '')) {
+                    showToast('You have already voted on this poll.', 'warning');
+                    return;
+                }
+                btn.classList.toggle('is-selected');
+                syncPollMultiSubmitState(wrap);
+                return;
+            }
             submitPollVote(
                 btn.getAttribute('data-poll-id'),
                 btn.getAttribute('data-poll-opt'),
@@ -2356,8 +2652,6 @@ export function initHub() {
     // "where is my train" view, so this deliberately does NOT switch tabs.
     document.getElementById('sidenav-interactive-map-btn')?.addEventListener('click', () => {
         triggerHaptic();
-        trackAnalyticsEvent('click_interactive_map', { location: 'sidenav' });
-        trackAnalyticsEvent('click_network_map', { location: 'sidenav' });
         closeAppHub(true);
         setTimeout(() => {
             trackAnalyticsEvent('open_interactive_map', { location: 'sidenav' });
@@ -2480,6 +2774,7 @@ export function initHub() {
                         deviceId,
                         isPWA: isStandalone,
                         attachmentsHeld: hasFile,
+                        ...chatScopeFields(),
                     },
                 },
             });
@@ -2503,6 +2798,9 @@ export function initHub() {
             if (window.firebaseAuth?.currentUser && window.firebaseGetIdToken) {
                 authToken = await window.firebaseGetIdToken(window.firebaseAuth.currentUser, true);
             }
+            if (!authToken) {
+                throw new Error('Could not send just now. Check your connection and try again.');
+            }
             let attachmentUrls = [];
             if (hasFile) {
                 attachmentUrls = await uploadFeedbackAttachments(threadFile.files);
@@ -2521,6 +2819,7 @@ export function initHub() {
                 userAgent: navigator.userAgent,
                 deviceId: getThreadDeviceId() || 'unknown',
                 isPWA: window.matchMedia('(display-mode: standalone)').matches || !!window.navigator.standalone,
+                ...chatScopeFields(),
             };
             const authParam = authToken ? `?auth=${authToken}` : '';
             const res = await fetch(`${DYNAMIC_BASE_URL}feedback.json${authParam}`, {
@@ -2531,7 +2830,13 @@ export function initHub() {
             const created = await res.json().catch(() => ({}));
             recordRateHit(FEEDBACK_RATE_KEY, { windowMs: FEEDBACK_WINDOW_MS });
             if (!signedInContactEmail()) persistValidContact(email);
-            await postCommuterInboxCopy({ text, feedbackType: 'thread_reply', feedbackId: created?.name });
+            await postCommuterInboxCopy({
+                text,
+                feedbackType: 'thread_reply',
+                feedbackId: created?.name,
+                attachmentUrl: attachmentUrls[0] || null,
+                attachmentUrls,
+            });
             if (input) input.value = '';
             if (threadFile) threadFile.value = '';
             paintThreadFileChip(threadFile);

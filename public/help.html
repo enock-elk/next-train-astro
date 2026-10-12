@@ -4,53 +4,73 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="robots" content="noindex, nofollow" />
-  <meta name="theme-color" content="#0f172a" />
-  <title>App Help &amp; Recovery | Next Train</title>
+  <meta name="theme-color" content="#1d4ed8" />
+  <title>Need help? | Next Train</title>
   <!--
     Fully self-contained. No hashed app stylesheet, no Tailwind, no Firebase SDK.
     Every rule lives in this file so the page still paints when the app
     stylesheet 404s. If CSS is disabled entirely, the headings, lists,
     buttons and mailto/Facebook links still work. The reset button needs JS.
+    Do not paint device IDs or technical dumps on this page.
   -->
   <style>
     :root {
-      --bg: #0f172a;
-      --panel: #1e293b;
-      --panel-2: #334155;
-      --text: #f1f5f9;
-      --muted: #94a3b8;
-      --accent: #2563eb;
-      --accent-hover: #1d4ed8;
-      --warn: #f59e0b;
-      --ok: #10b981;
-      --danger: #ef4444;
-      --line: rgba(148, 163, 184, 0.25);
+      --blue: #1d4ed8;
+      --blue-hover: #163d96;
+      --canvas: #f3f4f6;
+      --card: #ffffff;
+      --text: #111827;
+      --muted: #4b5563;
+      --line: #e5e7eb;
+      --ok: #15803d;
+      --warn: #c2410c;
+      --fb: #1877f2;
     }
     * { box-sizing: border-box; }
     html, body { margin: 0; padding: 0; min-height: 100%; }
     body {
       font-family: system-ui, -apple-system, "Segoe UI", Roboto, Ubuntu, sans-serif;
-      background: radial-gradient(1200px 600px at 50% -10%, #1e3a5f 0%, var(--bg) 55%);
+      background: var(--canvas);
       color: var(--text);
       line-height: 1.45;
-      padding: 20px 16px 40px;
     }
-    .wrap { max-width: 420px; margin: 0 auto; }
+    .phone {
+      max-width: 28rem;
+      margin: 0 auto;
+      min-height: 100vh;
+      background: var(--card);
+      box-shadow: 0 18px 50px rgb(15 23 42 / 0.12);
+    }
+    .top {
+      padding: 18px 20px 8px;
+      border-bottom: 1px solid var(--line);
+    }
     .brand {
-      font-size: 0.72rem; font-weight: 800; letter-spacing: 0.14em;
-      text-transform: uppercase; color: var(--muted); margin-bottom: 8px;
+      font-size: 2rem;
+      font-weight: 900;
+      letter-spacing: -0.035em;
+      color: var(--blue);
+      line-height: 1;
+      margin: 0;
     }
-    h1 { font-size: 1.55rem; line-height: 1.2; margin: 0 0 10px; font-weight: 800; }
-    .lead { color: var(--muted); font-size: 0.95rem; margin: 0 0 20px; }
+    .sub {
+      margin: 8px 0 0;
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--muted);
+    }
+    .pad { padding: 16px 20px 32px; }
+    h1 { font-size: 1.35rem; line-height: 1.25; margin: 0 0 8px; font-weight: 800; }
+    .lead { color: var(--muted); font-size: 0.95rem; margin: 0 0 18px; }
     .card {
-      background: var(--panel);
+      background: var(--canvas);
       border: 1px solid var(--line);
       border-radius: 16px;
       padding: 16px;
       margin-bottom: 14px;
     }
     .card h2 {
-      font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.08em;
+      font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.08em;
       color: var(--muted); margin: 0 0 12px; font-weight: 800;
     }
     .steps { list-style: none; padding: 0; margin: 0; counter-reset: step; }
@@ -61,10 +81,11 @@
       font-size: 0.92rem;
     }
     .steps li:first-child { border-top: 0; padding-top: 0; }
+    .steps li > span { flex: 1; min-width: 0; }
     .steps li::before {
       content: counter(step);
       flex: 0 0 24px; height: 24px; border-radius: 999px;
-      background: var(--panel-2); color: var(--text);
+      background: #dbeafe; color: var(--blue);
       font-size: 0.75rem; font-weight: 800;
       display: flex; align-items: center; justify-content: center;
       margin-top: 1px;
@@ -77,15 +98,15 @@
       -webkit-tap-highlight-color: transparent;
     }
     .btn:last-child { margin-bottom: 0; }
-    .btn-primary { background: var(--accent); }
-    .btn-primary:hover, .btn-primary:focus { background: var(--accent-hover); }
-    .btn-warn { background: #c2410c; }
+    .btn-primary { background: var(--blue); }
+    .btn-primary:hover, .btn-primary:focus { background: var(--blue-hover); }
+    .btn-warn { background: var(--warn); }
     .btn-warn:hover { background: #9a3412; }
     .btn-ghost {
       background: transparent; color: var(--text);
       border: 1px solid var(--line);
     }
-    .btn-fb { background: #1877f2; }
+    .btn-fb { background: var(--fb); }
     .btn-fb:hover { background: #0f5fbf; }
     .btn:disabled { opacity: 0.55; cursor: wait; }
     label {
@@ -95,7 +116,7 @@
     }
     input, textarea, select {
       width: 100%; border-radius: 10px; border: 1px solid var(--line);
-      background: #0b1220; color: var(--text);
+      background: #fff; color: var(--text);
       padding: 12px; font: inherit; margin-bottom: 12px;
     }
     textarea { min-height: 88px; resize: vertical; }
@@ -105,13 +126,9 @@
       font-size: 0.85rem; font-weight: 600;
     }
     .status.show { display: block; }
-    .status.ok { background: rgba(16, 185, 129, 0.15); color: #6ee7b7; }
-    .status.err { background: rgba(239, 68, 68, 0.15); color: #fca5a5; }
-    .status.info { background: rgba(37, 99, 235, 0.15); color: #93c5fd; }
-    .meta {
-      font-size: 0.72rem; color: var(--muted); word-break: break-all;
-      margin-top: 8px; line-height: 1.4;
-    }
+    .status.ok { background: #dcfce7; color: var(--ok); }
+    .status.err { background: #fee2e2; color: #b91c1c; }
+    .status.info { background: #dbeafe; color: #1d4ed8; }
     .hp { position: absolute; left: -9999px; opacity: 0; height: 0; width: 0; overflow: hidden; }
     details.more { margin-top: 4px; }
     details.more summary {
@@ -121,8 +138,9 @@
     details.more summary::-webkit-details-marker { display: none; }
     .ios {
       margin-top: 10px; padding: 10px 12px; border-radius: 10px;
-      background: rgba(245, 158, 11, 0.12); color: #fcd34d; font-size: 0.82rem;
+      background: #fff7ed; color: #9a3412; font-size: 0.82rem;
     }
+    a.inline { color: var(--blue); }
   </style>
 </head>
 <body>
@@ -134,23 +152,27 @@
       then open <a href="./">Next Train</a> again.
     </p>
   </noscript>
-  <div class="wrap">
-    <div class="brand">Next Train · Recovery</div>
+  <div class="phone">
+    <div class="top">
+      <p class="brand">Next Train</p>
+      <p class="sub">Help</p>
+    </div>
+    <div class="pad">
     <h1 id="title">Having trouble opening the app?</h1>
     <p class="lead" id="lead">
-      This rescue page works even when the main app is stuck, unstyled, or our servers are having a bad day.
+      This page still works when the main app is stuck or looking unfinished. Try the steps below.
     </p>
 
     <div class="card">
       <h2>Try this first</h2>
       <ol class="steps" id="steps">
-        <li>Pull down to refresh, or close the tab and open Next Train again.</li>
-        <li>If it still looks broken, tap <strong>Reset saved app data</strong> below - this clears an old cached copy (common after a big update).</li>
-        <li>Still stuck? Send your contact details or WhatsApp / email us. We’ll reply when we can.</li>
+        <li><span>Pull down to refresh, or close the app and open Next Train again.</span></li>
+        <li><span>If it still looks broken, tap <strong>Reset saved app data</strong> below. That clears an old saved copy, which is common after a big update.</span></li>
+        <li><span>Still stuck? Leave your contact details, or WhatsApp / email us. We’ll reply when we can.</span></li>
       </ol>
       <div class="ios" id="ios-tip" hidden>
-        On iPhone: open the site in Safari → Share → Add to Home Screen again after reset.
-        Or Settings → Safari → Clear History and Website Data (this clears other sites too).
+        On iPhone: open the site in Safari, then Share, then Add to Home Screen again after reset.
+        Or Settings, Safari, Clear History and Website Data (this clears other sites too).
       </div>
     </div>
 
@@ -190,21 +212,21 @@
           <input id="company" name="company" type="text" tabindex="-1" autocomplete="off" />
         </div>
 
-        <p class="hint">Sent to our support inbox when Firebase is reachable. If send fails, use Facebook or email above - nothing is lost.</p>
+        <p class="hint">Sent to our support inbox when we can reach it. If send fails, use Facebook or email above.</p>
         <button type="submit" class="btn btn-primary" id="btn-send">Please contact me</button>
         <div class="status" id="form-status" role="status"></div>
       </form>
-      <div class="meta" id="diag"></div>
     </div>
 
     <details class="more card">
-      <summary>More technical tips</summary>
+      <summary>More tips</summary>
       <ol class="steps" style="margin-top:12px">
-        <li>Android Chrome: menu → Delete browsing data → Cached images and files for this site, then reopen.</li>
-        <li>If you installed the app icon, remove it and reopen from the browser once after reset.</li>
-        <li>Check <a href="https://www.cloudflarestatus.com/" style="color:#93c5fd" target="_blank" rel="noopener">Cloudflare status</a> if the whole internet feels broken.</li>
+        <li><span>Android Chrome: menu, Delete browsing data, Cached images and files for this site, then reopen.</span></li>
+        <li><span>If you installed the app icon, remove it and reopen from the browser once after reset.</span></li>
+        <li><span>Check <a class="inline" href="https://www.cloudflarestatus.com/" target="_blank" rel="noopener">Cloudflare status</a> if the whole internet feels broken.</span></li>
       </ol>
     </details>
+    </div>
   </div>
 
   <script>
@@ -220,7 +242,6 @@
   function detectBase() {
     var path = location.pathname || '/';
     if (path.indexOf('/next-train-astro/') !== -1) return '/next-train-astro/';
-    // When opened as …/help.html under a subpath
     var i = path.lastIndexOf('/help.html');
     if (i > 0) return path.slice(0, i + 1);
     return '/';
@@ -232,19 +253,19 @@
   var copy = {
     offline: {
       title: 'You look offline',
-      lead: 'Your device has no usable connection right now. Schedules may still work later from a saved copy - first get signal, then reopen the app.'
+      lead: 'Your device has no usable connection right now. Get signal, then open Next Train again. Saved times may still work later.'
     },
     boot: {
       title: 'The app is taking too long to start',
       lead: 'Usually this is a stuck saved copy after an update, or our servers are slow. Reset below, then try again.'
     },
     crash: {
-      title: 'The app hit a fatal error',
-      lead: 'We caught a crash. Resetting saved data usually fixes it. You can also send us your contact details.'
+      title: 'The app hit a problem',
+      lead: 'Resetting saved data usually fixes it. You can also send us your contact details.'
     },
     server: {
       title: 'We can’t reach Next Train servers',
-      lead: 'Your phone is online, but our hosting or data pipeline isn’t answering. Wait a few minutes, or leave your contact details.'
+      lead: 'Your phone is online, but our hosting isn’t answering. Wait a few minutes, or leave your contact details.'
     },
     cache: {
       title: 'This install looks stuck on an old version',
@@ -252,11 +273,11 @@
     },
     broken_install: {
       title: 'Having trouble opening the app?',
-      lead: 'This rescue page works even when the main app is stuck, unstyled, or our servers are having a bad day.'
+      lead: 'This page still works when the main app is stuck or looking unfinished. Try the steps below.'
     },
     after_update: {
       title: 'Stuck after an update?',
-      lead: 'Big upgrades (like our recent rebuild) can leave an old offline copy on your phone. Reset clears it safely.'
+      lead: 'A big upgrade can leave an old offline copy on your phone. Reset clears it safely.'
     },
     other: {
       title: 'Need help with Next Train?',
@@ -310,12 +331,6 @@
   var lastCrash = '';
   try { lastCrash = sessionStorage.getItem('nt_last_crash') || ''; } catch (e) {}
 
-  document.getElementById('diag').textContent =
-    'Device: ' + deviceId() +
-    ' · Version: ' + appVersion() +
-    ' · Online: ' + (navigator.onLine ? 'yes' : 'no') +
-    ' · Page: ' + location.href;
-
   function showStatus(el, type, msg) {
     el.className = 'status show ' + type;
     el.textContent = msg;
@@ -356,7 +371,7 @@
       showStatus(status, 'ok', 'Cleared. Reopening the app…');
       setTimeout(function () { location.href = BASE + '?v=' + Date.now(); }, 700);
     } catch (err) {
-      showStatus(status, 'err', 'Could not fully clear. Try WhatsApp us, or clear site data in browser settings.');
+      showStatus(status, 'err', 'Could not fully clear. Try messaging us, or clear site data in browser settings.');
       btn.disabled = false;
     }
   });
@@ -412,18 +427,16 @@
     } catch (err) { ok = false; }
 
     if (ok) {
-      showStatus(status, 'ok', 'Sent. We’ll try to contact you - also keep Facebook/email handy if systems are down.');
+      showStatus(status, 'ok', 'Sent. We’ll try to contact you. Keep Facebook or email handy if systems are down.');
       document.getElementById('note').value = '';
     } else {
       var body =
         'Contact: ' + contact +
         '\nReason: ' + reason +
         '\nNote: ' + (note || '(none)') +
-        '\nDevice: ' + deviceId() +
-        '\nVersion: ' + appVersion() +
-        '\nURL: ' + location.href;
+        '\nPage: ' + location.href;
       var mail = 'mailto:' + EMAIL +
-        '?subject=' + encodeURIComponent('Next Train distress (' + reason + ')') +
+        '?subject=' + encodeURIComponent('Next Train help (' + reason + ')') +
         '&body=' + encodeURIComponent(body);
       showStatus(status, 'err', 'Could not reach our servers. Opening email… or use Facebook.');
       try { location.href = mail; } catch (e) {}

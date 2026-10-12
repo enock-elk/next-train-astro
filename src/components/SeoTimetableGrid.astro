@@ -1,7 +1,7 @@
 ---
 /**
  * Crawlable timetable grid styled like the in-app sheet (light first-paint).
- * Ghost stations are already dropped by extractSeoGrid. Skip-stops stay as "-".
+ * Ghost stations are already dropped by extractSeoGrid. A skip is the text EXPR.
  * Sticky Station column; train columns ~70px so phones show a few + scroll.
  */
 const { grid, caption } = Astro.props;
@@ -56,7 +56,7 @@ const cells = grid?.cells || [];
     border-collapse: separate;
     border-spacing: 0;
     font-variant-numeric: tabular-nums;
-    font-size: 12px;
+    font-size: 13px;
     line-height: 1.25;
     min-width: 100%;
   }

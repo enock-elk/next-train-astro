@@ -1,7 +1,7 @@
 /**
  * Alerts channel UI — bell gateway, WhatsApp-style column, reactions.
  */
-import { COMMUNITY_WORKER_URL, DYNAMIC_BASE_URL, ROUTES, withBase } from './config.js';
+import { DYNAMIC_BASE_URL, ROUTES, withBase } from './config.js';
 import { safeStorage, escapeHTML, repairMojibake, formatAppTime, formatThreadDateLabel } from './utils.js';
 import { prepareRichHtml, injectRichTextStyles } from './rich-text.js';
 import { showToast, triggerHaptic, openSmoothModal, closeSmoothModal } from './ui.js';
@@ -10,6 +10,7 @@ import { $currentRouteId, $userRegion } from '../store.js';
 import { cacheAlertImages, pruneExpiredAlertImages, resolveCachedAlertImage } from './alert-image-cache.js';
 import {
     ALERTS_PAGE_SIZE,
+    ALERT_PIN_SVG,
     ALERT_REACTION_KEYS,
     ALERT_REACTION_EMOJI,
     buildAlertReactionBreakdown,
@@ -29,12 +30,17 @@ import {
     collectNoticeImageUrls,
     hoistAlertImagesFromHtml,
     layoutAlertPost,
+    alertCopyNeedsSeeMore,
+    buildAlertSeeMoreMarkup,
+    expandAlertSeeMore,
     stripAlertSignoffHtml,
     noticeScopeLabel,
     shouldIgnoreAlertLongPress,
     buildNoticesMeta,
+    isNoticePinned,
     listNoticesInTarget,
 } from './alerts-feed.js';
+import { buildPollShellHtml, hydratePollResults } from './alert-poll.js';
 
 export {
     ALERTS_PAGE_SIZE,
@@ -55,49 +61,31 @@ let cachedLiveNotices = [];
 let visibleCount = ALERTS_PAGE_SIZE;
 let highlightNoticeId = null;
 let channelBound = false;
-let impressionObserver = null;
-const impressionTimers = new Map();
-const impressionsInFlight = new Set();
-const ALERT_IMPRESSION_DWELL_MS = 900;
-const ALERT_IMPRESSION_INSTALLATION_KEY = 'nt_alert_impression_installation_v1';
-const ALERT_IMPRESSION_WORKER = COMMUNITY_WORKER_URL || 'https://nexttrain-community.enock.workers.dev';
+/** When set, SEO pages keep every route bucket for this page (corridor or region). */
+let scopeKeyOverride = null;
 
-export function alertImpressionStorageKey(scope, noticeId) {
-    return `nt_alert_impression_v1:${String(scope || '')}:${String(noticeId || '')}`;
+/**
+ * Pin the union for this document. One route, or every route on a corridor or region page.
+ * Does not write the commuter's saved region.
+ */
+export function useNoticeScope(region, routeIds = []) {
+    const ids = (Array.isArray(routeIds) ? routeIds : [])
+        .map((id) => String(id || '').trim())
+        .filter((id) => id && ROUTES[id]);
+    const keys = scopeKeysFor(region, '');
+    ids.forEach((id) => {
+        if (!keys.includes(id)) keys.push(id);
+    });
+    scopeKeyOverride = new Set(keys);
+    try {
+        $userRegion.set(String(region || '').trim() || 'GP');
+        $currentRouteId.set(ids.length === 1 ? ids[0] : null);
+    } catch { /* atoms are optional during a bare import */ }
+    return keys;
 }
 
-export function createAlertImpressionInstallationId(cryptoApi = globalThis.crypto) {
-    if (typeof cryptoApi?.randomUUID === 'function') return `nti_${cryptoApi.randomUUID()}`;
-    const bytes = new Uint8Array(24);
-    cryptoApi?.getRandomValues?.(bytes);
-    return `nti_${Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('')}`;
-}
-
-export function shouldCountAlertIntersection({
-    isIntersecting,
-    intersectionRatio,
-    pageVisible,
-    channelVisible,
-}) {
-    return !!isIntersecting && Number(intersectionRatio) >= 0.5 && !!pageVisible && !!channelVisible;
-}
-
-function getAlertImpressionInstallationId() {
-    let id = '';
-    try { id = safeStorage.getItem(ALERT_IMPRESSION_INSTALLATION_KEY) || ''; } catch { id = ''; }
-    if (/^nti_[A-Za-z0-9_-]{12,124}$/.test(id)) return id;
-    id = createAlertImpressionInstallationId();
-    try { safeStorage.setItem(ALERT_IMPRESSION_INSTALLATION_KEY, id); } catch { /* ignore */ }
-    return id;
-}
-
-function hasRecordedAlertImpression(scope, noticeId) {
-    try { return safeStorage.getItem(alertImpressionStorageKey(scope, noticeId)) === 'true'; }
-    catch { return false; }
-}
-
-function markAlertImpressionRecorded(scope, noticeId) {
-    try { safeStorage.setItem(alertImpressionStorageKey(scope, noticeId), 'true'); } catch { /* ignore */ }
+export function clearNoticeScopeOverride() {
+    scopeKeyOverride = null;
 }
 
 export function noticeScopeKeys(region, routeId) {
@@ -145,7 +133,7 @@ export function setCachedLiveNotices(list) {
 
 /** Keep only notices in the current union (global + region + this route). */
 export function scopedLiveNotices(list = cachedLiveNotices, region = $userRegion.get() || 'GP', routeId = $currentRouteId.get()) {
-    const keys = new Set(noticeScopeKeys(region, routeId && ROUTES[routeId] ? routeId : ''));
+    const keys = scopeKeyOverride || new Set(noticeScopeKeys(region, routeId));
     return (Array.isArray(list) ? list : []).filter((n) => keys.has(n._sourceKey));
 }
 
@@ -163,7 +151,7 @@ async function fetchBucket(key) {
 }
 
 export async function fetchUnionNotices(region, routeId) {
-    const keys = noticeScopeKeys(region, routeId);
+    const keys = scopeKeyOverride ? [...scopeKeyOverride] : noticeScopeKeys(region, routeId);
     const buckets = await Promise.all(keys.map(fetchBucket));
     return mergeUnionNotices(buckets);
 }
@@ -225,7 +213,7 @@ export function renderLazyPosterHtml(urls, notice = null) {
         const src = escapeHTML(href);
         return `<button type="button" data-alert-lightbox="${src}" data-alert-notice-id="${noticeId}" data-alert-expires="${expiresAt}" class="relative block w-full aspect-square min-h-[10rem] max-h-72 focus:outline-none cursor-zoom-in rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm active:scale-[0.99] transition-transform">
             <span class="nt-alert-poster-loading absolute inset-0 flex items-center justify-center bg-gray-100 dark:bg-gray-900 pointer-events-none" aria-hidden="true">${spinner}</span>
-            <img src="${src}" alt="Service poster" draggable="false" fetchpriority="high" decoding="async" class="nt-alert-poster-img absolute inset-0 w-full h-full object-cover opacity-0 pointer-events-none">
+            <img src="${src}" alt="Service poster" draggable="false" fetchpriority="high" decoding="async" class="nt-alert-poster-img absolute inset-0 w-full h-full object-cover opacity-0">
             <span class="nt-zoom-plus absolute bottom-1.5 right-1.5 w-5 h-5 rounded-full bg-black/40 text-white text-xs font-bold leading-none flex items-center justify-center border border-white/20 pointer-events-none select-none shadow-sm" aria-hidden="true">+</span>
         </button>`;
     }).join('');
@@ -243,12 +231,27 @@ export function hydrateAlertPosterImages(root = typeof document !== 'undefined' 
         img.decoding = 'async';
         const host = img.closest('[data-alert-lightbox]');
         const originalSrc = host?.getAttribute('data-alert-lightbox') || img.getAttribute('src') || '';
+        const rememberObjectUrl = (blob) => {
+            if (!blob || !host) return '';
+            try {
+                const prev = host.getAttribute('data-alert-object-url') || '';
+                const obj = URL.createObjectURL(blob);
+                host.setAttribute('data-alert-object-url', obj);
+                if (prev && prev.startsWith('blob:') && prev !== obj) {
+                    try { URL.revokeObjectURL(prev); } catch { /* ignore */ }
+                }
+                return obj;
+            } catch {
+                return '';
+            }
+        };
         resolveCachedAlertImage(originalSrc).then((cached) => {
             if (!cached) return;
-            if (img.dataset.ntPosterRevealed === '1' || img.naturalWidth > 0) return;
             return cached.blob().then((blob) => {
+                const obj = rememberObjectUrl(blob);
+                if (!obj) return;
                 if (img.dataset.ntPosterRevealed === '1' || img.naturalWidth > 0) return;
-                img.src = URL.createObjectURL(blob);
+                img.src = obj;
             });
         }).catch(() => {});
         const reveal = () => {
@@ -259,6 +262,8 @@ export function hydrateAlertPosterImages(root = typeof document !== 'undefined' 
             img.classList.add('opacity-100');
             host?.querySelector('.nt-alert-poster-loading')?.classList.add('hidden');
             host?.setAttribute('data-alert-ready', '1');
+            const live = img.currentSrc || img.src || '';
+            if (live.startsWith('blob:')) host?.setAttribute('data-alert-object-url', live);
             if (originalSrc) {
                 cacheAlertImages({
                     id: host?.getAttribute('data-alert-notice-id') || '',
@@ -321,29 +326,7 @@ function watchAlertPosterHydration(root) {
 }
 
 function renderPollHtml(notice) {
-    if (!notice.poll || !notice.poll.active) return '';
-    const pollId = String(notice.id || 'preview');
-    let voted = '';
-    try { voted = safeStorage.getItem('poll_voted_' + pollId) || ''; } catch { voted = ''; }
-    const meta = {
-        question: notice.poll.question || '',
-        optionA: notice.poll.optionA || '',
-        optionB: notice.poll.optionB || '',
-        optionC: notice.poll.optionC || '',
-        showResults: !!notice.poll.showResults,
-        severity: notice.severity || 'info',
-    };
-    const metaAttr = escapeHTML(JSON.stringify(meta));
-    if (voted) {
-        return `<div id="poll-container-${escapeHTML(pollId)}" data-poll-meta="${metaAttr}" class="mt-3 p-3 rounded-xl bg-gray-50 dark:bg-gray-900/60 text-center"><p class="text-xs font-bold text-gray-700 dark:text-gray-200">Thanks for voting!</p></div>`;
-    }
-    const btn = (key, text) => text
-        ? `<button type="button" data-poll-id="${escapeHTML(pollId)}" data-poll-opt="${key}" data-poll-text="${escapeHTML(text)}" class="nt-poll-vote flex-1 min-w-[30%] bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 font-bold py-2 rounded-lg text-xs">${escapeHTML(text)}</button>`
-        : '';
-    return `<div id="poll-container-${escapeHTML(pollId)}" data-poll-meta="${metaAttr}" class="mt-3 p-3 rounded-xl bg-gray-50 dark:bg-gray-900/60">
-        <p class="text-sm font-black text-gray-800 dark:text-gray-100 mb-2 text-center">${escapeHTML(notice.poll.question || '')}</p>
-        <div class="flex flex-wrap gap-2">${btn('A', notice.poll.optionA)}${btn('B', notice.poll.optionB)}${btn('C', notice.poll.optionC)}</div>
-    </div>`;
+    return buildPollShellHtml(notice, { mode: 'live' });
 }
 
 function mineReactionKey(notice) {
@@ -392,6 +375,28 @@ function openAlertReactionPicker(notice, anchorEl) {
                 if (target) deleteAlertForEveryone(target);
                 return;
             }
+            const pin = e.target.closest?.('[data-alert-pin-toggle]');
+            if (pin) {
+                e.preventDefault();
+                e.stopPropagation();
+                const id = pin.getAttribute('data-alert-id');
+                const src = pin.getAttribute('data-alert-src');
+                const target = cachedLiveNotices.find((n) => String(n.id) === String(id) && String(n._sourceKey) === String(src));
+                hideAlertReactionPicker();
+                if (target) toggleAlertPinned(target);
+                return;
+            }
+            const votes = e.target.closest?.('[data-alert-poll-count-toggle]');
+            if (votes) {
+                e.preventDefault();
+                e.stopPropagation();
+                const id = votes.getAttribute('data-alert-id');
+                const src = votes.getAttribute('data-alert-src');
+                const target = cachedLiveNotices.find((n) => String(n.id) === String(id) && String(n._sourceKey) === String(src));
+                hideAlertReactionPicker();
+                if (target) toggleAlertPollRawCounts(target);
+                return;
+            }
             const btn = e.target.closest?.('[data-alert-react]');
             if (!btn) return;
             e.preventDefault();
@@ -411,12 +416,24 @@ function openAlertReactionPicker(notice, anchorEl) {
             mine === key ? 'bg-white/15 ring-1 ring-white/40' : 'hover:bg-white/10'
         }" aria-label="React ${ALERT_REACTION_EMOJI[key]}">${ALERT_REACTION_EMOJI[key]}</button>`
     )).join('');
+    const menuBtn = (attrs, label, danger = false) => (
+        `<button type="button" ${attrs} class="nt-alert-admin-item${danger ? ' is-danger' : ''}">${label}</button>`
+    );
     const deleteBtn = admin
-        ? `<button type="button" data-alert-delete data-alert-id="${escapeHTML(String(notice.id || ''))}" data-alert-src="${escapeHTML(String(notice._sourceKey || ''))}" class="px-3 py-1.5 rounded-full bg-red-600 text-white text-[11px] font-black uppercase tracking-wide shadow-lg border border-red-400/40 focus:outline-none">Delete for everyone</button>`
+        ? menuBtn(`data-alert-delete data-alert-id="${escapeHTML(String(notice.id || ''))}" data-alert-src="${escapeHTML(String(notice._sourceKey || ''))}"`, 'Delete for everyone', true)
         : '';
-    sheet.innerHTML = `<div class="flex flex-col items-center gap-1.5">
+    const pinBtn = admin
+        ? menuBtn(`data-alert-pin-toggle data-alert-id="${escapeHTML(String(notice.id || ''))}" data-alert-src="${escapeHTML(String(notice._sourceKey || ''))}"`, isNoticePinned(notice) ? 'Unpin from feed' : 'Pin to bottom of feed')
+        : '';
+    const pollCountBtn = admin && notice?.poll?.active
+        ? menuBtn(`data-alert-poll-count-toggle data-alert-id="${escapeHTML(String(notice.id || ''))}" data-alert-src="${escapeHTML(String(notice._sourceKey || ''))}"`, notice.poll.showRawCounts || notice.poll.showParticipantCount ? 'Hide raw counts' : 'Show raw counts')
+        : '';
+    const adminMenu = admin
+        ? `<div class="nt-alert-admin-menu" role="menu">${pinBtn}${pollCountBtn}${deleteBtn}</div>`
+        : '';
+    sheet.innerHTML = `<div class="flex flex-col items-center gap-2">
         <div class="nt-alert-react-pill flex items-center gap-0.5 px-2 py-1.5 rounded-full bg-gray-950/95 text-white shadow-2xl border border-white/10" data-alert-picker-row>${reactBtns}</div>
-        ${deleteBtn}
+        ${adminMenu}
     </div>`;
     const rect = anchorEl.getBoundingClientRect();
     sheet.classList.remove('hidden');
@@ -426,7 +443,7 @@ function openAlertReactionPicker(notice, anchorEl) {
     const midX = Number.isFinite(pressX) ? pressX : (rect.left + rect.width / 2);
     const anchorY = Number.isFinite(pressY) ? pressY : rect.top;
     const left = Math.max(8, Math.min(window.innerWidth - pillW - 8, midX - (pillW / 2)));
-    const pickerH = admin ? 108 : 58;
+    const pickerH = sheet.offsetHeight || (admin ? 148 : 58);
     let top = anchorY - pickerH;
     if (top < 8) top = Math.min(window.innerHeight - (pickerH + 8), anchorY + 16);
     sheet.style.left = `${left}px`;
@@ -469,6 +486,65 @@ async function deleteAlertForEveryone(notice) {
         console.warn('Alert delete failed', e);
         showToast('Could not delete this alert.', 'error');
     }
+}
+
+async function patchLiveAlert(notice, fields, { successToast, failToast } = {}) {
+    if (!notice || !isAdminAuthed()) return false;
+    try {
+        const { ensureAdminLoaded } = await import('./admin-bridge.js');
+        const Admin = await ensureAdminLoaded();
+        if (!Admin?.patchLiveNoticeFields || !Admin.getAuthKey) {
+            showToast('Admin tools unavailable.', 'error');
+            return false;
+        }
+        const secret = await Admin.getAuthKey();
+        if (!secret) {
+            showToast('Sign in as admin to update alerts.', 'error');
+            return false;
+        }
+        const sourceKey = notice._sourceKey || '';
+        const next = await Admin.patchLiveNoticeFields(sourceKey, notice.id, fields, secret);
+        if (!next) {
+            showToast(failToast || 'Could not update this alert.', 'error');
+            return false;
+        }
+        cachedLiveNotices = cachedLiveNotices.map((n) => (
+            String(n.id) === String(notice.id) && String(n._sourceKey) === String(sourceKey)
+                ? { ...n, ...next, _sourceKey: sourceKey, _reactPath: n._reactPath }
+                : n
+        ));
+        renderAlertsChannel(cachedLiveNotices);
+        applyBellFromNotices(cachedLiveNotices);
+        if (successToast) showToast(successToast, 'success');
+        triggerHaptic();
+        return true;
+    } catch (e) {
+        console.warn('Alert patch failed', e);
+        showToast(failToast || 'Could not update this alert.', 'error');
+        return false;
+    }
+}
+
+export async function toggleAlertPinned(notice) {
+    const pinned = !isNoticePinned(notice);
+    return patchLiveAlert(notice, {
+        pinned,
+        pinnedAt: pinned ? Date.now() : null,
+    }, {
+        successToast: pinned ? 'Alert pinned to the bottom of the feed.' : 'Alert unpinned.',
+        failToast: 'Could not update pin.',
+    });
+}
+
+export async function toggleAlertPollRawCounts(notice) {
+    if (!notice?.poll?.active) return false;
+    const showRawCounts = !(notice.poll.showRawCounts || notice.poll.showParticipantCount);
+    return patchLiveAlert(notice, {
+        poll: { ...notice.poll, showRawCounts },
+    }, {
+        successToast: showRawCounts ? 'Poll also shows vote counts.' : 'Poll hides vote counts.',
+        failToast: 'Could not update poll counts.',
+    });
 }
 
 function hideAlertReactionBreakdown() {
@@ -520,7 +596,9 @@ function renderPostCard(notice, opts = {}) {
         : '';
     const mediaHtml = renderPosterHtml(layout.imageUrls, notice);
     const bodyHtml = body
-        ? `<div class="nt-rich-body text-sm text-gray-800 dark:text-gray-200 leading-relaxed ${mediaHtml ? 'mt-3' : ''}" data-alert-body>${body}</div>`
+        ? (alertCopyNeedsSeeMore(body)
+            ? buildAlertSeeMoreMarkup(body, { className: mediaHtml ? 'mt-3' : '' })
+            : `<div class="nt-rich-body text-sm text-gray-800 dark:text-gray-200 leading-relaxed ${mediaHtml ? 'mt-3' : ''}" data-alert-body>${body}</div>`)
         : '';
     let extra = '';
     if (notice.ctaUrl && notice.ctaText) {
@@ -543,7 +621,7 @@ function renderPostCard(notice, opts = {}) {
         ? `<time class="nt-alert-time" datetime="${escapeHTML(ts ? new Date(ts).toISOString() : '')}">${escapeHTML(when)}</time>`
         : '';
     const adminMetaHtml = scope
-        ? `<span class="nt-alert-scope">${escapeHTML(scope)} <span aria-hidden="true">·</span> <span data-alert-impression-count>0 views</span></span>`
+        ? `<span class="nt-alert-scope">${escapeHTML(scope)}</span>`
         : '';
     const replyBtn = `<button type="button" class="nt-alert-reply text-xs font-bold inline-flex items-center gap-1 px-3 py-1.5 rounded-full shrink-0 focus:outline-none" data-alert-reply="${escapeHTML(String(notice.id || ''))}" data-alert-snippet="${escapeHTML(snippet)}"><svg class="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>Reply</button>`;
     const footerHtml = `<div class="nt-alert-card-footer">
@@ -556,13 +634,18 @@ function renderPostCard(notice, opts = {}) {
                 <div class="nt-alert-action-meta">${adminMetaHtml}${replyBtn}</div>
             </div>
         </div>`;
-    const cardRing = highlight
-        ? 'ring-2 ring-red-400 ring-offset-2 dark:ring-offset-gray-950'
-        : 'ring-1 ring-black/5 dark:ring-white/10';
+    const cardRing = opts.flash
+        ? 'nt-alert-force-flash'
+        : highlight
+            ? 'ring-2 ring-red-400 ring-offset-2 dark:ring-offset-gray-950'
+            : 'ring-1 ring-black/5 dark:ring-white/10';
     return `<article id="alert-post-${escapeHTML(String(notice.id || ''))}" data-alert-post="${escapeHTML(String(notice.id || ''))}" data-alert-id="${escapeHTML(String(notice.id || ''))}" data-alert-src="${escapeHTML(String(notice._sourceKey || ''))}" class="nt-alert-card bg-white dark:bg-gray-800 rounded-2xl shadow-md ${cardRing} border-l-4 ${chrome.bar} border border-gray-200/80 dark:border-gray-700 p-0 overflow-hidden select-none">
         <div class="nt-alert-strip flex items-center justify-between gap-2 px-3 py-1 ${chrome.strip}">
             <span class="nt-alert-signoff text-xs font-semibold leading-none tracking-wide">${escapeHTML(signoff)}</span>
-            <span class="nt-alert-chip inline-flex items-center shrink-0 px-1.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider leading-none ${chrome.chip}">${chrome.emoji} ${chrome.label}</span>
+            <span class="nt-alert-chip-wrap inline-flex items-center gap-1.5 shrink-0">
+                ${isNoticePinned(notice) ? `<span class="nt-alert-pin" title="Pinned" aria-label="Pinned">${ALERT_PIN_SVG}</span>` : ''}
+                <span class="nt-alert-chip inline-flex items-center shrink-0 px-1.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider leading-none ${chrome.chip}">${chrome.emoji} ${chrome.label}</span>
+            </span>
         </div>
         <div class="px-4 pt-3 pb-4">
         ${titleHtml}
@@ -612,152 +695,6 @@ function renderPinStrip(notices) {
     }).join('');
 }
 
-function clearAlertImpressionObserver() {
-    impressionObserver?.disconnect();
-    impressionObserver = null;
-    impressionTimers.forEach((timer) => clearTimeout(timer));
-    impressionTimers.clear();
-}
-
-async function postAlertImpression(card) {
-    const scope = card?.getAttribute('data-alert-src') || '';
-    const noticeId = card?.getAttribute('data-alert-id') || '';
-    const key = alertImpressionStorageKey(scope, noticeId);
-    if (!scope || !noticeId || hasRecordedAlertImpression(scope, noticeId) || impressionsInFlight.has(key)) return;
-    impressionsInFlight.add(key);
-    try {
-        const res = await fetch(`${ALERT_IMPRESSION_WORKER}/alerts/impression`, {
-            method: 'POST',
-            body: JSON.stringify({
-                scope,
-                noticeId,
-                installationId: getAlertImpressionInstallationId(),
-            }),
-            keepalive: true,
-        });
-        if (!res.ok) return;
-        const data = await res.json();
-        if (!data?.ok) return;
-        markAlertImpressionRecorded(scope, noticeId);
-        impressionObserver?.unobserve(card);
-        const count = card.querySelector('[data-alert-impression-count]');
-        if (count && Number.isFinite(Number(data.count))) {
-            count.textContent = `${Number(data.count).toLocaleString('en-US')} views`;
-        }
-    } catch {
-        /* best-effort approximate metric */
-    } finally {
-        impressionsInFlight.delete(key);
-    }
-}
-
-export function observeRenderedAlertImpressions(feed) {
-    clearAlertImpressionObserver();
-    if (!feed?.querySelectorAll || typeof IntersectionObserver === 'undefined') return;
-    const scroller = document.getElementById('alerts-channel-scroll');
-    impressionObserver = new IntersectionObserver((entries) => {
-        entries.forEach((entry) => {
-            const card = entry.target;
-            const visible = shouldCountAlertIntersection({
-                isIntersecting: entry.isIntersecting,
-                intersectionRatio: entry.intersectionRatio,
-                pageVisible: document.visibilityState !== 'hidden',
-                channelVisible: !document.getElementById('alerts-channel')?.classList.contains('hidden'),
-            });
-            const existing = impressionTimers.get(card);
-            if (!visible) {
-                card.removeAttribute('data-alert-impression-visible');
-                if (existing) clearTimeout(existing);
-                impressionTimers.delete(card);
-                return;
-            }
-            card.setAttribute('data-alert-impression-visible', 'true');
-            if (existing) return;
-            const timer = setTimeout(() => {
-                impressionTimers.delete(card);
-                if (card.isConnected
-                    && card.getAttribute('data-alert-impression-visible') === 'true'
-                    && document.visibilityState !== 'hidden'
-                    && !document.getElementById('alerts-channel')?.classList.contains('hidden')) {
-                    postAlertImpression(card);
-                }
-            }, ALERT_IMPRESSION_DWELL_MS);
-            impressionTimers.set(card, timer);
-        });
-    }, { root: scroller || null, threshold: [0, 0.5, 1] });
-
-    feed.querySelectorAll('.nt-alert-card[data-alert-id][data-alert-src]').forEach((card) => {
-        const scope = card.getAttribute('data-alert-src') || '';
-        const noticeId = card.getAttribute('data-alert-id') || '';
-        if (!hasRecordedAlertImpression(scope, noticeId)) impressionObserver.observe(card);
-    });
-}
-
-function paintAlertImpressionCount(scope, noticeId, value) {
-    const latest = Math.max(0, Number(value) || 0);
-    feedCardsForNotice(scope, noticeId).forEach((card) => {
-        const count = card.querySelector('[data-alert-impression-count]');
-        if (!count) return;
-        const current = Number(String(count.textContent || '').replace(/[^\d]/g, '')) || 0;
-        count.textContent = `${Math.max(current, latest).toLocaleString('en-US')} views`;
-    });
-}
-
-async function hydrateAdminAlertImpressionCounts(notices) {
-    if (!isAdminAuthed() || !Array.isArray(notices) || !notices.length) return;
-    let token = '';
-    try {
-        if (typeof window.Admin?.getAuthKey === 'function') token = await window.Admin.getAuthKey();
-    } catch { /* fall through */ }
-    if (!token) token = await ensureReactAuthToken();
-    if (!token) return;
-    const query = notices.slice(-50).map((notice) => ({
-        scope: String(notice._sourceKey || ''),
-        noticeId: String(notice.id || ''),
-    })).filter((item) => item.scope && item.noticeId);
-    if (!query.length) return;
-    let painted = false;
-    try {
-        const res = await fetch(`${ALERT_IMPRESSION_WORKER}/admin/alert-impressions`, {
-            method: 'POST',
-            headers: {
-                Authorization: `Bearer ${token}`,
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ notices: query }),
-        });
-        if (res.ok) {
-            const data = await res.json();
-            (data.notices || []).forEach((row) => {
-                paintAlertImpressionCount(row.scope, row.noticeId, row.count);
-                painted = true;
-            });
-        }
-    } catch {
-        /* fall through to RTDB */
-    }
-    if (painted) return;
-    await Promise.all(query.map(async (item) => {
-        try {
-            const res = await fetch(
-                `${DYNAMIC_BASE_URL}notice_impressions/${encodeURIComponent(item.scope)}/${encodeURIComponent(item.noticeId)}.json?auth=${encodeURIComponent(token)}`
-            );
-            if (!res.ok) return;
-            const node = await res.json();
-            paintAlertImpressionCount(item.scope, item.noticeId, node?.count);
-        } catch {
-            /* admin-only enhancement */
-        }
-    }));
-}
-
-function feedCardsForNotice(scope, noticeId) {
-    return Array.from(document.querySelectorAll('.nt-alert-card')).filter((card) =>
-        card.getAttribute('data-alert-src') === String(scope)
-        && card.getAttribute('data-alert-id') === String(noticeId)
-    );
-}
-
 export function renderAlertsChannel(notices = cachedLiveNotices, opts = {}) {
     injectRichTextStyles();
     const feed = document.getElementById('alerts-feed');
@@ -774,7 +711,6 @@ export function renderAlertsChannel(notices = cachedLiveNotices, opts = {}) {
     renderPinStrip(list);
 
     if (!list.length) {
-        clearAlertImpressionObserver();
         feed.innerHTML = '';
         empty?.classList.remove('hidden');
         earlierBtn?.classList.add('hidden');
@@ -799,13 +735,15 @@ export function renderAlertsChannel(notices = cachedLiveNotices, opts = {}) {
             parts.push(renderDateChip(ts));
             lastDay = day;
         }
-        parts.push(renderPostCard(n, { highlight: highlightNoticeId }));
+        parts.push(renderPostCard(n, {
+            highlight: opts.flash ? null : highlightNoticeId,
+            flash: !!opts.flash && String(n.id) === String(highlightNoticeId),
+        }));
     });
     const html = parts.join('');
     if (feed.dataset.ntAlertsSig === html) {
         hydrateAlertPosterImages(feed);
-        observeRenderedAlertImpressions(feed);
-        hydrateAdminAlertImpressionCounts(page.visible);
+        hydratePollResults(feed);
         return true;
     }
     feed.dataset.ntAlertsSig = html;
@@ -813,8 +751,7 @@ export function renderAlertsChannel(notices = cachedLiveNotices, opts = {}) {
     pruneExpiredAlertImages(list);
     list.forEach((n) => cacheAlertImages(n, resolveAlertImageSrc));
     hydrateAlertPosterImages(feed);
-    observeRenderedAlertImpressions(feed);
-    hydrateAdminAlertImpressionCounts(page.visible);
+    hydratePollResults(feed);
     return true;
 }
 
@@ -835,9 +772,26 @@ function scrollFeedTo(noticeId, toBottom = false) {
     }
 }
 
+/** Put the top of a force-opened card at the top of the feed scroller. */
+function alignAlertCardTop(noticeId) {
+    const scroller = document.getElementById('alerts-channel-scroll');
+    const el = document.getElementById(`alert-post-${noticeId}`);
+    if (!scroller || !el) return false;
+    const delta = el.getBoundingClientRect().top - scroller.getBoundingClientRect().top;
+    if (Math.abs(delta) < 2) return true;
+    scroller.scrollTop += delta;
+    return true;
+}
+
+function revealForceOpenNotice(list, noticeId) {
+    if (!noticeId) return;
+    const idx = (list || []).findIndex((n) => String(n.id) === String(noticeId));
+    if (idx < 0) return;
+    visibleCount = Math.max(visibleCount, list.length - idx);
+}
+
 export function closeAlertsChannel() {
     const el = document.getElementById('alerts-channel');
-    clearAlertImpressionObserver();
     hideAlertReactionPicker();
     hideAlertReactionBreakdown();
     if (!el || el.classList.contains('hidden')) {
@@ -854,7 +808,9 @@ export function openAlertsChannel(opts = {}) {
     const notices = scopedLiveNotices(opts.notices || cachedLiveNotices);
     if (opts.resetVisible !== false) visibleCount = ALERTS_PAGE_SIZE;
     highlightNoticeId = opts.highlightId || null;
-    renderAlertsChannel(notices, { highlightId: highlightNoticeId });
+    const focusTop = !!opts.focusTop && !!highlightNoticeId;
+    if (focusTop) revealForceOpenNotice(notices, highlightNoticeId);
+    renderAlertsChannel(notices, { highlightId: highlightNoticeId, flash: focusTop });
     markNoticesSeen(notices);
     applyBellFromNotices(notices);
     if (typeof window !== 'undefined') {
@@ -862,10 +818,13 @@ export function openAlertsChannel(opts = {}) {
         window.__ntAlertsParkHome = false;
     }
     openSmoothModal('alerts-channel', 'top-right');
-    setTimeout(() => {
-        if (highlightNoticeId) scrollFeedTo(highlightNoticeId, false);
+    const align = () => {
+        if (focusTop) alignAlertCardTop(highlightNoticeId);
+        else if (highlightNoticeId) scrollFeedTo(highlightNoticeId, false);
         else scrollFeedTo(null, true);
-    }, 80);
+    };
+    requestAnimationFrame(() => requestAnimationFrame(align));
+    setTimeout(align, 280);
     bindAlertsChannelOnce();
 }
 
@@ -1065,6 +1024,13 @@ function bindAlertsChannelOnce() {
     }, true);
 
     root.addEventListener('click', (e) => {
+        const seeMore = e.target.closest?.('[data-alert-see-more]');
+        if (seeMore) {
+            e.preventDefault();
+            e.stopPropagation();
+            expandAlertSeeMore(seeMore);
+            return;
+        }
         if (longFired) {
             e.preventDefault();
             e.stopPropagation();
@@ -1074,9 +1040,8 @@ function bindAlertsChannelOnce() {
         const lightbox = e.target.closest?.('[data-alert-lightbox]');
         if (lightbox) {
             e.preventDefault();
-            if (lightbox.getAttribute('data-alert-ready') !== '1') return;
             const src = lightbox.getAttribute('data-alert-lightbox');
-            if (src && typeof window.openLightbox === 'function') window.openLightbox(src);
+            if (src && typeof window.openLightbox === 'function') window.openLightbox(src, lightbox);
             return;
         }
         const jump = e.target.closest?.('[data-alert-jump]');

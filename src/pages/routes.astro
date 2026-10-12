@@ -11,10 +11,11 @@ import {
   WC_PUBLIC_HOLIDAYS_PATH,
 } from '../lib/seo-routes.js';
 import SeoCrossLinks from '../components/SeoCrossLinks.astro';
+import JhbFit from '../components/JhbFit.astro';
 
 const title = 'Metrorail Route Schedules | Metrorail Next Train';
 const description =
-  'Updated PRASA Metrorail train schedules and current times for Pretoria, Johannesburg, Cape Town, Durban and East London. Open Next Train for ticket prices and the next train.';
+  'View and download PRASA Metrorail train timetables for Pretoria, Johannesburg, Cape Town, Durban and East London. Free, works offline. Ticket prices and next train in Next Train.';
 const pages = listSeoRoutes();
 const regions = listSeoRegions();
 const byRegion = pages.reduce((acc, item) => {
@@ -97,7 +98,7 @@ const regionOrder = ['GP', 'WC', 'KZN', 'EC'];
                       {displayRouteName(route)}
                     </span>
                     <span class="block text-[10px] font-semibold uppercase tracking-wider text-slate-500 mt-1">
-                      {getCorridorLabel(route) || displayRouteName(route)}
+                      <JhbFit text={getCorridorLabel(route) || displayRouteName(route)} />
                     </span>
                   </a>
                 </li>

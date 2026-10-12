@@ -2,6 +2,7 @@
  * Pure alerts-channel feed rules (no DOM). Union scoping, expiry, posters, paging.
  */
 export const ALERTS_PAGE_SIZE = 10;
+export const ALERT_PIN_SVG = `<svg class="nt-alert-pin-icon w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16 3H8v2h1v6.2L7 14v2h4v5h2v-5h4v-2l-2-2.8V5h1V3z"/></svg>`;
 export const ALERT_IMAGE_PREFIX = '/images/alerts/';
 export const ALERT_REACTION_KEYS = ['like', 'love', 'laugh', 'wow', 'sad', 'pray'];
 export const ALERT_REACTION_EMOJI = {
@@ -49,8 +50,21 @@ export function isNoticeLive(notice, now = Date.now()) {
     return !exp || exp > now;
 }
 
+function noticeHasPoll(node) {
+    const poll = node?.poll;
+    return !!(poll && typeof poll === 'object' && (poll.active || poll.question || poll.optionA || poll.optionB));
+}
+
+function childLooksLikeNotice(val) {
+    return !!(val && typeof val === 'object' && (
+        val.message || val.text || val.severity || val.imageUrls || val.imageUrl || noticeHasPoll(val)
+    ));
+}
+
 export function isNoticeRecord(node) {
-    return !!(node && typeof node === 'object' && (node.message || node.text || node.severity || node.id || node.imageUrls || node.imageUrl));
+    return !!(node && typeof node === 'object' && (
+        node.message || node.text || node.severity || node.id || node.imageUrls || node.imageUrl || noticeHasPoll(node)
+    ));
 }
 
 /** Route ∪ region ∪ global. Pass routeId only when that corridor is real. */
@@ -94,13 +108,13 @@ export function parseNoticeBucket(raw, sourceKey, now = Date.now()) {
     const children = [];
     Object.entries(raw).forEach(([key, val]) => {
         if (key === 'reactions') return;
-        if (val && typeof val === 'object' && (val.message || val.text || val.severity || val.imageUrls || val.imageUrl)) {
+        if (childLooksLikeNotice(val)) {
             const row = stamp(val, val.id || key);
             if (row && isNoticeLive(row, now)) children.push(row);
         }
     });
 
-    const rootLooksLikeNotice = !!(raw.message || raw.text || raw.imageUrls || raw.imageUrl);
+    const rootLooksLikeNotice = !!(raw.message || raw.text || raw.imageUrls || raw.imageUrl || noticeHasPoll(raw));
     if (children.length) {
         if (rootLooksLikeNotice && raw.id) {
             const root = stamp(raw, raw.id);
@@ -147,8 +161,28 @@ export function mergeUnionNotices(buckets) {
     });
 
     const out = [...byId.values(), ...unkeyed];
-    out.sort((a, b) => noticeTimestamp(a) - noticeTimestamp(b));
-    return out;
+    return sortAlertsFeed(out);
+}
+
+export function isNoticePinned(notice) {
+    return notice?.pinned === true || notice?.pinned === 1 || notice?.pinned === 'true';
+}
+
+/** Oldest-first, with admin-pinned cards last so they sit at the bottom of the WhatsApp-style feed. */
+export function sortAlertsFeed(notices) {
+    const list = Array.isArray(notices) ? notices.slice() : [];
+    list.sort((a, b) => {
+        const ap = isNoticePinned(a) ? 1 : 0;
+        const bp = isNoticePinned(b) ? 1 : 0;
+        if (ap !== bp) return ap - bp;
+        if (ap && bp) {
+            const pinA = Number(a?.pinnedAt || 0);
+            const pinB = Number(b?.pinnedAt || 0);
+            if (pinA !== pinB) return pinA - pinB;
+        }
+        return noticeTimestamp(a) - noticeTimestamp(b);
+    });
+    return list;
 }
 
 export function highestSeverity(notices) {
@@ -235,17 +269,160 @@ export function collectNoticeImageUrls(notice) {
 
 /**
  * Hold-to-react should work on catalog posters and hoisted photos.
- * Reply / poll / count chips / real links stay excluded.
+ * Reply / poll (including results) / count chips / real links stay excluded.
  */
 export function shouldIgnoreAlertLongPress(target) {
     if (!target || typeof target.closest !== 'function') return true;
     if (target.closest('[data-alert-lightbox]')) return false;
     if (target.closest('[data-alert-media]')) return false;
     if (target.closest('button[onclick*="openLightbox"]')) return false;
-    if (target.closest('[data-alert-reply], [data-alert-jump], [data-alert-summary], .nt-poll-vote')) return true;
+    if (target.closest('[data-alert-reply], [data-alert-jump], [data-alert-summary], .nt-poll-vote, .nt-poll, [data-poll-shell]')) return true;
     if (target.closest('a, input, textarea, select')) return true;
     if (target.closest('button')) return true;
     return false;
+}
+
+/**
+ * First See more lands on this many characters of the post.
+ * Sized from the commuter sample that should stay visible through
+ * "increase. Students, unemployed people a". Each later tap reveals
+ * the same number again, and drops the button when the rest is shorter.
+ */
+export const ALERT_SEE_MORE_WINDOW = 764;
+
+export function alertCopyNeedsSeeMore(html) {
+    return stripHtmlToText(html).length > ALERT_SEE_MORE_WINDOW;
+}
+
+/** Characters visible after `step` reveals. Step 1 is the first window. */
+export function alertSeeMoreLimit(step) {
+    const n = Math.max(1, Number(step) || 1);
+    return ALERT_SEE_MORE_WINDOW * n;
+}
+
+function decodeBasicEntity(raw) {
+    const name = String(raw || '').slice(1, -1).toLowerCase();
+    if (name === 'amp') return '&';
+    if (name === 'lt') return '<';
+    if (name === 'gt') return '>';
+    if (name === 'quot') return '"';
+    return '';
+}
+
+/** Cut rich HTML so its plain text is `limit` characters, then an ellipsis. */
+export function clipHtmlToTextLength(html, limit) {
+    const input = String(html || '');
+    const max = Math.max(0, Number(limit) || 0);
+    if (stripHtmlToText(input).length <= max) return input;
+    let out = '';
+    let count = 0;
+    let started = false;
+    let gap = false;
+    const open = [];
+    const voidTags = new Set(['br', 'hr', 'img', 'wbr', 'input', 'meta', 'link']);
+    let i = 0;
+    const emitSpace = () => {
+        if (!started || !gap || count >= max) {
+            gap = false;
+            return count >= max;
+        }
+        out += ' ';
+        count += 1;
+        gap = false;
+        return count >= max;
+    };
+    while (i < input.length && count < max) {
+        if (input[i] === '<') {
+            const end = input.indexOf('>', i);
+            if (end < 0) break;
+            const tag = input.slice(i, end + 1);
+            const name = (tag.match(/^<\/?\s*([a-zA-Z0-9]+)/) || [])[1]?.toLowerCase() || '';
+            const closing = /^<\s*\//.test(tag);
+            const self = /\/\s*>$/.test(tag) || voidTags.has(name);
+            /* A tag is a gap, same as the space stripHtmlToText inserts.
+               Do not emit that space here. The next letter emits one space,
+               so <b> between two words does not count twice. */
+            gap = started || gap;
+            out += tag;
+            if (closing) {
+                const at = open.lastIndexOf(name);
+                if (at >= 0) open.splice(at, 1);
+            } else if (name && !self) open.push(name);
+            i = end + 1;
+            continue;
+        }
+        if (/\s/.test(input[i]) || input.slice(i, i + 6).toLowerCase() === '&nbsp;') {
+            gap = true;
+            i += input.slice(i, i + 6).toLowerCase() === '&nbsp;' ? 6 : 1;
+            continue;
+        }
+        if (input[i] === '&') {
+            const semi = input.indexOf(';', i);
+            const raw = semi > i && semi - i < 12 ? input.slice(i, semi + 1) : '';
+            const decoded = raw ? decodeBasicEntity(raw) : '';
+            if (decoded) {
+                if (emitSpace()) break;
+                if (count + decoded.length > max) break;
+                out += raw;
+                count += decoded.length;
+                started = true;
+                i = semi + 1;
+                continue;
+            }
+        }
+        if (emitSpace()) break;
+        out += input[i];
+        count += 1;
+        started = true;
+        i += 1;
+    }
+    out += '…';
+    for (let n = open.length - 1; n >= 0; n -= 1) out += `</${open[n]}>`;
+    return out;
+}
+
+export function buildAlertSeeMoreMarkup(innerHtml, opts = {}) {
+    const full = String(innerHtml || '');
+    const clipped = clipHtmlToTextLength(full, ALERT_SEE_MORE_WINDOW);
+    const extra = opts.className ? ` ${opts.className}` : '';
+    const stored = full.replace(/<\/template/gi, '<\\/template');
+    return `<div class="nt-alert-copy${extra}"><div class="nt-rich-body nt-alert-body text-sm text-gray-800 dark:text-gray-200 leading-relaxed" data-alert-body data-see-more-step="1">${clipped}</div><template data-alert-full>${stored}</template><button type="button" class="nt-alert-see-more" data-alert-see-more>See more...</button></div>`;
+}
+
+/**
+ * One See more tap. Reveal another full window when the post is still
+ * that long. Otherwise show the rest and drop the button.
+ */
+export function expandAlertSeeMore(button) {
+    const copy = button?.closest?.('.nt-alert-copy');
+    const body = copy?.querySelector?.('[data-alert-body]');
+    if (!body) {
+        button?.remove?.();
+        return;
+    }
+    const template = copy.querySelector?.('template[data-alert-full]');
+    const full = template ? template.innerHTML : '';
+    if (!full) {
+        body.classList.remove('is-collapsed');
+        body.style.webkitLineClamp = '';
+        body.style.lineClamp = '';
+        button.remove();
+        return;
+    }
+    const step = Math.max(1, Number(body.getAttribute('data-see-more-step')) || 1);
+    const nextStep = step + 1;
+    if (stripHtmlToText(full).length > alertSeeMoreLimit(nextStep)) {
+        body.innerHTML = clipHtmlToTextLength(full, alertSeeMoreLimit(nextStep));
+        body.setAttribute('data-see-more-step', String(nextStep));
+        return;
+    }
+    body.innerHTML = full;
+    body.classList.remove('is-collapsed');
+    body.style.webkitLineClamp = '';
+    body.style.lineClamp = '';
+    body.removeAttribute('data-see-more-step');
+    template.remove();
+    button.remove();
 }
 
 function stripHtmlToText(html) {
@@ -289,6 +466,7 @@ export function sanitizeInlineAlertImageUrl(url) {
         const host = u.hostname.toLowerCase();
         if (
             host === 'firebasestorage.googleapis.com'
+            || host === 'storage.googleapis.com'
             || host.endsWith('.firebasestorage.app')
             || host.endsWith('.googleusercontent.com')
         ) {
@@ -387,12 +565,14 @@ export function listNoticesInTarget(node) {
     const children = [];
     Object.entries(node).forEach(([key, val]) => {
         if (key === 'reactions') return;
-        if (val && typeof val === 'object' && (val.message || val.text || val.severity || val.imageUrls || val.imageUrl)) {
+        if (childLooksLikeNotice(val)) {
             children.push({ ...val, _key: val.id || key });
         }
     });
     if (children.length) return children;
-    if (node.message || node.text || node.id || node.imageUrls || node.imageUrl) return [{ ...node, _key: node.id || 'legacy' }];
+    if (node.message || node.text || node.id || node.imageUrls || node.imageUrl || noticeHasPoll(node)) {
+        return [{ ...node, _key: node.id || 'legacy' }];
+    }
     return [];
 }
 

@@ -41,6 +41,8 @@ export const $account = atom({
     displayName: null,
     photoURL: null,
     email: null,
+    emailVerified: false,
+    authProvider: null,
     chatDeviceId: null,
 });
 
@@ -94,7 +96,10 @@ export function readLocalAccountPrefs() {
         showPhotoInAlerts: safeStorage.getItem(PHOTO_PREF_KEY) === '1',
         showMarksInCommunity: safeStorage.getItem(MARKS_COMMUNITY_PREF_KEY) !== '0',
         notifyCategories,
-        theme: safeStorage.getItem('theme') === 'dark' ? 'dark' : 'light',
+        theme: (() => {
+            const stored = safeStorage.getItem('theme');
+            return stored === 'dark' || stored === 'system' ? stored : 'light';
+        })(),
         colourPack: safeStorage.getItem('colourPack') || 'classic',
         hapticsEnabled: safeStorage.getItem('hapticsEnabled') === 'true',
         passengerType: safeStorage.getItem('userProfile') || $userProfile.get() || 'Adult',
@@ -146,16 +151,18 @@ function bindSignedInOpsListeners() {
 
 export async function applyAccountPrefs(prefs) {
     if (!prefs || typeof prefs !== 'object') return;
+    const root = typeof document !== 'undefined' ? document.documentElement : null;
+    const beforeDark = !!(root && root.classList.contains('dark'));
+    const beforePack = (root && root.getAttribute('data-colour-pack')) || 'classic';
     _hydratingPrefs = true;
     try {
-        if (prefs.theme === 'dark' || prefs.theme === 'light') {
+        if (prefs.theme === 'dark' || prefs.theme === 'light' || prefs.theme === 'system') {
             safeStorage.setItem('theme', prefs.theme);
             safeStorage.setResilientItem?.('theme', prefs.theme)?.catch?.(() => {});
-            if (typeof document !== 'undefined') {
-                document.documentElement.classList.toggle('dark', prefs.theme === 'dark');
-                const themeCb = document.getElementById('settings-theme-checkbox');
-                if (themeCb) themeCb.checked = prefs.theme === 'dark';
-            }
+            try {
+                const themeMod = await import('./prefs.js');
+                themeMod.paintThemeMode(prefs.theme);
+            } catch { /* ignore */ }
         }
         if (prefs.colourPack) {
             try {
@@ -173,6 +180,8 @@ export async function applyAccountPrefs(prefs) {
             safeStorage.setItem('userProfile', prefs.passengerType);
             const display = document.getElementById('settings-profile-display');
             if (display) display.textContent = prefs.passengerType;
+            const accountPax = document.getElementById('account-passenger-type-display');
+            if (accountPax) accountPax.textContent = prefs.passengerType;
         }
         if (typeof prefs.showPhotoInAlerts === 'boolean') {
             safeStorage.setItem(PHOTO_PREF_KEY, prefs.showPhotoInAlerts ? '1' : '0');
@@ -205,6 +214,16 @@ export async function applyAccountPrefs(prefs) {
         } catch { /* ignore */ }
     } finally {
         _hydratingPrefs = false;
+        if (root) {
+            const afterDark = root.classList.contains('dark');
+            const afterPack = root.getAttribute('data-colour-pack') || 'classic';
+            const themeTouched = prefs.theme === 'dark' || prefs.theme === 'light' || prefs.theme === 'system';
+            const themeChanged = themeTouched && afterDark !== beforeDark;
+            const packChanged = !!prefs.colourPack && afterPack !== beforePack;
+            if ((themeChanged || packChanged) && typeof window !== 'undefined' && typeof window.showToast === 'function') {
+                window.showToast('Look updated from your account.', 'info');
+            }
+        }
     }
 }
 
@@ -223,6 +242,24 @@ export async function pushSignedInPrefs(partial = {}) {
     }
 }
 
+function cleanPhotoUrl(value) {
+    const url = String(value || '').trim();
+    if (!url || url === 'null' || url === 'undefined') return '';
+    return url;
+}
+
+/** Google often leaves the picture on providerData after user.photoURL is empty. */
+export function resolveAuthPhotoURL(user) {
+    const direct = cleanPhotoUrl(user?.photoURL);
+    if (direct) return direct;
+    const rows = Array.isArray(user?.providerData) ? user.providerData : [];
+    for (const row of rows) {
+        const url = cleanPhotoUrl(row?.photoURL);
+        if (url) return url;
+    }
+    return '';
+}
+
 function publishUser(user, extras = {}) {
     if (!user || user.isAnonymous) {
         $account.set({
@@ -231,21 +268,46 @@ function publishUser(user, extras = {}) {
             displayName: null,
             photoURL: null,
             email: null,
+            emailVerified: false,
+            authProvider: null,
             chatDeviceId: null,
         });
         safeStorage.removeItem('authUid');
         return;
     }
+    const photoURL = cleanPhotoUrl(extras.photoURL) || resolveAuthPhotoURL(user) || null;
+    const providerId = Array.isArray(user.providerData)
+        ? (user.providerData.find((row) => row?.providerId)?.providerId || null)
+        : null;
     $account.set({
         status: 'signed-in',
         uid: user.uid,
         displayName: extras.displayName || formatAccountDisplayName(user.displayName || (user.email ? user.email.split('@')[0] : 'Passenger')),
-        photoURL: user.photoURL || null,
+        photoURL,
         email: user.email || null,
+        emailVerified: !!user.emailVerified,
+        authProvider: extras.authProvider || providerId,
         displayNameCustom: !!extras.displayNameCustom,
         chatDeviceId: extras.chatDeviceId || $account.get().chatDeviceId || null,
     });
     safeStorage.setItem('authUid', user.uid);
+}
+
+async function adoptProviderPhoto(user) {
+    if (!user || user.isAnonymous) return '';
+    let photoURL = resolveAuthPhotoURL(user);
+    const google = (user.providerData || []).some((row) => row?.providerId === 'google.com' || row?.providerId === 'facebook.com');
+    if (!photoURL && google && typeof user.reload === 'function' && !user.__ntPhotoReloaded) {
+        user.__ntPhotoReloaded = true;
+        try {
+            await user.reload();
+            photoURL = resolveAuthPhotoURL(user);
+        } catch { /* keep the letter if the provider has no picture */ }
+    }
+    if (photoURL && photoURL !== cleanPhotoUrl(user.photoURL) && window.firebaseUpdateProfile) {
+        try { await window.firebaseUpdateProfile(user, { photoURL }); } catch { /* RTDB still stores it */ }
+    }
+    return photoURL;
 }
 
 async function waitForFirebase(timeoutMs = 8000) {
@@ -294,12 +356,13 @@ export async function ensureUserProfile(user, opts = {}) {
         }
         const chatDeviceId = pickCanonicalChatDeviceId(mergedDeviceIds, deviceId);
         const ops = accountOpsFields(now);
+        const photoURL = (await adoptProviderPhoto(user)) || cleanPhotoUrl(existing?.photoURL) || null;
 
         if (!existing) {
             await window.firebaseDbSet(window.firebaseDbRef(window.firebaseDb, userPath), {
                 displayName,
                 displayNameCustom: !!customName,
-                photoURL: user.photoURL || null,
+                photoURL,
                 email: user.email || null,
                 createdAt: now,
                 deviceIds: deviceId ? { [deviceId]: now } : {},
@@ -314,7 +377,7 @@ export async function ensureUserProfile(user, opts = {}) {
             });
         } else {
             const patch = {
-                photoURL: user.photoURL || existing.photoURL || null,
+                photoURL,
                 email: user.email || existing.email || null,
                 updatedAt: now,
                 ...ops,
@@ -363,11 +426,16 @@ export async function ensureUserProfile(user, opts = {}) {
             displayName,
             displayNameCustom: !!(customName || existing?.displayNameCustom),
             chatDeviceId,
+            photoURL,
         });
     } catch (e) {
         // RTDB rules may block until deployed — Auth session still valid locally
         console.warn('Account profile sync deferred', e?.message || e);
-        publishUser(user, { chatDeviceId: pickCanonicalChatDeviceId({ [deviceId]: now }, deviceId) });
+        const photoURL = await adoptProviderPhoto(user);
+        publishUser(user, {
+            chatDeviceId: pickCanonicalChatDeviceId({ [deviceId]: now }, deviceId),
+            photoURL,
+        });
     }
 }
 
@@ -378,17 +446,22 @@ export async function updateAccountDisplayName(raw) {
     if (!check.ok) throw new Error(check.message);
     const custom = check.name;
     const displayName = custom || formatAccountDisplayName(user.displayName || (user.email ? user.email.split('@')[0] : 'Passenger'));
+    const photoURL = resolveAuthPhotoURL(user);
     if (window.firebaseUpdateProfile) {
-        try { await window.firebaseUpdateProfile(user, { displayName }); } catch { /* RTDB is source for chat */ }
+        const profilePatch = { displayName };
+        if (photoURL) profilePatch.photoURL = photoURL;
+        try { await window.firebaseUpdateProfile(user, profilePatch); } catch { /* RTDB is source for chat */ }
     }
     if (window.firebaseDb) {
-        await window.firebaseDbUpdate(window.firebaseDbRef(window.firebaseDb, `users/${user.uid}`), {
+        const profileRow = {
             displayName,
             displayNameCustom: !!custom,
             updatedAt: Date.now(),
-        });
+        };
+        if (photoURL) profileRow.photoURL = photoURL;
+        await window.firebaseDbUpdate(window.firebaseDbRef(window.firebaseDb, `users/${user.uid}`), profileRow);
     }
-    publishUser(user, { displayName, displayNameCustom: !!custom });
+    publishUser(user, { displayName, displayNameCustom: !!custom, photoURL });
     window.dispatchEvent(new CustomEvent('accountchange', { detail: $account.get() }));
     return displayName;
 }
@@ -527,6 +600,11 @@ export async function signUpWithEmail(email, password, displayName) {
         if (!check.ok) throw new Error(check.message);
     }
     const cred = await window.firebaseCreateUser(window.firebaseAuth, email.trim(), password);
+    try {
+        if (cred.user && typeof window.firebaseSendEmailVerification === 'function') {
+            await window.firebaseSendEmailVerification(cred.user);
+        }
+    } catch { /* non-fatal: they can resend from Account */ }
     if (displayName?.trim()) {
         const check = refuseDisplayName(displayName);
         if (!check.ok) throw new Error(check.message);
@@ -538,6 +616,28 @@ export async function signUpWithEmail(email, password, displayName) {
     }
     await ensureUserProfile(cred.user);
     return cred.user;
+}
+
+export async function sendAccountPasswordReset(email) {
+    const ok = await waitForFirebase();
+    if (!ok) throw new Error('Cloud sign-in unavailable offline.');
+    if (!email || !String(email).trim()) throw new Error('Enter your email first.');
+    if (typeof window.firebaseSendPasswordResetEmail !== 'function') {
+        throw new Error('Password reset is unavailable.');
+    }
+    await window.firebaseSendPasswordResetEmail(window.firebaseAuth, String(email).trim());
+}
+
+export async function resendAccountVerification() {
+    const ok = await waitForFirebase();
+    if (!ok || !window.firebaseAuth?.currentUser) throw new Error('Sign in first.');
+    const user = window.firebaseAuth.currentUser;
+    if (user.emailVerified) return true;
+    if (typeof window.firebaseSendEmailVerification !== 'function') {
+        throw new Error('Verification email is unavailable.');
+    }
+    await window.firebaseSendEmailVerification(user);
+    return true;
 }
 
 export async function signOutAccount() {
@@ -599,16 +699,79 @@ export function waitForSignedIn(timeoutMs = 90000) {
     });
 }
 
+/** Keep in sync with ui.js ACCOUNT_SHEET_HASHES. */
+const ACCOUNT_SHEET_HASH = {
+    'account-points-sheet': '#account-points',
+    'account-name-sheet': '#account-name',
+    'account-badge-how-sheet': '#account-badge',
+    'account-contrib-sheet': '#account-contrib',
+};
+const ACCOUNT_SHEET_ORDER = ['account-contrib-sheet', 'account-badge-how-sheet', 'account-name-sheet', 'account-points-sheet'];
+const accountSheetStack = [];
+
+function hideAccountSheetEl(id) {
+    document.getElementById(id)?.classList.add('hidden');
+    const at = accountSheetStack.lastIndexOf(id);
+    if (at >= 0) accountSheetStack.splice(at, 1);
+}
+
+function topAccountSheetId() {
+    const stacked = accountSheetStack[accountSheetStack.length - 1];
+    if (stacked) {
+        const el = document.getElementById(stacked);
+        if (el && !el.classList.contains('hidden')) return stacked;
+    }
+    for (const id of ACCOUNT_SHEET_ORDER) {
+        const el = document.getElementById(id);
+        if (el && !el.classList.contains('hidden')) return id;
+    }
+    return null;
+}
+
+function showAccountSheet(id) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.classList.remove('hidden');
+    const at = accountSheetStack.indexOf(id);
+    if (at >= 0) accountSheetStack.splice(at, 1);
+    accountSheetStack.push(id);
+    const hash = ACCOUNT_SHEET_HASH[id];
+    if (hash && location.hash !== hash) {
+        try { history.pushState({ accountSheet: id }, '', hash); } catch { /* ignore */ }
+    }
+}
+
+function requestCloseAccountSheet(id) {
+    const hash = ACCOUNT_SHEET_HASH[id];
+    if (hash && location.hash === hash) {
+        try { history.back(); return; } catch { /* hide below */ }
+    }
+    hideAccountSheetEl(id);
+}
+
+function accountSheetOnPop(hashNow) {
+    const top = topAccountSheetId();
+    if (!top) return false;
+    if (ACCOUNT_SHEET_HASH[top] === hashNow) return false;
+    hideAccountSheetEl(top);
+    return true;
+}
+
+function closeAccountSheets() {
+    for (const id of Object.keys(ACCOUNT_SHEET_HASH)) hideAccountSheetEl(id);
+    accountSheetStack.length = 0;
+}
+
 function setAccountProfileOpen(open) {
-    const toggle = document.getElementById('account-profile-toggle');
-    const panel = document.getElementById('account-profile-panel');
-    const chevron = document.getElementById('account-profile-chevron');
-    panel?.classList.toggle('hidden', !open);
-    toggle?.setAttribute('aria-expanded', open ? 'true' : 'false');
-    chevron?.classList.toggle('rotate-180', !!open);
+    if (!open) closeAccountSheets();
 }
 
 export function closeAccountModal() {
+    if (accountSheetStack.length || topAccountSheetId()) {
+        const top = topAccountSheetId();
+        if (top) requestCloseAccountSheet(top);
+        return;
+    }
     setAccountProfileOpen(false);
     if (typeof window.closeSmoothModal === 'function') {
         window.closeSmoothModal('account-modal');
@@ -638,8 +801,11 @@ export function syncAccountSettingsUi(state = $account.get()) {
                 : 'Guest · Sign in optional';
     }
     if (avatarImg && avatarPh) {
-        if (signed && state.photoURL) {
-            avatarImg.src = state.photoURL;
+        const photo = signed ? (state.photoURL || '') : '';
+        const failed = avatarImg.dataset.ntPhotoFailed || '';
+        if (photo && failed !== photo) {
+            avatarImg.referrerPolicy = 'no-referrer';
+            if (avatarImg.getAttribute('src') !== photo) avatarImg.src = photo;
             avatarImg.classList.remove('hidden');
             avatarPh.classList.add('hidden');
         } else {
@@ -655,6 +821,8 @@ export function syncAccountSettingsUi(state = $account.get()) {
     if (guestBlock) guestBlock.classList.toggle('hidden', signed || state.status === 'loading');
     const sessionActions = document.getElementById('account-session-actions');
     if (sessionActions) sessionActions.classList.toggle('hidden', !signed);
+    document.getElementById('account-prefs-label')?.classList.toggle('hidden', !signed);
+    document.getElementById('account-signin-create-hint')?.classList.add('hidden');
     const deleteWrap = document.getElementById('account-delete-wrap');
     const isOperator = signed && isAdminEmail(state.email);
     if (deleteWrap) {
@@ -669,16 +837,7 @@ export function syncAccountSettingsUi(state = $account.get()) {
             confirmBtn.disabled = true;
             confirmBtn.classList.add('opacity-40');
         }
-        const pointsPanel = document.getElementById('account-points-panel');
-        pointsPanel?.classList.add('hidden');
-        const guestBtn = document.getElementById('account-points-guest-btn');
-        if (pointsPanel && guestBtn) guestBtn.insertAdjacentElement('afterend', pointsPanel);
-        document.querySelectorAll('#account-points-btn, #account-points-guest-btn').forEach((btn) => {
-            btn.setAttribute('aria-expanded', 'false');
-        });
-        document.querySelectorAll('#account-points-chevron, .account-points-chevron').forEach((el) => {
-            el.classList.remove('rotate-180');
-        });
+        closeAccountSheets();
         setAccountProfileOpen(false);
         const photoBox = document.getElementById('account-photo-alerts');
         if (photoBox) delete photoBox.dataset.dirty;
@@ -687,11 +846,13 @@ export function syncAccountSettingsUi(state = $account.get()) {
         if (modalName) modalName.textContent = 'Passenger';
         if (modalEmail) modalEmail.textContent = '';
     } else {
-        const pointsPanel = document.getElementById('account-points-panel');
-        const signedBtn = document.getElementById('account-points-btn');
-        if (pointsPanel && signedBtn) signedBtn.insertAdjacentElement('afterend', pointsPanel);
         if (modalName) modalName.textContent = state.displayName || 'Passenger';
         if (modalEmail) modalEmail.textContent = state.email || '';
+        const verifyRow = document.getElementById('account-verify-row');
+        const verifyLabel = document.getElementById('account-verify-label');
+        const needsVerify = !!state.email && state.authProvider === 'password' && !state.emailVerified;
+        if (verifyRow) verifyRow.classList.toggle('hidden', !needsVerify);
+        if (verifyLabel) verifyLabel.textContent = needsVerify ? 'Not verified' : 'Verified';
         const nameInput = document.getElementById('account-edit-display-name');
         if (nameInput && document.activeElement !== nameInput) {
             nameInput.value = state.displayName || '';
@@ -708,15 +869,20 @@ export function syncAccountSettingsUi(state = $account.get()) {
         letterEl.textContent = signed
             ? (state.displayName || state.email || 'P').charAt(0).toUpperCase()
             : '?';
-        letterEl.classList.toggle('hidden', !!(signed && state.photoURL && modalImg));
+        const photo = signed ? (state.photoURL || '') : '';
+        const failed = modalImg?.dataset.ntPhotoFailed || '';
+        letterEl.classList.toggle('hidden', !!(photo && modalImg && failed !== photo));
     }
     if (modalImg) {
-        if (signed && state.photoURL) {
-            modalImg.src = state.photoURL;
+        const photo = signed ? (state.photoURL || '') : '';
+        const failed = modalImg.dataset.ntPhotoFailed || '';
+        if (photo && failed !== photo) {
+            modalImg.referrerPolicy = 'no-referrer';
+            if (modalImg.getAttribute('src') !== photo) modalImg.src = photo;
             modalImg.classList.remove('hidden');
         } else {
             modalImg.classList.add('hidden');
-            modalImg.removeAttribute('src');
+            if (!photo) modalImg.removeAttribute('src');
         }
     }
     const photoToggle = document.getElementById('account-photo-alerts');
@@ -732,11 +898,17 @@ export function syncAccountSettingsUi(state = $account.get()) {
         }).catch(() => {});
     }
     import('./rider-marks.js').then((m) => m.syncRiderMarksUi()).catch(() => {});
+    const paxLabel = $userProfile.get() || document.getElementById('settings-profile-display')?.textContent || 'Adult';
+    const accountPax = document.getElementById('account-passenger-type-display');
+    if (accountPax) accountPax.textContent = paxLabel;
     if (typeof window.placeAccountSettings === 'function') {
         const accountOn = document.documentElement.getAttribute('data-account-settings') === '1'
             || !document.getElementById('settings-account-btn')?.classList.contains('hidden');
         window.placeAccountSettings(accountOn);
     }
+    const cluster = document.getElementById('settings-profile-cluster');
+    const hosted = !!cluster?.closest('#account-settings-host');
+    if (cluster) cluster.classList.toggle('hidden', signed && hosted);
 }
 
 export function syncAuthProviderUi(providers = getAuthProviders(), busy = _accountUiBusy) {
@@ -782,7 +954,61 @@ function badgeSvg(kind, ratio) {
 }
 
 function closeBadgeHowSheet() {
-    document.getElementById('account-badge-how-sheet')?.classList.add('hidden');
+    requestCloseAccountSheet('account-badge-how-sheet');
+}
+
+function closeContributionSheet() {
+    requestCloseAccountSheet('account-contrib-sheet');
+}
+
+function contributionSheetLines(item, marks) {
+    const lines = typeof marks.contributionDetailLines === 'function'
+        ? marks.contributionDetailLines(item)
+        : [];
+    if (item?.action === 'first_share_day') {
+        if (!lines.length) lines.push('Trip details were not saved for this share.');
+        return lines;
+    }
+    if (!lines.length && item?.how) lines.push(item.how);
+    return lines;
+}
+
+function shareTripBlocks(state, marks) {
+    const days = typeof marks.listContributionDays === 'function'
+        ? marks.listContributionDays(state, { limit: 30 })
+        : [];
+    const trips = [];
+    for (const day of days) {
+        for (const item of day.items || []) {
+            if (item.action !== 'first_share_day') continue;
+            const when = day.day && typeof marks.formatContributionDate === 'function'
+                ? marks.formatContributionDate(day.day)
+                : '';
+            const lines = contributionSheetLines(item, marks);
+            trips.push({ when, lines });
+        }
+    }
+    return trips;
+}
+
+function openContributionSheet(item, marks) {
+    const sheet = document.getElementById('account-contrib-sheet');
+    if (!sheet || !item) return;
+    const title = document.getElementById('account-contrib-title');
+    const points = document.getElementById('account-contrib-points');
+    const body = document.getElementById('account-contrib-body');
+    if (title) title.textContent = item.title || 'Contribution';
+    if (points) {
+        const n = Number(item.points) || 0;
+        points.textContent = `+${n} ${marks.pointsWord(n)}`;
+    }
+    if (body) {
+        const lines = contributionSheetLines(item, marks);
+        body.innerHTML = (lines.length ? lines : ['Points from this action.']).map((line) => (
+            `<p>${escapeAccountHtml(line)}</p>`
+        )).join('');
+    }
+    showAccountSheet('account-contrib-sheet');
 }
 
 function openBadgeHowSheet(badgeId, state, marks) {
@@ -801,7 +1027,26 @@ function openBadgeHowSheet(badgeId, state, marks) {
         else if (progress.total > 1 && progress.current > 0) status.textContent = `${progress.current} of ${progress.total} service days`;
         else status.textContent = 'Not unlocked yet';
     }
-    if (body) body.textContent = `${cat.how} ${cat.points} ${marks.pointsWord(cat.points)}.`;
+    if (body) {
+        if (badgeId === 'first_share_day') {
+            const trips = shareTripBlocks(state, marks);
+            if (trips.length) {
+                body.innerHTML = trips.map((trip) => {
+                    const head = trip.when
+                        ? `<p class="font-semibold text-gray-800 dark:text-gray-100">${escapeAccountHtml(trip.when)}</p>`
+                        : '';
+                    const rest = trip.lines.map((line) => `<p>${escapeAccountHtml(line)}</p>`).join('');
+                    return `<div class="space-y-1">${head}${rest}</div>`;
+                }).join('');
+            } else if (on) {
+                body.textContent = 'Trip details were not saved for this share.';
+            } else {
+                body.textContent = `${cat.how} ${cat.points} ${marks.pointsWord(cat.points)}.`;
+            }
+        } else {
+            body.textContent = `${cat.how} ${cat.points} ${marks.pointsWord(cat.points)}.`;
+        }
+    }
     const needs = Array.isArray(cat.requires) ? cat.requires : [];
     const missing = needs.filter((id) => !marks.badgeUnlocked(id, state)).map((id) => {
         const row = marks.MARK_CATALOG.find((c) => c.id === id);
@@ -816,7 +1061,7 @@ function openBadgeHowSheet(badgeId, state, marks) {
             prereq.classList.add('hidden');
         }
     }
-    sheet.classList.remove('hidden');
+    showAccountSheet('account-badge-how-sheet');
 }
 
 export function paintAccountPoints(state) {
@@ -861,23 +1106,33 @@ export function paintAccountPoints(state) {
             const days = typeof m.listContributionDays === 'function'
                 ? m.listContributionDays(st)
                 : [];
+            const painted = new Map();
             contrib.innerHTML = days.length
                 ? days.map((day) => {
-                    const when = day.at ? new Date(day.at).toLocaleDateString() : day.day;
-                    const items = (day.items || []).map((item) => (
-                        `<li class="flex justify-between gap-2 pl-1"><span>${escapeAccountHtml(item.title)}</span><span class="shrink-0">+${item.points}</span></li>`
-                    )).join('');
-                    return `<li>
-                        <details class="account-contrib-day">
-                            <summary class="flex justify-between gap-2 cursor-pointer list-none">
-                                <span>${escapeAccountHtml(when)}</span>
-                                <span class="shrink-0 font-semibold">+${day.total}</span>
-                            </summary>
-                            <ul class="mt-1.5 space-y-1 text-gray-500 dark:text-gray-400">${items}</ul>
-                        </details>
+                    const when = day.day && typeof m.formatContributionDate === 'function'
+                        ? m.formatContributionDate(day.day)
+                        : (day.day ? day.day : 'Earlier');
+                    const items = (day.items || []).map((item, index) => {
+                        const id = `${day.day || 'earlier'}:${index}`;
+                        painted.set(id, item);
+                        const label = `${item.title} (+${item.points})`;
+                        return `<button type="button" data-contrib-id="${escapeAccountHtml(id)}" class="account-contrib-event w-full text-left rounded-lg px-2.5 py-2 text-[13px] font-semibold text-gray-800 dark:text-gray-100 bg-[#f2f2f7] dark:bg-[#2c2c2e] border border-black/10 dark:border-white/15 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400">${escapeAccountHtml(label)}</button>`;
+                    }).join('');
+                    return `<li class="space-y-1.5">
+                        <div class="flex justify-between gap-3 px-0.5">
+                            <span>${escapeAccountHtml(when)}</span>
+                            <span class="shrink-0 font-semibold">+${day.total}</span>
+                        </div>
+                        <div class="flex flex-col gap-1.5">${items}</div>
                     </li>`;
                 }).join('')
                 : '<li>No contributions yet. Earn points from the actions above.</li>';
+            contrib.onclick = (ev) => {
+                const btn = ev.target?.closest?.('[data-contrib-id]');
+                if (!btn) return;
+                const item = painted.get(btn.getAttribute('data-contrib-id'));
+                if (item) openContributionSheet(item, m);
+            };
         }
         const grid = document.getElementById('account-badge-grid');
         if (grid) {
@@ -912,6 +1167,21 @@ export function bindAccountUi() {
         return;
     }
     window.__ntAccountUiBound = true;
+
+    const watchPhoto = (imgId, letterId) => {
+        const img = document.getElementById(imgId);
+        if (!img || img.dataset.ntPhotoWatch === '1') return;
+        img.dataset.ntPhotoWatch = '1';
+        img.referrerPolicy = 'no-referrer';
+        img.addEventListener('error', () => {
+            const failed = img.currentSrc || img.src || '';
+            if (failed) img.dataset.ntPhotoFailed = failed;
+            img.classList.add('hidden');
+            document.getElementById(letterId)?.classList.remove('hidden');
+        });
+    };
+    watchPhoto('account-modal-avatar-img', 'account-modal-avatar-letter');
+    watchPhoto('settings-account-avatar-img', 'settings-account-avatar-ph');
 
     $account.subscribe(syncAccountSettingsUi);
     syncAccountSettingsUi();
@@ -987,6 +1257,23 @@ export function bindAccountUi() {
             paintAccountPoints();
         } catch (e) {
             showErr(friendlyAuthError(e));
+            const hint = document.getElementById('account-signin-create-hint');
+            if (hint && ['auth/user-not-found', 'auth/wrong-password', 'auth/invalid-credential'].includes(e?.code || '')) {
+                hint.classList.remove('hidden');
+            }
+        } finally {
+            setBusy(false);
+        }
+    });
+
+    document.getElementById('account-forgot-btn')?.addEventListener('click', async () => {
+        const email = document.getElementById('account-email')?.value;
+        setBusy(true);
+        try {
+            await sendAccountPasswordReset(email);
+            if (typeof window.showToast === 'function') window.showToast('Password reset email sent', 'success');
+        } catch (e) {
+            showErr(friendlyAuthError(e) || e?.message || 'Could not send reset email.');
         } finally {
             setBusy(false);
         }
@@ -1024,39 +1311,72 @@ export function bindAccountUi() {
     document.getElementById('account-save-display-name')?.addEventListener('click', async () => {
         const input = document.getElementById('account-edit-display-name');
         const photo = document.getElementById('account-photo-alerts');
+        const nameErr = document.getElementById('account-name-error');
+        if (nameErr) nameErr.textContent = '';
         setBusy(true);
         try {
             const next = await updateAccountDisplayName(input?.value || '');
             if (input) input.value = next;
-            const { setShowPhotoInAlerts, setShowMarksInCommunity } = await import('./rider-marks.js');
+            const { setShowPhotoInAlerts } = await import('./rider-marks.js');
             await setShowPhotoInAlerts(!!photo?.checked);
-            const marks = document.getElementById('account-marks-community');
-            await setShowMarksInCommunity(marks ? !!marks.checked : true);
-            await pushSignedInPrefs({
-                showPhotoInAlerts: !!photo?.checked,
-                showMarksInCommunity: marks ? !!marks.checked : true,
-            });
+            await pushSignedInPrefs({ showPhotoInAlerts: !!photo?.checked });
             if (photo) delete photo.dataset.dirty;
-            if (marks) delete marks.dataset.dirty;
             if (typeof window.showToast === 'function') window.showToast('Saved', 'success');
+            requestCloseAccountSheet('account-name-sheet');
         } catch (e) {
             const msg = e?.message || 'Could not save.';
             if (msg === DISPLAY_NAME_REFUSE_MSG && typeof window.showToast === 'function') {
                 window.showToast(DISPLAY_NAME_REFUSE_MSG);
             }
+            if (nameErr) nameErr.textContent = msg;
             showErr(msg);
         } finally {
             setBusy(false);
         }
     });
 
+    const askSignOutConfirm = () => new Promise((resolve) => {
+        const sheet = document.getElementById('account-signout-confirm');
+        if (!sheet) {
+            resolve(typeof window.confirm === 'function' ? window.confirm('Sign out?') : true);
+            return;
+        }
+        sheet.classList.remove('hidden');
+        const yes = document.getElementById('account-signout-confirm-btn');
+        const no = document.getElementById('account-signout-cancel-btn');
+        const finish = (ok) => {
+            sheet.classList.add('hidden');
+            yes?.removeEventListener('click', onYes);
+            no?.removeEventListener('click', onNo);
+            resolve(ok);
+        };
+        const onYes = () => finish(true);
+        const onNo = () => finish(false);
+        yes?.addEventListener('click', onYes);
+        no?.addEventListener('click', onNo);
+    });
+
     document.getElementById('account-signout-btn')?.addEventListener('click', async () => {
+        const ok = await askSignOutConfirm();
+        if (!ok) return;
         setBusy(true);
         try {
             await signOutAccount();
             if (typeof window.showToast === 'function') window.showToast('Signed out');
         } catch (e) {
             showErr(e?.message || 'Sign-out failed.');
+        } finally {
+            setBusy(false);
+        }
+    });
+
+    document.getElementById('account-verify-resend-btn')?.addEventListener('click', async () => {
+        setBusy(true);
+        try {
+            await resendAccountVerification();
+            if (typeof window.showToast === 'function') window.showToast('Verification email sent', 'success');
+        } catch (e) {
+            showErr(e?.message || 'Could not send verification email.');
         } finally {
             setBusy(false);
         }
@@ -1101,45 +1421,32 @@ export function bindAccountUi() {
         }
     });
 
-    const attachPointsPanel = (btn) => {
-        const panel = document.getElementById('account-points-panel');
-        if (!panel || !btn) return panel;
-        btn.insertAdjacentElement('afterend', panel);
-        return panel;
+    const openPointsSheet = () => {
+        if (!document.getElementById('account-points-sheet')) return;
+        paintAccountPoints();
+        showAccountSheet('account-points-sheet');
     };
-    const visiblePointsButton = () => {
-        const signed = document.getElementById('account-signed-in');
-        if (signed && !signed.classList.contains('hidden')) {
-            return document.getElementById('account-points-btn');
-        }
-        return document.getElementById('account-points-guest-btn');
-    };
-    const togglePoints = (e) => {
-        const btn = e?.currentTarget || visiblePointsButton();
-        const panel = attachPointsPanel(btn);
-        if (!panel) return;
-        const open = panel.classList.contains('hidden');
-        panel.classList.toggle('hidden', !open);
-        document.querySelectorAll('#account-points-btn, #account-points-guest-btn').forEach((el) => {
-            el.setAttribute('aria-expanded', el === btn && open ? 'true' : 'false');
-        });
-        document.querySelectorAll('#account-points-chevron, .account-points-chevron').forEach((el) => {
-            const owner = el.closest('button');
-            el.classList.toggle('rotate-180', open && owner === btn);
-        });
-        if (open) {
-            paintAccountPoints();
-            try {
-                panel.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-            } catch { /* ignore */ }
-        }
-    };
-    document.getElementById('account-points-btn')?.addEventListener('click', togglePoints);
-    document.getElementById('account-points-guest-btn')?.addEventListener('click', togglePoints);
+    const closePointsSheet = () => requestCloseAccountSheet('account-points-sheet');
+    document.getElementById('account-points-btn')?.addEventListener('click', openPointsSheet);
+    document.getElementById('account-points-guest-btn')?.addEventListener('click', openPointsSheet);
+    document.getElementById('account-points-close')?.addEventListener('click', closePointsSheet);
+    document.getElementById('account-points-overlay')?.addEventListener('click', closePointsSheet);
 
-    document.getElementById('account-profile-toggle')?.addEventListener('click', () => {
-        const panel = document.getElementById('account-profile-panel');
-        setAccountProfileOpen(!!panel?.classList.contains('hidden'));
+    const openNameSheet = () => {
+        const input = document.getElementById('account-edit-display-name');
+        const nameErr = document.getElementById('account-name-error');
+        if (nameErr) nameErr.textContent = '';
+        if (input) input.value = $account.get().displayName || '';
+        showAccountSheet('account-name-sheet');
+        setTimeout(() => input?.focus(), 40);
+    };
+    const closeNameSheet = () => requestCloseAccountSheet('account-name-sheet');
+    document.getElementById('account-name-edit-btn')?.addEventListener('click', openNameSheet);
+    document.getElementById('account-name-close')?.addEventListener('click', closeNameSheet);
+    document.getElementById('account-name-overlay')?.addEventListener('click', closeNameSheet);
+    document.getElementById('account-passenger-type-btn')?.addEventListener('click', () => {
+        if (typeof window.triggerHaptic === 'function') window.triggerHaptic();
+        if (typeof window.openSmoothModal === 'function') window.openSmoothModal('profile-modal');
     });
     document.getElementById('account-photo-toggle')?.addEventListener('click', (e) => {
         const t = e.target;
@@ -1152,20 +1459,31 @@ export function bindAccountUi() {
     document.getElementById('account-photo-alerts')?.addEventListener('change', (e) => {
         e.target.dataset.dirty = '1';
     });
+    const persistMarksVisibility = async (on) => {
+        try {
+            const { setShowMarksInCommunity } = await import('./rider-marks.js');
+            await setShowMarksInCommunity(!!on);
+            await pushSignedInPrefs({ showMarksInCommunity: !!on });
+        } catch { /* local switch still shows the choice */ }
+    };
     document.getElementById('account-marks-toggle')?.addEventListener('click', (e) => {
         const t = e.target;
         if (t.tagName === 'INPUT' || t.tagName === 'LABEL') return;
         const cb = document.getElementById('account-marks-community');
         if (!cb) return;
         cb.checked = !cb.checked;
-        cb.dataset.dirty = '1';
+        delete cb.dataset.dirty;
+        persistMarksVisibility(cb.checked);
     });
     document.getElementById('account-marks-community')?.addEventListener('change', (e) => {
-        e.target.dataset.dirty = '1';
+        delete e.target.dataset.dirty;
+        persistMarksVisibility(e.target.checked);
     });
 
     document.getElementById('account-badge-how-close')?.addEventListener('click', closeBadgeHowSheet);
     document.getElementById('account-badge-how-overlay')?.addEventListener('click', closeBadgeHowSheet);
+    document.getElementById('account-contrib-close')?.addEventListener('click', closeContributionSheet);
+    document.getElementById('account-contrib-overlay')?.addEventListener('click', closeContributionSheet);
 
     paintAccountPoints();
 }
@@ -1189,6 +1507,7 @@ function friendlyAuthError(e) {
 }
 
 if (typeof window !== 'undefined') {
+    window.__ntAccountSheetOnPop = accountSheetOnPop;
     window.openAccountModal = openAccountModal;
     window.waitForSignedIn = waitForSignedIn;
     window.signOutAccount = signOutAccount;

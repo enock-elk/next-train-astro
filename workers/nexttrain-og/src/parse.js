@@ -62,8 +62,57 @@ export function stationLabel(raw) {
   return cleaned;
 }
 
+/** Path share `/og/l/9115/pta-pien/PIENAARSPOORT` — avoids WhatsApp wrapping query strings. */
+export function parseLiveSharePath(pathname) {
+  const m = String(pathname || '').match(/^\/og\/(?:l|live)\/([^/]+)(?:\/([^/]+))?(?:\/([^/]+))?\/?$/i);
+  if (!m) return null;
+  const trainId = decodeURIComponent(m[1] || '').trim();
+  if (!trainId || /\./.test(trainId)) return null;
+  const routeId = m[2] ? decodeURIComponent(m[2]).trim() : '';
+  const dest = m[3] ? stationLabel(decodeURIComponent(m[3])) : '';
+  return {
+    kind: 'live',
+    trainId,
+    routeId,
+    dest,
+    region: '',
+  };
+}
+
+/** PNG path `/og/train/9115.png` or `/og/train/9115/pta-pien/Pienaarspoort.png` — no query for WhatsApp. */
+export function parseLiveTrainImagePath(pathname) {
+  const m = String(pathname || '').match(/^\/og\/train\/([^/]+?)(?:\/([^/]+))?(?:\/([^/]+))?\.png$/i);
+  if (!m) return null;
+  let trainId = '';
+  let routeId = '';
+  let dest = '';
+  try { trainId = decodeURIComponent(m[1] || '').trim(); } catch { trainId = String(m[1] || '').trim(); }
+  if (!trainId) return null;
+  try { routeId = m[2] ? decodeURIComponent(m[2]).trim() : ''; } catch { routeId = String(m[2] || '').trim(); }
+  try { dest = m[3] ? decodeURIComponent(m[3]).trim() : ''; } catch { dest = String(m[3] || '').trim(); }
+  if (routeId === '-') routeId = '';
+  return { trainId, routeId, dest: stationLabel(dest) };
+}
+
 export function parseShareIntent(url) {
   const params = url.searchParams;
+  const pathLive = parseLiveSharePath(url.pathname);
+  if (pathLive) return pathLive;
+
+  // Live must win over rt=/to= (those are also on live shares). Production
+  // previously treated ?live=9115&rt=pta-pien as a timetable card.
+  const liveId = String(params.get('live') || params.get('train') || '').trim();
+  if (liveId) {
+    const regionRaw = (params.get('r') || params.get('region') || '').toUpperCase();
+    return {
+      kind: 'live',
+      trainId: liveId,
+      routeId: params.get('rt') || params.get('route') || '',
+      dest: stationLabel(params.get('to') || ''),
+      region: ['GP', 'WC', 'KZN', 'EC'].includes(regionRaw) ? regionRaw : '',
+    };
+  }
+
   const plan = params.get('plan');
   const action = String(params.get('action') || '').toLowerCase();
 
@@ -86,7 +135,7 @@ export function parseShareIntent(url) {
       to,
       time: params.get('t') || params.get('time') || '',
       day: decodeDay(params.get('d') || params.get('day') || ''),
-      region: ['GP', 'WC', 'KZN', 'EC'].includes(regionRaw) ? regionRaw : null,
+      region: ['GP', 'WC', 'KZN', 'EC'].includes(regionRaw) ? regionRaw : '',
     };
   }
 

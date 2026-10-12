@@ -9,6 +9,9 @@ import {
     progressAlongStopsDetailed,
     journeyPositionLabel,
     alignBearingToJourney,
+    railPathForTrain,
+    listTrainsInWindow,
+    liveMapTrainBan,
 } from '../src/lib/train-ghosts.js';
 import {
     closestPointOnPath,
@@ -16,11 +19,13 @@ import {
     projectToTrustedFeature,
     trackBearingDeg,
     TRACKER_SNAP_MAX_M,
+    paintedPathForRoute,
 } from '../src/lib/rail-tracks.js';
 import {
     adaptiveOnboardPingMs,
     compactPingsForMap,
     consensusProjectedPings,
+    isRidePingGpsStale,
     isTrackingInterchange,
     ONBOARD_FAST_PING_MS,
     ONBOARD_MOVING_PING_MS,
@@ -33,14 +38,39 @@ import {
     shouldPromptLeftTrain,
     TRACKING_STATE,
     updateDirectionObservation,
+    SHARE_PROMPT_TIMEOUT_MS,
+    REVERSE_SUSTAIN_MS,
+    DWELL_PROMPT_MS,
+    OFFTRACK_PROMPT_MS,
+    TRAIN_STATUS,
+    rideVoteTally,
+    shareEligibilityForTrain,
 } from '../src/lib/ride-pings.js';
 import {
     formatGpsPingAge,
     formatGpsPingClock,
     formatLastSeenWithPingClock,
     gpsPingSuccessAt,
+    RIDE_GPS_STALE_MS,
+    RIDE_INTERPOLATION_MAX_MS,
 } from '../src/lib/gps-freshness.js';
 import { refineMotionFix, confirmStationaryWatchTick, reusableGeoFix, locateFixOrLast, GEO_REUSE_MAX_AGE_MS } from '../src/lib/geo-watch.js';
+import { $globalExclusions } from '../src/store.js';
+import {
+    applyMotionFusionToFix,
+    classifyMotion,
+    deadReckonFix,
+    fusedHeadingFromPing,
+    fusedSpeedFromPing,
+    imuPredictFromGpsAnchor,
+    ingestMotionGpsFix,
+    mixHeading,
+    peekMotionFusion,
+    readPingMotionClass,
+    resetMotionFusionForTest,
+    startMotionFusion,
+    wrap360,
+} from '../src/lib/motion-fusion.js';
 import { readFileSync } from 'node:fs';
 import {
     WEEKDAY_REPORT_MAX_AGE_MS,
@@ -176,6 +206,20 @@ const poorAccuracyFix = refineMotionFix(
     { lat: -25, lng: 28, accuracy: 200, heading: null, speedMps: 0, t: 1000 }
 );
 assert(poorAccuracyFix?.speedMps === 0 && poorAccuracyFix.stationary, 'poor-accuracy displacement cannot impersonate train speed');
+const homeJitter = refineMotionFix(
+    { lat: -25, lng: 28.00008, accuracy: 18, heading: null, speedMps: 1.6, t: 11000 },
+    { lat: -25, lng: 28, accuracy: 18, heading: null, speedMps: 0, t: 1000 }
+);
+assert(homeJitter?.speedMps === 0 && homeJitter.stationary, '5 km/h OS jitter inside the accuracy circle is stationary');
+const walkFive = refineMotionFix(
+    { lat: -25, lng: 28.00014, accuracy: 6, heading: null, speedMps: 1.39, t: 11000 },
+    { lat: -25, lng: 28, accuracy: 6, heading: null, speedMps: 0, stationary: true, t: 1000 }
+);
+assert(walkFive && !walkFive.stationary && walkFive.speedMps >= 1.2 && walkFive.speedMps < 2, 'real 5 km/h walking still reports speed');
+assert(refineMotionFix(
+    { lat: -25, lng: 28, accuracy: 20, heading: null, speedMps: 1.6, t: 1000 },
+    null
+)?.speedMps === 0, 'first GPS sample does not show jitter as speed');
 assert(refineMotionFix(
     { lat: -25, lng: 28.01, accuracy: 5, heading: 90, speedMps: 10, t: 1000 },
     { lat: -25, lng: 28, accuracy: 5, heading: 90, speedMps: 10, t: 1000 }
@@ -212,9 +256,63 @@ assert(
     )?.lat === -25.751,
     'trusted high-accuracy locate wins over the map pin'
 );
-assert(adaptiveOnboardPingMs(12) === ONBOARD_FAST_PING_MS, 'fast train broadcasts every 5 seconds');
-assert(adaptiveOnboardPingMs(2) === ONBOARD_MOVING_PING_MS, 'slow movement broadcasts every 10 seconds');
-assert(adaptiveOnboardPingMs(0) === ONBOARD_STATIONARY_PING_MS, 'stationary share heartbeats every 10 seconds');
+assert(RIDE_GPS_STALE_MS === 15000 && RIDE_INTERPOLATION_MAX_MS === 15000, 'grey pause and interpolation share a 15 second window');
+assert(ONBOARD_FAST_PING_MS === 3000 && ONBOARD_MOVING_PING_MS === 4000 && ONBOARD_STATIONARY_PING_MS === 6000, 'onboard bands: 3s moving, 4s slow, 6s parked');
+assert(ONBOARD_STATIONARY_PING_MS * 2 < RIDE_GPS_STALE_MS, 'a parked heartbeat can miss once and still beat the 15s grey window');
+assert(adaptiveOnboardPingMs(12) === ONBOARD_FAST_PING_MS, 'fast train broadcasts every 3 seconds');
+assert(adaptiveOnboardPingMs(2) === ONBOARD_MOVING_PING_MS, 'slow movement broadcasts every 4 seconds');
+assert(adaptiveOnboardPingMs(0) === ONBOARD_STATIONARY_PING_MS, 'stationary share heartbeats every 6 seconds');
+assert(SHARE_PROMPT_TIMEOUT_MS === 90000, 'share prompts time out after 90 seconds');
+assert(OFFTRACK_PROMPT_MS === 15000, 'off-track still-on-this-train prompt waits 15 seconds before asking again');
+assert(REVERSE_SUSTAIN_MS === 20000, 'backward progress must persist 20 seconds before the share pauses');
+assert(DWELL_PROMPT_MS === 4 * 60 * 1000, 'parked at an intermediate platform for 4 minutes asks whether the train is stuck');
+assert(TRAIN_STATUS.STUCK === 'stuck' && TRAIN_STATUS.CANCELLED === 'cancelled', 'train status values are stable for rules and receivers');
+
+{
+    const now = Date.now();
+    const votes = {
+        a: { vote: -1, at: now - 60000 },
+        b: { vote: -1, at: now - 60000 },
+        c: { vote: -1, at: now - 60000 },
+        me: { vote: 1, at: now - 60000 },
+    };
+    assert(rideVoteTally(votes, { sharerDeviceId: 'me' }).suppressed, 'three agreeing down votes hide a share');
+    assert(rideVoteTally(votes, { sharerDeviceId: 'me' }).up === 0, 'the sharer’s own vote never counts');
+    assert(!rideVoteTally({ a: { vote: -1, at: now } }).suppressed, 'one grumpy rider cannot hide a share');
+    assert(!rideVoteTally({
+        a: { vote: -1, at: now }, b: { vote: -1, at: now }, c: { vote: -1, at: now },
+        d: { vote: 1, at: now }, e: { vote: 1, at: now },
+    }).suppressed, 'down votes must outnumber up votes two to one');
+    assert(!rideVoteTally(votes, { sharerDeviceId: 'me', resetAt: now - 1000 }).suppressed, 'votes before the sharer’s reset are ignored');
+    assert(!rideVoteTally({ a: { vote: -1, at: now - 25 * 60000 }, b: { vote: -1, at: now - 25 * 60000 }, c: { vote: -1, at: now - 25 * 60000 } }).suppressed, 'votes older than 20 minutes expire');
+}
+{
+    const sheet = {
+        headers: ['STATION', '1000', '2000'],
+        rows: [
+            { STATION: 'ORIGIN', 1000: '10:00:00', 2000: '12:00:00' },
+            { STATION: 'TERMINUS', 1000: '10:30:00', 2000: '12:30:00' },
+        ],
+    };
+    const schedules = { weekday_to_a: sheet };
+    const base = { schedules, dayType: 'weekday', exclusions: {} };
+    assert(shareEligibilityForTrain('1000', 'pta-pien', { ...base, nowSec: 10 * 3600 + 600 }).ok, 'a running train on today’s sheet is shareable');
+    assert(shareEligibilityForTrain('1000', 'pta-pien', { ...base, nowSec: 9 * 3600 + 20 * 60 }).ok, 'shareable 40 minutes before departure');
+    assert(shareEligibilityForTrain('1000', 'pta-pien', { ...base, nowSec: 9 * 3600 }).reason === 'too_early', 'an hour before departure is too early');
+    assert(shareEligibilityForTrain('1000', 'pta-pien', { ...base, nowSec: 11 * 3600 + 30 * 60 }).reason === 'finished', 'an hour after arrival the trip is finished');
+    assert(shareEligibilityForTrain('3000', 'pta-pien', { ...base, nowSec: 10 * 3600 }).reason === 'not_today', 'a train not on today’s sheet cannot be shared');
+    assert(shareEligibilityForTrain('1000', 'pta-pien', {
+        ...base, nowSec: 10 * 3600, exclusions: { 'pta-pien': { 1000: { type: 'banned' } } },
+    }).reason === 'banned', 'a banned train cannot be shared');
+    assert(shareEligibilityForTrain('1000', 'pta-pien', {
+        ...base, nowSec: 10 * 3600, exclusions: { 'pta-pien': { 1000: { type: 'special' } } },
+    }).ok, 'a special train is still shareable');
+    assert(shareEligibilityForTrain('1000', 'pta-pien', {
+        ...base, nowSec: 10 * 3600, exclusions: { 'pta-pien': { 1000: { type: 'banned', expiresAt: Date.now() - 1000 } } },
+    }).ok, 'an expired ban does not block sharing');
+}
+assert(!isRidePingGpsStale({ acceptedAt: Date.now() - 14000 }), 'a 14 second GPS ping is still live');
+assert(isRidePingGpsStale({ acceptedAt: Date.now() - 16000 }), 'a 16 second GPS ping is stale');
 assert(!terminusStopShouldFire({
     atLast: true, lastIndex: 12, minProgressSeen: 12,
 }), 'sitting at the last station when sharing starts does not end the share');
@@ -328,6 +426,86 @@ assert(
 assert(pausedMarkers[0]?.bearing === 92, 'paused map marker preserves accepted bearing');
 assert(pausedMarkers[0]?.routeProgressM === 12400, 'paused map marker exposes rail distance');
 assert(pausedMarkers[0]?.accuracy === 18, 'paused map marker exposes GPS accuracy');
+assert(pausedMarkers[0]?.motionClass === '', 'legacy paused pings without motionClass still compact');
+
+resetMotionFusionForTest();
+assert(wrap360(-90) === 270, 'heading wrap stays 0-360');
+assert(Math.abs(mixHeading(350, 10, 1) - 10) < 0.01, 'heading mix crosses 0');
+assert(classifyMotion({ accelVar: 0.1, speedMps: 0, meanAccel: 0.1 }) === 'still', 'low accel is still');
+assert(classifyMotion({ accelVar: 0.2, speedMps: 8 }) === 'ride', 'cruise speed is ride');
+assert(classifyMotion({ accelVar: 1.2, speedMps: 1.4 }) === 'walk', 'bouncy low speed is walk');
+assert(readPingMotionClass({ motionClass: 'RIDE' }) === 'ride', 'receivers normalise motionClass');
+assert(readPingMotionClass({ motionClass: 'nope' }) === '', 'junk motionClass is ignored');
+assert(readPingMotionClass({}) === '', 'missing motionClass is legacy GPS');
+assert(fusedSpeedFromPing({ motionClass: 'still', speedMps: 12 }) === 0, 'still pins receiver speed at 0');
+assert(fusedSpeedFromPing({ motionClass: 'ride' }, 12) === 12, 'ride without speed uses fallback');
+assert(!Number.isFinite(fusedSpeedFromPing({ motionClass: 'ride' }, NaN)), 'display speed does not invent a ride cruise');
+assert(fusedSpeedFromPing({ speedMps: 7.2 }) === 7.2, 'legacy speed still interpolates');
+assert(fusedHeadingFromPing({ heading: 450 }) === 90, 'receiver heading wraps');
+const imuAnchor = { lat: -25, lng: 28, t: 1000 };
+const imuFusion = { motionClass: 'ride', heading: 0, speedMps: 10 };
+const imuOne = imuPredictFromGpsAnchor(imuAnchor, imuFusion, 2000);
+const imuTwo = imuPredictFromGpsAnchor(imuAnchor, imuFusion, 3000);
+assert(imuOne && imuTwo && imuOne.fromImu && imuTwo.t === 1000, 'IMU predict stays on the GPS clock');
+assert(
+    Math.abs((imuTwo.lat - imuAnchor.lat) - 2 * (imuOne.lat - imuAnchor.lat)) < 1e-8,
+    'repeated IMU ticks from the same GPS rail pose do not compound'
+);
+assert(imuPredictFromGpsAnchor(imuAnchor, { motionClass: 'walk', heading: 0, speedMps: 1.4 }, 2000) == null, 'walk does not dead-reckon the train');
+assert(imuPredictFromGpsAnchor(imuAnchor, { motionClass: 'still', heading: 90, speedMps: 0 }, 2000) == null, 'still does not dead-reckon the train');
+startMotionFusion();
+ingestMotionGpsFix({ lat: -25, lng: 28, heading: 90, speedMps: 10, t: 1000 }, 1000);
+const fusedFix = applyMotionFusionToFix({ lat: -25, lng: 28.001, heading: null, speedMps: 10, t: 2000 }, 2000);
+assert(Number.isFinite(fusedFix.heading), 'sender fusion fills an empty GPS heading');
+const predicted = deadReckonFix({ lat: -25, lng: 28, t: 1000 }, { heading: 90, speedMps: 10 }, 2000);
+assert(predicted && predicted.fromImu && predicted.t === 1000, 'IMU predict keeps the GPS clock');
+assert(deadReckonFix({ lat: -25, lng: 28, t: 1000 }, { heading: 90, speedMps: 10 }, 1000 + 6000) == null, 'IMU predict stops after 4.8s');
+resetMotionFusionForTest();
+assert(peekMotionFusion().running === false, 'fusion resets in tests');
+
+const fusedMarkers = await compactPingsForMap([{
+    deviceId: 'fused-device',
+    routeId: 'pta-pien',
+    trainId: '1000',
+    station: 'MIDDLE',
+    coarseLat: -25.1,
+    coarseLng: 28.1,
+    projectedLat: -25,
+    projectedLng: 28.01,
+    projectedProgress: 1,
+    acceptedAt: Date.now(),
+    fixAt: Date.now(),
+    at: Date.now(),
+    expiresAt: Date.now() + 600000,
+    heading: 88,
+    speedMps: 9.4,
+    motionClass: 'ride',
+    trackingState: TRACKING_STATE.ACTIVE,
+}], { mineDeviceId: 'fused-device', routeId: 'pta-pien' });
+assert(fusedMarkers[0]?.motionClass === 'ride', 'receivers keep sender motionClass');
+assert(fusedMarkers[0]?.speedMps === 9.4, 'receivers keep fused speed');
+assert(fusedMarkers[0]?.heading === 88, 'receivers keep fused heading');
+const stillMarkers = await compactPingsForMap([{
+    deviceId: 'still-device',
+    routeId: 'pta-pien',
+    trainId: '1000',
+    station: 'MIDDLE',
+    coarseLat: -25.1,
+    coarseLng: 28.1,
+    projectedLat: -25,
+    projectedLng: 28.01,
+    projectedProgress: 1,
+    acceptedAt: Date.now(),
+    fixAt: Date.now(),
+    at: Date.now(),
+    expiresAt: Date.now() + 600000,
+    heading: 88,
+    speedMps: 11,
+    motionClass: 'STILL',
+    trackingState: TRACKING_STATE.ACTIVE,
+}], { mineDeviceId: 'still-device', routeId: 'pta-pien' });
+assert(stillMarkers[0]?.motionClass === 'still', 'receivers normalise sender STILL');
+assert(stillMarkers[0]?.speedMps === 0, 'compact still pings pin receiver speed at 0');
 const staleActiveMarkers = await compactPingsForMap([{
     deviceId: 'stale-active',
     routeId: 'pta-pien',
@@ -347,6 +525,64 @@ const staleActiveMarkers = await compactPingsForMap([{
 assert(
     staleActiveMarkers[0]?.trackingState === TRACKING_STATE.PAUSED,
     'a stale active write remains visible as a stationary paused marker'
+);
+const nowSwitch = Date.now();
+const switchedMarkers = await compactPingsForMap([
+    {
+        deviceId: 'stale-rider',
+        routeId: 'pta-pien',
+        trainId: '1000',
+        station: 'ORIGIN',
+        coarseLat: -25.1,
+        coarseLng: 28.1,
+        projectedLat: -25.0,
+        projectedLng: 28.0,
+        projectedProgress: 0.4,
+        acceptedAt: nowSwitch - 8000,
+        fixAt: nowSwitch - 8000,
+        at: nowSwitch - 8000,
+        expiresAt: nowSwitch + 600000,
+        speedMps: 12,
+        railDistanceM: 8,
+        trackingState: TRACKING_STATE.ACTIVE,
+    },
+    {
+        deviceId: 'fresh-rider',
+        routeId: 'pta-pien',
+        trainId: '1000',
+        station: 'MIDDLE',
+        coarseLat: -25.2,
+        coarseLng: 28.2,
+        projectedLat: -25.02,
+        projectedLng: 28.02,
+        projectedProgress: 1.1,
+        acceptedAt: nowSwitch - 1000,
+        fixAt: nowSwitch - 1000,
+        at: nowSwitch - 1000,
+        expiresAt: nowSwitch + 600000,
+        speedMps: 0,
+        railDistanceM: 6,
+        trackingState: TRACKING_STATE.ACTIVE,
+    },
+], { mineDeviceId: 'observer', routeId: 'pta-pien' });
+assert(switchedMarkers.length === 1, 'one train marker when two riders share it');
+assert(switchedMarkers[0]?.trackingState === TRACKING_STATE.ACTIVE, 'a fresh rider keeps the train live');
+assert(
+    switchedMarkers[0]?.lat === -25.02 && switchedMarkers[0]?.lng === 28.02,
+    'the train switches to the reachable rider’s last GPS'
+);
+assert(
+    pingPublicTrainId({
+        trainId: '1000',
+        trackingState: TRACKING_STATE.ACTIVE,
+        acceptedAt: Date.now(),
+        projectedLat: -25,
+        projectedLng: 28,
+        projectedProgress: 1,
+        railDistanceM: 10,
+        speedMps: 0,
+    }) === '1000',
+    'a stationary on-rail GPS ping still counts as an accurate train ping'
 );
 
 const mapAppSource = readFileSync(new URL('../public/js/map-app.js', import.meta.url), 'utf8');
@@ -369,6 +605,22 @@ assert(!mapAppSource.includes('enableHighAccuracy: true});'), 'map no longer sta
 assert(mapTabSource.includes('acquireGeoWatch'), 'map tab holds the fused geo watch while visible');
 assert(mapTabSource.includes('releaseGeoWatch'), 'leaving the map tab drops the map geo-watch holder');
 assert(ridePingsSource.includes("acquireGeoWatch('share')"), 'an active share keeps the geo watch');
+assert(ridePingsSource.includes('payload.motionClass'), 'sender writes motionClass on the existing ride_pings node');
+assert(ridePingsSource.includes('tickOnboardImu'), 'sender dead-reckons locally between GPS pings');
+assert(ridePingsSource.includes('onboardGpsRailAnchor'), 'IMU ticks start from the last GPS rail pose');
+assert(ridePingsSource.includes('imuPredictFromGpsAnchor'), 'sender uses the shared IMU predict helper');
+assert(ridePingsSource.includes('motionClass: pos.motionClass'), 'onboard writes the fused class from that GPS fix');
+assert(ridePingsSource.includes("resolvedMotion === 'still'"), 'sender still pings write speed 0');
+assert(ridePingsSource.includes('readPingMotionClass(fusion)'), 'live fusion class wins over a stale GPS tag');
+assert(ridePingsSource.includes('startMotionFusion'), 'an active share starts device-motion fusion');
+assert(ridePingsSource.includes('motionClass: readPingMotionClass'), 'compacted map pings carry motionClass to receivers');
+assert(geoWatchSource.includes('applyMotionFusionToFix'), 'GPS watch applies fusion before listeners see a fix');
+assert(mapTabSource.includes('requestMotionPermission'), 'share tap requests iOS motion permission');
+assert(mapTabSource.includes('fusedSpeedFromPing(subjectMarker, NaN)'), 'tracking card does not invent a ride cruise');
+assert(mapTabSource.includes('readPingMotionClass(p)'), 'map fallback compact sanitises motionClass');
+assert(mapAppSource.includes("motionClass === 'still'"), 'map iframe pins a still ping');
+assert(mapAppSource.includes("newest.motionClass || '').trim().toLowerCase()"), 'map iframe normalises sender motionClass');
+assert(mapAppSource.includes('motionClass: motionClass'), 'map iframe forwards motionClass to the tracking card');
 assert(!ridePingsSource.includes("document.hidden) {\n            await queueOnboardPause('staleGps')"), 'hidden documents do not pause an active share');
 assert(ridePingsSource.includes('queueOnboardPause(\'staleGps\', onboardLatestFix)'), 'share still pauses when GPS is actually stale');
 assert(ridePingsSource.includes('alignBearingToJourney'), 'projected pings use rail tangent aligned to travel');
@@ -377,6 +629,17 @@ assert(geoWatchSource.includes('enableHighAccuracy: false'), 'seek watch is fuse
 assert(geoWatchSource.includes('enableHighAccuracy: true'), 'an active share uses a high-accuracy watch');
 assert(geoWatchSource.includes("holders.has('share')"), 'share keeps GPS running while the document is hidden');
 assert(geoWatchSource.includes('SHARE_SILENT_RESTART_MS'), 'a silent share watch is restarted');
+assert(geoWatchSource.includes('requestFreshShareFix'), 'silent share watch also one-shots GPS');
+assert(geoWatchSource.includes('SHARE_FRESH_OPTS'), 'share one-shot GPS uses maximumAge 0');
+assert(geoWatchSource.includes("holders.has('share')") && geoWatchSource.includes('pagehide'), 'pagehide keeps an active share watch');
+assert(geoWatchSource.includes('now - osT'), 'cached OS GPS timestamps are not treated as stale');
+assert(ridePingsSource.includes('SHARE_EAGER_GPS_MS'), 'onboard loop refreshes GPS before the 15s grey window');
+assert(ridePingsSource.includes('refreshRideShareGps'), 'sender can force a GPS ping');
+assert(ridePingsSource.includes('usedCorridorFallback'), 'missing train stop list still snaps to the corridor');
+assert(mapViewSource.includes('id="map-tracking-refresh"'), 'tracking card has Refresh GPS');
+assert(mapTabSource.includes('map-tracking-refresh'), 'Refresh GPS is wired on the sender card');
+assert(!mapTabSource.includes('Couldn’t build the selected train'), 'share checks do not block on a missing train path');
+assert(mapTabSource.includes('painted corridor'), 'share checks fall back to the painted corridor');
 assert(geoWatchSource.includes('wakeLock.request'), 'sharing requests a screen wake lock to keep GPS live');
 assert(geoWatchSource.includes('confirmStationaryWatchTick'), 'repeated stationary GPS callbacks stay live');
 assert(geoWatchSource.includes("holders.add"), 'geo watch is reference-counted by map and share');
@@ -389,27 +652,71 @@ assert(ridePingsSource.includes('reusableGeoFix'), 'presence share reuses the fu
 assert(mapPageSource.includes('nt-live-train-oval'), 'map page styles the merged ovals');
 assert(mapPageSource.includes('border-radius: 999px'), 'map marker uses a capsule oval');
 assert(mapAppSource.includes('interpolateRideMarkerLatLng'), 'remote map marker interpolates bounded received corrections');
+assert(mapAppSource.includes('interpolateAlongRidePath'), 'train interpolation follows the painted rail, not a Euclidean jump');
+assert(mapAppSource.includes('STATION_APPROACH_M'), 'trains slow approaching a station');
+assert(mapAppSource.includes('STATION_DWELL_SEC'), 'trains dwell when GPS is at a station');
+assert(mapAppSource.includes('RIDE_INTERPOLATION_MAX_MS = 15000'), 'map interpolation caps at 15 seconds');
+assert(mapAppSource.includes('A successful GPS ping always cancels'), 'a new GPS ping retargets and cancels the previous glide');
+assert(mapAppSource.includes('applyRideTrainStalePause'), 'receivers grey the glyph after 15s without a ping');
+assert(mapTabSource.includes('if (mapOn) syncRidePingsToMap()'), 'map tab recompacts pings so a fresh rider can take over');
+assert(ridePingsSource.includes('}, ONBOARD_LOOP_TICK_MS)'), 'onboard loop ticks on the worker-backed 3 second cadence');
+assert(ridePingsSource.includes('autoPaused'), 'a successful GPS ping after grey pause broadcasts immediately');
+assert(mapAppSource.includes('rideFacingAlongPath'), 'train yaw follows the painted-rail tangent');
+assert(mapAppSource.includes('snapTrainToRail'), 'train centre is snapped onto the painted rail');
+assert(mapAppSource.includes('found.trackCoords'), 'train snap uses the painted GOLD line, not a station chord');
+assert(mapAppSource.includes('paintLiveTrainIcon'), 'pill yaw is reapplied after setIcon');
+assert(mapAppSource.includes('applyTrainGlyphYaw'), 'glyph rotates with the rail while interpolating');
+assert(mapAppSource.includes('separate along-track'), 'opposing trains stay on the rail instead of offsetting sideways');
+assert(mapAppSource.includes('source of truth'), 'animation stays tied to commuter GPS fixes');
+assert(mapAppSource.includes("paused || motionClass === 'still', {"), 'own share still glides; only a paused or still ping snaps');
+assert(!mapAppSource.includes('mine || paused'), 'own share is no longer snapped instantly');
 assert(mapAppSource.includes('let marker = rideTrainMarkers[trainId]'), 'train markers are retained by train id');
 assert(mapAppSource.includes('readableTrainLabelDeg'), 'train number has a dedicated readable angle');
 assert(mapAppSource.includes('readable > 90') && mapAppSource.includes('readable < -90'), 'train number is bounded to -90 through 90 degrees');
-assert(mapAppSource.includes('nt-live-train-wake'), 'train pill includes a bow wake');
-assert(mapAppSource.includes('nt-live-train-wake-ripple'), 'wake is stacked V ripples');
-assert(mapPageSource.includes('transform-origin: right center'), 'wake arms hinge at the bow and open aft');
-assert(mapPageSource.includes('translate(-26px, -50%)'), 'wake ripples travel backward, not forward');
+assert(mapAppSource.includes('nt-live-train-nose'), 'train glyph has a forward tip on the rail axis');
+assert(!mapAppSource.includes('nt-live-train-wake-ripple'), 'train glyph does not paint >>> wake chevrons');
+assert(!mapPageSource.includes('nt-live-train-wake'), 'map CSS does not keep the wake chevrons');
 assert(mapPageSource.includes('prefers-reduced-motion: reduce'), 'train motion respects reduced-motion preference');
-assert(mapAppSource.includes('Show tracking details'), 'train popup opens tracking details');
-assert(mapAppSource.includes('Rail distance') && mapAppSource.includes('GPS accuracy'), 'train popup exposes tracking metrics');
-assert(mapAppSource.includes('GPS age'), 'train popup shows GPS age');
-assert(mapAppSource.includes("s + ' sec'") && mapAppSource.includes("m + 'm ' + s + ' sec'"), 'train popup GPS age always includes seconds');
-assert(mapAppSource.includes('tickRidePopupFreshness'), 'open train popup ticks GPS age every second');
-assert(mapAppSource.includes("data-nt-gps-kind='age'"), 'popup GPS age is bound to the last ping');
+assert(mapAppSource.includes("type: 'nt-map-show-tracking-details'"), 'train click opens the tracking details card');
+assert(mapAppSource.includes("ping: Object.assign({}, newest"), 'train click sends the snapped rail ping, not a thin newest row');
+assert(mapTabSource.includes('firstFiniteMetric'), 'tracking card fills speed/accuracy/rail from last GPS instead of Unknown');
+assert(mapTabSource.includes('mine ? lastCoords?.accuracy'), 'own-share accuracy can fall back to the map pin');
+assert(ridePingsSource.includes("'speedMps', 'accuracy', 'heading'"), 'paused pings keep last speed/accuracy/heading');
+assert(ridePingsSource.includes('onboardLatestFix'), 'user Pause passes the last GPS sample');
+assert(!mapAppSource.includes('marker.bindPopup'), 'train markers do not use the Leaflet popup tooltip');
+assert(mapAppSource.includes("type: 'nt-map-close-tracking'"), 'tapping the map closes tracking details');
+assert(mapAppSource.includes('Always sit on the painted corridor'), 'trains snap to the painted rail even when GPS is off the yard');
+assert(mapTabSource.includes('paintSharePill'), 'share restore pill turns green while the commuter is sharing');
+assert(mapTabSource.includes("restore.classList.toggle('bg-emerald-600', live)"), 'live share pill is emerald');
+assert(mapTabSource.includes('viewedTrain'), 'tapping a train fills the tracking card for that train');
+assert(mapTabSource.includes('setTrackingOwnerChrome'), 'viewers do not see Stop/Pause/Share on someone else’s train');
 assert(mapTabSource.includes('formatLastSeenWithPingClock'), 'tracking card Last seen uses the GPS ping clock');
 assert(mapTabSource.includes('formatGpsPingAge'), 'tracking card GPS cell is ping age');
 assert(ridePingsSource.includes('payload.fixAt'), 'successful GPS pings store fixAt');
 assert(ridePingsSource.includes('gpsFixAt'), 'onboard broadcasts pass the GPS sample time');
 assert(mapViewSource.includes('id="map-tracking-card"'), 'current contributor has a bottom tracking card');
+assert(mapViewSource.includes('id="map-tracking-dest"'), 'tracking card destination sits under the train number');
+assert(mapTabSource.includes('MAP_CARD_POS_KEY'), 'open tracking card remembers where it was dragged');
+assert(mapTabSource.includes('applyTrackingCardPos'), 'open tracking card does not snap back to the pill after a drag');
+assert(mapTabSource.includes('`Train ${trainId} ${stateLabel}`'), 'tracking card title is Train number then state');
+assert(mapViewSource.includes('Real-Time:'), 'tracking status line labels Real-Time');
+assert(mapViewSource.includes('id="map-tracking-timetable-label"'), 'timetable label sits above the late line');
+assert(mapTabSource.includes('trackingTimetableLabel'), 'late line spells minutes on the tracking card');
+assert(mapTabSource.includes('RIDE_OFFTRACK_HARD_M'), 'on-rail distance uses the off-track check');
+assert(mapAppSource.includes('spec && spec.far'), 'far zoom can hide the train number');
+assert(mapAppSource.includes("var numHtml = (spec && spec.far)"), 'zoomed-out glyphs omit the train number');
+assert(mapTabSource.includes('nt-share-checks-proceed'), 'passed checks ask before sharing');
+assert(mapTabSource.includes('You are about to share this train’s location.'), 'passed checks confirm a train share');
+assert(!mapTabSource.includes('you will appear as a person'), 'checks do not offer a person share');
+assert(readFileSync(new URL('../src/lib/features.js', import.meta.url), 'utf8').includes('regionIds'), 'experimental features keep a region allow-list');
+assert(readFileSync(new URL('../src/lib/admin-chrome.js', import.meta.url), 'utf8').includes('scheduleExperimentalFeatureRecheck'), 'enabled users recheck experimental features after open');
+assert(ridePingsSource.includes('TRACKING_STATE.STOPPED) return'), 'stopped shares leave the map');
+assert(mapTabSource.includes('openPlannerTrainSheet'), 'late or early line opens the full timesheet');
 assert(mapViewSource.includes('id="map-tracking-minimize"'), 'tracking card is minimizable');
-assert(mapViewSource.includes('id="map-tracking-dismiss"'), 'tracking card is dismissible');
+assert(!mapViewSource.includes('id="map-tracking-dismiss"'), 'tracking card has no close button');
+assert(mapViewSource.includes('decoration-dotted'), 'late or early line is dotted');
+assert(mapAppSource.includes('function ensureSharedRailLine'), 'a shared train paints its rail line');
+assert(mapAppSource.includes('function keepFollowedTrainInView'), 'a moving shared train stays in view until the commuter pans');
 assert(mapTabSource.includes('Currently tracking'), 'Nearby trains shows the current tracked train status');
 assert(mapTabSource.includes('data-current-tracking-details'), 'Nearby current train opens tracking details');
 assert(mapTabSource.includes('renderTrackingStatusCard') && mapTabSource.includes('trackingCardMode'), 'tracking metrics keep updating while the card is minimized');
@@ -421,6 +728,9 @@ assert(ridePingsSource.includes("title: 'Switch trains?'"), 'a shuttle that ends
 assert(ridePingsSource.includes("keepLabel: 'Still on the train'"), 'last-station prompt can keep sharing');
 assert(ridePingsSource.includes("stopLabel: 'Yes, we’ve arrived'"), 'last-station prompt can confirm arrival');
 assert(ridePingsSource.includes("title: 'Still on this train?'"), 'off-track and direction mismatch ask before stopping');
+assert(ridePingsSource.includes('OFFTRACK_PROMPT_MS'), 'off-track prompt is rate limited');
+assert(ridePingsSource.includes('must not pause or stop this share'), 'admin train test is not stopped by the rail check');
+assert(mapTabSource.includes('const adminTrainTest = isAdminAuthed()'), 'a signed-in admin can share as the train without the commuter vet');
 assert(ridePingsSource.includes('offTrackStayUntil'), 'still-on-it snoozes another off-track drop');
 assert(ridePingsSource.includes('sharePromptOpen'), 'overlapping share prompts do not stack');
 assert(ridePingsSource.includes("reason === 'direction'"), 'direction mismatch can end the share after the prompt');
@@ -435,6 +745,16 @@ assert(ridePingsSource.includes('onboardWatchStartedAt'), 'share can become stal
 assert(ridePingsSource.includes('Math.min(350'), 'interchange GPS leniency has a bounded radius');
 assert(ridePingsSource.includes('firebaseGetIdToken(window.firebaseAuth.currentUser, forceRefresh)'), 'adaptive pings reuse cached auth tokens');
 assert(mapTabSource.includes("modal.id = 'nt-share-checks-modal'"), 'train sharing opens the live checks bottom sheet');
+assert(mapTabSource.includes('nt-share-checks-outcome'), 'live checks paint a separate Outcome strip');
+assert(mapTabSource.includes('justify-end'), 'live checks sheet docks to the bottom of the screen');
+assert(mapTabSource.includes('env(safe-area-inset-bottom)'), 'live checks buttons sit above the home indicator');
+assert(mapTabSource.includes('Closest rail point is'), 'distance check keeps a short description');
+assert(!mapTabSource.includes('Compass and motion sensors will fill heading'), 'motion check description is shortened');
+assert(mapTabSource.includes("state === 'defer'"), 'deferred checks use an amber tone');
+assert(mapTabSource.includes('border-green-200'), 'successful checks paint green');
+assert(mapTabSource.includes('border-amber-200'), 'deferred checks paint orange');
+assert(mapTabSource.includes('border-red-200'), 'blocking checks paint red');
+assert(!mapTabSource.includes("addShareCheck('Decision'"), 'Decision is the outcome, not a check row');
 assert(mapTabSource.includes('Restart checks'), 'live checks can be restarted');
 assert(mapTabSource.includes('Distance to selected rail path'), 'checks measure the selected train path');
 assert(!mapTabSource.includes('from Train ${finalId} - sharing as a commuter'), 'share result does not describe distance from a train');
@@ -535,6 +855,24 @@ assert(
     !missingRouteGeometry.ok && missingRouteGeometry.geometryUnavailable,
     'missing route geometry is distinct from an off-track fix'
 );
+const painted = await paintedPathForRoute('pta-pien', 'GP');
+assert(painted?.length >= 2, 'painted GOLD path is available for pta-pien in the mock');
+const fallbackPath = await railPathForTrain('9999', {
+    routeId: 'pta-pien',
+    region: 'GP',
+    schedules: [{ headers: ['STATION'], rows: [{ STATION: 'ORIGIN' }] }],
+    stationIndex: {},
+});
+assert(fallbackPath?.length >= 2, 'missing train stop list still uses the painted corridor');
+const corridorFix = await projectTrainTrackerFix({
+    lat: -25.0002,
+    lng: 28.005,
+    trainId: '9999',
+    routeId: 'pta-pien',
+    stationIndex,
+    schedules: [{ headers: ['STATION'], rows: [{ STATION: 'ORIGIN' }] }],
+});
+assert(corridorFix.ok && corridorFix.usedCorridorFallback, 'thin stop list still snaps to the corridor');
 globalThis.fetch = originalFetch;
 
 assert(routeHasNoScheduledTrains('sunday'), 'Sunday has no trains to report');
@@ -574,6 +912,64 @@ assert(expiredReportsFromToday([staleToday], { nowMs: curfewMs }).length === 0, 
     assert(formatGpsPingAge(now - 5000, now) === '5 sec', 'sub-minute GPS age keeps seconds');
     assert(formatGpsPingAge(now - 65000, now) === '1m 5 sec', 'GPS age after a minute still shows seconds');
     assert(formatLastSeenWithPingClock('PRETORIA', now) === `Last seen PRETORIA - ${clock}`, 'Last seen includes the ping clock');
+}
+
+{
+    const at = Date.now();
+    const ping = (trainId, extra = {}) => ({
+        deviceId: extra.deviceId || `dev-${trainId}`,
+        routeId: 'pta-pien',
+        trainId,
+        station: 'MIDDLE',
+        coarseLat: -25.1,
+        coarseLng: 28.1,
+        projectedLat: -25,
+        projectedLng: 28.01,
+        projectedProgress: 1,
+        acceptedAt: at,
+        at,
+        expiresAt: at + 600000,
+        trackingState: TRACKING_STATE.ACTIVE,
+        ...extra,
+    });
+    const prevWindow = globalThis.window;
+    globalThis.window = { currentDayIndex: 1 };
+    $globalExclusions.set({
+        'pta-pien': {
+            '0619': { type: 'banned', days: [1, 5] },
+            '0701': { type: 'special', days: [1] },
+        },
+    });
+    const schedule = {
+        headers: ['STATION', '0619', '0701', '0802'],
+        rows: [
+            { STATION: 'A', '0619': '08:00:00', '0701': '08:05:00', '0802': '08:10:00' },
+            { STATION: 'B', '0619': '08:30:00', '0701': '08:35:00', '0802': '08:40:00' },
+        ],
+    };
+    const monday = listTrainsInWindow(8 * 3600, { routeId: 'pta-pien', dayIdx: 1, schedules: [schedule] });
+    assert(!monday.includes('0619'), 'a Monday ban hides 0619 from live tracking');
+    assert(monday.includes('0701'), 'a special train stays in live tracking');
+    assert(monday.includes('0802'), 'a train with no ban stays in live tracking');
+    const tuesday = listTrainsInWindow(8 * 3600, { routeId: 'pta-pien', dayIdx: 2, schedules: [schedule] });
+    assert(tuesday.includes('0619'), '0619 returns on Tuesday when the ban is Mon and Fri');
+    assert(liveMapTrainBan('0701', 'pta-pien', { dayIdx: 1 }) === false, 'special is not a map ban');
+    const markers = await compactPingsForMap([
+        ping('0619'),
+        ping('0701'),
+        ping('0802', { trainStatus: TRAIN_STATUS.CANCELLED }),
+    ], { mineDeviceId: 'observer', routeId: 'pta-pien' });
+    const markerIds = markers.map((m) => m.trainId);
+    assert(!markerIds.includes('0619'), 'map hides a train banned today');
+    assert(markerIds.includes('0701'), 'map shows a special train');
+    assert(!markerIds.includes('0802'), 'map hides a cancelled share');
+    const own = await compactPingsForMap([
+        ping('0619', { deviceId: 'operator', adminOverrideRole: 'train' }),
+    ], { mineDeviceId: 'operator', routeId: 'pta-pien' });
+    assert(own.length === 1 && own[0].trainId === '0619', 'operator test of a banned train stays on that phone');
+    $globalExclusions.set({});
+    if (prevWindow === undefined) delete globalThis.window;
+    else globalThis.window = prevWindow;
 }
 
 if (failures.length) {

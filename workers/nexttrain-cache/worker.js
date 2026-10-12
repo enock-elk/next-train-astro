@@ -35,13 +35,18 @@ export default {
         const allowedOrigins = [
             'https://nexttrain.co.za',
             'https://www.nexttrain.co.za',
+            'https://lab.nexttrain.co.za',
             // Astro / SPA GitHub Pages preview (browser Origin is host-only, no path)
             'https://enock-elk.github.io',
             'http://localhost',
             'http://127.0.0.1'
         ];
+        let labPreview = false;
+        try {
+            labPreview = new URL(origin).hostname.toLowerCase().endsWith('.next-train-lab.pages.dev');
+        } catch { /* ignore */ }
         
-        const isAllowed = allowedOrigins.some(allowed => origin.startsWith(allowed));
+        const isAllowed = labPreview || allowedOrigins.some(allowed => origin.startsWith(allowed));
         
         if (!isAllowed) {
             console.log(`🛡️ Guardian Firewall: Blocked unauthorized request from Origin: ${origin}`);

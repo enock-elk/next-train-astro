@@ -214,7 +214,8 @@ const [
 ]);
 
 assert.match(admin, /setupPushNotificationsManager/);
-assert.match(admin, /id = 'push-notifications-panel'/);
+assert.match(admin, /id="push-notifications-header-btn"/);
+assert.match(admin, /paintDrillTitle\('Notifications'\)/);
 assert.match(admin, /data-admin-subview/);
 assert.match(admin, /alert-hub-push/);
 assert.match(admin, /\/admin\/notifications\/send/);

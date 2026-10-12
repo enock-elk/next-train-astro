@@ -1,0 +1,90 @@
+---
+/**
+ * In-app Alerts sheet on route, region, and corridor landings.
+ * Scope is this page: one route, or every route on a region or corridor.
+ * The bell stays hidden until a live notice exists.
+ */
+import AlertsChannel from './AlertsChannel.astro';
+
+interface Props {
+  region: string;
+  routeIds?: string[];
+}
+
+const region = Astro.props.region || '';
+const routeIds = (Astro.props.routeIds || []).filter(Boolean);
+const routeIdAttr = routeIds.join(',');
+---
+
+<div id="nt-seo-alerts" data-region={region} data-route-ids={routeIdAttr} hidden></div>
+<div id="toast" class=""></div>
+<AlertsChannel />
+<div id="alert-image-lightbox" class="fixed inset-0 bg-black z-[160] hidden flex-col [touch-action:none]" role="dialog" aria-modal="true" aria-label="Image Preview">
+  <div id="alert-image-lightbox-stage" class="relative flex-1 min-h-0 overflow-hidden flex items-center justify-center [touch-action:none]">
+    <img id="alert-image-lightbox-img" alt="Image Preview" draggable="false" decoding="sync" class="max-w-full max-h-full object-contain select-none pointer-events-none">
+  </div>
+  <div class="shrink-0 z-10 w-full px-4 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))] bg-black">
+    <button type="button" id="alert-image-lightbox-close" class="w-full max-w-sm mx-auto block bg-white hover:bg-gray-100 text-gray-900 font-bold py-3 px-4 rounded-lg focus:outline-none [touch-action:manipulation]">Close</button>
+  </div>
+</div>
+
+<style is:global>
+  body.modal-active { overflow: hidden !important; overscroll-behavior: none; }
+  @keyframes nt-seo-shake {
+    0%, 100% { transform: rotate(0deg); }
+    25% { transform: rotate(-10deg); }
+    75% { transform: rotate(10deg); }
+  }
+  #notice-bell.animate-shake { animation: nt-seo-shake 0.5s ease-in-out infinite; }
+</style>
+
+<script>
+  const host = document.getElementById('nt-seo-alerts');
+  const region = host?.getAttribute('data-region') || '';
+  const routeIds = (host?.getAttribute('data-route-ids') || '').split(',').map((id) => id.trim()).filter(Boolean);
+  const w = window as any;
+
+  async function bootSeoAlerts() {
+    if (!region || w.__ntSeoAlertsBooted) return;
+    w.__ntSeoAlertsBooted = true;
+    const alerts = await import('../lib/alerts-channel.js');
+    const ui = await import('../lib/ui.js');
+    alerts.useNoticeScope(region, routeIds);
+    alerts.initAlertsChannel();
+
+    if (!w.__ntSeoAlertsHistory) {
+      w.__ntSeoAlertsHistory = true;
+      window.addEventListener('popstate', () => {
+        const hashNow = location.hash || '';
+        if (w._isLightboxMode && hashNow !== '#lightbox') {
+          ui.closeLightbox(true);
+        }
+        const alertsEl = document.getElementById('alerts-channel');
+        const alertsOpen = (alertsEl && !alertsEl.classList.contains('hidden'))
+          || w.__ntAlertsOpen
+          || w.__ntAlertsParkHome;
+        if (alertsOpen && hashNow !== '#alerts' && hashNow !== '#lightbox' && hashNow !== '#feedback') {
+          ui.closeSmoothModal('alerts-channel', true);
+          w.__ntAlertsOpen = false;
+          w.__ntAlertsParkHome = false;
+        }
+      });
+    }
+
+    const notices = await alerts.fetchUnionNotices(region, routeIds[0] || '');
+    alerts.setCachedLiveNotices(notices);
+    alerts.applyBellFromNotices(notices);
+    if (location.hash === '#alerts') alerts.openAlertsChannel({ notices, resetVisible: true });
+
+    const bootAuth = () => {
+      import('../lib/firebase-boot.js').then((m) => m.bootFirebase()).catch(() => {});
+    };
+    if (window.requestIdleCallback) window.requestIdleCallback(bootAuth, { timeout: 4000 });
+    else setTimeout(bootAuth, 1500);
+  }
+
+  const start = () => { bootSeoAlerts().catch(() => {}); };
+  if (location.hash === '#alerts') start();
+  else if (window.requestIdleCallback) window.requestIdleCallback(start, { timeout: 2000 });
+  else setTimeout(start, 800);
+</script>

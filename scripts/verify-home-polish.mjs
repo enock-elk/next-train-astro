@@ -3,7 +3,7 @@
  * Run: node scripts/verify-home-polish.mjs
  */
 import { readFileSync } from 'node:fs';
-import { warningTriangleSvg } from '../src/lib/utils.js';
+import { warningTriangleSvg, expandJhbLabel, applyFittedLabel } from '../src/lib/utils.js';
 import { APP_VERSION, CHANGELOG_DATA, FARE_CONFIG, FORCE_UPDATE_REQUIRED } from '../src/lib/config.js';
 import {
     collectHubOnwardOptions,
@@ -18,6 +18,56 @@ import { normalizeAdminChangelogKey } from '../src/lib/admin-changelog.js';
 import { hoistAlertImagesFromHtml } from '../src/lib/alerts-feed.js';
 
 const failures = [];
+
+{
+    assert(expandJhbLabel('JHB <-> Randfontein') === 'Johannesburg <-> Randfontein', 'JHB route end expands');
+    assert(expandJhbLabel('Pretoria–JHB Line') === 'Pretoria–Johannesburg Line', 'JHB inside a line name expands');
+    assert(expandJhbLabel('JHB_WEST') === 'JHB_WEST', 'corridor ids are not display labels');
+    const wide = {
+        clientWidth: 400,
+        scrollWidth: 0,
+        style: {},
+        _html: '',
+        set innerHTML(value) {
+            this._html = value;
+            this.scrollWidth = value.length > 40 ? 500 : 200;
+        },
+        get innerHTML() { return this._html; },
+    };
+    applyFittedLabel(wide, 'JHB', 'Johannesburg <-> Randfontein', true);
+    assert(wide.innerHTML.includes('Johannesburg'), 'wide line keeps Johannesburg');
+    assert(wide.style.whiteSpace === 'nowrap', 'fitted label cannot wrap');
+    const narrow = {
+        clientWidth: 120,
+        scrollWidth: 0,
+        style: {},
+        _html: '',
+        set innerHTML(value) {
+            this._html = value;
+            this.scrollWidth = value.includes('Johannesburg') ? 240 : 80;
+        },
+        get innerHTML() { return this._html; },
+    };
+    applyFittedLabel(narrow, 'JHB <-> Randfontein', 'Johannesburg <-> Randfontein', true);
+    assert(narrow.innerHTML === 'JHB <-> Randfontein', 'narrow line keeps JHB');
+    const hidden = {
+        clientWidth: 0,
+        scrollWidth: 0,
+        style: {},
+        textContent: '',
+    };
+    applyFittedLabel(hidden, 'JHB West Line', 'Johannesburg West Line', false);
+    assert(hidden.textContent === 'JHB West Line', 'unmeasured line keeps JHB');
+    const clipped = {
+        clientWidth: 80,
+        scrollWidth: 200,
+        style: { whiteSpace: '', overflow: '' },
+        textContent: '',
+    };
+    applyFittedLabel(clipped, 'JHB West Line schedules', 'Johannesburg West Line schedules', false);
+    assert(clipped.textContent === 'JHB West Line schedules', 'a short heading that cannot fit one line stays JHB');
+    assert(clipped.style.whiteSpace === '', 'a short heading that cannot fit one line is allowed to wrap');
+}
 function assert(cond, msg) {
     if (!cond) failures.push(msg);
 }
@@ -33,61 +83,68 @@ assert(packageFile.version === packageVersionFromApp, `package.json ${packageFil
 assert(FORCE_UPDATE_REQUIRED === true, 'this ship forces existing shells onto V9_09.17.15');
 assert(CHANGELOG_DATA[0].forceShow === false, 'What’s New does not auto-open');
 assert(!CHANGELOG_DATA.some((e) => e.forceShow), 'no What’s New card opts into auto-open');
-assert(CHANGELOG_DATA[0].id === 'V9_09.18.11' && CHANGELOG_DATA[0].features.length === 1, 'What’s New latest card is V9_09.18.11');
-assert(CHANGELOG_DATA[0].features[0].includes('Points take longer to earn'), 'V9_09.18.11 What’s New mentions slower points');
-assert(CHANGELOG_DATA[0].features[0].includes('group together'), 'V9_09.18.11 What’s New mentions grouped contributions');
-assert(CHANGELOG_DATA[1].id === 'V9_09.18.4' && CHANGELOG_DATA[1].features.length === 1, 'keep V9_09.18.4 as the previous What’s New card');
-assert(CHANGELOG_DATA[1].features[0].includes('scroll away with the page'), 'V9_09.18.4 What’s New mentions ads scrolling with the page');
-assert(CHANGELOG_DATA[2].id === 'V9_09.17.14' && CHANGELOG_DATA[2].features.length === 1, 'keep V9_09.17.14 as the previous What’s New card');
-assert(CHANGELOG_DATA[2].features[0].includes('shorter trips may cost less'), 'V9_09.17.14 What’s New mentions the ticket note');
-assert(CHANGELOG_DATA[2].features[0].includes('Confirm at the station'), 'V9_09.17.14 What’s New tells commuters to confirm at the station');
-assert(CHANGELOG_DATA[3].id === 'V9_09.17.10' && CHANGELOG_DATA[3].features.length === 1, 'keep V9_09.17.10 as the previous What’s New card');
-assert(CHANGELOG_DATA[3].features[0].includes('Classic and Earthy'), 'V9_09.17.10 What’s New mentions Classic and Earthy');
-assert(CHANGELOG_DATA[4].id === 'V9_09.16.3' && CHANGELOG_DATA[4].features.length === 2, 'keep V9_09.16.3 as the previous What’s New card');
-assert(CHANGELOG_DATA[4].features[0].includes('Classic light'), 'V9_09.16.3 What’s New mentions Classic light');
-assert(CHANGELOG_DATA[4].features[1].includes('Feedback Hub sits flush'), 'V9_09.16.3 What’s New mentions Feedback Hub flush');
-assert(CHANGELOG_DATA[4].features[1].includes('above the keyboard'), 'V9_09.16.3 What’s New mentions Hub typing above the keyboard');
-assert(CHANGELOG_DATA[5].id === 'V9_09.16.2' && CHANGELOG_DATA[5].features.length === 1, 'keep V9_09.16.2 as the previous What’s New card');
-assert(CHANGELOG_DATA[5].features[0].includes('Kapteinsklip'), 'V9_09.16.2 What’s New mentions Kapteinsklip');
-assert(CHANGELOG_DATA[6].id === 'V9_09.16.1' && CHANGELOG_DATA[6].features.length === 1, 'keep V9_09.16.1 as the previous What’s New card');
-assert(CHANGELOG_DATA[6].features[0].includes('iPhone'), 'V9_09.16.1 What’s New mentions iPhone typing');
-assert(CHANGELOG_DATA[7].id === 'V9_08.29.2' && CHANGELOG_DATA[7].features.length === 3, 'keep V9_08.29.2 as the previous What’s New card');
-assert(CHANGELOG_DATA[8].id === 'V9_08.28.20', 'keep V9_08.28.20 as the previous What’s New card');
-assert(CHANGELOG_DATA[9].id === 'V9_08.28.19', 'keep V9_08.28.19 as the previous What’s New card');
-assert(CHANGELOG_DATA[10].id === 'V9_08.28.14', 'keep V9_08.28.14 as the previous What’s New card');
-assert(CHANGELOG_DATA[11].id === 'V9_08.28.13', 'keep V9_08.28.13 as the previous What’s New card');
-assert(CHANGELOG_DATA[12].id === 'V9_08.28.11', 'keep V9_08.28.11 as the previous What’s New card');
-assert(CHANGELOG_DATA[13].id === 'V9_08.28.10', 'keep V9_08.28.10 as the previous What’s New card');
-assert(CHANGELOG_DATA[14].id === 'V9_08.28.9', 'keep V9_08.28.9 as the previous What’s New card');
-assert(CHANGELOG_DATA[15].id === 'V9_08.28.8', 'keep V9_08.28.8 as the previous What’s New card');
-assert(CHANGELOG_DATA[16].id === 'V9_08.28.7', 'keep V9_08.28.7 as the previous What’s New card');
-assert(CHANGELOG_DATA[17].id === 'V9_08.28.2', 'V9_08.28.6–28.3 folded into V9_08.28.2');
-assert(CHANGELOG_DATA[18].id === 'V9_08.28.1', 'keep V9_08.28.1 as the previous production What’s New card');
+const wn = (id) => CHANGELOG_DATA.find((e) => e.id === id);
+assert(wn('V9_09.24.5')?.features?.[0]?.includes('Ticket Prices'), 'V9_09.24.5 What’s New mentions Ticket Prices');
+assert(wn('V9_09.24.4')?.features?.[0]?.includes('holiday timetable'), 'V9_09.24.4 What’s New names the holiday timetable');
+assert(wn('V9_09.21.1')?.id === 'V9_09.21.1' && wn('V9_09.21.1').features.length === 1, 'What’s New still has V9_09.21.1');
+assert(wn('V9_09.21.1').features[0].includes('Opening the app goes from the splash screen'), 'V9_09.21.1 What’s New mentions splash to board');
+assert(wn('V9_09.21.1').features[0].includes('Starting Next Train stays on screen'), 'V9_09.21.1 What’s New mentions Starting Next Train');
+assert(wn('V9_09.20.2')?.id === 'V9_09.20.2' && wn('V9_09.20.2').features.length === 1, 'keep V9_09.20.2 as the previous What’s New card');
+assert(wn('V9_09.20.2').features[0].includes('Trip fare lists Single'), 'V9_09.20.2 What’s New mentions Single Return Weekly Monthly');
+assert(wn('V9_09.20.2').features[0].includes('Yes sits on the right'), 'V9_09.20.2 What’s New mentions Yes on the right');
+assert(!CHANGELOG_DATA.some((e) => e.id === 'V9_09.18.11'), 'points and badges card is gone from What’s New');
+assert(wn('V9_09.18.4')?.id === 'V9_09.18.4' && wn('V9_09.18.4').features.length === 1, 'keep V9_09.18.4 as the previous What’s New card');
+assert(wn('V9_09.18.4').features[0].includes('scroll away with the page'), 'V9_09.18.4 What’s New mentions ads scrolling with the page');
+assert(wn('V9_09.17.14')?.id === 'V9_09.17.14' && wn('V9_09.17.14').features.length === 1, 'keep V9_09.17.14 as the previous What’s New card');
+assert(wn('V9_09.17.14').features[0].includes('shorter trips may cost less'), 'V9_09.17.14 What’s New mentions the ticket note');
+assert(wn('V9_09.17.14').features[0].includes('Confirm at the station'), 'V9_09.17.14 What’s New tells commuters to confirm at the station');
+assert(wn('V9_09.17.10')?.id === 'V9_09.17.10' && wn('V9_09.17.10').features.length === 1, 'keep V9_09.17.10 as the previous What’s New card');
+assert(wn('V9_09.17.10').features[0].includes('Classic and Earthy'), 'V9_09.17.10 What’s New mentions Classic and Earthy');
+assert(wn('V9_09.16.3')?.id === 'V9_09.16.3' && wn('V9_09.16.3').features.length === 2, 'keep V9_09.16.3 as the previous What’s New card');
+assert(wn('V9_09.16.3').features[0].includes('Classic light'), 'V9_09.16.3 What’s New mentions Classic light');
+assert(wn('V9_09.16.3').features[1].includes('Feedback Hub sits flush'), 'V9_09.16.3 What’s New mentions Feedback Hub flush');
+assert(wn('V9_09.16.3').features[1].includes('above the keyboard'), 'V9_09.16.3 What’s New mentions Hub typing above the keyboard');
+assert(wn('V9_09.16.2')?.id === 'V9_09.16.2' && wn('V9_09.16.2').features.length === 1, 'keep V9_09.16.2 as the previous What’s New card');
+assert(wn('V9_09.16.2').features[0].includes('Kapteinsklip'), 'V9_09.16.2 What’s New mentions Kapteinsklip');
+assert(wn('V9_09.16.1')?.id === 'V9_09.16.1' && wn('V9_09.16.1').features.length === 1, 'keep V9_09.16.1 as the previous What’s New card');
+assert(wn('V9_09.16.1').features[0].includes('iPhone'), 'V9_09.16.1 What’s New mentions iPhone typing');
+assert(wn('V9_08.29.2')?.id === 'V9_08.29.2' && wn('V9_08.29.2').features.length === 3, 'keep V9_08.29.2 as the previous What’s New card');
+assert(wn('V9_08.28.20'), 'keep V9_08.28.20 as the previous What’s New card');
+assert(wn('V9_08.28.19'), 'keep V9_08.28.19 as the previous What’s New card');
+assert(wn('V9_08.28.14'), 'keep V9_08.28.14 as the previous What’s New card');
+assert(wn('V9_08.28.13'), 'keep V9_08.28.13 as the previous What’s New card');
+assert(wn('V9_08.28.11'), 'keep V9_08.28.11 as the previous What’s New card');
+assert(wn('V9_08.28.10'), 'keep V9_08.28.10 as the previous What’s New card');
+assert(wn('V9_08.28.9'), 'keep V9_08.28.9 as the previous What’s New card');
+assert(wn('V9_08.28.8'), 'keep V9_08.28.8 as the previous What’s New card');
+assert(wn('V9_08.28.7'), 'keep V9_08.28.7 as the previous What’s New card');
+assert(wn('V9_08.28.2'), 'V9_08.28.6–28.3 folded into V9_08.28.2');
+assert(wn('V9_08.28.1'), 'keep V9_08.28.1 as the previous production What’s New card');
 assert(!CHANGELOG_DATA.some((e) => ['V9_08.28.6', 'V9_08.28.5', 'V9_08.28.4', 'V9_08.28.3'].includes(e.id)), 'folded 28.6–28.3 out of What’s New');
-assert(CHANGELOG_DATA[7].features.some((f) => f.includes('smaller list')), 'V9_08.29.2 What’s New mentions Network Lines size');
-assert(CHANGELOG_DATA[7].features.some((f) => f.includes('follows the rail in all four regions')), 'V9_08.29.2 What’s New mentions every region following rail');
-assert(CHANGELOG_DATA[7].features.some((f) => f.includes('Cato Ridge')), 'V9_08.29.2 What’s New mentions Cato Ridge reaching its terminus');
-assert(CHANGELOG_DATA[8].features.some((f) => f.includes('sits in the middle of its row')), 'V9_08.28.20 What’s New mentions planner title center');
-assert(CHANGELOG_DATA[8].features.some((f) => f.includes('grow upward')), 'V9_08.28.20 What’s New mentions Feedback Hub growing up');
-assert(CHANGELOG_DATA[9].features.some((f) => f.includes('Station choices open at the top')), 'V9_08.28.19 What’s New mentions planner list at the top');
-assert(CHANGELOG_DATA[9].features.some((f) => f.includes('oval bar stays at the bottom')), 'V9_08.28.19 What’s New mentions pinned tabs');
-assert(CHANGELOG_DATA[10].features.some((f) => f.includes('From sits in the same place')), 'V9_08.28.14 What’s New mentions From alignment');
-assert(CHANGELOG_DATA[11].features.some((f) => f.includes('Check for Updates')), 'V9_08.28.13 What’s New still mentions Check for Updates');
-assert(CHANGELOG_DATA[12].features.some((f) => f.includes('Station dots sit on the lines')), 'V9_08.28.11 What’s New mentions station dots');
-assert(CHANGELOG_DATA[13].features.some((f) => f.includes('Park Station')), 'V9_08.28.10 What’s New mentions Park Station');
-assert(CHANGELOG_DATA[14].features.some((f) => f.includes('oval bar stays at the bottom')), 'V9_08.28.9 What’s New mentions pinned tabs');
-assert(CHANGELOG_DATA[15].features.some((f) => f.includes('Max. Single Fare')), 'V9_08.28.8 What’s New mentions train-sheet fares');
-assert(CHANGELOG_DATA[15].features.some((f) => f.includes('Durban to Crossmoor')), 'V9_08.28.8 What’s New mentions Crossmoor train order');
-assert(CHANGELOG_DATA[16].features.some((f) => f.includes('every corridor that stops there')), 'V9_08.28.7 What’s New mentions station corridors');
-assert(CHANGELOG_DATA[16].features.some((f) => f.includes('Show all lines')), 'V9_08.28.7 What’s New mentions restoring the network');
-assert(CHANGELOG_DATA[17].features.some((f) => f.includes('Network Lines')), 'folded 28.2 card still mentions Network Lines');
-assert(CHANGELOG_DATA[17].features.some((f) => f.includes('oval bar')), 'folded 28.2 card still mentions floating tabs');
+assert(wn('V9_08.29.2').features.some((f) => f.includes('smaller list')), 'V9_08.29.2 What’s New mentions Network Lines size');
+assert(wn('V9_08.29.2').features.some((f) => f.includes('follows the rail in all four regions')), 'V9_08.29.2 What’s New mentions every region following rail');
+assert(wn('V9_08.29.2').features.some((f) => f.includes('Cato Ridge')), 'V9_08.29.2 What’s New mentions Cato Ridge reaching its terminus');
+assert(wn('V9_08.28.20').features.some((f) => f.includes('sits in the middle of its row')), 'V9_08.28.20 What’s New mentions planner title center');
+assert(wn('V9_08.28.20').features.some((f) => f.includes('grow upward')), 'V9_08.28.20 What’s New mentions Feedback Hub growing up');
+assert(wn('V9_08.28.19').features.some((f) => f.includes('Station choices open at the top')), 'V9_08.28.19 What’s New mentions planner list at the top');
+assert(wn('V9_08.28.19').features.some((f) => f.includes('oval bar stays at the bottom')), 'V9_08.28.19 What’s New mentions pinned tabs');
+assert(wn('V9_08.28.14').features.some((f) => f.includes('From sits in the same place')), 'V9_08.28.14 What’s New mentions From alignment');
+assert(wn('V9_08.28.13').features.some((f) => f.includes('Check for Updates')), 'V9_08.28.13 What’s New still mentions Check for Updates');
+assert(wn('V9_08.28.11').features.some((f) => f.includes('Station dots sit on the lines')), 'V9_08.28.11 What’s New mentions station dots');
+assert(wn('V9_08.28.10').features.some((f) => f.includes('Park Station')), 'V9_08.28.10 What’s New mentions Park Station');
+assert(wn('V9_08.28.9').features.some((f) => f.includes('oval bar stays at the bottom')), 'V9_08.28.9 What’s New mentions pinned tabs');
+assert(wn('V9_08.28.8').features.some((f) => f.includes('Max. Single Fare')), 'V9_08.28.8 What’s New mentions train-sheet fares');
+assert(wn('V9_08.28.8').features.some((f) => f.includes('Durban to Crossmoor')), 'V9_08.28.8 What’s New mentions Crossmoor train order');
+assert(wn('V9_08.28.7').features.some((f) => f.includes('every corridor that stops there')), 'V9_08.28.7 What’s New mentions station corridors');
+assert(wn('V9_08.28.7').features.some((f) => f.includes('Show all lines')), 'V9_08.28.7 What’s New mentions restoring the network');
+assert(wn('V9_08.28.2').features.some((f) => f.includes('Network Lines')), 'folded 28.2 card still mentions Network Lines');
+assert(wn('V9_08.28.2').features.some((f) => f.includes('oval bar')), 'folded 28.2 card still mentions floating tabs');
 assert(!/admin|account|password|sign-in|face id|dev hub|deploy|worker|firebase|nuke|analytics|seo|google/i.test(CHANGELOG_DATA[0].features.join(' ')), 'What’s New latest card is commuter-only');
 assert(!CHANGELOG_DATA.some((e) => e.id === 'V8_08.16.1' || e.id === 'V8_08.15.1'), 'folded 16.1–15.1 out of What’s New');
 assert(!CHANGELOG_DATA.some((e) => ['V8_08.28.5', 'V8_08.28.4', 'V8_08.28.3', 'V8_08.28.2', 'V8_08.28.1', 'V8_08.27.9', 'V8_08.27.8', 'V8_08.27.7', 'V8_08.27.6', 'V8_08.27.5', 'V8_08.27.4', 'V8_08.27.3', 'V8_08.26.2', 'V8_08.26.1'].includes(e.id)), 'folded 28.5–26.1 into V9_08.28.1');
 assert(!CHANGELOG_DATA.some((e) => e.id === 'V8_08.18.1'), 'Alerts channel card is gone from What’s New');
 {
-    const hidden = /alert|the bell|hold to react|trains near|i['’]m on it|community chat|route chat|live location|ride sharing|firebase|global state/i;
+    const hidden = /alert|the bell|hold to react|trains near|i['’]m on it|community chat|route chat|live location|ride sharing|firebase|global state|\bpoints\b|\bbadges?\b/i;
     const dash = /[\u2014\u2013]/;
     const emoji = /\p{Extended_Pictographic}/u;
     for (const entry of CHANGELOG_DATA) {
@@ -139,7 +196,20 @@ assert(!ads.includes('setAdPadding(true)'), 'ad code must not request reserved p
 const board = readFileSync(new URL('../src/lib/live-board-ui.js', import.meta.url), 'utf8');
 const renderer = readFileSync(new URL('../src/lib/renderer.js', import.meta.url), 'utf8');
 assert(renderer.includes("const borderColor = '#e5e7eb'"), 'export table margins stay light grey');
+assert(renderer.includes("let borderClass = isExport ? ''"), 'export cells do not take the dark-mode border class');
+assert(renderer.includes("setProperty('border-right', `1px solid ${borderColor}`, 'important')"), 'export time lines use the station column edge only');
+assert(renderer.includes("setProperty('--nt-border', borderColor)"), 'export sheet keeps the light border token');
 assert(!renderer.includes("const borderColor = '#cbd5e1'"), 'export must not use the darker slate cell border');
+assert(renderer.includes("const cellBg = '#ffffff'"), 'export even rows stay white');
+assert(renderer.includes("const zebraBg = '#eff6ff'"), 'export odd rows use a light blue shade');
+assert(!renderer.includes('dark:bg-gray-800">STN'), 'export STN header does not take the dark surface class');
+assert(!renderer.includes('dark:text-gray-400 text-[10px]'), 'export STN codes do not take the dark text class');
+assert(renderer.includes("setProperty('background-color', '#e2e8f0', 'important')"), 'export STN header stays light slate');
+assert(renderer.includes("setProperty('color', '#64748b', 'important')"), 'export STN codes stay light grey');
+assert(renderer.includes('export-zebra'), 'export alternates blue and white rows');
+assert(renderer.includes("td.style.boxShadow = 'none'"), 'export time borders stay a flat light line');
+assert(renderer.includes('boardHolidayName'), 'empty board names a public holiday');
+assert(renderer.includes('This route does not run on ${holidayName}'), 'holiday empty board does not say Saturday');
 assert(renderer.includes('APP_VERSION'), 'export footer includes the app version');
 assert(renderer.includes('Data Source: PRASA / Metrorail'), 'export cites PRASA / Metrorail');
 assert(!renderer.includes('Metrorail Facebook'), 'export data source is not Facebook');
@@ -241,7 +311,7 @@ assert(admin.includes('const result = await Admin.upsertSavedAlertSource('), 'so
 assert(admin.includes('Source saved online for both operators.'), 'source Save confirms shared online persistence');
 assert(admin.includes('online sync failed.'), 'source Save/Delete report online failures');
 assert(admin.includes('endOfTodayLocalValue'), 'shared end-of-day expiry helper');
-assert(admin.includes('alerts-hub-v1'), 'alert panel rebuild key');
+assert(admin.includes('alerts-hub-v2'), 'alert panel rebuild key');
 assert(admin.includes('alert-tab-active'), 'Active alerts tab exists');
 assert(admin.includes('Active Alerts'), 'Active alerts tab label');
 assert(admin.includes('fetchActiveAlerts'), 'Active alerts list loader');
@@ -253,14 +323,18 @@ assert(admin.includes('id="alert-force-popup"') && admin.includes('id="alert-pol
 assert(
     admin.includes('id="excl-grid-notice-in-app"')
     && admin.includes('id="excl-grid-notice-export"')
+    && admin.includes('id="excl-grid-notice-day-weekday"')
+    && admin.includes('id="excl-grid-notice-day-saturday"')
+    && admin.includes('id="excl-grid-notice-day-sunday"')
+    && admin.includes('id="excl-grid-notice-day-public_holiday"')
     && admin.includes('id="excl-in-app-toggle"')
     && admin.includes('id="excl-export-toggle"')
     && admin.includes("const surface = showInApp && showOnGrid ? 'both'"),
-    'banner and train exceptions support in-app, grid-only, or both'
+    'banner and train exceptions support in-app, grid-only, or both, plus schedule-day isolate'
 );
 assert(admin.includes('openRoadmapOriginal'), 'roadmap opens original feedback or crash');
-assert(admin.includes('roadmap-refine-v2'), 'roadmap card redesign is loaded');
-assert(admin.includes('id="roadmap-body" class="nt-pack-surface'), 'roadmap uses the interactive feedback-style wallpaper surface');
+assert(admin.includes('roadmap-refine-v3'), 'roadmap card redesign is loaded');
+assert(admin.includes('id="roadmap-new-ticket"') && admin.includes('basis-full'), 'roadmap is full width and New ticket is its own control');
 assert(admin.includes("label: 'Public Holiday sheets'") && admin.includes("label: 'Saturday sheets (holiday default)'"), 'holiday dropdowns split WC vs other regions');
 assert(admin.includes('id="alert-poster-select"'), 'admin uses poster dropdown');
 assert(!admin.includes('alert-poster-path'), 'admin path input removed');
@@ -271,6 +345,10 @@ assert(admin.includes("icon('pencil'"), 'alias control includes a pencil icon');
 assert(!admin.includes('>Set alias</button>'), 'Set alias text button removed');
 assert(!/setCommuterAlias[\s\S]{0,500}prompt\(/.test(admin), 'setCommuterAlias no longer uses prompt');
 assert(admin.includes('data-fb-more-toggle'), 'Options toggle remains');
+assert(admin.includes('flex items-start gap-2 shrink-0 mb-0'), 'contact chips wrap under Options instead of shoving it');
+assert(admin.includes('relative shrink-0 ml-auto'), 'Options stays pinned to the top-right');
+assert(admin.includes('break-all whitespace-normal inline-flex items-center gap-1 min-w-0'), 'long emails and numbers wrap inside the contact column');
+assert(!admin.includes('max-w-[220px] sm:max-w-[300px]'), 'contact chips no longer use a width that fights Options');
 assert(!admin.includes("icon('more'"), 'Options dropped the more icon');
 assert(admin.includes('feedback-thread-chat'), 'thread wallpaper lives on feedback-thread-chat');
 assert(admin.includes('nt-pack-wallpaper'), 'admin thread wallpaper uses the shared pack');
@@ -322,12 +400,16 @@ assert(communityView.includes('community-pane relative'), 'Community wallpaper i
 assert(/community-pane[\s\S]*?nt-pack-wallpaper[\s\S]*?community-feed-scroll/.test(communityView), 'wallpaper sits on the pane, not the flex feed child');
 assert(communityView.includes('>Just you here</button>'), 'Community tab placeholder is Just you here');
 assert(communityView.indexOf('Community</p>') < communityView.indexOf('id="community-presence"'), 'presence sits on the Community label row');
-assert(communityView.includes('id="community-marks-chip"'), 'Community chrome can show the signed-in level');
+assert(communityView.includes('id="community-marks-chip"'), 'Community chrome keeps the leftover title chip id');
+assert(communityView.includes('community-bubble-marks'), 'Community name row can hold medal and points');
 assert(communityView.indexOf('id="community-presence"') < communityView.indexOf('community-route-select'), 'presence sits above the route dropdown');
 assert(!communityView.includes('mt-6 p-2 rounded-full'), 'refresh button is not padded down to the dropdown');
 assert(!communityView.includes('min-h-[1rem]'), 'composer error does not reserve a blank line');
 assert(communityView.includes('min-h-[2.75rem]'), 'composer field is compact');
 const communityJs = readFileSync(new URL('../src/lib/community.js', import.meta.url), 'utf8');
+assert(communityJs.includes('community-bubble-name'), 'name stays on the far left of the bubble row');
+assert(communityJs.includes('grouped'), 'consecutive same-author posts still omit the name row');
+assert(communityJs.includes('renderBubbleMarksHtml'), 'points render on named bubbles');
 assert(communityJs.includes('No posts on this line yet'), 'Community empty heading stays');
 assert(communityJs.includes('Be the first to share a heads-up for fellow passengers.'), 'Community empty state keeps the first-post invitation');
 assert(!/shouting match/i.test(communityJs), 'Community empty copy dropped the shouting-match lecture');
@@ -346,10 +428,15 @@ assert(hubModals.includes('Show my photo next to my name'), 'photo opt-in is com
 assert(hubModals.includes('Show my level on Community'), 'Community level opt-out sits with photo');
 assert(hubModals.includes('id="account-photo-alerts"'), 'photo opt-in checkbox exists');
 assert(hubModals.includes('id="account-marks-community"'), 'Community level checkbox exists');
-assert(hubModals.includes('id="account-profile-toggle"') && hubModals.includes('id="account-profile-panel"'), 'signed-in name and email open a profile accordion');
+assert(hubModals.includes('id="account-name-edit-btn"') && hubModals.includes('Edit display name'), 'signed-in name opens from a pencil');
+assert(!hubModals.includes('id="account-profile-toggle"') && !hubModals.includes('id="account-profile-panel"'), 'signed-in name is not an accordion');
+assert(hubModals.includes('id="account-passenger-type-btn"') && hubModals.includes('id="account-passenger-type-display"'), 'preview shows passenger type');
+assert(hubModals.includes('id="account-modal-display-name"') && hubModals.includes('id="account-modal-email"'), 'preview shows name and email');
 assert(hubModals.includes('id="account-photo-toggle"') && hubModals.includes('toggle-checkbox'), 'photo opt-in is a settings toggle');
 assert(hubModals.includes('id="account-marks-toggle"'), 'Community level opt-out is a settings toggle');
 assert(hubModals.includes('>Save<') && hubModals.includes('id="account-save-display-name"'), 'display name and photo share one Save');
+assert(hubModals.includes('id="account-name-sheet"'), 'name edits open in a sheet');
+assert(hubModals.includes('id="account-points-sheet"') && hubModals.includes('h-[min(92dvh,100%)]'), 'points open in a tall sheet');
 assert(hubModals.includes('Continue with Facebook'), 'guest Facebook sign-in');
 assert(hubModals.includes('id="account-facebook-btn"'), 'Facebook button id');
 assert(hubModals.includes('Delete account'), 'signed-in delete row');
@@ -370,21 +457,34 @@ assert(hubModals.includes('id="messages-thread-contact-row"') && hubModals.inclu
 assert(hubModals.includes('id="account-delete-type"'), 'delete confirm requires typing DELETE');
 assert(hubModals.includes('id="account-badge-how-sheet"') && hubModals.includes('id="account-badge-how-close"'), 'badge how-to sheet exists');
 assert(
-    hubModals.indexOf('id="account-profile-toggle"') < hubModals.indexOf('id="account-photo-alerts"')
-    && hubModals.indexOf('id="account-photo-alerts"') < hubModals.indexOf('id="account-save-display-name"')
-    && hubModals.indexOf('id="account-save-display-name"') < hubModals.indexOf('id="account-points-btn"')
-    && hubModals.indexOf('id="account-points-btn"') < hubModals.indexOf('id="account-settings-host"')
-    && hubModals.indexOf('id="account-settings-host"') < hubModals.indexOf('id="account-signout-btn"'),
-    'signed-in Account order is profile accordion, Points, theme host, sign out',
+    hubModals.indexOf('id="account-modal-display-name"') < hubModals.indexOf('id="account-passenger-type-btn"')
+    && hubModals.indexOf('id="account-passenger-type-btn"') < hubModals.indexOf('id="account-points-btn"')
+    && hubModals.indexOf('id="account-points-btn"') < hubModals.indexOf('id="account-signout-btn"')
+    && hubModals.indexOf('id="account-signout-btn"') < hubModals.indexOf('id="account-settings-host"'),
+    'signed-in Account order is identity preview, sign out, settings',
 );
 assert(hubModals.includes('?from=account'), 'Account legal links return with from=account');
 assert(hubModals.includes('account-points-panel'), 'points details live inside Account');
-assert(hubModals.indexOf('id="account-points-btn"') < hubModals.indexOf('id="account-points-panel"'), 'points panel sits under the Points row');
-assert(hubModals.indexOf('id="account-edit-display-name"') < hubModals.indexOf('id="account-photo-alerts"')
-    && hubModals.indexOf('id="account-photo-alerts"') < hubModals.indexOf('id="account-marks-community"')
-    && hubModals.indexOf('id="account-marks-community"') < hubModals.indexOf('id="account-save-display-name"')
-    && hubModals.indexOf('id="account-save-display-name"') < hubModals.indexOf('id="account-points-panel"'), 'name, photo, and Community level sit in the profile accordion with a shared Save');
-assert(accountJs.includes("insertAdjacentElement('afterend'") && accountJs.includes('account-points-panel'), 'Points toggle docks the breakdown next to the accordion button');
+assert(
+    hubModals.indexOf('id="account-points-sheet"') < hubModals.indexOf('id="account-marks-community"')
+    && hubModals.indexOf('id="account-marks-community"') < hubModals.indexOf('id="account-points-panel"'),
+    'Community level switch and the breakdown live in the points sheet',
+);
+assert(
+    hubModals.indexOf('id="account-name-sheet"') < hubModals.indexOf('id="account-edit-display-name"')
+    && hubModals.indexOf('id="account-edit-display-name"') < hubModals.indexOf('id="account-photo-alerts"')
+    && hubModals.indexOf('id="account-photo-alerts"') < hubModals.indexOf('id="account-save-display-name"')
+    && hubModals.indexOf('id="account-save-display-name"') < hubModals.indexOf('id="account-name-close"'),
+    'name sheet holds the field, photo switch, and Save',
+);
+assert(!accountJs.includes("insertAdjacentElement('afterend'"), 'points panel stays in the tall sheet');
+assert(accountJs.includes("openSmoothModal('profile-modal')"), 'passenger type opens the profile modal on the account back stack');
+assert(accountJs.includes('#account-points') && accountJs.includes('history.pushState({ accountSheet: id }'), 'account sheets push their own history entry');
+assert(accountJs.includes('Trip details were not saved for this share.'), 'a share without stored stations does not fall back to the earn blurb');
+assert(accountJs.includes('contributionDetailLines'), 'share sheets use the stored trip lines');
+assert(accountJs.includes('resolveAuthPhotoURL') && accountJs.includes('providerData'), 'account photo falls back to the provider picture');
+assert(accountJs.includes('setShowMarksInCommunity'), 'level switch saves on its own');
+assert(accountJs.includes("cluster.classList.toggle('hidden', signed && hosted)"), 'sidenav Passenger Type hides only while hosted for a signed-in user');
 assert(accountJs.includes('setShowPhotoInAlerts') && accountJs.includes("window.showToast('Saved', 'success')"), 'Save writes display name and photo together');
 assert(hubModals.includes('id="reports-feed-modal"'), 'VIEW opens a commuter reports list');
 assert(hubModals.includes('id="reports-feed-list"'), 'reports list has a feed host');
@@ -402,7 +502,8 @@ assert(hubModals.includes('No trains in the next 45 minutes'), 'nearby empty cop
 assert(hubModals.includes('id="network-slow-confirm-modal"'), 'Check for Updates has a slow-network confirm');
 assert(hubModals.includes('id="cache-clear-modal"'), 'Check for Updates has a confirm popup');
 assert(hubModals.includes('This downloads the latest app onto this phone, then restarts Next Train.'), 'Check for Updates confirm explains the restart');
-assert(hubModals.includes('Your pinned route stays, but the look goes back to Classic light.'), 'Check for Updates confirm mentions Classic light');
+assert(hubModals.includes('Your pinned route stays.'), 'Check for Updates confirm says the pinned route stays');
+assert(!hubModals.includes('the look goes back to Classic light'), 'Check for Updates confirm does not reset the look to Classic light');
 assert(!hubModals.includes('stuck copy'), 'Check for Updates does not mention stuck copy');
 assert(hubModals.includes('Your network seems slow. Are you sure?'), 'slow-network confirm asks before wiping');
 assert(hubModals.includes('id="nt-admin-publish-train"'), 'admin nearby sheet can publish a test train');
@@ -413,8 +514,15 @@ assert(hubModals.includes('id="nt-admin-publish-train"'), 'admin nearby sheet ca
     const mapApp = readFileSync(new URL('../public/js/map-app.js', import.meta.url), 'utf8');
     const mapPage = readFileSync(new URL('../src/pages/map.astro', import.meta.url), 'utf8');
     const ridePings = readFileSync(new URL('../src/lib/ride-pings.js', import.meta.url), 'utf8');
+    const gpsFreshness = readFileSync(new URL('../src/lib/gps-freshness.js', import.meta.url), 'utf8');
     const adminJs = readFileSync(new URL('../public/js/admin.js', import.meta.url), 'utf8');
     assert(mapView.includes('id="map-tab-stop-btn"'), 'Map tab has Stop sharing');
+    assert(mapView.includes('id="map-tracking-share"'), 'tracking card has a share control');
+    assert(mapView.includes('id="map-tracking-locate"'), 'tracking pill can centre on the train');
+    assert(mapView.includes('id="map-tracking-toggle"'), 'tracking card can pause or restart');
+    assert(mapView.includes('id="map-tracking-refresh"'), 'sender tracking card has Refresh GPS');
+    assert(mapTab.includes('refreshRideShareGps'), 'Refresh GPS pushes a new location ping');
+    assert(mapView.includes('id="map-tracking-restore-open"'), 'tracking pill opens the card from its position');
     assert(mapTab.includes('ENFORCE_LIVE_SHARE_VET = true'), 'live-share GPS vet is enforced');
     assert(mapTab.includes("'nearby_modal'"), 'Trains near you still starts a share');
     assert(mapTab.includes('skipVolunteer: true'), 'nearby / map join skip the volunteer sheet');
@@ -427,11 +535,25 @@ assert(hubModals.includes('id="nt-admin-publish-train"'), 'admin nearby sheet ca
     assert(mapApp.includes('railOvalYawDeg'), 'map train capsule yaws long-axis along the rail');
     assert(mapApp.includes('watchPosition'), 'map location uses watchPosition');
     assert(mapTab.includes('acquireGeoWatch'), 'map tab acquires the fused geo watch');
-    assert(ridePings.includes('alignBearingToJourney'), 'share projection aligns oval to the rail tangent');
+    assert(ridePings.includes('pauseRideShare'), 'sharer can pause from the card');
+    assert(ridePings.includes('resumeRideShare'), 'sharer can restart a paused share');
+    assert(ridePings.includes("pauseReason === 'user'"), 'user pause does not auto-resume');
+    assert(mapTab.includes('stopRidePingsListener'), 'leaving Map drops the ride_pings listener');
+    assert(mapTab.includes('parentElement'), 'tracking pill drag is relative to the map pane');
+    assert(mapTab.includes('nt-map-resume-share'), 'tracking card can restart a paused share');
+    assert(mapView.includes('id="map-tracking-toward"'), 'tracking card keeps toward slot');
+    assert(mapTab.includes('trainHeadboardTitle'), 'tracking card title is dest Train id');
+    assert(mapTab.includes('bindTrackingCardDrag'), 'tracking card can be moved around the map');
+    assert(mapTab.includes('MAP_CARD_POS_KEY'), 'open tracking card keeps its dragged position');
+    assert(mapTab.includes('applyTrackingCardPos'), 'tracking card opens from a saved spot or the green pill');
+    assert(mapTab.includes('positionTrackingCardFromPill'), 'tracking card opens from the green pill');
+    assert(mapView.includes('id="map-tracking-dest"'), 'tracking card destination is off the title row');
+    assert(mapView.includes('id="map-tracking-card-drag"'), 'tracking card header is the drag handle');
+    assert(mapTab.includes('trustedDisplaySpeedMps'), 'tracking card speed uses refined GPS not jitter');
     assert(mapApp.includes('nt-live-train-ring'), 'map train has a pulse ring around the oval');
     assert(mapApp.includes('applyShareHidesUserDot'), 'sharing a train hides the GPS pulse');
     assert(!mapApp.includes('liveTrainShareLine'), 'map glyph does not print You’re sharing');
-    assert(mapApp.includes('nt-map-open-timetable'), 'map popup can open the train timetable');
+    assert(mapTab.includes('nt-map-open-timetable'), 'tracking card can open the train timetable');
     assert(mapApp.includes("z < 11"), 'map train glyph is compact below zoom 11');
     assert(mapApp.includes('nt-live-train-wrap--far'), 'zoomed-out train glyph has a far size');
     assert(mapApp.includes('bearingsOppose'), 'opposite trains offset off the same rail');
@@ -443,8 +565,26 @@ assert(hubModals.includes('id="nt-admin-publish-train"'), 'admin nearby sheet ca
     assert(mapPage.includes('nt-live-train-halo'), 'map train ring animation is slow and faint');
     assert(mapPage.includes('overflow: visible'), 'leaflet icon does not clip the pulse');
     assert(mapPage.includes('nt-live-train-num'), 'map page styles the train number');
+    assert(gpsFreshness.includes('RIDE_INTERPOLATION_MAX_MS = 15 * 1000'), 'interpolation caps at 15 seconds');
+    assert(gpsFreshness.includes('RIDE_GPS_STALE_MS = RIDE_INTERPOLATION_MAX_MS'), 'GPS stale window matches the 15 second interpolation cap');
     assert(ridePings.includes('RIDE_SHARE_IDLE_MS = 30 * 60 * 1000'), 'share stops after 30 minutes idle');
-    assert(ridePings.includes('RIDE_GPS_STALE_MS = 90 * 1000'), 'GPS stale window is 90 seconds');
+    assert(ridePings.includes('RIDE_GPS_STALE_MS'), 'GPS stale window is exported');
+    assert(ridePings.includes('ONBOARD_FAST_PING_MS = 3 * 1000'), 'a moving train publishes every 3 seconds');
+    assert(ridePings.includes('ONBOARD_STATIONARY_PING_MS = 6 * 1000'), 'a parked train heartbeats every 6 seconds, inside the 15s grey window');
+    assert(ridePings.includes('startBackgroundTicker(') && ridePings.includes('ONBOARD_LOOP_TICK_MS'), 'onboard loop ticks from a Web Worker so background throttling cannot starve it');
+    assert(ridePings.includes('SHARE_PROMPT_TIMEOUT_MS = 90 * 1000'), 'unanswered share prompts stop the share after 90 seconds');
+    assert(ridePings.includes("title: 'Is the train moving?'") && ridePings.includes("id: 'stuck'") && ridePings.includes("id: 'cancelled'"), 'a parked sharer can mark the train stuck or cancelled');
+    assert(ridePings.includes('shareEligibilityForTrain'), 'shares are limited to today’s timetable, the 45 min window and unbanned trains');
+    assert(ridePings.includes("ride_votes/") && ridePings.includes('rideVoteTally'), 'riders vote on a share and heavily downvoted shares are suppressed');
+    assert(mapView.includes('id="map-tracking-votes"') && mapView.includes('id="map-tracking-vote-up"'), 'tracking card has thumbs up / down for other riders');
+    assert(mapView.includes('id="map-tracking-reason"') && mapView.includes('id="map-tracking-timing"'), 'tracking card explains a pause and shows early / late');
+    assert(mapTab.includes('SPEED_ALERT_KMH = 65'), 'speed above 65 km/h paints red');
+    assert(mapTab.includes('trackingLastSeenLine'), 'last seen says at or approaching honestly');
+    assert(mapApp.includes('RIDE_BACK_JITTER_M') && mapApp.includes('rideTravelDirAlongPath'), 'receivers hold the glyph on small backward jitter and never flip the nose from glide direction');
+    assert(!mapApp.includes('travelDir < 0'), 'glide direction no longer flips the train glyph');
+    assert(mapApp.includes('RIDE_INTERPOLATION_MAX_MS = 15000'), 'map glide matches the 15 second cap');
+    assert(mapApp.includes('applyRideTrainStalePause'), 'listeners grey the train when GPS goes stale locally');
+    assert(mapTab.includes('RIDE_GPS_STALE_MS'), 'tracking card uses the shared GPS stale window');
     assert(ridePings.includes('compactPingsForMap'), 'map pings are compacted per train');
     assert(ridePings.includes('snapToRail'), 'compact pings snap to rails before averaging');
     assert(ridePings.includes('RIDE_OFFTRACK_GRACE_MS = 3 * 60 * 1000'), 'off-track train share has a 3 minute grace');
@@ -457,12 +597,20 @@ assert(hubModals.includes('id="nt-admin-publish-train"'), 'admin nearby sheet ca
     assert(!renderer.includes('nt-live-train-pulse'), 'live board has no sharing dots');
     const timetableGrid = readFileSync(new URL('../src/lib/timetable-grid.js', import.meta.url), 'utf8');
     assert(!timetableGrid.includes('paintLiveTrainDots'), 'full timetable grid has no sharing dots');
+    assert(timetableGrid.includes('schedulesBelongToRoute'), 'full timetable refuses the previous corridor sheet');
+    assert(timetableGrid.includes('bindGridScheduleRouteRefresh'), 'open timetable refreshes when the matching route bundle lands');
+    const utilsJs = readFileSync(new URL('../src/lib/utils.js', import.meta.url), 'utf8');
+    assert(utilsJs.includes('export function schedulesBelongToRoute'), 'schedule bundles can be tagged to a route');
+    const logicJs = readFileSync(new URL('../src/lib/logic.js', import.meta.url), 'utf8');
+    assert(logicJs.includes('_routeId: route.id'), 'parsed schedules carry the corridor id');
+    const liveBoardUi = readFileSync(new URL('../src/lib/live-board-ui.js', import.meta.url), 'utf8');
+    assert(liveBoardUi.includes('schedulesBelongToRoute($schedules.get(), routeId)'), 'route change clears mismatched schedule slots');
     assert(mapTab.includes('hasRidePingsListener'), 'map prefers the live listener over REST');
     assert(mapTab.includes('isMapTabFullscreen()'), 'map fullscreen can exit when already full');
     assert(mapView.includes('allow="geolocation; fullscreen"'), 'map iframe allows fullscreen');
     assert(mapPage.includes('data-map-fs-icon="minimize"'), 'fullscreen control becomes minimize');
     assert(mapTab.includes('PINGS_POLL_WITH_LISTENER_MS'), 'map REST poll backs off when the listener is live');
-    assert(mapApp.includes('Stop sharing'), 'map popup can stop sharing');
+    assert(mapView.includes('Stop sharing'), 'tracking card can stop sharing');
     assert(ridePings.includes('Stop the other share'), 'second device is offered a stop');
     assert(ridePings.includes('appendRideShareLog'), 'share start/stop writes a log');
     assert(ridePings.includes("action: 'session'"), 'share log writes a session node');
@@ -493,6 +641,7 @@ assert(hubModals.includes('id="nt-admin-publish-train"'), 'admin nearby sheet ca
     assert(accountJs.includes("hydrateRemoteMarks({ persist: true })"), 'sign-in hydrates that uid from users/{uid}/marks');
     assert(accountJs.includes('switchMarksAccount(user.uid)'), 'sign-in drops the previous account points immediately');
     assert(accountJs.includes('updateAccountDisplayName'), 'signed-in users can save a display name');
+    assert(accountJs.includes('Look updated from your account.'), 'sign-in toasts when the saved look actually changes');
     assert(hubModals.includes('id="account-edit-display-name"') && hubModals.includes('id="account-save-display-name"'), 'Account has a display name field');
     const adminCl = readFileSync(new URL('../src/lib/admin-changelog.js', import.meta.url), 'utf8');
     assert(adminCl.includes('ADMIN_CHANGELOG'), 'operator build notes exist');
@@ -501,11 +650,18 @@ assert(hubModals.includes('id="nt-admin-publish-train"'), 'admin nearby sheet ca
     assert(adminCl.includes('listAdminChangelogVersions'), 'build notes list merges What’s New versions');
     assert(adminJs.includes('ntAdminSecureEscape'), 'build notes escape helper is in scope');
 }
-assert(hubModals.includes('id="account-session-actions"'), 'Account sign out sits in a bottom session block');
+assert(hubModals.includes('id="account-session-actions"'), 'delete account stays in the session block');
+{
+    const uiJs = readFileSync(new URL('../src/lib/ui.js', import.meta.url), 'utf8');
+    assert(uiJs.includes('__ntAccountSheetOnPop'), 'back closes the top account sheet before the account modal');
+    assert(uiJs.includes("hashNow === '#sidenav'"), 'back from Account leaves Options open');
+}
 assert(
-    hubModals.indexOf('id="account-settings-host"') < hubModals.indexOf('id="account-signout-btn"'),
-    'Sign out is below Account settings',
+    hubModals.indexOf('id="account-points-btn"') < hubModals.indexOf('id="account-signout-btn"')
+    && hubModals.indexOf('id="account-signout-btn"') < hubModals.indexOf('id="account-settings-host"'),
+    'Sign out is a row on the identity card, above settings',
 );
+assert(!/id="account-signout-btn"[^>]*text-center/.test(hubModals), 'Sign out is not a centered bottom bar');
 assert(
     hubModals.indexOf('id="account-signout-btn"') < hubModals.indexOf('privacy.html'),
     'Sign out is above the Account legal links',
@@ -596,10 +752,28 @@ assert(refuseDisplayName('Enock').ok === true, 'ordinary first names are still a
     assert(liveBoardUi.includes("zone === 'Z1'"), 'Z1 keeps the original confirm-at-station note');
     const hubJs = readFileSync(new URL('../src/lib/hub.js', import.meta.url), 'utf8');
     assert(hubJs.includes('chatDeviceId'), 'Feedback Hub prefers the canonical oldest device');
+    assert(hubJs.includes('ntChatGuestSince'), 'logout chat is a timestamp slice, not a new user id');
+    assert(hubJs.includes('beginGuestChat'), 'logout starts a fresh admin chat on the same device');
+    assert(hubJs.includes('mergeGuestChatIntoAccount'), 'sign-in merges the signed-out chat');
+    assert(!/safeStorage\.setItem\(\s*['"]next_train_device_id['"]/.test(hubJs), 'logout chat does not replace the device id');
     const marksSrc = readFileSync(new URL('../src/lib/rider-marks.js', import.meta.url), 'utf8');
     assert(marksSrc.includes("requires: ['streak_3day']"), '5-day streak badge requires 3-day streak');
     assert(marksSrc.includes('min: 80'), 'Silver starts at 80 points');
     assert(marksSrc.includes('listContributionDays'), 'contributions group by day');
+    assert(marksSrc.includes('formatContributionDate'), 'contribution dates use a fixed format');
+    assert(sidenav.includes('id="settings-theme-toggle"'), 'side nav keeps the dark mode toggle');
+    assert(sidenav.includes('data-account-theme="system"'), 'account appearance can follow the phone');
+    assert(sidenav.includes('data-account-theme="light"') && sidenav.includes('data-account-theme="dark"'), 'account appearance keeps light and dark');
+    const prefsSrc = readFileSync(new URL('../src/lib/prefs.js', import.meta.url), 'utf8');
+    assert(prefsSrc.includes("theme === 'system'"), 'stored system theme is kept');
+    assert(prefsSrc.includes('prefers-color-scheme: dark'), 'system theme reads the phone setting');
+    const accountSrc = readFileSync(new URL('../src/lib/account.js', import.meta.url), 'utf8');
+    assert(accountSrc.includes('formatContributionDate'), 'account list formats contribution dates');
+    assert(accountSrc.includes('(+${item.points})'), 'event buttons carry their own points');
+    assert(!accountSrc.includes('toLocaleDateString'), 'account contributions do not use locale dates');
+    const hubModals = readFileSync(new URL('../src/components/HubModals.astro', import.meta.url), 'utf8');
+    assert(hubModals.includes('id="account-contrib-sheet"'), 'contribution details open in a sheet');
+    assert(hubModals.includes('html[data-account-settings="1"] #settings-theme-toggle'), 'account modal hides the side-nav theme switch');
     assert(marksSrc.includes('badgeProgress'), 'badges expose fill progress');
     assert(marksSrc.includes('showMarksInCommunity'), 'Community level pref exists');
     assert(marksSrc.includes("el.id === 'settings-account-points'"), 'marks sync does not unhide Options points for guests');
@@ -615,6 +789,16 @@ assert(refuseDisplayName('Enock').ok === true, 'ordinary first names are still a
     assert(appearance.includes('font-size: max(16px, 1em) !important'), 'appearance.css keeps the iOS 16px input floor');
     const plannerModals = readFileSync(new URL('../src/components/PlannerModals.astro', import.meta.url), 'utf8');
     assert(plannerModals.includes('id="alert-image-lightbox"') && plannerModals.includes('id="alert-image-lightbox-img"'), 'dedicated alert image lightbox markup exists');
+    assert(plannerModals.includes('id="alert-image-lightbox-stage"'), 'alert preview zoom lives on a dedicated stage');
+    assert(plannerModals.includes('id="alert-image-lightbox-close"') && plannerModals.indexOf('alert-image-lightbox-stage') < plannerModals.indexOf('alert-image-lightbox-close'), 'Close sits after the image stage');
+    assert(plannerModals.includes('shrink-0') && plannerModals.includes('pb-[max(1rem,env(safe-area-inset-bottom))]'), 'Close stays in a bottom bar');
+    assert(uiJs.includes('resolveLightboxDisplaySrc') && uiJs.includes('currentSrc'), 'full view reuses the already-decoded poster');
+    assert(uiJs.includes('poster.currentSrc'), 'full view paints the feed poster URL first');
+    assert(!uiJs.includes('snapshotDecodedImage'), 'full view does not canvas-snapshot the poster');
+    assert(!uiJs.includes('toDataURL'), 'full view does not JPEG-encode on open');
+    assert(!/img\.removeAttribute\('src'\);\s*img\.alt = 'Image Preview'/.test(uiJs), 'openLightbox does not clear src before showing');
+    assert(!/closeLightbox[\s\S]*img\.removeAttribute\('src'\)/.test(uiJs), 'closeLightbox keeps the last poster in memory');
+    assert(uiJs.includes('blockPageZoom') && uiJs.includes('gesturestart'), 'alert preview pinch does not zoom the Close chrome');
     const adsJs = readFileSync(new URL('../src/lib/clever-ads.js', import.meta.url), 'utf8');
     assert(adsJs.includes("'account-modal'"), 'ads cloak while Account is open');
 }

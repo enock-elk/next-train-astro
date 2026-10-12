@@ -2,15 +2,17 @@
  * Timetable ghosts — each schedule column is a simulated train.
  * Position is interpolated between the last stop whose clock ≤ now and the next.
  */
-import { $schedules, $globalStationIndex, $userRegion } from '../store.js';
+import { $schedules, $globalStationIndex, $userRegion, $fullDatabase, $globalExclusions, $currentRouteId } from '../store.js';
+import { ROUTES } from './config.js';
 import {
     normalizeStationName,
     timeToSeconds,
     isRealTime,
     scheduleCacheSlot,
     getDistanceFromLatLonInKm,
+    exclusionAppliesToSurface,
 } from './utils.js';
-import { closestPointOnPath, smoothPathFromStops } from './rail-tracks.js';
+import { closestPointOnPath, paintedPathForRoute, smoothPathFromStops } from './rail-tracks.js';
 
 /** Trains stay trackable for 45 minutes either side of timetable time. */
 export const TRACKING_WINDOW_SEC = 45 * 60;
@@ -35,6 +37,33 @@ function currentClock() {
 function currentDayType() {
     if (typeof window !== 'undefined' && window.currentDayType) return window.currentDayType;
     return 'weekday';
+}
+
+function liveMapDayIndex(opts = {}) {
+    if (Number.isFinite(opts.dayIdx)) return Number(opts.dayIdx);
+    if (typeof window !== 'undefined' && Number.isFinite(Number(window.currentDayIndex))) {
+        return Number(window.currentDayIndex);
+    }
+    return new Date().getDay();
+}
+
+/**
+ * Ban that should keep this train off the live map and nearby list today.
+ * A special still runs, so it returns false. No rule returns false.
+ */
+export function liveMapTrainBan(trainId, routeId, opts = {}) {
+    const rules = (opts.exclusions || $globalExclusions.get() || {})[String(routeId || '')];
+    const rule = rules?.[String(trainId || '')];
+    if (!exclusionAppliesToSurface(rule, 'in_app')) return false;
+    if (rule.expiresAt && Date.now() > rule.expiresAt) return false;
+    const days = Array.isArray(rule.days) ? rule.days : null;
+    if (days && days.length) {
+        const idx = liveMapDayIndex(opts);
+        if (!days.some((d) => Number(d) === idx)) return false;
+    }
+    const type = rule.type || 'banned';
+    if (type === 'special') return false;
+    return type;
 }
 
 function nowSeconds(now) {
@@ -103,15 +132,79 @@ export function currentDirectionSchedules(schedules = $schedules.get() || {}) {
         .filter((s) => s?.rows?.length);
 }
 
+function dumpRowsToSchedule(rows) {
+    if (Array.isArray(rows) && rows.length) {
+        return { stationColumnName: 'STATION', headers: Object.keys(rows[0] || {}), rows };
+    }
+    if (rows && typeof rows === 'object' && Array.isArray(rows.rows)) return rows;
+    return null;
+}
+
+function dumpStopsForTrain(trainId, opts = {}) {
+    const id = String(trainId || '').trim();
+    const routeId = String(opts.routeId || '');
+    const route = ROUTES[routeId];
+    const db = opts.database || $fullDatabase.get();
+    if (!id || !route?.sheetKeys || !db) return [];
+    for (const key of Object.values(route.sheetKeys)) {
+        const parsed = dumpRowsToSchedule(db[key]);
+        if (!parsed) continue;
+        const stops = stopsForTrain(parsed, id);
+        if (stops.length) return stops;
+    }
+    return [];
+}
+
 export function findStopsForTrain(trainId, opts = {}) {
-    const schedules = opts.schedules
-        ? (Array.isArray(opts.schedules) ? opts.schedules : Object.values(opts.schedules).filter(Boolean))
-        : currentDirectionSchedules();
-    for (const schedule of schedules) {
+    if (opts.schedules) {
+        const schedules = Array.isArray(opts.schedules)
+            ? opts.schedules
+            : Object.values(opts.schedules).filter(Boolean);
+        for (const schedule of schedules) {
+            const stops = stopsForTrain(schedule, trainId);
+            if (stops.length) return { schedule, stops };
+        }
+        return { schedule: null, stops: [] };
+    }
+    const loaded = $schedules.get() || {};
+    const preferred = currentDirectionSchedules(loaded);
+    for (const schedule of preferred) {
         const stops = stopsForTrain(schedule, trainId);
         if (stops.length) return { schedule, stops };
     }
-    return { schedule: null, stops: [] };
+    for (const schedule of Object.values(loaded)) {
+        if (!schedule?.rows?.length) continue;
+        const stops = stopsForTrain(schedule, trainId);
+        if (stops.length) return { schedule, stops };
+    }
+    const dumpStops = dumpStopsForTrain(trainId, opts);
+    return { schedule: null, stops: dumpStops };
+}
+
+function stationPointsOnRoute(routeId, stationIndex) {
+    const id = String(routeId || '');
+    const points = [];
+    for (const coords of Object.values(stationIndex || {})) {
+        if (!coords || typeof coords.lat !== 'number') continue;
+        const lng = coords.lon ?? coords.lng;
+        if (typeof lng !== 'number') continue;
+        const routes = coords.routes;
+        const onRoute = !id
+            || (routes && typeof routes.has === 'function' && routes.has(id))
+            || (Array.isArray(routes) && routes.includes(id));
+        if (!onRoute) continue;
+        points.push({ lat: coords.lat, lon: lng, routeId: id });
+    }
+    return points;
+}
+
+async function corridorFallbackPath(routeId, region, stationIndex) {
+    const painted = await paintedPathForRoute(routeId, region);
+    if (painted?.length >= 2) return painted;
+    const points = stationPointsOnRoute(routeId, stationIndex);
+    if (points.length < 2) return null;
+    const smoothed = await smoothPathFromStops(points, region);
+    return smoothed || points.map((point) => [point.lat, point.lon]);
 }
 
 /** Build the selected service's origin-to-terminus rail path. */
@@ -119,15 +212,18 @@ export async function railPathForTrain(trainId, opts = {}) {
     const { stops } = findStopsForTrain(trainId, opts);
     const stationIndex = opts.stationIndex || $globalStationIndex.get() || {};
     const routeId = String(opts.routeId || '');
+    const region = opts.region || $userRegion.get() || 'GP';
     const points = stops
         .map((stop) => {
             const coords = coordsForStation(stop.station, stationIndex);
             return coords ? { lat: coords.lat, lon: coords.lng, routeId } : null;
         })
         .filter(Boolean);
-    if (points.length < 2) return null;
-    const smoothed = await smoothPathFromStops(points, opts.region || $userRegion.get() || 'GP');
-    return smoothed || points.map((point) => [point.lat, point.lon]);
+    if (points.length >= 2) {
+        const smoothed = await smoothPathFromStops(points, region);
+        return smoothed || points.map((point) => [point.lat, point.lon]);
+    }
+    return corridorFallbackPath(routeId, region, stationIndex);
 }
 
 /** Metres from a GPS fix to the closest rail point on this selected service. */
@@ -374,6 +470,7 @@ export function scoreTrainForFix(lat, lng, trainId, opts = {}) {
 export function listTrainsInWindow(now, opts = {}) {
     const nowSec = nowSeconds(now);
     const windowSec = opts.windowSec ?? GHOST_WINDOW_SEC;
+    const routeId = String(opts.routeId || $currentRouteId.get() || '');
     const schedules = opts.schedules
         ? (Array.isArray(opts.schedules) ? opts.schedules : Object.values(opts.schedules).filter(Boolean))
         : currentDirectionSchedules();
@@ -382,6 +479,7 @@ export function listTrainsInWindow(now, opts = {}) {
     for (const schedule of schedules) {
         for (const id of trainIdsInSchedule(schedule)) {
             if (seen.has(id)) continue;
+            if (liveMapTrainBan(id, routeId, opts)) continue;
             const stops = stopsForTrain(schedule, id);
             if (!trainInWindow(stops, nowSec, windowSec)) continue;
             seen.add(id);
@@ -491,16 +589,165 @@ export function progressAlongStopsDetailed(lat, lng, stops, stationIndex) {
     };
 }
 
-export function journeyPositionLabel(stops, progress) {
-    if (!stops?.length || !Number.isFinite(progress)) return '';
+/** Within this many metres of a platform the train counts as "at" the station. */
+export const AT_STATION_M = 220;
+/** A stopped train gets a wider platform allowance (long platforms, GPS drift while stationary). */
+export const AT_STATION_STATIONARY_M = 350;
+/** Minutes either side of the timetable that still read as "On time". */
+export const ON_TIME_TOLERANCE_SEC = 90;
+
+/**
+ * Where along the stop chain a projected position really is.
+ * "at X" only when the position is within platform distance of X; everything
+ * else between two stations is "approaching" the next one. Falls back to a
+ * tight fraction split only when station coordinates are missing.
+ * @returns {{ kind: 'at'|'approaching', index: number, station: string, label: string, distanceM: number|null }|null}
+ */
+export function journeyPositionDetail(stops, progress, opts = {}) {
+    if (!stops?.length || !Number.isFinite(progress)) return null;
     const bounded = Math.max(0, Math.min(stops.length - 1, progress));
     const i = Math.floor(bounded);
     const fraction = bounded - i;
     const here = shortStation(stops[i]?.station);
-    if (i >= stops.length - 1) return here ? `at ${here}` : '';
-    if (fraction < 0.5) return here ? `at ${here}` : '';
+    const at = (index, station, distanceM) => (station
+        ? { kind: 'at', index, station, label: `at ${station}`, distanceM }
+        : null);
+    if (i >= stops.length - 1) return at(i, here, 0);
     const next = shortStation(stops[i + 1]?.station);
-    return next ? `approaching ${next}` : (here ? `at ${here}` : '');
+    const radius = Number.isFinite(opts.atStationM)
+        ? opts.atStationM
+        : (opts.stationary ? AT_STATION_STATIONARY_M : AT_STATION_M);
+    const index = opts.stationIndex || $globalStationIndex.get() || {};
+    const a = coordsForStation(stops[i]?.station, index);
+    const b = coordsForStation(stops[i + 1]?.station, index);
+    const hopM = (a && b) ? haversineM(a.lat, a.lng, b.lat, b.lng) : 0;
+    if (hopM >= 20) {
+        const fromHere = hopM * fraction;
+        const toNext = hopM * (1 - fraction);
+        if (fromHere <= radius) return at(i, here, fromHere);
+        if (toNext <= radius) return at(i + 1, next, toNext);
+        if (next) return { kind: 'approaching', index: i + 1, station: next, label: `approaching ${next}`, distanceM: toNext };
+        return at(i, here, fromHere);
+    }
+    if (fraction < 0.25) return at(i, here, null);
+    if (fraction > 0.85) return at(i + 1, next, null) || at(i, here, null);
+    if (next) return { kind: 'approaching', index: i + 1, station: next, label: `approaching ${next}`, distanceM: null };
+    return at(i, here, null);
+}
+
+export function journeyPositionLabel(stops, progress, opts = {}) {
+    return journeyPositionDetail(stops, progress, opts)?.label || '';
+}
+
+function wrapDaySeconds(delta) {
+    let d = delta % 86400;
+    if (d > 43200) d -= 86400;
+    if (d < -43200) d += 86400;
+    return d;
+}
+
+/**
+ * How early or late a train is against today's timetable, from where it is now.
+ * Between stations the scheduled clock is interpolated linearly along the hop
+ * (20% of the way from A to B = 20% of the way from A's time to B's time), so a
+ * train halfway along a 6-minute hop is compared against A + 3 min. At a platform
+ * the scheduled clock is that station's own time.
+ * Positive seconds = late, negative = early.
+ * @returns {{ seconds: number, scheduledSec: number, phase: 'before_departure'|'en_route'|'arrived', position: object }|null}
+ */
+export function timetableDeviation(stops, progress, now, opts = {}) {
+    if (!stops?.length || !Number.isFinite(progress)) return null;
+    const nowSec = nowSeconds(now);
+    const position = journeyPositionDetail(stops, progress, opts);
+    if (!position) return null;
+    const bounded = Math.max(0, Math.min(stops.length - 1, progress));
+    const i = Math.floor(bounded);
+    const fraction = bounded - i;
+    let scheduledSec;
+    let phase = 'en_route';
+    if (position.kind === 'at') {
+        scheduledSec = stops[position.index]?.seconds;
+        if (position.index >= stops.length - 1) phase = 'arrived';
+        else if (position.index === 0 && nowSec < stops[0].seconds) phase = 'before_departure';
+    } else {
+        const a = stops[i];
+        const b = stops[i + 1] || a;
+        const span = Math.max(0, (b.seconds ?? 0) - (a.seconds ?? 0));
+        scheduledSec = (a.seconds ?? 0) + span * fraction;
+    }
+    if (!Number.isFinite(scheduledSec)) return null;
+    return {
+        seconds: Math.round(wrapDaySeconds(nowSec - scheduledSec)),
+        scheduledSec,
+        phase,
+        position,
+    };
+}
+
+/** Grandmother-readable timetable chip: "On time", "4 min late", "Departs in 6 min". */
+export function formatDeviationLabel(deviation) {
+    if (!deviation || !Number.isFinite(deviation.seconds)) return '';
+    const sec = deviation.seconds;
+    const min = Math.max(1, Math.round(Math.abs(sec) / 60));
+    if (deviation.phase === 'before_departure') {
+        if (sec < -ON_TIME_TOLERANCE_SEC) return `Departs in ${min} min`;
+        if (sec > ON_TIME_TOLERANCE_SEC) return `${min} min late leaving`;
+        return 'Leaving on time';
+    }
+    const arrived = deviation.phase === 'arrived';
+    if (Math.abs(sec) <= ON_TIME_TOLERANCE_SEC) return arrived ? 'Arrived on time' : 'On time';
+    const prefix = arrived ? 'Arrived ' : '';
+    if (sec > 0) return `${prefix}${min} min late`;
+    return `${prefix}${min} min early`;
+}
+
+/**
+ * Delay-prediction scaffold (NOT wired, NOT written anywhere yet).
+ *
+ * Every accepted onboard fix can be reduced to one compact sample of
+ * "timetable said X, the train was actually here at Y". Collected over weeks,
+ * per train / per day type / per hop, these samples are the training set for
+ * a future "this train is usually 4 min late at Rissik on weekday mornings"
+ * feature and for live arrival estimates on the board.
+ *
+ * Proposed storage (owner decision, do not create until approved):
+ *   - NOT the primary RTDB used by boards and alerts. Samples arrive every few
+ *     seconds per active sharer and never need to be read live by commuters,
+ *     so they belong in a separate, append-only, analytics-shaped store:
+ *     a second RTDB instance `nexttrain-telemetry`, or Cloudflare D1/R2 behind
+ *     a Worker (cheapest for later aggregation).
+ *   - Suggested shape when it lands:
+ *     train_deviations/{region}/{yyyymmdd}/{trainId}/{sampleId} = buildDeviationSample(...)
+ *   - Trip plans (saved planner journeys) stay where they are; they are
+ *     per-user documents, not a telemetry stream, and do not share this store.
+ *
+ * Only builds the object. Nothing calls it on a write path.
+ */
+export function buildDeviationSample(input = {}) {
+    const deviation = input.deviation
+        || timetableDeviation(input.stops, input.progress, input.nowSec, { stationIndex: input.stationIndex });
+    if (!deviation) return null;
+    const stops = input.stops || [];
+    const at = Math.max(0, Math.min(stops.length - 1, Number(input.progress) || 0));
+    const hopFrom = stops[Math.floor(at)]?.station || null;
+    const hopTo = stops[Math.min(stops.length - 1, Math.floor(at) + 1)]?.station || null;
+    return {
+        v: 1,
+        trainId: String(input.trainId || ''),
+        routeId: String(input.routeId || ''),
+        region: String(input.region || ''),
+        dayType: input.dayType || currentDayType(),
+        at: Number.isFinite(input.at) ? input.at : Date.now(),
+        progress: Math.round(at * 1000) / 1000,
+        hopFrom,
+        hopTo,
+        phase: deviation.phase,
+        scheduledSec: Math.round(deviation.scheduledSec),
+        deviationSec: deviation.seconds,
+        speedMps: Number.isFinite(input.speedMps) ? Math.round(input.speedMps * 10) / 10 : null,
+        accuracyM: Number.isFinite(input.accuracy) ? Math.round(input.accuracy) : null,
+        trainStatus: input.trainStatus || 'moving',
+    };
 }
 
 function projectFraction(lat, lng, a, b) {
@@ -556,13 +803,11 @@ function shortStation(name) {
     return String(name || '').replace(/ STATION$/i, '').trim();
 }
 
-/** Last timed stop on this timetable column (headboard / terminus). */
+/** Last timed stop on this timetable column (headboard / terminus). Never corridor destB. */
 export function trainTerminusName(trainId, fallback) {
-    const fb = shortStation(fallback);
-    if (fb) return fb;
     const { stops } = findStopsForTrain(trainId);
     if (stops.length) return shortStation(stops[stops.length - 1].station);
-    return '';
+    return shortStation(fallback);
 }
 
 /** "1165 → Pienaarspoort" — never a bare train number. */
@@ -581,6 +826,21 @@ export function trainGoingFullLabel(trainId, destination) {
     if (id && dest) return `Train ${id} → ${dest}`;
     if (id) return `Train ${id}`;
     return dest || 'Train';
+}
+
+/** Timetable headboard, e.g. "Toward Mabopane". Never the opposite corridor name. */
+export function trainTowardLabel(trainId, destination) {
+    const dest = trainTerminusName(trainId, destination);
+    return dest ? `Toward ${dest}` : '';
+}
+
+/** Tracking card title, e.g. "PIENAARSPOORT Train 9123". */
+export function trainHeadboardTitle(trainId, destination) {
+    const id = String(trainId || '').trim();
+    const dest = trainTerminusName(trainId, destination);
+    if (dest && id) return `${dest} Train ${id}`;
+    if (id) return `Train ${id}`;
+    return dest || 'Tracking train';
 }
 
 /** Where the timetable says this train should be right now. */

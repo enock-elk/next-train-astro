@@ -64,6 +64,75 @@ export function buildPlannerShareUrl({ from, to, time, day, region, origin, path
     return `${baseOrigin}/og/share?${params.toString()}`;
 }
 
+export function parseLiveSharePath(pathname) {
+    // Optional app base (`/next-train-astro/og/l/...` on the GitHub preview).
+    const m = String(pathname || '').match(/\/og\/(?:l|live)\/([^/]+)(?:\/([^/]+))?(?:\/([^/]+))?\/?$/i);
+    if (!m) return null;
+    let trainId = '';
+    let routeId = '';
+    let dest = '';
+    try { trainId = decodeURIComponent(m[1] || '').trim(); } catch { trainId = String(m[1] || '').trim(); }
+    if (!trainId || /\./.test(trainId)) return null;
+    try { routeId = m[2] ? decodeURIComponent(m[2]).trim() : ''; } catch { routeId = String(m[2] || '').trim(); }
+    try { dest = m[3] ? decodeURIComponent(m[3]).trim() : ''; } catch { dest = String(m[3] || '').trim(); }
+    dest = dest.replace(/\s+STATION$/i, '').trim();
+    return { kind: 'live', trainId, routeId, dest, region: null };
+}
+
+export function liveShareSearchFromUrl(url) {
+    const pathLive = parseLiveSharePath(url?.pathname);
+    if (!pathLive) return url?.search || '';
+    const params = new URLSearchParams();
+    params.set('live', pathLive.trainId);
+    if (pathLive.routeId) params.set('rt', pathLive.routeId);
+    if (pathLive.dest) params.set('to', pathLive.dest);
+    return `?${params.toString()}`;
+}
+
+export function buildLiveTrainShareUrl({ trainId, routeId, destination, origin } = {}) {
+    const baseOrigin = origin || (typeof location !== 'undefined' ? location.origin : 'https://nexttrain.co.za');
+    const id = encodeURIComponent(String(trainId || '').trim());
+    const prefix = liveShareBasePrefix();
+    if (!id) return `${baseOrigin}${prefix}/og/share`;
+    const rt = encodeURIComponent(String(routeId || '').trim());
+    const dest = encodeURIComponent(String(destination || '').replace(/\s+STATION$/i, '').trim());
+    let path = `/og/l/${id}`;
+    if (rt) path += `/${rt}`;
+    if (dest) path += `/${dest}`;
+    return `${baseOrigin}${prefix}${path}`;
+}
+
+/** GitHub Pages preview lives under `/next-train-astro`. Production base is `/`. */
+function liveShareBasePrefix() {
+    try {
+        const base = (typeof import.meta !== 'undefined' && import.meta.env?.BASE_URL) || '/';
+        const raw = String(base || '/').trim();
+        if (!raw || raw === '/') return '';
+        return `/${raw.replace(/^\/+|\/+$/g, '')}`;
+    } catch {
+        return '';
+    }
+}
+
+export function parseLiveTrainDeepLink(search = typeof location !== 'undefined' ? location.search : '') {
+    if (search && typeof search === 'object' && !Array.isArray(search) && !(search instanceof URLSearchParams)) {
+        if (search.kind === 'live' && search.trainId) return search;
+    }
+    const params = search instanceof URLSearchParams
+        ? search
+        : new URLSearchParams(typeof search === 'string' ? search : '');
+    const trainId = String(params.get('live') || '').trim();
+    if (!trainId) return null;
+    const regionRaw = (params.get('r') || params.get('region') || '').toUpperCase();
+    return {
+        kind: 'live',
+        trainId,
+        routeId: params.get('rt') || params.get('route') || '',
+        dest: normalizeStationQuery(params.get('to') || ''),
+        region: ['GP', 'WC', 'KZN', 'EC'].includes(regionRaw) ? regionRaw : null,
+    };
+}
+
 export function buildRouteShareUrl({ routeId, view = 'grid', dir = 'A', day = 'weekday', origin, pathname: _pathname } = {}) {
     const baseOrigin = origin || (typeof location !== 'undefined' ? location.origin : 'https://nexttrain.co.za');
     const params = new URLSearchParams();
@@ -116,6 +185,7 @@ export function parsePlannerDeepLink(search = typeof location !== 'undefined' ? 
     if (!from || !to) return null;
 
     const regionRaw = (params.get('r') || params.get('region') || '').toUpperCase();
+    const src = String(params.get('src') || params.get('source') || '').toLowerCase();
     return {
         kind: 'planner',
         from,
@@ -124,6 +194,7 @@ export function parsePlannerDeepLink(search = typeof location !== 'undefined' ? 
         day: decodeDay(params.get('d') || params.get('day') || ''),
         region: ['GP', 'WC', 'KZN', 'EC'].includes(regionRaw) ? regionRaw : null,
         legacy,
+        src: src === 'seo' ? 'seo' : '',
     };
 }
 
@@ -138,12 +209,14 @@ export function parseRouteDeepLinkParams(search = typeof location !== 'undefined
     const rt = params.get('rt');
     const action = String(params.get('action') || '').toLowerCase();
     const legacy = action === 'route';
+    if (params.get('live')) return null;
     const routeId = rt || params.get('route');
     if (!routeId) return null;
     // SPA parity: bare `?route=pta-pien&view=grid` (no action=) must still open the timetable
     if (!rt && !legacy && !params.get('route')) return null;
 
     const regionRaw = (params.get('r') || params.get('region') || '').toUpperCase();
+    const src = String(params.get('src') || params.get('source') || '').toLowerCase();
     return {
         kind: 'route',
         routeId,
@@ -152,7 +225,38 @@ export function parseRouteDeepLinkParams(search = typeof location !== 'undefined
         day: decodeDay(params.get('d') || params.get('day') || 'weekday'),
         region: ['GP', 'WC', 'KZN', 'EC'].includes(regionRaw) ? regionRaw : null,
         legacy: legacy || (!rt && !!params.get('route')),
+        src: src === 'seo' ? 'seo' : '',
     };
+}
+
+/**
+ * SEO landings open the app with ?rt= / ?plan=. That must not count as deep_link_open
+ * (reserved for shared WhatsApp/OG/share links). Detect src=seo and same-origin SEO referrers.
+ */
+export function isSeoAppHandoff(linkOrSearch = null) {
+    try {
+        if (linkOrSearch && typeof linkOrSearch === 'object' && !Array.isArray(linkOrSearch)
+            && !(linkOrSearch instanceof URLSearchParams)) {
+            if (String(linkOrSearch.src || '').toLowerCase() === 'seo') return true;
+        }
+        const params = linkOrSearch instanceof URLSearchParams
+            ? linkOrSearch
+            : (typeof linkOrSearch === 'string'
+                ? new URLSearchParams(linkOrSearch)
+                : (typeof location !== 'undefined' ? new URLSearchParams(location.search || '') : null));
+        if (params) {
+            const src = String(params.get('src') || params.get('source') || '').toLowerCase();
+            if (src === 'seo') return true;
+        }
+        if (typeof document === 'undefined' || typeof location === 'undefined') return false;
+        const ref = String(document.referrer || '');
+        if (!ref) return false;
+        const u = new URL(ref);
+        if (u.origin !== location.origin) return false;
+        return /^\/(?:routes|regions|corridors)(?:\.html|\/|$)/i.test(u.pathname || '');
+    } catch {
+        return false;
+    }
 }
 
 /** Legacy SPA `?action=map` — opens the static network map modal. */
@@ -216,6 +320,7 @@ export function parseShareTargetDeepLink(search = typeof location !== 'undefined
         : new URLSearchParams(typeof search === 'string' ? search : '');
 
     // Prefer explicit Next Train deep links over share-target fields.
+    if (params.get('live')) return parseLiveTrainDeepLink(params);
     if (params.get('plan') || params.get('rt') || params.get('route') || params.get('action')) {
         return null;
     }
@@ -231,6 +336,8 @@ export function parseShareTargetDeepLink(search = typeof location !== 'undefined
             const u = new URL(candidate, typeof location !== 'undefined' ? location.origin : 'https://nexttrain.co.za');
             const planner = parsePlannerDeepLink(u.search);
             if (planner) return { ...planner, fromShareTarget: true };
+            const live = parseLiveTrainDeepLink(u.search);
+            if (live) return { ...live, fromShareTarget: true };
             const route = parseRouteDeepLinkParams(u.search);
             if (route) return { ...route, fromShareTarget: true };
         } catch { /* ignore bad URLs */ }
@@ -265,7 +372,8 @@ export function stripShareParamsFromUrl() {
             'action', 'route', 'view', 'dir', 'day',
             'from', 'to', 'time', 'region',
             'plan', 'rt', 'v', 't', 'd', 'r',
-            'onboard',
+            'live', 'onboard',
+            'src', 'source',
             // Web Share Target GET params
             'title', 'text', 'url',
         ].forEach((k) => urlObj.searchParams.delete(k));

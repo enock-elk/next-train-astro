@@ -10,7 +10,7 @@ import { withBase } from '../lib/config.js';
         <div class="relative w-16 h-16 sm:w-20 sm:h-20 mb-3 sm:mb-4">
             <div class="absolute inset-0 bg-blue-500 rounded-full opacity-20 animate-ping"></div>
             <div class="relative bg-white dark:bg-gray-800 p-3 sm:p-4 rounded-full shadow-xl ring-4 ring-blue-50 dark:ring-gray-700 flex items-center justify-center">
-                <img src={withBase('icons/loading-logo.png')} class="w-full h-full object-contain" alt="Logo" onerror="this.style.display='none'" />
+                <img src={withBase('icons/loading-logo-splash.webp')} class="w-full h-full object-contain" alt="Logo" width="64" height="64" onerror="this.style.display='none'" />
             </div>
         </div>
         
@@ -41,9 +41,10 @@ import { withBase } from '../lib/config.js';
     // @ts-nocheck — pre-existing bridge; typed globals live in env.d.ts
     import { $userRegion, $currentRouteId } from '../store.js';
     import { ROUTES, getCorridorLabel } from '../lib/config.js';
-    import { safeStorage, formatRouteLabelHtml } from '../lib/utils.js';
+    import { safeStorage, formatRouteLabelHtml, expandJhbLabel, fitRouteNameNodes, fitJhbNodes, escapeHTML, restorePinnedSession } from '../lib/utils.js';
     import { loadAllSchedules, executeRegionSwap } from '../lib/logic.js';
-    import { prepareDeeplinkIntents, flushPendingDeeplinkIntents } from '../lib/deeplink.js';
+    import { prepareDeeplinkIntents, flushPendingDeeplinkIntents, hasInboundShareIntent } from '../lib/deeplink.js';
+    import { markWelcomeShownThisVisit, snapshotReturningForStartupLocate, maybeAutoLocateBoard } from '../lib/auto-locate.js';
 
     prepareDeeplinkIntents();
 
@@ -96,11 +97,12 @@ import { withBase } from '../lib/config.js';
                 else if (route.colorClass.includes('indigo')) borderColor = 'border-indigo-500';
 
                 const corridor = getCorridorLabel(route);
+                const corridorText = corridor || 'View schedules';
                 btn.className = `w-full text-left p-4 rounded-xl shadow-md flex items-center justify-between group transition-all transform hover:scale-[1.02] active:scale-95 bg-white dark:bg-gray-800 border-l-4 ${borderColor} focus:outline-none`;
                 btn.innerHTML = `
                     <div class="min-w-0 pr-2">
-                        <span class="block text-sm font-bold text-gray-900 dark:text-white truncate">${displayName}</span>
-                        <span class="block text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500 mt-0.5">${corridor || 'View schedules'}</span>
+                        <span class="block text-sm font-bold text-gray-900 dark:text-white truncate" data-route-raw="${escapeHTML(route.name)}">${displayName}</span>
+                        <span class="block text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500 mt-0.5 truncate" data-jhb-short="${escapeHTML(corridorText)}" data-jhb-long="${escapeHTML(expandJhbLabel(corridorText))}">${escapeHTML(corridorText)}</span>
                     </div>
                     <svg class="w-5 h-5 text-gray-400 group-hover:text-blue-500 transition-colors flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
                 `;
@@ -111,7 +113,7 @@ import { withBase } from '../lib/config.js';
                         window._suppressReloads = true;
                     }
 
-                    // 1. Persist selection to persistent memory
+                    // 1. Persist selection to persistent memory (localStorage + IndexedDB)
                     safeStorage.setItem('userRegion', region);
                     safeStorage.setItem('defaultRoute_' + region, route.id);
                     safeStorage.setItem('welcomeSeen', 'true');
@@ -132,9 +134,11 @@ import { withBase } from '../lib/config.js';
                             modal.classList.add('hidden');
                             modal.classList.remove('opacity-0');
                             revealChrome();
+                            try { window.dispatchEvent(new CustomEvent('nt-welcome-closed')); } catch (e) {}
                         }, 300);
                     } else {
                         revealChrome();
+                        try { window.dispatchEvent(new CustomEvent('nt-welcome-closed')); } catch (e) {}
                     }
                     
                     // 4. Trigger base schedule fetch
@@ -156,8 +160,8 @@ import { withBase } from '../lib/config.js';
                 btn.className = `w-full text-left p-4 rounded-xl shadow-md flex items-center justify-between bg-gray-50 dark:bg-gray-800/40 border-l-4 border-gray-300 dark:border-gray-700 opacity-80 cursor-not-allowed transition-all focus:outline-none`;
                 btn.innerHTML = `
                     <div class="min-w-0 pr-2">
-                        <span class="block text-sm font-bold text-gray-500 dark:text-gray-400 truncate">${displayName}</span>
-                        ${corridorSoon ? `<span class="block text-[10px] font-semibold uppercase tracking-wider text-gray-400 mt-0.5">${corridorSoon}</span>` : ''}
+                        <span class="block text-sm font-bold text-gray-500 dark:text-gray-400 truncate" data-route-raw="${escapeHTML(route.name)}">${displayName}</span>
+                        ${corridorSoon ? `<span class="block text-[10px] font-semibold uppercase tracking-wider text-gray-400 mt-0.5 truncate" data-jhb-short="${escapeHTML(corridorSoon)}" data-jhb-long="${escapeHTML(expandJhbLabel(corridorSoon))}">${escapeHTML(corridorSoon)}</span>` : ''}
                         <span class="text-[10px] font-black text-yellow-600 dark:text-yellow-500 uppercase tracking-widest mt-0.5 inline-block">🚧 Coming Soon</span>
                     </div>
                     <svg class="w-5 h-5 text-gray-300 dark:text-gray-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
@@ -170,14 +174,25 @@ import { withBase } from '../lib/config.js';
             }
             listContainer.appendChild(btn);
         });
+        fitRouteNameNodes(listContainer);
+        fitJhbNodes(listContainer);
     };
 
-    const initWelcomeScreen = () => {
+    const initWelcomeScreen = async () => {
         const modal = document.getElementById('welcome-modal');
         if (!modal) return;
 
+        try { await restorePinnedSession(); } catch (e) {}
+        const returningAtBoot = snapshotReturningForStartupLocate();
+
         let isOnboardMap = false;
         try { isOnboardMap = new URLSearchParams(window.location.search).get('onboard') === 'map'; } catch (e) {}
+
+        const restoredRegion = $userRegion.get();
+        const lsRegion = safeStorage.getItem('userRegion');
+        if (lsRegion && lsRegion !== restoredRegion) {
+            $userRegion.set(lsRegion);
+        }
 
         const welcomeSeen = safeStorage.getItem('welcomeSeen') === 'true';
         let activeRegion = $userRegion.get() || 'GP';
@@ -189,7 +204,9 @@ import { withBase } from '../lib/config.js';
         const hasPlannerShortcut = params.get('action') === 'planner' && !params.get('from') && !params.get('to') && !params.get('plan');
         const hasMapDeepLink = String(params.get('action') || '').toLowerCase() === 'map';
         const hasShareTarget = !!(params.get('title') || params.get('text') || params.get('url'));
-        const hasInboundShare = hasRouteDeepLink || hasPlannerDeepLink || hasPlannerShortcut || hasMapDeepLink || hasShareTarget;
+        // Search plus launchQueue/session snapshot — a late Facebook hop can
+        // already have frozen plan= before this script reads location.search.
+        const hasInboundShare = hasRouteDeepLink || hasPlannerDeepLink || hasPlannerShortcut || hasMapDeepLink || hasShareTarget || hasInboundShareIntent();
         // Soft SEO hint for first-time only — never override a returning user's region
         const seoRegion = (params.get('region') || params.get('r') || '').toUpperCase();
         if (!welcomeSeen && ['GP', 'WC', 'KZN', 'EC'].includes(seoRegion) && !safeStorage.getItem('userRegion')) {
@@ -212,6 +229,7 @@ import { withBase } from '../lib/config.js';
         // Brand-new users + legacy map onboarding deep-links
         // Shared route/planner links skip Welcome so the destination opens immediately
         if ((!welcomeSeen || isOnboardMap) && !hasInboundShare) {
+            markWelcomeShownThisVisit();
             if (isOnboardMap) {
                 try {
                     const urlObj = new URL(window.location.href);
@@ -243,6 +261,8 @@ import { withBase } from '../lib/config.js';
                     }
                 });
             });
+        } else if (returningAtBoot) {
+            maybeAutoLocateBoard().catch(() => {});
         }
     };
 

@@ -1,7 +1,7 @@
 ---
 /**
- * Crawlable landings use the in-app header chrome: Next Train left,
- * Open Next Train · region on the right (bell slot). No logo, no theme toggle.
+ * Crawlable landings use the in-app header chrome: Next Train left.
+ * The region shortcut stays off this row. No logo, no theme toggle.
  */
 import { withBase } from '../lib/config.js';
 
@@ -20,9 +20,6 @@ const homeHref = region
   ? withBase(`/?region=${encodeURIComponent(region)}`)
   : withBase('/');
 const ctaHref = Astro.props.ctaHref || homeHref;
-const ctaLabel =
-  Astro.props.ctaLabel ||
-  (regionLabel ? `Open Next Train · ${regionLabel}` : 'Open Next Train');
 ---
 
 <header id="app-header" class="app-header shrink-0 px-3 py-2.5 z-30 relative flex items-start justify-between gap-2 border-b">
@@ -40,13 +37,62 @@ const ctaLabel =
       <p id="current-day" class="text-[11px] sm:text-xs font-medium text-gray-500 dark:text-gray-400 leading-tight">Getting schedules…</p>
     </div>
   </div>
-  <a
-    href={ctaHref}
-    class="seo-open-app shrink-0 mt-1 max-w-[9.5rem] sm:max-w-none text-[11px] sm:text-xs font-bold text-right leading-tight underline-offset-2 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70 rounded-sm"
-  >
-    {ctaLabel}
-  </a>
+  <div class="flex items-center gap-0.5 shrink-0 -mt-0.5 relative z-[70]">
+    <button id="notice-bell" type="button" class="hidden relative shrink-0 p-2 rounded-full bg-red-100 dark:bg-red-900 text-red-600 dark:text-red-300 shadow-sm focus:outline-none hover:bg-red-200 dark:hover:bg-red-800 transition-colors" aria-label="Service alerts">
+      <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path></svg>
+      <span id="notice-dot" class="absolute top-0 right-0 block h-2.5 w-2.5 rounded-full ring-2 ring-white dark:ring-gray-800 bg-red-600 transform translate-x-1/4 -translate-y-1/4 hidden"></span>
+    </button>
+  </div>
 </header>
+<a id="seo-open-bar" class="seo-open-bar" href={ctaHref}>Open in Next Train</a>
+
+<style is:global>
+  .seo-open-bar {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 40;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 3.25rem;
+    padding: 0.85rem 1rem calc(0.85rem + env(safe-area-inset-bottom));
+    background: #1d4ed8;
+    color: #fff;
+    font-weight: 800;
+    letter-spacing: -0.01em;
+    text-decoration: none;
+    box-shadow: 0 -10px 28px rgba(15, 23, 42, 0.16);
+  }
+  .seo-open-bar:hover { background: #1e40af; }
+  body:has(#seo-open-bar) {
+    padding-bottom: calc(4.5rem + env(safe-area-inset-bottom));
+  }
+  #app-header ~ main h1 {
+    font-size: clamp(1.35rem, 0.85rem + 2.2vw, 2.15rem);
+    letter-spacing: -0.03em;
+    line-height: 1.15;
+  }
+  @media (min-width: 1024px) {
+    #app-header ~ main {
+      max-width: 76rem;
+      margin-inline: auto;
+    }
+    #app-header ~ main .max-w-2xl,
+    #app-header ~ main .max-w-6xl {
+      max-width: none;
+    }
+    #app-header ~ main h2 {
+      font-size: 1.35rem;
+      letter-spacing: -0.02em;
+    }
+  }
+  #app-header ~ main .rounded-2xl,
+  #app-header ~ main .rounded-xl {
+    box-shadow: 0 12px 32px rgba(15, 23, 42, 0.06);
+  }
+</style>
 
 <script is:inline>
   (function () {

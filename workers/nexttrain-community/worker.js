@@ -16,6 +16,7 @@ import {
     classifyUnsafeLanguage,
     findDisallowedUrls,
 } from '../../src/lib/content-safety-core.js';
+import { sanitizeCommunityPhotoUrl } from '../../src/lib/community-photo.js';
 
 const BODY_MAX = 280;
 const ADMIN_EMAILS = new Set(['enockelk@gmail.com', 'thandeka05nxumalo@gmail.com']);
@@ -23,7 +24,6 @@ const JOHANNESBURG_OFFSET_MS = 2 * 60 * 60 * 1000;
 const ALERT_CRON = '*/5 * * * *';
 const TTL_CRON = '0 * * * *';
 const DEFAULT_CLAIM_LEASE_MS = 2 * 60 * 1000;
-const DEFAULT_IMPRESSION_DEDUPE_TTL_MS = 14 * 24 * 60 * 60 * 1000;
 
 /** @type {Map<string, number[]>} */
 const rateBuckets = new Map();
@@ -32,7 +32,7 @@ function isSafeRtdbKey(value) {
     return typeof value === 'string' && value.length > 0 && value.length <= 80 && !/[.#$[\]/]/.test(value);
 }
 
-function corsOriginAllowed(origin, env) {
+export function corsOriginAllowed(origin, env) {
     if (!origin) return true;
     const allowed = String(env.ALLOWED_ORIGINS || '')
         .split(',')
@@ -41,7 +41,8 @@ function corsOriginAllowed(origin, env) {
     if (allowed.includes('*') || allowed.includes(origin)) return true;
     try {
         const host = new URL(origin).hostname.toLowerCase();
-        if (host.endsWith('.github.io') || host.endsWith('.pages.dev')) return true;
+        if (host === 'lab.nexttrain.co.za') return true;
+        if (host.endsWith('.next-train-lab.pages.dev')) return true;
     } catch { /* ignore */ }
     return false;
 }
@@ -56,7 +57,7 @@ function corsHeaders(env, request) {
     return {
         'Access-Control-Allow-Origin': ok ? (origin || '*') : (allowed[0] || '*'),
         'Access-Control-Allow-Methods': 'POST, OPTIONS, GET',
-        'Access-Control-Allow-Headers': 'Authorization, Content-Type',
+        'Access-Control-Allow-Headers': 'Authorization, Content-Type, X-Cron-Secret',
         'Access-Control-Max-Age': '86400',
         Vary: 'Origin',
     };
@@ -120,31 +121,6 @@ function checkRate(key, windowMs, max) {
     arr.push(now);
     rateBuckets.set(key, arr);
     return true;
-}
-
-export function isValidImpressionScope(value) {
-    const scope = String(value || '').trim();
-    if (!isSafeRtdbKey(scope)) return false;
-    return scope === 'all'
-        || /^all_[A-Z]{2,3}$/.test(scope)
-        || /^[a-z][a-z0-9_-]{1,80}$/i.test(scope);
-}
-
-export function isValidImpressionNoticeId(value) {
-    return isSafeRtdbKey(String(value || '').trim());
-}
-
-export function isValidInstallationId(value) {
-    return typeof value === 'string'
-        && value.length >= 16
-        && value.length <= 128
-        && /^[A-Za-z0-9_-]+$/.test(value);
-}
-
-export async function hashInstallationId(installationId, secret = '') {
-    const bytes = new TextEncoder().encode(`${secret}:${installationId}`);
-    const digest = await crypto.subtle.digest('SHA-256', bytes);
-    return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
 }
 
 function toBase64Url(obj) {
@@ -388,86 +364,6 @@ async function pruneInvalidPushSubscriptions(rtdb, invalid) {
     return pruned;
 }
 
-function isNoticePayload(value) {
-    return !!value && typeof value === 'object' && !!(
-        value.id || value.message || value.text || value.imageUrl || value.imageUrls
-    );
-}
-
-async function noticeExists(rtdb, scope, noticeId) {
-    const direct = (await rtdb.get(`notices/${scope}/${noticeId}`)).value;
-    if (isNoticePayload(direct)) return true;
-    const bucket = (await rtdb.get(`notices/${scope}`)).value;
-    return isNoticePayload(bucket) && String(bucket.id || '') === noticeId;
-}
-
-/**
- * ETag transaction over count + dedupe map. A concurrent duplicate either wins
- * this transaction or observes the winner, so the count changes exactly once.
- */
-export async function recordAlertImpression({
-    rtdb,
-    scope,
-    noticeId,
-    installationId,
-    hashSecret = '',
-    now = Date.now(),
-    retentionMs = DEFAULT_IMPRESSION_DEDUPE_TTL_MS,
-}) {
-    if (!isValidImpressionScope(scope)) throw new Error('Invalid scope');
-    if (!isValidImpressionNoticeId(noticeId)) throw new Error('Invalid noticeId');
-    if (!isValidInstallationId(installationId)) throw new Error('Invalid installationId');
-    if (!(await noticeExists(rtdb, scope, noticeId))) return { found: false, counted: false, count: 0 };
-
-    const installationHash = await hashInstallationId(installationId, hashSecret);
-    const path = `notice_impressions/${scope}/${noticeId}`;
-    for (let attempt = 0; attempt < 6; attempt += 1) {
-        const current = await rtdb.get(path, true);
-        const node = current.value && typeof current.value === 'object' ? current.value : {};
-        const dedupe = node.dedupe && typeof node.dedupe === 'object' ? node.dedupe : {};
-        if (dedupe[installationHash]) {
-            return { found: true, counted: false, count: Math.max(0, Number(node.count) || 0) };
-        }
-        const next = {
-            count: Math.max(0, Number(node.count) || 0) + 1,
-            updatedAt: now,
-            dedupe: {
-                ...dedupe,
-                [installationHash]: { createdAt: now, expiresAt: now + retentionMs },
-            },
-        };
-        const written = await rtdb.put(path, next, current.etag);
-        if (written.matched) return { found: true, counted: true, count: next.count };
-    }
-    throw new Error('Impression transaction contended');
-}
-
-export async function cleanupAlertImpressionDedupe(env, options = {}) {
-    const now = Number(options.now ?? Date.now());
-    const rtdb = options.rtdb || createRtdbClient(env);
-    const tree = (await rtdb.get('notice_impressions')).value;
-    let deleted = 0;
-    for (const [scope, notices] of Object.entries(tree || {})) {
-        for (const noticeId of Object.keys(notices || {})) {
-            const path = `notice_impressions/${scope}/${noticeId}`;
-            for (let attempt = 0; attempt < 4; attempt += 1) {
-                const current = await rtdb.get(path, true);
-                if (!current.value || typeof current.value !== 'object') break;
-                const entries = Object.entries(current.value.dedupe || {});
-                const live = Object.fromEntries(entries.filter(([, item]) => Number(item?.expiresAt || 0) > now));
-                const removed = entries.length - Object.keys(live).length;
-                if (!removed) break;
-                const next = { ...current.value, dedupe: live };
-                const written = await rtdb.put(path, next, current.etag);
-                if (!written.matched) continue;
-                deleted += removed;
-                break;
-            }
-        }
-    }
-    return { deleted };
-}
-
 function johannesburgParts(ts) {
     const d = new Date(Number(ts) + JOHANNESBURG_OFFSET_MS);
     return {
@@ -643,15 +539,49 @@ function scheduledTargets(job) {
     return Array.from(new Set(values.map((target) => String(target || '').trim()).filter(isSafeRtdbKey)));
 }
 
+function noticeLooksLikeRecord(value) {
+    const poll = value?.poll;
+    return !!(value && typeof value === 'object' && (
+        value.message || value.text || value.severity || value.imageUrls || value.imageUrl
+        || (poll && typeof poll === 'object' && (poll.active || poll.question || poll.optionA || poll.optionB))
+    ));
+}
+
 function listNotices(node) {
     if (!node || typeof node !== 'object') return [];
     if (Array.isArray(node)) return node.filter((item) => item && typeof item === 'object');
     const children = Object.entries(node)
-        .filter(([key, value]) => key !== 'reactions' && value && typeof value === 'object'
-            && (value.message || value.text || value.severity || value.imageUrls || value.imageUrl))
+        .filter(([key, value]) => key !== 'reactions' && noticeLooksLikeRecord(value))
         .map(([key, value]) => ({ ...value, id: value.id || key }));
     if (children.length) return children;
-    return (node.message || node.text || node.id || node.imageUrls || node.imageUrl) ? [node] : [];
+    return (node.message || node.text || node.id || node.imageUrls || node.imageUrl || noticeLooksLikeRecord(node)) ? [node] : [];
+}
+
+function scheduledPollClosesAt(runAt, job, expiresAt) {
+    const poll = job?.notice?.poll;
+    if (!poll || poll.active === false) return 0;
+    const exp = Number(expiresAt) || 0;
+    const closesInMs = Number(poll.closesInMs);
+    if (Number.isFinite(closesInMs) && closesInMs > 0) {
+        const until = Number(runAt) + closesInMs;
+        return exp > 0 && until > exp ? exp : until;
+    }
+    const explicit = Number(poll.closesAt);
+    if (Number.isFinite(explicit) && explicit > 0) {
+        return exp > 0 && explicit > exp ? exp : explicit;
+    }
+    return exp;
+}
+
+async function writePollVoteMeta(rtdb, payload) {
+    if (!payload?.id || !payload.poll || payload.poll.active === false) return;
+    const closesAt = Number(payload.poll.closesAt) || Number(payload.expiresAt) || 0;
+    const allowMultiple = !!payload.poll.allowMultiple;
+    if (!closesAt && !allowMultiple) return;
+    const meta = {};
+    if (closesAt) meta.closesAt = closesAt;
+    if (allowMultiple) meta.allowMultiple = true;
+    await rtdb.put(`polls/${payload.id}/_meta`, meta);
 }
 
 function noticesMeta(notices, now) {
@@ -731,18 +661,34 @@ async function processScheduledJob(rtdb, scheduleId, now, leaseMs) {
 
     const notice = { ...job.notice };
     delete notice.expiresInMs;
+    if (notice.poll && typeof notice.poll === 'object') {
+        notice.poll = { ...notice.poll };
+        delete notice.poll.closesInMs;
+    }
+    const expiresAt = scheduledAlertExpiresAt(plan.occurrenceAt, job);
     const payload = {
         ...notice,
         id: noticeId,
         postedAt: plan.occurrenceAt,
-        expiresAt: scheduledAlertExpiresAt(plan.occurrenceAt, job),
+        expiresAt,
     };
+    if (payload.poll && payload.poll.active) {
+        const closesAt = scheduledPollClosesAt(plan.occurrenceAt, job, expiresAt);
+        if (closesAt) payload.poll.closesAt = closesAt;
+    }
     const failures = [];
     for (const target of targets) {
         try {
             await publishScheduledNotice(rtdb, target, payload, now);
         } catch (error) {
             failures.push({ target, error: error?.message || 'Publish failed' });
+        }
+    }
+    if (!failures.length && payload.poll && payload.poll.active) {
+        try {
+            await writePollVoteMeta(rtdb, payload);
+        } catch (error) {
+            failures.push({ target: 'polls', error: error?.message || 'Poll meta failed' });
         }
     }
     if (failures.length) return { state: 'failed', noticeId, failures };
@@ -792,40 +738,83 @@ export async function runScheduledAlerts(env, options = {}) {
     return summary;
 }
 
-async function handleAlertImpression(request, env) {
-    let body;
+function cronSecret(env) {
+    return String(env?.ALERT_CRON_SECRET || env?.TTL_WIPE_SECRET || env?.CRON_SECRET || '').trim();
+}
+
+function cronSecretOk(request, env) {
+    const expected = cronSecret(env);
+    if (!expected) return false;
+    const header = String(request.headers.get('X-Cron-Secret') || '').trim();
+    return header.length > 0 && header === expected;
+}
+
+const GITHUB_ACTIONS_OIDC_ISS = 'https://token.actions.githubusercontent.com';
+const GITHUB_ACTIONS_OIDC_AUD = 'nexttrain-community';
+const GITHUB_ACTIONS_OIDC_REPO = 'enock-elk/next-train-astro';
+const GITHUB_ACTIONS_OIDC_WORKFLOW = 'enock-elk/next-train-astro/.github/workflows/scheduled-alerts.yml';
+
+function decodeJwtPart(part) {
+    const pad = '='.repeat((4 - (part.length % 4)) % 4);
+    const b64 = `${part}${pad}`.replace(/-/g, '+').replace(/_/g, '/');
+    return JSON.parse(atob(b64));
+}
+
+function jwtSignatureBytes(part) {
+    const pad = '='.repeat((4 - (part.length % 4)) % 4);
+    const b64 = `${part}${pad}`.replace(/-/g, '+').replace(/_/g, '/');
+    const bin = atob(b64);
+    return Uint8Array.from(bin, (ch) => ch.charCodeAt(0));
+}
+
+export async function verifyGithubActionsOidc(token) {
+    const parts = String(token || '').split('.');
+    if (parts.length !== 3) throw new Error('Invalid OIDC token');
+    const header = decodeJwtPart(parts[0]);
+    const payload = decodeJwtPart(parts[1]);
+    if (header.alg !== 'RS256') throw new Error('OIDC alg must be RS256');
+    const now = Math.floor(Date.now() / 1000);
+    if (Number(payload.exp || 0) <= now) throw new Error('OIDC token expired');
+    if (Number(payload.nbf || 0) > now + 30) throw new Error('OIDC token not yet valid');
+    if (payload.iss !== GITHUB_ACTIONS_OIDC_ISS) throw new Error('OIDC issuer mismatch');
+    const aud = Array.isArray(payload.aud) ? payload.aud : [payload.aud];
+    if (!aud.includes(GITHUB_ACTIONS_OIDC_AUD)) throw new Error('OIDC audience mismatch');
+    if (payload.repository !== GITHUB_ACTIONS_OIDC_REPO) throw new Error('OIDC repository mismatch');
+    const workflow = String(payload.job_workflow_ref || payload.workflow_ref || '');
+    if (!workflow.startsWith(`${GITHUB_ACTIONS_OIDC_WORKFLOW}@`)) throw new Error('OIDC workflow mismatch');
+    const jwksRes = await fetch(`${GITHUB_ACTIONS_OIDC_ISS}/.well-known/jwks`);
+    if (!jwksRes.ok) throw new Error('OIDC JWKS unavailable');
+    const jwks = await jwksRes.json();
+    const jwk = (jwks.keys || []).find((key) => key.kid === header.kid);
+    if (!jwk) throw new Error('OIDC key not found');
+    const cryptoKey = await crypto.subtle.importKey(
+        'jwk',
+        jwk,
+        { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' },
+        false,
+        ['verify'],
+    );
+    const data = new TextEncoder().encode(`${parts[0]}.${parts[1]}`);
+    const ok = await crypto.subtle.verify('RSASSA-PKCS1-v1_5', cryptoKey, jwtSignatureBytes(parts[2]), data);
+    if (!ok) throw new Error('OIDC signature mismatch');
+    return payload;
+}
+
+async function githubActionsOidcOk(request) {
+    const auth = request.headers.get('Authorization') || '';
+    if (!auth.startsWith('Bearer ')) return false;
     try {
-        body = await request.json();
-    } catch {
-        return json(env, request, 400, { ok: false, error: 'Invalid JSON' });
-    }
-    const scope = String(body.scope || '').trim();
-    const noticeId = String(body.noticeId || '').trim();
-    const installationId = String(body.installationId || '').trim();
-    if (!isValidImpressionScope(scope) || !isValidImpressionNoticeId(noticeId) || !isValidInstallationId(installationId)) {
-        return json(env, request, 400, { ok: false, error: 'Invalid impression identity' });
-    }
-    const windowMs = Number(env.IMPRESSION_RATE_WINDOW_MS || 60_000);
-    const max = Number(env.IMPRESSION_RATE_MAX || 30);
-    const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
-    if (!checkRate(`imp-device:${installationId}`, windowMs, max)
-        || !checkRate(`imp-ip:${ip}`, windowMs, max * 4)) {
-        return json(env, request, 429, { ok: false, error: 'Rate limited', retryAfterMs: windowMs });
-    }
-    try {
-        const result = await recordAlertImpression({
-            rtdb: createRtdbClient(env),
-            scope,
-            noticeId,
-            installationId,
-            hashSecret: env.IMPRESSION_HASH_SECRET || env.FIREBASE_PRIVATE_KEY || '',
-            retentionMs: Number(env.IMPRESSION_DEDUPE_TTL_MS || DEFAULT_IMPRESSION_DEDUPE_TTL_MS),
-        });
-        if (!result.found) return json(env, request, 404, { ok: false, error: 'Notice not found' });
-        return json(env, request, 200, { ok: true, counted: result.counted, count: result.count });
+        await verifyGithubActionsOidc(auth.slice(7).trim());
+        return true;
     } catch (error) {
-        return json(env, request, 500, { ok: false, error: error?.message || 'Impression write failed' });
+        console.warn('GitHub Actions OIDC rejected', error?.message || error);
+        return false;
     }
+}
+
+async function cronAuthorized(request, env) {
+    if (cronSecretOk(request, env)) return true;
+    return githubActionsOidcOk(request);
 }
 
 async function requireAdmin(request, env) {
@@ -1100,27 +1089,6 @@ async function handlePushNotificationsAdmin(request, env) {
     }
 }
 
-async function handleAlertImpressionAdmin(request, env) {
-    const auth = await requireAdmin(request, env);
-    if (auth.error) return json(env, request, auth.status, { ok: false, error: auth.error });
-    let body;
-    try {
-        body = await request.json();
-    } catch {
-        return json(env, request, 400, { ok: false, error: 'Invalid JSON' });
-    }
-    const notices = (Array.isArray(body.notices) ? body.notices.slice(0, 50) : [])
-        .filter((item) => isValidImpressionScope(item?.scope) && isValidImpressionNoticeId(item?.noticeId));
-    const rtdb = createRtdbClient(env);
-    const rows = await Promise.all(notices.map(async (item) => {
-        const scope = String(item.scope);
-        const noticeId = String(item.noticeId);
-        const node = (await rtdb.get(`notice_impressions/${scope}/${noticeId}`)).value;
-        return { scope, noticeId, count: Math.max(0, Number(node?.count) || 0) };
-    }));
-    return json(env, request, 200, { ok: true, notices: rows });
-}
-
 async function handleScheduledAlertsAdmin(request, env) {
     const auth = await requireAdmin(request, env);
     if (auth.error) return json(env, request, auth.status, { ok: false, error: auth.error });
@@ -1236,7 +1204,7 @@ async function handlePost(request, env) {
         category,
         uid: user.uid,
         displayName: String(body.displayName || user.displayName || 'Passenger').slice(0, 80),
-        photoURL: body.photoURL || user.photoURL || null,
+        photoURL: sanitizeCommunityPhotoUrl(body.photoURL || user.photoURL || '') || null,
         email: String(body.email || user.email || '').slice(0, 120) || null,
         deviceId: String(body.deviceId || 'unknown').slice(0, 120),
         timestamp: Date.now(),
@@ -1348,18 +1316,25 @@ export default {
         if (request.method === 'POST' && (url.pathname === '/community/post' || url.pathname === '/post')) {
             return handlePost(request, env);
         }
-        if (request.method === 'POST' && url.pathname === '/alerts/impression') {
-            return handleAlertImpression(request, env);
-        }
-        if (request.method === 'POST' && url.pathname === '/admin/alert-impressions') {
-            try {
-                return await handleAlertImpressionAdmin(request, env);
-            } catch (e) {
-                return json(env, request, 500, { ok: false, error: e.message || 'Impression lookup failed' });
-            }
-        }
         if (request.method === 'POST' && url.pathname === '/admin/notifications/send') {
             return handlePushNotificationsAdmin(request, env);
+        }
+        if (
+            (request.method === 'GET' || request.method === 'POST')
+            && url.pathname === '/cron/scheduled-alerts'
+        ) {
+            if (!await cronAuthorized(request, env)) {
+                return json(env, request, 401, { ok: false, error: 'Unauthorized' });
+            }
+            try {
+                if (!hasFirebaseAdminEnv(env)) {
+                    return json(env, request, 500, { ok: false, error: 'Firebase Admin env incomplete' });
+                }
+                const result = await runScheduledAlerts(env);
+                return json(env, request, 200, { ok: true, via: 'http-cron', ...result });
+            } catch (e) {
+                return json(env, request, 500, { ok: false, error: e.message || 'Scheduled alert run failed' });
+            }
         }
         if (
             (request.method === 'GET' || request.method === 'POST')
@@ -1392,16 +1367,17 @@ export default {
         // Always publish due alerts on every cron tick. Do not require an exact
         // `event.cron === '*/5 * * * *'` match — Cloudflare can normalize the
         // expression, and a no-op here leaves Monday 00:00 jobs sitting in the queue.
+        if (!hasFirebaseAdminEnv(env)) {
+            console.error('Scheduled alerts skipped: FIREBASE_PRIVATE_KEY / Admin env incomplete');
+            return;
+        }
         const tasks = [
             runScheduledAlerts(env).catch((e) => console.error('Scheduled alert run failed', e)),
         ];
         const hourly = cron === TTL_CRON || cron === '0 * * * *' || /^0 \* \* \* \*$/.test(cron);
         if (hourly) {
             tasks.push(
-                Promise.all([
-                    wipeStalePosts(env),
-                    cleanupAlertImpressionDedupe(env),
-                ]).catch((e) => console.error('TTL wipe failed', e))
+                wipeStalePosts(env).catch((e) => console.error('TTL wipe failed', e))
             );
         }
         await Promise.all(tasks);

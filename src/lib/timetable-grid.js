@@ -1,20 +1,136 @@
 /**
  * Full timetable grid UI + route deep-link handling
  */
-import { ROUTES } from './config.js';
-import { safeStorage, escapeHTML, routeArrowSvg, routePrimaryGridDirection, scheduleCacheSlot, normalizeScheduleSheetDay } from './utils.js';
+import { ROUTES, HOLIDAY_NAMES } from './config.js';
+import { safeStorage, escapeHTML, routeArrowSvg, routePrimaryGridDirection, scheduleCacheSlot, normalizeScheduleSheetDay, schedulesBelongToRoute } from './utils.js';
 import { $currentRouteId, $userRegion, $schedules, $globalExclusions, $globalDisruptions, $opsOverlaysReady } from '../store.js';
 import { loadAllSchedules, ensureRoutePinnedForRegion } from './logic.js';
-import { showToast, triggerHaptic, openSmoothModal, closeSmoothModal, toggleDropdownScrim } from './ui.js';
+import { showToast, triggerHaptic, openSmoothModal, closeSmoothModal, switchTab, toggleDropdownScrim } from './ui.js';
 import { simulateNextActiveService, routeHasSaturdayService, scheduleHasService } from './live-board.js';
 import {
     buildRouteShareUrl,
     parseRouteDeepLinkParams,
     stripShareParamsFromUrl,
+    isSeoAppHandoff,
 } from './share-links.js';
-import { consumeShareDeeplinkSnapshot, peekShareDeeplinkSnapshot } from './deeplink.js';
+import { consumeShareDeeplinkSnapshot, peekShareDeeplinkSnapshot, armSlowDeeplinkToast, lockShareBoot } from './deeplink.js';
 
 let lastGridBody = null;
+let gridSchedulesRefreshBound = false;
+let gridSchedulesRefreshPrimed = false;
+let gridReloadPendingFor = '';
+/** One pending VIEW FULL TIMETABLE tap. Tap-around clears it so load cannot stack overlays. */
+let gridOpenIntent = null;
+let gridRouteIntentPrimed = false;
+/** One view_full_grid per open; day/dir switches must not re-count. */
+let gridViewEventOpen = false;
+
+const GRID_INTENT_BLOCKING_MODALS = [
+    'route-modal', 'fare-modal', 'alerts-channel', 'notice-modal', 'schedule-modal',
+    'profile-modal', 'feedback-modal', 'about-modal', 'legal-modal', 'messages-thread-modal',
+    'dev-modal', 'login-modal', 'holiday-notice-modal', 'exit-modal', 'cache-clear-modal',
+    'network-slow-confirm-modal', 'region-confirm-modal', 'schedule-override-modal',
+];
+
+function scheduleBundleHasRows(scheds) {
+    if (!scheds || typeof scheds !== 'object') return false;
+    return ['weekday_to_a', 'weekday_to_b', 'saturday_to_a', 'saturday_to_b', 'pub_to_a', 'pub_to_b']
+        .some((key) => Array.isArray(scheds[key]?.rows) && scheds[key].rows.length > 0);
+}
+
+export function shouldHonorGridOpenIntent(intent, ctx = {}) {
+    if (!intent || !intent.routeId) return false;
+    if (ctx.currentRouteId && ctx.currentRouteId !== intent.routeId) return false;
+    if (ctx.activeTab && ctx.activeTab !== 'next-train') return false;
+    if (ctx.homeTabActive === false) return false;
+    if (ctx.hubOpen) return false;
+    const open = Array.isArray(ctx.openModalIds) ? ctx.openModalIds : [];
+    if (open.some((id) => id && id !== 'full-schedule-modal')) return false;
+    return true;
+}
+
+export function collectGridIntentContext() {
+    if (typeof document === 'undefined') {
+        return { currentRouteId: '', activeTab: 'next-train', homeTabActive: true, hubOpen: false, openModalIds: [] };
+    }
+    const home = document.getElementById('view-next-train');
+    const openModalIds = GRID_INTENT_BLOCKING_MODALS.filter((id) => {
+        const el = document.getElementById(id);
+        return !!(el && !el.classList.contains('hidden'));
+    });
+    let activeTab = 'next-train';
+    try { activeTab = safeStorage.getItem('activeTab') || 'next-train'; } catch { /* ignore */ }
+    return {
+        currentRouteId: $currentRouteId.get() || '',
+        activeTab,
+        homeTabActive: !home || home.classList.contains('active'),
+        hubOpen: document.body?.classList.contains('sidenav-open'),
+        openModalIds,
+    };
+}
+
+export function cancelPendingGridOpen() {
+    gridOpenIntent = null;
+}
+
+export function markFullGridClosed() {
+    gridViewEventOpen = false;
+}
+
+function closeFullGridModal() {
+    markFullGridClosed();
+    if (typeof location !== 'undefined' && location.hash === '#grid') {
+        history.back();
+        return;
+    }
+    closeSmoothModal('full-schedule-modal');
+}
+
+function tryHonorPendingGridOpen(scheds = $schedules.get()) {
+    const intent = gridOpenIntent;
+    if (!intent) return false;
+    if (!shouldHonorGridOpenIntent(intent, collectGridIntentContext())) return false;
+    if (!schedulesBelongToRoute(scheds, intent.routeId) || !scheduleBundleHasRows(scheds)) return false;
+    const dir = intent.direction;
+    const day = intent.dayOverride;
+    gridOpenIntent = null;
+    if (gridReloadPendingFor === intent.routeId) gridReloadPendingFor = '';
+    renderFullScheduleGrid(dir, day, { silent: true });
+    return true;
+}
+
+function bindGridScheduleRouteRefresh() {
+    if (gridSchedulesRefreshBound) return;
+    gridSchedulesRefreshBound = true;
+    $schedules.subscribe((scheds) => {
+        if (!gridSchedulesRefreshPrimed) {
+            gridSchedulesRefreshPrimed = true;
+            return;
+        }
+        if (tryHonorPendingGridOpen(scheds)) return;
+        const modal = document.getElementById('full-schedule-modal');
+        if (!modal || modal.classList.contains('hidden')) return;
+        const routeId = $currentRouteId.get();
+        if (!schedulesBelongToRoute(scheds, routeId) || !scheduleBundleHasRows(scheds)) return;
+        const dir = lastGridBody?.direction || (typeof window !== 'undefined' ? window._gridSwapDir : null) || 'A';
+        const day = lastGridBody?.selectedDay || null;
+        renderFullScheduleGrid(dir, day, { silent: true });
+    });
+    $currentRouteId.subscribe((routeId) => {
+        if (!gridRouteIntentPrimed) {
+            gridRouteIntentPrimed = true;
+            return;
+        }
+        if (gridOpenIntent && gridOpenIntent.routeId !== routeId) cancelPendingGridOpen();
+    });
+}
+
+/** Holiday name for the calendar day, when the open sheet is a public holiday. */
+function holidayNoticeName() {
+    const now = new Date();
+    const key = `${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    return HOLIDAY_NAMES?.[key] || '';
+}
 let gridExclRefreshBound = false;
 
 /** Wait briefly for exclusions so VIEW FULL TIMETABLE is not race-blind. */
@@ -41,20 +157,57 @@ function paintOpenGridBody() {
     const grid = document.getElementById('grid-container');
     const modal = document.getElementById('full-schedule-modal');
     if (!grid || !modal || modal.classList.contains('hidden') || !lastGridBody) return;
+    if ($currentRouteId.get() !== lastGridBody.routeId) return;
+    if (!schedulesBelongToRoute($schedules.get(), lastGridBody.routeId)) return;
     const {
         noServiceSheet, schedule, routeName, routeSheetKey, routeId, targetDayIdx, isTodayType,
+        sheetDayType, holidayName,
     } = lastGridBody;
     grid.innerHTML = noServiceSheet
         ? (typeof window.Renderer?._buildNoSaturdayGridHTML === 'function'
-            ? window.Renderer._buildNoSaturdayGridHTML(schedule, routeName, routeId)
+            ? window.Renderer._buildNoSaturdayGridHTML(schedule, routeName, routeId, sheetDayType || 'saturday', holidayName || '')
             : grid.innerHTML)
         : window.Renderer._buildGridHTML(schedule, routeSheetKey, routeId, targetDayIdx, isTodayType, false, lastGridBody.selectedDay);
     if (noServiceSheet) bindNoWeekendWeekdaySwitch(lastGridBody.direction || window._gridSwapDir || 'A');
+    bindGridExpressSkips();
+}
+
+function bindGridExpressSkips() {
+    const grid = document.getElementById('grid-container');
+    if (!grid || grid.dataset.exprBound === '1') return;
+    grid.dataset.exprBound = '1';
+    grid.addEventListener('click', (e) => {
+        const btn = e.target?.closest?.('[data-expr-skip="1"]');
+        if (!btn) return;
+        e.preventDefault();
+        e.stopPropagation();
+        const station = btn.getAttribute('data-expr-station') || 'this station';
+        const train = btn.getAttribute('data-expr-train') || 'This train';
+        showToast(`Train ${train} does not stop at ${station}.`, 'info', 3500);
+    });
 }
 
 function bindNoWeekendWeekdaySwitch(direction) {
     document.getElementById('grid-switch-weekday-btn')?.addEventListener('click', () => {
         renderFullScheduleGrid(direction, 'weekday');
+    });
+    document.getElementById('grid-plan-trip-btn')?.addEventListener('click', () => {
+        const routeId = lastGridBody?.routeId;
+        const route = ROUTES[routeId];
+        const dir = direction === 'B' ? 'B' : 'A';
+        closeSmoothModal('full-schedule-modal', true);
+        if (typeof location !== 'undefined' && location.hash === '#grid') {
+            try { history.replaceState({ tab: 'planner' }, '', '#planner'); } catch { /* ignore */ }
+        }
+        switchTab('trip-planner');
+        if (!route) return;
+        const origin = dir === 'A' ? route.destB : route.destA;
+        const dest = dir === 'A' ? route.destA : route.destB;
+        import('./planner-ui.js').then((mod) => {
+            mod.planFromEmptyWeekendGrid(origin, dest, route.region);
+        }).catch(() => {
+            showToast('Could not open the trip planner.', 'info', 2500);
+        });
     });
 }
 
@@ -78,14 +231,6 @@ function bindGridExclusionRefresh() {
     });
 }
 
-function closeFullGridModal() {
-    if (typeof location !== 'undefined' && location.hash === '#grid') {
-        history.back();
-        return;
-    }
-    closeSmoothModal('full-schedule-modal');
-}
-
 function buildGridShareUrl(routeId, direction, dayType) {
     const day = (dayType === 'saturday' || dayType === 'sunday' || dayType === 'public_holiday')
         ? dayType
@@ -101,6 +246,7 @@ export function buildFareShareUrl(routeId) {
 export function parseRouteDeepLink() {
     if (typeof location === 'undefined') return null;
     const snap = peekShareDeeplinkSnapshot();
+    if (snap && snap.kind === 'live') return null;
     const fromUrl = parseRouteDeepLinkParams(location.search);
     // URL wins over a leftover share snapshot so a Hercules page cannot open Pretoria.
     const raw = (fromUrl && fromUrl.routeId)
@@ -117,6 +263,7 @@ export function parseRouteDeepLink() {
         dir: raw.dir,
         day,
         region: raw.region || null,
+        src: raw.src || '',
         fromSnapshot: !!(snap && snap.kind === 'route' && !(fromUrl && fromUrl.routeId)),
     };
 }
@@ -134,7 +281,9 @@ export async function applyRouteDeepLink() {
 
     if (link.fromSnapshot || peekShareDeeplinkSnapshot()?.kind === 'route') consumeShareDeeplinkSnapshot();
 
-    showToast('Opening shared link...', 'info', 5000);
+    const seoHandoff = isSeoAppHandoff(link);
+    lockShareBoot();
+    const slowToast = armSlowDeeplinkToast(seoHandoff ? 'Opening Next Train' : 'Still opening this link');
 
     const returning = safeStorage.getItem('welcomeSeen') === 'true';
     const defaultKey = 'defaultRoute_' + route.region;
@@ -145,8 +294,13 @@ export async function applyRouteDeepLink() {
         safeStorage.setItem('welcomeSeen', 'true');
     }
     try { document.getElementById('welcome-modal')?.classList.add('hidden'); } catch { /* ignore */ }
-    // Cold start / no defaults: pin the shared route as theirs
-    if (!hasUsableDefault) {
+    // SEO timetable download always pins that corridor. Shared links pin only when none exists.
+    if (seoHandoff) {
+        try {
+            safeStorage.setItem('userRegion', route.region);
+            safeStorage.setItem(defaultKey, link.routeId);
+        } catch { /* ignore */ }
+    } else if (!hasUsableDefault) {
         safeStorage.setItem(defaultKey, link.routeId);
     }
 
@@ -160,39 +314,93 @@ export async function applyRouteDeepLink() {
     // Strip share params — renderFullScheduleGrid will push #grid so Close/Back stays in-app
     stripShareParamsFromUrl();
 
-    await loadAllSchedules(true);
-    // Pin restore must not win: keep the corridor from this page.
-    $currentRouteId.set(link.routeId);
-    if (typeof window.findNextTrains === 'function') window.findNextTrains();
-    if (typeof window.updateNextTrainView === 'function') window.updateNextTrainView();
+    // Cache and the bundled dump paint the sheet. Do not wait out the network waterfall
+    // (a forced reload used to hold the grid until Firebase finished).
+    loadAllSchedules(false).catch(() => {});
 
-    if (typeof window.trackAnalyticsEvent === 'function') {
-        window.trackAnalyticsEvent('deep_link_open', { type: 'route', route_id: link.routeId, view: link.view || 'board' });
+    const sheetsReady = (scheds) => (
+        $currentRouteId.get() === link.routeId
+        && schedulesBelongToRoute(scheds, link.routeId)
+        && scheduleBundleHasRows(scheds)
+    );
+
+    const paint = () => {
+        $currentRouteId.set(link.routeId);
+        if (typeof window.findNextTrains === 'function') window.findNextTrains();
+        if (typeof window.updateNextTrainView === 'function') window.updateNextTrainView();
+        slowToast.cancel();
+        if (typeof window.trackAnalyticsEvent === 'function' && !isSeoAppHandoff(link)) {
+            window.trackAnalyticsEvent('deep_link_open', {
+                type: 'route',
+                route_id: link.routeId,
+                view: link.view || 'board',
+                region_id: region || '',
+            });
+        }
+        if (!seoHandoff) showToast(`Opened shared route: ${route.name}`, 'success', 2000);
+        if (link.view === 'grid') {
+            renderFullScheduleGrid(link.dir, link.day);
+        } else if (link.view === 'fares' || link.view === 'fare') {
+            import('./live-board-ui.js')
+                .then((m) => m.openFareModalForCurrentRoute?.())
+                .catch(() => { /* ignore */ });
+        }
+    };
+
+    if (sheetsReady($schedules.get())) {
+        paint();
+        return true;
     }
-    showToast(`Opened shared route: ${route.name}`, 'success', 2000);
 
-    if (link.view === 'grid') {
-        setTimeout(() => renderFullScheduleGrid(link.dir, link.day), 80);
-    } else if (link.view === 'fares' || link.view === 'fare') {
-        setTimeout(async () => {
-            try {
-                const { openFareModalForCurrentRoute } = await import('./live-board-ui.js');
-                openFareModalForCurrentRoute();
-            } catch (_) { /* ignore */ }
-        }, 120);
+    let unsub = () => {};
+    let painted = false;
+    const giveUp = setTimeout(() => {
+        if (painted) return;
+        painted = true;
+        try { unsub(); } catch { /* ignore */ }
+        slowToast.cancel();
+        showToast('Connection timeout: Could not load this timetable.', 'error');
+    }, 12000);
+    unsub = $schedules.subscribe((scheds) => {
+        if (painted || !sheetsReady(scheds)) return;
+        painted = true;
+        clearTimeout(giveUp);
+        try { unsub(); } catch { /* ignore */ }
+        paint();
+    });
+    if (painted) {
+        try { unsub(); } catch { /* ignore */ }
     }
     return true;
 }
 
-export function renderFullScheduleGrid(direction = null, dayOverride = null) {
-    triggerHaptic();
+export function renderFullScheduleGrid(direction = null, dayOverride = null, opts = {}) {
+    if (!opts.silent) triggerHaptic();
+    bindGridScheduleRouteRefresh();
     const routeId = $currentRouteId.get();
     const route = ROUTES[routeId];
     const scheds = $schedules.get() || {};
-    if (!route || !window.Renderer?._buildGridHTML || !scheds || Object.keys(scheds).length === 0) {
+    if (!route || !window.Renderer?._buildGridHTML) {
         showToast('Loading latest schedules... please wait.', 'info', 2000);
         return;
     }
+    // Same-region corridor swap keeps generic weekday_to_a slots until the new
+    // route finishes parsing. Never paint Mabopane chrome over Pienaarspoort rows.
+    if (!schedulesBelongToRoute(scheds, routeId) || !scheduleBundleHasRows(scheds)) {
+        const alreadyWaiting = !!(gridOpenIntent && gridOpenIntent.routeId === routeId);
+        gridOpenIntent = { routeId, direction, dayOverride };
+        if (!alreadyWaiting) showToast('Loading latest schedules... please wait.', 'info', 2000);
+        if (gridReloadPendingFor !== routeId) {
+            gridReloadPendingFor = routeId;
+            loadAllSchedules(true).then(() => {
+                tryHonorPendingGridOpen();
+            }).catch(() => { /* ignore */ }).finally(() => {
+                if (gridReloadPendingFor === routeId) gridReloadPendingFor = '';
+            });
+        }
+        return;
+    }
+    gridOpenIntent = null;
     direction = direction === 'A' || direction === 'B'
         ? direction
         : routePrimaryGridDirection(route);
@@ -262,12 +470,15 @@ export function renderFullScheduleGrid(direction = null, dayOverride = null) {
     }
 
     let modal = document.getElementById('full-schedule-modal');
-    const isFirstOpen = !modal || modal.classList.contains('hidden');
+    const isFirstOpen = !gridViewEventOpen && (!modal || modal.classList.contains('hidden'));
     if (isFirstOpen && typeof window.trackAnalyticsEvent === 'function') {
+        gridViewEventOpen = true;
         window.trackAnalyticsEvent('view_full_grid', {
             route: route.name,
+            route_id: routeId,
             direction,
             day: selectedDay,
+            region_id: route.region || '',
         });
     }
 
@@ -462,16 +673,19 @@ export function renderFullScheduleGrid(direction = null, dayOverride = null) {
         targetDayIdx,
         isTodayType,
         selectedDay,
+        sheetDayType,
+        holidayName: sheetDayType === 'public_holiday' ? (holidayNoticeName() || '') : '',
     };
     if (typeof window !== 'undefined') window._gridSelectedDay = selectedDay;
     const html = noServiceSheet
         ? (typeof window.Renderer._buildNoSaturdayGridHTML === 'function'
-            ? window.Renderer._buildNoSaturdayGridHTML(schedule, route.name, routeId)
+            ? window.Renderer._buildNoSaturdayGridHTML(schedule, route.name, routeId, sheetDayType, sheetDayType === 'public_holiday' ? (holidayNoticeName() || '') : '')
             : `<div class="p-6 text-center text-sm text-gray-600 dark:text-gray-300">No weekend service on this route. <button type="button" id="grid-switch-weekday-btn" class="underline font-bold">Switch to Mon - Fri</button></div>`)
         : window.Renderer._buildGridHTML(schedule, routeSheetKey, routeId, targetDayIdx, isTodayType, false, selectedDay);
     const grid = document.getElementById('grid-container');
     if (grid) grid.innerHTML = html;
     if (noServiceSheet) bindNoWeekendWeekdaySwitch(direction);
+    bindGridExpressSkips();
     bindGridExclusionRefresh();
 
     openSmoothModal('full-schedule-modal');
@@ -491,4 +705,6 @@ export function attachTimetableGridGlobals() {
     if (typeof window === 'undefined') return;
     window.renderFullScheduleGrid = renderFullScheduleGrid;
     window.applyRouteDeepLink = applyRouteDeepLink;
+    window.cancelPendingGridOpen = cancelPendingGridOpen;
+    window.markFullGridClosed = markFullGridClosed;
 }

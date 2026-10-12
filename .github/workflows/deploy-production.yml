@@ -79,6 +79,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Verify map gold
+        run: npm run verify:map-gold
+
       - name: Build for production (base=/)
         run: npm run build
         env:

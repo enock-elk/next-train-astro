@@ -16,7 +16,7 @@ import {
     currentDayType as logicCurrentDayType,
     currentDayIndex as logicCurrentDayIndex,
 } from './logic.js';
-import { getLookaheadDayInfo, isTrainExcluded } from './live-board.js';
+import { getLookaheadDayInfo, isTrainExcluded, isWeekdayPatternExcluded } from './live-board.js';
 import {
     classifySaturdayPlaceholderTrip,
     isPlaceholderRouteClosed,
@@ -27,6 +27,45 @@ import {
 /** Sheet day used for timetable lookups — Sunday has no sheets; WC public holidays use *_pub. */
 function scheduleDayType(dayType, region) {
     return normalizeScheduleSheetDay(dayType, region);
+}
+
+/** Local weekday index for YYYY-MM-DD. Null when the string is not that calendar day. */
+export function isoToWeekdayIndex(isoDate) {
+    if (!isoDate || !/^\d{4}-\d{2}-\d{2}$/.test(String(isoDate))) return null;
+    const [y, m, d] = String(isoDate).split('-').map(Number);
+    const date = new Date(y, m - 1, d);
+    if (Number.isNaN(date.getTime())) return null;
+    if (date.getFullYear() !== y || date.getMonth() !== m - 1 || date.getDate() !== d) return null;
+    return date.getDay();
+}
+
+/**
+ * Which day index exclusions use.
+ * A picked date wins (Tuesday stays 2, not Monday).
+ * A generic Weekday chip that is not today uses weekdayPattern instead of Monday.
+ */
+export function resolvePlannerExclusionDay({
+    dayType,
+    specificDate = null,
+    offset = 0,
+    startOffset = 0,
+    isExplicitOverride = false,
+    currentDayIdx = 1,
+    lookaheadIdx = null,
+} = {}) {
+    const specificIdx = offset === startOffset ? isoToWeekdayIndex(specificDate) : null;
+    if (specificIdx != null) {
+        return { targetDayIdx: specificIdx, weekdayPattern: false };
+    }
+    if (isExplicitOverride) {
+        const targetDayIdx = (dayType === 'saturday' || dayType === 'public_holiday') ? 6
+            : (dayType === 'sunday' ? 0 : 1);
+        return { targetDayIdx, weekdayPattern: dayType === 'weekday' };
+    }
+    if (offset > 0 && lookaheadIdx != null) {
+        return { targetDayIdx: lookaheadIdx, weekdayPattern: false };
+    }
+    return { targetDayIdx: currentDayIdx, weekdayPattern: false };
 }
 
 // SPA used script-scope globals. Prefer live window clock when the boot clock
@@ -593,7 +632,12 @@ export function findUpcomingTrainsForLeg(schedule, originRow, destRow, dayType, 
 
     let upcomingTrains = [];
     schedule.headers.slice(1).forEach(trainName => {
-        if (routeId && isTrainExcluded(trainName, routeId, exclusionDayIdx)) return;
+        if (routeId) {
+            const excl = context.weekdayPattern
+                ? isWeekdayPatternExcluded(trainName, routeId)
+                : isTrainExcluded(trainName, routeId, exclusionDayIdx);
+            if (excl && excl !== 'special') return;
+        }
         const depTime = originRow[trainName], arrTime = destRow[trainName];
         if (depTime && arrTime) {
             const depSeconds = timeToSeconds(depTime);
@@ -651,9 +695,10 @@ export class TransitMinHeap {
     }
 }
 
-export function buildTransitGraph(dayType, dayIdx) {
+export function buildTransitGraph(dayType, dayIdx, opts = null) {
     const graph = new Map();
     const db = $fullDatabase.get();
+    const weekdayPattern = !!(opts && opts.weekdayPattern);
 
     for (const [routeId, routeConfig] of Object.entries(ROUTES)) {
         if (!routeConfig.isActive) continue;
@@ -665,7 +710,10 @@ export function buildTransitGraph(dayType, dayIdx) {
             const rows     = schedule.rows;
 
             for (const trainName of schedule.headers.slice(1)) {
-                if (isTrainExcluded(trainName, routeId, dayIdx)) continue;
+                const graphExclusion = weekdayPattern
+                    ? isWeekdayPatternExcluded(trainName, routeId)
+                    : isTrainExcluded(trainName, routeId, dayIdx);
+                if (graphExclusion && graphExclusion !== 'special') continue;
 
                 for (let i = 0; i < rows.length - 1; i++) {
                     const rawDep = rows[i][trainName];
@@ -908,15 +956,16 @@ export function planDijkstraTrip(origin, dest, dayType, isRolloverLoop = false, 
     const dayIdx = context.targetDayIdx !== undefined ? context.targetDayIdx
                  : (dayType === getCurrentDayType() ? getCurrentDayIndex()
                  : (dayType === 'saturday' || dayType === 'public_holiday' ? 6 : 1));
+    const weekdayPattern = !!context.weekdayPattern;
 
     const startSec = 0;
 
     // GUARDIAN PHASE 16: Transit Graph Memoization — avoid rebuilding the heavy
     // graph on every Dijkstra run within one unified plan lifecycle.
-    const cacheKey = `graph_${dayType}_${dayIdx}`;
+    const cacheKey = `graph_${dayType}_${dayIdx}_${weekdayPattern ? 'wd' : 'd'}`;
     if (!context.graphCache) context.graphCache = {};
     if (!context.graphCache[cacheKey]) {
-        context.graphCache[cacheKey] = buildTransitGraph(dayType, dayIdx);
+        context.graphCache[cacheKey] = buildTransitGraph(dayType, dayIdx, { weekdayPattern });
     }
     const baseGraph = context.graphCache[cacheKey];
     const bannedEdges     = new Set();
@@ -1345,19 +1394,31 @@ export async function planUnifiedTrip(origin, dest, dayType, externalContext = {
         let targetDayType = dayType;
         let targetDayLabel = null;
         let targetDayIdx = getCurrentDayIndex();
-        let isFutureOffset = offset > startOffset; 
-        
+        let isFutureOffset = offset > startOffset;
+        let lookaheadIdx = null;
+
         if (isExplicitOverride) {
             targetDayType = dayType;
-            targetDayLabel = null; 
-            targetDayIdx = (dayType === 'saturday' || dayType === 'public_holiday') ? 6 : (dayType === 'sunday' ? 0 : 1);
+            targetDayLabel = null;
         } else if (offset > 0) {
             const info = getLookaheadDayInfo(offset);
             targetDayType = info.type;
             targetDayLabel = info.name;
-            targetDayIdx = info.idx;
+            lookaheadIdx = info.idx;
             context._targetIsHoliday = !!info.isHoliday;
         }
+
+        const exclusionDay = resolvePlannerExclusionDay({
+            dayType: targetDayType,
+            specificDate: context.specificDate,
+            offset,
+            startOffset,
+            isExplicitOverride,
+            currentDayIdx: getCurrentDayIndex(),
+            lookaheadIdx,
+        });
+        targetDayIdx = exclusionDay.targetDayIdx;
+        context.weekdayPattern = exclusionDay.weekdayPattern;
 
         if (targetDayType === 'sunday' && !isExplicitOverride) {
             return { status: 'SUNDAY_SKIP', trips: [], severedTerminus: null };

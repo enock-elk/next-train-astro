@@ -592,9 +592,151 @@ html[data-colour-pack="earthy"].dark .text-blue-400,
 html[data-colour-pack="earthy"].dark .text-blue-300 {
   color: rgb(var(--nt-blue-800)) !important;
 }
+/* Earthy only. Classic keeps its blue pills and gray buttons.
+   These chips were inheriting the inverted blue scale (cream on cream,
+   white on taupe). Dark brown ink on a distinct paper chip, both modes. */
+html[data-colour-pack="earthy"]:not(.dark) .nt-fare-zone-chip {
+  background-color: #e7e1d4 !important;
+  color: #2a261f !important;
+  border: 1px solid #cfc6b4 !important;
+}
 html[data-colour-pack="earthy"].dark .nt-fare-zone-chip {
-  background-color: var(--nt-surface) !important;
-  border: 1px solid var(--nt-border);
+  background-color: #efeae0 !important;
+  color: #2a261f !important;
+  border: 1px solid #d8d0c2 !important;
+}
+html[data-colour-pack="earthy"]:not(.dark) #planner-swap-btn {
+  background-color: #e7e1d4 !important;
+  color: #2a261f !important;
+  border-color: #f3f2ee !important;
+}
+html[data-colour-pack="earthy"].dark #planner-swap-btn {
+  background-color: #3a342c !important;
+  color: #f5f1e9 !important;
+  border-color: #1c1b18 !important;
+}
+html[data-colour-pack="earthy"]:not(.dark) #grid-swap-dir-btn,
+html[data-colour-pack="earthy"]:not(.dark) #grid-share-btn {
+  background-color: #e7e1d4 !important;
+  color: #2a261f !important;
+  border-color: #cfc6b4 !important;
+}
+html[data-colour-pack="earthy"].dark #grid-swap-dir-btn,
+html[data-colour-pack="earthy"].dark #grid-share-btn {
+  background-color: #efeae0 !important;
+  color: #2a261f !important;
+  border-color: #d8d0c2 !important;
+}
+html[data-colour-pack="earthy"] #pinned-section {
+  border-color: #cfc6b4;
+}
+html[data-colour-pack="earthy"]:not(.dark) #pinned-section a {
+  background-color: #e7e1d4 !important;
+  color: #2a261f !important;
+}
+html[data-colour-pack="earthy"].dark #pinned-section {
+  border-color: #6a6458;
+}
+html[data-colour-pack="earthy"].dark #pinned-section a {
+  background-color: #3a342c !important;
+  color: #f5f1e9 !important;
+}
+html[data-colour-pack="earthy"] #pinned-section .text-blue-700,
+html[data-colour-pack="earthy"] #pinned-section .text-blue-500,
+html[data-colour-pack="earthy"] #pinned-section .text-blue-400,
+html[data-colour-pack="earthy"] #pinned-section .text-blue-300 {
+  color: inherit !important;
+}
+html[data-colour-pack="earthy"]:not(.dark) #grid-container .nt-station-col.bg-blue-100 {
+  background-color: #e7e1d4 !important;
+  color: #2a261f !important;
+}
+html[data-colour-pack="earthy"].dark #grid-container .nt-station-col.dark\:bg-blue-800 {
+  background-color: #efeae0 !important;
+  color: #2a261f !important;
+}
+html[data-colour-pack="earthy"]:not(.dark) #grid-container tr.bg-blue-50 {
+  background-color: #efeae0;
+}
+html[data-colour-pack="earthy"].dark #grid-container tr.dark\:bg-blue-900\/20 {
+  background-color: rgba(58, 52, 44, 0.95);
+}
+html[data-colour-pack="earthy"] #commuter-peek-lookup,
+html[data-colour-pack="earthy"] #commuter-peek-close {
+  background-color: #3a342c !important;
+  color: #f7f3eb !important;
+  border-color: transparent !important;
+}
+html[data-colour-pack="earthy"] #commuter-peek-lookup:hover,
+html[data-colour-pack="earthy"] #commuter-peek-close:hover {
+  background-color: #2a261f !important;
+  color: #f7f3eb !important;
+}
+/* Earthy blue-600 is the light paper CTA in both light and dark.
+   text-white on that wash is the unreadable Update / Yes / Close label.
+   Light mode is the same wash (#d8d6ce), so the ink rule is not .dark-only.
+   Nested .text-white (icon labels) does not inherit, so it is listed too. */
+html[data-colour-pack="earthy"] .bg-blue-600,
+html[data-colour-pack="earthy"] .bg-blue-600 .text-white,
+html[data-colour-pack="earthy"].dark .dark\:bg-blue-600,
+html[data-colour-pack="earthy"].dark .dark\:bg-blue-600 .text-white,
+html[data-colour-pack="earthy"].dark .dark\:bg-blue-600 .dark\:text-white {
+  color: var(--nt-primary-fg) !important;
+}
+html[data-colour-pack="earthy"] .hover\:bg-blue-600:hover,
+html[data-colour-pack="earthy"] .hover\:bg-blue-600:hover .text-white {
+  color: var(--nt-primary-fg) !important;
+}
+/* Light Earthy hover steps onto the dark blue-700 / blue-500 wash.
+   Dark Earthy blue-700 stays a light wash, so that mode keeps the ink above. */
+html[data-colour-pack="earthy"]:not(.dark) .hover\:bg-blue-700:hover,
+html[data-colour-pack="earthy"]:not(.dark) .hover\:bg-blue-700:hover .text-white,
+html[data-colour-pack="earthy"]:not(.dark) .hover\:bg-blue-500:hover,
+html[data-colour-pack="earthy"]:not(.dark) .hover\:bg-blue-500:hover .text-white {
+  color: #f5f1e9 !important;
+}
+/* See more / View results use --nt-primary as a label. In Earthy light that
+   token is the paper fill, so the label disappears on the card. */
+html[data-colour-pack="earthy"] .nt-alert-see-more,
+html[data-colour-pack="earthy"] .nt-poll-view-results {
+  color: var(--nt-accent);
+}
+/* Checked switches paint the track with --nt-primary. Earthy light makes that
+   the same pale wash as the knob, so the on state vanishes. */
+html[data-colour-pack="earthy"]:not(.dark) .toggle-checkbox:checked {
+  background-color: #f7f3eb !important;
+  border-color: #3a342c !important;
+}
+html[data-colour-pack="earthy"]:not(.dark) .toggle-checkbox:checked + .toggle-label {
+  background-color: #6f675c !important;
+}
+html[data-colour-pack="earthy"].dark #route-list a.dark\:text-blue-300 {
+  background-color: #3a342c !important;
+  color: #f5f1e9 !important;
+}
+html[data-colour-pack="earthy"].dark #route-list a.dark\:text-blue-300 span,
+html[data-colour-pack="earthy"].dark #route-list a.dark\:text-blue-300 svg {
+  color: #f5f1e9 !important;
+}
+html[data-colour-pack="earthy"]:not(.dark) #route-list a.text-blue-700.bg-blue-50 {
+  background-color: #e7e1d4 !important;
+  color: #2a261f !important;
+}
+html[data-colour-pack="earthy"]:not(.dark) #route-list a.text-blue-700.bg-blue-50 span,
+html[data-colour-pack="earthy"]:not(.dark) #route-list a.text-blue-700.bg-blue-50 svg {
+  color: #2a261f !important;
+}
+html[data-colour-pack="earthy"] #telemetry-region-modal .bg-blue-50 {
+  background-color: #e7e1d4 !important;
+  color: #2a261f !important;
+}
+html[data-colour-pack="earthy"].dark #telemetry-region-modal .dark\:bg-blue-900\/20 {
+  background-color: #efeae0 !important;
+  color: #2a261f !important;
+}
+html[data-colour-pack="earthy"] #telemetry-region-modal .bg-blue-50 span,
+html[data-colour-pack="earthy"].dark #telemetry-region-modal .dark\:bg-blue-900\/20 span {
+  color: #2a261f !important;
 }
 #grid-trigger-container {
   padding-bottom: 0.5rem;
@@ -815,6 +957,37 @@ html.dark .nt-offline-strip {
 #alert-msg {
   white-space: pre-wrap;
 }
+@keyframes nt-alert-force-flash {
+  0% { box-shadow: 0 0 0 3px color-mix(in srgb, var(--nt-primary, #2563eb) 72%, white); }
+  55% { box-shadow: 0 0 0 3px color-mix(in srgb, var(--nt-primary, #2563eb) 28%, transparent); }
+  100% { box-shadow: 0 0 0 0 transparent; }
+}
+.nt-alert-card.nt-alert-force-flash {
+  animation: nt-alert-force-flash 1.5s ease-out 1;
+}
+.nt-alert-body.is-collapsed {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 12;
+  line-clamp: 12;
+  overflow: hidden;
+}
+.nt-alert-see-more {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: 44px;
+  margin: 0;
+  padding: 0.35rem 0 0.15rem;
+  border: 0;
+  background: none;
+  color: var(--nt-primary, #2563eb);
+  font-size: 0.9375rem;
+  font-weight: 700;
+  line-height: 1.2;
+  text-align: left;
+  cursor: pointer;
+}
 .nt-rich-body a,
 #notice-content a,
 #developer-reply-content a,
@@ -1001,7 +1174,24 @@ body.nav-bottom:not(.nt-immersive) #sidenav {
 #alerts-channel-scroll {
   background-color: transparent !important;
 }
+#alerts-channel header {
+  background-color: var(--nt-chrome-header) !important;
+  border-color: var(--nt-chrome-header-border);
+  color: var(--nt-chrome-fg);
+}
 #alerts-channel header,
+#alerts-channel header #alerts-channel-title,
+#alerts-channel header p,
+#alerts-channel header #alerts-channel-back,
+#alerts-channel header #alerts-channel-close {
+  color: var(--nt-chrome-fg) !important;
+}
+#alerts-channel header p {
+  opacity: 0.82;
+}
+#alerts-channel-close {
+  background-color: color-mix(in srgb, var(--nt-chrome-fg) 18%, transparent) !important;
+}
 #alerts-channel-footer {
   background-color: color-mix(in srgb, var(--nt-surface) 92%, transparent) !important;
   border-color: var(--nt-border);
@@ -1011,10 +1201,65 @@ body.nav-bottom:not(.nt-immersive) #sidenav {
   color: var(--nt-primary-fg) !important;
   border-color: transparent !important;
 }
+#close-timetable-footer-btn,
+#close-help-btn-2,
+#fare-modal-close-btn {
+  background-color: var(--nt-primary) !important;
+  color: var(--nt-primary-fg) !important;
+  border-color: transparent !important;
+}
+html.dark #fare-modal > div,
+html.dark #fare-modal > div > .rounded-t-2xl,
+html.dark #fare-modal > div > .rounded-b-2xl {
+  background-color: var(--nt-surface) !important;
+}
+#planner-train-sheet-fare {
+  background-color: #ffffff !important;
+  color: #1e3a8a !important;
+}
+html.dark #planner-train-sheet-fare {
+  background-color: #ffffff !important;
+  color: #1e3a8a !important;
+}
 .nt-alert-card {
   background-color: var(--nt-surface) !important;
   border-color: var(--nt-border);
   box-shadow: 0 1px 2px color-mix(in srgb, #000 22%, transparent), 0 10px 28px color-mix(in srgb, #000 16%, transparent);
+}
+.nt-alert-admin-menu {
+  width: min(17rem, calc(100vw - 1.5rem));
+  border-radius: 0.9rem;
+  overflow: hidden;
+  background: var(--nt-surface);
+  color: var(--nt-text);
+  border: 1px solid var(--nt-border);
+  box-shadow: 0 18px 40px color-mix(in srgb, #000 28%, transparent);
+}
+.nt-alert-admin-item {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  text-align: left;
+  padding: 0.72rem 0.9rem;
+  font-size: 0.8125rem;
+  font-weight: 650;
+  letter-spacing: 0;
+  text-transform: none;
+  background: transparent;
+  color: var(--nt-text);
+  border: 0;
+  border-bottom: 1px solid var(--nt-border);
+}
+.nt-alert-admin-item:last-child {
+  border-bottom: 0;
+}
+.nt-alert-admin-item:hover,
+.nt-alert-admin-item:focus-visible {
+  background: color-mix(in srgb, var(--nt-primary) 10%, var(--nt-surface));
+  outline: none;
+}
+.nt-alert-admin-item.is-danger {
+  color: #b91c1c;
 }
 .nt-alert-strip {
   border-bottom: 1px solid var(--nt-border);
@@ -1096,6 +1341,254 @@ a.nt-alert-source:focus-visible {
   text-underline-offset: 3px;
 }
 
+.nt-poll {
+  margin-top: 0.75rem;
+  padding: 0.85rem 0.9rem 0.7rem;
+  border-radius: 0.9rem;
+  border: 1px solid var(--nt-border);
+  background: color-mix(in srgb, var(--nt-primary) 9%, var(--nt-surface));
+}
+.nt-poll[data-poll-severity="warning"] {
+  background: color-mix(in srgb, #f59e0b 14%, var(--nt-surface));
+  border-color: color-mix(in srgb, #f59e0b 30%, var(--nt-border));
+}
+.nt-poll[data-poll-severity="critical"] {
+  background: color-mix(in srgb, #dc2626 12%, var(--nt-surface));
+  border-color: color-mix(in srgb, #dc2626 28%, var(--nt-border));
+}
+.nt-poll-q,
+.nt-poll-thanks {
+  margin: 0 0 0.65rem;
+  text-align: center;
+  font-size: 0.8125rem;
+  font-weight: 800;
+  line-height: 1.35;
+  color: var(--nt-text);
+}
+.nt-poll-thanks {
+  margin-bottom: 0.2rem;
+}
+.nt-poll > .nt-poll-foot:first-child {
+  margin: 0 0 0.55rem;
+}
+.nt-poll-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+.nt-poll-choices--stack {
+  flex-direction: column;
+}
+.nt-poll-vote {
+  flex: 1 1 30%;
+  min-width: 5.6rem;
+  min-height: 2.25rem;
+  padding: 0.45rem 0.65rem;
+  border-radius: 0.65rem;
+  border: 1px solid color-mix(in srgb, var(--nt-border) 80%, var(--nt-primary));
+  background: var(--nt-surface);
+  color: var(--nt-text);
+  font-size: 0.75rem;
+  font-weight: 800;
+  line-height: 1.25;
+  text-align: center;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  hyphens: auto;
+}
+.nt-poll-choices--stack .nt-poll-vote {
+  flex: 1 1 auto;
+  width: 100%;
+  min-width: 0;
+}
+.nt-poll-vote:hover,
+.nt-poll-vote:focus-visible {
+  border-color: var(--nt-primary);
+  background: color-mix(in srgb, var(--nt-primary) 10%, var(--nt-surface));
+}
+.nt-poll-vote.is-selected {
+  border-color: var(--nt-primary);
+  background: color-mix(in srgb, var(--nt-primary) 16%, var(--nt-surface));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--nt-primary) 35%, transparent);
+}
+.nt-poll[data-poll-open="0"] .nt-poll-vote {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.nt-poll-submit {
+  display: block;
+  width: 100%;
+  margin: 0.55rem 0 0;
+  min-height: 2.25rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.65rem;
+  border: 1px solid var(--nt-primary);
+  background: var(--nt-primary);
+  color: var(--nt-primary-fg);
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  line-height: 1.2;
+  text-align: center;
+  cursor: pointer;
+}
+.nt-poll-submit:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.nt-poll-view-results {
+  display: block;
+  width: 100%;
+  margin: 0.85rem 0 0.1rem;
+  padding: 0.2rem 0.4rem;
+  border: 0;
+  background: none;
+  font-size: 0.6875rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  line-height: 1.3;
+  text-transform: uppercase;
+  color: var(--nt-primary);
+  text-align: center;
+  cursor: pointer;
+}
+.nt-poll-results {
+  margin-top: 0.55rem;
+}
+.nt-poll-results:first-child {
+  margin-top: 0;
+}
+.nt-poll-row {
+  margin-bottom: 0.45rem;
+  padding: 0.28rem 0.15rem 0.2rem;
+}
+.nt-poll-row.is-mine {
+  margin-left: -0.35rem;
+  margin-right: -0.35rem;
+  padding-left: 0.5rem;
+  padding-right: 0.5rem;
+  border-radius: 0.6rem;
+  background: color-mix(in srgb, var(--nt-primary) 12%, transparent);
+}
+.nt-poll[data-poll-severity="warning"] .nt-poll-row.is-mine {
+  background: color-mix(in srgb, #f59e0b 16%, transparent);
+}
+.nt-poll[data-poll-severity="critical"] .nt-poll-row.is-mine {
+  background: color-mix(in srgb, #dc2626 14%, transparent);
+}
+.nt-poll-row-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.6rem;
+  margin-bottom: 0.28rem;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  color: var(--nt-text);
+}
+.nt-poll-label {
+  min-width: 0;
+  line-height: 1.3;
+}
+.nt-poll-yours {
+  display: inline-block;
+  margin-left: 0.4rem;
+  font-size: 0.5625rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--nt-primary);
+  vertical-align: middle;
+}
+.nt-poll[data-poll-severity="warning"] .nt-poll-yours {
+  color: #b45309;
+}
+.nt-poll[data-poll-severity="critical"] .nt-poll-yours {
+  color: #b91c1c;
+}
+.nt-poll-pct {
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+  color: var(--nt-text-muted);
+}
+.nt-poll-track {
+  height: 0.4rem;
+  overflow: hidden;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--nt-text) 10%, var(--nt-surface));
+}
+.nt-poll-fill {
+  height: 100%;
+  min-width: 0;
+  border-radius: inherit;
+  background: var(--nt-primary);
+  transition: width 0.45s ease;
+}
+.nt-poll[data-poll-severity="warning"] .nt-poll-fill {
+  background: #d97706;
+}
+.nt-poll[data-poll-severity="critical"] .nt-poll-fill {
+  background: #dc2626;
+}
+.nt-poll-foot {
+  margin: 0.15rem 0 0;
+  text-align: center;
+  font-size: 0.5625rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--nt-text-faint);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.7rem;
+}
+.nt-poll-results > .nt-poll-foot:first-child,
+.nt-poll > .nt-poll-results > .nt-poll-foot:first-child {
+  margin-top: 0;
+  margin-bottom: 0.55rem;
+}
+.nt-poll-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.nt-poll-live-dot {
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 999px;
+  background: #22c55e;
+  flex-shrink: 0;
+}
+.nt-poll-live-dot.is-on {
+  animation: nt-poll-live-pulse 1.8s ease-in-out infinite;
+}
+.nt-poll-live-dot.is-off {
+  background: #ef4444;
+  animation: none;
+  opacity: 1;
+}
+@keyframes nt-poll-live-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .nt-poll-live-dot.is-on { animation: none; }
+}
+.nt-alert-chip-wrap {
+  min-width: 0;
+}
+.nt-alert-pin {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.95;
+}
+.nt-alert-pin-icon {
+  display: block;
+}
+
 #alerts-channel .nt-alert-card-footer {
   margin-top: 10px;
 }
@@ -1173,9 +1666,9 @@ html[data-colour-pack="earthy"] #notice-bell.nt-bell-info {
 }
 
 .nt-planner-map-btn {
-  background-color: var(--nt-surface) !important;
+  background-color: color-mix(in srgb, var(--nt-text) 10%, var(--nt-surface, #fff)) !important;
   color: var(--nt-text) !important;
-  border-color: var(--nt-border) !important;
+  border-color: var(--nt-border, #e5e7eb) !important;
 }
 
 /* One 2rem row for Back, weekday, and Share. Same text-xs / weight / box
@@ -1330,6 +1823,13 @@ html.dark:not([data-colour-pack]) #bottom-nav .bottom-nav-item.is-active {
 [id$="-modal"].fixed:not(.full-screen):not(#welcome-modal):not(#blackbox-modal):not(#messages-thread-modal):not(#account-modal) > div,
 #nt-on-train-sheet > div {
   max-height: calc(var(--nt-app-h, 100dvh) - 5.5rem - var(--nt-sys-bottom, env(safe-area-inset-bottom, 0px))) !important;
+}
+
+/* Live train card: community trust vote the viewer has cast. */
+#map-tracking-votes .nt-vote-btn.nt-vote-on {
+  background-color: var(--nt-primary, #2563eb);
+  border-color: var(--nt-primary, #2563eb);
+  color: var(--nt-primary-fg, #fff);
 }
 
 /* ---------------------------------------------------------------------------

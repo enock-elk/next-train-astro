@@ -3,7 +3,7 @@
  * Thin controller bridging DOM ↔ live-board.js engine ↔ Renderer
  */
 import { ROUTES, FARE_CONFIG, getCorridorLabel } from './config.js';
-import { normalizeStationName, timeToSeconds, safeStorage, escapeHTML, formatTimeDisplay, formatRouteLabelPlain, formatRouteLabelHtml, isRealTime, shortSharedSourceLabel, scheduleCacheSlot, warningTriangleSvg } from './utils.js';
+import { normalizeStationName, timeToSeconds, safeStorage, escapeHTML, formatTimeDisplay, formatRouteLabelPlain, formatRouteLabelHtml, expandJhbLabel, applyFittedLabel, fitRouteNameNodes, fitJhbNodes, isRealTime, shortSharedSourceLabel, scheduleCacheSlot, warningTriangleSvg, schedulesBelongToRoute } from './utils.js';
 import { $currentRouteId, $userRegion, $userProfile, $fullDatabase, $schedules } from '../store.js';
 import { currentTime, loadAllSchedules } from './logic.js';
 import { showToast, triggerHaptic, openSmoothModal, closeSmoothModal } from './ui.js';
@@ -66,10 +66,10 @@ export function openRegionRoutePicker() {
     import('./logic.js').then(({ syncRegionDisplayDom }) => {
         syncRegionDisplayDom(region);
     }).catch(() => {});
+    openSmoothModal('route-modal');
     if (typeof window !== 'undefined' && window.Renderer?.renderRouteMenu) {
         window.Renderer.renderRouteMenu('route-list', getRoutesForCurrentRegion(), $currentRouteId.get());
     }
-    openSmoothModal('route-modal');
     syncRouteModalCloseBtn();
 }
 
@@ -160,9 +160,21 @@ export function setupNextTrainAutocomplete() {
     }
 }
 
+/** True when Trip Planner From already has a station the commuter chose. */
+export function plannerFromIsSet(doc = typeof document !== 'undefined' ? document : null) {
+    if (!doc) return false;
+    const input = doc.getElementById('planner-from-search');
+    const select = doc.getElementById('planner-from');
+    if (String(input?.value || '').trim()) return true;
+    if (String(input?.dataset?.resolvedValue || '').trim()) return true;
+    if (String(select?.value || '').trim()) return true;
+    return false;
+}
+
 /** Mirror Live Board station into Trip Planner "From" field (SPA ui.js parity). */
 export function syncPlannerFromMain(stationName) {
     if (!stationName) return;
+    if (plannerFromIsSet()) return;
     const plannerInput = document.getElementById('planner-from-search');
     const plannerSelect = document.getElementById('planner-from');
     if (!plannerInput || !plannerSelect) return;
@@ -217,7 +229,11 @@ export function processAndRenderJourney(allJourneys, element, _header, destinati
     if (destination) currentScheduleData[destination] = validJourneys;
     const nowInSeconds = timeToSeconds(getCurrentTime() || '00:00:00');
     // Cancelled / no-service columns still appear in Upcoming; live board skips them.
-    const runnable = validJourneys.filter((j) => !j.isExcluded && !j.exclusionType);
+    // Special trains (exclusion type special) still run on the board.
+    const runnable = validJourneys.filter((j) => {
+        const t = j.exclusionType || (j.isExcluded ? 'banned' : null);
+        return !t || t === 'special';
+    });
     const remaining = runnable.filter(j => timeToSeconds(j.departureTime || j.train1.departureTime) >= nowInSeconds);
     const nextJourney = remaining[0] || null;
     const firstTrainName = runnable.length > 0 ? (runnable[0].train || runnable[0].train1.train) : null;
@@ -342,7 +358,7 @@ export function openFareModal(fareDetails, routeIdOverride) {
         modal.className = 'fixed inset-0 bg-black/80 z-[140] hidden flex items-center justify-center p-4 backdrop-blur-sm transition-opacity duration-300';
         modal.innerHTML = `
             <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-sm flex flex-col transform transition-transform duration-300 scale-95 max-h-[85vh]">
-                <div class="p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center bg-gray-50 dark:bg-gray-900 rounded-t-2xl shrink-0">
+                <div class="p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center bg-white dark:bg-gray-800 rounded-t-2xl shrink-0">
                     <h3 class="text-lg font-bold text-gray-900 dark:text-white flex flex-col items-start justify-center" id="fare-zone-badge">Ticket Prices</h3>
                     <button onclick="closeSmoothModal('fare-modal')" class="p-2 rounded-full bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-600 transition focus:outline-none" aria-label="Close">
                         <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
@@ -353,8 +369,8 @@ export function openFareModal(fareDetails, routeIdOverride) {
                     <p id="fare-confirm-note" class="text-[10px] text-gray-500 dark:text-gray-400 text-center mt-6">Prices are subject to change. Confirm at station.</p>
                     <p class="text-[10px] text-gray-500 dark:text-gray-400 text-center mt-1">Off-Peak Fares apply weekdays between 09:30 and 14:30.</p>
                 </div>
-                <div class="p-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 rounded-b-2xl shrink-0">
-                    <button onclick="closeSmoothModal('fare-modal')" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg shadow-md transition-colors focus:outline-none">Close</button>
+                <div class="p-4 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 rounded-b-2xl shrink-0">
+                    <button onclick="closeSmoothModal('fare-modal')" id="fare-modal-close-btn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg shadow-md transition-colors focus:outline-none">Close</button>
                 </div>
             </div>`;
         document.body.appendChild(modal);
@@ -491,18 +507,23 @@ export function loadUserProfile() {
 export function updateNextTrainView() {
     const routeId = $currentRouteId.get();
     const route = routeId ? ROUTES[routeId] : null;
-    const labelPlain = formatRouteLabelPlain(route?.name || 'Select a route');
-    const labelHtml = formatRouteLabelHtml(route?.name || 'Select a route');
+    const rawName = route?.name || 'Select a route';
+    const labelPlain = formatRouteLabelPlain(rawName);
+    const longPlain = expandJhbLabel(labelPlain);
+    const shortHtml = formatRouteLabelHtml(rawName);
+    const longHtml = formatRouteLabelHtml(expandJhbLabel(rawName));
+    const expands = longPlain !== labelPlain;
 
     const title = document.getElementById('route-subtitle-text');
     if (title) {
-        title.innerHTML = labelHtml;
-        title.title = labelPlain;
-        if (route?.colorClass) {
-            title.className = `text-base sm:text-lg font-medium ${route.colorClass} group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors line-clamp-2 w-full text-center leading-tight`;
-        } else {
-            title.className = 'text-base sm:text-lg font-medium text-gray-700 dark:text-gray-200 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors line-clamp-2 w-full text-center leading-tight';
-        }
+        const color = route?.colorClass
+            ? `text-base sm:text-lg font-medium ${route.colorClass}`
+            : 'text-base sm:text-lg font-medium text-gray-700 dark:text-gray-200';
+        const fitClass = expands ? 'whitespace-nowrap overflow-hidden' : 'line-clamp-2';
+        title.className = `${color} group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors ${fitClass} w-full text-center leading-tight`;
+        if (expands) applyFittedLabel(title, shortHtml, longHtml, true);
+        else title.innerHTML = shortHtml;
+        title.title = longPlain;
         try {
             if (route?.name) safeStorage.setItem('nt_last_route_label', labelPlain);
             else safeStorage.removeItem('nt_last_route_label');
@@ -514,8 +535,9 @@ export function updateNextTrainView() {
     const corridor = getCorridorLabel(route);
     if (corridorEl) {
         if (corridor) {
-            corridorEl.textContent = corridor;
             corridorEl.classList.remove('hidden');
+            applyFittedLabel(corridorEl, corridor, expandJhbLabel(corridor), false);
+            corridorEl.title = expandJhbLabel(corridor);
         } else {
             corridorEl.textContent = '';
             corridorEl.classList.add('hidden');
@@ -665,7 +687,7 @@ export function openScheduleModal(destination, dayOverride = null) {
 
         const div = document.createElement('div');
         div.className = divClass;
-        if (!exclusionType && !isPassed && !firstNextTrainFound && !dayOverride) {
+        if ((!exclusionType || exclusionType === 'special') && !isPassed && !firstNextTrainFound && !dayOverride) {
             div.id = 'next-train-marker';
             firstNextTrainFound = true;
         }
@@ -828,6 +850,11 @@ export function initLiveBoardUi() {
         if (!routeId) return;
         updatePinUI();
         updateNextTrainView();
+        // Drop the previous corridor's generic weekday_to_* slots before reload so
+        // VIEW FULL TIMETABLE cannot paint Mabopane chrome over Pienaarspoort rows.
+        if (!schedulesBelongToRoute($schedules.get(), routeId)) {
+            $schedules.set({});
+        }
         // Always reload on route change — region swaps clear fullDatabase, so a
         // "only if cache exists" guard left the board empty after picking a route.
         loadAllSchedules(true).then(() => {
@@ -909,13 +936,18 @@ export function initLiveBoardUi() {
                 searchInput.value = stationSelect.value.replace(/ STATION/g, '');
                 searchInput.dataset.resolvedValue = stationSelect.value;
             }
-            trackAnalyticsEvent('select_station', {
-                station: stationSelect.value || '',
-                route_id: $currentRouteId.get() || '',
-            });
-            syncPlannerFromMain(stationSelect.value);
+            // Board paint first; planner mirror and analytics wait for the next task.
             findNextTrains();
             updateNextTrainView();
+            const station = stationSelect.value || '';
+            const routeId = $currentRouteId.get() || '';
+            setTimeout(() => {
+                trackAnalyticsEvent('select_station', {
+                    station,
+                    route_id: routeId,
+                });
+                syncPlannerFromMain(station);
+            }, 0);
         });
     }
 
@@ -1014,6 +1046,28 @@ export function initLiveBoardUi() {
     try { startSmartRefresh(); } catch (e) { console.warn('Smart refresh unavailable', e); }
     bindAutoLocateTriggers();
     maybeAutoLocateBoard().catch(() => {});
+
+    if (typeof window !== 'undefined' && !window.__ntJhbFitResize) {
+        window.__ntJhbFitResize = true;
+        let fitTimer = 0;
+        const refit = () => {
+            try { updateNextTrainView(); } catch { /* ignore */ }
+            const routeList = document.getElementById('route-list');
+            const welcomeList = document.getElementById('welcome-route-list');
+            if (routeList) {
+                fitRouteNameNodes(routeList);
+                fitJhbNodes(routeList);
+            }
+            if (welcomeList) {
+                fitRouteNameNodes(welcomeList);
+                fitJhbNodes(welcomeList);
+            }
+        };
+        window.addEventListener('resize', () => {
+            clearTimeout(fitTimer);
+            fitTimer = setTimeout(refit, 80);
+        });
+    }
 
     // Keep route-modal region label in sync whenever the store changes
     $userRegion.subscribe((region) => {

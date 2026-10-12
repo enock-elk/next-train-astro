@@ -4,8 +4,8 @@ Worker URL: `https://nexttrain-cache.enock.workers.dev/`
 
 This folder tracks the **active production worker** (origin firewall + 24h schedule cache + `/admin/purge`), with one Astro-era addition:
 
-- Allowlist entry: `https://enock-elk.github.io`  
-  so GitHub Pages preview can run admin Cache Propagation / Deep Network Scan against Cloudflare.
+- Allowlist entries: `https://enock-elk.github.io`, `https://lab.nexttrain.co.za`, and `*.next-train-lab.pages.dev`  
+  so GitHub Pages preview and lab can reach the edge cache.
 
 Everything else matches the live Guardian firewall worker (Referer fallback, `startsWith` localhost allowlist, reflected `Access-Control-Allow-Origin`, purge server-to-server only).
 

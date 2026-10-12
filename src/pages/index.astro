@@ -17,12 +17,12 @@ import { APP_VERSION, withBase } from '../lib/config.js';
 /** SPA-parity homepage SEO (full brand). Short "Next Train" remains PWA homescreen only. */
 const pageTitle = 'Metrorail Next Train | 2026 PRASA Train Times and Schedules';
 const pageDescription =
-  'Updated 2026 PRASA Metrorail train times and schedules for Gauteng, Cape Town, Durban and East London. Current timetables, ticket prices, trip planner, and next train in the Next Train app.';
+  'View and download 2026 PRASA Metrorail train timetables for Gauteng, Cape Town, Durban and East London. Free, works offline. Ticket prices, trip planner, and next train in the Next Train app.';
 const ogTitle = 'Metrorail Next Train | 2026 PRASA Train Times';
 const ogDescription =
-  'Updated PRASA Metrorail train times, ticket prices, and schedules for Gauteng, Cape Town, KZN, and Eastern Cape. Open Next Train for the current timetable.';
+  'View and download 2026 PRASA Metrorail train timetables for Gauteng, Cape Town, KZN, and Eastern Cape. Free, works offline. Ticket prices and next train in Next Train.';
 const twitterDescription =
-  'Updated PRASA Metrorail train times and schedules. Ticket prices, trip planner, and next train in the Next Train app.';
+  'View and download 2026 PRASA Metrorail train timetables. Free, works offline. Ticket prices, trip planner, and next train in the Next Train app.';
 
 const softwareAppLd = {
   '@context': 'https://schema.org',
@@ -253,7 +253,7 @@ const faqLd = {
     import { loadAllSchedules, startClock, currentTime, currentDayType, syncRegionDisplayDom, ensureReachabilityProbed, bindKillswitchWatch } from '../lib/logic.js';
     import { $currentRouteId, $userRegion, hydrateStores } from '../store.js';
     import { ROUTES, withBase } from '../lib/config.js';
-    import { safeStorage } from '../lib/utils.js';
+    import { safeStorage, restorePinnedSession } from '../lib/utils.js';
 
     const revealAppShell = () => {
         const main = document.getElementById('main-content');
@@ -263,6 +263,7 @@ const faqLd = {
         try { document.documentElement.classList.add('nt-shell-ready'); } catch (e) {}
         try { sessionStorage.setItem('nt_shell_warm', '1'); } catch (e) {}
     };
+    const revealWhenBoardReady = () => revealAppShell();
     // Fix loader image base path for GitHub Pages preview (small WebP for cold-boot LCP)
     const loaderImg = document.querySelector('#loading-overlay img');
     if (loaderImg) loaderImg.setAttribute('src', withBase('icons/loading-logo-splash.webp'));
@@ -292,7 +293,7 @@ const faqLd = {
         bindMaintenanceBanner
     } from '../lib/ui.js';
     import { hydratePrefs, syncCrmRegionAnalytics } from '../lib/prefs.js';
-    import { canAccessPilotSurface, applyPilotChrome } from '../lib/admin-chrome.js';
+    import { canAccessPilotSurface, canOpenTrackingMap, applyPilotChrome } from '../lib/admin-chrome.js';
     import { fetchFeatures } from '../lib/features.js';
     import {
         prepareDeeplinkIntents,
@@ -301,6 +302,7 @@ const faqLd = {
         applyShareTargetDeepLink,
         flushPendingDeeplinkIntents,
         applyMapDeepLink,
+        applyLiveTrainDeepLink,
         bindLaunchQueueDeeplinks,
         bindWebViewDeeplinkResume,
     } from '../lib/deeplink.js';
@@ -319,6 +321,20 @@ const faqLd = {
     };
 
     hydrateStores();
+    restorePinnedSession().then((pinned) => {
+        if (window.__ntShareBootLock) {
+            revealWhenBoardReady();
+            return;
+        }
+        if (pinned?.userRegion) $userRegion.set(pinned.userRegion);
+        const region = $userRegion.get() || 'GP';
+        const savedDefault = safeStorage.getItem('defaultRoute_' + region);
+        if (savedDefault && ROUTES[savedDefault] && ROUTES[savedDefault].isActive) {
+            $currentRouteId.set(savedDefault);
+        }
+        if (typeof window.updateNextTrainView === 'function') window.updateNextTrainView();
+        revealWhenBoardReady();
+    }).catch(() => {});
     // Align sidenav + route-modal region labels with hydrated localStorage region
     syncRegionDisplayDom($userRegion.get() || 'GP');
     syncCrmRegionAnalytics($userRegion.get() || 'GP');
@@ -406,14 +422,16 @@ const faqLd = {
         else switchTab('next-train');
     } else if (hash === '#alerts') {
         switchTab('next-train');
-        setTimeout(() => window.openAlertsChannel?.(), 400);
+        import('../lib/session-stability.js').then((m) => {
+            m.whenSettledForAutoNotices?.(() => window.openAlertsChannel?.());
+        }).catch(() => window.openAlertsChannel?.());
     } else if (hash === '#map') {
-        if (canAccessPilotSurface('map')) switchTab('map');
+        if (canOpenTrackingMap()) switchTab('map');
         else switchTab('next-train');
     } else {
         const lastTab = safeStorage.getItem('activeTab');
         if (lastTab === 'trip-planner') switchTab('trip-planner');
-        else if (lastTab === 'map' && canAccessPilotSurface('map')) switchTab('map');
+        else if (lastTab === 'map' && canOpenTrackingMap()) switchTab('map');
         else if (lastTab === 'community' && canAccessPilotSurface('community')) switchTab('community');
         else switchTab('next-train');
     }
@@ -421,6 +439,7 @@ const faqLd = {
     bindPlannerShellModals();
     bindMaintenanceBanner();
     initLiveBoardUi();
+    revealWhenBoardReady();
     initPlanner();
     initHub();
     // Admin + Firebase SDK stay off the critical home chunk (CWV / SW precache).
@@ -441,10 +460,15 @@ const faqLd = {
     window.revealAppShell = revealAppShell;
 
     const igniteDataEngine = async () => {
-        // Shell is already visible — schedules hydrate in the background.
-        revealAppShell();
+        // 14.1: two-frame / 700ms drop already ran. Later reveals are no-ops.
         try {
             bindKillswitchWatch();
+            if (await applyLiveTrainDeepLink()) {
+                checkServiceAlerts();
+                await flushPendingDeeplinkIntents();
+                return;
+            }
+
             if (await applyRouteDeepLink()) {
                 checkServiceAlerts();
                 await flushPendingDeeplinkIntents();
@@ -476,9 +500,13 @@ const faqLd = {
                 return;
             }
 
+            const pinned = await restorePinnedSession();
+            if (pinned?.userRegion) $userRegion.set(pinned.userRegion);
+
             const welcomeSeen = safeStorage.getItem('welcomeSeen') === 'true';
             if (!welcomeSeen) {
                 console.log("🛡️ Guardian: New session detected. Postponing automatic schedule downloads until welcome configuration completes.");
+                revealWhenBoardReady();
                 return;
             }
 
@@ -504,6 +532,8 @@ const faqLd = {
 
             if (pinnedOk) {
                 $currentRouteId.set(savedDefault);
+                if (typeof window.updateNextTrainView === 'function') window.updateNextTrainView();
+                revealWhenBoardReady();
                 console.log("🛡️ Guardian: Igniting Data Engine (background)…");
                 // Do not await — poor networks must not block chrome / map→home return.
                 loadAllSchedules(false)
@@ -517,9 +547,10 @@ const faqLd = {
                 // Unpin / no default: never invent first-in-list as pinned.
                 // Open this region's route picker so the user chooses.
                 openRegionRoutePicker();
+                revealAppShell(true);
             }
         } finally {
-            revealAppShell();
+            revealWhenBoardReady();
         }
     };
 

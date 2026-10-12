@@ -32,6 +32,7 @@ this.ntAdminNormalizeRoadmapText = ntAdminNormalizeRoadmapText;
 this.ntAdminParseRoadmapSource = ntAdminParseRoadmapSource;
 this.ntAdminDevPanelIdFromHash = ntAdminDevPanelIdFromHash;
 this.ntAdminCanonicalPanelId = ntAdminCanonicalPanelId;
+this.ntAdminDrillPanelTitle = ntAdminDrillPanelTitle;
 this.ntAdminPushDrillPanel = ntAdminPushDrillPanel;
 this.ntAdminTrimDrillStackTo = ntAdminTrimDrillStackTo;
 this.ntAdminDrillBackAction = ntAdminDrillBackAction;
@@ -133,8 +134,15 @@ const requiredIds = [
     'alert-source-delete-btn',
     'alert-duration-custom',
     'alert-force-popup',
+    'alert-pin-toggle',
     'alert-poll-toggle',
     'alert-poll-question',
+    'alert-poll-show-results',
+    'alert-poll-allow-multiple',
+    'alert-poll-show-count',
+    'alert-poll-closes',
+    'alert-live-poll-results',
+    'alert-live-poll-refresh',
     'alert-schedule-first',
     'alert-weekly-days',
     'alert-weekly-time',
@@ -147,6 +155,10 @@ const requiredIds = [
     'excl-grid-notice-expiry',
     'excl-grid-notice-in-app',
     'excl-grid-notice-export',
+    'excl-grid-notice-day-weekday',
+    'excl-grid-notice-day-saturday',
+    'excl-grid-notice-day-sunday',
+    'excl-grid-notice-day-public_holiday',
     'excl-expiry',
     'excl-in-app-toggle',
     'excl-export-toggle',
@@ -165,10 +177,17 @@ const requiredIds = [
 for (const id of requiredIds) {
     assert(admin.includes(`id="${id}"`), `admin still exposes #${id}`);
 }
+assert(admin.includes('Allow multiple answers'), 'admin can allow WhatsApp-style multi answers');
+assert(admin.includes('allowMultiple'), 'compose writes poll.allowMultiple');
+assert(admin.includes('Add a message, a poster, or a poll.'), 'compose allows a poll without alert body');
+assert(!admin.includes('Add a message or a poster.'), 'old body-or-poster-only toast is gone');
+assert(admin.includes('writePollVoteMeta'), 'publish writes poll close meta for rules');
+assert(admin.includes('closesInMs'), 'scheduled polls store a dedicated run length');
 assert(admin.includes("'exp-map-enabled'") && admin.includes("'exp-community-enabled'"), 'experimental Map and Community toggles exist');
 
 assert(admin.includes('renderExpFeatureAccordions'), 'experimental features render as per-type accordions');
-assert(admin.includes("I'm on it / live share") && admin.includes('Delay reports') && admin.includes('Community realtime') && admin.includes('Push notifications') && admin.includes('Trip price'), 'System Controls lists every experimental feature type');
+assert(admin.includes("I'm on it / live share") && admin.includes('Delay reports') && admin.includes('Community realtime') && admin.includes('Push notifications'), 'System Controls lists remaining experimental feature types');
+assert(!/Trip price/.test(admin.split('grantableFeatures')[1] || admin), 'Trip price is not an experimental feature accordion');
 assert(admin.includes('exp-feat-${key}-header') || admin.includes('expFeatureControlIds'), 'each feature type has an accordion header');
 
 assert(admin.includes('showCancelledOnMap'), 'incidents persist the map cancelled-station toggle');
@@ -207,6 +226,16 @@ assert(helpers.ntAdminDevPanelIdFromHash('#dev') === '', 'grid hash is not a pan
 assert(helpers.ntAdminDevPanelIdFromHash('#roadmap-ticket') === '', 'ticket overlay hash is not a panel');
 assert(helpers.ntAdminCanonicalPanelId('alert-panel--inapp') === 'alert-panel', 'in-app hub hash still mounts Service Alerts');
 assert(helpers.ntAdminCanonicalPanelId('feedback-panel') === 'feedback-panel', 'other panel ids stay unchanged');
+assert(helpers.ntAdminDrillPanelTitle('push-notifications-panel') === 'Notifications', 'FCM drill title is Notifications, not the panel id');
+assert(helpers.ntAdminDrillPanelTitle('alert-panel--inapp') === 'In-app alerts', 'in-app drill title is In-app alerts');
+assert(helpers.ntAdminDrillPanelTitle('alert-panel', 'Service Alerts') === 'Service Alerts', 'hub drill title stays Service Alerts');
+assert(admin.includes('id="push-notifications-header-btn"'), 'Notifications header uses -header-btn so the drill title can hide the tile chrome');
+{
+    const showAt = admin.indexOf('showDrilledPanel: (panelId, opts = {})');
+    const hubAt = admin.indexOf("Admin.applyAlertHubView(skipHub ? 'inapp' : 'hub')", showAt);
+    const quietAt = admin.indexOf('if (quiet) return true;', showAt);
+    assert(showAt > -1 && hubAt > showAt && quietAt > hubAt, 'Back restores hub/inapp before the quiet return so tiles do not stack on compose');
+}
 assert(admin.includes('id="alert-hub"'), 'Service Alerts drill opens an inner hub');
 assert(admin.includes('In-app alerts'), 'hub tile for channel posts');
 assert(admin.includes('alert-hub-push'), 'hub tile for FCM notifications');
@@ -243,9 +272,11 @@ assert(ui.includes("'admin-ticket-view-modal': '#roadmap-ticket'"), 'ticket view
 assert(ui.includes('Admin.syncDrillFromHash'), 'popstate restores the drilled panel from the hash');
 assert(ui.includes('Admin.stepDrillBack'), 'drilled Back steps one panel, not always the grid');
 
-assert(admin.includes('data-alert-when="weekly"'), 'compose exposes weekly when-mode');
+assert(admin.includes('paintLivePollResults'), 'admin paints live poll tallies on review');
+assert(admin.includes('hideLivePollResults'), 'admin can hide the live poll panel');
+assert((admin.match(/id="alert-live-poll-results"/g) || []).length === 1, 'one live poll results panel');
 assert(admin.includes('data-alert-when="monthly"'), 'compose exposes monthly when-mode');
-assert(admin.includes('alerts-hub-v1'), 'alert panel rebuilds after composer and schedule UX');
+assert(admin.includes('alerts-hub-v2'), 'alert panel rebuilds after live poll results wiring');
 assert(!admin.includes('Recurring schedule (optional)'), 'old recurrence accordion is gone');
 assert(admin.includes('ntAdminComputeJobNextRun'), 'scheduled publish uses job-aware next-run');
 
@@ -336,12 +367,14 @@ assert(legacyHourly === new Date(2026, 8, 7, 7, 0, 0).getTime(), 'legacy hourly 
 assert(admin.includes('zone-audit-monthly-legend'), 'zone audit shows a monthly ticket legend');
 assert(admin.includes('formatZoneMonthlyLegend'), 'zone audit legend reads FARE_CONFIG monthlies');
 assert(admin.includes('monthly R${Number(d.monthly)}'), 'zone audit direction rows show monthly');
+assert(admin.includes('tracks/rail-tracks-${targetRegion}.geojson'), 'zone audit loads painted rail corridors');
+assert(admin.includes('m.chainSource'), 'zone audit shows whether the stop list is the static map');
 
 assert(admin.includes('openRoadmapOriginal'), 'roadmap can open the original item');
 assert(admin.includes('data-fb-ids'), 'feedback threads expose ids for deep-link');
 assert(admin.includes('data-crash-id='), 'crash rows expose ids for deep-link');
-assert(admin.includes('roadmap-refine-v2'), 'roadmap panel rebuilds after the wallpaper pass');
-assert(admin.includes('id="roadmap-body" class="nt-pack-surface'), 'roadmap body uses the interactive operations wallpaper surface');
+assert(admin.includes('roadmap-refine-v3'), 'roadmap panel rebuilds after the full-width pass');
+assert(admin.includes('id="roadmap-new-ticket"') && admin.includes('basis-full'), 'roadmap columns fill the phone and New ticket is not a floating chip');
 assert(admin.includes('roadmap-open-original'), 'ticket view has Open original');
 assert(!/font-mono text-xs sm:text-sm leading-relaxed whitespace-pre-wrap break-words min-h-\[150px\]/.test(admin), 'old centered mono description box is gone');
 
@@ -371,12 +404,38 @@ assert(admin.includes("e.target.closest?.('#admin-changelog-notes')"), 'build no
 assert(admin.includes('overflow-y-auto custom-scrollbar overscroll-contain'), 'build notes scroll inside the card');
 assert(admin.includes("addEventListener('touchmove', stopBgScroll, { passive: false })"), 'build notes swallow backdrop touchmove');
 assert(admin.includes('fb-version-chip'), 'feedback version chips are dedicated buttons');
+assert(admin.includes('data-admin-changelog="${safeAppVersion}"'), 'crash app version opens build notes');
+assert(admin.includes('App: ${appVersionHtml}'), 'crash app version is a clickable field');
 assert(admin.includes('holiday-region-save'), 'approved holiday notices can be re-saved');
 assert(admin.includes('holiday-region-unapprove'), 'approved holiday notices can return to pending');
 assert(admin.includes('layoutInboxMedia'), 'feedback bubbles hoist unique images');
-assert(admin.includes('hydrateAlertPosterImages'), 'feedback posters use the alerts loader');
+assert(admin.includes('id="alert-poster-preview"'), 'compose has a catalog poster preview');
+assert(
+    admin.indexOf('id="alert-msg"') < admin.indexOf('id="alert-poster-preview"')
+        && admin.indexOf('id="alert-poster-preview"') < admin.indexOf('id="alert-poster-selected"'),
+    'poster preview sits in the message field, not only under the picker'
+);
+assert(admin.includes('window.withBase === \'function\' ? window.withBase(path)'), 'poster preview uses withBase so github.io still loads the jpg');
 assert(admin.includes("style.zIndex = '260'"), 'build notes sit above Dev Hub');
 assert(admin.includes("if (e.target.closest?.('[data-admin-changelog]')) return;"), 'hold-to-react ignores the version chip');
+assert(admin.includes("if (e.target.closest?.('[data-fb-edit-admin]')) return;"), 'hold-to-react does not steal admin hold-to-edit');
+assert(admin.includes('data-fb-receipt'), 'admin ticks expose hold-for-delivery');
+assert(admin.includes('showInboxReceiptSheet'), 'admin can hold ticks for sent/delivered/seen');
+assert(admin.includes('inbox-bubble-route-row'), 'feedback bubbles keep the saved route on its own row');
+assert(admin.includes('threadCommuterRoute'), 'feedback thread falls back to the commuter saved route');
+assert(admin.includes('openFeedbackAttachmentPreview'), 'feedback posters have one shared-preview entry point');
+assert(admin.includes("overlay.style.zIndex = '10050'"), 'feedback preview is lifted above a stale Dev Mode shell');
+assert(admin.includes("document.getElementById('alert-image-lightbox')"), 'feedback preview uses the service-poster lightbox');
+assert(!admin.includes('window.openLightbox(src, poster)'), 'feedback preview does not wait on the hashed lightbox opener');
+assert(admin.includes('bindFeedbackPhotoPreview'), 'feedback panel captures photo taps itself');
+assert(admin.includes("history.pushState({ modal: 'feedback-preview' }, '', location.href)"), 'feedback preview keeps the Dev Mode hash');
+assert(admin.includes('Admin.openFeedbackAttachmentPreview(src, el)'), 'feedback capture opens the shared preview');
+assert(admin.includes('Admin.openFeedbackAttachmentPreview(src, poster)'), 'feedback bubble tap opens the shared preview');
+{
+    const holdStart = admin.indexOf("dataset.fbHoldBound");
+    const holdBlock = holdStart >= 0 ? admin.slice(holdStart, holdStart + 900) : '';
+    assert(holdBlock.includes("if (e.target.closest?.('[data-admin-changelog]')) return;"), 'hold-to-edit ignores the version chip');
+}
 assert(admin.includes("data-fb-lazy=\"1\""), 'archive threads defer chat HTML');
 assert(admin.includes('hydrateFeedbackThreadBody'), 'archive hydrates a thread on first expand');
 assert(admin.includes('buildFeedbackThreadInnerHtml'), 'inbox and archive share the same thread renderer');
@@ -387,6 +446,9 @@ assert(admin.includes('openScheduleQaDeltaModal'), 'delta variance opens a train
 assert(admin.includes('id="sched-qa-delta-modal"') || admin.includes("id = 'sched-qa-delta-modal'"), 'delta modal id is stable');
 assert(admin.includes('data-qa-delta-idx'), 'delta cards are clickable');
 assert(admin.includes('${deltaSpread} min'), 'delta cards show their minute spread at top right');
+assert(!admin.includes('id="sched-qa-region"'), 'Schedule QA has no private region selector');
+assert(admin.includes("getElementById('diag-region-select')"), 'Schedule QA uses Target Region (Matrix & Scan)');
+assert(admin.includes('Uses the Target Region (Matrix &amp; Scan) control above.'), 'Schedule QA points at the shared region control');
 
 const qa = readFileSync(new URL('../src/lib/schedule-qa.js', import.meta.url), 'utf8');
 assert(qa.includes('flattenPublicHolidays'), 'QA flattens WC public_holidays before sheetKeys lookup');
@@ -507,6 +569,135 @@ assert(
     ));
     assert(kapPubMissing.length === 0, 'QA finds WC pub sheets nested under public_holidays');
     assert(nestedPubQa.summary.sheetsScanned >= 6, 'QA scans weekday, Saturday, and pub sheets for Kapteinsklip');
+}
+
+{
+    const { createContext, runInContext } = await import('node:vm');
+    const elements = new Map();
+    const classSets = new Map();
+    function makeEl(id) {
+        const classes = new Set(id === 'alert-image-lightbox' || id === 'dev-modal' ? ['hidden'] : []);
+        const el = {
+            id,
+            nodeType: 1,
+            tagName: 'DIV',
+            style: {},
+            dataset: {},
+            parentElement: null,
+            children: [],
+            _attrs: {},
+            setAttribute(name, value) { this._attrs[name] = String(value); },
+            getAttribute(name) { return Object.prototype.hasOwnProperty.call(this._attrs, name) ? this._attrs[name] : null; },
+            appendChild(child) {
+                child.parentElement = this;
+                this.children.push(child);
+                return child;
+            },
+            querySelectorAll(sel) {
+                const walk = (node, out) => {
+                    (node.children || []).forEach((child) => {
+                        if (sel === '[data-fb-preview-step]' && child.getAttribute?.('data-fb-preview-step') != null) out.push(child);
+                        walk(child, out);
+                    });
+                    return out;
+                };
+                return walk(this, []);
+            },
+            querySelector() { return null; },
+            addEventListener() {},
+            contains(node) { return this === node || this.children.includes(node); },
+            closest() { return null; },
+            remove() {
+                const parent = this.parentElement;
+                if (!parent) return;
+                parent.children = parent.children.filter((child) => child !== this);
+                this.parentElement = null;
+            },
+        };
+        el.classList = {
+            contains: (name) => classes.has(name),
+            add: (...names) => names.forEach((name) => classes.add(name)),
+            remove: (...names) => names.forEach((name) => classes.delete(name)),
+        };
+        classSets.set(el, classes);
+        if (id) elements.set(id, el);
+        return el;
+    }
+    const body = makeEl('body');
+    const overlay = makeEl('alert-image-lightbox');
+    const stage = makeEl('alert-image-lightbox-stage');
+    const img = makeEl('alert-image-lightbox-img');
+    const closeBtn = makeEl('alert-image-lightbox-close');
+    overlay.appendChild(stage);
+    overlay.appendChild(img);
+    overlay.appendChild(closeBtn);
+    const shell = makeEl('shell');
+    shell.appendChild(overlay);
+    const photo = 'https://firebasestorage.googleapis.com/v0/b/app/o/feedback_attachments%2Fa.jpg?alt=media&token=abc';
+    const second = 'https://firebasestorage.googleapis.com/v0/b/app/o/feedback_attachments%2Fb.jpg?alt=media&token=def';
+    let openedViaHashedBundle = false;
+    const poster = {
+        nodeType: 1,
+        tagName: 'BUTTON',
+        _attrs: { 'data-alert-lightbox': photo },
+        getAttribute(name) { return this._attrs[name] || null; },
+        querySelector(sel) {
+            if (sel === 'img') return { naturalWidth: 40, currentSrc: photo, src: photo, getAttribute: () => photo };
+            return null;
+        },
+        closest() {
+            return {
+                querySelectorAll(sel) {
+                    if (sel !== '[data-alert-lightbox]') return [];
+                    return [
+                        poster,
+                        { getAttribute: (name) => (name === 'data-alert-lightbox' ? second : null) },
+                    ];
+                },
+            };
+        },
+    };
+    const sandbox = {
+        window: {
+            openLightbox() { openedViaHashedBundle = true; },
+            Admin: null,
+        },
+        document: {
+            body,
+            getElementById: (id) => elements.get(id) || null,
+            createElement: () => makeEl(''),
+            addEventListener() {},
+        },
+        history: {
+            state: null,
+            pushState(state) { this.state = state; },
+        },
+        location: { href: 'https://enock-elk.github.io/next-train-astro/#dev-feedback-panel' },
+        MutationObserver: function MutationObserver() {
+            this.observe = () => { throw new Error('not a node'); };
+        },
+        console,
+    };
+    sandbox.globalThis = sandbox;
+    sandbox.window.document = sandbox.document;
+    const context = createContext(sandbox);
+    runInContext(admin, context, { filename: 'admin.js' });
+    const opened = sandbox.window.Admin.openFeedbackAttachmentPreview(photo, poster);
+    assert(opened === true, 'feedback photo preview opens');
+    assert(openedViaHashedBundle === false, 'feedback photo preview does not call the hashed opener');
+    assert(!overlay.classList.contains('hidden'), 'service poster preview is visible');
+    assert(overlay.classList.contains('flex'), 'service poster preview uses flex');
+    assert(img.src === photo, 'preview shows the commuter attachment');
+    assert(overlay.style.zIndex === '10050', 'preview sits above Dev Mode');
+    assert(overlay.parentElement === body, 'preview is on document.body, outside the Dev Mode shell');
+    assert(sandbox.history.state?.modal === 'feedback-preview', 'preview history stays on the current feedback URL');
+    assert(String(overlay.dataset.ntFeedbackGallery).split('\n').length === 2, 'preview keeps both photos from the message');
+    sandbox.window.Admin.stepFeedbackPreview(overlay, 1);
+    assert(img.src === second, 'next photo in the same message replaces the preview');
+    assert(stage.querySelectorAll('[data-fb-preview-step]').length === 2, 'several photos get previous and next controls');
+    sandbox.window.Admin.clearFeedbackPreviewChrome(overlay);
+    assert(overlay.querySelectorAll('[data-fb-preview-step]').length === 0, 'closing the preview removes the feedback controls');
+    assert(!overlay.dataset.ntFeedbackGallery, 'closing the preview drops the feedback gallery');
 }
 
 if (failed) {

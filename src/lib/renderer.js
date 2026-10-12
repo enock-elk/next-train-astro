@@ -11,15 +11,17 @@ import {
 } from '../store.js';
 
 import { 
-    ROUTES, CHANGELOG_DATA, CORRIDOR_META, getCorridorLabel, APP_VERSION
+    ROUTES, CHANGELOG_DATA, CORRIDOR_META, getCorridorLabel, APP_VERSION, SPECIAL_DATES, HOLIDAY_NAMES
 } from './config.js';
 
 import { orderGridTrainIds } from './grid-order.js';
 
 import { 
-    normalizeStationName, timeToSeconds, formatTimeDisplay, isRealTime, escapeHTML, safeStorage,
-    formatRouteLabelHtml, formatRouteLabelPlain, routePrimaryGridDirection, shortSharedSourceLabel,
-    scheduleCacheSlot, routeSheetKeyForDay, warningTriangleSvg
+    normalizeStationName, timeToSeconds, formatTimeDisplay, isRealTime, isExpressSkip,
+    isVariantStationName, variantMapFromSchedule, escapeHTML, safeStorage,
+    formatRouteLabelHtml, formatRouteLabelPlain, expandJhbLabel, fitRouteNameNodes, fitJhbNodes, routePrimaryGridDirection, shortSharedSourceLabel,
+    scheduleCacheSlot, routeSheetKeyForDay, warningTriangleSvg, gridNoticeShowsOnDay,
+    resolveOperatingDayType, simUsesSpecificDate
 } from './utils.js';
 
 import { 
@@ -36,6 +38,7 @@ import {
     resolveTransferHubName,
 } from './transfer-card.js';
 import { saturdayNoServiceCopy } from './saturday-service.js';
+import { resolveHolidayDayType } from './holiday-approvals.js';
 import {
     liveBoardJourneyKey,
     liveBoardNextAvailKey,
@@ -68,11 +71,35 @@ function firstTrainDayBit(dayName) {
     return name === 'Tomorrow' ? 'tomorrow' : `on ${name}`;
 }
 
-function emptyBoardHeadline(kind, dayName, _departureTime) {
+function emptyBoardHeadline(kind, dayName, holidayName) {
     const dayBit = firstTrainDayBit(dayName);
+    if (kind === 'holiday' && holidayName) return `No ${holidayName} service · first ${dayBit}:`;
     if (kind === 'weekend') return `No weekend service · first ${dayBit}:`;
     if (kind === 'noservice') return `No service today · first ${dayBit}:`;
     return `No more trains today · first ${dayBit}:`;
+}
+
+/** Named public holiday for the board the commuter is looking at. Generic sim days stay unnamed. */
+function boardHolidayName() {
+    const simActive = typeof window !== 'undefined' && !!window.isSimMode;
+    if (simActive && !simUsesSpecificDate()) return '';
+    let dateToCheck = new Date();
+    if (simActive && simUsesSpecificDate() && typeof document !== 'undefined') {
+        const dateInput = document.getElementById('sim-date');
+        if (dateInput instanceof HTMLInputElement && /^\d{4}-\d{2}-\d{2}$/.test(dateInput.value || '')) {
+            const parts = dateInput.value.split('-').map(Number);
+            dateToCheck = new Date(parts[0], parts[1] - 1, parts[2]);
+        }
+    }
+    const dateKey = `${String(dateToCheck.getMonth() + 1).padStart(2, '0')}-${String(dateToCheck.getDate()).padStart(2, '0')}`;
+    const name = HOLIDAY_NAMES?.[dateKey] || '';
+    if (!name) return '';
+    const route = ROUTES[$currentRouteId.get()];
+    const region = route?.region || $userRegion.get() || 'GP';
+    const holidayType = resolveHolidayDayType(dateKey, region, dateToCheck.getFullYear()) || SPECIAL_DATES?.[dateKey] || null;
+    const operating = resolveOperatingDayType(dateToCheck.getDay(), holidayType, region);
+    if (operating !== 'saturday' && operating !== 'public_holiday') return '';
+    return name;
 }
 
 /** What's New copy must read as human: no em/en dashes. */
@@ -141,7 +168,7 @@ export const Renderer = {
                             <div class="flex items-center min-w-0 pr-2">
                                 <span class="w-3 h-3 rounded-full mr-3 flex-shrink-0 ${dotColor} ${isActive ? 'ring-2 ring-blue-300 dark:ring-blue-700' : ''}"></span>
                                 <span class="text-[10px] font-black text-blue-500 dark:text-blue-400 uppercase tracking-widest mr-2 flex-shrink-0">Pinned:</span>
-                                <span class="truncate">${formatRouteLabelHtml(r.name)}</span>
+                                <span class="truncate" data-route-raw="${escapeHTML(r.name)}">${formatRouteLabelHtml(r.name)}</span>
                             </div>
                         </a>
                     </li>
@@ -151,7 +178,7 @@ export const Renderer = {
 
         categoryOrder.forEach(cat => {
             if (groups[cat]) {
-                html += `<li class="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest text-center pb-2 pt-4 list-none select-none">${cat}</li>`;
+                html += `<li class="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest text-center pb-2 pt-4 list-none select-none" data-jhb-short="${escapeHTML(cat)}" data-jhb-long="${escapeHTML(expandJhbLabel(cat))}">${escapeHTML(cat)}</li>`;
                 html += `<div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 mb-4 overflow-hidden divide-y divide-gray-100 dark:divide-gray-700">`;
                 
                 groups[cat].forEach(r => {
@@ -167,7 +194,7 @@ export const Renderer = {
                                         <div class="w-7 h-7 rounded-md flex items-center justify-center mr-3 flex-shrink-0 bg-gray-200 dark:bg-gray-700 text-gray-400 shadow-sm">
                                             <svg class="w-4 h-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="16" rx="2" ry="2"></rect><path d="M4 11h16"></path><path d="M12 3v8"></path><path d="M8 19l-2 3"></path><path d="M18 22l-2-3"></path><path d="M8 15h0"></path><path d="M16 15h0"></path></svg>
                                         </div>
-                                        <span class="truncate">${displayName}</span>
+                                        <span class="truncate" data-route-raw="${escapeHTML(r.name)}">${displayName}</span>
                                     </div>
                                     <span class="ml-2 text-[8px] bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 px-1.5 py-0.5 rounded uppercase font-black tracking-widest flex-shrink-0">Soon</span>
                                 </a>
@@ -191,7 +218,7 @@ export const Renderer = {
                                         <div class="w-7 h-7 rounded-md flex items-center justify-center mr-3 flex-shrink-0 ${tileBg} shadow-sm group-hover:scale-105 transition-transform">
                                             <svg class="w-4 h-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="16" rx="2" ry="2"></rect><path d="M4 11h16"></path><path d="M12 3v8"></path><path d="M8 19l-2 3"></path><path d="M18 22l-2-3"></path><path d="M8 15h0"></path><path d="M16 15h0"></path></svg>
                                         </div>
-                                        <span class="truncate">${displayName}</span>
+                                        <span class="truncate" data-route-raw="${escapeHTML(r.name)}">${displayName}</span>
                                     </div>
                                     ${isActive ? '<svg class="w-4 h-4 text-blue-600 dark:text-blue-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"></path></svg>' : ''}
                                 </a>
@@ -204,6 +231,8 @@ export const Renderer = {
         });
 
         container.innerHTML = html;
+        fitRouteNameNodes(container);
+        fitJhbNodes(container);
     },
 
     renderWelcomeList: (containerId, routes, onSelectCallback) => {
@@ -233,7 +262,7 @@ export const Renderer = {
                 
                 btn.innerHTML = `
                     <div class="min-w-0 pr-2">
-                        <span class="block text-sm font-bold text-gray-900 dark:text-white truncate">${displayName}</span>
+                        <span class="block text-sm font-bold text-gray-900 dark:text-white truncate" data-route-raw="${escapeHTML(route.name)}">${displayName}</span>
                         <span class="text-xs text-gray-500 dark:text-gray-400">View schedules</span>
                     </div>
                     <svg class="w-5 h-5 text-gray-400 group-hover:text-blue-500 transition-colors flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
@@ -247,7 +276,7 @@ export const Renderer = {
                 
                 btn.innerHTML = `
                     <div class="min-w-0 pr-2">
-                        <span class="block text-sm font-bold text-gray-500 dark:text-gray-400 truncate">${displayName}</span>
+                        <span class="block text-sm font-bold text-gray-500 dark:text-gray-400 truncate" data-route-raw="${escapeHTML(route.name)}">${displayName}</span>
                         <span class="text-[10px] font-black text-yellow-600 dark:text-yellow-500 uppercase tracking-widest mt-0.5 inline-block">🚧 Coming Soon</span>
                     </div>
                     <svg class="w-5 h-5 text-gray-300 dark:text-gray-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
@@ -262,6 +291,8 @@ export const Renderer = {
 
             container.appendChild(btn);
         });
+        fitRouteNameNodes(container);
+        fitJhbNodes(container);
     },
 
     // --- 2. LAYOUT PLACEHOLDERS & ERRORS ---
@@ -408,7 +439,13 @@ export const Renderer = {
         const firstTime = firstNextTrain
             ? formatTimeDisplay(firstNextTrain.departureTime || firstNextTrain.train1.departureTime)
             : '';
-        const headline = emptyBoardHeadline('weekend', nextDayInfo.name, firstTime);
+        const holidayName = boardHolidayName();
+        const headline = holidayName
+            ? emptyBoardHeadline('holiday', nextDayInfo.name, holidayName)
+            : emptyBoardHeadline('weekend', nextDayInfo.name, firstTime);
+        const closedCopy = holidayName
+            ? `This route does not run on ${holidayName}`
+            : 'This route does not run on Saturdays';
         const weekendKey = liveBoardStaticKey('weekend', destination, firstTime);
         if (tryPatchLiveBoardCountdown(element, weekendKey, timeDiffStr)) return;
 
@@ -416,7 +453,7 @@ export const Renderer = {
         element.innerHTML = `
             <div class="flex flex-col justify-center items-center w-full py-3 px-2 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700${weekendAnim}">
                 <div class="text-sm font-bold text-red-600 dark:text-red-400 text-center px-2 leading-snug">${headline}</div>
-                <p class="text-[10px] text-gray-500 dark:text-gray-400 mt-1 text-center px-2 leading-snug">This route does not run on Saturdays</p>
+                <p class="text-[10px] text-gray-500 dark:text-gray-400 mt-1 text-center px-2 leading-snug">${closedCopy}</p>
                 <div class="text-center p-2 bg-gray-50 dark:bg-gray-900/50 rounded-md transition-all mt-1 w-3/4 shadow-sm border border-gray-100 dark:border-gray-800">
                     ${timeHTML}
                 </div>
@@ -743,11 +780,12 @@ export const Renderer = {
             }
             const normDest = Renderer._applyUIIntercepts(normalizeStationName(destination));
             
-            let trainTitle = `Direct Train ${safeTrainName}`;
+            const isSpecialTrain = journey.exclusionType === 'special';
+            let trainTitle = isSpecialTrain ? `Special Train ${safeTrainName}` : `Direct Train ${safeTrainName}`;
             let titleColor = "text-gray-900 dark:text-white";
             
             if (journey.isLastTrain) {
-                trainTitle = `Direct Train ${safeTrainName}`;
+                trainTitle = isSpecialTrain ? `Special Train ${safeTrainName}` : `Direct Train ${safeTrainName}`;
                 titleColor = "text-red-600 dark:text-red-400";
             }
 
@@ -950,7 +988,7 @@ export const Renderer = {
         let tableClass = isExport ? (showRightAnchor ? 'export-compact' : '') : 'bg-white dark:bg-gray-900';
         let theadClass = isExport ? '' : 'bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-200'; 
         let stickyHeaderClass = isExport ? '' : 'bg-gray-200 dark:bg-gray-700 border-gray-300 dark:border-gray-600'; 
-        let borderClass = isExport ? 'border-gray-200' : 'border-gray-300 dark:border-gray-700';
+        let borderClass = isExport ? '' : 'border-gray-300 dark:border-gray-700';
         let tbodyClass = isExport ? '' : 'bg-white dark:bg-gray-900';
         let stickyCellClass = isExport ? 'nt-station-col' : 'nt-station-col bg-gray-100 dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-white';
 
@@ -959,7 +997,7 @@ export const Renderer = {
         if (!isExport && globalExclData && globalExclData[routeId] && globalExclData[routeId]['_grid_notice']) {
             const noticeNode = globalExclData[routeId]['_grid_notice'];
             const noticeText = noticeNode.text;
-            if (noticeNode.showInApp !== false && noticeText && noticeText.trim() !== '') {
+            if (noticeNode.showInApp !== false && noticeText && noticeText.trim() !== '' && gridNoticeShowsOnDay(noticeNode, gridDayType)) {
                 const cleanText = escapeHTML(noticeText);
                 gridNoticeHtml = `
                     <div class="bg-blue-50 dark:bg-blue-900/30 border-l-4 border-blue-500 p-3 mx-3 my-4 text-[11px] sm:text-xs text-blue-800 dark:text-blue-300 font-medium shadow-sm rounded-r flex items-start">
@@ -973,6 +1011,8 @@ export const Renderer = {
             }
         }
 
+        const variantByTrain = variantMapFromSchedule(schedule);
+
         let html = `
             ${gridNoticeHtml}
             <table class="w-full ${fontSizeClass} text-left border-collapse ${tableClass}">
@@ -981,15 +1021,25 @@ export const Renderer = {
                         <th class="nt-station-col sticky left-0 z-30 ${stickyHeaderClass} ${paddingClass} border-b border-r font-bold min-w-[140px] shadow-lg text-left pl-3">Station</th>
                         ${sortedCols.map((h, i) => {
                             const isHighlight = i === activeColIndex;
+                            const viaLabel = variantByTrain[h] || '';
                             const exclusionType = isTrainExcluded(h, routeId, dayIdx, isExport ? 'export' : 'grid');
                             const paintExclusion = !!exclusionType && (!isExport || exclusionShowsOnExport(h, routeId, dayIdx));
                             
                             let bgClass = '';
                             const trainIdStyle = isExport
-                                ? 'display:block;font-size:18px;font-weight:400;color:#0f172a;line-height:21px;'
+                                ? 'display:block;font-family:system-ui,-apple-system,"Segoe UI",sans-serif;font-size:18px;font-weight:400;letter-spacing:normal;color:#0f172a;line-height:21px;'
                                 : 'display:block;font-weight:inherit;color:inherit;line-height:14px;';
-                            const stack = (statusHtml, statusStyle = '') => `<span class="nt-grid-train-head" style="display:grid;grid-template-rows:11px ${isExport ? '21px' : '14px'};align-items:center;justify-items:center;gap:2px;line-height:1;white-space:nowrap;"><span class="nt-grid-train-status" style="display:flex;height:11px;align-items:center;justify-content:center;${statusStyle}">${statusHtml}</span><span class="nt-grid-train-id" style="${trainIdStyle}">${h}</span></span>`;
+                            const stack = (statusHtml, statusStyle = '') => {
+                                const statusHidden = !statusHtml || statusHtml === '&nbsp;' || /visibility:\s*hidden/.test(statusStyle);
+                                if (isExport && statusHidden) {
+                                    return `<span class="nt-grid-train-id" style="${trainIdStyle}">${h}</span>`;
+                                }
+                                return `<span class="nt-grid-train-head" style="display:grid;grid-template-rows:11px ${isExport ? '21px' : '14px'};align-items:center;justify-items:center;gap:2px;line-height:1;white-space:nowrap;"><span class="nt-grid-train-status" style="display:flex;height:11px;align-items:center;justify-content:center;${statusStyle}">${statusHtml}</span><span class="nt-grid-train-id" style="${trainIdStyle}">${h}</span></span>`;
+                            };
                             let headerContent = stack('&nbsp;', 'visibility:hidden;');
+                            const viaHtml = viaLabel
+                                ? `<span class="nt-grid-via" title="Via ${escapeHTML(viaLabel)}" style="display:block;margin-top:2px;font-size:8px;font-weight:800;letter-spacing:0.02em;line-height:1.15;white-space:normal;">Via ${escapeHTML(viaLabel)}</span>`
+                                : '';
                             
                             if (paintExclusion && exclusionType === 'special') {
                                 const splIcon = `<svg class="inline-block w-2 h-2 mr-0.5 mb-[1px]" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>`;
@@ -1016,10 +1066,11 @@ export const Renderer = {
                             const exclHeadAttrs = (!isExport && paintExclusion && exclusionType !== 'special')
                                 ? ` data-excl-open="1" data-excl-route="${escapeHTML(String(routeId || ''))}" data-excl-train="${escapeHTML(String(h || ''))}" data-excl-day="${Number(dayIdx)}" tabindex="0" role="button" aria-label="Why train ${escapeHTML(String(h))} has no service"`
                                 : '';
+                            headerContent += viaHtml;
                             const wrapClass = (isExport && paintExclusion && exclusionType !== 'special') ? 'whitespace-normal' : 'whitespace-nowrap';
                             return `<th class="${paddingClass} border-b border-r ${borderClass} ${wrapClass} text-center ${bgClass} ${minWidthClass}" ${isHighlight ? 'id="grid-active-col"' : ''} ${!isExport ? `data-nt-live-host="${escapeHTML(String(h || ''))}"` : ''}${exclHeadAttrs}>${headerContent}</th>`;
                         }).join('')}
-                        ${showRightAnchor ? `<th class="right-anchor-header sticky right-0 z-30 ${stickyHeaderClass} ${paddingClass} border-b border-l ${borderClass} font-bold min-w-[50px] shadow-[-4px_0_10px_rgba(0,0,0,0.05)] text-center bg-gray-100 dark:bg-gray-800">STN</th>` : ''}
+                        ${showRightAnchor ? `<th class="right-anchor-header ${paddingClass} border-b border-l font-bold min-w-[50px] text-center">STN</th>` : ''}
                     </tr>
                 </thead>
                 <tbody class="${isExport ? '' : 'divide-y '}${borderClass} ${tbodyClass}">
@@ -1027,7 +1078,8 @@ export const Renderer = {
 
         let validRowIndex = 0;
         schedule.rows.forEach(row => {
-            if (!row.STATION || row.STATION.toLowerCase().includes('updated')) return; 
+            if (!row.STATION || row.STATION.toLowerCase().includes('updated')) return;
+            if (isVariantStationName(row.STATION)) return; 
             const cleanStation = row.STATION.replace(' STATION', '');
             let hasData = false;
             sortedCols.forEach(col => { if (row[col] && row[col] !== "-" && row[col] !== "") hasData = true; });
@@ -1072,7 +1124,12 @@ export const Renderer = {
                     <td class="sticky left-0 z-10 ${currentStickyCellClass} ${paddingClass} border-r font-bold truncate max-w-[140px] shadow-lg border-b text-left pl-3">${cleanStation}</td>
                     ${sortedCols.map((col, i) => {
                         let val = row[col] || "-";
-                        if (val !== "-") {
+                        const expressSkip = isExpressSkip(val);
+                        if (expressSkip) {
+                            val = isExport
+                                ? 'EXPR'
+                                : `<button type="button" class="nt-expr-btn text-[10px] font-black tracking-wide text-amber-700 dark:text-amber-300 underline decoration-dotted focus:outline-none" data-expr-skip="1" data-expr-station="${escapeHTML(cleanStation)}" data-expr-train="${escapeHTML(String(col))}" aria-label="Train ${escapeHTML(String(col))} does not stop at ${escapeHTML(cleanStation)}">EXPR</button>`;
+                        } else if (val !== "-") {
                             if (isRealTime(val)) {
                                 val = formatTimeDisplay(val); 
                             } else {
@@ -1126,7 +1183,7 @@ export const Renderer = {
                         
                         return `<td class="${cellClass}"${exclCellAttrs}>${val}</td>`;
                     }).join('')}
-                    ${showRightAnchor ? `<td class="right-anchor-col sticky right-0 z-10 ${currentStickyCellClass || (isExport ? '' : 'bg-gray-50 dark:bg-gray-800/80')} ${paddingClass} border-l ${borderClass} border-b font-mono font-bold text-center shadow-[-4px_0_10px_rgba(0,0,0,0.05)] text-gray-500 dark:text-gray-400 text-[10px] sm:text-xs">${getAbbrev(cleanStation)}</td>` : ''}
+                    ${showRightAnchor ? `<td class="right-anchor-col ${paddingClass} border-l border-b font-mono font-bold text-center text-[10px] sm:text-xs">${getAbbrev(cleanStation)}</td>` : ''}
                 </tr>
             `;
             validRowIndex++;
@@ -1140,7 +1197,7 @@ export const Renderer = {
      * Saturday / holiday grid for routes with no weekend timetable:
      * active weekday stations only + compact notice above a single-column table.
      */
-    _buildNoSaturdayGridHTML: (weekdaySchedule, routeName = '', routeId = '') => {
+    _buildNoSaturdayGridHTML: (weekdaySchedule, routeName = '', routeId = '', dayType = 'saturday', holidayName = '') => {
         if (!weekdaySchedule?.rows?.length) {
             return `<div class="flex items-center justify-center h-full p-6 text-center text-sm text-gray-500">No station list available.</div>`;
         }
@@ -1164,7 +1221,7 @@ export const Renderer = {
             if (clean && !stations.includes(clean)) stations.push(clean);
         });
 
-        const copy = saturdayNoServiceCopy(routeId || '');
+        const copy = saturdayNoServiceCopy(routeId || '', dayType || 'saturday', holidayName || '');
         const noticeBody = copy?.body
             || `Metrorail does not run Saturday or public-holiday trains on this route${routeName ? ` (${formatRouteLabelPlain(String(routeName))})` : ''}.`;
 
@@ -1183,9 +1240,14 @@ export const Renderer = {
             <div class="w-full h-full overflow-auto">
                 <div class="bg-blue-50 dark:bg-blue-900/30 border-l-4 border-blue-500 p-3 mx-3 my-3 text-[11px] sm:text-xs text-blue-800 dark:text-blue-300 font-medium shadow-sm rounded-r">
                     <p class="leading-relaxed">${escapeHTML(noticeBody)}</p>
-                    <button type="button" id="grid-switch-weekday-btn" class="mt-2 inline-flex items-center justify-center px-3 py-1.5 rounded-md bg-white dark:bg-gray-800 border border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300 text-[11px] font-bold shadow-sm focus:outline-none">
+                    <div class="mt-2 flex flex-wrap gap-2">
+                    <button type="button" id="grid-switch-weekday-btn" class="inline-flex items-center justify-center px-3 py-1.5 rounded-md bg-white dark:bg-gray-800 border border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300 text-[11px] font-bold shadow-sm focus:outline-none">
                         Switch to Mon - Fri
                     </button>
+                    <button type="button" id="grid-plan-trip-btn" class="inline-flex items-center justify-center px-3 py-1.5 rounded-md bg-blue-600 text-white text-[11px] font-bold shadow-sm focus:outline-none">
+                        Plan this trip
+                    </button>
+                    </div>
                 </div>
                 <table class="w-full text-xs text-left border-collapse bg-white dark:bg-gray-900">
                     <thead class="text-[10px] uppercase bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-200 sticky top-0 z-20 shadow-sm">
@@ -1354,7 +1416,8 @@ export async function takeGridSnapshot(direction = 'A', dayType = 'weekday') {
     const mutedColor = '#6b7280';
     const tableHeaderBg = '#f1f5f9'; 
     const headerTextColor = '#1e293b'; 
-    const zebraBg = '#f8fafc'; 
+    const cellBg = '#ffffff';
+    const zebraBg = '#eff6ff'; 
 
     let dummyDayIdx = (selectedDay === 'weekday' || selectedDay === 'sunday') ? 1 : 6;
 
@@ -1384,6 +1447,8 @@ export async function takeGridSnapshot(direction = 'A', dayType = 'weekday') {
     exportContainer.style.color = textColor;
     
     exportContainer.classList.remove('dark');
+    exportContainer.style.colorScheme = 'light';
+    exportContainer.style.setProperty('--nt-border', borderColor);
 
     const destAName = Renderer._applyUIIntercepts(route.destA).toUpperCase();
     const destBName = Renderer._applyUIIntercepts(route.destB).toUpperCase();
@@ -1395,6 +1460,11 @@ export async function takeGridSnapshot(direction = 'A', dayType = 'weekday') {
     const finalScheduleTypeLabel = hasExceptions ? `AMENDED ${scheduleTypeLabel}` : scheduleTypeLabel;
     
     const displayRouteName = formatRouteLabelPlain(route.name);
+    const corridorEnds = displayRouteName.split('↔').map((part) => part.trim()).filter(Boolean);
+    const exportBiArrow = `<span style="display:inline-block;vertical-align:middle;line-height:1;font-size:1.15em;font-weight:700;letter-spacing:0;margin:0 0.28em;font-family:Arial,sans-serif;position:relative;top:-0.06em;">↔</span>`;
+    const corridorTitle = corridorEnds.length >= 2
+        ? `${escapeHTML(corridorEnds[0])}${exportBiArrow}${escapeHTML(corridorEnds[1])} CORRIDOR`
+        : `${escapeHTML(displayRouteName)} CORRIDOR`;
     
     let effectiveDateText = "";
     if (schedA && schedA.lastUpdated) {
@@ -1406,7 +1476,7 @@ export async function takeGridSnapshot(direction = 'A', dayType = 'weekday') {
     if (globalExclData && globalExclData[activeRouteId] && globalExclData[activeRouteId]['_grid_notice']) {
         const noticeNode = globalExclData[activeRouteId]['_grid_notice'];
         const noticeText = noticeNode.text;
-        if (noticeText && noticeText.trim() !== '' && noticeNode.showOnExport !== false) {
+        if (noticeText && noticeText.trim() !== '' && noticeNode.showOnExport !== false && gridNoticeShowsOnDay(noticeNode, selectedDay)) {
             const cleanText = escapeHTML(noticeText);
             exportGridNoticeHtml = `
                 <div class="nt-export-note" style="background-color:#fff7ed;border-left:5px solid #c2410c;margin:12px 0 0;font-size:15px;color:#9a3412;border-radius:0 6px 6px 0;box-shadow:0 1px 2px rgba(0,0,0,0.05);display:table;width:100%;min-height:44px;box-sizing:border-box;">
@@ -1438,7 +1508,7 @@ export async function takeGridSnapshot(direction = 'A', dayType = 'weekday') {
             <div class="flex justify-between items-end">
                 <div>
                     <h1 class="text-4xl font-black uppercase tracking-tight leading-none mb-0" style="color: ${accentColor}">Commuter Notice</h1>
-                    <h2 class="text-xl font-bold uppercase tracking-widest leading-tight mt-1" style="color: ${mutedColor}">${displayRouteName} Corridor</h2>
+                    <h2 class="text-xl font-bold uppercase leading-tight mt-1" style="color:#000000;">${corridorTitle}</h2>
                 </div>
                 <div class="text-right">
                     <div class="text-2xl font-bold leading-none" style="color: ${textColor}">${finalScheduleTypeLabel} TIMETABLE</div>
@@ -1448,8 +1518,8 @@ export async function takeGridSnapshot(direction = 'A', dayType = 'weekday') {
         </div>
 
         <div class="mb-4">
-            <div class="nt-export-direction nt-export-direction--primary border-l-4" style="background-color:#eaf2ff;border-color:${accentColor};padding:10px 12px;min-height:42px;display:flex;align-items:center;">
-                <h3 class="font-bold text-lg uppercase" style="color:${textColor};margin:0;letter-spacing:0.015em;">${primarySection.from} ➔ ${primarySection.to}</h3>
+            <div class="nt-export-direction nt-export-direction--primary border-l-4" style="background-color:#eaf2ff;border-color:${accentColor};padding:10px 12px 12px;box-sizing:border-box;">
+                <h3 class="nt-export-route-title font-bold uppercase" style="color:${textColor};margin:0;padding:0;letter-spacing:0.015em;font-size:22px;line-height:22px;height:auto;white-space:nowrap;display:block;text-align:left;">${primarySection.from} ➔ ${primarySection.to}</h3>
             </div>
             <div class="schedule-table-wrapper">
                 ${primarySection.html}
@@ -1463,8 +1533,8 @@ export async function takeGridSnapshot(direction = 'A', dayType = 'weekday') {
         </div>
 
         <div class="mb-8">
-            <div class="nt-export-direction nt-export-direction--return border-l-4" style="background-color:#eaf2ff;border-color:${accentColor};padding:10px 12px;min-height:42px;display:flex;align-items:center;">
-                <h3 class="font-bold text-lg uppercase" style="color:${textColor};margin:0;letter-spacing:0.015em;">${returnSection.from} ➔ ${returnSection.to}</h3>
+            <div class="nt-export-direction nt-export-direction--return border-l-4" style="background-color:#eaf2ff;border-color:${accentColor};padding:10px 12px 12px;box-sizing:border-box;">
+                <h3 class="nt-export-route-title font-bold uppercase" style="color:${textColor};margin:0;padding:0;letter-spacing:0.015em;font-size:22px;line-height:22px;height:auto;white-space:nowrap;display:block;text-align:left;">${returnSection.from} ➔ ${returnSection.to}</h3>
             </div>
             <div class="schedule-table-wrapper">
                 ${returnSection.html}
@@ -1499,22 +1569,41 @@ export async function takeGridSnapshot(direction = 'A', dayType = 'weekday') {
             headerCell.style.position = 'relative'; 
             headerCell.style.backgroundColor = tableHeaderBg;
             headerCell.style.color = headerTextColor;
-            headerCell.style.border = `1px solid ${borderColor}`;
-            headerCell.style.padding = isCompact ? '8px 3px' : '8px 6px'; 
+            headerCell.style.setProperty('border', '0', 'important');
+            headerCell.style.setProperty('border-right', `1px solid ${borderColor}`, 'important');
+            headerCell.style.setProperty('border-bottom', `1px solid ${borderColor}`, 'important');
+            headerCell.style.boxShadow = 'none';
+            headerCell.style.padding = isCompact ? '4px 3px 11px' : '4px 6px 12px'; 
             headerCell.style.fontSize = isCompact ? '17px' : '18px';
             headerCell.style.fontWeight = headerCell.querySelector('.nt-grid-train-id') ? '400' : '900';
             headerCell.style.textAlign = 'center';
-            if (isCompact) headerCell.style.letterSpacing = '-0.5px'; 
+            headerCell.style.verticalAlign = 'middle';
+            headerCell.style.lineHeight = '1';
+            if (isCompact) headerCell.style.letterSpacing = '-0.5px';
+            headerCell.querySelectorAll('.nt-grid-train-id').forEach((idEl) => {
+                idEl.style.fontFamily = 'system-ui, -apple-system, "Segoe UI", sans-serif';
+                idEl.style.fontWeight = '400';
+                idEl.style.fontSize = isCompact ? '17px' : '18px';
+                idEl.style.letterSpacing = 'normal';
+                idEl.style.lineHeight = '21px';
+                idEl.style.color = '#0f172a';
+            }); 
         });
         
         t.querySelectorAll('td').forEach(td => {
-            td.style.border = `1px solid ${borderColor}`;
-            td.style.padding = isCompact ? '6px 2.5px' : '6px'; 
+            td.style.setProperty('border', '0', 'important');
+            td.style.setProperty('border-right', `1px solid ${borderColor}`, 'important');
+            td.style.setProperty('border-bottom', `1px solid ${borderColor}`, 'important');
+            td.style.padding = isCompact ? '3px 2.5px 9px' : '3px 6px 10px'; 
             td.style.color = textColor;
             td.style.fontSize = isCompact ? '13.5px' : '15px'; 
             td.style.fontFamily = 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace';
-            td.style.textAlign = 'center'; 
+            td.style.textAlign = 'center';
+            td.style.verticalAlign = 'middle';
+            td.style.lineHeight = '1';
             td.style.fontWeight = '700'; 
+            td.style.backgroundColor = cellBg;
+            td.style.boxShadow = 'none';
             if (isCompact) td.style.letterSpacing = '-0.5px'; 
         });
 
@@ -1537,30 +1626,30 @@ export async function takeGridSnapshot(direction = 'A', dayType = 'weekday') {
             td.style.color = '#ef4444'; 
             td.style.opacity = '0.5'; 
         });
+        t.querySelectorAll('tr.export-zebra td:not(.export-spl-cell):not(.export-banned-cell):not(.export-disrupted-cell)').forEach(td => {
+            td.style.backgroundColor = zebraBg;
+        });
+
         t.querySelectorAll('tr.export-disrupted-row td, td.export-disrupted-cell').forEach(td => {
             td.style.backgroundColor = '#f3f4f6';
             td.style.color = '#9ca3af';
             td.style.opacity = '0.7';
         });
 
-        t.querySelectorAll('tr.export-zebra td:not(.export-spl-cell):not(.export-banned-cell):not(.export-disrupted-cell)').forEach(td => {
-            td.style.backgroundColor = zebraBg;
+        t.querySelectorAll('.right-anchor-header').forEach(headerCell => {
+            headerCell.style.setProperty('background-color', '#e2e8f0', 'important');
+            headerCell.style.setProperty('color', '#475569', 'important');
+            headerCell.style.letterSpacing = 'normal';
+            headerCell.style.padding = '4px 6px 12px';
         });
 
-        t.querySelectorAll('.right-anchor-header').forEach(headerCell => {
-            headerCell.style.backgroundColor = '#e2e8f0'; 
-            headerCell.style.color = '#475569';
-            headerCell.style.letterSpacing = 'normal'; 
-            headerCell.style.padding = '8px 6px'; 
-        });
-        
         t.querySelectorAll('.right-anchor-col').forEach(td => {
-            td.style.backgroundColor = '#f1f5f9';
-            td.style.color = '#64748b';
+            td.style.setProperty('background-color', '#f1f5f9', 'important');
+            td.style.setProperty('color', '#64748b', 'important');
             td.style.fontWeight = '800';
             td.style.fontSize = '13px';
-            td.style.letterSpacing = 'normal'; 
-            td.style.padding = '6px 6px'; 
+            td.style.letterSpacing = 'normal';
+            td.style.padding = '3px 6px 10px';
         });
 
         t.querySelectorAll('.sticky').forEach(el => {
@@ -1586,6 +1675,23 @@ export async function takeGridSnapshot(direction = 'A', dayType = 'weekday') {
 
     try {
         await new Promise(r => setTimeout(r, 100));
+
+        exportContainer.querySelectorAll('.nt-export-route-title').forEach((title) => {
+            const section = title.closest('.mb-4, .mb-8');
+            const table = section?.querySelector('table');
+            const available = Math.max(table?.offsetWidth || 0, title.parentElement?.clientWidth || 0);
+            if (!available) return;
+            let size = 22;
+            title.style.fontSize = `${size}px`;
+            title.style.lineHeight = `${size}px`;
+            title.style.height = 'auto';
+            title.style.display = 'block';
+            while (size > 13 && title.scrollWidth > available - 24) {
+                size -= 1;
+                title.style.fontSize = `${size}px`;
+                title.style.lineHeight = `${size}px`;
+            }
+        });
 
         const canvas = await window.html2canvas(exportContainer, {
             scale: 2,

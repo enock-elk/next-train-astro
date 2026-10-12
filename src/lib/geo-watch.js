@@ -1,3 +1,6 @@
+import { applyMotionFusionToFix } from './motion-fusion.js';
+import { startBackgroundTicker } from './background-ticker.js';
+
 /**
  * One geolocation watch for the map tab and an active share.
  *
@@ -28,6 +31,8 @@ const STATIONARY_SPEED_MPS = 1.5;
 const MAX_PLAUSIBLE_SPEED_MPS = 70;
 /** Restart a silent share watch so Android cannot freeze fused GPS for minutes. */
 const SHARE_SILENT_RESTART_MS = 8 * 1000;
+/** One-shot GPS before the 15s grey window. */
+const SHARE_FRESH_OPTS = { enableHighAccuracy: true, maximumAge: 0, timeout: 12000 };
 
 /** Map pin / last fused sample is still good enough to attach or list nearby trains. */
 export const GEO_REUSE_MAX_AGE_MS = 30 * 1000;
@@ -53,19 +58,21 @@ function bearingDeg(a, b) {
 }
 
 /**
- * Accuracy-aware motion sample. Low-speed OS readings inside the combined GPS
- * uncertainty are stationary, while meaningful displacement can supply a
- * speed / heading when Android leaves those fields null.
+ * Accuracy-aware motion sample. Displacement inside the combined GPS circle is
+ * stationary even when the OS reports ~5 km/h jitter. Real walking at 5 km/h
+ * still reports once the fix leaves that circle. Cruise-speed first samples
+ * (~14 km/h+) are trusted before a second point exists.
  */
 export function refineMotionFix(raw, previous = null) {
     if (!raw || !Number.isFinite(raw.lat) || !Number.isFinite(raw.lng)) return null;
     if (Number.isFinite(raw.accuracy) && raw.accuracy > 250) return null;
     if (!previous || !Number.isFinite(previous.t)) {
+        const reported = Number.isFinite(raw.speedMps) ? raw.speedMps : 0;
+        const cruise = reported >= 4;
         return {
             ...raw,
-            speedMps: Number.isFinite(raw.speedMps) && raw.speedMps < STATIONARY_SPEED_MPS
-                ? 0
-                : raw.speedMps,
+            speedMps: cruise ? reported : 0,
+            stationary: !cruise,
         };
     }
     if (raw.t <= previous.t) return null;
@@ -81,13 +88,8 @@ export function refineMotionFix(raw, previous = null) {
         Math.min(200, Math.hypot(accuracy, previousAccuracy) * 0.75)
     );
     const reportedSpeed = Number.isFinite(raw.speedMps) ? raw.speedMps : null;
-    const stationary = movedM <= uncertaintyM
-        && (
-            accuracy > 50
-            || previousAccuracy > 50
-            || reportedSpeed == null
-            || reportedSpeed < STATIONARY_SPEED_MPS
-        );
+    // Sitting still: the pin has not left the accuracy blob. Ignore OS speed.
+    const stationary = movedM <= uncertaintyM;
     if (stationary) {
         return {
             ...raw,
@@ -101,7 +103,9 @@ export function refineMotionFix(raw, previous = null) {
     const measuredSpeed = reportedSpeed != null && reportedSpeed >= STATIONARY_SPEED_MPS
         ? reportedSpeed
         : derivedSpeed;
-    const previousSpeed = Number.isFinite(previous.speedMps) ? previous.speedMps : measuredSpeed;
+    const previousSpeed = previous.stationary
+        ? measuredSpeed
+        : (Number.isFinite(previous.speedMps) ? previous.speedMps : measuredSpeed);
     return {
         ...raw,
         speedMps: Math.max(0, previousSpeed * 0.35 + measuredSpeed * 0.65),
@@ -111,6 +115,17 @@ export function refineMotionFix(raw, previous = null) {
         movedM,
         stationary: false,
     };
+}
+
+/**
+ * Card / ping display: prefer the refined stationary flag. Do not floor real
+ * 5 km/h walking; only hide a sample already marked stationary.
+ */
+export function trustedDisplaySpeedMps({ speedMps, stationary } = {}) {
+    if (stationary) return 0;
+    const speed = Number(speedMps);
+    if (!Number.isFinite(speed) || speed < 0) return NaN;
+    return speed;
 }
 
 /**
@@ -152,9 +167,10 @@ function fromCoords(coords, timestamp = Date.now()) {
 }
 
 function emit(fix) {
-    lastFix = fix;
+    const next = applyMotionFusionToFix(fix);
+    lastFix = next;
     listeners.forEach((fn) => {
-        try { fn(fix); } catch { /* listener */ }
+        try { fn(next); } catch { /* listener */ }
     });
 }
 
@@ -176,8 +192,17 @@ function desiredWatchKind() {
 function ingestWatchPosition(pos) {
     lastWatchCallbackAt = Date.now();
     if (!pos?.coords) return;
-    const raw = fromCoords(pos.coords, pos.timestamp);
-    const fix = refineMotionFix(raw, lastFix) || confirmStationaryWatchTick(raw, lastFix);
+    const osT = Number(pos.timestamp);
+    const now = Date.now();
+    // Cached OS timestamps make a live callback look 30-60s stale.
+    const t = Number.isFinite(osT) && (now - osT) <= 2000 ? osT : now;
+    const raw = fromCoords(pos.coords, t);
+    const fix = refineMotionFix(raw, lastFix) || confirmStationaryWatchTick(raw, lastFix) || {
+        ...raw,
+        t: now,
+        speedMps: Number.isFinite(raw.speedMps) ? raw.speedMps : 0,
+        stationary: true,
+    };
     if (fix) emit(fix);
 }
 
@@ -198,19 +223,20 @@ function startWatch(kind) {
 function syncShareWatchdog(on) {
     if (!on) {
         if (shareWatchdogTimer) {
-            clearInterval(shareWatchdogTimer);
+            shareWatchdogTimer.stop();
             shareWatchdogTimer = 0;
         }
         return;
     }
     if (shareWatchdogTimer) return;
-    shareWatchdogTimer = setInterval(() => {
+    // Worker-backed so a backgrounded tab cannot throttle the restart check.
+    shareWatchdogTimer = startBackgroundTicker(() => {
         if (desiredWatchKind() !== 'share') return;
         const last = lastWatchCallbackAt || lastFix?.t || 0;
         if (last && Date.now() - last < SHARE_SILENT_RESTART_MS) return;
-        lastWatchCallbackAt = Date.now();
         clearWatch();
         startWatch('share');
+        requestFreshShareFix().catch(() => {});
     }, 4000);
 }
 
@@ -248,8 +274,29 @@ function bindLifecycle() {
     boundLifecycle = true;
     document.addEventListener('visibilitychange', () => {
         applyWatch();
+        // Back from another app while sharing: the OS may have frozen the
+        // watch. Re-arm the wake lock and pull one fresh fix straight away.
+        if (!document.hidden && holders.has('share')) {
+            clearWatch();
+            startWatch('share');
+            requestFreshShareFix().catch(() => {});
+        }
+    });
+    // Page Lifecycle: Chrome freezes hidden tabs after ~5 min and fires
+    // `resume` when the commuter returns. Treat it like becoming visible.
+    document.addEventListener('resume', () => {
+        if (!holders.has('share')) return;
+        clearWatch();
+        startWatch('share');
+        requestFreshShareFix().catch(() => {});
     });
     window.addEventListener('pagehide', () => {
+        // Keep an active share watch alive. Clearing here is why GPS went
+        // 30-60s stale after Android TWA lifecycle events.
+        if (holders.has('share')) {
+            applyWatch();
+            return;
+        }
         clearWatch();
         syncShareWatchdog(false);
         syncShareWakeLock(false);
@@ -300,7 +347,59 @@ export function geoWatchHolders() {
     return [...holders];
 }
 
-/** Recenter-quality fix. Reuses a recent watch sample when the OS still has one. */
+/** Restart the high-accuracy share watch without dropping the share holder. */
+export function restartShareWatch() {
+    if (desiredWatchKind() !== 'share') {
+        acquireGeoWatch('share');
+        return;
+    }
+    clearWatch();
+    startWatch('share');
+}
+
+/**
+ * Force a new GPS sample for an active share (Refresh GPS / silent watchdog).
+ * Stamps `t` to now so a cached OS position cannot grey the card.
+ */
+export function requestFreshShareFix() {
+    return new Promise((resolve, reject) => {
+        if (typeof navigator === 'undefined' || !navigator.geolocation) {
+            if (lastFix) {
+                resolve(lastFix);
+                return;
+            }
+            reject(Object.assign(new Error('Location isn’t available on this device.'), { code: 2 }));
+            return;
+        }
+        acquireGeoWatch('share');
+        navigator.geolocation.getCurrentPosition(
+            (pos) => {
+                lastWatchCallbackAt = Date.now();
+                if (!pos?.coords) {
+                    if (lastFix) {
+                        resolve(lastFix);
+                        return;
+                    }
+                    reject(Object.assign(new Error('Couldn’t get a GPS fix.'), { code: 2 }));
+                    return;
+                }
+                const raw = fromCoords(pos.coords, Date.now());
+                const fix = refineMotionFix(raw, lastFix) || confirmStationaryWatchTick(raw, lastFix) || raw;
+                emit(fix);
+                resolve(fix);
+            },
+            (err) => {
+                if (lastFix) {
+                    resolve(lastFix);
+                    return;
+                }
+                reject(err);
+            },
+            SHARE_FRESH_OPTS
+        );
+    });
+}
+
 export function requestGeoLocateFix() {
     return new Promise((resolve, reject) => {
         const reuse = () => reusableGeoFix(lastFix);

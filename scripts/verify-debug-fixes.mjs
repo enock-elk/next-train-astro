@@ -4,7 +4,7 @@
  */
 import { readFileSync } from 'node:fs';
 import { DEFAULT_EXCLUSIONS, APP_VERSION } from '../src/lib/config.js';
-import { simUsesSpecificDate, resolveOperatingDayType, resolvePlannerStationInput, plannerStationDisplayName, formatThreadDateLabel, formatAppTime, routePrimaryGridDirection, exclusionAppliesToSurface, STATION_ALIASES, pruneExclusionsTree } from '../src/lib/utils.js';
+import { simUsesSpecificDate, resolveOperatingDayType, resolvePlannerStationInput, plannerStationDisplayName, formatThreadDateLabel, formatAppTime, routePrimaryGridDirection, exclusionAppliesToSurface, gridNoticeShowsOnDay, STATION_ALIASES, pruneExclusionsTree } from '../src/lib/utils.js';
 
 let failed = 0;
 function assert(cond, msg) {
@@ -151,7 +151,16 @@ assert(shouldOpenRoutePicker({ swapGen: 1, currentGen: 2, currentRouteId: null }
     const board = readFileSync(new URL('../src/lib/live-board.js', import.meta.url), 'utf8');
     assert(board.includes('export function getTrainExclusionRule'), 'getTrainExclusionRule is exported');
     assert(board.includes('export function openTrainExclusionSheet'), 'exclusion sheet opener is exported');
+    assert(board.includes("train1Exclusion !== 'special'"), 'board transfers still allow special trains');
+    assert(board.includes("connExclusion !== 'special'"), 'board connections still allow special trains');
+    const boardUi = readFileSync(new URL('../src/lib/live-board-ui.js', import.meta.url), 'utf8');
+    assert(boardUi.includes("t === 'special'"), 'live board next train keeps special exclusions');
+    assert(boardUi.includes("exclusionType === 'special') && !isPassed"), 'upcoming next marker keeps special trains');
+    const planner = readFileSync(new URL('../src/lib/planner-core.js', import.meta.url), 'utf8');
+    assert(planner.includes("excl !== 'special'"), 'planner legs still allow special trains');
+    assert(planner.includes("graphExclusion !== 'special'"), 'planner graph still allows special trains');
     const renderer = readFileSync(new URL('../src/lib/renderer.js', import.meta.url), 'utf8');
+    assert(renderer.includes('Special Train ${safeTrainName}'), 'live board labels specials as Special Train');
     assert(renderer.includes('data-excl-open="1"'), 'cancelled columns open the exclusion sheet');
     assert(renderer.includes('exclHeadAttrs'), 'NO SVC header cell is the hit target');
     assert(renderer.includes('exclCellAttrs'), 'banned time cells open the same advisory');
@@ -162,6 +171,12 @@ assert(shouldOpenRoutePicker({ swapGen: 1, currentGen: 2, currentRouteId: null }
     assert(!renderer.includes('nt-excl-head'), 'NO SVC number uses the same header box as other trains');
     assert(renderer.includes("isExport ? 'export' : 'grid'"), 'grid visibility uses the selected exclusion surface');
     assert(renderer.includes('noticeNode.showInApp !== false'), 'in-app grid banner honours its visibility checkbox');
+    assert(renderer.includes('gridNoticeShowsOnDay(noticeNode, gridDayType)'), 'in-app grid banner honours selected schedule days');
+    assert(renderer.includes('gridNoticeShowsOnDay(noticeNode, selectedDay)'), 'export grid banner honours selected schedule days');
+    assert(gridNoticeShowsOnDay({ text: 'x' }, 'saturday') === true, 'legacy banner without days shows on every schedule');
+    assert(gridNoticeShowsOnDay({ days: { weekday: true, saturday: false, sunday: false, public_holiday: true } }, 'weekday') === true, 'ticked weekday banner shows on weekday');
+    assert(gridNoticeShowsOnDay({ days: { weekday: true, saturday: false, sunday: false, public_holiday: true } }, 'saturday') === false, 'unticked Saturday banner is hidden');
+    assert(gridNoticeShowsOnDay({ days: { weekday: true, saturday: false, sunday: false, public_holiday: true } }, 'public_holiday') === true, 'ticked public-holiday banner shows on holiday grids');
     assert(renderer.includes('routePrimaryGridDirection(route)') && renderer.includes('primarySection.html'), 'download grid starts with the route-name direction');
     assert(renderer.includes('nt-export-direction--primary') && renderer.includes('nt-export-direction--return'), 'outbound and return direction strips stay labeled');
     assert(renderer.includes('NOTE:') && !renderer.includes('font-size: 12px;">Service Update</div>'), 'export notice uses NOTE: and does not grow the in-app Service Update banner');
@@ -194,6 +209,9 @@ assert(shouldOpenRoutePicker({ swapGen: 1, currentGen: 2, currentRouteId: null }
     assert(resolvePlannerStationInput('park station', gp) === 'JOHANNESBURG', 'park station → JOHANNESBURG');
     assert(resolvePlannerStationInput('Kempton Park', gp) === 'KEMPTON PARK', 'Kempton Park stays Kempton Park');
     assert(resolvePlannerStationInput('Ellis Park', gp) === 'ELLIS PARK', 'Ellis Park stays Ellis Park');
+    const jhbBoth = ['PRETORIA', 'JOHANNESBURG PARK', 'JOHANNESBURG', 'GERMISTON'];
+    assert(resolvePlannerStationInput('JOHANNESBURG', jhbBoth) === 'JOHANNESBURG', 'bare JOHANNESBURG is not ambiguous with Park');
+    assert(resolvePlannerStationInput('PRETORIA', jhbBoth) === 'PRETORIA', 'PRETORIA still resolves next to Johannesburg');
     const gpNorth = ['PRETORIA', 'PRETORIA-N', 'PRETORIA WES', 'MABOPANE', 'KEMPTON PARK'];
     assert(resolvePlannerStationInput('Pretoria North', gpNorth) === 'PRETORIA-N', 'Pretoria North → PRETORIA-N');
     assert(resolvePlannerStationInput('Pretoria West', gpNorth) === 'PRETORIA WES', 'Pretoria West → PRETORIA WES');

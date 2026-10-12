@@ -1,0 +1,43 @@
+# Deploy nexttrain-community (scheduled alerts + community write bouncer).
+# Cron triggers live only after this Worker is deployed.
+name: Deploy nexttrain-community worker
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'workers/nexttrain-community/**'
+      - '.github/workflows/deploy-community-worker.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-community-worker
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Deploy worker
+        working-directory: workers/nexttrain-community
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          if [ -z "${CLOUDFLARE_API_TOKEN:-}" ] || [ -z "${CLOUDFLARE_ACCOUNT_ID:-}" ]; then
+            echo "::warning::CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID not set. Worker cron will not update."
+            exit 0
+          fi
+          npx --yes wrangler deploy

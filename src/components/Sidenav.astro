@@ -27,7 +27,7 @@ const versionBadge = String(APP_VERSION);
         <button type="button" id="settings-account-btn" hidden inert aria-hidden="true" class="hidden w-full flex justify-between items-center py-3 px-4 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors focus:outline-none group">
           <div class="flex items-center space-x-4 min-w-0">
             <span id="settings-account-avatar" class="relative w-9 h-9 shrink-0 rounded-full bg-blue-100 dark:bg-blue-900/40 flex items-center justify-center overflow-hidden" data-signed-in="false">
-              <img id="settings-account-avatar-img" class="hidden w-full h-full object-cover" alt="" />
+              <img id="settings-account-avatar-img" class="hidden w-full h-full object-cover" alt="" referrerpolicy="no-referrer" />
               <span id="settings-account-avatar-ph" class="text-sm font-black text-blue-700 dark:text-blue-300 select-none">?</span>
             </span>
             <div class="text-left min-w-0">
@@ -131,6 +131,16 @@ const versionBadge = String(APP_VERSION);
               <label for="settings-theme-checkbox" class="toggle-label block overflow-hidden h-5 rounded-full bg-gray-300 cursor-pointer"></label>
             </div>
           </button>
+
+          <div id="account-theme-choice" class="hidden py-3 px-4" hidden>
+            <p class="text-sm font-bold text-gray-900 dark:text-white leading-tight">Appearance</p>
+            <p class="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">Light, dark, or this phone</p>
+            <div class="grid grid-cols-3 gap-2 mt-2" role="group" aria-label="Appearance">
+              <button type="button" data-account-theme="light" class="account-theme-option" aria-pressed="false">Light</button>
+              <button type="button" data-account-theme="dark" class="account-theme-option" aria-pressed="false">Dark</button>
+              <button type="button" data-account-theme="system" class="account-theme-option" aria-pressed="false">System</button>
+            </div>
+          </div>
 
           <button type="button" id="settings-haptics-toggle" class="w-full flex justify-between items-center py-3 px-4 hover:bg-gray-100 dark:hover:bg-gray-800/50 transition-colors focus:outline-none group">
             <div class="flex items-center space-x-4">

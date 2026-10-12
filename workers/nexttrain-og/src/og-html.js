@@ -2,7 +2,7 @@ import { dayLabel, stationLabel } from './parse.js';
 import { OG_IMAGE_HEIGHT, OG_IMAGE_WIDTH } from './og-size.js';
 
 /** Bump when OG art/meta changes so WhatsApp/Facebook re-fetch the image. */
-const OG_IMAGE_CACHE_BUST = 'wa9';
+const OG_IMAGE_CACHE_BUST = 'wa11';
 
 function esc(s) {
   return String(s ?? '')
@@ -29,6 +29,12 @@ export function buildAppDeepLink(intent, site) {
     if (intent.region) app.searchParams.set('r', intent.region);
     return app.toString();
   }
+  if (intent.kind === 'live') {
+    app.searchParams.set('live', intent.trainId);
+    if (intent.routeId) app.searchParams.set('rt', intent.routeId);
+    if (intent.dest) app.searchParams.set('to', intent.dest);
+    return app.toString();
+  }
   app.searchParams.set('rt', intent.routeId);
   app.searchParams.set('v', intent.view === 'fares' ? 'f' : 'g');
   if (intent.dir === 'B') app.searchParams.set('dir', 'B');
@@ -45,6 +51,15 @@ export function buildOgShareLink(intent, site) {
     if (intent.day) share.searchParams.set('d', dayCode(intent.day));
     if (intent.region) share.searchParams.set('r', intent.region);
     return share.toString();
+  }
+  if (intent.kind === 'live') {
+    const id = encodeURIComponent(String(intent.trainId || '').trim());
+    const rt = encodeURIComponent(String(intent.routeId || '').trim());
+    const dest = encodeURIComponent(String(intent.dest || '').trim());
+    let path = `/og/l/${id}`;
+    if (rt) path += `/${rt}`;
+    if (dest) path += `/${dest}`;
+    return `${site.replace(/\/$/, '')}${path}`;
   }
   share.searchParams.set('rt', intent.routeId);
   share.searchParams.set('v', intent.view === 'fares' ? 'f' : 'g');
@@ -108,6 +123,31 @@ export function buildPlannerOgMeta(intent, site) {
   };
 }
 
+export function buildLiveTrainOgMeta(intent, site) {
+  const id = String(intent.trainId || '').trim();
+  const dest = stationLabel(intent.dest || '');
+  const title = dest ? `Train ${id} to ${dest} is live` : `Train ${id} is live`;
+  const description = dest
+    ? `A rider is sharing Train ${id} toward ${dest} in real time. Open Next Train to follow it on the map.`
+    : `A rider is sharing Train ${id} in real time. Open Next Train to follow it on the map.`;
+  const rt = encodeURIComponent(String(intent.routeId || '').trim() || '-');
+  const destSeg = encodeURIComponent(dest || '');
+  const idSeg = encodeURIComponent(id || 'Train');
+  let imgPath = `/og/train/${idSeg}.png`;
+  if (intent.routeId || dest) {
+    imgPath = `/og/train/${idSeg}/${rt}${destSeg ? `/${destSeg}` : ''}.png`;
+  }
+  const img = new URL(imgPath, site);
+  return {
+    title,
+    description,
+    url: buildOgShareLink(intent, site),
+    appUrl: buildAppDeepLink(intent, site),
+    image: withImageCacheBust(img.toString()),
+    imageAlt: dest ? `Live Train ${id} toward ${dest}` : `Live Train ${id}`,
+  };
+}
+
 export function renderOgHtml({
   title,
   description,
@@ -139,6 +179,7 @@ export function renderOgHtml({
 <meta property="og:image:width" content="${OG_IMAGE_WIDTH}"/>
 <meta property="og:image:height" content="${OG_IMAGE_HEIGHT}"/>
 <meta property="og:image:alt" content="${esc(alt)}"/>
+<link rel="image_src" href="${esc(image)}"/>
 <meta name="twitter:card" content="summary_large_image"/>
 <meta name="twitter:title" content="${esc(title)}"/>
 <meta name="twitter:description" content="${esc(description)}"/>

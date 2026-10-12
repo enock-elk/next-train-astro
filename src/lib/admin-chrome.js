@@ -5,9 +5,10 @@
  * Never use five-tap unlock or the admin-ready / admin-session-active flags as the gate.
  */
 import { safeStorage } from './utils.js';
-import { $currentRouteId } from '../store.js';
+import { $currentRouteId, $userRegion } from '../store.js';
 import { $account } from './account.js';
-import { FEATURE_KEYS, isFeatureEnabled, isFeatureGranted } from './features.js';
+import { FEATURE_KEYS, fetchFeatures, getGrantedFeatures, isFeatureEnabled, isFeatureGranted, isRideCheckInPinned } from './features.js';
+import { isLiveTrainFollowActive } from './live-train-follow.js';
 
 function isSignedInAccount() {
     return $account.get()?.status === 'signed-in';
@@ -50,13 +51,11 @@ function setReveal(el, on) {
     }
 }
 
-/** Pin-gated testers: Map / Community / Account follow pinned routes, not the viewed corridor. */
+/** Map / Community follow a region, the board route, a pin, or a device grant. */
 export function canAccessPilotSurface(surface, routeId = '') {
     if (isAdminAuthed()) return true;
     if (surface === 'map' && isFeatureGranted(FEATURE_KEYS.MAP_TAB)) return true;
     if (surface === 'community' && isFeatureGranted(FEATURE_KEYS.COMMUNITY_TAB)) return true;
-    if (surface === 'tripPrice' && isFeatureGranted(FEATURE_KEYS.TRIP_PRICE)) return true;
-    if (surface === 'tripPrice' && routeId) return isFeatureEnabled(FEATURE_KEYS.TRIP_PRICE, routeId);
     // A signed-in commuter must always reach Account, even if extra features
     // (Map / Community / ride check-in) are switched off in Dev Hub.
     if (surface === 'account' && isSignedInAccount()) return true;
@@ -65,16 +64,36 @@ export function canAccessPilotSurface(surface, routeId = '') {
         || isFeatureGranted(FEATURE_KEYS.COMMUNITY_TAB)
         || isFeatureGranted(FEATURE_KEYS.RIDE_CHECKIN)
     )) return true;
-    const pins = routeId ? [String(routeId)] : getPinnedRouteIds();
-    if (!pins.length) return false;
-    const hit = (key) => pins.some((id) => isFeatureEnabled(key, id));
+    const hit = (key) => experimentalFeatureMatches(key, routeId);
     if (surface === 'map') return hit(FEATURE_KEYS.MAP_TAB);
     if (surface === 'community') return hit(FEATURE_KEYS.COMMUNITY_TAB);
-    if (surface === 'tripPrice') return hit(FEATURE_KEYS.TRIP_PRICE);
     if (surface === 'account') {
         return hit(FEATURE_KEYS.MAP_TAB) || hit(FEATURE_KEYS.COMMUNITY_TAB);
     }
     return false;
+}
+
+/**
+ * Region, the route on the board, a pinned route, or an explicit route argument.
+ * A device grant is handled before this runs.
+ */
+function experimentalFeatureMatches(key, routeId = '') {
+    const region = String($userRegion.get() || '').toUpperCase();
+    if (region && isFeatureEnabled(key, '', region)) return true;
+    const ids = new Set(routeId ? [String(routeId)] : getPinnedRouteIds());
+    if (!routeId) {
+        const current = String($currentRouteId.get() || '');
+        if (current) ids.add(current);
+    }
+    return [...ids].some((id) => isFeatureEnabled(key, id));
+}
+
+/**
+ * Interactive tracking Map: authenticated admins, experimental Map pins/grants,
+ * or a live-share follow for this browser session only.
+ */
+export function canOpenTrackingMap() {
+    return canAccessPilotSurface('map') || isLiveTrainFollowActive();
 }
 
 /** Passenger Type + Theme live in Account when that row is visible. */
@@ -87,6 +106,7 @@ export function placeAccountSettings(accountOn) {
     const accountSlot = document.getElementById('account-settings-host');
     const mapsBlock = document.getElementById('sidenav-maps-block');
     const themeToggle = document.getElementById('settings-theme-toggle');
+    const themeChoice = document.getElementById('account-theme-choice');
     const notifyToggle = document.getElementById('settings-notify-toggle');
     const paxNote = document.getElementById('settings-profile-community-note');
     if (accountOn && accountSlot) {
@@ -95,6 +115,11 @@ export function placeAccountSettings(accountOn) {
         }
         if (prefs) accountSlot.appendChild(prefs);
         prefs?.classList.add('nt-prefs-flat');
+        if (themeChoice) {
+            themeChoice.hidden = false;
+            themeChoice.removeAttribute('hidden');
+            themeChoice.classList.remove('hidden');
+        }
         document.getElementById('prefs-accordion-toggle')?.classList.add('hidden');
         const panel = document.getElementById('prefs-accordion-panel');
         panel?.classList.remove('hidden');
@@ -110,6 +135,11 @@ export function placeAccountSettings(accountOn) {
         paxNote?.classList.remove('hidden');
     } else {
         prefs?.classList.remove('nt-prefs-flat');
+        if (themeChoice) {
+            themeChoice.hidden = true;
+            themeChoice.setAttribute('hidden', '');
+            themeChoice.classList.add('hidden');
+        }
         document.getElementById('prefs-accordion-toggle')?.classList.remove('hidden');
         document.getElementById('prefs-accordion-toggle')?.setAttribute('aria-expanded', 'false');
         const panel = document.getElementById('prefs-accordion-panel');
@@ -150,7 +180,7 @@ export function applyPilotChrome() {
     html.setAttribute('data-pilot-community', !isAdminAuthed() && communityOn ? '1' : '0');
 
     const tab = safeStorage.getItem('activeTab');
-    if (!isAdminAuthed() && ((tab === 'map' && !mapOn) || (tab === 'community' && !communityOn))) {
+    if (!isAdminAuthed() && ((tab === 'map' && !canOpenTrackingMap()) || (tab === 'community' && !communityOn))) {
         if (typeof window.switchTab === 'function') window.switchTab('next-train');
         else safeStorage.setItem('activeTab', 'next-train');
     }
@@ -182,8 +212,65 @@ export function applyAdminAuthedChrome(authed) {
     }
 }
 
+function experimentalAccessSnapshot() {
+    const routeId = String($currentRouteId.get() || '');
+    const region = String($userRegion.get() || '');
+    return {
+        map: !isAdminAuthed() && canAccessPilotSurface('map'),
+        community: !isAdminAuthed() && canAccessPilotSurface('community'),
+        ride: isRideCheckInPinned(routeId) || isFeatureEnabled(FEATURE_KEYS.RIDE_CHECKIN, routeId, region),
+    };
+}
+
+/** Fresh RTDB read soon after open. Revoke hides the surface; a live one refreshes after a toast. */
+export function scheduleExperimentalFeatureRecheck() {
+    if (typeof window === 'undefined' || window.__ntExpRecheck) return;
+    window.__ntExpRecheck = true;
+    const started = Date.now();
+    const run = async () => {
+        try {
+            await fetchFeatures();
+            const before = experimentalAccessSnapshot();
+            const grants = getGrantedFeatures();
+            const enabled = before.map || before.community || before.ride
+                || Object.values(grants).some((on) => on === true);
+            if (!enabled || isAdminAuthed()) return;
+            await fetchFeatures(true);
+            applyPilotChrome();
+            if (typeof window.renderRideSeenChip === 'function') {
+                try { window.renderRideSeenChip(); } catch { /* ignore */ }
+            }
+            const after = experimentalAccessSnapshot();
+            const lostMap = before.map && !after.map;
+            const lostCommunity = before.community && !after.community;
+            const lostRide = before.ride && !after.ride;
+            if (!lostMap && !lostCommunity && !lostRide) return;
+            const tab = safeStorage.getItem('activeTab') || '';
+            const mapOpen = lostMap && (
+                tab === 'map' || !!document.getElementById('view-map')?.classList.contains('active')
+            );
+            const communityOpen = lostCommunity && (
+                tab === 'community' || !!document.getElementById('view-community')?.classList.contains('active')
+            );
+            let sharing = false;
+            if (lostRide) {
+                try {
+                    sharing = !!JSON.parse(safeStorage.getItem('ridePingActiveV1') || 'null')?.routeId;
+                } catch { /* ignore */ }
+            }
+            if (!mapOpen && !communityOpen && !sharing) return;
+            if (typeof window.showToast === 'function') {
+                window.showToast('An experimental feature was turned off. Refreshing.', 'info', 2500);
+            }
+            window.setTimeout(() => { window.location.reload(); }, 700);
+        } catch { /* ignore */ }
+    };
+    const delay = Math.max(0, Math.min(1500, 5000 - (Date.now() - started)));
+    window.setTimeout(() => { run(); }, delay);
+}
+
 function bindPilotChromeListeners() {
-    if (typeof window === 'undefined' || window.__ntPilotChromeBound) return;
+    if (typeof window === 'undefined' || typeof window.addEventListener !== 'function' || window.__ntPilotChromeBound) return;
     window.__ntPilotChromeBound = true;
     window.addEventListener('nt-features-updated', () => {
         try { applyPilotChrome(); } catch { /* ignore */ }
@@ -212,7 +299,9 @@ if (typeof window !== 'undefined') {
     window.applyAdminAuthedChrome = applyAdminAuthedChrome;
     window.applyPilotChrome = applyPilotChrome;
     window.canAccessPilotSurface = canAccessPilotSurface;
+    window.canOpenTrackingMap = canOpenTrackingMap;
     window.getPinnedRouteIds = getPinnedRouteIds;
     window.placeAccountSettings = placeAccountSettings;
     bindPilotChromeListeners();
+    scheduleExperimentalFeatureRecheck();
 }

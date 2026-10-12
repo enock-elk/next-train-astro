@@ -4,13 +4,20 @@
  * Snapshots share query params early so Welcome/URL cleanup cannot drop legacy SPA links.
  */
 import { safeStorage } from './utils.js';
+import { withBase } from './config.js';
+import { clearLiveTrainFollow, setLiveTrainFollow } from './live-train-follow.js';
+import { whenSettledForAutoNotices } from './session-stability.js';
 import {
     parsePlannerDeepLink,
     parseRouteDeepLinkParams,
+    parseLiveTrainDeepLink,
+    parseLiveSharePath,
+    liveShareSearchFromUrl,
     parseMapDeepLink,
     parsePlannerShortcutDeepLink,
     parseShareTargetDeepLink,
     stripShareParamsFromUrl,
+    isSeoAppHandoff,
 } from './share-links.js';
 
 const INTENT_KEY = 'nt_pending_deeplink';
@@ -18,7 +25,8 @@ const SHARE_SNAPSHOT_KEY = 'nt_share_deeplink_snapshot';
 const LAUNCH_URL_KEY = 'nt_launch_target_url';
 
 function parseShareFromSearch(search) {
-    return parsePlannerDeepLink(search)
+    return parseLiveTrainDeepLink(search)
+        || parsePlannerDeepLink(search)
         || parseRouteDeepLinkParams(search)
         || parseMapDeepLink(search)
         || parsePlannerShortcutDeepLink(search)
@@ -30,6 +38,7 @@ function shareFingerprint(snap) {
     if (!snap || !snap.kind) return '';
     if (snap.kind === 'route') return `route:${snap.routeId}:${snap.view || ''}:${snap.dir || ''}:${snap.day || ''}`;
     if (snap.kind === 'planner') return `planner:${snap.from}:${snap.to}:${snap.time || ''}:${snap.day || ''}:${snap.region || ''}`;
+    if (snap.kind === 'live') return `live:${snap.trainId}:${snap.routeId || ''}:${snap.dest || ''}`;
     if (snap.kind === 'planner-shortcut') return 'planner-shortcut';
     if (snap.kind === 'map') return 'map';
     if (snap.kind === 'share-target') return `share-target:${snap.url || ''}:${snap.text || ''}`;
@@ -132,6 +141,36 @@ export function peekShareDeeplinkSnapshot() {
     }
 }
 
+/** Tell a late pin-restore not to replace the corridor this share just opened. */
+export function lockShareBoot() {
+    if (typeof window === 'undefined') return;
+    window.__ntShareBootLock = true;
+}
+
+const SLOW_DEEPLINK_MS = 700;
+
+/**
+ * Dismissable "still working" toast, only if the handoff is still going after a short wait.
+ * Fast cache opens cancel before it appears.
+ */
+export function armSlowDeeplinkToast(message = 'Still opening this link') {
+    const text = String(message || 'Still opening this link');
+    let cancelled = false;
+    const timer = setTimeout(() => {
+        if (cancelled || typeof window === 'undefined') return;
+        if (typeof window.showToast === 'function') {
+            window.showToast(text, 'info', 10000, '', { dismissible: true, force: true });
+        }
+    }, SLOW_DEEPLINK_MS);
+    return {
+        cancel() {
+            cancelled = true;
+            clearTimeout(timer);
+            try { window.hideToastIfMessage?.(text); } catch { /* ignore */ }
+        },
+    };
+}
+
 /**
  * Installed PWA uses launch_handler: focus-existing. Chrome delivers the
  * clicked URL via launchQueue — not location.search — on the first open.
@@ -147,16 +186,21 @@ export function ingestLaunchTargetUrl(targetURL) {
     }
     if (url.origin !== location.origin) return null;
 
-    const snap = snapshotShareDeeplink(url.search);
-    if (!snap) return null;
+    const search = liveShareSearchFromUrl(url) || url.search;
+    const pathLive = parseLiveSharePath(url.pathname);
+    const snap = snapshotShareDeeplink(search);
+    if (!snap && !pathLive) return null;
 
     try {
-        const destPath = /\/og\/share\/?$/.test(url.pathname) ? '/' : (url.pathname || '/');
-        const next = destPath + url.search + (url.hash || '');
+        const destPath = (/\/og\/share\/?$/.test(url.pathname) || parseLiveSharePath(url.pathname))
+            ? withBase('/')
+            : (url.pathname || withBase('/'));
+        const destSearch = pathLive ? search : url.search;
+        const next = destPath + destSearch + (url.hash || '');
         const cur = location.pathname + location.search + location.hash;
         if (next !== cur) history.replaceState(history.state || {}, '', next);
     } catch { /* ignore */ }
-    return snap;
+    return snap || pathLive;
 }
 
 export function hasInboundShareIntent(search = typeof location !== 'undefined' ? location.search : '') {
@@ -165,6 +209,7 @@ export function hasInboundShareIntent(search = typeof location !== 'undefined' ?
     return !!(snap && (
         snap.kind === 'route'
         || snap.kind === 'planner'
+        || snap.kind === 'live'
         || snap.kind === 'planner-shortcut'
         || snap.kind === 'map'
         || snap.kind === 'share-target'
@@ -319,7 +364,7 @@ export async function applyShareTargetDeepLink() {
     if (typeof window === 'undefined') return false;
     const snap = peekShareDeeplinkSnapshot();
     // Share-target parser may upgrade to planner/route — those are handled elsewhere.
-    if (snap && (snap.kind === 'planner' || snap.kind === 'route')) return false;
+    if (snap && (snap.kind === 'planner' || snap.kind === 'route' || snap.kind === 'live')) return false;
 
     const link = (snap && snap.kind === 'share-target')
         ? snap
@@ -342,6 +387,102 @@ export async function applyShareTargetDeepLink() {
 }
 
 /**
+ * Live train share `?live=0823&rt=pta-mabopane&to=Mabopane` — open Map on that train.
+ */
+export async function applyLiveTrainDeepLink() {
+    if (typeof window === 'undefined') return false;
+    const snap = peekShareDeeplinkSnapshot();
+    const link = (snap && snap.kind === 'live')
+        ? snap
+        : parseLiveTrainDeepLink(location.search);
+    if (!link || link.kind !== 'live' || !link.trainId) return false;
+    if (snap && snap.kind === 'live') consumeShareDeeplinkSnapshot();
+    lockShareBoot();
+    const slowToast = armSlowDeeplinkToast('Still opening this link');
+
+    if (safeStorage.getItem('welcomeSeen') !== 'true') {
+        safeStorage.setItem('welcomeSeen', 'true');
+    }
+    try { document.getElementById('welcome-modal')?.classList.add('hidden'); } catch { /* ignore */ }
+
+    const { ROUTES } = await import('./config.js');
+    const { $currentRouteId, $userRegion } = await import('../store.js');
+    const route = link.routeId ? ROUTES[link.routeId] : null;
+    if (route?.isActive) {
+        const region = route.region || $userRegion.get() || 'GP';
+        $userRegion.set(region);
+        const defaultKey = 'defaultRoute_' + region;
+        if (!safeStorage.getItem(defaultKey)) safeStorage.setItem(defaultKey, route.id);
+        $currentRouteId.set(route.id);
+    }
+
+    stripShareParamsFromUrl();
+
+    let share = { status: 'stopped' };
+    try {
+        const ride = await import('./ride-pings.js');
+        share = await ride.findLiveTrainShare(link.trainId, link.routeId || '');
+    } catch { /* treat as stopped */ }
+    slowToast.cancel();
+
+    if (share.status !== 'live') {
+        clearLiveTrainFollow();
+        if (typeof window.showToast === 'function') {
+            window.showToast(
+                share.status === 'offline'
+                    ? `Could not check Train ${link.trainId} right now`
+                    : `Train ${link.trainId} is no longer being shared`,
+                'info',
+                5000
+            );
+        }
+        if (typeof window.trackAnalyticsEvent === 'function' && !isSeoAppHandoff(link)) {
+            window.trackAnalyticsEvent('deep_link_open', {
+                type: 'live',
+                train_id: link.trainId,
+                route_id: link.routeId || '',
+                live_state: share.status,
+                region_id: route?.region || '',
+            });
+        }
+        return true;
+    }
+
+    setLiveTrainFollow({
+        trainId: link.trainId,
+        routeId: link.routeId || '',
+        dest: link.dest || '',
+    });
+    if (typeof window.switchTab === 'function') {
+        window.switchTab('map');
+    }
+    try {
+        const map = await import('./map-tab.js');
+        await map.focusTrainOnMap?.(link.trainId, {
+            routeId: link.routeId || '',
+            dest: link.dest || '',
+            viewed: true,
+        });
+    } catch { /* map optional */ }
+    if (typeof window.trackAnalyticsEvent === 'function' && !isSeoAppHandoff(link)) {
+        window.trackAnalyticsEvent('deep_link_open', {
+            type: 'live',
+            train_id: link.trainId,
+            route_id: link.routeId || '',
+            live_state: 'live',
+            region_id: route?.region || '',
+        });
+    }
+    if (typeof window.showToast === 'function') {
+        const dest = String(link.dest || '').replace(/\s+STATION$/i, '').trim();
+        window.showToast(dest
+            ? `Following Train ${link.trainId} toward ${dest}`
+            : `Following Train ${link.trainId}`, 'success', 2800);
+    }
+    return true;
+}
+
+/**
  * Legacy SPA `?action=map` — open the interactive Map tab (fallback: static PRASA modal).
  */
 export async function applyMapDeepLink() {
@@ -353,9 +494,7 @@ export async function applyMapDeepLink() {
     if (!link || link.kind !== 'map') return false;
     if (snap && snap.kind === 'map') consumeShareDeeplinkSnapshot();
 
-    if (typeof window.showToast === 'function') {
-        window.showToast('Opening shared link...', 'info', 5000);
-    }
+    const slowToast = armSlowDeeplinkToast('Still opening this link');
 
     if (safeStorage.getItem('welcomeSeen') !== 'true') {
         safeStorage.setItem('welcomeSeen', 'true');
@@ -366,7 +505,7 @@ export async function applyMapDeepLink() {
     const openTab = () => {
         if (typeof window.switchTab !== 'function' || !document.getElementById('view-map')) return false;
         window.switchTab('map');
-        if (typeof window.trackAnalyticsEvent === 'function') {
+        if (typeof window.trackAnalyticsEvent === 'function' && !isSeoAppHandoff()) {
             window.trackAnalyticsEvent('deep_link_open', { type: 'map' });
         }
         if (typeof window.showToast === 'function') {
@@ -391,7 +530,7 @@ export async function applyMapDeepLink() {
         } catch { /* ignore */ }
         const mapImage = document.getElementById('map-image');
         if (mapImage) mapImage.style.transform = 'translate(0px, 0px) scale(1)';
-        if (typeof window.trackAnalyticsEvent === 'function') {
+        if (typeof window.trackAnalyticsEvent === 'function' && !isSeoAppHandoff()) {
             window.trackAnalyticsEvent('deep_link_open', { type: 'map' });
         }
         if (typeof window.showToast === 'function') {
@@ -400,11 +539,19 @@ export async function applyMapDeepLink() {
         return true;
     };
 
-    if (openTab()) return true;
+    if (openTab()) {
+        slowToast.cancel();
+        return true;
+    }
     // Modal markup may still be mounting on cold start
-    if (openModal()) return true;
+    if (openModal()) {
+        slowToast.cancel();
+        return true;
+    }
     await new Promise((r) => setTimeout(r, 120));
-    return openTab() || openModal();
+    const opened = openTab() || openModal();
+    slowToast.cancel();
+    return opened;
 }
 
 export function bindDeeplinkHashChange() {
@@ -469,7 +616,6 @@ export function bindPwaSameOriginLinks() {
             }
             if (hash === '#map') {
                 if (typeof window.switchTab === 'function') window.switchTab('map');
-                if (location.hash !== '#map') history.pushState({ tab: 'map' }, '', '#map');
                 return;
             }
             if (hash === '#prasa-map') {
@@ -478,7 +624,9 @@ export function bindPwaSameOriginLinks() {
                 return;
             }
             if (hash === '#alerts') {
-                if (typeof window.openAlertsChannel === 'function') window.openAlertsChannel();
+                whenSettledForAutoNotices(() => {
+                    if (typeof window.openAlertsChannel === 'function') window.openAlertsChannel();
+                });
                 return;
             }
         }

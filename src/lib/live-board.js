@@ -24,7 +24,14 @@ import {
 import { showToast, triggerHaptic, openSmoothModal, closeSmoothModal } from './ui.js';
 import { routeAllowsDualHubOptions } from './transfer-card.js';
 import { trackAnalyticsEvent } from './analytics.js';
-import { shouldApplySilentLocate } from './auto-locate.js';
+import {
+    shouldApplySilentLocate,
+    rememberGeolocationGranted,
+    disarmStartupLocateOverwrite,
+    noteAutoLocateApplied,
+    noteAutoLocateFailed,
+} from './auto-locate.js';
+import { peekLastGeoFix, reusableGeoFix } from './geo-watch.js';
 import { resolveHolidayDayType } from './holiday-approvals.js';
 import { isAdminAuthed } from './admin-chrome.js';
 import {
@@ -287,7 +294,7 @@ export function hasForwardOverlap(trainName, otherSchedule, fromStation, targetS
 }
 
 /** Same expiry + days[] rules as isTrainExcluded; returns the RTDB rule or null. DEFAULT_EXCLUSIONS stays {}. */
-export function getTrainExclusionRule(trainNumber, routeId, dayIdx, now = Date.now()) {
+export function getTrainExclusionRule(trainNumber, routeId, dayIdx, now = Date.now(), opts = null) {
     if (!trainNumber) return null;
 
     // Source of truth is `$globalExclusions` (Firebase tree, or DEFAULT only
@@ -298,12 +305,56 @@ export function getTrainExclusionRule(trainNumber, routeId, dayIdx, now = Date.n
     const rule = rules[trainNumber];
     if (rule.expiresAt && now > rule.expiresAt) return null;
     const days = Array.isArray(rule.days) ? rule.days : null;
-    if (days && days.length) {
+    if (!(opts && opts.ignoreDays) && days && days.length) {
         const idx = Number(dayIdx);
         const hit = days.some((d) => Number(d) === idx);
         if (!hit) return null;
     }
     return rule;
+}
+
+/** True when a ban covers every Mon–Fri index, or has no day list (every day). */
+export function weekdayPatternBanApplies(days) {
+    if (!Array.isArray(days) || days.length === 0) return true;
+    const set = days.map((d) => Number(d));
+    return [1, 2, 3, 4, 5].every((d) => set.includes(d));
+}
+
+const SHEET_DAY_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+/**
+ * Train-sheet pill. A special is labeled Special. A partial weekday ban names
+ * the days the train still runs (Mon+Fri off → Tue, Wed, Thu). A full weekday
+ * ban, or no rule, stays on the sheet's day type.
+ */
+export function trainSheetOperatingLabel(dayType, routeId, trainId, now = Date.now()) {
+    if (dayType === 'saturday') return 'Saturdays';
+    if (dayType === 'sunday') return 'Sundays';
+    if (dayType === 'public_holiday') return 'Public Holidays';
+    const rule = getTrainExclusionRule(trainId, routeId, 1, now, { ignoreDays: true });
+    if (!exclusionAppliesToSurface(rule, 'in_app')) return 'Weekdays';
+    const type = rule.type || 'banned';
+    if (type === 'special') return 'Special';
+    const days = Array.isArray(rule.days) ? rule.days.map((d) => Number(d)) : [];
+    if (!days.length || weekdayPatternBanApplies(days)) return 'Weekdays';
+    const banned = new Set(days);
+    const runs = [1, 2, 3, 4, 5].filter((d) => !banned.has(d));
+    if (!runs.length) return 'Weekdays';
+    return runs.map((d) => SHEET_DAY_SHORT[d]).join(', ');
+}
+
+/**
+ * Generic Weekday chip (no picked date). A Mon/Fri-only ban does not remove
+ * the train, because it still runs Tue–Thu. A ban with no days, or all of
+ * Mon–Fri, still removes it. Special trains stay.
+ */
+export function isWeekdayPatternExcluded(trainNumber, routeId, surface = 'in_app', now = Date.now()) {
+    const rule = getTrainExclusionRule(trainNumber, routeId, 1, now, { ignoreDays: true });
+    if (!exclusionAppliesToSurface(rule, surface)) return false;
+    const type = rule.type || 'banned';
+    if (type === 'special') return false;
+    if (!weekdayPatternBanApplies(rule.days)) return false;
+    return type;
 }
 
 /** Omitted surface keeps legacy exclusions visible in both the app and timetable grid. */
@@ -1141,7 +1192,8 @@ export function findTransfers(fromStation, schedule, terminalStation, finalDesti
 
     for (const train1 of trainHeaders) {
         if (!train1 || train1 === "") continue;
-        if (isTrainExcluded(train1, routeId, targetDayIdx)) continue; 
+        const train1Exclusion = isTrainExcluded(train1, routeId, targetDayIdx);
+        if (train1Exclusion && train1Exclusion !== 'special') continue;
 
         const departureTime = fromRow[train1]; 
         const terminationTime = termRow[train1];
@@ -1194,7 +1246,8 @@ export function findConnections(arrivalTimeAtTransfer, schedule, connectionStati
     for (const train of trainHeaders) {
         if (!train || train === "") continue;
         if (train === incomingTrainName) continue; 
-        if (isTrainExcluded(train, routeId, targetDayIdx)) continue; 
+        const connExclusion = isTrainExcluded(train, routeId, targetDayIdx);
+        if (connExclusion && connExclusion !== 'special') continue;
 
         const connectionTime = connRow[train];
         if (!isRealTime(connectionTime)) continue;
@@ -1238,140 +1291,157 @@ export function findConnections(arrivalTimeAtTransfer, schedule, connectionStati
 }
 
 export function findNearestStation(isAuto = false) {
+    const stopLocateSpin = () => {
+        if (isAuto) return;
+        const icon = locateBtnEl()?.querySelector('svg');
+        if (icon) icon.classList.remove('spinning', 'animate-spin');
+    };
+
+    const applyFromCoords = (userLat, userLon) => {
+        let candidates = [];
+        const routeId = getCurrentRouteId();
+        const weekdaySheets = weekdaySheetsForRoute(
+            ROUTES[routeId],
+            getSchedules(),
+            getFullDatabase(),
+        );
+        for (const [stationName, coords] of Object.entries(getGlobalStationIndex())) {
+            const onRoute = coords?.routes instanceof Set
+                ? coords.routes.has(routeId)
+                : Array.isArray(coords?.routes) && coords.routes.includes(routeId);
+            if (!onRoute) continue;
+            const ll = resolveStationLatLon(stationName, coords, weekdaySheets);
+            if (!ll) continue;
+            const dist = getDistanceFromLatLonInKm(userLat, userLon, ll.lat, ll.lon);
+            if (!Number.isFinite(dist)) continue;
+            candidates.push({ stationName, dist });
+        }
+
+        candidates.sort((a, b) => a.dist - b.dist);
+
+        if (candidates.length === 0) {
+            if (isAuto) noteAutoLocateFailed();
+            else {
+                showToast("No stations on this route found in database.", "error");
+                stopLocateSpin();
+            }
+            return;
+        }
+
+        const nearest = candidates[0];
+
+        if (isAuto && !shouldApplySilentLocate()) return;
+        rememberGeolocationGranted();
+
+        if (nearest.dist <= MAX_RADIUS_KM) {
+            const stationName = nearest.stationName;
+            const distStr = nearest.dist.toFixed(1);
+
+            let matched = false;
+            const options = (stationSelectEl() && stationSelectEl().options) || [];
+
+            for (let i = 0; i < options.length; i++) {
+                if (normalizeStationName(options[i].value) === normalizeStationName(stationName)) {
+                    if (stationSelectEl()) {
+                        stationSelectEl().selectedIndex = i;
+                        stationSelectEl().value = options[i].value;
+                    }
+                    matched = true;
+                    break;
+                }
+            }
+
+            if (matched) {
+                const selectedVal = stationSelectEl()?.value || '';
+                if (typeof window.syncPlannerFromMain === 'function') {
+                    window.syncPlannerFromMain(selectedVal);
+                }
+
+                const searchInput = document.getElementById('station-search-input');
+                if (searchInput) {
+                    searchInput.value = selectedVal.replace(/ STATION/g, '');
+                    searchInput.dataset.resolvedValue = selectedVal;
+                }
+
+                findNextTrains();
+                disarmStartupLocateOverwrite();
+                noteAutoLocateApplied();
+                // force: Locating toast (1.2s global gap) must not swallow Found on the board.
+                showToast(`Found: ${stationName.replace(' STATION', '')} (${distStr}km)`, "success", 2500, '', { force: true });
+
+                try {
+                    window.dispatchEvent(new CustomEvent('nt-locate-fix', {
+                        detail: {
+                            lat: userLat,
+                            lon: userLon,
+                            station: stationName,
+                            isAuto: !!isAuto,
+                        },
+                    }));
+                } catch { /* ignore */ }
+
+                if (typeof trackAnalyticsEvent === 'function') {
+                    trackAnalyticsEvent('auto_locate_success', {
+                        station: stationName.replace(' STATION', ''),
+                        route_id: getCurrentRouteId(),
+                        distance_km: parseFloat(distStr),
+                        is_background_check: isAuto
+                    });
+                }
+            } else if (isAuto) {
+                noteAutoLocateFailed();
+            } else {
+                showToast("Station found nearby, but not available in dropdown.", "error");
+            }
+        } else if (isAuto) {
+            noteAutoLocateFailed();
+        } else {
+            showToast(`No stations on this route within ${MAX_RADIUS_KM}km.`, "error");
+        }
+
+        stopLocateSpin();
+    };
+
     if (!navigator.geolocation) {
         if (!isAuto) showToast("Geolocation is not supported by your browser.", "error");
         if (!isAuto) if (stationSelectEl()) stationSelectEl().value = "";
+        if (isAuto) noteAutoLocateFailed();
         return;
     }
-    
+
     if (!isAuto) {
         showToast("Locating nearest station...", "info", 4000);
         const icon = locateBtnEl()?.querySelector('svg');
-        // SPA uses `.spinning`; also add Tailwind `animate-spin` so motion always shows
         if (icon) icon.classList.add('spinning', 'animate-spin');
     }
 
+    if (isAuto) {
+        try {
+            const kept = reusableGeoFix(peekLastGeoFix(), Date.now(), 60_000);
+            if (kept && Number.isFinite(kept.lat) && Number.isFinite(kept.lng)) {
+                applyFromCoords(kept.lat, kept.lng);
+                return;
+            }
+        } catch { /* still ask the OS */ }
+    }
+
     navigator.geolocation.getCurrentPosition(
-        async (position) => {
-            const userLat = position.coords.latitude;
-            const userLon = position.coords.longitude;
-            
-            let candidates = [];
-            const routeId = getCurrentRouteId();
-            const weekdaySheets = weekdaySheetsForRoute(
-                ROUTES[routeId],
-                getSchedules(),
-                getFullDatabase(),
-            );
-            for (const [stationName, coords] of Object.entries(getGlobalStationIndex())) {
-                const onRoute = coords?.routes instanceof Set
-                    ? coords.routes.has(routeId)
-                    : Array.isArray(coords?.routes) && coords.routes.includes(routeId);
-                if (!onRoute) continue;
-                const ll = resolveStationLatLon(stationName, coords, weekdaySheets);
-                if (!ll) continue;
-                const dist = getDistanceFromLatLonInKm(userLat, userLon, ll.lat, ll.lon);
-                if (!Number.isFinite(dist)) continue;
-                candidates.push({ stationName, dist });
-            }
-            
-            candidates.sort((a, b) => a.dist - b.dist);
-
-            if (candidates.length === 0) {
-                 if (!isAuto) {
-                     showToast("No stations on this route found in database.", "error");
-                     const icon = locateBtnEl()?.querySelector('svg');
-                     if (icon) icon.classList.remove('spinning', 'animate-spin');
-                 }
-                 return;
-            }
-
-            const nearest = candidates[0];
-
-            if (isAuto && !shouldApplySilentLocate()) return;
-            
-            if (nearest.dist <= MAX_RADIUS_KM) {
-                const stationName = nearest.stationName;
-                const distStr = nearest.dist.toFixed(1);
-
-                let matched = false;
-                const options = (stationSelectEl() && stationSelectEl().options);
-                
-                for (let i = 0; i < options.length; i++) {
-                    if (normalizeStationName(options[i].value) === normalizeStationName(stationName)) {
-                        if (stationSelectEl()) {
-                            stationSelectEl().selectedIndex = i;
-                            stationSelectEl().value = options[i].value;
-                        }
-                        matched = true;
-                        break;
-                    }
-                }
-
-                if (matched) {
-                    const selectedVal = stationSelectEl()?.value || '';
-                    if (typeof window.syncPlannerFromMain === 'function') {
-                        window.syncPlannerFromMain(selectedVal);
-                    }
-
-                    // GUARDIAN V6.21: Unified Dataset Sync logic absorbed from UI
-                    const searchInput = document.getElementById('station-search-input');
-                    if (searchInput) {
-                        searchInput.value = selectedVal.replace(/ STATION/g, '');
-                        searchInput.dataset.resolvedValue = selectedVal;
-                    }
-                    
-                    findNextTrains(); 
-                    if (!isAuto) {
-                        showToast(`Found: ${stationName.replace(' STATION', '')} (${distStr}km)`, "success");
-                    }
-
-                    try {
-                        window.dispatchEvent(new CustomEvent('nt-locate-fix', {
-                            detail: {
-                                lat: userLat,
-                                lon: userLon,
-                                station: stationName,
-                                isAuto: !!isAuto,
-                            },
-                        }));
-                    } catch { /* ignore */ }
-
-                    // GUARDIAN PHASE 1 (ANALYTICS): Inject 'auto_locate_success' event tracking
-                    if (typeof trackAnalyticsEvent === 'function') {
-                        trackAnalyticsEvent('auto_locate_success', {
-                            station: stationName.replace(' STATION', ''),
-                            route_id: getCurrentRouteId(),
-                            distance_km: parseFloat(distStr),
-                            is_background_check: isAuto
-                        });
-                    }
-                    
-                } else {
-                     if (!isAuto) showToast("Station found nearby, but not available in dropdown.", "error");
-                }
-            } else {
-                if (!isAuto) showToast(`No stations on this route within ${MAX_RADIUS_KM}km.`, "error");
-            }
-            
-            if (!isAuto) {
-                const icon = locateBtnEl()?.querySelector('svg');
-                if (icon) icon.classList.remove('spinning', 'animate-spin');
-            }
+        (position) => {
+            applyFromCoords(position.coords.latitude, position.coords.longitude);
         },
         (error) => {
-            if (!isAuto) {
-                let msg = "Unable to retrieve location.";
-                if (error.code === 1) msg = "Location permission denied.";
-                // 🛡️ GUARDIAN UX FIX: Handle timeout specifically
-                if (error.code === 3) msg = "Location request timed out."; 
-                showToast(msg, "error");
-                if (stationSelectEl()) stationSelectEl().value = "";
-                const icon = locateBtnEl()?.querySelector('svg');
-                if (icon) icon.classList.remove('spinning', 'animate-spin');
+            if (isAuto) {
+                noteAutoLocateFailed();
+                return;
             }
+            let msg = "Unable to retrieve location.";
+            if (error.code === 1) msg = "Location permission denied.";
+            if (error.code === 3) msg = "Location request timed out.";
+            showToast(msg, "error");
+            if (stationSelectEl()) stationSelectEl().value = "";
+            stopLocateSpin();
         },
-        { timeout: 8000, enableHighAccuracy: true } // 🛡️ GUARDIAN UX FIX: 8s timeout to stop infinite underground hangs
+        { timeout: isAuto ? 15000 : 8000, enableHighAccuracy: !isAuto, maximumAge: isAuto ? 60000 : 0 }
     );
 }
 

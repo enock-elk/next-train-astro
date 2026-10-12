@@ -17,6 +17,7 @@ import {
 } from '../src/lib/saturday-service.js';
 import { extractTrainSheetStops } from '../src/lib/planner-core.js';
 import { Renderer } from '../src/lib/renderer.js';
+import { filterStopsForFork } from '../src/lib/map-overrides.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const failures = [];
@@ -55,6 +56,10 @@ if (!ui.includes('presentedPlannerDayType')) fail('dropdown uses the presented r
 if (ui.includes("display.textContent = 'Weekday (Mon-Fri)'")) fail('must not paint Weekday on the dropdown before results exist');
 if (!ui.includes('planner_saturday_reply')) fail('Saturday Reply must quote the advisory for admin');
 if (!ui.includes('enterFeedbackReplyMode')) fail('Saturday Reply must enter feedback reply mode');
+if (ui.includes('Sundays & Public Holidays')) fail('train sheet must not claim a Sunday timetable');
+const liveBoard = readFileSync(join(ROOT, 'src/lib/live-board.js'), 'utf8');
+if (!liveBoard.includes("return 'Public Holidays'")) fail('public holiday train sheet says Public Holidays');
+if (!ui.includes('Public Holiday schedule')) fail('holiday notice must be able to name the Public Holiday schedule');
 if (!ui.includes('openPlannerTrainSheet')) fail('planner must open a train-sheet modal');
 if (!ui.includes('planner-train-name-btn')) fail('planner results must underline the train name');
 if (!ui.includes('planner-notice-details-row')) fail('Details must sit on its own row');
@@ -63,8 +68,8 @@ if (ui.includes('planner-notice-details-row flex justify-end mt-1.5')) fail('Det
 if (!ui.includes('planner-notice-aside')) fail('banner SVG lives in a top-right aside column');
 if (!ui.includes('trainTerminatesRuleHtml')) fail('TRAIN TERMINATES is a reusable clickable rule');
 if (!ui.includes('openDisruptionModal')) fail('TRAIN TERMINATES / Details open the Line Severed modal');
-if (ui.includes('flex-col items-start mt-1 sm:mt-0')) fail('Departed and Show Next Train must share one row');
-if (!ui.includes('planner-departed-next')) fail('Departed merges into the Show Next Train button');
+if (!ui.includes('flex-col items-start mt-1 sm:mt-0')) fail('Departed stays a status above Show Next Train');
+if (!ui.includes('planner-departed-next')) fail('Show Next Train is its own button');
 if (!ui.includes('Show Next Train')) fail('departed card still offers Show Next Train');
 if (ui.includes('getInjectionHtml(0) ?')) fail('must not double-call getInjectionHtml(0)');
 if (!ui.includes('const injAtOrigin = getInjectionHtml(0)')) fail('TRAIN TERMINATES at origin is injected once');
@@ -72,7 +77,7 @@ if (ui.includes('allowedDisrIds.size && !allowedDisrIds.has')) fail('empty allow
 if (!ui.includes('!allowedDisrIds.has(d.id)')) fail('trip map paints only disruptions that hit this trip');
 if (!ui.includes('stopOnTripPath')) fail('trip map requires zone ends on this trip path');
 if (!ui.includes('planner-notice-copy')) fail('notice body copy must be fittable');
-if (!ui.includes('Trip fare:')) fail('planner fare is a single Trip fare line');
+if (!ui.includes('Trip fare')) fail('planner fare is a single Trip fare line');
 if (ui.includes("switchTab('map'")) fail('Open Network Map must not switch to the live Map tab');
 if (!ui.includes('__ntOpenNetworkMapSheet')) fail('Open Network Map opens the sidenav GPS network map sheet');
 {
@@ -169,6 +174,14 @@ const ecc = saturdayNoServiceCopy('ec-berlin');
 if (!/Eastern Cape/i.test(ecc.body) || !/East London to Berlin/i.test(ecc.body)) {
     fail(`ec-berlin modal copy drifted: ${ecc.body}`);
 }
+const cape = saturdayNoServiceCopy('eerst-dtoit');
+if (!/Western Cape/i.test(cape.body) || !/Eerste River/i.test(cape.body) || !/Du Toit/i.test(cape.body)) {
+    fail(`eerst-dtoit copy must name the Cape corridor: ${cape.body}`);
+}
+if (/Hercules to Koedoespoort/i.test(cape.body)) fail('eerst-dtoit must not use the Hercules sentence');
+if (cape.body !== 'Metrorail Western Cape does not have a Saturday timetable for the Eerste River to Du Toit line. The trip planner can check other routes for a way through.') {
+    fail(`eerst-dtoit sentence drifted: ${cape.body}`);
+}
 
 const boarding = buildSaturdayAdvisoryCopy({
     routeId: 'herc-koed',
@@ -239,11 +252,60 @@ if (noWeekend.includes('onclick=')) fail('no-weekend switch must not use inline 
 if (!/Gauteng/i.test(noWeekend) || !/Hercules to Koedoespoort/i.test(noWeekend)) {
     fail(`no-weekend notice must use saturdayNoServiceCopy: ${noWeekend}`);
 }
+if (!noWeekend.includes('id="grid-plan-trip-btn"')) fail('no-weekend grid must offer Plan this trip');
+const capeGrid = Renderer._buildNoSaturdayGridHTML(weekdaySheet, 'Du Toit to Eerste River', 'eerst-dtoit');
+if (!/Western Cape/i.test(capeGrid) || !/Du Toit/i.test(capeGrid) || !capeGrid.includes('id="grid-plan-trip-btn"')) {
+    fail(`Cape no-weekend grid must name the route and offer the planner: ${capeGrid}`);
+}
+if (capeGrid.includes('onclick=')) fail('Cape no-weekend buttons must not use inline onclick');
+
+const expressSheet = {
+    headers: ['STATION', '2630'],
+    stationColumnName: 'STATION',
+    rows: [
+        { STATION: 'VARIANT', '2630': 'MONTE_VISTA' },
+        { STATION: 'TYGERBERG', '2630': 'EXPRESS' },
+        { STATION: 'BELLVILLE', '2630': '08:10:00' },
+        { STATION: 'MUTUAL', '2630': 'Via MV' },
+    ],
+};
+const expressHtml = Renderer._buildGridHTML(expressSheet, 'sheet', 'ct-bellv', 1, false, false, 'weekday');
+if (!expressHtml.includes('>EXPR<') || !expressHtml.includes('Via Monte Vista')) {
+    fail('grid must render EXPR and Via Monte Vista');
+}
+if (/<td[^>]*>VARIANT</i.test(expressHtml) || />Via MV</.test(expressHtml)) {
+    fail('grid must not paint VARIANT as a station or leftover Via MV prose');
+}
+const expressExport = Renderer._buildGridHTML(expressSheet, 'sheet', 'ct-bellv', 1, false, true, 'weekday');
+if (!expressExport.includes('EXPR') || expressExport.includes('nt-expr-btn')) {
+    fail('export grid must keep the text EXPR and not a button');
+}
+const forked = filterStopsForFork(
+    [
+        { name: 'DURBAN' },
+        { name: "DUFF'S ROAD" },
+        { name: 'KWAMASHU' },
+        { name: 'BRIDGE CITY' },
+    ],
+    { at: "DUFF'S ROAD", branches: { a: { stops: ['KWAMASHU'] }, b: { stops: ['BRIDGE CITY'] } } },
+).map((s) => s.name);
+if (forked.includes('KWAMASHU') || !forked.includes('BRIDGE CITY') || !forked.includes('DURBAN') || !forked.includes("DUFF'S ROAD")) {
+    fail(`fork filter must keep one branch plus the trunk: ${forked.join(', ')}`);
+}
+const logicSrc = readFileSync(join(ROOT, 'src/lib/logic.js'), 'utf8');
+if (!logicSrc.includes("bare === 'VARIANT'")) fail('VARIANT must stay a sheet meta row');
 
 const gridJs = readFileSync(join(ROOT, 'src/lib/timetable-grid.js'), 'utf8');
 if (!gridJs.includes('bindNoWeekendWeekdaySwitch')) fail('timetable-grid must bind Switch to Mon - Fri');
-if (!gridJs.includes('_buildNoSaturdayGridHTML(schedule, route.name, routeId)')) {
-    fail('timetable-grid must pass routeId into the no-weekend builder');
+if (!gridJs.includes('_buildNoSaturdayGridHTML(schedule, route.name, routeId, sheetDayType')) {
+    fail('timetable-grid must pass routeId and the open day into the no-weekend builder');
+}
+const holidayCape = saturdayNoServiceCopy('eerst-dtoit', 'public_holiday', 'Heritage Day');
+if (!/Heritage Day timetable/.test(holidayCape.body) || /Saturday timetable/.test(holidayCape.body)) {
+    fail(`public holiday sheet must not say Saturday: ${holidayCape.body}`);
+}
+if (saturdayNoServiceCopy('eerst-dtoit').body !== cape.body) {
+    fail('Saturday sheet copy must stay the Saturday sentence');
 }
 if (gridJs.includes('onclick="window.renderFullScheduleGrid')) fail('timetable-grid fallback must not use inline onclick');
 

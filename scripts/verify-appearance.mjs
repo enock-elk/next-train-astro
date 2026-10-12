@@ -16,6 +16,24 @@ assert(css.includes('html[data-colour-pack="earthy"]:not(.dark) .text-blue-600')
 assert(css.includes('html[data-colour-pack="earthy"].dark .text-blue-400'), 'Earthy dark maps pale blue labels to light ink');
 assert(css.includes('html[data-colour-pack="earthy"].dark #planner-back-btn'), 'Earthy dark planner toolbar uses light ink');
 assert(css.includes('.nt-fare-zone-chip'), 'fare Zone chip has a pack-aware class');
+assert(css.includes('html[data-colour-pack="earthy"]:not(.dark) .nt-fare-zone-chip'), 'Earthy light zone chip is its own chip');
+assert(css.includes('html[data-colour-pack="earthy"].dark .nt-fare-zone-chip'), 'Earthy dark zone chip is a cream chip');
+assert(css.includes('#efeae0') && css.includes('#2a261f'), 'Earthy chips use paper and charcoal');
+assert(css.includes('html[data-colour-pack="earthy"].dark #planner-swap-btn'), 'Earthy dark planner swap is a dark disc');
+assert(css.includes('html[data-colour-pack="earthy"].dark #grid-swap-dir-btn'), 'Earthy dark timetable direction chip is readable');
+assert(css.includes('html[data-colour-pack="earthy"].dark #pinned-section a'), 'Earthy dark pinned route uses light ink');
+assert(css.includes('#grid-container .nt-station-col.bg-blue-100'), 'Earthy selected station stays in the in-app grid');
+assert(css.includes('#commuter-peek-lookup') && css.includes('#commuter-peek-close'), 'Earthy user sheet buttons share the dark brown');
+assert(css.includes('html[data-colour-pack="earthy"] .bg-blue-600') && css.includes('html[data-colour-pack="earthy"] .bg-blue-600 .text-white'), 'Earthy light and dark paper CTAs use dark ink, including nested white labels');
+assert(css.includes('color: var(--nt-primary-fg) !important;') && css.includes('.nt-poll-submit'), 'poll Submit uses primary ink, not hardcoded white');
+assert(/\.nt-poll-submit \{[\s\S]*?color: var\(--nt-primary-fg\);/.test(css), 'poll Submit color is --nt-primary-fg');
+assert(css.includes('html[data-colour-pack="earthy"]:not(.dark) .hover\\:bg-blue-700:hover'), 'Earthy light hover on the dark wash uses cream text');
+assert(css.includes('html[data-colour-pack="earthy"] .nt-alert-see-more'), 'Earthy See more is accent ink, not the paper fill');
+assert(css.includes('html[data-colour-pack="earthy"]:not(.dark) .toggle-checkbox:checked + .toggle-label'), 'Earthy light checked switches keep a dark track');
+assert(css.includes('#route-list a.text-blue-700.bg-blue-50'), 'Earthy light selected corridor row is readable');
+assert(css.includes('#telemetry-region-modal .bg-blue-50'), 'Earthy Gauteng tile is paper and charcoal');
+assert(!/html\[data-colour-pack="classic"\][^{]*\.bg-blue-600/.test(css), 'Classic blue-600 buttons are not restyled');
+assert(!/html\[data-colour-pack="classic"\][^{]*#planner-swap-btn/.test(css), 'Classic planner swap is not restyled');
 assert(/html\[data-colour-pack="earthy"\] #view-full-timetable-btn/.test(css), 'Earthy weakens the timetable CTA halo');
 assert(!css.includes('data-colour-pack="ember"'), 'Ember pack CSS is gone');
 assert(/\.text-gray-400,[\s\S]*?--nt-text-faint/.test(css), 'gray-400 maps to faint, not muted');
@@ -87,6 +105,15 @@ assert(indexPage.includes('You are offline.'), 'offline dock copy matches the mo
 assert(indexPage.includes('id="offline-refresh-btn"'), 'offline dock has Refresh');
 assert(indexPage.includes('id="offline-dismiss-btn"'), 'offline dock has Close');
 assert(!indexPage.includes('id="bottom-nav" class="hidden shrink-0 border-t'), 'bottom nav dropped the boxy top border');
+assert(/id="main-content"[^>]*style="visibility:\s*hidden;?"/.test(indexPage), '14.1 home shell starts inline-hidden until the two-frame drop');
+assert(indexPage.includes('id="loading-overlay"'), '14.1 boot cover lives on the home page');
+assert(indexPage.includes('loading-logo-splash.webp'), '14.1 boot shows the 64px train logo');
+assert(indexPage.includes('Starting Next Train…'), '14.1 Starting copy is visible on the gray overlay');
+assert(indexPage.includes('setTimeout(revealAppShell, 700)'), '14.1 boot drops the logo at 700ms');
+assert(indexPage.includes('requestAnimationFrame(() => {\n        requestAnimationFrame(() => {\n            revealAppShell();'), '14.1 boot drops after two frames');
+assert(!indexPage.includes('boardChromeReady'), '14.1 boot does not wait for dest names');
+assert(!indexPage.includes('INSTALLED_SPLASH_MS'), '14.1 boot has no 8s installed splash hold');
+assert(!indexPage.includes('nt-boot-browser'), '14.1 boot does not classify TWA vs browser for the overlay');
 
 const sidenav = readFileSync(new URL('../src/components/Sidenav.astro', import.meta.url), 'utf8');
 assert(sidenav.includes('id="settings-account-btn"'), 'Account row exists in Options');
@@ -131,12 +158,16 @@ assert(!css.includes('#app-header.nt-maint-active #app-title'), 'maintenance bar
 const prefs = readFileSync(new URL('../src/lib/prefs.js', import.meta.url), 'utf8');
 assert(prefs.includes('syncInAppChrome'), 'prefs exports syncInAppChrome after Welcome');
 assert(prefs.includes("getItem('welcomeSeen') === 'true' && !welcomeOpen"), 'bottom bar waits until Welcome is done');
-assert(prefs.includes('ntProdClassicPackV1'), 'production one-shot remaps non-classic packs');
+assert(prefs.includes('ntProdClassicPackV1'), 'production pack FLAG still exists');
+assert(!prefs.includes('if (pack && pack !== COLOUR_PACKS.CLASSIC)'), 'missing FLAG does not remap Earthy to Classic');
 assert(prefs.includes('syncPrefsAccordionSummary'), 'theme accordion subtitle follows the live pack');
 assert(prefs.includes('restoreLookPrefs'), 'look prefs restore from IndexedDB after a purge');
 assert(prefs.includes('resetLookToClassicLight'), 'Check for Updates can force Classic light');
 assert(prefs.includes('setResilientItem'), 'colour pack writes mirror to IndexedDB');
-assert(layout.includes('ntProdClassicPackV1'), 'Layout boot remaps production packs before first paint');
+assert(prefs.includes('restoreHolidaySeenPrefs'), 'holiday dismiss map restores after a purge');
+assert(layout.includes('ntProdClassicPackV1'), 'Layout boot still stamps the production pack FLAG');
+assert(!layout.includes("if (storedPack && storedPack !== 'classic')"), 'Layout boot does not remap a saved colour pack');
+assert(!layout.includes("localStorage.setItem('theme', 'light')"), 'Layout boot does not persist a missing theme before IndexedDB restore');
 
 const welcome = readFileSync(new URL('../src/components/WelcomeModal.astro', import.meta.url), 'utf8');
 assert(welcome.includes('later in Options'), 'Welcome copy points at Options, not side menu');
@@ -344,7 +375,8 @@ assert(!/#messages-thread-modal \{\s*align-items: flex-end;/.test(hubModals), 'F
 assert(hubModals.includes('id="cache-clear-modal"'), 'Check for Updates has a confirm modal');
 assert(hubModals.includes('id="cache-clear-confirm-btn"'), 'Check for Updates confirm has Update');
 assert(hubModals.includes('This downloads the latest app onto this phone, then restarts Next Train.'), 'Check for Updates confirm explains the restart');
-assert(hubModals.includes('Your pinned route stays, but the look goes back to Classic light.'), 'Check for Updates confirm mentions Classic light');
+assert(hubModals.includes('Your pinned route stays.'), 'Check for Updates confirm says the pinned route stays');
+assert(!hubModals.includes('the look goes back to Classic light'), 'Check for Updates confirm does not reset the look to Classic light');
 assert(!hubModals.includes('stuck copy'), 'Check for Updates does not mention stuck copy');
 assert(hubModals.includes('id="messages-thread-contact-hint"'), 'Feedback Hub contact hint is present');
 assert(hubModals.includes('#messages-thread-contact.nt-contact-invalid'), 'invalid contact uses a red border');
@@ -354,6 +386,10 @@ assert(hubModals.includes('#feedback-panel .inbox-bubble-own'), 'admin inbox sha
 assert(hubModals.includes('#feedback-panel .inbox-bubble-other'), 'admin inbox shares WhatsApp other-bubble tokens');
 assert(hubModals.includes('#feedback-panel .feedback-thread-chat'), 'admin thread wallpaper selector');
 assert(hubModals.includes('nt-pack-wallpaper'), 'Feedback Hub uses the shared pack wallpaper');
+assert(
+    /#feedback-panel \.feedback-thread-chat\.nt-pack-wallpaper > \* \{[^}]*pointer-events:\s*auto;/.test(hubModals),
+    'feedback chat children stay tappable under the inherited wallpaper pointer-events'
+);
 assert(hubModals.includes('#roadmap-body.nt-pack-surface'), 'Roadmap wallpaper styling follows the interactive surface class');
 assert(!hubModals.includes('#roadmap-body.nt-pack-wallpaper'), 'Roadmap has no stale decorative-only wallpaper selector');
 assert(!hubModals.includes('background: #efeae2'), 'Feedback Hub dropped the #efeae2 wallpaper wash');
@@ -486,6 +522,17 @@ assert(!layout.includes('interactive-widget=overlays-content'), 'layout viewport
 assert(layout.includes('lastLayoutH'), 'keyboard keeps full-screen layout height so the oval stays put');
 assert(layout.includes('lastFullLayoutH'), 'keyboard does not overwrite the full-screen layout height');
 assert(layout.includes('lastShellH'), 'keyboard keeps a last-visible shell fallback');
+assert(layout.includes('function atLeastFull'), 'shell height ignores sub-240 first readings');
+assert(layout.includes("localStorage.getItem('welcomeSeen') === 'true'"), 'returning users skip the 14.1 overlay before first paint');
+assert(layout.includes("sessionStorage.getItem('nt_shell_warm') === '1'"), 'warm same-session navigations skip the 14.1 overlay');
+assert(layout.includes('if (seen || warm) document.documentElement.classList.add(\'nt-shell-ready\')'), 'welcomeSeen or warm stamps nt-shell-ready');
+assert(layout.includes('html.nt-shell-ready #loading-overlay { display: none !important; }'), 'ready sessions hide the gray overlay');
+assert(layout.includes('loading-logo-splash.webp'), 'layout preloads the 14.1 64px splash logo');
+assert(!layout.includes('id="loading-overlay"'), '14.1 boot cover is not in the layout body');
+assert(!layout.includes('isDefiniteBrowser'), '14.1 boot does not classify TWA vs browser');
+assert(!layout.includes('nt-boot-installed'), '14.1 boot does not stamp a splash-hold class');
+assert(!layout.includes("style={unlockShellEarly ? 'background-color:#1d4ed8' : undefined}"), '14.1 html first bytes are not forced OS-splash blue');
+assert(/<body[^>]*>\s*<RecoveryLifeline \/>/.test(layout), 'lifeline stays the first app body node');
 assert(layout.includes('--nt-shell-top'), 'shell is pinned below overlay chrome');
 assert(layout.includes('--nt-shell-h'), 'shell height follows the visible hole');
 assert(layout.includes('missing < 180'), 'URL-bar overlay uses the missing layout strip, not an invented tray');
@@ -524,6 +571,10 @@ assert(recovery.includes('visibilityState'), 'recovery counts visible time only'
 assert(recovery.includes('overlayStillBlocking'), 'auto-lifeboat requires the loading overlay');
 assert(!recovery.includes("if (!board || !tabs) return true"), 'recovery does not treat hidden top tabs as a crash');
 assert(recovery.includes('view-trip-planner'), 'planner tab is a healthy shell');
+assert(!recovery.includes('LOADER_ESCAPE_MS'), '14.1 App stuck link is on the overlay immediately');
+assert(!recovery.includes('INSTALLED_SPLASH_MS'), '14.1 recovery has no 8s splash-color hold');
+assert(!recovery.includes('BROWSER_SLOW_BOOT_MS'), '14.1 recovery has no browser slow-boot clock');
+assert(!recovery.includes('onStartingCoverElapsed'), '14.1 App stuck is not gated on Starting copy');
 
 const bootLogic = readFileSync(new URL('../src/lib/logic.js', import.meta.url), 'utf8');
 assert(bootLogic.includes('markSchedulesCoreReady'), 'cached schedules stabilize the shell immediately');
@@ -542,7 +593,8 @@ assert(!plannerModals.includes('Germiston or Koedoespoort'), 'planner instructio
 assert(!css.includes('th.nt-excl-head'), 'NO SVC header does not shift the train number with extra padding');
 
 const rendererGrid = readFileSync(new URL('../src/lib/renderer.js', import.meta.url), 'utf8');
-assert(rendererGrid.includes("isExport ? 'border-gray-200' : 'border-gray-300 dark:border-gray-700'"), 'export grid lines are softer; in-app borders stay');
+assert(rendererGrid.includes("isExport ? '' : 'border-gray-300 dark:border-gray-700'"), 'export grid skips pack border classes; in-app borders stay');
+assert(rendererGrid.includes("const borderColor = '#e5e7eb'"), 'export grid lines stay light grey');
 assert(rendererGrid.includes('isExport ? " font-mono font-bold" : " font-mono font-medium"'), 'export times are bold; in-app grid times stay medium');
 assert(rendererGrid.includes("isExport ? '21px' : '14px'") && rendererGrid.includes('headerContent = stack(`${banIcon} NO SVC`'), 'in-app NO SVC occupies the status row above the train number');
 assert(rendererGrid.includes('font-size:18px') && rendererGrid.includes('font-weight:400') && rendererGrid.includes('line-height:14px;'), 'export train IDs are larger and regular weight; in-app IDs stay 14px');
@@ -566,7 +618,8 @@ assert(liveBoard.includes("timeEl.classList.add('hidden')"), 'commuters do not s
 const adminJs = readFileSync(new URL('../public/js/admin.js', import.meta.url), 'utf8');
 assert(adminJs.includes('id="exp-features-header"'), 'System Controls has Experimental features');
 assert(adminJs.includes("'exp-map-enabled'") && adminJs.includes("'exp-community-enabled'"), 'experimental Map and Community toggles exist');
-assert(adminJs.includes("I'm on it / live share") && adminJs.includes('Delay reports') && adminJs.includes('Community realtime') && adminJs.includes('Push notifications') && adminJs.includes('Trip price'), 'experimental accordion lists every grantable feature');
+assert(adminJs.includes("I'm on it / live share") && adminJs.includes('Delay reports') && adminJs.includes('Community realtime') && adminJs.includes('Push notifications'), 'experimental accordion lists remaining grantable features');
+assert(!adminJs.includes("{ key: 'tripPrice', label: 'Trip price' }"), 'Trip price is not a grantable experimental feature');
 assert(adminJs.includes('exp-feat-header') && adminJs.includes('exp-feat-body'), 'feature types are nested accordions');
 assert(adminJs.includes('config/features.json'), 'experimental save writes config/features');
 assert(adminJs.includes('config/feature_grants/'), 'feedback beta grants write config/feature_grants');

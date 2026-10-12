@@ -5,8 +5,8 @@
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { parseShareIntent, isSocialCrawler } from '../workers/nexttrain-og/src/parse.js';
-import { buildAppDeepLink } from '../workers/nexttrain-og/src/og-html.js';
+import { parseShareIntent, isSocialCrawler, parseLiveTrainImagePath } from '../workers/nexttrain-og/src/parse.js';
+import { buildAppDeepLink, buildOgShareLink } from '../workers/nexttrain-og/src/og-html.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const failures = [];
@@ -76,6 +76,49 @@ ok(intent && intent.kind === 'route' && intent.routeId === 'germ-leralla', 'work
 const appUrl = buildAppDeepLink(intent, 'https://nexttrain.co.za');
 ok(appUrl.startsWith('https://nexttrain.co.za/?') && appUrl.includes('rt=germ-leralla'), 'human 302 target is /?rt=');
 
+const liveIntent = parseShareIntent(new URL('https://nexttrain.co.za/og/share?live=9115&rt=pta-pien&to=PIENAARSPOORT'));
+ok(liveIntent && liveIntent.kind === 'live' && liveIntent.trainId === '9115', 'worker parseShareIntent prefers live= over rt=');
+ok(liveIntent.routeId === 'pta-pien', 'live share still carries the corridor');
+const livePathIntent = parseShareIntent(new URL('https://nexttrain.co.za/og/l/9115/pta-pien/PIENAARSPOORT'));
+ok(livePathIntent && livePathIntent.kind === 'live' && livePathIntent.trainId === '9115', 'path /og/l/train/route/dest is a live share');
+const liveApp = buildAppDeepLink(liveIntent, 'https://nexttrain.co.za');
+ok(liveApp.includes('live=9115') && liveApp.includes('to=Pienaarspoort'), 'human 302 target is /?live=');
+const liveOg = buildOgShareLink(liveIntent, 'https://nexttrain.co.za');
+ok(liveOg.includes('/og/l/9115/pta-pien'), 'canonical live OG URL is the short path, not a timetable share');
+ok(!liveOg.includes('v=g'), 'live OG canonical is not a grid share');
+const liveImg = parseLiveTrainImagePath('/og/train/9115/pta-pien/Pienaarspoort.png');
+ok(liveImg && liveImg.trainId === '9115' && liveImg.dest === 'Pienaarspoort', 'live OG PNG path carries train and dest');
+
+consumeShareDeeplinkSnapshot();
+const pathLaunch = ingestLaunchTargetUrl('https://nexttrain.co.za/og/l/9115/pta-pien/PIENAARSPOORT');
+ok(pathLaunch && pathLaunch.kind === 'live' && pathLaunch.trainId === '9115', 'launch /og/l snapshots live');
+ok(String(globalThis.location.pathname) === '/' && String(globalThis.location.search).includes('live=9115'), 'path launch rewrites to /?live=');
+
+const shareLinks = readFileSync(join(ROOT, 'src/lib/share-links.js'), 'utf8');
+ok(shareLinks.includes('buildLiveTrainShareUrl'), 'client can mint live share URL');
+ok(shareLinks.includes('/og/l/'), 'client mints /og/l/ path shares so WhatsApp cannot wrap ?live=');
+ok(shareLinks.includes('liveShareBasePrefix'), 'preview live share URLs keep the app base');
+ok(shareLinks.includes('/og\\/(?:l|live)\\/'), 'live path parse allows a base prefix before /og/l/');
+const notFound = readFileSync(join(ROOT, 'src/pages/404.astro'), 'utf8');
+ok(notFound.includes('/og\\/(?:l|live)\\/'), 'GitHub 404 sends /og/l/ humans into ?live=');
+ok(shareLinks.includes("params.get('live')"), 'route parser ignores live shares');
+
+const ogHtml = readFileSync(join(ROOT, 'workers/nexttrain-og/src/og-html.js'), 'utf8');
+ok(ogHtml.includes('A rider is sharing Train'), 'live OG describes a rider sharing the train');
+ok(ogHtml.includes('/og/train/'), 'live OG image is a path PNG, not a query string WhatsApp can wrap');
+ok(ogHtml.includes('rel="image_src"'), 'OG HTML includes image_src for crawlers');
+
+const ogIndex = readFileSync(join(ROOT, 'workers/nexttrain-og/src/index.js'), 'utf8');
+ok(ogIndex.includes("/og/live.png"), 'worker still serves /og/live.png');
+ok(ogIndex.includes('parseLiveTrainImagePath'), 'worker serves /og/train/*.png');
+ok(ogIndex.includes('buildLiveTrainOgMeta'), 'worker emits live OG HTML');
+ok(ogIndex.includes('isOgSharePath') && ogIndex.includes('parseLiveSharePath'), 'worker treats /og/l/ as a share path');
+ok(ogIndex.includes('private, no-store'), 'OG HTML is not CDN-cached (live vs timetable UA mix)');
+
+const ghosts = readFileSync(join(ROOT, 'src/lib/train-ghosts.js'), 'utf8');
+const termFn = ghosts.slice(ghosts.indexOf('export function trainTerminusName'), ghosts.indexOf('export function trainGoingLabel'));
+ok(termFn.indexOf('findStopsForTrain') < termFn.indexOf('shortStation(fallback)'), 'terminus prefers timetable last stop over corridor fallback');
+
 ok(isSocialCrawler('facebookexternalhit/1.1'), 'facebookexternalhit is a crawler');
 ok(!isSocialCrawler('Mozilla/5.0 FBAN/FB4A FBAV/50.0'), 'Facebook IAB is not a crawler (must 302)');
 ok(!isSocialCrawler('Mozilla/5.0 Instagram 192.0.0.0'), 'Instagram IAB is not a crawler');
@@ -96,8 +139,15 @@ ok(layout.includes('launchQueue') && layout.includes('nt_launch_target_url'), 'h
 
 const astroCfg = readFileSync(join(ROOT, 'astro.config.mjs'), 'utf8');
 ok(astroCfg.includes("url.pathname === '/og/share'") && astroCfg.includes('NetworkOnly'), 'SW does not cache /og/share');
+ok(astroCfg.includes('/og/l'), 'SW does not cache /og/l live shares');
 ok(astroCfg.includes('privacy\\.html'), 'SW does not treat /privacy.html as the app shell');
 ok(astroCfg.includes('account-delete\\.html'), 'SW does not treat /account-delete.html as the app shell');
+ok(astroCfg.includes('sitemap\\.xml'), 'SW does not treat /sitemap.xml as the app shell');
+ok(astroCfg.includes('robots\\.txt'), 'SW does not treat /robots.txt as the app shell');
+const welcomeDeeplink = readFileSync(join(ROOT, 'src/components/WelcomeModal.astro'), 'utf8');
+ok(welcomeDeeplink.includes('hasInboundShareIntent()'), 'Welcome skips inbound planner/route snapshots');
+const plannerDeeplink = readFileSync(join(ROOT, 'src/lib/planner-ui.js'), 'utf8');
+ok(plannerDeeplink.includes('attempts < maxAttempts'), 'planner deep link retries station resolve');
 
 const ui = readFileSync(join(ROOT, 'src/lib/ui.js'), 'utf8');
 ok(ui.includes("location.hash === '#privacy'"), 'home tab paint keeps #privacy');
@@ -114,6 +164,27 @@ ok(legalShell.includes("get('from') === 'account'"), 'legal pages detect an Acco
 
 const deeplink = readFileSync(join(ROOT, 'src/lib/deeplink.js'), 'utf8');
 ok(deeplink.includes("hash === '#account'"), ' /#account opens Account');
+ok(deeplink.includes('setLiveTrainFollow'), 'live share starts view-only follow');
+ok(deeplink.includes('findLiveTrainShare'), 'live share checks ride_pings before opening Map');
+ok(deeplink.includes('is no longer being shared'), 'stopped live share tells the commuter');
+ok(deeplink.includes('clearLiveTrainFollow'), 'stopped live share does not leave a Map permit');
+ok(deeplink.includes('viewed: true'), 'live share asks for the view-only tracking card');
+ok(!deeplink.includes('allowHiddenTabs'), 'live share does not use a generic hidden-tab bypass');
+const ridePings = readFileSync(join(ROOT, 'src/lib/ride-pings.js'), 'utf8');
+ok(ridePings.includes('export async function findLiveTrainShare'), 'ride-pings can look up a live share');
+ok(ridePings.includes('TRACKING_STATE.STOPPED'), 'stopped pings do not count as live');
+const mapTab = readFileSync(join(ROOT, 'src/lib/map-tab.js'), 'utf8');
+ok(mapTab.includes('setTrackingOwnerChrome'), 'tracking card still hides owner chrome for viewers');
+ok(mapTab.includes('getLiveTrainFollow'), 'map tab honors inbound live follow');
+ok(!mapTab.includes('allowHiddenTabs'), 'focusTrainOnMap does not bypass Map gating');
+const chrome = readFileSync(join(ROOT, 'src/lib/admin-chrome.js'), 'utf8');
+ok(chrome.includes('canOpenTrackingMap'), 'Map open is a single gate');
+ok(chrome.includes("canAccessPilotSurface('map') || isLiveTrainFollowActive()"), 'Map is admin/pin or this-session live follow');
+const follow = readFileSync(join(ROOT, 'src/lib/live-train-follow.js'), 'utf8');
+ok(follow.includes('sessionStorage'), 'live follow is session-only');
+ok(!follow.includes('localStorage'), 'live follow is not written to localStorage');
+ok(ui.includes('canOpenTrackingMap()'), 'switchTab refuses Map without admin, pin, or live follow');
+ok(!ui.includes('allowHiddenTabs'), 'switchTab has no hidden-tab bypass');
 
 const deletePage = readFileSync(join(ROOT, 'src/pages/account-delete.astro'), 'utf8');
 ok(deletePage.includes('SUPPORT_EMAIL'), 'deletion page names the support email');

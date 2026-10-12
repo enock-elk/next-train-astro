@@ -202,6 +202,41 @@ export async function timetablePng(opts) {
   return svgToPng(buildTimetableSvg(opts));
 }
 
+export function buildLiveTrainSvg({ trainId, dest }) {
+  const W = OG_DESIGN_WIDTH;
+  const H = OG_DESIGN_HEIGHT;
+  const id = truncate(String(trainId || 'Train').replace(/^Train\s+/i, ''), 12);
+  const destT = dest ? truncate(stationLabel(dest), 22) : '';
+  const title = destT ? `Train ${id}` : `Train ${id}`;
+  const toward = destT ? `toward ${destT}` : 'live on the map';
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#1d4ed8"/>
+      <stop offset="100%" stop-color="#0f172a"/>
+    </linearGradient>
+    <linearGradient id="card" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#1e3a8a"/>
+      <stop offset="100%" stop-color="#0f172a"/>
+    </linearGradient>
+  </defs>
+  <rect width="${W}" height="${H}" fill="url(#bg)"/>
+  <rect x="48" y="48" width="${W - 96}" height="${H - 96}" rx="28" fill="url(#card)" opacity="0.92"/>
+  <text x="600" y="120" fill="#93c5fd" font-size="18" font-family="${FONT}" font-weight="800" letter-spacing="3" text-anchor="middle">METRORAIL NEXT TRAIN</text>
+  <rect x="510" y="148" width="180" height="36" rx="18" fill="#22c55e"/>
+  <text x="600" y="173" fill="#052e16" font-size="16" font-family="${FONT}" font-weight="800" letter-spacing="2" text-anchor="middle">LIVE</text>
+  <text x="600" y="280" fill="#ffffff" font-size="64" font-family="${FONT}" font-weight="800" text-anchor="middle">${esc(title)}</text>
+  <text x="600" y="350" fill="#bfdbfe" font-size="32" font-family="${FONT}" font-weight="700" text-anchor="middle">${esc(toward)}</text>
+  <text x="600" y="450" fill="#e2e8f0" font-size="22" font-family="${FONT}" font-weight="600" text-anchor="middle">A rider is sharing this train in real time</text>
+  <text x="600" y="540" fill="#93c5fd" font-size="18" font-family="${FONT}" font-weight="700" text-anchor="middle">Open Next Train to follow it on the map</text>
+</svg>`;
+}
+
+export async function liveTrainPng(opts) {
+  return svgToPng(buildLiveTrainSvg(opts));
+}
+
 export async function plannerPng(opts) {
   return svgToPng(buildPlannerSvg(opts));
 }

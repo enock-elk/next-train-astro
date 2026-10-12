@@ -102,6 +102,7 @@ export function exposeAdminGlobals() {
     window.DEFAULT_EXCLUSIONS = DEFAULT_EXCLUSIONS;
     window.REGIONS = REGIONS;
     window.FARE_CONFIG = FARE_CONFIG;
+    window.withBase = withBase;
     window.SPECIAL_DATES = SPECIAL_DATES;
     window.HOLIDAY_NAMES = HOLIDAY_NAMES;
     window.SATURDAY_PLACEHOLDER_ROUTES = SATURDAY_PLACEHOLDER_ROUTES;

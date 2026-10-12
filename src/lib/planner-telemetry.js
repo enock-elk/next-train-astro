@@ -12,7 +12,7 @@
  * (public read, operator write). Votes stay create-once in sys_logs.
  *
  * RTDB sys_logs/trip_plans/$batchId allows create-once (!data.exists).
- * Auth token preferred; anonymous create-once still works without email claim.
+ * Writes need an ID token (anonymous is enough). No email claim required.
  */
 import { DYNAMIC_BASE_URL, APP_VERSION, FARE_CONFIG } from './config.js';
 import { safeStorage, normalizeStationName } from './utils.js';
@@ -68,7 +68,7 @@ async function ensureAuthToken() {
             return await window.firebaseGetIdToken(window.firebaseAuth.currentUser, true) || '';
         }
     } catch {
-        /* ignore — create-once rules still allow unauthenticated PUT */
+        /* ignore — caller logs a failed write if the token is missing */
     }
     return '';
 }
@@ -384,6 +384,22 @@ function clipStr(value, max) {
     return String(value || '').slice(0, max);
 }
 
+const FARE_TICKET_TYPES = new Set(['single', 'return', 'weekly_mon_fri', 'weekly_mon_sat', 'monthly']);
+
+export function normalizeFareTicketType(value) {
+    const key = String(value || '').trim().toLowerCase();
+    return FARE_TICKET_TYPES.has(key) ? key : 'single';
+}
+
+export function fareTicketTypeLabel(value) {
+    const key = normalizeFareTicketType(value);
+    if (key === 'return') return 'Return';
+    if (key === 'weekly_mon_fri') return 'Weekly Mon-Fri';
+    if (key === 'weekly_mon_sat') return 'Weekly Mon-Sat';
+    if (key === 'monthly') return 'Monthly';
+    return 'Single';
+}
+
 export function buildFareVotePayload({
     origin,
     destination,
@@ -396,6 +412,7 @@ export function buildFareVotePayload({
     quotedPrice,
     reportedPrice,
     agree,
+    ticketType,
     isOffPeak,
     dayType,
     depTime,
@@ -425,8 +442,12 @@ export function buildFareVotePayload({
         abKm: ab,
         zone: clipStr(zone, 8) || null,
         quotedPrice: quoted,
+        // Live board / planner quote is always Single Trip. Weekly/monthly
+        // corrections still store that single quote here for context.
+        quotedTicketType: 'single',
         reportedPrice: reported,
         agree: !!agree,
+        ticketType: normalizeFareTicketType(ticketType),
         isOffPeak: !!isOffPeak,
         dayType: clipStr(dayType, 24) || null,
         depTime: clipStr(depTime, 8) || null,

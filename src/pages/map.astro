@@ -201,9 +201,18 @@ const regionSeoSlugs = Object.fromEntries(
       }
       .dark .legend-item-all { border-bottom-color: #374151; }
       .color-dot { width: 12px; height: 12px; border-radius: 50%; margin-right: 8px; flex-shrink: 0; }
+      .leaflet-popup.map-station-popup .leaflet-popup-content-wrapper,
+      .leaflet-popup.map-station-popup .leaflet-popup-tip {
+        background: #ffffff;
+        color: #111827;
+      }
+      .leaflet-popup.map-station-popup .leaflet-popup-close-button {
+        color: #111827;
+      }
       .leaflet-popup.map-station-popup .leaflet-popup-content {
         margin: 10px 28px 10px 12px;
         min-width: 9.5rem;
+        color: #111827;
       }
       .map-popup-name {
         display: block;
@@ -213,7 +222,8 @@ const regionSeoSlugs = Object.fromEntries(
         margin: 0 0 0.4rem;
         color: #111827;
       }
-      .dark .map-popup-name { color: #f9fafb; }
+      .dark .leaflet-popup.map-station-popup .map-popup-name,
+      .dark .map-popup-name { color: #111827; }
       .map-popup-routes {
         display: flex;
         flex-direction: column;
@@ -228,7 +238,8 @@ const regionSeoSlugs = Object.fromEntries(
         line-height: 1.25;
         color: #4b5563;
       }
-      .dark .map-popup-route { color: #d1d5db; }
+      .dark .leaflet-popup.map-station-popup .map-popup-route,
+      .dark .map-popup-route { color: #374151; }
       .map-popup-swatch {
         width: 8px;
         height: 8px;
@@ -269,46 +280,6 @@ const regionSeoSlugs = Object.fromEntries(
         z-index: 0;
       }
       .nt-live-train-ring--delay { animation-delay: 1.15s; }
-      .nt-live-train-wake {
-        position: absolute;
-        right: -2px;
-        top: 50%;
-        width: 34px;
-        height: 40px;
-        transform: translate(42%, -50%);
-        pointer-events: none;
-        z-index: 0;
-        overflow: visible;
-      }
-      .nt-live-train-wake-ripple {
-        position: absolute;
-        right: 0;
-        top: 50%;
-        width: 2px;
-        height: 2px;
-        transform: translateY(-50%);
-        animation: nt-live-train-wake 1.65s ease-out infinite;
-      }
-      .nt-live-train-wake-ripple:nth-child(2) { animation-delay: 0.22s; opacity: 0.8; }
-      .nt-live-train-wake-ripple:nth-child(3) { animation-delay: 0.44s; opacity: 0.55; }
-      .nt-live-train-wake-ripple i {
-        position: absolute;
-        right: 0;
-        top: 0;
-        width: 18px;
-        height: 2px;
-        border-radius: 999px;
-        background: rgba(37, 99, 235, 0.7);
-        transform-origin: right center;
-      }
-      .nt-live-train-wake-ripple i:first-child { transform: rotate(24deg); }
-      .nt-live-train-wake-ripple i:last-child { transform: rotate(-24deg); }
-      .nt-live-train-wrap--compact .nt-live-train-wake {
-        width: 26px;
-        height: 32px;
-        transform: translate(38%, -50%) scale(0.82);
-      }
-      .nt-live-train-wrap--paused .nt-live-train-wake { display: none; }
       .nt-live-train-wrap--paused .nt-live-train-ring {
         background: rgba(100, 116, 139, 0.18);
         animation: none;
@@ -345,6 +316,18 @@ const regionSeoSlugs = Object.fromEntries(
       }
       .nt-live-train-oval--a { left: 2px; }
       .nt-live-train-oval--b { right: 2px; }
+      .nt-live-train-nose {
+        position: absolute;
+        right: 1px;
+        top: 50%;
+        width: 9px;
+        height: 9px;
+        margin-top: -4.5px;
+        background: linear-gradient(135deg, #60a5fa 0%, #1d4ed8 100%);
+        transform: rotate(45deg);
+        border-radius: 1px 2px 1px 1px;
+        z-index: 1;
+      }
       .nt-live-train-num {
         position: relative; z-index: 2;
         display: block;
@@ -360,39 +343,44 @@ const regionSeoSlugs = Object.fromEntries(
       .nt-live-train-glyph--mine .nt-live-train-oval {
         background: linear-gradient(180deg, #2563eb 0%, #1e40af 100%);
       }
+      .nt-live-train-glyph--mine .nt-live-train-nose {
+        background: linear-gradient(135deg, #60a5fa 0%, #1e40af 100%);
+      }
       .nt-live-train-glyph--mine .nt-live-train-shell {
         box-shadow: 0 0 0 1px #93c5fd, 0 1px 4px rgba(30, 64, 175, 0.45);
       }
       .nt-live-train-glyph--paused .nt-live-train-oval {
         background: linear-gradient(180deg, #94a3b8 0%, #64748b 100%);
       }
+      .nt-live-train-glyph--paused .nt-live-train-nose {
+        background: linear-gradient(135deg, #cbd5e1 0%, #64748b 100%);
+      }
       .nt-live-train-glyph--paused.nt-live-train-glyph--mine .nt-live-train-shell {
         box-shadow: 0 0 0 1px #cbd5e1, 0 1px 3px rgba(15, 23, 42, 0.28);
       }
+      /* Rider on board marked the train as stuck: amber hull, still live. */
+      .nt-live-train-glyph--stuck .nt-live-train-oval {
+        background: linear-gradient(180deg, #fbbf24 0%, #d97706 100%);
+      }
+      .nt-live-train-glyph--stuck .nt-live-train-nose {
+        background: linear-gradient(135deg, #fde68a 0%, #d97706 100%);
+      }
       .nt-live-train-glyph--compact { width: 34px; height: 16px; }
       .nt-live-train-glyph--compact .nt-live-train-oval { width: 20px; height: 13px; }
+      .nt-live-train-glyph--compact .nt-live-train-nose { width: 6px; height: 6px; margin-top: -3px; }
       .nt-live-train-glyph--compact .nt-live-train-num { font-size: 7px; letter-spacing: 0.02em; }
       .nt-live-train-glyph--far { width: 28px; height: 14px; }
       .nt-live-train-glyph--far .nt-live-train-oval { width: 16px; height: 11px; }
-      .nt-live-train-glyph--far .nt-live-train-num { font-size: 6px; letter-spacing: 0.01em; }
+      .nt-live-train-glyph--far .nt-live-train-nose { width: 5px; height: 5px; margin-top: -2.5px; }
+      .nt-live-train-glyph--far .nt-live-train-num { display: none; }
       .nt-live-train-wrap--far .nt-live-train-ring { width: 22px; height: 22px; }
-      .nt-live-train-wrap--far .nt-live-train-wake { display: none; }
       @keyframes nt-live-train-halo {
         0% { transform: scale(0.55); opacity: 0.42; }
         100% { transform: scale(1.7); opacity: 0; }
       }
-      @keyframes nt-live-train-wake {
-        0% { transform: translate(-2px, -50%) scale(0.28); opacity: 0.92; }
-        100% { transform: translate(-26px, -50%) scale(1.2); opacity: 0; }
-      }
       @media (prefers-reduced-motion: reduce) {
-        .nt-live-train-ring,
-        .nt-live-train-wake-ripple {
+        .nt-live-train-ring {
           animation: none !important;
-        }
-        .nt-live-train-wake-ripple {
-          transform: translate(-10px, -50%) scale(0.85);
-          opacity: 0.45;
         }
       }
       .nt-live-train-pop { text-align: left; color: #111827; min-width: 13.5rem; padding: 0.1rem 0.15rem; }
@@ -413,6 +401,7 @@ const regionSeoSlugs = Object.fromEntries(
         background: #2563eb; color: #fff; font-size: 11px; font-weight: 800; border: 0; cursor: pointer;
       }
       .nt-live-train-pop-btn--stop { background: #dc2626; }
+      .nt-live-train-pop-btn--resume { background: #2563eb; }
       .nt-live-train-pop-btn--details { background: #0f172a; }
       .nt-live-train-pop-btn--sheet {
         background: #eff6ff; color: #1d4ed8; box-shadow: inset 0 0 0 1px #bfdbfe;
@@ -484,6 +473,8 @@ const regionSeoSlugs = Object.fromEntries(
         display: none;
         position: fixed;
         left: 10px; right: 10px;
+        max-height: 46vh;
+        overflow: auto;
         bottom: max(0.6rem, env(safe-area-inset-bottom, 0px));
         z-index: 1105;
         pointer-events: auto;
@@ -496,6 +487,12 @@ const regionSeoSlugs = Object.fromEntries(
         color: #111827;
       }
       html.nt-track-editing #nt-track-editor { display: block; }
+      #nt-track-editor.is-min {
+        max-height: none;
+        overflow: hidden;
+        padding-bottom: 0.55rem;
+      }
+      #nt-track-editor.is-min > :not(#nt-track-editor-head) { display: none !important; }
       html.dark #nt-track-editor {
         background: rgba(17, 24, 39, 0.96);
         color: #f3f4f6;
@@ -519,12 +516,16 @@ const regionSeoSlugs = Object.fromEntries(
       }
       #nt-track-editor-tools {
         display: flex;
+        flex-wrap: wrap;
         gap: 0.3rem;
         margin-top: 0.5rem;
       }
       #nt-track-editor-tools button,
       #nt-track-editor-actions button,
+      #nt-track-editor-fork button,
+      #nt-track-editor-move-pins-wrap button,
       #nt-track-editor-stations-toggle,
+      #nt-track-editor-collapse,
       #nt-track-editor-done {
         font-family: inherit;
         font-size: 12px;
@@ -538,21 +539,48 @@ const regionSeoSlugs = Object.fromEntries(
       }
       html.dark #nt-track-editor-tools button,
       html.dark #nt-track-editor-actions button,
+      html.dark #nt-track-editor-fork button,
+      html.dark #nt-track-editor-move-pins-wrap button,
       html.dark #nt-track-editor-stations-toggle,
+      html.dark #nt-track-editor-collapse,
       html.dark #nt-track-editor-done {
         background: #1f2937;
         color: #f3f4f6;
         border-color: #4b5563;
       }
       #nt-track-editor-tools button {
-        flex: 1;
+        flex: 1 1 30%;
       }
+      #nt-track-editor-fork,
+      #nt-track-editor-move-pins-wrap { display: none; margin-top: 0.4rem; }
+      html.nt-track-tool-fork #nt-track-editor-fork { display: block; }
+      #nt-track-editor-fork-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.3rem;
+      }
+      #nt-track-editor-fork-actions button { flex: 1 1 30%; }
+      #nt-track-editor-fork-actions #nt-track-fork-preset { flex: 1 1 100%; }
+      html.nt-track-tool-brush #nt-track-editor-move-pins-wrap {
+        display: flex;
+        align-items: center;
+        gap: 0.35rem;
+        flex-wrap: wrap;
+        font-size: 12px;
+        font-weight: 700;
+      }
+      #nt-track-editor-fork-status { margin: 0 0 0.35rem; font-size: 12px; font-weight: 700; line-height: 1.35; }
       #nt-track-editor-tools button.is-on {
         background: #111827;
         color: #fff;
         border-color: #111827;
       }
-      html.dark #nt-track-editor-tools button.is-on {
+      #nt-track-editor-fork button.is-on {
+        background: #111827;
+        color: #fff;
+        border-color: #111827;
+      }
+      html.dark #nt-track-editor-fork button.is-on {
         background: #f3f4f6;
         color: #111827;
         border-color: #f3f4f6;
@@ -749,14 +777,33 @@ const regionSeoSlugs = Object.fromEntries(
   <div id="nt-track-editor">
     <div id="nt-track-editor-head">
       <p id="nt-track-editor-title">Edit line</p>
+      <button type="button" id="nt-track-editor-collapse" aria-expanded="true">Hide</button>
       <button type="button" id="nt-track-editor-done">Done</button>
     </div>
     <div id="nt-track-editor-tools" role="group" aria-label="Edit tools">
       <button type="button" data-track-tool="move" class="is-on">Move</button>
       <button type="button" data-track-tool="add">Add</button>
       <button type="button" data-track-tool="delete">Delete</button>
+      <button type="button" data-track-tool="brush">Push</button>
+      <button type="button" data-track-tool="stations">Pins</button>
+      <button type="button" data-track-tool="fork">Fork</button>
     </div>
     <p id="nt-track-editor-hint">Drag a dot along the rails. Zoom in for more dots.</p>
+    <div id="nt-track-editor-move-pins-wrap">
+      <label for="nt-track-editor-move-pins"><input type="checkbox" id="nt-track-editor-move-pins" /> Move station pins</label>
+      <button type="button" id="nt-track-brush-smaller">Smaller</button>
+      <button type="button" id="nt-track-brush-larger">Larger</button>
+    </div>
+    <div id="nt-track-editor-fork">
+      <p id="nt-track-editor-fork-status">Tap Duff's Road split to paint kwaMashu and Bridge City as two lines.</p>
+      <div id="nt-track-editor-fork-actions">
+        <button type="button" id="nt-track-fork-a" class="is-on">Branch A</button>
+        <button type="button" id="nt-track-fork-b">Branch B</button>
+        <button type="button" id="nt-track-fork-preset">Duff's Road split</button>
+        <button type="button" id="nt-track-fork-clear">Clear</button>
+        <button type="button" id="nt-track-fork-save">Save fork</button>
+      </div>
+    </div>
     <p id="nt-track-editor-cover"></p>
     <div id="nt-track-editor-stations-row">
       <button type="button" id="nt-track-editor-stations-toggle" aria-expanded="false" aria-controls="nt-track-editor-stations-wrap">Stations</button>
@@ -768,6 +815,7 @@ const regionSeoSlugs = Object.fromEntries(
     </div>
     <div id="nt-track-editor-actions">
       <button type="button" id="nt-track-editor-undo">Undo</button>
+      <button type="button" id="nt-track-editor-save-pins">Save pins</button>
       <button type="button" id="nt-track-editor-download">Save</button>
     </div>
   </div>

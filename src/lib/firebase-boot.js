@@ -18,6 +18,8 @@ import {
     FacebookAuthProvider,
     signInWithPopup,
     updateProfile,
+    sendEmailVerification,
+    sendPasswordResetEmail,
 } from 'firebase/auth';
 import { getStorage, ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import {
@@ -48,7 +50,7 @@ import {
 
 const firebaseConfig = {
     apiKey: 'AIzaSyAU303BRMrH3A5n5zbJH4MVwWdkfznqxMY',
-    authDomain: 'metrorail-next-train.firebaseapp.com',
+    authDomain: 'auth.nexttrain.co.za',
     databaseURL: 'https://metrorail-next-train-default-rtdb.firebaseio.com/',
     projectId: 'metrorail-next-train',
     storageBucket: 'metrorail-next-train.firebasestorage.app',
@@ -89,6 +91,8 @@ export async function bootFirebase() {
         // docs/facebook-login-setup.md is finished and Dev Hub enables it.
         window.firebaseFacebookProvider = FacebookAuthProvider;
         window.firebaseUpdateProfile = updateProfile;
+        window.firebaseSendEmailVerification = sendEmailVerification;
+        window.firebaseSendPasswordResetEmail = sendPasswordResetEmail;
 
         window.firebaseStorage = getStorage(app);
         window.firebaseStorageRef = ref;

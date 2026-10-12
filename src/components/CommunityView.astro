@@ -19,7 +19,7 @@
             <div class="flex items-center justify-between gap-3 px-4">
                 <div class="flex items-center gap-2 min-w-0">
                     <p class="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Community</p>
-                    <span id="community-marks-chip" class="hidden shrink-0 max-w-[58%] truncate text-[10px] font-bold text-amber-700 dark:text-amber-300 tracking-wide"></span>
+                    <span id="community-marks-chip" hidden aria-hidden="true" class="hidden shrink-0 max-w-[58%] truncate text-[10px] font-bold text-amber-700 dark:text-amber-300 tracking-wide"></span>
                 </div>
                 <button type="button" id="community-presence" class="text-[10px] font-bold text-gray-400 dark:text-gray-500 tracking-wide text-right truncate max-w-[42%] hover:text-blue-600 dark:hover:text-blue-400 underline-offset-2 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-sm transition-colors" title="About who’s here">Just you here</button>
             </div>
@@ -178,12 +178,37 @@
     border-color: #374151;
   }
   .community-bubble-name-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
     padding: 0.3rem 0.65rem;
     font-size: 0.75rem;
     font-weight: 700;
     line-height: 1.2;
     background: rgba(0, 0, 0, 0.055);
     border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+  }
+  .community-bubble-name {
+    min-width: 0;
+  }
+  .community-bubble-marks {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.2rem;
+    flex-shrink: 0;
+    font-size: 0.62rem;
+    font-weight: 800;
+    letter-spacing: 0.01em;
+    color: #b45309;
+    line-height: 1;
+  }
+  .dark .community-bubble-marks {
+    color: #fcd34d;
+  }
+  .community-bubble-medal {
+    display: block;
+    flex-shrink: 0;
   }
   .dark .community-bubble-name-row {
     background: rgba(255, 255, 255, 0.07);

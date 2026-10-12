@@ -6,6 +6,7 @@
 import '../styles/appearance.css';
 import AppFonts from '../components/AppFonts.astro';
 import RecoveryLifeline from '../components/RecoveryLifeline.astro';
+import SeoAlerts from '../components/SeoAlerts.astro';
 import ShellFallbackStyles from '../components/ShellFallbackStyles.astro';
 import StuckUpdateGuard from '../components/StuckUpdateGuard.astro';
 import { MANIFEST_FILENAME, normalizeBase, withBase } from '../lib/config.js';
@@ -32,6 +33,8 @@ interface Props {
   seoRegion?: string;
   seoCorridor?: string;
   seoRouteId?: string;
+  /** Extra route buckets for a region or corridor alerts sheet. Comma-separated ids. */
+  seoAlertRouteIds?: string;
   /** SEO landings fire one `seo_page_view`. Map/guide skip it (opened inside the app). */
   trackSeo?: boolean;
 }
@@ -58,8 +61,15 @@ const {
   seoRegion = '',
   seoCorridor = '',
   seoRouteId = '',
+  seoAlertRouteIds = '',
   trackSeo = true,
 } = Astro.props;
+
+const alertRouteIds = [...new Set(
+  [seoRouteId, ...String(seoAlertRouteIds || '').split(',')]
+    .map((id) => String(id || '').trim())
+    .filter(Boolean)
+)];
 
 const labNoIndex = import.meta.env.PUBLIC_LAB_MODE === 'true'
   || (Astro.site && String(Astro.site.hostname || '').toLowerCase() === 'lab.nexttrain.co.za');
@@ -176,9 +186,11 @@ const resolvedHtmlClass = [forceDark ? 'dark' : '', htmlClass].filter(Boolean).j
           try { theme = localStorage.getItem('theme'); } catch (e) {}
           if (!theme) {
             theme = 'light';
-            try { localStorage.setItem('theme', 'light'); } catch (e) {}
           }
-          const isDark = theme === 'dark';
+          let isDark = theme === 'dark';
+          if (theme === 'system') {
+            try { isDark = window.matchMedia('(prefers-color-scheme: dark)').matches; } catch (e) { isDark = false; }
+          }
           if (isDark) document.documentElement.classList.add('dark');
           else document.documentElement.classList.remove('dark');
         }
@@ -187,10 +199,6 @@ const resolvedHtmlClass = [forceDark ? 'dark' : '', htmlClass].filter(Boolean).j
         try {
           var isLabPage = document.documentElement.getAttribute('data-lab-mode') === 'true';
           if (!isLabPage && !localStorage.getItem('ntProdClassicPackV1')) {
-            if (pack && pack !== 'classic') {
-              localStorage.setItem('colourPack', 'classic');
-              pack = 'classic';
-            }
             localStorage.setItem('ntProdClassicPackV1', '1');
           }
         } catch (e) {}
@@ -298,6 +306,7 @@ const resolvedHtmlClass = [forceDark ? 'dark' : '', htmlClass].filter(Boolean).j
         seo_route_id: seoRouteId || '',
         route_id: seoRouteId || '',
         region: seoRegion || userRegion,
+        region_id: seoRegion || userRegion,
         page_type: pageType,
         slug: seoSlug || '',
         corridor: seoCorridor || '',
@@ -375,6 +384,7 @@ const resolvedHtmlClass = [forceDark ? 'dark' : '', htmlClass].filter(Boolean).j
               sampleRate: 0.3,
               ignoreErrors: [
                 'ResizeObserver loop limit exceeded',
+                'ResizeObserver loop completed with undelivered notifications.',
                 'Network request failed',
                 'Failed to fetch',
                 'Load failed',
@@ -406,5 +416,38 @@ const resolvedHtmlClass = [forceDark ? 'dark' : '', htmlClass].filter(Boolean).j
   <body class:list={['font-[Inter,system-ui,sans-serif] antialiased text-gray-800 dark:text-gray-200 transition-colors duration-300', bodyClass]}>
     <RecoveryLifeline />
     <slot />
+    {seoRegion && <SeoAlerts region={seoRegion} routeIds={alertRouteIds} />}
+    <script is:inline>
+      function ntFitJhbLabels() {
+        var nodes = document.querySelectorAll('[data-jhb-long]');
+        for (var i = 0; i < nodes.length; i++) {
+          var el = nodes[i];
+          var longText = el.getAttribute('data-jhb-long') || '';
+          var shortText = el.getAttribute('data-jhb-short') || '';
+          el.style.whiteSpace = 'nowrap';
+          el.style.overflow = 'hidden';
+          el.style.maxWidth = '100%';
+          function fits() {
+            return el.clientWidth > 0 && el.scrollWidth <= el.clientWidth + 1;
+          }
+          function release() {
+            el.style.whiteSpace = '';
+            el.style.overflow = '';
+          }
+          if (!longText || longText === shortText || el.clientWidth <= 0) {
+            el.textContent = shortText;
+            if (!fits()) release();
+            continue;
+          }
+          el.textContent = longText;
+          if (fits()) continue;
+          el.textContent = shortText;
+          if (!fits()) release();
+        }
+      }
+      if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', ntFitJhbLabels);
+      else ntFitJhbLabels();
+      window.addEventListener('resize', ntFitJhbLabels);
+    </script>
   </body>
 </html>

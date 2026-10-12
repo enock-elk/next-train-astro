@@ -121,6 +121,15 @@ export function scheduleCacheSlot(dayType, region, ab = 'a') {
     return `weekday_to_${dir}`;
 }
 
+/**
+ * Parsed `$schedules` slots are generic (weekday_to_a, …). Tag them with `_routeId`
+ * so a same-region corridor swap cannot paint Mabopane chrome over Pienaarspoort rows.
+ */
+export function schedulesBelongToRoute(schedules, routeId) {
+    if (!routeId || !schedules || typeof schedules !== 'object') return false;
+    return String(schedules._routeId || '') === String(routeId);
+}
+
 /** Firebase / sheetKeys key for a route direction on the given day type. */
 export function routeSheetKeyForDay(route, dayType, ab = 'a') {
     const dir = ab === 'b' || ab === 'B' ? 'b' : 'a';
@@ -284,6 +293,37 @@ export function routePrimaryGridDirection(route) {
     return 'A';
 }
 
+/** Day keys an admin can isolate for `_grid_notice` banners. */
+export const GRID_NOTICE_DAY_KEYS = ['weekday', 'saturday', 'sunday', 'public_holiday'];
+
+function normalizeGridNoticeDay(dayType) {
+    const key = String(dayType || '').trim().toLowerCase();
+    if (key === 'public_holiday' || key === 'holiday') return 'public_holiday';
+    if (key === 'saturday') return 'saturday';
+    if (key === 'sunday') return 'sunday';
+    return 'weekday';
+}
+
+/**
+ * Route-wide timetable banner: missing `days` means every schedule (legacy).
+ * Once any weekday / Saturday / Sunday / public-holiday flag is stored, only
+ * the ticked schedules paint the banner.
+ */
+export function gridNoticeShowsOnDay(notice, dayType) {
+    if (!notice) return false;
+    const days = notice.days;
+    if (days == null) return true;
+    const key = normalizeGridNoticeDay(dayType);
+    if (Array.isArray(days)) {
+        if (!days.length) return true;
+        return days.map((d) => normalizeGridNoticeDay(d)).includes(key);
+    }
+    if (typeof days !== 'object') return true;
+    const configured = GRID_NOTICE_DAY_KEYS.some((k) => days[k] === true || days[k] === false);
+    if (!configured) return true;
+    return days[key] === true;
+}
+
 /** Omitted surface keeps legacy exclusions visible in both the app and timetable grid. */
 export function exclusionAppliesToSurface(rule, surface = 'in_app') {
     if (!rule) return false;
@@ -304,12 +344,113 @@ export function formatRouteLabelHtml(raw) {
     return parts.map((p) => escapeHTML(p.trim())).filter(Boolean).join(routeArrowSvg());
 }
 
+/** Visible "JHB" stands for Johannesburg. Ids such as JHB_WEST are left alone. */
+export function expandJhbLabel(text) {
+    return String(text ?? '').replace(/\bJHB\b/g, 'Johannesburg');
+}
+
+/**
+ * Paint the long label only when it stays on one line inside `el`.
+ * Otherwise keep the short label. Nowrap stays only when that short
+ * label also fits. A heading that still needs two lines can wrap.
+ */
+export function applyFittedLabel(el, shortValue, longValue, asHtml = false) {
+    if (!el) return;
+    const short = shortValue == null ? '' : String(shortValue);
+    const long = longValue == null ? short : String(longValue);
+    const write = (value) => {
+        if (asHtml) el.innerHTML = value;
+        else el.textContent = value;
+    };
+    el.style.whiteSpace = 'nowrap';
+    el.style.overflow = 'hidden';
+    el.style.maxWidth = '100%';
+    if (typeof window !== 'undefined' && window.getComputedStyle) {
+        const display = window.getComputedStyle(el).display;
+        if (display === 'inline') el.style.display = 'inline-block';
+    }
+    const fits = () => el.clientWidth > 0 && el.scrollWidth <= el.clientWidth + 1;
+    const release = () => {
+        el.style.whiteSpace = '';
+        el.style.overflow = '';
+    };
+    if (!long || long === short || el.clientWidth <= 0) {
+        write(short);
+        if (!fits()) release();
+        return;
+    }
+    write(long);
+    if (fits()) return;
+    write(short);
+    if (!fits()) release();
+}
+
+/** Route-name nodes marked with data-route-raw. */
+export function fitRouteNameNodes(root) {
+    if (!root || typeof root.querySelectorAll !== 'function') return;
+    root.querySelectorAll('[data-route-raw]').forEach((el) => {
+        const raw = el.getAttribute('data-route-raw') || '';
+        applyFittedLabel(
+            el,
+            formatRouteLabelHtml(raw),
+            formatRouteLabelHtml(expandJhbLabel(raw)),
+            true
+        );
+    });
+}
+
+/** Plain-text nodes marked with data-jhb-short / data-jhb-long. */
+export function fitJhbNodes(root) {
+    if (!root || typeof root.querySelectorAll !== 'function') return;
+    root.querySelectorAll('[data-jhb-long]').forEach((el) => {
+        applyFittedLabel(
+            el,
+            el.getAttribute('data-jhb-short') || '',
+            el.getAttribute('data-jhb-long') || '',
+            false
+        );
+    });
+}
+
 /** True for timetable clock cells (rejects notes like "Monte", dashes, blanks). */
 export function isRealTime(val) {
     if (val == null) return false;
     const s = String(val).trim();
     if (!s || s === '-' || s === '—' || s === '–') return false;
     return /^([01]?\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/.test(s);
+}
+
+/** Sheet cell EXPRESS means the train does not call at that station. */
+export function isExpressSkip(val) {
+    return String(val || '').trim().toUpperCase() === 'EXPRESS';
+}
+
+/** Reserved timetable row. Not a station. Cells name the branch a train takes. */
+export function isVariantStationName(rawName) {
+    const bare = String(rawName || '').replace(/ STATION$/i, '').trim().toUpperCase();
+    return bare === 'VARIANT';
+}
+
+/** Known VARIANT cell codes. Unknown prose is ignored. */
+export function variantViaLabel(code) {
+    const key = String(code || '').trim().toUpperCase().replace(/[\s-]+/g, '_');
+    if (key === 'MONTE_VISTA') return 'Monte Vista';
+    return '';
+}
+
+/** Train id → "Monte Vista" from a VARIANT row. */
+export function variantMapFromSchedule(schedule) {
+    const map = {};
+    const rows = schedule?.rows || [];
+    for (const row of rows) {
+        if (!isVariantStationName(row?.STATION)) continue;
+        for (const [col, val] of Object.entries(row)) {
+            if (col === 'STATION' || col === 'COORDINATES' || col === 'KM_MARK' || col === 'row_index') continue;
+            const label = variantViaLabel(val);
+            if (label) map[String(col)] = label;
+        }
+    }
+    return map;
 }
 
 export function formatTimeDisplay(timeStr) {
@@ -398,6 +539,13 @@ export function resolvePlannerStationInput(raw, list) {
         return b.includes(want) || want.includes(b);
     });
     if (matches.length === 1) return matches[0];
+    if (matches.length > 1) {
+        const prefer = matches.find((s) => normalizeStationName(s) === want)
+            || matches.find((s) => normalizeStationName(s) === norm);
+        if (prefer) return prefer;
+        const shortest = [...matches].sort((a, b) => normalizeStationName(a).length - normalizeStationName(b).length)[0];
+        if (shortest && normalizeStationName(shortest) === want) return shortest;
+    }
 
     // Prefix on an alias key (BOSMA → BOSMAN). Skip short tokens like PARK.
     if (norm.length >= 5) {
@@ -600,6 +748,35 @@ export function destructiveNetworkIsSafe({ online = true, lieFi = false, preflig
     return online === true && lieFi !== true && preflight === 'ok';
 }
 
+export const PINNED_SESSION_KEYS = Object.freeze([
+    'welcomeSeen',
+    'userRegion',
+    'defaultRoute_GP',
+    'defaultRoute_WC',
+    'defaultRoute_KZN',
+    'defaultRoute_EC',
+    'defaultRoute',
+]);
+
+const PINNED_SESSION_KEY_SET = new Set(PINNED_SESSION_KEYS);
+
+export function welcomeSeenFromPinnedSession(getItem) {
+    const read = typeof getItem === 'function' ? getItem : (key) => safeStorage.getItem(key);
+    if (read('welcomeSeen') === 'true') return true;
+    if (read('defaultRoute')) return true;
+    return ['GP', 'WC', 'KZN', 'EC'].some((region) => !!read(`defaultRoute_${region}`));
+}
+
+export function inferRegionFromPins(getItem) {
+    const read = typeof getItem === 'function' ? getItem : (key) => safeStorage.getItem(key);
+    const stored = read('userRegion');
+    if (stored === 'GP' || stored === 'WC' || stored === 'KZN' || stored === 'EC') return stored;
+    for (const region of ['GP', 'WC', 'KZN', 'EC']) {
+        if (read(`defaultRoute_${region}`)) return region;
+    }
+    return null;
+}
+
 export const VOLATILE_FLUSH_PROTECTED_KEYS = Object.freeze([
     'next_train_device_id',
     'userProfile',
@@ -620,6 +797,7 @@ export const VOLATILE_FLUSH_PROTECTED_KEYS = Object.freeze([
     'last_impression_timestamp',
     'nt_alert_impression_installation_v1',
     'seen_changelog_version',
+    'nt_holiday_seen_map_v1',
     'ntInboxLocalV1',
     'ntInboxAcknowledgedV1',
     'defaultRoute_GP',
@@ -676,6 +854,32 @@ export function shouldDeleteCacheForPolicy(name, policy = cacheClearPolicy()) {
 
 export const safeStorage = {
     memoryFallback: {},
+
+    _writeLocal: function(key, value) {
+        if (typeof window === 'undefined') {
+            this.memoryFallback[key] = value;
+            return;
+        }
+        try {
+            localStorage.setItem(key, value);
+        } catch (e) {
+            console.warn(`🛡️ Guardian: localStorage.setItem blocked (Quota/Privacy). Using RAM fallback for ${key}.`);
+            this.memoryFallback[key] = value;
+        }
+    },
+
+    _removeLocal: function(key) {
+        if (typeof window === 'undefined') {
+            delete this.memoryFallback[key];
+            return;
+        }
+        try {
+            localStorage.removeItem(key);
+        } catch (e) {
+            console.warn(`🛡️ Guardian: localStorage.removeItem blocked. Using RAM fallback for ${key}.`);
+            delete this.memoryFallback[key];
+        }
+    },
     
     // Standard Synchronous Get (For UI state, preferences, etc.)
     getItem: function(key) {
@@ -690,28 +894,16 @@ export const safeStorage = {
     
     // Standard Synchronous Set
     setItem: function(key, value) {
-        if (typeof window === 'undefined') {
-            this.memoryFallback[key] = value;
-            return;
-        }
-        try {
-            localStorage.setItem(key, value);
-        } catch (e) {
-            console.warn(`🛡️ Guardian: localStorage.setItem blocked (Quota/Privacy). Using RAM fallback for ${key}.`);
-            this.memoryFallback[key] = value;
+        this._writeLocal(key, value);
+        if (PINNED_SESSION_KEY_SET.has(key) && value != null && value !== '') {
+            this._putIdb(key, value).catch(() => {});
         }
     },
     
     removeItem: function(key) {
-        if (typeof window === 'undefined') {
-            delete this.memoryFallback[key];
-            return;
-        }
-        try {
-            localStorage.removeItem(key);
-        } catch (e) {
-            console.warn(`🛡️ Guardian: localStorage.removeItem blocked. Using RAM fallback for ${key}.`);
-            delete this.memoryFallback[key];
+        this._removeLocal(key);
+        if (PINNED_SESSION_KEY_SET.has(key)) {
+            this._deleteIdb(key).catch(() => {});
         }
     },
 
@@ -808,7 +1000,7 @@ export const safeStorage = {
             // Background sync to ensure IDB is up-to-date (Only once per session to prevent IO storm)
             if (!this._mirroredKeys.has(key)) {
                 this._mirroredKeys.add(key);
-                this.setResilientItem(key, val);
+                this._putIdb(key, val).catch(() => {});
             }
             return val;
         }
@@ -823,7 +1015,7 @@ export const safeStorage = {
                     if (request.result && request.result.value) {
                         console.log(`🛡️ Guardian: Resurrected ${key} from IndexedDB after ITP purge.`);
                         // Restore it to fast synchronous storage for the rest of the session
-                        this.setItem(key, request.result.value);
+                        this._writeLocal(key, request.result.value);
                         resolve(request.result.value);
                     } else {
                         resolve(null);
@@ -837,9 +1029,7 @@ export const safeStorage = {
         }
     },
 
-    // Synchronously saves to localStorage, then asynchronously mirrors to IndexedDB
-    setResilientItem: async function(key, value) {
-        this.setItem(key, value); // Instant UI availability
+    _putIdb: async function(key, value) {
         try {
             const db = await this._initIDB();
             return new Promise((resolve) => {
@@ -852,6 +1042,33 @@ export const safeStorage = {
             console.warn("🛡️ Guardian: IDB mirror write failed.", e);
             return false;
         }
+    },
+
+    _deleteIdb: async function(key) {
+        try {
+            const db = await this._initIDB();
+            return new Promise((resolve) => {
+                const tx = db.transaction('IdentityStore', 'readwrite');
+                tx.objectStore('IdentityStore').delete(key);
+                tx.oncomplete = () => resolve(true);
+                tx.onerror = () => resolve(false);
+            });
+        } catch {
+            return false;
+        }
+    },
+
+    // Synchronously saves to localStorage, then asynchronously mirrors to IndexedDB
+    setResilientItem: async function(key, value) {
+        this._writeLocal(key, value); // Instant UI availability
+        this._mirroredKeys.add(key);
+        return this._putIdb(key, value);
+    },
+
+    removeResilientItem: async function(key) {
+        this._removeLocal(key);
+        this._mirroredKeys.delete(key);
+        return this._deleteIdb(key);
     }
 };
 
@@ -954,6 +1171,40 @@ export function restoreDeviceIdentity() {
     return restoreDevicePromise;
 }
 
+let restorePinnedPromise = null;
+
+/**
+ * iOS home-screen PWAs that hopped onto `/?v=` lost localStorage (new site
+ * sandbox) while IndexedDB on the origin still held the pin. Resurrect, then
+ * treat any defaultRoute_* as welcomeSeen so Check for Updates cannot dump a
+ * returning commuter on Welcome.
+ */
+export function restorePinnedSession() {
+    if (typeof window === 'undefined') return Promise.resolve({ welcomeSeen: false, userRegion: null });
+    if (restorePinnedPromise) return restorePinnedPromise;
+    restorePinnedPromise = (async () => {
+        await withTimeout(Promise.all(
+            PINNED_SESSION_KEYS.map((key) => safeStorage.getResilientItem(key).catch(() => null))
+        ), 2000, null);
+        if (welcomeSeenFromPinnedSession()) {
+            if (safeStorage.getItem('welcomeSeen') !== 'true') {
+                safeStorage.setItem('welcomeSeen', 'true');
+                console.log('🛡️ Guardian: Restored welcomeSeen from pinned route (iOS storage hop / ITP).');
+            }
+        }
+        const region = inferRegionFromPins();
+        if (region && !safeStorage.getItem('userRegion')) {
+            safeStorage.setItem('userRegion', region);
+            console.log(`🛡️ Guardian: Restored userRegion ${region} from pinned route.`);
+        }
+        return {
+            welcomeSeen: safeStorage.getItem('welcomeSeen') === 'true',
+            userRegion: safeStorage.getItem('userRegion') || region,
+        };
+    })();
+    return restorePinnedPromise;
+}
+
 export const _mirrorDeviceId = () => {
     if (typeof window === 'undefined') return;
     const currentId = safeStorage.getItem('next_train_device_id');
@@ -964,6 +1215,7 @@ export const _mirrorDeviceId = () => {
 
 if (typeof window !== 'undefined') {
     restoreDeviceIdentity().then(() => _mirrorDeviceId()).catch(() => _mirrorDeviceId());
+    restorePinnedSession().catch(() => {});
 
     document.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'hidden') {

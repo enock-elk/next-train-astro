@@ -106,6 +106,18 @@ export function sanitizeAttachmentDisplayUrl(url) {
     return sanitizeInlineAlertImageUrl(s);
 }
 
+function isStorageAttachmentHost(url) {
+    try {
+        const host = new URL(url, 'https://nexttrain.co.za').hostname.toLowerCase();
+        return host === 'firebasestorage.googleapis.com'
+            || host === 'storage.googleapis.com'
+            || host.endsWith('.firebasestorage.app')
+            || host.endsWith('.googleusercontent.com');
+    } catch {
+        return false;
+    }
+}
+
 export function classifyAttachmentUrl(url) {
     const safe = sanitizeAttachmentDisplayUrl(url);
     if (!safe) return null;
@@ -113,11 +125,13 @@ export function classifyAttachmentUrl(url) {
     try {
         path = decodeURIComponent(new URL(safe, 'https://nexttrain.co.za').pathname || '');
     } catch {
-        path = safe;
+        path = String(safe).split('?')[0];
     }
     const lower = withoutAppBase(path).toLowerCase();
-    if (/\.(jpe?g|png|gif|webp)$/.test(lower) || lower.includes('/images/alerts/')) return 'image';
     if (/\.pdf$/.test(lower)) return 'pdf';
+    if (/\.(jpe?g|png|gif|webp)$/.test(lower) || lower.includes('/images/alerts/')) return 'image';
+    // Commuter uploads are only photos or PDFs. A storage link with no extension is still a photo.
+    if (isStorageAttachmentHost(safe)) return 'image';
     return 'file';
 }
 
@@ -140,7 +154,7 @@ export function attachmentPreviewHtml(url, opts = {}) {
     if (!safe) return '';
     const kind = classifyAttachmentUrl(safe);
     const attr = escapeHTML(safe);
-    const fn = opts.admin ? 'Admin.openLightbox' : 'window.openLightbox';
+    const fn = 'window.openLightbox';
     const onclick = lightboxOnclickJs(safe, fn);
     if (kind === 'image' && onclick) {
         return `<button type="button" onclick='event.stopPropagation(); ${onclick}' class="${opts.buttonClass || 'block focus:outline-none w-full text-left'}"><img src="${attr}" class="${opts.imgClass || 'w-full h-24 object-cover rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 hover:opacity-90 transition-opacity cursor-zoom-in'}" alt="${escapeHTML(opts.alt || 'Attachment')}"></button>`;

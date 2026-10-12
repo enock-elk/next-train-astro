@@ -14,7 +14,7 @@
  * Changelog / What’s New is optional: skip both, or write only "no release notes."
  * Always add ADMIN_CHANGELOG[APP_VERSION] (System Health Build notes).
  */
-export const APP_VERSION = "V9_09.18.11";
+export const APP_VERSION = "V9_10.12.2";
 
 /** Public support channels (About modal, lifeboat help.html, Safe Mode). */
 export const SUPPORT_EMAIL = 'admin@nexttrain.co.za';
@@ -59,9 +59,10 @@ export function withBase(path = '/') {
 // Set to 'false' for silent background updates (Stale-While-Revalidate).
 // Admin NUKE (killswitch.json) still wipes caches for online clients.
 //
-// This build requires the forced path. app-update.js defers it until an active
-// reachability preflight succeeds, keeps the current shell offline, and activates
-// an already-waiting worker before the cache-bust navigation.
+// This build requires the forced path. app-update.js peeks published
+// app-version.json (origin + dump mirrors), defers until an active
+// reachability preflight succeeds, keeps the current shell offline, installs
+// the incoming worker, then reloads the same URL (no numeric ?v= hop).
 export const FORCE_UPDATE_REQUIRED = true;
 
 // --- 🛡️ GUARDIAN PHASE 5: WATERFALL DATA PIPELINE. ---
@@ -958,18 +959,125 @@ export const HERC_KOED_JUNCTIONS = ['KOEDOESPOORT', 'HERCULES'];
 // app configuration.
 // Never mention work that is still hidden while operators test it: Alerts /
 // the bell / notices / hold-to-react, Trains near me, I'm on it, live location,
-// ride sharing, community chat, route chat.
+// ride sharing, community chat, route chat, points, badges.
 // Never use emoji. Never use em dashes (U+2014) or en dashes (U+2013). Use a
 // comma, a period, or a hyphen. Do not explain strategy or "we fixed."
 // Leave every forceShow false. Never auto-open What's New over the welcome screen.
 export const CHANGELOG_DATA = [
     {
-        id: "V9_09.18.11",
-        title: "Points and badges",
-        date: "18 Sep 2026",
+        id: "V9_10.12.1",
+        title: "Planner trip card",
+        date: "12 Oct 2026",
         forceShow: false,
         features: [
-            "Points take longer to earn. Same-day contributions group together. Badge tiles fill as you work toward a streak."
+            "A departed trip shows Departed and a separate Show Next Train button.",
+            "The trip fare sits as a centered price under the times.",
+            "Each train is named after the last stop that train actually makes."
+        ]
+    },
+    {
+        id: "V9_10.04.2",
+        title: "Timetable wait",
+        date: "4 Oct 2026",
+        forceShow: false,
+        features: [
+            "If you tap View full timetable while times are still loading, the timetable opens when they are ready, as long as you stay on Next Train."
+        ]
+    },
+    {
+        id: "V9_09.26.1",
+        title: "Special trains",
+        date: "26 Sep 2026",
+        forceShow: false,
+        features: [
+            "Special trains for the day show on the Next Train board and Trip Planner when they run."
+        ]
+    },
+    {
+        id: "V9_09.24.9",
+        title: "Timetable heading",
+        date: "24 Sep 2026",
+        forceShow: false,
+        features: [
+            "A downloaded timetable names the route in a larger line, and the corridor name is black."
+        ]
+    },
+    {
+        id: "V9_09.24.8",
+        title: "Ticket Prices card",
+        date: "24 Sep 2026",
+        forceShow: false,
+        features: [
+            "Ticket Prices uses the same dark card as Next Train.",
+            "Check for Updates keeps your pinned route."
+        ]
+    },
+    {
+        id: "V9_09.24.5",
+        title: "Ticket Prices on a dark screen",
+        date: "24 Sep 2026",
+        forceShow: false,
+        features: [
+            "Ticket Prices sits a little clearer on a dark screen."
+        ]
+    },
+    {
+        id: "V9_09.24.4",
+        title: "Holiday day line",
+        date: "24 Sep 2026",
+        forceShow: false,
+        features: [
+            "The day line shows the holiday timetable straight away.",
+            "A public holiday with no trains names that day.",
+            "Trip Planner names the public holiday timetable.",
+            "A public holiday train sheet says Public Holidays."
+        ]
+    },
+    {
+        id: "V9_09.24.3",
+        title: "Hub stops on the trip map",
+        date: "24 Sep 2026",
+        forceShow: false,
+        features: [
+            "Hub stops on the trip map use the larger station dot."
+        ]
+    },
+    {
+        id: "V9_09.24.2",
+        title: "Trip map distance",
+        date: "24 Sep 2026",
+        forceShow: false,
+        features: [
+            "A public holiday timetable names that day, not Saturday.",
+            "The trip map follows the rail and shows how far the trip is."
+        ]
+    },
+    {
+        id: "V9_09.23.1",
+        title: "Your route on the weekend board",
+        date: "23 Sep 2026",
+        forceShow: false,
+        features: [
+            "A weekend board with no Saturday times names your route and offers Plan this trip.",
+            "A timetable cell shows EXPR when that train does not stop at the station."
+        ]
+    },
+    {
+        id: "V9_09.21.1",
+        title: "Open to the board",
+        date: "20 Sep 2026",
+        forceShow: false,
+        features: [
+            "Opening the app goes from the splash screen to the board. If startup takes longer, Starting Next Train stays on screen."
+        ]
+    },
+    {
+        id: "V9_09.20.2",
+        title: "Trip fare tickets",
+        date: "20 Sep 2026",
+        forceShow: false,
+        features: [
+            "Trip fare lists Single, Return, Weekly, and Monthly. Peak time no longer shows a stray colon. Yes sits on the right."
         ]
     },
     {

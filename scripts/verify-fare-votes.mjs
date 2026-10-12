@@ -186,11 +186,18 @@ try {
 const ui = readFileSync(join(ROOT, 'src/lib/planner-ui.js'), 'utf8');
 assert(ui.includes('Is this what you paid?'), 'fare sheet asks Is this what you paid?');
 assert(ui.includes('planner-fare-vote-yes') && ui.includes('planner-fare-vote-no'), 'fare sheet has Yes / No');
+{
+    const noBtn = ui.indexOf('id="planner-fare-vote-no" class="inline-flex');
+    const yesBtn = ui.indexOf('id="planner-fare-vote-yes" class="inline-flex');
+    assert(noBtn > 0 && yesBtn > noBtn, 'No sits on the left, Yes on the right');
+}
 assert(ui.includes('planner-fare-vote-send'), 'No path has Send');
 assert(ui.includes('roundFareVoteRand'), 'correction uses the board whole-rand floor');
 assert(ui.includes('submitFareVote'), 'fare sheet writes votes immediately');
 assert(ui.includes('smoothKm: km') && ui.includes('abKm: crowKm'), 'fare sheet sends smooth and A-B km');
-assert(ui.includes('showPlannerFareTicketPrompt'), 'Yes/Send then offers an optional ticket photo');
+assert(ui.includes('showPlannerFareTicketPrompt'), 'disagree path can offer an optional ticket photo');
+assert(ui.includes('extra.agree === false'), 'ticket photo is only after a disagree vote');
+assert(ui.includes('showPlannerFareVoteThanks'), 'matching quoted price just thanks the commuter');
 assert(ui.includes('planner-fare-ticket-add') && ui.includes('planner-fare-ticket-skip'), 'ticket prompt has Add photo and Skip');
 assert(ui.includes('putFareTicketPhoto'), 'ticket photo writes the sidecar, not the vote');
 assert(ui.includes('fare_tickets/'), 'ticket photos upload to fare_tickets');
@@ -201,6 +208,9 @@ const tel = readFileSync(join(ROOT, 'src/lib/planner-telemetry.js'), 'utf8');
 assert(tel.includes('sys_logs/fare_votes'), 'client writes sys_logs/fare_votes');
 assert(tel.includes('smoothKm'), 'fare vote payload includes smoothKm');
 assert(tel.includes('abKm'), 'fare vote payload includes abKm');
+assert(tel.includes("quotedTicketType: 'single'"), 'fare votes always store the board quote as Single');
+assert(tel.includes('normalizeFareTicketType'), 'fare votes normalize weekly/monthly ticket types');
+assert(tel.includes('weekly_mon_fri') && tel.includes('monthly'), 'fare votes accept weekly and monthly ticket types');
 assert(tel.includes('FARE_VOTE_QUEUE_KEY'), 'offline fare vote queue exists');
 assert(tel.includes('slice(-1)'), 'offline fare vote queue is capped at 1');
 assert(tel.includes("config/planner_fares"), 'approved prices live at config/planner_fares');

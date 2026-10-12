@@ -763,7 +763,14 @@ export async function submitDelayValidation({ routeId, trainId, scheduledTime, a
         delete routeReportCacheAt[routeId];
         await hydrateTrainReportSlots(document.getElementById('view-next-train') || document);
         const { awardMark } = await import('./rider-marks.js');
-        awardMark('delay_confirm');
+        awardMark('delay_confirm', {
+            detail: {
+                trainId: trainId || '',
+                routeId: routeId || '',
+                origin: station || '',
+                destination: destination || '',
+            },
+        });
         showToast('Thanks - that helps others', 'success');
         import('./push-notify.js').then((m) => m.maybeOfferCorridorAlerts?.()).catch(() => {});
         return { ok: true };
@@ -826,7 +833,14 @@ export async function submitQuickDelayReport({
         hydrateTrainReportSlots(document.getElementById('view-next-train') || document);
         if (!existing) {
             import('./rider-marks.js').then((m) => {
-                m.awardMark('delay_report');
+                m.awardMark('delay_report', {
+                    detail: {
+                        trainId: trainId || '',
+                        routeId: routeId || '',
+                        origin: station || '',
+                        destination: destination || '',
+                    },
+                });
             }).catch(() => {});
         }
         return { ok: true };
@@ -976,7 +990,7 @@ async function submitTrainReportPayload({ status, lateBucket, note }) {
         return false;
     }
 
-    let noteToStore = note || '';
+    let noteToStore = String(note || '').slice(0, 280);
     if (noteToStore) {
         const safety = checkContentSafety(noteToStore);
         if (safety.verdict === 'block') { showErr(safety.message); return false; }
@@ -1070,7 +1084,14 @@ async function submitTrainReportPayload({ status, lateBucket, note }) {
         hydrateTrainReportSlots(document.getElementById('view-next-train') || document);
         if (!isUpdate) {
             import('./rider-marks.js').then((m) => {
-                m.awardMark('delay_report');
+                m.awardMark('delay_report', {
+                    detail: {
+                        trainId: trainId || '',
+                        routeId: routeId || '',
+                        origin: station || '',
+                        destination: destination || '',
+                    },
+                });
             }).catch(() => {});
         }
         return true;

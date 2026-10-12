@@ -17,6 +17,11 @@ import {
     DEFAULT_KEEP,
     DEFAULT_KEEP_CSS,
 } from './retain-previous-astro.mjs';
+import {
+    loadEdgeZoneSpec,
+    mergeManagedRules,
+    managedRefs,
+} from './apply-nexttrain-edge-cache-rules.mjs';
 
 const failures = [];
 const assert = (cond, msg) => { if (!cond) failures.push(msg); };
@@ -98,6 +103,8 @@ assert(css.includes('Do not make this the only copy again'), 'appearance warns t
 
 const layout = readFileSync(new URL('../src/layouts/Layout.astro', import.meta.url), 'utf8');
 const content = readFileSync(new URL('../src/layouts/ContentLayout.astro', import.meta.url), 'utf8');
+assert(layout.includes('ResizeObserver loop completed with undelivered notifications.'), 'app Sentry ignores the Chrome ResizeObserver loop');
+assert(content.includes('ResizeObserver loop completed with undelivered notifications.'), 'content Sentry ignores the Chrome ResizeObserver loop');
 assert(layout.includes('<StuckUpdateGuard />'), 'app layout wires the inline guard');
 assert(content.includes('<StuckUpdateGuard />'), 'map layout wires the inline guard');
 assert(layout.includes('<ShellFallbackStyles surface="app" />'), 'app layout wires the inline fallback styles');
@@ -123,6 +130,24 @@ assert(/<div class="hp"[^>]*\bhidden\b/.test(help), 'honeypot stays hidden when 
 assert(help.includes('id="btn-reset"'), 'Reset saved app data is a real button');
 assert(help.includes('admin@nexttrain.co.za'), 'Reset and Recover keeps the support email as a mailto');
 assert(help.includes('facebook.com/enock.kazembe'), 'Reset and Recover keeps the Facebook support link');
+assert(help.includes('<h1 id="title">'), 'unstyled fallback still has a real heading');
+assert(help.includes('<ol class="steps"'), 'unstyled fallback still has a real list');
+assert(help.includes('<button type="button"') && help.includes('<button type="submit"'), 'unstyled fallback still has real buttons');
+assert(help.includes('If CSS is disabled entirely'), 'help.html documents the no-CSS fallback');
+assert(!help.includes('id="diag"'), 'Reset and Recover does not paint a diagnostic dump');
+assert(!/Device:\s*['+]/.test(help), 'Reset and Recover does not print a device id on the page');
+assert(help.includes('class="phone"') || help.includes('class="brand"'), 'Reset and Recover uses Next Train light chrome');
+assert(help.includes('<li><span>'), 'help step copy is wrapped so bold labels do not become extra columns');
+assert(!help.includes('#0f172a'), 'Reset and Recover is not the old dark stacked shell');
+
+const recoverySrc = readFileSync(new URL('../src/lib/recovery.js', import.meta.url), 'utf8');
+const indexPageFouc = readFileSync(new URL('../src/pages/index.astro', import.meta.url), 'utf8');
+assert(recoverySrc.includes('ensureLoaderEscape'), 'boot still arms App stuck? Get help');
+assert(!recoverySrc.includes('INSTALLED_SPLASH_MS'), '14.1 boot has no 8s splash-color hold');
+assert(!recoverySrc.includes('onStartingCoverElapsed'), '14.1 App stuck is on the logo overlay immediately');
+assert(indexPageFouc.includes('data-nt-help-escape="1"'), 'Starting Next Train has the App stuck link');
+assert(indexPageFouc.includes('id="loading-overlay"'), '14.1 boot cover lives on the home page');
+assert(indexPageFouc.includes('setTimeout(revealAppShell, 700)'), '14.1 boot drops the logo at 700ms');
 
 const appUpdate = readFileSync(new URL('../src/lib/app-update.js', import.meta.url), 'utf8');
 assert(appUpdate.includes('Incoming update waiting (quiet)'), 'onNeedRefresh is quiet');
@@ -133,7 +158,12 @@ assert(!needRefresh.includes('showCrucialUpdateToast'), 'onNeedRefresh does not 
 assert(!needRefresh.includes('__ntPendingUpdateToken'), 'onNeedRefresh does not force a reload token');
 assert(appUpdate.includes('it is not how FOUC is fixed'), 'app-update comments that force-update is not the FOUC fix');
 assert(appUpdate.includes('export async function peekIncomingVersion'), 'incoming version peek is shared');
-assert(appUpdate.includes('return null;'), 'failed version peek does not pretend this shell is incoming');
+assert(appUpdate.includes('return report.version;'), 'failed version peek does not pretend this shell is incoming');
+assert(appUpdate.includes('listAppVersionProbeUrls'), 'version peek uses several published URLs');
+assert(appUpdate.includes('reloadToApplyUpdate'), 'update restart stays on the same URL');
+assert(!appUpdate.includes("path + '?v=' + Date.now()"), 'app-update does not invent numeric ?v=');
+assert(layout.includes('ntLeavingCacheBust'), 'Layout hops off leftover numeric ?v= before minting a device id');
+assert(layout.includes('window.location.replace(cleanEarly)'), 'Layout uses location.replace for the iOS start-URL hop');
 assert(appUpdate.includes('markLatestVersionToast'), 'current-version reset schedules a distinct post-reload toast');
 assert(appUpdate.includes('maybeShowLatestVersionToast'), 'current-version toast is shown after the reset reload');
 assert(isAppVersionNewer('V9_09.12.2', 'V9_09.12.1'), 'same-day higher release is newer');
@@ -152,6 +182,8 @@ assert(hubJs.includes('skipNetworkPreflight'), 'confirmed Check for Updates can 
 assert(hubModals.includes('id="network-slow-confirm-modal"'), 'slow-network confirm lives next to region confirm');
 assert(hubModals.includes('Your network seems slow. Are you sure?'), 'slow-network confirm copy is a question, not a hard stop');
 assert(hubJs.includes('peekIncomingVersion'), 'Check for Updates probes the published version before restart');
+assert(hubJs.includes('reloadToApplyUpdate'), 'Check for Updates restarts without a numeric ?v= hop');
+assert(!hubJs.includes("pathname + '?v=' + Date.now()"), 'Check for Updates does not invent numeric ?v=');
 assert(hubJs.includes('latestVersion: !!(incomingVersion && !isAppVersionNewer(incomingVersion, APP_VERSION))'), 'Check for Updates always resets and classifies the post-reload toast');
 assert(hubJs.includes("policy.systemKillswitch || (source === 'check_updates' && !skipNetworkPreflight)"), 'Check for Updates still preflights unless the commuter confirmed');
 assert(appUpdate.includes('You’re on the latest version'), 'current release gets a grey informational toast after restart');
@@ -160,6 +192,26 @@ assert(appUpdate.includes('lastSavedTimesToastAt'), 'forced-update saved-times t
 assert(appUpdate.includes('SAVED_TIMES_TOAST_COOLDOWN_MS = 10 * 60 * 1000'), 'red saved-times toast waits 10 minutes');
 assert(appUpdate.includes('crucialUpdateToastShown'), 'crucial-update toast is once per session');
 assert(appUpdate.includes('forcedUpdateAnnounced'), 'forced-update retries do not re-announce every minute');
+const handleUpdate = appUpdate.split('export async function handleUpdateClick')[1]?.split('const UPDATED_TOAST_KEY')[0] || '';
+assert(handleUpdate.includes('installIncomingServiceWorker'), 'forced update installs before it toasts');
+assert(
+    handleUpdate.indexOf('installIncomingServiceWorker') < handleUpdate.indexOf('showCrucialUpdateToast'),
+    'automatic toast waits until the incoming worker is downloaded'
+);
+assert(
+    !/if \(options\.announce === true && newer\) showCrucialUpdateToast/.test(handleUpdate),
+    'forced update does not toast before installIncomingServiceWorker'
+);
+assert(handleUpdate.includes('isIncomingWorkerDownloaded'), 'toast requires waiting or installed');
+assert(handleUpdate.includes('shouldToastAutomaticUpdate'), 'auto toast is gated on downloaded + host version');
+assert(handleUpdate.includes('will not toast or restart until the worker actually installs'), 'dump-ahead already_current stays silent');
+assert(handleUpdate.includes('No toast until that download finishes'), 'origin-newer unstick does not toast');
+const scheduleUpdate = appUpdate.split('function scheduleForcedUpdate')[1]?.split('async function probeNetworkAndForceUpdate')[0] || '';
+assert(
+    !/forcedUpdateAnnounced = true;/.test(scheduleUpdate),
+    'retries do not mark the toast announced before the download finishes'
+);
+assert(scheduleUpdate.includes('const announce = !forcedUpdateAnnounced && !crucialUpdateToastShown'), 'auto retries still announce once after download');
 assert(isAppVersionNewer('V9_09.18.3', 'V9_09.17.12'), 'this release is newer than live V9_09.17.12');
 assert(appUpdate.includes('You are offline. Using saved times until you reconnect.'), 'offline saved-times copy is unchanged');
 assert(appUpdate.includes('Network is slow. Using saved times until you reconnect.'), 'a slow probe is not called offline');
@@ -258,6 +310,40 @@ try {
 } finally {
     rmSync(dir, { recursive: true, force: true });
 }
+
+const worker = readFileSync(new URL('../workers/nexttrain-edge/worker.js', import.meta.url), 'utf8');
+assert(worker.includes("url.pathname === '/app-version.json'"), 'edge worker intercepts app-version.json');
+assert(worker.includes("url.pathname === '/sw.js'"), 'edge worker intercepts sw.js');
+assert(worker.includes('no-store, no-cache, must-revalidate'), 'edge worker serves update probes with no-store');
+assert(!worker.includes('rollback only') && !worker.includes('routes are detached'), 'edge worker is attached, not documented as detached');
+const wrangler = readFileSync(new URL('../workers/nexttrain-edge/wrangler.jsonc', import.meta.url), 'utf8');
+assert(wrangler.includes('nexttrain.co.za/_astro/'), 'wrangler routes hashed /_astro/');
+assert(wrangler.includes('nexttrain.co.za/app-version.json'), 'wrangler routes app-version.json');
+assert(wrangler.includes('nexttrain.co.za/sw.js'), 'wrangler routes sw.js');
+const spec = loadEdgeZoneSpec();
+const refs = managedRefs(spec);
+assert(spec.cache.some((r) => r.ref === 'nt-edge-astro' && r.expression.includes('/_astro/')), 'Cache Rule covers hashed /_astro/');
+assert(spec.cache.some((r) => r.ref === 'nt-edge-icons' && r.expression.includes('/icons/')), 'Cache Rule covers /icons/');
+assert(spec.cache.some((r) => r.ref === 'nt-edge-probes' && r.action_parameters.cache === false), 'Cache Rule bypasses update probes');
+assert(spec.transform.some((r) => r.ref === 'nt-edge-cc-astro' && r.action_parameters.headers['Cache-Control'].value.includes('immutable')), 'transform sets immutable on /_astro/');
+assert(spec.transform.some((r) => r.ref === 'nt-edge-cc-probes' && r.action_parameters.headers['Cache-Control'].value.includes('no-store')), 'transform sets no-store on probes');
+assert(!JSON.stringify(spec).includes('/*.html') && !spec.cache.some((r) => r.expression.includes('.html')), 'zone rules do not long-cache HTML');
+{
+    const foreign = { ref: 'keep-me', description: 'other rule', action: 'set_cache_settings' };
+    const merged = mergeManagedRules([foreign, { ref: 'nt-edge-astro', id: 'old', description: 'stale' }], spec.cache, refs);
+    assert(merged.some((r) => r.ref === 'keep-me'), 'apply script keeps unrelated Cache Rules');
+    assert(merged.find((r) => r.ref === 'nt-edge-astro')?.id === 'old', 'apply script updates our rule in place');
+    assert(merged.filter((r) => r.ref === 'nt-edge-astro').length === 1, 'apply script does not duplicate our Cache Rule');
+}
+const astroCfgFouc = readFileSync(new URL('../astro.config.mjs', import.meta.url), 'utf8');
+assert(astroCfgFouc.includes('sitemap\\.xml'), 'SW navigateFallback does not treat /sitemap.xml as the app shell');
+assert(astroCfgFouc.includes('robots\\.txt'), 'SW navigateFallback does not treat /robots.txt as the app shell');
+
+const welcome = readFileSync(new URL('../src/components/WelcomeModal.astro', import.meta.url), 'utf8');
+assert(welcome.includes('restorePinnedSession'), 'Welcome waits for IDB pin resurrection');
+const utilsSrc = readFileSync(new URL('../src/lib/utils.js', import.meta.url), 'utf8');
+assert(utilsSrc.includes('PINNED_SESSION_KEYS'), 'pin/welcome keys are mirrored to IndexedDB');
+assert(utilsSrc.includes('export function restorePinnedSession'), 'pinned session restore is exported');
 
 if (failures.length) {
     console.error(`verify-update-fouc: ${failures.length} failed`);

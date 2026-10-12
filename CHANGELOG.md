@@ -2,6 +2,342 @@
 
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin, Dev Hub, Alerts, Trains near me, community chat, or other hidden-test work. No emoji and no em dashes in What’s New. Keep `APP_VERSION`, `package.json` `version`, and `public/app-version.json` aligned on each release. Changelog / What’s New may be skipped, or the heading may be only **no release notes.** Every bump must add `ADMIN_CHANGELOG[APP_VERSION]` (System Health Build notes).
 
+## V9_10.12.2 — no release notes
+
+## V9_10.12.1
+
+Planner results restore Departed as a status and Show Next Train as its own button. Trip fare is a centered price under the times. Each train is named from that train’s last timed stop.
+
+## V9_10.11.11 — no release notes
+
+## V9_10.11.10 — no release notes
+
+## V9_10.11.9 — no release notes
+
+## V9_10.11.8 — no release notes
+
+## V9_10.11.7 — no release notes
+
+## V9_10.11.6 — no release notes
+
+## V9_10.11.5 — no release notes
+
+## V9_10.11.4 — no release notes
+
+## V9_10.11.3 — no release notes
+
+## V9_10.11.2 — no release notes
+
+## V9_10.11.1 — no release notes
+
+## V9_10.10.7 — no release notes
+
+## V9_10.10.6 — no release notes
+
+## V9_10.10.5 — no release notes
+
+## V9_10.10.4 — no release notes
+
+## V9_10.10.3 — no release notes
+
+Dev Mode Commuter Feedback photos accept taps and open the full-screen preview. Commuter What’s New unchanged.
+
+## V9_10.10.2 — no release notes
+
+Dev Mode Commuter Feedback opens an attached photo in the full-screen preview. Commuter What’s New unchanged.
+
+## V9_10.10.1 — no release notes
+
+Feedback photos keep the shared service-poster preview above Dev Mode in warm preview sessions. Commuter What’s New unchanged.
+
+## V9_10.09.4 — no release notes
+
+Inbox photo taps open the same full-screen preview as service posters. Commuter What’s New unchanged.
+
+## V9_10.09.3 — no release notes
+
+Admin inbox photo taps open the original image above the thread, including storage photos that have no file extension. Commuter What’s New unchanged.
+
+## V9_10.09.2 — no release notes
+
+Commuter photo tap opens the original image. The feedback filter menu uses the toolbar width. Station popups keep dark text on the white card in dark mode. Signing out starts a new admin chat on the same device id, and signing in merges it back. Commuter What’s New unchanged.
+
+## V9_10.09.1 — no release notes
+
+Experimental Map and Community can be turned on for a whole region. Passed live checks ask before sharing as the train. The tracking card reads Train 0755 Paused, with Real-Time and Timetable on separate lines. Commuter What’s New unchanged.
+
+## V9_10.08.3 — no release notes
+
+Live map follows the shared train the commuter opened, and paints that corridor line when a train is being shared. Tracking card title carries Active or Paused. Late and early open the full timesheet. Commuter What’s New unchanged.
+
+## V9_10.08.2 — no release notes
+
+Admin train testing is not stopped by the rail check. Commuter off-track prompts wait 15 seconds. Regional breakdown labels users and sessions as overlapping cards, not a split of people today. Commuter What’s New unchanged.
+
+## V9_10.08.1 — no release notes
+
+Live tracking hardening while operators test it. Tracking card: origin → destination, state pill, pause reason, distance-based Last seen at / Approaching, timetable early/late chip with between-stop interpolation, red speed above 65 km/h. Sharer: today-only eligible trains (window, bans, specials), direction hold then pause and ask, 90 s prompt timeouts, dwell prompt with stuck / cancelled, worker-backed 3 s loop and GPS re-arm on resume. Receivers: accuracy up/down votes with suppression, timetable-bearing glyph facing with no flip and rail-only glide. Rules add `ride_votes` and `trainStatus` / `voteResetAt`. Deviation telemetry scaffolded, not written. Commuter What’s New unchanged.
+
+## V9_10.04.5 — no release notes
+
+Poll layout, View Poll Results shake, multi-answer admin toggle, and two new catalog posters. Commuter What’s New stays on the timetable wait card.
+
+## V9_10.04.4 — no release notes
+
+Analytics: SEO app opens no longer count as deep_link_open, events carry region_id, and view_full_grid / sidenav map opens are once-per-action. Commuter What’s New stays on the timetable wait card.
+
+## V9_10.04.3 — no release notes
+
+Operator poll run length, View Poll Results (vote first), ACTIVE/INACTIVE footer, uid-keyed votes, and empty-body poll/poster compose. Commuter What’s New stays on the timetable wait card.
+
+## V9_10.04.2
+
+View full timetable: one pending open. Stay on the board and it opens when sheets are ready. Leave (another tab, hub, modal, or route) and that request is dropped.
+
+Alerts pin is for every post, not only polls. Pinned cards sit at the bottom of the feed, with a pin mark left of Info. Polls hide results until the device votes, then always show percentages. Admins can also turn on raw counts, which appear in brackets next to the percentage.
+
+## V9_10.04.1
+
+After you change route, the full timetable is for that route. Same-region swaps no longer keep the previous corridor sheet behind Mabopane (or other) chrome.
+
+## V9_09.26.1
+
+Special trains marked in Global State Monitor show on the Next Train board and Trip Planner instead of being skipped like cancelled trains. Welcome and About use the small splash WebP. Planner Fails cards show the build version.
+
+## V9_09.24.6
+
+Wide timetable exports shrink the train number by one pixel when the STN column is shown.
+
+## V9_09.24.5
+
+The KZN map lists Berea Road to kwaMashu and Berea Road to Bridge City as two lines, split at Duff's Road.
+
+## V9_09.24.11 — no release notes
+
+## V9_09.24.10 — no release notes
+
+## V9_09.24.9
+
+A downloaded timetable names the route in a larger line, and the corridor name is black.
+
+## V9_09.24.8
+
+Ticket Prices uses the same dark card as Next Train. Check for Updates keeps your pinned route.
+
+## V9_09.24.5
+
+Ticket Prices sits a little clearer on a dark screen.
+
+## V9_09.24.4
+
+Berea Road to Bridge City stays on its own line. Duff's Road to kwaMashu is the second line from the fork.
+
+The day line shows the holiday timetable straight away. A public holiday with no trains names that day. Trip Planner names the public holiday timetable. A public holiday train sheet says Public Holidays.
+
+## V9_09.24.3
+
+Hub stops on the trip map use the larger station dot.
+
+## V9_09.24.2
+
+A public holiday timetable names that day, not Saturday. The trip map follows the rail and shows how far the trip is.
+
+## V9_09.24.1 — no release notes
+
+SEO landing pages only. No What’s New.
+
+## V9_09.23.1
+
+A weekend board with no Saturday times names that route and offers Plan this trip. A timetable cell shows EXPR when that train does not stop.
+
+Operator notes (fares, map editor, version probe) are in System Health build notes.
+
+## V9_09.22.1 — no release notes
+
+Version label only. What’s New still ends at V9_09.21.1.
+
+## V9_09.21.19 — no release notes
+
+Re-attach nexttrain-edge Worker routes. No What’s New.
+
+## V9_09.21.18 — no release notes
+
+Detach nexttrain-edge; Cache Rules own hashed-asset TTLs. No What’s New.
+
+## V9_09.21.17 — no release notes
+
+Admin i next to a user id opens a quick User sheet. No What’s New.
+
+## V9_09.21.16 — no release notes
+
+Admin user profile lookup, alias-first ids, planner contributor rows, fare default route. No What’s New.
+
+## V9_09.21.15 — no release notes
+
+WC public-holiday copy, admin hold-to-edit, receipt hold, feedback route row, photo preview. No What’s New.
+
+## V9_09.21.14 — no release notes
+
+Pretoria-JHB corridor cold-start planner, trip-plan screenshot, sitemap SW denylist, admin version-chip edit, ResizeObserver ignore. No What’s New.
+
+## V9_09.21.13 — no release notes
+
+Feedback trip-plans presence icon. Alert view counts and their community-worker impression routes are removed. No What’s New.
+
+## V9_09.21.12 — no release notes
+
+Admin Planner Telemetry contributor ids, recent sort default, crash version chips, and Resolve All inside the opened crash log. No What’s New.
+
+## V9_09.21.11 — no release notes
+
+Live share GPS refresh and corridor-rail fallback when a train path cannot be built. No What’s New.
+
+## V9_09.21.10 — no release notes
+
+Dropped the Points and badges What’s New card. forceShow stays false. No commuter notes.
+
+## V9_09.21.9 — no release notes
+
+Tracking card title no longer fights the share cluster. Open card can be dragged and stays put. Live glide/grey window is 15s. No What’s New.
+
+## V9_09.21.8 — no release notes
+
+Live-train pill sits on the painted GOLD line, not a station chord. No What’s New.
+
+## V9_09.21.7 — no release notes
+
+Startup auto-locate waits until the commuter is returning. First-visit Welcome and a minted welcomeSeen on the same load do not open the location sheet. No What’s New.
+
+## V9_09.21.6 — no release notes
+
+Restores the 14 Sep splash: gray 64px train, Starting copy, two frames plus 700ms. No What’s New.
+
+## V9_09.21.5 — no release notes
+
+Scheduled-alert cron no longer depends on opening Service Alerts or a missing GitHub secret. No What’s New.
+
+## V9_09.21.4 — no release notes
+
+Automatic updates only toast after the incoming worker is on disk. Dump-ahead of production stays silent. No What’s New.
+
+## V9_09.21.3 — no release notes
+
+TWA first paint is the OS splash color with no second small logo. Unknown Android stays on the blue cover. No What’s New.
+
+## V9_09.21.2 — no release notes
+
+Alert impression writes were denied on `notice_impressions` (worker service account is scored as a user; `.write` was false). Rules + dwell observer + notice lookup. No What’s New.
+
+## V9_09.21.1
+
+Installed cold start keeps the OS splash color and train logo until dest names paint. The 20.8 hold hid the logo (`display:none`) on a blank `#1d4ed8` sheet, and first paint used hashed canvas `#e8eef4` (white) before `nt-boot-installed`. Starting copy still waits 8s installed / 2s browser. Browser still shows the site immediately.
+
+## V9_09.20.11 — no release notes
+
+Sender motion fusion and receiver handling of fused heading, speed, and motionClass. No What’s New.
+
+## V9_09.20.10 — no release notes
+
+Timetable banner day isolate, community 77 then medal, share-check colours, rail-locked live train. No What’s New.
+
+## V9_09.20.9 — no release notes
+
+Stopped live-share links tell the commuter. Scheduled alerts publish without opening Alerts Refresh. No What’s New.
+
+## V9_09.20.8 — no release notes
+
+JHB Midway gold track refresh and installed-PWA splash hold. No What’s New.
+
+## V9_09.20.7 — no release notes
+
+Tracking Map opens only for authenticated admins, experimental Map pin/grant users, or a live-share link in that browser session. No What’s New.
+
+## V9_09.20.6 — no release notes
+
+Live-share links open the view-only tracking map. Community points sit on named message bubbles. Force-open Alerts and holiday reminders wait until updates and ad injections have settled. No What’s New.
+
+## V9_09.20.5 — no release notes
+
+Loading logo stays until the board dest names are on screen, so the white card does not flash through. Live-train interpolation is 12 seconds. No What’s New.
+
+## V9_09.20.4 — no release notes
+
+PWA and Play TWA update path peeks the published version from several URLs, installs the incoming service worker, then restarts on the same URL so iOS bookmarks keep the pinned route. NUKE is polled every 15 seconds. No What’s New.
+
+## V9_09.20.3 — no release notes
+
+Live trains keep station-approach slowing. Interpolation is capped at 7 seconds; a successful GPS ping cancels the glide. Firebase publish is 4 seconds while testing. After 7 seconds without a ping the glyph goes grey; another rider’s fresh ping takes over. No What’s New.
+
+## V9_09.20.2
+
+Planner trip fare: Yes on the right, No on the left. Single Trip plus Return / Weekly / Monthly rows. Peak weekday clock uses compactTime (no trailing colon on 5:10:00). Service Alerts catalog poster preview is inside the message field. Tracking card title is `{dest} Train {id}`, opens from the green pill, and is draggable. Sitting still no longer paints GPS jitter as 5 km/h; real 5 km/h walking still reports. Live train OG image is a path PNG (`/og/train/…png`) like grid and trip-plan cards.
+
+Commuter What’s New covers the fare sheet only.
+
+## V9_09.20.1 — no release notes
+
+Tracking card keeps last GPS metrics after Pause. Alert full view reuses the feed poster URL. Returning-user startup no longer sticks on a white shell. No What’s New.
+
+## V9_09.19.11 — no release notes
+
+Schedule QA follows the shared admin target region. Alert full view reuses the loaded poster. Earthy modal Close/Got it ink matches Alerts. Classic dark train-sheet fare chip stays readable. Admin NUKE keeps theme pack, light/dark, and holiday reminder seen state. No What’s New.
+
+## V9_09.19.10 — no release notes
+
+GitHub schedule dump replaced with the operator export. SEO route pages and the fallback waterfall read that file. No What’s New.
+
+## V9_09.19.9 — no release notes
+
+Planner trip fare uses painted network-map corridors, not every branch printed on a shared WC sheet. Cape Town to Wellington is about 72 km, not 156 km via Strand and Stellenbosch placeholders. No What’s New.
+
+## V9_09.19.8 — no release notes
+
+Zone distances follow the static network maps and painted rails. Live trains stay on the corridor and open the tracking card. No What’s New.
+
+## V9_09.19.7 — no release notes
+
+Live train share uses a dedicated OG preview and Map landing. Train markers stay on the painted rail and face travel. No What’s New.
+
+## V9_09.19.6 — no release notes
+
+Planner trip fare is always shown. Experimental tripPrice gating is gone. No What’s New.
+
+## V9_09.19.5 — no release notes
+
+Installed-app startup auto-locate retries eagerly. Next Train locate shows the green Found toast. Live-train glide follows rail and stations. No What’s New.
+
+## V9_09.19.4 — no release notes
+
+Service Alerts drill titles, Back no longer stacks hub tiles on compose, and long inbox emails wrap under Options. No What’s New.
+
+## V9_09.19.3 — no release notes
+
+Alert image preview Close stays at the bottom, reuses the already-loaded poster, and pinch-zooms only the image. Trip planner fares show for everyone. Agreeing with the quoted price thanks the commuter without a ticket photo. Planner telemetry Fares no longer appends trip plans. No What’s New.
+
+## V9_09.19.2 — no release notes
+
+West-side SEO notes for Naledi, Randfontein and Lenz, De Wildt connections, off-peak fare lines on route landings. No What’s New.
+
+## V9_09.19.1 — no release notes
+
+SEO route insights, Pretoria to Johannesburg corridor copy, sitemap lastmod, Distance on route constants. No What’s New.
+
+## V9_09.18.15 — no release notes
+
+Homepage and route SERP copy lead with view and download PRASA Metrorail timetables, plus offline. No What’s New.
+
+## V9_09.18.14 — no release notes
+
+Installed-app startup auto-locate, Found station toast on auto-locate, delayed App stuck link, light help page without on-screen IDs. No What’s New.
+
+## V9_09.18.13 — no release notes
+
+Weekday 10:00 Next Train tab screenshots on every SEO route landing. No What’s New.
+
+## V9_09.18.12 — no release notes
+
+Live train share links, timetable-aware headboard, pause-aware map tracking chrome, and a slightly blue planner map button. No What’s New.
+
 ## V9_09.18.11 — Points, badges, notification targeting
 
 Account points take longer. Same-day contributions collapse to one row and expand for detail. Badge tiles fill toward a streak. Community can show the signed-in level. Dev Hub Notifications can target pinned routes, a user id, and a notification type. No FCM, Alerts, or Community chat in What’s New.

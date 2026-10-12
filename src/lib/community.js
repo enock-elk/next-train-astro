@@ -13,6 +13,7 @@
 import { APP_VERSION, COMMUNITY_WORKER_URL, DYNAMIC_BASE_URL, ROUTES } from './config.js';
 import { formatAccountDisplayName } from './display-name.js';
 import { safeStorage, escapeHTML } from './utils.js';
+import { sanitizeCommunityPhotoUrl } from './community-photo.js';
 import { $currentRouteId, $userRegion, $deviceId } from '../store.js';
 import { $account } from './account.js';
 import { isAdminAuthed } from './admin-chrome.js';
@@ -30,6 +31,13 @@ import {
 } from './trust.js';
 import { joinCommunityPresence, leaveCommunityPresence, signalCommunityTyping } from './community-presence.js';
 import { FEATURE_KEYS, fetchFeatures, isFeatureEnabled } from './features.js';
+import {
+    awardCommunityMarks,
+    marksPublicSnapshot,
+    readMarks,
+    renderBubbleMarksHtml,
+    showMarksInCommunity,
+} from './rider-marks.js';
 
 const BODY_MAX = 280;
 /** Blaze cost control — plan: limitToLast(5–10). */
@@ -202,9 +210,10 @@ function communityNameFor(acct) {
 }
 
 function renderAvatarHtml(photoURL) {
-    if (photoURL) {
+    const safePhoto = sanitizeCommunityPhotoUrl(photoURL);
+    if (safePhoto) {
         return `<span class="relative inline-flex w-8 h-8 shrink-0">
-            <img src="${escapeHTML(photoURL)}" alt="" class="w-8 h-8 rounded-full object-cover bg-gray-200 dark:bg-gray-700" loading="lazy" onerror="this.classList.add('hidden');const f=this.parentElement.querySelector('.avatar-fallback');if(f)f.classList.remove('hidden');"/>
+            <img src="${escapeHTML(safePhoto)}" alt="" class="w-8 h-8 rounded-full object-cover bg-gray-200 dark:bg-gray-700" loading="lazy" onerror="this.classList.add('hidden');const f=this.parentElement.querySelector('.avatar-fallback');if(f)f.classList.remove('hidden');"/>
             <span class="avatar-fallback hidden absolute inset-0 w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-base" aria-hidden="true">🙍</span>
         </span>`;
     }
@@ -501,6 +510,9 @@ export async function submitCommunityPost(body, routeId = $currentRouteId.get())
     if (acct.status !== 'signed-in' || !acct.uid) {
         return { ok: false, message: 'Sign in to post in this route’s community.' };
     }
+    if (acct.authProvider === 'password' && !acct.emailVerified) {
+        return { ok: false, message: 'Verify your email to post. Open Account to resend the email.' };
+    }
     if (!routeId) return { ok: false, message: 'Select a route first.' };
     if (!text || text.length < 2) return { ok: false, message: 'Write a short message.' };
     if (text.length > BODY_MAX) return { ok: false, message: `Max ${BODY_MAX} characters.` };
@@ -549,6 +561,7 @@ export async function submitCommunityPost(body, routeId = $currentRouteId.get())
                     hidden: false,
                     replyCount: 0,
                     appVersion: APP_VERSION,
+                    ...(marksPublicSnapshot() ? { marks: marksPublicSnapshot() } : {}),
                     ...replyToPayload,
                 },
             },
@@ -576,6 +589,7 @@ export async function submitCommunityPost(body, routeId = $currentRouteId.get())
         hidden: false,
         replyCount: 0,
         appVersion: APP_VERSION,
+        ...(marksPublicSnapshot() ? { marks: marksPublicSnapshot() } : {}),
         ...replyToPayload,
     };
 
@@ -684,6 +698,9 @@ export async function submitCommunityReply(postId, body, routeId = $currentRoute
     const acct = $account.get();
     if (acct.status !== 'signed-in' || !acct.uid) {
         return { ok: false, message: 'Sign in to reply.' };
+    }
+    if (acct.authProvider === 'password' && !acct.emailVerified) {
+        return { ok: false, message: 'Verify your email to reply. Open Account to resend the email.' };
     }
     if (!routeId || !postId) return { ok: false, message: 'Missing post.' };
     if (!text || text.length < 1) return { ok: false, message: 'Write a reply.' };
@@ -970,15 +987,20 @@ function openReactionSheet(postId, routeId) {
 
     sheet.dataset.postId = postId;
     sheet.dataset.routeId = routeId;
+    sheet.dataset.replyId = '';
     const post = findCachedPost(postId);
     sheet.dataset.uid = post?.uid || '';
     sheet.dataset.email = post?.email || '';
     const actions = sheet.querySelector('#community-reaction-sheet-actions');
     if (actions) {
+        const adminActions = isAdminAuthed()
+            ? `<button type="button" class="community-sheet-lookup col-span-2 py-2.5 rounded-xl text-xs font-bold bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300">Look up rider</button>
+                    <button type="button" class="community-sheet-delete col-span-2 py-2.5 rounded-xl text-xs font-bold bg-red-600 text-white">Delete for everyone</button>`
+            : '';
         actions.innerHTML = `
                     <button type="button" class="community-sheet-reply py-2.5 rounded-xl text-xs font-bold bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-100">Reply</button>
                     <button type="button" class="community-sheet-report py-2.5 rounded-xl text-xs font-bold bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400">Report</button>
-                    ${isAdminAuthed() ? '<button type="button" class="community-sheet-lookup col-span-2 py-2.5 rounded-xl text-xs font-bold bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300">Look up rider</button>' : ''}
+                    ${adminActions}
         `;
     }
     const { myEmoji } = summarizeReactions(postId);
@@ -1021,9 +1043,13 @@ function renderPostCard(post, routeId, { grouped = false } = {}) {
             : `<div class="community-avatar">${renderAvatarHtml(photoURL)}</div>`;
     const bubbleCls = isOwn ? 'community-bubble community-bubble-own' : 'community-bubble community-bubble-other';
     const displayName = isOwn ? 'You' : (post.displayName || 'Passenger');
+    const marksSnap = isOwn
+        ? (showMarksInCommunity() ? marksPublicSnapshot(readMarks()) : null)
+        : (post.marks && Number.isFinite(Number(post.marks.points)) ? post.marks : null);
+    const marksHtml = !grouped && marksSnap ? renderBubbleMarksHtml(marksSnap) : '';
     const nameHtml = grouped
         ? ''
-        : `<div class="community-bubble-name-row truncate" style="color:${isOwn ? 'inherit' : nameColor}">${escapeHTML(displayName)}</div>`;
+        : `<div class="community-bubble-name-row" style="color:${isOwn ? 'inherit' : nameColor}"><span class="community-bubble-name truncate">${escapeHTML(displayName)}</span>${marksHtml}</div>`;
 
     return `
       <div class="community-post-row ${isOwn ? 'justify-end' : 'justify-start gap-2'}${grouped ? ' is-grouped' : ''}" data-post-id="${postId}" data-route="${escapeHTML(routeId)}" data-uid="${uid}">
@@ -1670,12 +1696,13 @@ async function handlePostSubmit() {
     } else {
         showToast('Posted to the route feed', 'success');
     }
-    import('./rider-marks.js').then((m) => {
-        m.awardMark('first_community_post', { key: 'badge:first_community_post' });
-    }).catch(() => {});
-    // Realtime listener will refresh; REST fallback still re-renders
+    if (!result.held && !result.shadowSilenced) awardCommunityMarks({ detail: { routeId } });
+    // Realtime listener will refresh; REST fallback still re-renders.
+    // Own bubbles read live points, so repaint after the award either way.
     if (!postsListenRouteId || postsListenRouteId !== routeId) {
         await renderCommunityFeed(routeId);
+    } else {
+        applyFeedFilter(routeId);
     }
     if (btn) btn.disabled = false;
     paintCommunityQuotaHint();
@@ -1852,6 +1879,43 @@ export function bindCommunityUi() {
             return;
         }
 
+        const sheetDelete = t.closest?.('.community-sheet-delete');
+        if (sheetDelete) {
+            e.preventDefault();
+            if (!isAdminAuthed()) return;
+            const sheet = document.getElementById('community-reaction-sheet');
+            const postId = sheet?.dataset.postId || '';
+            const routeId = sheet?.dataset.routeId || '';
+            const replyId = sheet?.dataset.replyId || '';
+            closeReactionSheet();
+            const ok = typeof window.confirm === 'function'
+                ? window.confirm(replyId ? 'Delete this reply for everyone?' : 'Delete this message for everyone?')
+                : true;
+            if (!ok || !routeId || !postId) return;
+            try {
+                const { ensureAdminLoaded } = await import('./admin-bridge.js');
+                const Admin = await ensureAdminLoaded();
+                if (!Admin?.deletePublishedCommunityMessage) {
+                    showToast('Admin tools unavailable.', 'error');
+                    return;
+                }
+                await Admin.deletePublishedCommunityMessage(routeId, postId, replyId || undefined);
+                if (!replyId) {
+                    cachedFeedPosts = cachedFeedPosts.filter((p) => String(p.postId) !== String(postId));
+                    if (localOverlayByRoute[routeId]) {
+                        localOverlayByRoute[routeId] = localOverlayByRoute[routeId].filter((p) => String(p.postId) !== String(postId));
+                    }
+                    delete cachedReactionsByPost[postId];
+                    applyFeedFilter(routeId);
+                }
+                showToast('Message deleted for everyone.', 'success');
+                triggerHaptic();
+            } catch (err) {
+                showToast(err?.message || 'Could not delete this message.', 'error');
+            }
+            return;
+        }
+
         const sheetLookup = t.closest?.('.community-sheet-lookup');
         if (sheetLookup) {
             e.preventDefault();
@@ -1915,6 +1979,7 @@ export function bindCommunityUi() {
                 showToast(result.message || 'Held for review - it won’t show until approved.', 'info');
                 return;
             }
+            if (!result.shadowSilenced) awardCommunityMarks({ detail: { routeId } });
             showToast('Reply posted', 'success');
             const box = document.querySelector(`.community-replies[data-replies-for="${postId}"]`);
             if (box) {

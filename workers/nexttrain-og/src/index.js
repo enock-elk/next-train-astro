@@ -11,13 +11,29 @@
  * goes to the zone origin and does not re-enter this Worker.
  */
 import catalog from './catalog.json';
-import { isSocialCrawler, parseShareIntent, dayLabel, stationLabel, decodeDay } from './parse.js';
-import { buildRouteOgMeta, buildPlannerOgMeta, renderOgHtml, buildAppDeepLink } from './og-html.js';
+import { isSocialCrawler, parseShareIntent, parseLiveSharePath, parseLiveTrainImagePath, dayLabel, stationLabel, decodeDay } from './parse.js';
+import { buildRouteOgMeta, buildPlannerOgMeta, buildLiveTrainOgMeta, renderOgHtml, buildAppDeepLink } from './og-html.js';
 import { extractGridPreview, loadRegionDb, loadRegionGridOrder } from './schedule.js';
-import { timetablePng, plannerPng, buildTimetableSvg, buildPlannerSvg } from './og-images.js';
+import { timetablePng, plannerPng, liveTrainPng, buildTimetableSvg, buildPlannerSvg, buildLiveTrainSvg } from './og-images.js';
 
 function siteBase(env, requestUrl) {
   return String(env.PUBLIC_SITE || `${requestUrl.protocol}//${requestUrl.host}`).replace(/\/$/, '');
+}
+
+function isOgSharePath(pathname) {
+  if (pathname === '/og/share' || pathname.endsWith('/og/share')) return true;
+  return !!parseLiveSharePath(pathname);
+}
+
+function ogHtmlHeaders() {
+  return {
+    'Content-Type': 'text/html; charset=utf-8',
+    // Crawlers and humans share this URL. Never let CF cache a 302 for WhatsApp
+    // or a timetable stub for ?live= (query-key and UA mixing both bit us).
+    'Cache-Control': 'private, no-store, no-cache, max-age=0',
+    'CDN-Cache-Control': 'no-store',
+    Vary: 'User-Agent',
+  };
 }
 
 function pngResponse(bytes, cacheSeconds = 300) {
@@ -104,19 +120,44 @@ async function handleOgPlan(url, env) {
   }
 }
 
+async function handleOgLive(url) {
+  const pathLive = parseLiveTrainImagePath(url.pathname);
+  const trainId = pathLive?.trainId
+    || url.searchParams.get('train')
+    || url.searchParams.get('live')
+    || 'Train';
+  const dest = stationLabel(pathLive?.dest || url.searchParams.get('to') || '');
+  const wantSvg = url.searchParams.get('format') === 'svg';
+  const opts = { trainId, dest };
+  if (wantSvg) return svgResponse(buildLiveTrainSvg(opts));
+  try {
+    const png = await liveTrainPng(opts);
+    return pngResponse(png);
+  } catch (e) {
+    console.error('Live train PNG failed', e.message || e);
+    try {
+      const png = await liveTrainPng({ trainId: String(trainId || 'Train'), dest: dest || '' });
+      return pngResponse(png);
+    } catch (retryErr) {
+      console.error('Live train PNG retry failed', retryErr.message || retryErr);
+      return new Response('Live train preview unavailable', { status: 502 });
+    }
+  }
+}
+
 async function handleBotShare(url, env, ctx) {
   const intent = parseShareIntent(url);
   if (!intent) return null;
   const site = siteBase(env, url);
 
+  if (intent.kind === 'live') {
+    const meta = buildLiveTrainOgMeta(intent, site);
+    return new Response(renderOgHtml(meta), { headers: ogHtmlHeaders() });
+  }
+
   if (intent.kind === 'planner') {
     const meta = buildPlannerOgMeta(intent, site);
-    return new Response(renderOgHtml(meta), {
-      headers: {
-        'Content-Type': 'text/html; charset=utf-8',
-        'Cache-Control': 'public, max-age=120, s-maxage=300',
-      },
-    });
+    return new Response(renderOgHtml(meta), { headers: ogHtmlHeaders() });
   }
 
   if (intent.kind === 'route') {
@@ -139,12 +180,7 @@ async function handleBotShare(url, env, ctx) {
       }
     }
     const meta = buildRouteOgMeta(route, intent, site, grid);
-    return new Response(renderOgHtml(meta), {
-      headers: {
-        'Content-Type': 'text/html; charset=utf-8',
-        'Cache-Control': 'public, max-age=120, s-maxage=300',
-      },
-    });
+    return new Response(renderOgHtml(meta), { headers: ogHtmlHeaders() });
   }
 
   return null;
@@ -152,6 +188,16 @@ async function handleBotShare(url, env, ctx) {
 
 export default {
   async fetch(request, env, ctx) {
+    try {
+      return await handleFetch(request, env, ctx);
+    } catch (e) {
+      console.error('nexttrain-og crash', e && e.stack || e);
+      return new Response('OG worker error', { status: 500 });
+    }
+  },
+};
+
+async function handleFetch(request, env, ctx) {
     const url = new URL(request.url);
 
     if (request.method === 'OPTIONS') {
@@ -173,14 +219,18 @@ export default {
       if (url.pathname.endsWith('.svg')) url.searchParams.set('format', 'svg');
       return handleOgPlan(url, env);
     }
+    if (url.pathname === '/og/live.png' || url.pathname === '/og/live.svg' || parseLiveTrainImagePath(url.pathname)) {
+      if (url.pathname.endsWith('.svg')) url.searchParams.set('format', 'svg');
+      return handleOgLive(url);
+    }
 
     // Share links: crawlers get OG HTML. Humans (Facebook/Instagram IAB included)
     // get one HTTP 302 to /?rt=… — JS location.replace in IAB is often stolen by
     // Android App Links and opens the PWA at start_url with no query.
-    if (url.pathname === '/og/share') {
+    if (isOgSharePath(url.pathname)) {
       const intent = parseShareIntent(url);
       if (!intent) {
-        return new Response('Missing rt= or plan= share params', { status: 400 });
+        return new Response('Missing rt=, plan=, or live= share params', { status: 400 });
       }
       const uaShare = request.headers.get('user-agent') || '';
       if (!isSocialCrawler(uaShare)) {
@@ -189,10 +239,10 @@ export default {
       }
       const stub = await handleBotShare(url, env, ctx);
       if (stub) {
-        stub.headers.set('X-NextTrain-OG', 'share');
+        stub.headers.set('X-NextTrain-OG', intent.kind === 'live' ? 'live' : 'share');
         return stub;
       }
-      return new Response('Missing rt= or plan= share params', { status: 400 });
+      return new Response('Missing rt=, plan=, or live= share params', { status: 400 });
     }
 
     // Social crawlers on legacy deep-link homepage shares (/?rt= / ?plan=)
@@ -218,5 +268,4 @@ export default {
     }
 
     return passToOrigin(request);
-  },
-};
+}

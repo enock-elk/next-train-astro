@@ -27,6 +27,14 @@ import {
     noticeScopeLabel,
     ALERTS_PAGE_SIZE,
     ALERT_REACTION_KEYS,
+    isNoticePinned,
+    sortAlertsFeed,
+    alertCopyNeedsSeeMore,
+    ALERT_SEE_MORE_WINDOW,
+    alertSeeMoreLimit,
+    clipHtmlToTextLength,
+    buildAlertSeeMoreMarkup,
+    expandAlertSeeMore,
 } from '../src/lib/alerts-feed.js';
 
 const failures = [];
@@ -67,6 +75,13 @@ const now = 1_700_000_000_000;
     }, 'all', now);
     assert(imageOnly.length === 1 && imageOnly[0].id === 'p1', `image-only child is kept: ${imageOnly.map((n) => n.id)}`);
     assert(isNoticeRecord({ imageUrls: ['/images/alerts/a.png'] }), 'imageUrls counts as a notice');
+
+    const pollOnly = parseNoticeBucket({
+        poster: { id: 'poll-only', poll: { active: true, question: 'Keep Saturday trains?' }, postedAt: 1, expiresAt: now + 1 },
+        empty: { id: 'skip' },
+    }, 'all', now);
+    assert(pollOnly.length === 1 && pollOnly[0].id === 'poll-only', `poll-only child is kept: ${pollOnly.map((n) => n.id)}`);
+    assert(isNoticeRecord({ poll: { active: true, question: 'Q' } }), 'poll counts as a notice');
 }
 
 {
@@ -77,6 +92,13 @@ const now = 1_700_000_000_000;
     assert(merged.length === 3, `union keeps all scopes, got ${merged.length}`);
     assert(merged[0].id === 'n1' && merged[2].id === 'g1', 'chronological oldest-first');
     assert(highestSeverity(merged) === 'critical', 'highest severity is critical');
+    const pinnedFeed = sortAlertsFeed([
+        { id: 'old', postedAt: 1 },
+        { id: 'pin', postedAt: 2, pinned: true, pinnedAt: 9 },
+        { id: 'new', postedAt: 8 },
+    ]);
+    assert(pinnedFeed[2].id === 'pin' && pinnedFeed[0].id === 'old' && pinnedFeed[1].id === 'new', `pinned sits at the bottom ${pinnedFeed.map((n) => n.id)}`);
+    assert(isNoticePinned({ pinned: true }) && !isNoticePinned({}), 'pinned flag helper');
 }
 
 {
@@ -155,6 +177,8 @@ const now = 1_700_000_000_000;
     assert(shouldIgnoreAlertLongPress(fake(['[data-alert-reply]', 'button'])), 'reply button is not hold-to-react');
     assert(shouldIgnoreAlertLongPress(fake(['[data-alert-summary]', 'button'])), 'count chip is not hold-to-react');
     assert(shouldIgnoreAlertLongPress(fake(['.nt-poll-vote', 'button'])), 'poll vote is not hold-to-react');
+    assert(shouldIgnoreAlertLongPress(fake(['.nt-poll'])), 'poll results panel is not hold-to-react');
+    assert(shouldIgnoreAlertLongPress(fake(['[data-poll-shell]'])), 'poll shell is not hold-to-react');
     assert(shouldIgnoreAlertLongPress(fake(['a'])), 'links are not hold-to-react');
     assert(shouldIgnoreAlertLongPress(null), 'missing target ignored');
 }
@@ -223,7 +247,9 @@ const now = 1_700_000_000_000;
 {
     const { readFileSync } = await import('node:fs');
     const channel = readFileSync(new URL('../src/components/AlertsChannel.astro', import.meta.url), 'utf8');
-    assert(channel.includes('>Close</button>'), 'header has a labeled Close button');
+    assert(/id="alerts-channel-close"[\s\S]{0,500}M6 18L18 6M6 6l12 12/.test(channel), 'header Close is an X');
+    assert(!/id="alerts-channel-close"[^>]*>\s*Close\s*</.test(channel), 'header Close is not the word Close');
+    assert(channel.includes('>Close</button>'), 'footer Close stays labeled Close');
     assert(channel.includes('id="alerts-channel-wallpaper"'), 'alerts wallpaper sits behind the feed');
     assert(channel.includes('id="alerts-channel-footer-close"'), 'alerts has a bottom Close');
     assert(channel.includes('When Next Train posts a notice for your region or route, it will show up here.'), 'empty-state copy');
@@ -232,6 +258,26 @@ const now = 1_700_000_000_000;
 
     const js = readFileSync(new URL('../src/lib/alerts-channel.js', import.meta.url), 'utf8');
     assert(js.includes('scopedLiveNotices'), 'feed filters to the current route union');
+    assert(js.includes('useNoticeScope'), 'SEO pages can pin a route or region union');
+    assert(js.includes('scopeKeyOverride'), 'pinned scope keeps corridor route buckets');
+    const { useNoticeScope, scopedLiveNotices, clearNoticeScopeOverride } = await import('../src/lib/alerts-channel.js');
+    const keys = useNoticeScope('WC', ['ct-bellv', 'ct-strnd', 'not-a-route']);
+    assert(keys.includes('all') && keys.includes('all_WC') && keys.includes('ct-bellv') && keys.includes('ct-strnd'), `seo scope keys ${keys.join(',')}`);
+    assert(!keys.includes('not-a-route'), 'unknown route ids stay out of the union');
+    const kept = scopedLiveNotices([
+        { id: '1', _sourceKey: 'ct-strnd' },
+        { id: '2', _sourceKey: 'pta-pien' },
+        { id: '3', _sourceKey: 'all_WC' },
+    ]);
+    assert(kept.length === 2 && kept.every((n) => n._sourceKey !== 'pta-pien'), 'override keeps this page only');
+    clearNoticeScopeOverride();
+    const layout = readFileSync(new URL('../src/layouts/ContentLayout.astro', import.meta.url), 'utf8');
+    const header = readFileSync(new URL('../src/components/SeoPageHeader.astro', import.meta.url), 'utf8');
+    const seoAlerts = readFileSync(new URL('../src/components/SeoAlerts.astro', import.meta.url), 'utf8');
+    assert(layout.includes('SeoAlerts') && layout.includes('seoRegion &&'), 'content pages with a region mount the alerts sheet');
+    assert(header.includes('id="notice-bell"'), 'SEO header has the alerts bell');
+    assert(seoAlerts.includes('closeSmoothModal') && seoAlerts.includes('__ntAlertsParkHome'), 'SEO Close still parks via history');
+    assert(!seoAlerts.includes('switchTab'), 'SEO alerts must not rewrite the page into the app shell');
     assert(js.includes('noticeScopeKeys(region, routeId'), 'scoped notices use union keys');
     assert(js.includes('alerts-channel-footer-close'), 'footer Close is bound');
     assert(js.includes('nt-alert-signoff'), 'card has signature class');
@@ -239,6 +285,8 @@ const now = 1_700_000_000_000;
     assert(js.includes('hydrateAlertPosterImages'), 'posters hydrate after feed paint');
     assert(js.includes('img.decode'), 'poster reveal waits on decode when available');
     assert(js.includes("data-alert-ready"), 'poster click waits until the image is ready');
+    assert(js.includes('data-alert-object-url'), 'decoded poster keeps an object URL for full view');
+    assert(js.includes('window.openLightbox(src, lightbox)'), 'feed tap passes the loaded poster into full view');
     assert(!js.includes('setTimeout(resolve, 2500)'), 'poster decode is not raced against a timeout');
     assert(js.includes('fetchpriority="high"'), 'poster img asks for high fetch priority');
     assert(js.includes('watchAlertPosterHydration'), 'poster hydrate survives innerHTML rewrites');
@@ -260,7 +308,12 @@ const now = 1_700_000_000_000;
     assert(js.includes('📰</span>Source:'), 'source label includes the requested newspaper prefix');
     assert(js.includes('nt-alert-action-meta'), 'admin route/views share the roomier Reply row');
     const hub = readFileSync(new URL('../src/lib/hub.js', import.meta.url), 'utf8');
+    assert(js.includes('hydratePollResults(feed)'), 'poll results hydrate after feed paint');
+    assert(js.includes('buildPollShellHtml'), 'feed uses the shared poll shell');
     assert(js.includes('feed.dataset.ntAlertsSig'), 'alerts skip innerHTML rewrite when the feed is unchanged');
+    assert(hub.includes('paintPollShellsAfterVote'), 'a vote paints every poll shell for that notice');
+    assert(hub.includes('toggleAlertPinned'), 'notice modal can pin any live alert');
+    assert(hub.includes('nt-notice-admin'), 'signed-in admin gets pin and poll-count on the notice modal');
     assert(js.includes('ntPosterRevealed'), 'decoded posters skip the blob URL swap');
     assert(hub.includes('inboxMediaFromHtml'), 'commuter inbox reuses alerts image hoist');
     assert(hub.includes('hydrateAlertPosterImages(host)'), 'commuter inbox hydrates posters');
@@ -269,20 +322,45 @@ const now = 1_700_000_000_000;
     assert(hub.includes('paintAlertsForCurrentRoute'), 'open alerts drop the previous route immediately');
     assert(hub.includes('noticesPromise'), 'notice fetch does not wait on inbox');
     const ui = readFileSync(new URL('../src/lib/ui.js', import.meta.url), 'utf8');
+    assert(hub.includes('whenSettledForAutoNotices'), 'force-open Alerts waits until the phone has settled');
+    assert(ui.includes('isSettledForAutoNotices'), 'auto-open home notices require settled updates and ads');
+    const stability = readFileSync(new URL('../src/lib/session-stability.js', import.meta.url), 'utf8');
+    assert(stability.includes('isAdInjectionPending'), 'auto-open reads in-flight ad inject without changing ads');
+    assert(stability.includes('isForcedUpdatePending'), 'auto-open waits for a pending force-update');
+    assert(stability.includes('nt-ads-entering'), 'ad-inject wait uses the existing entering class');
+    assert(!stability.includes('clever-ads.js'), 'session-stability does not import ad injection code');
     assert(ui.includes("modalId === 'alerts-channel'"), 'alerts Close fades before popping history');
+    assert(ui.includes('cancelPendingGridOpenFromUi'), 'leaving the board cancels a pending timetable open');
+    assert(ui.includes('resolveLightboxDisplaySrc'), 'alert full view reuses the feed poster bitmap');
+    assert(ui.includes('poster.currentSrc'), 'full view prefers the already-decoded feed currentSrc');
+    assert(!ui.includes('toDataURL'), 'full view does not re-encode the poster on the main thread');
+    assert(!ui.includes('snapshotDecodedImage'), 'full view does not snapshot via canvas');
+    assert(ui.includes('alert-image-lightbox-stage'), 'alert full view pinch is isolated to the image stage');
     assert(!/class="[^"]*nt-alert-reply[^"]*\bw-full\b/.test(js), 'Reply is not a full-width button');
     assert(!/class="[^"]*\bw-full\b[^"]*nt-alert-reply/.test(js), 'Reply does not pick up w-full from a twin CTA');
 
     const appearance = readFileSync(new URL('../src/styles/appearance.css', import.meta.url), 'utf8');
+    assert(/\.nt-poll\s*\{[\s\S]*?background:\s*color-mix/.test(appearance), 'poll well uses pack tokens');
+    assert(appearance.includes('.nt-poll-row.is-mine'), 'your-vote row is a padded highlight, not a ring');
     assert(/#alerts-channel-footer-close\s*\{[\s\S]*?background-color:\s*var\(--nt-primary\)/.test(appearance), 'footer Close stays the filled --nt-primary CTA');
+    assert(/#alerts-channel header\s*\{[\s\S]*?background-color:\s*var\(--nt-chrome-header\)/.test(appearance), 'alerts header uses the chrome colour, not the card surface');
+    assert(/#close-timetable-footer-btn,[\s\S]*?#fare-modal-close-btn\s*\{[\s\S]*?color:\s*var\(--nt-primary-fg\)/.test(appearance), 'timetable, tips, and fare Close match Alerts CTA ink');
+    assert(/#planner-train-sheet-fare\s*\{[\s\S]*?background-color:\s*#ffffff/.test(appearance), 'train-sheet fare chip stays white on the blue header');
+    assert(/\.nt-planner-map-btn\s*\{[\s\S]*?color:\s*var\(--nt-text\)/.test(appearance), 'View trip plan on map uses body ink');
     assert(/\.nt-alert-reply\s*\{[\s\S]*?background-color:\s*var\(--nt-primary\)/.test(appearance), 'Reply uses the filled --nt-primary CTA');
     assert(/\.nt-alert-reply\s*\{[\s\S]*?color:\s*var\(--nt-primary-fg\)/.test(appearance), 'Reply uses white primary text');
     assert(js.includes('nt-alert-source'), 'source citation uses the quiet source class');
     assert(!js.includes('nt-alert-source mt-3 text-[11px] font-semibold'), 'source dropped the chip-sized type');
-    assert(js.includes('0 views'), 'admin impression placeholder is 0 views');
+    assert(!js.includes('0 views'), 'alert cards do not show a views counter');
+    assert(!js.includes('/alerts/impression'), 'Alerts overlay does not POST impressions to the worker');
     assert(js.includes('formatAppTime'), 'alert stamps are time-only');
     assert(js.includes('data-alert-date-chip'), 'alerts feed inserts date chips');
     assert(js.includes('data-alert-delete'), 'admin long-press can delete for everyone');
+    assert(js.includes('data-alert-pin-toggle'), 'admin long-press can pin any alert');
+    assert(js.includes('nt-alert-admin-menu'), 'admin alert actions use a menu');
+    assert(js.includes('Pin to bottom of feed'), 'pin control is labeled for any posted alert');
+    assert(js.includes('Show raw counts'), 'admin can switch poll rows to raw counts');
+    assert(!/admin && notice\?\.poll\?\.active[\s\S]{0,80}data-alert-pin-toggle/.test(js), 'pin is not limited to poll posts');
     assert(js.includes('isAdminAuthed() ? noticeScopeLabel'), 'region/scope is admin-only');
     assert(!js.includes('Posted ${'), 'Posted prefix removed from alert stamps');
 
@@ -292,6 +370,10 @@ const now = 1_700_000_000_000;
     const gridShare = readFileSync(new URL('../src/lib/timetable-grid.js', import.meta.url), 'utf8');
     assert(!gridShare.includes('Check out the weekday'), 'grid share has no caption');
     assert(gridShare.includes('{ url: shareUrl }'), 'grid share is URL-only');
+    assert(gridShare.includes('cancelPendingGridOpen'), 'stale timetable opens cancel when the commuter leaves the board');
+    assert(gridShare.includes('shouldHonorGridOpenIntent'), 'pending timetable open checks the live board context');
+    assert(gridShare.includes('gridViewEventOpen') && gridShare.includes('markFullGridClosed'), 'view_full_grid is once per open');
+    assert(gridShare.includes('isSeoAppHandoff'), 'SEO Open links skip deep_link_open');
 
     const plannerShare = readFileSync(new URL('../src/lib/planner-ui.js', import.meta.url), 'utf8');
     assert(!plannerShare.includes('Trip Plan:'), 'planner header share has no Trip Plan caption');
@@ -317,6 +399,205 @@ const now = 1_700_000_000_000;
     assert(rules.notices_meta?.['.read'] === true, 'notices_meta public read');
     const emojiWrite = rules.notices?.$target?.$noticeId?.reactions?.$emoji?.['.write'] || '';
     assert(emojiWrite.includes('wow') && emojiWrite.includes('sad') && emojiWrite.includes('like'), `notice reaction write ${emojiWrite}`);
+    const pollVoteWrite = String(rules.polls?.$pollId?.$voteId?.['.write'] || '');
+    assert(pollVoteWrite.includes('$voteId === auth.uid'), `poll votes are keyed to uid ${pollVoteWrite}`);
+    assert(pollVoteWrite.includes("child('_meta')") && pollVoteWrite.includes('closesAt'), 'closed polls reject new votes');
+    assert(rules.polls?.$pollId?._meta, 'polls/{id}/_meta is a dedicated admin node');
+}
+
+{
+    const {
+        buildPollShellHtml,
+        buildPollResultsHtml,
+        tallyPollVotes,
+        isPollOpen,
+        withPollTiming,
+        pollChoicesNeedStack,
+    } = await import('../src/lib/alert-poll.js');
+    const tallies = tallyPollVotes({
+        a: { optionKey: 'A' },
+        b: { optionKey: 'B' },
+        c: { optionKey: 'A' },
+        multi: { optionKey: 'A', optionKeys: 'A,C' },
+        skip: 'nope',
+        _meta: { closesAt: 9 },
+    });
+    assert(tallies.A === 3 && tallies.B === 1 && tallies.C === 1 && tallies.total === 5, `tally ${JSON.stringify(tallies)}`);
+
+    const bars = buildPollResultsHtml({
+        poll: { question: 'Keep Saturday trains?', optionA: 'Yes', optionB: 'No', optionC: 'Not sure' },
+        counts: { A: 2, B: 1, C: 1, total: 4 },
+        votedOption: 'A',
+        includeQuestion: true,
+    });
+    assert(bars.includes('Keep Saturday trains?') && bars.includes('Your vote') && bars.includes('50%'), `results html ${bars}`);
+    assert(bars.includes('is-mine') && bars.includes('ACTIVE POLL') && bars.includes('NEXT TRAIN'), 'voted row is marked with live poll label');
+    assert(bars.indexOf('nt-poll-foot') < bars.indexOf('nt-poll-q'), 'live label sits above the results question');
+    assert(!bars.includes('Live percentages'), 'old Live percentages footer is gone');
+    assert(!bars.includes('(2)') && !bars.includes('(1)'), 'default results omit raw counts');
+
+    const rawBars = buildPollResultsHtml({
+        poll: { question: 'Keep Saturday trains?', optionA: 'Yes', optionB: 'No', showRawCounts: true },
+        counts: { A: 2, B: 1, total: 3 },
+        votedOption: 'A',
+        includeQuestion: false,
+    });
+    assert(rawBars.includes('67% (2)') && rawBars.includes('33% (1)') && rawBars.includes('67%'), `raw counts sit in brackets next to percentages ${rawBars}`);
+
+    const closedLabel = buildPollResultsHtml({
+        poll: { question: 'Q', optionA: 'Yes', optionB: 'No', closesAt: 1 },
+        counts: { A: 1, B: 0, total: 1 },
+        votedOption: 'A',
+        includeQuestion: false,
+    });
+    assert(closedLabel.includes('INACTIVE POLL') && closedLabel.includes('is-off'), `closed results use inactive label ${closedLabel}`);
+
+    const notice = {
+        id: 'poll-1',
+        severity: 'info',
+        poll: {
+            active: true,
+            showResults: true,
+            question: 'Keep Saturday trains?',
+            optionA: 'Yes',
+            optionB: 'No',
+        },
+    };
+    const unvoted = buildPollShellHtml(notice, { mode: 'preview' });
+    assert(unvoted.includes('nt-poll-vote') && !unvoted.includes('data-poll-hydrate="1"'), 'results stay hidden until a vote');
+    assert(unvoted.includes('Keep Saturday trains?') && unvoted.includes('Yes'), 'unvoted poll keeps the question and options');
+    assert(unvoted.includes('ACTIVE POLL') && unvoted.includes('NEXT TRAIN'), 'unvoted poll still shows the live label');
+    assert(unvoted.indexOf('nt-poll-foot') < unvoted.indexOf('nt-poll-q'), 'live label sits above the poll question');
+    assert(unvoted.includes('View Poll Results') && unvoted.includes('data-poll-view-results'), 'unvoted poll tempts with View Poll Results');
+    assert(!unvoted.includes('Thanks for voting'), 'showResults does not thank before a vote');
+    assert(!unvoted.includes('data-poll-submit'), 'single-answer polls do not show Submit vote');
+
+    const multiShell = buildPollShellHtml({
+        ...notice,
+        poll: { ...notice.poll, allowMultiple: true, optionC: 'Maybe' },
+    }, { mode: 'preview' });
+    assert(multiShell.includes('data-poll-multi="1"') && multiShell.includes('data-poll-submit'), 'multi-answer polls show Submit vote');
+
+    const longOpt = {
+        active: true,
+        showResults: true,
+        question: 'Q',
+        optionA: 'Raise monthly fares only on Zone 4 corridors',
+        optionB: 'No',
+    };
+    assert(pollChoicesNeedStack(longOpt) === true, 'long option text opts into stacked choices');
+    const longShell = buildPollShellHtml({ id: 'poll-long', poll: longOpt }, { mode: 'preview' });
+    assert(longShell.includes('nt-poll-choices--stack'), 'long answers render in a stacked column');
+
+    const hidden = buildPollShellHtml({
+        ...notice,
+        poll: { ...notice.poll, showResults: false },
+    }, { mode: 'preview' });
+    assert(hidden.includes('nt-poll-vote') && !hidden.includes('data-poll-hydrate'), 'hidden results keep vote buttons only');
+
+    const closedShell = buildPollShellHtml({
+        ...notice,
+        poll: { ...notice.poll, closesAt: 1 },
+    }, { mode: 'preview' });
+    assert(closedShell.includes('data-poll-open="0"') && closedShell.includes('INACTIVE POLL'), 'closed poll is inactive without flipping poll.active');
+    assert(closedShell.includes('data-poll-hydrate="1"') && closedShell.includes('data-poll-closed="1"'), 'closed poll opens results without a vote');
+    assert(!closedShell.includes('View Poll Results') && !closedShell.includes('nt-poll-vote'), 'closed poll does not ask for a vote');
+
+    assert(isPollOpen(withPollTiming({ active: true }, { expiresAt: now - 1 }), now) === false, 'missing closesAt inherits alert expiry');
+    assert(isPollOpen(withPollTiming({ active: true }, {}), now) === true, 'no close and no alert expiry stays open');
+    assert(isPollOpen(withPollTiming({ active: true, closesAt: now + 1 }, { expiresAt: now - 1 }), now) === true, 'dedicated poll close can outlive nothing once set');
+
+    const { safeStorage } = await import('../src/lib/utils.js');
+    safeStorage.setItem('poll_voted_poll-1', 'A');
+    const votedShow = buildPollShellHtml(notice, { mode: 'live' });
+    assert(votedShow.includes('data-poll-hydrate="1"') && votedShow.includes('Your vote'), 'after voting with showResults, the shell keeps a results well');
+    assert(!votedShow.includes('nt-poll-vote'), 'after voting with showResults, vote buttons are gone');
+    const votedHide = buildPollShellHtml({
+        ...notice,
+        poll: { ...notice.poll, showResults: false },
+    }, { mode: 'live' });
+    assert(votedHide.includes('Thanks for voting') && !votedHide.includes('data-poll-hydrate'), 'hidden results still thank the voter');
+
+    const { readFileSync } = await import('node:fs');
+    const hubJs = readFileSync(new URL('../src/lib/hub.js', import.meta.url), 'utf8');
+    assert(hubJs.includes("method: 'PUT'"), 'votes PUT to polls/{id}/{uid}');
+    assert(hubJs.includes('Vote first to see the results.'), 'View Poll Results asks for a vote first');
+    assert(hubJs.includes('shakePollVoteButtons'), 'View Poll Results shakes the answer buttons');
+    assert(hubJs.includes('This poll is closed.'), 'closed polls tell the commuter votes are off');
+    assert(hubJs.includes('ensureAnonymousAuthToken') && hubJs.includes('waitForAuthUser'), 'votes wait for a saved sign-in');
+    assert(hubJs.includes('firebaseGetIdToken(user, false)'), 'votes use the saved token');
+    assert(hubJs.includes('Could not record your vote. Check your connection and try again.'), 'a dropped vote names the connection');
+    assert(!hubJs.includes('Firebase: Error'), 'reply errors do not surface the raw Firebase string');
+    assert(alertCopyNeedsSeeMore(`${'word '.repeat(200)}`) === true, 'a long post needs See more');
+    assert(alertCopyNeedsSeeMore('Short advisory.') === false, 'a short post stays open');
+    assert(ALERT_SEE_MORE_WINDOW === 764, 'See more uses the 764 character window');
+    assert(alertSeeMoreLimit(1) === 764 && alertSeeMoreLimit(2) === 1528 && alertSeeMoreLimit(3) === 2292, 'each See more reveals another window of the same size');
+    const phrase = 'increase. Students, unemployed people a';
+    const head = 'a'.repeat(ALERT_SEE_MORE_WINDOW - phrase.length);
+    const sample = `${head}${phrase} and the rest of the notice keeps going.`;
+    const clipped = clipHtmlToTextLength(sample, ALERT_SEE_MORE_WINDOW);
+    assert(clipped === `${head}${phrase}…`, 'the first window ends on the sample phrase');
+    const rich = clipHtmlToTextLength('hello <b>world</b> and more', 11);
+    const richPlain = rich.replace(/<[^>]+>/g, ' ').replace(/&nbsp;/gi, ' ').replace(/\s+/g, ' ').trim();
+    assert(rich.includes('<b>') && rich.includes('</b>') && richPlain === 'hello world…', `HTML clip keeps tags and stops on plain length (${richPlain})`);
+    const markup = buildAlertSeeMoreMarkup(`<p>${sample}</p>`);
+    assert(markup.includes('See more...') && markup.includes('data-see-more-step="1"') && markup.includes('data-alert-full'), 'See more markup stores the full post');
+    assert(!markup.includes('is-collapsed'), 'See more is a character window, not a line clamp');
+    const seeMoreBody = (text, step = 1) => {
+        const body = {
+            html: '',
+            step: String(step),
+            collapsed: false,
+            classList: {
+                add() { body.collapsed = true; },
+                remove() { body.collapsed = false; },
+            },
+            getAttribute(name) { return name === 'data-see-more-step' ? body.step : null; },
+            setAttribute(name, value) { if (name === 'data-see-more-step') body.step = String(value); },
+            removeAttribute(name) { if (name === 'data-see-more-step') body.step = ''; },
+            style: {},
+        };
+        Object.defineProperty(body, 'innerHTML', {
+            get() { return body.html; },
+            set(value) { body.html = value; },
+        });
+        const template = {
+            innerHTML: text,
+            removed: false,
+            remove() { template.removed = true; },
+        };
+        const copy = {
+            querySelector(sel) {
+                const q = String(sel);
+                if (q.includes('template')) return template;
+                return body;
+            },
+        };
+        const button = {
+            removed: false,
+            remove() { button.removed = true; },
+            closest: () => copy,
+        };
+        return { body, button, template };
+    };
+    const shortStep = seeMoreBody('x'.repeat(900), 1);
+    expandAlertSeeMore(shortStep.button);
+    assert(shortStep.button.removed && shortStep.template.removed && shortStep.body.html === 'x'.repeat(900), 'a post inside the next window opens fully');
+    const longStep = seeMoreBody('x'.repeat(2000), 1);
+    expandAlertSeeMore(longStep.button);
+    assert(!longStep.button.removed && longStep.body.step === '2' && longStep.body.html.endsWith('…') && longStep.body.html.replace(/…$/, '').length === 1528, 'a longer post keeps See more after one more window');
+    expandAlertSeeMore(longStep.button);
+    assert(longStep.button.removed && longStep.body.html === 'x'.repeat(2000), 'the next tap opens the rest once it fits');
+    const channelJs = readFileSync(new URL('../src/lib/alerts-channel.js', import.meta.url), 'utf8');
+    const feedJs = readFileSync(new URL('../src/lib/alerts-feed.js', import.meta.url), 'utf8');
+    assert(feedJs.includes('See more...'), 'long posts offer See more');
+    assert(channelJs.includes('buildAlertSeeMoreMarkup') && channelJs.includes('expandAlertSeeMore'), 'the feed steps See more');
+    assert(hubJs.includes('buildAlertSeeMoreMarkup') && hubJs.includes('expandAlertSeeMore'), 'the notice modal steps See more');
+    assert(channelJs.includes('alignAlertCardTop') && channelJs.includes('focusTop'), 'force open puts the alert top in view');
+    assert(channelJs.includes('nt-alert-force-flash'), 'force open highlight is a brief flash');
+    assert(hubJs.includes('focusTop: true'), 'auto open asks for the top of the alert');
+    const pollJs = readFileSync(new URL('../src/lib/alert-poll.js', import.meta.url), 'utf8');
+    assert(pollJs.includes("data-poll-closed") && pollJs.includes('if (!voted && !closed) return'), 'closed results load without a local vote');
 }
 
 if (failures.length) {

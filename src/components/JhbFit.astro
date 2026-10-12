@@ -1,0 +1,20 @@
+---
+/**
+ * Shows Johannesburg in place of JHB when the line is wide enough.
+ * The short form is the first paint so the word never wraps.
+ */
+const { text = '', inline = false } = Astro.props;
+const short = String(text);
+const long = short.replace(/\bJHB\b/g, 'Johannesburg');
+const expands = long !== short;
+---
+{expands ? (
+  <span
+    class:list={[
+      'nt-jhb-fit max-w-full whitespace-nowrap overflow-hidden',
+      inline ? 'inline-block align-bottom' : 'block',
+    ]}
+    data-jhb-short={short}
+    data-jhb-long={long}
+  >{short}</span>
+) : short}

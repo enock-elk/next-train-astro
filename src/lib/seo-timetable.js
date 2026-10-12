@@ -7,8 +7,16 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { FARE_CONFIG, ROUTES } from './config.js';
 import { getGridOrderManifest, orderGridTrainIds } from './grid-order.js';
-import { isRealTime, timeToSeconds, flattenPublicHolidays } from './utils.js';
-import { gridStationLabel, stationLabel } from './seo-routes.js';
+import { isRealTime, isExpressSkip, isVariantStationName, timeToSeconds, flattenPublicHolidays } from './utils.js';
+import { displayRouteName, gridStationLabel, stationLabel, wcRoutesWithHolidaySheets } from './seo-routes.js';
+import {
+  extractStationChain,
+  measureStationChain,
+  primaryDistanceKm,
+  bakedDestToDestKm,
+  corridorNameList,
+  mapCorridorsFromFeatures,
+} from './zone-distance-audit.js';
 
 const IGNORE_KEYS = new Set(['STATION', 'COORDINATES', 'KM_MARK', 'row_index']);
 const REGION_NESTS = ['gauteng', 'westerncape', 'kzn', 'easterncape'];
@@ -94,6 +102,7 @@ function isMetaStation(name) {
     if (!s) return true;
     if (/^Last Updated/i.test(s)) return true;
     if (s.toUpperCase() === 'STATION') return true;
+    if (isVariantStationName(s)) return true;
     return false;
 }
 
@@ -197,7 +206,7 @@ function departuresFromRow(row, trainIds) {
  * @param {string} sheetKey
  * @param {string} [originName]  Terminus we depart from (label, e.g. "Pretoria")
  * @param {{ destName?: string }} [options]
- * First/last prefer the destination row (trains that join along the line still count).
+ * First/last are clocks on the origin row (the station named in "From … towards").
  * @returns {{
  *   sheetKey: string,
  *   stations: string[],
@@ -229,7 +238,7 @@ export function extractSeoGrid(db, sheetKey, originName, options = {}) {
         const name = stationNameFromRow(row);
         if (!name) continue;
         stations.push(name);
-        cells.push(trainIds.map((id) => formatClock(row[id]) || '-'));
+        cells.push(trainIds.map((id) => (isExpressSkip(row[id]) ? 'EXPR' : (formatClock(row[id]) || '-'))));
         keptRows.push(row);
     }
     if (!stations.length) return null;
@@ -240,9 +249,9 @@ export function extractSeoGrid(db, sheetKey, originName, options = {}) {
         || keptRows.filter((r) => rowHasClockInColumns(r, trainIds)).at(-1)
         || null;
     const destStation = destRow ? stationNameFromRow(destRow) : stations[stations.length - 1];
-    const destClocks = destRow ? firstLastFromRow(destRow, trainIds) : { first: null, last: null };
-    const { first, last } = destClocks.first
-        ? destClocks
+    const originClocks = originRow ? firstLastFromRow(originRow, trainIds) : { first: null, last: null };
+    const { first, last } = originClocks.first
+        ? originClocks
         : firstLastFromTrainsFirstClock(keptRows, trainIds);
     return {
         sheetKey,
@@ -300,6 +309,50 @@ export function buildRouteSeoTimetable(route) {
         hasWeekday: !!(weekdayA || weekdayB),
         hasSaturday: !!(saturdayA || saturdayB),
     };
+}
+
+/**
+ * Western Cape public-holiday grids that actually contain times.
+ * Sheet keys with an empty placeholder are omitted. Calendar days stay elsewhere.
+ */
+export function buildWcPublicHolidayTimetables() {
+    const db = loadScheduleDump();
+    const exportedOrders = loadGridOrderDump();
+    const out = [];
+    for (const { seed, route } of wcRoutesWithHolidaySheets()) {
+        const origin = stationLabel(route.destA);
+        const dest = stationLabel(route.destB);
+        const orderOptions = {
+            region: route?.region,
+            runtimeConfig: exportedOrders?.[route?.region] || exportedOrders?.config?.grid_order?.[route?.region],
+        };
+        const labelGrid = (grid, fromName, toward) => {
+            if (!grid) return null;
+            return {
+                ...grid,
+                heading: directionGridHeading(fromName, toward),
+            };
+        };
+        const towardA = labelGrid(
+            extractSeoGrid(db, route.sheetKeys?.pub_to_a, dest, { ...orderOptions, destName: origin }),
+            dest,
+            origin
+        );
+        const towardB = labelGrid(
+            extractSeoGrid(db, route.sheetKeys?.pub_to_b, origin, { ...orderOptions, destName: dest }),
+            origin,
+            dest
+        );
+        if (!towardA && !towardB) continue;
+        out.push({
+            id: route.id,
+            slug: seed.slug,
+            name: displayRouteName(route),
+            a: towardA,
+            b: towardB,
+        });
+    }
+    return out;
 }
 
 function faqAnswer(text) {
@@ -458,7 +511,7 @@ export function bothDirectionTitle(origin, dest) {
 }
 
 export function routeDocumentTitle(origin, dest) {
-    return `${bidirectionalTitle(origin, dest)} | Metrorail Next Train`;
+    return `${origin} to ${dest} ${SEO_SCHEDULE_YEAR} Metrorail Train Times | Next Train`;
 }
 
 export function routeMetaDescription(origin, dest, province, opts = {}) {
@@ -473,7 +526,7 @@ export function routeMetaDescription(origin, dest, province, opts = {}) {
     else if (opts.hasSaturday === false) satBit = ' No Sunday service.';
     const nearby = opts.nearby ? ` ${String(opts.nearby).trim()}` : '';
     const provinceBit = province ? ` (${province})` : '';
-    return `Updated ${pair} Metrorail (PRASA) train schedule${provinceBit}.${trainBit}${fareBit} Next Train shows the next train, timetable, ticket prices, and trip planner.${satBit}${nearby}`;
+    return `View and download the ${pair} Metrorail (PRASA) train schedule${provinceBit}. Updated ${SEO_SCHEDULE_YEAR} timetable.${trainBit}${fareBit} Works offline in Next Train, with next train, ticket prices, and trip planner.${satBit}${nearby}`;
 }
 
 function getDumpValue(db, key) {
@@ -545,8 +598,10 @@ export function firstLastSummaryLine(grid) {
     if (grid.first) bits.push(`first ${grid.first}`);
     if (grid.last) bits.push(`last ${grid.last}`);
     if (!bits.length) return null;
-    const toward = grid.destName || String(grid.heading || '').replace(/^From .+ towards\s+/i, '').replace(/^Showing trains to\s+/i, '');
-    return `${grid.heading}: ${bits.join(', ')} at ${toward}`;
+    const at = grid.originStation
+        || String(grid.heading || '').replace(/^From\s+/i, '').replace(/\s+towards\s+.+$/i, '')
+        || '';
+    return `${grid.heading}: ${bits.join(', ')} at ${at}`;
 }
 
 /** Ordered stop names for one corridor (weekday B, else weekday A). */
@@ -580,6 +635,8 @@ export function buildRouteGridAppPath(routeId, dir = 'A', day = 'weekday') {
     params.set('d', day === 'saturday' ? 'sa' : 'wd');
     const region = ROUTES[routeId]?.region;
     if (region) params.set('r', region);
+    // SEO → app handoff. Must not count as deep_link_open.
+    params.set('src', 'seo');
     return `/?${params.toString()}`;
 }
 
@@ -589,5 +646,88 @@ export function buildRouteBoardAppPath(routeId) {
     params.set('rt', routeId || '');
     const region = ROUTES[routeId]?.region;
     if (region) params.set('r', region);
+    // SEO → app handoff. Must not count as deep_link_open.
+    params.set('src', 'seo');
     return `/?${params.toString()}`;
+}
+
+const DISTANCE_SHEET_ORDER = ['weekday_to_b', 'weekday_to_a', 'saturday_to_b', 'saturday_to_a'];
+const TRACK_FILE = {
+    GP: 'rail-tracks-GP.geojson',
+    WC: 'rail-tracks-WC.geojson',
+    KZN: 'rail-tracks-KZN.geojson',
+    EC: 'rail-tracks-EC.geojson',
+};
+const bakedCache = new Map();
+
+function loadBakedFeature(route) {
+    const region = String(route?.region || '').toUpperCase();
+    const file = TRACK_FILE[region];
+    if (!file) return null;
+    if (!bakedCache.has(region)) {
+        const here = dirname(fileURLToPath(import.meta.url));
+        const candidates = [
+            join(process.cwd(), 'public/tracks', file),
+            join(here, '../../public/tracks', file),
+        ];
+        const path = candidates.find((p) => existsSync(p));
+        if (!path) {
+            bakedCache.set(region, null);
+        } else {
+            try {
+                bakedCache.set(region, JSON.parse(readFileSync(path, 'utf8')));
+            } catch {
+                bakedCache.set(region, null);
+            }
+        }
+    }
+    const fc = bakedCache.get(region);
+    return (fc?.features || []).find((f) => f?.properties?.routeId === route?.id) || null;
+}
+
+/**
+ * destA→destB km: painted rail when present, else timed published stops.
+ * Same primary figure as the zone-distance audit.
+ */
+export function seoRouteDistanceKm(route, dump = loadScheduleDump()) {
+    const keys = route?.sheetKeys || {};
+    const dayDirs = [
+        ...DISTANCE_SHEET_ORDER.filter((k) => keys[k]),
+        ...Object.keys(keys).filter((k) => !DISTANCE_SHEET_ORDER.includes(k)),
+    ];
+    for (const dayDir of dayDirs) {
+        const sheet = getSheet(dump, keys[dayDir]);
+        if (!sheet) continue;
+        const rows = Array.isArray(sheet) ? sheet : sheet.rows;
+        if (!rows?.length) continue;
+        const baked = loadBakedFeature(route);
+        const regionFc = bakedCache.get(String(route?.region || '').toUpperCase());
+        const chain = extractStationChain({
+            rows,
+            stationColumnName: 'STATION',
+        }, {
+            destA: route.destA,
+            destB: route.destB,
+            mapCorridor: corridorNameList(baked).length >= 2 ? corridorNameList(baked) : undefined,
+            mapCorridors: mapCorridorsFromFeatures(regionFc?.features || []),
+            bakedFeature: baked,
+            bakedFeatures: regionFc?.features || [],
+        });
+        const measure = measureStationChain(chain);
+        const ends = chain.filter((s) => s.lat != null && s.lon != null);
+        if (baked && ends.length >= 2) {
+            measure.bakedKm = bakedDestToDestKm(baked, ends[0], ends[ends.length - 1]);
+        }
+        const km = primaryDistanceKm(measure);
+        if (km != null && Number.isFinite(km) && km > 0) {
+            return Math.round(km * 10) / 10;
+        }
+    }
+    return null;
+}
+
+/** Constants-row label. Null when the dump has no measurable chain. */
+export function seoRouteDistanceLabel(km) {
+    if (km == null || !Number.isFinite(km) || km <= 0) return null;
+    return `${km.toFixed(1)} km along published stops`;
 }

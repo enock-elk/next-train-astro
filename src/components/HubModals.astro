@@ -206,7 +206,7 @@ import { withBase } from '../lib/config.js';
         </button>
     </div>
     <div class="w-full max-w-md px-6 pb-12 flex flex-col items-center text-center">
-        <img src={withBase('icons/loading-logo.png')} class="w-20 h-20 mb-4 rounded-full" alt="Next Train Logo" onerror="this.style.display='none'">
+        <img src={withBase('icons/loading-logo-splash.webp')} class="w-20 h-20 mb-4 rounded-full" alt="Next Train Logo" width="80" height="80" onerror="this.style.display='none'">
         <h2 id="about-app-title" class="text-3xl font-black text-gray-900 dark:text-white mb-2 select-none cursor-pointer">Next Train</h2>
         <div class="inline-flex items-center px-3 py-1 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-100 text-xs font-bold uppercase tracking-wider mb-6 border border-gray-300 dark:border-gray-600">Unofficial & Independent</div>
         <div class="text-center space-y-4 text-sm text-gray-600 dark:text-gray-300 leading-relaxed mb-8">
@@ -301,81 +301,58 @@ import { withBase } from '../lib/config.js';
 
             <!-- Signed-in panel -->
             <div id="account-signed-in" class="hidden space-y-5">
+                <p class="px-1 text-[12px] font-normal uppercase tracking-wide text-gray-500 dark:text-gray-500">Profile</p>
                 <div class="rounded-[12px] overflow-hidden bg-white dark:bg-[#1c1c1e]">
-                    <button type="button" id="account-profile-toggle" class="w-full flex items-center gap-3.5 px-4 py-3.5 text-left focus:outline-none active:bg-black/[0.03] dark:active:bg-white/[0.04]" aria-expanded="false" aria-controls="account-profile-panel">
+                    <div class="flex items-center gap-3.5 px-4 pt-4 pb-3.5">
                         <div class="w-16 h-16 rounded-full bg-[#e5e5ea] dark:bg-[#3a3a3c] flex items-center justify-center text-[22px] font-semibold text-gray-600 dark:text-gray-300 shrink-0 overflow-hidden ring-1 ring-black/5 dark:ring-white/10">
-                            <img id="account-modal-avatar-img" class="hidden w-full h-full object-cover" alt="">
+                            <img id="account-modal-avatar-img" class="hidden w-full h-full object-cover" alt="" referrerpolicy="no-referrer">
                             <span id="account-modal-avatar-letter" class="select-none"></span>
                         </div>
                         <div class="min-w-0 flex-1">
-                            <p id="account-modal-display-name" class="text-[17px] font-semibold tracking-tight text-gray-900 dark:text-white truncate">Passenger</p>
+                            <div class="flex items-center gap-1 min-w-0">
+                                <p id="account-modal-display-name" class="text-[17px] font-semibold tracking-tight text-gray-900 dark:text-white truncate">Passenger</p>
+                                <button type="button" id="account-name-edit-btn" class="shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-gray-500 dark:text-gray-300 hover:bg-black/[0.04] dark:hover:bg-white/[0.06] focus:outline-none" aria-label="Edit display name">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16.5 3.5a2.12 2.12 0 013 3L8 18l-4 1 1-4 11.5-11.5z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 20h9"></path></svg>
+                                </button>
+                            </div>
                             <p id="account-modal-email" class="text-[13px] font-normal text-gray-500 dark:text-gray-400 truncate"></p>
                         </div>
-                        <svg id="account-profile-chevron" class="w-3.5 h-3.5 text-gray-300 dark:text-gray-600 shrink-0 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7"></path></svg>
-                    </button>
-                    <div id="account-profile-panel" class="hidden border-t border-black/10 dark:border-white/10">
-                        <p class="px-4 pt-3 text-[12px] font-normal text-gray-500 dark:text-gray-400 leading-snug">Display name and photo are used on the Community tab.</p>
-                        <div class="px-4 pt-3 pb-1">
-                            <label class="block text-[12px] font-normal text-gray-500 dark:text-gray-400 mb-1" for="account-edit-display-name">Display name</label>
-                            <input id="account-edit-display-name" type="text" maxlength="80" autocomplete="nickname" class="w-full h-11 px-3 rounded-[10px] bg-[#f2f2f7] dark:bg-[#2c2c2e] text-[13px] font-normal text-gray-900 dark:text-white focus:outline-none" placeholder="First name">
-                        </div>
-                        <button type="button" id="account-photo-toggle" class="w-full flex items-center justify-between gap-3 px-4 py-3 text-left focus:outline-none">
-                            <span class="min-w-0">
-                                <span class="block text-[13px] font-normal text-gray-900 dark:text-white">Show my photo next to my name</span>
-                                <span class="block text-[12px] font-normal text-gray-500 dark:text-gray-400 mt-0.5 leading-snug">Off unless you turn it on.</span>
-                            </span>
-                            <span class="relative inline-block w-10 align-middle select-none shrink-0">
-                                <input type="checkbox" id="account-photo-alerts" class="toggle-checkbox absolute block w-5 h-5 rounded-full bg-white border-4 border-gray-300 appearance-none cursor-pointer outline-none" />
-                                <label for="account-photo-alerts" class="toggle-label block overflow-hidden h-5 rounded-full bg-gray-300 cursor-pointer"></label>
-                            </span>
-                        </button>
-                        <button type="button" id="account-marks-toggle" class="w-full flex items-center justify-between gap-3 px-4 py-3 text-left focus:outline-none border-t border-black/10 dark:border-white/10">
-                            <span class="min-w-0">
-                                <span class="block text-[13px] font-normal text-gray-900 dark:text-white">Show my level on Community</span>
-                                <span class="block text-[12px] font-normal text-gray-500 dark:text-gray-400 mt-0.5 leading-snug">On unless you turn it off.</span>
-                            </span>
-                            <span class="relative inline-block w-10 align-middle select-none shrink-0">
-                                <input type="checkbox" id="account-marks-community" class="toggle-checkbox absolute block w-5 h-5 rounded-full bg-white border-4 border-gray-300 appearance-none cursor-pointer outline-none" checked />
-                                <label for="account-marks-community" class="toggle-label block overflow-hidden h-5 rounded-full bg-gray-300 cursor-pointer"></label>
-                            </span>
-                        </button>
-                        <button type="button" id="account-save-display-name" data-account-action class="w-full px-4 py-[11px] text-[13px] font-normal text-blue-600 dark:text-blue-400 text-center border-t border-black/10 dark:border-white/10 focus:outline-none">Save</button>
                     </div>
+                    <div id="account-verify-row" class="hidden w-full flex items-center justify-between gap-3 px-4 py-[13px] border-t border-black/10 dark:border-white/10">
+                        <span class="text-[13px] font-normal text-gray-900 dark:text-white">Email</span>
+                        <button type="button" id="account-verify-resend-btn" class="text-[13px] font-normal text-blue-600 dark:text-blue-400 focus:outline-none">
+                            <span id="account-verify-label">Not verified</span> · Resend
+                        </button>
+                    </div>
+                    <button type="button" id="account-passenger-type-btn" class="w-full flex items-center justify-between gap-3 px-4 py-[13px] text-left border-t border-black/10 dark:border-white/10 focus:outline-none active:bg-black/[0.03] dark:active:bg-white/[0.04]">
+                        <span class="text-[13px] font-normal text-gray-900 dark:text-white">Passenger type</span>
+                        <span class="flex items-center gap-1 min-w-0">
+                            <span id="account-passenger-type-display" class="text-[13px] font-normal text-gray-500 dark:text-gray-400 truncate">Adult</span>
+                            <svg class="w-3.5 h-3.5 text-gray-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"></path></svg>
+                        </span>
+                    </button>
                 </div>
-
-                <div class="rounded-[12px] overflow-hidden bg-white dark:bg-[#1c1c1e] divide-y divide-black/10 dark:divide-white/10">
-                    <button type="button" id="account-points-btn" class="w-full flex items-center justify-between gap-2 px-4 py-[11px] text-left focus:outline-none" aria-expanded="false" aria-controls="account-points-panel">
+                <p class="px-1 text-[12px] font-normal uppercase tracking-wide text-gray-500 dark:text-gray-500">Activity</p>
+                <div class="rounded-[12px] overflow-hidden bg-white dark:bg-[#1c1c1e]">
+                    <button type="button" id="account-points-btn" class="w-full flex items-center justify-between gap-3 px-4 py-[13px] text-left focus:outline-none active:bg-black/[0.03] dark:active:bg-white/[0.04]">
                         <span class="text-[13px] font-normal text-gray-900 dark:text-white">Points</span>
                         <span class="flex items-center gap-1 min-w-0">
                             <span data-rider-marks class="text-[13px] font-normal text-gray-500 dark:text-gray-400 truncate">Bronze · 0 points</span>
-                            <svg id="account-points-chevron" class="w-3.5 h-3.5 text-gray-400 shrink-0 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7"></path></svg>
+                            <svg class="w-3.5 h-3.5 text-gray-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"></path></svg>
                         </span>
                     </button>
-                    <div id="account-points-panel" class="hidden px-4 py-3 space-y-4 bg-[#f2f2f7] dark:bg-black/40">
-                        <div>
-                            <p class="text-[12px] font-normal uppercase tracking-wide text-gray-500 mb-1">Your level</p>
-                            <p id="account-points-progress" class="text-[13px] font-normal text-gray-600 dark:text-gray-300 leading-snug"></p>
-                            <div class="mt-2 h-1.5 rounded-full bg-gray-100 dark:bg-gray-800 overflow-hidden">
-                                <div id="account-points-bar" class="h-full rounded-full bg-amber-500" style="width:0%"></div>
-                            </div>
-                        </div>
-                        <div>
-                            <p class="text-[12px] font-normal uppercase tracking-wide text-gray-500 mb-2">Levels</p>
-                            <ul id="account-tier-list" class="space-y-1.5 text-[13px] font-normal"></ul>
-                        </div>
-                        <div>
-                            <p class="text-[12px] font-normal uppercase tracking-wide text-gray-500 mb-2">Badges</p>
-                            <div id="account-badge-grid" class="grid grid-cols-3 gap-2"></div>
-                            <p class="text-[12px] font-normal text-gray-400 mt-2 leading-snug">Streaks count Monday to Saturday. Sunday does not add a day and does not reset your streak.</p>
-                        </div>
-                        <div>
-                            <p class="text-[12px] font-normal uppercase tracking-wide text-gray-500 mb-2">How to earn points</p>
-                            <ul id="account-earn-list" class="space-y-1.5 text-[13px] font-normal text-gray-600 dark:text-gray-300"></ul>
-                        </div>
-                        <div id="account-contrib-wrap">
-                            <p class="text-[12px] font-normal uppercase tracking-wide text-gray-500 mb-2">Your contributions</p>
-                            <ul id="account-contrib-list" class="space-y-1.5 text-[13px] font-normal text-gray-600 dark:text-gray-300"></ul>
-                        </div>
+                </div>
+                <p class="px-1 text-[12px] font-normal uppercase tracking-wide text-gray-500 dark:text-gray-500">Security</p>
+                <div class="rounded-[12px] overflow-hidden bg-white dark:bg-[#1c1c1e]">
+                    <button type="button" id="account-signout-btn" data-account-action class="w-full flex items-center px-4 py-[13px] text-left focus:outline-none active:bg-black/[0.03] dark:active:bg-white/[0.04]">
+                        <span class="text-[13px] font-normal text-[#ff3b30]">Sign out</span>
+                    </button>
+                </div>
+                <div id="account-signout-confirm" class="hidden rounded-[12px] bg-white dark:bg-[#1c1c1e] px-4 py-3 space-y-3">
+                    <p class="text-[13px] font-normal text-gray-600 dark:text-gray-300 leading-snug">Sign out of this account?</p>
+                    <div class="flex gap-2">
+                        <button type="button" id="account-signout-cancel-btn" class="flex-1 py-2 rounded-lg text-[13px] font-normal text-gray-700 dark:text-gray-200 bg-[#f2f2f7] dark:bg-[#2c2c2e] focus:outline-none">Cancel</button>
+                        <button type="button" id="account-signout-confirm-btn" class="flex-1 py-2 rounded-lg text-[13px] font-normal text-white bg-[#ff3b30] focus:outline-none">Sign out</button>
                     </div>
                 </div>
             </div>
@@ -423,29 +400,26 @@ import { withBase } from '../lib/config.js';
                         </div>
                     </div>
                     <button type="button" id="account-email-signin-btn" data-account-action data-account-provider="email" class="w-full px-4 py-[11px] text-[13px] font-normal text-blue-600 dark:text-blue-400 text-center focus:outline-none">Sign in <span data-provider-unavailable class="hidden block text-[11px]">Not available yet</span></button>
+                    <button type="button" id="account-forgot-btn" class="w-full px-4 py-[11px] text-[13px] font-normal text-gray-500 dark:text-gray-400 text-center focus:outline-none">Forgot password</button>
+                    <p id="account-signin-create-hint" class="hidden px-4 py-2 text-[12px] font-normal text-gray-500 dark:text-gray-400 text-center leading-snug">No account yet? Use Create account below.</p>
                     <button type="button" id="account-email-signup-btn" data-account-action data-account-provider="email" class="w-full px-4 py-[11px] text-[13px] font-normal text-blue-600 dark:text-blue-400 text-center focus:outline-none">Create account <span data-provider-unavailable class="hidden block text-[11px]">Not available yet</span></button>
                 </div>
 
                 <div id="account-guest-points-wrap" class="hidden rounded-[10px] overflow-hidden bg-white dark:bg-[#1c1c1e]">
-                    <button type="button" id="account-points-guest-btn" class="w-full flex items-center justify-between gap-2 px-4 py-[11px] text-left focus:outline-none" aria-expanded="false" aria-controls="account-points-panel">
+                    <button type="button" id="account-points-guest-btn" class="w-full flex items-center justify-between gap-2 px-4 py-[11px] text-left focus:outline-none">
                         <span class="text-[13px] font-normal text-gray-900 dark:text-white">Points</span>
                         <span class="flex items-center gap-1 min-w-0">
                             <span data-rider-marks class="text-[13px] font-normal text-gray-500 dark:text-gray-400 truncate">Bronze · 0 points</span>
-                            <svg class="w-3.5 h-3.5 text-gray-400 shrink-0 account-points-chevron transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7"></path></svg>
+                            <svg class="w-3.5 h-3.5 text-gray-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"></path></svg>
                         </span>
                     </button>
                 </div>
             </div>
 
+            <p id="account-prefs-label" class="hidden px-1 text-[12px] font-normal uppercase tracking-wide text-gray-500 dark:text-gray-500">Preferences</p>
             <div id="account-settings-host" class="space-y-3"></div>
 
             <div id="account-session-actions" class="hidden space-y-6">
-                <div class="rounded-[12px] overflow-hidden bg-white dark:bg-[#1c1c1e]">
-                    <button type="button" id="account-signout-btn" data-account-action class="w-full px-4 py-[11px] text-[13px] font-normal text-blue-600 dark:text-blue-400 text-center focus:outline-none">
-                        Sign out
-                    </button>
-                </div>
-
                 <div id="account-delete-wrap" class="hidden space-y-2">
                     <p class="px-1 text-[12px] font-normal uppercase tracking-wide text-gray-500 dark:text-gray-500">Danger zone</p>
                     <div class="rounded-[12px] overflow-hidden bg-white dark:bg-[#1c1c1e]">
@@ -478,12 +452,97 @@ import { withBase } from '../lib/config.js';
 
 <div id="account-badge-how-sheet" class="fixed inset-0 z-[130] hidden flex items-end justify-center p-0 bg-black/40" role="dialog" aria-modal="true" aria-labelledby="account-badge-how-title">
     <button type="button" id="account-badge-how-overlay" class="absolute inset-0" aria-label="Close"></button>
-    <div class="relative w-full max-w-md rounded-t-2xl bg-white dark:bg-[#1c1c1e] px-4 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))] space-y-3">
+    <div class="relative z-10 w-full max-w-md rounded-t-2xl bg-white dark:bg-[#1c1c1e] px-4 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))] space-y-3">
         <p id="account-badge-how-title" class="text-[17px] font-semibold text-gray-900 dark:text-white"></p>
         <p id="account-badge-how-status" class="text-[13px] font-normal text-gray-500 dark:text-gray-400"></p>
-        <p id="account-badge-how-body" class="text-[13px] font-normal text-gray-600 dark:text-gray-300 leading-snug"></p>
+        <div id="account-badge-how-body" class="max-h-[40vh] overflow-y-auto space-y-3 text-[13px] font-normal text-gray-600 dark:text-gray-300 leading-snug"></div>
         <p id="account-badge-how-prereq" class="hidden text-[13px] font-normal text-gray-500 dark:text-gray-400 leading-snug"></p>
         <button type="button" id="account-badge-how-close" class="w-full py-2.5 rounded-xl text-[13px] font-normal text-blue-600 dark:text-blue-400 bg-[#f2f2f7] dark:bg-[#2c2c2e] focus:outline-none">Close</button>
+    </div>
+</div>
+
+<div id="account-contrib-sheet" class="fixed inset-0 z-[130] hidden flex items-end justify-center p-0 bg-black/40" role="dialog" aria-modal="true" aria-labelledby="account-contrib-title">
+    <button type="button" id="account-contrib-overlay" class="absolute inset-0" aria-label="Close"></button>
+    <div class="relative z-10 w-full max-w-md rounded-t-2xl bg-white dark:bg-[#1c1c1e] px-4 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))] space-y-3">
+        <p id="account-contrib-title" class="text-[17px] font-semibold text-gray-900 dark:text-white"></p>
+        <p id="account-contrib-points" class="text-[13px] font-normal text-gray-500 dark:text-gray-400"></p>
+        <div id="account-contrib-body" class="space-y-1 text-[13px] font-normal text-gray-600 dark:text-gray-300 leading-snug"></div>
+        <button type="button" id="account-contrib-close" class="w-full py-2.5 rounded-xl text-[13px] font-normal text-blue-600 dark:text-blue-400 bg-[#f2f2f7] dark:bg-[#2c2c2e] focus:outline-none">Close</button>
+    </div>
+</div>
+
+<div id="account-name-sheet" class="fixed inset-0 z-[125] hidden flex items-end justify-center p-0 bg-black/40" role="dialog" aria-modal="true" aria-labelledby="account-name-sheet-title">
+    <button type="button" id="account-name-overlay" class="absolute inset-0" aria-label="Close"></button>
+    <div class="relative z-10 w-full max-w-md rounded-t-2xl bg-white dark:bg-[#1c1c1e] px-4 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))] space-y-3">
+        <p id="account-name-sheet-title" class="text-[17px] font-semibold text-gray-900 dark:text-white">Display name</p>
+        <p class="text-[13px] font-normal text-gray-500 dark:text-gray-400 leading-snug">Used on the Community tab.</p>
+        <div>
+            <label class="block text-[12px] font-normal text-gray-500 dark:text-gray-400 mb-1" for="account-edit-display-name">Name</label>
+            <input id="account-edit-display-name" type="text" maxlength="80" autocomplete="nickname" class="w-full h-11 px-3 rounded-[10px] bg-[#f2f2f7] dark:bg-[#2c2c2e] text-[13px] font-normal text-gray-900 dark:text-white focus:outline-none" placeholder="First name">
+        </div>
+        <p id="account-name-error" class="text-[13px] font-normal text-red-600 dark:text-red-400 empty:hidden" role="alert"></p>
+        <button type="button" id="account-photo-toggle" class="w-full flex items-center justify-between gap-3 py-1 text-left focus:outline-none">
+            <span class="min-w-0">
+                <span class="block text-[13px] font-normal text-gray-900 dark:text-white">Show my photo next to my name</span>
+                <span class="block text-[12px] font-normal text-gray-500 dark:text-gray-400 mt-0.5 leading-snug">Off unless you turn it on.</span>
+            </span>
+            <span class="relative inline-block w-10 align-middle select-none shrink-0">
+                <input type="checkbox" id="account-photo-alerts" class="toggle-checkbox absolute block w-5 h-5 rounded-full bg-white border-4 border-gray-300 appearance-none cursor-pointer outline-none" />
+                <label for="account-photo-alerts" class="toggle-label block overflow-hidden h-5 rounded-full bg-gray-300 cursor-pointer"></label>
+            </span>
+        </button>
+        <button type="button" id="account-save-display-name" data-account-action class="w-full py-2.5 rounded-xl text-[13px] font-semibold text-white bg-blue-600 focus:outline-none">Save</button>
+        <button type="button" id="account-name-close" class="w-full py-2.5 rounded-xl text-[13px] font-normal text-blue-600 dark:text-blue-400 bg-[#f2f2f7] dark:bg-[#2c2c2e] focus:outline-none">Close</button>
+    </div>
+</div>
+
+<div id="account-points-sheet" class="fixed inset-0 z-[125] hidden flex items-end justify-center p-0 bg-black/40" role="dialog" aria-modal="true" aria-labelledby="account-points-sheet-title">
+    <button type="button" id="account-points-overlay" class="absolute inset-0" aria-label="Close"></button>
+    <div class="relative z-10 w-full max-w-md h-[min(92dvh,100%)] rounded-t-2xl bg-[#f2f2f7] dark:bg-black flex flex-col overflow-hidden">
+        <div class="shrink-0 flex items-center justify-between gap-3 px-4 pt-4 pb-3">
+            <p id="account-points-sheet-title" class="text-[17px] font-semibold text-gray-900 dark:text-white">Points</p>
+            <button type="button" id="account-points-close" class="text-[13px] font-normal text-blue-600 dark:text-blue-400 px-2 py-1 focus:outline-none">Close</button>
+        </div>
+        <div class="flex-1 min-h-0 overflow-y-auto px-4 pb-[max(1.25rem,env(safe-area-inset-bottom))] space-y-3">
+            <div class="rounded-[12px] bg-white dark:bg-[#1c1c1e] px-4">
+                <button type="button" id="account-marks-toggle" class="w-full flex items-center justify-between gap-3 py-3 text-left focus:outline-none">
+                    <span class="min-w-0">
+                        <span class="block text-[13px] font-normal text-gray-900 dark:text-white">Show my level on Community</span>
+                        <span class="block text-[12px] font-normal text-gray-500 dark:text-gray-400 mt-0.5 leading-snug">On unless you turn it off.</span>
+                    </span>
+                    <span class="relative inline-block w-10 align-middle select-none shrink-0">
+                        <input type="checkbox" id="account-marks-community" class="toggle-checkbox absolute block w-5 h-5 rounded-full bg-white border-4 border-gray-300 appearance-none cursor-pointer outline-none" checked />
+                        <label for="account-marks-community" class="toggle-label block overflow-hidden h-5 rounded-full bg-gray-300 cursor-pointer"></label>
+                    </span>
+                </button>
+            </div>
+            <div id="account-points-panel" class="space-y-3">
+                <div class="rounded-[12px] bg-white dark:bg-[#1c1c1e] px-4 py-3">
+                    <p class="text-[12px] font-normal uppercase tracking-wide text-gray-500 mb-1">Your level</p>
+                    <p id="account-points-progress" class="text-[13px] font-normal text-gray-600 dark:text-gray-300 leading-snug"></p>
+                    <div class="mt-2 h-1.5 rounded-full bg-gray-100 dark:bg-gray-800 overflow-hidden">
+                        <div id="account-points-bar" class="h-full rounded-full bg-amber-500" style="width:0%"></div>
+                    </div>
+                </div>
+                <div class="rounded-[12px] bg-white dark:bg-[#1c1c1e] px-4 py-3">
+                    <p class="text-[12px] font-normal uppercase tracking-wide text-gray-500 mb-2">Levels</p>
+                    <ul id="account-tier-list" class="space-y-1.5 text-[13px] font-normal"></ul>
+                </div>
+                <div class="rounded-[12px] bg-white dark:bg-[#1c1c1e] px-4 py-3">
+                    <p class="text-[12px] font-normal uppercase tracking-wide text-gray-500 mb-2">Badges</p>
+                    <div id="account-badge-grid" class="grid grid-cols-3 gap-2"></div>
+                    <p class="text-[12px] font-normal text-gray-400 mt-2 leading-snug">Streaks count Monday to Saturday. Sunday does not add a day and does not reset your streak.</p>
+                </div>
+                <div class="rounded-[12px] bg-white dark:bg-[#1c1c1e] px-4 py-3">
+                    <p class="text-[12px] font-normal uppercase tracking-wide text-gray-500 mb-2">How to earn points</p>
+                    <ul id="account-earn-list" class="space-y-1.5 text-[13px] font-normal text-gray-600 dark:text-gray-300"></ul>
+                </div>
+                <div id="account-contrib-wrap" class="rounded-[12px] bg-white dark:bg-[#1c1c1e] px-4 py-3">
+                    <p class="text-[12px] font-normal uppercase tracking-wide text-gray-500 mb-2">Your contributions</p>
+                    <ul id="account-contrib-list" class="space-y-1.5 text-[13px] font-normal text-gray-600 dark:text-gray-300"></ul>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -545,37 +604,37 @@ import { withBase } from '../lib/config.js';
                 <svg id="telemetry-chevron" class="w-4 h-4 transform transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
             </button>
             <div id="telemetry-body" class="space-y-3">
-                <div id="telemetry-metrics-tray" class="rounded-2xl bg-slate-100/90 dark:bg-slate-900/50 border border-slate-200/80 dark:border-slate-700/70 p-3">
+                <div id="telemetry-metrics-tray" class="rounded-2xl bg-gray-100/90 dark:bg-gray-900/50 border border-gray-200/80 dark:border-gray-700/70 p-3">
                 <div class="grid grid-cols-2 gap-3">
-                    <div class="bg-green-50 dark:bg-green-900/20 p-3 rounded-lg border border-green-100 dark:border-green-800 flex flex-col items-center justify-center">
-                        <span class="text-[10px] text-green-600 dark:text-green-400 font-bold uppercase tracking-wider mb-1">Last 5 Mins</span>
-                        <span id="stat-5m" class="text-2xl font-black text-green-700 dark:text-green-300 animate-pulse">--</span>
+                    <div class="bg-gray-50 dark:bg-gray-800/50 p-3 rounded-lg border border-gray-200 dark:border-gray-700 flex flex-col items-center justify-center shadow-sm">
+                        <span class="text-[10px] text-gray-500 dark:text-gray-400 font-bold uppercase tracking-wider mb-1">Last 5 Mins</span>
+                        <span id="stat-5m" class="text-2xl font-black text-gray-800 dark:text-gray-200 animate-pulse">--</span>
                     </div>
-                    <div class="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg border border-blue-100 dark:border-blue-800 flex flex-col items-center justify-center">
-                        <span class="text-[10px] text-blue-600 dark:text-blue-400 font-bold uppercase tracking-wider mb-1">Last 30 Mins</span>
-                        <span id="stat-30m" class="text-2xl font-black text-blue-700 dark:text-blue-300 animate-pulse">--</span>
+                    <div class="bg-gray-50 dark:bg-gray-800/50 p-3 rounded-lg border border-gray-200 dark:border-gray-700 flex flex-col items-center justify-center shadow-sm">
+                        <span class="text-[10px] text-gray-500 dark:text-gray-400 font-bold uppercase tracking-wider mb-1">Last 30 Mins</span>
+                        <span id="stat-30m" class="text-2xl font-black text-gray-800 dark:text-gray-200 animate-pulse">--</span>
                     </div>
-                    <div class="bg-indigo-50 dark:bg-indigo-900/20 p-3 rounded-lg border border-indigo-100 dark:border-indigo-800 flex flex-col items-center justify-center">
-                        <span class="text-[10px] text-indigo-600 dark:text-indigo-400 font-bold uppercase tracking-wider mb-1">Today</span>
-                        <span id="stat-today" class="text-2xl font-black text-indigo-700 dark:text-indigo-300 animate-pulse">--</span>
+                    <div class="bg-gray-50 dark:bg-gray-800/50 p-3 rounded-lg border border-blue-300 dark:border-blue-400 flex flex-col items-center justify-center shadow-sm">
+                        <span class="text-[10px] text-gray-500 dark:text-gray-400 font-bold uppercase tracking-wider mb-1">Today</span>
+                        <span id="stat-today" class="text-2xl font-black text-gray-800 dark:text-gray-200 animate-pulse">--</span>
                     </div>
-                    <div class="bg-teal-50 dark:bg-teal-900/20 p-3 rounded-lg border border-teal-100 dark:border-teal-800 flex flex-col items-center justify-center">
-                        <span class="text-[10px] text-teal-600 dark:text-teal-400 font-bold uppercase tracking-wider mb-1">7 Days (WAU)</span>
-                        <span id="stat-weekly" class="text-2xl font-black text-teal-700 dark:text-teal-300 animate-pulse">--</span>
+                    <div class="bg-gray-50 dark:bg-gray-800/50 p-3 rounded-lg border border-gray-200 dark:border-gray-700 flex flex-col items-center justify-center shadow-sm">
+                        <span class="text-[10px] text-gray-500 dark:text-gray-400 font-bold uppercase tracking-wider mb-1">7 Days (WAU)</span>
+                        <span id="stat-weekly" class="text-2xl font-black text-gray-800 dark:text-gray-200 animate-pulse">--</span>
                     </div>
-                    <div class="bg-cyan-50 dark:bg-cyan-900/20 p-3 rounded-lg border border-cyan-100 dark:border-cyan-800 flex flex-col items-center justify-center">
-                        <span class="text-[10px] text-cyan-600 dark:text-cyan-400 font-bold uppercase tracking-wider mb-1">30 Days (MAU)</span>
-                        <span id="stat-monthly" class="text-2xl font-black text-cyan-700 dark:text-cyan-300 animate-pulse">--</span>
+                    <div class="bg-gray-50 dark:bg-gray-800/50 p-3 rounded-lg border border-gray-200 dark:border-gray-700 flex flex-col items-center justify-center shadow-sm">
+                        <span class="text-[10px] text-gray-500 dark:text-gray-400 font-bold uppercase tracking-wider mb-1">30 Days (MAU)</span>
+                        <span id="stat-monthly" class="text-2xl font-black text-gray-800 dark:text-gray-200 animate-pulse">--</span>
                     </div>
-                    <div class="bg-purple-50 dark:bg-purple-900/20 p-3 rounded-lg border border-purple-100 dark:border-purple-800 flex flex-col items-center justify-center">
-                        <span class="text-[10px] text-purple-600 dark:text-purple-400 font-bold uppercase tracking-wider mb-1">All-Time</span>
-                        <span id="stat-alltime" class="text-2xl font-black text-purple-700 dark:text-purple-300 animate-pulse">--</span>
+                    <div class="bg-gray-50 dark:bg-gray-800/50 p-3 rounded-lg border border-gray-200 dark:border-gray-700 flex flex-col items-center justify-center shadow-sm">
+                        <span class="text-[10px] text-gray-500 dark:text-gray-400 font-bold uppercase tracking-wider mb-1">All-Time</span>
+                        <span id="stat-alltime" class="text-2xl font-black text-gray-800 dark:text-gray-200 animate-pulse">--</span>
                     </div>
                 </div>
                 </div>
-                <div class="bg-red-50 dark:bg-red-900/20 p-3 rounded-lg border border-red-100 dark:border-red-800 flex items-center justify-between">
-                    <span class="text-[10px] text-red-600 dark:text-red-400 font-bold uppercase tracking-wider flex items-center"><svg class="w-3.5 h-3.5 mr-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2v2"/><path d="M6 6l-1.5-1.5"/><path d="M18 6l1.5-1.5"/><path d="M5 14a7 7 0 0114 0"/><path d="M4 20h16"/><path d="M9 20v-2a3 3 0 016 0v2"/></svg> System Errors (Today)</span>
-                    <span id="stat-errors" class="text-lg font-black text-red-700 dark:text-red-300 animate-pulse">--</span>
+                <div class="bg-gray-50 dark:bg-gray-800/80 p-3 rounded-lg border border-gray-200 dark:border-gray-700 flex items-center justify-between shadow-sm">
+                    <span class="text-[10px] text-gray-600 dark:text-gray-400 font-bold uppercase tracking-wider flex items-center"><svg class="w-3.5 h-3.5 mr-1 text-amber-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2v2"/><path d="M6 6l-1.5-1.5"/><path d="M18 6l1.5-1.5"/><path d="M5 14a7 7 0 0114 0"/><path d="M4 20h16"/><path d="M9 20v-2a3 3 0 016 0v2"/></svg> System Errors (Today)</span>
+                    <span id="stat-errors" class="text-lg font-black text-gray-800 dark:text-gray-200 animate-pulse">--</span>
                 </div>
             </div>
         </div>
@@ -719,12 +778,33 @@ import { withBase } from '../lib/config.js';
   #account-settings-host #settings-profile-community-note:not(.hidden) {
     display: block;
   }
-  #account-profile-chevron.rotate-180 {
-    transform: rotate(180deg);
-  }
   #account-photo-toggle .toggle-checkbox,
   #account-marks-toggle .toggle-checkbox {
     z-index: 1;
+  }
+  html[data-account-settings="1"] #settings-theme-toggle {
+    display: none !important;
+  }
+  html[data-account-settings="1"] #account-theme-choice {
+    display: block !important;
+  }
+  #account-theme-choice .account-theme-option {
+    border: 1px solid rgba(0, 0, 0, 0.12);
+    border-radius: 10px;
+    padding: 8px 4px;
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1.2;
+    color: var(--nt-text);
+    background: transparent;
+  }
+  html.dark #account-theme-choice .account-theme-option {
+    border-color: rgba(255, 255, 255, 0.16);
+  }
+  #account-theme-choice .account-theme-option[aria-pressed="true"] {
+    background: var(--nt-primary);
+    color: var(--nt-primary-fg);
+    border-color: transparent;
   }
   #account-contrib-list details > summary {
     list-style: none;
@@ -878,6 +958,21 @@ import { withBase } from '../lib/config.js';
     pointer-events: auto;
     cursor: pointer;
   }
+  #feedback-panel .inbox-bubble-route-row,
+  #messages-thread-modal .inbox-bubble-route-row {
+    padding: 0.2rem 0.65rem 0.25rem;
+    font-size: 0.68rem;
+    font-weight: 700;
+    line-height: 1.25;
+    color: #334155;
+    word-break: break-word;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+  }
+  html.dark #feedback-panel .inbox-bubble-route-row,
+  html.dark #messages-thread-modal .inbox-bubble-route-row {
+    color: #e2e8f0;
+    border-bottom-color: rgba(255, 255, 255, 0.08);
+  }
   html.dark #messages-thread-modal .inbox-bubble-name-row,
   html.dark #feedback-panel .inbox-bubble-name-row {
     background: rgba(255, 255, 255, 0.07);
@@ -967,6 +1062,14 @@ import { withBase } from '../lib/config.js';
       radial-gradient(circle at 14% 18%, rgba(255,255,255,0.05) 0 1.5px, transparent 2.2px),
       radial-gradient(circle at 62% 8%, rgba(255,255,255,0.04) 0 1px, transparent 1.8px),
       linear-gradient(180deg, rgba(255,255,255,0.03), rgba(0,0,0,0.22));
+  }
+  /* .nt-pack-wallpaper is pointer-events:none and that value is inherited.
+     On Alerts the decoration is an empty sibling. Here it is the chat itself,
+     so a commuter photo was visible and untappable. Children take hits again. */
+  #feedback-panel .feedback-thread-chat.nt-pack-wallpaper > * {
+    position: relative;
+    z-index: 1;
+    pointer-events: auto;
   }
   #roadmap-body.nt-pack-surface {
     position: relative;
@@ -1077,7 +1180,7 @@ import { withBase } from '../lib/config.js';
             </div>
             <h3 class="text-lg font-black text-gray-900 dark:text-white mb-2 tracking-tight">Check for Updates?</h3>
             <p class="text-sm text-gray-500 dark:text-gray-400 mb-2 leading-snug">This downloads the latest app onto this phone, then restarts Next Train.</p>
-            <p class="text-[12px] text-gray-500 dark:text-gray-400 leading-snug mb-6">Your pinned route stays, but the look goes back to Classic light.</p>
+            <p class="text-[12px] text-gray-500 dark:text-gray-400 leading-snug mb-6">Your pinned route stays.</p>
             <div class="flex space-x-3">
                 <button type="button" id="cache-clear-cancel-btn" class="flex-1 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 font-medium py-2.5 px-4 rounded-lg transition-colors focus:outline-none">Cancel</button>
                 <button type="button" id="cache-clear-confirm-btn" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-4 rounded-lg shadow-md transition-colors focus:outline-none">Update</button>
@@ -1140,7 +1243,8 @@ import { withBase } from '../lib/config.js';
     <div id="notice-modal-card" class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-sm transform transition-all scale-100 border-l-4 border-red-500 flex flex-col max-h-[85dvh] overflow-hidden">
         <div id="notice-modal-strip" class="nt-alert-strip nt-alert-strip-info flex items-center justify-between gap-2 px-4 py-2 shrink-0">
             <span id="notice-modal-signoff" class="nt-alert-signoff text-xs font-semibold leading-none tracking-wide">Next Train Ops</span>
-            <div class="flex items-center gap-2">
+            <div class="flex items-center gap-1.5">
+                <span id="notice-modal-pin" class="nt-alert-pin hidden" title="Pinned" aria-label="Pinned"></span>
                 <span id="notice-modal-sev-chip" class="nt-alert-chip inline-flex items-center shrink-0 px-1.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider leading-none">🔵 Info</span>
                 <button type="button" id="notice-modal-x" onclick="if(location.hash==='#notice')history.back();else closeSmoothModal('notice-modal')" class="opacity-80 hover:opacity-100 focus:outline-none" aria-label="Close">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
@@ -1164,8 +1268,10 @@ import { withBase } from '../lib/config.js';
         <div class="mt-5 flex flex-col gap-2">
             <button type="button" id="nt-on-train-primary" class="w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold focus:outline-none">Show where I am</button>
             <button type="button" id="nt-on-train-secondary" class="w-full py-3 rounded-xl bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 text-sm font-bold focus:outline-none">Not now</button>
+            <button type="button" id="nt-on-train-quaternary" class="hidden w-full py-3 rounded-xl bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 text-sm font-bold focus:outline-none">More</button>
             <button type="button" id="nt-on-train-tertiary" class="hidden w-full py-2 text-[12px] font-semibold text-gray-500 dark:text-gray-400 focus:outline-none">Cancel</button>
         </div>
+        <p id="nt-on-train-timeout" class="hidden mt-3 text-[11px] font-semibold text-gray-400 dark:text-gray-500 text-center" aria-live="polite"></p>
     </div>
 </div>
 

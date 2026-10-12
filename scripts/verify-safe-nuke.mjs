@@ -17,6 +17,19 @@ import {
 } from '../src/lib/utils.js';
 import { ALERT_IMAGE_CACHE, ALERT_IMAGE_INDEX_KEY } from '../src/lib/alert-image-cache.js';
 import { FORCE_UPDATE_REQUIRED } from '../src/lib/config.js';
+import {
+    pickNewestAppVersion,
+    pickForceUpdateTarget,
+    isAppVersionNewer,
+    isDumpAheadOfOrigin,
+    isIncomingWorkerDownloaded,
+    shouldToastAutomaticUpdate,
+    listAppVersionProbeUrls,
+} from '../src/lib/app-update.js';
+import {
+    welcomeSeenFromPinnedSession,
+    inferRegionFromPins,
+} from '../src/lib/utils.js';
 
 const failures = [];
 const assert = (condition, message) => {
@@ -103,6 +116,8 @@ assert(shouldDeleteCacheForPolicy(ALERT_IMAGE_CACHE, factory), 'factory reset re
 assert(!VOLATILE_FLUSH_PROTECTED_KEYS.includes(ALERT_IMAGE_INDEX_KEY), 'alert image index is not a protected localStorage key');
 assert(!VOLATILE_FLUSH_PROTECTED_PREFIXES.some((prefix) => ALERT_IMAGE_INDEX_KEY.startsWith(prefix)), 'alert image index is not under a protected prefix');
 assert(!isProtectedVolatileKey(ALERT_IMAGE_INDEX_KEY), 'alert image index is flushed on nuke');
+assert(isProtectedVolatileKey('nt_holiday_seen_map_v1'), 'holiday dismiss map survives volatile flush');
+assert(isProtectedVolatileKey('seen_holiday_week_09-24_2026'), 'holiday week seen keys survive volatile flush');
 
 assert(FORCE_UPDATE_REQUIRED === true, 'FORCE_UPDATE_REQUIRED is true for this build');
 
@@ -112,7 +127,7 @@ const update = readFileSync(new URL('../src/lib/app-update.js', import.meta.url)
 assert(logic.includes('killswitchCheckPromise'), 'concurrent killswitch calls share one in-flight check');
 assert(logic.includes("safeStorage.setItem(KILLSWITCH_PENDING_KEY"), 'killswitch writes pending marker before cleanup');
 assert(logic.indexOf('safeStorage.setItem(KILLSWITCH_APPLIED_KEY') > logic.indexOf("performHardCacheClear('system_killswitch')"), 'killswitch marks applied only after cleanup');
-assert(logic.includes("setInterval(() => poke({ visibleOnly: true }), 60_000)"), 'visible online sessions check periodically');
+assert(logic.includes("setInterval(() => poke({ visibleOnly: true }), 15_000)"), 'visible online sessions check NUKE every 15s');
 assert(hub.indexOf('probeReachability(3500)') < hub.indexOf("if ('caches' in window)"), 'killswitch preflights before Cache Storage changes');
 assert(hub.includes("performHardCacheClear('check_updates', {"), 'manual Check for Updates still goes through the update path');
 assert(hub.includes("policy.systemKillswitch || (source === 'check_updates' && !skipNetworkPreflight)"), 'Check for Updates still preflights unless the commuter confirmed');
@@ -123,9 +138,78 @@ assert(hub.includes('installIncomingServiceWorker'), 'Check for Updates download
 assert(hub.includes('Kept your saved app. Try again on a stronger connection.'), 'failed Check for Updates keeps the cached app');
 assert(hub.includes('skipNetworkPreflight'), 'confirmed Check for Updates can skip only the check_updates probe');
 assert(!hub.includes('skipNetworkPreflight') || hub.includes('policy.systemKillswitch || (source === \'check_updates\' && !skipNetworkPreflight)'), 'killswitch never skips the network preflight');
-assert(update.indexOf('await activateWaitingServiceWorker()') < update.indexOf("hardReloadWithCacheBust('version_enforce')"), 'forced update activates waiting SW before reload');
+assert(hub.includes("source !== 'system_killswitch'"), 'admin NUKE never resets look or flushes prefs');
+assert(update.indexOf('await activateWaitingServiceWorker()') < update.indexOf("reloadToApplyUpdate('version_enforce')"), 'forced update activates waiting SW before reload');
 assert(update.includes("window.addEventListener('online', attempt)"), 'forced update retries immediately when online');
 assert(update.includes("document.visibilityState === 'visible'"), 'forced update defers until visible');
+assert(update.includes('peekIncomingVersionReport'), 'force update peeks published versions on the network');
+assert(update.includes('listAppVersionProbeUrls'), 'version peek lists same-origin app-version.json');
+assert(!update.includes('jsdelivr.net/gh/enock-elk/next-train-astro@main/public/app-version.json'), 'version peek does not call jsDelivr');
+assert(!update.includes('raw.githubusercontent.com/enock-elk/next-train-astro/main/public/app-version.json'), 'version peek does not call GitHub raw');
+assert(!update.includes('enock-elk.github.io/next-train-astro/app-version.json'), 'version peek does not call GitHub Pages');
+assert(update.includes('reloadToApplyUpdate'), 'updates reload the same URL');
+assert(!update.includes("path + '?v=' + Date.now()"), 'forced update does not invent a numeric ?v= hop');
+assert(update.includes("NEW APP VERSION found"), 'console logs when a new app version is found');
+assert(update.includes('NOT downloaded'), 'console logs when the incoming version did not download');
+assert(update.includes('Restarting now to implement'), 'console logs when restart will implement the new version');
+assert(hub.includes('☢️ GUARDIAN NUKE'), 'Check for Updates / NUKE path logs NUKE');
+assert(logic.includes('☢️ GUARDIAN NUKE found'), 'killswitch logs when a NUKE is found');
+assert(logic.includes('NUKE listener armed'), 'killswitch listener announces itself');
+assert(update.includes('unstickStaleServiceWorker'), 'stuck SW can be unregistered so one shell can land');
+assert(!/safeStorage\.setItem\('app_installed_version', newVersion/.test(update), 'do not record incoming version before the new shell runs');
+
+assert(pickNewestAppVersion(['V9_09.20.1', 'V9_09.20.3', 'V9_09.19.11']) === 'V9_09.20.3', 'newest-wins version probe prefers 20.3 over 20.1');
+assert(pickNewestAppVersion(['V9_09.20.1'], 'V9_09.20.3') === 'V9_09.20.3', 'newest-wins can keep the running shell when probes are older');
+assert(isAppVersionNewer('V9_09.20.4', 'V9_09.20.3'), '20.4 is newer than 20.3');
+assert(
+    pickForceUpdateTarget({ version: 'V9_09.20.3', originVersion: 'V9_09.20.3' }, 'V9_09.20.1') === 'V9_09.20.3',
+    'origin 20.3 forces a 20.1 shell'
+);
+assert(
+    pickForceUpdateTarget({ version: 'V9_09.20.4', originVersion: 'V9_09.20.3' }, 'V9_09.20.3') === 'V9_09.20.4',
+    'dump-ahead still peeks newest so install can run; already_current blocks auto reload'
+);
+assert(
+    pickForceUpdateTarget({ version: 'V9_09.20.3', originVersion: 'V9_09.20.1' }, 'V9_09.20.1') === 'V9_09.20.3',
+    'stale origin JSON still yields the dump so PWA/TWA can install'
+);
+assert(
+    isDumpAheadOfOrigin({ version: 'V9_09.21.3', originVersion: 'V9_09.21.1' }, 'V9_09.21.1'),
+    'github dump newer than production origin is dump-ahead'
+);
+assert(
+    !isDumpAheadOfOrigin({ version: 'V9_09.21.3', originVersion: 'V9_09.21.3' }, 'V9_09.21.1'),
+    'origin matching the dump is not dump-ahead'
+);
+assert(isIncomingWorkerDownloaded({ ok: true, reason: 'waiting' }), 'waiting SW counts as downloaded');
+assert(isIncomingWorkerDownloaded({ ok: true, reason: 'installed' }), 'installed SW counts as downloaded');
+assert(!isIncomingWorkerDownloaded({ ok: true, reason: 'already_current' }), 'already_current is not a downloaded shell');
+assert(!isIncomingWorkerDownloaded({ ok: false, reason: 'timeout' }), 'timeout is not a downloaded shell');
+assert(
+    shouldToastAutomaticUpdate({ downloaded: true, newer: true, dumpAhead: false }),
+    'auto toast after a newer host shell is on disk'
+);
+assert(
+    !shouldToastAutomaticUpdate({ downloaded: false, newer: true, dumpAhead: false }),
+    'auto toast does not fire before download'
+);
+assert(
+    !shouldToastAutomaticUpdate({ downloaded: true, newer: true, dumpAhead: true }),
+    'dump-ahead never toasts even if some other worker is waiting'
+);
+assert(update.includes('will not toast or restart until the worker actually installs'), 'dump-ahead already_current stays silent');
+assert(
+    update.indexOf('isIncomingWorkerDownloaded') < update.indexOf('showCrucialUpdateToast'),
+    'forced update checks download before the crucial toast'
+);
+const probeUrls = listAppVersionProbeUrls();
+assert(probeUrls.some((url) => url.includes('app-version.json')), 'probe list includes app-version.json');
+assert(
+    welcomeSeenFromPinnedSession((key) => (key === 'defaultRoute_GP' ? 'pta-pien' : null)),
+    'a pinned route counts as welcomeSeen'
+);
+assert(!welcomeSeenFromPinnedSession(() => null), 'empty storage is a new session');
+assert(inferRegionFromPins((key) => (key === 'defaultRoute_WC' ? 'ct-bellv' : null)) === 'WC', 'region is inferred from the pin');
 
 if (failures.length) {
     console.error(`verify-safe-nuke: ${failures.length} failed`);

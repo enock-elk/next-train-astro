@@ -1,17 +1,96 @@
 /**
  * Silent nearest-station locate on the live board and Trip Planner From field.
- * Only runs when the OS already granted geolocation — never prompts.
  * Coordinates stay on-device (findNearestStation).
- * Never overwrites a From station the commuter is picking or has already set.
+ *
+ * Startup locate runs only for returning commuters (welcomeSeen or a pinned
+ * route after IDB restore, and Welcome was not shown this page load). Brand-new
+ * cold starts must not open the OS location sheet — they may decline before
+ * they know it is useful. Installed PWA / Play Store TWA still treat
+ * prompt/unknown as granted after that returning gate. A Chrome tab still
+ * requires query=granted (or nt_geo_granted) and will not overwrite a station
+ * the commuter set, except the one-shot installed startup refresh.
  */
 import { $currentRouteId } from '../store.js';
+import { welcomeSeenFromPinnedSession } from './utils.js';
 
 export const AUTO_LOCATE_DEBOUNCE_MS = 120_000;
+export const AUTO_LOCATE_RETRY_MS = 4_000;
+export const AUTO_LOCATE_MAX_FAILS = 3;
+export const GEO_GRANTED_KEY = 'nt_geo_granted';
 
 let lastAutoLocateAt = 0;
+let lastAutoLocateFailAt = 0;
+let autoLocateFailCount = 0;
+let autoLocateRetryTimer = 0;
+let startupOverwriteArmed = true;
+let welcomeShownThisVisit = false;
+let returningAtBoot = null;
 
 export function resetAutoLocateDebounce() {
     lastAutoLocateAt = 0;
+    lastAutoLocateFailAt = 0;
+}
+
+export function noteAutoLocateApplied() {
+    lastAutoLocateAt = Date.now();
+    lastAutoLocateFailAt = 0;
+    autoLocateFailCount = 0;
+    if (autoLocateRetryTimer) {
+        clearTimeout(autoLocateRetryTimer);
+        autoLocateRetryTimer = 0;
+    }
+}
+
+export function noteAutoLocateFailed() {
+    lastAutoLocateAt = 0;
+    lastAutoLocateFailAt = Date.now();
+    autoLocateFailCount += 1;
+    if (autoLocateFailCount > AUTO_LOCATE_MAX_FAILS) return;
+    if (typeof window === 'undefined') return;
+    if (autoLocateRetryTimer) clearTimeout(autoLocateRetryTimer);
+    autoLocateRetryTimer = window.setTimeout(() => {
+        autoLocateRetryTimer = 0;
+        maybeAutoLocateBoard().catch(() => {});
+    }, AUTO_LOCATE_RETRY_MS);
+}
+
+export function resetStartupLocateOverwrite() {
+    startupOverwriteArmed = true;
+}
+
+export function disarmStartupLocateOverwrite() {
+    startupOverwriteArmed = false;
+}
+
+export function markWelcomeShownThisVisit() {
+    welcomeShownThisVisit = true;
+}
+
+export function welcomeWasShownThisVisit() {
+    return welcomeShownThisVisit;
+}
+
+/**
+ * Freeze returning-vs-new after pin restore and before Welcome or a share
+ * deeplink can mint welcomeSeen for a first-time visitor.
+ */
+export function snapshotReturningForStartupLocate(getItem) {
+    if (returningAtBoot !== null) return returningAtBoot;
+    returningAtBoot = welcomeSeenFromPinnedSession(getItem);
+    return returningAtBoot;
+}
+
+export function isReturningForStartupLocate({ getItem, returning, welcomeShown } = {}) {
+    if (returning != null) return !!returning;
+    const shown = welcomeShown != null ? !!welcomeShown : welcomeShownThisVisit;
+    if (shown) return false;
+    if (returningAtBoot !== null) return returningAtBoot;
+    return welcomeSeenFromPinnedSession(getItem);
+}
+
+export function resetStartupLocateReturningState() {
+    welcomeShownThisVisit = false;
+    returningAtBoot = null;
 }
 
 export function welcomeIsActive(doc = typeof document !== 'undefined' ? document : null) {
@@ -73,47 +152,125 @@ export function stationPickerIsEngaged(doc = typeof document !== 'undefined' ? d
 }
 
 /** Next Train station or Trip Planner From already has a value (including leftover typed text). */
-export function fromStationIsClaimed(doc = typeof document !== 'undefined' ? document : null) {
+export function fromStationIsClaimed(doc = typeof document !== 'undefined' ? document : null, opts = {}) {
     if (!doc) return false;
-    if (fieldHasStation(doc.getElementById('station-select'))) return true;
-    if (fieldHasStation(doc.getElementById('station-search-input'))) return true;
-    if (fieldHasStation(doc.getElementById('planner-from'))) return true;
-    if (fieldHasStation(doc.getElementById('planner-from-search'))) return true;
+    const nextTrain = opts.nextTrainActive ?? nextTrainTabIsActive(doc);
+    const planner = opts.plannerActive ?? tripPlannerTabIsActive(doc);
+    const checkNt = nextTrain || (!nextTrain && !planner);
+    const checkPl = planner || (!nextTrain && !planner);
+    if (checkNt) {
+        if (fieldHasStation(doc.getElementById('station-select'))) return true;
+        if (fieldHasStation(doc.getElementById('station-search-input'))) return true;
+    }
+    if (checkPl) {
+        if (fieldHasStation(doc.getElementById('planner-from'))) return true;
+        if (fieldHasStation(doc.getElementById('planner-from-search'))) return true;
+    }
+    return false;
+}
+
+export function hasRememberedGeoGrant(storage = typeof localStorage !== 'undefined' ? localStorage : null) {
+    try {
+        return storage?.getItem?.(GEO_GRANTED_KEY) === '1';
+    } catch {
+        return false;
+    }
+}
+
+export function rememberGeolocationGranted(storage = typeof localStorage !== 'undefined' ? localStorage : null) {
+    try {
+        storage?.setItem?.(GEO_GRANTED_KEY, '1');
+    } catch { /* ignore */ }
+}
+
+/**
+ * Home-screen PWA, Play Store TWA, or a session that already stamped standalone.
+ * @param {{ standalone?: boolean, twa?: boolean }} [signals]
+ */
+export function isInstalledAppClient(signals) {
+    if (signals && (signals.standalone != null || signals.twa != null)) {
+        return !!(signals.standalone || signals.twa);
+    }
+    if (typeof window === 'undefined') return false;
+    try {
+        if (window.matchMedia?.('(display-mode: standalone)').matches) return true;
+        if (window.matchMedia?.('(display-mode: fullscreen)').matches) return true;
+        if (window.matchMedia?.('(display-mode: minimal-ui)').matches) return true;
+        if (window.navigator?.standalone) return true;
+        if (String(document.referrer || '').indexOf('android-app://') === 0) return true;
+        if (sessionStorage.getItem('nt_standalone') === '1') return true;
+        if (sessionStorage.getItem('nt_twa') === '1' || localStorage.getItem('nt_twa') === '1') return true;
+        if (document.documentElement?.classList?.contains('nt-standalone')) return true;
+        if (window.__ntAppClient?.app_source === 'twa' || window.__ntAppClient?.app_source === 'pwa') return true;
+    } catch { /* ignore */ }
+    return false;
+}
+
+export async function geolocationPermissionState() {
+    if (typeof navigator === 'undefined' || !navigator.permissions?.query) return 'unknown';
+    try {
+        const status = await navigator.permissions.query({ name: 'geolocation' });
+        const state = String(status?.state || '');
+        if (state === 'granted' || state === 'denied' || state === 'prompt') return state;
+        return 'unknown';
+    } catch {
+        return 'unknown';
+    }
+}
+
+/**
+ * True when startup/silent locate may call getCurrentPosition.
+ * Installed clients try unless OS geolocation is denied. Browser tabs stay
+ * granted-or-remembered so a regular tab does not open a permission sheet.
+ * @param {{ state?: string, remembered?: boolean, installed?: boolean }} [opts]
+ */
+export async function geolocationAlreadyGranted(opts = {}) {
+    const state = opts.state != null ? opts.state : await geolocationPermissionState();
+    if (state === 'granted') return true;
+    if (state === 'denied') return false;
+    const remembered = opts.remembered != null ? !!opts.remembered : hasRememberedGeoGrant();
+    if (remembered) return true;
+    const installed = opts.installed != null ? !!opts.installed : isInstalledAppClient();
+    // Installed PWA / Play TWA: Permissions API is often missing (unknown) or
+    // stuck on prompt after the OS already granted location. Eagerly try.
+    if (installed && state !== 'denied') return true;
     return false;
 }
 
 /** Re-check right before applying GPS so an in-flight locate cannot steal the picker. */
-export function shouldApplySilentLocate(doc = typeof document !== 'undefined' ? document : null) {
-    return !stationPickerIsEngaged(doc) && !fromStationIsClaimed(doc);
+export function shouldApplySilentLocate(doc = typeof document !== 'undefined' ? document : null, opts = {}) {
+    if (stationPickerIsEngaged(doc)) {
+        disarmStartupLocateOverwrite();
+        return false;
+    }
+    const nextTrainActive = opts.nextTrainActive ?? nextTrainTabIsActive(doc);
+    const plannerActive = opts.plannerActive ?? tripPlannerTabIsActive(doc);
+    if (!fromStationIsClaimed(doc, { nextTrainActive, plannerActive })) return true;
+    const installed = opts.installed != null ? !!opts.installed : isInstalledAppClient();
+    const overwrite = opts.startupOverwrite != null ? !!opts.startupOverwrite : (startupOverwriteArmed && installed);
+    return overwrite;
 }
 
 /** Pure gate used by tests. Does not read Permissions API. */
 export function boardIsReadyForAutoLocate({
     welcomeActive = false,
+    returningCommuter = true,
     routeId = '',
     nextTrainActive = false,
     plannerActive = false,
     visible = true,
     pickerEngaged = false,
     fromAlreadySet = false,
+    startupOverwrite = false,
 } = {}) {
     if (welcomeActive) return false;
+    if (!returningCommuter) return false;
     if (!String(routeId || '').trim()) return false;
     if (!nextTrainActive && !plannerActive) return false;
     if (visible === false) return false;
     if (pickerEngaged) return false;
-    if (fromAlreadySet) return false;
+    if (fromAlreadySet && !startupOverwrite) return false;
     return true;
-}
-
-export async function geolocationAlreadyGranted() {
-    if (typeof navigator === 'undefined' || !navigator.permissions?.query) return false;
-    try {
-        const status = await navigator.permissions.query({ name: 'geolocation' });
-        return status?.state === 'granted';
-    } catch {
-        return false;
-    }
 }
 
 /**
@@ -123,27 +280,44 @@ export async function geolocationAlreadyGranted() {
 export async function maybeAutoLocateBoard(opts = {}) {
     const now = Number(opts.now) || Date.now();
     if (now - lastAutoLocateAt < AUTO_LOCATE_DEBOUNCE_MS) return false;
+    if (lastAutoLocateFailAt && now - lastAutoLocateFailAt < AUTO_LOCATE_RETRY_MS) return false;
 
     const locate = opts.locate
         || (typeof window !== 'undefined' ? window.findNearestStation : null);
     if (typeof locate !== 'function') return false;
 
     const doc = opts.doc ?? (typeof document !== 'undefined' ? document : null);
+    const installed = opts.installed != null ? !!opts.installed : isInstalledAppClient();
+    const pickerEngaged = opts.pickerEngaged ?? stationPickerIsEngaged(doc);
+    if (pickerEngaged) disarmStartupLocateOverwrite();
+    const startupOverwrite = opts.startupOverwrite != null
+        ? !!opts.startupOverwrite
+        : (startupOverwriteArmed && installed && !pickerEngaged);
+    const nextTrainActive = opts.nextTrainActive ?? nextTrainTabIsActive(doc);
+    const plannerActive = opts.plannerActive ?? tripPlannerTabIsActive(doc);
+    const returningCommuter = opts.returningCommuter != null
+        ? !!opts.returningCommuter
+        : isReturningForStartupLocate({ getItem: opts.getItem });
     const ready = boardIsReadyForAutoLocate({
         welcomeActive: opts.welcomeActive ?? welcomeIsActive(doc),
+        returningCommuter,
         routeId: opts.routeId ?? $currentRouteId.get(),
-        nextTrainActive: opts.nextTrainActive ?? nextTrainTabIsActive(doc),
-        plannerActive: opts.plannerActive ?? tripPlannerTabIsActive(doc),
+        nextTrainActive,
+        plannerActive,
         visible: opts.visible ?? (typeof document === 'undefined' ? true : document.visibilityState === 'visible'),
-        pickerEngaged: opts.pickerEngaged ?? stationPickerIsEngaged(doc),
-        fromAlreadySet: opts.fromAlreadySet ?? fromStationIsClaimed(doc),
+        pickerEngaged,
+        fromAlreadySet: opts.fromAlreadySet ?? fromStationIsClaimed(doc, { nextTrainActive, plannerActive }),
+        startupOverwrite,
     });
     if (!ready) return false;
 
-    const granted = opts.granted != null ? !!opts.granted : await geolocationAlreadyGranted();
-    if (!granted) return false;
-
     lastAutoLocateAt = now;
+    const granted = opts.granted != null ? !!opts.granted : await geolocationAlreadyGranted({ installed });
+    if (!granted) {
+        lastAutoLocateAt = 0;
+        return false;
+    }
+
     locate(true);
     return true;
 }
@@ -157,6 +331,8 @@ export function bindAutoLocateTriggers() {
     document.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'visible') kick();
     });
+    window.addEventListener('pageshow', kick);
+    window.addEventListener('nt-welcome-closed', kick);
     window.addEventListener('nt-tab-changed', (e) => {
         const tab = e?.detail?.tab;
         if (tab === 'next-train' || tab === 'trip-planner') kick();

@@ -38,7 +38,6 @@
  * 9. Nuclear Cache Wipe (Killswitch)
  * 10. Live Telemetry Bridge & Snapshot Export
  * 11. User Feedback Manager (Inbox & Archive Protocol Tabs)
- * 12. Growth & Promo Manager (QR Codes)
  *
  * CHRONOLOGICAL CHANGE LOG:
  * * GUARDIAN PHASE 5 [22 Dec 2025]: Injected basic simulation control wiring and first-pass Service Alerts/Incident layouts.
@@ -198,6 +197,43 @@ function ntAdminScheduleSheet(db, sheetKey) {
     return null;
 }
 
+function ntAdminScheduleRows(db, sheetKey) {
+    const raw = ntAdminScheduleSheet(db, sheetKey);
+    if (Array.isArray(raw)) return raw;
+    if (Array.isArray(raw?.rows)) return raw.rows;
+    if (raw && typeof raw === 'object') {
+        return Object.keys(raw)
+            .filter((key) => /^\d+$/.test(key))
+            .sort((a, b) => Number(a) - Number(b))
+            .map((key) => raw[key]);
+    }
+    return [];
+}
+
+const NT_ADMIN_REGION_SCHEDULE_PATHS = {
+    GP: 'schedules/gauteng.json',
+    WC: 'schedules/westerncape.json',
+    KZN: 'schedules/kzn.json',
+    EC: 'schedules/easterncape.json',
+};
+
+async function ntAdminFetchRegionScheduleDb(region) {
+    const dbPath = NT_ADMIN_REGION_SCHEDULE_PATHS[region];
+    if (!dbPath || typeof Admin === 'undefined' || typeof Admin.fetchDiagJson !== 'function') return null;
+    let rawData;
+    try {
+        rawData = await Admin.fetchDiagJson(`https://nexttrain-cache.enock.workers.dev/${dbPath}?t=${Date.now()}`);
+    } catch {
+        rawData = await Admin.fetchDiagJson(`https://metrorail-next-train-default-rtdb.firebaseio.com/${dbPath}?t=${Date.now()}`);
+    }
+    const db = ntAdminUnwrapRegionScheduleDb(region, rawData);
+    if (db) {
+        Admin._gridOrderRegionDb = Admin._gridOrderRegionDb || {};
+        Admin._gridOrderRegionDb[region] = db;
+    }
+    return db || null;
+}
+
 function ntAdminDeleteAlertSource(list, id) {
     return (Array.isArray(list) ? list : []).filter((s) => s.id !== id);
 }
@@ -310,6 +346,17 @@ function ntAdminDevPanelIdFromHash(hash) {
 function ntAdminCanonicalPanelId(panelId) {
     const id = String(panelId || '');
     if (id === 'alert-panel--inapp') return 'alert-panel';
+    return id;
+}
+
+/** Human drill title. Never show a raw panel id like `push-notifications-panel`. */
+function ntAdminDrillPanelTitle(panelId, headerText) {
+    const id = String(panelId || '');
+    if (id === 'push-notifications-panel') return 'Notifications';
+    if (id === 'alert-panel--inapp') return 'In-app alerts';
+    const fromHeader = String(headerText || '').replace(/\s+/g, ' ').trim();
+    if (fromHeader) return fromHeader;
+    if (id === 'alert-panel') return 'Service Alerts';
     return id;
 }
 
@@ -766,6 +813,38 @@ function ntAdminSchedulePreviewText(meta) {
     return ntAdminFormatScheduleSummary(meta);
 }
 
+async function ntAdminDeletePublishedCommunityMessage(routeId, postId, replyId) {
+    if (!routeId || !postId) throw new Error('Missing route/post id');
+    const token = await Admin.getAuthKey();
+    if (!token) throw new Error('Not signed in');
+    const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
+    const authQ = `?auth=${encodeURIComponent(token)}`;
+    const postPath = `route_community/${encodeURIComponent(routeId)}/posts/${encodeURIComponent(postId)}`;
+    const deleteJson = async (path) => {
+        const res = await fetch(`${dynamicEndpoint}${path}.json${authQ}`, { method: 'DELETE' });
+        if (!res.ok && res.status !== 404) throw new Error(`Delete failed (${res.status})`);
+        return res;
+    };
+    if (replyId) {
+        await deleteJson(`${postPath}/replies/${encodeURIComponent(replyId)}`);
+        await deleteJson(`community_activity/${encodeURIComponent(routeId)}/${encodeURIComponent(replyId)}`).catch(() => {});
+        return;
+    }
+    let replyIds = [];
+    try {
+        const postRes = await window.guardianFetch(`${dynamicEndpoint}${postPath}.json${authQ}`, {}, 6000);
+        const post = postRes.ok ? await postRes.json() : null;
+        replyIds = Object.keys(post?.replies || {});
+    } catch (e) {
+        console.warn('Community delete reply-index read failed', e);
+    }
+    await deleteJson(postPath);
+    await deleteJson(`community_activity/${encodeURIComponent(routeId)}/${encodeURIComponent(postId)}`).catch(() => {});
+    await Promise.all(replyIds.map((id) =>
+        deleteJson(`community_activity/${encodeURIComponent(routeId)}/${encodeURIComponent(id)}`).catch(() => {})
+    ));
+}
+
 const Admin = {
     
     // GUARDIAN PHASE 2: Dropdown Breadcrumbs State
@@ -933,6 +1012,7 @@ const Admin = {
             mail: '<path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><path d="M22 6l-10 7L2 6"/>',
             phone: '<path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"/>',
             paperclip: '<path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/>',
+            filter: '<path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/>',
             bug: '<path d="M8 2l1.88 1.88M14.12 3.88L16 2M9 7.13v-1a3.003 3.003 0 116 0v1"/><path d="M12 20c-3.3 0-6-2.7-6-6v-3a6 6 0 0112 0v3c0 3.3-2.7 6-6 6z"/><path d="M12 20v-9M6.53 9C4.6 9.9 3 11.6 3 14M17.47 9c1.93.9 3.53 2.6 3.53 5M3 13h2M19 13h2M4 18h2M18 18h2"/>',
             lightbulb: '<path d="M9 18h6M10 22h4M12 2a7 7 0 00-4 12.7V17h8v-2.3A7 7 0 0012 2z"/>',
             clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/>',
@@ -960,6 +1040,76 @@ const Admin = {
             return `<svg class="${className}" viewBox="0 0 12 11" width="12" height="11" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M1.75 5.75L4.6 8.5 10.25 2.2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
         }
         return `<svg class="${className}" viewBox="0 0 16 11" width="16" height="11" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M1.2 6.1L3.85 8.7 8.9 2.35" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M6.35 6.1L9 8.7 14.05 2.35" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+    },
+
+    isBlankInboxRoute: (routeId) => {
+        const s = String(routeId || '').trim();
+        return !s || /^(none|null|undefined|-)$/i.test(s);
+    },
+
+    inboxRouteLabel: (routeId) => {
+        if (Admin.isBlankInboxRoute(routeId)) return '';
+        if (typeof ROUTES !== 'undefined' && ROUTES[routeId]?.name) {
+            return (typeof formatRouteLabelPlain === 'function')
+                ? formatRouteLabelPlain(ROUTES[routeId].name)
+                : String(ROUTES[routeId].name);
+        }
+        return String(routeId);
+    },
+
+    threadCommuterRoute: (items) => {
+        const list = Array.isArray(items) ? items : [];
+        for (let i = list.length - 1; i >= 0; i--) {
+            const it = list[i];
+            if (!it || it.isFromAdmin) continue;
+            if (!Admin.isBlankInboxRoute(it.routeId)) return it.routeId;
+        }
+        return '';
+    },
+
+    formatInboxStamp: (ts) => {
+        const n = Number(ts);
+        if (!n) return '';
+        const d = new Date(n);
+        if (Number.isNaN(d.getTime())) return '';
+        const datePart = (typeof formatAppDate === 'function')
+            ? formatAppDate(d)
+            : d.toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' });
+        const timePart = (typeof formatAppTime === 'function')
+            ? formatAppTime(d)
+            : d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        return `${datePart}, ${timePart}`;
+    },
+
+    hideInboxReceiptSheet: () => {
+        document.getElementById('inbox-receipt-sheet')?.classList.add('hidden');
+    },
+
+    showInboxReceiptSheet: (anchor) => {
+        if (!anchor) return;
+        let sheet = document.getElementById('inbox-receipt-sheet');
+        if (!sheet) {
+            sheet = document.createElement('div');
+            sheet.id = 'inbox-receipt-sheet';
+            sheet.className = 'hidden fixed z-[280] min-w-[11rem] max-w-[16rem] px-3 py-2 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 shadow-xl text-[11px] leading-snug text-gray-700 dark:text-gray-200';
+            document.body.appendChild(sheet);
+        }
+        const row = (label, value) => {
+            const when = Admin.formatInboxStamp(value);
+            return `<div class="flex justify-between gap-3 py-0.5"><span class="font-bold text-gray-500 dark:text-gray-400">${label}</span><span class="font-mono text-right">${when || '—'}</span></div>`;
+        };
+        sheet.innerHTML = `
+            <p class="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1">Delivery</p>
+            ${row('Sent', anchor.getAttribute('data-fb-sent'))}
+            ${row('Delivered', anchor.getAttribute('data-fb-delivered'))}
+            ${row('Seen', anchor.getAttribute('data-fb-read'))}
+        `;
+        const rect = anchor.getBoundingClientRect();
+        sheet.classList.remove('hidden');
+        const top = Math.max(12, rect.top - sheet.offsetHeight - 8);
+        const left = Math.max(12, Math.min(window.innerWidth - sheet.offsetWidth - 12, rect.right - sheet.offsetWidth));
+        sheet.style.top = `${top}px`;
+        sheet.style.left = `${left}px`;
     },
 
     tileIcon: (name, colorClass = 'text-blue-600 dark:text-blue-400') =>
@@ -1159,6 +1309,9 @@ const Admin = {
         }
         return null;
     },
+
+    deletePublishedCommunityMessage: (routeId, postId, replyId) =>
+        ntAdminDeletePublishedCommunityMessage(routeId, postId, replyId),
 
     /** Safe escalate payload for data-escalate attrs (avoids onclick SyntaxError ? app reload). */
     encodeEscalatePayload: (payload) => encodeURIComponent(JSON.stringify(payload || {})),
@@ -1666,19 +1819,46 @@ const Admin = {
     },
 
     // --- 0.16 IMAGE LIGHTBOX MODAL ---
-    openLightbox: function(url) {
+    openLightbox: function(url, blobUrl, posterEl) {
+        if (!posterEl && Admin._lightboxPoster) posterEl = Admin._lightboxPoster;
+        Admin._lightboxPoster = null;
+        const raw = String(url || '').trim();
         const safe = typeof window.sanitizeAttachmentDisplayUrl === 'function'
-            ? window.sanitizeAttachmentDisplayUrl(url)
+            ? window.sanitizeAttachmentDisplayUrl(raw)
             : '';
-        if (!safe) return;
+        let poster = posterEl && posterEl.getAttribute ? posterEl : null;
+        if (!poster && raw) {
+            document.querySelectorAll('[data-alert-lightbox], [data-alert-object-url]').forEach((el) => {
+                if (poster) return;
+                if (el.getAttribute('data-alert-lightbox') === raw || el.getAttribute('data-alert-object-url') === raw) poster = el;
+            });
+        }
+        const posterImg = poster?.querySelector?.('img') || null;
+        const live = posterImg ? (posterImg.currentSrc || posterImg.src || '') : '';
+        const blob = String(blobUrl || poster?.getAttribute?.('data-alert-object-url') || (raw.startsWith('blob:') ? raw : '') || '');
+        let ownedBlob = '';
+        if (blob.startsWith('blob:')) {
+            document.querySelectorAll('[data-alert-object-url]').forEach((el) => {
+                if (!ownedBlob && el.getAttribute('data-alert-object-url') === blob) ownedBlob = blob;
+            });
+        }
+        const httpsLive = /^https:\/\//i.test(live) ? live : '';
+        const shown = (posterImg && posterImg.naturalWidth > 0)
+            ? (posterImg.currentSrc || posterImg.src || '')
+            : '';
+        const src = safe || (/^https:\/\//i.test(raw) ? raw : '') || httpsLive || ownedBlob || (/^blob:|^https:\/\//i.test(shown) ? shown : '');
+        if (!src) return;
+        const fallback = [ownedBlob, httpsLive, shown, safe, /^https:\/\//i.test(raw) ? raw : ''].find((candidate) => candidate && candidate !== src) || '';
         window._adminLightboxOpen = true;
-        history.pushState({ modal: 'admin-lightbox' }, '', '#admin-lightbox');
+        try {
+            history.pushState({ modal: 'admin-lightbox', keepHash: location.hash || '' }, '', location.href);
+        } catch { /* ignore */ }
         if (typeof lockBackgroundScroll === 'function') lockBackgroundScroll();
         let modal = document.getElementById('admin-lightbox-modal');
         if (!modal) {
             modal = document.createElement('div');
             modal.id = 'admin-lightbox-modal';
-            modal.className = 'fixed inset-0 bg-black/95 z-[300] hidden flex items-center justify-center p-2 sm:p-4 backdrop-blur-md transition-opacity duration-300';
+            modal.className = 'fixed inset-0 bg-black/95 hidden flex items-center justify-center p-2 sm:p-4 backdrop-blur-md transition-opacity duration-300';
             modal.onclick = (e) => {
                 if (e.target === modal || e.target.id === 'lightbox-close-btn' || e.target.closest('#lightbox-close-btn')) {
                     Admin.closeLightbox();
@@ -1688,15 +1868,25 @@ const Admin = {
                 <button id="lightbox-close-btn" class="absolute top-4 right-4 p-2.5 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors focus:outline-none z-10 backdrop-blur-sm">
                     <svg class="w-6 h-6 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
                 </button>
-                <img id="admin-lightbox-img" src="" class="max-w-full max-h-[90vh] object-contain rounded-lg shadow-2xl transform transition-transform scale-95 duration-300" alt="Full screen preview">
+                <img id="admin-lightbox-img" src="" class="max-w-full max-h-[90vh] object-contain rounded-lg shadow-2xl" alt="Full screen preview">
             `;
             document.body.appendChild(modal);
         }
+        modal.style.zIndex = '10050';
+        modal.classList.remove('hidden');
+        modal.style.setProperty('display', 'flex', 'important');
         
         const img = document.getElementById('admin-lightbox-img');
-        if (img) img.src = safe;
+        if (img) {
+            const fallbacks = [fallback, ownedBlob, httpsLive, shown, safe].filter((candidate, index, all) => candidate && candidate !== src && all.indexOf(candidate) === index);
+            let fallbackAt = 0;
+            img.onerror = () => {
+                const next = fallbacks[fallbackAt++];
+                if (next && img.getAttribute('src') !== next) img.src = next;
+            };
+            img.src = src;
+        }
         
-        modal.classList.remove('hidden');
         void modal.offsetWidth; // Force Reflow
         if (img) {
             img.classList.remove('scale-95');
@@ -1704,9 +1894,12 @@ const Admin = {
         }
     },
 
-    closeLightbox: function() {
+    closeLightbox: function(fromPopState) {
+        if (!fromPopState && history.state && history.state.modal === 'admin-lightbox') {
+            history.back();
+            return;
+        }
         window._adminLightboxOpen = false;
-        if (location.hash === '#admin-lightbox') history.back();
         if (typeof unlockBackgroundScroll === 'function') unlockBackgroundScroll();
         const modal = document.getElementById('admin-lightbox-modal');
         if (!modal) return;
@@ -1718,6 +1911,7 @@ const Admin = {
         modal.classList.add('opacity-0');
         setTimeout(() => {
             modal.classList.add('hidden');
+            modal.style.removeProperty('display');
             modal.classList.remove('opacity-0');
             if (img) img.src = '';
         }, 300);
@@ -1769,7 +1963,7 @@ const Admin = {
             : '';
         if (!safe) return '';
         const js = typeof window.lightboxOnclickJs === 'function'
-            ? window.lightboxOnclickJs(safe, 'Admin.openLightbox')
+            ? window.lightboxOnclickJs(safe, 'window.openLightbox')
             : '';
         if (!js) return '';
         const href = typeof escapeHTML === 'function' ? escapeHTML(safe) : safe;
@@ -2040,7 +2234,6 @@ const Admin = {
             'auth-providers-body',
             'exp-features-body',
             'shadow-ban-default-body',
-            'promo-body',
             'deploy-live-body',
             'cf-purge-body',
             'nuke-body',
@@ -2050,7 +2243,6 @@ const Admin = {
             'auth-providers-chevron',
             'exp-features-chevron',
             'shadow-ban-default-chevron',
-            'promo-chevron',
             'deploy-live-chevron',
             'cf-purge-chevron',
             'nuke-chevron',
@@ -2112,9 +2304,227 @@ const Admin = {
         }
     },
 
+    /**
+     * Picture URL for a Dev Mode feedback photo. Prefer the image already on
+     * screen, then the stored attachment URL.
+     */
+    feedbackPreviewSrc: (src, poster) => {
+        const img = poster?.tagName === 'IMG' ? poster : poster?.querySelector?.('img');
+        const live = img && img.naturalWidth > 0 ? (img.currentSrc || img.src || '') : '';
+        const blob = poster?.getAttribute?.('data-alert-object-url') || '';
+        const attr = poster?.getAttribute?.('data-alert-lightbox') || '';
+        const tries = [live, blob, src, attr];
+        for (const candidate of tries) {
+            const s = String(candidate || '').trim();
+            if (!s) continue;
+            if (s.startsWith('blob:') || /^https:\/\//i.test(s)) return s;
+            if (typeof window.sanitizeAttachmentDisplayUrl === 'function') {
+                const safe = window.sanitizeAttachmentDisplayUrl(s);
+                if (safe) return safe;
+            }
+        }
+        return '';
+    },
+
+    /** Other photos in the same feedback bubble, so left/right can move between them. */
+    feedbackPreviewUrls: (poster, current) => {
+        const root = poster?.closest?.('.inbox-bubble') || poster;
+        const urls = [];
+        const push = (u) => {
+            const s = String(u || '').trim();
+            if (!s || urls.includes(s)) return;
+            if (s.startsWith('blob:') || /^https:\/\//i.test(s) || s.startsWith('/')) urls.push(s);
+        };
+        root?.querySelectorAll?.('[data-alert-lightbox]').forEach((el) => {
+            push(el.getAttribute('data-alert-lightbox'));
+        });
+        if (!urls.length) push(current);
+        else if (current && /^https:\/\//i.test(current) && !urls.includes(current)) urls.unshift(current);
+        return urls;
+    },
+
+    clearFeedbackPreviewChrome: (overlay) => {
+        if (!overlay) return;
+        overlay.querySelectorAll('[data-fb-preview-step]').forEach((node) => node.remove());
+        delete overlay.dataset.ntFeedbackGallery;
+        delete overlay.dataset.ntFeedbackIndex;
+        if (overlay.dataset.ntAdminLift) {
+            overlay.style.zIndex = '';
+            delete overlay.dataset.ntAdminLift;
+        }
+    },
+
+    paintFeedbackPreviewChrome: (overlay) => {
+        const stage = document.getElementById('alert-image-lightbox-stage');
+        if (!stage) return;
+        stage.querySelectorAll('[data-fb-preview-step]').forEach((node) => node.remove());
+        const urls = String(overlay?.dataset?.ntFeedbackGallery || '').split('\n').filter(Boolean);
+        if (urls.length < 2) return;
+        const make = (dir, label, side) => {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.setAttribute('data-fb-preview-step', String(dir));
+            btn.setAttribute('aria-label', label);
+            btn.className = `absolute top-1/2 -translate-y-1/2 ${side} z-20 w-11 h-11 rounded-full bg-black/50 text-white text-2xl leading-none`;
+            btn.textContent = dir < 0 ? '\u2039' : '\u203A';
+            return btn;
+        };
+        stage.appendChild(make(-1, 'Previous image', 'left-2'));
+        stage.appendChild(make(1, 'Next image', 'right-2'));
+    },
+
+    stepFeedbackPreview: (overlay, dir) => {
+        const urls = String(overlay?.dataset?.ntFeedbackGallery || '').split('\n').filter(Boolean);
+        if (urls.length < 2) return;
+        let index = Number(overlay.dataset.ntFeedbackIndex || 0) + dir;
+        if (index < 0) index = urls.length - 1;
+        if (index >= urls.length) index = 0;
+        overlay.dataset.ntFeedbackIndex = String(index);
+        const img = document.getElementById('alert-image-lightbox-img');
+        if (img) img.src = urls[index];
+    },
+
+    bindFeedbackPreviewChrome: (overlay) => {
+        if (!overlay || overlay.dataset.ntFbPreviewBound === '1') return;
+        overlay.dataset.ntFbPreviewBound = '1';
+        const closeBtn = document.getElementById('alert-image-lightbox-close');
+        closeBtn?.addEventListener('click', (e) => {
+            if (history.state?.modal !== 'feedback-preview') return;
+            e.preventDefault();
+            e.stopPropagation();
+            if (typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation();
+            try { history.back(); } catch { Admin.dismissFeedbackPreview(overlay); }
+        }, true);
+        let startX = 0;
+        let startY = 0;
+        const stage = document.getElementById('alert-image-lightbox-stage');
+        stage?.addEventListener('touchstart', (e) => {
+            if (!overlay.dataset.ntFeedbackGallery) return;
+            if (!e.touches || e.touches.length !== 1) return;
+            startX = e.touches[0].clientX;
+            startY = e.touches[0].clientY;
+        }, { passive: true });
+        stage?.addEventListener('touchend', (e) => {
+            if (!overlay.dataset.ntFeedbackGallery) return;
+            const touch = e.changedTouches && e.changedTouches[0];
+            if (!touch) return;
+            const dx = touch.clientX - startX;
+            const dy = touch.clientY - startY;
+            if (Math.abs(dx) < 48 || Math.abs(dx) < Math.abs(dy)) return;
+            Admin.stepFeedbackPreview(overlay, dx < 0 ? 1 : -1);
+        }, { passive: true });
+        overlay.addEventListener('click', (e) => {
+            const dirBtn = e.target?.closest?.('[data-fb-preview-step]');
+            if (!dirBtn || !overlay.contains(dirBtn)) return;
+            e.preventDefault();
+            e.stopPropagation();
+            Admin.stepFeedbackPreview(overlay, Number(dirBtn.getAttribute('data-fb-preview-step')) || 0);
+        });
+        if (typeof MutationObserver === 'function') {
+            try {
+                const watch = new MutationObserver(() => {
+                    if (overlay.classList.contains('hidden')) Admin.clearFeedbackPreviewChrome(overlay);
+                });
+                watch.observe(overlay, { attributes: true, attributeFilter: ['class'] });
+            } catch { /* non-element host */ }
+        }
+    },
+
+    dismissFeedbackPreview: (overlay) => {
+        const box = overlay || document.getElementById('alert-image-lightbox');
+        if (!box) return;
+        box.classList.add('hidden');
+        box.classList.remove('flex');
+        window._isLightboxMode = false;
+        Admin.clearFeedbackPreviewChrome(box);
+    },
+
+    /**
+     * Dev Mode feedback photos use the same full-screen preview as a service
+     * poster (#alert-image-lightbox). admin.js shows it directly so a stale
+     * hashed ui.js cannot refuse the open, and so the hash stays on the
+     * feedback panel.
+     */
+    openFeedbackAttachmentPreview: (src, poster) => {
+        const display = Admin.feedbackPreviewSrc(src, poster);
+        if (!display) return false;
+        const overlay = document.getElementById('alert-image-lightbox');
+        const img = document.getElementById('alert-image-lightbox-img');
+        if (!overlay || !img) {
+            if (typeof Admin.openLightbox === 'function') {
+                Admin.openLightbox(display, '', poster);
+                return true;
+            }
+            return false;
+        }
+        if (overlay.parentElement !== document.body) document.body.appendChild(overlay);
+        const urls = Admin.feedbackPreviewUrls(poster, display);
+        const marked = poster?.getAttribute?.('data-alert-lightbox') || '';
+        let index = urls.indexOf(display);
+        if (index < 0) index = urls.indexOf(marked);
+        if (index < 0) index = 0;
+        overlay.dataset.ntAdminLift = '1';
+        overlay.dataset.ntFeedbackGallery = urls.join('\n');
+        overlay.dataset.ntFeedbackIndex = String(index);
+        overlay.style.zIndex = '10050';
+        img.alt = 'Image Preview';
+        if (img.getAttribute('src') !== display) img.src = display;
+        overlay.classList.remove('hidden');
+        overlay.classList.add('flex');
+        window._isLightboxMode = true;
+        try {
+            history.pushState({ modal: 'feedback-preview' }, '', location.href);
+        } catch { /* ignore */ }
+        Admin.bindFeedbackPreviewChrome(overlay);
+        Admin.paintFeedbackPreviewChrome(overlay);
+        return !overlay.classList.contains('hidden');
+    },
+
+    /** Capture taps on photos inside the Dev Mode feedback panel only. */
+    bindFeedbackPhotoPreview: (panel) => {
+        if (!panel || panel.dataset.fbPhotoBound === '1') return;
+        panel.dataset.fbPhotoBound = '1';
+        const inThread = (node) => !!(node && panel.contains(node) && node.closest?.('.feedback-thread-body, .inbox-bubble, .feedback-thread-chat'));
+        panel.addEventListener('click', (e) => {
+            const poster = e.target?.closest?.('[data-alert-lightbox]');
+            if (poster && inThread(poster)) {
+                e.preventDefault();
+                e.stopPropagation();
+                const original = poster.getAttribute('data-alert-lightbox') || '';
+                const blob = poster.getAttribute('data-alert-object-url') || '';
+                Admin.openFeedbackAttachmentPreview(original || blob, poster);
+                return;
+            }
+            const img = e.target?.closest?.('img');
+            if (!img || !inThread(img) || img.closest?.('#alert-image-lightbox')) return;
+            e.preventDefault();
+            e.stopPropagation();
+            Admin.openFeedbackAttachmentPreview(img.currentSrc || img.getAttribute('src') || '', img);
+        }, true);
+    },
+
     bindFeedbackInboxReactions: (host) => {
         if (!host || host.dataset.inboxReactBound === '1') return;
         host.dataset.inboxReactBound = '1';
+        host.addEventListener('click', (e) => {
+            const poster = e.target.closest?.('[data-alert-lightbox]');
+            const link = !poster ? e.target.closest?.('a[href]') : null;
+            const href = link?.getAttribute?.('href') || '';
+            const storageLink = !!(link && host.contains(link) && /firebasestorage|googleusercontent|storage\.googleapis\.com/i.test(href));
+            if (!(poster && host.contains(poster)) && !storageLink) return;
+            e.preventDefault();
+            e.stopPropagation();
+            if (typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation();
+            if (storageLink && typeof window.classifyAttachmentUrl === 'function' && window.classifyAttachmentUrl(href) === 'pdf') {
+                window.open(href, '_blank', 'noopener');
+                return;
+            }
+            const el = poster || link;
+            const original = poster?.getAttribute?.('data-alert-lightbox') || href || '';
+            const blob = poster?.getAttribute?.('data-alert-object-url') || '';
+            const src = original || blob;
+            if (src) Admin.openFeedbackAttachmentPreview(src, el);
+        }, true);
         let longTimer = null;
         const clearLong = () => {
             if (longTimer) clearTimeout(longTimer);
@@ -2122,6 +2532,9 @@ const Admin = {
         };
         host.addEventListener('pointerdown', (e) => {
             if (e.target.closest?.('[data-admin-changelog]')) return;
+            if (e.target.closest?.('[data-fb-receipt]')) return;
+            if (e.target.closest?.('[data-alert-lightbox]')) return;
+            if (e.target.closest?.('[data-fb-edit-admin]')) return;
             const bubble = e.target.closest?.('[data-inbox-react-host]');
             if (!bubble || e.target.closest?.('[data-inbox-react]')) return;
             const row = bubble.closest('[data-inbox-msg-id]');
@@ -2137,9 +2550,10 @@ const Admin = {
             if (poster && host.contains(poster)) {
                 e.preventDefault();
                 e.stopPropagation();
-                if (poster.getAttribute('data-alert-ready') !== '1') return;
-                const src = poster.getAttribute('data-alert-lightbox');
-                if (src && Admin.openLightbox) Admin.openLightbox(src);
+                const original = poster.getAttribute('data-alert-lightbox') || '';
+                const blob = poster.getAttribute('data-alert-object-url') || '';
+                const src = original || blob;
+                if (src) Admin.openFeedbackAttachmentPreview(src, poster);
                 return;
             }
             const chip = e.target.closest?.('[data-inbox-react]');
@@ -2175,18 +2589,521 @@ const Admin = {
     },
 
     showJoinedHint: (id) => {
-        const label = Admin.formatJoinedLabel(id);
-        if (!label) return;
-        if (typeof showToast === 'function') showToast(label, 'info', 2800);
+        Admin.openCommuterPeek(id);
     },
 
-    /** Compact “i” next to a user/device id — title + tap toast, does not replace the id. */
+    /** Compact “i” next to a user/device id — opens the peek sheet, does not replace the id. */
     userIdJoinHintHtml: (id) => {
-        const label = Admin.formatJoinedLabel(id);
-        if (!label) return '';
-        const safeId = String(id || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+        const raw = String(id || '').trim();
+        if (!raw || raw === 'Anonymous / Legacy' || raw === 'unknown') return '';
+        const label = Admin.formatJoinedLabel(raw) || 'User info';
+        const safeId = raw.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
         const title = (typeof escapeHTML === 'function' ? escapeHTML(label) : label.replace(/"/g, '&quot;'));
         return `<button type="button" onclick="event.stopPropagation(); Admin.showJoinedHint('${safeId}')" class="nt-uid-joined inline-flex items-center justify-center w-3.5 h-3.5 rounded-full border border-gray-300 dark:border-gray-600 text-[8px] font-black leading-none text-gray-500 dark:text-gray-400 hover:border-blue-400 hover:text-blue-600 dark:hover:text-blue-300 align-middle ml-0.5 shrink-0 focus:outline-none" title="${title}" aria-label="${title}">i</button>`;
+    },
+
+    collectCommuterPeek: async (id) => {
+        const did = String(id || '').trim();
+        await Admin.ensureAliasesLoaded();
+        const secret = await Admin.getAuthKey();
+        const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
+        const auth = secret ? `?auth=${encodeURIComponent(secret)}` : '';
+        const fetchJson = async (path) => {
+            try {
+                const res = await fetch(`${dynamicEndpoint}${path}${auth}`);
+                if (!res.ok) return null;
+                return res.json();
+            } catch {
+                return null;
+            }
+        };
+        const looksDevice = /^usr_/i.test(did);
+        const needFares = !(Admin._cachedFareVotes && typeof Admin._cachedFareVotes === 'object');
+        const needFails = !(Admin._cachedRoutingFails && typeof Admin._cachedRoutingFails === 'object');
+        const needTickets = !(Admin._cachedFareTicketPhotos && typeof Admin._cachedFareTicketPhotos === 'object');
+        const [tripNode, inboxNode, deviceNode, userNode, fareData, failData, ticketData] = await Promise.all([
+            fetchJson(`sys_logs/trip_plan_users/${encodeURIComponent(did)}.json`),
+            looksDevice ? fetchJson(`inbox/${encodeURIComponent(did)}.json`) : Promise.resolve(null),
+            looksDevice ? fetchJson(`devices/${encodeURIComponent(did)}.json`) : Promise.resolve(null),
+            fetchJson(`users/${encodeURIComponent(did)}.json`),
+            needFares ? fetchJson('sys_logs/fare_votes.json') : Promise.resolve(null),
+            needFails ? fetchJson('sys_logs/routing_fails.json') : Promise.resolve(null),
+            needTickets ? fetchJson('sys_logs/fare_ticket_photos.json') : Promise.resolve(null),
+        ]);
+        let fareStatus = 'ready';
+        let failStatus = 'ready';
+        let ticketStatus = 'ready';
+        if (needFares) {
+            if (fareData && typeof fareData === 'object') Admin._cachedFareVotes = fareData;
+            else fareStatus = 'unavailable';
+        }
+        if (needFails) {
+            if (failData && typeof failData === 'object') Admin._cachedRoutingFails = failData;
+            else failStatus = 'unavailable';
+        }
+        if (needTickets) {
+            if (ticketData && typeof ticketData === 'object') Admin._cachedFareTicketPhotos = ticketData;
+            else ticketStatus = 'unavailable';
+        }
+        const ids = Admin.commuterIdSet(did, deviceNode?.uid, userNode && looksDevice ? null : did);
+        const feedbackItems = (Admin.cachedFeedbackData || []).filter((i) => {
+            const fbDid = String(i?.deviceId || i?.device_id || '').trim();
+            return ids.has(fbDid) || fbDid === did;
+        });
+        const latestFeedback = feedbackItems.filter((i) => !i.isFromAdmin)
+            .sort((a, b) => (Number(b.timestamp) || 0) - (Number(a.timestamp) || 0))[0] || null;
+        const contacts = typeof Admin.collectFeedbackContacts === 'function'
+            ? Admin.collectFeedbackContacts(did)
+            : { emails: [], phones: [] };
+        let tripLast = Number(tripNode?.lastSeen) || 0;
+        let tripRegion = tripNode?.region || '';
+        const tripIndex = Admin._fbTripPlanUsers && typeof Admin._fbTripPlanUsers === 'object'
+            ? (Admin._fbTripPlanUsers[did] || Admin._fbTripPlanUsers[did.replace(/[.#$[\]/]/g, '_')])
+            : null;
+        if (tripIndex) {
+            const last = Number(tripIndex.lastSeen) || 0;
+            if (last > tripLast) tripLast = last;
+            tripRegion = tripRegion || tripIndex.region || '';
+        }
+        const inboxHas = !!(inboxNode && typeof inboxNode === 'object' && Object.keys(inboxNode).length);
+        const crashKnown = Array.isArray(Admin.cachedCrashData);
+        const crashCount = (Admin.cachedCrashData || []).filter((c) => {
+            const cDid = String(c?.deviceId || c?.device_id || '').trim();
+            return ids.has(cDid) || cDid === did;
+        }).length;
+        const matchesId = (row) => {
+            const rowId = String(row?.deviceId || row?.userId || '').trim();
+            const authUid = String(row?.authUid || '').trim();
+            return ids.has(rowId) || rowId === did || (authUid && ids.has(authUid));
+        };
+        const fareVotes = fareStatus === 'unavailable'
+            ? []
+            : Object.entries(Admin._cachedFareVotes || {}).map(([id, v]) => ({ id, ...(v || {}) })).filter(matchesId);
+        const fails = failStatus === 'unavailable'
+            ? []
+            : Object.values(Admin._cachedRoutingFails || {}).filter(matchesId);
+        const ticketPhotos = Admin._cachedFareTicketPhotos || {};
+        const ticketFromVotes = fareVotes.filter((v) => v.ticketUrl || (v.id && ticketPhotos[v.id]?.ticketUrl)).length;
+        const ticketFromCache = ticketStatus === 'unavailable' ? 0 : Object.values(ticketPhotos).filter(matchesId).length;
+        const ticketCount = Math.max(ticketFromVotes, ticketFromCache);
+        const formatRand = (n) => {
+            const num = Number(n);
+            if (!Number.isFinite(num)) return '';
+            return `R${Number.isInteger(num) ? num : num.toFixed(2)}`;
+        };
+        const interactionLine = (label, status, count, detail) => {
+            if (status === 'unavailable') return `${label}: unavailable`;
+            if (!count) return `${label}: none`;
+            return detail ? `${label}: ${count} · ${detail}` : `${label}: ${count}`;
+        };
+        let fareDetail = '';
+        if (fareVotes.length) {
+            const latest = [...fareVotes].sort((a, b) => (Number(b.at || b.timestamp) || 0) - (Number(a.at || a.timestamp) || 0))[0];
+            const from = String(latest.origin || '').trim();
+            const to = String(latest.destination || '').trim();
+            const od = from && to ? `${from} to ${to}` : (from || to);
+            const quoted = formatRand(latest.quotedPrice);
+            const reported = formatRand(latest.reportedPrice);
+            fareDetail = [od, quoted ? `quoted ${quoted}` : '', reported ? `reported ${reported}` : ''].filter(Boolean).join(' · ');
+        }
+        let ticketLine = interactionLine('Ticket photos', 'ready', ticketCount, '');
+        if (ticketStatus === 'unavailable' && !ticketCount) {
+            ticketLine = 'Ticket photos: unavailable';
+        }
+        const crashLine = crashKnown
+            ? (crashCount ? `Crashes: ${crashCount}` : 'Crashes: none')
+            : 'Crashes: unavailable';
+        return {
+            id: did,
+            alias: Admin.commuterAlias(did),
+            joinedMs: Admin.parseJoinedAtFromUserId(did) || Number(userNode?.createdAt) || null,
+            displayName: userNode?.displayName || deviceNode?.displayName || '',
+            email: userNode?.email || deviceNode?.email || '',
+            linkedUid: deviceNode?.uid || '',
+            tripLast,
+            tripRegion,
+            hasChat: inboxHas || feedbackItems.length > 0,
+            feedbackCount: feedbackItems.filter((i) => !i.isFromAdmin).length,
+            latestFeedbackAt: latestFeedback ? Number(latestFeedback.timestamp) || 0 : 0,
+            latestFeedbackId: latestFeedback?.id || latestFeedback?.feedbackId || '',
+            contacts,
+            defaultRoute: Admin.inferCommuterDefaultRoute(did, latestFeedback || {}),
+            crashCount,
+            fareLine: interactionLine('Fares', fareStatus, fareVotes.length, fareDetail),
+            failLine: interactionLine('Routing fails', failStatus, fails.length, ''),
+            ticketLine,
+            crashLine,
+        };
+    },
+
+    openCommuterPeek: async (id) => {
+        const did = String(id || '').trim();
+        if (!did || did === 'Anonymous / Legacy' || did === 'unknown') return;
+        document.getElementById('admin-commuter-peek')?.remove();
+        const modal = document.createElement('div');
+        modal.id = 'admin-commuter-peek';
+        modal.className = 'fixed inset-0 bg-black/80 z-[220] flex items-center justify-center p-4 backdrop-blur-sm';
+        const close = () => modal.remove();
+        modal.innerHTML = `
+            <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md p-5 border border-gray-200 dark:border-gray-700" role="dialog" aria-labelledby="commuter-peek-title" aria-modal="true">
+                <h3 id="commuter-peek-title" class="text-lg font-black text-gray-900 dark:text-white mb-1">User sheet</h3>
+                <p class="text-[11px] text-gray-500 dark:text-gray-400 mb-3 leading-relaxed">Quick facts for this id. Search User Trust if you need the full profile.</p>
+                <div id="commuter-peek-body" class="space-y-1.5 text-[11px] text-gray-700 dark:text-gray-200">
+                    <p class="animate-pulse text-gray-400">Loading...</p>
+                </div>
+                <div class="flex flex-wrap gap-2 mt-4">
+                    <button type="button" id="commuter-peek-lookup" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded-lg text-sm">Look up more</button>
+                    <button type="button" id="commuter-peek-close" class="flex-1 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 font-bold py-2.5 rounded-lg text-sm">Close</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+        document.getElementById('commuter-peek-close').onclick = close;
+        modal.addEventListener('click', (e) => { if (e.target === modal) close(); });
+        document.getElementById('commuter-peek-lookup').onclick = () => {
+            close();
+            if (typeof Admin.openUserTrustLookup === 'function') Admin.openUserTrustLookup({ uid: did });
+            else if (typeof showToast === 'function') showToast('Open User Trust to search this id.', 'info');
+        };
+        const body = document.getElementById('commuter-peek-body');
+        try {
+            const peek = await Admin.collectCommuterPeek(did);
+            if (!body.isConnected) return;
+            const esc = Admin.commuterEsc;
+            const heading = peek.alias || peek.displayName || did;
+            const joinedLabel = peek.joinedMs ? Admin.formatDate(peek.joinedMs) : 'unknown';
+            const contactBits = [
+                ...(peek.contacts.emails || []).map((em) => esc(em)),
+                ...(peek.contacts.phones || []).map((ph) => esc(ph)),
+            ];
+            const routeLabel = Admin.inboxRouteLabel(peek.defaultRoute) || peek.defaultRoute;
+            body.innerHTML = `
+                <p class="font-black text-sm text-gray-900 dark:text-white break-words">${esc(heading)}</p>
+                ${peek.alias ? `<p>Alias: <b>${esc(peek.alias)}</b></p>` : '<p class="text-gray-400">No feedback alias.</p>'}
+                <p class="font-mono text-[10px] text-gray-400 break-all">${esc(did)}</p>
+                <p>Joined: <b>${esc(joinedLabel)}</b></p>
+                ${peek.email ? `<p>Email: <b>${esc(peek.email)}</b></p>` : ''}
+                ${peek.linkedUid ? `<p>Account: <span class="font-mono break-all">${esc(peek.linkedUid)}</span></p>` : ''}
+                <p>Trip plans: <b>${peek.tripLast ? 'yes' : 'none'}</b>${peek.tripRegion ? ` · ${esc(peek.tripRegion)}` : ''}${peek.tripLast ? ` · last ${esc(Admin.formatDate(peek.tripLast))}` : ''}</p>
+                <p>Feedback: <b>${peek.hasChat ? (peek.feedbackCount ? `${peek.feedbackCount} messages` : 'open thread') : 'none'}</b>${peek.latestFeedbackAt ? ` · last ${esc(Admin.formatDate(peek.latestFeedbackAt))}` : ''}</p>
+                ${contactBits.length ? `<p>Contacts: <b>${contactBits.join(', ')}</b></p>` : ''}
+                ${routeLabel ? `<p>Default route: <b>${esc(routeLabel)}</b></p>` : ''}
+                <p>${esc(peek.fareLine)}</p>
+                <p>${esc(peek.failLine)}</p>
+                <p>${esc(peek.ticketLine)}</p>
+                <p>${esc(peek.crashLine)}</p>
+            `;
+            if (peek.hasChat) {
+                const actions = document.createElement('div');
+                actions.className = 'flex flex-wrap gap-2 pt-2';
+                actions.innerHTML = `<button type="button" id="commuter-peek-chat" class="text-[10px] font-black uppercase tracking-wider text-white bg-blue-600 hover:bg-blue-700 px-3 py-1.5 rounded-lg">Open chat</button>`;
+                body.appendChild(actions);
+                document.getElementById('commuter-peek-chat').onclick = () => {
+                    close();
+                    Admin.openFeedbackForDevice(did, peek.latestFeedbackId);
+                };
+            }
+        } catch (e) {
+            if (body.isConnected) body.innerHTML = `<p class="text-red-500">Could not load this sheet: ${Admin.commuterEsc(e.message || e)}</p>`;
+        }
+    },
+
+    commuterAlias: (id) => {
+        const raw = String(id || '').trim();
+        if (!raw || raw === 'Anonymous / Legacy') return '';
+        const map = Admin.cachedAliases;
+        if (!map || typeof map !== 'object') return '';
+        const alias = map[raw];
+        return alias ? String(alias).trim() : '';
+    },
+
+    commuterLabel: (id) => Admin.commuterAlias(id) || String(id || '').trim(),
+
+    commuterEsc: (str) => {
+        if (str == null) return '';
+        if (typeof escapeHTML === 'function') return escapeHTML(str);
+        return String(str).replace(/[&<>"']/g, (m) => ({
+            '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+        }[m]));
+    },
+
+    commuterLabelHtml: (id, opts = {}) => {
+        const raw = String(id || '').trim();
+        if (!raw) return '';
+        const alias = Admin.commuterAlias(raw);
+        const hint = opts.hint === false ? '' : Admin.userIdJoinHintHtml(raw);
+        const title = alias ? ` title="${Admin.commuterEsc(raw)}"` : '';
+        const text = Admin.commuterEsc(alias || raw);
+        const weight = alias ? 'font-bold text-gray-800 dark:text-gray-100' : 'font-mono text-gray-600 dark:text-gray-300';
+        return `<span class="inline-flex items-center min-w-0 max-w-full ${weight} break-all"${title}>${text}${hint}</span>`;
+    },
+
+    commuterIdSet: (...vals) => {
+        const out = new Set();
+        vals.flat(Infinity).forEach((v) => {
+            const s = String(v || '').trim();
+            if (s && s !== 'Anonymous / Legacy') out.add(s);
+        });
+        return out;
+    },
+
+    ensureAliasesLoaded: async () => {
+        if (Admin.cachedAliases && typeof Admin.cachedAliases === 'object' && Object.keys(Admin.cachedAliases).length) {
+            return Admin.cachedAliases;
+        }
+        if (Admin._aliasesLoadInflight) return Admin._aliasesLoadInflight;
+        Admin._aliasesLoadInflight = (async () => {
+            try {
+                const secret = await Admin.getAuthKey();
+                if (!secret) {
+                    Admin.cachedAliases = Admin.cachedAliases || {};
+                    return Admin.cachedAliases;
+                }
+                const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
+                const res = await window.guardianFetch(`${dynamicEndpoint}admin_state/aliases.json?auth=${secret}`, {}, 8000);
+                Admin.cachedAliases = res.ok ? ((await res.json()) || {}) : (Admin.cachedAliases || {});
+                if (!Admin.cachedAliases || typeof Admin.cachedAliases !== 'object') Admin.cachedAliases = {};
+            } catch {
+                Admin.cachedAliases = Admin.cachedAliases || {};
+            } finally {
+                Admin._aliasesLoadInflight = null;
+            }
+            return Admin.cachedAliases;
+        })();
+        return Admin._aliasesLoadInflight;
+    },
+
+    inferCommuterDefaultRoute: (deviceId, item) => {
+        const ids = Admin.commuterIdSet(deviceId, item?.deviceId, item?.userId);
+        const fromFeedback = (Admin.cachedFeedbackData || []).filter((i) => {
+            if (!i || i.isFromAdmin) return false;
+            const did = i.deviceId || i.device_id;
+            return ids.has(String(did || '').trim()) && !Admin.isBlankInboxRoute(i.routeId);
+        }).sort((a, b) => (Number(b.timestamp) || 0) - (Number(a.timestamp) || 0));
+        if (fromFeedback[0]?.routeId) return fromFeedback[0].routeId;
+        const voteRoutes = Array.isArray(item?.routeIds) ? item.routeIds.map((r) => String(r || '').trim()).filter(Boolean) : [];
+        if (voteRoutes[0]) return voteRoutes[0];
+        const votes = Admin._cachedFareVotes && typeof Admin._cachedFareVotes === 'object'
+            ? Object.values(Admin._cachedFareVotes) : [];
+        for (const v of votes) {
+            const did = String(v?.deviceId || v?.userId || '').trim();
+            if (!ids.has(did)) continue;
+            if (Array.isArray(v.routeIds) && v.routeIds[0]) return String(v.routeIds[0]);
+        }
+        return '';
+    },
+
+    stackedContributorRowHtml: (userId, meta) => {
+        const esc = Admin.secureDeEscape || Admin.commuterEsc;
+        return `<div class="flex flex-col gap-0.5 py-1.5 border-b border-gray-100 dark:border-gray-800 last:border-0 text-[10px]">
+            <span class="min-w-0">${Admin.commuterLabelHtml(userId)}</span>
+            ${meta ? `<span class="font-mono text-gray-500 dark:text-gray-400 break-words">${esc(meta)}</span>` : ''}
+        </div>`;
+    },
+
+    openFeedbackForDevice: (deviceId, feedbackId) => {
+        const did = String(deviceId || '').trim();
+        if (!did || did === 'Anonymous / Legacy') {
+            if (typeof showToast === 'function') showToast('No user id to open chat.', 'warning');
+            return;
+        }
+        Admin._pendingFeedbackOpen = { feedbackId: String(feedbackId || ''), deviceId: did };
+        if (typeof Admin.deepLinkToPanel === 'function') Admin.deepLinkToPanel('feedback-panel');
+        else if (typeof Admin.fetchFeedback === 'function') Admin.fetchFeedback();
+        else if (typeof showToast === 'function') showToast('Open Feedback first.', 'info');
+    },
+
+    startFeedbackChat: (deviceId, feedbackId) => {
+        const did = String(deviceId || '').trim();
+        if (!did || did === 'Anonymous / Legacy') {
+            if (typeof showToast === 'function') showToast('No user id to start chat.', 'warning');
+            return;
+        }
+        Admin._pendingFeedbackOpen = { feedbackId: String(feedbackId || ''), deviceId: did };
+        Admin.openReplyModal(feedbackId || '', did);
+    },
+
+    collectCommuterProfile: async ({ uid, deviceId, extraIds = [] } = {}) => {
+        await Admin.ensureAliasesLoaded();
+        const ids = Admin.commuterIdSet(uid, deviceId, extraIds);
+        const secret = await Admin.getAuthKey();
+        const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
+        const fetchJson = async (path) => {
+            try {
+                const joiner = path.includes('?') ? '&' : '?';
+                const authed = secret ? `${path}${joiner}auth=${encodeURIComponent(secret)}` : path;
+                const res = await fetch(`${dynamicEndpoint}${authed}`);
+                if (!res.ok) return null;
+                return res.json();
+            } catch {
+                return null;
+            }
+        };
+        const deviceLooks = [...ids].filter((id) => /^usr_/i.test(id)).slice(0, 6);
+        const lookIds = [...ids].slice(0, 8);
+        const needFares = !(Admin._cachedFareVotes && typeof Admin._cachedFareVotes === 'object');
+        const needFails = !(Admin._cachedRoutingFails && typeof Admin._cachedRoutingFails === 'object');
+        const needTickets = !(Admin._cachedFareTicketPhotos && typeof Admin._cachedFareTicketPhotos === 'object');
+        const shareRegions = ['GP', 'WC', 'KZN', 'EC'];
+        const [inboxRows, tripRows, pings, activity, fareData, failData, ticketData, shareBuckets] = await Promise.all([
+            Promise.all(deviceLooks.map(async (did) => ({ did, data: await fetchJson(`inbox/${encodeURIComponent(did)}.json`) }))),
+            Promise.all(lookIds.map(async (id) => ({ id, data: await fetchJson(`sys_logs/trip_plan_users/${encodeURIComponent(id)}.json`) }))),
+            fetchJson('ride_pings.json'),
+            fetchJson('community_activity.json'),
+            needFares ? fetchJson('sys_logs/fare_votes.json') : null,
+            needFails ? fetchJson('sys_logs/routing_fails.json') : null,
+            needTickets ? fetchJson('sys_logs/fare_ticket_photos.json') : null,
+            Promise.all(shareRegions.map(async (region) => fetchJson(`ride_share_log/${encodeURIComponent(region)}.json?orderBy=${encodeURIComponent('"at"')}&limitToLast=40`))),
+        ]);
+        if (fareData && typeof fareData === 'object') Admin._cachedFareVotes = fareData;
+        if (failData && typeof failData === 'object') Admin._cachedRoutingFails = failData;
+        if (ticketData && typeof ticketData === 'object') Admin._cachedFareTicketPhotos = ticketData;
+
+        const inboxHits = inboxRows.filter((row) => row.data && typeof row.data === 'object');
+        const feedbackItems = (Admin.cachedFeedbackData || []).filter((i) => {
+            const did = String(i?.deviceId || i?.device_id || '').trim();
+            return ids.has(did);
+        });
+        const chatDevice = deviceLooks.find((did) => inboxHits.some((row) => row.did === did))
+            || feedbackItems.map((i) => String(i.deviceId || i.device_id || '').trim()).find(Boolean)
+            || deviceLooks[0]
+            || '';
+        const latestFeedback = feedbackItems.filter((i) => !i.isFromAdmin).sort((a, b) => (Number(b.timestamp) || 0) - (Number(a.timestamp) || 0))[0] || null;
+        const contacts = chatDevice && typeof Admin.collectFeedbackContacts === 'function'
+            ? Admin.collectFeedbackContacts(chatDevice)
+            : { emails: [], phones: [] };
+
+        let tripLast = 0;
+        let tripRegion = '';
+        let tripPresent = 0;
+        tripRows.forEach((row) => {
+            if (!row.data) return;
+            tripPresent += 1;
+            const last = Number(row.data.lastSeen) || 0;
+            if (last > tripLast) {
+                tripLast = last;
+                tripRegion = row.data.region || tripRegion;
+            }
+        });
+        if (!tripPresent && Admin._fbTripPlanUsers && typeof Admin._fbTripPlanUsers === 'object') {
+            lookIds.forEach((id) => {
+                const node = Admin._fbTripPlanUsers[id] || Admin._fbTripPlanUsers[String(id).replace(/[.#$[\]/]/g, '_')];
+                if (!node) return;
+                tripPresent += 1;
+                const last = Number(node.lastSeen) || 0;
+                if (last > tripLast) {
+                    tripLast = last;
+                    tripRegion = node.region || tripRegion;
+                }
+            });
+        }
+
+        const fareVotes = Object.entries(Admin._cachedFareVotes || {}).map(([id, v]) => ({ id, ...(v || {}) })).filter((v) => {
+            const did = String(v?.deviceId || v?.userId || '').trim();
+            const authUid = String(v?.authUid || '').trim();
+            return ids.has(did) || ids.has(authUid);
+        });
+        const ticketPhotos = Admin._cachedFareTicketPhotos || {};
+        const fareTicketUrls = fareVotes.map((v) => {
+            const id = String(v?.id || '').trim();
+            const url = v?.ticketUrl || (id && ticketPhotos[id]?.ticketUrl) || '';
+            return url ? { voteId: id, url, at: Number(v?.at) || 0 } : null;
+        }).filter(Boolean);
+        const fails = Object.values(Admin._cachedRoutingFails || {}).filter((v) => {
+            const did = String(v?.userId || v?.deviceId || '').trim();
+            return ids.has(did);
+        });
+        const crashes = (Admin.cachedCrashData || []).filter((c) => {
+            const did = String(c?.deviceId || c?.device_id || '').trim();
+            return ids.has(did);
+        });
+
+        const now = Date.now();
+        const liveShares = [];
+        if (pings && typeof pings === 'object') {
+            Object.entries(pings).forEach(([routeId, nodes]) => {
+                if (!nodes || typeof nodes !== 'object') return;
+                Object.values(nodes).forEach((p) => {
+                    if (!p) return;
+                    const did = String(p.deviceId || '').trim();
+                    const pUid = String(p.uid || '').trim();
+                    if (!ids.has(did) && !ids.has(pUid)) return;
+                    liveShares.push({ ...p, routeId: p.routeId || routeId, live: (p.expiresAt || 0) > now });
+                });
+            });
+        }
+        liveShares.sort((a, b) => (Number(b.at) || 0) - (Number(a.at) || 0));
+
+        const shareLog = [];
+        (shareBuckets || []).forEach((bucket) => {
+            if (!bucket || typeof bucket !== 'object') return;
+            Object.entries(bucket).forEach(([id, row]) => {
+                if (!row || typeof row !== 'object') return;
+                const did = String(row.deviceId || '').trim();
+                const pUid = String(row.uid || '').trim();
+                if (!ids.has(did) && !ids.has(pUid)) return;
+                shareLog.push({
+                    id,
+                    routeId: row.routeId || '',
+                    trainId: row.trainId || '',
+                    action: row.action || '',
+                    status: row.status || '',
+                    at: Number(row.stoppedAt || row.at || row.startedAt) || 0,
+                    startedAt: Number(row.startedAt) || 0,
+                    stoppedAt: Number(row.stoppedAt) || 0,
+                });
+            });
+        });
+        shareLog.sort((a, b) => (b.at || 0) - (a.at || 0));
+
+        const community = [];
+        if (activity && typeof activity === 'object') {
+            Object.entries(activity).forEach(([routeId, msgs]) => {
+                if (!msgs || typeof msgs !== 'object') return;
+                Object.values(msgs).forEach((a) => {
+                    if (!a) return;
+                    const aUid = String(a.uid || '').trim();
+                    if (!ids.has(aUid)) return;
+                    community.push({ routeId, kind: a.kind || 'post', postId: a.postId, timestamp: a.timestamp });
+                });
+            });
+        }
+        community.sort((a, b) => (Number(b.timestamp) || 0) - (Number(a.timestamp) || 0));
+
+        const defaultRoute = Admin.inferCommuterDefaultRoute(chatDevice || deviceId, fareVotes[0] || latestFeedback || {});
+        const alias = Admin.commuterAlias(chatDevice) || Admin.commuterAlias(deviceId) || Admin.commuterAlias(uid);
+        return {
+            ids: [...ids],
+            alias,
+            chatDevice,
+            hasChat: inboxHits.length > 0 || feedbackItems.length > 0,
+            feedbackCount: feedbackItems.filter((i) => !i.isFromAdmin).length,
+            latestFeedbackAt: latestFeedback ? Number(latestFeedback.timestamp) || 0 : 0,
+            latestFeedbackId: latestFeedback?.id || latestFeedback?.feedbackId || '',
+            contacts,
+            defaultRoute,
+            tripPresent,
+            tripLast,
+            tripRegion,
+            fareVotes,
+            fareTicketUrls,
+            fails,
+            crashes,
+            liveShares,
+            shareLog,
+            community,
+        };
+    },
+
+    /** Cheap trip-plan presence from sys_logs/trip_plan_users (loaded once with feedback). */
+    feedbackDeviceHasTripPlans: (did) => {
+        const index = Admin._fbTripPlanUsers;
+        if (!index || typeof index !== 'object') return false;
+        const raw = String(did || '').trim();
+        if (!raw || raw === 'Anonymous / Legacy') return false;
+        if (index[raw]) return true;
+        const key = raw.replace(/[.#$[\]/]/g, '_');
+        return !!(key && index[key]);
     },
 
     // --- GUARDIAN PHASE 11 & 12: MASTER NOTIFICATION ENGINE (SEEN PROTOCOL) ---
@@ -2368,34 +3285,34 @@ const Admin = {
             
             const metricBoxes = telBody.querySelectorAll('.grid > div');
             metricBoxes.forEach(box => {
-                box.className = "bg-slate-50 dark:bg-slate-800/50 p-3 rounded-lg border border-slate-200 dark:border-slate-700 flex flex-col items-center justify-center shadow-sm transition-colors";
+                box.className = "bg-gray-50 dark:bg-gray-800/50 p-3 rounded-lg border border-gray-200 dark:border-gray-700 flex flex-col items-center justify-center shadow-sm transition-colors";
                 const label = box.querySelector('span:first-child');
                 const value = box.querySelector('span:last-child');
                 
                 // GUARDIAN: Identify the "Today" tile to make it interactive for Regional Breakdown
                 if (value && value.id === 'stat-today') {
-                    box.classList.add('cursor-pointer', 'hover:border-indigo-400', 'dark:hover:border-indigo-500', 'hover:shadow-md');
+                    box.classList.add('cursor-pointer', 'border-blue-300', 'dark:border-blue-400', 'hover:shadow-md');
                     box.title = "View Regional Breakdown";
                     box.onclick = () => Admin.openRegionalModal();
                 }
 
-                if (label) label.className = "text-[10px] text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider mb-1";
+                if (label) label.className = "text-[10px] text-gray-500 dark:text-gray-400 font-bold uppercase tracking-wider mb-1";
                 // No permanent pulse on Today / WAU - only refreshTelemetry adds a short loading pulse
-                if (value) value.className = "text-2xl font-black text-slate-800 dark:text-slate-200";
+                if (value) value.className = "text-2xl font-black text-gray-800 dark:text-gray-200";
             });
 
             const errorBox = telBody.querySelector('.bg-red-50') || telBody.querySelector('#stat-errors')?.closest('div');
             if (errorBox) {
-                errorBox.className = "bg-slate-50 dark:bg-slate-800/80 p-3 rounded-lg border border-slate-200 dark:border-slate-700 flex items-center justify-between shadow-sm mt-3 transition-colors cursor-pointer hover:border-red-400 dark:hover:border-red-500 hover:shadow-md";
+                errorBox.className = "bg-gray-50 dark:bg-gray-800/80 p-3 rounded-lg border border-gray-200 dark:border-gray-700 flex items-center justify-between shadow-sm mt-3 transition-colors cursor-pointer hover:border-blue-400 dark:hover:border-blue-500 hover:shadow-md";
                 errorBox.title = 'System / Sentry diagnostic errors (24h). Distress/help lives under Crash Analytics.';
                 errorBox.onclick = () => Admin.openDiagnosticErrorsModal();
                 const label = errorBox.querySelector('span:first-child');
                 const value = errorBox.querySelector('span:last-child');
                 if (label) {
-                    label.className = "text-[10px] text-slate-600 dark:text-slate-400 font-bold uppercase tracking-wider flex items-center";
+                    label.className = "text-[10px] text-gray-600 dark:text-gray-400 font-bold uppercase tracking-wider flex items-center";
                     label.innerHTML = `<span class="mr-1.5 inline-flex text-amber-500">${Admin.icon('alert', 'w-4 h-4')}</span> SYSTEM ERRORS 24H`;
                 }
-                if (value) value.className = "text-lg font-black text-slate-800 dark:text-slate-200";
+                if (value) value.className = "text-lg font-black text-gray-800 dark:text-gray-200";
             }
             
             // GUARDIAN FIX: Removed the regex SVG-replacement block here to allow the native emoji to display.
@@ -2405,24 +3322,24 @@ const Admin = {
         if (telBody && !document.getElementById('tel-export-btn')) {
             // GROWTH SPRINT PHASE 6 & 8: Fully Dynamic SVG Line Graph & Range Toggles
             const trendWrapper = document.createElement('div');
-            trendWrapper.className = "mt-4 border-t border-slate-200 dark:border-slate-700 pt-3";
+            trendWrapper.className = "mt-4 border-t border-gray-200 dark:border-gray-700 pt-3";
             trendWrapper.innerHTML = `
                 <div class="flex items-center justify-between mb-2 px-1">
-                    <button id="trend-cycle-btn" class="text-[10px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-widest focus:outline-none hover:text-blue-600 dark:hover:text-blue-400 transition-colors bg-slate-100 dark:bg-slate-800 px-2 py-1.5 rounded flex items-center shadow-sm border border-slate-200 dark:border-slate-700">
+                    <button id="trend-cycle-btn" class="text-[10px] font-bold text-gray-600 dark:text-gray-300 uppercase tracking-widest focus:outline-none hover:text-blue-600 dark:hover:text-blue-400 transition-colors bg-gray-100 dark:bg-gray-800 px-2 py-1.5 rounded flex items-center shadow-sm border border-gray-200 dark:border-gray-700">
                         <svg class="w-3.5 h-3.5 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z"></path></svg>
                         <span>${Admin.telemetryRange} Trend</span>
                     </button>
                     <div class="flex space-x-2">
-                        <button id="trend-expand-btn" class="text-sm text-slate-400 hover:text-blue-500 transition-colors focus:outline-none px-1" title="Full Screen">
+                        <button id="trend-expand-btn" class="text-sm text-gray-400 hover:text-blue-500 transition-colors focus:outline-none px-1" title="Full Screen">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"></path></svg>
                         </button>
-                        <button id="trend-inline-export-btn" class="text-sm text-slate-400 hover:text-blue-500 transition-colors focus:outline-none px-1" title="Export">
+                        <button id="trend-inline-export-btn" class="text-sm text-gray-400 hover:text-blue-500 transition-colors focus:outline-none px-1" title="Export">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
                         </button>
                     </div>
                 </div>
-                <div id="tel-trend-container" class="h-28 bg-white dark:bg-gray-900 rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden flex items-center justify-center cursor-pointer hover:border-blue-300 dark:hover:border-blue-700 transition-colors">
-                    <span class="text-xs text-slate-400 italic">Loading Graph...</span>
+                <div id="tel-trend-container" class="h-28 bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden flex items-center justify-center cursor-pointer hover:border-blue-300 dark:hover:border-blue-700 transition-colors">
+                    <span class="text-xs text-gray-400 italic">Loading Graph...</span>
                 </div>
             `;
             telBody.appendChild(trendWrapper);
@@ -2438,31 +3355,31 @@ const Admin = {
                 chartPanel.className = 'bg-gray-50 dark:bg-gray-900 min-h-[calc(100dvh-5.5rem)] h-[calc(100dvh-5.5rem)] landscape:min-h-[calc(100dvh-4.5rem)] landscape:h-[calc(100dvh-4.5rem)]';
                 chartPanel.innerHTML = `
                     <button id="telemetry-chart-header-btn" class="hidden" type="button"><span>Analytics Trends</span></button>
-                    <div id="telemetry-chart-body" class="h-full min-h-0 flex flex-col overflow-hidden bg-white dark:bg-gray-800 border border-slate-200 dark:border-slate-700 rounded-xl">
-                        <div class="p-2 sm:p-3 border-b border-slate-200 dark:border-slate-700 flex flex-wrap justify-between items-center gap-2 bg-slate-50 dark:bg-slate-900 shrink-0">
-                            <button id="analytics-trend-cycle" class="px-3 py-1.5 rounded-lg bg-white dark:bg-gray-800 text-slate-700 dark:text-slate-200 hover:bg-blue-50 dark:hover:bg-gray-700 transition-colors focus:outline-none text-[10px] font-bold uppercase tracking-widest border border-slate-200 dark:border-slate-700 shadow-sm flex items-center">
+                    <div id="telemetry-chart-body" class="h-full min-h-0 flex flex-col overflow-hidden bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl">
+                        <div class="p-2 sm:p-3 border-b border-gray-200 dark:border-gray-700 flex flex-wrap justify-between items-center gap-2 bg-gray-50 dark:bg-gray-900 shrink-0">
+                            <button id="analytics-trend-cycle" class="px-3 py-1.5 rounded-lg bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 hover:bg-blue-50 dark:hover:bg-gray-700 transition-colors focus:outline-none text-[10px] font-bold uppercase tracking-widest border border-gray-200 dark:border-gray-700 shadow-sm flex items-center">
                                 <svg class="w-3.5 h-3.5 mr-1.5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z"></path></svg>
                                 <span>${Admin.telemetryRange}</span>
                             </button>
                             <div class="flex items-center space-x-2">
-                                <button id="analytics-trend-compare-btn" class="p-2 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-slate-700 transition-colors focus:outline-none" title="Compare Previous Period" aria-label="Compare previous period">
+                                <button id="analytics-trend-compare-btn" class="p-2 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-gray-700 transition-colors focus:outline-none" title="Compare Previous Period" aria-label="Compare previous period">
                                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
                                 </button>
-                                <button id="analytics-trend-export" class="p-2 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-blue-100 dark:hover:bg-slate-700 transition-colors focus:outline-none" title="Export Chart" aria-label="Export chart">
+                                <button id="analytics-trend-export" class="p-2 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-blue-100 dark:hover:bg-gray-700 transition-colors focus:outline-none" title="Export Chart" aria-label="Export chart">
                                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
                                 </button>
                             </div>
                         </div>
-                        <div id="analytics-pagination-controls" class="p-2 bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 flex justify-center items-center space-x-4 shrink-0 shadow-inner">
-                            <button id="analytics-trend-prev" class="w-8 h-8 rounded-full bg-white dark:bg-gray-800 shadow border border-slate-200 dark:border-slate-600 flex items-center justify-center text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 focus:outline-none transition-transform active:scale-95" aria-label="Previous period"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg></button>
-                            <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest w-24 text-center">Navigate</span>
-                            <button id="analytics-trend-next" class="w-8 h-8 rounded-full bg-white dark:bg-gray-800 shadow border border-slate-200 dark:border-slate-600 flex items-center justify-center text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 focus:outline-none transition-transform active:scale-95 disabled:opacity-30" aria-label="Next period"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg></button>
+                        <div id="analytics-pagination-controls" class="p-2 bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 flex justify-center items-center space-x-4 shrink-0 shadow-inner">
+                            <button id="analytics-trend-prev" class="w-8 h-8 rounded-full bg-white dark:bg-gray-800 shadow border border-gray-200 dark:border-gray-600 flex items-center justify-center text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none transition-transform active:scale-95" aria-label="Previous period"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg></button>
+                            <span class="text-[10px] font-bold text-gray-500 uppercase tracking-widest w-24 text-center">Navigate</span>
+                            <button id="analytics-trend-next" class="w-8 h-8 rounded-full bg-white dark:bg-gray-800 shadow border border-gray-200 dark:border-gray-600 flex items-center justify-center text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none transition-transform active:scale-95 disabled:opacity-30" aria-label="Next period"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg></button>
                         </div>
                         <div class="flex-grow p-2 sm:p-4 landscape:p-2 flex flex-col items-center justify-center relative bg-white dark:bg-gray-800 min-h-0 overflow-hidden">
                             <div id="analytics-chart-svg-container" class="w-full flex-1 min-h-0 mb-2 landscape:mb-0"></div>
                             <div class="text-center shrink-0 pb-2 landscape:pb-0">
-                                <h3 class="text-base sm:text-xl font-black text-slate-900 dark:text-white tracking-tight leading-none" id="analytics-trend-title">Loading...</h3>
-                                <p class="text-[10px] text-slate-500 uppercase tracking-widest font-bold mt-1">Live Analytics Engine</p>
+                                <h3 class="text-base sm:text-xl font-black text-gray-900 dark:text-white tracking-tight leading-none" id="analytics-trend-title">Loading...</h3>
+                                <p class="text-[10px] text-gray-500 uppercase tracking-widest font-bold mt-1">Live Analytics Engine</p>
                             </div>
                         </div>
                     </div>
@@ -2480,11 +3397,11 @@ const Admin = {
                     compareBtn.onclick = () => {
                         Admin.isComparing = !Admin.isComparing;
                         if (Admin.isComparing) {
-                            compareBtn.classList.replace('text-slate-400', 'text-blue-600');
-                            compareBtn.classList.replace('dark:bg-slate-800', 'dark:bg-slate-700');
+                            compareBtn.classList.replace('text-gray-400', 'text-blue-600');
+                            compareBtn.classList.replace('dark:bg-gray-800', 'dark:bg-gray-700');
                         } else {
-                            compareBtn.classList.replace('text-blue-600', 'text-slate-400');
-                            compareBtn.classList.replace('dark:bg-slate-700', 'dark:bg-slate-800');
+                            compareBtn.classList.replace('text-blue-600', 'text-gray-400');
+                            compareBtn.classList.replace('dark:bg-gray-700', 'dark:bg-gray-800');
                         }
                         Admin.refreshTelemetry();
                     };
@@ -2497,52 +3414,57 @@ const Admin = {
                 regionModal.id = 'telemetry-region-modal';
                 regionModal.className = 'fixed inset-0 bg-black/90 z-[160] hidden flex items-center justify-center p-4 backdrop-blur-md transition-opacity duration-300';
                 regionModal.innerHTML = `
-                    <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-sm flex flex-col transform transition-all scale-95 border border-slate-200 dark:border-slate-700">
-                        <div class="p-4 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center bg-slate-50 dark:bg-slate-900 rounded-t-2xl shrink-0">
-                            <h3 class="text-lg font-black text-slate-900 dark:text-white flex items-center tracking-tight">
+                    <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-sm flex flex-col transform transition-all scale-95 border border-gray-200 dark:border-gray-700">
+                        <div class="p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center bg-gray-50 dark:bg-gray-900 rounded-t-2xl shrink-0">
+                            <h3 class="text-lg font-black text-gray-900 dark:text-white flex items-center tracking-tight">
                                 <span class="mr-2 inline-flex">${Admin.icon('globe', 'w-4 h-4')}</span> Regional Breakdown
                             </h3>
-                            <button onclick="closeSmoothModal('telemetry-region-modal'); if(location.hash === '#region-breakdown') history.replaceState({ adminPanel: 'telemetry-panel' }, '', '#dev-telemetry-panel');" class="p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500 transition-colors focus:outline-none">
+                            <button onclick="closeSmoothModal('telemetry-region-modal'); if(location.hash === '#region-breakdown') history.replaceState({ adminPanel: 'telemetry-panel' }, '', '#dev-telemetry-panel');" class="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-500 transition-colors focus:outline-none">
                                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
                             </button>
                         </div>
                         <div class="p-5 flex-grow bg-white dark:bg-gray-800 rounded-b-2xl">
-                            <p id="region-metric-label" class="text-center text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Unique users by last selected region</p>
-                            <p id="region-today-total" class="text-center text-xs font-black text-slate-800 dark:text-slate-200 mb-1">Today unique: --</p>
-                            <p id="region-today-sessions" class="text-center text-[10px] font-bold text-slate-500 mb-4">Today sessions: --</p>
+                            <p id="region-metric-label" class="text-center text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1">Users and sessions by region on the hit</p>
+                            <p id="region-today-total" class="text-center text-xs font-black text-gray-800 dark:text-gray-200 mb-1">People today: --</p>
+                            <p id="region-today-sessions" class="text-center text-[10px] font-bold text-gray-500 mb-4">Sessions today: --</p>
                             <div class="grid grid-cols-2 gap-3 mb-3">
                                 <div class="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg border border-blue-100 dark:border-blue-800/50 flex flex-col items-center justify-center shadow-sm">
                                     <span class="text-[10px] text-blue-600 dark:text-blue-400 font-bold uppercase tracking-wider mb-1">Gauteng</span>
                                     <span id="region-stat-gp" class="text-2xl font-black text-blue-700 dark:text-blue-300">--</span>
+                                    <span class="text-[9px] font-bold uppercase tracking-wider text-blue-600/80 dark:text-blue-300/70">users</span>
                                     <span id="region-sess-gp" class="text-[9px] font-bold text-blue-500/80 dark:text-blue-300/70 mt-0.5">-- sessions</span>
                                 </div>
-                                <div class="bg-green-50 dark:bg-green-900/20 p-3 rounded-lg border border-green-100 dark:border-green-800/50 flex flex-col items-center justify-center shadow-sm">
-                                    <span class="text-[10px] text-green-600 dark:text-green-400 font-bold uppercase tracking-wider mb-1">Western Cape</span>
-                                    <span id="region-stat-wc" class="text-2xl font-black text-green-700 dark:text-green-300">--</span>
-                                    <span id="region-sess-wc" class="text-[9px] font-bold text-green-500/80 dark:text-green-300/70 mt-0.5">-- sessions</span>
+                                <div class="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg border border-blue-100 dark:border-blue-800/50 flex flex-col items-center justify-center shadow-sm">
+                                    <span class="text-[10px] text-blue-600 dark:text-blue-400 font-bold uppercase tracking-wider mb-1">Western Cape</span>
+                                    <span id="region-stat-wc" class="text-2xl font-black text-blue-700 dark:text-blue-300">--</span>
+                                    <span class="text-[9px] font-bold uppercase tracking-wider text-blue-600/80 dark:text-blue-300/70">users</span>
+                                    <span id="region-sess-wc" class="text-[9px] font-bold text-blue-500/80 dark:text-blue-300/70 mt-0.5">-- sessions</span>
                                 </div>
-                                <div class="bg-orange-50 dark:bg-orange-900/20 p-3 rounded-lg border border-orange-100 dark:border-orange-800/50 flex flex-col items-center justify-center shadow-sm">
-                                    <span class="text-[10px] text-orange-600 dark:text-orange-400 font-bold uppercase tracking-wider mb-1">KwaZulu-Natal</span>
-                                    <span id="region-stat-kzn" class="text-2xl font-black text-orange-700 dark:text-orange-300">--</span>
-                                    <span id="region-sess-kzn" class="text-[9px] font-bold text-orange-500/80 dark:text-orange-300/70 mt-0.5">-- sessions</span>
+                                <div class="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg border border-blue-100 dark:border-blue-800/50 flex flex-col items-center justify-center shadow-sm">
+                                    <span class="text-[10px] text-blue-600 dark:text-blue-400 font-bold uppercase tracking-wider mb-1">KwaZulu-Natal</span>
+                                    <span id="region-stat-kzn" class="text-2xl font-black text-blue-700 dark:text-blue-300">--</span>
+                                    <span class="text-[9px] font-bold uppercase tracking-wider text-blue-600/80 dark:text-blue-300/70">users</span>
+                                    <span id="region-sess-kzn" class="text-[9px] font-bold text-blue-500/80 dark:text-blue-300/70 mt-0.5">-- sessions</span>
                                 </div>
-                                <div class="bg-purple-50 dark:bg-purple-900/20 p-3 rounded-lg border border-purple-100 dark:border-purple-800/50 flex flex-col items-center justify-center shadow-sm">
-                                    <span class="text-[10px] text-purple-600 dark:text-purple-400 font-bold uppercase tracking-wider mb-1">Eastern Cape</span>
-                                    <span id="region-stat-ec" class="text-2xl font-black text-purple-700 dark:text-purple-300">--</span>
-                                    <span id="region-sess-ec" class="text-[9px] font-bold text-purple-500/80 dark:text-purple-300/70 mt-0.5">-- sessions</span>
+                                <div class="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg border border-blue-100 dark:border-blue-800/50 flex flex-col items-center justify-center shadow-sm">
+                                    <span class="text-[10px] text-blue-600 dark:text-blue-400 font-bold uppercase tracking-wider mb-1">Eastern Cape</span>
+                                    <span id="region-stat-ec" class="text-2xl font-black text-blue-700 dark:text-blue-300">--</span>
+                                    <span class="text-[9px] font-bold uppercase tracking-wider text-blue-600/80 dark:text-blue-300/70">users</span>
+                                    <span id="region-sess-ec" class="text-[9px] font-bold text-blue-500/80 dark:text-blue-300/70 mt-0.5">-- sessions</span>
                                 </div>
                             </div>
-                            <div class="bg-slate-50 dark:bg-slate-800/50 p-3 rounded-lg border border-slate-200 dark:border-slate-700 flex items-center justify-between shadow-sm mt-1 mb-3">
-                                <span id="region-stat-other-label" class="text-[10px] text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider flex items-center">No region set</span>
+                            <div class="bg-gray-50 dark:bg-gray-800/50 p-3 rounded-lg border border-gray-200 dark:border-gray-700 flex items-center justify-between shadow-sm mt-1 mb-3">
+                                <span id="region-stat-other-label" class="text-[10px] text-gray-500 dark:text-gray-400 font-bold uppercase tracking-wider flex items-center">No region on the hit</span>
                                 <div class="text-right">
-                                    <span id="region-stat-other" class="text-lg font-black text-slate-700 dark:text-slate-300">--</span>
-                                    <span id="region-sess-other" class="block text-[9px] font-bold text-slate-500">-- sessions</span>
+                                    <span id="region-stat-other" class="text-lg font-black text-gray-700 dark:text-gray-300">--</span>
+                                    <span class="block text-[9px] font-bold uppercase tracking-wider text-gray-500">users</span>
+                                    <span id="region-sess-other" class="block text-[9px] font-bold text-gray-500">-- sessions</span>
                                 </div>
                             </div>
-                            <p id="region-note" class="text-[10px] leading-relaxed text-slate-500 dark:text-slate-400 mb-4">TODAY is unique people. Region cards are unique users by last selected region — they are not sessions, and they will not add up to TODAY if someone switched region or sent hits before a region was set.</p>
+                            <p id="region-note" class="text-[10px] leading-relaxed text-gray-500 dark:text-gray-400 mb-4">People today and Sessions today are the totals. Each card counts a person, and their sessions, once for every region value on their hits. The cards are not a split of people today.</p>
                             
                             <!-- GROWTH SPRINT PHASE 12: Pivot to Graph CTA -->
-                            <button id="region-view-graph-btn" class="w-full bg-slate-800 hover:bg-slate-900 dark:bg-slate-700 dark:hover:bg-slate-600 text-white font-bold py-3 rounded-xl shadow-md transition-colors text-xs uppercase tracking-widest focus:outline-none flex items-center justify-center border border-slate-700 dark:border-slate-600">
+                            <button id="region-view-graph-btn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl shadow-md transition-colors text-xs uppercase tracking-widest focus:outline-none flex items-center justify-center">
                                 <svg class="w-4 h-4 mr-2 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z"></path></svg>
                                 View Global Trends
                             </button>
@@ -2713,7 +3635,15 @@ const Admin = {
             : '';
         
         // Colors & Theme Independence (hardcoded hex for perfect exportability)
-        const lineColor = '#3b82f6';
+        const pack = (typeof document !== 'undefined' && document.documentElement.getAttribute('data-colour-pack')) || 'classic';
+        let lineColor = '#3b82f6';
+        if (typeof document !== 'undefined' && typeof getComputedStyle === 'function') {
+            const ink = getComputedStyle(document.documentElement);
+            lineColor = (pack === 'earthy'
+                ? ink.getPropertyValue('--nt-accent')
+                : ink.getPropertyValue('--nt-primary')
+            ).trim() || lineColor;
+        }
         const todayColor = '#f97316';
         const gridColor = '#e5e5ea';
         const labelColor = '#8e8e93';
@@ -3393,19 +4323,31 @@ const Admin = {
         const todayUsers = data.todayUsers ?? Admin.currentTodayUsers;
         const todaySessions = data.todaySessions ?? Admin.currentTodaySessions;
         const todayEl = document.getElementById('region-today-total');
-        if (todayEl) todayEl.textContent = `Today unique: ${n(todayUsers)}`;
+        if (todayEl) todayEl.textContent = `People today: ${n(todayUsers)}`;
         const sessEl = document.getElementById('region-today-sessions');
-        if (sessEl) sessEl.textContent = `Today sessions: ${n(todaySessions)}`;
+        if (sessEl) sessEl.textContent = `Sessions today: ${n(todaySessions)}`;
+
+        const otherLabel = document.getElementById('region-stat-other-label');
+        if (otherLabel) {
+            const unset = Number(data.unsetUsers) || 0;
+            const unrecognised = Number(data.otherUsers) || 0;
+            otherLabel.textContent = unrecognised > 0 && unset === 0
+                ? 'Unrecognised region'
+                : unrecognised > 0
+                    ? 'No region on the hit, plus unrecognised'
+                    : 'No region on the hit';
+        }
 
         const assigned = (Number(data.GP) || 0) + (Number(data.WC) || 0) + (Number(data.KZN) || 0) + (Number(data.EC) || 0);
         const other = Number(data.OTHER) || 0;
-        const uniqueToday = Number(todayUsers) || 0;
+        const people = Number(todayUsers) || 0;
+        const cardUsers = assigned + other;
+        const extra = Math.max(0, cardUsers - people);
         const note = document.getElementById('region-note');
         if (note) {
-            const overlap = Math.max(0, (assigned + other) - uniqueToday);
-            note.textContent = overlap > 0
-                ? `These cards are unique users (not sessions). Region + no-region (${Admin.formatNumber(assigned + other)}) is about ${Admin.formatNumber(overlap)} above TODAY because the same commuter can appear in more than one bucket if they switched region or sent hits before a region was set.`
-                : `These cards are unique users by last selected region, not sessions. TODAY (${n(todayUsers)}) is unique people.`;
+            note.textContent = extra > 0
+                ? `People today and Sessions today are the totals. Each card counts a person, and their sessions, once for every region value on their hits, so the user numbers add up to ${Admin.formatNumber(cardUsers)}, which is ${Admin.formatNumber(extra)} above the ${Admin.formatNumber(people)} people. The cards are not a split of people today.`
+                : 'People today and Sessions today are the totals. Each card is the users who had that region on a hit today, and the sessions on those hits.';
         }
     },
 
@@ -3908,7 +4850,7 @@ const Admin = {
                 <button id="action-header-btn" type="button" class="w-full text-left text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center justify-center focus:outline-none relative">
                     <span class="flex flex-col items-center">
                         ${Admin.tileIcon('activity', 'text-blue-600 dark:text-blue-400')}
-                        <span class="text-blue-600 dark:text-blue-400">Global State Monitor</span>
+                        <span class="text-blue-600 dark:text-blue-400">State Monitor</span>
                     </span>
                     <svg id="action-chevron" class="w-4 h-4 transform transition-transform -rotate-90 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
                 </button>
@@ -3932,6 +4874,14 @@ const Admin = {
         { id: 'maint', label: 'Maint', types: ['Maintenance'] },
     ],
 
+    _GSM_SORTS: [
+        { id: 'expiry', label: 'Expiry' },
+        { id: 'newest', label: 'Newest' },
+        { id: 'severity', label: 'Severity' },
+        { id: 'type', label: 'Type' },
+        { id: 'route', label: 'Route' },
+    ],
+
     gsmTabCounts: (items) => {
         const counts = { all: (items || []).length };
         (Admin._GSM_TABS || []).forEach((tab) => {
@@ -3943,8 +4893,46 @@ const Admin = {
 
     gsmFilteredItems: (items, tabId) => {
         const tab = (Admin._GSM_TABS || []).find((t) => t.id === tabId) || Admin._GSM_TABS[0];
-        if (!tab || !tab.types) return items || [];
-        return (items || []).filter((it) => tab.types.includes(it.type));
+        const filtered = (!tab || !tab.types) ? (items || []) : (items || []).filter((it) => tab.types.includes(it.type));
+        return Admin.gsmSortedItems(filtered, Admin._gsmSort || 'expiry');
+    },
+
+    gsmSortedItems: (items, sortId) => {
+        const list = [...(items || [])];
+        const sevRank = (it) => {
+            const s = String(it.severity || '').toLowerCase();
+            if (s === 'critical') return 0;
+            if (s === 'warning') return 1;
+            return 2;
+        };
+        const created = (it) => Number(it.createdAt || it.timestamp || 0);
+        if (sortId === 'newest') {
+            list.sort((a, b) => (created(b) - created(a)) || ((b.expiresAt || 0) - (a.expiresAt || 0)));
+        } else if (sortId === 'severity') {
+            list.sort((a, b) => sevRank(a) - sevRank(b));
+        } else if (sortId === 'type') {
+            list.sort((a, b) => String(a.type || '').localeCompare(String(b.type || '')));
+        } else if (sortId === 'route') {
+            list.sort((a, b) => String(a.routeId || '').localeCompare(String(b.routeId || '')));
+        } else {
+            list.sort((a, b) => {
+                if (!a.expiresAt && !b.expiresAt) return 0;
+                if (!a.expiresAt) return 1;
+                if (!b.expiresAt) return -1;
+                return a.expiresAt - b.expiresAt;
+            });
+        }
+        return list;
+    },
+
+    gsmSortBarHtml: () => {
+        const active = Admin._gsmSort || 'expiry';
+        return `<div class="flex items-center justify-between gap-2 mb-2">
+            <label class="text-[10px] font-black uppercase tracking-wider text-gray-500 shrink-0" for="gsm-sort">Sort</label>
+            <select id="gsm-sort" class="flex-1 h-8 px-2 rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-[11px] font-bold text-gray-800 dark:text-gray-100">
+                ${(Admin._GSM_SORTS || []).map((s) => `<option value="${s.id}" ${s.id === active ? 'selected' : ''}>${s.label}</option>`).join('')}
+            </select>
+        </div>`;
     },
 
     gsmRegionBadge: (rId) => {
@@ -3985,6 +4973,8 @@ const Admin = {
                 <span class="text-sm font-black text-slate-900 dark:text-white leading-tight break-words w-full mb-2">
                     ${item.label}
                 </span>
+                ${item.imageUrl ? `<div class="w-full mb-2 rounded-lg overflow-hidden border border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-900"><img src="${String(item.imageUrl).replace(/"/g, '&quot;')}" alt="" class="w-full h-24 object-cover"></div>` : ''}
+                ${item.preview ? `<p class="text-[11px] text-gray-600 dark:text-gray-300 leading-snug break-words w-full mb-2">${String(item.preview).replace(/</g, '&lt;')}</p>` : ''}
                 <div class="flex gap-2 pt-2.5 border-t border-gray-100 dark:border-gray-700 mt-auto w-full">
                     <button onclick="event.stopPropagation(); Admin.resolveActionRequired('${safeType}', '${safeId}', '${safeRoute}')" class="flex-1 bg-white dark:bg-gray-800 hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 dark:text-red-400 border border-slate-200 dark:border-slate-600 text-xs font-bold py-1.5 rounded-lg shadow-sm transition-colors focus:outline-none flex items-center justify-center">
                         <svg class="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg> Resolve
@@ -4041,6 +5031,14 @@ const Admin = {
         bindGsmSwipe(document.getElementById('gsm-tabs'));
         bindGsmSwipe(document.getElementById('gsm-list'));
         bindGsmSwipe(document.getElementById('action-body'));
+        const sortEl = document.getElementById('gsm-sort');
+        if (sortEl) {
+            sortEl.onchange = (e) => {
+                e.stopPropagation();
+                Admin._gsmSort = sortEl.value || 'expiry';
+                Admin.renderGlobalStateMonitor(document.getElementById('action-required-panel'), Admin._gsmItems || [], { keepOpen: true });
+            };
+        }
     },
 
     renderGlobalStateMonitor: (actionBanner, activeItems, opts = {}) => {
@@ -4071,12 +5069,13 @@ const Admin = {
             <button id="action-header-btn" type="button" class="w-full text-left text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center justify-center focus:outline-none relative">
                 <span class="flex flex-col items-center">
                     ${Admin.tileIcon('activity', 'text-blue-600 dark:text-blue-400')}
-                    <span class="text-blue-600 dark:text-blue-400">Global State Monitor (${total})</span>
+                    <span class="text-blue-600 dark:text-blue-400">State Monitor (${total})</span>
                 </span>
                 <span class="admin-unread-badge ${total ? '' : 'hidden'}" aria-label="Active items">${total || ''}</span>
                 <svg id="action-chevron" class="w-4 h-4 transform transition-transform -rotate-90 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
             </button>
             <div id="action-body" class="${wasOpen ? 'mt-4 space-y-2' : 'hidden mt-4 space-y-2'}">
+                ${Admin.gsmSortBarHtml()}
                 ${Admin.gsmTabBarHtml(Admin._gsmItems)}
                 <div id="gsm-list">${listHtml}</div>
             </div>
@@ -4112,7 +5111,7 @@ const Admin = {
             <button id="action-header-btn" type="button" class="w-full text-left text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center justify-center focus:outline-none relative">
                 <span class="flex flex-col items-center">
                     ${Admin.tileIcon('activity', 'text-blue-600 dark:text-blue-400')}
-                    <span class="text-blue-600 dark:text-blue-400">Global State Monitor</span>
+                    <span class="text-blue-600 dark:text-blue-400">State Monitor</span>
                 </span>
                 <svg id="action-chevron" class="w-4 h-4 transform transition-transform -rotate-90 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
             </button>`;
@@ -4153,9 +5152,16 @@ const Admin = {
                             Admin.listNoticesInTarget(targetNotices).forEach((item) => {
                                 if (!item.expiresAt || item.expiresAt > now) {
                                     const sev = item.severity === 'critical' ? 'Critical' : (item.severity === 'warning' ? 'Warning' : 'Info');
+                                    const title = String(item.title || '').trim();
+                                    const rawBody = String(item.message || item.text || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+                                    const img = (Array.isArray(item.imageUrls) && item.imageUrls[0]) || item.imageUrl || '';
                                     activeItems.push({
                                         type: 'Alert',
-                                        label: `${sev} channel post`,
+                                        label: title || rawBody.slice(0, 72) || `${sev} channel post`,
+                                        preview: rawBody && title ? rawBody.slice(0, 160) : (title ? '' : rawBody.slice(72, 232)),
+                                        imageUrl: img,
+                                        severity: item.severity || 'info',
+                                        createdAt: item.createdAt || item.timestamp || item.postedAt || 0,
                                         expiresAt: item.expiresAt,
                                         id: item.id || item._key,
                                         panelId: 'alert-panel',
@@ -4644,12 +5650,13 @@ const Admin = {
             if (titleH3) {
                 if (!devHeaderRow.dataset.originalHtml) devHeaderRow.dataset.originalHtml = titleH3.innerHTML;
                 const headerSpan = targetPanel.querySelector('[id$="-header-btn"] > span');
-                let cardTitle = panelId;
+                let headerText = '';
                 if (headerSpan) {
                     const titleClone = headerSpan.cloneNode(true);
                     titleClone.querySelectorAll('span[id$="-last-sync"], span[id$="-unread-badge"]').forEach((el) => el.remove());
-                    cardTitle = (titleClone.textContent || '').replace(/\s+/g, ' ').trim() || panelId;
+                    headerText = (titleClone.textContent || '').replace(/\s+/g, ' ').trim();
                 }
+                const cardTitle = ntAdminDrillPanelTitle(requestedId, headerText);
                 titleH3.innerHTML = `
                     <button id="drill-back-btn" class="mr-3 p-1.5 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-500 hover:text-gray-900 dark:hover:text-white transition-colors focus:outline-none shadow-sm shrink-0">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
@@ -4674,24 +5681,6 @@ const Admin = {
                 Admin.renderGlobalStateMonitor(banner, Admin._gsmItems || [], { keepOpen: true });
             }
         }
-        if (quiet) return true;
-        if (panelId === 'feedback-panel' && typeof Admin.fetchFeedback === 'function') Admin.fetchFeedback();
-        if (panelId === 'delay-reports-panel' && typeof Admin.fetchDelayReports === 'function') Admin.fetchDelayReports();
-        if (panelId === 'live-share-panel' && typeof Admin.fetchRideShareLog === 'function') Admin.fetchRideShareLog();
-        if (panelId === 'moderation-queue-panel' && typeof Admin.fetchModerationQueue === 'function') Admin.fetchModerationQueue();
-        if (panelId === 'user-trust-panel' && typeof Admin.fetchActiveBans === 'function') Admin.fetchActiveBans();
-        if (panelId === 'deadends-panel' && typeof Admin.fetchDeadEnds === 'function') {
-            Admin._deSortMode = 'count';
-            const sortBtn = document.getElementById('de-sort-btn');
-            if (sortBtn) sortBtn.textContent = 'Sort: Count';
-            Admin.fetchDeadEnds();
-        }
-        if (panelId === 'crashes-panel' && typeof Admin.fetchCrashes === 'function') Admin.fetchCrashes();
-        if (panelId === 'roadmap-panel' && typeof Admin.fetchRoadmap === 'function') Admin.fetchRoadmap();
-        if (panelId === 'holiday-approvals-panel' && typeof Admin.fetchHolidayApprovals === 'function') Admin.fetchHolidayApprovals();
-        if (panelId === 'maint-panel') {
-            Admin.collapseSystemControlAccordions();
-        }
         if (domId === 'alert-panel') {
             const skipHub = !!(
                 opts.alertView === 'inapp'
@@ -4700,7 +5689,7 @@ const Admin = {
                 || Admin._pendingReviewItemId
             );
             Admin.applyAlertHubView(skipHub ? 'inapp' : 'hub');
-            if (skipHub) {
+            if (skipHub && !quiet) {
                 if (typeof Admin.setAlertManagerTab === 'function' && Admin._pendingAdminRoute) {
                     Admin.setAlertManagerTab('compose');
                 }
@@ -4710,6 +5699,27 @@ const Admin = {
                     Admin.fetchCurrentAlertsForTargets();
                 }
             }
+        }
+        if (domId === 'push-notifications-panel') {
+            Admin.paintDrillTitle('Notifications');
+        }
+        if (quiet) return true;
+        if (panelId === 'feedback-panel' && typeof Admin.fetchFeedback === 'function') Admin.fetchFeedback();
+        if (panelId === 'delay-reports-panel' && typeof Admin.fetchDelayReports === 'function') Admin.fetchDelayReports();
+        if (panelId === 'live-share-panel' && typeof Admin.fetchRideShareLog === 'function') Admin.fetchRideShareLog();
+        if (panelId === 'moderation-queue-panel' && typeof Admin.fetchModerationQueue === 'function') Admin.fetchModerationQueue();
+        if (panelId === 'user-trust-panel' && typeof Admin.fetchActiveBans === 'function') Admin.fetchActiveBans();
+        if (panelId === 'deadends-panel' && typeof Admin.fetchDeadEnds === 'function') {
+            Admin._deSortMode = Admin._deSortMode || 'recent';
+            const sortBtn = document.getElementById('de-sort-btn');
+            if (sortBtn) sortBtn.textContent = Admin._deSortMode === 'count' ? 'Sort: Count' : 'Sort: Recent';
+            Admin.fetchDeadEnds();
+        }
+        if (panelId === 'crashes-panel' && typeof Admin.fetchCrashes === 'function') Admin.fetchCrashes();
+        if (panelId === 'roadmap-panel' && typeof Admin.fetchRoadmap === 'function') Admin.fetchRoadmap();
+        if (panelId === 'holiday-approvals-panel' && typeof Admin.fetchHolidayApprovals === 'function') Admin.fetchHolidayApprovals();
+        if (panelId === 'maint-panel') {
+            Admin.collapseSystemControlAccordions();
         }
         return true;
     },
@@ -4966,6 +5976,7 @@ const Admin = {
 
         if (crashPanel.dataset.adminLoaded === "true") return;
         crashPanel.dataset.adminLoaded = "true";
+        Admin.bindAdminChangelogClicks();
         
         Admin.cachedCrashData = [];
         Admin.currentCrashTab = 'inbox';
@@ -5041,7 +6052,33 @@ const Admin = {
             }
             const tabLabel = tab === 'distress' ? 'Distress' : (tab === 'inbox' ? 'Inbox' : 'Archive');
             let txt = `NEXT TRAIN - CRASH ANALYTICS\nTab: ${tabLabel}\nExported: ${Admin.formatDate(Date.now())}\nRows: ${rows.length}\n${'='.repeat(48)}\n\n`;
+            const crashRecorded = (value) => {
+                const s = String(value ?? '').replace(/\r/g, '').trim();
+                if (!s || s === 'undefined' || s === 'null' || s === 'N/A' || s === 'undefined:undefined') return '';
+                return s;
+            };
+            const crashRawObject = (c) => {
+                if (!c || c.raw == null || c.raw === '') return null;
+                if (typeof c.raw === 'object') return c.raw;
+                const text = String(c.raw).replace(/\n\.\.\.\[truncated\]$/, '');
+                try {
+                    const parsed = JSON.parse(text);
+                    return parsed && typeof parsed === 'object' ? parsed : null;
+                } catch {
+                    return null;
+                }
+            };
+            const indentBlock = (value) => String(value || '(not recorded)').split('\n').map((l) => `    ${l}`).join('\n');
             rows.forEach((c, i) => {
+                const raw = crashRawObject(c);
+                let line = c.line ?? c.lineno;
+                if ((line == null || line === '') && raw) {
+                    if (raw.line != null && raw.col != null && !String(raw.line).includes(':')) line = `${raw.line}:${raw.col}`;
+                    else line = raw.line ?? raw.lineno;
+                }
+                const script = c.url || c.script || c.filename || (raw && (raw.url || raw.filename || raw.script)) || '';
+                const stack = c.stack || (raw && (raw.stack || (raw.error && raw.error.stack))) || '';
+                const msg = crashRecorded(c.message || c.error || (raw && raw.message));
                 txt += `#${i + 1}  ${Admin.formatDate(c.timestamp)}\n`;
                 txt += `  ID: ${c.id || '-'}\n`;
                 txt += `  Device: ${c.deviceId || c.device_id || '-'}\n`;
@@ -5050,8 +6087,10 @@ const Admin = {
                 if (c.contact) txt += `  Contact: ${c.contact}\n`;
                 if (c.reason) txt += `  Reason: ${c.reason}\n`;
                 if (c.note) txt += `  Note: ${c.note}\n`;
-                const msg = String(c.message || c.error || c.stack || '').replace(/\r/g, '');
-                if (msg) txt += `  Message:\n${msg.split('\n').map((l) => `    ${l}`).join('\n')}\n`;
+                txt += `  Message:\n${indentBlock(msg)}\n`;
+                txt += `  Line: ${crashRecorded(line) || '(not recorded)'}\n`;
+                txt += `  Script: ${crashRecorded(script) || '(not recorded)'}\n`;
+                txt += `  Stack:\n${indentBlock(crashRecorded(stack))}\n`;
                 txt += `\n`;
             });
             const dateStr = new Date().toISOString().slice(0, 10);
@@ -5159,23 +6198,25 @@ const Admin = {
                 const did = secureEscape(rawDid);
                 const safeJsDid = rawDid.replace(/'/g, "\\'");
                 
-                // GUARDIAN PHASE 1: Bulk Resolve Button & HTML Fix (button inside button is invalid, changed outer to div)
+                // Resolve All lives inside the opened log so it only shows after an admin expands the device group.
                 const resolveAllHtml = isInbox 
-                    ? `<button onclick="event.stopPropagation(); Admin.resolveAllDeviceCrashes('${safeJsDid}')" class="mr-3 bg-green-100 dark:bg-green-900/50 hover:bg-green-200 dark:hover:bg-green-800 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-700 px-2 py-1.5 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-colors shadow-sm focus:outline-none flex items-center shrink-0"><span class="mr-1 inline-flex">${Admin.icon('check', 'w-3 h-3')}</span> Resolve All (${groupCrashes.length})</button>` 
+                    ? `<div class="px-2.5 py-2 border-b border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/60">
+                            <button type="button" onclick="event.stopPropagation(); Admin.resolveAllDeviceCrashes('${safeJsDid}')" class="w-full bg-green-100 dark:bg-green-900/50 hover:bg-green-200 dark:hover:bg-green-800 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-700 px-2 py-1.5 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-colors shadow-sm focus:outline-none inline-flex items-center justify-center"><span class="mr-1 inline-flex">${Admin.icon('check', 'w-3 h-3')}</span> Resolve All (${groupCrashes.length})</button>
+                       </div>` 
                     : '';
 
                 let groupHTML = `
                     <div data-crash-group-toggle class="w-full flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors cursor-pointer border-b border-transparent" onclick="this.nextElementSibling.classList.toggle('hidden'); this.classList.toggle('border-gray-200'); this.classList.toggle('dark:border-gray-700'); this.querySelector('.chevron-icon').classList.toggle('rotate-180')">
                         <div class="flex flex-col items-start min-w-0 pr-2">
-                            <span class="text-xs font-bold text-gray-900 dark:text-white truncate w-full inline-flex items-center">Device: <span class="text-blue-600">${did.substring(0,15)}${did.length>15?'...':''}</span>${Admin.userIdJoinHintHtml(rawDid)}</span>
+                            <span class="text-xs font-bold text-gray-900 dark:text-white w-full inline-flex items-center min-w-0">Device: <span class="text-blue-600 min-w-0">${Admin.commuterLabelHtml(rawDid)}</span></span>
                             <span class="text-[9px] text-gray-500 font-mono mt-0.5 truncate w-full">${groupCrashes.length} Crash${groupCrashes.length > 1 ? 'es' : ''} | Last: ${latestDate}</span>
                         </div>
                         <div class="flex items-center shrink-0">
-                            ${resolveAllHtml}
                             <svg class="chevron-icon w-4 h-4 text-gray-400 transform transition-transform shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
                         </div>
                     </div>
                     <div class="hidden divide-y divide-gray-100 dark:divide-gray-800 bg-white dark:bg-gray-900">
+                    ${resolveAllHtml}
                 `;
                 
                 groupCrashes.forEach(crash => {
@@ -5184,7 +6225,11 @@ const Admin = {
                     const safeErr = secureEscape(crash.error);
                     const safeRoute = secureEscape(crash.routeId || "Global");
                     const safeOS = secureEscape(crash.userAgent || "Unknown OS");
-                    const safeAppVersion = secureEscape(String(crash.appVersion || 'Unknown'));
+                    const rawAppVersion = String(crash.appVersion || 'Unknown').split(' - ')[0];
+                    const safeAppVersion = secureEscape(rawAppVersion);
+                    const appVersionHtml = /^V\d+_/i.test(rawAppVersion)
+                        ? `<button type="button" class="fb-version-chip relative z-[2] font-mono font-medium underline decoration-dotted underline-offset-2 hover:opacity-80 focus:outline-none" data-admin-changelog="${safeAppVersion}" onclick="event.preventDefault();event.stopPropagation();if(window.Admin&amp;&amp;Admin.openAdminChangelogLookup)Admin.openAdminChangelogLookup(this.getAttribute('data-admin-changelog')||this.textContent);">${safeAppVersion}</button>`
+                        : `<span class="text-gray-800 dark:text-gray-200">${safeAppVersion}</span>`;
                     const safeJsCrashId = String(crash.id || '').replace(/'/g, "\\'");
                     const safeLine = secureEscape(crash.line == null ? '' : String(crash.line));
                     const safeUrl = secureEscape(crash.url || '');
@@ -5306,7 +6351,6 @@ const Admin = {
                             '</div>';
                     }
 
-                    const appLabel = String(safeAppVersion || '').split(' - ')[0];
                     groupHTML += `
                         <div class="p-2.5 flex flex-col" data-crash-id="${secureEscape(crash.id || '')}">
                             <div class="flex justify-between items-start mb-1.5">
@@ -5323,7 +6367,7 @@ const Admin = {
                             </details>
                             <div class="flex flex-col space-y-1 bg-gray-50 dark:bg-gray-800/50 p-2 rounded border border-gray-100 dark:border-gray-700">
                                 <span class="text-[9px] text-gray-600 dark:text-gray-400 font-bold uppercase tracking-wider">Route: <span class="text-blue-500">${safeRoute}</span></span>
-                                <span class="text-[9px] text-gray-600 dark:text-gray-400 font-bold uppercase tracking-wider">App: <span class="text-gray-800 dark:text-gray-200">${appLabel}</span></span>
+                                <span class="text-[9px] text-gray-600 dark:text-gray-400 font-bold uppercase tracking-wider inline-flex items-center gap-1 flex-wrap">App: ${appVersionHtml}</span>
                                 ${safeLine ? `<span class="text-[9px] text-gray-600 dark:text-gray-400 font-bold uppercase tracking-wider">Line: <span class="text-gray-800 dark:text-gray-200">${safeLine}</span></span>` : ''}
                                 ${safeUrl ? `<span class="text-[9px] text-gray-600 dark:text-gray-400 font-bold uppercase tracking-wider leading-tight">URL: <span class="text-gray-800 dark:text-gray-200 whitespace-normal break-words">${safeUrl}</span></span>` : ''}
                                 <span class="text-[9px] text-gray-600 dark:text-gray-400 font-bold uppercase tracking-wider leading-tight">OS: <span class="text-gray-800 dark:text-gray-200 whitespace-normal break-words">${safeOS}</span></span>
@@ -5352,6 +6396,7 @@ const Admin = {
         Admin.fetchCrashes = async () => {
             const secret = await Admin.getAuthKey();
             if (!secret) return;
+            await Admin.ensureAliasesLoaded();
             
             // GUARDIAN PHASE 11 & 12: Mark as seen instantly in Firebase (Cross-Device Sync) AND Local Storage
             try { 
@@ -5819,57 +6864,6 @@ const Admin = {
         }
     },
 
-    // --- 2.9 GROWTH & PROMO MANAGER (QR CODE) ---
-    setupGrowthManager: () => {
-        const adminContainer = document.getElementById('admin-modules-container');
-        if (!adminContainer) return;
-
-        let growthPanel = document.getElementById('growth-panel');
-        if (!growthPanel) {
-            growthPanel = document.createElement('div');
-            growthPanel.id = 'growth-panel';
-            adminContainer.appendChild(growthPanel);
-        }
-
-        if (growthPanel.dataset.adminLoaded === "true") return;
-        growthPanel.dataset.adminLoaded = "true";
-
-        growthPanel.className = "bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-xl shadow-md border border-blue-200 dark:border-indigo-800 p-4 mb-4 relative overflow-hidden transition-all duration-300";
-
-        growthPanel.innerHTML = `
-            <button id="growth-header-btn" class="w-full text-left text-xs font-bold text-indigo-700 dark:text-indigo-400 uppercase tracking-wider flex items-center justify-center focus:outline-none relative">
-                <span class="flex flex-col items-center">${Admin.tileIcon('rocket', 'text-violet-500 dark:text-violet-400')} <span>Growth & Promo</span></span>
-                <svg id="growth-chevron" class="w-4 h-4 transform transition-transform -rotate-90 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
-            </button>
-            
-            <div id="growth-body" class="hidden mt-4">
-                <p class="text-[10px] text-indigo-800 dark:text-indigo-300 font-medium leading-snug mb-4 text-center px-2">Let commuters scan this to instantly open and install the app without typing the URL.</p>
-                <div class="flex flex-col items-center justify-center bg-white p-3 rounded-2xl shadow-sm border border-indigo-100 dark:border-gray-800 w-max mx-auto">
-                    <img src="https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=https://nexttrain.co.za&color=1e3a8a&bgcolor=ffffff" alt="Next Train QR Code" class="w-40 h-40 object-contain rounded-lg">
-                </div>
-                <div class="text-center mt-4 mb-1">
-                    <span class="text-xs font-bold text-indigo-900 dark:text-indigo-100 bg-white/60 dark:bg-black/20 px-4 py-1.5 rounded-full border border-indigo-200 dark:border-indigo-800 shadow-sm">nexttrain.co.za</span>
-                </div>
-            </div>
-        `;
-
-        const header = document.getElementById('growth-header-btn');
-        const body = document.getElementById('growth-body');
-        const chevron = document.getElementById('growth-chevron');
-
-        header.onclick = () => {
-            if (Admin.isGridMode) return; // Prevent accordion action when in grid
-            body.classList.toggle('hidden');
-            if (body.classList.contains('hidden')) {
-                chevron.classList.add('-rotate-90');
-                header.classList.remove('mb-4');
-            } else {
-                chevron.classList.remove('-rotate-90');
-                header.classList.add('mb-4');
-            }
-        };
-    },
-
     // --- GROWTH SPRINT PHASE 5: SILENT ROUTING FAILURES TRACKER (DEAD ENDS) ---
     setupDeadEndsManager: () => {
         const adminContainer = document.getElementById('admin-modules-container');
@@ -5979,6 +6973,8 @@ const Admin = {
         const listDiv = document.getElementById('de-list');
         Admin._deActiveTab = 'trips';
         Admin._deTripFilters = { region: '', dayType: '', userId: '' };
+        Admin._deFareDeviceFilter = Admin._deFareDeviceFilter || '';
+        Admin._deFailDeviceFilter = Admin._deFailDeviceFilter || '';
         Admin._deTripWindowSize = Admin._deTripWindowSize || 80;
         Admin._deTripWindowStep = 80;
         Admin._deTripCacheAt = Admin._deTripCacheAt || 0;
@@ -6022,10 +7018,38 @@ const Admin = {
             syncDeFiltersVisibility();
             Admin.fetchDeadEnds();
         };
+        Admin.setDeadEndsTab = setDeTab;
         document.getElementById('de-tab-fails')?.addEventListener('click', () => setDeTab('fails'));
         document.getElementById('de-tab-trips')?.addEventListener('click', () => setDeTab('trips'));
         document.getElementById('de-tab-fares')?.addEventListener('click', () => setDeTab('fares'));
         syncDeFiltersVisibility();
+
+        /** Jump from User Trust lookup into Planner Telemetry for one device. */
+        Admin.openPlannerTelemetryForDevice = ({ tab = 'fares', deviceId = '' } = {}) => {
+            const did = String(deviceId || '').trim();
+            const which = (tab === 'fails' || tab === 'trips') ? tab : 'fares';
+            Admin._deFareDeviceFilter = which === 'fares' ? did : '';
+            Admin._deFailDeviceFilter = which === 'fails' ? did : '';
+            if (which === 'trips' && did) {
+                Admin._deTripFilters = { ...(Admin._deTripFilters || {}), userId: did };
+            }
+            if (typeof Admin.deepLinkToPanel === 'function') {
+                Admin.deepLinkToPanel('deadends-panel');
+            } else {
+                Admin.showDrilledPanel?.('deadends-panel');
+            }
+            setTimeout(() => {
+                if (typeof Admin.setDeadEndsTab === 'function') Admin.setDeadEndsTab(which);
+                else document.getElementById(`de-tab-${which}`)?.click();
+                if (which === 'trips' && did) {
+                    const userSel = document.getElementById('de-filter-user');
+                    if (userSel) {
+                        userSel.value = did;
+                        userSel.dispatchEvent(new Event('change', { bubbles: true }));
+                    }
+                }
+            }, 80);
+        };
 
         document.getElementById('de-filters-toggle')?.addEventListener('click', () => {
             const bodyEl = document.getElementById('de-filters-body');
@@ -6101,8 +7125,8 @@ const Admin = {
             exportBtn.onclick = () => Admin.exportPlannerTelemetryTab();
         }
 
-        // Default: sort corridors by volume (count), not most recent.
-        Admin._deSortMode = 'count';
+        // Default: all planner telemetry tabs start on most recent.
+        Admin._deSortMode = Admin._deSortMode || 'recent';
 
         if (sortBtn) {
             sortBtn.textContent = Admin._deSortMode === 'count' ? 'Sort: Count' : 'Sort: Recent';
@@ -6149,6 +7173,10 @@ const Admin = {
                 throw new Error('Correction needs a whole rand between 1 and 500');
             }
             if (item.agree !== false) throw new Error('Only price corrections can be approved');
+            const ticketType = String(item.ticketType || 'single').toLowerCase();
+            if (ticketType && ticketType !== 'single') {
+                throw new Error('Only a single ticket can update the planner quote');
+            }
             const key = window.plannerFareOverrideKey(item);
             const record = window.buildPlannerFareOverrideRecord(item, {
                 approvedBy: Admin.currentUser?.email || Admin.currentUser?.uid || 'Admin',
@@ -6169,6 +7197,32 @@ const Admin = {
                 window.setPlannerFareOverridesCache(Admin._cachedPlannerFares);
             }
             if (typeof showToast === 'function') showToast(`Planner will quote R${record.price}`, 'success');
+            await Admin.fetchDeadEnds();
+        };
+
+        Admin.refutePlannerFare = async (vote) => {
+            const secret = await Admin.getAuthKey();
+            if (!secret) throw new Error('Not signed in');
+            const item = vote && typeof vote === 'object' ? vote : {};
+            const id = String(item.id || '').trim();
+            if (!id) throw new Error('Missing fare vote');
+            if (item.agree !== false) throw new Error('Only a price correction can be refuted');
+            const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
+            const patch = {
+                review: 'refuted',
+                reviewedAt: Date.now(),
+                reviewedBy: Admin.currentUser?.email || Admin.currentUser?.uid || 'Admin',
+            };
+            const res = await fetch(`${dynamicEndpoint}sys_logs/fare_votes/${encodeURIComponent(id)}.json?auth=${secret}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(patch),
+            });
+            if (!res.ok) throw new Error(`Refute failed (${res.status}). Deploy the fare vote rules, then try again.`);
+            if (Admin._cachedFareVotes && Admin._cachedFareVotes[id]) {
+                Admin._cachedFareVotes[id] = { ...Admin._cachedFareVotes[id], ...patch };
+            }
+            if (typeof showToast === 'function') showToast('Correction refuted', 'success');
             await Admin.fetchDeadEnds();
         };
 
@@ -6210,14 +7264,18 @@ const Admin = {
             const regions = typeof REGIONS !== 'undefined' ? Object.keys(REGIONS) : ['GP', 'WC', 'KZN', 'EC'];
             const region = Admin._deRouteFaresRegion || 'GP';
             wrap.innerHTML = `
-                <div class="flex items-center justify-between gap-2">
-                    <p class="text-[10px] font-black uppercase tracking-widest text-gray-500">Confirmed corridor fares</p>
-                    <select id="de-route-fares-region" class="h-7 px-2 rounded-md bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-[10px] font-bold text-gray-700 dark:text-gray-200">
-                        ${regions.map((code) => `<option value="${code}" ${code === region ? 'selected' : ''}>${code}</option>`).join('')}
-                    </select>
-                </div>
-                <p class="text-[10px] text-gray-500 leading-snug">Single-route quotes cannot exceed a confirmed long fare. Gauteng dump zones are confirmed until you un-confirm them.</p>
-                <div id="de-route-fares-list" class="space-y-2"></div>
+                <details class="rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50/80 dark:bg-gray-950/40">
+                    <summary class="cursor-pointer list-none px-3 py-2 text-[10px] font-black uppercase tracking-widest text-gray-500">Confirmed corridor fares</summary>
+                    <div class="px-3 pb-3 space-y-2">
+                        <div class="flex items-center justify-end">
+                            <select id="de-route-fares-region" class="h-7 px-2 rounded-md bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-[10px] font-bold text-gray-700 dark:text-gray-200">
+                                ${regions.map((code) => `<option value="${code}" ${code === region ? 'selected' : ''}>${code}</option>`).join('')}
+                            </select>
+                        </div>
+                        <p class="text-[10px] text-gray-500 leading-snug">Single-route quotes cannot exceed a confirmed long fare. Gauteng dump zones are confirmed until you un-confirm them.</p>
+                        <div id="de-route-fares-list" class="space-y-2"></div>
+                    </div>
+                </details>
             `;
             const list = wrap.querySelector('#de-route-fares-list');
             const dumpDb = typeof fullDatabase !== 'undefined' ? fullDatabase : window.fullDatabase;
@@ -6292,6 +7350,7 @@ const Admin = {
         Admin.fetchDeadEnds = async () => {
             const secret = await Admin.getAuthKey();
             if (!secret) return;
+            await Admin.ensureAliasesLoaded();
             
             // GUARDIAN PHASE 11 & 12: Mark as seen instantly in Firebase (Cross-Device Sync) AND Local Storage
             try { 
@@ -6348,6 +7407,7 @@ const Admin = {
                     if (typeof window.setRouteFaresCache === 'function') {
                         window.setRouteFaresCache(liveRouteFares);
                     }
+                    if (Admin._deActiveTab !== 'fares') return;
                     const secureEscape = (str) => {
                         if (!str) return '';
                         if (typeof escapeHTML === 'function') return escapeHTML(str);
@@ -6357,18 +7417,56 @@ const Admin = {
                     };
                     listDiv.innerHTML = '';
                     Admin.paintConfirmedCorridorFares(listDiv, liveRouteFares);
-                    const entries = Object.entries(Admin._cachedFareVotes).map(([id, v]) => ({ id, ...(v || {}) }));
+                    const fareDeviceFilter = String(Admin._deFareDeviceFilter || '').trim();
+                    if (fareDeviceFilter) {
+                        const filterBar = document.createElement('div');
+                        filterBar.className = 'mb-2 px-2 py-2 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 flex items-start justify-between gap-2';
+                        filterBar.innerHTML = `
+                            <p class="text-[10px] text-amber-900 dark:text-amber-200 leading-snug min-w-0">Showing fare votes for <span class="font-mono break-all">${secureEscape(fareDeviceFilter)}</span>. Ticket photos open from each card.</p>
+                            <button type="button" id="de-fare-clear-filter" class="shrink-0 text-[10px] font-black uppercase tracking-wider text-amber-800 dark:text-amber-200 underline">Clear</button>`;
+                        listDiv.appendChild(filterBar);
+                        filterBar.querySelector('#de-fare-clear-filter')?.addEventListener('click', () => {
+                            Admin._deFareDeviceFilter = '';
+                            Admin.fetchDeadEnds();
+                        });
+                    }
+                    let entries = Object.entries(Admin._cachedFareVotes).map(([id, v]) => ({ id, ...(v || {}) }));
+                    if (fareDeviceFilter) {
+                        const needle = fareDeviceFilter.toLowerCase();
+                        entries = entries.filter((item) => {
+                            const did = String(item.deviceId || item.userId || '').toLowerCase();
+                            const auth = String(item.authUid || '').toLowerCase();
+                            return did === needle || auth === needle;
+                        });
+                    }
                     if (!entries.length) {
                         const empty = document.createElement('div');
                         empty.className = 'text-xs text-gray-500 italic text-center py-4';
-                        empty.textContent = 'No fare votes recorded.';
+                        empty.textContent = fareDeviceFilter ? 'No fare votes for this device.' : 'No fare votes recorded.';
                         listDiv.appendChild(empty);
                         return;
                     }
                     entries.sort((a, b) => (Number(b.at) || 0) - (Number(a.at) || 0));
-                    entries.forEach((item) => {
+                    const fareIsLive = (item) => {
+                        const fareKey = typeof window.plannerFareOverrideKey === 'function' ? window.plannerFareOverrideKey(item) : '';
+                        const liveRow = fareKey ? liveData[fareKey] : null;
+                        const livePrice = liveRow ? Number(liveRow.price) : NaN;
+                        return Number.isFinite(livePrice) && livePrice === Number(item.reportedPrice);
+                    };
+                    const fareGroups = [
+                        { title: 'Pending', items: entries.filter((item) => item.review !== 'refuted' && !fareIsLive(item)) },
+                        { title: 'Approved', items: entries.filter((item) => item.review !== 'refuted' && fareIsLive(item)) },
+                        { title: 'Refuted', items: entries.filter((item) => item.review === 'refuted') },
+                    ];
+                    fareGroups.forEach((group) => {
+                        if (!group.items.length) return;
+                        const heading = document.createElement('p');
+                        heading.className = 'text-[10px] font-black uppercase tracking-widest text-gray-500 dark:text-gray-400 pt-2';
+                        heading.textContent = `${group.title} (${group.items.length})`;
+                        listDiv.appendChild(heading);
+                        group.items.forEach((item) => {
                         const card = document.createElement('div');
-                        card.className = "bg-white dark:bg-gray-900 p-3 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm flex items-start justify-between gap-2";
+                        card.className = "de-fare-card bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden cursor-pointer transition-colors hover:border-amber-300";
                         const quoted = item.quotedPrice != null ? `R${item.quotedPrice}` : '-';
                         const reported = item.reportedPrice != null ? `R${item.reportedPrice}` : '-';
                         const peakLabel = item.isOffPeak ? 'Off-peak' : 'Peak';
@@ -6377,31 +7475,61 @@ const Admin = {
                         const kmLabel = `smooth ${smoothKm != null && smoothKm !== '' ? smoothKm : '-'} km · A-B ${abKm != null && abKm !== '' ? abKm : '-'} km`;
                         const profileLabel = item.profile || 'Adult';
                         const vsLabel = item.agree ? `${quoted} (yes)` : `${quoted} → ${reported}`;
+                        const fareDid = String(item.deviceId || item.userId || '').trim();
+                        const defaultRouteId = Admin.inferCommuterDefaultRoute(fareDid, item);
+                        const defaultRouteLabel = Admin.inboxRouteLabel(defaultRouteId) || defaultRouteId;
                         const fareKey = typeof window.plannerFareOverrideKey === 'function' ? window.plannerFareOverrideKey(item) : '';
                         const liveRow = fareKey ? liveData[fareKey] : null;
                         const livePrice = liveRow ? Number(liveRow.price) : NaN;
                         const isLive = Number.isFinite(livePrice) && livePrice === Number(item.reportedPrice);
-                        const canApprove = item.agree === false && Number(item.reportedPrice) >= 1 && Number(item.reportedPrice) <= 500;
+                        const ticketTypeKey = String(item.ticketType || 'single').toLowerCase();
+                        const ticketTypeLabel = ticketTypeKey === 'return' ? 'Return'
+                            : ticketTypeKey === 'weekly_mon_fri' ? 'Weekly Mon-Fri'
+                            : ticketTypeKey === 'weekly_mon_sat' ? 'Weekly Mon-Sat'
+                            : ticketTypeKey === 'monthly' ? 'Monthly'
+                            : 'Single';
+                        const canApprove = item.agree === false && ticketTypeKey === 'single' && Number(item.reportedPrice) >= 1 && Number(item.reportedPrice) <= 500;
+                        const canRefute = item.agree === false && item.review !== 'refuted' && !isLive;
                         const ticketUrl = item.ticketUrl || ticketPhotos[item.id]?.ticketUrl || '';
                         const ticketHtml = ticketUrl && typeof window.attachmentPreviewHtml === 'function'
-                            ? `<div class="mt-2 de-fare-ticket">${window.attachmentPreviewHtml(ticketUrl, { admin: true, imgClass: 'w-12 h-12 object-cover rounded-md border border-gray-200 dark:border-gray-700 hover:opacity-90 cursor-zoom-in', alt: 'Ticket' })}</div>`
+                            ? `<div class="mt-2 de-fare-ticket flex items-center gap-2">
+                                ${window.attachmentPreviewHtml(ticketUrl, { admin: true, imgClass: 'w-20 h-20 object-cover rounded-lg border border-gray-200 dark:border-gray-700 hover:opacity-90 cursor-zoom-in', alt: 'Ticket' })}
+                                <a href="${secureEscape(ticketUrl)}" target="_blank" rel="noopener noreferrer" class="text-[10px] font-black uppercase tracking-wider text-blue-600 dark:text-blue-400 underline">Open ticket</a>
+                               </div>`
+                            : '';
+                        const peakHint = item.agree === false
+                            ? `<p class="mt-1.5 text-[10px] leading-snug text-slate-600 dark:text-slate-300">Board was <b>${secureEscape(peakLabel)}</b>${item.depTime ? ` at <b>${secureEscape(item.depTime)}</b>` : ''}. Quoted Single ${secureEscape(quoted)}${ticketTypeKey !== 'single' ? `; user entered ${secureEscape(ticketTypeLabel)} ${secureEscape(reported)}` : ''}.</p>`
+                            : '';
+                        const typeWarn = item.agree === false && ticketTypeKey !== 'single'
+                            ? `<p class="mt-1 text-[10px] leading-snug text-amber-800 dark:text-amber-200 bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-800 rounded-md px-2 py-1">Collect-only for now. Do not Approve weekly/monthly into Single live fares. Peak/off-peak on this card is the board they viewed, not the ticket period.</p>`
                             : '';
                         card.innerHTML = `
-                            <div class="min-w-0 flex-1">
-                                <div class="text-xs font-bold text-gray-900 dark:text-white whitespace-normal break-words leading-snug">${secureEscape(item.origin)} ${Admin.routeArrowSvg('inline-block w-3.5 h-3.5 mx-1 align-middle text-gray-400 shrink-0')} ${secureEscape(item.destination)}</div>
-                                <div class="flex flex-wrap items-center mt-1.5 gap-1.5">
-                                    <span class="text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded ${item.agree ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300' : 'bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-200'}">${secureEscape(vsLabel)}</span>
-                                    <span class="text-[9px] font-bold text-indigo-600 dark:text-indigo-400 uppercase">${secureEscape(peakLabel)}</span>
-                                    <span class="text-[9px] text-gray-400 font-mono">${secureEscape(kmLabel)}</span>
-                                    <span class="text-[9px] text-gray-500 font-bold">${secureEscape(profileLabel)}</span>
-                                    <span class="text-[9px] text-gray-400 font-mono">${Admin.formatDate(item.at)}</span>
-                                    ${isLive ? `<span class="text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300">Live R${secureEscape(String(livePrice))}</span>` : ''}
+                            <div class="de-fare-card-btn p-3 flex items-start justify-between gap-2">
+                                <div class="min-w-0 flex-1">
+                                    <div class="text-xs font-bold text-gray-900 dark:text-white whitespace-normal break-words leading-snug">${secureEscape(item.origin)} ${Admin.routeArrowSvg('inline-block w-3.5 h-3.5 mx-1 align-middle text-gray-400 shrink-0')} ${secureEscape(item.destination)}</div>
+                                    <div class="flex flex-wrap items-center mt-1.5 gap-1.5">
+                                        <span class="text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded ${item.agree ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300' : 'bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-200'}">${secureEscape(vsLabel)}</span>
+                                        <span class="text-[9px] font-bold text-indigo-600 dark:text-indigo-400 uppercase">${secureEscape(peakLabel)}</span>
+                                        <span class="text-[9px] font-bold text-gray-600 dark:text-gray-300">${secureEscape(ticketTypeLabel)}</span>
+                                        <span class="text-[9px] text-gray-400 font-mono">${secureEscape(kmLabel)}</span>
+                                        <span class="text-[9px] text-gray-500 font-bold">${secureEscape(profileLabel)}</span>
+                                        ${defaultRouteLabel ? `<span class="text-[9px] font-bold text-slate-600 dark:text-slate-300">Route: ${secureEscape(defaultRouteLabel)}</span>` : ''}
+                                        <span class="text-[9px] text-gray-400 font-mono">${Admin.formatDate(item.at)}</span>
+                                        ${isLive ? `<span class="text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300">Live R${secureEscape(String(livePrice))}</span>` : ''}
+                                    </div>
+                                    ${peakHint}
+                                    ${typeWarn}
+                                    ${ticketHtml}
                                 </div>
-                                ${ticketHtml}
+                                ${(canApprove && !isLive) || canRefute ? `<div class="shrink-0 flex flex-col gap-1.5">
+                                    ${canApprove && !isLive ? `<button type="button" class="de-fare-approve text-emerald-700 dark:text-emerald-400 hover:text-white hover:bg-emerald-600 text-[9px] font-black bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 px-3 py-1.5 rounded transition-colors focus:outline-none uppercase tracking-widest shadow-sm">Approve ${secureEscape(reported)}</button>` : ''}
+                                    ${canRefute ? `<button type="button" class="de-fare-refute text-rose-700 dark:text-rose-300 hover:text-white hover:bg-rose-600 text-[9px] font-black bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800 px-3 py-1.5 rounded transition-colors focus:outline-none uppercase tracking-widest shadow-sm">Refute</button>` : ''}
+                                </div>` : ''}
                             </div>
-                            ${canApprove && !isLive ? `<button type="button" class="de-fare-approve shrink-0 text-emerald-700 dark:text-emerald-400 hover:text-white hover:bg-emerald-600 text-[9px] font-black bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 px-3 py-1.5 rounded transition-colors focus:outline-none uppercase tracking-widest shadow-sm">Approve ${secureEscape(reported)}</button>` : ''}
+                            <div class="de-fare-contributors hidden px-3 pb-3 border-t border-gray-100 dark:border-gray-800 bg-gray-50/80 dark:bg-gray-950/40"></div>
                         `;
-                        card.querySelector('.de-fare-approve')?.addEventListener('click', async () => {
+                        card.querySelector('.de-fare-approve')?.addEventListener('click', async (ev) => {
+                            ev.stopPropagation();
                             try {
                                 await Admin.approvePlannerFare(item);
                             } catch (e) {
@@ -6409,7 +7537,27 @@ const Admin = {
                                 if (typeof showToast === 'function') showToast(e.message || 'Approve failed', 'error');
                             }
                         });
+                        card.querySelector('.de-fare-refute')?.addEventListener('click', async (ev) => {
+                            ev.stopPropagation();
+                            try {
+                                await Admin.refutePlannerFare(item);
+                            } catch (e) {
+                                console.error('Refute planner fare failed', e);
+                                if (typeof showToast === 'function') showToast(e.message || 'Refute failed', 'error');
+                            }
+                        });
+                        card.addEventListener('click', (ev) => {
+                            if (ev.target.closest('.de-fare-approve, .de-fare-refute, .de-fare-ticket, [data-alert-lightbox], a, button.de-fare-approve')) return;
+                            const panel = card.querySelector('.de-fare-contributors');
+                            if (!panel) return;
+                            const open = panel.classList.toggle('hidden') === false;
+                            if (open && !panel.dataset.loaded) {
+                                panel.dataset.loaded = '1';
+                                Admin.expandFareContributor(panel, item);
+                            }
+                        });
                         listDiv.appendChild(card);
+                        });
                     });
                     return;
                 }
@@ -6427,11 +7575,24 @@ const Admin = {
                 Admin._cachedRoutingFails = data;
 
                 // Aggregate by Origin|Dest|Reason|DayType - track hits + unique users
+                const failDeviceFilter = String(Admin._deFailDeviceFilter || '').trim().toLowerCase();
+                const tripUserFilter = String(Admin._deTripFilters?.userId || '').trim().toLowerCase();
+                const failHitMatchesUser = (entry) => {
+                    if (!tripUserFilter) return true;
+                    const hay = `${entry.userId || ''} ${entry.deviceId || ''} ${entry.authUid || ''} ${Admin.commuterAlias?.(entry.userId) || ''} ${Admin.commuterAlias?.(entry.authUid) || ''}`.toLowerCase();
+                    return hay.includes(tripUserFilter);
+                };
                 const heatMap = {};
                 Object.values(data).forEach(entry => {
                     if (!entry.origin || !entry.destination) return;
+                    if (!failHitMatchesUser(entry)) return;
+                    if (failDeviceFilter) {
+                        const uid = String(entry.userId || entry.deviceId || entry.authUid || '').toLowerCase();
+                        if (uid !== failDeviceFilter) return;
+                    }
                     const dayType = entry.dayType || 'unknown';
                     const key = `${entry.origin}|${entry.destination}|${entry.reason || 'UNKNOWN'}|${dayType}`;
+                    const appVersion = String(entry.appVersion || '').split(' - ')[0].trim();
                     if (!heatMap[key]) {
                         heatMap[key] = {
                             origin: entry.origin,
@@ -6442,9 +7603,16 @@ const Admin = {
                             hitCount: 0,
                             userIds: new Set(),
                             lastSeen: 0,
+                            versions: {},
                         };
                     }
                     heatMap[key].hitCount++;
+                    if (appVersion) {
+                        const prevVer = heatMap[key].versions[appVersion] || { count: 0, lastSeen: 0 };
+                        prevVer.count += 1;
+                        if ((entry.timestamp || 0) >= prevVer.lastSeen) prevVer.lastSeen = entry.timestamp || 0;
+                        heatMap[key].versions[appVersion] = prevVer;
+                    }
                     const uid = entry.userId || entry.deviceId || entry.authUid || '';
                     if (uid) heatMap[key].userIds.add(uid);
                     if (entry.timestamp > heatMap[key].lastSeen) {
@@ -6464,6 +7632,24 @@ const Admin = {
                 });
                 
                 listDiv.innerHTML = '';
+                if (failDeviceFilter || tripUserFilter) {
+                    const filterBar = document.createElement('div');
+                    filterBar.className = 'mb-2 px-2 py-2 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 flex items-start justify-between gap-2';
+                    const who = tripUserFilter || failDeviceFilter;
+                    filterBar.innerHTML = `
+                        <p class="text-[10px] text-amber-900 dark:text-amber-200 leading-snug min-w-0">Showing routing fails for <span class="font-mono break-all">${who.replace(/</g, '&lt;')}</span>.</p>
+                        <button type="button" id="de-fail-clear-filter" class="shrink-0 text-[10px] font-black uppercase tracking-wider text-amber-800 dark:text-amber-200 underline">Clear</button>`;
+                    listDiv.appendChild(filterBar);
+                    filterBar.querySelector('#de-fail-clear-filter')?.addEventListener('click', () => {
+                        Admin._deFailDeviceFilter = '';
+                        if (Admin._deTripFilters) Admin._deTripFilters.userId = '';
+                        const userSel = document.getElementById('de-filter-userid');
+                        if (userSel) userSel.value = '';
+                        const uidDisplay = document.getElementById('de-filter-userid-display');
+                        if (uidDisplay) uidDisplay.textContent = 'All users';
+                        Admin.fetchDeadEnds();
+                    });
+                }
                 
                 const secureEscape = (str) => {
                     if (!str) return '';
@@ -6473,10 +7659,18 @@ const Admin = {
                     });
                 };
 
+                if (!sorted.length) {
+                    const empty = document.createElement('div');
+                    empty.className = 'text-xs text-gray-500 italic text-center py-4';
+                    empty.textContent = (failDeviceFilter || tripUserFilter) ? 'No routing failures for this user.' : 'No routing failures recorded.';
+                    listDiv.appendChild(empty);
+                    return;
+                }
+
                 sorted.forEach(item => {
                     const dateStr = Admin.formatDate(item.lastSeen);
                     const card = document.createElement('div');
-                    card.className = "bg-white dark:bg-gray-900 p-3 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm flex items-center justify-between transition-colors hover:border-blue-300";
+                    card.className = "de-fail-card bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden cursor-pointer transition-colors hover:border-blue-300";
                     
                     let reasonBadge = "bg-gray-100 text-gray-600";
                     let reasonText = "Unknown";
@@ -6486,18 +7680,36 @@ const Admin = {
                     else if (item.reason === 'ERR_CROSS_REGION') { reasonBadge = "bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-400"; reasonText = "Cross Region"; }
                     else if (item.reason === 'ERR_ACTIVE_SUSPENSION') { reasonBadge = "bg-orange-100 dark:bg-orange-900/50 text-orange-700 dark:text-orange-400"; reasonText = "Line Severed"; }
                     else if (item.reason === 'ERR_NO_SERVICE_TODAY') { reasonBadge = "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300"; reasonText = "No Service"; }
+                    else if (item.reason === 'ERR_NO_SATURDAY_SERVICE') { reasonBadge = "bg-rose-100 dark:bg-rose-900/50 text-rose-700 dark:text-rose-300"; reasonText = "No Weekend Service"; }
 
                     const safeOrigin = secureEscape(item.origin);
                     const safeDest = secureEscape(item.dest);
                     const dayLabel = secureEscape(item.dayType || 'unknown');
                     const timeLabel = secureEscape(item.timeOfDay || '-');
                     const countLabel = countMode === 'hits' ? 'Hits' : 'Users';
+                    const versionEntries = Object.entries(item.versions || {}).sort((a, b) => (b[1].lastSeen || 0) - (a[1].lastSeen || 0));
+                    const versionChips = versionEntries.length
+                        ? versionEntries.slice(0, 3).map(([ver]) => {
+                            const safeVer = secureEscape(ver);
+                            if (/^V\d+_/i.test(ver)) {
+                                return `<button type="button" class="fb-version-chip inline max-w-full whitespace-normal break-all text-left text-[9px] font-mono font-medium underline decoration-dotted underline-offset-2 text-gray-600 dark:text-gray-300 focus:outline-none" data-admin-changelog="${safeVer}" onclick="event.preventDefault();event.stopPropagation();if(window.Admin&&Admin.openAdminChangelogLookup)Admin.openAdminChangelogLookup(this.getAttribute('data-admin-changelog')||this.textContent);">${safeVer}</button>`;
+                            }
+                            return `<span class="text-[9px] font-mono text-gray-500">${safeVer}</span>`;
+                        }).join('') + (versionEntries.length > 3 ? `<span class="text-[9px] font-mono text-gray-400">+${versionEntries.length - 3}</span>` : '')
+                        : '<span class="text-[9px] font-mono text-gray-400">No version</span>';
+                    const versionList = versionEntries.map(([ver, info]) => `${ver} (${info.count})`).join(', ') || 'no version';
+                    const corridorKey = Admin.failCorridorKey({
+                        origin: item.origin,
+                        destination: item.dest,
+                        reason: item.reason,
+                        dayType: item.dayType,
+                    });
                     
                     const escalateAttr = Admin.encodeEscalatePayload({
                         type: 'route',
                         severity: 'medium',
                         title: `Routing Fail: ${item.origin} to ${item.dest}`,
-                        description: `Failed with reason: ${item.reason || 'UNKNOWN'} (${item.dayType || 'day?'}, ~${item.timeOfDay || 'time?'}). ${item.hitCount} hits / ${item.userCount} users.`,
+                        description: `Failed with reason: ${item.reason || 'UNKNOWN'} (${item.dayType || 'day?'}, ~${item.timeOfDay || 'time?'}). ${item.hitCount} hits / ${item.userCount} users. Versions: ${versionList}.`,
                         source: 'Telemetry Data',
                         sourceKind: 'deadend',
                         sourceId: `${item.origin || ''}|${item.dest || ''}|${item.reason || ''}`,
@@ -6505,23 +7717,37 @@ const Admin = {
                     });
 
                     card.innerHTML = `
-                        <div class="min-w-0 flex-1 pr-2">
-                            <div class="text-xs font-bold text-gray-900 dark:text-white whitespace-normal break-words leading-snug">${safeOrigin} ${Admin.routeArrowSvg('inline-block w-3.5 h-3.5 mx-1 align-middle text-gray-400 shrink-0')} ${safeDest}</div>
-                            <div class="flex flex-wrap items-center mt-1.5 gap-1.5">
-                                <span class="text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded ${reasonBadge}">${reasonText}</span>
-                                <span class="text-[9px] font-bold text-indigo-600 dark:text-indigo-400 uppercase">${dayLabel}</span>
-                                <span class="text-[9px] text-gray-400 font-mono">${timeLabel}</span>
-                                <span class="text-[9px] text-gray-400 font-mono">Last: ${dateStr}</span>
+                        <div class="de-fail-card-btn p-3 flex items-center justify-between">
+                            <div class="min-w-0 flex-1 pr-2">
+                                <div class="text-xs font-bold text-gray-900 dark:text-white whitespace-normal break-words leading-snug">${safeOrigin} ${Admin.routeArrowSvg('inline-block w-3.5 h-3.5 mx-1 align-middle text-gray-400 shrink-0')} ${safeDest}</div>
+                                <div class="flex flex-wrap items-center mt-1.5 gap-1.5">
+                                    <span class="text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded ${reasonBadge}">${reasonText}</span>
+                                    <span class="text-[9px] font-bold text-indigo-600 dark:text-indigo-400 uppercase">${dayLabel}</span>
+                                    <span class="text-[9px] text-gray-400 font-mono">${timeLabel}</span>
+                                    <span class="text-[9px] text-gray-400 font-mono">Last: ${dateStr}</span>
+                                </div>
+                                <div class="mt-1.5 max-w-full break-all">${versionChips}</div>
+                            </div>
+                            <div class="flex flex-col items-end shrink-0 gap-1.5 ml-2">
+                                <div class="flex items-center justify-center bg-gray-50 dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-lg px-2.5 py-1.5 shadow-sm min-w-[4.5rem]">
+                                    <span class="text-[9px] text-gray-400 uppercase font-bold mr-1.5">${countLabel}</span>
+                                    <span class="text-sm font-black text-gray-700 dark:text-gray-300 leading-none">${item.displayCount}</span>
+                                </div>
+                                <button type="button" class="text-orange-600 dark:text-orange-400 hover:text-white hover:bg-orange-600 text-[9px] font-bold bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 px-3 py-1.5 rounded transition-colors focus:outline-none uppercase tracking-widest shadow-sm w-full text-center" onclick="event.stopPropagation(); Admin.escalateFromEl(this)" data-escalate="${escalateAttr}">Ticket</button>
                             </div>
                         </div>
-                        <div class="flex flex-col items-end shrink-0 gap-1.5 ml-2">
-                            <div class="flex items-center justify-center bg-gray-50 dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-lg px-2.5 py-1.5 shadow-sm min-w-[4.5rem]">
-                                <span class="text-[9px] text-gray-400 uppercase font-bold mr-1.5">${countLabel}</span>
-                                <span class="text-sm font-black text-gray-700 dark:text-gray-300 leading-none">${item.displayCount}</span>
-                            </div>
-                            <button class="text-orange-600 dark:text-orange-400 hover:text-white hover:bg-orange-600 text-[9px] font-bold bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 px-3 py-1.5 rounded transition-colors focus:outline-none uppercase tracking-widest shadow-sm w-full text-center" onclick="Admin.escalateFromEl(this)" data-escalate="${escalateAttr}">Ticket</button>
-                        </div>
+                        <div class="de-fail-contributors hidden px-3 pb-3 border-t border-gray-100 dark:border-gray-800 bg-gray-50/80 dark:bg-gray-950/40"></div>
                     `;
+                    card.addEventListener('click', (ev) => {
+                        if (ev.target.closest('[data-escalate]')) return;
+                        const panel = card.querySelector('.de-fail-contributors');
+                        if (!panel) return;
+                        const open = panel.classList.toggle('hidden') === false;
+                        if (open && !panel.dataset.loaded) {
+                            panel.dataset.loaded = '1';
+                            Admin.expandFailCorridorHits(panel, corridorKey);
+                        }
+                    });
                     listDiv.appendChild(card);
                 });
             } catch(e) {
@@ -6536,6 +7762,9 @@ const Admin = {
         Admin.tripCorridorKey = (entry) =>
             `${entry.origin}|${entry.destination}|${entry.dayType || ''}|${entry.region || ''}`;
 
+        Admin.failCorridorKey = (entry) =>
+            `${entry.origin}|${entry.destination}|${entry.reason || 'UNKNOWN'}|${entry.dayType || 'unknown'}`;
+
         Admin.getFilteredTripPlanRows = () => {
             const f = Admin._deTripFilters || {};
             const region = (f.region || '').toUpperCase();
@@ -6545,7 +7774,7 @@ const Admin = {
                 if (region && String(r.region || '').toUpperCase() !== region) return false;
                 if (dayType && String(r.dayType || '').toLowerCase() !== dayType) return false;
                 if (userId) {
-                    const hay = `${r.userId || ''} ${r.authUid || ''}`.toLowerCase();
+                    const hay = `${r.userId || ''} ${r.authUid || ''} ${Admin.commuterAlias(r.userId)} ${Admin.commuterAlias(r.authUid)}`.toLowerCase();
                     if (!hay.includes(userId)) return false;
                 }
                 return true;
@@ -6570,7 +7799,10 @@ const Admin = {
             const q = String(Admin._deUserQuery || '').toLowerCase();
             const prev = Admin._deTripFilters?.userId || userSel.value || '';
             const users = Admin._deTripUserIds || [];
-            const matched = q ? users.filter((u) => u.toLowerCase().includes(q)) : users;
+            const matched = q ? users.filter((u) => {
+                const alias = Admin.commuterAlias(u).toLowerCase();
+                return u.toLowerCase().includes(q) || (alias && alias.includes(q));
+            }) : users;
             const shown = matched.slice(0, cap);
             userSel.innerHTML = `<option value="">All users</option>` + shown.map((u) =>
                 `<option value="${String(u).replace(/"/g, '&quot;')}">${Admin.secureDeEscape(u)}</option>`
@@ -6595,14 +7827,64 @@ const Admin = {
                 uidOptions.appendChild(li);
             };
             addLi('', 'All users');
-            shown.forEach((u) => addLi(u, u));
+            shown.forEach((u) => addLi(u, Admin.commuterAlias(u) || u));
             if (matched.length > shown.length) {
                 const more = document.createElement('li');
                 more.className = 'px-3 py-2 text-[10px] text-gray-400 italic';
                 more.textContent = `Showing ${shown.length} of ${matched.length} — type to narrow`;
                 uidOptions.appendChild(more);
             }
-            if (uidDisplay) uidDisplay.textContent = userSel.value || 'All users';
+            if (uidDisplay) uidDisplay.textContent = userSel.value ? (Admin.commuterAlias(userSel.value) || userSel.value) : 'All users';
+        };
+
+        Admin.expandFailCorridorHits = (panel, corridorKey) => {
+            if (!panel) return;
+            const cap = Admin._deHitPreviewCap || 25;
+            const byUser = {};
+            Object.values(Admin._cachedRoutingFails || {}).forEach((entry) => {
+                if (!entry || Admin.failCorridorKey(entry) !== corridorKey) return;
+                const uid = String(entry.userId || entry.deviceId || '').trim();
+                if (!uid) return;
+                const ts = Number(entry.timestamp) || 0;
+                const appVersion = String(entry.appVersion || '').split(' - ')[0].trim();
+                const prev = byUser[uid];
+                if (!prev) byUser[uid] = { userId: uid, lastSeen: ts, hitCount: 1, appVersion };
+                else {
+                    prev.hitCount += 1;
+                    if (ts >= prev.lastSeen) {
+                        prev.lastSeen = ts;
+                        if (appVersion) prev.appVersion = appVersion;
+                    }
+                }
+            });
+            const hits = Object.values(byUser).sort((a, b) => (b.lastSeen || 0) - (a.lastSeen || 0));
+            const slice = hits.slice(0, cap);
+            panel.innerHTML = `
+                <p class="text-[9px] font-black uppercase tracking-wider text-gray-400 pt-2 mb-1">Contributors${hits.length > cap ? ` (latest ${cap} of ${hits.length})` : ''}</p>
+                ${slice.map((h) => Admin.stackedContributorRowHtml(h.userId, `${Admin.formatDate(h.lastSeen)} · ${h.hitCount}${h.appVersion ? ` · ${h.appVersion}` : ' · no version'}`)).join('') || '<p class="text-[10px] text-gray-400 italic">No user ids on these fails.</p>'}
+            `;
+        };
+
+        Admin.expandFareContributor = (panel, item) => {
+            if (!panel) return;
+            const esc = Admin.secureDeEscape;
+            const did = String(item?.deviceId || item?.userId || '').trim();
+            const auth = String(item?.authUid || '').trim();
+            const defaultRouteId = Admin.inferCommuterDefaultRoute(did, item);
+            const defaultRouteLabel = Admin.inboxRouteLabel(defaultRouteId) || defaultRouteId;
+            const rows = [];
+            if (did) rows.push({ label: 'User', html: Admin.commuterLabelHtml(did) });
+            if (auth && auth !== did) rows.push({ label: 'Auth UID', html: `<span class="font-mono break-all">${esc(auth)}</span>` });
+            if (defaultRouteLabel) rows.push({ label: 'Default route', html: `<span class="break-words">${esc(defaultRouteLabel)}</span>` });
+            panel.innerHTML = `
+                <p class="text-[9px] font-black uppercase tracking-wider text-gray-400 pt-2 mb-1">Contributor</p>
+                ${rows.map((r) => `
+                    <div class="flex flex-col gap-0.5 py-1.5 border-b border-gray-100 dark:border-gray-800 last:border-0 text-[10px]">
+                        <span class="text-[9px] font-bold uppercase tracking-wider text-gray-400">${esc(r.label)}</span>
+                        <span class="text-gray-600 dark:text-gray-300 min-w-0">${r.html}</span>
+                    </div>
+                `).join('') || '<p class="text-[10px] text-gray-400 italic">No user id on this vote.</p>'}
+            `;
         };
 
         Admin.expandTripCorridorHits = (panel, corridorKey) => {
@@ -6615,16 +7897,12 @@ const Admin = {
             const esc = Admin.secureDeEscape;
             panel.innerHTML = `
                 <p class="text-[9px] font-black uppercase tracking-wider text-gray-400 pt-2 mb-1">Hit history${hits.length > cap ? ` (latest ${cap} of ${hits.length})` : ''}</p>
-                ${slice.map((h) => `
-                    <div class="flex justify-between gap-2 py-1.5 border-b border-gray-100 dark:border-gray-800 last:border-0 text-[10px]">
-                        <span class="font-mono text-gray-500 truncate inline-flex items-center min-w-0">${esc(Admin.formatDate(h.timestamp))} / ${esc((h.userId || '').slice(0, 14))}${Admin.userIdJoinHintHtml(h.userId)}</span>
-                        <span class="font-mono text-gray-600 dark:text-gray-300 shrink-0">dep ${esc(h.depTime || '-')}</span>
-                    </div>
-                `).join('') || '<p class="text-[10px] text-gray-400 italic">No hit details.</p>'}
+                ${slice.map((h) => Admin.stackedContributorRowHtml(h.userId, `${Admin.formatDate(h.timestamp)} · dep ${esc(h.depTime || '-')}`)).join('') || '<p class="text-[10px] text-gray-400 italic">No hit details.</p>'}
             `;
         };
 
         Admin.appendTripCorridorCards = (listDiv, items) => {
+            if (Admin._deActiveTab !== 'trips' || !listDiv) return;
             const countMode = Admin._deCountMode === 'hits' ? 'hits' : 'users';
             const esc = Admin.secureDeEscape;
             const frag = document.createDocumentFragment();
@@ -6682,6 +7960,7 @@ const Admin = {
             listDiv.dataset.deScrollBound = '1';
             const nearBottom = () => listDiv.scrollHeight - listDiv.scrollTop - listDiv.clientHeight < 80;
             const onScroll = () => {
+                if (Admin._deActiveTab !== 'trips') return;
                 if (!nearBottom()) return;
                 Admin.loadMoreTripCorridors(listDiv);
             };
@@ -6689,6 +7968,7 @@ const Admin = {
         };
 
         Admin.loadMoreTripCorridors = async (listDiv) => {
+            if (Admin._deActiveTab !== 'trips') return;
             const sorted = Admin._deTripSorted || [];
             const pageSize = Admin._deTripPageSize || 40;
             const painted = Admin._deTripPainted || 0;
@@ -6713,6 +7993,10 @@ const Admin = {
         };
 
         Admin.syncTripLoadMoreChrome = (listDiv) => {
+            if (!listDiv || Admin._deActiveTab !== 'trips') {
+                listDiv?.querySelector('#de-trip-scroll-sentinel')?.remove();
+                return;
+            }
             const sorted = Admin._deTripSorted || [];
             const painted = Admin._deTripPainted || 0;
             const canFetch = !!Admin._deTripMeta?.canLoadMore;
@@ -6958,6 +8242,7 @@ const Admin = {
         };
 
         Admin.paintTripCorridorPage = (listDiv, sorted, meta) => {
+            if (Admin._deActiveTab !== 'trips' || !listDiv) return;
             const esc = Admin.secureDeEscape;
             const usersWindow = Number(meta.uniqueUsers || 0);
             const usersEver = Number(meta.usersEver || 0);
@@ -7009,6 +8294,7 @@ const Admin = {
                     Admin._deTripWindowFull = Object.keys(Admin._cachedTripPlans || {}).length >= windowSize;
                 }
                 const data = Admin._cachedTripPlans;
+                if (Admin._deActiveTab !== 'trips') return;
                 if (!data) {
                     listDiv.innerHTML = '<div class="text-xs text-gray-500 italic text-center py-4">No batched trip plans yet.<br><span class="text-[9px]">Clients flush every 10 successful plans.</span></div>';
                     return;
@@ -7058,6 +8344,7 @@ const Admin = {
 
                 const totalRows = allRows.length;
                 const uniqueUsers = new Set(allRows.map((r) => r.userId).filter(Boolean)).size;
+                if (Admin._deActiveTab !== 'trips') return;
                 if (!sorted.length) {
                     listDiv.innerHTML = `<div class="text-xs text-gray-500 italic text-center py-4">${totalRows ? 'No trip plans match these filters.' : 'Batches present but no trip rows to merge.'}</div>`;
                     return;
@@ -7138,11 +8425,13 @@ const Admin = {
                 }
                 entries.sort((a, b) => (Number(b.at) || 0) - (Number(a.at) || 0));
                 const photos = Admin._cachedFareTicketPhotos || {};
-                const headers = ['at', 'origin', 'destination', 'quotedPrice', 'reportedPrice', 'agree', 'isOffPeak', 'dayType', 'depTime', 'profile', 'km', 'crowKm', 'smoothKm', 'abKm', 'zone', 'region', 'deviceId', 'authUid', 'appVersion', 'routeIds', 'ticketUrl', 'id'];
+                const headers = ['at', 'origin', 'destination', 'quotedPrice', 'reportedPrice', 'agree', 'ticketType', 'quotedTicketType', 'isOffPeak', 'dayType', 'depTime', 'profile', 'km', 'crowKm', 'smoothKm', 'abKm', 'zone', 'region', 'deviceId', 'authUid', 'appVersion', 'routeIds', 'ticketUrl', 'id'];
                 const cell = (r, h) => {
                     if (h === 'at') return Admin.formatDate(r.at);
                     if (h === 'routeIds') return Array.isArray(r.routeIds) ? r.routeIds.join('|') : (r.routeIds || '');
                     if (h === 'ticketUrl') return r.ticketUrl || photos[r.id]?.ticketUrl || '';
+                    if (h === 'ticketType') return r.ticketType || 'single';
+                    if (h === 'quotedTicketType') return r.quotedTicketType || 'single';
                     return r[h];
                 };
                 if (format === 'csv') {
@@ -7160,8 +8449,11 @@ const Admin = {
                     entries.forEach((r, i) => {
                         txt += `#${i + 1}  ${Admin.formatDate(r.at)}\n`;
                         txt += `  ${(r.origin || '-')} -> ${(r.destination || '-')}\n`;
-                        txt += `  Quoted: R${r.quotedPrice ?? '-'}  Reported: R${r.reportedPrice ?? '-'}  Agree: ${r.agree ? 'yes' : 'no'}\n`;
-                        txt += `  ${r.isOffPeak ? 'Off-peak' : 'Peak'} - ${r.dayType || '-'} - smooth ${r.smoothKm ?? r.km ?? '-'} km - A-B ${r.abKm ?? r.crowKm ?? '-'} km - ${r.profile || 'Adult'}\n\n`;
+                        txt += `  Quoted: R${r.quotedPrice ?? '-'}  Reported: R${r.reportedPrice ?? '-'}  Agree: ${r.agree ? 'yes' : 'no'}  Ticket: ${r.ticketType || 'single'}\n`;
+                        txt += `  ${r.isOffPeak ? 'Off-peak' : 'Peak'} - ${r.dayType || '-'} - smooth ${r.smoothKm ?? r.km ?? '-'} km - A-B ${r.abKm ?? r.crowKm ?? '-'} km - ${r.profile || 'Adult'}\n`;
+                        const tipUrl = r.ticketUrl || photos[r.id]?.ticketUrl || '';
+                        if (tipUrl) txt += `  Ticket photo: ${tipUrl}\n`;
+                        txt += '\n';
                     });
                     Admin.downloadFile(`fare_votes_${dateStr}.txt`, txt);
                 }
@@ -7288,13 +8580,22 @@ const Admin = {
                 </div>
 
                 <!-- GUARDIAN UX FIX: Relocated Action Buttons -->
-                <div class="grid-hidden-actions flex space-x-2 mb-3 px-1 shrink-0">
+                <div id="fb-filter-wrap" class="grid-hidden-actions relative flex space-x-2 mb-3 px-1 shrink-0">
                     <button id="fb-export-global-btn" onclick="event.stopPropagation()" class="flex-1 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-800 border border-indigo-200 dark:border-indigo-800 rounded-lg px-3 py-2.5 text-xs font-bold transition-colors shadow-sm focus:outline-none flex items-center justify-center gap-1.5">
                         ${Admin.icon('download', 'w-3.5 h-3.5')} Export All
+                    </button>
+                    <button id="fb-filter-btn" type="button" onclick="event.stopPropagation()" class="flex-1 bg-violet-50 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300 hover:bg-violet-100 dark:hover:bg-violet-800 border border-violet-200 dark:border-violet-800 rounded-lg px-3 py-2.5 text-xs font-bold transition-colors shadow-sm focus:outline-none flex items-center justify-center gap-1.5">
+                        ${Admin.icon('filter', 'w-3.5 h-3.5')} Filter
                     </button>
                     <button id="fb-refresh-btn" onclick="event.stopPropagation()" class="flex-1 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-800 border border-blue-200 dark:border-blue-800 rounded-lg px-3 py-2.5 text-xs font-bold transition-colors shadow-sm focus:outline-none flex items-center justify-center gap-1.5">
                         ${Admin.icon('refresh', 'w-3.5 h-3.5')} Refresh
                     </button>
+                    <div id="fb-filter-menu" class="hidden absolute left-0 top-full mt-1 z-50 w-max min-w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-xl p-2 space-y-1">
+                        <label class="flex items-center gap-2 px-2 py-2 rounded-lg text-xs font-bold text-gray-800 dark:text-gray-100 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 whitespace-nowrap"><input type="checkbox" data-fb-filter="email" class="rounded border-gray-300 text-violet-600 focus:ring-violet-500"> Email</label>
+                        <label class="flex items-center gap-2 px-2 py-2 rounded-lg text-xs font-bold text-gray-800 dark:text-gray-100 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 whitespace-nowrap"><input type="checkbox" data-fb-filter="whatsapp" class="rounded border-gray-300 text-violet-600 focus:ring-violet-500"> WhatsApp number</label>
+                        <label class="flex items-center gap-2 px-2 py-2 rounded-lg text-xs font-bold text-gray-800 dark:text-gray-100 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 whitespace-nowrap"><input type="checkbox" data-fb-filter="attachments" class="rounded border-gray-300 text-violet-600 focus:ring-violet-500"> Attachments</label>
+                        <label class="flex items-center gap-2 px-2 py-2 rounded-lg text-xs font-bold text-gray-800 dark:text-gray-100 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 whitespace-nowrap"><input type="checkbox" data-fb-filter="trips" class="rounded border-gray-300 text-violet-600 focus:ring-violet-500"> Trip plans</label>
+                    </div>
                 </div>
                 
                 <div id="fb-list" class="space-y-3 pr-1"></div>
@@ -7307,6 +8608,7 @@ const Admin = {
         const refreshBtn = document.getElementById('fb-refresh-btn');
         const exportGlobalBtn = document.getElementById('fb-export-global-btn');
         const listContainer = document.getElementById('fb-list');
+        Admin.bindFeedbackPhotoPreview(fbPanel);
         const tabInbox = document.getElementById('fb-tab-inbox');
         const tabArchive = document.getElementById('fb-tab-archive');
         const searchInput = document.getElementById('fb-search-input');
@@ -7330,6 +8632,35 @@ const Admin = {
 
         refreshBtn.onclick = () => Admin.fetchFeedback();
         if (exportGlobalBtn) exportGlobalBtn.onclick = () => Admin.exportGlobalThreadsForAI();
+        const filterBtn = document.getElementById('fb-filter-btn');
+        const filterMenu = document.getElementById('fb-filter-menu');
+        const paintFilterBtn = () => {
+            if (!filterBtn) return;
+            const on = Object.values(Admin.feedbackInboxFilters || {}).some(Boolean);
+            filterBtn.classList.toggle('ring-2', on);
+            filterBtn.classList.toggle('ring-violet-400', on);
+        };
+        filterMenu?.querySelectorAll('[data-fb-filter]').forEach((box) => {
+            const key = box.getAttribute('data-fb-filter');
+            box.checked = !!Admin.feedbackInboxFilters?.[key];
+            box.addEventListener('change', () => {
+                Admin.feedbackInboxFilters[key] = !!box.checked;
+                paintFilterBtn();
+                Admin.renderFeedbackList();
+            });
+        });
+        if (filterBtn && filterMenu) {
+            filterBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                filterMenu.classList.toggle('hidden');
+            });
+            document.addEventListener('click', (e) => {
+                if (e.target.closest?.('#fb-filter-btn') || e.target.closest?.('#fb-filter-menu')) return;
+                filterMenu.classList.add('hidden');
+            });
+        }
+        paintFilterBtn();
 
         // Dual-Tab Switcher Logic
         const switchTab = (tab) => {
@@ -7419,14 +8750,18 @@ const Admin = {
                     matchesSearch = alias.includes(searchQuery) || didLower.includes(searchQuery) || hasMatchingMsg;
                 }
 
-                if (matchesSearch) {
+                if (matchesSearch && Admin.feedbackThreadMatchesFilters(did, groupItems)) {
                     if (isInbox && isThreadActive) displayGroups.push({ did, items: groupItems });
                     if (!isInbox && !isThreadActive) displayGroups.push({ did, items: groupItems });
                 }
             });
 
             if (displayGroups.length === 0) {
-                listContainer.innerHTML = `<div class="text-xs text-gray-500 italic text-center py-6">${isInbox ? 'Inbox is completely clean.' : 'No archived threads yet.'}</div>`;
+                const filtersOn = Object.values(Admin.feedbackInboxFilters || {}).some(Boolean);
+                const emptyCopy = filtersOn
+                    ? 'No threads match these filters.'
+                    : (isInbox ? 'Inbox is completely clean.' : 'No archived threads yet.');
+                listContainer.innerHTML = `<div class="text-xs text-gray-500 italic text-center py-6">${emptyCopy}</div>`;
                 return;
             }
 
@@ -7522,6 +8857,9 @@ const Admin = {
                 if (allPhones.size > 0) {
                     contactScanHtml += `<span class="inline-flex text-emerald-600 dark:text-emerald-400" title="${allPhones.size} phone${allPhones.size > 1 ? 's' : ''}">${Admin.icon('phone', 'w-3 h-3')}</span>`;
                 }
+                if (Admin.feedbackDeviceHasTripPlans(did)) {
+                    contactScanHtml += `<span class="inline-flex text-sky-600 dark:text-sky-400" title="Has trip plans">${Admin.icon('map', 'w-3 h-3')}</span>`;
+                }
                 if (hasAttachments) {
                     contactScanHtml += `<span class="inline-flex text-purple-500 dark:text-purple-400" title="Has attachments">${Admin.icon('paperclip', 'w-3 h-3')}</span>`;
                 }
@@ -7544,12 +8882,12 @@ const Admin = {
 
                 let contactHtml = '';
                 if (allEmails.size > 0 || allPhones.size > 0) {
-                    contactHtml = '<div class="flex flex-wrap gap-1.5">';
+                    contactHtml = '<div class="flex flex-wrap gap-1.5 min-w-0">';
                     allEmails.forEach(em => {
                         contactHtml += `
-                            <div class="flex items-center bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded px-1.5 py-0.5 max-w-[220px] sm:max-w-[300px]">
-                                <a href="mailto:${em}" onclick="event.stopPropagation()" class="text-[10px] text-blue-500 hover:underline font-mono tracking-tight lowercase truncate inline-flex items-center gap-1">${Admin.icon('mail', 'w-3 h-3 shrink-0')} ${em}</a>
-                                <button onclick="event.stopPropagation(); navigator.clipboard.writeText('${em}'); if(typeof showToast === 'function') showToast('Copied!', 'success', 1000);" class="ml-1.5 text-gray-400 hover:text-blue-500 transition-colors focus:outline-none inline-flex" title="Copy">${Admin.icon('copy', 'w-3 h-3')}</button>
+                            <div class="flex items-center min-w-0 max-w-full bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded px-1.5 py-0.5">
+                                <a href="mailto:${em}" onclick="event.stopPropagation()" class="text-[10px] text-blue-500 hover:underline font-mono tracking-tight lowercase break-all whitespace-normal inline-flex items-center gap-1 min-w-0">${Admin.icon('mail', 'w-3 h-3 shrink-0')} ${em}</a>
+                                <button onclick="event.stopPropagation(); navigator.clipboard.writeText('${em}'); if(typeof showToast === 'function') showToast('Copied!', 'success', 1000);" class="ml-1.5 text-gray-400 hover:text-blue-500 transition-colors focus:outline-none inline-flex shrink-0" title="Copy">${Admin.icon('copy', 'w-3 h-3')}</button>
                             </div>`;
                     });
                     allPhones.forEach(ph => {
@@ -7559,9 +8897,9 @@ const Admin = {
                         const aClass = isNum ? 'text-emerald-700 dark:text-emerald-300 hover:underline' : 'text-gray-500 dark:text-gray-400';
                         
                         contactHtml += `
-                            <div class="flex items-center bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800/50 rounded px-2 py-1 max-w-[220px] sm:max-w-[300px] shadow-sm">
-                                <a href="${link}" ${target} onclick="event.stopPropagation()" class="text-[10px] ${aClass} font-mono tracking-tight truncate inline-flex items-center gap-1">${Admin.icon(isNum ? 'message' : 'phone', 'w-3 h-3 shrink-0')} ${ph}</a>
-                                <button onclick="event.stopPropagation(); navigator.clipboard.writeText('${ph}'); if(typeof showToast === 'function') showToast('Copied!', 'success', 1000);" class="ml-1.5 text-gray-400 hover:text-emerald-500 transition-colors focus:outline-none inline-flex" title="Copy">${Admin.icon('copy', 'w-3 h-3')}</button>
+                            <div class="flex items-center min-w-0 max-w-full bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800/50 rounded px-2 py-1 shadow-sm">
+                                <a href="${link}" ${target} onclick="event.stopPropagation()" class="text-[10px] ${aClass} font-mono tracking-tight break-all whitespace-normal inline-flex items-center gap-1 min-w-0">${Admin.icon(isNum ? 'message' : 'phone', 'w-3 h-3 shrink-0')} ${ph}</a>
+                                <button onclick="event.stopPropagation(); navigator.clipboard.writeText('${ph}'); if(typeof showToast === 'function') showToast('Copied!', 'success', 1000);" class="ml-1.5 text-gray-400 hover:text-emerald-500 transition-colors focus:outline-none inline-flex shrink-0" title="Copy">${Admin.icon('copy', 'w-3 h-3')}</button>
                             </div>`;
                     });
                     contactHtml += '</div>';
@@ -7614,6 +8952,14 @@ const Admin = {
 
             // GUARDIAN PHASE 1: The Auto-Collapse "Accordion Rule" & Delegated Listener
             listContainer.onclick = (e) => {
+                const poster = e.target.closest?.('[data-alert-lightbox]');
+                if (poster && listContainer.contains(poster)) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const src = poster.getAttribute('data-alert-lightbox') || poster.getAttribute('data-alert-object-url') || '';
+                    if (src) Admin.openFeedbackAttachmentPreview(src, poster);
+                    return;
+                }
                 const clBtn = e.target.closest('[data-admin-changelog]');
                 if (clBtn && listContainer.contains(clBtn)) {
                     e.preventDefault();
@@ -7724,10 +9070,21 @@ const Admin = {
                     }
                 };
                 listContainer.addEventListener('pointerdown', (e) => {
-                    const bubble = e.target.closest('[data-fb-edit-admin]');
-                    if (!bubble || !listContainer.contains(bubble) || e.button) return;
+                    if (e.target.closest?.('[data-admin-changelog]')) return;
+                    if (e.target.closest?.('[data-alert-lightbox]')) return;
+                    if (e.button) return;
                     holdFired = false;
                     clearHold();
+                    const receipt = e.target.closest?.('[data-fb-receipt]');
+                    if (receipt && listContainer.contains(receipt)) {
+                        holdTimer = setTimeout(() => {
+                            holdFired = true;
+                            Admin.showInboxReceiptSheet(receipt);
+                        }, 400);
+                        return;
+                    }
+                    const bubble = e.target.closest('[data-fb-edit-admin]');
+                    if (!bubble || !listContainer.contains(bubble)) return;
                     holdTimer = setTimeout(() => {
                         holdFired = true;
                         const row = bubble.closest('[data-fb-msg-id]');
@@ -7745,6 +9102,8 @@ const Admin = {
                     if (Math.abs(e.movementX) + Math.abs(e.movementY) > 12) clearHold();
                 });
                 listContainer.addEventListener('click', (e) => {
+                    if (e.target.closest?.('#inbox-receipt-sheet')) return;
+                    if (!e.target.closest?.('[data-fb-receipt]')) Admin.hideInboxReceiptSheet();
                     if (!holdFired) return;
                     holdFired = false;
                     e.preventDefault();
@@ -7778,16 +9137,25 @@ const Admin = {
                 const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
                 
                 // Fetch Commuter Messages AND Admin Sent Messages concurrently
-                const [res, inboxRes, aliasesRes] = await Promise.all([
+                const [res, inboxRes, aliasesRes, tripUsersRes] = await Promise.all([
                     window.guardianFetch(`${dynamicEndpoint}feedback.json?auth=${secret}`, {}, 10000),
                     window.guardianFetch(`${dynamicEndpoint}inbox.json?auth=${secret}`, {}, 10000),
-                    window.guardianFetch(`${dynamicEndpoint}admin_state/aliases.json?auth=${secret}`, {}, 10000)
+                    window.guardianFetch(`${dynamicEndpoint}admin_state/aliases.json?auth=${secret}`, {}, 10000),
+                    window.guardianFetch(`${dynamicEndpoint}sys_logs/trip_plan_users.json?auth=${secret}`, {}, 15000).catch(() => null),
                 ]);
                 
                 if (!res.ok) throw new Error("Failed to fetch feedback (" + res.status + ")");
                 const data = await res.json();
                 const inboxData = inboxRes.ok ? await inboxRes.json() : {};
                 Admin.cachedAliases = aliasesRes.ok ? (await aliasesRes.json()) || {} : {};
+                try {
+                    Admin._fbTripPlanUsers = (tripUsersRes && tripUsersRes.ok)
+                        ? ((await tripUsersRes.json()) || {})
+                        : {};
+                    if (!Admin._fbTripPlanUsers || typeof Admin._fbTripPlanUsers !== 'object') Admin._fbTripPlanUsers = {};
+                } catch {
+                    Admin._fbTripPlanUsers = {};
+                }
 
                 let mergedData = (data && typeof data === 'object') ? Object.keys(data).map(key => ({ id: key, ...data[key] })) : [];
                 const usedInboxKeys = new Set();
@@ -7812,7 +9180,21 @@ const Admin = {
                     item.inboxMsgId = hit.msgKey;
                     item.reactions = hit.msg.reactions;
                     item.reactedBy = hit.msg.reactedBy;
+                    if (hit.msg.chatScope) item.chatScope = hit.msg.chatScope;
+                    if (hit.msg.accountUid) item.accountUid = hit.msg.accountUid;
+                    if (hit.msg.sentSignedOut) item.sentSignedOut = true;
+                    if (hit.msg.mergedIntoDevice) item.mergedIntoDevice = hit.msg.mergedIntoDevice;
+                    if (hit.msg.mergedIntoId) item.mergedIntoId = hit.msg.mergedIntoId;
+                    if (!item.appVersion && hit.msg.appVersion) item.appVersion = hit.msg.appVersion;
+                    if (Admin.isBlankInboxRoute(item.routeId) && hit.msg.routeId) item.routeId = hit.msg.routeId;
+                    if (!item.attachmentUrl && hit.msg.attachmentUrl) item.attachmentUrl = hit.msg.attachmentUrl;
+                    if (!item.attachmentUrls && hit.msg.attachmentUrls) item.attachmentUrls = hit.msg.attachmentUrls;
                     usedInboxKeys.add(`${did}/${hit.msgKey}`);
+                });
+                mergedData.forEach((item) => {
+                    if (item.isFromAdmin || !item.mergedIntoDevice) return;
+                    item.device_id = item.mergedIntoDevice;
+                    item.deviceId = item.mergedIntoDevice;
                 });
 
                 // Fold Admin Replies (and unmatched commuter inbox copies) into the Thread Matrix
@@ -7823,6 +9205,8 @@ const Admin = {
                         Object.keys(deviceMessages).forEach(msgKey => {
                             const msg = deviceMessages[msgKey];
                             if (usedInboxKeys.has(`${deviceId}/${msgKey}`)) return;
+                            if (msg.mergedIntoDevice) return;
+                            if (msg.mergedFromDevice && mergedData.some((item) => !item.isFromAdmin && String(item.mergedIntoId || '') === String(msgKey))) return;
                             const fromCommuter = String(msg.from || '') === 'commuter';
                             let parentStatus = 'unread';
                             // Inherit the archive status of the parent ticket so threads collapse together
@@ -7840,14 +9224,24 @@ const Admin = {
                                 status: parentStatus,
                                 read: msg.read,
                                 delivered: msg.delivered,
+                                deliveredAt: msg.deliveredAt,
+                                readAt: msg.readAt,
+                                viewedAt: msg.viewedAt,
                                 acknowledged: msg.acknowledged,
                                 feedbackId: msg.feedbackId,
                                 appVersion: msg.appVersion,
                                 routeId: msg.routeId,
+                                attachmentUrl: msg.attachmentUrl,
+                                attachmentUrls: msg.attachmentUrls,
                                 fromName: msg.fromName,
                                 editedAt: msg.editedAt,
                                 reactions: msg.reactions,
                                 reactedBy: msg.reactedBy,
+                                chatScope: msg.chatScope,
+                                accountUid: msg.accountUid,
+                                sentSignedOut: msg.sentSignedOut,
+                                mergedFromDevice: msg.mergedFromDevice,
+                                mergedIntoDevice: msg.mergedIntoDevice,
                             });
                         });
                     });
@@ -8563,6 +9957,7 @@ const Admin = {
         };
 
         Admin.fetchRideShareLog = async (opts = {}) => {
+            await Admin.ensureAliasesLoaded();
             const quiet = !!opts.quiet;
             const liveEl = document.getElementById('ls-live-list');
             const logEl = document.getElementById('ls-log-list');
@@ -8608,7 +10003,7 @@ const Admin = {
                 }
                 liveEl.innerHTML = liveRows.length
                     ? liveRows.slice(0, 80).map((p) => {
-                        const stale = p.at && (now - p.at) >= 90000;
+                        const stale = (p.fixAt || p.acceptedAt || p.at) && (now - (p.fixAt || p.acceptedAt || p.at)) >= 15000;
                         const acc = Number.isFinite(p.accuracy) ? Math.round(p.accuracy) + ' m' : '';
                         const speed = Number.isFinite(p.speedMps) ? (p.speedMps * 3.6).toFixed(0) + ' km/h' : '';
                         const bits = [p.source || '', p.station || '', acc, speed].filter(Boolean).join(' · ');
@@ -8621,7 +10016,7 @@ const Admin = {
                                 </p>
                                 <span class="text-[9px] font-mono ${stale ? 'text-amber-600 dark:text-amber-400' : 'text-blue-600 dark:text-blue-300'} shrink-0">${stale ? 'GPS stale · ' : 'LIVE · '}${esc(fmtAge(p.at, now))}</span>
                             </div>
-                            <p class="text-[10px] font-mono text-gray-500 dark:text-gray-400 mt-1">uid ${esc(p.uid || 'guest')} · ${esc(p.email || '')} · device ${esc((p.deviceId || '').slice(0, 10))}</p>
+                            <p class="text-[10px] font-mono text-gray-500 dark:text-gray-400 mt-1">uid ${esc(p.uid || 'guest')} · ${esc(p.email || '')} · device ${Admin.commuterLabelHtml(p.deviceId)}</p>
                             <p class="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5">${esc(bits)}</p>
                             <button type="button" class="ls-stop-share mt-2 text-[10px] font-bold text-red-600 dark:text-red-400 underline" data-route="${esc(p.routeId)}" data-device="${esc(p.deviceId)}">Stop share</button>
                         </div>`;
@@ -8684,7 +10079,7 @@ const Admin = {
                             </summary>
                             <div class="px-3 pb-3 pt-0 text-[10px] font-mono text-gray-500 dark:text-gray-400 space-y-0.5" data-ls-session-body>
                                 <p>uid ${esc(s.uid || '')} · ${esc(s.email || '')}</p>
-                                <p>device ${esc(s.deviceId || '')}</p>
+                                <p>device ${Admin.commuterLabelHtml(s.deviceId)}</p>
                                 <p>start ${esc(s.startSource || '—')} · stop ${esc(s.stopSource || (live ? 'still live' : '—'))}</p>
                                 ${s.appVersion ? `<p>build ${esc(s.appVersion)}</p>` : ''}
                             </div>
@@ -8726,10 +10121,14 @@ const Admin = {
             </div>
             <div id="mq-body" class="hidden mt-4 flex flex-col">
                 <p class="text-[10px] text-gray-500 dark:text-gray-400 mb-3 px-1 leading-snug">Routes are ordered by their latest published post, reply, or held item. Open a route to view its conversation and mark it seen for your operator account.</p>
-                <label class="px-1 mb-3">
+                <label class="px-1 mb-2">
                     <span class="sr-only">Search community routes and messages</span>
-                    <input id="mq-search" type="search" placeholder="Search routes or messages" class="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 px-3 py-2.5 text-xs text-gray-900 dark:text-white"/>
+                    <input id="mq-search" type="search" placeholder="Search routes, messages, or user id" class="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 px-3 py-2.5 text-xs text-gray-900 dark:text-white"/>
                 </label>
+                <div class="flex gap-2 px-1 mb-3">
+                    <input id="mq-lookup" type="search" placeholder="Look up uid, device, or email" class="flex-1 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 px-3 py-2.5 text-xs text-gray-900 dark:text-white"/>
+                    <button type="button" id="mq-lookup-btn" class="shrink-0 bg-blue-600 hover:bg-blue-700 text-white rounded-xl px-3 py-2.5 text-[10px] font-black uppercase tracking-wider">Look up</button>
+                </div>
                 <div class="grid-hidden-actions flex space-x-2 mb-3 px-1">
                     <button type="button" id="mq-refresh-btn" class="flex-1 bg-slate-50 dark:bg-slate-900/40 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2.5 text-xs font-bold transition-colors shadow-sm focus:outline-none">Refresh</button>
                 </div>
@@ -8775,8 +10174,8 @@ const Admin = {
             }
 
             const allowedKeys = kind === 'community_post'
-                ? ['postId', 'routeId', 'region', 'body', 'category', 'uid', 'displayName', 'photoURL', 'email', 'deviceId', 'timestamp', 'hidden', 'replyCount', 'appVersion', 'via', 'replyTo']
-                : ['replyId', 'postId', 'routeId', 'body', 'uid', 'displayName', 'deviceId', 'timestamp', 'hidden', 'appVersion'];
+                ? ['postId', 'routeId', 'region', 'body', 'category', 'uid', 'displayName', 'photoURL', 'email', 'deviceId', 'timestamp', 'hidden', 'replyCount', 'appVersion', 'via', 'replyTo', 'marks']
+                : ['replyId', 'postId', 'routeId', 'body', 'uid', 'displayName', 'deviceId', 'timestamp', 'hidden', 'appVersion', 'marks'];
             if (Object.keys(payload).some((key) => !allowedKeys.includes(key))) {
                 throw new Error('Held community payload contains unsupported fields');
             }
@@ -8788,6 +10187,12 @@ const Admin = {
                 return optionalString(value.postId, 80)
                     && optionalString(value.displayName, 80)
                     && optionalString(value.body, 120);
+            };
+            const validMarks = (value) => {
+                if (value == null) return true;
+                if (typeof value !== 'object' || Array.isArray(value)) return false;
+                if (Object.keys(value).some((key) => !['points', 'tier'].includes(key))) return false;
+                return Number.isFinite(Number(value.points)) && optionalString(value.tier, 40);
             };
             if (
                 typeof payload.body !== 'string' || !payload.body.trim() || payload.body.length > 280
@@ -8805,6 +10210,7 @@ const Admin = {
                 || (kind === 'community_post' && !optionalString(payload.photoURL, 500))
                 || (kind === 'community_post' && !optionalString(payload.email, 120))
                 || (kind === 'community_post' && !validReplyTo(payload.replyTo))
+                || !validMarks(payload.marks)
             ) {
                 throw new Error('Invalid held community payload');
             }
@@ -8873,7 +10279,6 @@ const Admin = {
             const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
             const reportId = String(report?.reportId || report?._key || '');
             if (!reportId) throw new Error('Missing moderation report id');
-            validateHeldCommunityPublish(report);
             await markModerationStatus(dynamicEndpoint, secret, reportId, {
                 status: 'rejected',
                 resolution: 'rejected',
@@ -8964,6 +10369,7 @@ const Admin = {
             const list = document.getElementById('mq-list');
             if (!list) return;
             list.innerHTML = '<p class="text-xs text-gray-400 text-center py-4">Loading...</p>';
+            await Admin.ensureAliasesLoaded();
             try {
                 const secret = await Admin.getAuthKey();
                 if (!secret || !Admin.currentUser?.uid) throw new Error('Not signed in');
@@ -9010,8 +10416,12 @@ const Admin = {
                     const contact = r.contact || r.publish?.payload?.email || '';
                     const sourceLabel = r.source || (isFeedbackHold ? 'feedback' : 'report');
                     const metaLine = isFeedbackHold
-                        ? `source: ${String(sourceLabel).replace(/</g, '')} · device: ${(deviceId || '-').toString().slice(0, 22)} · contact: ${(contact || '-').toString().slice(0, 24)}`
-                        : `target uid: ${(r.targetUid || '-').toString().slice(0, 16)} - post: ${(r.targetPostId || '-').toString().slice(0, 18)}`;
+                        ? `source: ${String(sourceLabel).replace(/</g, '')} · device: ${Admin.commuterLabel(deviceId) || '-'} · contact: ${(contact || '-').toString().slice(0, 24)}`
+                        : `target uid: ${Admin.commuterLabel(r.targetUid) || '-'} - post: ${(r.targetPostId || '-').toString().slice(0, 18)}`;
+                    const lookupUid = r.targetUid || r.publish?.payload?.uid || '';
+                    const lookupBtn = lookupUid
+                        ? `<button type="button" class="mq-lookup-uid text-[10px] font-bold text-blue-600 dark:text-blue-400 underline" data-uid="${esc(lookupUid)}">Look up</button>`
+                        : '';
                     const statusLabel = status === 'approved'
                         ? (isFeedbackHold ? 'Approved to Feedback Hub' : 'Approved')
                         : (status === 'rejected' ? 'Rejected' : (closed ? 'Closed' : ''));
@@ -9023,6 +10433,7 @@ const Admin = {
                             <div class="flex flex-wrap gap-2 mt-1">
                                 <button type="button" class="mq-approve-community text-[10px] font-bold text-emerald-700 dark:text-emerald-400 underline" data-id="${r.reportId || r._key}">Approve</button>
                                 <button type="button" class="mq-reject-community text-[10px] font-bold text-gray-600 dark:text-gray-300 underline" data-id="${r.reportId || r._key}">Reject</button>
+                                ${lookupBtn}
                             </div>` : `
                             <div class="flex flex-wrap gap-2 mt-1">
                                 <button type="button" class="mq-hide-post text-[10px] font-bold text-amber-700 dark:text-amber-400 underline" data-route="${r.routeId || ''}" data-post="${r.targetPostId || ''}">Hide post</button>
@@ -9055,7 +10466,7 @@ const Admin = {
                 };
                 const previews = await Promise.all(rows.map(fetchPreview));
                 list.innerHTML = rows.map((row, index) => `
-                    <details class="community-monitor-route border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-800 overflow-hidden" data-community-route="${esc(row.routeId)}" data-community-search="${esc(`${row.routeName} ${row.routeId} ${previews[index]}`.toLowerCase())}">
+                    <details class="community-monitor-route border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-800 overflow-hidden" data-community-route="${esc(row.routeId)}" data-community-search="${esc(`${row.routeName} ${row.routeId} ${previews[index]} ${(row.held || []).map((h) => `${h.targetUid || ''} ${h.publish?.payload?.uid || ''} ${h.publish?.payload?.email || ''} ${h.publish?.payload?.deviceId || ''}`).join(' ')}`.toLowerCase())}">
                         <summary class="cursor-pointer list-none p-3 flex items-start justify-between gap-3">
                             <span class="min-w-0">
                                 <span class="block text-xs font-black text-gray-900 dark:text-white truncate">${esc(row.routeName)}</span>
@@ -9078,13 +10489,17 @@ const Admin = {
                     const category = message.category && message.category !== 'general'
                         ? `<span class="text-[9px] font-bold uppercase text-amber-700 dark:text-amber-300">${esc(message.category)}</span>`
                         : '';
+                    const authorId = message.uid || message.deviceId || '';
+                    const authorHint = authorId && typeof Admin.userIdJoinHintHtml === 'function' ? Admin.userIdJoinHintHtml(authorId) : '';
+                    const quoteUid = message.replyTo?.uid || message.replyTo?.deviceId || '';
+                    const quoteHint = quoteUid && typeof Admin.userIdJoinHintHtml === 'function' ? Admin.userIdJoinHintHtml(quoteUid) : '';
                     const quote = message.replyTo?.body
-                        ? `<div class="border-l-2 border-emerald-500 bg-gray-50 dark:bg-gray-900 rounded-r-lg px-2 py-1 mb-2 text-[10px] text-gray-500"><b>${esc(message.replyTo.displayName || 'Passenger')}</b><br>${esc(message.replyTo.body)}</div>`
+                        ? `<div class="border-l-2 border-emerald-500 bg-gray-50 dark:bg-gray-900 rounded-r-lg px-2 py-1 mb-2 text-[10px] text-gray-500"><b>${esc(message.replyTo.displayName || 'Passenger')}</b>${quoteHint}<br>${esc(message.replyTo.body)}</div>`
                         : '';
                     const postId = message.postId || '';
                     return `<div class="${isReply ? 'ml-6 bg-gray-50 dark:bg-gray-900/60' : 'bg-emerald-50/50 dark:bg-emerald-950/10'} border border-gray-200 dark:border-gray-700 rounded-xl p-3 ${message.hidden ? 'opacity-50 ring-1 ring-red-400' : ''}" data-community-message data-community-post="${esc(postId)}" ${isReply ? `data-community-reply="${esc(message.replyId || '')}"` : ''}>
                         <div class="flex items-center justify-between gap-2 mb-1">
-                            <span class="text-[11px] font-black text-gray-900 dark:text-white">${esc(message.displayName || 'Passenger')} ${category}</span>
+                            <span class="text-[11px] font-black text-gray-900 dark:text-white">${esc(message.displayName || 'Passenger')} ${authorHint} ${category}</span>
                             <span class="text-[9px] font-mono text-gray-400">${esc(formatWhen(message.timestamp))}</span>
                         </div>
                         ${quote}<p class="text-[12px] leading-relaxed text-gray-800 dark:text-gray-200 whitespace-pre-wrap">${esc(message.body || '')}</p>
@@ -9202,6 +10617,21 @@ const Admin = {
                     });
                 });
 
+                const runMonitorLookup = (raw) => {
+                    const q = String(raw || '').trim();
+                    if (!q) return;
+                    if (typeof Admin.openUserTrustLookup === 'function') {
+                        Admin.openUserTrustLookup({ uid: q, email: q.includes('@') ? q : undefined });
+                    }
+                };
+                const lookupInput = document.getElementById('mq-lookup');
+                document.getElementById('mq-lookup-btn')?.addEventListener('click', () => runMonitorLookup(lookupInput?.value));
+                lookupInput?.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        runMonitorLookup(lookupInput.value);
+                    }
+                });
                 const search = document.getElementById('mq-search');
                 if (search) {
                     search.oninput = async () => {
@@ -9218,36 +10648,15 @@ const Admin = {
                     };
                 }
 
-                Admin.deletePublishedCommunityMessage = async (routeId, postId, replyId) => {
-                    if (!routeId || !postId) throw new Error('Missing route/post id');
-                    const authQ = await communityAuthSuffix();
-                    const postPath = `route_community/${encodeURIComponent(routeId)}/posts/${encodeURIComponent(postId)}`;
-                    const deleteJson = async (path) => {
-                        const res = await fetch(`${dynamicEndpoint}${path}.json${authQ}`, { method: 'DELETE' });
-                        if (!res.ok && res.status !== 404) throw new Error(`Delete failed (${res.status})`);
-                        return res;
-                    };
-                    if (replyId) {
-                        await deleteJson(`${postPath}/replies/${encodeURIComponent(replyId)}`);
-                        await deleteJson(`community_activity/${encodeURIComponent(routeId)}/${encodeURIComponent(replyId)}`).catch(() => {});
-                        return;
-                    }
-                    let replyIds = [];
-                    try {
-                        const postRes = await window.guardianFetch(`${dynamicEndpoint}${postPath}.json${authQ}`, {}, 6000);
-                        const post = postRes.ok ? await postRes.json() : null;
-                        replyIds = Object.keys(post?.replies || {});
-                    } catch (e) {
-                        console.warn('Community delete reply-index read failed', e);
-                    }
-                    await deleteJson(postPath);
-                    await deleteJson(`community_activity/${encodeURIComponent(routeId)}/${encodeURIComponent(postId)}`).catch(() => {});
-                    await Promise.all(replyIds.map((id) =>
-                        deleteJson(`community_activity/${encodeURIComponent(routeId)}/${encodeURIComponent(id)}`).catch(() => {})
-                    ));
-                };
+                Admin.deletePublishedCommunityMessage = ntAdminDeletePublishedCommunityMessage;
 
                 list.onclick = async (event) => {
+                    const lookupUidBtn = event.target.closest?.('.mq-lookup-uid');
+                    if (lookupUidBtn) {
+                        event.preventDefault();
+                        runMonitorLookup(lookupUidBtn.getAttribute('data-uid'));
+                        return;
+                    }
                     const hide = event.target.closest?.('.cm-hide-message');
                     if (hide) {
                         event.preventDefault();
@@ -9364,6 +10773,14 @@ const Admin = {
                         try {
                             await Admin.rejectHeldCommunity(report);
                             if (typeof showToast === 'function') showToast('Community message rejected', 'success');
+                            const banUid = report.targetUid || report.publish?.payload?.uid || '';
+                            if (banUid && typeof Admin.applyShadowBan === 'function') {
+                                const alsoBan = await Admin.secureConfirm(
+                                    'Warn or shadow-ban?',
+                                    `Also warn or shadow-ban ${String(banUid).slice(0, 16)}? Choose Cancel to leave them as they are.`
+                                );
+                                if (alsoBan) await Admin.applyShadowBan(banUid, { deviceId: report.publish?.payload?.deviceId || report.deviceId || '' });
+                            }
                             Admin.fetchModerationQueue();
                         } catch (e) {
                             if (typeof showToast === 'function') showToast(e?.message || 'Reject failed', 'error');
@@ -9442,6 +10859,7 @@ const Admin = {
                 { id: 'freeze', label: 'Freeze / unresponsive' },
                 { id: 'fouc', label: 'True FOUC (unstyled)' },
                 { id: 'lost', label: '404 / End of the Line' },
+                { id: 'warning', label: 'Warning (visible)' },
             ];
 
         const choice = await new Promise((resolve) => {
@@ -9543,14 +10961,16 @@ const Admin = {
                 });
                 if (!banAtRes.ok) throw new Error(`Ban write failed (${banAtRes.status}) at devices/.../bannedAt`);
             }
-            if (typeof window.trustAddToBlockList === 'function') {
-                window.trustAddToBlockList(uid);
-                if (deviceId) window.trustAddToBlockList(deviceId);
-            } else if (window.trustLocalBlockList) {
-                window.trustLocalBlockList.add(uid);
-                if (deviceId) window.trustLocalBlockList.add(deviceId);
+            if (banMode !== 'warning') {
+                if (typeof window.trustAddToBlockList === 'function') {
+                    window.trustAddToBlockList(uid);
+                    if (deviceId) window.trustAddToBlockList(deviceId);
+                } else if (window.trustLocalBlockList) {
+                    window.trustLocalBlockList.add(uid);
+                    if (deviceId) window.trustLocalBlockList.add(deviceId);
+                }
             }
-            if (typeof showToast === 'function') showToast(`Shadow-banned (${choice.label}) - mode: ${modeLabel}`, 'success');
+            if (typeof showToast === 'function') showToast(`${banMode === 'warning' ? 'Warning set' : 'Shadow-banned'} (${choice.label}) - mode: ${modeLabel}`, 'success');
             if (typeof Admin.fetchActiveBans === 'function') Admin.fetchActiveBans();
             return true;
         } catch (e) {
@@ -9760,6 +11180,7 @@ const Admin = {
             const list = document.getElementById('ut-bans-list');
             if (!list) return;
             list.innerHTML = '<p class="text-xs text-gray-400 text-center py-3 animate-pulse">Scanning bans...</p>';
+            await Admin.ensureAliasesLoaded();
             try {
                 const secret = await Admin.getAuthKey();
                 if (!secret) throw new Error('not signed in - open Admin while logged in as an admin account');
@@ -9823,14 +11244,15 @@ const Admin = {
                         })()
                         : 'no expiry';
                     const modeStr = banModeLabel(b.mode);
-                    const name = String(b.displayName || '-').replace(/</g, '&lt;');
+                    const alias = Admin.commuterAlias(b.id) || Admin.commuterAlias(b.deviceId);
+                    const name = String(alias || b.displayName || '-').replace(/</g, '&lt;');
                     const email = b.email ? String(b.email).replace(/</g, '&lt;') : '';
                     const card = document.createElement('div');
                     card.className = 'border border-red-200 dark:border-red-900/50 bg-red-50/40 dark:bg-red-950/20 rounded-xl p-3 space-y-1';
                     card.innerHTML = `
                         <div class="flex items-start justify-between gap-2">
                             <div class="min-w-0">
-                                <p class="text-xs font-black text-gray-900 dark:text-white truncate">${name}</p>
+                                <p class="text-xs font-black text-gray-900 dark:text-white break-words">${name}</p>
                                 <p class="font-mono text-[9px] text-gray-400 break-all">${b.id}</p>
                                 ${email ? `<p class="text-[10px] text-gray-500">${email}</p>` : ''}
                             </div>
@@ -9857,9 +11279,23 @@ const Admin = {
         Admin.resolveTrustTarget = async (query) => {
             const q = String(query || '').trim();
             if (!q) return null;
+            await Admin.ensureAliasesLoaded();
             const secret = await Admin.getAuthKey();
             const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
             const auth = secret ? `?auth=${secret}` : '';
+            let viaHint = '';
+            let resolvedQuery = q;
+            const needle = q.toLowerCase();
+            const aliases = Admin.cachedAliases && typeof Admin.cachedAliases === 'object' ? Admin.cachedAliases : {};
+            if (!q.includes('@')) {
+                for (const [did, alias] of Object.entries(aliases)) {
+                    if (String(alias || '').trim().toLowerCase() === needle) {
+                        resolvedQuery = did;
+                        viaHint = 'alias';
+                        break;
+                    }
+                }
+            }
 
             const fetchJson = async (path) => {
                 const res = await fetch(`${dynamicEndpoint}${path}${auth}`);
@@ -9868,35 +11304,35 @@ const Admin = {
             };
 
             // 1) Direct users/{id}
-            let user = await fetchJson(`users/${encodeURIComponent(q)}.json`);
+            let user = await fetchJson(`users/${encodeURIComponent(resolvedQuery)}.json`);
             if (user) {
-                return { uid: q, user, via: 'uid', deviceId: null };
+                return { uid: resolvedQuery, user, via: viaHint || 'uid', deviceId: /^usr_/i.test(resolvedQuery) ? resolvedQuery : null };
             }
 
             // 2) Device ID ? linked Firebase uid (devices/{deviceId}.uid)
-            const looksLikeDevice = /^usr_/i.test(q);
+            const looksLikeDevice = /^usr_/i.test(resolvedQuery);
             if (looksLikeDevice) {
-                const device = await fetchJson(`devices/${encodeURIComponent(q)}.json`);
+                const device = await fetchJson(`devices/${encodeURIComponent(resolvedQuery)}.json`);
                 if (device?.uid) {
                     user = await fetchJson(`users/${encodeURIComponent(device.uid)}.json`);
                     if (user) {
-                        return { uid: device.uid, user, via: 'device?uid', deviceId: q, device };
+                        return { uid: device.uid, user, via: viaHint || 'device?uid', deviceId: resolvedQuery, device };
                     }
                 }
                 // Guest / pre-account: allow banning the device id itself
                 const deviceFlags = device?.flags || null;
                 return {
-                    uid: q,
+                    uid: resolvedQuery,
                     user: {
                         displayName: device?.uid ? `Device linked to ${device.uid}` : 'Device (no account yet)',
                         email: null,
                         trustScore: 0,
                         flags: deviceFlags || { shadowBanned: false, shadowBannedUntil: 0, role: 'device' },
-                        deviceIds: { [q]: true },
+                        deviceIds: { [resolvedQuery]: true },
                         _isDeviceStub: true,
                     },
-                    via: 'device',
-                    deviceId: q,
+                    via: viaHint || 'device',
+                    deviceId: resolvedQuery,
                     device,
                 };
             }
@@ -9939,44 +11375,190 @@ const Admin = {
                 const score = typeof user.trustScore === 'number' ? user.trustScore : 0;
                 const name = (user.displayName || (user._isDeviceStub ? 'Device guest' : '-')).toString().replace(/</g, '&lt;');
                 const email = (user.email || '-').toString().replace(/</g, '&lt;');
-                const viaLabel = via === 'email' ? 'matched by email' : (via === 'device' ? 'device record' : (via === 'device?uid' ? 'device → account' : 'user id'));
+                const viaLabel = via === 'email' ? 'matched by email'
+                    : (via === 'alias' ? 'feedback alias'
+                    : (via === 'device' ? 'device record'
+                    : (via === 'device?uid' ? 'device → account' : 'user id')));
                 const joinedMs = Number(user.createdAt)
                     || Admin.parseJoinedAtFromUserId(deviceId)
                     || Admin.parseJoinedAtFromUserId(uid);
-                let lastSeenMs = Number(user.updatedAt) || Number(device?.linkedAt) || 0;
                 const linkedIds = user.deviceIds && typeof user.deviceIds === 'object'
                     ? Object.keys(user.deviceIds).filter(Boolean)
                     : (deviceId ? [deviceId] : []);
-                try {
-                    const secret = await Admin.getAuthKey();
-                    const lookIds = [...new Set([deviceId, ...linkedIds].filter(Boolean))];
-                    const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
-                    const auth = secret ? `?auth=${encodeURIComponent(secret)}` : '';
-                    for (const lookId of lookIds) {
-                        const idxRes = await fetch(`${dynamicEndpoint}sys_logs/trip_plan_users/${encodeURIComponent(lookId)}.json${auth}`);
-                        if (!idxRes.ok) continue;
-                        const idx = await idxRes.json();
-                        if (idx && Number(idx.lastSeen) > lastSeenMs) lastSeenMs = Number(idx.lastSeen);
-                    }
-                } catch { /* optional */ }
+                const profile = await Admin.collectCommuterProfile({
+                    uid,
+                    deviceId,
+                    extraIds: linkedIds,
+                });
+                const fareAt = Math.max(0, ...(profile.fareVotes || []).map((v) => Number(v.at) || 0));
+                const crashAt = Math.max(0, ...(profile.crashes || []).map((c) => Number(c.timestamp || c.at || c.time) || 0));
+                const activityCandidates = [
+                    { ms: Number(user.lastSeenAt) || 0, label: 'App open' },
+                    { ms: Number(profile.tripLast) || 0, label: 'Trip plan' },
+                    { ms: Number(profile.latestFeedbackAt) || 0, label: 'Feedback' },
+                    { ms: Number(profile.liveShares[0]?.at) || 0, label: 'Live share' },
+                    { ms: Number(profile.shareLog?.[0]?.at) || 0, label: 'Live share' },
+                    { ms: Number(profile.community[0]?.timestamp) || 0, label: 'Community' },
+                    { ms: fareAt, label: 'Fare vote' },
+                    { ms: crashAt, label: 'Crash report' },
+                ].filter((row) => row.ms > 0).sort((a, b) => b.ms - a.ms);
+                const lastActivity = activityCandidates[0] || null;
                 const joinedLabel = joinedMs ? Admin.formatDate(joinedMs) : 'unknown';
-                const lastSeenLabel = lastSeenMs ? Admin.formatDate(lastSeenMs) : 'unknown';
-                const devicesLabel = linkedIds.length ? linkedIds.map((id) => String(id).replace(/</g, '&lt;')).join(', ') : 'none';
+                const lastActivityHtml = lastActivity
+                    ? `<b>${Admin.formatDate(lastActivity.ms)}</b><span class="block text-[10px] text-gray-500 mt-0.5">${Admin.commuterEsc(lastActivity.label)}</span>`
+                    : '<span class="text-gray-400">No activity on file</span>';
+                const devicesLabel = linkedIds.length
+                    ? linkedIds.map((id) => Admin.commuterLabelHtml(id)).join('<span class="text-gray-300">, </span>')
+                    : 'none';
+                const heading = profile.alias
+                    ? Admin.commuterEsc(profile.alias)
+                    : name;
+                const chatDid = profile.chatDevice || deviceId || (/^usr_/i.test(uid) ? uid : '');
+                const defaultRouteLabel = Admin.inboxRouteLabel(profile.defaultRoute) || profile.defaultRoute;
+                const accountEmailRaw = String(user.email || '').trim();
+                const accountEmailHtml = accountEmailRaw.includes('@')
+                    ? `<a href="mailto:${Admin.commuterEsc(accountEmailRaw)}" class="font-bold text-blue-600 dark:text-blue-400 underline break-all">${Admin.commuterEsc(accountEmailRaw)}</a>`
+                    : `<b>${email}</b>`;
+                const contactHtml = [
+                    ...(profile.contacts.emails || []).map((em) => (
+                        `<a href="mailto:${Admin.commuterEsc(em)}" class="text-blue-600 dark:text-blue-400 underline break-all">${Admin.commuterEsc(em)}</a>`
+                    )),
+                    ...(profile.contacts.phones || []).map((ph) => {
+                        const tel = String(ph).replace(/\D/g, '');
+                        return `<a href="tel:+${Admin.commuterEsc(tel)}" class="text-blue-600 dark:text-blue-400 underline">${Admin.commuterEsc(ph)}</a>`;
+                    }),
+                ].join('<span class="text-gray-300 mx-1">·</span>');
+                const shareLines = [];
+                profile.liveShares.slice(0, 3).forEach((p) => {
+                    const routeLabel = Admin.inboxRouteLabel(p.routeId) || p.routeId || '';
+                    const state = p.live ? 'Live now' : 'Last pin';
+                    shareLines.push(`<p class="text-[11px] text-gray-700 dark:text-gray-300">${state}: <b>${Admin.commuterEsc(routeLabel)}</b> · train ${Admin.commuterEsc(p.trainId || '-')} · ${Admin.commuterEsc(p.station || '')} · ${Admin.formatDate(p.at)}</p>`);
+                });
+                (profile.shareLog || []).slice(0, 4).forEach((row) => {
+                    const routeLabel = Admin.inboxRouteLabel(row.routeId) || row.routeId || '';
+                    const ended = row.status === 'stopped' || row.action === 'stop' || row.stoppedAt > 0;
+                    const state = row.status === 'live' && !ended ? 'Logged live' : 'Logged share';
+                    shareLines.push(`<p class="text-[11px] text-gray-700 dark:text-gray-300">${state}: <b>${Admin.commuterEsc(routeLabel)}</b> · train ${Admin.commuterEsc(row.trainId || '-')} · ${Admin.formatDate(row.at)}</p>`);
+                });
+                const liveHtml = shareLines.length
+                    ? shareLines.join('')
+                    : '<p class="text-[11px] text-gray-400 leading-snug">No live pin right now. Signed-in shares stay in the ride log after the pin expires. A guest device only shows here while a share is still live. Coordinates stay on the live pin, not on the account.</p>';
+                const communityHtml = profile.community.length
+                    ? profile.community.slice(0, 6).map((c) => {
+                        const routeLabel = Admin.inboxRouteLabel(c.routeId) || c.routeId || '';
+                        return `<p class="text-[11px] text-gray-700 dark:text-gray-300">${Admin.commuterEsc(c.kind || 'post')} on <b>${Admin.commuterEsc(routeLabel)}</b> · ${Admin.formatDate(c.timestamp)}</p>`;
+                    }).join('')
+                    : '<p class="text-[11px] text-gray-400">No community posts matched this id.</p>';
+                const bannedAtMs = Number(flags.shadowBannedAt || 0);
+                const bannedBy = flags.shadowBannedBy ? Admin.commuterEsc(String(flags.shadowBannedBy)) : '';
+                const ticketCount = (profile.fareTicketUrls || []).length;
+                const utBtn = (id, label) => (
+                    `<button type="button" id="${id}" class="ut-action-btn shrink-0 text-[10px] font-black uppercase tracking-wider text-white bg-blue-600 hover:bg-blue-700 px-3 py-1.5 rounded-lg">${label}</button>`
+                );
+                const footBtn = (id, label, tone) => {
+                    const toneClass = tone === 'danger'
+                        ? 'text-red-700 dark:text-red-300 bg-white dark:bg-gray-900 border-red-200 dark:border-red-800'
+                        : 'text-blue-700 dark:text-blue-300 bg-white dark:bg-gray-900 border-blue-200 dark:border-blue-800';
+                    return `<button type="button" id="${id}" class="text-[10px] font-black uppercase tracking-wider px-3 py-1.5 rounded-lg border ${toneClass}">${label}</button>`;
+                };
+                const metricRow = (label, valueHtml, openBtn = '') => `
+                    <div class="flex items-start justify-between gap-2 py-2 border-b border-gray-100 dark:border-gray-800 last:border-0">
+                        <div class="min-w-0">
+                            <p class="text-[9px] font-black uppercase tracking-wider text-gray-400">${label}</p>
+                            <div class="text-[11px] text-gray-800 dark:text-gray-200 mt-0.5 leading-snug">${valueHtml}</div>
+                        </div>
+                        ${openBtn ? `<div class="shrink-0 pt-0.5">${openBtn}</div>` : ''}
+                    </div>`;
                 out.innerHTML = `
-                    <div class="border border-gray-200 dark:border-gray-700 rounded-xl p-3 space-y-2">
-                        <p class="font-black text-gray-900 dark:text-white">${name}</p>
-                        <p class="font-mono text-[10px] text-gray-400 break-all">${uid}</p>
-                        <p class="text-[11px]">Email: <b>${email}</b> - Found via <b>${viaLabel}</b>${deviceId && deviceId !== uid ? ` - device <span class="font-mono">${deviceId}</span>` : ''}</p>
-                        <p class="text-[11px]">Joined: <b>${joinedLabel}</b> · Last seen: <b>${lastSeenLabel}</b></p>
-                        <p class="text-[11px]">Linked devices: <span class="font-mono break-all">${devicesLabel}</span></p>
-                        <p class="text-[11px]">Role: <b>${flags.role || 'user'}</b> - Trust score: <b>${score}</b></p>
-                        <p class="text-[11px]">Shadow banned: <b class="${banned && !expired ? 'text-red-600' : 'text-green-600'}">${banned ? (expired ? 'expired' : 'yes') : 'no'}</b>${banned ? ` - until ${untilStr}` : ''}</p>
-                        ${banned && !expired ? `<p class="text-[11px]">Ban type: <b>${modeStr}</b></p>` : ''}
-                        <div class="flex flex-wrap gap-3 pt-1">
-                            <button type="button" id="ut-ban-btn" class="text-[10px] font-bold text-red-600 underline">Shadow ban</button>
-                            <button type="button" id="ut-lift-btn" class="text-[10px] font-bold text-blue-600 underline">Lift ban</button>
+                    <div class="rounded-2xl border border-gray-200 dark:border-gray-700 bg-gradient-to-b from-white to-slate-50 dark:from-gray-900 dark:to-gray-950 shadow-sm overflow-hidden">
+                        <div class="px-3.5 pt-3.5 pb-3 border-b border-gray-100 dark:border-gray-800">
+                            <p class="font-black text-base text-gray-900 dark:text-white break-words leading-tight">${heading}</p>
+                            ${profile.alias ? `<p class="text-[11px] text-gray-500 mt-1">Alias <b class="text-gray-800 dark:text-gray-200">${Admin.commuterEsc(profile.alias)}</b></p>` : '<p class="text-[11px] text-gray-400 mt-1">No feedback alias yet.</p>'}
+                            <p class="font-mono text-[10px] text-gray-400 break-all mt-1.5">${Admin.commuterEsc(uid)}</p>
+                        </div>
+                        <div class="px-3.5 py-2">
+                            ${metricRow('Email', `${accountEmailHtml}<span class="text-gray-400"> · via ${Admin.commuterEsc(viaLabel)}</span>${deviceId && deviceId !== uid ? ` · device <span class="font-mono break-all">${Admin.commuterEsc(deviceId)}</span>` : ''}`)}
+                            ${contactHtml ? metricRow('Contacts', contactHtml) : ''}
+                            ${metricRow('Joined', `<b>${joinedLabel}</b>`)}
+                            ${metricRow('Last activity', lastActivityHtml)}
+                            ${metricRow('Linked devices', `<span class="break-all">${devicesLabel}</span>`)}
+                            ${metricRow('Role / trust', `Role <b>${flags.role || 'user'}</b> · Trust score <b>${score}</b>`)}
+                            ${metricRow(
+                                'Shadow ban',
+                                `<b class="${banned && !expired ? 'text-red-600' : 'text-green-600'}">${banned ? (expired ? 'expired' : 'yes') : 'no'}</b>${banned ? ` · until ${untilStr} · ${modeStr}` : ''}${bannedAtMs ? ` · since ${Admin.formatDate(bannedAtMs)}` : ''}${bannedBy ? ` · by <span class="font-mono">${bannedBy}</span>` : ''}`,
+                                utBtn('ut-open-bans-btn', 'Open bans')
+                            )}
+                            ${metricRow(
+                                'Feedback',
+                                `<b>${profile.hasChat ? `${profile.feedbackCount || 'open'} thread` : 'none'}</b>${profile.latestFeedbackAt ? ` · last ${Admin.formatDate(profile.latestFeedbackAt)}` : ''}`,
+                                profile.hasChat && chatDid ? utBtn('ut-open-chat-btn', 'Open chat') : ''
+                            )}
+                            ${metricRow(
+                                'Trip plans',
+                                `<b>${profile.tripPresent ? 'yes' : 'none'}</b>${profile.tripRegion ? ` · ${Admin.commuterEsc(profile.tripRegion)}` : ''}${profile.tripLast ? ` · ${Admin.formatDate(profile.tripLast)}` : ''}`,
+                                chatDid ? utBtn('ut-open-trips-btn', 'Open trip plans') : ''
+                            )}
+                            ${metricRow(
+                                'Fare votes',
+                                `<b>${profile.fareVotes.length}</b>${defaultRouteLabel ? ` · default <b>${Admin.commuterEsc(defaultRouteLabel)}</b>` : ''}${ticketCount ? ` · <b>${ticketCount}</b> ticket photo${ticketCount === 1 ? '' : 's'}` : ''}`,
+                                chatDid || profile.fareVotes.length ? utBtn('ut-open-fares-btn', 'Open fare votes') : ''
+                            )}
+                            ${metricRow(
+                                'Routing fails',
+                                `<b>${profile.fails.length}</b>`,
+                                chatDid || profile.fails.length ? utBtn('ut-open-fails-btn', 'Open fails') : ''
+                            )}
+                            ${metricRow(
+                                'Crashes',
+                                `<b>${profile.crashes.length}</b>`,
+                                chatDid || profile.crashes.length ? utBtn('ut-open-crashes-btn', 'Open crashes') : ''
+                            )}
+                        </div>
+                        <div class="px-3.5 py-3 border-t border-gray-100 dark:border-gray-800 space-y-3">
+                            <div>
+                                <p class="text-[9px] font-black uppercase tracking-wider text-gray-400 mb-1">Live location</p>
+                                ${liveHtml}
+                            </div>
+                            <div>
+                                <p class="text-[9px] font-black uppercase tracking-wider text-gray-400 mb-1">Community</p>
+                                ${communityHtml}
+                            </div>
+                        </div>
+                        <div class="px-3.5 py-3 bg-slate-50/80 dark:bg-gray-950/50 border-t border-gray-100 dark:border-gray-800 flex flex-wrap gap-2">
+                            ${chatDid ? footBtn('ut-start-chat-btn', profile.hasChat ? 'Reply' : 'Start chat', 'primary') : ''}
+                            ${chatDid ? footBtn('ut-alias-btn', 'Edit alias', 'primary') : ''}
+                            ${footBtn('ut-ban-btn', 'Shadow ban', 'danger')}
+                            ${footBtn('ut-lift-btn', 'Lift ban', 'primary')}
                         </div>
                     </div>`;
+                document.getElementById('ut-open-chat-btn')?.addEventListener('click', () => {
+                    Admin.openFeedbackForDevice(chatDid, profile.latestFeedbackId);
+                });
+                document.getElementById('ut-open-trips-btn')?.addEventListener('click', () => {
+                    Admin.openFeedbackTripPlans(chatDid);
+                });
+                document.getElementById('ut-open-fares-btn')?.addEventListener('click', () => {
+                    Admin.openPlannerTelemetryForDevice?.({ tab: 'fares', deviceId: chatDid });
+                });
+                document.getElementById('ut-open-fails-btn')?.addEventListener('click', () => {
+                    Admin.openPlannerTelemetryForDevice?.({ tab: 'fails', deviceId: chatDid });
+                });
+                document.getElementById('ut-open-crashes-btn')?.addEventListener('click', () => {
+                    Admin._pendingCrashOpen = { deviceId: chatDid };
+                    if (typeof Admin.deepLinkToPanel === 'function') Admin.deepLinkToPanel('crashes-panel');
+                    else Admin.showDrilledPanel?.('crashes-panel');
+                    setTimeout(() => Admin.consumePendingCrashOpen?.(), 100);
+                });
+                document.getElementById('ut-open-bans-btn')?.addEventListener('click', () => {
+                    Admin.setUtTab?.('bans');
+                });
+                document.getElementById('ut-start-chat-btn')?.addEventListener('click', () => {
+                    Admin.startFeedbackChat(chatDid, profile.latestFeedbackId);
+                });
+                document.getElementById('ut-alias-btn')?.addEventListener('click', async () => {
+                    await Admin.setCommuterAlias(chatDid, profile.alias || '');
+                    Admin.lookupUserTrust();
+                });
                 document.getElementById('ut-ban-btn').onclick = async () => {
                     await Admin.applyShadowBan(uid, { deviceId: deviceId || (/^usr_/i.test(uid) ? uid : null) });
                     Admin.lookupUserTrust();
@@ -9994,10 +11576,52 @@ const Admin = {
     },
 
     // --- GROWTH SPRINT PHASE 8: ADMIN REPLY INBOX PROTOCOL ---
+    feedbackInboxFilters: { email: false, whatsapp: false, attachments: false, trips: false },
+
+    feedbackThreadContactSets: (groupItems) => {
+        const emails = new Set();
+        const phones = new Set();
+        (groupItems || []).forEach((msg) => {
+            const em = String(msg?.email || '').trim();
+            if (!em) return;
+            if (em.includes('@')) {
+                emails.add(em);
+                return;
+            }
+            const digitCount = (em.match(/\d/g) || []).length;
+            if (digitCount >= 9) phones.add(em);
+        });
+        return { emails, phones };
+    },
+
+    feedbackThreadMatchesFilters: (did, groupItems) => {
+        const filters = Admin.feedbackInboxFilters || {};
+        if (!filters.email && !filters.whatsapp && !filters.attachments && !filters.trips) return true;
+        const { emails, phones } = Admin.feedbackThreadContactSets(groupItems);
+        if (filters.email && !emails.size) return false;
+        if (filters.whatsapp && !phones.size) return false;
+        if (filters.attachments && !(groupItems || []).some((item) => Admin.feedbackItemHasAttachments(item))) return false;
+        if (filters.trips && !Admin.feedbackDeviceHasTripPlans(did)) return false;
+        return true;
+    },
+
+    feedbackAttachmentList: (item) => {
+        const out = [];
+        const push = (u) => {
+            const s = String(u || '').trim();
+            if (s && !out.includes(s)) out.push(s);
+        };
+        if (!item) return out;
+        push(item.attachmentUrl);
+        const many = item.attachmentUrls;
+        if (Array.isArray(many)) many.forEach(push);
+        else if (many && typeof many === 'object') Object.values(many).forEach(push);
+        return out;
+    },
+
     feedbackItemHasAttachments: (item) => {
         if (!item) return false;
-        if (item.attachmentUrl) return true;
-        if (Array.isArray(item.attachmentUrls) && item.attachmentUrls.length) return true;
+        if (Admin.feedbackAttachmentList(item).length) return true;
         const html = String(item.text || item.message || '');
         return /admin_attachments|View Attached PDF|<img[\s>/]|openLightbox/i.test(html);
     },
@@ -10378,20 +12002,26 @@ const Admin = {
                 const res = await fetch(url, { method: 'POST', body: JSON.stringify(payload) });
                 if (!res.ok) throw new Error("Failed to send");
                 
-                // Flag the original ticket as replied to
-                await fetch(`${dynamicEndpoint}feedback/${replyFeedbackId}.json?auth=${secret}`, {
-                    method: 'PATCH',
-                    body: JSON.stringify({ hasAdminReply: true })
-                });
+                if (replyFeedbackId) {
+                    await fetch(`${dynamicEndpoint}feedback/${replyFeedbackId}.json?auth=${secret}`, {
+                        method: 'PATCH',
+                        body: JSON.stringify({ hasAdminReply: true })
+                    });
+                }
 
                 // Collect contacts before archive refresh replaces the cache
                 const contacts = Admin.collectFeedbackContacts(replyDeviceId);
                 const commuterName = (Admin.cachedAliases && Admin.cachedAliases[replyDeviceId]) || 'this commuter';
 
-                // Auto-resolve the feedback item (stays on the current Inbox/Archive tab)
-                await Admin.resolveFeedback(replyFeedbackId, true); 
+                if (replyFeedbackId) {
+                    await Admin.resolveFeedback(replyFeedbackId, true);
+                } else if (typeof Admin.fetchFeedback === 'function') {
+                    Admin.fetchFeedback();
+                } 
                 
-                if (typeof showToast === 'function') showToast("Reply sent & archived!", "success");
+                if (typeof showToast === 'function') {
+                    showToast(replyFeedbackId ? 'Reply sent & archived!' : 'Message sent to their inbox.', 'success');
+                }
                 cleanup();
                 if (contacts.emails.length || contacts.phones.length) {
                     Admin.showOutreachModal({ ...contacts, commuterName });
@@ -10869,6 +12499,50 @@ const Admin = {
         }
     },
 
+    hideLivePollResults: () => {
+        const wrap = document.getElementById('alert-live-poll-results');
+        if (wrap) wrap.classList.add('hidden');
+        Admin._livePollPaintId = '';
+    },
+
+    paintLivePollResults: async (pollId, poll, secret) => {
+        const wrap = document.getElementById('alert-live-poll-results');
+        if (!wrap) return;
+        if (!pollId || !poll || !poll.active) {
+            wrap.classList.add('hidden');
+            Admin._livePollPaintId = '';
+            return;
+        }
+        Admin._livePollPaintId = String(pollId);
+        wrap.classList.remove('hidden');
+        const qEl = document.getElementById('poll-result-question');
+        if (qEl) qEl.textContent = poll.question || 'Poll';
+        const tallies = await Admin.fetchPollResultsSnapshot(pollId, secret) || { A: 0, B: 0, C: 0, total: 0 };
+        const total = Number(tallies.total || 0);
+        const pct = (n) => (total > 0 ? Math.round((Number(n) || 0) / total * 100) : 0);
+        const paintRow = (letter, label, count) => {
+            const lab = document.getElementById(`poll-result-label-${letter}`);
+            const countEl = document.getElementById(`poll-result-count-${letter}`);
+            const bar = document.getElementById(`poll-result-bar-${letter}`);
+            const n = Number(count || 0);
+            const p = pct(n);
+            if (lab) lab.textContent = label || `Option ${letter.toUpperCase()}`;
+            if (countEl) countEl.textContent = `${n} vote${n === 1 ? '' : 's'} (${p}%)`;
+            if (bar) bar.style.width = `${p}%`;
+        };
+        paintRow('a', poll.optionA, tallies.A);
+        paintRow('b', poll.optionB, tallies.B);
+        const cWrap = document.getElementById('poll-result-c-wrap');
+        if (poll.optionC || Number(tallies.C || 0) > 0) {
+            cWrap?.classList.remove('hidden');
+            paintRow('c', poll.optionC, tallies.C);
+        } else {
+            cWrap?.classList.add('hidden');
+        }
+        const totalEl = document.getElementById('poll-result-total');
+        if (totalEl) totalEl.textContent = `Total Votes: ${total}`;
+    },
+
     listNoticesInTarget: (node) => {
         if (typeof window.listNoticesInTarget === 'function') return window.listNoticesInTarget(node);
         if (!node || typeof node !== 'object') return [];
@@ -11210,10 +12884,10 @@ const Admin = {
             });
         }
         if (preview) {
-            const last = selected[selected.length - 1];
-            preview.innerHTML = last
-                ? `<img src="${last}" alt="" class="w-full max-h-28 object-contain rounded-lg bg-gray-100 dark:bg-gray-900">`
-                : '';
+            const srcFor = (path) => (typeof window.withBase === 'function' ? window.withBase(path) : path);
+            preview.innerHTML = selected.map((p) => (
+                `<img src="${srcFor(p)}" alt="${esc(labelFor(p))}" class="mt-2 first:mt-0 w-full max-h-36 object-contain rounded-lg bg-gray-100 dark:bg-gray-900">`
+            )).join('');
         }
     },
 
@@ -11286,7 +12960,62 @@ const Admin = {
         }
         const nextList = listed.filter((n) => String(n.id || n._key) !== id).concat([payload]);
         await Admin.writeNoticesMeta(target, secret, nextList);
+        await Admin.writePollVoteMeta(id, payload.poll, secret, payload.expiresAt);
         return payload;
+    },
+
+    writePollVoteMeta: async (pollId, poll, secret, fallbackExpiresAt = 0) => {
+        if (!pollId || !secret || !poll || poll.active === false) return;
+        const closesAt = Number(poll.closesAt) || Number(fallbackExpiresAt) || 0;
+        const allowMultiple = !!poll.allowMultiple;
+        if (!closesAt && !allowMultiple) return;
+        const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
+        const meta = {};
+        if (closesAt) meta.closesAt = closesAt;
+        if (allowMultiple) meta.allowMultiple = true;
+        try {
+            await fetch(`${dynamicEndpoint}polls/${encodeURIComponent(pollId)}/_meta.json?auth=${secret}`, {
+                method: 'PUT',
+                body: JSON.stringify(meta),
+            });
+        } catch (e) {
+            console.warn('poll _meta write failed', e);
+        }
+    },
+
+    patchLiveNoticeFields: async (target, noticeId, fields, secret) => {
+        const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
+        const fetchRes = await window.guardianFetch(`${dynamicEndpoint}notices/${target}.json`, {}, 6000);
+        if (!fetchRes.ok) throw new Error('Alert not found');
+        const node = await fetchRes.json();
+        if (!node) throw new Error('Alert not found');
+        const listed = Admin.listNoticesInTarget(node);
+        const current = listed.find((n) => String(n.id || n._key) === String(noticeId))
+            || listed.find((n) => String(n.id || n._key) === String(noticeId));
+        if (!current) throw new Error('Alert not found');
+        const key = current._key || current.id;
+        const patch = fields && typeof fields === 'object' ? { ...fields } : {};
+        if (patch.poll && current.poll && typeof current.poll === 'object') {
+            patch.poll = { ...current.poll, ...patch.poll };
+        }
+        const isLegacy = node && (node.message || node.text)
+            && !Object.entries(node).some(([k, v]) => k !== 'reactions' && v && typeof v === 'object' && (v.message || v.text));
+        const url = isLegacy
+            ? `${dynamicEndpoint}notices/${target}.json?auth=${secret}`
+            : `${dynamicEndpoint}notices/${target}/${encodeURIComponent(key)}.json?auth=${secret}`;
+        const write = await window.guardianFetch(url, {
+            method: 'PATCH',
+            body: JSON.stringify(patch),
+        }, 8000);
+        if (!write.ok) throw new Error('Failed to update alert');
+        const next = { ...current, ...patch };
+        delete next._key;
+        const nextList = listed.map((n) => (
+            String(n.id || n._key) === String(key) ? { ...n, ...patch } : n
+        ));
+        await Admin.writeNoticesMeta(target, secret, nextList);
+        await Admin.writePollVoteMeta(noticeId, next.poll, secret, next.expiresAt);
+        return next;
     },
 
     archiveActiveNotice: async (target, secret, noticeData = null, noticeId = null) => {
@@ -11582,12 +13311,27 @@ const Admin = {
             const noticeId = ntAdminScheduledNoticeId(scheduleId, plan.occurrenceAt);
             const notice = { ...(job.notice || {}) };
             delete notice.expiresInMs;
+            if (notice.poll && typeof notice.poll === 'object') {
+                notice.poll = { ...notice.poll };
+                delete notice.poll.closesInMs;
+            }
+            const expiresAt = ntAdminJhbExpiresAt(plan.occurrenceAt, job);
             const payload = {
                 ...notice,
                 id: noticeId,
                 postedAt: plan.occurrenceAt,
-                expiresAt: ntAdminJhbExpiresAt(plan.occurrenceAt, job),
+                expiresAt,
             };
+            if (payload.poll && payload.poll.active) {
+                const closesInMs = Number(job.notice?.poll?.closesInMs) || 0;
+                const explicit = Number(job.notice?.poll?.closesAt) || 0;
+                let closesAt = 0;
+                if (closesInMs > 0) closesAt = plan.occurrenceAt + closesInMs;
+                else if (explicit > 0) closesAt = explicit;
+                else closesAt = expiresAt;
+                if (expiresAt && closesAt > expiresAt) closesAt = expiresAt;
+                if (closesAt) payload.poll.closesAt = closesAt;
+            }
             const failures = [];
             for (const target of targets) {
                 try {
@@ -11742,6 +13486,30 @@ const Admin = {
         });
     },
 
+    armScheduledAlertPublisher: () => {
+        if (window.__ntSchedAlertArmed) return;
+        window.__ntSchedAlertArmed = true;
+        const tick = () => {
+            Admin.publishDueScheduledAlerts()
+                .then((due) => {
+                    if (due && Number(due.published) > 0) return null;
+                    return Admin.fetchScheduledAlerts().then((items) => {
+                        const stillDue = (items || []).filter((job) => job && job.enabled !== false && Number(job.nextRunAt || 0) <= Date.now());
+                        if (!stillDue.length) return null;
+                        return Admin.publishDueScheduledAlertsDirect(null, stillDue);
+                    });
+                })
+                .catch((err) => {
+                    console.warn('armScheduledAlertPublisher optional', err);
+                });
+        };
+        setTimeout(tick, 4000);
+        setInterval(tick, 60_000);
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible') tick();
+        });
+    },
+
     refreshScheduledAlerts: async () => {
         const statusEl = document.getElementById('alert-schedule-status');
         if (statusEl) statusEl.textContent = 'Loading...';
@@ -11770,6 +13538,8 @@ const Admin = {
             }
             if (!publishNote && due && due.published) {
                 publishNote = ` - posted ${due.published}`;
+            } else if (!publishNote && due && Number(due.at)) {
+                publishNote = ` - worker ${Admin.formatDate(due.at)}`;
             }
             Admin.renderScheduledAlertsList(items);
             if (statusEl) statusEl.textContent = `${items.length} scheduled${publishNote}`;
@@ -11815,10 +13585,11 @@ const Admin = {
 
         const alertPanel = document.getElementById('alert-panel');
         if (!alertPanel) return;
+        if (typeof Admin.armScheduledAlertPublisher === 'function') Admin.armScheduledAlertPublisher();
         
         const alertHeaderLen = (alertPanel.querySelector('#alert-header-btn')?.textContent || '').trim().length;
         const alertShellEmpty = !(alertPanel.innerHTML || '').trim() || alertHeaderLen < 3;
-        const ALERT_PANEL_REV = 'alerts-hub-v1';
+        const ALERT_PANEL_REV = 'alerts-hub-v2';
         if (
             alertPanel.dataset.adminLoaded === ALERT_PANEL_REV
             && (!document.getElementById('alert-poster-toggle') || !document.querySelector('#alert-body [data-nt-font-select]') || !document.getElementById('alert-source-saved'))
@@ -11917,6 +13688,7 @@ const Admin = {
                     <div class="border border-gray-300 dark:border-gray-600 rounded-lg overflow-hidden min-w-0 max-w-full focus-within:ring-2 focus-within:ring-blue-500">
                         ${Admin.wysiwygToolbarHtml('alert-msg', { fileInputId: 'alert-upload-file', fileLabelId: 'alert-upload-label' })}
                         <div contenteditable="true" id="alert-msg" class="nt-rich-body w-full max-w-full min-w-0 overflow-x-hidden min-h-[120px] p-2.5 bg-gray-50 dark:bg-gray-900 border-0 text-gray-900 dark:text-white text-xs focus:ring-0 outline-none whitespace-pre-wrap empty:before:content-[attr(placeholder)] empty:before:text-gray-400" placeholder="e.g. Delays of 45min due to cable theft..."></div>
+                        <div id="alert-poster-preview" class="px-2.5 pb-2.5 empty:hidden"></div>
                     </div>
                 </div>
 
@@ -11934,7 +13706,6 @@ const Admin = {
                         </button>
                         <ul id="alert-poster-list" class="absolute z-[200] left-0 right-0 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl hidden mt-1 max-h-64 overflow-y-auto custom-scrollbar text-left"></ul>
                     </div>
-                    <div id="alert-poster-preview" class="mt-2"></div>
                 </div>
                 </div>
 
@@ -11951,7 +13722,17 @@ const Admin = {
                                 <label for="alert-force-popup" class="toggle-label block overflow-hidden h-6 rounded-full bg-gray-300 cursor-pointer"></label>
                             </div>
                         </div>
-                        <div class="flex items-center justify-between bg-purple-50 dark:bg-purple-900/20 p-3 rounded-xl border border-purple-200 dark:border-purple-800">
+                        <div class="flex items-center justify-between bg-sky-50 dark:bg-sky-900/20 p-3 rounded-xl border border-sky-200 dark:border-sky-800">
+                            <div>
+                                <span class="font-bold text-sky-800 dark:text-sky-200 text-sm">Pin to bottom of feed</span>
+                                <p class="text-[10px] text-sky-600 dark:text-sky-400 mt-0.5">Any alert. Stays under the others, pin next to Info</p>
+                            </div>
+                            <div class="relative inline-block w-10 mr-2 align-middle select-none transition duration-200 ease-in">
+                                <input type="checkbox" id="alert-pin-toggle" class="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 border-gray-300 appearance-none cursor-pointer outline-none"/>
+                                <label for="alert-pin-toggle" class="toggle-label block overflow-hidden h-6 rounded-full bg-gray-300 cursor-pointer"></label>
+                            </div>
+                        </div>
+                        <div class="flex items-center justify-between bg-purple-50 dark:bg-purple-900/20 p-3 rounded-xl border border-purple-200 dark:border-purple-800 sm:col-span-2">
                             <div>
                                 <span class="font-bold text-purple-800 dark:text-purple-200 text-sm">Interactive Poll Mode</span>
                                 <p class="text-[10px] text-purple-600 dark:text-purple-400 mt-0.5">Add commuter voting buttons</p>
@@ -11983,15 +13764,83 @@ const Admin = {
                         <input type="text" id="alert-poll-opt-c" class="w-full h-10 px-3 rounded-lg bg-white dark:bg-gray-900 border border-purple-200 dark:border-purple-700 text-gray-900 dark:text-white text-xs focus:ring-2 focus:ring-purple-500 outline-none" placeholder="e.g. Not sure">
                     </div>
                     <button type="button" id="alert-poll-add-c-btn" class="text-[10px] font-bold uppercase tracking-wider text-purple-600 dark:text-purple-400 hover:underline focus:outline-none">+ Add third option</button>
+                    <div>
+                        <label class="block text-[10px] font-bold text-purple-600 dark:text-purple-400 uppercase mb-1" for="alert-poll-closes">Poll closes</label>
+                        <input type="datetime-local" id="alert-poll-closes" class="w-full h-10 px-3 rounded-lg bg-white dark:bg-gray-900 border border-purple-200 dark:border-purple-700 text-gray-900 dark:text-white text-xs focus:ring-2 focus:ring-purple-500 outline-none">
+                        <p class="text-[10px] text-purple-600 dark:text-purple-400 mt-1">Leave blank to match the alert expiry, or stay open if the alert has none. Cannot run past the alert expiry.</p>
+                    </div>
                     <div class="flex items-center justify-between bg-white dark:bg-gray-900/60 p-3 rounded-xl border border-purple-200 dark:border-purple-800">
                         <div>
                             <span class="font-bold text-purple-800 dark:text-purple-200 text-xs">Show results to users</span>
-                            <p class="text-[10px] text-purple-600 dark:text-purple-400 mt-0.5">Percentages only - after they vote (or while viewing)</p>
+                            <p class="text-[10px] text-purple-600 dark:text-purple-400 mt-0.5">Percentages after they vote. Off shows thanks only</p>
                         </div>
                         <div class="relative inline-block w-10 mr-2 align-middle select-none transition duration-200 ease-in">
                             <input type="checkbox" id="alert-poll-show-results" class="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 border-gray-300 appearance-none cursor-pointer outline-none"/>
                             <label for="alert-poll-show-results" class="toggle-label block overflow-hidden h-6 rounded-full bg-gray-300 cursor-pointer"></label>
                         </div>
+                    </div>
+                    <div class="flex items-center justify-between bg-white dark:bg-gray-900/60 p-3 rounded-xl border border-purple-200 dark:border-purple-800">
+                        <div>
+                            <span class="font-bold text-purple-800 dark:text-purple-200 text-xs">Allow multiple answers</span>
+                            <p class="text-[10px] text-purple-600 dark:text-purple-400 mt-0.5">Like WhatsApp. Off is one pick. On lets them select several, then Submit vote</p>
+                        </div>
+                        <div class="relative inline-block w-10 mr-2 align-middle select-none transition duration-200 ease-in">
+                            <input type="checkbox" id="alert-poll-allow-multiple" class="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 border-gray-300 appearance-none cursor-pointer outline-none"/>
+                            <label for="alert-poll-allow-multiple" class="toggle-label block overflow-hidden h-6 rounded-full bg-gray-300 cursor-pointer"></label>
+                        </div>
+                    </div>
+                    <div class="flex items-center justify-between bg-white dark:bg-gray-900/60 p-3 rounded-xl border border-purple-200 dark:border-purple-800">
+                        <div>
+                            <span class="font-bold text-purple-800 dark:text-purple-200 text-xs">Show raw vote counts</span>
+                            <p class="text-[10px] text-purple-600 dark:text-purple-400 mt-0.5">Adds the count in brackets next to each percentage</p>
+                        </div>
+                        <div class="relative inline-block w-10 mr-2 align-middle select-none transition duration-200 ease-in">
+                            <input type="checkbox" id="alert-poll-show-count" class="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 border-gray-300 appearance-none cursor-pointer outline-none"/>
+                            <label for="alert-poll-show-count" class="toggle-label block overflow-hidden h-6 rounded-full bg-gray-300 cursor-pointer"></label>
+                        </div>
+                    </div>
+                    <div id="alert-live-poll-results" class="hidden pt-3 border-t border-purple-100 dark:border-purple-800">
+                    <div class="flex items-center justify-between gap-2 mb-3">
+                        <h4 class="text-[10px] font-bold text-purple-600 dark:text-purple-400 uppercase tracking-widest flex items-center"><span class="mr-1.5 inline-flex">${Admin.icon('chart', 'w-3.5 h-3.5')}</span> Live Poll Results</h4>
+                        <button type="button" id="alert-live-poll-refresh" class="h-7 px-2 rounded-lg bg-white dark:bg-gray-900 border border-purple-200 dark:border-purple-700 text-[9px] font-black uppercase tracking-wider text-purple-700 dark:text-purple-300 focus:outline-none">Refresh</button>
+                    </div>
+                    <div class="bg-white dark:bg-gray-900 rounded-xl p-3 border border-purple-100 dark:border-purple-800">
+                        <p id="poll-result-question" class="text-xs font-bold text-gray-800 dark:text-gray-200 mb-3 leading-snug">Question...</p>
+                        
+                        <div class="mb-2">
+                            <div class="flex justify-between text-[10px] font-bold text-gray-600 dark:text-gray-400 mb-1">
+                                <span id="poll-result-label-a">Option A</span>
+                                <span id="poll-result-count-a">0 votes (0%)</span>
+                            </div>
+                            <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                                <div id="poll-result-bar-a" class="bg-purple-500 h-2 rounded-full transition-all duration-500" style="width: 0%"></div>
+                            </div>
+                        </div>
+                        
+                        <div class="mb-2">
+                            <div class="flex justify-between text-[10px] font-bold text-gray-600 dark:text-gray-400 mb-1">
+                                <span id="poll-result-label-b">Option B</span>
+                                <span id="poll-result-count-b">0 votes (0%)</span>
+                            </div>
+                            <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                                <div id="poll-result-bar-b" class="bg-purple-400 h-2 rounded-full transition-all duration-500" style="width: 0%"></div>
+                            </div>
+                        </div>
+
+                        <div id="poll-result-c-wrap" class="hidden mb-2">
+                            <div class="flex justify-between text-[10px] font-bold text-gray-600 dark:text-gray-400 mb-1">
+                                <span id="poll-result-label-c">Option C</span>
+                                <span id="poll-result-count-c">0 votes (0%)</span>
+                            </div>
+                            <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                                <div id="poll-result-bar-c" class="bg-purple-300 h-2 rounded-full transition-all duration-500" style="width: 0%"></div>
+                            </div>
+                        </div>
+                        
+                        <div class="mt-3 text-right">
+                            <span id="poll-result-total" class="text-[9px] font-black uppercase text-gray-400 tracking-wider">Total Votes: 0</span>
+                        </div>
+                    </div>
                     </div>
                 </div>
                 </div>
@@ -12120,47 +13969,6 @@ const Admin = {
                         Clear
                     </button>
                 </div>
-
-                <div id="alert-live-poll-results" class="hidden pt-4 border-t border-gray-100 dark:border-gray-700 mt-4">
-                    <h4 class="text-[10px] font-bold text-purple-600 dark:text-purple-400 uppercase tracking-widest mb-3 flex items-center"><span class="mr-1.5 inline-flex">${Admin.icon('chart', 'w-3.5 h-3.5')}</span> Live Poll Results</h4>
-                    <div class="bg-gray-50 dark:bg-gray-900 rounded-xl p-3 border border-gray-200 dark:border-gray-700">
-                        <p id="poll-result-question" class="text-xs font-bold text-gray-800 dark:text-gray-200 mb-3 leading-snug">Question...</p>
-                        
-                        <div class="mb-2">
-                            <div class="flex justify-between text-[10px] font-bold text-gray-600 dark:text-gray-400 mb-1">
-                                <span id="poll-result-label-a">Option A</span>
-                                <span id="poll-result-count-a">0 votes (0%)</span>
-                            </div>
-                            <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-                                <div id="poll-result-bar-a" class="bg-purple-500 h-2 rounded-full transition-all duration-500" style="width: 0%"></div>
-                            </div>
-                        </div>
-                        
-                        <div class="mb-2">
-                            <div class="flex justify-between text-[10px] font-bold text-gray-600 dark:text-gray-400 mb-1">
-                                <span id="poll-result-label-b">Option B</span>
-                                <span id="poll-result-count-b">0 votes (0%)</span>
-                            </div>
-                            <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-                                <div id="poll-result-bar-b" class="bg-purple-400 h-2 rounded-full transition-all duration-500" style="width: 0%"></div>
-                            </div>
-                        </div>
-
-                        <div id="poll-result-c-wrap" class="hidden mb-2">
-                            <div class="flex justify-between text-[10px] font-bold text-gray-600 dark:text-gray-400 mb-1">
-                                <span id="poll-result-label-c">Option C</span>
-                                <span id="poll-result-count-c">0 votes (0%)</span>
-                            </div>
-                            <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-                                <div id="poll-result-bar-c" class="bg-purple-300 h-2 rounded-full transition-all duration-500" style="width: 0%"></div>
-                            </div>
-                        </div>
-                        
-                        <div class="mt-3 text-right">
-                            <span id="poll-result-total" class="text-[9px] font-black uppercase text-gray-400 tracking-wider">Total Votes: 0</span>
-                        </div>
-                    </div>
-                </div>
                 </div>
 
                 <div id="alert-active-pane" class="hidden space-y-3">
@@ -12179,7 +13987,7 @@ const Admin = {
                 <div id="alert-schedule-pane" class="hidden space-y-3">
                     <div class="bg-indigo-50 dark:bg-indigo-900/20 p-3 rounded-lg border border-indigo-200 dark:border-indigo-800">
                         <p class="text-[10px] text-indigo-800 dark:text-indigo-300 font-medium leading-snug">
-                            Live queue of scheduled alerts. Create them under <b>New Alert</b> with Later, Weekly, or Monthly. Refresh publishes any that are due.
+                            Live queue of scheduled alerts. Create them under <b>New Alert</b> with Later, Weekly, or Monthly. The worker posts due jobs every 5 minutes. Refresh also publishes now.
                         </p>
                     </div>
                     <div class="flex justify-between items-center">
@@ -12262,6 +14070,7 @@ const Admin = {
         
         const signoffInput = document.getElementById('alert-signoff');
         const forcePopupToggle = document.getElementById('alert-force-popup');
+        const pinToggle = document.getElementById('alert-pin-toggle');
 
         const srcToggleBtn = document.getElementById('alert-source-toggle-btn');
         const srcBody = document.getElementById('alert-source-body');
@@ -12390,9 +14199,70 @@ const Admin = {
         const pollOptCWrap = document.getElementById('alert-poll-opt-c-wrap');
         const pollAddCBtn = document.getElementById('alert-poll-add-c-btn');
         const pollShowResults = document.getElementById('alert-poll-show-results');
+        const pollAllowMultiple = document.getElementById('alert-poll-allow-multiple');
+        const pollShowCount = document.getElementById('alert-poll-show-count');
+        const pollCloses = document.getElementById('alert-poll-closes');
         let existingAlertId = null;
         Admin._alertRepostDraft = false;
         Admin._skipAlertFetchOnce = false;
+
+        const readPollClosesAt = (alertExpiresAt) => {
+            if (!pollToggle?.checked) return 0;
+            const exp = Number(alertExpiresAt) || 0;
+            const raw = pollCloses?.value ? new Date(pollCloses.value).getTime() : NaN;
+            if (!Number.isFinite(raw) || raw <= 0) return exp;
+            if (exp > 0 && raw > exp) {
+                if (pollCloses) pollCloses.value = Admin.toLocalDatetimeValue(exp);
+                return exp;
+            }
+            return raw;
+        };
+
+        const assembleComposePoll = ({ closesAt = 0, closesInMs = 0 } = {}) => {
+            if (!pollToggle?.checked) {
+                return {
+                    active: false,
+                    question: null,
+                    optionA: null,
+                    optionB: null,
+                    optionC: null,
+                    showResults: false,
+                    showRawCounts: false,
+                    allowMultiple: false,
+                };
+            }
+            const optCVal = pollOptC && !pollOptCWrap?.classList.contains('hidden')
+                ? (pollOptC.value.trim() || null)
+                : null;
+            const poll = {
+                active: true,
+                question: (pollQuestion?.value || '').trim() || null,
+                optionA: (pollOptA?.value || '').trim() || null,
+                optionB: (pollOptB?.value || '').trim() || null,
+                optionC: optCVal,
+                showResults: !!(pollShowResults && pollShowResults.checked),
+                showRawCounts: !!(pollShowCount && pollShowCount.checked),
+                allowMultiple: !!(pollAllowMultiple && pollAllowMultiple.checked),
+            };
+            if (closesAt) poll.closesAt = closesAt;
+            if (closesInMs) poll.closesInMs = closesInMs;
+            return poll;
+        };
+
+        const composeNeedsContentToast = (hasBody, posters) => {
+            if (hasBody || posters.length || pollToggle?.checked) return false;
+            if (typeof showToast === 'function') showToast('Add a message, a poster, or a poll.', 'error');
+            return true;
+        };
+
+        const composePollFieldsOk = () => {
+            if (!pollToggle?.checked) return true;
+            if (!(pollQuestion?.value || '').trim() || !(pollOptA?.value || '').trim() || !(pollOptB?.value || '').trim()) {
+                if (typeof showToast === 'function') showToast('Add a poll question and two answers.', 'error');
+                return false;
+            }
+            return true;
+        };
 
         Admin.currentAlertManagerTab = 'compose';
         const setAlertTab = (tab) => {
@@ -12605,7 +14475,8 @@ const Admin = {
             const targets = Admin.getSelectedAlertTargets();
             const hasBody = Admin.alertComposeHasBody(msg);
             const posters = Admin.getSelectedAlertPosters();
-            if (!hasBody && !posters.length) { if (typeof showToast === 'function') showToast('Add a message or a poster.', 'error'); return; }
+            if (composeNeedsContentToast(hasBody, posters)) return;
+            if (!composePollFieldsOk()) return;
             if (!targets.length) { if (typeof showToast === 'function') showToast('Pick a target audience.', 'error'); return; }
             const meta = readComposeScheduleMeta();
             if (!meta.ok) { if (typeof showToast === 'function') showToast(meta.error, 'error'); return; }
@@ -12618,9 +14489,12 @@ const Admin = {
             if (hasBody && !/<span[^>]*>.*?<\/span>\s*$/i.test(msg)) {
                 msg += `<br><br><span class="opacity-75 text-[10px] uppercase font-bold tracking-wider">- ${signoff}</span>`;
             }
-            const optCVal = pollToggle?.checked && pollOptC && !pollOptCWrap?.classList.contains('hidden')
-                ? (pollOptC.value.trim() || null) : null;
             const schedId = Admin._editingSchedId || `sched_${Date.now()}`;
+            const alertExpiresAt = Number(meta.nextRunAt || 0) + Number(meta.expiresInMs || 0);
+            const pollClosesAt = readPollClosesAt(alertExpiresAt);
+            const pollClosesInMs = pollToggle?.checked && pollCloses?.value && Number(meta.nextRunAt)
+                ? Math.max(0, pollClosesAt - Number(meta.nextRunAt))
+                : 0;
             const job = {
                 id: schedId,
                 target: targets[0],
@@ -12638,6 +14512,8 @@ const Admin = {
                     message: msg,
                     authorName: signoff,
                     forcePopup: !!(forcePopupToggle && forcePopupToggle.checked),
+                    pinned: !!(pinToggle && pinToggle.checked),
+                    pinnedAt: pinToggle?.checked ? Date.now() : null,
                     severity: severitySelect?.value || 'info',
                     imageUrls: Admin.getSelectedAlertPosters(),
                     imageUrl: null,
@@ -12646,14 +14522,7 @@ const Admin = {
                     sourceName: sourceNameInput ? sourceNameInput.value.trim() || null : null,
                     sourceUrl: sourceUrlInput ? sourceUrlInput.value.trim() || null : null,
                     expiresInMs: meta.expiresInMs || 0,
-                    poll: {
-                        active: !!(pollToggle && pollToggle.checked),
-                        question: pollToggle?.checked ? pollQuestion.value.trim() : null,
-                        optionA: pollToggle?.checked ? pollOptA.value.trim() : null,
-                        optionB: pollToggle?.checked ? pollOptB.value.trim() : null,
-                        optionC: optCVal,
-                        showResults: pollToggle?.checked ? !!(pollShowResults && pollShowResults.checked) : false,
-                    },
+                    poll: assembleComposePoll({ closesInMs: pollClosesInMs }),
                 },
             };
             const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
@@ -12703,6 +14572,7 @@ const Admin = {
             }
             if (signoffInput) signoffInput.value = item.authorName || item.signoff || 'Next Train Ops';
             if (forcePopupToggle) forcePopupToggle.checked = item.forcePopup !== undefined ? !!item.forcePopup : (item.severity === 'critical');
+            if (pinToggle) pinToggle.checked = !!(item.pinned === true || item.pinned === 1 || item.pinned === 'true');
             if (sourceNameInput) sourceNameInput.value = item.sourceName || '';
             if (sourceUrlInput) sourceUrlInput.value = item.sourceUrl || '';
             syncSourceDropdownFromFields();
@@ -12720,14 +14590,29 @@ const Admin = {
                 if (pollOptA) pollOptA.value = item.poll.optionA || '';
                 if (pollOptB) pollOptB.value = item.poll.optionB || '';
                 if (pollShowResults) pollShowResults.checked = !!item.poll.showResults;
+                if (pollAllowMultiple) pollAllowMultiple.checked = !!item.poll.allowMultiple;
+                if (pollShowCount) pollShowCount.checked = !!(item.poll.showRawCounts || item.poll.showParticipantCount);
+                if (item.poll.closesAt && pollCloses) {
+                    pollCloses.value = Admin.toLocalDatetimeValue(item.poll.closesAt);
+                } else if (pollCloses) {
+                    pollCloses.value = '';
+                }
                 if (item.poll.optionC) {
                     if (pollOptC) pollOptC.value = item.poll.optionC;
                     pollOptCWrap?.classList.remove('hidden');
                     pollAddCBtn?.classList.add('hidden');
                 }
+                const livePollId = item.id || existingAlertId || '';
+                if (mode === 'review' && livePollId) {
+                    Admin.paintLivePollResults(livePollId, item.poll);
+                } else {
+                    Admin.hideLivePollResults();
+                }
             } else {
                 if (pollToggle) pollToggle.checked = false;
                 pollContainer?.classList.add('hidden');
+                if (pollCloses) pollCloses.value = '';
+                Admin.hideLivePollResults();
             }
 
             composePane?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -12747,6 +14632,9 @@ const Admin = {
                 Admin.setSelectedAlertTargets(targets, { fetch: false });
             }
             fillAlertComposeFromItem(job.notice, { mode: 'repost' });
+            if (job.notice?.poll?.closesInMs && job.nextRunAt && pollCloses) {
+                pollCloses.value = Admin.toLocalDatetimeValue(Number(job.nextRunAt) + Number(job.notice.poll.closesInMs));
+            }
             const freq = job.frequency || 'once';
             const mode = freq === 'weekly' ? 'weekly' : (freq === 'monthly' ? 'monthly' : 'later');
             syncAlertWhenMode(mode);
@@ -12998,11 +14886,35 @@ const Admin = {
             pollToggle.addEventListener('change', () => {
                 if (pollToggle.checked) {
                     if (pollContainer) pollContainer.classList.remove('hidden');
+                    if (existingAlertId) {
+                        Admin.paintLivePollResults(existingAlertId, {
+                            active: true,
+                            question: pollQuestion?.value || '',
+                            optionA: pollOptA?.value || '',
+                            optionB: pollOptB?.value || '',
+                            optionC: pollOptCWrap?.classList.contains('hidden') ? '' : (pollOptC?.value || ''),
+                        });
+                    }
                 } else {
                     if (pollContainer) pollContainer.classList.add('hidden');
+                    Admin.hideLivePollResults();
                 }
             });
         }
+        document.getElementById('alert-live-poll-refresh')?.addEventListener('click', () => {
+            const id = existingAlertId || Admin._livePollPaintId;
+            if (!id) {
+                if (typeof showToast === 'function') showToast('Post or open a live poll to see results.', 'info');
+                return;
+            }
+            Admin.paintLivePollResults(id, {
+                active: true,
+                question: pollQuestion?.value || '',
+                optionA: pollOptA?.value || '',
+                optionB: pollOptB?.value || '',
+                optionC: pollOptCWrap?.classList.contains('hidden') ? '' : (pollOptC?.value || ''),
+            });
+        });
 
         async function fetchCurrentAlertsForTargets(targets) {
             if (Admin._skipAlertFetchOnce) {
@@ -13013,19 +14925,35 @@ const Admin = {
             existingAlertId = null;
             const list = Admin.dedupeAlertTargets(targets || Admin.getSelectedAlertTargets());
             const countEl = document.getElementById('alert-live-count');
-            if (!list.length) {
-                if (countEl) countEl.textContent = 'Pick at least one route or region.';
-                return;
-            }
+            const fetchGen = (Admin._alertLiveCountGen = (Admin._alertLiveCountGen || 0) + 1);
+            const stillCurrent = () => fetchGen === Admin._alertLiveCountGen;
+            const paintPending = () => {
+                if (!countEl || !stillCurrent()) return;
+                if (!list.length) {
+                    countEl.textContent = 'Pick at least one route or region.';
+                    return;
+                }
+                const labels = list.map((t) => Admin.alertTargetLabel(t)).join(', ');
+                countEl.textContent = list.length === 1
+                    ? `Checking live posts on ${labels}…`
+                    : `Posting to ${list.length} targets (${labels}). Checking live posts…`;
+            };
+            paintPending();
+            if (!list.length) return;
             try {
                 const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
                 let totalLive = 0;
                 for (const target of list) {
+                    if (!stillCurrent()) return;
                     const res = await window.guardianFetch(`${dynamicEndpoint}notices/${target}.json?t=${Date.now()}`, {}, 6000);
                     const data = await res.json();
                     const listed = Admin.listNoticesInTarget(data);
                     totalLive += listed.filter((n) => !n.expiresAt || n.expiresAt > Date.now()).length;
                 }
+                if (!stillCurrent()) return;
+                // Selection may have changed mid-flight; never paint a stale audience list.
+                const latest = Admin.getSelectedAlertTargets();
+                if (latest.join('\0') !== list.join('\0')) return;
                 const labels = list.map((t) => Admin.alertTargetLabel(t)).join(', ');
                 if (countEl) {
                     countEl.textContent = list.length === 1
@@ -13036,7 +14964,7 @@ const Admin = {
                 }
                 if (sendBtn) sendBtn.textContent = 'Preview Alert';
             } catch (e) {
-                if (countEl) countEl.textContent = 'Could not read live posts for these targets.';
+                if (countEl && stillCurrent()) countEl.textContent = 'Could not read live posts for these targets.';
             }
         }
         Admin.fetchCurrentAlertsForTargets = fetchCurrentAlertsForTargets;
@@ -13148,12 +15076,14 @@ const Admin = {
             
             const signoff = signoffInput.value.trim() || "Next Train Ops";
             const isForcePopup = forcePopupToggle.checked;
+            const isPinned = !!(pinToggle && pinToggle.checked);
             
             const secret = await Admin.getAuthKey();
             
             const hasBody = Admin.alertComposeHasBody(msg);
             const posters = Admin.getSelectedAlertPosters();
-            if (!hasBody && !posters.length) { if (typeof showToast === 'function') showToast("Add a message or a poster.", "error"); return; }
+            if (composeNeedsContentToast(hasBody, posters)) return;
+            if (!composePollFieldsOk()) return;
             if (!targets.length) { if (typeof showToast === 'function') showToast("Pick at least one route or region.", "error"); return; }
             if (!secret) { if (typeof showToast === 'function') showToast("Authentication required! Sign in again.", "error"); return; }
 
@@ -13164,9 +15094,6 @@ const Admin = {
 
             let expiresAtVal = dateInput && dateInput.value ? new Date(dateInput.value).getTime() : new Date(Admin.endOfTodayLocalValue()).getTime();
 
-            const optCVal = pollToggle.checked && pollOptC && !pollOptCWrap?.classList.contains('hidden')
-                ? (pollOptC.value.trim() || null)
-                : null;
             const isRepost = !!Admin._alertRepostDraft;
             const isUpdate = !!existingAlertId && !isRepost;
             const nowTs = Date.now();
@@ -13175,6 +15102,8 @@ const Admin = {
                 message: msg,
                 authorName: signoff,
                 forcePopup: isForcePopup,
+                pinned: isPinned,
+                pinnedAt: isPinned ? nowTs : null,
                 expiresAt: expiresAtVal,
                 severity: severity,
                 imageUrls: Admin.getSelectedAlertPosters(),
@@ -13191,14 +15120,7 @@ const Admin = {
                 payload.postedAt = nowTs;
             }
             if (isRepost) payload.repostedAt = nowTs;
-            payload.poll = {
-                active: pollToggle.checked,
-                question: pollToggle.checked ? pollQuestion.value.trim() : null,
-                optionA: pollToggle.checked ? pollOptA.value.trim() : null,
-                optionB: pollToggle.checked ? pollOptB.value.trim() : null,
-                optionC: optCVal,
-                showResults: pollToggle.checked ? !!(pollShowResults && pollShowResults.checked) : false,
-            };
+            payload.poll = assembleComposePoll({ closesAt: readPollClosesAt(expiresAtVal) });
 
             const publishAssembled = async () => {
                 try {
@@ -13301,6 +15223,7 @@ const Admin = {
                 renderSavedSourceDropdown('');
                 if (dateInput) dateInput.value = Admin.endOfTodayLocalValue();
                 forcePopupToggle.checked = false;
+                if (pinToggle) pinToggle.checked = false;
                 pollToggle.checked = false;
                 pollContainer.classList.add('hidden');
                 pollQuestion.value = "";
@@ -13308,10 +15231,14 @@ const Admin = {
                 pollOptB.value = "";
                 if (pollOptC) pollOptC.value = "";
                 if (pollShowResults) pollShowResults.checked = false;
+                if (pollAllowMultiple) pollAllowMultiple.checked = false;
+                if (pollShowCount) pollShowCount.checked = false;
+                if (pollCloses) pollCloses.value = '';
                 pollOptCWrap?.classList.add('hidden');
                 pollAddCBtn?.classList.remove('hidden');
                 const livePoll = document.getElementById('alert-live-poll-results');
                 if (livePoll) livePoll.classList.add('hidden');
+                Admin._livePollPaintId = '';
 
                 sendBtn.textContent = "Preview Alert";
                 if (typeof checkServiceAlerts === 'function') setTimeout(checkServiceAlerts, 500);
@@ -13346,6 +15273,12 @@ const Admin = {
                 }
             }
             items.sort((a, b) => Number(b.postedAt || b.timestamp || 0) - Number(a.postedAt || a.timestamp || 0));
+            const secret = await Admin.getAuthKey();
+            await Promise.all(items.map(async (item) => {
+                if (!item?.poll?.active || !item.id) return;
+                const tallies = await Admin.fetchPollResultsSnapshot(item.id, secret);
+                if (tallies) item.pollResults = tallies;
+            }));
             Admin._cachedActiveAlerts = items;
             Admin.renderActiveAlertsList(items);
             if (statusEl) statusEl.textContent = items.length ? `${items.length} live` : 'None live';
@@ -13382,6 +15315,12 @@ const Admin = {
                     return (d.textContent || '').trim().slice(0, 140) || '(no message)';
                 } catch { return '(no message)'; }
             })();
+            const poll = item.pollResults;
+            const pollHint = poll && poll.total
+                ? `<span class="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300">Poll - ${poll.total} vote${poll.total === 1 ? '' : 's'}</span>`
+                : (item.poll && item.poll.active
+                    ? `<span class="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300">Poll</span>`
+                    : '');
             const scope = escapeHTML(Admin.alertTargetLabel(item.target || item.clearedFrom || '-'));
             const idSafe = escapeHTML(String(item.id || item._key || idx));
             return `
@@ -13389,6 +15328,7 @@ const Admin = {
                     <div class="flex flex-wrap items-center gap-1.5 mb-1.5">
                         <span class="px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider ${sevCls}">${sevLabel}</span>
                         <span class="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400">${scope}</span>
+                        ${pollHint}
                     </div>
                     <p class="text-xs text-gray-800 dark:text-gray-200 leading-snug line-clamp-2 mb-2">${escapeHTML(plain)}</p>
                     <p class="text-[9px] font-mono text-gray-400 mb-2 truncate">${idSafe} - ${escapeHTML(whenStr)}</p>
@@ -13701,7 +15641,7 @@ const Admin = {
     /** Body HTML for notice-modal (no outer padded card). */
     buildNoticeBodyHtml: (data) => {
         if (!data) return '<p class="text-sm text-gray-500">No alert data.</p>';
-        // Admin.openLightbox (z-300) — never window.openLightbox/map-modal (z-160 under archive preview z-260)
+        // Same full-screen preview as the alert panel. openLightbox lifts it above Dev Mode.
         const posterUrls = Admin.collectAlertImageUrls(data);
         let imgHtml = posterUrls.map((src) => Admin.wrapLightboxImgHtml(src) || '').join('');
         let parsedMessage = data.message || data.text || 'No details provided.';
@@ -14669,20 +16609,7 @@ const Admin = {
             return route.sheetKeys[`${dayEl.value}_to_${dir}`] || '';
         };
 
-        const unwrapRegionScheduleDb = (region, raw) => ntAdminUnwrapRegionScheduleDb(region, raw);
-
-        const scheduleRowsFromDb = (db, sheetKey) => {
-            const raw = ntAdminScheduleSheet(db, sheetKey);
-            if (Array.isArray(raw)) return raw;
-            if (Array.isArray(raw?.rows)) return raw.rows;
-            if (raw && typeof raw === 'object') {
-                return Object.keys(raw)
-                    .filter((key) => /^\d+$/.test(key))
-                    .sort((a, b) => Number(a) - Number(b))
-                    .map((key) => raw[key]);
-            }
-            return [];
-        };
+        const scheduleRowsFromDb = (db, sheetKey) => ntAdminScheduleRows(db, sheetKey);
 
         const ensureGridOrderDb = async (region, sheetKey) => {
             const ram = typeof fullDatabase !== 'undefined' ? fullDatabase : null;
@@ -14698,14 +16625,7 @@ const Admin = {
             };
             const dbPath = paths[region];
             if (!dbPath || typeof Admin.fetchDiagJson !== 'function') return ram;
-            let rawData;
-            try {
-                rawData = await Admin.fetchDiagJson(`https://nexttrain-cache.enock.workers.dev/${dbPath}?t=${Date.now()}`);
-            } catch {
-                rawData = await Admin.fetchDiagJson(`https://metrorail-next-train-default-rtdb.firebaseio.com/${dbPath}?t=${Date.now()}`);
-            }
-            const db = unwrapRegionScheduleDb(region, rawData);
-            if (db) Admin._gridOrderRegionDb[region] = db;
+            const db = await ntAdminFetchRegionScheduleDb(region);
             return db || ram;
         };
 
@@ -14952,8 +16872,8 @@ const Admin = {
             
             <div id="excl-body" class="hidden mt-4 space-y-3">
                 <div id="excl-review-banner" class="hidden text-[10px] leading-snug px-2.5 py-2 rounded-lg bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 text-slate-700 dark:text-slate-200"></div>
-                <div class="rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50/70 dark:bg-gray-900/40 p-3 space-y-2">
-                    <p class="text-[10px] font-black uppercase tracking-wider text-gray-500 dark:text-gray-400">1. Route</p>
+                <details open class="rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50/70 dark:bg-gray-900/40 p-3 space-y-2">
+                    <summary class="text-[10px] font-black uppercase tracking-wider text-gray-500 dark:text-gray-400 cursor-pointer">1. Route</summary>
                 <div class="relative w-full" id="excl-route-container">
                     <select id="excl-route" class="hidden"></select>
                     <div onclick="document.getElementById('excl-route-list').classList.toggle('hidden'); document.getElementById('excl-route-chevron').classList.toggle('rotate-180');" class="w-full h-10 px-2 bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg text-xs font-bold text-gray-900 dark:text-white transition-colors shadow-sm hover:border-blue-400 dark:hover:border-blue-500 flex items-center justify-between cursor-pointer select-none">
@@ -14962,10 +16882,10 @@ const Admin = {
                     </div>
                     <ul id="excl-route-list" class="absolute z-[200] w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl hidden mt-1 flex-col overflow-y-auto max-h-60 custom-scrollbar text-left"></ul>
                 </div>
-                </div>
+                </details>
 
-                <div class="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg border border-blue-200 dark:border-blue-800 space-y-2">
-                    <p class="text-[10px] font-black uppercase tracking-wider text-blue-800 dark:text-blue-300">2. Timetable grid banner</p>
+                <details class="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg border border-blue-200 dark:border-blue-800 space-y-2">
+                    <summary class="text-[10px] font-black uppercase tracking-wider text-blue-800 dark:text-blue-300 cursor-pointer">2. Timetable grid banner</summary>
                     <p class="text-[10px] text-blue-700 dark:text-blue-400 leading-snug">Route-wide banner inside the full timetable grid. Separate from the NO SVC / SPL train tag below.</p>
                     <label class="block text-[10px] font-bold text-blue-800 dark:text-blue-300 uppercase mb-1">Banner text</label>
                     <div class="flex space-x-2">
@@ -14987,10 +16907,31 @@ const Admin = {
                             <span class="text-[10px] font-bold text-blue-800 dark:text-blue-300 uppercase tracking-wide leading-snug">Show on downloaded grid</span>
                         </label>
                     </div>
-                </div>
+                    <div class="pt-2 border-t border-blue-200 dark:border-blue-800/50 space-y-1.5">
+                        <p class="text-[9px] font-bold text-blue-800 dark:text-blue-300 uppercase tracking-wide">Show banner on</p>
+                        <div class="grid grid-cols-2 gap-2">
+                            <label class="flex items-start cursor-pointer gap-2 rounded-lg bg-white/70 dark:bg-gray-800/70 p-2">
+                                <input type="checkbox" id="excl-grid-notice-day-weekday" checked class="form-checkbox h-4 w-4 mt-0.5 text-blue-600 bg-white border-gray-300 rounded focus:ring-0 shrink-0">
+                                <span class="text-[10px] font-bold text-blue-800 dark:text-blue-300 uppercase tracking-wide leading-snug">Weekday</span>
+                            </label>
+                            <label class="flex items-start cursor-pointer gap-2 rounded-lg bg-white/70 dark:bg-gray-800/70 p-2">
+                                <input type="checkbox" id="excl-grid-notice-day-saturday" checked class="form-checkbox h-4 w-4 mt-0.5 text-blue-600 bg-white border-gray-300 rounded focus:ring-0 shrink-0">
+                                <span class="text-[10px] font-bold text-blue-800 dark:text-blue-300 uppercase tracking-wide leading-snug">Saturday</span>
+                            </label>
+                            <label class="flex items-start cursor-pointer gap-2 rounded-lg bg-white/70 dark:bg-gray-800/70 p-2">
+                                <input type="checkbox" id="excl-grid-notice-day-sunday" checked class="form-checkbox h-4 w-4 mt-0.5 text-blue-600 bg-white border-gray-300 rounded focus:ring-0 shrink-0">
+                                <span class="text-[10px] font-bold text-blue-800 dark:text-blue-300 uppercase tracking-wide leading-snug">Sunday</span>
+                            </label>
+                            <label class="flex items-start cursor-pointer gap-2 rounded-lg bg-white/70 dark:bg-gray-800/70 p-2">
+                                <input type="checkbox" id="excl-grid-notice-day-public_holiday" checked class="form-checkbox h-4 w-4 mt-0.5 text-blue-600 bg-white border-gray-300 rounded focus:ring-0 shrink-0">
+                                <span class="text-[10px] font-bold text-blue-800 dark:text-blue-300 uppercase tracking-wide leading-snug">Public holiday</span>
+                            </label>
+                        </div>
+                    </div>
+                </details>
 
-                <div class="rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50/70 dark:bg-gray-900/40 p-3 space-y-3">
-                    <p class="text-[10px] font-black uppercase tracking-wider text-gray-500 dark:text-gray-400">3. Train exceptions</p>
+                <details open class="rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50/70 dark:bg-gray-900/40 p-3 space-y-3">
+                    <summary class="text-[10px] font-black uppercase tracking-wider text-gray-500 dark:text-gray-400 cursor-pointer">3. Train exceptions</summary>
                 <div class="flex space-x-2">
                     <div class="relative w-2/3" id="excl-schedule-type-container">
                         <select id="excl-schedule-type" class="hidden">
@@ -15052,10 +16993,10 @@ const Admin = {
                 </div>
 
                 <input id="excl-reason" type="text" placeholder="Reason (e.g. Testing, Easter)" class="w-full h-10 px-3 bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg text-xs text-gray-900 dark:text-white outline-none">
-                </div>
+                </details>
                 
-                <div class="rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50/70 dark:bg-gray-900/40 p-3 space-y-2">
-                    <p class="text-[10px] font-black uppercase tracking-wider text-gray-500 dark:text-gray-400">4. How this exception appears</p>
+                <details open class="rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50/70 dark:bg-gray-900/40 p-3 space-y-2">
+                    <summary class="text-[10px] font-black uppercase tracking-wider text-gray-500 dark:text-gray-400 cursor-pointer">4. How this exception appears</summary>
                     <div class="rounded-lg border border-gray-200 dark:border-gray-700 p-2.5 bg-white dark:bg-gray-800">
                         <p class="text-[10px] font-black uppercase tracking-wider text-gray-600 dark:text-gray-300 mb-1">Visibility</p>
                         <p class="text-[9px] text-gray-500 dark:text-gray-400 leading-snug mb-2">Tick one surface for in-app only or grid-only. Tick both to publish everywhere.</p>
@@ -15073,7 +17014,7 @@ const Admin = {
                         <input type="datetime-local" id="excl-expiry" class="w-full h-10 px-3 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-xs text-gray-900 dark:text-white outline-none">
                         <p class="text-[9px] text-gray-400 mt-1">Defaults to today at 23:59. If set, the train automatically returns after this date. Clear the field for no auto-return.</p>
                     </div>
-                </div>
+                </details>
                 
                 <button id="excl-save-btn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-4 rounded-lg shadow-sm transition-colors text-xs uppercase tracking-wide focus:outline-none">
                     Apply Exceptions
@@ -15098,6 +17039,35 @@ const Admin = {
         const exclNoticeExpiryInit = document.getElementById('excl-grid-notice-expiry');
         if (exclExpiryInputInit) exclExpiryInputInit.value = Admin.endOfTodayLocalValue();
         if (exclNoticeExpiryInit) exclNoticeExpiryInit.value = Admin.endOfTodayLocalValue();
+
+        const NOTICE_DAY_KEYS = ['weekday', 'saturday', 'sunday', 'public_holiday'];
+        const noticeDayCheckbox = (key) => document.getElementById(`excl-grid-notice-day-${key}`);
+        const readNoticeDays = () => {
+            const days = {};
+            NOTICE_DAY_KEYS.forEach((key) => {
+                const el = noticeDayCheckbox(key);
+                days[key] = el ? !!el.checked : true;
+            });
+            return days;
+        };
+        const applyNoticeDays = (days) => {
+            const configured = days && typeof days === 'object'
+                ? (Array.isArray(days)
+                    ? days.length > 0
+                    : NOTICE_DAY_KEYS.some((key) => days[key] === true || days[key] === false))
+                : false;
+            NOTICE_DAY_KEYS.forEach((key) => {
+                const el = noticeDayCheckbox(key);
+                if (!el) return;
+                if (!configured) {
+                    el.checked = true;
+                    return;
+                }
+                el.checked = Array.isArray(days)
+                    ? days.includes(key)
+                    : days[key] === true;
+            });
+        };
 
         const schedTypeSelect = document.getElementById('excl-schedule-type');
 
@@ -15182,11 +17152,10 @@ const Admin = {
             return dir === 'A' ? route.sheetKeys.saturday_to_a : route.sheetKeys.saturday_to_b;
         };
 
-        const trainsFromSheet = (sheetKey, runtimeOrder = null) => {
-            if (typeof fullDatabase === 'undefined' || !fullDatabase || !sheetKey) return [];
-            const rawData = ntAdminScheduleSheet(fullDatabase, sheetKey);
-            if (!rawData) return [];
-            const rows = Array.isArray(rawData) ? rawData : (Array.isArray(rawData.rows) ? rawData.rows : []);
+        const trainsFromSheet = (sheetKey, runtimeOrder = null, db = null) => {
+            const database = db || (typeof fullDatabase !== 'undefined' ? fullDatabase : null);
+            if (!database || !sheetKey) return [];
+            const rows = ntAdminScheduleRows(database, sheetKey);
             const set = new Set();
             try {
                 rows.forEach((row) => {
@@ -15200,7 +17169,7 @@ const Admin = {
                 region: ROUTES?.[routeSelect?.value]?.region,
                 runtimeOrder,
                 manifestOrder: typeof window.getGridOrderManifest === 'function'
-                    ? window.getGridOrderManifest(fullDatabase, sheetKey)
+                    ? window.getGridOrderManifest(database, sheetKey)
                     : null,
             });
         };
@@ -15476,11 +17445,6 @@ const Admin = {
             const route = ROUTES[rId];
             if (!route) return;
 
-            if (typeof fullDatabase === 'undefined' || !fullDatabase) {
-                if (typeof showToast === 'function') showToast("Database not ready. Refresh app.", "error");
-                return;
-            }
-
             const sheetA = sheetKeyForDir(route, type, 'A');
             const sheetB = sheetKeyForDir(route, type, 'B');
             const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : '';
@@ -15499,9 +17463,18 @@ const Admin = {
             };
             loadTrainsBtn.disabled = true;
             const [orderA, orderB] = await Promise.all([loadOrder(sheetA), loadOrder(sheetB)]);
+            let scheduleDb = (typeof fullDatabase !== 'undefined' && fullDatabase) ? fullDatabase : null;
+            const sheetHasTrains = (database) => (
+                ntAdminScheduleRows(database, sheetA).length > 0 || ntAdminScheduleRows(database, sheetB).length > 0
+            );
+            if (!sheetHasTrains(scheduleDb)) {
+                const cached = Admin._gridOrderRegionDb?.[route.region];
+                if (sheetHasTrains(cached)) scheduleDb = cached;
+                else scheduleDb = await ntAdminFetchRegionScheduleDb(route.region) || scheduleDb;
+            }
             loadTrainsBtn.disabled = false;
-            const trainsA = trainsFromSheet(sheetA, orderA);
-            const trainsB = trainsFromSheet(sheetB, orderB);
+            const trainsA = trainsFromSheet(sheetA, orderA, scheduleDb);
+            const trainsB = trainsFromSheet(sheetB, orderB, scheduleDb);
             if (!trainsA.length && !trainsB.length) {
                 if (typeof showToast === 'function') showToast(`No data found for ${type}`, "error");
                 return;
@@ -15530,8 +17503,13 @@ const Admin = {
             const showInApp = noticeInAppToggle ? noticeInAppToggle.checked : true;
             const noticeExportToggle = document.getElementById('excl-grid-notice-export');
             const showOnExport = noticeExportToggle ? noticeExportToggle.checked : true;
+            const noticeDays = readNoticeDays();
             if (text && !showInApp && !showOnExport) {
                 if (typeof showToast === 'function') showToast("Tick in-app, downloaded grid, or both.", "error");
+                return;
+            }
+            if (text && !NOTICE_DAY_KEYS.some((key) => noticeDays[key])) {
+                if (typeof showToast === 'function') showToast("Tick weekday, Saturday, Sunday, or public holiday.", "error");
                 return;
             }
 
@@ -15554,7 +17532,8 @@ const Admin = {
                             updatedAt: Date.now(),
                             expiresAt: noticeExpiryTs,
                             showInApp: showInApp,
-                            showOnExport: showOnExport
+                            showOnExport: showOnExport,
+                            days: noticeDays
                         })
                     }, 10000);
                 }
@@ -15660,6 +17639,7 @@ const Admin = {
                     if (noticeInAppToggle) {
                         noticeInAppToggle.checked = data._grid_notice.showInApp !== false;
                     }
+                    applyNoticeDays(data._grid_notice.days);
                 } else {
                     noticeInput.value = "";
                     const noticeExpiryInput = document.getElementById('excl-grid-notice-expiry');
@@ -15670,6 +17650,7 @@ const Admin = {
                     if (noticeExportToggle) noticeExportToggle.checked = true;
                     const noticeInAppToggle = document.getElementById('excl-grid-notice-in-app');
                     if (noticeInAppToggle) noticeInAppToggle.checked = true;
+                    applyNoticeDays(null);
                 }
 
                 listDiv.innerHTML = '';
@@ -16048,11 +18029,11 @@ const Admin = {
             });
         };
         let groupHTML = `
-                        <div class="flex flex-wrap items-center gap-2 shrink-0 mb-0 bg-gray-50 dark:bg-gray-800/50 p-2 rounded-t-lg border border-gray-100 dark:border-gray-700 border-b-0">
-                            <div class="flex-grow min-w-0">
+                        <div class="flex items-start gap-2 shrink-0 mb-0 bg-gray-50 dark:bg-gray-800/50 p-2 rounded-t-lg border border-gray-100 dark:border-gray-700 border-b-0">
+                            <div class="flex-1 min-w-0">
                                 ${contactHtml || '<span class="text-[10px] text-gray-400 italic font-medium px-1">No contact info provided</span>'}
                             </div>
-                            <div class="relative shrink-0" data-fb-more-wrap>
+                            <div class="relative shrink-0 ml-auto" data-fb-more-wrap>
                                 <button type="button" data-fb-more-toggle class="flex items-center gap-1 px-2.5 py-1.5 bg-white dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 border border-gray-200 dark:border-gray-600 rounded-lg transition-colors focus:outline-none shadow-sm text-[10px] font-bold uppercase tracking-wider" title="Options">
                                     Options
                                     <svg class="w-3 h-3 opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
@@ -16070,6 +18051,8 @@ const Admin = {
                 `;
 
                 let lastRenderedDate = "";
+                const threadRouteId = Admin.threadCommuterRoute(groupItems);
+                const threadRouteLabel = Admin.inboxRouteLabel(threadRouteId);
 
                 groupItems.forEach(item => {
                     const date = new Date(item.timestamp || Date.now());
@@ -16105,11 +18088,15 @@ const Admin = {
                     
                     if (item.isFromAdmin) {
                         // ADMIN BUBBLE (Right) — 1 grey sent, 2 grey delivered, 2 blue read. No R.
-                        let receiptHtml = `<span class="inline-flex items-center text-gray-400 ml-1 shrink-0" title="Sent">${Admin.receiptTicks('single', 'w-3 h-2.5')}</span>`;
+                        const sentAt = item.timestamp || '';
+                        const deliveredAt = item.deliveredAt || (item.delivered ? item.timestamp : '');
+                        const readAt = item.readAt || item.viewedAt || ((item.read || item.acknowledged) ? item.timestamp : '');
+                        const receiptAttrs = `data-fb-receipt data-fb-sent="${secureEscape(String(sentAt))}" data-fb-delivered="${secureEscape(String(deliveredAt))}" data-fb-read="${secureEscape(String(readAt))}"`;
+                        let receiptHtml = `<span class="inline-flex items-center text-gray-400 ml-1 shrink-0 cursor-pointer" title="Hold for delivery status" ${receiptAttrs}>${Admin.receiptTicks('single', 'w-3 h-2.5')}</span>`;
                         if (item.read || item.acknowledged) {
-                            receiptHtml = `<span class="inline-flex items-center text-sky-400 ml-1 shrink-0" title="Read">${Admin.receiptTicks('double', 'w-3.5 h-2.5')}</span>`;
+                            receiptHtml = `<span class="inline-flex items-center text-sky-400 ml-1 shrink-0 cursor-pointer" title="Hold for delivery status" ${receiptAttrs}>${Admin.receiptTicks('double', 'w-3.5 h-2.5')}</span>`;
                         } else if (item.delivered) {
-                            receiptHtml = `<span class="inline-flex items-center text-gray-400 ml-1 shrink-0" title="Delivered">${Admin.receiptTicks('double', 'w-3.5 h-2.5')}</span>`;
+                            receiptHtml = `<span class="inline-flex items-center text-gray-400 ml-1 shrink-0 cursor-pointer" title="Hold for delivery status" ${receiptAttrs}>${Admin.receiptTicks('double', 'w-3.5 h-2.5')}</span>`;
                         }
 
                         // REGEX: Extract Admin Signoff Name ("- Enock") including ASCII hyphen
@@ -16124,13 +18111,10 @@ const Admin = {
                             parsedAdminText = window.sanitizeRichHtml(parsedAdminText);
                         }
 
-                        const adminExtra = [];
-                        if (item.attachmentUrl) adminExtra.push(item.attachmentUrl);
-                        if (Array.isArray(item.attachmentUrls)) {
-                            item.attachmentUrls.forEach((u) => { if (u) adminExtra.push(u); });
-                        }
+                        const adminExtra = Admin.feedbackAttachmentList(item);
                         const adminMedia = Admin.layoutInboxMedia(parsedAdminText, adminExtra);
-                        parsedAdminText = `${adminMedia.media || ''}${adminMedia.body || ''}`;
+                        const adminAttachHtml = adminMedia.media || '';
+                        parsedAdminText = adminMedia.body || '';
 
                         // GUARDIAN UX FIX: Professional, high-contrast Admin message bubble
                         // id/data use raw inbox key (same as [REPLY TO ADMIN: key]) for quote jump
@@ -16138,11 +18122,13 @@ const Admin = {
                         const msgAnchor = secureEscape(rawMsgKey);
                         const rawAdminVer = String(item.appVersion || (typeof APP_VERSION !== 'undefined' ? APP_VERSION : '') || '').split(' - ')[0] || 'Admin';
                         const adminVer = secureEscape(rawAdminVer);
-                        const adminRoute = secureEscape(item.routeId || '');
-                        const adminMetaLabel = adminRoute ? `${adminVer} · ${adminRoute}` : adminVer;
+                        const userRouteLabel = Admin.inboxRouteLabel(item.routeId) || threadRouteLabel;
+                        const userRouteHtml = userRouteLabel
+                            ? `<div class="inbox-bubble-route-row">${secureEscape(userRouteLabel)}</div>`
+                            : '';
                         const adminMeta = /^V\d+_/i.test(rawAdminVer)
-                            ? `<button type="button" class="fb-version-chip relative z-[2] font-mono font-medium opacity-80 ml-2 truncate underline decoration-dotted underline-offset-2 hover:opacity-100 focus:outline-none" data-admin-changelog="${adminVer}" onclick="event.preventDefault();event.stopPropagation();if(window.Admin&amp;&amp;Admin.openAdminChangelogLookup)Admin.openAdminChangelogLookup(this.getAttribute('data-admin-changelog')||this.textContent);">${adminMetaLabel}</button>`
-                            : `<span class="font-mono font-medium opacity-60 truncate">${adminMetaLabel}</span>`;
+                            ? `<button type="button" class="fb-version-chip relative z-[2] font-mono font-medium opacity-80 ml-2 shrink-0 underline decoration-dotted underline-offset-2 hover:opacity-100 focus:outline-none" data-admin-changelog="${adminVer}" onclick="event.preventDefault();event.stopPropagation();if(window.Admin&amp;&amp;Admin.openAdminChangelogLookup)Admin.openAdminChangelogLookup(this.getAttribute('data-admin-changelog')||this.textContent);">${adminVer}</button>`
+                            : `<span class="font-mono font-medium opacity-60 shrink-0">${adminVer}</span>`;
                         const editedLabel = item.editedAt ? `<span class="ml-1 opacity-70">edited</span>` : '';
                         const inboxReactId = item.inboxMsgId || String(item.id || '');
                         const reactChips = (typeof window.renderInboxReactionChips === 'function' && inboxReactId)
@@ -16156,8 +18142,10 @@ const Admin = {
                                             <span>${secureEscape(adminName)}</span>
                                             ${adminMeta}
                                         </div>
+                                        ${userRouteHtml}
                                         <div class="inbox-bubble-body">
                                             <div class="inbox-msg-text">${parsedAdminText}<span class="inbox-msg-time">${dateStr}${receiptHtml}${editedLabel}</span></div>
+                                            ${adminAttachHtml}
                                         </div>
                                     </div>
                                     ${reactChips}
@@ -16398,13 +18386,7 @@ const Admin = {
                         rawText = rawText.replace(/\n/g, '<br>');
 
                         const safeAppVersion = secureEscape(item.appVersion || 'Unknown');
-                        const safeRouteId = secureEscape(item.routeId || 'None');
-                        const rawAttach = [];
-                        if (item.attachmentUrl) rawAttach.push(item.attachmentUrl);
-                        if (item.attachmentUrls && Array.isArray(item.attachmentUrls)) {
-                            item.attachmentUrls.forEach((u) => { if (u) rawAttach.push(u); });
-                        }
-                        const uniqueAttach = [...new Set(rawAttach)];
+                        const uniqueAttach = Admin.feedbackAttachmentList(item);
 
                         // Safeguard rawText in case the replace cleared it completely
                         if (typeof rawText !== 'string') rawText = '';
@@ -16428,11 +18410,23 @@ const Admin = {
                         let headerColorClass = isReply ? "text-blue-600 dark:text-blue-400" : "text-gray-500 dark:text-gray-400";
 
                         const verLabel = safeAppVersion.split(' - ')[0];
+                        const commuterRouteLabel = Admin.inboxRouteLabel(item.routeId) || threadRouteLabel;
+                        const commuterRouteHtml = commuterRouteLabel
+                            ? `<div class="inbox-bubble-route-row">${secureEscape(commuterRouteLabel)}</div>`
+                            : '';
+                        const signedOutHtml = (item.sentSignedOut || item.chatScope === 'guest')
+                            ? `<div class="text-[10px] font-semibold text-amber-700 dark:text-amber-300 mt-0.5">Sent while signed out</div>`
+                            : '';
+                        const commuterVerBtn = /^V\d+_/i.test(verLabel)
+                            ? `<button type="button" class="fb-version-chip relative z-[2] font-mono font-medium opacity-80 ml-2 shrink-0 underline decoration-dotted underline-offset-2 hover:opacity-100 focus:outline-none" data-admin-changelog="${verLabel}" onclick="event.preventDefault();event.stopPropagation();if(window.Admin&amp;&amp;Admin.openAdminChangelogLookup)Admin.openAdminChangelogLookup(this.getAttribute('data-admin-changelog')||this.textContent);">${verLabel}</button>`
+                            : `<span class="font-mono font-medium opacity-60 ml-2 shrink-0">${verLabel}</span>`;
                         const integratedHeaderHtml = `
                             <div class="inbox-bubble-name-row">
                                 <span class="whitespace-nowrap inline-flex items-center gap-1 ${headerColorClass} uppercase tracking-widest text-[10px]">${headerLabelText}</span>
-                                <button type="button" class="fb-version-chip relative z-[2] font-mono font-medium opacity-80 ml-2 truncate underline decoration-dotted underline-offset-2 hover:opacity-100 focus:outline-none" data-admin-changelog="${verLabel}" onclick="event.preventDefault();event.stopPropagation();if(window.Admin&amp;&amp;Admin.openAdminChangelogLookup)Admin.openAdminChangelogLookup(this.getAttribute('data-admin-changelog')||this.textContent);">${verLabel} · ${safeRouteId}</button>
+                                ${commuterVerBtn}
                             </div>
+                            ${commuterRouteHtml}
+                            ${signedOutHtml}
                         `;
 
                         const inboxReactId = item.inboxMsgId || '';
@@ -16446,7 +18440,8 @@ const Admin = {
                                         ${integratedHeaderHtml}
                                         <div class="inbox-bubble-body">
                                             ${quoteBlockHtml}
-                                            <div class="inbox-msg-text">${rawText}${attachmentHtml}<span class="inbox-msg-time">${dateStr}</span></div>
+                                            <div class="inbox-msg-text">${rawText}<span class="inbox-msg-time">${dateStr}</span></div>
+                                            ${attachmentHtml}
                                         </div>
                                     </div>
                                     ${reactChips}
@@ -16505,7 +18500,6 @@ const Admin = {
             { key: 'delayReportsUi', label: 'Delay reports' },
             { key: 'communityRealtime', label: 'Community realtime' },
             { key: 'pushNotify', label: 'Push notifications' },
-            { key: 'tripPrice', label: 'Trip price' },
         ];
     },
 
@@ -16514,6 +18508,7 @@ const Admin = {
             return {
                 enabled: 'exp-map-enabled',
                 routes: 'exp-map-routes',
+                regions: 'exp-map-regions',
                 all: 'exp-map-all',
                 header: 'exp-feat-mapTab-header',
                 body: 'exp-feat-mapTab-body',
@@ -16525,6 +18520,7 @@ const Admin = {
             return {
                 enabled: 'exp-community-enabled',
                 routes: 'exp-community-routes',
+                regions: 'exp-community-regions',
                 all: 'exp-community-all',
                 header: 'exp-feat-communityTab-header',
                 body: 'exp-feat-communityTab-body',
@@ -16535,6 +18531,7 @@ const Admin = {
         return {
             enabled: `exp-feat-${key}-enabled`,
             routes: `exp-feat-${key}-routes`,
+            regions: `exp-feat-${key}-regions`,
             all: `exp-feat-${key}-all`,
             header: `exp-feat-${key}-header`,
             body: `exp-feat-${key}-body`,
@@ -16565,6 +18562,8 @@ const Admin = {
                                     <input type="checkbox" id="${ids.all}" class="exp-feat-all rounded border-teal-400 text-teal-600 focus:ring-teal-500" data-exp-key="${f.key}">
                                     All routes
                                 </label>
+                                <p class="text-[9px] font-black uppercase tracking-widest text-teal-700 dark:text-teal-300">Allowed regions</p>
+                                <div id="${ids.regions}" class="flex flex-wrap gap-x-3 gap-y-1"></div>
                                 <p class="text-[9px] font-black uppercase tracking-widest text-teal-700 dark:text-teal-300">Allowed routes</p>
                                 <div id="${ids.routes}" class="max-h-36 overflow-y-auto custom-scrollbar space-y-1 rounded-lg border border-teal-200 dark:border-teal-800/60 bg-white/60 dark:bg-gray-900/30 p-2"></div>
                             </div>
@@ -16896,7 +18895,7 @@ const Admin = {
         panel.dataset.loaded = 'true';
         panel.className = 'bg-white dark:bg-gray-800 rounded-xl shadow-md border border-gray-200 dark:border-gray-700 p-4 mb-4 relative overflow-hidden transition-all duration-300';
         panel.innerHTML = `
-            <button type="button" id="push-notifications-header" class="w-full text-left text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center justify-center focus:outline-none">
+            <button type="button" id="push-notifications-header-btn" class="w-full text-left text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center justify-center focus:outline-none">
                 <span class="flex flex-col items-center">
                     ${Admin.tileIcon('megaphone', 'text-blue-600 dark:text-blue-400')}
                     <span>Notifications</span>
@@ -16992,7 +18991,7 @@ const Admin = {
             </div>`;
 
         const body = panel.querySelector('#push-notifications-body');
-        const header = panel.querySelector('#push-notifications-header');
+        const header = panel.querySelector('#push-notifications-header-btn');
         const environment = panel.querySelector('#push-notifications-environment');
         const audience = panel.querySelector('#push-notifications-audience');
         const category = panel.querySelector('#push-notifications-category');
@@ -17339,26 +19338,17 @@ const Admin = {
                             delta variance, missing coordinates, junk leftover rows (a lone 12 or 7.20), day mismatches, and more.
                         </p>
 
-                        <div class="grid grid-cols-2 gap-2">
-                            <div>
-                                <label class="block text-[10px] font-bold text-violet-800 dark:text-violet-300 uppercase mb-1">Region</label>
-                                <select id="sched-qa-region" class="w-full h-10 px-2 rounded-lg bg-white dark:bg-gray-800 border border-violet-200 dark:border-violet-800/50 text-xs text-gray-900 dark:text-white focus:ring-2 focus:ring-violet-500 outline-none">
-                                    <option value="CURRENT">Active region</option>
-                                    <option value="GP">Gauteng</option>
-                                    <option value="WC">Western Cape</option>
-                                    <option value="KZN">KwaZulu-Natal</option>
-                                    <option value="EC">Eastern Cape</option>
-                                </select>
-                            </div>
-                            <div>
-                                <label class="block text-[10px] font-bold text-violet-800 dark:text-violet-300 uppercase mb-1">Source</label>
-                                <select id="sched-qa-source" class="w-full h-10 px-2 rounded-lg bg-white dark:bg-gray-800 border border-violet-200 dark:border-violet-800/50 text-xs text-gray-900 dark:text-white focus:ring-2 focus:ring-violet-500 outline-none">
-                                    <option value="FIREBASE" selected>Firebase</option>
-                                    <option value="CLOUDFLARE">Cloudflare</option>
-                                    <option value="GITHUB">GitHub CDN</option>
-                                    <option value="RAM">RAM cache</option>
-                                </select>
-                            </div>
+                        <p class="text-[9px] text-violet-700 dark:text-violet-300 font-medium leading-snug">
+                            Uses the Target Region (Matrix &amp; Scan) control above.
+                        </p>
+                        <div>
+                            <label class="block text-[10px] font-bold text-violet-800 dark:text-violet-300 uppercase mb-1">Source</label>
+                            <select id="sched-qa-source" class="w-full h-10 px-2 rounded-lg bg-white dark:bg-gray-800 border border-violet-200 dark:border-violet-800/50 text-xs text-gray-900 dark:text-white focus:ring-2 focus:ring-violet-500 outline-none">
+                                <option value="FIREBASE" selected>Firebase</option>
+                                <option value="CLOUDFLARE">Cloudflare</option>
+                                <option value="GITHUB">GitHub CDN</option>
+                                <option value="RAM">RAM cache</option>
+                            </select>
                         </div>
 
                         <div class="relative z-30" id="sched-qa-filter-wrap">
@@ -17633,7 +19623,7 @@ const Admin = {
                     ? `${p.distanceKm.toFixed(1)} km`
                     : '-';
                 const srcBit = p?.distanceSource
-                    ? ({ path: 'path', km_mark: 'km mark', crow: 'crow-flies' }[p.distanceSource] || p.distanceSource)
+                    ? ({ path: 'path', stops: 'stops', rail: 'rail', km_mark: 'km mark', crow: 'crow-flies' }[p.distanceSource] || p.distanceSource)
                     : '';
                 const assigned = p?.assignedZone || (r.zones?.[0] || '-');
                 const suggested = p?.suggestedZone || '-';
@@ -17664,7 +19654,8 @@ const Admin = {
                                 <span>${d.distanceKm != null ? d.distanceKm.toFixed(1) + ' km' : '-'} - ${esc(d.assignedZone || '-')}/${esc(d.suggestedZone || '-')}${monthlyBit}${d.mismatch ? ' !' : ''}</span>
                             </div>
                             <div class="text-[8px] opacity-70 mt-0.5">
-                                path ${m.pathKm != null ? m.pathKm + ' km' : '-'}
+                                path ${m.pathKm != null ? m.pathKm + ' km' : '-'} (${esc(m.chainSource || 'stops')})
+                                - rail ${m.bakedKm != null ? m.bakedKm + ' km' : '-'}
                                 - crow ${m.crowKm != null ? m.crowKm + ' km' : '-'}
                                 - km-mark ${m.kmMarkDelta != null ? m.kmMarkDelta + ' km' : '-'}
                                 - coords ${m.withCoords || 0}/${m.stationCount || 0}
@@ -17728,9 +19719,22 @@ const Admin = {
                         throw new Error('Zone audit engine not loaded (runZoneDistanceAudit missing).');
                     }
                     const db = await fetchDbForZoneAudit(targetRegion, scanSource);
+                    let bakedFeatures = [];
+                    try {
+                        const trackPath = `tracks/rail-tracks-${targetRegion}.geojson`;
+                        const trackUrl = (typeof window.withBase === 'function')
+                            ? window.withBase(trackPath)
+                            : new URL(trackPath, document.baseURI).href;
+                        const trackRes = await fetch(trackUrl, { cache: 'no-store' });
+                        if (trackRes.ok) {
+                            const fc = await trackRes.json();
+                            bakedFeatures = Array.isArray(fc?.features) ? fc.features : [];
+                        }
+                    } catch { /* dump / stops still work */ }
                     const report = runZoneDistanceAudit(db, targetRegion, {
                         bands,
                         parseJSONSchedule: typeof parseJSONSchedule === 'function' ? parseJSONSchedule : null,
+                        bakedFeatures,
                     });
                     report.meta = {
                         region: targetRegion,
@@ -18514,7 +20518,7 @@ const Admin = {
 
         if (runBtn) {
             runBtn.onclick = async () => {
-                const regionSelect = document.getElementById('sched-qa-region');
+                const regionSelect = document.getElementById('diag-region-select');
                 const sourceSelect = document.getElementById('sched-qa-source');
                 const scanRegion = regionSelect?.value || 'CURRENT';
                 const scanSourceRaw = sourceSelect?.value || 'FIREBASE';
@@ -19102,27 +21106,9 @@ const Admin = {
                             <option value="freeze">Freeze / unresponsive</option>
                             <option value="fouc">True FOUC (unstyled)</option>
                             <option value="lost">404 / End of the Line</option>
+                            <option value="warning">Warning (visible)</option>
                         </select>
                         <button type="button" id="shadow-ban-default-save" class="w-full bg-violet-600 hover:bg-violet-700 text-white font-bold py-2.5 rounded-lg text-xs uppercase tracking-wide focus:outline-none">Save default mode</button>
-                    </div>
-                </div>
-
-                <!-- Transplanted Growth & Promo -->
-                <div class="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-xl border border-blue-200 dark:border-indigo-800 overflow-hidden shadow-sm transition-all">
-                    <button id="promo-header-btn" class="w-full px-3 py-3 bg-blue-100/50 dark:bg-indigo-900/40 text-left text-[10px] font-black text-indigo-800 dark:text-indigo-300 uppercase tracking-widest flex items-center justify-between focus:outline-none transition-colors hover:bg-blue-200/50 dark:hover:bg-indigo-900/60">
-                        <span class="flex items-center gap-2">
-                            <span class="text-indigo-600 dark:text-indigo-300">${Admin.icon('rocket', 'w-4 h-4')}</span> Growth & Promo
-                        </span>
-                        <svg id="promo-chevron" class="w-4 h-4 transform transition-transform -rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
-                    </button>
-                    <div id="promo-body" class="hidden p-4">
-                        <p class="text-[10px] text-indigo-800 dark:text-indigo-300 font-medium leading-snug mb-4 text-center px-2">Let commuters scan this to instantly open and install the app without typing the URL.</p>
-                        <div class="flex flex-col items-center justify-center bg-white p-3 rounded-2xl shadow-sm border border-indigo-100 dark:border-gray-800 w-max mx-auto">
-                            <img src="https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=https://nexttrain.co.za&color=1e3a8a&bgcolor=ffffff" alt="Next Train QR Code" class="w-40 h-40 object-contain rounded-lg">
-                        </div>
-                        <div class="text-center mt-4 mb-1">
-                            <span class="text-xs font-bold text-indigo-900 dark:text-indigo-100 bg-white/60 dark:bg-black/20 px-4 py-1.5 rounded-full border border-indigo-200 dark:border-indigo-800 shadow-sm">nexttrain.co.za</span>
-                        </div>
                     </div>
                 </div>
 
@@ -19468,9 +21454,6 @@ const Admin = {
         const deployRefreshBtn = document.getElementById('deploy-status-refresh-btn');
         const deployRunLink = document.getElementById('deploy-github-run-link');
 
-        const promoHeader = document.getElementById('promo-header-btn');
-        const promoBody = document.getElementById('promo-body');
-        const promoChevron = document.getElementById('promo-chevron');
         const banModeSelect = document.getElementById('shadow-ban-default-mode');
         const banModeSave = document.getElementById('shadow-ban-default-save');
         const banDefaultHeader = document.getElementById('shadow-ban-default-header');
@@ -19496,7 +21479,7 @@ const Admin = {
         const expFeatureState = {};
         let expFeaturesHydrated = false;
         Admin.grantableFeatures().forEach((f) => {
-            expFeatureState[f.key] = { enabled: false, routes: new Set(), allRoutes: false };
+            expFeatureState[f.key] = { enabled: false, routes: new Set(), regions: new Set(), allRoutes: false };
         });
 
         const listExpRoutes = () => {
@@ -19509,8 +21492,13 @@ const Admin = {
         const expFeatCountLabel = (state) => {
             if (!state?.enabled) return 'Off';
             if (state.allRoutes) return 'All routes';
-            const n = state.routes.size;
-            return n ? `${n} route${n === 1 ? '' : 's'}` : 'No routes';
+            const parts = [];
+            const regionCount = state.regions?.size || 0;
+            const routeCount = state.routes?.size || 0;
+            if (regionCount === 1) parts.push([...state.regions][0]);
+            else if (regionCount > 1) parts.push(`${regionCount} regions`);
+            if (routeCount) parts.push(`${routeCount} route${routeCount === 1 ? '' : 's'}`);
+            return parts.length ? parts.join(' · ') : 'Nothing selected';
         };
 
         const paintExpFeatCount = (key) => {
@@ -19550,6 +21538,33 @@ const Admin = {
             paintExpFeatCount(key);
         };
 
+        const EXP_REGION_LABELS = { GP: 'Gauteng', WC: 'Western Cape', KZN: 'KwaZulu-Natal', EC: 'Eastern Cape' };
+
+        const paintExpRegionBox = (key) => {
+            const ids = Admin.expFeatureControlIds(key);
+            const box = document.getElementById(ids.regions);
+            const state = expFeatureState[key];
+            if (!box || !state) return;
+            const disabled = state.allRoutes ? 'disabled' : '';
+            box.innerHTML = ['GP', 'WC', 'KZN', 'EC'].map((code) => {
+                const checked = state.allRoutes || state.regions.has(code) ? 'checked' : '';
+                return `<label class="inline-flex items-center gap-1.5 text-[10px] font-bold text-teal-900 dark:text-teal-100 cursor-pointer ${state.allRoutes ? 'opacity-60' : ''}">
+                    <input type="checkbox" class="exp-region-cb rounded border-teal-300 text-teal-600 focus:ring-teal-500" data-exp-key="${key}" value="${code}" ${checked} ${disabled}>
+                    ${EXP_REGION_LABELS[code]}
+                </label>`;
+            }).join('');
+            box.querySelectorAll('.exp-region-cb').forEach((cb) => {
+                cb.onchange = () => {
+                    const st = expFeatureState[cb.getAttribute('data-exp-key')];
+                    if (!st || st.allRoutes) return;
+                    if (cb.checked) st.regions.add(cb.value);
+                    else st.regions.delete(cb.value);
+                    paintExpFeatCount(cb.getAttribute('data-exp-key'));
+                };
+            });
+            paintExpFeatCount(key);
+        };
+
         const bindExpFeatureControls = (key) => {
             const ids = Admin.expFeatureControlIds(key);
             const header = document.getElementById(ids.header);
@@ -19573,9 +21588,11 @@ const Admin = {
             if (all) {
                 all.onchange = () => {
                     expFeatureState[key].allRoutes = !!all.checked;
+                    paintExpRegionBox(key);
                     paintExpRouteBox(key);
                 };
             }
+            paintExpRegionBox(key);
             paintExpRouteBox(key);
         };
 
@@ -19587,14 +21604,20 @@ const Admin = {
                 state.enabled = !!raw.enabled;
                 state.allRoutes = Array.isArray(raw.routeIds) && raw.routeIds.includes('*');
                 state.routes.clear();
+                state.regions.clear();
                 (Array.isArray(raw.routeIds) ? raw.routeIds : []).forEach((id) => {
                     if (id && id !== '*') state.routes.add(String(id));
+                });
+                (Array.isArray(raw.regionIds) ? raw.regionIds : []).forEach((id) => {
+                    const code = String(id || '').toUpperCase();
+                    if (code) state.regions.add(code);
                 });
                 const ids = Admin.expFeatureControlIds(f.key);
                 const enabled = document.getElementById(ids.enabled);
                 const all = document.getElementById(ids.all);
                 if (enabled) enabled.checked = state.enabled;
                 if (all) all.checked = state.allRoutes;
+                paintExpRegionBox(f.key);
                 paintExpRouteBox(f.key);
             });
             expFeaturesHydrated = true;
@@ -19669,14 +21692,6 @@ const Admin = {
                 deployLiveBody.classList.toggle('hidden');
                 if (deployLiveBody.classList.contains('hidden')) deployLiveChevron?.classList.add('-rotate-90');
                 else deployLiveChevron?.classList.remove('-rotate-90');
-            };
-        }
-
-        if (promoHeader) {
-            promoHeader.onclick = () => {
-                promoBody.classList.toggle('hidden');
-                if (promoBody.classList.contains('hidden')) promoChevron.classList.add('-rotate-90');
-                else promoChevron.classList.remove('-rotate-90');
             };
         }
 
@@ -19885,10 +21900,11 @@ const Admin = {
                         updatedBy: Admin.currentUser?.email || 'Admin',
                     };
                     Admin.grantableFeatures().forEach((f) => {
-                        const state = expFeatureState[f.key] || { enabled: false, routes: new Set(), allRoutes: false };
+                        const state = expFeatureState[f.key] || { enabled: false, routes: new Set(), regions: new Set(), allRoutes: false };
                         payload[f.key] = {
                             enabled: !!state.enabled,
                             routeIds: state.allRoutes ? ['*'] : [...state.routes],
+                            regionIds: state.allRoutes ? [] : [...state.regions],
                         };
                     });
                     const res = await window.guardianFetch(`${dynamicEndpoint}config/features.json?auth=${secret}`, {
@@ -20368,8 +22384,8 @@ const Admin = {
             adminContainer.appendChild(roadmapPanel);
         }
 
-        if (roadmapPanel.dataset.adminLoaded === "roadmap-refine-v2") return;
-        roadmapPanel.dataset.adminLoaded = "roadmap-refine-v2";
+        if (roadmapPanel.dataset.adminLoaded === "roadmap-refine-v3") return;
+        roadmapPanel.dataset.adminLoaded = "roadmap-refine-v3";
 
         Admin.cachedRoadmapData = [];
 
@@ -20383,42 +22399,36 @@ const Admin = {
                 </span>
                 <svg id="roadmap-chevron" class="w-4 h-4 transform transition-transform -rotate-90 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
             </button>
-            <div id="roadmap-body" class="nt-pack-surface hidden mt-4 flex flex-col space-y-3 rounded-xl p-3 border border-slate-200/70 dark:border-slate-800">
-                <!-- Controls Header -->
-                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-white dark:bg-slate-900 p-3 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
-                    <div class="flex items-center gap-2 w-full sm:w-auto">
-                        <span class="text-[10px] font-bold text-gray-500 uppercase tracking-wider pl-1" id="roadmap-status-display">Syncing Board...</span>
-                    </div>
-                    
-                    <div class="flex items-center gap-2 w-full sm:w-auto">
-                        <!-- Search Bar -->
-                        <div class="relative flex-grow sm:w-48">
-                            <svg class="absolute left-2.5 top-1/2 transform -translate-y-1/2 w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
-                            <input type="text" id="roadmap-search-input" placeholder="Search tickets..." class="w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 text-gray-900 dark:text-white text-xs rounded-lg focus:ring-blue-500 focus:border-blue-500 block pl-8 p-2 shadow-sm outline-none transition-colors">
-                        </div>
-                        
-                        <button id="roadmap-refresh-btn" class="p-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-500 hover:text-blue-500 transition-colors focus:outline-none shadow-sm shrink-0" title="Refresh">
+            <div id="roadmap-body" class="hidden -mx-4 sm:-mx-6 flex flex-col text-left bg-gray-50 dark:bg-gray-900">
+                <div class="px-4 pt-1 pb-3 space-y-2 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-800">
+                    <div class="flex items-center justify-between gap-2">
+                        <span class="text-[11px] font-semibold text-gray-500" id="roadmap-status-display">Syncing board</span>
+                        <button id="roadmap-refresh-btn" class="h-9 w-9 inline-flex items-center justify-center rounded-lg border border-gray-200 dark:border-gray-600 text-gray-500 hover:text-blue-600 focus:outline-none shrink-0" title="Refresh">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m-15.357-2a8.001 8.001 0 0015.357 2m0 0H15"></path></svg>
                         </button>
-                        <select id="roadmap-date-filter" class="h-9 max-w-[7.5rem] px-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-200 text-[10px] font-bold rounded-lg focus:ring-blue-500 outline-none shadow-sm shrink-0" title="Filter by date">
+                    </div>
+                    <div class="flex gap-2">
+                        <div class="relative flex-1 min-w-0">
+                            <svg class="absolute left-2.5 top-1/2 transform -translate-y-1/2 w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                            <input type="text" id="roadmap-search-input" placeholder="Search tickets" class="w-full h-10 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 text-gray-900 dark:text-white text-xs rounded-lg focus:ring-blue-500 focus:border-blue-500 block pl-8 pr-2 outline-none">
+                        </div>
+                        <select id="roadmap-date-filter" class="h-10 max-w-[8.5rem] px-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-200 text-[11px] font-semibold rounded-lg focus:ring-blue-500 outline-none shrink-0" title="Filter by date">
                             <option value="all">All dates</option>
                             <option value="7">Last 7 days</option>
                             <option value="30">Last 30 days</option>
                             <option value="90">Last 90 days</option>
                         </select>
-                        <button onclick="Admin.openTicketModal()" class="bg-blue-600 hover:bg-blue-500 text-white px-3 py-2 rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 whitespace-nowrap shadow-md focus:outline-none shrink-0">
-                            ${Admin.icon('plus', 'w-3.5 h-3.5')} New Ticket
-                        </button>
                     </div>
+                    <button type="button" id="roadmap-new-ticket" onclick="Admin.openTicketModal()" class="w-full h-10 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold inline-flex items-center justify-center gap-1.5 focus:outline-none">
+                        ${Admin.icon('plus', 'w-4 h-4')} New ticket
+                    </button>
                 </div>
 
-                <!-- Kanban Board Area (Responsive Grid) -->
-                <div class="overflow-x-auto pb-4 custom-scrollbar snap-x flex-grow w-full">
-                    <!-- GUARDIAN UX FIX: Fluid Grid on Desktop, Snap Flex on Mobile -->
-                    <div class="flex md:grid md:grid-cols-3 gap-4 h-full items-start px-1 w-full min-w-max md:min-w-0" id="roadmap-kanban-board">
+                <div class="overflow-x-auto snap-x snap-mandatory w-full">
+                    <div class="flex w-full items-start" id="roadmap-kanban-board">
                         
                         <!-- Column: Backlog -->
-                        <div class="flex flex-col w-[280px] md:w-auto md:min-w-0 max-h-[500px] bg-slate-200/70 dark:bg-slate-900/80 rounded-xl border border-slate-300 dark:border-slate-700 shadow-inner overflow-hidden snap-center shrink-0 md:shrink">
+                        <div class="flex flex-col basis-full shrink-0 grow-0 snap-start md:basis-0 md:flex-1 md:min-w-0 max-h-[70vh] bg-gray-50 dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 overflow-hidden">
                             <div class="p-3 border-b border-slate-300 dark:border-slate-700 flex justify-between items-center bg-white dark:bg-slate-800 shrink-0">
                                 <div class="flex items-center gap-2">
                                     <span class="w-2.5 h-2.5 rounded-full bg-gray-400 shadow-sm"></span>
@@ -20435,8 +22445,8 @@ const Admin = {
                         </div>
 
                         <!-- Column: In Progress -->
-                        <div class="flex flex-col w-[280px] md:w-auto md:min-w-0 max-h-[500px] bg-blue-50/80 dark:bg-slate-900/80 rounded-xl border border-blue-200 dark:border-blue-900 shadow-inner overflow-hidden snap-center shrink-0 md:shrink">
-                            <div class="p-3 border-b border-blue-200 dark:border-blue-900 flex justify-between items-center bg-white dark:bg-slate-800 shrink-0">
+                        <div class="flex flex-col basis-full shrink-0 grow-0 snap-start md:basis-0 md:flex-1 md:min-w-0 max-h-[70vh] bg-gray-50 dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 overflow-hidden">
+                            <div class="p-3 border-b border-gray-200 dark:border-gray-800 flex justify-between items-center bg-white dark:bg-gray-800 shrink-0">
                                 <div class="flex items-center gap-2">
                                     <span class="w-2.5 h-2.5 rounded-full bg-blue-500 shadow-sm ring-2 ring-blue-200 dark:ring-blue-900"></span>
                                     <h2 class="text-[10px] font-black uppercase tracking-widest text-blue-800 dark:text-blue-300">In Progress</h2>
@@ -20452,8 +22462,8 @@ const Admin = {
                         </div>
 
                         <!-- Column: Completed -->
-                        <div class="flex flex-col w-[280px] md:w-auto md:min-w-0 max-h-[500px] bg-emerald-50/80 dark:bg-slate-900/80 rounded-xl border border-emerald-200 dark:border-emerald-900 shadow-inner overflow-hidden snap-center shrink-0 md:shrink">
-                            <div class="p-3 border-b border-emerald-200 dark:border-emerald-900 flex justify-between items-center bg-white dark:bg-slate-800 shrink-0">
+                        <div class="flex flex-col basis-full shrink-0 grow-0 snap-start md:basis-0 md:flex-1 md:min-w-0 max-h-[70vh] bg-gray-50 dark:bg-gray-900 overflow-hidden">
+                            <div class="p-3 border-b border-gray-200 dark:border-gray-800 flex justify-between items-center bg-white dark:bg-gray-800 shrink-0">
                                 <div class="flex items-center gap-2">
                                     <span class="w-2.5 h-2.5 rounded-full bg-green-500 shadow-sm ring-2 ring-green-200 dark:ring-green-900"></span>
                                     <h2 class="text-[10px] font-black uppercase tracking-widest text-green-800 dark:text-green-300">Completed</h2>

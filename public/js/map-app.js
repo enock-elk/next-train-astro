@@ -319,10 +319,19 @@
             // spur Lentegeur → Kapteinsklip (painted as a second polyline from
             // Philippi only, never a second Cape Town → Mutual line).
             'ct-nolu': ["CAPE TOWN", "ESPLANADE", "YSTERPLAAT", "MUTUAL", "LANGA", "BONTEHEUWEL", "NETREG", "HEIDEVELD", "NYANGA", "PHILIPPI", "STOCK ROAD", "MANDALAY", "NOLUNGILE"],
+            // network-map_wc.png: Northern Line trunk via Mutual (not Century City,
+            // not the Strand or Stellenbosch forks). Stikland is not adjacent to Du Toit.
+            'ct-well': ["CAPE TOWN", "WOODSTOCK", "SALT RIVER", "KOEBERG RD", "MAITLAND", "WOLTEMADE", "MUTUAL", "THORNTON", "GOODWOOD", "VASCO", "ELSIES RIVER", "PAROW", "TYGERBERG", "BELLVILLE", "STIKLAND", "BRACKENFELL", "EIKENFONTEIN", "KRAAIFONTEIN", "MULDERSVLEI", "KLAPMUTS", "PAARL", "HUGUENOT", "DAL JOSAFAT", "MBEKWENI", "WELLINGTON"],
+            'ct-kraai': ["CAPE TOWN", "WOODSTOCK", "SALT RIVER", "KOEBERG RD", "MAITLAND", "WOLTEMADE", "MUTUAL", "THORNTON", "GOODWOOD", "VASCO", "ELSIES RIVER", "PAROW", "TYGERBERG", "BELLVILLE", "STIKLAND", "BRACKENFELL", "EIKENFONTEIN", "KRAAIFONTEIN"],
+            'ct-eerst': ["CAPE TOWN", "WOODSTOCK", "SALT RIVER", "KOEBERG RD", "MAITLAND", "WOLTEMADE", "MUTUAL", "THORNTON", "GOODWOOD", "VASCO", "ELSIES RIVER", "PAROW", "TYGERBERG", "BELLVILLE", "KUILS RIVER", "BLACKHEATH", "MELTONROSE", "EERSTE RIVER"],
+            'ct-strnd': ["CAPE TOWN", "WOODSTOCK", "SALT RIVER", "KOEBERG RD", "MAITLAND", "WOLTEMADE", "MUTUAL", "THORNTON", "GOODWOOD", "VASCO", "ELSIES RIVER", "PAROW", "TYGERBERG", "BELLVILLE", "KUILS RIVER", "BLACKHEATH", "MELTONROSE", "EERSTE RIVER", "FAURE", "FIRGROVE", "SOMERSET WEST", "VAN DER STEL", "STRAND"],
+            'eerst-dtoit': ["CAPE TOWN", "WOODSTOCK", "SALT RIVER", "KOEBERG RD", "MAITLAND", "WOLTEMADE", "MUTUAL", "THORNTON", "GOODWOOD", "VASCO", "ELSIES RIVER", "PAROW", "TYGERBERG", "BELLVILLE", "KUILS RIVER", "BLACKHEATH", "MELTONROSE", "EERSTE RIVER", "LYNEDOCH", "VLOTTENBURG", "STELLENBOSCH", "DU TOIT"],
+            'ct-simon': ["CAPE TOWN", "WOODSTOCK", "SALT RIVER", "OBSERVATORY", "MOWBRAY", "ROSEBANK", "RONDEBOSCH", "NEWLANDS", "CLAREMONT", "HARFIELD ROAD", "KENILWORTH", "WYNBERG", "WITTEBOME", "PLUMSTEAD", "STEURHOF", "DIEPRIVIER", "HEATHFIELD", "RETREAT", "STEENBERG", "LAKESIDE", "FALSE BAY", "MUIZENBERG", "ST JAMES", "KALK BAY", "FISH HOEK", "SUNNY COVE", "GLENCAIRN", "SIMON'S TOWN"],
 
             // --- KWAZULU-NATAL ---
             'kzn-umlazi': ["DURBAN YARD", "DURBAN", "BEREA ROAD", "DALBRIDGE", "CONGELLA", "UMBILO", "ROSSBURGH", "CLAIRWOOD", "MONTCLAIR", "MEREBANK", "REUNION", "ZWELETHU", "KWAMNYANDU", "LINDOKUHLE", "UMLAZI"],
             'kzn-bridgecity': ["BEREA ROAD", "DURBAN", "MOSES MABHIDA", "UMGENI", "BRIARDENE", "GREENWOOD PARK", "RED HILL", "AVOCA", "DUFF'S ROAD", "TEMBALIHLE", "KWAMASHU", "BRIDGE CITY"],
+            'kzn-kwamashu': ["BEREA ROAD", "DURBAN", "MOSES MABHIDA", "UMGENI", "BRIARDENE", "GREENWOOD PARK", "RED HILL", "AVOCA", "DUFF'S ROAD", "TEMBALIHLE", "KWAMASHU"],
             'kzn-winklespruit': ["DURBAN YARD", "DURBAN", "BEREA ROAD", "DALBRIDGE", "CONGELLA", "UMBILO", "ROSSBURGH", "CLAIRWOOD", "MONTCLAIR", "MEREBANK", "PELGRIM", "ISIPINGO", "UMBOGINTWINI", "PAHLA", "AMANZIMTOTI", "DOONSIDE", "WARNER BEACH", "WINKLESPRUIT"],
             'kzn-catoridge': ["DURBAN YARD", "DURBAN", "BEREA ROAD", "DALBRIDGE", "CONGELLA", "UMBILO", "ROSSBURGH", "MOUNT VERNON", "CAVENDISH", "BURLINGTON", "SHALLCROSS", "KLAARWATER", "MARIANNHILL", "THORNWOOD", "SITUNDU HILLS", "DASSENHOEK", "KWANDENGEZI", "DELVILLE WOOD", "NSHONGWENI", "CLIFFDALE", "HAMMARSDALE", "KWATANDAZA", "GEORGEDALE", "CATO RIDGE"],
             'kzn-pinetown': ["DURBAN YARD", "DURBAN", "BEREA ROAD", "DALBRIDGE", "CONGELLA", "UMBILO", "ROSSBURGH", "SEA VIEW", "BELLAIR", "POET'S CORNER", "MALVERN", "ESCOMBE", "NORTHDENE", "MOSELEY", "GLEN PARK", "SARNIA", "PINETOWN"],
@@ -536,7 +545,49 @@
                 slice.push(latlngs[i]);
                 if (i === i2) break;
             }
-            return slice.length > 2 ? slice : null;
+            const trimmed = dropOutAndBack(slice);
+            return trimmed && trimmed.length > 2 ? trimmed : null;
+        }
+
+        function dropOutAndBack(seg, toleranceM = 40) {
+            if (!Array.isArray(seg) || seg.length < 4) return seg;
+            let current = seg;
+            for (let pass = 0; pass < 6; pass++) {
+                const out = [];
+                let i = 0;
+                while (i < current.length) {
+                    const [latA, lonA] = current[i];
+                    let jump = -1;
+                    for (let j = current.length - 1; j > i + 2; j--) {
+                        if (railHaversineM(latA, lonA, current[j][0], current[j][1]) <= toleranceM) {
+                            let far = 0;
+                            for (let k = i; k <= j; k++) {
+                                const d = railHaversineM(latA, lonA, current[k][0], current[k][1]);
+                                if (d > far) far = d;
+                            }
+                            if (far > toleranceM) jump = j;
+                            break;
+                        }
+                    }
+                    out.push(current[i]);
+                    i = jump > i ? jump + 1 : i + 1;
+                }
+                if (out.length < 2 || out.length === current.length) return out.length > 1 ? out : current;
+                current = out;
+            }
+            return current;
+        }
+
+        function stitchBakedStops(baked, stops) {
+            if (!baked || baked.length < 2 || !Array.isArray(stops) || stops.length < 2) return null;
+            const out = [];
+            for (let i = 0; i < stops.length - 1; i++) {
+                const seg = clipBakedHop(baked, stops[i], stops[i + 1]);
+                if (!seg || seg.length < 2) return null;
+                if (!out.length) out.push(...seg);
+                else out.push(...seg.slice(1));
+            }
+            return out.length > 1 ? out : null;
         }
 
         function smoothStopsOnRailGraph(graph, stops, baked) {
@@ -606,6 +657,7 @@
 
         async function loadRailTrackBundle(region) {
             const byId = new Map();
+            const goldById = new Map();
             const stationOrderById = new Map();
             let graph = null;
             try {
@@ -616,7 +668,7 @@
                 // /tracks/ (not /data/) — production rsync excludes metrorail-app/data/
                 const url = `${root}tracks/rail-tracks-${region}.geojson`;
                 const res = await fetch(url, { cache: 'default' });
-                if (!res.ok) return { byId, graph: null, stationOrderById };
+                if (!res.ok) return { byId, goldById, graph: null, stationOrderById };
                 const fc = await res.json();
                 const features = fc.features || [];
                 for (const f of features) {
@@ -635,7 +687,10 @@
                         }
                         latlngs = best;
                     }
-                    if (latlngs.length > 1) byId.set(id, latlngs);
+                    if (latlngs.length > 1) {
+                        byId.set(id, latlngs);
+                        goldById.set(id, latlngs.map((p) => [p[0], p[1]]));
+                    }
                     // Manual patches set stationOrderOverride so paint follows
                     // Ndabeni/Pinelands (or any edited list) instead of STATIC.
                     const names = f.properties?.stationNames;
@@ -647,7 +702,7 @@
             } catch (e) {
                 console.warn('Guardian: OSM track GeoJSON unavailable, using station chords.', e);
             }
-            return { byId, graph, stationOrderById };
+            return { byId, goldById, graph, stationOrderById };
         }
 
         /** Baked OSM LineString may only be used if stations appear along it in list order. */
@@ -782,13 +837,111 @@
         const BRANCH_TRAIN_THRESHOLD = 2;
         const MIN_TRAINS_TO_JUDGE = 4;
         const NOLU_KAPTEINSKLIP_SPUR = ["PHILIPPI", "LENTEGEUR", "MITCHELL'S PLAIN", "KAPTEINSKLIP"];
+        const KZN_NORTH_TRUNK = ["BEREA ROAD", "DURBAN", "MOSES MABHIDA", "UMGENI", "BRIARDENE", "GREENWOOD PARK", "RED HILL", "AVOCA", "DUFF'S ROAD"];
+        const KZN_BRIDGE_CITY_MAIN = [...KZN_NORTH_TRUNK, "BRIDGE CITY"];
+        const KZN_KWAMASHU_MAIN = [...KZN_NORTH_TRUNK, "TEMBALIHLE", "KWAMASHU"];
+        const KZN_KWAMASHU_SPUR = ["DUFF'S ROAD", "TEMBALIHLE", "KWAMASHU"];
+        const KZN_MAP_KWAMASHU_ID = 'kzn-kwamashu';
+        const DEFAULT_KZN_BRIDGE_FORK = {
+            at: "DUFF'S ROAD",
+            branches: {
+                a: { id: 'a', stops: ['TEMBALIHLE', 'KWAMASHU'] },
+                b: { id: 'b', stops: ['BRIDGE CITY'] }
+            }
+        };
+        let liveTrackForks = {};
         let trackEdit = null;
 
+        function namedRouteStops(routeObj, nameList) {
+            const byName = new Map();
+            (routeObj.validStops || []).forEach((s) => {
+                const name = String(s?.name || '').toUpperCase().trim();
+                if (name && !byName.has(name)) byName.set(name, s);
+            });
+            const stops = (nameList || [])
+                .map((name) => byName.get(String(name || '').toUpperCase().trim()))
+                .filter((s) => s && Number.isFinite(s.lat) && Number.isFinite(s.lon));
+            return stops.length >= 2 ? stops : [];
+        }
+
+        function forkIsUsable(raw) {
+            if (!raw || !raw.at) return false;
+            const branches = raw.branches && typeof raw.branches === 'object' ? Object.values(raw.branches) : [];
+            return branches.filter((b) => b && Array.isArray(b.stops) && b.stops.length).length >= 2;
+        }
+
+        function publishedForkForRoute(routeId) {
+            const raw = liveTrackForks && routeId ? liveTrackForks[routeId] : null;
+            if (forkIsUsable(raw)) return raw;
+            if (routeId === 'kzn-bridgecity') return DEFAULT_KZN_BRIDGE_FORK;
+            return null;
+        }
+
+        function isKznNorthMapLine(routeId) {
+            return routeId === 'kzn-bridgecity' || routeId === KZN_MAP_KWAMASHU_ID;
+        }
+
+        function kznNorthBakeId(routeId) {
+            return isKznNorthMapLine(routeId) ? 'kzn-bridgecity' : routeId;
+        }
+
+        function bakedLineFor(routeId, trackBundle) {
+            const bakeId = kznNorthBakeId(routeId);
+            if (trackEdit && trackEdit.goldCoords && trackEdit.goldCoords.length > 1
+                && kznNorthBakeId(trackEdit.routeId) === bakeId) {
+                return trackEdit.goldCoords;
+            }
+            const gold = trackBundle?.goldById?.get(bakeId);
+            if (gold && gold.length > 1) return gold;
+            return trackBundle?.byId?.get(bakeId);
+        }
+
+        function forkArmNames(fork, destName) {
+            const at = String(fork?.at || '').toUpperCase().trim();
+            const branches = fork?.branches && typeof fork.branches === 'object'
+                ? Object.values(fork.branches).filter((b) => b && Array.isArray(b.stops) && b.stops.length)
+                : [];
+            const dest = String(destName || '').replace(/ STATION$/i, '').toUpperCase().trim();
+            const destArm = branches.find((b) => (b.stops || []).some((s) => String(s).toUpperCase().trim() === dest))
+                || branches[1]
+                || { stops: [] };
+            const otherArm = branches.find((b) => b !== destArm) || { stops: [] };
+            return { at, destArm: destArm.stops || [], otherArm: otherArm.stops || [] };
+        }
+
+        function kznBridgeCityMainStops(routeObj) {
+            const fork = publishedForkForRoute(routeObj.routeId);
+            if (fork && routeObj.routeId === 'kzn-bridgecity') {
+                const dest = String(routeObj.destB || 'BRIDGE CITY').replace(/ STATION$/i, '');
+                const { at, destArm } = forkArmNames(fork, dest);
+                const names = [];
+                for (const n of KZN_BRIDGE_CITY_MAIN) {
+                    names.push(n);
+                    if (n === at) break;
+                }
+                destArm.forEach((n) => {
+                    const up = String(n).toUpperCase().trim();
+                    if (up && names.indexOf(up) < 0) names.push(up);
+                });
+                const stops = namedRouteStops(routeObj, names);
+                if (stops.length >= 2) return stops;
+            }
+            return namedRouteStops(routeObj, KZN_BRIDGE_CITY_MAIN);
+        }
+
         function corridorGeometryStops(routeObj) {
-            if (trackEdit && trackEdit.routeId === routeObj.routeId && trackEdit.stops && trackEdit.stops.length > 1) {
+            if (trackEdit && trackEdit.routeId === (routeObj && routeObj.routeId) && trackEdit.stops && trackEdit.stops.length > 1) {
                 return trackEdit.stops;
             }
             const all = routeObj.validStops || [];
+            if (routeObj.routeId === KZN_MAP_KWAMASHU_ID) {
+                const main = namedRouteStops(routeObj, KZN_KWAMASHU_MAIN);
+                if (main.length >= 2) return main;
+            }
+            if (routeObj.routeId === 'kzn-bridgecity') {
+                const main = kznBridgeCityMainStops(routeObj);
+                if (main.length >= 2) return main;
+            }
             if (GHOST_GEOMETRY_REGIONS.has(routeObj.region)) return all;
             const served = all.filter((s) => s && !s.inactive);
             if (served.length < 2) return all;
@@ -823,11 +976,21 @@
             const chords = (stops.length > 1)
                 ? stops.map((s) => [s.lat, s.lon])
                 : (routeObj.coords || []);
-            const bundle = trackBundle || { byId: new Map(), graph: null };
-            const baked = (preferBakeId && bundle.byId && bundle.byId.get(preferBakeId))
-                || (bundle.byId && bundle.byId.get(routeObj.routeId));
+            const bundle = trackBundle || { byId: new Map(), goldById: new Map(), graph: null };
+            const bakedId = preferBakeId || kznNorthBakeId(routeObj.routeId);
+            const baked = bakedLineFor(bakedId, bundle);
             const held = GHOST_GEOMETRY_REGIONS.has(routeObj.region);
             const bakedIsUsable = baked && baked.length > 1 && bakedLineCoversStops(baked, stops);
+
+            // kzn-bridgecity is one LineString that runs Duff's Road ->
+            // Tembalihle -> kwaMashu and doubles back to Bridge City. Returning
+            // the whole bake, or graph-smoothing that bake, paints Berea Road
+            // to Bridge City via kwaMashu. Hop-stitch with dropOutAndBack keeps
+            // the Bridge City trunk and the kwaMashu spur as two lines.
+            if (isKznNorthMapLine(routeObj.routeId) && !preferBakeId && baked) {
+                const stitched = stitchBakedStops(baked, stops);
+                if (stitched && stitched.length > 1) return stitched;
+            }
 
             // The baked corridor is one continuous OSM line for exactly this
             // route, so it is the smoothest thing we can draw. Re-deriving it
@@ -857,6 +1020,31 @@
 
         function resolveRouteLatLngs(routeObj, trackBundle) {
             return resolveStopsLatLngs(corridorGeometryStops(routeObj), routeObj, trackBundle);
+        }
+
+        function kznKwamashuSpurStops(routeObj) {
+            if (!routeObj || routeObj.routeId !== 'kzn-bridgecity') return [];
+            const fork = publishedForkForRoute(routeObj.routeId);
+            if (fork) {
+                const dest = String(routeObj.destB || 'BRIDGE CITY').replace(/ STATION$/i, '');
+                const { at, otherArm } = forkArmNames(fork, dest);
+                const names = [at, ...otherArm.map((n) => String(n).toUpperCase().trim())].filter(Boolean);
+                const unique = [];
+                names.forEach((n) => { if (unique.indexOf(n) < 0) unique.push(n); });
+                const stops = namedRouteStops(routeObj, unique);
+                if (stops.length >= 2) return stops;
+            }
+            return namedRouteStops(routeObj, KZN_KWAMASHU_SPUR);
+        }
+
+        function resolveKznKwamashuSpurLatLngs(routeObj, trackBundle) {
+            const stops = kznKwamashuSpurStops(routeObj);
+            if (stops.length < 2) return null;
+            const baked = bakedLineFor('kzn-bridgecity', trackBundle);
+            const stitched = baked ? stitchBakedStops(baked, stops) : null;
+            if (stitched && stitched.length > 1) return stitched;
+            const chords = stops.map((s) => [s.lat, s.lon]);
+            return chords.length > 1 ? chords : null;
         }
 
         function resolveNoluKapteinsklipSpurLatLngs(routeObj, trackBundle) {
@@ -1294,6 +1482,11 @@
 
             // Guardian UX: Disabled Leaflet's rigid zoom control for horizontal bar layout
             const map = L.map('map', { zoomControl: false }).setView([initLat, initLon], initZoom);
+            map.on('click', function () {
+                try {
+                    (window.parent || window).postMessage({ type: 'nt-map-close-tracking' }, '*');
+                } catch (_) {}
+            });
             map.createPane('nt-stations');
             const stationPane = map.getPane('nt-stations');
             if (stationPane) stationPane.style.zIndex = 450;
@@ -1351,6 +1544,8 @@
             const ends = new Set();
             let selectedRouteId = null;
             let networkBounds = null;
+            // Legend pick hides other corridors. Do not paint the shared line back over that.
+            let userFilteredRail = false;
 
             function escapeMapHtml(s) {
                 return String(s || '').replace(/[&<>"']/g, (c) => ({
@@ -1461,6 +1656,49 @@
                 };
             }
 
+            /** Leaflet only: one gold LineString becomes two selectable lines at Duff's Road. */
+            function splitKznNorthMapRoutes() {
+                const i = drawnRoutes.findIndex((r) => r.routeId === 'kzn-bridgecity');
+                if (i < 0) return;
+                const src = drawnRoutes[i];
+                const pool = [...(src.sheetStops || []), ...(src.validStops || [])];
+                const bridgeStops = namedRouteStops({ validStops: pool }, KZN_BRIDGE_CITY_MAIN);
+                const kwaStops = namedRouteStops({ validStops: pool }, KZN_KWAMASHU_MAIN);
+                if (bridgeStops.length >= 2) {
+                    src.validStops = bridgeStops;
+                    src.coords = bridgeStops.map((s) => [s.lat, s.lon]);
+                }
+                src.destB = 'BRIDGE CITY';
+                src.bakeId = 'kzn-bridgecity';
+                src.name = 'Berea Road ↔ Bridge City';
+                ends.add('BRIDGE CITY');
+                if (kwaStops.length < 2) return;
+                drawnRoutes.splice(i + 1, 0, {
+                    routeId: KZN_MAP_KWAMASHU_ID,
+                    bakeId: 'kzn-bridgecity',
+                    name: 'Berea Road ↔ KwaMashu',
+                    color: src.color,
+                    isActive: src.isActive,
+                    region: src.region,
+                    trainCount: src.trainCount,
+                    destB: 'KWAMASHU',
+                    coords: kwaStops.map((s) => [s.lat, s.lon]),
+                    validStops: kwaStops,
+                    sheetStops: src.sheetStops
+                });
+                ends.add('KWAMASHU');
+                const bridgeSet = new Set(KZN_BRIDGE_CITY_MAIN);
+                const kwaSet = new Set(KZN_KWAMASHU_MAIN);
+                [...KZN_BRIDGE_CITY_MAIN, ...KZN_KWAMASHU_MAIN].forEach((name) => {
+                    const data = globalStations[name];
+                    if (!data || !data.routes) return;
+                    if (bridgeSet.has(name)) data.routes.add('kzn-bridgecity');
+                    else data.routes.delete('kzn-bridgecity');
+                    if (kwaSet.has(name)) data.routes.add(KZN_MAP_KWAMASHU_ID);
+                    else data.routes.delete(KZN_MAP_KWAMASHU_ID);
+                });
+            }
+
             Object.values(ROUTES).forEach(route => {
                 if (route.region !== currentRegion || route.id === 'special_event') return;
 
@@ -1519,6 +1757,7 @@
                         const hasData = servedTrains > 0;
 
                         const sName = sNameOrig.replace(/ STATION/gi, '').toUpperCase();
+                        if (sName === 'VARIANT') continue;
 
                         let lat = null, lon = null;
                         const cVal = row[coordKey];
@@ -1603,12 +1842,15 @@
                          isActive: route.isActive,
                          region: route.region,
                          trainCount: sheetTrainKeys.size,
+                         destB: route.destB,
                          coords: routeCoords,
                          validStops: validStops,
                          sheetStops: sheetStops
                      });
                 }
             });
+
+            splitKznNorthMapRoutes();
 
             if (currentRegion === 'WC' && !drawnRoutes.some((r) => stopsAreAdjacent(r.validStops, 'MAITLAND', 'MUTUAL'))) {
                 const mai = STATION_COORDINATES.MAITLAND;
@@ -1638,7 +1880,7 @@
             // --- OSM TRACK GEOMETRY (cached GeoJSON + live graph smooth) ---
             // © OpenStreetMap contributors — baked offline via scripts/build-rail-tracks.mjs
             const overlayGroup = L.layerGroup().addTo(map);
-            const emptyTracks = { byId: new Map(), graph: null, stationOrderById: new Map() };
+            const emptyTracks = { byId: new Map(), goldById: new Map(), graph: null, stationOrderById: new Map() };
             let liveTrackBundle = emptyTracks;
             let mapOperatorAuthed = false;
 
@@ -1646,6 +1888,7 @@
                 const orders = trackBundle?.stationOrderById;
                 if (!orders || !orders.size) return;
                 drawnRoutes.forEach((r) => {
+                    if (isKznNorthMapLine(r.routeId)) return;
                     const names = orders.get(r.routeId);
                     if (!names || names.length < 2) return;
                     const pool = [...(r.sheetStops || []), ...(r.validStops || [])];
@@ -1708,6 +1951,9 @@
                 const drawnIncidentIds = new Set();
 
                 drawnRoutes.forEach((routeObj) => {
+                    if (selectedRouteId && routeObj.routeId !== selectedRouteId) return;
+                    const lineOnMap = !routeObj._polyline || map.hasLayer(routeObj._polyline);
+                    if (!lineOnMap) return;
                     Object.values(disruptions || {}).flat().forEach((d) => {
                         if (!d || drawnIncidentIds.has(d.id + '_' + routeObj.routeId)) return;
                         const mapDay = (typeof window !== 'undefined' && window.currentDayType) || 'weekday';
@@ -1951,6 +2197,7 @@
                     }
                 });
                 raiseStationMarkers();
+                paintDisruptionOverlays(liveTrackBundle || emptyTracks, globalDisruptions);
                 syncLineFilterChrome();
                 syncTrackEditorChrome();
                 if (!fit) return;
@@ -1975,6 +2222,7 @@
             }
 
             function applySelectedLine(routeId) {
+                userFilteredRail = true;
                 if (trackEdit) {
                     if (routeId === trackEdit.routeId) return;
                     stopTrackEditor();
@@ -1993,6 +2241,47 @@
                 try { pinned = localStorage.getItem('defaultRoute_' + currentRegion) || ''; } catch (_) {}
                 applyEmbedCorridorFocus(pinned);
             }
+
+            async function applyPublishedStationPins(index) {
+                try {
+                    const endpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
+                    const res = await fetch(`${endpoint}config/map_stations.json`);
+                    if (!res.ok) return;
+                    const data = await res.json();
+                    if (!data || typeof data !== 'object') return;
+                    const byNorm = {};
+                    Object.keys(data).forEach((key) => {
+                        const value = data[key];
+                        const lat = Number(value && value.lat);
+                        const lon = Number(value && value.lon);
+                        if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
+                        const raw = String((value && value.name) || key).replace(/ STATION/gi, '').trim().toUpperCase();
+                        if (raw) byNorm[raw] = { lat, lon };
+                    });
+                    Object.keys(index).forEach((name) => {
+                        const norm = String(name).replace(/ STATION/gi, '').trim().toUpperCase();
+                        const hit = byNorm[norm];
+                        if (!hit || !index[name]) return;
+                        index[name].lat = hit.lat;
+                        index[name].lon = hit.lon;
+                    });
+                } catch (_) {}
+            }
+
+            async function applyPublishedTrackForks() {
+                try {
+                    const endpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
+                    const res = await fetch(`${endpoint}config/track_forks.json`);
+                    if (!res.ok) return;
+                    const data = await res.json();
+                    liveTrackForks = data && typeof data === 'object' ? data : {};
+                } catch (_) {
+                    liveTrackForks = {};
+                }
+            }
+            await applyPublishedStationPins(globalStations);
+            await applyPublishedTrackForks();
+            if (liveTrackBundle) paintRouteLines(liveTrackBundle);
 
             // --- DRAW MARKERS (WITH NAKED HALO TOOLTIPS) ---
             Object.entries(globalStations).forEach(([name, data]) => {
@@ -2029,7 +2318,8 @@
                       offset: [0, -5],
                       className: labelClass
                   });
-                stationLayerItems.push({ name, routes: data.routes, marker, labelClass });
+                marker._ntMajor = isMajor;
+                stationLayerItems.push({ name, routes: data.routes, marker, labelClass, isMajor });
             });
             raiseStationMarkers();
 
@@ -2046,6 +2336,7 @@
                 allBtn.innerHTML = `<span class="color-dot" style="background:#94a3b8"></span><span class="text-gray-700 dark:text-gray-200">Show all lines</span>`;
                 allBtn.addEventListener('click', (e) => {
                     e.stopPropagation();
+                    userFilteredRail = false;
                     setSelectedLine(null, { toggle: false, fit: true });
                 });
                 legendContent.appendChild(allBtn);
@@ -2111,14 +2402,25 @@
             }
 
             const trackEditLayer = L.layerGroup().addTo(map);
+            const brushLayer = L.layerGroup().addTo(map);
             const vertexIcon = L.divIcon({ className: 'nt-track-vertex', iconSize: [16, 16], iconAnchor: [8, 8] });
             const vertexEndIcon = L.divIcon({ className: 'nt-track-vertex is-end', iconSize: [16, 16], iconAnchor: [8, 8] });
             const TRACK_EDIT_HINTS = {
                 move: 'Drag a dot along the rails. Zoom in for more dots.',
                 add: 'Tap the line where the extra dot should go.',
-                delete: 'Tap a dot to remove it.'
+                delete: 'Tap a dot to remove it.',
+                brush: 'Drag the circle. Points inside are swept out to the rim. Pinch to resize.',
+                stations: 'Drag a station pin. The rail line stays where it is.',
+                fork: 'Tap Duff\'s Road split for the two lines. Or tap the junction, then the stations on each arm.'
             };
+            const TRACK_EDIT_TOOLS = ['move', 'add', 'delete', 'brush', 'stations', 'fork'];
             let trackEditTool = 'move';
+            let brushCircle = null;
+            let brushHandle = null;
+            let brushRadiusM = 700;
+            let brushDrag = null;
+            let brushDragHeading = 0;
+            let stationPinDragBound = false;
 
             function parseEditorStationNames(text) {
                 return String(text || '')
@@ -2162,18 +2464,24 @@
             }
 
             function setTrackEditTool(tool) {
-                trackEditTool = (tool === 'add' || tool === 'delete') ? tool : 'move';
+                const prev = trackEditTool;
+                trackEditTool = TRACK_EDIT_TOOLS.indexOf(tool) >= 0 ? tool : 'move';
                 const html = document.documentElement;
                 html.classList.toggle('nt-track-tool-add', trackEditTool === 'add');
                 html.classList.toggle('nt-track-tool-delete', trackEditTool === 'delete');
+                html.classList.toggle('nt-track-tool-brush', trackEditTool === 'brush');
+                html.classList.toggle('nt-track-tool-stations', trackEditTool === 'stations');
+                html.classList.toggle('nt-track-tool-fork', trackEditTool === 'fork');
                 document.querySelectorAll('#nt-track-editor-tools [data-track-tool]').forEach((btn) => {
                     const on = btn.getAttribute('data-track-tool') === trackEditTool;
                     btn.classList.toggle('is-on', on);
                     btn.setAttribute('aria-pressed', on ? 'true' : 'false');
                 });
                 const hint = document.getElementById('nt-track-editor-hint');
-                if (hint) hint.textContent = TRACK_EDIT_HINTS[trackEditTool];
+                if (hint) hint.textContent = TRACK_EDIT_HINTS[trackEditTool] || TRACK_EDIT_HINTS.move;
+                syncBrush();
                 if (trackEdit) rebuildTrackVertices();
+                if (trackEditTool === 'fork' && prev !== 'fork' && trackEdit) hydrateForkTool();
             }
 
             function paintEditorVia() {
@@ -2193,7 +2501,8 @@
                 const html = document.documentElement;
                 const can = mapOperatorAuthed && !isMapTabEmbed();
                 const route = drawnRoutes.find((x) => x.routeId === selectedRouteId);
-                const baked = !!(route && liveTrackBundle?.byId?.has(route.routeId));
+                const bakeId = route ? (route.bakeId || kznNorthBakeId(route.routeId)) : '';
+                const baked = !!(route && bakeId && liveTrackBundle?.byId?.has(bakeId));
                 const ready = can && !!route && baked;
                 html.classList.toggle('nt-track-editor-ready', ready && !trackEdit);
                 html.classList.toggle('nt-track-editing', !!trackEdit);
@@ -2234,7 +2543,7 @@
                 if (!trackEdit || !trackEdit.coords) return;
                 const coords = trackEdit.coords;
                 const stride = vertexStride(map.getZoom(), coords.length);
-                const canDrag = trackEditTool !== 'delete';
+                const canDrag = trackEditTool === 'move';
                 for (let i = 0; i < coords.length; i++) {
                     const isEnd = i === 0 || i === coords.length - 1;
                     if (!isEnd && i % stride !== 0) continue;
@@ -2308,20 +2617,24 @@
             function startTrackEditor() {
                 if (isMapTabEmbed() || !mapOperatorAuthed) return;
                 const r = drawnRoutes.find((x) => x.routeId === selectedRouteId);
-                if (!r || !liveTrackBundle?.byId?.has(r.routeId)) return;
-                const coords = cloneLatLngs(r.trackCoords && r.trackCoords.length > 1 ? r.trackCoords : liveTrackBundle.byId.get(r.routeId));
+                const bakeId = r ? (r.bakeId || kznNorthBakeId(r.routeId)) : '';
+                if (!r || !bakeId || !liveTrackBundle?.byId?.has(bakeId)) return;
+                const gold = cloneLatLngs((liveTrackBundle.goldById && liveTrackBundle.goldById.get(bakeId)) || liveTrackBundle.byId.get(bakeId));
+                const coords = cloneLatLngs(r.trackCoords && r.trackCoords.length > 1 ? r.trackCoords : gold);
                 if (coords.length < 2) return;
                 const names = (r.validStops || []).map((s) => s.name);
-                trackEdit = { routeId: r.routeId, coords, stops: editorStopsFromNames(r, names), undo: [] };
+                trackEdit = { routeId: r.routeId, coords, goldCoords: gold, stops: editorStopsFromNames(r, names), undo: [], fork: forkStateFromPublished(r.routeId) };
                 const title = document.getElementById('nt-track-editor-title');
                 if (title) title.textContent = r.name;
                 const area = document.getElementById('nt-track-editor-stations');
                 if (area) area.value = names.join('\n');
                 setStationsOpen(false);
+                setEditorCollapsed(false);
                 setTrackEditTool('move');
                 setSelectedLine(r.routeId, { toggle: false, fit: false });
                 applyEditPreview();
                 bindEditPolylineClicks();
+                paintForkStatus();
                 document.documentElement.classList.add('nt-track-editing');
                 document.documentElement.classList.remove('nt-track-editor-ready');
                 syncTrackEditorChrome();
@@ -2332,9 +2645,17 @@
                 const r = drawnRoutes.find((x) => x.routeId === id);
                 if (r?._polyline) r._polyline.off('click', onEditLineClick);
                 trackEditLayer.clearLayers();
+                clearBrush();
                 trackEdit = null;
                 trackEditTool = 'move';
-                document.documentElement.classList.remove('nt-track-editing', 'nt-track-tool-add', 'nt-track-tool-delete');
+                document.documentElement.classList.remove(
+                    'nt-track-editing',
+                    'nt-track-tool-add',
+                    'nt-track-tool-delete',
+                    'nt-track-tool-brush',
+                    'nt-track-tool-stations',
+                    'nt-track-tool-fork'
+                );
                 setStationsOpen(false);
                 paintRouteLines(liveTrackBundle);
                 syncTrackEditorChrome();
@@ -2382,6 +2703,464 @@
                 }
             }
 
+            function stationOverrideKey(name) {
+                return String(name || 'station').replace(/[^A-Za-z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 60) || 'station';
+            }
+
+            function setEditorStatus(text, ok) {
+                const el = document.getElementById('nt-track-editor-cover');
+                if (!el) return;
+                el.textContent = text;
+                el.classList.toggle('is-ok', !!ok);
+                el.classList.toggle('is-warn', !ok);
+            }
+
+            function rememberStationMove(name, lat, lon) {
+                if (!trackEdit) return;
+                if (!trackEdit.stationMoves) trackEdit.stationMoves = {};
+                const key = stationOverrideKey(name);
+                trackEdit.stationMoves[key] = {
+                    lat: Math.round(lat * 1e6) / 1e6,
+                    lon: Math.round(lon * 1e6) / 1e6,
+                    name
+                };
+                if (globalStations[name]) {
+                    globalStations[name].lat = lat;
+                    globalStations[name].lon = lon;
+                }
+            }
+
+            function requestMapSave(node, body, routeId) {
+                const id = String(Date.now());
+                const parentWin = window.parent;
+                if (!parentWin || parentWin === window) {
+                    setEditorStatus('Open this map from the app while signed in to save.', false);
+                    return;
+                }
+                window.__ntMapSaveWait = id;
+                parentWin.postMessage({ type: 'nt-map-save', id, node, body, routeId: routeId || '' }, '*');
+                setEditorStatus('Saving…', true);
+                setTimeout(() => {
+                    if (window.__ntMapSaveWait === id) {
+                        setEditorStatus('Save did not reach the app. Sign in and try again.', false);
+                    }
+                }, 8000);
+            }
+
+            function forkStateFromPublished(routeId) {
+                const raw = publishedForkForRoute(routeId);
+                if (!raw || !raw.at) return { at: '', which: 0, branches: [[], []] };
+                const branches = raw.branches && typeof raw.branches === 'object' ? raw.branches : {};
+                const a = Array.isArray(branches.a?.stops) ? branches.a.stops.slice()
+                    : Array.isArray(branches[0]?.stops) ? branches[0].stops.slice() : [];
+                const b = Array.isArray(branches.b?.stops) ? branches.b.stops.slice()
+                    : Array.isArray(branches[1]?.stops) ? branches[1].stops.slice() : [];
+                return {
+                    at: String(raw.at || '').toUpperCase().trim(),
+                    which: 0,
+                    branches: [a.map((s) => String(s).toUpperCase().trim()).filter(Boolean), b.map((s) => String(s).toUpperCase().trim()).filter(Boolean)]
+                };
+            }
+
+            function forkBranchLabel(which) {
+                if (trackEdit && trackEdit.routeId === 'kzn-bridgecity') {
+                    return which === 1 ? 'Bridge City' : 'kwaMashu';
+                }
+                return which === 1 ? 'Branch B' : 'Branch A';
+            }
+
+            function paintForkBranchButtons() {
+                const aBtn = document.getElementById('nt-track-fork-a');
+                const bBtn = document.getElementById('nt-track-fork-b');
+                const which = trackEdit && trackEdit.fork ? trackEdit.fork.which : 0;
+                if (aBtn) {
+                    aBtn.textContent = forkBranchLabel(0);
+                    aBtn.classList.toggle('is-on', which !== 1);
+                }
+                if (bBtn) {
+                    bBtn.textContent = forkBranchLabel(1);
+                    bBtn.classList.toggle('is-on', which === 1);
+                }
+            }
+
+            function paintForkStatus() {
+                const el = document.getElementById('nt-track-editor-fork-status');
+                const fork = trackEdit && trackEdit.fork;
+                paintForkBranchButtons();
+                if (!el) return;
+                if (!fork || !fork.at) {
+                    el.textContent = trackEdit && trackEdit.routeId === 'kzn-bridgecity'
+                        ? 'Tap Duff\'s Road split to paint kwaMashu and Bridge City as two lines.'
+                        : 'Tap the junction station, then the stations on this arm.';
+                    return;
+                }
+                const aName = forkBranchLabel(0);
+                const bName = forkBranchLabel(1);
+                const which = forkBranchLabel(fork.which === 1 ? 1 : 0);
+                const a = (fork.branches[0] || []).join(', ') || 'none yet';
+                const b = (fork.branches[1] || []).join(', ') || 'none yet';
+                el.textContent = `Two lines from ${fork.at}. Editing ${which}. ${aName}: ${a}. ${bName}: ${b}.`;
+            }
+
+            function applyForkLinePreview() {
+                if (!trackEdit || !liveTrackBundle) return;
+                const r = drawnRoutes.find((x) => x.routeId === trackEdit.routeId);
+                const fork = trackEdit.fork;
+                if (fork && fork.at && (fork.branches[0] || []).length && (fork.branches[1] || []).length) {
+                    liveTrackForks[trackEdit.routeId] = {
+                        routeId: trackEdit.routeId,
+                        at: fork.at,
+                        branches: {
+                            a: { id: 'a', stops: (fork.branches[0] || []).slice() },
+                            b: { id: 'b', stops: (fork.branches[1] || []).slice() }
+                        }
+                    };
+                }
+                if (r && r.routeId === KZN_MAP_KWAMASHU_ID) {
+                    const baked = trackEdit.goldCoords || bakedLineFor(r.routeId, liveTrackBundle);
+                    const mainStops = namedRouteStops(r, KZN_KWAMASHU_MAIN);
+                    const stitched = baked && mainStops.length >= 2 ? stitchBakedStops(baked, mainStops) : null;
+                    if (stitched && stitched.length > 1) trackEdit.coords = cloneLatLngs(stitched);
+                } else if (r && r.routeId === 'kzn-bridgecity') {
+                    const baked = trackEdit.goldCoords || bakedLineFor(r.routeId, liveTrackBundle);
+                    const mainStops = kznBridgeCityMainStops(r);
+                    const stitched = baked && mainStops.length >= 2 ? stitchBakedStops(baked, mainStops) : null;
+                    if (stitched && stitched.length > 1) trackEdit.coords = cloneLatLngs(stitched);
+                }
+                paintRouteLines(liveTrackBundle);
+                if (r?._polyline) bindEditPolylineClicks();
+                rebuildTrackVertices();
+                paintEditorCover();
+            }
+
+            function hydrateForkTool() {
+                if (!trackEdit) return;
+                const fork = trackEdit.fork;
+                const empty = !fork || !fork.at || !(fork.branches[0] || []).length || !(fork.branches[1] || []).length;
+                if (empty && trackEdit.routeId === 'kzn-bridgecity') {
+                    applyDuffsRoadForkPreset();
+                    return;
+                }
+                paintForkStatus();
+                applyForkLinePreview();
+            }
+
+            function recordForkStation(name) {
+                if (!trackEdit || trackEditTool !== 'fork') return;
+                if (!trackEdit.fork) trackEdit.fork = { at: '', which: 0, branches: [[], []] };
+                const fork = trackEdit.fork;
+                const up = String(name || '').toUpperCase().trim();
+                if (!up) return;
+                if (!fork.at) fork.at = up;
+                else if (up === fork.at) fork.at = up;
+                else {
+                    const list = fork.branches[fork.which] || (fork.branches[fork.which] = []);
+                    const idx = list.indexOf(up);
+                    if (idx >= 0) list.splice(idx, 1);
+                    else list.push(up);
+                }
+                paintForkStatus();
+                if (fork.at && (fork.branches[0] || []).length && (fork.branches[1] || []).length) {
+                    applyForkLinePreview();
+                }
+            }
+
+            function applyDuffsRoadForkPreset() {
+                if (!trackEdit) return;
+                trackEdit.fork = {
+                    at: "DUFF'S ROAD",
+                    which: 0,
+                    branches: [['TEMBALIHLE', 'KWAMASHU'], ['BRIDGE CITY']]
+                };
+                if (trackEditTool !== 'fork') setTrackEditTool('fork');
+                paintForkStatus();
+                applyForkLinePreview();
+                setEditorStatus("Two lines from Duff's Road: kwaMashu and Bridge City. Save fork to keep it.", true);
+            }
+
+            function setForkBranch(which) {
+                if (!trackEdit) return;
+                if (!trackEdit.fork) trackEdit.fork = { at: '', which: 0, branches: [[], []] };
+                trackEdit.fork.which = which === 1 ? 1 : 0;
+                paintForkStatus();
+            }
+
+            function beginStationDrag(item, ev) {
+                if (trackEditTool !== 'stations' || !trackEdit) return;
+                if (ev.originalEvent) L.DomEvent.stop(ev.originalEvent);
+                try { item.marker.closePopup(); } catch (_) {}
+                map.dragging.disable();
+                const move = (e) => {
+                    item.marker.setLatLng(map.mouseEventToLatLng(e));
+                };
+                const up = (e) => {
+                    document.removeEventListener('pointermove', move);
+                    document.removeEventListener('pointerup', up);
+                    map.dragging.enable();
+                    const ll = e && e.clientX != null ? map.mouseEventToLatLng(e) : item.marker.getLatLng();
+                    item.marker.setLatLng(ll);
+                    rememberStationMove(item.name, ll.lat, ll.lng);
+                    setEditorStatus(`Moved ${item.name}. Save pins to keep it. The rail line stays put.`, true);
+                };
+                document.addEventListener('pointermove', move);
+                document.addEventListener('pointerup', up);
+            }
+
+            function bindStationPinDrag() {
+                if (stationPinDragBound) return;
+                stationPinDragBound = true;
+                stationLayerItems.forEach((item) => {
+                    item.marker.on('mousedown', (ev) => beginStationDrag(item, ev));
+                    item.marker.on('click', (ev) => {
+                        if (trackEditTool !== 'stations' && trackEditTool !== 'fork') return;
+                        L.DomEvent.stop(ev);
+                        try { item.marker.closePopup(); } catch (_) {}
+                        if (trackEditTool === 'fork') recordForkStation(item.name);
+                    });
+                });
+            }
+
+            function clearBrush() {
+                brushLayer.clearLayers();
+                brushCircle = null;
+                brushHandle = null;
+                brushDrag = null;
+            }
+
+            function brushBearing(a, b) {
+                const lat1 = a.lat * Math.PI / 180;
+                const lat2 = b.lat * Math.PI / 180;
+                const dLon = (b.lng - a.lng) * Math.PI / 180;
+                const y = Math.sin(dLon) * Math.cos(lat2);
+                const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
+                return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+            }
+
+            function brushDestination(latlng, bearingDeg, metres) {
+                const R = 6371000;
+                const br = bearingDeg * Math.PI / 180;
+                const lat1 = latlng.lat * Math.PI / 180;
+                const lon1 = latlng.lng * Math.PI / 180;
+                const ang = metres / R;
+                const lat2 = Math.asin(Math.sin(lat1) * Math.cos(ang) + Math.cos(lat1) * Math.sin(ang) * Math.cos(br));
+                const lon2 = lon1 + Math.atan2(
+                    Math.sin(br) * Math.sin(ang) * Math.cos(lat1),
+                    Math.cos(ang) - Math.sin(lat1) * Math.sin(lat2)
+                );
+                return [lat2 * 180 / Math.PI, ((lon2 * 180 / Math.PI + 540) % 360) - 180];
+            }
+
+            function bearingDelta(fromDeg, toDeg) {
+                let d = (toDeg - fromDeg) % 360;
+                if (d > 180) d -= 360;
+                if (d < -180) d += 360;
+                return d;
+            }
+
+            function sweepPointToRim(center, lat, lon, heading) {
+                const ll = L.latLng(lat, lon);
+                const dist = map.distance(center, ll);
+                if (dist >= brushRadiusM) return null;
+                const bearing = dist < 0.8 ? (heading || 0) : brushBearing(center, ll);
+                return brushDestination(center, bearing, brushRadiusM + 0.6);
+            }
+
+            function arcSamples(center, fromLatLng, toLatLng, heading) {
+                const a = brushBearing(center, fromLatLng);
+                const b = brushBearing(center, toLatLng);
+                const forward = bearingDelta(a, b);
+                const back = bearingDelta(a, b - 360);
+                let step = forward;
+                if (Number.isFinite(heading)) {
+                    const midForward = (a + forward / 2 + 360) % 360;
+                    const midBack = (a + back / 2 + 360) % 360;
+                    const score = (mid) => Math.abs(bearingDelta(mid, heading));
+                    if (score(midBack) < score(midForward)) step = back;
+                } else if (Math.abs(back) < Math.abs(forward)) {
+                    step = back;
+                }
+                const span = Math.abs(step);
+                if (span < 12) return [];
+                const n = Math.min(16, Math.max(2, Math.round(span / 12)));
+                const out = [];
+                for (let k = 1; k < n; k++) {
+                    out.push(brushDestination(center, a + step * (k / n), brushRadiusM + 0.6));
+                }
+                return out;
+            }
+
+            function sweepBrush(center, heading) {
+                if (!trackEdit || !center) return;
+                const coords = trackEdit.coords || [];
+                if (coords.length < 2) return;
+                const movedPins = document.getElementById('nt-track-editor-move-pins')?.checked;
+                const next = [];
+                coords.forEach((p) => {
+                    const pushed = sweepPointToRim(center, p[0], p[1], heading);
+                    next.push(pushed || p);
+                });
+                const out = [next[0]];
+                for (let i = 1; i < next.length; i++) {
+                    const prev = out[out.length - 1];
+                    const cur = next[i];
+                    const midLat = (prev[0] + cur[0]) / 2;
+                    const midLon = (prev[1] + cur[1]) / 2;
+                    if (map.distance(center, L.latLng(midLat, midLon)) < brushRadiusM * 0.98) {
+                        arcSamples(center, L.latLng(prev[0], prev[1]), L.latLng(cur[0], cur[1]), heading)
+                            .forEach((pt) => out.push(pt));
+                    }
+                    const last = out[out.length - 1];
+                    if (last[0] !== cur[0] || last[1] !== cur[1]) out.push(cur);
+                }
+                trackEdit.coords = out;
+                const line = drawnRoutes.find((x) => x.routeId === trackEdit.routeId);
+                if (line?._polyline) line._polyline.setLatLngs(trackEdit.coords);
+                if (movedPins) {
+                    stationLayerItems.forEach((item) => {
+                        const ll = item.marker.getLatLng();
+                        const pushed = sweepPointToRim(center, ll.lat, ll.lng, heading);
+                        if (!pushed) return;
+                        item.marker.setLatLng(pushed);
+                        rememberStationMove(item.name, pushed[0], pushed[1]);
+                    });
+                }
+            }
+
+            function bindBrushPinch() {
+                if (map._ntBrushPinch) return;
+                map._ntBrushPinch = true;
+                const pointers = new Map();
+                let pinch = null;
+                const el = map.getContainer();
+                el.addEventListener('pointerdown', (ev) => {
+                    if (trackEditTool !== 'brush' || !brushCircle) return;
+                    pointers.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+                    if (pointers.size === 2) {
+                        const pts = [...pointers.values()];
+                        pinch = {
+                            dist: Math.max(8, Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y)),
+                            radius: brushRadiusM,
+                            snapped: false
+                        };
+                        map.dragging.disable();
+                    }
+                });
+                el.addEventListener('pointermove', (ev) => {
+                    if (!pointers.has(ev.pointerId)) return;
+                    pointers.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+                    if (!pinch || pointers.size < 2 || !brushCircle) return;
+                    const pts = [...pointers.values()];
+                    const dist = Math.max(8, Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y));
+                    if (!pinch.snapped) {
+                        snapshotTrackEdit();
+                        pinch.snapped = true;
+                    }
+                    brushRadiusM = Math.max(80, Math.min(4000, pinch.radius * (dist / pinch.dist)));
+                    brushCircle.setRadius(brushRadiusM);
+                    sweepBrush(brushCircle.getLatLng(), brushDragHeading);
+                });
+                const endPinch = (ev) => {
+                    pointers.delete(ev.pointerId);
+                    if (pointers.size < 2) {
+                        if (pinch && pinch.snapped) applyEditPreview({ rebuild: true });
+                        pinch = null;
+                        if (trackEditTool === 'brush') map.dragging.enable();
+                    }
+                };
+                el.addEventListener('pointerup', endPinch);
+                el.addEventListener('pointercancel', endPinch);
+            }
+
+            function syncBrush() {
+                if (trackEditTool !== 'brush' || !trackEdit) {
+                    clearBrush();
+                    return;
+                }
+                bindStationPinDrag();
+                if (brushCircle) return;
+                const center = map.getCenter();
+                brushCircle = L.circle(center, {
+                    radius: brushRadiusM,
+                    color: '#2563eb',
+                    weight: 2,
+                    fillColor: '#2563eb',
+                    fillOpacity: 0.12,
+                    interactive: false
+                }).addTo(brushLayer);
+                brushHandle = L.marker(center, {
+                    icon: vertexEndIcon,
+                    draggable: true,
+                    pane: 'nt-track-edit',
+                    keyboard: false
+                }).addTo(brushLayer);
+                bindBrushPinch();
+                brushHandle.on('dragstart', () => {
+                    brushDrag = { start: brushHandle.getLatLng(), snapped: false };
+                });
+                brushHandle.on('drag', (ev) => {
+                    if (!brushDrag || !trackEdit) return;
+                    const ll = ev.latlng;
+                    if (!brushDrag.snapped) {
+                        snapshotTrackEdit();
+                        brushDrag.snapped = true;
+                    }
+                    const moved = map.distance(brushDrag.start, ll);
+                    if (moved > 0.4) brushDragHeading = brushBearing(brushDrag.start, ll);
+                    brushDrag.start = ll;
+                    if (brushCircle) brushCircle.setLatLng(ll);
+                    sweepBrush(ll, brushDragHeading);
+                });
+                brushHandle.on('dragend', () => {
+                    brushDrag = null;
+                    applyEditPreview({ rebuild: true });
+                    if (brushHandle && brushCircle) brushCircle.setLatLng(brushHandle.getLatLng());
+                });
+            }
+
+            function resizeBrush(delta) {
+                if (trackEdit && brushCircle) snapshotTrackEdit();
+                brushRadiusM = Math.max(80, Math.min(4000, brushRadiusM + delta));
+                if (brushCircle) {
+                    brushCircle.setRadius(brushRadiusM);
+                    sweepBrush(brushCircle.getLatLng(), brushDragHeading);
+                    applyEditPreview({ rebuild: true });
+                }
+            }
+
+            function setEditorCollapsed(collapsed) {
+                const panel = document.getElementById('nt-track-editor');
+                const btn = document.getElementById('nt-track-editor-collapse');
+                if (!panel || !btn) return;
+                panel.classList.toggle('is-min', !!collapsed);
+                btn.textContent = collapsed ? 'Show' : 'Hide';
+                btn.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+            }
+
+            function saveStationPins() {
+                const moves = trackEdit && trackEdit.stationMoves;
+                if (!moves || !Object.keys(moves).length) {
+                    setEditorStatus('Drag a pin first.', false);
+                    return;
+                }
+                requestMapSave('config/map_stations', moves);
+            }
+
+            function saveTrackFork() {
+                const fork = trackEdit && trackEdit.fork;
+                if (!fork || !fork.at || !(fork.branches[0] || []).length || !(fork.branches[1] || []).length) {
+                    setEditorStatus('Mark the split and both branches before saving.', false);
+                    return;
+                }
+                requestMapSave('config/track_forks', {
+                    routeId: trackEdit.routeId,
+                    at: fork.at,
+                    branches: {
+                        a: { id: 'a', stops: fork.branches[0].slice() },
+                        b: { id: 'b', stops: fork.branches[1].slice() }
+                    }
+                }, trackEdit.routeId);
+            }
+
             function setMapOperatorAuthed(on) {
                 mapOperatorAuthed = !!on;
                 syncTrackEditorChrome();
@@ -2395,6 +3174,11 @@
                 e.stopPropagation();
                 stopTrackEditor();
             });
+            document.getElementById('nt-track-editor-collapse')?.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const panel = document.getElementById('nt-track-editor');
+                setEditorCollapsed(!panel?.classList.contains('is-min'));
+            });
             document.getElementById('nt-track-editor-undo')?.addEventListener('click', (e) => {
                 e.stopPropagation();
                 undoTrackEditor();
@@ -2403,6 +3187,46 @@
                 e.stopPropagation();
                 downloadTrackPatch();
             });
+            document.getElementById('nt-track-editor-save-pins')?.addEventListener('click', (e) => {
+                e.stopPropagation();
+                saveStationPins();
+            });
+            document.getElementById('nt-track-fork-a')?.addEventListener('click', (e) => {
+                e.stopPropagation();
+                setForkBranch(0);
+            });
+            document.getElementById('nt-track-fork-b')?.addEventListener('click', (e) => {
+                e.stopPropagation();
+                setForkBranch(1);
+            });
+            document.getElementById('nt-track-fork-preset')?.addEventListener('click', (e) => {
+                e.stopPropagation();
+                applyDuffsRoadForkPreset();
+            });
+            document.getElementById('nt-track-fork-clear')?.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (!trackEdit) return;
+                if (trackEdit.routeId === 'kzn-bridgecity') {
+                    applyDuffsRoadForkPreset();
+                    return;
+                }
+                trackEdit.fork = { at: '', which: 0, branches: [[], []] };
+                if (liveTrackForks && trackEdit.routeId) delete liveTrackForks[trackEdit.routeId];
+                paintForkStatus();
+            });
+            document.getElementById('nt-track-fork-save')?.addEventListener('click', (e) => {
+                e.stopPropagation();
+                saveTrackFork();
+            });
+            document.getElementById('nt-track-brush-smaller')?.addEventListener('click', (e) => {
+                e.stopPropagation();
+                resizeBrush(-150);
+            });
+            document.getElementById('nt-track-brush-larger')?.addEventListener('click', (e) => {
+                e.stopPropagation();
+                resizeBrush(150);
+            });
+            bindStationPinDrag();
             document.getElementById('nt-track-editor-stations-toggle')?.addEventListener('click', (e) => {
                 e.stopPropagation();
                 const wrap = document.getElementById('nt-track-editor-stations-wrap');
@@ -2574,14 +3398,115 @@
             let rideTrainMarkers = {};
             let rideLooseMarkers = [];
             let lastRidePings = [];
+            var followTrainId = '';
+            var pendingFocusTrainId = '';
+            var followInteracting = false;
+            var followUserHoldUntil = 0;
+            var followUserPannedAway = false;
+            var followPanAt = 0;
+
+            function onFollowUserGrab() {
+                followInteracting = true;
+                followUserHoldUntil = Date.now() + 6000;
+            }
+            function onFollowUserRelease() {
+                followInteracting = false;
+                followUserHoldUntil = Date.now() + 2500;
+                if (!followTrainId || !rideTrainMarkers[followTrainId]) return;
+                var ll = rideTrainMarkers[followTrainId].getLatLng();
+                if (ll && !map.getBounds().contains(ll)) followUserPannedAway = true;
+            }
+            map.on('dragstart', onFollowUserGrab);
+            map.on('zoomstart', onFollowUserGrab);
+            map.on('dragend', onFollowUserRelease);
+            map.on('zoomend', onFollowUserRelease);
+
+            function ensureSharedRailLine(routeId) {
+                if (userFilteredRail) return;
+                var rid = String(routeId || '');
+                if (!rid) return;
+                var found = null;
+                for (var i = 0; i < drawnRoutes.length; i++) {
+                    if (drawnRoutes[i].routeId === rid) { found = drawnRoutes[i]; break; }
+                }
+                if (!found) return;
+                var latlngs = (found.trackCoords && found.trackCoords.length > 1) ? found.trackCoords : null;
+                if ((!latlngs || latlngs.length < 2) && found.coords && found.coords.length > 1) latlngs = found.coords;
+                if ((!latlngs || latlngs.length < 2) && found.validStops && found.validStops.length > 1) {
+                    latlngs = found.validStops.map(function (s) {
+                        return [s.lat, s.lon];
+                    }).filter(function (p) {
+                        return Number.isFinite(p[0]) && Number.isFinite(p[1]);
+                    });
+                }
+                if (latlngs && latlngs.length > 1 && (!found.trackCoords || found.trackCoords.length < 2)) {
+                    found.trackCoords = latlngs;
+                }
+                if ((!found._polyline) && latlngs && latlngs.length > 1) {
+                    found._polyline = L.polyline(latlngs, {
+                        color: found.color || '#16a34a',
+                        weight: 5,
+                        opacity: 0.95,
+                        lineCap: 'round',
+                        lineJoin: 'round'
+                    });
+                }
+                [found._polyline, found._spurPolyline].forEach(function (layer) {
+                    if (!layer) return;
+                    if (!map.hasLayer(layer)) layer.addTo(map);
+                    try {
+                        layer.setStyle({ weight: 5, opacity: 0.95, dashArray: null });
+                        layer.bringToFront();
+                    } catch (_) {}
+                });
+            }
+            function keepFollowedTrainInView(latlng) {
+                if (!followTrainId || !latlng) return;
+                if (followInteracting || Date.now() < followUserHoldUntil) return;
+                var now = Date.now();
+                if (now - followPanAt < 500) return;
+                var bounds = map.getBounds();
+                var inside = bounds.contains(latlng);
+                if (followUserPannedAway) {
+                    if (!inside) return;
+                    followUserPannedAway = false;
+                }
+                if (!inside) {
+                    followPanAt = now;
+                    map.panTo(latlng, { animate: true, duration: 0.55 });
+                    return;
+                }
+                if (!bounds.pad(-0.18).contains(latlng)) {
+                    followPanAt = now;
+                    map.panTo(latlng, { animate: true, duration: 0.4 });
+                }
+            }
+            function focusRideTrainNow(trainId, routeId) {
+                var id = String(trainId || '');
+                if (!id) return;
+                followTrainId = id;
+                followUserPannedAway = false;
+                followUserHoldUntil = Date.now() + 1200;
+                userFilteredRail = false;
+                if (routeId) ensureSharedRailLine(routeId);
+                var marker = rideTrainMarkers[id];
+                if (marker && marker._ntRailRouteId) ensureSharedRailLine(marker._ntRailRouteId);
+                if (!marker) {
+                    pendingFocusTrainId = id;
+                    return;
+                }
+                pendingFocusTrainId = '';
+                var z = map.getZoom();
+                map.flyTo(marker.getLatLng(), z < 13 ? 14 : Math.min(z, 16), { duration: 0.8 });
+            }
             function escapePing(s) {
                 return String(s || '').replace(/[&<>"']/g, function (c) {
                     return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c];
                 });
             }
-            function isPingGpsStale(ping) {
-                var at = Number(ping && ping.at || 0);
-                return !at || (Date.now() - at) >= 90000;
+            function isPingGpsStale(ping, now) {
+                var at = Number(ping && (ping.fixAt || ping.acceptedAt || ping.lastPingAt || ping.at) || 0);
+                return !at || ((now || Date.now()) - at) >= RIDE_GPS_STALE_MS;
             }
             function applyShareHidesUserDot(hide) {
                 hideUserDotForShare = !!hide;
@@ -2611,6 +3536,7 @@
                 var far = z < 11;
                 var compact = z < 13;
                 var paused = !!(ping && ping.trackingState === 'paused') || isPingGpsStale(ping);
+                var stuck = !!(ping && ping.trainStatus === 'stuck');
                 var box = far ? 36 : (compact ? 48 : 64);
                 var bearing = ping && Number.isFinite(ping.bearing) ? ping.bearing : 0;
                 return {
@@ -2619,6 +3545,7 @@
                     compact: compact,
                     far: far,
                     paused: paused,
+                    stuck: stuck,
                     bearing: bearing
                 };
             }
@@ -2677,6 +3604,9 @@
                     cls += ' nt-live-train-glyph--paused';
                     wrapCls += ' nt-live-train-wrap--paused';
                 }
+                if (spec && spec.stuck && !(spec && spec.paused)) {
+                    cls += ' nt-live-train-glyph--stuck';
+                }
                 if (spec && spec.far) {
                     wrapCls += ' nt-live-train-wrap--far';
                     cls += ' nt-live-train-glyph--far';
@@ -2692,15 +3622,18 @@
                 // produce the readable final angle rather than repeat the parent yaw.
                 var labelCounterYaw = readableTrainLabelDeg(deg) - yaw;
                 var numSize = id.length >= 6 ? '8px' : (id.length >= 5 ? '9px' : '10px');
+                var numHtml = (spec && spec.far)
+                    ? ''
+                    : '<span class="nt-live-train-num" style="font-size:' + numSize + ';transform:rotate(' + labelCounterYaw + 'deg)">' + id + '</span>';
                 return '<div class="' + wrapCls + '" title="Train ' + id + '">'
                     + '<span class="nt-live-train-ring" aria-hidden="true"></span>'
                     + '<span class="nt-live-train-ring nt-live-train-ring--delay" aria-hidden="true"></span>'
                     + '<span class="' + cls + '" style="transform:rotate(' + yaw + 'deg)">'
-                    + '<span class="nt-live-train-wake" aria-hidden="true"><span class="nt-live-train-wake-ripple"><i></i><i></i></span><span class="nt-live-train-wake-ripple"><i></i><i></i></span><span class="nt-live-train-wake-ripple"><i></i><i></i></span></span>'
                     + '<span class="nt-live-train-shell" aria-hidden="true"></span>'
                     + '<span class="nt-live-train-oval nt-live-train-oval--a" aria-hidden="true"></span>'
                     + '<span class="nt-live-train-oval nt-live-train-oval--b" aria-hidden="true"></span>'
-                    + '<span class="nt-live-train-num" style="font-size:' + numSize + ';transform:rotate(' + labelCounterYaw + 'deg)">' + id + '</span>'
+                    + '<span class="nt-live-train-nose" aria-hidden="true"></span>'
+                    + numHtml
                     + '</span></div>';
             }
             function sharingStatusCopy(count, mine) {
@@ -2756,7 +3689,25 @@
             }
             if (!window.__ntRideFreshnessTick) {
                 window.__ntRideFreshnessTick = true;
-                setInterval(tickRidePopupFreshness, 1000);
+                setInterval(function () {
+                    tickRidePopupFreshness();
+                    applyRideTrainStalePause();
+                }, 1000);
+            }
+            function applyRideTrainStalePause() {
+                var now = Date.now();
+                Object.keys(rideTrainMarkers).forEach(function (trainId) {
+                    var marker = rideTrainMarkers[trainId];
+                    var ping = marker && marker._ntRidePing;
+                    if (!marker || !ping) return;
+                    var stale = ping.trackingState === 'paused' || isPingGpsStale(ping, now);
+                    if (!stale || marker._ntRideGrey) return;
+                    marker._ntRideGrey = true;
+                    ping.trackingState = 'paused';
+                    ping.pauseReason = ping.pauseReason || 'staleGps';
+                    stopRideMarkerInterpolation(marker, marker._ntRideTarget);
+                    paintLiveTrainIcon(marker, trainId, Number(marker._ntRideN) || 1, !!marker._ntRideMine, ping);
+                });
             }
             function headingMetric(deg) {
                 if (!Number.isFinite(deg)) return 'Unknown';
@@ -2774,34 +3725,476 @@
                     cancelAnimationFrame(marker._ntRideFrame);
                     marker._ntRideFrame = 0;
                 }
-                if (target) marker.setLatLng(target);
+                if (target) {
+                    var hold = L.latLng(target);
+                    commitRailPose(marker, hold.lat, hold.lng, marker._ntRailBearing, marker._ntRailAlongM, marker._ntRailRouteId);
+                }
             }
-            function interpolateRideMarkerLatLng(marker, target, immediate) {
+            // Keep in sync with src/lib/gps-freshness.js (RIDE_GPS_STALE_MS / RIDE_INTERPOLATION_MAX_MS).
+            var RIDE_GPS_STALE_MS = 15000;
+            var RIDE_INTERPOLATION_MAX_MS = 15000;
+            var STATION_APPROACH_M = 160;
+            var STATION_DWELL_SEC = 0.7;
+            var STATION_CRAWL_SEC = 0.22;
+            var RIDE_CRUISE_MPS = 12;
+            // A train only travels one way. A new fix that lands this far or
+            // less *behind* the glyph along the rail is GPS scatter: hold the
+            // pose rather than slide the hull backwards and flip its nose.
+            var RIDE_BACK_JITTER_M = 120;
+            function flattenRidePath(coords) {
+                if (!coords) return [];
+                var out = [];
+                function walk(item) {
+                    if (!item) return;
+                    if (Array.isArray(item) && item.length >= 2 && typeof item[0] === 'number' && typeof item[1] === 'number') {
+                        out.push([item[0], item[1]]);
+                        return;
+                    }
+                    if (item.lat != null && (item.lng != null || item.lon != null)) {
+                        out.push([item.lat, item.lng != null ? item.lng : item.lon]);
+                        return;
+                    }
+                    if (Array.isArray(item)) item.forEach(walk);
+                }
+                walk(coords);
+                return out;
+            }
+            function ridePathForRoute(routeId) {
+                var rid = String(routeId || '');
+                var found = null;
+                for (var i = 0; i < drawnRoutes.length; i++) {
+                    if (rid && drawnRoutes[i].routeId === rid) { found = drawnRoutes[i]; break; }
+                }
+                if (!found && selectedRouteId) {
+                    for (var j = 0; j < drawnRoutes.length; j++) {
+                        if (drawnRoutes[j].routeId === selectedRouteId) { found = drawnRoutes[j]; break; }
+                    }
+                }
+                if (!found) return [];
+                // Same LineString as the green paint. Station-to-station `coords`
+                // are straight chords, so the pill sits off the baked rail.
+                var coords = (found.trackCoords && found.trackCoords.length > 1)
+                    ? found.trackCoords
+                    : null;
+                if ((!coords || coords.length < 2) && found._polyline) {
+                    try { coords = found._polyline.getLatLngs(); } catch (_) {}
+                }
+                if ((!coords || coords.length < 2) && found.coords && found.coords.length > 1) {
+                    coords = found.coords;
+                }
+                return flattenRidePath(coords);
+            }
+            function rideSegmentFraction(pLat, pLon, aLat, aLon, bLat, bLon) {
+                var lat0 = ((aLat + bLat) / 2) * Math.PI / 180;
+                var toXY = function (lat, lon) {
+                    return [
+                        lon * Math.PI / 180 * 6371000 * Math.cos(lat0),
+                        lat * Math.PI / 180 * 6371000
+                    ];
+                };
+                var p = toXY(pLat, pLon);
+                var a = toXY(aLat, aLon);
+                var b = toXY(bLat, bLon);
+                var abx = b[0] - a[0];
+                var aby = b[1] - a[1];
+                var len2 = abx * abx + aby * aby;
+                if (len2 < 1) return 0;
+                var t = ((p[0] - a[0]) * abx + (p[1] - a[1]) * aby) / len2;
+                return Math.max(0, Math.min(1, t));
+            }
+            function projectOntoRidePath(path, lat, lng) {
+                if (!path || path.length < 2) return null;
+                var bestD = Infinity;
+                var bestAlong = 0;
+                var bestLat = path[0][0];
+                var bestLng = path[0][1];
+                var along = 0;
+                for (var i = 1; i < path.length; i++) {
+                    var a = path[i - 1];
+                    var b = path[i];
+                    var segM = railHaversineM(a[0], a[1], b[0], b[1]);
+                    var t = segM > 0 ? rideSegmentFraction(lat, lng, a[0], a[1], b[0], b[1]) : 0;
+                    var plat = a[0] + (b[0] - a[0]) * t;
+                    var plng = a[1] + (b[1] - a[1]) * t;
+                    var d = railHaversineM(lat, lng, plat, plng);
+                    if (d < bestD) {
+                        bestD = d;
+                        bestAlong = along + segM * t;
+                        bestLat = plat;
+                        bestLng = plng;
+                    }
+                    along += segM;
+                }
+                return { alongM: bestAlong, lat: bestLat, lng: bestLng, lengthM: along, offM: bestD };
+            }
+            function pointAtRideAlongM(path, alongM) {
+                if (!path || path.length < 2) return null;
+                var remain = Math.max(0, alongM);
+                for (var i = 1; i < path.length; i++) {
+                    var a = path[i - 1];
+                    var b = path[i];
+                    var segM = railHaversineM(a[0], a[1], b[0], b[1]);
+                    if (remain <= segM || i === path.length - 1) {
+                        var t = segM > 0 ? Math.min(1, remain / segM) : 0;
+                        return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
+                    }
+                    remain -= segM;
+                }
+                var last = path[path.length - 1];
+                return [last[0], last[1]];
+            }
+            function geoBearingDeg(aLat, aLng, bLat, bLng) {
+                var lat1 = aLat * Math.PI / 180;
+                var lat2 = bLat * Math.PI / 180;
+                var dLon = (bLng - aLng) * Math.PI / 180;
+                var y = Math.sin(dLon) * Math.cos(lat2);
+                var x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
+                var deg = Math.atan2(y, x) * 180 / Math.PI;
+                return (deg + 360) % 360;
+            }
+            function rideTangentAlongPath(path, alongM) {
+                if (!path || path.length < 2) return NaN;
+                var remain = Math.max(0, alongM);
+                var lastGood = NaN;
+                for (var i = 1; i < path.length; i++) {
+                    var a = path[i - 1];
+                    var b = path[i];
+                    var segM = railHaversineM(a[0], a[1], b[0], b[1]);
+                    if (segM >= 2) lastGood = geoBearingDeg(a[0], a[1], b[0], b[1]);
+                    if (remain <= segM || i === path.length - 1) {
+                        if (segM >= 2) return geoBearingDeg(a[0], a[1], b[0], b[1]);
+                        return lastGood;
+                    }
+                    remain -= segM;
+                }
+                return lastGood;
+            }
+            function bearingDiffDeg(a, b) {
+                var d = Math.abs(a - b) % 360;
+                return d > 180 ? 360 - d : d;
+            }
+            // Which way along the painted path this train travels: +1 with the
+            // LineString, -1 against it. The sharer's timetable bearing (origin to
+            // terminus heading at its progress) is authoritative; the terminus
+            // position along the path is the fallback. Never derived from the
+            // order two GPS fixes happened to arrive in.
+            function rideTravelDirAlongPath(path, alongM, destAlongM, journeyBearing) {
+                var tang = rideTangentAlongPath(path, alongM);
+                if (Number.isFinite(journeyBearing) && Number.isFinite(tang)) {
+                    return bearingDiffDeg(tang, journeyBearing) > 90 ? -1 : 1;
+                }
+                if (Number.isFinite(destAlongM) && Number.isFinite(alongM)) {
+                    if (destAlongM + 12 < alongM) return -1;
+                    if (destAlongM > alongM + 12) return 1;
+                }
+                return 1;
+            }
+            // Face the painted rail: long axis = local tangent, tip toward travel.
+            function rideFacingAlongPath(path, alongM, destAlongM, journeyBearing) {
+                var tang = rideTangentAlongPath(path, alongM);
+                if (!Number.isFinite(tang)) return NaN;
+                if (rideTravelDirAlongPath(path, alongM, destAlongM, journeyBearing) < 0) tang = (tang + 180) % 360;
+                return tang;
+            }
+            function alongMForStationName(stations, name) {
+                var key = String(name || '').replace(/\s+STATION$/i, '').trim().toUpperCase();
+                if (!key) return NaN;
+                for (var i = 0; i < (stations || []).length; i++) {
+                    var n = String(stations[i].name || '').replace(/\s+STATION$/i, '').trim().toUpperCase();
+                    if (n === key) return stations[i].alongM;
+                }
+                return NaN;
+            }
+            function applyTrainGlyphYaw(marker, bearingDeg) {
+                if (!marker || !Number.isFinite(bearingDeg)) return;
+                var root = marker.getElement && marker.getElement();
+                if (!root) return;
+                var glyph = root.querySelector('.nt-live-train-glyph');
+                var num = root.querySelector('.nt-live-train-num');
+                var yaw = railOvalYawDeg(bearingDeg);
+                if (glyph) glyph.style.transform = 'rotate(' + yaw + 'deg)';
+                if (num) num.style.transform = 'rotate(' + (readableTrainLabelDeg(bearingDeg) - yaw) + 'deg)';
+                marker._ntRailBearing = bearingDeg;
+            }
+            function railBearingForMarker(marker, ping) {
+                if (marker && Number.isFinite(marker._ntRailBearing)) return marker._ntRailBearing;
+                if (ping && Number.isFinite(ping.bearing)) return ping.bearing;
+                return 0;
+            }
+            function paintLiveTrainIcon(marker, trainId, n, mine, ping) {
+                if (!marker) return;
+                var bearing = railBearingForMarker(marker, ping);
+                var spec = liveTrainIconSpec(map.getZoom(), trainId, Object.assign({}, ping || {}, { bearing: bearing }));
+                marker.setIcon(L.divIcon({
+                    className: 'nt-live-train',
+                    html: liveTrainGlyphHtml(trainId, n, mine, spec),
+                    iconSize: [spec.w, spec.h],
+                    iconAnchor: [Math.round(spec.w / 2), Math.round(spec.h / 2)]
+                }));
+                if (Number.isFinite(bearing)) applyTrainGlyphYaw(marker, bearing);
+            }
+            // Outcome of a rail snap: the pill stays on the painted LineString.
+            // Never fall back to raw GPS or a phone heading.
+            function commitRailPose(marker, lat, lng, facing, alongM, routeId) {
+                if (!marker || !Number.isFinite(lat) || !Number.isFinite(lng)) return;
+                marker.setLatLng([lat, lng]);
+                marker._ntRailLatLng = { lat: lat, lng: lng };
+                if (Number.isFinite(alongM)) marker._ntRailAlongM = alongM;
+                if (routeId) marker._ntRailRouteId = String(routeId);
+                if (Number.isFinite(facing)) applyTrainGlyphYaw(marker, facing);
+                if (marker._ntTrainId && marker._ntTrainId === followTrainId) {
+                    keepFollowedTrainInView(L.latLng(lat, lng));
+                }
+            }
+            function rideAlongAtWarpedTime(samples, t01) {
+                if (!samples) return NaN;
+                var t = Math.max(0, Math.min(1, t01)) * samples.totalSec;
+                var metres = samples.metres;
+                var times = samples.times;
+                if (t <= 0) return metres[0];
+                for (var i = 1; i < times.length; i++) {
+                    if (t <= times[i]) {
+                        var span = times[i] - times[i - 1];
+                        var u = span > 0 ? (t - times[i - 1]) / span : 1;
+                        return metres[i - 1] + (metres[i] - metres[i - 1]) * u;
+                    }
+                }
+                return metres[metres.length - 1];
+            }
+            function snapTrainToRail(lat, lng, opts) {
+                var path = ridePathForRoute(opts && opts.routeId);
+                if (path.length < 2) return null;
+                var p = projectOntoRidePath(path, lat, lng);
+                if (!p) return null;
+                var stations = stationsAlongRidePath(path, opts && opts.routeId);
+                var destAlong = Number(opts && opts.destAlong);
+                if (!Number.isFinite(destAlong)) destAlong = alongMForStationName(stations, opts && opts.destination);
+                var journeyBearing = Number(opts && opts.bearing);
+                // Always sit on the painted corridor when one exists. A 250 m
+                // cutoff left Pretoria GPS (yards / concourse) off the green
+                // line with a raw heading instead of the rail tangent.
+                return {
+                    lat: p.lat,
+                    lng: p.lng,
+                    alongM: p.alongM,
+                    offM: p.offM,
+                    facing: rideFacingAlongPath(path, p.alongM, destAlong, journeyBearing),
+                    travelDir: rideTravelDirAlongPath(path, p.alongM, destAlong, journeyBearing),
+                    destAlong: destAlong,
+                    journeyBearing: journeyBearing,
+                    path: path
+                };
+            }
+            function stationsAlongRidePath(path, routeId) {
+                var rid = String(routeId || '');
+                var stops = [];
+                for (var i = 0; i < drawnRoutes.length; i++) {
+                    if (drawnRoutes[i].routeId === rid && drawnRoutes[i].validStops) {
+                        stops = drawnRoutes[i].validStops;
+                        break;
+                    }
+                }
+                if (!stops.length) {
+                    stationLayerItems.forEach(function (item) {
+                        if (!item || !item.marker) return;
+                        if (rid && item.routes && item.routes.has && !item.routes.has(rid)) return;
+                        var ll = item.marker.getLatLng();
+                        stops.push({ lat: ll.lat, lon: ll.lng, name: item.name });
+                    });
+                }
+                var out = [];
+                stops.forEach(function (s) {
+                    var lat = Number(s.lat);
+                    var lon = Number(s.lon != null ? s.lon : s.lng);
+                    if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
+                    var p = projectOntoRidePath(path, lat, lon);
+                    if (!p || p.offM > 250) return;
+                    out.push({ alongM: p.alongM, name: s.name || '' });
+                });
+                return out;
+            }
+            function buildStationAwareRideSamples(path, startAlong, endAlong, stations, opts) {
+                var span = endAlong - startAlong;
+                if (!Number.isFinite(span) || Math.abs(span) < 1) return null;
+                var dir = span >= 0 ? 1 : -1;
+                var lo = Math.min(startAlong, endAlong);
+                var hi = Math.max(startAlong, endAlong);
+                var cruise = Number(opts && opts.cruiseMps);
+                if (!Number.isFinite(cruise) || cruise < 2) cruise = RIDE_CRUISE_MPS;
+                cruise = Math.max(4, Math.min(25, cruise));
+                var gpsAtStation = !!(opts && opts.atStation);
+                var samples = [];
+                var step = Math.max(8, Math.min(40, Math.abs(span) / 40));
+                for (var m = lo; m <= hi; m += step) samples.push(m);
+                if (samples[samples.length - 1] !== hi) samples.push(hi);
+                (stations || []).forEach(function (st) {
+                    if (st.alongM >= lo - 1 && st.alongM <= hi + 1) samples.push(st.alongM);
+                });
+                samples.sort(function (a, b) { return (a - b) * dir; });
+                var uniq = [];
+                samples.forEach(function (v) {
+                    if (!uniq.length || Math.abs(uniq[uniq.length - 1] - v) > 0.5) uniq.push(v);
+                });
+                var times = [0];
+                for (var i = 1; i < uniq.length; i++) {
+                    var a = uniq[i - 1];
+                    var b = uniq[i];
+                    var ds = Math.abs(b - a);
+                    var mid = (a + b) / 2;
+                    var nearest = Infinity;
+                    var atStation = false;
+                    (stations || []).forEach(function (st) {
+                        var d = Math.abs(st.alongM - mid);
+                        if (d < nearest) nearest = d;
+                        if (Math.abs(st.alongM - b) < 12) atStation = true;
+                    });
+                    var factor = nearest >= STATION_APPROACH_M ? 1 : Math.max(0.12, nearest / STATION_APPROACH_M);
+                    var dt = ds / (cruise * factor);
+                    if (atStation) {
+                        var arriving = gpsAtStation && Math.abs(b - endAlong) < 25;
+                        dt += arriving ? STATION_DWELL_SEC : STATION_CRAWL_SEC;
+                    }
+                    times.push(times[i - 1] + dt);
+                }
+                return { metres: uniq, times: times, totalSec: times[times.length - 1] || 0.4 };
+            }
+            function ridePosAtWarpedTime(path, samples, t01) {
+                if (!samples) return null;
+                var t = Math.max(0, Math.min(1, t01)) * samples.totalSec;
+                var metres = samples.metres;
+                var times = samples.times;
+                if (t <= 0) return pointAtRideAlongM(path, metres[0]);
+                for (var i = 1; i < times.length; i++) {
+                    if (t <= times[i]) {
+                        var span = times[i] - times[i - 1];
+                        var u = span > 0 ? (t - times[i - 1]) / span : 1;
+                        var along = metres[i - 1] + (metres[i] - metres[i - 1]) * u;
+                        return pointAtRideAlongM(path, along);
+                    }
+                }
+                return pointAtRideAlongM(path, metres[metres.length - 1]);
+            }
+            function interpolateAlongRidePath(marker, start, end, opts) {
+                // Commuter phone GPS is the source of truth, but the hull never
+                // leaves the painted rail. Project both ends onto the LineString.
+                var routeId = opts && opts.routeId;
+                var path = ridePathForRoute(routeId);
+                if (path.length < 2) return null;
+                var from = projectOntoRidePath(path, start.lat, start.lng);
+                var to = projectOntoRidePath(path, end.lat, end.lng);
+                if (!from || !to) return null;
+                if (marker && Number.isFinite(marker._ntRailAlongM) && String(marker._ntRailRouteId || '') === String(routeId || '')) {
+                    var locked = pointAtRideAlongM(path, marker._ntRailAlongM);
+                    if (locked) {
+                        from = {
+                            alongM: marker._ntRailAlongM,
+                            lat: locked[0],
+                            lng: locked[1],
+                            offM: 0,
+                            lengthM: from.lengthM
+                        };
+                    }
+                }
+                if (Math.abs(to.alongM - from.alongM) < 2) return null;
+                var stations = stationsAlongRidePath(path, routeId);
+                var destAlong = Number(opts && opts.destAlong);
+                if (!Number.isFinite(destAlong)) {
+                    destAlong = alongMForStationName(stations, opts && opts.destination);
+                }
+                var speed = Number(opts && opts.speedMps);
+                if (opts && opts.motionClass === 'still') return null;
+                var label = String((opts && opts.lastSeenLabel) || '');
+                var atStation = /^at\s/i.test(label) || (Number.isFinite(speed) && speed < 1.5 && (function () {
+                    for (var i = 0; i < stations.length; i++) {
+                        if (Math.abs(stations[i].alongM - to.alongM) < 40) return true;
+                    }
+                    return false;
+                })());
+                var samples = buildStationAwareRideSamples(path, from.alongM, to.alongM, stations, {
+                    cruiseMps: Number.isFinite(speed) && speed >= 2 ? speed : RIDE_CRUISE_MPS,
+                    atStation: atStation
+                });
+                if (!samples) return null;
+                return {
+                    path: path,
+                    samples: samples,
+                    endAlong: to.alongM,
+                    destAlong: destAlong,
+                    journeyBearing: Number(opts && opts.bearing)
+                };
+            }
+            function interpolateRideMarkerLatLng(marker, target, immediate, opts) {
                 if (!marker || !target) return;
+                // A successful GPS ping always cancels the previous glide and retargets.
                 stopRideMarkerInterpolation(marker);
-                var end = L.latLng(target);
-                var start = marker.getLatLng();
-                var reduceMotion = false;
-                try { reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (_) {}
-                if (immediate || reduceMotion || (start.lat === end.lat && start.lng === end.lng)) {
-                    marker.setLatLng(end);
+                var rawEnd = L.latLng(target);
+                var snap = snapTrainToRail(rawEnd.lat, rawEnd.lng, opts || {});
+                if (!snap) {
+                    // No painted path yet: keep the last on-rail pose. Never jump off the line.
+                    if (marker._ntRailLatLng) {
+                        applyTrainGlyphYaw(marker, marker._ntRailBearing);
+                    }
                     return;
                 }
-                var distance = map.distance(start, end);
-                var duration = Math.max(180, Math.min(700, distance * 8));
+                var end = L.latLng(snap.lat, snap.lng);
+                marker._ntRideTarget = end;
+                var endFacing = Number.isFinite(snap.facing) ? snap.facing : marker._ntRailBearing;
+                var sameRoute = String(marker._ntRailRouteId || '') === String((opts && opts.routeId) || '');
+                if (Number.isFinite(marker._ntRailAlongM) && sameRoute) {
+                    var delta = snap.alongM - marker._ntRailAlongM;
+                    var backwards = delta * (snap.travelDir || 1) < 0;
+                    if (backwards && Math.abs(delta) <= RIDE_BACK_JITTER_M) {
+                        // Scatter behind the hull: hold the rail pose, keep the nose forward.
+                        applyTrainGlyphYaw(marker, endFacing);
+                        return;
+                    }
+                    if (backwards) {
+                        // A real move against the timetable direction (the sharer is
+                        // being asked about it). Re-seat without a backwards glide.
+                        commitRailPose(marker, end.lat, end.lng, endFacing, snap.alongM, opts && opts.routeId);
+                        return;
+                    }
+                }
+                var startSrc = marker._ntRailLatLng || marker.getLatLng();
+                var start = L.latLng(startSrc.lat, startSrc.lng);
+                var startSnap = projectOntoRidePath(snap.path, start.lat, start.lng);
+                if (startSnap) start = L.latLng(startSnap.lat, startSnap.lng);
+                var reduceMotion = false;
+                try { reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (_) {}
+                var along = (!immediate && !reduceMotion)
+                    ? interpolateAlongRidePath(marker, start, end, opts || {})
+                    : null;
+                if (immediate || reduceMotion || !along || (start.lat === end.lat && start.lng === end.lng)) {
+                    commitRailPose(marker, end.lat, end.lng, endFacing, snap.alongM, opts && opts.routeId);
+                    return;
+                }
+                var duration = Math.max(450, Math.min(RIDE_INTERPOLATION_MAX_MS, along.samples.totalSec * 1000));
                 var startedAt = performance.now();
                 function frame(now) {
                     var t = Math.max(0, Math.min(1, (now - startedAt) / duration));
-                    var eased = 1 - Math.pow(1 - t, 3);
-                    marker.setLatLng([
-                        start.lat + ((end.lat - start.lat) * eased),
-                        start.lng + ((end.lng - start.lng) * eased)
-                    ]);
+                    var alongNow = rideAlongAtWarpedTime(along.samples, t);
+                    var pos = ridePosAtWarpedTime(along.path, along.samples, t)
+                        || pointAtRideAlongM(along.path, alongNow);
+                    // Nose follows the rail tangent, pointed by the timetable
+                    // direction. The glide direction itself never flips the glyph.
+                    var facing = rideFacingAlongPath(along.path, alongNow, along.destAlong, along.journeyBearing);
+                    if (!Number.isFinite(facing)) facing = endFacing;
+                    if (pos) {
+                        commitRailPose(marker, pos[0], pos[1], facing, alongNow, opts && opts.routeId);
+                    }
                     if (t < 1) {
                         marker._ntRideFrame = requestAnimationFrame(frame);
                     } else {
                         marker._ntRideFrame = 0;
-                        marker.setLatLng(end);
+                        var finishFacing = rideFacingAlongPath(along.path, along.endAlong, along.destAlong, along.journeyBearing);
+                        commitRailPose(
+                            marker,
+                            end.lat,
+                            end.lng,
+                            Number.isFinite(finishFacing) ? finishFacing : endFacing,
+                            along.endAlong,
+                            opts && opts.routeId
+                        );
                     }
                 }
                 marker._ntRideFrame = requestAnimationFrame(frame);
@@ -2809,6 +4202,19 @@
             function bindRideTrainPopupActions(marker) {
                 var ctx = marker && marker._ntRidePopupContext;
                 if (!ctx) return;
+                const resumeBtn = document.getElementById(ctx.resumeId);
+                if (resumeBtn) {
+                    resumeBtn.onclick = function () {
+                        try {
+                            (window.parent || window).postMessage({
+                                type: 'nt-map-resume-share',
+                                trainId: ctx.trainId,
+                                routeId: ctx.routeId
+                            }, '*');
+                        } catch (_) {}
+                        map.closePopup();
+                    };
+                }
                 const btn = document.getElementById(ctx.joinId);
                 if (btn) {
                     btn.onclick = function () {
@@ -2879,6 +4285,10 @@
                     return trains[id].some(function (p) { return !!p.mine; });
                 });
                 applyShareHidesUserDot(mineOnTrain);
+                Object.keys(trains).forEach(function (id) {
+                    var list = trains[id] || [];
+                    ensureSharedRailLine((list[0] && list[0].routeId) || '');
+                });
 
                 const renderedTrainIds = {};
                 const placedTrains = Object.keys(trains).map(function (trainId) {
@@ -2891,28 +4301,52 @@
                     const n = list.reduce(function (s, p) { return s + (Number(p.n) || 1); }, 0) || Object.keys(ids).length;
                     const mine = list.some(function (p) { return !!p.mine; });
                     const newest = consensus;
-                    const bearing = Number.isFinite(newest.bearing) ? newest.bearing : 0;
+                    const destName = String(newest.destination || '').replace(/\s+STATION$/i, '').trim();
+                    const prevMarker = rideTrainMarkers[trainId];
+                    const prevLl = prevMarker && prevMarker._ntRailLatLng;
+                    const prevBr = prevMarker && prevMarker._ntRailBearing;
+                    const prevAlong = prevMarker && prevMarker._ntRailAlongM;
+                    // newest.bearing is the sharer's timetable heading at its
+                    // progress (origin to terminus), so the nose cannot swing
+                    // round when GPS scatter arrives out of order.
+                    const rail = snapTrainToRail(consensus.lat, consensus.lng, {
+                        routeId: newest.routeId || list[0].routeId,
+                        destination: destName,
+                        bearing: Number.isFinite(Number(newest.bearing)) ? Number(newest.bearing) : NaN
+                    });
+                    if (!rail && !prevLl) return null;
+                    const bearing = Number.isFinite(rail && rail.facing)
+                        ? rail.facing
+                        : (Number.isFinite(prevBr) ? prevBr : 0);
                     return {
                         trainId: trainId,
                         list: list,
                         newest: newest,
                         n: n,
                         mine: mine,
-                        lat: consensus.lat,
-                        lng: consensus.lng,
+                        lat: rail ? rail.lat : prevLl.lat,
+                        lng: rail ? rail.lng : prevLl.lng,
+                        alongM: rail ? rail.alongM : (Number.isFinite(prevAlong) ? prevAlong : 0),
+                        destAlong: rail ? rail.destAlong : NaN,
+                        routeId: newest.routeId || list[0].routeId,
+                        destination: destName,
                         bearing: bearing
                     };
-                });
+                }).filter(Boolean);
                 for (var pi = 0; pi < placedTrains.length; pi += 1) {
                     for (var pj = pi + 1; pj < placedTrains.length; pj += 1) {
                         var pa = placedTrains[pi];
                         var pb = placedTrains[pj];
                         var metres = map.distance(L.latLng(pa.lat, pa.lng), L.latLng(pb.lat, pb.lng));
                         if (metres > 90 || !bearingsOppose(pa.bearing, pb.bearing)) continue;
-                        var ao = offsetLatLngByBearing(pa.lat, pa.lng, pa.bearing, 12);
-                        var bo = offsetLatLngByBearing(pb.lat, pb.lng, pb.bearing, 12);
-                        pa.lat = ao.lat; pa.lng = ao.lng;
-                        pb.lat = bo.lat; pb.lng = bo.lng;
+                        // Keep both hulls on the painted rail: separate along-track, never off to the side.
+                        var pathA = ridePathForRoute(pa.routeId);
+                        if (pathA.length >= 2) {
+                            var aPos = pointAtRideAlongM(pathA, (pa.alongM || 0) - 10);
+                            var bPos = pointAtRideAlongM(pathA, (pb.alongM || 0) + 10);
+                            if (aPos) { pa.lat = aPos[0]; pa.lng = aPos[1]; }
+                            if (bPos) { pb.lat = bPos[0]; pb.lng = bPos[1]; }
+                        }
                     }
                 }
                 placedTrains.forEach(function (row) {
@@ -2924,9 +4358,30 @@
                     const n = row.n;
                     const mine = row.mine;
                     const newest = row.newest;
-                    const speedValue = (list.find(function (p) { return typeof p.speedMps === 'number'; }) || newest || {}).speedMps;
+                    function firstFinitePingField(key) {
+                        for (var fi = 0; fi < list.length; fi++) {
+                            var fv = list[fi] && list[fi][key];
+                            if (typeof fv === 'number' && Number.isFinite(fv)) return fv;
+                        }
+                        return null;
+                    }
+                    const motionClass = (function () {
+                        var raw = String(newest.motionClass || '').trim().toLowerCase();
+                        return (raw === 'still' || raw === 'walk' || raw === 'ride') ? raw : '';
+                    })();
+                    const speedValue = (function () {
+                        if (motionClass === 'still') return 0;
+                        var s = firstFinitePingField('speedMps');
+                        if (typeof s === 'number' && Number.isFinite(s)) return s;
+                        if (motionClass === 'ride') return RIDE_CRUISE_MPS;
+                        return s;
+                    })();
                     const speed = typeof speedValue === 'number' ? speedValue : null;
-                    const heading = row.bearing;
+                    const accuracyValue = firstFinitePingField('accuracy');
+                    const railDistanceValue = firstFinitePingField('railDistanceM');
+                    const pingAtValue = Number(newest.fixAt || newest.acceptedAt || newest.lastPingAt || newest.at || 0) || firstFinitePingField('fixAt') || firstFinitePingField('acceptedAt') || firstFinitePingField('at');
+                    const paused = newest.trackingState === 'paused' || isPingGpsStale(newest);
+                    const dest = String(newest.destination || '').replace(/\s+STATION$/i, '').trim();
                     const spec = liveTrainIconSpec(map.getZoom(), trainId, Object.assign({}, newest, { bearing: row.bearing }));
                     const icon = L.divIcon({
                         className: 'nt-live-train',
@@ -2934,61 +4389,80 @@
                         iconSize: [spec.w, spec.h],
                         iconAnchor: [Math.round(spec.w / 2), Math.round(spec.h / 2)]
                     });
-                    const joinId = 'nt-join-train-' + String(trainId).replace(/[^a-zA-Z0-9_-]/g, '');
-                    const sheetId = 'nt-tt-train-' + String(trainId).replace(/[^a-zA-Z0-9_-]/g, '');
-                    const actionBtn = mine
-                        ? "<button type='button' id='" + joinId + "' class='nt-live-train-pop-btn nt-live-train-pop-btn--stop'>Stop sharing</button>"
-                        : "<button type='button' id='" + joinId + "' class='nt-live-train-pop-btn'>I’m on this train</button>";
-                    const paused = newest.trackingState === 'paused' || isPingGpsStale(newest);
-                    const status = paused ? 'Paused' : 'Active';
-                    const detailsId = 'nt-track-details-' + String(trainId).replace(/[^a-zA-Z0-9_-]/g, '');
-                    const pingAt = gpsPingSuccessAt(newest);
-                    const lastPlace = newest.lastSeenLabel || newest.station || 'on the route';
-                    const popupHtml =
-                        "<div class='nt-live-train-pop'>"
-                        + "<div class='nt-live-train-pop-head'><p class='nt-live-train-pop-title'>Train " + escapePing(trainId) + "</p>"
-                        + "<span class='nt-live-train-status nt-live-train-status--" + (paused ? 'paused' : 'active') + "'>" + status + "</span></div>"
-                        + "<p class='nt-live-train-pop-sub'>" + escapePing(sharingStatusCopy(n, mine)) + "</p>"
-                        + "<dl class='nt-live-train-metrics'>"
-                        + "<div><dt>Speed</dt><dd>" + escapePing(speed == null ? 'Unknown' : (Math.max(0, speed) * 3.6).toFixed(0) + ' km/h') + "</dd></div>"
-                        + "<div><dt>Heading</dt><dd>" + escapePing(headingMetric(heading)) + "</dd></div>"
-                        + "<div><dt>Rail distance</dt><dd>" + escapePing(distanceMetric(Number(newest.railDistanceM))) + "</dd></div>"
-                        + "<div><dt>GPS age</dt><dd data-nt-gps-at='" + pingAt + "' data-nt-gps-kind='age'>" + escapePing(ageMetric(pingAt)) + "</dd></div>"
-                        + "<div><dt>GPS accuracy</dt><dd>" + escapePing(Number.isFinite(newest.accuracy) ? '±' + Math.round(newest.accuracy) + ' m' : 'Unknown') + "</dd></div>"
-                        + "<div><dt>Contributors</dt><dd>" + escapePing(metricValue(n, '0')) + "</dd></div>"
-                        + "</dl>"
-                        + "<p class='nt-live-train-last' data-nt-gps-at='" + pingAt + "' data-nt-gps-kind='last' data-nt-last-seen='" + escapePing(lastPlace) + "'>" + escapePing(lastSeenMetric(lastPlace, pingAt)) + "</p>"
-                        + "<div class='nt-live-train-pop-actions'>"
-                        + "<button type='button' id='" + detailsId + "' class='nt-live-train-pop-btn nt-live-train-pop-btn--details'>Show tracking details</button>"
-                        + actionBtn
-                        + "<button type='button' id='" + sheetId + "' class='nt-live-train-pop-btn nt-live-train-pop-btn--sheet'>Timetable</button>"
-                        + "</div></div>";
                     let marker = rideTrainMarkers[trainId];
                     if (!marker) {
                         marker = L.marker([lat, lng], { icon: icon, zIndexOffset: 800, keyboard: true });
-                        marker.bindPopup(popupHtml);
-                        marker.on('popupopen', function () { bindRideTrainPopupActions(marker); });
+                        marker._ntRailLatLng = { lat: lat, lng: lng };
+                        marker._ntRailAlongM = row.alongM;
+                        marker._ntRailRouteId = String(row.routeId || '');
+                        marker._ntRailBearing = row.bearing;
+                        marker._ntTrainId = String(trainId);
+                        marker.on('click', function (ev) {
+                            L.DomEvent.stop(ev);
+                            followTrainId = String(trainId);
+                            followUserPannedAway = false;
+                            userFilteredRail = false;
+                            ensureSharedRailLine(row.routeId);
+                            try {
+                                (window.parent || window).postMessage({
+                                    type: 'nt-map-show-tracking-details',
+                                    trainId: trainId,
+                                    routeId: newest.routeId || list[0].routeId || null,
+                                    ping: Object.assign({}, newest, {
+                                        bearing: row.bearing,
+                                        lat: lat,
+                                        lng: lng,
+                                        speedMps: speed,
+                                        motionClass: motionClass,
+                                        accuracy: accuracyValue != null ? accuracyValue : newest.accuracy,
+                                        railDistanceM: railDistanceValue != null ? railDistanceValue : newest.railDistanceM,
+                                        onRails: true,
+                                        fixAt: pingAtValue || newest.fixAt,
+                                        acceptedAt: newest.acceptedAt || pingAtValue,
+                                        at: newest.at || pingAtValue
+                                    }),
+                                    n: n,
+                                    mine: mine
+                                }, '*');
+                            } catch (_) {}
+                        });
                         marker.addTo(ridePingLayer);
                         rideTrainMarkers[trainId] = marker;
-                    } else {
-                        marker.setIcon(icon);
-                        marker.setPopupContent(popupHtml);
                     }
-                    marker._ntRidePopupContext = {
-                        trainId: trainId,
-                        joinId: joinId,
-                        detailsId: detailsId,
-                        sheetId: sheetId,
-                        mine: mine,
-                        station: list[0].station || '',
-                        routeId: list[0].routeId || null
-                    };
-                    interpolateRideMarkerLatLng(marker, [lat, lng], mine || paused);
-                    if (marker.isPopupOpen && marker.isPopupOpen()) {
-                        requestAnimationFrame(function () { bindRideTrainPopupActions(marker); });
-                    }
+                    marker._ntRailBearing = row.bearing;
+                    marker._ntTrainId = String(trainId);
+                    paintLiveTrainIcon(marker, trainId, n, mine, Object.assign({}, newest, { bearing: row.bearing, trackingState: paused ? 'paused' : newest.trackingState }));
+                    marker._ntRidePing = Object.assign({}, newest, {
+                        bearing: row.bearing,
+                        lat: lat,
+                        lng: lng,
+                        speedMps: speed,
+                        motionClass: motionClass,
+                        accuracy: accuracyValue != null ? accuracyValue : newest.accuracy,
+                        railDistanceM: railDistanceValue != null ? railDistanceValue : newest.railDistanceM,
+                        fixAt: pingAtValue || newest.fixAt,
+                        acceptedAt: newest.acceptedAt || pingAtValue,
+                        at: newest.at || pingAtValue
+                    });
+                    marker._ntRideN = n;
+                    marker._ntRideMine = mine;
+                    marker._ntRideGrey = paused;
+                    interpolateRideMarkerLatLng(marker, [lat, lng], paused || motionClass === 'still', {
+                        routeId: newest.routeId || list[0].routeId,
+                        speedMps: speed,
+                        motionClass: motionClass,
+                        lastSeenLabel: newest.lastSeenLabel || newest.station || '',
+                        destination: dest,
+                        destAlong: row.destAlong,
+                        bearing: row.bearing
+                    });
                 });
                 updateStationCallouts(placedTrains);
+                if (pendingFocusTrainId && rideTrainMarkers[pendingFocusTrainId]) {
+                    focusRideTrainNow(pendingFocusTrainId, rideTrainMarkers[pendingFocusTrainId]._ntRailRouteId);
+                } else if (followTrainId && rideTrainMarkers[followTrainId]) {
+                    keepFollowedTrainInView(rideTrainMarkers[followTrainId].getLatLng());
+                }
 
                 Object.keys(rideTrainMarkers).forEach(function (trainId) {
                     if (renderedTrainIds[trainId]) return;
@@ -2997,6 +4471,7 @@
                     delete rideTrainMarkers[trainId];
                 });
 
+                keepHubMarkerSize();
                 loose.forEach(function (p) {
                     const mine = !!p.mine;
                     const marker = L.circleMarker([p.lat, p.lng], {
@@ -3022,19 +4497,35 @@
                     setMapOperatorAuthed(!!data.authed);
                     return;
                 }
+                if (data.type === 'nt-map-save-result') {
+                    if (window.__ntMapSaveWait && data.id && String(data.id) !== String(window.__ntMapSaveWait)) return;
+                    window.__ntMapSaveWait = '';
+                    setEditorStatus(data.ok ? 'Saved.' : 'Could not save. Sign in from the app and try again.', !!data.ok);
+                    if (data.ok && trackEdit && trackEdit.fork && trackEdit.fork.at) {
+                        applyForkLinePreview();
+                    }
+                    return;
+                }
                 if (data.type === 'nt-map-ride-pings') {
+                    if (typeof data.followTrainId === 'string') {
+                        if (data.followTrainId) {
+                            if (data.followTrainId !== followTrainId) {
+                                followTrainId = data.followTrainId;
+                                followUserPannedAway = false;
+                            }
+                        } else if (!pendingFocusTrainId) {
+                            followTrainId = '';
+                        }
+                    }
                     renderRidePingMarkers(data.pings || []);
                     return;
                 }
                 if (data.type === 'nt-map-focus-train' && data.trainId) {
-                    const marker = rideTrainMarkers[String(data.trainId)];
-                    if (marker) {
-                        map.flyTo(marker.getLatLng(), 15, { duration: 1.0 });
-                        marker.openPopup();
-                    }
+                    focusRideTrainNow(data.trainId, data.routeId || '');
                     return;
                 }
                 if (data.type === 'nt-map-focus-route') {
+                    if (followTrainId || pendingFocusTrainId) return;
                     if (isMapTabEmbed() && data.region) {
                         const next = String(data.region).toUpperCase();
                         if (VALID_MAP_REGIONS.includes(next) && next !== currentRegion) {
@@ -3072,6 +4563,18 @@
 
 
             // --- DYNAMIC TEXT RESIZING & PROGRESSIVE DISCLOSURE ---
+            function keepHubMarkerSize() {
+                stationLayerItems.forEach((item) => {
+                    if (!item.marker || typeof item.marker.setRadius !== 'function') return;
+                    const major = !!item.isMajor;
+                    item.marker.setRadius(major ? 5 : 2.5);
+                    item.marker.setStyle({
+                        color: major ? '#1f2937' : '#3b82f6',
+                        weight: major ? 2 : 1
+                    });
+                });
+            }
+
             function updateTooltipSize() {
                 const zoom = map.getZoom();
                 const allTooltips = document.querySelectorAll('.tooltip-dynamic');
@@ -3089,6 +4592,7 @@
 
             var zoomGlyphTimer = 0;
             map.on('zoomend', function () {
+                keepHubMarkerSize();
                 updateTooltipSize();
                 if (!lastRidePings.length) return;
                 if (zoomGlyphTimer) clearTimeout(zoomGlyphTimer);

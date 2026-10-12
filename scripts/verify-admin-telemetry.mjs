@@ -88,6 +88,7 @@ ok(adminJs.includes('See ${Admin._deTripWindowStep') || adminJs.includes('more b
 ok(adminJs.includes("`${entry.origin}|${entry.destination}|${entry.dayType || ''}|${entry.region || ''}`"), 'trip corridor key includes day type');
 ok(adminJs.includes('_deTripWindowSize || 80') || adminJs.includes('_deTripWindowSize = Admin._deTripWindowSize || 80'), 'first Firebase window is 80 batches');
 ok(adminJs.includes('bindTripScrollLoadMore') && adminJs.includes('loadMoreTripCorridors'), 'trip list loads more on scroll');
+ok(adminJs.includes("if (Admin._deActiveTab !== 'trips') return") && adminJs.includes('appendTripCorridorCards'), 'trip infinite-scroll does not paint onto Fares');
 ok(adminJs.includes('_deTripPageSize = 40') || adminJs.includes('_deTripPageSize || 40'), 'first paint is 40 corridor cards');
 ok(adminJs.includes('parseJoinedAtFromUserId'), 'usr_ epoch suffix is first-install time');
 {
@@ -103,6 +104,31 @@ ok(adminJs.includes('parseJoinedAtFromUserId'), 'usr_ epoch suffix is first-inst
     ok(parseJoined('Anonymous / Legacy') == null, 'legacy ids have no join time');
 }
 ok(adminJs.includes('userIdJoinHintHtml'), 'admin shows an i next to user ids');
+ok(adminJs.includes('openCommuterPeek'), 'i opens a user sheet modal');
+ok(adminJs.includes("modal.id = 'admin-commuter-peek'"), 'user sheet modal id is admin-commuter-peek');
+ok(adminJs.includes('collectCommuterPeek'), 'user sheet uses cheap per-id reads');
+{
+    const peekAt = adminJs.indexOf('collectCommuterPeek: async');
+    const peekSlice = adminJs.slice(peekAt, peekAt + 9000);
+    ok(peekSlice.includes('sys_logs/fare_votes.json'), 'user sheet loads fare votes when the cache is cold');
+    ok(peekSlice.includes('sys_logs/routing_fails.json'), 'user sheet loads routing fails when the cache is cold');
+    ok(peekSlice.includes('sys_logs/fare_ticket_photos.json'), 'user sheet loads ticket photos when the cache is cold');
+    ok(peekSlice.includes('fareLine') && peekSlice.includes('Fares'), 'user sheet always names fares');
+    ok(adminJs.includes('peek.fareLine') && adminJs.includes('peek.crashLine'), 'user sheet always prints fares and crashes');
+}
+{
+    const exportAt = adminJs.indexOf('Admin.exportCrashesTxt = () => {');
+    const exportEnd = adminJs.indexOf('if (exportBtn) exportBtn.onclick', exportAt);
+    const exportSlice = adminJs.slice(exportAt, exportEnd);
+    ok(exportSlice.includes('Line:') && exportSlice.includes('Script:') && exportSlice.includes('Stack:'), 'crash export always prints line, script, and stack');
+    ok(exportSlice.includes('(not recorded)'), 'crash export marks a missing script address');
+}
+{
+    const uiJs = readFileSync(new URL('../src/lib/ui.js', import.meta.url), 'utf8');
+    ok(!uiJs.includes('Invalid or unexpected token'), 'Invalid or unexpected token is still reported');
+}
+ok(adminJs.includes('Look up more'), 'user sheet can hand off to User Trust search');
+ok(!/showJoinedHint:[\s\S]{0,180}showToast\(label/.test(adminJs), 'i no longer only toasts the join date');
 ok(adminJs.includes('de-filter-day') && adminJs.includes('All days'), 'day-type filter stays off (All days)');
 ok(adminJs.includes('expandTripCorridorHits'), 'hit history is lazy-loaded on expand');
 ok(adminJs.includes('_deTripPageSize'), 'corridor list is paginated');
@@ -116,9 +142,12 @@ ok(!/bindDeSwipe\(\s*document\.getElementById\('de-list'\)\s*\)/.test(adminJs), 
 ok(adminJs.includes('fetchDiagJson:'), 'Admin.fetchDiagJson is hoisted');
 ok(adminJs.includes('normalizeStationName'), 'Deep Scan dest checks use normalizeStationName');
 ok(adminJs.includes('Expected — no Saturday service'), 'placeholder Saturday sheets are expected, not errors');
-ok(adminJs.includes('Joined:') && adminJs.includes('Last seen:'), 'device lookup shows joined + last seen');
-ok(adminJs.includes('Linked devices:'), 'device lookup lists linked device ids');
+ok(adminJs.includes("metricRow('Joined'") && adminJs.includes("metricRow('Last activity'") && adminJs.includes('joinedLabel'), 'device lookup splits joined and last activity');
+ok(adminJs.includes("'Linked devices'"), 'device lookup lists linked device ids');
 ok(adminJs.includes('sys_logs/trip_plan_users'), 'admin reads trip_plan_users index');
+ok(adminJs.includes('feedbackDeviceHasTripPlans'), 'feedback list can mark devices that have trip plans');
+ok(adminJs.includes("title=\"Has trip plans\""), 'trip-plans presence uses the same scan-icon row as email and phone');
+ok(adminJs.includes("Admin.icon('map', 'w-3 h-3')"), 'trip-plans indicator is the map SVG at mail/phone size');
 {
     const rules = readFileSync(join(ROOT, 'firebase-database.rules.json'), 'utf8');
     ok(rules.includes('"trip_plan_users"'), 'rules allow trip_plan_users index');
@@ -139,7 +168,11 @@ ok(adminJs.includes('sys_logs/trip_plan_users'), 'admin reads trip_plan_users in
 }
 ok(adminJs.includes('confirmClearDb'), 'Clear DB uses a second confirmation popup');
 ok(adminJs.includes("telemetryRange === 'ALL'"), 'admin ALL range does not use the 7-point slicer');
-ok(adminJs.includes('Unique users by last selected region'), 'regional modal says unique users, not a partition of TODAY');
+ok(adminJs.includes('Users and sessions by region on the hit'), 'regional modal names users and sessions on the hit');
+ok(adminJs.includes('People today:'), 'regional modal calls the total people, not a unique split');
+ok(adminJs.includes('No region on the hit'), 'missing region is hits with no region, not people with no region');
+ok(adminJs.includes('The cards are not a split of people today.'), 'regional note says the cards overlap');
+ok(workerJs.includes('unsetUsers'), 'worker keeps hits with no region separate from unrecognised values');
 ok(adminJs.includes("chartPanel.id = 'telemetry-chart-panel'"), 'telemetry chart is an admin drill subview');
 ok(adminJs.includes("Admin.deepLinkToPanel('telemetry-chart-panel')"), 'chart enters through history-aware admin navigation');
 ok(adminJs.includes("chartPanel.dataset.adminSubview = 'true'"), 'analytics subview is excluded from the admin tile grid');
@@ -153,7 +186,9 @@ ok(adminJs.includes('100dvh') && adminJs.includes('landscape:'), 'analytics dril
     const astroConfig = readFileSync(join(ROOT, 'astro.config.mjs'), 'utf8');
     ok(!astroConfig.includes("orientation: 'portrait'"), 'PWA manifest no longer locks portrait orientation');
 }
-ok(adminJs.includes('data-gsm-tab'), 'Global State Monitor has feature tabs');
+ok(adminJs.includes('data-gsm-tab'), 'State Monitor has feature tabs');
+ok(adminJs.includes('State Monitor'), 'State Monitor title is State Monitor');
+ok(adminJs.includes('gsm-sort'), 'State Monitor has a sort control');
 ok(adminJs.includes("id: 'grid'") && adminJs.includes("id: 'exclusions'"), 'GSM tabs include grid notices and exclusions');
 ok(adminJs.includes("maintModeBody?.classList.add('hidden')"), 'maintenance accordion is forced closed');
 ok(adminJs.includes('collapseSystemControlAccordions'), 'System Control reopens with every accordion closed');
@@ -184,6 +219,45 @@ ok(adminJs.includes('Admin.saveRouteFare'), 'Fares tab can confirm a corridor lo
 ok(adminJs.includes('config/route_fares/'), 'Confirm writes config/route_fares/$routeId');
 ok(adminJs.includes('de-fare-ticket'), 'vote cards can show a ticket thumb');
 ok(adminJs.includes('fare_ticket_photos'), 'Fares tab reads ticket photo sidecars');
+ok(adminJs.includes("Admin._deSortMode = Admin._deSortMode || 'recent'"), 'planner telemetry starts on recent sort');
+ok(!adminJs.includes("Admin._deSortMode = 'count';"), 'opening planner telemetry does not reset sort to count');
+ok(adminJs.includes('expandFailCorridorHits'), 'Fails expand contributor user ids on click');
+ok(adminJs.includes('stackedContributorRowHtml'), 'planner contributor rows stack id above date');
+ok(!adminJs.includes("(h.userId || '').slice(0, 14)"), 'trip hit history does not slice user ids');
+ok(!/font-mono text-gray-500 truncate inline-flex[\s\S]{0,80}esc\(h\.userId\)/.test(adminJs), 'fail contributors no longer truncate user id against the date');
+ok(adminJs.includes('inferCommuterDefaultRoute'), 'fares infer a default/saved route');
+ok(adminJs.includes('Route: ${secureEscape(defaultRouteLabel)}'), 'Fares cards paint default route');
+ok(adminJs.includes('commuterLabelHtml'), 'admin paints feedback alias instead of raw user id');
+ok(adminJs.includes('ensureAliasesLoaded'), 'aliases load without opening Feedback first');
+ok(adminJs.includes('openFeedbackForDevice'), 'user lookup can jump to the feedback thread');
+ok(adminJs.includes('startFeedbackChat'), 'user lookup can start a feedback chat');
+ok(adminJs.includes('collectCommuterProfile'), 'user lookup builds a profile from known user data');
+ok(adminJs.includes('ut-open-chat-btn'), 'user lookup has Open chat');
+ok(adminJs.includes('ut-open-trips-btn'), 'user lookup has Open trip plans');
+ok(adminJs.includes('ut-open-fares-btn'), 'user lookup has Open fare votes');
+ok(adminJs.includes('ut-open-fails-btn'), 'user lookup has Open fails');
+ok(adminJs.includes('ut-open-crashes-btn'), 'user lookup has Open crashes');
+ok(adminJs.includes('ut-open-bans-btn'), 'user lookup has Open bans');
+ok(adminJs.includes('ut-start-chat-btn'), 'user lookup has Start chat / Reply');
+ok(adminJs.includes('openPlannerTelemetryForDevice'), 'user lookup can jump to planner telemetry for a device');
+ok(adminJs.includes('fareTicketUrls'), 'user lookup counts ticket photos on the profile');
+ok(adminJs.includes('mailto:'), 'user lookup makes emails clickable');
+ok(adminJs.includes('Open ticket'), 'fare cards link out to the uploaded ticket image');
+ok(adminJs.includes('Quoted Single'), 'fare cards spell that the board quote is Single');
+ok(adminJs.includes("'ticketType', 'quotedTicketType'"), 'CSV export includes ticketType and quotedTicketType');
+ok(adminJs.includes('Collect-only for now'), 'weekly/monthly corrections are collect-only in admin');
+ok(adminJs.includes('_alertLiveCountGen'), 'alert composer live-count fetch uses a generation guard');
+ok(adminJs.includes('Checking live posts on'), 'alert composer paints audience labels before the live-count fetch returns');
+ok(adminJs.includes('expandFareContributor'), 'Fares expand contributor user ids on click');
+ok(adminJs.includes('de-fail-contributors'), 'fail cards have a contributor panel');
+ok(adminJs.includes('de-fare-contributors'), 'fare cards have a contributor panel');
+ok(adminJs.includes('failCorridorKey'), 'fail corridor key matches origin dest reason day');
+ok(adminJs.includes('item.versions') && adminJs.includes('No version'), 'fail cards show the app version');
+ok(adminJs.includes('h.appVersion'), 'fail contributors show the app version');
+ok(/class="hidden divide-y[\s\S]{0,180}\$\{resolveAllHtml\}/.test(adminJs), 'Resolve All sits inside the opened crash log');
+ok(!/flex items-center shrink-0">\s*\$\{resolveAllHtml\}/.test(adminJs), 'Resolve All is not on the collapsed crash header');
+ok(adminJs.includes('App: ${appVersionHtml}'), 'crash app version is a dedicated chip field');
+ok(adminJs.includes('data-admin-changelog="${safeAppVersion}"'), 'crash app version opens build notes');
 {
     const bridge = readFileSync(join(ROOT, 'src/lib/admin-bridge.js'), 'utf8');
     ok(bridge.includes('window.plannerFareOverrideKey'), 'admin bridge exposes override keys');

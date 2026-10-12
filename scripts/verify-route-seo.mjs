@@ -12,9 +12,10 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { MANUAL_GRID_ORDER, orderGridTrainIds } from '../src/lib/grid-order.js';
-import { ROUTES } from '../src/lib/config.js';
+import { APP_VERSION, ROUTES } from '../src/lib/config.js';
 import {
   listFeaturedSeoRoutes,
+  listSeoRoutes,
   getSeoRouteBySlug,
   stationLabel,
   slugifyStation,
@@ -23,9 +24,12 @@ import {
   wcRoutesWithHolidaySheets,
   WC_PUBLIC_HOLIDAYS_PATH,
   WC_PUBLIC_HOLIDAYS_SLUG,
+  SEO_INSIGHTS,
+  CORRIDOR_INSIGHTS,
 } from '../src/lib/seo-routes.js';
 import {
   buildRouteSeoTimetable,
+  buildWcPublicHolidayTimetables,
   bidirectionalTitle,
   corridorPairLabel,
   directionPhrase,
@@ -41,8 +45,11 @@ import {
   buildRouteBoardAppPath,
   corridorStationList,
   seoTrainIdSample,
+  seoRouteDistanceKm,
+  seoRouteDistanceLabel,
   SEO_SCHEDULE_YEAR,
 } from '../src/lib/seo-timetable.js';
+import { listSeoAppPreviews, seoPreviewImageAbsPath, getSeoPlannerPreview, seoPlannerPreviewImageAbsPath } from '../src/lib/seo-app-previews.js';
 import { extractGridPreview } from '../workers/nexttrain-og/src/schedule.js';
 
 const DIST = process.argv[2] || 'dist';
@@ -120,6 +127,35 @@ for (const { id, slug } of FLAGSHIP) {
   }
 }
 
+{
+  const previews = listSeoAppPreviews();
+  const seoRoutes = listSeoRoutes();
+  if (previews.length !== seoRoutes.length) {
+    fail(`seo app previews (${previews.length}) must cover every SEO route (${seoRoutes.length})`);
+  }
+  const pienPreview = previews.find((item) => item.routeId === 'pta-pien');
+  if (!pienPreview || !/devenish/i.test(pienPreview.stationRaw || '')) {
+    fail('Pienaarspoort preview station must stay Devenish Street');
+  }
+  for (const preview of previews) {
+    if (!preview.stationRaw) fail(`${preview.routeId} preview is missing a station`);
+    if (!preview.image.includes(`${preview.routeId}-live-board.webp`)) {
+      fail(`${preview.routeId} preview image path must be route-specific`);
+    }
+    const imagePath = seoPreviewImageAbsPath(preview.routeId);
+    if (!existsSync(imagePath)) fail(`missing SEO preview image ${imagePath}`);
+  }
+  const plannerPreview = getSeoPlannerPreview();
+  if (!plannerPreview || plannerPreview.id !== 'pretoria-johannesburg') {
+    fail('planner preview id must stay pretoria-johannesburg');
+  }
+  if (!plannerPreview.image.includes('pretoria-johannesburg-trip-plan.webp')) {
+    fail('planner preview image path must be trip-plan specific');
+  }
+  const plannerImage = seoPlannerPreviewImageAbsPath();
+  if (!existsSync(plannerImage)) fail(`missing SEO planner preview image ${plannerImage}`);
+}
+
 const featured = listFeaturedSeoRoutes();
 if (featured.length < 6) fail(`expected ≥6 featured SEO routes, found ${featured.length}`);
 if (!featured.some((e) => e.route.id === 'jhb-soweto')) fail('featured list must include Naledi (jhb-soweto)');
@@ -172,7 +208,7 @@ if (directionPhrase('Pretoria', 'Mabopane') !== 'Pretoria to Mabopane') {
   fail('directionPhrase should be "Pretoria to Mabopane"');
 }
 const docTitle = routeDocumentTitle('Pretoria', 'Mabopane');
-if (!docTitle.startsWith(`Pretoria to Mabopane ${SEO_SCHEDULE_YEAR} Train Times |`)) {
+if (docTitle !== `Pretoria to Mabopane ${SEO_SCHEDULE_YEAR} Metrorail Train Times | Next Train`) {
   fail(`document title is "${docTitle}"`);
 }
 if (docTitle.includes('Mabopane to Pretoria')) {
@@ -186,6 +222,10 @@ if (!meta.includes('Pretoria to Mabopane')) fail(`meta must use in-app route nam
 if (!/schedule/i.test(meta)) fail(`meta must include schedule: "${meta}"`);
 if (!/PRASA/i.test(meta) || !/Metrorail/i.test(meta)) fail(`meta must name PRASA and Metrorail: "${meta}"`);
 if (!/Updated/i.test(meta) || !/Current trains/i.test(meta)) fail(`meta must say updated/current: "${meta}"`);
+if (!/^View and download the Pretoria to Mabopane/.test(meta)) {
+  fail(`meta must lead with view and download: "${meta}"`);
+}
+if (!/works offline/i.test(meta)) fail(`meta must mention offline: "${meta}"`);
 if (!meta.includes('1810') || !meta.includes('1818')) fail(`meta must list train numbers: "${meta}"`);
 if (!/ticket prices/i.test(meta) && !/Max adult single/i.test(meta)) {
   fail(`meta must mention ticket prices: "${meta}"`);
@@ -210,6 +250,12 @@ if (!/Cape Town to Bellville/i.test(capeMeta) || !/train schedule/i.test(capeMet
 
 {
   const indexAstro = readFileSync(new URL('../src/pages/index.astro', import.meta.url), 'utf8');
+  if (!indexAstro.includes("const pageTitle = 'Metrorail Next Train | 2026 PRASA Train Times and Schedules';")) {
+    fail('homepage document title must stay Metrorail Next Train | 2026 PRASA Train Times and Schedules');
+  }
+  if (!indexAstro.includes('View and download 2026 PRASA Metrorail train timetables for Gauteng, Cape Town, Durban and East London.')) {
+    fail('homepage meta description must stay the 2026 PRASA timetable sentence');
+  }
   const faqLine = 'Commuters can send a delay note, and some testers can share a trip location.';
   if (!indexAstro.includes(faqLine)) {
     fail('homepage FAQ JSON-LD must include the delay-note sentence');
@@ -254,6 +300,9 @@ if (!gridPathB.includes('r=GP')) fail(`live grid path must include region: ${gri
 const boardPath = buildRouteBoardAppPath('herc-koed');
 if (!boardPath.includes('rt=herc-koed') || !boardPath.includes('r=GP') || boardPath.includes('v=g')) {
   fail(`live board path must be ?rt=herc-koed&r=GP without grid view: ${boardPath}`);
+}
+if (!boardPath.includes('src=seo') || !gridPathB.includes('src=seo')) {
+  fail('SEO Open board/grid paths must tag src=seo so deep_link_open is skipped');
 }
 const gridPathSa = buildRouteGridAppPath('pta-kempton', 'A', 'saturday');
 if (!gridPathSa.includes('d=sa') || gridPathSa.includes('dir=')) {
@@ -306,6 +355,17 @@ if (!gridPathSa.includes('d=sa') || gridPathSa.includes('dir=')) {
   if (!nye || !nye.runs || nye.dayType !== 'public_holiday') {
     fail('New Year\'s Day must use the Western Cape Public Holiday timetable');
   }
+  if (nye.label !== '01 January 2026' || nye.iso !== '2026-01-01') {
+    fail(`New Year's Day display must be 01 January 2026, got "${nye.label}"`);
+  }
+  const pubs = buildWcPublicHolidayTimetables();
+  if (!pubs.some((row) => row.id === 'ct-bellv' && row.a && row.b)) {
+    fail('Cape Town to Bellville must keep a Public Holiday timetable');
+  }
+  const emptyIds = ['bellville-mutual', 'ct-malm', 'ct-nolu', 'ct-well', 'eerst-dtoit'];
+  const leaked = pubs.filter((row) => emptyIds.includes(row.id)).map((row) => row.id);
+  if (leaked.length) fail(`public holiday page must omit routes without times: ${leaked.join(', ')}`);
+  if (pubs.some((row) => !row.a && !row.b)) fail('public holiday timetable rows must have at least one direction');
   const womens = days.find((d) => d.md === '08-09');
   if (!womens || womens.runs) fail("National Women's Day 2026 must be no service");
 
@@ -326,6 +386,20 @@ if (!gridPathSa.includes('d=sa') || gridPathSa.includes('dir=')) {
   if (!holidayPage.includes('Western Cape public holiday timetable')) {
     fail('WC holiday landing missing H1 copy');
   }
+  if (!holidayPage.includes('aria-label="Public holiday timetables"')) {
+    fail('WC holiday landing needs a jump list for the timetables');
+  }
+  if (!holidayPage.includes('days with a Public Holiday timetable') || !holidayPage.includes('days with no trains')) {
+    fail('WC holiday calendar sections must stay');
+  }
+  const navAt = holidayPage.indexOf('aria-label="Public holiday timetables"');
+  const daysAt = holidayPage.indexOf('days with a Public Holiday timetable');
+  if (navAt < 0 || daysAt < 0 || navAt > daysAt) {
+    fail('public holiday jump list must sit above the calendar');
+  }
+  if (!holidayPage.includes('Saturday timetable') || !holidayPage.includes('Check Next Train')) {
+    fail('WC holiday landing must say some holidays use Saturday and to check Next Train');
+  }
   if (!holidayPage.includes('seoPageType="region_holidays"')) {
     fail('WC holiday landing must tag seoPageType region_holidays');
   }
@@ -344,9 +418,52 @@ if (!gridPathSa.includes('d=sa') || gridPathSa.includes('dir=')) {
   if (!routePage.includes('<SeoAppPreview routeId={route.id} href={liveBoardHref} />')) {
     fail('route landings must select app previews by route id');
   }
+  if (!routePage.includes('liveGridSaturdayA') || !routePage.includes('>Download</a>')) {
+    fail('route landings must put a Download control on each timetable');
+  }
+  if (!routePage.includes('To Download this time table, Open Next Train online')) {
+    fail('route landings must keep the existing download sentence');
+  }
+  if (!routePage.includes('<SeoNetworkMap')) {
+    fail('route landings must show the static network map');
+  }
   const appPreview = readFileSync(new URL('../src/components/SeoAppPreview.astro', import.meta.url), 'utf8');
-  if (!appPreview.includes("'pta-pien'") || !appPreview.includes('pta-pien-live-board.webp')) {
-    fail('app preview catalog must map the Pienaarspoort screenshot only to pta-pien');
+  if (!appPreview.includes('getSeoAppPreview') || !appPreview.includes('preview.image')) {
+    fail('app preview catalog must map screenshots by route id');
+  }
+  if (!appPreview.includes('getSeoPlannerPreview') || !appPreview.includes("previewId === 'pretoria-johannesburg'")) {
+    fail('app preview must render the Pretoria-JHB trip-plan screenshot');
+  }
+  const corridorPage = readFileSync(new URL('../src/pages/corridors/[slug].astro', import.meta.url), 'utf8');
+  if (!corridorPage.includes('previewId="pretoria-johannesburg"')) {
+    fail('Pretoria-JHB corridor must embed the trip-plan preview');
+  }
+  if (!corridorPage.includes('isPtaJhb ? ptaJhbPlannerHref')) {
+    fail('Pretoria-JHB corridor Open CTA must go to the planner, not ?region=');
+  }
+  if (!corridorPage.includes('<SeoNetworkMap')) {
+    fail('corridor landings must show the static network map');
+  }
+  const mapPreview = readFileSync(new URL('../src/components/SeoNetworkMap.astro', import.meta.url), 'utf8');
+  if (!mapPreview.includes('loading="lazy"') || mapPreview.includes('fetchpriority')) {
+    fail('SEO map preview must be lazy and must not set fetchpriority');
+  }
+  if (!mapPreview.includes('Interactive map ·') || !mapPreview.includes('map.html?region=')) {
+    fail('SEO map preview must link to the Leaflet map page');
+  }
+  if (mapPreview.includes('map-app.js') || mapPreview.includes('leaflet')) {
+    fail('SEO map preview must not load Leaflet');
+  }
+  const gridHandoff = readFileSync(new URL('../src/lib/timetable-grid.js', import.meta.url), 'utf8');
+  if (!gridHandoff.includes("seoHandoff ? 'Opening Next Train'") || !gridHandoff.includes("safeStorage.setItem('userRegion', route.region)") || !gridHandoff.includes('safeStorage.setItem(defaultKey, link.routeId)')) {
+    fail('SEO grid handoff must pin the route and toast Opening Next Train');
+  }
+  if (!gridHandoff.includes('if (!seoHandoff) showToast(`Opened shared route:')) {
+    fail('shared route toast must stay off the SEO handoff');
+  }
+  const welcomeSrc = readFileSync(new URL('../src/components/WelcomeModal.astro', import.meta.url), 'utf8');
+  if (!welcomeSrc.includes('hasInboundShareIntent()')) {
+    fail('Welcome must skip when a planner/route snapshot is inbound');
   }
   if (!appPreview.includes('sm:grid-cols-') || !appPreview.includes('max-w-[15rem]')) {
     fail('app preview must adapt from stacked mobile to capped desktop columns');
@@ -476,15 +593,19 @@ if (!gridPathSa.includes('d=sa') || gridPathSa.includes('dir=')) {
     const towardB = tt.weekday.b;
     const towardA = tt.weekday.a;
     const durbanCount = (towardB?.stations || []).filter((s) => s === 'Durban').length;
-    if (!towardB?.stations?.includes('Durban Yard')) fail('kzn-umlazi weekday-B missing Durban Yard');
+    // Oct 2026 dump: DURBAN YARD is coordinates-only (no published clocks). SEO
+    // grids keep clocked passenger stops only; serves copy still names the Yard.
+    if (towardB?.stations?.includes('Durban Yard')) {
+      fail('kzn-umlazi weekday-B should not list unclocked Durban Yard as a passenger stop');
+    }
     if (!towardB?.stations?.includes('Durban')) fail('kzn-umlazi weekday-B missing Durban');
     if (durbanCount !== 1) fail(`kzn-umlazi weekday-B should have one Durban row, got ${durbanCount}`);
     if (towardB.last === '11:22') fail('kzn-umlazi first/last still uses Durban Yard origin last 11:22');
-    if (towardB.first !== '6:15' || towardB.last !== '21:17') {
-      fail(`kzn-umlazi dest-row first/last should be 6:15/21:17, got ${towardB.first}/${towardB.last}`);
+    if (towardB.first !== '5:37' || towardB.last !== '19:40') {
+      fail(`kzn-umlazi origin first/last should be 5:37/19:40 at Durban, got ${towardB.first}/${towardB.last}`);
     }
-    if (towardA?.first !== '5:15' || towardA?.last !== '21:45') {
-      fail(`kzn-umlazi weekday-A dest Durban first/last should be 5:15/21:45, got ${towardA?.first}/${towardA?.last}`);
+    if (towardA?.first !== '3:31' || towardA?.last !== '19:51') {
+      fail(`kzn-umlazi weekday-A origin first/last should be 3:31/19:51 at Umlazi, got ${towardA?.first}/${towardA?.last}`);
     }
   }
 }
@@ -509,6 +630,82 @@ if (!gridPathSa.includes('d=sa') || gridPathSa.includes('dir=')) {
   }
   const metaPien = routeMetaDescription('Pretoria', 'Pienaarspoort', 'Gauteng', { nearby: entry.seed.nearby });
   if (!/Loftus/i.test(metaPien)) fail(`pta-pien meta should reuse nearby clause: "${metaPien}"`);
+}
+
+{
+  const dashRe = /[\u2013\u2014]/;
+  const insightExpect = [
+    { id: 'kzn-bridgecity', phrases: ["Duff's Road", 'kwaMashu', 'Wednesday'] },
+    { id: 'kzn-catoridge', phrases: ['Transnet Freight Rail', 'first Monday'] },
+    { id: 'kzn-umlazi', phrases: ['15 km/h', 'Umlazi', 'Reunion'] },
+    { id: 'kzn-crossmoor', phrases: ['30 km/h', 'Crossmoor', 'Merebank'] },
+    { id: 'kzn-pinetown', phrases: ['30 km/h', 'Pinetown', 'Rossburgh'] },
+    { id: 'kzn-winklespruit', phrases: ['off-peak', 'planned maintenance'] },
+    { id: 'jhb-rand', phrases: ['shuttle', 'Roodepoort', 'Randfontein', 'Langlaagte', 'manual authorisation'] },
+    { id: 'jhb-soweto', phrases: ['Naledi', 'Langlaagte', 'Croesus', 'Kwesine'] },
+    { id: 'pta-dewildt', phrases: ['Hercules', 'Pretoria West', 'Marabastad', 'testing new sets'] },
+    { id: 'pta-pien', phrases: ['Koedoespoort', 'Mamelodi Gardens', 'trip planner'] },
+    { id: 'pta-saul', phrases: ['15 minutes', 'Saulsville'] },
+    { id: 'jhb-midway', phrases: ['Lenz', '2026', 'Vereeniging', 'Croesus', 'Lenasia'] },
+    { id: 'pta-kempton', phrases: ['Irene', '0618', '0619', 'Blue Train', 'Rovos Rail', 'sinkhole'] },
+    { id: 'pta-irene', phrases: ['Pretoria to Kempton Park', 'sinkhole', 'dolomite'] },
+  ];
+  for (const { id, phrases } of insightExpect) {
+    const text = SEO_INSIGHTS[id];
+    if (!text) {
+      fail(`SEO_INSIGHTS['${id}'] missing`);
+      continue;
+    }
+    if (dashRe.test(text)) fail(`SEO_INSIGHTS['${id}'] must not use em or en dashes`);
+    for (const phrase of phrases) {
+      if (!text.includes(phrase)) fail(`SEO_INSIGHTS['${id}'] must mention "${phrase}"`);
+    }
+    const seeded = listSeoRoutes().find((r) => r.route.id === id);
+    if (!seeded?.seed?.insight) fail(`${id} seed.insight missing`);
+    else if (seeded.seed.insight !== text) fail(`${id} seed.insight should match SEO_INSIGHTS`);
+  }
+  const corridorText = CORRIDOR_INSIGHTS['gauteng-pretoria-jhb-line'];
+  if (!corridorText) fail('CORRIDOR_INSIGHTS missing gauteng-pretoria-jhb-line');
+  else {
+    if (dashRe.test(corridorText)) fail('Pretoria-JHB corridor insight must not use em or en dashes');
+    if (!/three-train/i.test(corridorText)) fail('Pretoria-JHB corridor insight must mention three-train');
+    if (!/Germiston/i.test(corridorText) || !/Kempton Park/i.test(corridorText)) {
+      fail('Pretoria-JHB corridor insight must mention Germiston and Kempton Park');
+    }
+    if (!/trip planner/i.test(corridorText)) fail('Pretoria-JHB corridor insight must mention trip planner');
+  }
+  const pienKm = seoRouteDistanceKm(ROUTES['pta-pien']);
+  const pienLabel = seoRouteDistanceLabel(pienKm);
+  if (pienKm == null || pienKm < 20 || pienKm > 35) {
+    fail(`pta-pien distance should be ~26.6 km along published stops, got ${pienKm}`);
+  }
+  if (!pienLabel || !/^\d+\.\d km along published stops$/.test(pienLabel)) {
+    fail(`pta-pien distance label should be "{n.n} km along published stops", got "${pienLabel}"`);
+  }
+  if (/\b\d+(\.\d+)? km\b/.test(SEO_INSIGHTS['pta-pien'] || '')) {
+    fail('pta-pien insight must not include the calculated distance');
+  }
+}
+
+{
+  const sitemapPath = new URL('../public/sitemap.xml', import.meta.url);
+  if (!existsSync(sitemapPath)) fail('public/sitemap.xml missing');
+  else {
+    const xml = readFileSync(sitemapPath, 'utf8');
+    const today = new Date().toISOString().slice(0, 10);
+    if (!xml.includes(`<lastmod>${today}</lastmod>`)) {
+      fail(`sitemap lastmod should be ${today}`);
+    }
+    if (!xml.includes(`App version: ${APP_VERSION}`)) {
+      fail(`sitemap should name app version ${APP_VERSION}`);
+    }
+    if (!xml.includes(`lastmod: ${today}`)) {
+      fail(`sitemap comment lastmod should be ${today}`);
+    }
+    if (!xml.includes('https://nexttrain.co.za/corridors/gauteng-pretoria-jhb-line.html')) {
+      fail('sitemap missing Pretoria-JHB corridor URL');
+    }
+  }
 }
 
 if (existsSync(DIST)) {
@@ -547,8 +744,17 @@ if (existsSync(DIST)) {
     if (!html.includes('data-seo-fares') || !html.includes('Maximum fares') || !html.includes('Weekly Mon–Fri')) {
       fail('Naledi route HTML missing the max fare table');
     }
-    if (!html.includes('Open Next Train · Gauteng')) {
-      fail('Naledi route HTML missing header Open Next Train · Gauteng');
+    if (!html.includes('40% off') || !html.includes('50% off') || !html.includes('Scholars in uniform')) {
+      fail('Naledi fare table should mention 40% adult off-peak and 50% scholar/pensioner/veteran');
+    }
+    if (!html.includes('09:30 to 14:30')) {
+      fail('Naledi fare table should keep the 09:30 to 14:30 off-peak window');
+    }
+    if (!/Langlaagte/.test(html) || !/Croesus/.test(html)) {
+      fail('Naledi route HTML missing Langlaagte / Croesus through-train note');
+    }
+    if (html.includes('Open Next Train · Gauteng')) {
+      fail('Naledi route HTML should not put Open Next Train · Gauteng in the header');
     }
     if (html.includes('seo-theme-toggle') || html.includes('SeoThemeToggle')) {
       fail('Naledi route HTML must not include the SEO dark-mode toggle');
@@ -593,8 +799,24 @@ if (existsSync(DIST)) {
   if (!indexHtml.includes('PRASA Train Times')) {
     fail('homepage title should include PRASA Train Times');
   }
-  if (!/Updated 2026 PRASA Metrorail train times and schedules/i.test(indexHtml)) {
-    fail('homepage meta should lead with updated PRASA Metrorail train times and schedules');
+  if (!/View and download 2026 PRASA Metrorail train timetables for Gauteng, Cape Town, Durban and East London/i.test(indexHtml)) {
+    fail('homepage meta should lead with view and download PRASA Metrorail timetables');
+  }
+  if (!/works offline/i.test(indexHtml) || !/ticket prices/i.test(indexHtml)) {
+    fail('homepage meta should mention offline and ticket prices');
+  }
+  const homepageMeta = [];
+  for (const m of indexHtml.matchAll(/<meta\b[^>]*>/gi)) {
+    const tag = m[0];
+    if (!/(?:name|property)="(?:description|og:description|twitter:description)"/i.test(tag)) continue;
+    const content = tag.match(/\bcontent="([^"]*)"/i);
+    if (content) homepageMeta.push(content[1]);
+  }
+  if (!homepageMeta.length) fail('homepage missing description meta');
+  for (const bit of homepageMeta) {
+    if (/live train tracking/i.test(bit)) {
+      fail(`homepage meta must not advertise live train tracking: "${bit}"`);
+    }
   }
   if (!indexHtml.includes('Commuters can send a delay note, and some testers can share a trip location.')) {
     fail('homepage FAQ must mention delay notes and optional trip sharing');
@@ -633,14 +855,20 @@ if (existsSync(DIST)) {
     if (!html.includes('<table')) fail('Kempton route HTML has no <table>');
     if (!html.includes('From Pretoria towards Kempton Park')) fail('Kempton route HTML missing destA-first grid heading');
     if (!html.includes('Open live timetable in Next Train')) fail('Kempton route HTML missing live-board CTA');
-    if ((html.match(/Open live timetable in Next Train/g) || []).length !== 2) {
-      fail('Kempton route HTML should keep exactly two “Open live timetable in Next Train” CTAs');
+    if ((html.match(/Open live timetable in Next Train/g) || []).length !== 1) {
+      fail('Kempton route HTML should keep one “Open live timetable in Next Train” CTA');
     }
     if (html.includes('Download and Share are there.')) {
       fail('Kempton route HTML still has per-grid Download and Share lines');
     }
-    if (!html.includes('Open this weekday sheet in Next Train')) {
-      fail('Kempton route HTML missing the single weekday-sheet app link');
+    if (!html.includes('To Download this time table, Open Next Train online')) {
+      fail('Kempton route HTML missing the download sentence');
+    }
+    if (!html.includes('>Download</a>')) {
+      fail('Kempton route HTML missing a Download button');
+    }
+    if (!html.includes('Interactive map · GP')) {
+      fail('Kempton route HTML missing the map preview link');
     }
     if (!html.includes('v=g') || !html.includes('rt=pta-kempton')) {
       fail('Kempton route HTML missing in-app grid deep link (?rt=&v=g)');
@@ -649,6 +877,16 @@ if (existsSync(DIST)) {
     if (/Fonteine|Kloofsig|Pinedene/.test(html)) fail('Kempton route HTML still lists ghost stations');
     if (!/Irene/.test(html)) fail('Kempton route HTML missing Irene');
     if (!/Kempton Park/.test(html)) fail('Kempton route HTML missing Kempton Park');
+    if (!html.includes('0618') || !html.includes('0619')) fail('Kempton route HTML missing 0618/0619 weekday note');
+    if (!html.includes('Blue Train') || !html.includes('Rovos Rail')) {
+      fail('Kempton route HTML missing Blue Train / Rovos Rail');
+    }
+    if (!/inner stretch/i.test(html) || !/not a separate railway/i.test(html)) {
+      fail('Kempton route HTML must say Pretoria to Irene is a subset of this line');
+    }
+    if (!/sinkhole/i.test(html) || !/dolomite/i.test(html)) {
+      fail('Kempton route HTML missing Centurion sinkhole / dolomite note');
+    }
   }
 
   const umlaziHtmlPath = join(DIST, 'routes/durban-to-umlazi.html');
@@ -657,10 +895,12 @@ if (existsSync(DIST)) {
     if (!html.includes('Durban Yard')) fail('Umlazi route HTML missing Durban Yard');
     if ((html.match(/>Durban</g) || []).length < 1) fail('Umlazi route HTML missing Durban passenger stop');
     if (/last 11:22/.test(html)) fail('Umlazi first/last still shows Yard last 11:22');
-    if (!html.includes('21:17')) fail('Umlazi route HTML missing dest last 21:17');
-    if (!html.includes('join along the line')) fail('Umlazi first/last copy missing joiner note');
+    if (!html.includes('departures from the origin station')) fail('Umlazi first/last copy must name the origin station');
     if (!html.includes('Durban Yard, then the passenger stop at Durban')) {
       fail('Umlazi route HTML missing Durban Yard vs Durban commentary');
+    }
+    if (!html.includes('15 km/h') || !/Reunion/.test(html)) {
+      fail('Umlazi route HTML missing 15 km/h Reunion speed restriction');
     }
   }
 
@@ -672,14 +912,101 @@ if (existsSync(DIST)) {
     if (!html.includes('Mamelodi')) fail('Pienaarspoort HTML missing Mamelodi');
     if (!html.includes('Eersterust')) fail('Pienaarspoort HTML missing Eersterust area');
     if (!html.includes('not in service')) fail('Pienaarspoort HTML missing ghost-station note');
+    if (!html.includes('Koedoespoort')) fail('Pienaarspoort HTML missing Koedoespoort shuttle note');
+    if (!html.includes('Mamelodi Gardens')) fail('Pienaarspoort HTML missing Mamelodi Gardens short working');
+    if (!html.includes('plan=PRETORIA~PIENAARSPOORT')) {
+      fail('Pienaarspoort HTML missing trip planner deep link');
+    }
+    if (!html.includes('>Distance<') && !html.includes('>Distance</')) {
+      fail('Pienaarspoort constants should list Distance');
+    }
+    if (!/km along published stops/.test(html)) {
+      fail('Pienaarspoort constants missing along-published-stops km');
+    }
     if (!html.includes('data-seo-app-preview="pta-pien"')) fail('Pienaarspoort HTML missing its route-specific app preview');
     if (!html.includes('pta-pien-live-board.webp')) fail('Pienaarspoort HTML missing its route-specific screenshot');
+    if (!/Devenish Street/i.test(html)) fail('Pienaarspoort preview alt must name Devenish Street');
   }
-  const mabopaneHtmlPath = join(DIST, 'routes/pretoria-to-mabopane.html');
-  if (existsSync(mabopaneHtmlPath)) {
-    const html = readFileSync(mabopaneHtmlPath, 'utf8');
-    if (html.includes('data-seo-app-preview') || html.includes('pta-pien-live-board.webp')) {
-      fail('Pienaarspoort screenshot must not appear on the Mabopane route page');
+  for (const { seed, route } of listSeoRoutes()) {
+    const htmlPath = join(DIST, `routes/${seed.slug}.html`);
+    if (!existsSync(htmlPath)) continue;
+    const html = readFileSync(htmlPath, 'utf8');
+    if (!html.includes(`data-seo-app-preview="${route.id}"`)) {
+      fail(`${seed.slug} missing data-seo-app-preview="${route.id}"`);
+    }
+    if (!html.includes(`${route.id}-live-board.webp`)) {
+      fail(`${seed.slug} missing ${route.id}-live-board.webp`);
+    }
+    if (route.id !== 'pta-pien' && html.includes('pta-pien-live-board.webp')) {
+      fail(`${seed.slug} must not reuse the Pienaarspoort screenshot`);
+    }
+  }
+
+  const corridorHtmlPath = join(DIST, 'corridors/gauteng-pretoria-jhb-line.html');
+  if (existsSync(corridorHtmlPath)) {
+    const html = readFileSync(corridorHtmlPath, 'utf8');
+    if (!/Pretoria.JHB Line Metrorail routes in Gauteng/.test(html)) {
+      fail('Pretoria-JHB corridor HTML missing the existing blurb');
+    }
+    if (!html.includes('Routes on this line')) fail('Pretoria-JHB corridor HTML missing route list');
+    if (!/no single Pretoria to Johannesburg/i.test(html)) {
+      fail('Pretoria-JHB corridor HTML missing three-train Pretoria to Johannesburg copy');
+    }
+    if (!html.includes('Germiston') || !html.includes('Kempton Park')) {
+      fail('Pretoria-JHB corridor HTML must name Germiston and Kempton Park');
+    }
+    if (!/three-train/i.test(html) || !/trip planner/i.test(html)) {
+      fail('Pretoria-JHB corridor HTML must mention three-train and trip planner');
+    }
+    if (!html.includes('plan=PRETORIA~JOHANNESBURG')) {
+      fail('Pretoria-JHB corridor HTML missing Pretoria to Johannesburg planner link');
+    }
+    if (!html.includes('data-seo-app-preview="pretoria-johannesburg"')) {
+      fail('Pretoria-JHB corridor HTML missing trip-plan screenshot');
+    }
+    if (!html.includes('pretoria-johannesburg-trip-plan.webp')) {
+      fail('Pretoria-JHB corridor HTML missing trip-plan webp');
+    }
+    if (!/Plan Pretoria to Johannesburg/.test(html)) {
+      fail('Pretoria-JHB corridor CTA must say Plan Pretoria to Johannesburg');
+    }
+  }
+
+  const bridgeHtmlPath = join(DIST, 'routes/berea-road-to-bridge-city.html');
+  if (existsSync(bridgeHtmlPath)) {
+    const html = readFileSync(bridgeHtmlPath, 'utf8');
+    if (!/Duff'?s Road|Duff&#39;s Road/.test(html)) fail('Bridge City HTML missing Duff\'s Road direct working');
+    if (!/kwaMashu/i.test(html)) fail('Bridge City HTML missing kwaMashu contrast');
+    if (!/Wednesday/i.test(html)) fail('Bridge City HTML missing Wednesday maintenance');
+  }
+
+  const randHtmlPath = join(DIST, 'routes/johannesburg-to-randfontein.html');
+  if (existsSync(randHtmlPath)) {
+    const html = readFileSync(randHtmlPath, 'utf8');
+    if (!/shuttle/i.test(html) || !/Roodepoort/i.test(html)) {
+      fail('Randfontein HTML missing shuttle / Roodepoort note');
+    }
+    if (!/Langlaagte/.test(html) || !/manual authorisation/.test(html)) {
+      fail('Randfontein HTML missing Langlaagte manual-authorisation note');
+    }
+  }
+
+  const lenzHtmlPath = join(DIST, 'routes/johannesburg-to-lenz.html');
+  if (existsSync(lenzHtmlPath)) {
+    const html = readFileSync(lenzHtmlPath, 'utf8');
+    if (!/Croesus/.test(html) || !/Lenasia/.test(html)) {
+      fail('Lenz HTML missing Croesus / Lenasia turnback note');
+    }
+  }
+
+  const dewHtmlPath = join(DIST, 'routes/pretoria-to-de-wildt.html');
+  if (existsSync(dewHtmlPath)) {
+    const html = readFileSync(dewHtmlPath, 'utf8');
+    if (!/Hercules/.test(html) || !/Marabastad/.test(html) || !/Pretoria West/.test(html)) {
+      fail('De Wildt HTML missing Hercules / Marabastad / Pretoria West connection notes');
+    }
+    if (!/testing new sets/.test(html)) {
+      fail('De Wildt HTML missing off-peak test-train caveat');
     }
   }
 
@@ -692,8 +1019,9 @@ if (existsSync(DIST)) {
       fail('Gauteng network map image must not be wrapped in a map.html link');
     }
     if (!html.includes('Interactive map')) fail('Gauteng region page missing Interactive map control');
-    if (!html.includes('Open Next Train · Gauteng')) {
-      fail('Gauteng region page missing Open Next Train · Gauteng');
+    const gautengHeader = html.match(/<header\b[\s\S]*?<\/header>/i)?.[0] || '';
+    if (gautengHeader.includes('Open Next Train · Gauteng')) {
+      fail('Gauteng region page should not put Open Next Train · Gauteng in the header');
     }
     if (/href="[^"]*western-cape-public-holidays/.test(html)) {
       fail('Gauteng region page must not link a Western Cape public-holiday timetable');

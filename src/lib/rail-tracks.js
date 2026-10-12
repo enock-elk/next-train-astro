@@ -363,7 +363,7 @@ function hopSkipsRouteStop(graph, nodePath, stops, hopIndex, skipM = SKIP_STATIO
     return false;
 }
 
-async function loadRegionBundle(region) {
+export async function loadRegionBundle(region) {
     const key = String(region || 'GP').toUpperCase();
     if (cache.has(key)) return cache.get(key);
 
@@ -393,6 +393,32 @@ async function loadRegionBundle(region) {
         cache.set(key, null);
         return null;
     }
+}
+
+/**
+ * Painted GOLD LineString for one corridor, as [lat, lon][].
+ * Share checks and live snap fall back to this when a train's stop list is thin.
+ */
+export async function paintedPathForRoute(routeId, region = 'GP') {
+    const id = String(routeId || '');
+    if (!id) return null;
+    const bundle = await loadRegionBundle(region);
+    const feature = bundle?.byId?.get(id);
+    if (!feature) return null;
+    const out = [];
+    for (const line of featureLines(feature)) {
+        if (!Array.isArray(line)) continue;
+        for (const pair of line) {
+            if (!pair || pair.length < 2) continue;
+            const lon = Number(pair[0]);
+            const lat = Number(pair[1]);
+            if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+            const prev = out[out.length - 1];
+            if (prev && prev[0] === lat && prev[1] === lon) continue;
+            out.push([lat, lon]);
+        }
+    }
+    return out.length >= 2 ? out : null;
 }
 
 function featureLatLngs(feature) {
@@ -545,6 +571,37 @@ function graphHop(graph, a, b, stops, hopIndex) {
 }
 
 /**
+ * A hop's first stop often still carries the previous leg's route
+ * (Pretoria-Mabopane into Hercules, then Belle Ombre on Mabopane-Belle Ombre).
+ * That route does not list the next station, so the bake is skipped and the
+ * hop becomes a chord. Try each stop's route, then any baked corridor that
+ * actually names both stations.
+ */
+function sliceHopOnKnownRoutes(byId, a, b) {
+    if (!byId) return null;
+    const tried = new Set();
+    const tryId = (routeId) => {
+        const id = String(routeId || '');
+        if (!id || tried.has(id)) return null;
+        tried.add(id);
+        const baked = byId.get(id);
+        return baked ? sliceBakedHop(baked, a, b) : null;
+    };
+    const fromStops = tryId(b?.routeId) || tryId(a?.routeId);
+    if (fromStops) return fromStops;
+    let best = null;
+    for (const feature of byId.values()) {
+        const id = feature?.properties?.routeId;
+        if (!id || tried.has(id)) continue;
+        if (!bakeServesHop(feature, a, b)) continue;
+        const seg = sliceBakedHop(feature, a, b);
+        if (!seg) continue;
+        if (!best || seg.length < best.length) best = seg;
+    }
+    return best;
+}
+
+/**
  * Snap an ordered list of stop coords onto OSM rails → dense [lat, lon][] path.
  * Uses the baked corridor for each hop when routeId is known. Off-track
  * stations get a short stub onto the rail; a hop that cannot snap stays a
@@ -569,9 +626,7 @@ export async function smoothPathFromStops(stops, region = 'GP') {
         const b = stops[i + 1];
         if (!a || !b || !Number.isFinite(a.lat) || !Number.isFinite(b.lat)) continue;
 
-        const routeId = a.routeId || b.routeId;
-        const baked = routeId && byId ? byId.get(routeId) : null;
-        const bakedSeg = baked ? sliceBakedHop(baked, a, b) : null;
+        const bakedSeg = sliceHopOnKnownRoutes(byId, a, b);
         if (bakedSeg) {
             appendSeg(out, bakedSeg);
             railHops++;

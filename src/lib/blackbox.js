@@ -11,6 +11,7 @@ import { APP_VERSION, DYNAMIC_BASE_URL } from './config.js';
 import { escapeHTML } from './utils.js';
 import { $deviceId } from '../store.js';
 import { openSmoothModal, closeSmoothModal, showToast, triggerHaptic } from './ui.js';
+import { rtdbAuthQuery } from './rtdb-auth.js';
 
 const LOG_KEY = 'nt_blackbox_logs';
 const AUTH_KEY = 'nt_bb_session_authed';
@@ -200,7 +201,8 @@ export async function sendBlackBoxLogsToCloud() {
             logs: selected.logs,
         };
 
-        const blobRes = await fetch(`${DYNAMIC_BASE_URL}sys_logs/blackbox/${crashId}.json`, {
+        const authQ = await rtdbAuthQuery();
+        const blobRes = await fetch(`${DYNAMIC_BASE_URL}sys_logs/blackbox/${crashId}.json${authQ}`, {
             method: 'PUT',
             body: JSON.stringify(blobBody),
         });
@@ -223,7 +225,7 @@ export async function sendBlackBoxLogsToCloud() {
             originalCount: selected.originalCount,
         };
 
-        const res = await fetch(`${DYNAMIC_BASE_URL}sys_logs/crashes/${crashId}.json`, {
+        const res = await fetch(`${DYNAMIC_BASE_URL}sys_logs/crashes/${crashId}.json${authQ}`, {
             method: 'PUT',
             body: JSON.stringify(indexPayload),
         });

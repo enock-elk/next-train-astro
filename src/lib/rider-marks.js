@@ -5,7 +5,7 @@
  * Streaks count consecutive Metrorail service days (Monday to Saturday).
  * Sunday does not add to a streak and does not break one.
  */
-import { DYNAMIC_BASE_URL } from './config.js';
+import { DYNAMIC_BASE_URL, ROUTES } from './config.js';
 import { safeStorage } from './utils.js';
 import { bootFirebase } from './firebase-boot.js';
 
@@ -20,6 +20,7 @@ const MARKS_COMMUNITY_PREF_KEY = 'ntShowMarksInCommunity';
 
 export const MARK_POINTS = {
     first_community_post: 5,
+    community_message: 2,
     first_share_day: 2,
     join_confirm: 1,
     delay_report: 2,
@@ -42,6 +43,13 @@ export const MARK_CATALOG = [
         how: 'Post once in a route room.',
         points: MARK_POINTS.first_community_post,
         badge: true,
+    },
+    {
+        id: 'community_message',
+        title: 'Community message',
+        how: 'Post or reply in a route room. Points once per service day.',
+        points: MARK_POINTS.community_message,
+        badge: false,
     },
     {
         id: 'first_share_day',
@@ -106,6 +114,60 @@ function todayKey(d = new Date()) {
     return `${y}-${m}-${day}`;
 }
 
+/** Calendar day used in share/join/community award keys. */
+export function contributionDayKey(d = new Date()) {
+    return todayKey(d);
+}
+
+const CONTRIB_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+/** `09 Oct 2026`. Accepts `YYYY-MM-DD` or a timestamp. */
+export function formatContributionDate(dayOrAt) {
+    let date;
+    if (typeof dayOrAt === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dayOrAt)) {
+        const [y, m, d] = dayOrAt.split('-').map(Number);
+        date = new Date(y, m - 1, d);
+    } else {
+        date = new Date(dayOrAt);
+    }
+    if (Number.isNaN(date.getTime())) return '';
+    const dd = String(date.getDate()).padStart(2, '0');
+    return `${dd} ${CONTRIB_MONTHS[date.getMonth()]} ${date.getFullYear()}`;
+}
+
+/** Train, route, duration, and stations for a share. Empty when nothing was stored. */
+export function contributionDetailLines(itemOrDetail) {
+    const detail = itemOrDetail && typeof itemOrDetail === 'object' && itemOrDetail.detail
+        ? itemOrDetail.detail
+        : (itemOrDetail || {});
+    const lines = [];
+    if (detail.trainId) lines.push(`Train ${detail.trainId}`);
+    if (detail.route) lines.push(`Route ${detail.route}`);
+    const duration = formatContributionDuration(detail);
+    if (duration) lines.push(duration);
+    const origin = detail.origin || '';
+    const destination = detail.destination || '';
+    if (origin && destination) lines.push(`${origin} - ${destination}`);
+    else if (origin) lines.push(origin);
+    else if (destination) lines.push(destination);
+    return lines;
+}
+
+/** Trip length for the contribution sheet. Empty when we never stored a start. */
+export function formatContributionDuration(detail) {
+    const start = Number(detail?.startedAt) || 0;
+    const end = Number(detail?.endedAt) || 0;
+    if (start && !end) return 'Still on this trip';
+    if (!start || !end || end < start) return '';
+    const mins = Math.round((end - start) / 60000);
+    if (mins < 1) return 'Under 1 min';
+    if (mins < 60) return `${mins} min`;
+    const hours = Math.floor(mins / 60);
+    const rem = mins % 60;
+    if (!rem) return hours === 1 ? '1 hr' : `${hours} hr`;
+    return `${hours} hr ${rem} min`;
+}
+
 /** Metrorail service days: Monday (1) through Saturday (6). Sunday is 0. */
 export function isServiceDay(d = new Date()) {
     const day = d.getDay();
@@ -120,16 +182,69 @@ function previousServiceDay(d = new Date()) {
     return prev;
 }
 
+const HISTORY_LIMIT = 240;
+const DETAIL_FIELDS = ['trainId', 'routeId', 'route', 'origin', 'destination', 'note', 'startedAt', 'endedAt'];
+const STICKY_DETAIL = new Set(['origin', 'startedAt']);
+
+function contributionRouteLabel(routeId) {
+    const name = ROUTES[routeId]?.name || '';
+    if (!name) return '';
+    return String(name)
+        .replace(/\s*<->\s*/g, ' - ')
+        .replace(/\s*↔\s*/g, ' - ')
+        .replace(/\s+[–—]\s+/g, ' - ')
+        .trim();
+}
+
+function sanitizeDetail(raw) {
+    if (!raw || typeof raw !== 'object') return null;
+    const out = {};
+    for (const field of DETAIL_FIELDS) {
+        const value = raw[field];
+        if (field === 'startedAt' || field === 'endedAt') {
+            const n = Number(value);
+            if (Number.isFinite(n) && n > 0) out[field] = n;
+            continue;
+        }
+        if (typeof value !== 'string') continue;
+        const text = value.trim().slice(0, 140);
+        if (text) out[field] = text;
+    }
+    if (!out.route && out.routeId) {
+        const label = contributionRouteLabel(out.routeId);
+        if (label) out.route = label;
+    }
+    return Object.keys(out).length ? out : null;
+}
+
+/** Later pings can fill the train. The first boarding station and start time stay. */
+function mergeDetail(prev, next) {
+    const older = sanitizeDetail(prev) || {};
+    const newer = sanitizeDetail(next) || {};
+    const merged = { ...older };
+    for (const field of DETAIL_FIELDS) {
+        if (newer[field] == null || newer[field] === '') continue;
+        if (STICKY_DETAIL.has(field) && merged[field] != null && merged[field] !== '') continue;
+        merged[field] = newer[field];
+    }
+    return Object.keys(merged).length ? merged : null;
+}
+
 function clampHistory(raw) {
     if (!Array.isArray(raw)) return [];
-    const rows = raw
-        .filter((row) => row && typeof row === 'object' && typeof row.action === 'string')
-        .map((row) => ({
+    const rows = [];
+    for (const row of raw) {
+        if (!row || typeof row !== 'object' || typeof row.action !== 'string') continue;
+        const next = {
             action: String(row.action),
             points: Math.max(0, Number(row.points) || 0),
             at: Number(row.at) || 0,
             key: typeof row.key === 'string' ? row.key : '',
-        }));
+        };
+        const detail = sanitizeDetail(row.detail);
+        if (detail) next.detail = detail;
+        rows.push(next);
+    }
     const byKey = new Map();
     const noKey = [];
     for (const row of rows) {
@@ -138,11 +253,22 @@ function clampHistory(raw) {
             continue;
         }
         const prev = byKey.get(row.key);
-        if (!prev || (row.at || 0) >= (prev.at || 0)) byKey.set(row.key, row);
+        if (!prev) {
+            byKey.set(row.key, row);
+            continue;
+        }
+        const newer = (row.at || 0) >= (prev.at || 0) ? row : prev;
+        const older = newer === row ? prev : row;
+        const detail = mergeDetail(older.detail, newer.detail);
+        const kept = { ...newer };
+        if (detail) kept.detail = detail;
+        else delete kept.detail;
+        byKey.set(row.key, kept);
     }
+    // One row per award key. The old 40-row cap left only recent trip shares.
     return [...byKey.values(), ...noKey]
         .sort((a, b) => (a.at || 0) - (b.at || 0))
-        .slice(-40);
+        .slice(-HISTORY_LIMIT);
 }
 
 function clampState(raw) {
@@ -215,16 +341,85 @@ export function marksLabel(state = readMarks()) {
     return `${tier.label} · ${state.points} ${pointsWord(state.points)}`;
 }
 
+const MEDAL_FILL = {
+    bronze: '#cd7f32',
+    silver: '#c0c0c0',
+    gold: '#e6b800',
+    platinum: '#9aa4b2',
+};
+
+/** Compact medal for a community name row. */
+export function medalSvg(tierId = 'bronze') {
+    const fill = MEDAL_FILL[tierId] || MEDAL_FILL.bronze;
+    return `<svg class="community-bubble-medal" viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><circle cx="8" cy="8" r="6.4" fill="${fill}" stroke="rgba(0,0,0,0.28)" stroke-width="1.1"/><path d="M8 4.15l1.05 2.14 2.36.34-1.7 1.66.4 2.35L8 9.55l-2.11 1.09.4-2.35-1.7-1.66 2.36-.34z" fill="#fff" opacity="0.95"/></svg>`;
+}
+
+/** Name-row brag: "77 [svg]". */
+export function marksBubbleLabel(state = readMarks()) {
+    return String(Number(state.points) || 0);
+}
+
+export function marksPublicSnapshot(state = readMarks()) {
+    if (!showMarksInCommunity()) return null;
+    const points = Number(state.points) || 0;
+    return { points, tier: tierForPoints(points).id };
+}
+
+export function renderBubbleMarksHtml(stateOrSnap) {
+    if (!stateOrSnap) return '';
+    const points = Number(stateOrSnap.points);
+    if (!Number.isFinite(points)) return '';
+    const tierId = stateOrSnap.tier || tierForPoints(points).id;
+    const label = marksBubbleLabel({ points });
+    return `<span class="community-bubble-marks" aria-label="${escapeAttr(`${label} ${tierForPoints(points).label}`)}"><span>${escapeAttr(label)}</span> ${medalSvg(tierId)}</span>`;
+}
+
+function escapeAttr(s) {
+    return String(s || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+}
+
 export function catalogFor(action) {
     return MARK_CATALOG.find((c) => c.id === action) || null;
 }
 
-function pushHistory(state, action, points, key) {
-    const history = clampHistory([
-        ...(state.history || []),
-        { action, points, at: Date.now(), key: key || '' },
-    ]);
+function pushHistory(state, action, points, key, detail) {
+    const row = { action, points, at: Date.now(), key: key || '' };
+    const clean = sanitizeDetail(detail);
+    if (clean) row.detail = clean;
+    const history = clampHistory([...(state.history || []), row]);
     return { ...state, history };
+}
+
+function applyDetail(state, key, detail) {
+    const clean = sanitizeDetail(detail);
+    if (!clean || !key) return state;
+    let changed = false;
+    const history = (state.history || []).map((row) => {
+        if (row.key !== key) return row;
+        const merged = mergeDetail(row.detail, clean);
+        const before = JSON.stringify(row.detail || null);
+        const after = JSON.stringify(merged);
+        if (before === after) return row;
+        changed = true;
+        const next = { ...row };
+        if (merged) next.detail = merged;
+        else delete next.detail;
+        return next;
+    });
+    if (!changed) return state;
+    return { ...state, history };
+}
+
+/** Fill a share row after the trip ends. Does nothing when that award is not stored. */
+export function rememberContributionDetail(key, detail) {
+    const state = readMarks();
+    const next = applyDetail(state, key, detail);
+    if (next === state) return state;
+    return writeMarks(next);
 }
 
 export function mergeMarksStates(a, b) {
@@ -413,6 +608,9 @@ export function awardMark(action, opts = {}) {
     const dedupe = opts.key || `${action}:${today}`;
 
     if (state.awarded[dedupe]) {
+        const withDetail = opts.detail ? applyDetail(state, dedupe, opts.detail) : state;
+        if (!opts._nested && withDetail !== state) state = writeMarks(withDetail);
+        else state = withDetail;
         return {
             awarded: false, points: 0, added: 0, total: state.points,
             tier: tierForPoints(state.points), label: marksLabel(state), state,
@@ -420,8 +618,10 @@ export function awardMark(action, opts = {}) {
     }
 
     const countsAsServiceDay = action === 'first_share_day'
+        || action === 'join_confirm'
         || action === 'delay_report'
         || action === 'first_community_post'
+        || action === 'community_message'
         || action === 'delay_confirm';
 
     if (countsAsServiceDay && !opts._nested) {
@@ -433,7 +633,7 @@ export function awardMark(action, opts = {}) {
         ...state,
         points: state.points + pts,
         awarded: { ...state.awarded, [dedupe]: true },
-    }, action, pts, dedupe);
+    }, action, pts, dedupe, opts.detail);
 
     if (!opts._nested) {
         state = maybeAwardStreaks(state);
@@ -451,11 +651,29 @@ export function awardMark(action, opts = {}) {
     };
 }
 
-export function awardShareMarks({ joinedLive = false, confirmedCloser = false, trainId = '' } = {}) {
-    const share = awardMark('first_share_day', { key: `share:${todayKey()}` });
+/** Post or reply: the one-time badge, then the same daily points as the other features. */
+export function awardCommunityMarks(opts = {}) {
+    const detail = opts.detail || null;
+    const first = awardMark('first_community_post', { key: 'badge:first_community_post', detail });
+    const daily = awardMark('community_message', { key: `community:${todayKey()}`, detail });
+    const state = daily.state || first.state;
+    return {
+        awarded: !!(first.awarded || daily.awarded),
+        added: (first.added || 0) + (daily.added || 0),
+        label: marksLabel(state),
+        total: state.points,
+        tier: tierForPoints(state.points),
+        state,
+    };
+}
+
+export function awardShareMarks({ joinedLive = false, confirmedCloser = false, trainId = '', detail = null } = {}) {
+    const shareDetail = { ...(detail || {}) };
+    if (trainId && !shareDetail.trainId) shareDetail.trainId = trainId;
+    const share = awardMark('first_share_day', { key: `share:${todayKey()}`, detail: shareDetail });
     let join = { awarded: false, state: share.state, label: share.label, total: share.total };
     if (joinedLive || confirmedCloser) {
-        join = awardMark('join_confirm', { key: `join:${todayKey()}` });
+        join = awardMark('join_confirm', { key: `join:${todayKey()}`, detail: shareDetail });
     }
     const state = join.state || share.state;
     return {
@@ -515,23 +733,98 @@ export function listContributions(state = readMarks()) {
     });
 }
 
+const AWARD_KEY_RULES = [
+    { re: /^share:(\d{4}-\d{2}-\d{2})$/, action: 'first_share_day' },
+    { re: /^join:(\d{4}-\d{2}-\d{2})$/, action: 'join_confirm' },
+    { re: /^community:(\d{4}-\d{2}-\d{2})$/, action: 'community_message' },
+    { re: /^badge:first_community_post$/, action: 'first_community_post' },
+    { re: /^badge:streak_3$/, action: 'streak_3day' },
+    { re: /^badge:streak_5$/, action: 'streak_5day' },
+];
+
+function awardKeyParts(key) {
+    const text = String(key || '');
+    for (const rule of AWARD_KEY_RULES) {
+        const match = text.match(rule.re);
+        if (match) return { action: rule.action, day: match[1] || '' };
+    }
+    const split = text.match(/^([a-z0-9_]+):(\d{4}-\d{2}-\d{2})$/);
+    if (split && MARK_POINTS[split[1]]) return { action: split[1], day: split[2] };
+    if (MARK_POINTS[text]) return { action: text, day: '' };
+    return null;
+}
+
+function dayAtFromKey(day) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(day || '')) return 0;
+    const [y, m, d] = day.split('-').map(Number);
+    return new Date(y, m - 1, d, 12, 0, 0, 0).getTime();
+}
+
 export function listContributionDays(state = readMarks(), { limit = 12 } = {}) {
     const groups = new Map();
+    const seenKeys = new Set();
+    const seenActions = new Set();
+    const ensure = (day, at) => {
+        let group = groups.get(day);
+        if (!group) {
+            group = { day, at: at || dayAtFromKey(day), total: 0, items: [] };
+            groups.set(day, group);
+        }
+        if ((at || 0) > (group.at || 0)) group.at = at;
+        return group;
+    };
+    const pushItem = (group, item) => {
+        const existing = group.items.find((row) => row.action === item.action);
+        if (existing) {
+            existing.points += Number(item.points) || 0;
+            const detail = mergeDetail(existing.detail, item.detail);
+            if (detail) existing.detail = detail;
+            if (!existing.key && item.key) existing.key = item.key;
+            return;
+        }
+        const next = { ...item };
+        if (!next.detail) delete next.detail;
+        group.items.push(next);
+    };
     for (const row of state.history || []) {
         if (!row?.at) continue;
         const day = todayKey(new Date(row.at));
         const cat = catalogFor(row.action);
-        const title = cat?.title || row.action;
-        let group = groups.get(day);
-        if (!group) {
-            group = { day, at: row.at, total: 0, items: [] };
-            groups.set(day, group);
-        }
+        const group = ensure(day, row.at || 0);
+        if (row.key) seenKeys.add(row.key);
+        seenActions.add(row.action);
         group.total += Number(row.points) || 0;
-        if ((row.at || 0) > (group.at || 0)) group.at = row.at;
-        const existing = group.items.find((item) => item.action === row.action);
-        if (existing) existing.points += Number(row.points) || 0;
-        else group.items.push({ action: row.action, title, points: Number(row.points) || 0 });
+        pushItem(group, {
+            action: row.action,
+            title: cat?.title || row.action,
+            points: Number(row.points) || 0,
+            key: row.key || '',
+            detail: sanitizeDetail(row.detail),
+            how: cat?.how || '',
+        });
+    }
+    const awarded = state.awarded && typeof state.awarded === 'object' ? state.awarded : {};
+    for (const key of Object.keys(awarded)) {
+        if (!awarded[key] || seenKeys.has(key)) continue;
+        const parts = awardKeyParts(key);
+        if (!parts) continue;
+        if (!parts.day && seenActions.has(parts.action)) continue;
+        const cat = catalogFor(parts.action);
+        const points = MARK_POINTS[parts.action] || 0;
+        if (!points) continue;
+        const group = ensure(parts.day || '', dayAtFromKey(parts.day));
+        if (group.items.some((item) => item.action === parts.action)) continue;
+        group.total += points;
+        pushItem(group, {
+            action: parts.action,
+            title: cat?.title || parts.action,
+            points,
+            key,
+            detail: null,
+            how: cat?.how || '',
+        });
+        seenKeys.add(key);
+        seenActions.add(parts.action);
     }
     return [...groups.values()]
         .sort((a, b) => (b.at || 0) - (a.at || 0))
@@ -569,10 +862,12 @@ export function paintCommunityMarksChip(state = readMarks()) {
     if (typeof document === 'undefined') return;
     const el = document.getElementById('community-marks-chip');
     if (!el) return;
-    const signedIn = typeof window !== 'undefined' && window.$account?.get?.()?.status === 'signed-in';
-    const show = signedIn && showMarksInCommunity();
-    el.classList.toggle('hidden', !show);
-    if (show) el.textContent = marksLabel(state);
+    // Title chip is leftover chrome. Points live on named message bubbles.
+    el.textContent = '';
+    el.classList.add('hidden');
+    el.setAttribute('hidden', '');
+    el.setAttribute('aria-hidden', 'true');
+    void state;
 }
 
 export function badgeUnlocked(action, state = readMarks()) {

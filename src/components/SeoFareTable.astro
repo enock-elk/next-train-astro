@@ -20,8 +20,10 @@ const zoneLabel = zoneCode.replace(/^Z/i, 'Zone ');
   <p class="mt-2 text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
     These are the <strong>maximum</strong> adult cash fares for {origin} to {dest}
     ({zoneLabel}{inferred ? ', network maximum' : ''}) - terminus to terminus.
-    Shorter trips on the same line can cost less, especially for weekday
-    <strong>off-peak</strong> singles and returns (09:30–14:30).
+    Shorter trips on the same line can cost less. On weekdays, off-peak singles and
+    returns (09:30 to 14:30) are 40% off for ordinary adult tickets. Pensioners and
+    military veterans get 50% off in that same window (bring a Force Number plus ID
+    or letter). Scholars in uniform get 50% whenever trains run.
   </p>
   {inferred && (
     <p class="mt-2 text-xs text-slate-500">
@@ -50,6 +52,6 @@ const zoneLabel = zoneCode.replace(/^Z/i, 'Zone ');
     </table>
   </div>
   <p class="mt-3 text-xs text-slate-500 leading-relaxed">
-    Tickets are bought with cash at the station, not in this app. Off-peak does not apply on Saturday, Sunday, or public holidays.
+    Tickets are bought with cash at the station, not in this app. Off-peak does not apply on Saturday, Sunday, or public holidays. Weekly & Monthly Tickets also include the return trip.
   </p>
 </section>

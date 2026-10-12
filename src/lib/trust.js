@@ -162,6 +162,11 @@ function flagsAreBanned(flags) {
     return true;
 }
 
+function flagsAreCloaked(flags) {
+    if (!flagsAreBanned(flags)) return false;
+    return normalizeShadowBanMode(flags?.shadowBanMode) !== 'warning';
+}
+
 /** Avoid hanging Firebase RTDB get() when offline (blocks schedule cache boot). */
 function trustNetworkAvailable() {
     return typeof navigator === 'undefined' || navigator.onLine !== false;
@@ -250,14 +255,14 @@ export async function fetchDeviceFlags(deviceId) {
  */
 export async function isShadowBanned(uid) {
     if (uid && localBlockList.has(uid)) return true;
-    if (uid && flagsAreBanned(await fetchUserFlags(uid))) return true;
+    if (uid && flagsAreCloaked(await fetchUserFlags(uid))) return true;
 
     const deviceId = (typeof window !== 'undefined' && (window.NEXT_TRAIN_DEVICE_ID || safeStorage.getItem('next_train_device_id'))) || null;
     if (deviceId && deviceId !== uid) {
         if (localBlockList.has(deviceId)) return true;
-        if (flagsAreBanned(await fetchDeviceFlags(deviceId))) return true;
+        if (flagsAreCloaked(await fetchDeviceFlags(deviceId))) return true;
         // Guest ban stubs may also live at users/{deviceId}
-        if (flagsAreBanned(await fetchUserFlags(deviceId))) return true;
+        if (flagsAreCloaked(await fetchUserFlags(deviceId))) return true;
     }
     return false;
 }
@@ -410,12 +415,14 @@ export const SHADOW_BAN_DURATIONS = [
  * - freeze: UI captures input and feels frozen
  * - fouc: strip stylesheets → browser-default “true FOUC”
  * - lost: persistent 404 / End of the Line (Return Home bounces back)
+ * - warning: visible warning banner; app and posts still work
  */
 export const SHADOW_BAN_MODES = [
     { id: 'offline', label: 'Fake offline / lie-fi', hint: 'Offline banner + flaky connection feel' },
     { id: 'freeze', label: 'Freeze / unresponsive', hint: 'App looks loaded but ignores all input' },
     { id: 'fouc', label: 'True FOUC (unstyled)', hint: 'CSS disabled — raw HTML like a failed stylesheet load' },
     { id: 'lost', label: '404 / End of the Line', hint: 'Served the station-not-found page; Home always returns there' },
+    { id: 'warning', label: 'Warning (visible)', hint: 'User sees a warning; the app still works' },
 ];
 
 const BAN_LOST_KEY = 'nt_shadow_ban_lost';
@@ -615,6 +622,23 @@ function applyBanModeFouc() {
     }
 }
 
+function applyBanModeWarning() {
+    if (typeof document === 'undefined') return;
+    if (document.getElementById('nt-account-warning-banner')) return;
+    const bar = document.createElement('div');
+    bar.id = 'nt-account-warning-banner';
+    bar.setAttribute('role', 'status');
+    bar.style.cssText = [
+        'position:sticky', 'top:0', 'z-index:120',
+        'padding:10px 14px', 'text-align:center',
+        'font-size:13px', 'font-weight:600', 'line-height:1.35',
+        'background:#fef3c7', 'color:#92400e',
+        'border-bottom:1px solid #f59e0b',
+    ].join(';');
+    bar.textContent = 'Your account has a warning. Keep posts within the community rules.';
+    document.body.insertBefore(bar, document.body.firstChild);
+}
+
 /** Persistent 404 — Return Home reloads the app, which cloaks them back here. */
 function applyBanModeLost() {
     setLostBanFlag();
@@ -645,9 +669,16 @@ export async function applyShadowBanCloak() {
 
     const mode = normalizeShadowBanMode(verdict.mode);
     window.__ntBanCloakApplied = true;
-    window.__ntShadowBanCloak = true;
     window.__ntShadowBanMode = mode;
 
+    if (mode === 'warning') {
+        window.__ntShadowBanCloak = false;
+        clearLostBanFlag();
+        applyBanModeWarning();
+        return true;
+    }
+
+    window.__ntShadowBanCloak = true;
     if (mode === 'freeze') applyBanModeFreeze();
     else if (mode === 'fouc') applyBanModeFouc();
     else if (mode === 'lost') applyBanModeLost();

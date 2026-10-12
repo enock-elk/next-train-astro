@@ -41,6 +41,8 @@ export const $account = atom({
     displayName: null,
     photoURL: null,
     email: null,
+    emailVerified: false,
+    authProvider: null,
     chatDeviceId: null,
 });
 
@@ -266,18 +268,25 @@ function publishUser(user, extras = {}) {
             displayName: null,
             photoURL: null,
             email: null,
+            emailVerified: false,
+            authProvider: null,
             chatDeviceId: null,
         });
         safeStorage.removeItem('authUid');
         return;
     }
     const photoURL = cleanPhotoUrl(extras.photoURL) || resolveAuthPhotoURL(user) || null;
+    const providerId = Array.isArray(user.providerData)
+        ? (user.providerData.find((row) => row?.providerId)?.providerId || null)
+        : null;
     $account.set({
         status: 'signed-in',
         uid: user.uid,
         displayName: extras.displayName || formatAccountDisplayName(user.displayName || (user.email ? user.email.split('@')[0] : 'Passenger')),
         photoURL,
         email: user.email || null,
+        emailVerified: !!user.emailVerified,
+        authProvider: extras.authProvider || providerId,
         displayNameCustom: !!extras.displayNameCustom,
         chatDeviceId: extras.chatDeviceId || $account.get().chatDeviceId || null,
     });
@@ -591,6 +600,11 @@ export async function signUpWithEmail(email, password, displayName) {
         if (!check.ok) throw new Error(check.message);
     }
     const cred = await window.firebaseCreateUser(window.firebaseAuth, email.trim(), password);
+    try {
+        if (cred.user && typeof window.firebaseSendEmailVerification === 'function') {
+            await window.firebaseSendEmailVerification(cred.user);
+        }
+    } catch { /* non-fatal: they can resend from Account */ }
     if (displayName?.trim()) {
         const check = refuseDisplayName(displayName);
         if (!check.ok) throw new Error(check.message);
@@ -602,6 +616,28 @@ export async function signUpWithEmail(email, password, displayName) {
     }
     await ensureUserProfile(cred.user);
     return cred.user;
+}
+
+export async function sendAccountPasswordReset(email) {
+    const ok = await waitForFirebase();
+    if (!ok) throw new Error('Cloud sign-in unavailable offline.');
+    if (!email || !String(email).trim()) throw new Error('Enter your email first.');
+    if (typeof window.firebaseSendPasswordResetEmail !== 'function') {
+        throw new Error('Password reset is unavailable.');
+    }
+    await window.firebaseSendPasswordResetEmail(window.firebaseAuth, String(email).trim());
+}
+
+export async function resendAccountVerification() {
+    const ok = await waitForFirebase();
+    if (!ok || !window.firebaseAuth?.currentUser) throw new Error('Sign in first.');
+    const user = window.firebaseAuth.currentUser;
+    if (user.emailVerified) return true;
+    if (typeof window.firebaseSendEmailVerification !== 'function') {
+        throw new Error('Verification email is unavailable.');
+    }
+    await window.firebaseSendEmailVerification(user);
+    return true;
 }
 
 export async function signOutAccount() {
@@ -785,6 +821,8 @@ export function syncAccountSettingsUi(state = $account.get()) {
     if (guestBlock) guestBlock.classList.toggle('hidden', signed || state.status === 'loading');
     const sessionActions = document.getElementById('account-session-actions');
     if (sessionActions) sessionActions.classList.toggle('hidden', !signed);
+    document.getElementById('account-prefs-label')?.classList.toggle('hidden', !signed);
+    document.getElementById('account-signin-create-hint')?.classList.add('hidden');
     const deleteWrap = document.getElementById('account-delete-wrap');
     const isOperator = signed && isAdminEmail(state.email);
     if (deleteWrap) {
@@ -810,6 +848,11 @@ export function syncAccountSettingsUi(state = $account.get()) {
     } else {
         if (modalName) modalName.textContent = state.displayName || 'Passenger';
         if (modalEmail) modalEmail.textContent = state.email || '';
+        const verifyRow = document.getElementById('account-verify-row');
+        const verifyLabel = document.getElementById('account-verify-label');
+        const needsVerify = !!state.email && state.authProvider === 'password' && !state.emailVerified;
+        if (verifyRow) verifyRow.classList.toggle('hidden', !needsVerify);
+        if (verifyLabel) verifyLabel.textContent = needsVerify ? 'Not verified' : 'Verified';
         const nameInput = document.getElementById('account-edit-display-name');
         if (nameInput && document.activeElement !== nameInput) {
             nameInput.value = state.displayName || '';
@@ -1214,6 +1257,23 @@ export function bindAccountUi() {
             paintAccountPoints();
         } catch (e) {
             showErr(friendlyAuthError(e));
+            const hint = document.getElementById('account-signin-create-hint');
+            if (hint && ['auth/user-not-found', 'auth/wrong-password', 'auth/invalid-credential'].includes(e?.code || '')) {
+                hint.classList.remove('hidden');
+            }
+        } finally {
+            setBusy(false);
+        }
+    });
+
+    document.getElementById('account-forgot-btn')?.addEventListener('click', async () => {
+        const email = document.getElementById('account-email')?.value;
+        setBusy(true);
+        try {
+            await sendAccountPasswordReset(email);
+            if (typeof window.showToast === 'function') window.showToast('Password reset email sent', 'success');
+        } catch (e) {
+            showErr(friendlyAuthError(e) || e?.message || 'Could not send reset email.');
         } finally {
             setBusy(false);
         }
@@ -1275,13 +1335,48 @@ export function bindAccountUi() {
         }
     });
 
+    const askSignOutConfirm = () => new Promise((resolve) => {
+        const sheet = document.getElementById('account-signout-confirm');
+        if (!sheet) {
+            resolve(typeof window.confirm === 'function' ? window.confirm('Sign out?') : true);
+            return;
+        }
+        sheet.classList.remove('hidden');
+        const yes = document.getElementById('account-signout-confirm-btn');
+        const no = document.getElementById('account-signout-cancel-btn');
+        const finish = (ok) => {
+            sheet.classList.add('hidden');
+            yes?.removeEventListener('click', onYes);
+            no?.removeEventListener('click', onNo);
+            resolve(ok);
+        };
+        const onYes = () => finish(true);
+        const onNo = () => finish(false);
+        yes?.addEventListener('click', onYes);
+        no?.addEventListener('click', onNo);
+    });
+
     document.getElementById('account-signout-btn')?.addEventListener('click', async () => {
+        const ok = await askSignOutConfirm();
+        if (!ok) return;
         setBusy(true);
         try {
             await signOutAccount();
             if (typeof window.showToast === 'function') window.showToast('Signed out');
         } catch (e) {
             showErr(e?.message || 'Sign-out failed.');
+        } finally {
+            setBusy(false);
+        }
+    });
+
+    document.getElementById('account-verify-resend-btn')?.addEventListener('click', async () => {
+        setBusy(true);
+        try {
+            await resendAccountVerification();
+            if (typeof window.showToast === 'function') window.showToast('Verification email sent', 'success');
+        } catch (e) {
+            showErr(e?.message || 'Could not send verification email.');
         } finally {
             setBusy(false);
         }

@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_10.12.1': [
+        'Planner results restore the SPA departed label plus a separate Show Next Train button. Trip fare is a centered chip under that row. Each Depart/Connect train name uses that train column last real-timed stop, not corridor destB. Account keeps Sign in and Create account; a failed sign-in still says Wrong email or password and keeps Create account nearby. Sign out asks for confirmation. Password accounts get a verification email. Community Monitor reject no longer dies on marks. After reject, admin can warn or shadow-ban. Warning is a visible banner, not a cloak. State Monitor (renamed) can sort and previews alert title, text, and poster. No Today-tile GA4 hint. forceShow stays false.',
+    ],
     'V9_10.11.11': [
         'A tap on the blurred edge closes a partial sheet (date picker, Select Route, full train sheet, fare, and the same kind of dialog). Select Route stays up until a corridor is chosen. Planner and timetable share links paint from the saved timetable instead of waiting for a full reload, and a dismissable toast appears only when that open is still working. System Control no longer includes Growth and Promo. No commuter What’s New. forceShow stays false.',
     ],

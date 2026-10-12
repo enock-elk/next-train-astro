@@ -2850,13 +2850,41 @@ function plannerSheetDayLabel(dayType, routeId, trainId) {
     return trainSheetOperatingLabel(dayType, routeId, trainId);
 }
 
+const _plannerTrainTerminusCache = new Map();
+
+/** Last real-timed stop on that train's own column. Never corridor destB. */
+function plannerTrainColumnTerminus(routeId, trainId) {
+    const id = String(trainId || '').trim();
+    const route = String(routeId || '').trim();
+    if (!id || !route) return '';
+    const dayType = selectedPlannerDay || getCurrentDayType();
+    const key = `${route}|${id}|${dayType}`;
+    if (_plannerTrainTerminusCache.has(key)) return _plannerTrainTerminusCache.get(key);
+    const sheet = extractTrainSheetStops(route, id, dayType);
+    const terminus = sheet?.terminus
+        ? PlannerRenderer.applyUIIntercepts(sheet.terminus)
+        : '';
+    _plannerTrainTerminusCache.set(key, terminus);
+    return terminus;
+}
+
+function plannerTrainHeadboardLabel(routeId, trainId) {
+    const terminus = plannerTrainColumnTerminus(routeId, trainId);
+    const id = String(trainId || '').trim();
+    if (terminus && id) return `${terminus} Train ${id}`;
+    if (id) return `Train ${id}`;
+    return terminus || 'Train';
+}
+
 function plannerTrainNameButton(routeId, dest, trainId, extraClass = '') {
-    const destSafe = escapeHTML(String(dest || '').replace(/ STATION/gi, ''));
+    const fromColumn = plannerTrainColumnTerminus(routeId, trainId);
+    const destSafe = escapeHTML(fromColumn || String(dest || '').replace(/ STATION/gi, ''));
     const trainSafe = escapeHTML(String(trainId || ''));
     const routeSafe = escapeHTML(String(routeId || ''));
     const routeJs = String(routeId || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
     const trainJs = String(trainId || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-    return `<button type="button" class="planner-train-name-btn inline-flex items-center gap-0.5 underline underline-offset-2 decoration-1 decoration-blue-400/60 font-medium hover:decoration-blue-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 rounded-sm ${extraClass}" data-route-id="${routeSafe}" data-train-id="${trainSafe}" onclick="event.stopPropagation(); if(typeof window.openPlannerTrainSheet==='function') window.openPlannerTrainSheet('${routeJs}','${trainJs}')">${destSafe} Train ${trainSafe}</button>`;
+    const label = destSafe ? `${destSafe} Train ${trainSafe}` : `Train ${trainSafe}`;
+    return `<button type="button" class="planner-train-name-btn inline-flex items-center gap-0.5 underline underline-offset-2 decoration-1 decoration-blue-400/60 font-medium hover:decoration-blue-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 rounded-sm ${extraClass}" data-route-id="${routeSafe}" data-train-id="${trainSafe}" onclick="event.stopPropagation(); if(typeof window.openPlannerTrainSheet==='function') window.openPlannerTrainSheet('${routeJs}','${trainJs}')">${label}</button>`;
 }
 
 export function openPlannerTrainSheet(routeId, trainId) {
@@ -3021,7 +3049,7 @@ export const PlannerRenderer = {
 
     renderLegTimeline: (leg, fromStation, toStation, legId, isFinalDest = false, renderedAlerts = new Set(), initialSevered = false) => {
         const formatStation = (s) => PlannerRenderer.applyUIIntercepts(s);
-        let trainDest = formatStation(leg.actualDestination || leg.route.destB);
+        let trainDest = plannerTrainColumnTerminus(leg.route?.id, leg.train);
         
         // --- THE UNIFIED SUB-LEG RENDERER ---
         const renderSubLeg = (stops, subFrom, subTo, subLegId, subIsFinalDest, subTrain, subTrainDest, subInitialSevered) => {
@@ -3217,8 +3245,8 @@ export const PlannerRenderer = {
             const stopsBefore = transferIndex !== -1 ? leg.stops.slice(0, transferIndex + 1) : [];
             const stopsAfter = transferIndex !== -1 ? leg.stops.slice(transferIndex + 1) : leg.stops;
 
-            let train1Dest = `To ${sName}`;
-            let train2Dest = trainDest;
+            let train1Dest = plannerTrainColumnTerminus(leg.route?.id, it.train1);
+            let train2Dest = plannerTrainColumnTerminus(leg.route?.id, it.train2) || trainDest;
 
             const leg1 = renderSubLeg(stopsBefore, fromStation, sName, `${legId}-A`, false, it.train1, train1Dest, initialSevered);
             let combinedHtml = leg1.html;
@@ -3238,7 +3266,7 @@ export const PlannerRenderer = {
                 title: `${bridgeTitle} @ ${sName}`,
                 waitStr,
                 connectLabel: 'Switch To',
-                connectValue: `${train2Dest} Train ${it.train2}`,
+                connectValue: plannerTrainHeadboardLabel(leg.route?.id, it.train2),
                 variant: transferVariant
             });
 
@@ -3399,9 +3427,14 @@ export const PlannerRenderer = {
                           </div>`;
         } else if (isDeparted) {
             stateBadge = `
-                <button onclick="if(typeof window._plannerCurrentTripIndex !== 'undefined' && typeof window._selectCustomTrip === 'function') window._selectCustomTrip(window._plannerCurrentTripIndex + 1);" class="planner-departed-next bg-blue-50 hover:bg-blue-100 dark:bg-blue-900/30 dark:hover:bg-blue-900/50 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800 font-bold py-1.5 px-2.5 rounded-lg shadow-sm transition-colors focus:outline-none inline-flex justify-center items-center text-[9px] uppercase tracking-wider whitespace-nowrap">
-                    ${countdown}<span class="mx-1 font-semibold opacity-50" aria-hidden="true">·</span>Show Next Train <svg class="w-3 h-3 ml-1 opacity-80" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 5l7 7-7 7M5 5l7 7-7 7"></path></svg>
-                </button>
+                <div class="flex flex-col items-start mt-1 sm:mt-0 pr-2 min-w-0">
+                    <div class="text-[11px] font-bold text-gray-500 dark:text-gray-400 mb-1.5 uppercase tracking-wide">
+                        ${countdown}
+                    </div>
+                    <button type="button" onclick="if(typeof window._plannerCurrentTripIndex !== 'undefined' && typeof window._selectCustomTrip === 'function') window._selectCustomTrip(window._plannerCurrentTripIndex + 1);" class="planner-departed-next bg-blue-50 hover:bg-blue-100 dark:bg-blue-900/30 dark:hover:bg-blue-900/50 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800 font-bold py-1.5 px-3 rounded-lg shadow-sm transition-colors focus:outline-none flex justify-center items-center text-[9px] uppercase tracking-wider whitespace-nowrap">
+                        Show Next Train <svg class="w-3 h-3 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 5l7 7-7 7M5 5l7 7-7 7"></path></svg>
+                    </button>
+                </div>
             `;
         } else {
              stateBadge = `<div class="flex items-center text-xs font-bold text-blue-600 dark:text-blue-400">
@@ -3441,14 +3474,15 @@ export const PlannerRenderer = {
                             <svg class="w-3.5 h-3.5 mr-1 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 3h14M5 21h14M7 3v2.5c0 .8.4 1.6 1.1 2.1L12 10.5l3.9-2.9c.7-.5 1.1-1.3 1.1-2.1V3M7 21v-2.5c0-.8.4-1.6 1.1-2.1l3.9-2.9 3.9 2.9c.7.5 1.1 1.3 1.1 2.1V21"/></svg>
                             ${duration}
                         </div>
+                        <div class="text-[9px] text-gray-400 uppercase tracking-widest mt-0.5">Total Time</div>
                      </div>
                 </div>
-                <div class="flex justify-between items-center mt-0.5">
-                     ${canShowTripPrice(step) ? `<button type="button" data-nt-trip-fare="1" class="planner-trip-fare min-w-0 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 rounded">
-                        <span class="inline-flex items-center gap-1 text-xs font-black text-gray-800 dark:text-gray-100 tracking-wide whitespace-nowrap border-b border-dotted border-gray-700 dark:border-gray-200">${plannerMoneySvg('w-3.5 h-3.5 text-gray-800 dark:text-gray-100')}Trip fare: <span data-nt-trip-fare-price>R-</span></span>
-                     </button>` : '<span></span>'}
-                     <div class="text-[9px] text-gray-400 uppercase tracking-widest shrink-0 pl-2">Total Time</div>
-                </div>
+                ${canShowTripPrice(step) ? `<div class="flex justify-center mt-3">
+                     <button type="button" data-nt-trip-fare="1" class="planner-trip-fare inline-flex flex-col items-center justify-center min-w-[7.5rem] px-4 py-2 rounded-xl bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400">
+                        <span class="text-[9px] font-black uppercase tracking-widest text-blue-700 dark:text-blue-300">Trip fare</span>
+                        <span class="inline-flex items-center gap-1 text-base font-black text-gray-900 dark:text-white tabular-nums leading-none mt-0.5">${plannerMoneySvg('w-4 h-4 text-gray-900 dark:text-white')}<span data-nt-trip-fare-price>R-</span></span>
+                     </button>
+                </div>` : ''}
             </div>
         `;
     },
@@ -3577,7 +3611,7 @@ export const PlannerRenderer = {
                 const waitMins = Math.floor((dep - arr) / 60);
                 const waitStr = PlannerRenderer.formatDuration(waitMins);
                 const hubName = PlannerRenderer.applyUIIntercepts(leg.to);
-                const trainDest = PlannerRenderer.applyUIIntercepts(nextLeg.actualDestination || nextLeg.route.destB);
+                const trainDest = plannerTrainColumnTerminus(nextLeg.route?.id, nextLeg.train);
 
                 const isExtended = waitMins >= 240; 
                 if (isExtended && !renderedAlerts.has('excessive_layover')) {
@@ -3603,7 +3637,7 @@ export const PlannerRenderer = {
                     title: bridgeTitle,
                     waitStr,
                     connectLabel: 'Connect To',
-                    connectValue: `${trainDest} Train ${nextLeg.train}`,
+                    connectValue: plannerTrainHeadboardLabel(nextLeg.route?.id, nextLeg.train),
                     variant: isExtended ? 'extended' : (isInstant ? 'instant' : 'transfer')
                 });
             }
@@ -3619,7 +3653,7 @@ export const PlannerRenderer = {
         const waitMins = Math.floor((hubDep - hubArr) / 60);
         const waitStr = PlannerRenderer.formatDuration(waitMins);
         
-        let train2Dest = PlannerRenderer.applyUIIntercepts(step.leg2.actualDestination || step.leg2.route.destB);
+        let train2Dest = plannerTrainColumnTerminus(step.leg2.route?.id, step.leg2.train);
 
         const leg1Result = PlannerRenderer.renderLegTimeline(step.leg1, step.from, step.transferStation, `stops-leg1-${step.train}`, false, renderedAlerts, false);
         const transferOpacity = leg1Result.isSevered ? "opacity-50 grayscale" : "";
@@ -3647,7 +3681,7 @@ export const PlannerRenderer = {
             title: bridgeTitle,
             waitStr,
             connectLabel: 'Connect To',
-            connectValue: `${train2Dest} Train ${step.leg2.train}`,
+            connectValue: plannerTrainHeadboardLabel(step.leg2.route?.id, step.leg2.train),
             variant: isExtended ? 'extended' : (isInstant ? 'instant' : 'transfer')
         });
 
@@ -3676,8 +3710,8 @@ export const PlannerRenderer = {
         const formatStation = (s) => PlannerRenderer.applyUIIntercepts(s);
         const hub1Name = formatStation(step.hub1);
         
-        let train2Dest = formatStation(step.leg2.actualDestination || step.leg2.route.destB);
-        let train3Dest = formatStation(step.leg3.actualDestination || step.leg3.route.destB);
+        let train2Dest = plannerTrainColumnTerminus(step.leg2.route?.id, step.leg2.train);
+        let train3Dest = plannerTrainColumnTerminus(step.leg3.route?.id, step.leg3.train);
 
         const leg1Result = PlannerRenderer.renderLegTimeline(step.leg1, step.from, step.hub1, `l1-${step.train}`, false, renderedAlerts, false);
         const transferOpacity1 = leg1Result.isSevered ? "opacity-50 grayscale" : "";
@@ -3706,7 +3740,7 @@ export const PlannerRenderer = {
             title: bridgeTitle1,
             waitStr: wait1Str,
             connectLabel: 'Connect To',
-            connectValue: `${train2Dest} Train ${step.leg2.train}`,
+            connectValue: plannerTrainHeadboardLabel(step.leg2.route?.id, step.leg2.train),
             variant: isExtended1 ? 'extended' : (isInstant1 ? 'instant' : 'transfer')
         });
 
@@ -3736,7 +3770,7 @@ export const PlannerRenderer = {
             title: bridgeTitle2,
             waitStr: wait2Str,
             connectLabel: 'Connect To',
-            connectValue: `${train3Dest} Train ${step.leg3.train}`,
+            connectValue: plannerTrainHeadboardLabel(step.leg3.route?.id, step.leg3.train),
             variant: isExtended2 ? 'extended' : (isInstant2 ? 'instant' : 'transfer')
         });
 

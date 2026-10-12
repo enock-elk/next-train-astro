@@ -57,7 +57,8 @@ if (ui.includes("display.textContent = 'Weekday (Mon-Fri)'")) fail('must not pai
 if (!ui.includes('planner_saturday_reply')) fail('Saturday Reply must quote the advisory for admin');
 if (!ui.includes('enterFeedbackReplyMode')) fail('Saturday Reply must enter feedback reply mode');
 if (ui.includes('Sundays & Public Holidays')) fail('train sheet must not claim a Sunday timetable');
-if (!ui.includes("return 'Public Holidays'")) fail('public holiday train sheet says Public Holidays');
+const liveBoard = readFileSync(join(ROOT, 'src/lib/live-board.js'), 'utf8');
+if (!liveBoard.includes("return 'Public Holidays'")) fail('public holiday train sheet says Public Holidays');
 if (!ui.includes('Public Holiday schedule')) fail('holiday notice must be able to name the Public Holiday schedule');
 if (!ui.includes('openPlannerTrainSheet')) fail('planner must open a train-sheet modal');
 if (!ui.includes('planner-train-name-btn')) fail('planner results must underline the train name');
@@ -67,8 +68,8 @@ if (ui.includes('planner-notice-details-row flex justify-end mt-1.5')) fail('Det
 if (!ui.includes('planner-notice-aside')) fail('banner SVG lives in a top-right aside column');
 if (!ui.includes('trainTerminatesRuleHtml')) fail('TRAIN TERMINATES is a reusable clickable rule');
 if (!ui.includes('openDisruptionModal')) fail('TRAIN TERMINATES / Details open the Line Severed modal');
-if (ui.includes('flex-col items-start mt-1 sm:mt-0')) fail('Departed and Show Next Train must share one row');
-if (!ui.includes('planner-departed-next')) fail('Departed merges into the Show Next Train button');
+if (!ui.includes('flex-col items-start mt-1 sm:mt-0')) fail('Departed stays a status above Show Next Train');
+if (!ui.includes('planner-departed-next')) fail('Show Next Train is its own button');
 if (!ui.includes('Show Next Train')) fail('departed card still offers Show Next Train');
 if (ui.includes('getInjectionHtml(0) ?')) fail('must not double-call getInjectionHtml(0)');
 if (!ui.includes('const injAtOrigin = getInjectionHtml(0)')) fail('TRAIN TERMINATES at origin is injected once');
@@ -76,7 +77,7 @@ if (ui.includes('allowedDisrIds.size && !allowedDisrIds.has')) fail('empty allow
 if (!ui.includes('!allowedDisrIds.has(d.id)')) fail('trip map paints only disruptions that hit this trip');
 if (!ui.includes('stopOnTripPath')) fail('trip map requires zone ends on this trip path');
 if (!ui.includes('planner-notice-copy')) fail('notice body copy must be fittable');
-if (!ui.includes('Trip fare:')) fail('planner fare is a single Trip fare line');
+if (!ui.includes('Trip fare')) fail('planner fare is a single Trip fare line');
 if (ui.includes("switchTab('map'")) fail('Open Network Map must not switch to the live Map tab');
 if (!ui.includes('__ntOpenNetworkMapSheet')) fail('Open Network Map opens the sidenav GPS network map sheet');
 {

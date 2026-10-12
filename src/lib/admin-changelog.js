@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_10.12.2': [
+        'RTDB write-once logs and feedback now require an ID token (anonymous is enough, same as polls). replyCount can only step by one. Delay notes cap at 280 characters in rules. Community worker CORS no longer allows every pages.dev or github.io host. Community avatars only load https identity-CDN URLs. nexttrain-cache allows lab. No App Check and no CSP, so boards, ads, and Messages stay as they are. Deploy firebase-database.rules.json after this app build. No commuter What’s New. forceShow stays false.',
+    ],
     'V9_10.12.1': [
         'Planner results restore the SPA departed label plus a separate Show Next Train button. Trip fare is a centered chip under that row. Each Depart/Connect train name uses that train column last real-timed stop, not corridor destB. Account keeps Sign in and Create account; a failed sign-in still says Wrong email or password and keeps Create account nearby. Sign out asks for confirmation. Password accounts get a verification email. Community Monitor reject no longer dies on marks. After reject, admin can warn or shadow-ban. Warning is a visible banner, not a cloak. State Monitor (renamed) can sort and previews alert title, text, and poster. No Today-tile GA4 hint. forceShow stays false.',
     ],

@@ -990,7 +990,7 @@ async function submitTrainReportPayload({ status, lateBucket, note }) {
         return false;
     }
 
-    let noteToStore = note || '';
+    let noteToStore = String(note || '').slice(0, 280);
     if (noteToStore) {
         const safety = checkContentSafety(noteToStore);
         if (safety.verdict === 'block') { showErr(safety.message); return false; }

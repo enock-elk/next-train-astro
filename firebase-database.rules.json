@@ -148,7 +148,8 @@
     "feedback": {
       ".read": "auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')",
       "$feedbackId": {
-        ".write": "!data.exists() || (auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com'))"
+        ".write": "auth != null && (!data.exists() || auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')",
+        ".validate": "!newData.exists() || (newData.hasChildren(['timestamp', 'deviceId']) && newData.child('timestamp').isNumber() && newData.child('deviceId').isString() && newData.child('deviceId').val().length > 0 && newData.child('deviceId').val().length < 120 && (!newData.hasChild('text') || (newData.child('text').isString() && newData.child('text').val().length <= 4000)))"
       }
     },
 
@@ -176,51 +177,55 @@
       "crashes": {
         ".write": "auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')",
         "$crashId": {
-          ".write": "!data.exists()"
+          ".write": "auth != null && !data.exists()",
+          ".validate": "newData.hasChild('timestamp') && newData.child('timestamp').isNumber() && (!newData.hasChild('error') || (newData.child('error').isString() && newData.child('error').val().length < 8000)) && (!newData.hasChild('deviceId') || (newData.child('deviceId').isString() && newData.child('deviceId').val().length < 120))"
         }
       },
       "blackbox": {
         ".write": "auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')",
         "$exportId": {
-          ".write": "!data.exists()"
+          ".write": "auth != null && !data.exists()",
+          ".validate": "newData.hasChild('exportedAt') && newData.child('exportedAt').isNumber() && (!newData.hasChild('deviceId') || (newData.child('deviceId').isString() && newData.child('deviceId').val().length < 120))"
         }
       },
       "routing_fails": {
         ".write": "auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')",
         "$deadEndId": {
-          ".write": "!data.exists()"
+          ".write": "auth != null && !data.exists()",
+          ".validate": "newData.hasChildren(['timestamp', 'deviceId']) && newData.child('timestamp').isNumber() && newData.child('deviceId').isString() && newData.child('deviceId').val().length > 0 && newData.child('deviceId').val().length < 120"
         }
       },
       "fare_votes": {
         ".write": "auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')",
         "$voteId": {
-          ".write": "(!data.exists() && !newData.hasChild('review') && !newData.hasChild('reviewedAt') && !newData.hasChild('reviewedBy')) || (auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com') && data.exists() && data.child('origin').val() == newData.child('origin').val() && data.child('destination').val() == newData.child('destination').val() && data.child('quotedPrice').val() == newData.child('quotedPrice').val() && data.child('reportedPrice').val() == newData.child('reportedPrice').val() && data.child('agree').val() == newData.child('agree').val() && data.child('deviceId').val() == newData.child('deviceId').val() && data.child('at').val() == newData.child('at').val() && newData.child('review').val() == 'refuted')",
+          ".write": "(auth != null && !data.exists() && !newData.hasChild('review') && !newData.hasChild('reviewedAt') && !newData.hasChild('reviewedBy')) || (auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com') && data.exists() && data.child('origin').val() == newData.child('origin').val() && data.child('destination').val() == newData.child('destination').val() && data.child('quotedPrice').val() == newData.child('quotedPrice').val() && data.child('reportedPrice').val() == newData.child('reportedPrice').val() && data.child('agree').val() == newData.child('agree').val() && data.child('deviceId').val() == newData.child('deviceId').val() && data.child('at').val() == newData.child('at').val() && newData.child('review').val() == 'refuted')",
           ".validate": "newData.hasChildren(['origin','destination','quotedPrice','reportedPrice','agree','deviceId','at']) && newData.child('origin').isString() && newData.child('origin').val().length > 0 && newData.child('origin').val().length < 80 && newData.child('destination').isString() && newData.child('destination').val().length > 0 && newData.child('destination').val().length < 80 && newData.child('quotedPrice').isNumber() && newData.child('quotedPrice').val() >= 1 && newData.child('quotedPrice').val() <= 500 && newData.child('reportedPrice').isNumber() && newData.child('reportedPrice').val() >= 1 && newData.child('reportedPrice').val() <= 500 && newData.child('agree').isBoolean() && newData.child('deviceId').isString() && newData.child('deviceId').val().length > 0 && newData.child('deviceId').val().length < 80 && newData.child('at').isNumber() && (!newData.hasChild('ticketUrl') || (newData.child('ticketUrl').isString() && newData.child('ticketUrl').val().length > 12 && newData.child('ticketUrl').val().length < 2000)) && (!newData.hasChild('ticketType') || newData.child('ticketType').val() === 'single' || newData.child('ticketType').val() === 'return' || newData.child('ticketType').val() === 'weekly_mon_fri' || newData.child('ticketType').val() === 'weekly_mon_sat' || newData.child('ticketType').val() === 'monthly') && (!newData.hasChild('review') || newData.child('review').val() === 'refuted') && (!newData.hasChild('reviewedAt') || newData.child('reviewedAt').isNumber()) && (!newData.hasChild('reviewedBy') || (newData.child('reviewedBy').isString() && newData.child('reviewedBy').val().length > 0 && newData.child('reviewedBy').val().length < 120))"
         }
       },
       "fare_ticket_photos": {
         ".write": "auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')",
         "$voteId": {
-          ".write": "!data.exists()",
+          ".write": "auth != null && !data.exists()",
           ".validate": "newData.hasChildren(['ticketUrl','at','deviceId']) && newData.child('ticketUrl').isString() && newData.child('ticketUrl').val().length > 12 && newData.child('ticketUrl').val().length < 2000 && newData.child('at').isNumber() && newData.child('deviceId').isString() && newData.child('deviceId').val().length > 0 && newData.child('deviceId').val().length < 80"
         }
       },
       "trip_plans": {
         ".write": "auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')",
         "$batchId": {
-          ".write": "!data.exists()"
+          ".write": "auth != null && !data.exists()",
+          ".validate": "newData.hasChildren(['flushedAt', 'deviceId']) && newData.child('flushedAt').isNumber() && newData.child('deviceId').isString() && newData.child('deviceId').val().length > 0 && newData.child('deviceId').val().length < 120"
         }
       },
       "trip_plan_users": {
         ".write": "auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')",
         "$userId": {
-          ".write": "newData.exists() && newData.hasChild('lastSeen')"
+          ".write": "auth != null && newData.exists() && newData.hasChild('lastSeen')"
         }
       },
       "trip_plan_pairs": {
         ".write": "auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')",
         "$pairId": {
-          ".write": "newData.exists() && newData.hasChild('lastSeen')"
+          ".write": "auth != null && newData.exists() && newData.hasChild('lastSeen')"
         }
       }
     },
@@ -273,7 +278,7 @@
       ".indexOn": ["routeId", "timestamp", "trainKey"],
       "$reportId": {
         ".write": "auth != null && (!data.exists() || data.child('deviceId').val() === newData.child('deviceId').val() || auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')",
-        ".validate": "!newData.exists() || (newData.hasChildren(['reportId', 'routeId', 'timestamp', 'deviceId']) && newData.child('reportId').isString() && newData.child('reportId').val() === $reportId && newData.child('routeId').isString() && newData.child('routeId').val().length > 0 && newData.child('routeId').val().length < 80 && newData.child('timestamp').isNumber() && newData.child('deviceId').isString() && newData.child('deviceId').val().length > 0 && newData.child('deviceId').val().length < 120)"
+        ".validate": "!newData.exists() || (newData.hasChildren(['reportId', 'routeId', 'timestamp', 'deviceId']) && newData.child('reportId').isString() && newData.child('reportId').val() === $reportId && newData.child('routeId').isString() && newData.child('routeId').val().length > 0 && newData.child('routeId').val().length < 80 && newData.child('timestamp').isNumber() && newData.child('deviceId').isString() && newData.child('deviceId').val().length > 0 && newData.child('deviceId').val().length < 120 && (!newData.hasChild('note') || newData.child('note').val() == null || (newData.child('note').isString() && newData.child('note').val().length <= 280)))"
       }
     },
 
@@ -320,7 +325,7 @@
             ".validate": "!newData.exists() || (newData.hasChildren(['postId', 'routeId', 'body', 'uid', 'timestamp']) && newData.child('body').isString() && newData.child('body').val().length > 0 && newData.child('body').val().length <= 280 && newData.child('timestamp').isNumber() && (newData.child('uid').val() === auth.uid || auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com'))",
             "replyCount": {
               ".write": "auth != null && auth.token.firebase.sign_in_provider != 'anonymous'",
-              ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() < 100000"
+              ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() < 100000 && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com' || !data.exists() || newData.val() === data.val() + 1)"
             },
             "replies": {
               ".read": true,

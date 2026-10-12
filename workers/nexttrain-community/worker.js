@@ -16,6 +16,7 @@ import {
     classifyUnsafeLanguage,
     findDisallowedUrls,
 } from '../../src/lib/content-safety-core.js';
+import { sanitizeCommunityPhotoUrl } from '../../src/lib/community-photo.js';
 
 const BODY_MAX = 280;
 const ADMIN_EMAILS = new Set(['enockelk@gmail.com', 'thandeka05nxumalo@gmail.com']);
@@ -31,7 +32,7 @@ function isSafeRtdbKey(value) {
     return typeof value === 'string' && value.length > 0 && value.length <= 80 && !/[.#$[\]/]/.test(value);
 }
 
-function corsOriginAllowed(origin, env) {
+export function corsOriginAllowed(origin, env) {
     if (!origin) return true;
     const allowed = String(env.ALLOWED_ORIGINS || '')
         .split(',')
@@ -40,7 +41,8 @@ function corsOriginAllowed(origin, env) {
     if (allowed.includes('*') || allowed.includes(origin)) return true;
     try {
         const host = new URL(origin).hostname.toLowerCase();
-        if (host.endsWith('.github.io') || host.endsWith('.pages.dev')) return true;
+        if (host === 'lab.nexttrain.co.za') return true;
+        if (host.endsWith('.next-train-lab.pages.dev')) return true;
     } catch { /* ignore */ }
     return false;
 }
@@ -1202,7 +1204,7 @@ async function handlePost(request, env) {
         category,
         uid: user.uid,
         displayName: String(body.displayName || user.displayName || 'Passenger').slice(0, 80),
-        photoURL: body.photoURL || user.photoURL || null,
+        photoURL: sanitizeCommunityPhotoUrl(body.photoURL || user.photoURL || '') || null,
         email: String(body.email || user.email || '').slice(0, 120) || null,
         deviceId: String(body.deviceId || 'unknown').slice(0, 120),
         timestamp: Date.now(),

@@ -12,7 +12,7 @@
  * (public read, operator write). Votes stay create-once in sys_logs.
  *
  * RTDB sys_logs/trip_plans/$batchId allows create-once (!data.exists).
- * Auth token preferred; anonymous create-once still works without email claim.
+ * Writes need an ID token (anonymous is enough). No email claim required.
  */
 import { DYNAMIC_BASE_URL, APP_VERSION, FARE_CONFIG } from './config.js';
 import { safeStorage, normalizeStationName } from './utils.js';
@@ -68,7 +68,7 @@ async function ensureAuthToken() {
             return await window.firebaseGetIdToken(window.firebaseAuth.currentUser, true) || '';
         }
     } catch {
-        /* ignore — create-once rules still allow unauthenticated PUT */
+        /* ignore — caller logs a failed write if the token is missing */
     }
     return '';
 }

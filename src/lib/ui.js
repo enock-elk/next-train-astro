@@ -1366,9 +1366,11 @@ export function initGlobalErrorHandler() {
         };
         
         try {
-            fetch(`${DYNAMIC_BASE_URL}sys_logs/crashes/${crashId}.json`, {
-                method: 'PUT',
-                body: JSON.stringify(crashPayload)
+            import('./rtdb-auth.js').then(({ rtdbAuthQuery }) => rtdbAuthQuery()).then((authQ) => {
+                fetch(`${DYNAMIC_BASE_URL}sys_logs/crashes/${crashId}.json${authQ || ''}`, {
+                    method: 'PUT',
+                    body: JSON.stringify(crashPayload)
+                }).catch(()=>{});
             }).catch(()=>{});
         } catch(e) {}
 

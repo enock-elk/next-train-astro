@@ -138,6 +138,9 @@ assert.match(workerSource, /thandeka05nxumalo@gmail\.com/, 'Thandeka stays on th
 assert.match(workerSource, /enockelk@gmail\.com/, 'Enock stays on the worker admin allowlist');
 assert.match(community, /if \(!isAdminAuthed\(\)\) \{\s*const limit = checkCommunityRateLimit\(\);/, 'client cooldown skips signed-in operators');
 assert.match(community, /awardCommunityMarks\(/, 'a published community message awards points');
+assert.match(workerSource, /sanitizeCommunityPhotoUrl/, 'worker allowlists community avatar URLs');
+assert.match(workerSource, /next-train-lab\.pages\.dev/, 'worker CORS is limited to Next Train lab previews');
+assert.doesNotMatch(workerSource, /host\.endsWith\('\.pages\.dev'\)/, 'worker CORS does not allow every pages.dev host');
 assert.match(community, /community-sheet-delete/, 'admin can delete a community message from the tab');
 assert.match(community, /Delete for everyone/, 'community delete uses the alerts label');
 assert.match(admin, /ntAdminDeletePublishedCommunityMessage/, 'community tab delete uses the same RTDB delete as Community Monitor');

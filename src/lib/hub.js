@@ -941,6 +941,9 @@ async function submitFeedback() {
         } catch (authErr) {
             if (!isTransientAuthError(authErr)) throw authErr;
         }
+        if (!authToken) {
+            throw new Error('Could not send just now. Check your connection and try again.');
+        }
 
         let attachmentUrls = [];
         if (hasFile) {
@@ -2794,6 +2797,9 @@ export function initHub() {
             let authToken = '';
             if (window.firebaseAuth?.currentUser && window.firebaseGetIdToken) {
                 authToken = await window.firebaseGetIdToken(window.firebaseAuth.currentUser, true);
+            }
+            if (!authToken) {
+                throw new Error('Could not send just now. Check your connection and try again.');
             }
             let attachmentUrls = [];
             if (hasFile) {

@@ -13,6 +13,7 @@
 import { APP_VERSION, COMMUNITY_WORKER_URL, DYNAMIC_BASE_URL, ROUTES } from './config.js';
 import { formatAccountDisplayName } from './display-name.js';
 import { safeStorage, escapeHTML } from './utils.js';
+import { sanitizeCommunityPhotoUrl } from './community-photo.js';
 import { $currentRouteId, $userRegion, $deviceId } from '../store.js';
 import { $account } from './account.js';
 import { isAdminAuthed } from './admin-chrome.js';
@@ -209,9 +210,10 @@ function communityNameFor(acct) {
 }
 
 function renderAvatarHtml(photoURL) {
-    if (photoURL) {
+    const safePhoto = sanitizeCommunityPhotoUrl(photoURL);
+    if (safePhoto) {
         return `<span class="relative inline-flex w-8 h-8 shrink-0">
-            <img src="${escapeHTML(photoURL)}" alt="" class="w-8 h-8 rounded-full object-cover bg-gray-200 dark:bg-gray-700" loading="lazy" onerror="this.classList.add('hidden');const f=this.parentElement.querySelector('.avatar-fallback');if(f)f.classList.remove('hidden');"/>
+            <img src="${escapeHTML(safePhoto)}" alt="" class="w-8 h-8 rounded-full object-cover bg-gray-200 dark:bg-gray-700" loading="lazy" onerror="this.classList.add('hidden');const f=this.parentElement.querySelector('.avatar-fallback');if(f)f.classList.remove('hidden');"/>
             <span class="avatar-fallback hidden absolute inset-0 w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-base" aria-hidden="true">🙍</span>
         </span>`;
     }

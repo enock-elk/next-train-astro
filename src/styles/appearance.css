@@ -450,6 +450,10 @@ html[data-pilot-community="1"]:not([data-pilot-map="1"]) #bottom-nav-grid {
   grid-template-columns: repeat(4, minmax(0, 1fr));
   max-width: 30rem;
 }
+html[data-pilot-map="1"] #bottom-nav-map,
+html[data-pilot-community="1"] #bottom-nav-community {
+  display: flex !important;
+}
 
 #bottom-nav .bottom-nav-item:not(.is-active) {
   color: var(--nt-chrome-muted) !important;

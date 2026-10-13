@@ -2646,7 +2646,13 @@ const Admin = {
             if (ticketData && typeof ticketData === 'object') Admin._cachedFareTicketPhotos = ticketData;
             else ticketStatus = 'unavailable';
         }
-        const ids = Admin.commuterIdSet(did, deviceNode?.uid, userNode && looksDevice ? null : did);
+        let accountNode = userNode && typeof userNode === 'object' ? userNode : null;
+        const linkedUid = String(deviceNode?.uid || '').trim();
+        if (linkedUid && linkedUid !== did) {
+            const linked = await fetchJson(`users/${encodeURIComponent(linkedUid)}.json`);
+            if (linked && typeof linked === 'object') accountNode = linked;
+        }
+        const ids = Admin.commuterIdSet(did, linkedUid || deviceNode?.uid, userNode && looksDevice ? null : did);
         const feedbackItems = (Admin.cachedFeedbackData || []).filter((i) => {
             const fbDid = String(i?.deviceId || i?.device_id || '').trim();
             return ids.has(fbDid) || fbDid === did;
@@ -2714,6 +2720,30 @@ const Admin = {
         const crashLine = crashKnown
             ? (crashCount ? `Crashes: ${crashCount}` : 'Crashes: none')
             : 'Crashes: unavailable';
+        const versionOf = (row) => String(row?.appVersion || '').split(' - ')[0].trim();
+        const timeOf = (row) => Number(row?.timestamp || row?.at || row?.time || 0) || 0;
+        const activity = [];
+        const pushActivity = (ms, label, version) => {
+            const t = Number(ms) || 0;
+            if (t > 0) activity.push({ ms: t, label, appVersion: String(version || '').trim() });
+        };
+        if (accountNode) pushActivity(accountNode.lastSeenAt, 'App open', versionOf(accountNode));
+        pushActivity(tripLast, 'Trip plan', '');
+        if (latestFeedback) pushActivity(latestFeedback.timestamp, 'Feedback', versionOf(latestFeedback));
+        const latestFare = fareVotes.reduce((best, row) => (timeOf(row) > timeOf(best) ? row : best), null);
+        if (latestFare) pushActivity(timeOf(latestFare), 'Fare vote', versionOf(latestFare));
+        const latestFail = fails.reduce((best, row) => (timeOf(row) > timeOf(best) ? row : best), null);
+        if (latestFail) pushActivity(timeOf(latestFail), 'Routing fail', versionOf(latestFail));
+        if (crashKnown) {
+            const crashRows = (Admin.cachedCrashData || []).filter((c) => {
+                const cDid = String(c?.deviceId || c?.device_id || '').trim();
+                return ids.has(cDid) || cDid === did;
+            });
+            const latestCrash = crashRows.reduce((best, row) => (timeOf(row) > timeOf(best) ? row : best), null);
+            if (latestCrash) pushActivity(timeOf(latestCrash), 'Crash report', versionOf(latestCrash));
+        }
+        activity.sort((a, b) => b.ms - a.ms);
+        const lastActivity = activity[0] || null;
         return {
             id: did,
             alias: Admin.commuterAlias(did),
@@ -2739,6 +2769,7 @@ const Admin = {
             failCount: failStatus === 'unavailable' ? null : fails.length,
             ticketCount: ticketStatus === 'unavailable' && !ticketCount ? null : ticketCount,
             crashKnown,
+            lastActivity,
         };
     },
 
@@ -2806,11 +2837,14 @@ const Admin = {
             body.innerHTML = `
                 <p class="font-black text-sm text-gray-900 dark:text-white break-words">${esc(heading)}</p>
                 ${peek.alias ? `<p class="text-[11px]">Alias: <b>${esc(peek.alias)}</b></p>` : '<p class="text-[11px] text-gray-400">No feedback alias.</p>'}
+                ${peek.lastActivity
+                    ? `<p class="text-[11px]">Last activity: <b>${esc(Admin.formatDate(peek.lastActivity.ms))}</b> · ${esc(peek.lastActivity.label)}${peek.lastActivity.appVersion ? ` · ${esc(peek.lastActivity.appVersion)}` : ''}</p>`
+                    : '<p class="text-[11px] text-gray-400">No activity on file.</p>'}
                 ${peek.email ? `<p class="text-[11px]">Email: <b>${esc(peek.email)}</b></p>` : ''}
                 <div class="grid grid-cols-2 gap-2 pt-1">
                     ${tile('Joined', esc(joinedLabel), joinedLabel === 'unknown')}
                     ${tile('Trip plans', peek.tripLast ? esc(`yes${peek.tripRegion ? ` · ${peek.tripRegion}` : ''}`) : 'none', !peek.tripLast, peek.tripLast ? 'commuter-peek-trips' : '')}
-                    ${tile('Feedback', peek.hasChat ? esc(peek.feedbackCount ? `${peek.feedbackCount} messages` : 'open thread') : 'none', !peek.hasChat, peek.hasChat ? 'commuter-peek-feedback' : '')}
+                    ${tile('Feedback', peek.hasChat ? esc(peek.feedbackCount ? `${peek.feedbackCount} messages` : 'open thread') : 'none', !peek.hasChat, 'commuter-peek-feedback')}
                     ${tile('Contacts', contactParts.length ? contactParts.join('') : 'none', !contactParts.length)}
                     ${tile('Route', routeLabel ? esc(routeLabel) : 'none', !routeLabel)}
                     ${tile('Fares', peek.fareCount == null ? 'unavailable' : (peek.fareCount ? esc(`${peek.fareCount}${peek.fareDetail ? ` · ${peek.fareDetail}` : ''}`) : 'none'), !peek.fareCount)}
@@ -2819,12 +2853,11 @@ const Admin = {
                     ${tile('Crashes', esc(peek.crashKnown ? countLabel(peek.crashCount, peek.crashCount === 1 ? 'crash' : 'crashes') : 'unavailable'), !(peek.crashKnown && peek.crashCount))}
                 </div>
             `;
-            if (peek.hasChat) {
-                document.getElementById('commuter-peek-feedback')?.addEventListener('click', () => {
-                    close();
-                    Admin.openFeedbackForDevice(did, peek.latestFeedbackId);
-                });
-            }
+            document.getElementById('commuter-peek-feedback')?.addEventListener('click', () => {
+                close();
+                if (peek.hasChat) Admin.openFeedbackForDevice(did, peek.latestFeedbackId);
+                else Admin.startFeedbackChat(did, '');
+            });
             if (peek.tripLast) {
                 document.getElementById('commuter-peek-trips')?.addEventListener('click', () => {
                     close();

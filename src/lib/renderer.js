@@ -231,8 +231,13 @@ export const Renderer = {
         });
 
         container.innerHTML = html;
-        fitRouteNameNodes(container);
-        fitJhbNodes(container);
+        const fitNames = () => {
+            if (!container.isConnected) return;
+            fitRouteNameNodes(container);
+            fitJhbNodes(container);
+        };
+        if (typeof requestAnimationFrame === 'function') requestAnimationFrame(fitNames);
+        else fitNames();
     },
 
     renderWelcomeList: (containerId, routes, onSelectCallback) => {
@@ -291,8 +296,13 @@ export const Renderer = {
 
             container.appendChild(btn);
         });
-        fitRouteNameNodes(container);
-        fitJhbNodes(container);
+        const fitNames = () => {
+            if (!container.isConnected) return;
+            fitRouteNameNodes(container);
+            fitJhbNodes(container);
+        };
+        if (typeof requestAnimationFrame === 'function') requestAnimationFrame(fitNames);
+        else fitNames();
     },
 
     // --- 2. LAYOUT PLACEHOLDERS & ERRORS ---

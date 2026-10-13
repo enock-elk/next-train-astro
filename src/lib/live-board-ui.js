@@ -2,7 +2,7 @@
  * LIVE BOARD UI ORCHESTRATION (Phase 2)
  * Thin controller bridging DOM ↔ live-board.js engine ↔ Renderer
  */
-import { ROUTES, FARE_CONFIG, getCorridorLabel } from './config.js';
+import { ROUTES, FARE_CONFIG, fareMultiplierForListedTicket, getCorridorLabel } from './config.js';
 import { normalizeStationName, timeToSeconds, safeStorage, escapeHTML, formatTimeDisplay, formatRouteLabelPlain, formatRouteLabelHtml, expandJhbLabel, applyFittedLabel, fitRouteNameNodes, fitJhbNodes, isRealTime, shortSharedSourceLabel, scheduleCacheSlot, warningTriangleSvg, schedulesBelongToRoute } from './utils.js';
 import { $currentRouteId, $userRegion, $userProfile, $fullDatabase, $schedules } from '../store.js';
 import { currentTime, loadAllSchedules } from './logic.js';
@@ -37,6 +37,56 @@ import {
 export { renderFullScheduleGrid, applyRouteDeepLink, parseRouteDeepLink };
 
 const getCurrentTime = () => (typeof window !== 'undefined' && window.currentTime) ? window.currentTime : currentTime;
+
+let boardRefreshQueued = false;
+let boardRefreshAgain = false;
+
+/** Paint the pinned route after the tap has drawn, then merge shared corridors. */
+export function scheduleBoardRefresh() {
+    if (typeof window === 'undefined') {
+        findNextTrains();
+        updateNextTrainView();
+        return;
+    }
+    if (boardRefreshQueued) {
+        boardRefreshAgain = true;
+        return;
+    }
+    boardRefreshQueued = true;
+    const finish = () => {
+        boardRefreshQueued = false;
+        if (boardRefreshAgain) {
+            boardRefreshAgain = false;
+            scheduleBoardRefresh();
+        }
+    };
+    const run = () => {
+        let pending = false;
+        try {
+            pending = !!findNextTrains({ includeShared: false })?.pendingShared;
+        } catch (e) {
+            console.error(e);
+        }
+        try { updateNextTrainView(); } catch (e) { console.error(e); }
+        if (!pending) {
+            finish();
+            return;
+        }
+        const mergeShared = () => {
+            try { findNextTrains({ includeShared: true, keepCards: true }); }
+            catch (e) { console.error(e); }
+            finish();
+        };
+        if (typeof scheduler !== 'undefined' && typeof scheduler.yield === 'function') scheduler.yield().then(mergeShared);
+        else setTimeout(mergeShared, 0);
+    };
+    const afterPaint = () => {
+        if (typeof scheduler !== 'undefined' && typeof scheduler.yield === 'function') scheduler.yield().then(run);
+        else setTimeout(run, 0);
+    };
+    if (typeof requestAnimationFrame === 'function') requestAnimationFrame(afterPaint);
+    else afterPaint();
+}
 
 export function getRoutesForCurrentRegion() {
     const regionalRoutes = {};
@@ -79,34 +129,45 @@ export function _renderNextTrainList() {
     const list = document.getElementById('next-train-autocomplete-list');
     if (!input || !select || !list) return;
 
-    list.innerHTML = '';
     const matches = getAllStations();
-
-    if (matches.length === 0) {
-        const li = document.createElement('li');
-        if (!$fullDatabase.get()) {
-            li.className = "p-4 text-sm text-blue-600 dark:text-blue-400 font-bold flex items-center justify-center bg-blue-50 dark:bg-blue-900/20";
-            li.innerHTML = `<svg class="animate-spin -ml-1 mr-2 h-5 w-5 text-blue-500" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Loading stations... please wait`;
-        } else {
-            li.className = "p-4 text-sm text-gray-400 italic text-center";
-            li.textContent = "No stations on this route";
-        }
-        list.appendChild(li);
-    } else {
-        matches.forEach(station => {
-            const li = document.createElement('li');
-            li.className = "p-3.5 border-b border-gray-100 dark:border-gray-700 hover:bg-blue-50 dark:hover:bg-gray-700 cursor-pointer text-base sm:text-lg font-medium text-gray-700 dark:text-gray-200 transition-colors";
-            li.textContent = station.replace(' STATION', '');
-            li.onclick = () => {
-                input.value = station.replace(' STATION', '');
-                select.value = station;
-                select.dispatchEvent(new Event('change'));
-                list.classList.add('hidden');
-            };
-            list.appendChild(li);
-        });
+    const listKey = `${matches.join('\n')}|${$fullDatabase.get() ? '1' : '0'}`;
+    if (list.dataset.stationKey === listKey && list.childElementCount > 0) {
+        list.classList.remove('hidden');
+        return;
     }
+    list.innerHTML = '';
     list.classList.remove('hidden');
+    const paint = () => {
+        if (!list.isConnected || list.classList.contains('hidden')) return;
+        list.dataset.stationKey = listKey;
+        list.innerHTML = '';
+        if (matches.length === 0) {
+            const li = document.createElement('li');
+            if (!$fullDatabase.get()) {
+                li.className = "p-4 text-sm text-blue-600 dark:text-blue-400 font-bold flex items-center justify-center bg-blue-50 dark:bg-blue-900/20";
+                li.innerHTML = `<svg class="animate-spin -ml-1 mr-2 h-5 w-5 text-blue-500" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Loading stations... please wait`;
+            } else {
+                li.className = "p-4 text-sm text-gray-400 italic text-center";
+                li.textContent = "No stations on this route";
+            }
+            list.appendChild(li);
+        } else {
+            matches.forEach(station => {
+                const li = document.createElement('li');
+                li.className = "p-3.5 border-b border-gray-100 dark:border-gray-700 hover:bg-blue-50 dark:hover:bg-gray-700 cursor-pointer text-base sm:text-lg font-medium text-gray-700 dark:text-gray-200 transition-colors";
+                li.textContent = station.replace(' STATION', '');
+                li.onclick = () => {
+                    input.value = station.replace(' STATION', '');
+                    select.value = station;
+                    select.dispatchEvent(new Event('change'));
+                    list.classList.add('hidden');
+                };
+                list.appendChild(li);
+            });
+        }
+    };
+    if (typeof scheduler !== 'undefined' && typeof scheduler.yield === 'function') scheduler.yield().then(paint);
+    else setTimeout(paint, 0);
 }
 
 export function setupNextTrainAutocomplete() {
@@ -387,15 +448,15 @@ export function openFareModal(fareDetails, routeIdOverride) {
 
     const tableEl = document.getElementById('fare-table-content');
     if (tableEl && fareDetails.prices) {
-        const profile = FARE_CONFIG.profiles[$userProfile.get() || 'Adult'] || FARE_CONFIG.profiles.Adult;
+        const profileName = $userProfile.get() || 'Adult';
         const prices = fareDetails.prices;
-        const calc = (base) => (Math.ceil((base * profile.base) * 2) / 2).toFixed(2);
+        const calc = (base, kind) => (Math.ceil((base * fareMultiplierForListedTicket(profileName, kind)) * 2) / 2).toFixed(2);
         tableEl.innerHTML = `
-            <div class="flex justify-between items-center py-3 border-b border-dashed border-gray-300 dark:border-gray-600"><span class="text-gray-600 dark:text-gray-400 text-sm font-bold">Single Trip</span><span class="font-black text-gray-900 dark:text-white text-lg">R${calc(prices.single)}</span></div>
-            <div class="flex justify-between items-center py-3 border-b border-dashed border-gray-300 dark:border-gray-600"><span class="text-gray-600 dark:text-gray-400 text-sm font-bold">Return Trip</span><span class="font-black text-gray-900 dark:text-white text-lg">R${calc(prices.return)}</span></div>
-            <div class="flex justify-between items-center py-3 border-b border-dashed border-gray-300 dark:border-gray-600"><span class="text-gray-600 dark:text-gray-400 text-sm font-bold">Weekly <span class="opacity-70 font-normal">(Mon-Fri)</span></span><span class="font-black text-gray-900 dark:text-white text-lg">R${calc(prices.weekly_mon_fri)}</span></div>
-            <div class="flex justify-between items-center py-3 border-b border-dashed border-gray-300 dark:border-gray-600"><span class="text-gray-600 dark:text-gray-400 text-sm font-bold">Weekly <span class="opacity-70 font-normal">(Mon-Sat)</span></span><span class="font-black text-gray-900 dark:text-white text-lg">R${calc(prices.weekly_mon_sat)}</span></div>
-            <div class="flex justify-between items-center py-3"><span class="text-gray-600 dark:text-gray-400 text-sm font-bold">Monthly Pass</span><span class="font-black text-gray-900 dark:text-white text-lg">R${calc(prices.monthly)}</span></div>`;
+            <div class="flex justify-between items-center py-3 border-b border-dashed border-gray-300 dark:border-gray-600"><span class="text-gray-600 dark:text-gray-400 text-sm font-bold">Single Trip</span><span class="font-black text-gray-900 dark:text-white text-lg">R${calc(prices.single, 'single')}</span></div>
+            <div class="flex justify-between items-center py-3 border-b border-dashed border-gray-300 dark:border-gray-600"><span class="text-gray-600 dark:text-gray-400 text-sm font-bold">Return Trip</span><span class="font-black text-gray-900 dark:text-white text-lg">R${calc(prices.return, 'return')}</span></div>
+            <div class="flex justify-between items-center py-3 border-b border-dashed border-gray-300 dark:border-gray-600"><span class="text-gray-600 dark:text-gray-400 text-sm font-bold">Weekly <span class="opacity-70 font-normal">(Mon-Fri)</span></span><span class="font-black text-gray-900 dark:text-white text-lg">R${calc(prices.weekly_mon_fri, 'pass')}</span></div>
+            <div class="flex justify-between items-center py-3 border-b border-dashed border-gray-300 dark:border-gray-600"><span class="text-gray-600 dark:text-gray-400 text-sm font-bold">Weekly <span class="opacity-70 font-normal">(Mon-Sat)</span></span><span class="font-black text-gray-900 dark:text-white text-lg">R${calc(prices.weekly_mon_sat, 'pass')}</span></div>
+            <div class="flex justify-between items-center py-3"><span class="text-gray-600 dark:text-gray-400 text-sm font-bold">Monthly Pass</span><span class="font-black text-gray-900 dark:text-white text-lg">R${calc(prices.monthly, 'pass')}</span></div>`;
     }
 
     const noteEl = document.getElementById('fare-confirm-note');
@@ -482,7 +543,9 @@ export function updatePinUI() {
     if (pinBtn) pinBtn.title = pinned ? 'Unpin this route' : 'Pin this route as default';
     // SPA parity: the route menu carries the "Pinned:" section, so it must be
     // repainted whenever the pin or the active route changes.
-    if (typeof window !== 'undefined' && window.Renderer?.renderRouteMenu) {
+    const routeModal = typeof document !== 'undefined' ? document.getElementById('route-modal') : null;
+    const menuOpen = !!(routeModal && !routeModal.classList.contains('hidden'));
+    if (menuOpen && typeof window !== 'undefined' && window.Renderer?.renderRouteMenu) {
         window.Renderer.renderRouteMenu('route-list', getRoutesForCurrentRegion(), routeId);
     }
     try { applyPilotChrome(); } catch { /* ignore */ }
@@ -492,7 +555,7 @@ export function selectProfile(profileType) {
     $userProfile.set(profileType);
     safeStorage.setItem('userProfile', profileType);
     closeSmoothModal('profile-modal');
-    findNextTrains();
+    scheduleBoardRefresh();
     showToast(`Profile set to ${profileType}`, 'success', 1500);
     if (typeof window.pushSignedInPrefs === 'function') {
         window.pushSignedInPrefs({ passengerType: profileType });
@@ -838,9 +901,8 @@ export function initLiveBoardUi() {
         if (scheds && Object.keys(scheds).length > 0) {
             populateStationList();
             updateLastUpdatedText();
-            findNextTrains();
-            updateNextTrainView();
             updatePinUI();
+            scheduleBoardRefresh();
             maybeAutoLocateBoard().catch(() => {});
         }
     });
@@ -849,7 +911,7 @@ export function initLiveBoardUi() {
         syncRouteModalCloseBtn();
         if (!routeId) return;
         updatePinUI();
-        updateNextTrainView();
+        scheduleBoardRefresh();
         // Drop the previous corridor's generic weekday_to_* slots before reload so
         // VIEW FULL TIMETABLE cannot paint Mabopane chrome over Pienaarspoort rows.
         if (!schedulesBelongToRoute($schedules.get(), routeId)) {
@@ -859,8 +921,7 @@ export function initLiveBoardUi() {
         // "only if cache exists" guard left the board empty after picking a route.
         loadAllSchedules(true).then(() => {
             populateStationList();
-            findNextTrains();
-            updateNextTrainView();
+            scheduleBoardRefresh();
             maybeAutoLocateBoard().catch(() => {});
         });
     });
@@ -936,9 +997,8 @@ export function initLiveBoardUi() {
                 searchInput.value = stationSelect.value.replace(/ STATION/g, '');
                 searchInput.dataset.resolvedValue = stationSelect.value;
             }
-            // Board paint first; planner mirror and analytics wait for the next task.
-            findNextTrains();
-            updateNextTrainView();
+            // Board paint waits until this tap has drawn. Planner mirror and analytics follow.
+            scheduleBoardRefresh();
             const station = stationSelect.value || '';
             const routeId = $currentRouteId.get() || '';
             setTimeout(() => {

@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_10.13.2': [
+        'User sheet names the latest activity and the app version on that event. Every tile stays on the grid. A grey Feedback tile opens the reply composer. Scholar weekly and monthly passes use the adult price. Single and return stay half. Home taps paint the pinned route after the frame, then shared corridors. Inter uses a metric fallback. Pilot nav columns are stamped before first paint. Viewport writes skip unchanged values. What’s New covers scholar passes only. forceShow stays false.',
+    ],
     'V9_10.13.1': [
         'Planner Trip Fare puts the money mark on the left of the label. Show Next Train is a darker blue than the fare row. User Trust keeps bans, lookup, and deletion requests in one panel. The user sheet drops the duplicate id and the Open chat button: Feedback opens the thread, Trip plans opens plans, Joined stays inert, and Contacts lists email and phone when both exist. An alert with no reactions shows a circled plus that opens the reaction row. Existing reactions hang off the card. Hold-to-react stays. No alerts copy in What’s New. forceShow stays false.',
     ],

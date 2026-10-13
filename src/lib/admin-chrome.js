@@ -176,8 +176,15 @@ export function applyPilotChrome() {
     }
 
     const html = document.documentElement;
-    html.setAttribute('data-pilot-map', !isAdminAuthed() && mapOn ? '1' : '0');
-    html.setAttribute('data-pilot-community', !isAdminAuthed() && communityOn ? '1' : '0');
+    const pilotMap = !isAdminAuthed() && mapOn ? '1' : '0';
+    const pilotCommunity = !isAdminAuthed() && communityOn ? '1' : '0';
+    html.setAttribute('data-pilot-map', pilotMap);
+    html.setAttribute('data-pilot-community', pilotCommunity);
+    if (!isAdminAuthed()) {
+        try {
+            localStorage.setItem('ntPilotChrome', JSON.stringify({ map: pilotMap, community: pilotCommunity }));
+        } catch { /* ignore */ }
+    }
 
     const tab = safeStorage.getItem('activeTab');
     if (!isAdminAuthed() && ((tab === 'map' && !canOpenTrackingMap()) || (tab === 'community' && !communityOn))) {

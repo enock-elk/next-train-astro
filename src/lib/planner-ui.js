@@ -11,7 +11,7 @@ import {
     $isSimMode, $userRegion, $currentRouteId, $globalStationIndex, 
     $globalDisruptions, $opsOverlaysReady, $masterStationList, $ghostStationList, $userProfile, $fullDatabase, $simTime
 } from '../store.js';
-import { ROUTES, FARE_CONFIG, fareMultiplierForProfile, withBase, SPECIAL_DATES, HOLIDAY_NAMES } from './config.js';
+import { ROUTES, FARE_CONFIG, fareMultiplierForProfile, fareMultiplierForListedTicket, withBase, SPECIAL_DATES, HOLIDAY_NAMES } from './config.js';
 import { resolveHolidayDayType } from './holiday-approvals.js';
 import { smoothPathFromStops, nearestPathIndex, loadRegionBundle } from './rail-tracks.js';
 import { applyForksToStops, fetchTrackForks } from './map-overrides.js';
@@ -416,20 +416,19 @@ function formatRawFareLabel(raw) {
 }
 
 /** Board-style ticket rows under the trip's Single price (peak table, profile multiplier). */
-function plannerTicketRowsHtml(zone, fare) {
+export function plannerTicketRowsHtml(zone, fare) {
     const single = `
             <div class="flex justify-between gap-3 pt-2 border-t border-gray-100 dark:border-gray-800"><dt class="text-gray-500 dark:text-gray-400">Fare - Single Trip</dt><dd><button type="button" id="planner-fare-raw-toggle" class="font-black text-gray-900 dark:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 rounded" aria-pressed="false" title="Show calculated price">R${escapeHTML(fare.priceLabel)}</button></dd></div>`;
     const prices = zone && FARE_CONFIG.zones_detailed?.[zone];
     if (!prices) return single;
     const profileName = fare.profile || 'Adult';
-    const peakMult = fareMultiplierForProfile(profileName, false);
-    const money = (base) => formatBoardFareLabel(Number(base) * peakMult);
-    const row = (label, extra, base) => {
+    const money = (base, kind) => formatBoardFareLabel(Number(base) * fareMultiplierForListedTicket(profileName, kind));
+    const row = (label, extra, base, kind) => {
         if (base == null || !Number.isFinite(Number(base))) return '';
         return `
-            <div class="flex justify-between gap-3"><dt class="text-gray-500 dark:text-gray-400">${label}${extra || ''}</dt><dd class="font-black text-gray-900 dark:text-white">R${escapeHTML(money(base))}</dd></div>`;
+            <div class="flex justify-between gap-3"><dt class="text-gray-500 dark:text-gray-400">${label}${extra || ''}</dt><dd class="font-black text-gray-900 dark:text-white">R${escapeHTML(money(base, kind))}</dd></div>`;
     };
-    return `${single}${row('Return Trip', '', prices.return)}${row('Weekly', ' <span class="opacity-70 font-normal">(Mon-Fri)</span>', prices.weekly_mon_fri)}${row('Weekly', ' <span class="opacity-70 font-normal">(Mon-Sat)</span>', prices.weekly_mon_sat)}${row('Monthly Pass', '', prices.monthly)}`;
+    return `${single}${row('Return Trip', '', prices.return, 'return')}${row('Weekly', ' <span class="opacity-70 font-normal">(Mon-Fri)</span>', prices.weekly_mon_fri, 'pass')}${row('Weekly', ' <span class="opacity-70 font-normal">(Mon-Sat)</span>', prices.weekly_mon_sat, 'pass')}${row('Monthly Pass', '', prices.monthly, 'pass')}`;
 }
 
 function plannerMoneySvg(className = 'w-3.5 h-3.5') {

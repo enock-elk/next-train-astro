@@ -14,7 +14,7 @@
  * Changelog / What’s New is optional: skip both, or write only "no release notes."
  * Always add ADMIN_CHANGELOG[APP_VERSION] (System Health Build notes).
  */
-export const APP_VERSION = "V9_10.13.1";
+export const APP_VERSION = "V9_10.13.2";
 
 /** Public support channels (About modal, lifeboat help.html, Safe Mode). */
 export const SUPPORT_EMAIL = 'admin@nexttrain.co.za';
@@ -930,6 +930,16 @@ export function fareMultiplierForProfile(profileName, useOffPeak) {
     return useOffPeak ? profile.offPeak : profile.base;
 }
 
+/**
+ * Listed ticket sheet. Scholar 50% is single and return only.
+ * Weekly and monthly passes stay the adult price.
+ * kind: 'single' | 'return' | 'pass'
+ */
+export function fareMultiplierForListedTicket(profileName, kind) {
+    if (kind === 'pass' && profileName === 'Scholar') return 1;
+    return fareMultiplierForProfile(profileName, false);
+}
+
 // 6. GHOST TRAIN PROTOCOL (Default Exclusions)
 // Offline-only fallback if the Firebase exclusions tree cannot be fetched.
 // Live bans belong in RTDB `exclusions/{routeId}/{trainId}` so Global State
@@ -964,6 +974,16 @@ export const HERC_KOED_JUNCTIONS = ['KOEDOESPOORT', 'HERCULES'];
 // comma, a period, or a hyphen. Do not explain strategy or "we fixed."
 // Leave every forceShow false. Never auto-open What's New over the welcome screen.
 export const CHANGELOG_DATA = [
+    {
+        id: "V9_10.13.2",
+        title: "Scholar passes",
+        date: "13 Oct 2026",
+        forceShow: false,
+        features: [
+            "A scholar weekly or monthly pass matches the adult price.",
+            "Scholar single and return tickets stay half price."
+        ]
+    },
     {
         id: "V9_10.13.1",
         title: "Trip Fare",

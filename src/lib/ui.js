@@ -36,7 +36,7 @@ export function hapticsAreEnabled() {
 export function triggerHaptic() {
     try {
         if (hapticsAreEnabled() && navigator.vibrate) {
-            navigator.vibrate(50);
+            setTimeout(() => { try { navigator.vibrate(50); } catch (e) {} }, 0);
         }
     } catch(e) {}
 }

@@ -790,7 +790,9 @@ export function getDetailedFareForRoute(routeId) {
     return { code: zoneCode, prices: FARE_CONFIG.zones_detailed[zoneCode] };
 }
 
-export function findNextTrains() {
+export function findNextTrains(opts) {
+    const includeShared = !opts || opts.includeShared !== false;
+    const keepCards = !!(opts && opts.keepCards);
     const quietPaint = typeof window !== 'undefined' && !!window.__ntQuietBoardPaint;
     if (!quietPaint && typeof paintHeaderDayLabel === 'function') paintHeaderDayLabel();
     if(!getCurrentRouteId()) return;
@@ -833,7 +835,7 @@ export function findNextTrains() {
     const uiDestA = typeof window.Renderer !== 'undefined' ? window.Renderer._applyUIIntercepts(currentRoute.destA).toUpperCase() : currentRoute.destA.replace(' STATION', '').toUpperCase();
     const uiDestB = typeof window.Renderer !== 'undefined' ? window.Renderer._applyUIIntercepts(currentRoute.destB).toUpperCase() : currentRoute.destB.replace(' STATION', '').toUpperCase();
 
-    if (!quietPaint) {
+    if (!quietPaint && !keepCards) {
         if (pretoriaTimeEl()) pretoriaTimeEl().innerHTML = "";
         if (pienaarspoortTimeEl()) pienaarspoortTimeEl().innerHTML = "";
     }
@@ -942,6 +944,7 @@ export function findNextTrains() {
     }
 
     sharedRoutes = sharedRoutes.filter(rId => getSharedStationCount(getCurrentRouteId(), rId) > 1);
+    const routesForMerge = includeShared ? sharedRoutes : [];
     let primarySheetKey = routeSheetKeyForDay(currentRoute, boardDayType, 'a');
 
     // --- DESTINATION A ---
@@ -956,7 +959,7 @@ export function findNextTrains() {
         const seenTrainsA = new Set(mergedJourneys.map(j => j.train || j.train1.train));
         const targetStationsA = getTargetStations(schedule, selectedStation);
 
-        sharedRoutes.forEach(rId => {
+        routesForMerge.forEach(rId => {
             const otherRoute = ROUTES[rId];
             if (normalizeStationName(otherRoute.destA) === normalizeStationName(currentRoute.destA)) {
                 const key = routeSheetKeyForDay(otherRoute, boardDayType, 'a');
@@ -1021,7 +1024,7 @@ export function findNextTrains() {
         const seenTrainsB = new Set(mergedJourneys.map(j => j.train || j.train1.train));
         const targetStationsB = getTargetStations(schedule, selectedStation);
 
-        sharedRoutes.forEach(rId => {
+        routesForMerge.forEach(rId => {
             const otherRoute = ROUTES[rId];
             
                  const key = routeSheetKeyForDay(otherRoute, boardDayType, 'b');
@@ -1066,6 +1069,7 @@ export function findNextTrains() {
         if(typeof window.processAndRenderJourney === 'function') window.processAndRenderJourney(mergedJourneys, pienaarspoortTimeEl(), pienaarspoortHeaderEl(), currentRoute.destB);
     }
     import('./ride-pings.js').then((m) => m.paintLiveDirectionHeaders?.()).catch(() => {});
+    return { pendingShared: !includeShared && sharedRoutes.length > 0 };
 }
 
 export function findNextJourneyToDestA(fromStation, timeNow, schedule, routeConfig, targetDayIdx = getCurrentDayIndex()) {

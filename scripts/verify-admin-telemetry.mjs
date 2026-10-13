@@ -109,7 +109,7 @@ ok(adminJs.includes("modal.id = 'admin-commuter-peek'"), 'user sheet modal id is
 ok(adminJs.includes('collectCommuterPeek'), 'user sheet uses cheap per-id reads');
 {
     const peekAt = adminJs.indexOf('collectCommuterPeek: async');
-    const peekSlice = adminJs.slice(peekAt, peekAt + 9000);
+    const peekSlice = adminJs.slice(peekAt, peekAt + 12000);
     ok(peekSlice.includes('sys_logs/fare_votes.json'), 'user sheet loads fare votes when the cache is cold');
     ok(peekSlice.includes('sys_logs/routing_fails.json'), 'user sheet loads routing fails when the cache is cold');
     ok(peekSlice.includes('sys_logs/fare_ticket_photos.json'), 'user sheet loads ticket photos when the cache is cold');
@@ -129,6 +129,8 @@ ok(adminJs.includes('collectCommuterPeek'), 'user sheet uses cheap per-id reads'
 }
 ok(adminJs.includes('Look up more'), 'user sheet can hand off to User Trust search');
 ok(adminJs.includes('commuter-peek-feedback'), 'feedback tile opens the thread');
+ok(adminJs.includes('Last activity:'), 'user sheet shows latest activity');
+ok(adminJs.includes("Admin.startFeedbackChat(did, '')"), 'grey feedback tile can start a chat');
 ok(adminJs.includes('commuter-peek-trips'), 'trip plans tile opens plans');
 ok(!adminJs.includes('commuter-peek-chat'), 'user sheet has no Open chat button');
 ok(adminJs.includes('ut-tab-deletions') && adminJs.includes('ut-pane-deletions'), 'deletion requests live in User Trust');

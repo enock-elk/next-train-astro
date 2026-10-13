@@ -102,6 +102,13 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
         var lastFullLayoutH = 0;
         var lastShellTop = 0;
         var lastShellH = 0;
+        var paintedShellTop = -1;
+        var paintedShellH = -1;
+        var paintedVvH = -1;
+        var paintedVvTop = -1;
+        var paintedKb = -1;
+        var cachedEnv = -1;
+        var fitQueued = false;
         function markStandalone() {
           var on = false;
           try {
@@ -134,6 +141,8 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
           return /Android/i.test((window.navigator && window.navigator.userAgent) || '');
         }
         function envBottom() {
+          if (cachedEnv >= 0) return cachedEnv;
+          if (!document.body) return 0;
           try {
             var probe = document.createElement('div');
             probe.setAttribute('aria-hidden', 'true');
@@ -141,8 +150,10 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
             (document.body || root).appendChild(probe);
             var h = probe.getBoundingClientRect().height || 0;
             probe.parentNode.removeChild(probe);
+            cachedEnv = h;
             return h;
           } catch (e) {
+            cachedEnv = 0;
             return 0;
           }
         }
@@ -243,16 +254,29 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
               lastH = h;
               root.style.setProperty('--nt-app-h', h + 'px');
             }
-            root.style.setProperty('--nt-shell-top', shellTop + 'px');
-            root.style.setProperty('--nt-shell-h', shellH + 'px');
+            if (Math.abs(shellTop - paintedShellTop) >= 1) {
+              paintedShellTop = shellTop;
+              root.style.setProperty('--nt-shell-top', shellTop + 'px');
+            }
+            if (Math.abs(shellH - paintedShellH) >= 1) {
+              paintedShellH = shellH;
+              root.style.setProperty('--nt-shell-h', shellH + 'px');
+            }
           }
           if (Math.abs(sys - lastSys) >= 1) {
             lastSys = sys;
             root.style.setProperty('--nt-sys-bottom', sys + 'px');
           }
           var vvH = Math.round((vv && vv.height) ? vv.height : (inner || 0));
-          if (vvH >= 240) root.style.setProperty('--nt-vv-h', vvH + 'px');
-          root.style.setProperty('--nt-vv-top', Math.max(0, off) + 'px');
+          if (vvH >= 240 && Math.abs(vvH - paintedVvH) >= 1) {
+            paintedVvH = vvH;
+            root.style.setProperty('--nt-vv-h', vvH + 'px');
+          }
+          var vvTop = Math.max(0, off);
+          if (Math.abs(vvTop - paintedVvTop) >= 1) {
+            paintedVvTop = vvTop;
+            root.style.setProperty('--nt-vv-top', vvTop + 'px');
+          }
           var kbH = 0;
           if (keyboard) {
             kbH = Math.max(0, Math.round(gap));
@@ -261,7 +285,10 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
               if (covered > kbH) kbH = covered;
             }
           }
-          root.style.setProperty('--nt-kb-h', kbH + 'px');
+          if (Math.abs(kbH - paintedKb) >= 1) {
+            paintedKb = kbH;
+            root.style.setProperty('--nt-kb-h', kbH + 'px');
+          }
           root.classList.toggle('nt-keyboard', keyboard);
           root.classList.toggle('nt-standalone', markStandalone());
           root.classList.toggle('nt-android', isAndroid());
@@ -270,14 +297,25 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
           } catch (e) {}
         }
         window.ntFitAppViewport = apply;
+        function scheduleApply() {
+          if (fitQueued) return;
+          fitQueued = true;
+          requestAnimationFrame(function () {
+            fitQueued = false;
+            apply();
+          });
+        }
         apply();
-        window.addEventListener('resize', apply, { passive: true });
-        window.addEventListener('orientationchange', function () { setTimeout(apply, 80); });
+        window.addEventListener('resize', scheduleApply, { passive: true });
+        window.addEventListener('orientationchange', function () {
+          cachedEnv = -1;
+          setTimeout(apply, 80);
+        });
         document.addEventListener('focusin', apply, { passive: true });
         document.addEventListener('focusout', function () { setTimeout(apply, 50); }, { passive: true });
         if (window.visualViewport) {
-          window.visualViewport.addEventListener('resize', apply, { passive: true });
-          window.visualViewport.addEventListener('scroll', apply, { passive: true });
+          window.visualViewport.addEventListener('resize', scheduleApply, { passive: true });
+          window.visualViewport.addEventListener('scroll', scheduleApply, { passive: true });
         }
         document.addEventListener('visibilitychange', function () {
           if (document.visibilityState === 'visible') apply();
@@ -800,6 +838,12 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
         if (!localStorage.getItem('next_train_device_id')) {
           localStorage.setItem('next_train_device_id', 'usr_' + Math.random().toString(36).substr(2, 9) + '_' + Date.now());
         }
+        if (localStorage.getItem('ntOperatorAuthed') !== '1') {
+          var pilot = null;
+          try { pilot = JSON.parse(localStorage.getItem('ntPilotChrome') || 'null'); } catch (e2) { pilot = null; }
+          if (pilot && pilot.map === '1') document.documentElement.setAttribute('data-pilot-map', '1');
+          if (pilot && pilot.community === '1') document.documentElement.setAttribute('data-pilot-community', '1');
+        }
       } catch (e) {}
     </script>
 
@@ -809,7 +853,16 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
       .hidden { display: none !important; }
 
       html, body { height: 100%; }
-      body { font-family: Inter, system-ui, -apple-system, 'Segoe UI', sans-serif; }
+      /* Arial metrics matched to Inter so the swap does not reflow the board. */
+      @font-face {
+        font-family: "Inter Fallback";
+        src: local("Arial");
+        size-adjust: 107.64%;
+        ascent-override: 90.49%;
+        descent-override: 22.56%;
+        line-gap-override: 0%;
+      }
+      body { font-family: Inter, "Inter Fallback", system-ui, -apple-system, 'Segoe UI', sans-serif; }
       body.modal-active { overflow: hidden !important; overscroll-behavior: none; }
       /* iOS: body overflow:hidden does not stop #app-scroll under the Options scrim. */
       body.sidenav-open #app-scroll {

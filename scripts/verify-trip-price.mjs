@@ -5,10 +5,10 @@
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { FARE_CONFIG, fareMultiplierForProfile } from '../src/lib/config.js';
+import { FARE_CONFIG, fareMultiplierForProfile, fareMultiplierForListedTicket } from '../src/lib/config.js';
 import { FEATURE_KEYS, GRANTABLE_FEATURES, isFeatureEnabled } from '../src/lib/features.js';
 import { suggestZoneFromKm, DEFAULT_ZONE_KM_BANDS, bakedDestToDestKm } from '../src/lib/zone-distance-audit.js';
-import { computeZoneFareForTrip, getCrowFliesTripKm, collectTripStopsForDistance } from '../src/lib/planner-ui.js';
+import { computeZoneFareForTrip, plannerTicketRowsHtml, getCrowFliesTripKm, collectTripStopsForDistance } from '../src/lib/planner-ui.js';
 import { compactTime } from '../src/lib/share-links.js';
 import {
     cheaperZone,
@@ -97,6 +97,20 @@ assert(fareMultiplierForProfile('Adult', false) === 1, 'Adult peak is full fare'
 assert(fareMultiplierForProfile('Adult', true) === 0.6, 'Adult off-peak is 40% off');
 assert(fareMultiplierForProfile('Pensioner', false) === 1, 'Pensioner peak is full fare');
 assert(fareMultiplierForProfile('Pensioner', true) === 0.5, 'Pensioner off-peak is 50%');
+assert(fareMultiplierForListedTicket('Scholar', 'single') === 0.5, 'Scholar single stays 50%');
+assert(fareMultiplierForListedTicket('Scholar', 'return') === 0.5, 'Scholar return stays 50%');
+assert(fareMultiplierForListedTicket('Scholar', 'pass') === 1, 'Scholar weekly and monthly stay full adult price');
+assert(fareMultiplierForListedTicket('Adult', 'pass') === 1, 'Adult passes stay full price');
+assert(fareMultiplierForListedTicket('Pensioner', 'pass') === 1, 'Pensioner passes stay the peak adult price');
+{
+    const scholarRows = plannerTicketRowsHtml('Z2', { priceLabel: '6', profile: 'Scholar', price: 6 });
+    assert(scholarRows.includes('>R6<'), 'Scholar single row stays R6');
+    assert(scholarRows.includes('>R12<'), 'Scholar return stays half of Z2 R24');
+    assert(scholarRows.includes('>R70<'), 'Scholar Mon-Fri weekly stays adult R70');
+    assert(scholarRows.includes('>R80<'), 'Scholar Mon-Sat weekly stays adult R80');
+    assert(scholarRows.includes('>R220<'), 'Scholar monthly stays adult R220');
+    assert(!scholarRows.includes('>R110<'), 'Scholar monthly is not half of R220');
+}
 
 {
     $userProfile.set('Scholar');

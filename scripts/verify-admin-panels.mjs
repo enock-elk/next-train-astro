@@ -225,6 +225,7 @@ assert(helpers.ntAdminDevPanelIdFromHash('#dev-feedback-panel') === 'feedback-pa
 assert(helpers.ntAdminDevPanelIdFromHash('#dev') === '', 'grid hash is not a panel');
 assert(helpers.ntAdminDevPanelIdFromHash('#roadmap-ticket') === '', 'ticket overlay hash is not a panel');
 assert(helpers.ntAdminCanonicalPanelId('alert-panel--inapp') === 'alert-panel', 'in-app hub hash still mounts Service Alerts');
+assert(helpers.ntAdminCanonicalPanelId('account-deletions-panel') === 'user-trust-panel', 'deletion requests open inside User Trust');
 assert(helpers.ntAdminCanonicalPanelId('feedback-panel') === 'feedback-panel', 'other panel ids stay unchanged');
 assert(helpers.ntAdminDrillPanelTitle('push-notifications-panel') === 'Notifications', 'FCM drill title is Notifications, not the panel id');
 assert(helpers.ntAdminDrillPanelTitle('alert-panel--inapp') === 'In-app alerts', 'in-app drill title is In-app alerts');

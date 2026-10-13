@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_10.13.1': [
+        'Planner Trip Fare puts the money mark on the left of the label. Show Next Train is a darker blue than the fare row. User Trust keeps bans, lookup, and deletion requests in one panel. The user sheet drops the duplicate id and the Open chat button: Feedback opens the thread, Trip plans opens plans, Joined stays inert, and Contacts lists email and phone when both exist. An alert with no reactions shows a circled plus that opens the reaction row. Existing reactions hang off the card. Hold-to-react stays. No alerts copy in What’s New. forceShow stays false.',
+    ],
     'V9_10.12.3': [
         'Planner result times read Departs and Total Time, with Departed above Show Next Train, and trip fare on one row. Password accounts stay out of messages until the email link is opened. The verify card says the email needs to be verified, and the link returns to Next Train. Account profile opens name, photo, Sign out, and Delete account. Delete writes account_deletions for a Dev Hub Deletion requests tile (rules deploy still required). Sign-in merges recent trips, pinned routes, and the notification switch onto the account. Commuter toasts no longer say token, SW, or FCM. Legal pages use the Next Train header and skip their own footer link. User sheet is a tile grid. Fares shows quote match percent. /auth-action.html is ready if the Firebase action URL can be changed (case 10430971). forceShow stays false.',
     ],

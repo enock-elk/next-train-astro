@@ -276,7 +276,7 @@ export function shouldIgnoreAlertLongPress(target) {
     if (target.closest('[data-alert-lightbox]')) return false;
     if (target.closest('[data-alert-media]')) return false;
     if (target.closest('button[onclick*="openLightbox"]')) return false;
-    if (target.closest('[data-alert-reply], [data-alert-jump], [data-alert-summary], .nt-poll-vote, .nt-poll, [data-poll-shell]')) return true;
+    if (target.closest('[data-alert-reply], [data-alert-jump], [data-alert-summary], [data-alert-react-add], .nt-poll-vote, .nt-poll, [data-poll-shell]')) return true;
     if (target.closest('a, input, textarea, select')) return true;
     if (target.closest('button')) return true;
     return false;

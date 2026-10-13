@@ -346,6 +346,7 @@ function ntAdminDevPanelIdFromHash(hash) {
 function ntAdminCanonicalPanelId(panelId) {
     const id = String(panelId || '');
     if (id === 'alert-panel--inapp') return 'alert-panel';
+    if (id === 'account-deletions-panel') return 'user-trust-panel';
     return id;
 }
 
@@ -2777,16 +2778,26 @@ const Admin = {
             const esc = Admin.commuterEsc;
             const heading = peek.alias || peek.displayName || did;
             const joinedLabel = peek.joinedMs ? Admin.formatDate(peek.joinedMs) : 'unknown';
-            const contactBits = [
-                ...(peek.contacts.emails || []).map((em) => esc(em)),
-                ...(peek.contacts.phones || []).map((ph) => esc(ph)),
-            ];
+            const emails = peek.contacts.emails || [];
+            const phones = peek.contacts.phones || [];
+            const contactParts = [];
+            if (emails.length) {
+                contactParts.push(`<span class="block text-[9px] font-black uppercase tracking-wider text-gray-400">Email</span>${emails.map((em) => esc(em)).join('<br>')}`);
+            }
+            if (phones.length) {
+                contactParts.push(`<span class="block text-[9px] font-black uppercase tracking-wider text-gray-400${emails.length ? ' mt-1' : ''}">Phone</span>${phones.map((ph) => esc(ph)).join('<br>')}`);
+            }
             const routeLabel = Admin.inboxRouteLabel(peek.defaultRoute) || peek.defaultRoute;
-            const tile = (label, value, absent) => `
-                <div class="rounded-xl border px-2 py-2 text-left ${absent ? 'opacity-55 border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-900' : 'border-blue-100 dark:border-blue-900 bg-blue-50/70 dark:bg-blue-950/20'}">
+            const tile = (label, value, absent, actionId) => {
+                const tag = actionId ? 'button' : 'div';
+                const type = actionId ? ' type="button"' : '';
+                const idAttr = actionId ? ` id="${actionId}"` : '';
+                return `
+                <${tag}${type}${idAttr} class="rounded-xl border px-2 py-2 text-left ${absent ? 'opacity-55 border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-900' : 'border-blue-100 dark:border-blue-900 bg-blue-50/70 dark:bg-blue-950/20'}${actionId ? ' cursor-pointer hover:border-blue-300 dark:hover:border-blue-700 focus:outline-none' : ''}">
                     <p class="text-[9px] font-black uppercase tracking-widest ${absent ? 'text-gray-400' : 'text-blue-700 dark:text-blue-300'}">${esc(label)}</p>
                     <p class="mt-1 text-[11px] font-bold leading-snug break-words ${absent ? 'text-gray-400' : 'text-gray-900 dark:text-white'}">${value}</p>
-                </div>`;
+                </${tag}>`;
+            };
             const countLabel = (count, noun) => {
                 if (count == null) return 'unavailable';
                 if (!count) return 'none';
@@ -2795,13 +2806,12 @@ const Admin = {
             body.innerHTML = `
                 <p class="font-black text-sm text-gray-900 dark:text-white break-words">${esc(heading)}</p>
                 ${peek.alias ? `<p class="text-[11px]">Alias: <b>${esc(peek.alias)}</b></p>` : '<p class="text-[11px] text-gray-400">No feedback alias.</p>'}
-                <p class="font-mono text-[10px] text-gray-400 break-all">${esc(did)}</p>
                 ${peek.email ? `<p class="text-[11px]">Email: <b>${esc(peek.email)}</b></p>` : ''}
                 <div class="grid grid-cols-2 gap-2 pt-1">
                     ${tile('Joined', esc(joinedLabel), joinedLabel === 'unknown')}
-                    ${tile('Trip plans', peek.tripLast ? esc(`yes${peek.tripRegion ? ` · ${peek.tripRegion}` : ''}`) : 'none', !peek.tripLast)}
-                    ${tile('Feedback', peek.hasChat ? esc(peek.feedbackCount ? `${peek.feedbackCount} messages` : 'open thread') : 'none', !peek.hasChat)}
-                    ${tile('Contacts', contactBits.length ? contactBits.join(', ') : 'none', !contactBits.length)}
+                    ${tile('Trip plans', peek.tripLast ? esc(`yes${peek.tripRegion ? ` · ${peek.tripRegion}` : ''}`) : 'none', !peek.tripLast, peek.tripLast ? 'commuter-peek-trips' : '')}
+                    ${tile('Feedback', peek.hasChat ? esc(peek.feedbackCount ? `${peek.feedbackCount} messages` : 'open thread') : 'none', !peek.hasChat, peek.hasChat ? 'commuter-peek-feedback' : '')}
+                    ${tile('Contacts', contactParts.length ? contactParts.join('') : 'none', !contactParts.length)}
                     ${tile('Route', routeLabel ? esc(routeLabel) : 'none', !routeLabel)}
                     ${tile('Fares', peek.fareCount == null ? 'unavailable' : (peek.fareCount ? esc(`${peek.fareCount}${peek.fareDetail ? ` · ${peek.fareDetail}` : ''}`) : 'none'), !peek.fareCount)}
                     ${tile('Routing fails', esc(countLabel(peek.failCount, peek.failCount === 1 ? 'fail' : 'fails')), !peek.failCount)}
@@ -2810,14 +2820,16 @@ const Admin = {
                 </div>
             `;
             if (peek.hasChat) {
-                const actions = document.createElement('div');
-                actions.className = 'flex flex-wrap gap-2 pt-2';
-                actions.innerHTML = `<button type="button" id="commuter-peek-chat" class="text-[10px] font-black uppercase tracking-wider text-white bg-blue-600 hover:bg-blue-700 px-3 py-1.5 rounded-lg">Open chat</button>`;
-                body.appendChild(actions);
-                document.getElementById('commuter-peek-chat').onclick = () => {
+                document.getElementById('commuter-peek-feedback')?.addEventListener('click', () => {
                     close();
                     Admin.openFeedbackForDevice(did, peek.latestFeedbackId);
-                };
+                });
+            }
+            if (peek.tripLast) {
+                document.getElementById('commuter-peek-trips')?.addEventListener('click', () => {
+                    close();
+                    Admin.openFeedbackTripPlans(did);
+                });
             }
         } catch (e) {
             if (body.isConnected) body.innerHTML = `<p class="text-red-500">Could not load this sheet: ${Admin.commuterEsc(e.message || e)}</p>`;
@@ -5692,8 +5704,8 @@ const Admin = {
             }
         }
 
-        if (domId === 'account-deletions-panel' && typeof Admin.fetchAccountDeletions === 'function') {
-            Admin.fetchAccountDeletions();
+        if (requestedId === 'account-deletions-panel' && typeof Admin.setUtTab === 'function') {
+            Admin.setUtTab('deletions');
         }
         if (panelId === 'action-required-panel') {
             const banner = document.getElementById('action-required-panel');
@@ -5728,7 +5740,7 @@ const Admin = {
         if (panelId === 'delay-reports-panel' && typeof Admin.fetchDelayReports === 'function') Admin.fetchDelayReports();
         if (panelId === 'live-share-panel' && typeof Admin.fetchRideShareLog === 'function') Admin.fetchRideShareLog();
         if (panelId === 'moderation-queue-panel' && typeof Admin.fetchModerationQueue === 'function') Admin.fetchModerationQueue();
-        if (panelId === 'user-trust-panel' && typeof Admin.fetchActiveBans === 'function') Admin.fetchActiveBans();
+        if (panelId === 'user-trust-panel' && requestedId !== 'account-deletions-panel' && typeof Admin.fetchActiveBans === 'function') Admin.fetchActiveBans();
         if (panelId === 'deadends-panel' && typeof Admin.fetchDeadEnds === 'function') {
             Admin._deSortMode = Admin._deSortMode || 'recent';
             const sortBtn = document.getElementById('de-sort-btn');
@@ -11070,35 +11082,7 @@ const Admin = {
     },
 
     setupAccountDeletionsManager: () => {
-        const adminContainer = document.getElementById('admin-modules-container');
-        if (!adminContainer) return;
-        let panel = document.getElementById('account-deletions-panel');
-        if (!panel) {
-            panel = document.createElement('div');
-            panel.id = 'account-deletions-panel';
-            const after = document.getElementById('user-trust-panel');
-            if (after && after.parentNode) after.parentNode.insertBefore(panel, after.nextSibling);
-            else adminContainer.appendChild(panel);
-        }
-        if (panel.dataset.adminLoaded === 'true') return;
-        panel.dataset.adminLoaded = 'true';
-        panel.className = 'bg-white dark:bg-gray-800 rounded-xl shadow-md border border-gray-200 dark:border-gray-700 p-4 mb-4 relative overflow-hidden transition-all duration-300';
-        panel.innerHTML = `
-            <button id="ad-header-btn" class="w-full text-left text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center justify-center focus:outline-none relative">
-                <span class="flex flex-col items-center">
-                    ${Admin.tileIcon('user', 'text-rose-500 dark:text-rose-400')}
-                    <span>Deletion requests</span>
-                </span>
-            </button>
-            <div id="ad-body" class="hidden mt-4 space-y-2 text-left">
-                <div class="flex items-center justify-between gap-2">
-                    <p class="text-[11px] text-gray-500 dark:text-gray-400 leading-snug">Requests sent from Account. Mark done after the account is removed.</p>
-                    <button type="button" id="ad-refresh-btn" class="shrink-0 text-[10px] font-bold text-blue-600 dark:text-blue-400 px-2 py-1 rounded-lg bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800">Refresh</button>
-                </div>
-                <div id="ad-list" class="space-y-2"><p class="text-xs text-gray-400 text-center py-3">Open to load requests.</p></div>
-            </div>
-        `;
-        document.getElementById('ad-refresh-btn')?.addEventListener('click', () => Admin.fetchAccountDeletions());
+        document.getElementById('account-deletions-panel')?.remove();
     },
 
     fetchAccountDeletions: async () => {
@@ -11221,10 +11205,11 @@ const Admin = {
                 <svg id="ut-chevron" class="absolute right-3 w-4 h-4 transform transition-transform -rotate-90 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
             </div>
             <div id="ut-body" class="hidden mt-4 flex flex-col text-left">
-                <p class="text-[10px] text-gray-500 dark:text-gray-400 mb-3 px-1 leading-snug">Ban list and lookup stay separate - switch tabs below.</p>
+                <p class="text-[10px] text-gray-500 dark:text-gray-400 mb-3 px-1 leading-snug">Bans, lookup, and deletion requests are in this panel.</p>
                 <div class="flex gap-1 p-1 mb-3 rounded-xl bg-gray-100 dark:bg-gray-900/80 border border-gray-200 dark:border-gray-700" role="tablist" aria-label="User trust sections">
                     <button type="button" id="ut-tab-bans" role="tab" aria-selected="true" class="ut-tab flex-1 text-[10px] font-black uppercase tracking-wider py-2 rounded-lg bg-white dark:bg-gray-800 text-indigo-600 dark:text-indigo-400 shadow-sm border border-indigo-200 dark:border-indigo-800">Active bans</button>
                     <button type="button" id="ut-tab-lookup" role="tab" aria-selected="false" class="ut-tab flex-1 text-[10px] font-black uppercase tracking-wider py-2 rounded-lg text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200">Lookup</button>
+                    <button type="button" id="ut-tab-deletions" role="tab" aria-selected="false" class="ut-tab flex-1 text-[10px] font-black uppercase tracking-wider py-2 rounded-lg text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200">Deletions</button>
                 </div>
                 <div id="ut-pane-bans" role="tabpanel" class="ut-pane">
                     <div class="flex items-center justify-between gap-2 mb-2 px-1">
@@ -11242,44 +11227,49 @@ const Admin = {
                     </div>
                     <div id="ut-result" class="px-1 text-xs text-gray-500">Enter a UID to inspect.</div>
                 </div>
+                <div id="ut-pane-deletions" role="tabpanel" class="ut-pane hidden">
+                    <div class="flex items-center justify-between gap-2 mb-2 px-1">
+                        <p class="text-[11px] text-gray-500 dark:text-gray-400 leading-snug">Requests sent from Account. Mark done after the account is removed.</p>
+                        <button type="button" id="ad-refresh-btn" class="shrink-0 text-[10px] font-bold text-blue-600 dark:text-blue-400 px-2 py-1 rounded-lg bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800">Refresh</button>
+                    </div>
+                    <div id="ad-list" class="space-y-2 max-h-[320px] overflow-y-auto px-1 custom-scrollbar"><p class="text-xs text-gray-400 text-center py-3">Open this tab to load requests.</p></div>
+                </div>
             </div>
         `;
 
         const header = document.getElementById('ut-header-btn');
         const body = document.getElementById('ut-body');
         const chevron = document.getElementById('ut-chevron');
-        const tabBans = document.getElementById('ut-tab-bans');
-        const tabLookup = document.getElementById('ut-tab-lookup');
-        const paneBans = document.getElementById('ut-pane-bans');
-        const paneLookup = document.getElementById('ut-pane-lookup');
-        const setUtTab = (which) => {
-            const bans = which === 'bans';
-            tabBans?.setAttribute('aria-selected', bans ? 'true' : 'false');
-            tabLookup?.setAttribute('aria-selected', bans ? 'false' : 'true');
-            tabBans?.classList.toggle('bg-white', bans);
-            tabBans?.classList.toggle('dark:bg-gray-800', bans);
-            tabBans?.classList.toggle('text-indigo-600', bans);
-            tabBans?.classList.toggle('dark:text-indigo-400', bans);
-            tabBans?.classList.toggle('shadow-sm', bans);
-            tabBans?.classList.toggle('border', bans);
-            tabBans?.classList.toggle('border-indigo-200', bans);
-            tabBans?.classList.toggle('dark:border-indigo-800', bans);
-            tabBans?.classList.toggle('text-gray-500', !bans);
-            tabLookup?.classList.toggle('bg-white', !bans);
-            tabLookup?.classList.toggle('dark:bg-gray-800', !bans);
-            tabLookup?.classList.toggle('text-indigo-600', !bans);
-            tabLookup?.classList.toggle('dark:text-indigo-400', !bans);
-            tabLookup?.classList.toggle('shadow-sm', !bans);
-            tabLookup?.classList.toggle('border', !bans);
-            tabLookup?.classList.toggle('border-indigo-200', !bans);
-            tabLookup?.classList.toggle('dark:border-indigo-800', !bans);
-            tabLookup?.classList.toggle('text-gray-500', bans);
-            paneBans?.classList.toggle('hidden', !bans);
-            paneLookup?.classList.toggle('hidden', bans);
-            if (bans) Admin.fetchActiveBans();
+        const utTabs = [
+            { id: 'bans', btn: document.getElementById('ut-tab-bans'), pane: document.getElementById('ut-pane-bans') },
+            { id: 'lookup', btn: document.getElementById('ut-tab-lookup'), pane: document.getElementById('ut-pane-lookup') },
+            { id: 'deletions', btn: document.getElementById('ut-tab-deletions'), pane: document.getElementById('ut-pane-deletions') },
+        ];
+        const paintUtTab = (btn, on) => {
+            if (!btn) return;
+            btn.setAttribute('aria-selected', on ? 'true' : 'false');
+            btn.classList.toggle('bg-white', on);
+            btn.classList.toggle('dark:bg-gray-800', on);
+            btn.classList.toggle('text-indigo-600', on);
+            btn.classList.toggle('dark:text-indigo-400', on);
+            btn.classList.toggle('shadow-sm', on);
+            btn.classList.toggle('border', on);
+            btn.classList.toggle('border-indigo-200', on);
+            btn.classList.toggle('dark:border-indigo-800', on);
+            btn.classList.toggle('text-gray-500', !on);
+            btn.classList.toggle('dark:text-gray-400', !on);
         };
-        tabBans?.addEventListener('click', () => setUtTab('bans'));
-        tabLookup?.addEventListener('click', () => setUtTab('lookup'));
+        const setUtTab = (which) => {
+            const active = utTabs.some((tab) => tab.id === which) ? which : 'bans';
+            utTabs.forEach((tab) => {
+                const on = tab.id === active;
+                paintUtTab(tab.btn, on);
+                tab.pane?.classList.toggle('hidden', !on);
+            });
+            if (active === 'bans') Admin.fetchActiveBans();
+            if (active === 'deletions') Admin.fetchAccountDeletions();
+        };
+        utTabs.forEach((tab) => tab.btn?.addEventListener('click', () => setUtTab(tab.id)));
         Admin.setUtTab = setUtTab;
         Admin.openUserTrustLookup = ({ uid, email } = {}) => {
             const needle = String(uid || email || '').trim();
@@ -11314,6 +11304,7 @@ const Admin = {
 
         document.getElementById('ut-lookup-btn').onclick = () => Admin.lookupUserTrust();
         document.getElementById('ut-bans-refresh')?.addEventListener('click', () => Admin.fetchActiveBans());
+        document.getElementById('ad-refresh-btn')?.addEventListener('click', () => Admin.fetchAccountDeletions());
         document.getElementById('ut-uid-input')?.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') Admin.lookupUserTrust();
         });

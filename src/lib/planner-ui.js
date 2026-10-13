@@ -3429,7 +3429,7 @@ export const PlannerRenderer = {
             stateBadge = `
                 <div class="flex flex-col items-start min-w-0">
                     <p class="text-[11px] font-bold text-gray-500 dark:text-gray-400">Departed:</p>
-                    <button type="button" onclick="if(typeof window._plannerCurrentTripIndex !== 'undefined' && typeof window._selectCustomTrip === 'function') window._selectCustomTrip(window._plannerCurrentTripIndex + 1);" class="planner-departed-next mt-1 bg-blue-50 hover:bg-blue-100 dark:bg-blue-900/30 dark:hover:bg-blue-900/50 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800 font-bold py-1.5 px-3 rounded-lg shadow-sm transition-colors focus:outline-none flex justify-center items-center text-[9px] uppercase tracking-wider whitespace-nowrap">
+                    <button type="button" onclick="if(typeof window._plannerCurrentTripIndex !== 'undefined' && typeof window._selectCustomTrip === 'function') window._selectCustomTrip(window._plannerCurrentTripIndex + 1);" class="planner-departed-next mt-1 bg-blue-200 hover:bg-blue-300 dark:bg-blue-800/70 dark:hover:bg-blue-800 text-blue-800 dark:text-blue-100 border border-blue-300 dark:border-blue-600 font-bold py-1.5 px-3 rounded-lg shadow-sm transition-colors focus:outline-none flex justify-center items-center text-[9px] uppercase tracking-wider whitespace-nowrap">
                         Show Next Train <svg class="w-3 h-3 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 5l7 7-7 7M5 5l7 7-7 7"></path></svg>
                     </button>
                 </div>
@@ -3473,8 +3473,8 @@ export const PlannerRenderer = {
                      </div>
                 </div>
                 ${canShowTripPrice(step) ? `<button type="button" data-nt-trip-fare="1" class="planner-trip-fare mt-3 w-full flex items-center justify-between gap-3 px-3 py-2 rounded-xl bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400">
-                        <span class="text-[11px] font-bold text-blue-700 dark:text-blue-300">Trip fare</span>
-                        <span class="inline-flex items-center gap-1 text-base font-black text-gray-900 dark:text-white tabular-nums leading-none">${plannerMoneySvg('w-4 h-4 text-gray-900 dark:text-white')}<span data-nt-trip-fare-price>R-</span></span>
+                        <span class="inline-flex items-center gap-1.5 text-[11px] font-bold text-blue-700 dark:text-blue-300">${plannerMoneySvg('w-4 h-4 text-blue-700 dark:text-blue-300')}Trip Fare</span>
+                        <span class="inline-flex items-center gap-1 text-base font-black text-gray-900 dark:text-white tabular-nums leading-none"><span data-nt-trip-fare-price>R-</span></span>
                      </button>` : ''}
             </div>
         `;

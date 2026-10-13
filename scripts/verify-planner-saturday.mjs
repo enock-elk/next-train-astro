@@ -79,7 +79,7 @@ if (ui.includes('allowedDisrIds.size && !allowedDisrIds.has')) fail('empty allow
 if (!ui.includes('!allowedDisrIds.has(d.id)')) fail('trip map paints only disruptions that hit this trip');
 if (!ui.includes('stopOnTripPath')) fail('trip map requires zone ends on this trip path');
 if (!ui.includes('planner-notice-copy')) fail('notice body copy must be fittable');
-if (!ui.includes('Trip fare')) fail('planner fare is a single Trip fare line');
+if (!ui.includes('Trip Fare')) fail('planner fare is a single Trip Fare line');
 if (ui.includes("switchTab('map'")) fail('Open Network Map must not switch to the live Map tab');
 if (!ui.includes('__ntOpenNetworkMapSheet')) fail('Open Network Map opens the sidenav GPS network map sheet');
 {

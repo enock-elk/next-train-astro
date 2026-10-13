@@ -337,13 +337,15 @@ function renderReactionsHtml(notice, opts = {}) {
     const mine = mineReactionKey(notice);
     const { total, rows } = buildAlertReactionBreakdown(notice, mine);
     const wrapClass = opts.compact ? 'nt-alert-react-summary' : 'nt-alert-react-summary mt-2';
+    const id = escapeHTML(String(notice.id || ''));
+    const src = escapeHTML(String(notice._sourceKey || ''));
     if (!total) {
-        return `<div class="${wrapClass} min-h-[22px]" data-alert-summary="${escapeHTML(String(notice.id || ''))}"></div>`;
+        return `<button type="button" class="${wrapClass} nt-alert-react-add inline-flex items-center justify-center w-[22px] h-[22px] rounded-full border border-gray-300 dark:border-gray-500 text-gray-500 dark:text-gray-300 bg-white dark:bg-gray-900 focus:outline-none" data-alert-summary="${id}" data-alert-react-add="1" data-alert-id="${id}" data-alert-src="${src}" aria-label="Add a reaction"><span class="text-sm font-bold leading-none" aria-hidden="true">+</span></button>`;
     }
     const faces = rows.map((row) => (
         `<span class="text-sm leading-none" aria-hidden="true">${row.emoji}</span>`
     )).join('');
-    return `<button type="button" class="${wrapClass} inline-flex items-center gap-1.5 px-2 py-1 rounded-full bg-gray-100 dark:bg-gray-900/80 border border-gray-200 dark:border-gray-600 text-gray-800 dark:text-gray-100 focus:outline-none" data-alert-summary="${escapeHTML(String(notice.id || ''))}" data-alert-id="${escapeHTML(String(notice.id || ''))}" data-alert-src="${escapeHTML(String(notice._sourceKey || ''))}" aria-label="${total} reactions">
+    return `<button type="button" class="${wrapClass} nt-alert-react-hang inline-flex items-center gap-1.5 px-2 py-1 rounded-full bg-gray-100 dark:bg-gray-900/80 border border-gray-200 dark:border-gray-600 text-gray-800 dark:text-gray-100 focus:outline-none" data-alert-summary="${id}" data-alert-id="${id}" data-alert-src="${src}" aria-label="${total} reactions">
         <span class="inline-flex items-center gap-0.5">${faces}</span>
         <span class="text-[11px] font-bold tabular-nums">${total}</span>
     </button>`;
@@ -1054,6 +1056,15 @@ function bindAlertsChannelOnce() {
                 renderAlertsChannel(cachedLiveNotices, { highlightId: id });
             }
             scrollFeedTo(id, false);
+            return;
+        }
+        const addReact = e.target.closest?.('[data-alert-react-add]');
+        if (addReact) {
+            e.preventDefault();
+            const id = addReact.getAttribute('data-alert-id');
+            const src = addReact.getAttribute('data-alert-src');
+            const notice = cachedLiveNotices.find((n) => String(n.id) === String(id) && String(n._sourceKey) === String(src));
+            if (notice) openAlertReactionPicker(notice, addReact);
             return;
         }
         const summary = e.target.closest?.('[data-alert-summary]');

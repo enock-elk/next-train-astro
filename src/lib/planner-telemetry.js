@@ -3,7 +3,7 @@
  *
  * Two trip buckets (intentionally separate):
  *  1. UI recent trips — plannerHistory_* in planner-ui.js (display cap 5)
- *  2. Telemetry queue — nt_trip_plan_queue_v1 here (flush to RTDB every 10)
+ *  2. Telemetry queue — nt_trip_plan_queue_v1 here (flush to RTDB every 5)
  *
  * Fare votes write immediately to sys_logs/fare_votes/$voteId (create-once).
  * Offline devices keep a queue of one vote and flush on reconnect.
@@ -35,7 +35,7 @@ function authUid() {
 
 const FAIL_DEBOUNCE_MS = 45_000;
 /** Flush telemetry batch size — independent of UI history display cap. */
-export const TRIP_FLUSH_SIZE = 10;
+export const TRIP_FLUSH_SIZE = 5;
 /** Soft cap if flush keeps failing offline — avoid unbounded local growth. */
 const TRIP_QUEUE_HARD_CAP = 50;
 export const TRIP_QUEUE_KEY = 'nt_trip_plan_queue_v1';

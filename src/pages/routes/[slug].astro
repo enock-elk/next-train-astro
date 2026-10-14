@@ -35,7 +35,6 @@ import {
   seoTrainIdSample,
   seoRouteDistanceKm,
   seoRouteDistanceLabel,
-  SEO_SCHEDULE_YEAR,
 } from '../../lib/seo-timetable.js';
 
 export function getStaticPaths() {
@@ -69,6 +68,7 @@ const satNote = timetable.hasSaturday
   ? 'Saturday trains are listed further down this page.'
   : 'This corridor has no Saturday sheet in the published dump.';
 const fares = buildRouteFareTable(route);
+const adultSingle = (!fares.inferred && fares.tickets[0]?.value) ? fares.tickets[0].value : '';
 const title = routeDocumentTitle(origin, dest);
 const description = routeMetaDescription(origin, dest, province, {
   hasSaturday: timetable.hasSaturday,
@@ -154,9 +154,61 @@ const related = [
       <p class="mt-3 text-base text-slate-600 dark:text-slate-300 leading-relaxed">
         {seed.blurb}
       </p>
-      <p class="mt-3 text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
-        Updated {SEO_SCHEDULE_YEAR} {origin} to {dest} Metrorail (PRASA) schedule. Next Train is an unofficial helper: next train at your station, full timetable, ticket prices, trip planner, and network map.
-      </p>
+
+      <div class="mt-4 grid grid-cols-2 gap-2 text-sm">
+        <div class="rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900/60 px-3 py-2.5">
+          <p class="text-[10px] font-black uppercase tracking-widest text-slate-500">Saturday</p>
+          <p class="mt-1 font-semibold text-slate-900 dark:text-white">{timetable.hasSaturday ? 'Saturday sheet on this page' : 'No Saturday sheet'}</p>
+        </div>
+        <div class="rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900/60 px-3 py-2.5">
+          <p class="text-[10px] font-black uppercase tracking-widest text-slate-500">Sunday</p>
+          <p class="mt-1 font-semibold text-slate-900 dark:text-white">No Sunday service</p>
+        </div>
+        {adultSingle && (
+          <div class="rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900/60 px-3 py-2.5 col-span-2">
+            <p class="text-[10px] font-black uppercase tracking-widest text-slate-500">Adult single</p>
+            <p class="mt-1 font-semibold text-slate-900 dark:text-white">{adultSingle} for the longest trip on this route. Weekly and monthly prices are further down.</p>
+          </div>
+        )}
+      </div>
+
+      <div class="mt-4 rounded-2xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900/60 px-4 py-3 text-sm space-y-2">
+        <p class="text-[10px] font-black uppercase tracking-widest text-slate-500">When trains run</p>
+        <p>
+          <span class="font-semibold text-slate-800 dark:text-slate-100">Weekdays.</span>
+          Full times are listed below. Open Next Train for the live board.
+        </p>
+        <p>
+          <span class="font-semibold text-slate-800 dark:text-slate-100">Saturdays.</span>
+          {satNote}
+        </p>
+        <p>
+          <span class="font-semibold text-slate-800 dark:text-slate-100">Sundays and public holidays.</span>
+          {seed.operatingNote}
+          {route.region === 'WC' && route.sheetKeys?.pub_to_a && (
+            <>
+              {' '}
+              <a href={withBase(WC_PUBLIC_HOLIDAYS_PATH)} class="text-blue-700 dark:text-blue-300 hover:underline">
+                Western Cape public holiday timetable
+              </a>
+              .
+            </>
+          )}
+        </p>
+      </div>
+
+      {(firstB || firstA) && (
+        <div class="mt-4 rounded-2xl border border-blue-100 bg-blue-50/80 dark:border-blue-900/40 dark:bg-blue-950/30 px-4 py-3 text-sm text-slate-800 dark:text-slate-100">
+          <p class="text-[10px] font-black uppercase tracking-widest text-blue-700 dark:text-blue-300 mb-1">
+            Weekday first &amp; last
+          </p>
+          {firstB && <p>{firstB}</p>}
+          {firstA && <p class="mt-1">{firstA}</p>}
+          <p class="mt-2 text-xs text-slate-600 dark:text-slate-300">
+            First and last are departures from the origin station on that direction.
+          </p>
+        </div>
+      )}
 
       <SeoAppPreview routeId={route.id} href={liveBoardHref} />
     </div>
@@ -178,9 +230,11 @@ const related = [
         <p class="mt-1 text-sm text-slate-600 dark:text-slate-300">
           {stations.length} stops from {stations[0]} toward {stations[stations.length - 1]}.
         </p>
-        <p class="mt-2 text-sm text-slate-700 dark:text-slate-200 leading-relaxed">
-          {stations.join(', ')}.
-        </p>
+        <ul class="mt-3 columns-2 gap-x-4 text-sm text-slate-700 dark:text-slate-200">
+          {stations.map((stop) => (
+            <li class="break-inside-avoid py-0.5">{stop}</li>
+          ))}
+        </ul>
         {seed.serves && (
           <p class="mt-3 text-sm text-slate-700 dark:text-slate-200 leading-relaxed">
             {seed.serves}
@@ -235,46 +289,6 @@ const related = [
     </div>
 
     <div class="max-w-2xl mx-auto px-4 pt-6">
-      <div class="space-y-3 text-base text-slate-600 dark:text-slate-300 leading-relaxed">
-        <div class="rounded-2xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900/60 px-4 py-3 text-sm space-y-2">
-          <p class="text-[10px] font-black uppercase tracking-widest text-slate-500">When trains run</p>
-          <p>
-            <span class="font-semibold text-slate-800 dark:text-slate-100">Weekdays.</span>
-            Full times are listed above. Open Next Train for the live board.
-          </p>
-          <p>
-            <span class="font-semibold text-slate-800 dark:text-slate-100">Saturdays.</span>
-            {satNote}
-          </p>
-          <p>
-            <span class="font-semibold text-slate-800 dark:text-slate-100">Sundays and public holidays.</span>
-            {seed.operatingNote}
-            {route.region === 'WC' && route.sheetKeys?.pub_to_a && (
-              <>
-                {' '}
-                <a href={withBase(WC_PUBLIC_HOLIDAYS_PATH)} class="text-blue-700 dark:text-blue-300 hover:underline">
-                  Western Cape public holiday timetable
-                </a>
-                .
-              </>
-            )}
-          </p>
-        </div>
-      </div>
-
-      {(firstB || firstA) && (
-        <div class="mt-6 rounded-2xl border border-blue-100 bg-blue-50/80 dark:border-blue-900/40 dark:bg-blue-950/30 px-4 py-3 text-sm text-slate-800 dark:text-slate-100">
-          <p class="text-[10px] font-black uppercase tracking-widest text-blue-700 dark:text-blue-300 mb-1">
-            Weekday first &amp; last
-          </p>
-          {firstB && <p>{firstB}</p>}
-          {firstA && <p>{firstA}</p>}
-          <p class="mt-2 text-xs text-slate-600 dark:text-slate-300">
-            First and last are departures from the origin station on that direction.
-          </p>
-        </div>
-      )}
-
       <SeoFareTable
         zoneCode={fares.zoneCode}
         inferred={fares.inferred}

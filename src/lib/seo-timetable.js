@@ -517,16 +517,16 @@ export function routeDocumentTitle(origin, dest) {
 export function routeMetaDescription(origin, dest, province, opts = {}) {
     const pair = `${origin} to ${dest}`;
     const trains = (opts.trainIds || []).map((id) => String(id || '').trim()).filter(Boolean).slice(0, 4);
-    const trainBit = trains.length ? ` Current trains ${trains.join(', ')}.` : '';
+    const trainBit = trains.length ? ` Trains include ${trains.join(', ')}.` : '';
     const fareBit = (opts.maxSingle && !opts.inferredZone)
-        ? ` Max adult single ${opts.maxSingle}.`
-        : ' Ticket prices in Next Train.';
-    let satBit = '';
-    if (opts.hasSaturday === true) satBit = ' Saturday schedule listed. No Sunday service.';
-    else if (opts.hasSaturday === false) satBit = ' No Sunday service.';
+        ? ` Adult single ${opts.maxSingle}.`
+        : '';
+    let satBit = ' No Sunday service.';
+    if (opts.hasSaturday === true) satBit = ' Saturday schedule on this page. No Sunday service.';
+    else if (opts.hasSaturday === false) satBit = ' No Saturday or Sunday service.';
     const nearby = opts.nearby ? ` ${String(opts.nearby).trim()}` : '';
-    const provinceBit = province ? ` (${province})` : '';
-    return `View and download the ${pair} Metrorail (PRASA) train schedule${provinceBit}. Updated ${SEO_SCHEDULE_YEAR} timetable.${trainBit}${fareBit} Works offline in Next Train, with next train, ticket prices, and trip planner.${satBit}${nearby}`;
+    const provinceBit = province ? ` ${province}.` : '';
+    return `${pair} ${SEO_SCHEDULE_YEAR} Metrorail (PRASA) train schedule.${provinceBit}${satBit}${fareBit}${trainBit} View and download the timetable. Works offline in Next Train, with ticket prices, next train, and trip planner.${nearby}`;
 }
 
 function getDumpValue(db, key) {

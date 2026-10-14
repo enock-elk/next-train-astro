@@ -9,6 +9,7 @@ import {
   displayRouteName,
   regionName,
   CORRIDOR_INSIGHTS,
+  CORRIDOR_PAGE_COPY,
 } from '../../lib/seo-routes.js';
 import SeoCrossLinks from '../../components/SeoCrossLinks.astro';
 import SeoAppPreview from '../../components/SeoAppPreview.astro';
@@ -24,8 +25,11 @@ const entry = getSeoCorridorBySlug(slug);
 if (!entry) return Astro.redirect('/routes.html');
 
 const province = regionName(entry.region);
-const title = `Metrorail ${entry.label} Train Times | Next Train`;
-const description = `View and download ${entry.label} PRASA Metrorail train timetables. ${entry.blurb} Works offline in Next Train, with ticket prices and the next train.`;
+const pageCopy = CORRIDOR_PAGE_COPY[entry.slug] || null;
+const title = pageCopy?.title || `Metrorail ${entry.label} Train Times | Next Train`;
+const description = pageCopy?.description
+  || `View and download ${entry.label} PRASA Metrorail train timetables. ${entry.blurb} Works offline in Next Train, with ticket prices and the next train.`;
+const heading = pageCopy?.h1 || `${entry.label} schedules`;
 const canonicalPath = `/corridors/${entry.slug}.html`;
 const routesIndexHref = withBase('routes.html');
 const regionEntry = listSeoRegions().find((r) => r.region === entry.region);
@@ -78,10 +82,10 @@ const jsonLd = {
       </p>
 
       <h1 class="text-2xl sm:text-3xl font-black tracking-tight text-slate-900 dark:text-white leading-tight">
-        <JhbFit text={`${entry.label} schedules`} />
+        <JhbFit text={heading} />
       </h1>
       <p class="mt-3 text-base text-slate-600 dark:text-slate-300 leading-relaxed">
-        {entry.blurb}
+        {pageCopy?.lead || entry.blurb}
       </p>
       {corridorInsight && (
         <>

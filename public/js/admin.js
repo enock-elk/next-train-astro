@@ -3169,6 +3169,9 @@ const Admin = {
 
     // --- GUARDIAN PHASE 11 & 12: MASTER NOTIFICATION ENGINE (SEEN PROTOCOL) ---
     syncAllBadges: async () => {
+        if (Admin._badgeSyncInFlight) return;
+        Admin._badgeSyncInFlight = true;
+        try {
         const secret = await Admin.getAuthKey();
         if (!secret) return;
         const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
@@ -3302,7 +3305,13 @@ const Admin = {
                 else navigator.clearAppBadge();
             }
         } catch(e) {
-            console.warn("Guardian: Badge sync failed", e);
+            const badgeMsg = String((e && e.message) || e || '');
+            if (!/abort|offline|failed to fetch/i.test(badgeMsg)) {
+                console.warn("Guardian: Badge sync failed", e);
+            }
+        }
+        } finally {
+            Admin._badgeSyncInFlight = false;
         }
     },
 
@@ -4175,7 +4184,10 @@ const Admin = {
                 throw new Error("Worker returned status: " + res.status);
             }
         } catch(e) {
-            console.warn("Telemetry Fetch Failed:", e.message);
+            const telMsg = String((e && e.message) || e || '');
+            if (!/abort|offline|failed to fetch/i.test(telMsg)) {
+                console.warn("Telemetry Fetch Failed:", e.message);
+            }
             
             if(stat5m && stat5m.textContent === '--') stat5m.textContent = "Wait";
             if(stat30m && stat30m.textContent === '--') stat30m.textContent = "Wait";
@@ -8372,7 +8384,7 @@ const Admin = {
                 const data = Admin._cachedTripPlans;
                 if (Admin._deActiveTab !== 'trips') return;
                 if (!data) {
-                    listDiv.innerHTML = '<div class="text-xs text-gray-500 italic text-center py-4">No batched trip plans yet.<br><span class="text-[9px]">Clients flush every 10 successful plans.</span></div>';
+                    listDiv.innerHTML = '<div class="text-xs text-gray-500 italic text-center py-4">No batched trip plans yet.<br><span class="text-[9px]">Clients flush every 5 successful plans.</span></div>';
                     return;
                 }
 
@@ -13671,16 +13683,23 @@ const Admin = {
         if (window.__ntSchedAlertArmed) return;
         window.__ntSchedAlertArmed = true;
         const tick = () => {
-            Admin.publishDueScheduledAlerts()
-                .then((due) => {
-                    if (due && Number(due.published) > 0) return null;
-                    return Admin.fetchScheduledAlerts().then((items) => {
-                        const stillDue = (items || []).filter((job) => job && job.enabled !== false && Number(job.nextRunAt || 0) <= Date.now());
-                        if (!stillDue.length) return null;
-                        return Admin.publishDueScheduledAlertsDirect(null, stillDue);
-                    });
+            if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
+            Promise.resolve(typeof Admin.getAuthKey === 'function' ? Admin.getAuthKey() : null)
+                .then((secret) => {
+                    if (!secret) return null;
+                    return Admin.publishDueScheduledAlerts(secret)
+                        .then((due) => {
+                            if (due && Number(due.published) > 0) return null;
+                            return Admin.fetchScheduledAlerts().then((items) => {
+                                const stillDue = (items || []).filter((job) => job && job.enabled !== false && Number(job.nextRunAt || 0) <= Date.now());
+                                if (!stillDue.length) return null;
+                                return Admin.publishDueScheduledAlertsDirect(secret, stillDue);
+                            });
+                        });
                 })
                 .catch((err) => {
+                    const pubMsg = String((err && err.message) || err || '');
+                    if (/abort|offline|failed to fetch|authentication required/i.test(pubMsg)) return;
                     console.warn('armScheduledAlertPublisher optional', err);
                 });
         };
@@ -22022,7 +22041,7 @@ const Admin = {
                     }
                 } catch (ape) { /* keep safe defaults */ }
 
-                } catch(e) { console.warn("Failed to check system status"); }
+                } catch(e) { /* status check is optional when offline */ }
         }
         checkStatus();
 

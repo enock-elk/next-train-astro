@@ -299,6 +299,85 @@ export const SEO_INSIGHTS = {
         'This Pretoria to Irene timetable is the inner stretch of the Pretoria to Kempton Park line, not a separate railway. Centurion on this stretch saw a sinkhole in early 2026. The patch is in and trains are running again, but the station sits on dolomite, so the area remains sinkhole-prone.',
 };
 
+/**
+ * Search titles and a first paragraph for corridor landings.
+ * Names the cities and termini people type, not only the internal line name.
+ */
+export const CORRIDOR_PAGE_COPY = {
+    'gauteng-northern-corridor': {
+        title: 'Pretoria to Mabopane Train Schedule | Next Train',
+        h1: 'Pretoria to Mabopane train schedule',
+        description: 'Pretoria to Mabopane, De Wildt, Saulsville and Pienaarspoort Metrorail train schedule. Weekdays and Saturdays. No Sunday service. Ticket prices on each route.',
+        lead: 'This is the Pretoria timetable for Mabopane, De Wildt, Saulsville, Belle Ombre and Pienaarspoort. Weekday trains run. Saturday sheets are on the route pages. There is no Sunday service.',
+    },
+    'gauteng-pretoria-jhb-line': {
+        title: 'Pretoria to Johannesburg Train Schedule | Next Train',
+        h1: 'Pretoria to Johannesburg train schedule',
+        description: 'Pretoria, Kempton Park, Germiston and Johannesburg Metrorail train schedule. Weekdays and Saturdays. No Sunday service. There is no single through train.',
+        lead: 'Pretoria to Johannesburg is more than one train. The pages here cover Kempton Park, Irene, Germiston, Leralla and Kwesine. Weekdays and Saturdays. No Sunday service.',
+    },
+    'gauteng-jhb-west-line': {
+        title: 'Johannesburg to Naledi Train Schedule | Next Train',
+        h1: 'Johannesburg to Naledi train schedule',
+        description: 'Johannesburg to Naledi, Randfontein and Midway Metrorail train schedule. Weekdays and Saturdays. No Sunday service. Open a route for the full sheet and ticket prices.',
+        lead: 'Johannesburg west and south: Naledi, Randfontein and Midway / Lenz. Weekday trains run. Saturday sheets are on the route pages. There is no Sunday service.',
+    },
+    'western-cape-northern-line': {
+        title: 'Cape Town to Strand, Bellville and Wellington | Next Train',
+        h1: 'Cape Town to Strand, Bellville and Wellington',
+        description: 'Cape Town train schedule for Bellville, Strand, Wellington and Kraaifontein. Weekdays, Saturday where listed, and public holidays when PRASA announces them. No regular Sunday service.',
+        lead: 'Cape Town to Bellville, Kraaifontein, Strand and Wellington, plus Bellville to Mutual. Simon\'s Town is on the Southern Line. Weekday sheets are on each route. Saturday is listed where a sheet exists. Public holidays have their own page. There is no regular Sunday service.',
+    },
+    'western-cape-central-line': {
+        title: 'Cape Town Central Line Train Schedule | Next Train',
+        h1: 'Cape Town Central Line train schedule',
+        description: 'Cape Town train schedule for Chris Hani, Kapteinsklip and Nolungile. Weekdays and Saturdays. Public holidays when PRASA announces them. No regular Sunday service.',
+        lead: 'Cape Town Central Line times for Chris Hani, Kapteinsklip and Nolungile. Weekdays and Saturdays. Public holidays use the holiday page when PRASA announces the day. No regular Sunday service.',
+    },
+    'western-cape-southern-line': {
+        title: 'Cape Town to Simon\'s Town Train Schedule | Next Train',
+        h1: 'Cape Town to Simon\'s Town train schedule',
+        description: 'Cape Town to Simon\'s Town Metrorail train schedule. Weekdays and Saturdays. Public holidays when PRASA announces them. No regular Sunday service.',
+        lead: 'Cape Town Southern Line to Simon\'s Town. Weekday and Saturday times are on the route page. Public holidays have their own page. There is no regular Sunday service.',
+    },
+    'western-cape-cape-flats-line': {
+        title: 'Cape Town to Retreat Train Schedule | Next Train',
+        h1: 'Cape Town Cape Flats train schedule',
+        description: 'Cape Town to Retreat Metrorail train schedule on the Cape Flats line. Weekdays and Saturdays. No regular Sunday service.',
+        lead: 'Cape Town to Retreat on the Cape Flats line. Weekday and Saturday times are on the route page. There is no regular Sunday service.',
+    },
+    'western-cape-malmesbury-line': {
+        title: 'Cape Town to Malmesbury Train Schedule | Next Train',
+        h1: 'Cape Town to Malmesbury train schedule',
+        description: 'Cape Town to Malmesbury Metrorail train schedule. Weekdays and Saturdays where listed. No regular Sunday service.',
+        lead: 'Cape Town to Malmesbury. Weekday times are on the route page, with Saturday where a sheet exists. There is no regular Sunday service.',
+    },
+    'kwazulu-natal-north': {
+        title: 'Durban North Train Schedule | Next Train',
+        h1: 'Durban north train schedule',
+        description: 'Durban north Metrorail train schedule, including Bridge City. Weekdays and Saturdays. No Sunday service.',
+        lead: 'Durban north, including Bridge City. Weekday and Saturday sheets are on the route pages. There is no Sunday service.',
+    },
+    'kwazulu-natal-south': {
+        title: 'Durban to Umlazi Train Schedule | Next Train',
+        h1: 'Durban south train schedule',
+        description: 'Durban to Umlazi and Winklespruit Metrorail train schedule. Weekdays and Saturdays. No Sunday service.',
+        lead: 'Durban south: Umlazi, Winklespruit and the stations between. Weekdays and Saturdays. There is no Sunday service.',
+    },
+    'kwazulu-natal-inland': {
+        title: 'Durban to Pinetown Train Schedule | Next Train',
+        h1: 'Durban to Pinetown train schedule',
+        description: 'Durban to Pinetown, Cato Ridge and Crossmoor Metrorail train schedule. Weekdays and Saturdays. No Sunday service.',
+        lead: 'Durban inland: Pinetown, Cato Ridge and Crossmoor. Weekday and Saturday sheets are on the route pages. There is no Sunday service.',
+    },
+    'eastern-cape-central': {
+        title: 'East London to Berlin Train Schedule | Next Train',
+        h1: 'East London to Berlin train schedule',
+        description: 'East London to Berlin Metrorail train schedule. Weekday times on the route page. No Sunday service.',
+        lead: 'East London to Berlin. The weekday sheet is on the route page. There is no Sunday service.',
+    },
+};
+
 /** Extra copy on parent corridor landings. Does not replace the generated blurb. */
 export const CORRIDOR_INSIGHTS = {
     'gauteng-pretoria-jhb-line':

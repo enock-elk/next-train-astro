@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_10.14.2': [
+        'Black box lines cap at 240 characters. Ad-script lines and expected offline, abort, and signed-out publisher misses are not stored. The scheduled publisher skips a tick when the phone is offline or signed out. Badge sync ignores a second call that is already running. Planner batches flush at 5 successful trips. Route, region, corridor, and the station map lead with the city, the termini, Saturday, and the adult single when it is known. No commuter What’s New. forceShow stays false.',
+    ],
     'V9_10.14.1': [
         'What’s New keeps the same day cards. Under the February trip planner, guessed day entries run from 19 Nov 2025 (Metrorail App, Pretoria to Pienaarspoort, a hand-kept spreadsheet) through late January 2026: the public address, De Wildt, more Pretoria and Johannesburg lines, dark mode, a timetable store, messages, About, Check for Updates, a route map, ticket prices, and word of mouth. Dates in that gap are estimates. About adds the launch date, the old name, the first line, and the November address. No new top card. forceShow stays false. Those cards do not name alerts.',
     ],

@@ -221,9 +221,9 @@ const meta = routeMetaDescription('Pretoria', 'Mabopane', 'Gauteng', {
 if (!meta.includes('Pretoria to Mabopane')) fail(`meta must use in-app route name: "${meta}"`);
 if (!/schedule/i.test(meta)) fail(`meta must include schedule: "${meta}"`);
 if (!/PRASA/i.test(meta) || !/Metrorail/i.test(meta)) fail(`meta must name PRASA and Metrorail: "${meta}"`);
-if (!/Updated/i.test(meta) || !/Current trains/i.test(meta)) fail(`meta must say updated/current: "${meta}"`);
-if (!/^View and download the Pretoria to Mabopane/.test(meta)) {
-  fail(`meta must lead with view and download: "${meta}"`);
+if (!/2026/.test(meta) || !/Trains include/i.test(meta)) fail(`meta must name the year and trains: "${meta}"`);
+if (!/^Pretoria to Mabopane 2026 Metrorail/.test(meta)) {
+  fail(`meta must lead with the route and year: "${meta}"`);
 }
 if (!/works offline/i.test(meta)) fail(`meta must mention offline: "${meta}"`);
 if (!meta.includes('1810') || !meta.includes('1818')) fail(`meta must list train numbers: "${meta}"`);
@@ -253,8 +253,8 @@ if (!/Cape Town to Bellville/i.test(capeMeta) || !/train schedule/i.test(capeMet
   if (!indexAstro.includes("const pageTitle = 'Metrorail Next Train | 2026 PRASA Train Times and Schedules';")) {
     fail('homepage document title must stay Metrorail Next Train | 2026 PRASA Train Times and Schedules');
   }
-  if (!indexAstro.includes('View and download 2026 PRASA Metrorail train timetables for Gauteng, Cape Town, Durban and East London.')) {
-    fail('homepage meta description must stay the 2026 PRASA timetable sentence');
+  if (!indexAstro.includes('Today: PRASA Metrorail train schedule for Pretoria, Johannesburg, Cape Town, Durban and East London.')) {
+    fail('homepage meta description must lead with today for the four cities');
   }
   const faqLine = 'Commuters can send a delay note, and some testers can share a trip location.';
   if (!indexAstro.includes(faqLine)) {
@@ -732,7 +732,7 @@ if (existsSync(DIST)) {
     if (!html.includes('Metrorail (PRASA)')) {
       fail('Naledi route HTML must name Metrorail (PRASA)');
     }
-    if (!html.includes('Current trains')) {
+    if (!html.includes('Trains include')) {
       fail('Naledi route SERP description must list current train numbers');
     }
     if (html.includes('Johannesburg Park Station')) {
@@ -799,8 +799,8 @@ if (existsSync(DIST)) {
   if (!indexHtml.includes('PRASA Train Times')) {
     fail('homepage title should include PRASA Train Times');
   }
-  if (!/View and download 2026 PRASA Metrorail train timetables for Gauteng, Cape Town, Durban and East London/i.test(indexHtml)) {
-    fail('homepage meta should lead with view and download PRASA Metrorail timetables');
+  if (!/Today: PRASA Metrorail train schedule for Pretoria, Johannesburg, Cape Town, Durban and East London/i.test(indexHtml)) {
+    fail('homepage meta should lead with today for the four cities');
   }
   if (!/works offline/i.test(indexHtml) || !/ticket prices/i.test(indexHtml)) {
     fail('homepage meta should mention offline and ticket prices');

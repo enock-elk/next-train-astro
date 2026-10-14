@@ -482,13 +482,32 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
     <script is:inline>
       (function () {
         var MAX_LOGS = 500;
+        var MAX_LINE = 240;
         var LOG_KEY = 'nt_blackbox_logs';
+        function skipLog(type, msg) {
+          if (type === 'ERROR') return false;
+          if (msg.indexOf('CLVR:') === 0) return true;
+          var low = msg.toLowerCase();
+          var optional = low.indexOf('telemetry fetch failed') !== -1
+            || low.indexOf('badge sync failed') !== -1
+            || low.indexOf('armscheduledalertpublisher') !== -1
+            || low.indexOf('publishduescheduledalerts') !== -1
+            || low.indexOf('failed to check system status') !== -1;
+          if (!optional) return false;
+          if (low.indexOf('failed to check system status') !== -1) return true;
+          return low.indexOf('abort') !== -1
+            || low.indexOf('offline') !== -1
+            || low.indexOf('failed to fetch') !== -1
+            || low.indexOf('authentication required') !== -1;
+        }
         function saveLog(type, args) {
           try {
             var msg = Array.prototype.map.call(args, function (a) {
               if (a instanceof Error) return a.message + ' ' + (a.stack || '');
               return typeof a === 'object' ? JSON.stringify(a) : String(a);
             }).join(' ');
+            if (msg.length > MAX_LINE) msg = msg.slice(0, MAX_LINE);
+            if (skipLog(type, msg)) return;
             var logs = [];
             try { logs = JSON.parse(localStorage.getItem(LOG_KEY) || '[]'); } catch (e) {}
             logs.push({ t: Date.now(), type: type, msg: msg });

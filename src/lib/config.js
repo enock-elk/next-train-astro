@@ -14,7 +14,7 @@
  * Changelog / What’s New is optional: skip both, or write only "no release notes."
  * Always add ADMIN_CHANGELOG[APP_VERSION] (System Health Build notes).
  */
-export const APP_VERSION = "V9_10.13.2";
+export const APP_VERSION = "V9_10.14.1";
 
 /** Public support channels (About modal, lifeboat help.html, Safe Mode). */
 export const SUPPORT_EMAIL = 'admin@nexttrain.co.za';
@@ -1544,6 +1544,145 @@ export const CHANGELOG_DATA = [
         features: [
             "<b>Smart Trip Planner:</b> Origin, destination, and transfers in one search.",
             "<b>Fare Calculator:</b> Scholar, pensioner, and off-peak discounts built in."
+        ]
+    },
+    {
+        id: "V2_01.28",
+        title: "Passed along",
+        date: "28 Jan 2026",
+        forceShow: false,
+        features: [
+            "<b>Word of mouth:</b> Friends in local Facebook groups and WhatsApp chats started sharing the link. More people began opening it after that."
+        ]
+    },
+    {
+        id: "V2_01.23",
+        title: "Ticket prices",
+        date: "23 Jan 2026",
+        forceShow: false,
+        features: [
+            "<b>Prices on the route:</b> A single, a return, and the weekly and monthly passes for the line you are on."
+        ]
+    },
+    {
+        id: "V2_01.19",
+        title: "Route map",
+        date: "19 Jan 2026",
+        forceShow: false,
+        features: [
+            "<b>A map picture:</b> The stops on a line, shown as a simple map you could look at from the app."
+        ]
+    },
+    {
+        id: "V2_01.15",
+        title: "Check for Updates",
+        date: "15 Jan 2026",
+        forceShow: false,
+        features: [
+            "<b>Check for Updates:</b> Pulls a newer copy onto this phone. At first this was called Reset the app."
+        ]
+    },
+    {
+        id: "V2_01.12",
+        title: "About",
+        date: "12 Jan 2026",
+        forceShow: false,
+        features: [
+            "<b>About:</b> A short page on how the app started, and who looks after it."
+        ]
+    },
+    {
+        id: "V2_01.06",
+        title: "A message",
+        date: "6 Jan 2026",
+        forceShow: false,
+        features: [
+            "<b>Write in:</b> You could send a message if a time looked wrong, or if you just wanted to say hello."
+        ]
+    },
+    {
+        id: "V1_12.29",
+        title: "Timetable store",
+        date: "29 Dec 2025",
+        forceShow: false,
+        features: [
+            "<b>A proper store:</b> Times moved out of the hand-kept spreadsheet into a database the app could load on its own."
+        ]
+    },
+    {
+        id: "V1_12.23",
+        title: "Dark mode",
+        date: "23 Dec 2025",
+        forceShow: false,
+        features: [
+            "<b>Dark mode:</b> A darker look, easier on the eyes for a trip after sunset."
+        ]
+    },
+    {
+        id: "V1_12.22",
+        title: "More Johannesburg lines",
+        date: "22 Dec 2025",
+        forceShow: false,
+        features: [
+            "<b>West and south:</b> Johannesburg to Randfontein, Naledi, and Midway."
+        ]
+    },
+    {
+        id: "V1_12.18",
+        title: "Germiston lines",
+        date: "18 Dec 2025",
+        forceShow: false,
+        features: [
+            "<b>Through Germiston:</b> Johannesburg to Germiston, Germiston to Leralla, and Germiston to Kwesine."
+        ]
+    },
+    {
+        id: "V1_12.16",
+        title: "Toward Johannesburg",
+        date: "16 Dec 2025",
+        forceShow: false,
+        features: [
+            "<b>Pretoria to Kempton Park:</b> The first line that reached toward Johannesburg.",
+            "<b>Pretoria to Irene:</b> Added in the same week."
+        ]
+    },
+    {
+        id: "V1_12.11",
+        title: "More Pretoria lines",
+        date: "11 Dec 2025",
+        forceShow: false,
+        features: [
+            "<b>Still in Pretoria:</b> Mabopane, Belle Ombre, Hercules to Koedoespoort, and Saulsville."
+        ]
+    },
+    {
+        id: "V1_12.08",
+        title: "De Wildt",
+        date: "8 Dec 2025",
+        forceShow: false,
+        features: [
+            "<b>Pretoria to De Wildt:</b> Added so a trip toward Ga-Rankuwa had a timetable."
+        ]
+    },
+    {
+        id: "V1_11.28",
+        title: "A proper address",
+        date: "28 Nov 2025",
+        forceShow: false,
+        features: [
+            "<b>www.nexttrain.co.za:</b> The app got its own address.",
+            "<b>Shared nearby:</b> Passed to Mamelodi commuters, and to anyone else who asked."
+        ]
+    },
+    {
+        id: "V1_11.19",
+        title: "First version",
+        date: "19 Nov 2025",
+        forceShow: false,
+        features: [
+            "<b>Metrorail App:</b> The first public version. Only Pretoria to Pienaarspoort, a local line.",
+            "<b>Hand-kept times:</b> The timetable lived in a spreadsheet and was updated by hand.",
+            "<b>A clear list:</b> Easier to read than a photo of the station board."
         ]
     }
 ];

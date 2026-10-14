@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_10.14.1': [
+        'What’s New keeps the same day cards. Under the February trip planner, guessed day entries run from 19 Nov 2025 (Metrorail App, Pretoria to Pienaarspoort, a hand-kept spreadsheet) through late January 2026: the public address, De Wildt, more Pretoria and Johannesburg lines, dark mode, a timetable store, messages, About, Check for Updates, a route map, ticket prices, and word of mouth. Dates in that gap are estimates. About adds the launch date, the old name, the first line, and the November address. No new top card. forceShow stays false. Those cards do not name alerts.',
+    ],
     'V9_10.13.2': [
         'User sheet names the latest activity and the app version on that event. Every tile stays on the grid. A grey Feedback tile opens the reply composer. Scholar weekly and monthly passes use the adult price. Single and return stay half. Home taps paint the pinned route after the frame, then shared corridors. Inter uses a metric fallback. Pilot nav columns are stamped before first paint. Viewport writes skip unchanged values. What’s New covers scholar passes only. forceShow stays false.',
     ],

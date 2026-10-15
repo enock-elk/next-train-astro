@@ -1,5 +1,9 @@
 # Changelog
 
+## V9_10.15.8 — no release notes
+
+Operator composer and co-pilot layout. A blank shared note is refused. Scheduled alerts are checked again on sign-in.
+
 ## V9_10.15.7
 
 Check for Updates keeps the bottom message on screen while the download runs. A quick download still shows it for up to 6 seconds. Dev Hub Brief is operator-only and has no public card.

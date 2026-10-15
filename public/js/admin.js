@@ -4821,6 +4821,7 @@ const Admin = {
             Admin.ensureOperatorBriefSlot();
             Admin.initGridView(); // Ensure grid is bound if re-opened
             Admin.fetchActionRequired();
+            if (typeof Admin.armScheduledAlertPublisher === 'function') Admin.armScheduledAlertPublisher();
             return;
         }
         Admin._modulesRendered = true;
@@ -5037,6 +5038,9 @@ const Admin = {
             body: JSON.stringify(body),
         });
         const data = await res.json().catch(() => ({}));
+        if (res.status === 404) {
+            throw new Error('The reply worker does not have the brief yet. From the workers/nexttrain-reply folder, run npx wrangler deploy.');
+        }
         if (!res.ok) throw new Error(data.error || 'Could not write the brief.');
         return String(data.text || '');
     },
@@ -6941,6 +6945,8 @@ const Admin = {
                     .admin-grid-view > div[data-admin-shell="empty"],
                     .admin-grid-view > [data-admin-subview="true"] { display: none !important; height: 0 !important; margin: 0 !important; padding: 0 !important; border: 0 !important; overflow: hidden !important; pointer-events: none !important; }
                     .admin-grid-view > div:not(.hidden):not(:empty):not([data-admin-shell="empty"]):not([data-admin-subview="true"]) { margin-bottom: 0 !important; cursor: pointer; transition: transform 0.2s, box-shadow 0.2s; height: 110px; display: flex; flex-direction: column; justify-content: center; position: relative; overflow: visible !important; }
+                    .admin-grid-view > #operator-brief-slot { height: auto !important; grid-column: 1 / -1; cursor: default; display: block !important; justify-content: flex-start; }
+                    .admin-grid-view > #operator-brief-slot:hover { transform: none; box-shadow: none; border-color: transparent; }
                     .admin-grid-view > div:not(.hidden):not(:empty):not([data-admin-shell="empty"]):not([data-admin-subview="true"]):hover { transform: scale(1.02); box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); border-color: #3b82f6; }
                     .admin-grid-view > div [id$="-body"] { display: none !important; }
                     .admin-grid-view > div [id$="-header-btn"] { flex-direction: column; justify-content: center; height: 100%; align-items: center; text-align: center; margin-bottom: 0 !important; position: relative; overflow: visible; }
@@ -7121,7 +7127,7 @@ const Admin = {
                 }
                 
                 const card = e.target.closest('.admin-grid-view > div');
-                if (!card) return;
+                if (!card || card.id === 'operator-brief-slot') return;
                 
                 // Trigger Drill Down (push a history entry so Back can return to the grid)
                 Admin._drillStack = [card.id];
@@ -12173,13 +12179,19 @@ const Admin = {
         const top = Math.max(0, Math.round(vv?.offsetTop || 0));
         modal.style.top = `${top}px`;
         modal.style.height = `${height}px`;
+        modal.style.left = '0';
+        modal.style.right = '0';
+        modal.style.width = '100%';
         modal.style.bottom = 'auto';
-        modal.style.alignItems = 'center';
-        modal.style.justifyContent = 'center';
+        modal.style.alignItems = 'stretch';
+        modal.style.justifyContent = 'stretch';
         const card = modal.firstElementChild;
         if (card) {
-            card.style.maxHeight = `${Math.max(240, height - 32)}px`;
-            card.style.height = '';
+            card.style.maxHeight = 'none';
+            card.style.height = '100%';
+            card.style.width = '100%';
+            card.style.margin = '0';
+            card.style.overflowY = 'auto';
         }
     },
 
@@ -12200,13 +12212,14 @@ const Admin = {
                             <textarea id="admin-reply-suggest-context" rows="3" maxlength="2000" class="w-full rounded-lg border border-amber-300 dark:border-amber-700 bg-white dark:bg-gray-900 text-xs text-gray-900 dark:text-white p-2 focus:outline-none" placeholder="Type what the draft should use, then suggest again."></textarea>
                             <button type="button" id="reply-suggest-again" class="mt-2 w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-3 rounded-lg text-xs focus:outline-none">Suggest again</button>
                         </div>
-                        <button type="button" id="reply-suggest" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 px-3 rounded-lg shadow-sm transition-colors focus:outline-none text-sm">Suggest reply</button>
+                        <button type="button" id="reply-suggest" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-3 rounded-xl shadow-sm transition-colors focus:outline-none text-sm">Suggest reply</button>
                         <div id="admin-reply-suggest-status" class="hidden mt-2 rounded-lg border border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-950/40 p-2" aria-live="polite">
                             <p id="admin-reply-suggest-status-text" class="text-[11px] font-bold text-indigo-950 dark:text-indigo-100"></p>
                             <ul id="admin-reply-suggest-status-steps" class="mt-1 space-y-0.5 text-[11px] text-indigo-900 dark:text-indigo-100"></ul>
                         </div>
                         <details class="mt-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-900/40">
                             <summary class="cursor-pointer px-3 py-2 text-[11px] font-bold text-gray-600 dark:text-gray-300 select-none">Instructions and images</summary>
+                            <p id="admin-reply-suggest-done" class="hidden px-3 pb-2 text-[11px] text-gray-600 dark:text-gray-300 leading-relaxed"></p>
                             <div class="px-3 pb-3">
                                 <textarea id="admin-reply-suggest-note" rows="3" maxlength="4000" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-xs text-gray-900 dark:text-white p-2 focus:outline-none" placeholder="Shared by both operators. Sent with the next draft. Does not let the draft invent a missing fact."></textarea>
                                 <div class="flex items-center gap-2 mt-2">
@@ -12245,24 +12258,48 @@ const Admin = {
         if (!ta || !modal) return;
         const gen = String(Date.now());
         modal.dataset.noteGen = gen;
+        modal.dataset.noteReady = '0';
         try {
             const secret = await Admin.getAuthKey();
-            if (!secret) return;
+            if (!secret) {
+                modal.dataset.noteReady = '1';
+                return;
+            }
             const res = await fetch(`${Admin.replyWorkerUrl()}/context`, {
                 headers: { Authorization: `Bearer ${secret}` },
             });
-            if (!res.ok) return;
+            if (modal.dataset.noteGen !== gen) return;
+            if (!res.ok) {
+                modal.dataset.noteReady = 'error';
+                return;
+            }
             const data = await res.json().catch(() => ({}));
             if (modal.dataset.noteGen !== gen) return;
-            if (document.activeElement === ta) return;
-            ta.value = String(data.note || '');
-        } catch { /* shared note is optional */ }
+            if (document.activeElement !== ta) ta.value = String(data.note || '');
+            modal.dataset.noteReady = '1';
+        } catch {
+            if (modal.dataset.noteGen === gen) modal.dataset.noteReady = 'error';
+        }
     },
 
     saveReplySuggestNote: async () => {
         const ta = document.getElementById('admin-reply-suggest-note');
         const btn = document.getElementById('reply-suggest-save-note');
+        const modal = document.getElementById('admin-reply-modal');
         if (!ta) return;
+        const note = String(ta.value || '').trim();
+        if (!note) {
+            if (typeof showToast === 'function') showToast('Type a note before saving. A blank note is not saved.', 'error');
+            return;
+        }
+        if (modal && modal.dataset.noteReady === 'error') {
+            if (typeof showToast === 'function') showToast('Could not load the saved note, so it was not replaced.', 'error');
+            return;
+        }
+        if (modal && modal.dataset.noteReady !== '1') {
+            if (typeof showToast === 'function') showToast('The saved note is still loading.', 'error');
+            return;
+        }
         if (btn) btn.disabled = true;
         try {
             const secret = await Admin.getAuthKey();
@@ -12273,7 +12310,7 @@ const Admin = {
                     Authorization: `Bearer ${secret}`,
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ note: ta.value || '' }),
+                body: JSON.stringify({ note }),
             });
             const data = await res.json().catch(() => ({}));
             if (!res.ok) throw new Error(data.error || 'Could not save the shared note.');
@@ -12410,6 +12447,11 @@ const Admin = {
             clearInterval(Admin._suggestTicker);
             Admin._suggestTicker = null;
         }
+        const doneNote = document.getElementById('admin-reply-suggest-done');
+        if (doneNote) {
+            doneNote.textContent = '';
+            doneNote.classList.add('hidden');
+        }
         setSuggestBusy(true);
         paintProgress(null);
         Admin._suggestTicker = setInterval(() => {
@@ -12442,13 +12484,12 @@ const Admin = {
             const editor = document.getElementById('admin-reply-text');
             if (editor) editor.innerHTML = html;
             Admin.showSuggestHalt(null);
-            Admin.setSuggestProgress({
-                title: 'Draft ready',
-                steps: [
-                    { state: 'done', label: `Used ${payload.thread.length} messages` },
-                    { state: 'done', label: 'The draft is in the box. Edit it, then send.' },
-                ],
-            });
+            Admin.setSuggestProgress(null);
+            const ready = document.getElementById('admin-reply-suggest-done');
+            if (ready) {
+                ready.textContent = `Draft ready. Used ${payload.thread.length} messages. The draft is in the box. Edit it, then send.`;
+                ready.classList.remove('hidden');
+            }
             if (typeof showToast === 'function') showToast('Draft ready. Edit it, then send.', 'success');
         } catch (err) {
             const message = err.message || 'Could not draft a reply.';
@@ -12470,25 +12511,27 @@ const Admin = {
 
     ensureWriteModal: () => {
         let modal = document.getElementById('admin-write-modal');
-        if (modal) return modal;
+        if (modal && modal.dataset.writeRev === 'composer-v2') return modal;
+        if (modal) modal.remove();
         modal = document.createElement('div');
         modal.id = 'admin-write-modal';
-        modal.className = 'fixed inset-0 bg-black/80 z-[280] hidden flex items-end sm:items-center justify-center p-3 backdrop-blur-sm';
+        modal.dataset.writeRev = 'composer-v2';
+        modal.className = 'fixed inset-0 bg-black/80 z-[280] hidden flex items-end sm:items-center justify-center p-0 sm:p-4 backdrop-blur-sm';
         modal.innerHTML = `
-            <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-lg max-h-[90dvh] flex flex-col p-4 border border-gray-200 dark:border-gray-700" role="dialog" aria-labelledby="admin-write-title">
-                <div class="flex items-center justify-between gap-2 mb-1 shrink-0">
-                    <h3 id="admin-write-title" class="text-lg font-black text-gray-900 dark:text-white">Write</h3>
-                    <button type="button" id="admin-write-close" class="p-1 rounded-full text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none" aria-label="Close">
+            <div class="bg-white dark:bg-gray-800 shadow-2xl w-full sm:max-w-xl sm:rounded-3xl max-h-[100dvh] h-[100dvh] sm:h-auto sm:max-h-[92dvh] flex flex-col p-4 sm:p-5 border-0 sm:border border-gray-200 dark:border-gray-700" role="dialog" aria-labelledby="admin-write-title">
+                <div class="flex items-center justify-between gap-3 mb-2 shrink-0">
+                    <h3 id="admin-write-title" class="text-xl font-black text-gray-900 dark:text-white">Next Train Composer</h3>
+                    <button type="button" id="admin-write-close" class="p-2 rounded-full text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none" aria-label="Close">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
                     </button>
                 </div>
-                <p class="text-[10px] text-gray-500 dark:text-gray-400 mb-2 shrink-0">Uses the text in this box. Replace puts it back in the field. Nothing is posted until you save or send.</p>
-                <textarea id="admin-write-text" rows="7" class="w-full min-h-[8rem] flex-1 rounded-lg border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-900 text-sm text-gray-900 dark:text-white p-3 focus:outline-none"></textarea>
-                <div id="admin-write-actions" class="flex flex-wrap gap-1.5 mt-3 shrink-0"></div>
-                <p id="admin-write-status" class="min-h-[1rem] text-[10px] text-gray-500 dark:text-gray-400 mt-2 shrink-0"></p>
-                <div class="flex space-x-2 mt-2 shrink-0">
-                    <button type="button" id="admin-write-copy" class="flex-1 bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200 font-bold py-2.5 rounded-lg text-sm focus:outline-none">Copy</button>
-                    <button type="button" id="admin-write-replace" class="flex-1 bg-violet-600 hover:bg-violet-700 text-white font-bold py-2.5 rounded-lg text-sm focus:outline-none">Replace</button>
+                <p class="text-xs text-gray-500 dark:text-gray-400 mb-3 shrink-0">Uses the whole field. Replace puts it back. Nothing is posted until you save or send.</p>
+                <textarea id="admin-write-text" rows="8" class="w-full min-h-[10rem] flex-1 rounded-2xl border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-900 text-base text-gray-900 dark:text-white p-3 focus:outline-none"></textarea>
+                <div id="admin-write-actions" class="grid grid-cols-2 gap-2 mt-3 shrink-0"></div>
+                <p id="admin-write-status" class="min-h-[1.25rem] text-xs text-gray-500 dark:text-gray-400 mt-2 shrink-0"></p>
+                <div class="grid grid-cols-2 gap-2 mt-2 shrink-0">
+                    <button type="button" id="admin-write-copy" class="bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200 font-bold py-3.5 rounded-2xl text-base focus:outline-none">Copy</button>
+                    <button type="button" id="admin-write-replace" class="bg-violet-600 hover:bg-violet-700 text-white font-bold py-3.5 rounded-2xl text-base focus:outline-none">Replace</button>
                 </div>
             </div>`;
         document.body.appendChild(modal);
@@ -12510,7 +12553,7 @@ const Admin = {
         const actions = modal.querySelector('#admin-write-actions');
         const list = window.ntTextAssist?.TEXT_ASSIST_ACTIONS || [];
         actions.innerHTML = list.map((action) =>
-            `<button type="button" data-write-action="${action.id}" class="px-2.5 py-1.5 rounded-full text-[11px] font-bold bg-violet-50 text-violet-800 dark:bg-violet-900/40 dark:text-violet-200 border border-violet-200 dark:border-violet-800 focus:outline-none">${action.label}</button>`
+            `<button type="button" data-write-action="${action.id}" class="w-full px-3 py-3.5 rounded-2xl text-base font-bold bg-violet-50 text-violet-800 dark:bg-violet-900/40 dark:text-violet-200 border border-violet-200 dark:border-violet-800 focus:outline-none">${action.label}</button>`
         ).join('');
         actions.addEventListener('click', (event) => {
             const button = event.target.closest('[data-write-action]');
@@ -12525,23 +12568,7 @@ const Admin = {
         const editable = el.getAttribute && el.getAttribute('contenteditable') === 'true';
         if (!editable) {
             const value = String(el.value || '');
-            const start = Number(el.selectionStart);
-            const end = Number(el.selectionEnd);
-            if (Number.isFinite(start) && Number.isFinite(end) && end > start) {
-                return { text: value.slice(start, end), full: false, start, end };
-            }
             return { text: value, full: true, start: 0, end: value.length };
-        }
-        const saved = Admin._savedRange;
-        const live = window.getSelection && window.getSelection().rangeCount ? window.getSelection().getRangeAt(0) : null;
-        const range = [saved, live].find((candidate) => {
-            if (!candidate || candidate.collapsed) return false;
-            const node = candidate.commonAncestorContainer;
-            const parent = node && node.nodeType === 1 ? node : node?.parentNode;
-            return parent && el.contains(parent);
-        });
-        if (range) {
-            return { text: range.toString(), full: false, range: range.cloneRange() };
         }
         return { text: el.innerText || el.textContent || '', full: true };
     },
@@ -12552,19 +12579,19 @@ const Admin = {
         const read = Admin.readWriteField(el);
         const text = String(read.text || '').trim();
         if (!text) {
-            if (typeof showToast === 'function') showToast('Type or select some text first.', 'error');
+            if (typeof showToast === 'function') showToast('Type something in the field first.', 'error');
             return;
         }
         if (!window.ntTextAssist?.TEXT_ASSIST_ACTIONS) {
-            if (typeof showToast === 'function') showToast('Write is not loaded.', 'error');
+            if (typeof showToast === 'function') showToast('Next Train Composer is not loaded.', 'error');
             return;
         }
-        Admin._writeTarget = { id: targetId, full: read.full, start: read.start, end: read.end, range: read.range || null };
+        Admin._writeTarget = { id: targetId, full: true, start: 0, end: String(read.text || '').length };
         const modal = Admin.ensureWriteModal();
         const box = document.getElementById('admin-write-text');
         if (box) box.value = String(read.text || '').replace(/\r\n/g, '\n');
         const status = document.getElementById('admin-write-status');
-        if (status) status.textContent = read.full ? 'Using the whole field.' : 'Using the selected text.';
+        if (status) status.textContent = 'Using the whole field.';
         modal.classList.remove('hidden');
     },
 
@@ -12578,7 +12605,7 @@ const Admin = {
         const status = document.getElementById('admin-write-status');
         const text = box?.value || '';
         if (!text.trim()) {
-            if (typeof showToast === 'function') showToast('Type or select some text first.', 'error');
+            if (typeof showToast === 'function') showToast('Type something in the field first.', 'error');
             return;
         }
         const buttons = document.querySelectorAll('#admin-write-actions button');
@@ -12671,39 +12698,39 @@ const Admin = {
         if (!modal) {
             modal = document.createElement('div');
             modal.id = 'admin-reply-modal';
-            modal.className = 'fixed inset-0 bg-black/80 z-[200] hidden flex items-center justify-center p-4 backdrop-blur-sm transition-opacity duration-300';
+            modal.className = 'fixed inset-0 bg-black/70 z-[200] hidden flex items-stretch justify-stretch p-0';
             modal.innerHTML = `
-                <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-lg max-h-[90dvh] min-h-0 overflow-y-auto flex flex-col p-4 transform transition-all scale-95 border border-gray-200 dark:border-gray-700">
-                    <h3 id="admin-reply-title" class="text-lg font-black text-gray-900 dark:text-white mb-0.5 tracking-tight flex items-center gap-2 shrink-0"><span class="text-sky-500">${Admin.icon('message', 'w-5 h-5')}</span> <span id="admin-reply-title-text">Reply to Commuter</span></h3>
+                <div class="bg-white dark:bg-gray-800 shadow-2xl w-full h-full max-w-none max-h-none min-h-0 overflow-y-auto flex flex-col p-3 sm:p-4 border-0">
+                    <h3 id="admin-reply-title" class="text-xl font-black text-gray-900 dark:text-white mb-0.5 tracking-tight flex items-center gap-2 shrink-0"><span class="text-sky-500">${Admin.icon('message', 'w-5 h-5')}</span> <span id="admin-reply-title-text">Next Train Co-Pilot</span></h3>
                     <p id="admin-reply-recipient" class="text-[11px] text-gray-600 dark:text-gray-300 mb-1 break-all leading-snug shrink-0"></p>
                     <p id="admin-reply-hint" class="text-[10px] text-gray-500 dark:text-gray-400 mb-3 shrink-0">Message will be delivered to their personal inbox upon next app launch.</p>
                     
-                    <div class="flex flex-col min-h-0 flex-1 overflow-hidden">
+                    <div class="flex flex-col min-h-[14rem] flex-1">
                     <div class="shrink-0 rounded-t-lg border border-gray-300 dark:border-gray-600 border-b-0">
                             ${Admin.wysiwygToolbarHtml('admin-reply-text', { fileInputId: 'admin-reply-upload-file', fileLabelId: 'admin-reply-upload-label' })}
                     </div>
-                        <div contenteditable="true" id="admin-reply-text" class="nt-rich-body w-full flex-1 min-h-0 overflow-y-auto p-3 bg-gray-50 dark:bg-gray-900 border border-t-0 border-gray-300 dark:border-gray-600 rounded-b-lg text-sm text-gray-900 dark:text-white focus:outline-none empty:before:content-[attr(placeholder)] empty:before:text-gray-400 custom-scrollbar" placeholder="Type your response..."></div>
+                        <div contenteditable="true" id="admin-reply-text" class="nt-rich-body w-full flex-1 min-h-[12rem] overflow-y-auto p-3 bg-gray-50 dark:bg-gray-900 border border-t-0 border-gray-300 dark:border-gray-600 rounded-b-lg text-sm text-gray-900 dark:text-white focus:outline-none empty:before:content-[attr(placeholder)] empty:before:text-gray-400 custom-scrollbar" placeholder="Type your response..."></div>
                     </div>
 
                     ${Admin.replySuggestMarkup()}
 
-                    <div class="flex space-x-2 mt-3 shrink-0">
-                        <button id="reply-cancel" class="flex-1 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 font-bold py-2.5 px-3 rounded-lg transition-colors focus:outline-none text-sm">Cancel</button>
-                        <button id="reply-send" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-3 rounded-lg shadow-sm transition-colors focus:outline-none text-sm">Send Reply</button>
+                    <div class="grid grid-cols-2 gap-2 mt-3 shrink-0">
+                        <button id="reply-cancel" class="bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 font-bold py-3.5 px-3 rounded-2xl transition-colors focus:outline-none text-base">Cancel</button>
+                        <button id="reply-send" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 px-3 rounded-2xl shadow-sm transition-colors focus:outline-none text-base">Send Reply</button>
                     </div>
                 </div>
             `;
             document.body.appendChild(modal);
         } else {
-            // Upgrade short modal from earlier session in this page load
+            modal.className = 'fixed inset-0 bg-black/70 z-[200] hidden flex items-stretch justify-stretch p-0';
             const panel = modal.firstElementChild;
             if (panel) {
-                panel.className = 'bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-lg max-h-[90dvh] min-h-0 overflow-y-auto flex flex-col p-4 transform transition-all scale-95 border border-gray-200 dark:border-gray-700';
+                panel.className = 'bg-white dark:bg-gray-800 shadow-2xl w-full h-full max-w-none max-h-none min-h-0 overflow-y-auto flex flex-col p-3 sm:p-4 border-0';
             }
             const editor = document.getElementById('admin-reply-text');
             if (editor) {
-                editor.classList.remove('min-h-[120px]', 'min-h-[240px]', 'max-h-[50dvh]', 'p-2.5');
-                editor.classList.add('nt-rich-body', 'flex-1', 'min-h-0', 'overflow-y-auto', 'p-3', 'custom-scrollbar');
+                editor.classList.remove('min-h-[120px]', 'min-h-[240px]', 'max-h-[50dvh]', 'p-2.5', 'min-h-0');
+                editor.classList.add('nt-rich-body', 'flex-1', 'min-h-[12rem]', 'overflow-y-auto', 'p-3', 'custom-scrollbar');
                 const bar = editor.previousElementSibling;
                 if (bar) {
                     bar.classList.add('shrink-0');
@@ -12712,7 +12739,8 @@ const Admin = {
                 if (bar && !bar.querySelector('[data-nt-font-select]')) {
                     bar.outerHTML = `<div class="shrink-0 rounded-t-lg border border-gray-300 dark:border-gray-600 border-b-0">${Admin.wysiwygToolbarHtml('admin-reply-text', { fileInputId: 'admin-reply-upload-file', fileLabelId: 'admin-reply-upload-label' })}</div>`;
                 }
-                editor.parentElement?.classList.add('min-h-0', 'flex-1', 'overflow-hidden');
+                editor.parentElement?.classList.remove('min-h-0', 'overflow-hidden');
+                editor.parentElement?.classList.add('min-h-[14rem]', 'flex-1');
             }
             const sendRow = document.getElementById('reply-cancel')?.parentElement;
             if (sendRow && !document.getElementById('admin-reply-suggest-context')) {
@@ -12741,7 +12769,7 @@ const Admin = {
         const titleText = document.getElementById('admin-reply-title-text');
         const hintEl = document.getElementById('admin-reply-hint');
         const sendBtn = document.getElementById('reply-send');
-        if (titleText) titleText.textContent = editKey ? 'Edit reply' : 'Reply to Commuter';
+        if (titleText) titleText.textContent = editKey ? 'Edit reply' : 'Next Train Co-Pilot';
         if (hintEl) {
             hintEl.textContent = editKey
                 ? 'Saves over this reply. Does not post a new message or archive the thread.'
@@ -14416,8 +14444,6 @@ const Admin = {
     },
 
     armScheduledAlertPublisher: () => {
-        if (window.__ntSchedAlertArmed) return;
-        window.__ntSchedAlertArmed = true;
         const tick = () => {
             if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
             Promise.resolve(typeof Admin.getAuthKey === 'function' ? Admin.getAuthKey() : null)
@@ -14439,11 +14465,14 @@ const Admin = {
                     console.warn('armScheduledAlertPublisher optional', err);
                 });
         };
-        setTimeout(tick, 4000);
-        setInterval(tick, 60_000);
-        document.addEventListener('visibilitychange', () => {
-            if (document.visibilityState === 'visible') tick();
-        });
+        if (!window.__ntSchedAlertArmed) {
+            window.__ntSchedAlertArmed = true;
+            setInterval(tick, 60_000);
+            document.addEventListener('visibilitychange', () => {
+                if (document.visibilityState === 'visible') tick();
+            });
+        }
+        setTimeout(tick, 400);
     },
 
     refreshScheduledAlerts: async () => {

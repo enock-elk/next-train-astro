@@ -147,7 +147,9 @@ async function readSharedNote(env) {
 
 async function writeSharedNote(env, note) {
     if (!env?.REPLY_CONTEXT) return false;
-    await env.REPLY_CONTEXT.put(NOTE_KEY, String(note || '').slice(0, SUGGEST_NOTE_MAX));
+    const text = String(note || '').trim();
+    if (!text) return false;
+    await env.REPLY_CONTEXT.put(NOTE_KEY, text.slice(0, SUGGEST_NOTE_MAX));
     return true;
 }
 
@@ -172,7 +174,11 @@ export async function handleRequest(request, env) {
     if (url.pathname === '/context' && request.method === 'PUT') {
         let body = {};
         try { body = await request.json(); } catch { body = {}; }
-        const saved = await writeSharedNote(env, body?.note);
+        const text = String(body?.note || '').trim();
+        if (!text) {
+            return json(env, request, 400, { error: 'Type a note before saving. A blank note is not saved.' });
+        }
+        const saved = await writeSharedNote(env, text);
         if (!saved) {
             return json(env, request, 503, { error: 'Shared note storage is not configured.' });
         }

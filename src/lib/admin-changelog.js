@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_10.15.8': [
+        'Write is Next Train Composer and uses the whole field, with larger buttons. Reply to a commuter is Next Train Co-Pilot and fills the screen. A finished draft note sits inside Instructions and images. A blank shared note is not saved, and a save waits until the current note has loaded. Signing in checks scheduled alerts again, on top of the existing minute timer. The brief sits on its own row. No commuter What\'s New. forceShow stays false.',
+    ],
     'V9_10.15.7': [
         'Dev Hub has a Brief button. It stays until dismissed for the day, and it only reads logs after it is opened. The report covers the next few days (Cato Ridge first Monday, Saturday gaps, 0618/0619, holidays), expiries, trip plans, fare notes, routing failures, feature switches, and crash cards. Explain sends that crash log to the reply worker after emails and phone numbers are removed. Check for Updates keeps its bottom message up while the download runs, and a quick download still shows it for up to 6 seconds. No commuter What\'s New for the brief. forceShow stays false.',
     ],

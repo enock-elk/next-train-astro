@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_10.15.3': [
+        'Suggest reply uses Dear and a first name, or Dear Mr and a surname, only when that name is clear from the alias, the message, or the email. Otherwise it stays Hi there. The email address itself is not sent to the draft. No commuter What\'s New. forceShow stays false.',
+    ],
     'V9_10.15.2': [
         'Suggest reply still waits in the box until Send. A reply older than a week gets a calm late-reply line. WhatsApp opens with the quote title Metrorail Next Train | Response. Email subject is Metrorail Next Train | Feedback Response. No commuter What\'s New. forceShow stays false.',
     ],

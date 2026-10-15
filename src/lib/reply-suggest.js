@@ -148,6 +148,125 @@ export function pickSimilarReplies(allItems, threadItems, options = {}) {
     return ranked.slice(0, limit).map(({ score, ...row }) => row);
 }
 
+const ROLE_LOCAL = new Set([
+    'info', 'admin', 'support', 'hello', 'mail', 'contact', 'noreply', 'no-reply',
+    'user', 'test', 'help', 'office', 'sales', 'feedback', 'nexttrain', 'train',
+    'metro', 'metrorail', 'commuter', 'anonymous', 'nobody', 'postmaster', 'webmaster',
+]);
+
+const NOT_A_NAME = new Set([
+    ...ROLE_LOCAL,
+    'good', 'fine', 'here', 'from', 'just', 'well', 'back', 'late', 'sorry',
+    'interested', 'looking', 'writing', 'using', 'asking', 'happy', 'sure',
+    'okay', 'new', 'the', 'and', 'thanks', 'thank', 'please', 'sunday', 'ticket',
+]);
+
+/** First names we will treat as certain when they are the start of an email. */
+const FIRST_NAMES = new Set([
+    'enock', 'thandeka', 'sipho', 'thabo', 'kudzi', 'nomsa', 'lerato', 'ayanda',
+    'nokuthula', 'nandipha', 'nthabiseng', 'mmabatho', 'kagiso', 'tumelo', 'karabo',
+    'boitumelo', 'refiloe', 'pule', 'tebogo', 'tshepo', 'thabiso', 'thabang',
+    'sello', 'molefe', 'dineo', 'palesa', 'kabelo', 'neo', 'amogelang', 'onthatile',
+    'bongani', 'sibusiso', 'nhlanhla', 'mandla', 'sibongile', 'nonhlanhla', 'zanele',
+    'nokwanda', 'lindiwe', 'busisiwe', 'thulisile', 'nokukhanya', 'andile', 'luyanda',
+    'viwe', 'asanda', 'anathi', 'litha', 'sanele', 'mpho', 'lesego', 'keneilwe',
+    'gorata', 'ontlametse', 'johannes', 'pieter', 'andries', 'willem', 'christiaan',
+    'jacoba', 'annelie', 'elize', 'marlize',     'john', 'peter', 'david', 'michael',
+    'sarah', 'mary', 'james', 'daniel', 'samuel', 'joseph',
+]);
+
+const FIRST_NAMES_LONG = [...FIRST_NAMES].filter((name) => name.length >= 5).sort((a, b) => b.length - a.length);
+
+function titleName(value) {
+    const word = String(value || '').toLowerCase();
+    if (!word) return '';
+    return word.charAt(0).toUpperCase() + word.slice(1);
+}
+
+function honorificName(title, surname) {
+    const last = titleName(surname);
+    const honor = String(title || 'Mr').replace(/\./g, '');
+    const nice = honor.charAt(0).toUpperCase() + honor.slice(1).toLowerCase();
+    if (!last || NOT_A_NAME.has(last.toLowerCase())) return '';
+    return `Dear ${nice} ${last}`;
+}
+
+function firstNameGreeting(value) {
+    const name = titleName(value);
+    if (!/^[A-Z][a-z'’-]{2,20}$/.test(name)) return '';
+    if (NOT_A_NAME.has(name.toLowerCase())) return '';
+    return `Dear ${name}`;
+}
+
+function greetingFromEmail(email) {
+    const raw = String(email || '').split('@')[0].split('+')[0].toLowerCase();
+    if (!raw || raw.includes(' ')) return '';
+    const parts = raw.split(/[._-]+/).filter(Boolean);
+    if (parts.length >= 2) {
+        const [first, second] = parts;
+        if (first.length === 1 && /^[a-z]{3,20}$/.test(second) && !ROLE_LOCAL.has(second) && !NOT_A_NAME.has(second)) {
+            return honorificName('Mr', second);
+        }
+        if (second.length === 1 && /^[a-z]{3,20}$/.test(first) && !FIRST_NAMES.has(first) && !ROLE_LOCAL.has(first) && !NOT_A_NAME.has(first)) {
+            return honorificName('Mr', first);
+        }
+        if (FIRST_NAMES.has(first)) return firstNameGreeting(first);
+        if (FIRST_NAMES.has(second)) return firstNameGreeting(second);
+        return '';
+    }
+    const letters = raw.replace(/[^a-z]/g, '');
+    if (!letters || ROLE_LOCAL.has(letters) || NOT_A_NAME.has(letters)) return '';
+    if (FIRST_NAMES.has(letters)) return firstNameGreeting(letters);
+    for (const name of FIRST_NAMES_LONG) {
+        if (!letters.startsWith(name)) continue;
+        const rest = letters.slice(name.length);
+        if (/^[a-z]{2,12}$/.test(rest)) return firstNameGreeting(name);
+    }
+    return '';
+}
+
+function greetingFromText(text) {
+    const source = String(text || '');
+    const titled = source.match(/\b(Mr|Mrs|Ms|Miss)\.?\s+([A-Za-z]{3,20})\b/i);
+    if (titled && !NOT_A_NAME.has(titled[2].toLowerCase())) return honorificName(titled[1], titled[2]);
+    const named = source.match(/\bmy name is\s+([A-Za-z]{3,20})(?:\s+([A-Za-z]{3,20}))?/i);
+    if (named && !NOT_A_NAME.has(named[1].toLowerCase())) return firstNameGreeting(named[1]);
+    const intro = source.match(/\b(?:i am|i'm|this is)\s+([A-Za-z]{3,20})(?:\s+([A-Za-z]{3,20}))?/i);
+    if (intro && FIRST_NAMES.has(intro[1].toLowerCase())) return firstNameGreeting(intro[1]);
+    const emails = source.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi) || [];
+    for (const email of emails) {
+        const greeting = greetingFromEmail(email);
+        if (greeting) return greeting;
+    }
+    return '';
+}
+
+function greetingFromAlias(alias) {
+    const text = plainThreadText(alias);
+    if (!text || text.includes('@') || /^usr_/i.test(text)) return '';
+    const titled = text.match(/^(Mr|Mrs|Ms|Miss)\.?\s+([A-Za-z]{3,20})$/i);
+    if (titled && !NOT_A_NAME.has(titled[2].toLowerCase())) return honorificName(titled[1], titled[2]);
+    const words = text.split(/\s+/);
+    if (words.length > 2) return '';
+    if (!FIRST_NAMES.has(words[0].toLowerCase())) return '';
+    return firstNameGreeting(words[0]);
+}
+
+/** A greeting only when the name is clear. Never returns the email address. */
+export function certainGreeting({ alias = '', emails = [], texts = [] } = {}) {
+    for (const text of texts) {
+        const fromText = greetingFromText(text);
+        if (fromText) return fromText;
+    }
+    const fromAlias = greetingFromAlias(alias);
+    if (fromAlias) return fromAlias;
+    for (const email of emails) {
+        const fromEmail = greetingFromEmail(email);
+        if (fromEmail) return fromEmail;
+    }
+    return '';
+}
+
 export function buildSuggestPayload(items, options = {}) {
     const deviceId = String(options.deviceId || '').trim();
     const list = (Array.isArray(items) ? items : []).filter((item) => !deviceId || deviceOf(item) === deviceId);
@@ -162,6 +281,11 @@ export function buildSuggestPayload(items, options = {}) {
         || [...list].reverse().map((item) => itemRegion(item, routeRegionOf)).find(Boolean)
         || ''
     );
+    const greeting = certainGreeting({
+        alias: options.alias || '',
+        emails: list.map((item) => item?.email).filter(Boolean),
+        texts: list.filter((item) => !item?.isFromAdmin).map((item) => item?.text || item?.message || ''),
+    });
     const thread = threadMessages(list);
     const similar = pickSimilarReplies(options.allItems || items || [], list, {
         deviceId,
@@ -178,6 +302,7 @@ export function buildSuggestPayload(items, options = {}) {
         thread,
         similar,
         note: options.note || '',
+        greeting,
     });
 }
 
@@ -203,7 +328,14 @@ export function sanitizeSuggestPayload(input) {
             admin: clip(redactEmails(row?.admin || ''), 700),
         })).filter((row) => row.admin),
         note: clip(String(source.note || ''), SUGGEST_NOTE_MAX),
+        greeting: sanitizeGreeting(source.greeting),
     };
+}
+
+function sanitizeGreeting(value) {
+    const text = String(value || '').trim();
+    if (/^Dear (?:(?:Mr|Mrs|Ms|Miss) )?[A-Z][a-z'’-]{2,20}$/.test(text)) return text;
+    return '';
 }
 
 export function contactBlockForRegion(region) {
@@ -254,7 +386,7 @@ export function liaisonRules(region) {
         'Return JSON only. action is "draft" or "halt". draft.reply is only the commuter-facing message. The operator will edit it, then send. Do not send it yourself.',
         'Do not put the device id, thread labels, or code fences inside draft.reply.',
         'Do not add a sign-off. The app adds the operator name when the reply is sent.',
-        'If Alias is a first name, or the commuter states their name, greet them with it: Hello Sipho, or Hi Thabo,. If there is no name, use: Hi there,',
+        'If the user text gives a Certain greeting, use that exact first line, such as Dear Enock, or Dear Mr Kazembe. If it says none, use Hi there,. Never invent a name, and never turn an email address into a greeting yourself.',
         'After the greeting line, leave two blank lines, then the body.',
         'The first body line acknowledges what they wrote. Do not open cold.',
         'End every draft, including a short thank-you, with this exact final line: Thank you for using Next Train.',
@@ -299,6 +431,9 @@ export function buildSuggestUserText(payload, sharedNote, now = Date.now()) {
         stale
             ? 'Latest commuter message is more than 7 days old. Apologize calmly for the late reply.'
             : 'Latest commuter message is within 7 days. Do not apologize for a delay.',
+        clean.greeting
+            ? `Certain greeting: ${clean.greeting}. Use that exact first line.`
+            : 'Certain greeting: none. Use Hi there,. Do not invent a name.',
         '',
         'Thread:',
     ];

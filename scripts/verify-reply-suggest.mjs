@@ -11,6 +11,7 @@ import {
     buildGeminiRequest,
     buildSuggestPayload,
     buildSuggestUserText,
+    certainGreeting,
     composerHtmlFromResult,
     contactBlockForRegion,
     GAUTENG_OFFICES,
@@ -43,6 +44,29 @@ ok(!contactBlockForRegion('KZN').includes('011 013 0306'), 'KZN contact block ha
 ok(liaisonRules('KZN').includes('halt'), 'liaison rules tell the model to halt');
 ok(liaisonRules('KZN').includes('Thank you for using Next Train'), 'drafts close with the standard line');
 ok(liaisonRules('KZN').includes('two blank lines'), 'greeting leaves two blank lines');
+ok(liaisonRules('KZN').includes('Dear Enock'), 'a certain first name is Dear Firstname');
+ok(liaisonRules('KZN').includes('Dear Mr Kazembe'), 'a certain surname is Dear Mr Surname');
+ok(certainGreeting({ emails: ['enockelk@gmail.com'] }) === 'Dear Enock', 'enockelk is Dear Enock');
+ok(certainGreeting({ emails: ['j.kazembe@gmail.com'] }) === 'Dear Mr Kazembe', 'an initial plus surname is Dear Mr Kazembe');
+ok(certainGreeting({ texts: ['My name is Thabo Mokoena'] }) === 'Dear Thabo', 'a stated first name is used');
+ok(certainGreeting({ texts: ['I am Mr Kazembe'] }) === 'Dear Mr Kazembe', 'a stated surname keeps the title');
+ok(certainGreeting({ alias: 'Kudzi' }) === 'Dear Kudzi', 'a real alias is a certain first name');
+ok(certainGreeting({ emails: ['info@nexttrain.co.za'] }) === '', 'a role inbox is not a name');
+ok(certainGreeting({ emails: ['qwerty@gmail.com'] }) === '', 'a random inbox is not a name');
+ok(certainGreeting({ emails: ['marketing.team@gmail.com'] }) === '', 'two ordinary words are not a name');
+ok(certainGreeting({ emails: ['thandeka05nxumalo@gmail.com'] }) === 'Dear Thandeka', 'a first name glued to a surname is Dear Thandeka');
+ok(certainGreeting({ emails: ['enock.kazembe@gmail.com'] }) === 'Dear Enock', 'firstname.surname is Dear Firstname');
+ok(certainGreeting({ emails: ['kazembe.enock@gmail.com'] }) === 'Dear Enock', 'surname.firstname still finds the first name');
+ok(certainGreeting({ texts: ['I am good thanks'] }) === '', 'I am good is not a name');
+ok(certainGreeting({ texts: ['I am waiting for the Sunday train'] }) === '', 'I am waiting is not a name');
+ok(certainGreeting({ texts: ['Please write to enockelk@gmail.com'] }) === 'Dear Enock', 'an email inside the message can name them');
+ok(certainGreeting({ alias: 'Coolguy' }) === '', 'a made-up alias is not a certain name');
+ok(certainGreeting({ alias: 'Mr Kazembe' }) === 'Dear Mr Kazembe', 'an alias with Mr uses the surname');
+const named = buildSuggestPayload([
+    { deviceId: 'usr_named', email: 'enockelk@gmail.com', text: 'The Sunday train please', timestamp: 10 },
+], { deviceId: 'usr_named' });
+ok(named.greeting === 'Dear Enock', 'the draft payload carries Dear Enock');
+ok(!JSON.stringify(named).includes('enockelk@gmail.com'), 'the email address stays out of the draft payload');
 ok(liaisonRules('KZN').includes('more than 7 days'), 'a week-old message gets a late-reply line');
 ok(knowledgeBase().includes('Centurion'), 'sinkhole note is in the knowledge base');
 ok(knowledgeBase().includes('Midway'), 'Vereeniging operating stations are in the knowledge base');

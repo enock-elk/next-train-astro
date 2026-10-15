@@ -2411,13 +2411,18 @@ function installAnalyticsOfflineBridge() {
  * Full-screen sheets have no blur strip. The sheet body is a child, so taps inside stay put.
  * Select Route still refuses to close when no corridor is chosen (closeSmoothModal).
  */
-function scrollableAncestor(node, dy) {
+function scrollableAncestor(node, dy, dx) {
     let el = node && node.nodeType === 1 ? node : node?.parentElement;
+    const horizontal = Math.abs(dx || 0) > Math.abs(dy || 0) + 2;
+    if (horizontal && el?.closest) {
+        const grid = el.closest('#grid-container');
+        if (grid && grid.scrollWidth > grid.clientWidth + 2) return true;
+    }
     while (el && el !== document.body && el !== document.documentElement) {
         if (el.id === 'alert-image-lightbox') return true;
         const style = window.getComputedStyle(el);
-        const overflow = `${style.overflowY} ${style.overflow}`;
-        if (/(auto|scroll)/.test(overflow) && el.scrollHeight > el.clientHeight + 2) {
+        const overflowY = `${style.overflowY} ${style.overflow}`;
+        if (/(auto|scroll)/.test(overflowY) && el.scrollHeight > el.clientHeight + 2) {
             const atTop = el.scrollTop <= 0;
             const atBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 2;
             if (dy < 0 && !atTop) return true;
@@ -2434,22 +2439,27 @@ function bindModalBackgroundGuard() {
     if (typeof document === 'undefined' || window.__ntModalScrollGuard) return;
     window.__ntModalScrollGuard = true;
     let lastY = 0;
+    let lastX = 0;
     document.addEventListener('touchstart', (event) => {
         lastY = event.touches?.[0]?.clientY || 0;
+        lastX = event.touches?.[0]?.clientX || 0;
     }, { passive: true, capture: true });
-    const block = (event, dy) => {
+    const block = (event, dy, dx) => {
         if (!document.body.classList.contains('modal-active')) return;
-        if (scrollableAncestor(event.target, dy)) return;
+        if (scrollableAncestor(event.target, dy, dx)) return;
         event.preventDefault();
     };
     document.addEventListener('touchmove', (event) => {
         const y = event.touches?.[0]?.clientY || 0;
+        const x = event.touches?.[0]?.clientX || 0;
         const dy = lastY - y;
+        const dx = lastX - x;
         lastY = y;
-        block(event, dy);
+        lastX = x;
+        block(event, dy, dx);
     }, { passive: false, capture: true });
     document.addEventListener('wheel', (event) => {
-        block(event, event.deltaY);
+        block(event, event.deltaY, event.deltaX);
     }, { passive: false, capture: true });
 }
 

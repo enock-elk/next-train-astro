@@ -168,9 +168,11 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
           // Some Android builds shrink layout height with the keyboard (gap≈0).
           // If an editable is focused and the frame collapsed, keep the last full height.
           var ae = document.activeElement;
+          // A readonly station field opens a list, not the IME. Treating it
+          // as typing shrank the shell and left a gap under the bottom nav.
           var editing = !!(ae && (
             ae.tagName === 'TEXTAREA' ||
-            ae.tagName === 'INPUT' ||
+            (ae.tagName === 'INPUT' && !ae.readOnly) ||
             ae.isContentEditable
           ));
           var env = envBottom();
@@ -226,6 +228,11 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
               var missing = Math.round(layoutH - shellH);
               if (missing < 180) shellTop = missing;
             }
+            // visualViewport can stop short of the layout bottom. That
+            // remainder paints as a light band under the oval. Stay inside
+            // layoutH so the oval cannot ride past the screen.
+            var tail = Math.round(layoutH - shellTop - shellH);
+            if (tail > 8 && tail < 180) shellH += tail;
             lastLayoutH = layoutH;
             lastFullLayoutH = layoutH;
             lastShellTop = shellTop;
@@ -1191,6 +1198,23 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
       #map-modal.full-screen > div, #about-modal.full-screen > div, #full-schedule-modal.full-screen > div {
         border-radius: 0 !important;
         max-height: none !important;
+      }
+      /* The timetable is a flex child of a fixed-height sheet. Without a
+         zero minimum it grows with the table, the sheet clips it, and the
+         touch guard cancels the pan. Both axes scroll here. */
+      #full-schedule-modal.fixed {
+        touch-action: pan-x pan-y;
+      }
+      #full-schedule-modal.full-screen > div {
+        min-height: 0;
+        height: 100%;
+      }
+      #full-schedule-modal #grid-container {
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow: auto;
+        -webkit-overflow-scrolling: touch;
+        touch-action: pan-x pan-y;
       }
 
       /* SPA custom.css motion primitives */

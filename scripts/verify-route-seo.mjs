@@ -253,11 +253,21 @@ if (!/Cape Town to Bellville/i.test(capeMeta) || !/train schedule/i.test(capeMet
   if (!indexAstro.includes("const pageTitle = 'Metrorail Next Train | 2026 PRASA Train Times and Schedules';")) {
     fail('homepage document title must stay Metrorail Next Train | 2026 PRASA Train Times and Schedules');
   }
-  if (!indexAstro.includes('Today: PRASA Metrorail timetables and schedules for Gauteng (Pretoria, Johannesburg), Cape Town, Durban and East London.')) {
-    fail('homepage meta description must lead with today, Gauteng, and timetables');
+  if (!indexAstro.includes('PRASA Metrorail timetables and schedules for Gauteng (Pretoria, Johannesburg), Cape Town, Durban and East London.')) {
+    fail('homepage meta description must name Gauteng and timetables');
   }
-  if (!indexAstro.includes('View and download weekday and Saturday sheets.')) {
-    fail('homepage meta description must offer view and download');
+  if (indexAstro.includes("pageDescription =\n  'Today:")) {
+    fail('homepage meta description must not start with Today');
+  }
+  if (!indexAstro.includes('View and download weekday and Saturday sheets for today.')) {
+    fail('homepage meta description must offer view and download for today');
+  }
+  const regionAstro = readFileSync(new URL('../src/pages/regions/[slug].astro', import.meta.url), 'utf8');
+  if (!regionAstro.includes('Metrorail Gauteng timetables for Pretoria and Johannesburg')) {
+    fail('Gauteng region description must say Metrorail Gauteng');
+  }
+  if (/description:\s*['"]Today:/.test(regionAstro)) {
+    fail('region descriptions must not start with Today');
   }
   const faqLine = 'Commuters can send a delay note, and some testers can share a trip location.';
   if (!indexAstro.includes(faqLine)) {
@@ -802,11 +812,14 @@ if (existsSync(DIST)) {
   if (!indexHtml.includes('PRASA Train Times')) {
     fail('homepage title should include PRASA Train Times');
   }
-  if (!/Today: PRASA Metrorail timetables and schedules for Gauteng \(Pretoria, Johannesburg\), Cape Town, Durban and East London/i.test(indexHtml)) {
-    fail('homepage meta should lead with today, Gauteng, and timetables');
+  if (!/PRASA Metrorail timetables and schedules for Gauteng \(Pretoria, Johannesburg\), Cape Town, Durban and East London/i.test(indexHtml)) {
+    fail('homepage meta should name Gauteng and timetables');
   }
-  if (!/View and download weekday and Saturday sheets/i.test(indexHtml)) {
-    fail('homepage meta should offer view and download');
+  if (!/View and download weekday and Saturday sheets for today/i.test(indexHtml)) {
+    fail('homepage meta should offer view and download for today');
+  }
+  if (/content="Today:/i.test(indexHtml)) {
+    fail('homepage meta description must not start with Today');
   }
   if (!/works offline/i.test(indexHtml) || !/ticket prices/i.test(indexHtml)) {
     fail('homepage meta should mention offline and ticket prices');

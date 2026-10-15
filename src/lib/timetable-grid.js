@@ -487,7 +487,7 @@ export function renderFullScheduleGrid(direction = null, dayOverride = null, opt
         modal.id = 'full-schedule-modal';
         modal.className = 'fixed inset-0 bg-white dark:bg-gray-900 z-[125] hidden flex items-center justify-center p-0 full-screen backdrop-blur-md transition-opacity duration-300';
         modal.innerHTML = `
-            <div class="bg-white dark:bg-gray-900 rounded-none shadow-2xl w-full h-full flex flex-col overflow-hidden relative transform">
+            <div class="bg-white dark:bg-gray-900 rounded-none shadow-2xl w-full h-full min-h-0 flex flex-col overflow-hidden relative transform">
                 <div class="px-3 py-1.5 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center gap-2 bg-gray-50 dark:bg-gray-800 z-20 shrink-0">
                     <h3 class="flex-grow min-w-0"></h3>
                     <button type="button" id="close-full-grid-btn" class="p-1.5 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-500 shrink-0" aria-label="Close">
@@ -495,7 +495,7 @@ export function renderFullScheduleGrid(direction = null, dayOverride = null, opt
                     </button>
                 </div>
                 <div id="grid-controls" class="px-2 py-1.5 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 flex items-center shadow-sm relative z-10 shrink-0"></div>
-                <div id="grid-container" class="flex-grow overflow-auto bg-white dark:bg-gray-900 relative z-10"></div>
+                <div id="grid-container" class="flex-1 min-h-0 overflow-auto bg-white dark:bg-gray-900 relative z-10"></div>
                 <div class="shrink-0 p-3 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 z-20">
                     <button type="button" id="close-timetable-footer-btn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-4 rounded-lg shadow-md transition-colors text-sm focus:outline-none">Close Timetable</button>
                 </div>

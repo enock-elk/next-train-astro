@@ -1083,12 +1083,6 @@ html.dark .dark\:bg-gray-800\/95 {
   background-color: var(--nt-surface) !important;
 }
 
-/* Next Train station list sits on the same surface as the cards. A small
-   step toward black is enough to see the open list. */
-#next-train-autocomplete-list.nt-station-menu {
-  background-color: color-mix(in srgb, var(--nt-surface) 92%, #000) !important;
-}
-
 html.dark .dark\:bg-gray-900,
 html.dark .dark\:bg-gray-900\/50,
 html.dark .dark\:bg-gray-900\/95,

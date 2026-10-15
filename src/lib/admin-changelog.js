@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_10.15.12': [
+        'Station list colour is the card surface again. Homepage and region descriptions put today in the view and download line: View and download weekday and Saturday sheets for today. Gauteng reads Metrorail Gauteng. The full timetable scrolls across and down. A readonly station field keeps the shell at full height, and the shell fills a short gap under the bottom nav. No commuter What\'s New. forceShow stays false.',
+    ],
     'V9_10.15.11': [
         'Homepage and Gauteng descriptions name Gauteng, timetables, and view and download. Select Route no longer rebuilds the list on every tap, and a corridor already in memory is sliced instead of reloading the dump. The Next Train station list is a step darker than the card. The planner To field lets the header scroll away with the keyboard. All trains departed measures the card before it locks one line. Check for Updates waits for Update before it says it is checking, and every toast leaves on its own. A shared train reads last seen at, approaching, or after a station. Speed, heading, GPS, rail, accuracy, and rider count stay on the tracking card for operators only. About feedback is tagged About Next Train. The feedback field says Only if you want a reply, and the details box takes the spare height. The guide transfer label matches the yellow trip card, and a download is a timetable image. No commuter What\'s New. forceShow stays false.',
     ],

@@ -1,5 +1,9 @@
 # Changelog
 
+## V9_10.15.12 — no release notes
+
+Station list colour matches the card again. Descriptions put today in the view and download line, and Gauteng reads Metrorail Gauteng. The full timetable scrolls. The bottom nav sits on the screen edge.
+
 ## V9_10.15.11 — no release notes
 
 Select Route stays quick. The station list is easier to see. The planner header can leave view with the keyboard. Shared trains say at, approaching, or after a station. Check for Updates only talks after Update. Feedback from About is tagged About Next Train.

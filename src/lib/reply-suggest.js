@@ -6,6 +6,7 @@
 
 import { classifyAttachmentUrl, sanitizeAttachmentDisplayUrl, sniffAttachmentBytes } from './attachments.js';
 import { describeRoute, replyKnowledgeText } from './reply-knowledge.js';
+import { noticeQuotePlain, parseFeedbackAlertQuote } from './feedback-quote.js';
 
 export const SUGGEST_SIMILAR_LIMIT = 8;
 export const SUGGEST_NOTE_MAX = 4000;
@@ -96,13 +97,44 @@ function threadMessages(items) {
     return items
         .slice()
         .sort((a, b) => Number(a?.timestamp || 0) - Number(b?.timestamp || 0))
-        .map((item) => ({
-            from: item?.isFromAdmin ? 'admin' : 'commuter',
-            text: clip(redactEmails(item?.text || item?.message || ''), 4000),
-            at: Number(item?.timestamp || 0) || 0,
-        }))
+        .map((item) => {
+            const raw = redactEmails(item?.text || item?.message || '');
+            const limit = raw.startsWith('Quoted ') ? 8000 : 4000;
+            return {
+                from: item?.isFromAdmin ? 'admin' : 'commuter',
+                text: clip(raw, limit),
+                at: Number(item?.timestamp || 0) || 0,
+            };
+        })
         .filter((row) => row.text);
 }
+
+/**
+ * Replace a short [ALERT:…] chip with the whole quoted notice.
+ * `noticesById` values are already plain text. A stored quotedText is used
+ * when the live notice can no longer be loaded.
+ */
+export function withQuotedNoticeText(items, noticesById = {}) {
+    const map = noticesById && typeof noticesById === 'object' ? noticesById : {};
+    return (Array.isArray(items) ? items : []).map((item) => {
+        if (!item || item.isFromAdmin) return item;
+        const text = String(item.text || item.message || '');
+        const parsed = parseFeedbackAlertQuote(text);
+        const id = String(parsed?.alertId || item.quotedAlertId || '').trim();
+        const stored = String(item.quotedText || '').trim();
+        const looked = id ? String(map[id] || '').trim() : '';
+        const full = looked.length >= stored.length ? looked : stored;
+        if (!full) return item;
+        const commuter = parsed ? String(parsed.body || '').trim() : text;
+        const kind = parsed?.kind === 'disruption' || item.quotedAlertKind === 'disruption'
+            ? 'incident'
+            : 'advisory';
+        const next = `Quoted ${kind} in full:\n${full}\n\nCommuter:\n${commuter || text}`;
+        return { ...item, text: next, message: next };
+    });
+}
+
+export { noticeQuotePlain };
 
 /** Commuter messages with no admin reply after them. The whole thread is kept. */
 export function unansweredCommuterMessages(thread) {
@@ -317,7 +349,7 @@ export function buildSuggestPayload(items, options = {}) {
         emails: list.map((item) => item?.email).filter(Boolean),
         texts: list.filter((item) => !item?.isFromAdmin).map((item) => item?.text || item?.message || ''),
     });
-    const thread = threadMessages(list);
+    const thread = threadMessages(withQuotedNoticeText(list, options.quotedNotices));
     const similar = pickSimilarReplies(options.allItems || items || [], list, {
         deviceId,
         routeId,
@@ -549,8 +581,11 @@ export function knowledgeBase() {
 
 export function liaisonRules(region) {
     return [
-        'You are Melmoth, the communications assistant for Metrorail Next Train (nexttrain.co.za), an independent unofficial commuter app built by Enock Kazembe.',
-        'You draft replies in Enock\'s voice, as the developer speaking to the commuter. You are not a PRASA or Metrorail employee. You have no control over trains, schedules, infrastructure, or fares.',
+        'You are Melmoth, the communications assistant for Metrorail Next Train (nexttrain.co.za). You draft replies in Enock\'s voice, as the person who looks after the app.',
+        'You are not a PRASA employee. Do not write that into the reply, and do not say the app is independent or unofficial, unless they asked who runs the trains or who sets the fares. If they did ask, one short sentence, then the useful part.',
+        'Do not open with a disclaimer. Do not write "I want to gently mention". Do not copy an independence disclaimer from a similar past reply. Agreement, thanks, and a comment on a notice do not need a speech about the app, and they do not need a phone number.',
+        'Give a PRASA number only when they want PRASA to change something: a fare, a timetable, a closed office, or a broken train. One calm sentence. The contact block is the only source for that number.',
+        'When the thread has a block that starts with "Quoted advisory in full" or "Quoted incident in full", that block is the whole quoted message. Use all of it. Do not answer from the short title alone.',
         'Return JSON only. action is "draft" or "halt". draft.reply is only the commuter-facing message. The operator will edit it, then send. Do not send it yourself.',
         'Do not put the device id, thread labels, or code fences inside draft.reply.',
         'Do not add a sign-off. The app adds the operator name when the reply is sent.',
@@ -566,7 +601,7 @@ export function liaisonRules(region) {
         'Route keys such as pta-pien are for you. The commuter reply uses station names, never the key.',
         'The route key on the message is the board they had open, usually their pinned route. Use the resolved name, termini, and transfer.',
         'A route or connection question that is not answered by the knowledge base, the thread, the attached files, or Context for this draft is a halt. Ask what to tell them.',
-        'Operational complaints can be acknowledged. Point to PRASA only through the contact block, as the best way to actually get results. On a phone call, remind them to ask for a reference number.',
+        'If they want PRASA to change a fare, a timetable, or a station problem, one sentence can point to the matching office in the contact block, and a phone call can mention a reference number. Do not add that sentence to thanks, agreement, or a comment on a notice.',
         'Do not say these are not your trains. Do not mention a full-time job or building the app alone. Do not promise a feature date unless the knowledge base states it.',
         'Do not use these words: delve, furthermore, please be advised, we apologize for the inconvenience, crucial, ensure.',
         'Do not use em dashes in the reply. No citation markers.',

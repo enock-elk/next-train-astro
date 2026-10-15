@@ -13,7 +13,7 @@ import {
     SPECIAL_DATES, HOLIDAY_NAMES, SATURDAY_PLACEHOLDER_ROUTES
 } from './config.js';
 import { safeStorage, escapeHTML, formatAppDate, formatAppTime, formatThreadDateLabel, normalizeStationName, flattenPublicHolidays } from './utils.js';
-import { parseFeedbackAlertQuote } from './feedback-quote.js';
+import { noticeQuotePlain, parseFeedbackAlertQuote } from './feedback-quote.js';
 import {
     applyDraftGuard,
     buildSuggestPayload,
@@ -137,6 +137,7 @@ export function exposeAdminGlobals() {
         SUGGEST_MAX_IMAGE_BYTES,
         SUGGEST_MAX_IMAGES,
         whatsappReplyUrl,
+        noticeQuotePlain,
     };
     window.ntTextAssist = { TEXT_ASSIST_ACTIONS };
     window.ntLinkPreview = { fetchLinkPreview, firstHttpUrl };

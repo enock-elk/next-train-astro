@@ -12,7 +12,7 @@ import {
     MAX_RADIUS_KM
 } from './config.js';
 import {
-    normalizeStationName, timeToSeconds, formatTimeDisplay, isRealTime, safeStorage,
+    normalizeStationName, timeToSeconds, formatTimeDisplay, isRealTime, isVariantStationName, safeStorage,
     getDistanceFromLatLonInKm, escapeHTML, formatAppDate, usesWeekdayScheduleSheet, usesSaturdayScheduleSheet,
     usesPublicHolidayScheduleSheet, resolveOperatingDayType, scheduleCacheSlot, routeSheetKeyForDay,
     simUsesSpecificDate, exclusionAppliesToSurface, resolveStationLatLon, weekdaySheetsForRoute
@@ -291,6 +291,99 @@ export function hasForwardOverlap(trainName, otherSchedule, fromStation, targetS
         }
     }
     return false;
+}
+
+function sheetStationCol(schedule) {
+    return schedule?.stationColumnName || 'STATION';
+}
+
+/** Last clock time on this column. Notes, dashes, and the VARIANT row are not a terminus. */
+export function lastTimedStation(schedule, trainId) {
+    const id = String(trainId || '').trim();
+    const rows = schedule?.rows;
+    if (!id || !rows?.length) return '';
+    const col = sheetStationCol(schedule);
+    for (let i = rows.length - 1; i >= 0; i--) {
+        if (!isRealTime(rows[i]?.[id])) continue;
+        const name = String(rows[i]?.[col] || '').trim();
+        if (!name || /^last updated/i.test(name) || isVariantStationName(name)) continue;
+        return name;
+    }
+    return '';
+}
+
+function stationRowIndex(schedule, station) {
+    const target = normalizeStationName(station);
+    if (!target || !schedule?.rows) return -1;
+    const col = sheetStationCol(schedule);
+    for (let i = 0; i < schedule.rows.length; i++) {
+        if (normalizeStationName(schedule.rows[i]?.[col]) === target) return i;
+    }
+    return -1;
+}
+
+function timedStopCount(schedule, trainId) {
+    const rows = schedule?.rows || [];
+    let count = 0;
+    for (const row of rows) {
+        if (isRealTime(row?.[trainId])) count += 1;
+    }
+    return count;
+}
+
+/**
+ * Real terminus for one train on the sheets already chosen for this day type.
+ * A shared sheet that stops at Irene does not beat the same day's column that
+ * continues to Kempton Park. Two sheets that both end at Irene stay at Irene.
+ */
+export function realTrainTerminus(trainId, schedules) {
+    const id = String(trainId || '').trim();
+    const hits = [];
+    for (const schedule of schedules || []) {
+        const stop = lastTimedStation(schedule, id);
+        if (stop) hits.push({ schedule, stop });
+    }
+    if (!hits.length) return '';
+    const isAfter = (later, earlier) => hits.some((row) => {
+        const a = stationRowIndex(row.schedule, earlier);
+        const b = stationRowIndex(row.schedule, later);
+        return a >= 0 && b > a;
+    });
+    let best = hits[0];
+    for (const hit of hits.slice(1)) {
+        if (normalizeStationName(hit.stop) === normalizeStationName(best.stop)) {
+            if (timedStopCount(hit.schedule, id) > timedStopCount(best.schedule, id)) best = hit;
+            continue;
+        }
+        const hitLater = isAfter(hit.stop, best.stop);
+        const bestLater = isAfter(best.stop, hit.stop);
+        if (hitLater && !bestLater) best = hit;
+        else if (!hitLater && !bestLater && timedStopCount(hit.schedule, id) > timedStopCount(best.schedule, id)) best = hit;
+    }
+    return best.stop;
+}
+
+function stripStationWord(name) {
+    return String(name || '').replace(/\s+STATION$/i, '').trim();
+}
+
+/**
+ * Shared-corridor pill. "To Kempton Park" only when this train, on this day
+ * type, really ends somewhere other than the board's destination.
+ * Same-end corridors still say "From …". A short working that ends here does not.
+ */
+export function sharedDestTag(currentDest, otherDest, terminus) {
+    const board = normalizeStationName(currentDest);
+    const other = normalizeStationName(otherDest);
+    const raw = stripStationWord(terminus || otherDest || '');
+    const actual = normalizeStationName(raw);
+    const leaves = !!(actual && board && actual !== board);
+    const sameEnd = !!(other && board && other === board);
+    return {
+        isShared: sameEnd || leaves,
+        isDivergent: leaves,
+        actualDestName: raw,
+    };
 }
 
 /** Same expiry + days[] rules as isTrainExcluded; returns the RTDB rule or null. DEFAULT_EXCLUSIONS stays {}. */
@@ -1037,17 +1130,27 @@ export function findNextTrains(opts) {
                      const tNum = j.train || j.train1.train;
                      return hasForwardOverlap(tNum, otherSchedule, selectedStation, targetStationsB);
                  });
- 
-                 const isDivergent = normalizeStationName(otherRoute.destB) !== normalizeStationName(currentRoute.destB);
-                 
-                 const tagged = uniqueOther.map(j => ({
-                     ...j, 
-                     sourceRoute: otherRoute.name, 
-                     isShared: true,
-                     isDivergent: isDivergent, 
-                     actualDestName: otherRoute.destB.replace(' STATION', ''),
-                     sheetKey: key
-                 }));
+
+                 const daySheets = [schedule, otherSchedule].filter((sheet) => sheet?.rows?.length);
+                 const tagged = uniqueOther.map(j => {
+                     const tNum = j.train || j.train1?.train;
+                     const terminus = realTrainTerminus(tNum, daySheets);
+                     const tag = sharedDestTag(currentRoute.destB, otherRoute.destB, terminus || otherRoute.destB);
+                     const native = mergedJourneys.find((mj) => (mj.train || mj.train1?.train) === tNum);
+                     const termNorm = normalizeStationName(terminus);
+                     const nativeEnd = normalizeStationName(native?.actualDestination);
+                     const otherEnd = normalizeStationName(j.actualDestination);
+                     const keepNative = !!(native && termNorm && nativeEnd === termNorm && otherEnd !== termNorm);
+                     const chosen = keepNative ? native : j;
+                     const chosenEnd = normalizeStationName(chosen.actualDestination);
+                     return {
+                         ...chosen,
+                         actualDestination: termNorm && chosenEnd !== termNorm ? terminus : chosen.actualDestination,
+                         sourceRoute: otherRoute.name,
+                         sheetKey: keepNative ? (chosen.sheetKey || currentSheetKey) : key,
+                         ...tag,
+                     };
+                 });
                  
                  tagged.forEach(sharedJ => {
                      const tNum = sharedJ.train || sharedJ.train1.train;

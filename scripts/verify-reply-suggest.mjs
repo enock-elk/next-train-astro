@@ -20,6 +20,8 @@ import {
     isThreadFileUrl,
     liaisonRules,
     knowledgeBase,
+    noticeQuotePlain,
+    withQuotedNoticeText,
     loadSuggestFile,
     unansweredCommuterMessages,
     suggestDraftMessageId,
@@ -81,6 +83,37 @@ const named = buildSuggestPayload([
 ok(named.greeting === 'Dear Enock', 'the draft payload carries Dear Enock');
 ok(!JSON.stringify(named).includes('enockelk@gmail.com'), 'the email address stays out of the draft payload');
 ok(liaisonRules('KZN').includes('more than 7 days'), 'a week-old message gets a late-reply line');
+ok(liaisonRules('GP').includes('unless they asked'), 'independence is only mentioned when they ask');
+ok(liaisonRules('GP').includes('Do not write "I want to gently mention"'), 'the draft does not open with a disclaimer');
+ok(liaisonRules('GP').includes('Quoted advisory in full'), 'a quoted notice is used in full');
+ok(!liaisonRules('GP').includes('independent unofficial'), 'the system prompt does not hand the model the old disclaimer');
+const quoted = buildSuggestPayload([
+    {
+        deviceId: 'usr_quote',
+        text: '[ALERT:poll1|notice|What Commuters Said About the Proposed...]\nThey are right about the student prices.',
+        timestamp: 20,
+    },
+], {
+    deviceId: 'usr_quote',
+    quotedNotices: {
+        poll1: noticeQuotePlain({
+            title: 'What Commuters Said About the Proposed PRASA Monthly Ticket Prices',
+            message: '<p>Thank you to everyone who voted.</p><p>Student prices and the Sunday schedule were the main concerns.</p>',
+            poll: {
+                question: 'Are the new PRASA monthly ticket prices fair?',
+                optionA: "Yes, it's still cheaper",
+                optionB: 'No, service is poor',
+                optionC: "I'm undecided",
+            },
+            pollResults: { A: 694, B: 310, C: 324, total: 1328 },
+        }),
+    },
+});
+const quotedThread = quoted.thread.map((row) => row.text).join('\n');
+ok(quotedThread.includes('Student prices and the Sunday schedule'), 'the draft receives the full quoted notice');
+ok(quotedThread.includes('694 votes'), 'the draft receives the poll counts');
+ok(quotedThread.includes('They are right about the student prices'), 'the commuter line stays with the quote');
+ok(withQuotedNoticeText([{ text: 'Hello', quotedText: 'Full stored advisory' }])[0].text.includes('Full stored advisory'), 'a stored quote is used when the notice is gone');
 ok(knowledgeBase().includes('Centurion'), 'Centurion is in the knowledge base');
 ok(knowledgeBase().includes('pta-pien'), 'route keys are in the knowledge base');
 ok(describeRoute('pta-pien').includes('Pienaarspoort'), 'pta-pien is Pretoria to Pienaarspoort');
@@ -222,6 +255,8 @@ ok(!JSON.stringify(gemini).includes('rider@example.com'), 'Gemini request has no
 ok(gemini.contents[0].parts.some((part) => part.inlineData?.mimeType === 'image/png'), 'images ride along as inline data');
 
 const adminJs = readFileSync(join(ROOT, 'public/js/admin.js'), 'utf8');
+ok(!adminJs.includes('Sent while signed out'), 'the inbox does not label Sent while signed out');
+ok(adminJs.includes('quotedNoticesForSuggest'), 'suggest reply loads the full quoted notice');
 ok(adminJs.includes('id="reply-suggest"'), 'reply composer has Suggest reply');
 ok(adminJs.includes('id="admin-reply-suggest-context"'), 'a halt can take the missing fact');
 ok(adminJs.includes('id="admin-reply-suggest-status"'), 'suggest shows progress while it writes');

@@ -23,6 +23,7 @@ import {
     resolveStationLatLon, weekdaySheetsForRoute
 } from './utils.js';
 import { planUnifiedTrip, extractTrainSheetStops } from './planner-core.js';
+import { noticeQuotePlain } from './feedback-quote.js';
 import { trainSheetOperatingLabel } from './live-board.js';
 import { saturdayNoServiceCopy, buildSaturdayAdvisoryCopy, stationDisplayName } from './saturday-service.js';
 import { buildPlannerShareUrl, buildRouteShareUrl, parsePlannerDeepLink, stripShareParamsFromUrl, compactTime, isSeoAppHandoff } from './share-links.js';
@@ -2061,7 +2062,7 @@ export function restorePlannerResultsView() {
     return false;
 }
 
-function bindAdvisoryReplyButton({ snippet, rawMsg, alertId = '', location = 'planner_disruption_reply' }) {
+function bindAdvisoryReplyButton({ snippet, rawMsg, alertId = '', location = 'planner_disruption_reply', quotedText = '' }) {
     const card = document.getElementById('disruption-modal-card');
     const replyBtn = document.getElementById('disruption-modal-reply-btn')
         || Array.from(card?.querySelectorAll('button') || []).find((b) => b.textContent.includes('Reply'));
@@ -2075,6 +2076,7 @@ function bindAdvisoryReplyButton({ snippet, rawMsg, alertId = '', location = 'pl
             rawMsg: rawMsg || snippet,
             alertId,
             alertKind: 'disruption',
+            quotedText,
         });
         if (typeof closeSmoothModal === 'function') closeSmoothModal('disruption-modal');
         setTimeout(() => {
@@ -2207,6 +2209,7 @@ export function openDisruptionModal(id) {
         rawMsg,
         alertId: targetDisruption.id || '',
         location: 'planner_disruption_reply',
+        quotedText: noticeQuotePlain(targetDisruption),
     });
     
     if (typeof openSmoothModal === 'function') openSmoothModal('disruption-modal');

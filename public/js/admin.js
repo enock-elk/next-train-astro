@@ -12477,6 +12477,65 @@ const Admin = {
         panel.classList.remove('hidden');
     },
 
+    quotedNoticesForSuggest: async (items) => {
+        const parse = typeof parseFeedbackAlertQuote === 'function' ? parseFeedbackAlertQuote : null;
+        const plain = window.ntReplySuggest?.noticeQuotePlain;
+        if (!parse || typeof plain !== 'function') return {};
+        const ids = [];
+        for (const item of items || []) {
+            const parsed = parse(item?.text || item?.message || '');
+            if (parsed?.alertId) ids.push(parsed.alertId);
+        }
+        const unique = [...new Set(ids)];
+        if (!unique.length) return {};
+        const records = new Map();
+        const consider = (node, extra) => {
+            if (!node || typeof node !== 'object') return;
+            const id = String(node.id || node._key || extra?.id || '').trim();
+            if (!id || !unique.includes(id) || records.has(id)) return;
+            records.set(id, { ...node, ...extra, id });
+        };
+        (Admin._cachedActiveAlerts || []).forEach((node) => consider(node));
+        const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined'
+            ? DYNAMIC_BASE_URL
+            : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
+        const pull = async (path) => {
+            if (records.size >= unique.length) return;
+            try {
+                const res = await window.guardianFetch(`${dynamicEndpoint}${path}.json?t=${Date.now()}`, {}, 12000);
+                if (!res?.ok) return;
+                const data = await res.json();
+                if (!data || typeof data !== 'object') return;
+                if (path === 'notices' || path === 'disruptions') {
+                    Object.values(data).forEach((node) => {
+                        if (typeof Admin.listNoticesInTarget === 'function') {
+                            Admin.listNoticesInTarget(node).forEach((row) => consider(row));
+                        }
+                        consider(node);
+                    });
+                } else {
+                    Object.entries(data).forEach(([key, node]) => consider(node, { id: node?.id || key }));
+                }
+            } catch { /* the short quote still reaches the draft */ }
+        };
+        await pull('notices');
+        if (records.size < unique.length) await pull('notices_archive');
+        if (records.size < unique.length) await pull('disruptions');
+        const out = {};
+        let secret = '';
+        try { secret = await Admin.getAuthKey(); } catch { secret = ''; }
+        for (const [id, notice] of records) {
+            let row = notice;
+            if (row.poll && (row.poll.question || row.poll.optionA || row.poll.optionB)) {
+                const tallies = await Admin.fetchPollResultsSnapshot(id, secret);
+                if (tallies) row = { ...row, pollResults: tallies };
+            }
+            const text = plain(row);
+            if (text) out[id] = text;
+        }
+        return out;
+    },
+
     runSuggestReply: async () => {
         const modal = document.getElementById('admin-reply-modal');
         const btn = document.getElementById('reply-suggest');
@@ -12492,11 +12551,13 @@ const Admin = {
         const alias = (Admin.cachedAliases && Admin.cachedAliases[deviceId]) || '';
         const note = document.getElementById('admin-reply-suggest-note')?.value || '';
         const draftContext = document.getElementById('admin-reply-suggest-context')?.value || '';
+        const quotedNotices = await Admin.quotedNoticesForSuggest(items);
         const payload = api.buildSuggestPayload(items, {
             deviceId,
             alias,
             note,
             draftContext,
+            quotedNotices,
             allItems: Admin.cachedFeedbackData || [],
             routeRegionOf: (routeId) => (typeof ROUTES !== 'undefined' && ROUTES[routeId]?.region) || '',
         });
@@ -19536,9 +19597,6 @@ const Admin = {
                         const commuterRouteHtml = commuterRouteLabel
                             ? `<div class="inbox-bubble-route-row">${secureEscape(commuterRouteLabel)}</div>`
                             : '';
-                        const signedOutHtml = (item.sentSignedOut || item.chatScope === 'guest')
-                            ? `<div class="text-[10px] font-semibold text-amber-700 dark:text-amber-300 mt-0.5">Sent while signed out</div>`
-                            : '';
                         const commuterVerBtn = /^V\d+_/i.test(verLabel)
                             ? `<button type="button" class="fb-version-chip relative z-[2] font-mono font-medium opacity-80 ml-2 shrink-0 underline decoration-dotted underline-offset-2 hover:opacity-100 focus:outline-none" data-admin-changelog="${verLabel}" onclick="event.preventDefault();event.stopPropagation();if(window.Admin&amp;&amp;Admin.openAdminChangelogLookup)Admin.openAdminChangelogLookup(this.getAttribute('data-admin-changelog')||this.textContent);">${verLabel}</button>`
                             : `<span class="font-mono font-medium opacity-60 ml-2 shrink-0">${verLabel}</span>`;
@@ -19548,7 +19606,6 @@ const Admin = {
                                 ${commuterVerBtn}
                             </div>
                             ${commuterRouteHtml}
-                            ${signedOutHtml}
                         `;
 
                         const inboxReactId = item.inboxMsgId || '';

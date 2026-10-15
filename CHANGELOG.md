@@ -1,5 +1,9 @@
 # Changelog
 
+## V9_10.15.13 — no release notes
+
+A train on a shared line is labelled with the last station it actually calls on that day's sheet. 0626 toward Irene stays Irene. A train that continues to Kempton Park still says so.
+
 ## V9_10.15.12 — no release notes
 
 Station list colour matches the card again. Descriptions put today in the view and download line, and Gauteng reads Metrorail Gauteng. The full timetable scrolls. The bottom nav sits on the screen edge.

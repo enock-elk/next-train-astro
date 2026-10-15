@@ -15,7 +15,7 @@ import {
     safeStorage, escapeHTML, repairMojibake, restoreDeviceIdentity, formatAppDate,
     cacheClearPolicy, shouldDeleteCacheForPolicy, destructiveNetworkIsSafe,
 } from './utils.js';
-import { encodeFeedbackAlertQuote, commuterFeedbackText } from './feedback-quote.js';
+import { encodeFeedbackAlertQuote, commuterFeedbackText, noticeQuotePlain } from './feedback-quote.js';
 import {
     validateFeedbackContact,
     looksLikeContactOnlyMessage,
@@ -468,6 +468,7 @@ export function clearFeedbackReplyMode() {
         delete contextBox.dataset.rawMsg;
         delete contextBox.dataset.alertId;
         delete contextBox.dataset.alertKind;
+        delete contextBox.dataset.quotedText;
     }
     const typeWrap = document.getElementById('feedback-type-wrap');
     if (typeWrap) typeWrap.classList.remove('hidden');
@@ -479,7 +480,7 @@ export function clearFeedbackReplyMode() {
 }
 
 /** Show reply context chip and lock type to Thread Reply. */
-export function enterFeedbackReplyMode({ label = 'Replying to Advisory:', snippet = '', rawMsg = '', alertId = '', alertKind = 'notice' } = {}) {
+export function enterFeedbackReplyMode({ label = 'Replying to Advisory:', snippet = '', rawMsg = '', alertId = '', alertKind = 'notice', quotedText = '' } = {}) {
     const fText = document.getElementById('feedback-text');
     const fType = document.getElementById('feedback-type');
     const typeWrap = document.getElementById('feedback-type-wrap');
@@ -498,6 +499,9 @@ export function enterFeedbackReplyMode({ label = 'Replying to Advisory:', snippe
         if (alertId) contextBox.dataset.alertId = alertId;
         else delete contextBox.dataset.alertId;
         contextBox.dataset.alertKind = alertKind === 'disruption' ? 'disruption' : 'notice';
+        const fullQuote = String(quotedText || '').trim();
+        if (fullQuote) contextBox.dataset.quotedText = fullQuote.slice(0, 8000);
+        else delete contextBox.dataset.quotedText;
         contextBox.classList.remove('hidden');
     }
     if (fText) fText.value = '';
@@ -909,6 +913,7 @@ async function submitFeedback() {
                         isPWA: isStandalone,
                         // Held messages are text-only for v1 (attachments not uploaded on hold).
                         attachmentsHeld: hasFile,
+                        quotedText: String(document.getElementById('feedback-reply-context')?.dataset.quotedText || '').trim() || null,
                         ...chatScopeFields(),
                     },
                 },
@@ -989,6 +994,7 @@ async function submitFeedback() {
             userAgent: navigator.userAgent,
             deviceId: $deviceId.get() || safeStorage.getItem('next_train_device_id') || 'unknown',
             isPWA: isStandalone,
+            quotedText: String(document.getElementById('feedback-reply-context')?.dataset.quotedText || '').trim() || null,
             ...chatScopeFields(),
         };
 
@@ -1972,6 +1978,7 @@ export function renderServiceAlertModal(notice, options = {}) {
                 rawMsg: truncatedMsg,
                 alertId: notice?.id || '',
                 alertKind: 'notice',
+                quotedText: noticeQuotePlain(notice),
             });
         };
         btnContainer.appendChild(rightBtn);
@@ -2807,6 +2814,7 @@ export function initHub() {
                         deviceId,
                         isPWA: isStandalone,
                         attachmentsHeld: hasFile,
+                        quotedText: String(document.getElementById('feedback-reply-context')?.dataset.quotedText || '').trim() || null,
                         ...chatScopeFields(),
                     },
                 },

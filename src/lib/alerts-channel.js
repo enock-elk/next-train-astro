@@ -2,6 +2,7 @@
  * Alerts channel UI — bell gateway, WhatsApp-style column, reactions.
  */
 import { DYNAMIC_BASE_URL, REPLY_WORKER_URL, ROUTES, withBase } from './config.js';
+import { noticeQuotePlain } from './feedback-quote.js';
 import { hydrateLinkPreviews, linkPreviewMarkup } from './link-preview.js';
 import { safeStorage, escapeHTML, repairMojibake, formatAppTime, formatThreadDateLabel } from './utils.js';
 import { prepareRichHtml, injectRichTextStyles } from './rich-text.js';
@@ -1096,6 +1097,7 @@ function bindAlertsChannelOnce() {
             triggerHaptic();
             const id = replyBtn.getAttribute('data-alert-reply');
             const snippet = replyBtn.getAttribute('data-alert-snippet') || '';
+            const notice = cachedLiveNotices.find((n) => String(n.id) === String(id));
             if (typeof window.openFeedbackReplyFromOverlay === 'function') {
                 window.openFeedbackReplyFromOverlay('alerts-channel', {
                     label: 'Replying to Advisory:',
@@ -1103,6 +1105,7 @@ function bindAlertsChannelOnce() {
                     rawMsg: snippet,
                     alertId: id || '',
                     alertKind: 'notice',
+                    quotedText: noticeQuotePlain(notice),
                 });
             }
         }

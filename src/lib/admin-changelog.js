@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_10.15.13': [
+        'Suggest reply stays off the independent-app speech unless the commuter asked who runs the trains or the fares. A quoted advisory is sent to the draft in full, including the poll and the vote counts. The inbox no longer shows Sent while signed out. A shared train uses its own last stop on that day sheet, so 0626 on the Irene board is not labelled To Kempton Park, and a train that does run through to Kempton Park still is. No commuter What\'s New. forceShow stays false.',
+    ],
     'V9_10.15.12': [
         'Station list colour is the card surface again. Homepage and region descriptions put today in the view and download line: View and download weekday and Saturday sheets for today. Gauteng reads Metrorail Gauteng. The full timetable scrolls across and down. A readonly station field keeps the shell at full height, and the shell fills a short gap under the bottom nav. No commuter What\'s New. forceShow stays false.',
     ],

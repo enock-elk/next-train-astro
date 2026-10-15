@@ -5,6 +5,12 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_10.15.6': [
+        'Suggest reply reads the whole thread, the route key they had open, and any photo or PDF already in the chat. If earlier messages never got a reply, that same draft answers those too. A halt can take the missing fact and run again. The reply box keeps its formatting bar. Service alert paste turns WhatsApp bold marks into bold. While a draft is writing, the status lists what it is doing. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V9_10.15.5': [
+        'The in-app timetable station column shrinks to the longest station name, and still stops at the previous width. A longer name is cut off as before. Downloaded timetable sheets keep the same column width. No commuter What\'s New. forceShow stays false.',
+    ],
     'V9_10.15.4': [
         'Suggest reply and Write use Gemini 3.5 Flash-Lite, which new API keys can call. Error toasts show the full message, stay until dismissed, and are stored in the console log. Write is on alerts, notifications, exclusions, disruptions, replies, and holiday popups. Replace puts the text back. Nothing posts until you save or send. No commuter What\'s New. forceShow stays false.',
     ],

@@ -39,6 +39,12 @@ font[face="Times New Roman"], font[face="Times New Roman"], font[face="times new
 .nt-rich-body u, #notice-content u, #developer-reply-content u, #alert-msg u, #admin-reply-text u, #disr-msg u, #disruption-modal-body u {
   text-decoration: underline;
 }
+.nt-rich-body s, #notice-content s, #alert-msg s, #admin-reply-text s, #disr-msg s {
+  text-decoration: line-through;
+}
+.nt-rich-body code, #notice-content code, #alert-msg code, #admin-reply-text code, #disr-msg code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
 .nt-rich-body h1, .nt-rich-body h2, .nt-rich-body h3, .nt-rich-body h4,
 #notice-content h1, #notice-content h2, #notice-content h3, #notice-content h4,
 #developer-reply-content h1, #developer-reply-content h2, #developer-reply-content h3,
@@ -68,7 +74,7 @@ font[face="Times New Roman"], font[face="Times New Roman"], font[face="times new
 `;
 
 const ALLOWED_TAGS = new Set([
-    'B', 'I', 'U', 'STRONG', 'EM', 'A', 'BR', 'P', 'SPAN', 'DIV',
+    'B', 'I', 'U', 'S', 'STRIKE', 'CODE', 'STRONG', 'EM', 'A', 'BR', 'P', 'SPAN', 'DIV',
     'UL', 'OL', 'LI', 'IMG', 'BUTTON', 'FONT', 'H1', 'H2', 'H3', 'H4',
 ]);
 
@@ -83,6 +89,33 @@ const SAFE_HREF = /^(https?|mailto|tel):/i;
 
 /** Combined scanner: URL, email, then SA phone (0xx xxx xxxx / +27). */
 const CONTACT_RE = /https?:\/\/[^\s<>"'()]+|[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}|(?:\+?27|0)[\s.-]*[1-8]\d[\s.-]*\d{3}[\s.-]*\d{4}(?!\d)/g;
+
+function escapeMarkup(value) {
+    return String(value || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+}
+
+/**
+ * WhatsApp paste marks become the same tags the alert toolbar already uses.
+ * Plain text with no marks returns '' so the existing paste path stays as text.
+ * *bold* _italic_ ~strike~ ```mono```. A line that starts "* " stays a bullet.
+ */
+export function whatsappMarkupToHtml(value) {
+    const raw = String(value || '').replace(/\r\n/g, '\n');
+    if (!/[*_~`]/.test(raw)) return '';
+    let html = escapeMarkup(raw);
+    html = html.replace(/```([^`\n]+)```/g, '<code>$1</code>');
+    const apply = (pattern, tag) => {
+        html = html.replace(pattern, (_match, lead, body) => `${lead}<${tag}>${body}</${tag}>`);
+    };
+    apply(/(^|[\s([{"'])\*(\S(?:[^*\n]*\S)?)\*(?=$|[\s.,!?;:)\]}"'])/g, 'b');
+    apply(/(^|[\s([{"'])_(\S(?:[^_\n]*\S)?)_(?=$|[\s.,!?;:)\]}"'])/g, 'i');
+    apply(/(^|[\s([{"'])~(\S(?:[^~\n]*\S)?)~(?=$|[\s.,!?;:)\]}"'])/g, 's');
+    if (!/<(?:b|i|s|code)>/.test(html)) return '';
+    return html.replace(/\n/g, '<br>');
+}
 
 export function injectRichTextStyles() {
     if (typeof document === 'undefined') return;
@@ -282,4 +315,5 @@ if (typeof window !== 'undefined') {
     window.prepareRichHtml = prepareRichHtml;
     window.sanitizeRichHtml = sanitizeRichHtml;
     window.isSafeHref = isSafeHref;
+    window.whatsappMarkupToHtml = whatsappMarkupToHtml;
 }

@@ -16,12 +16,14 @@
  * Var: FIREBASE_WEB_API_KEY
  * KV: REPLY_CONTEXT (optional until the namespace id is set)
  *
- * The browser never sees the Gemini key. The worker does not download feedback.
+ * The browser never sees the Gemini key. The worker does not download the feedback tree.
+ * It may download photo and PDF URLs from this thread when they are on Firebase Storage.
  */
 import {
     applyDraftGuard,
     buildGeminiRequest,
     geminiText,
+    loadSuggestFiles,
     parseSuggestResult,
     sanitizeSuggestPayload,
     SUGGEST_NOTE_MAX,
@@ -214,12 +216,20 @@ async function suggestReply(request, env) {
             questions: [],
         });
     }
+    let loaded = { files: [], missed: 0 };
+    try {
+        loaded = await loadSuggestFiles(payload.files);
+    } catch (err) {
+        return json(env, request, 400, { error: err.message || 'Could not read a thread file.' });
+    }
     let geminiBody;
     try {
         geminiBody = buildGeminiRequest({
             payload,
             sharedNote: await readSharedNote(env),
             images: body?.images,
+            threadFiles: loaded.files,
+            filesMissed: loaded.missed,
         });
     } catch (err) {
         return json(env, request, 400, { error: err.message || 'Could not read those images.' });

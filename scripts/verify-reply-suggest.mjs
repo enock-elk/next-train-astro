@@ -17,14 +17,19 @@ import {
     GAUTENG_OFFICES,
     haltPanelText,
     htmlAttrUrl,
+    isThreadFileUrl,
     liaisonRules,
     knowledgeBase,
+    loadSuggestFile,
+    unansweredCommuterMessages,
     mailtoReplyUrl,
     outreachPlainText,
     parseSuggestResult,
     PRASA_SURVEY_URL,
     whatsappReplyUrl,
 } from '../src/lib/reply-suggest.js';
+import { describeRoute } from '../src/lib/reply-knowledge.js';
+import { whatsappMarkupToHtml } from '../src/lib/rich-text.js';
 import {
     buildTextAssistRequest,
     parseTextAssistResult,
@@ -74,7 +79,56 @@ const named = buildSuggestPayload([
 ok(named.greeting === 'Dear Enock', 'the draft payload carries Dear Enock');
 ok(!JSON.stringify(named).includes('enockelk@gmail.com'), 'the email address stays out of the draft payload');
 ok(liaisonRules('KZN').includes('more than 7 days'), 'a week-old message gets a late-reply line');
-ok(knowledgeBase().includes('Centurion'), 'sinkhole note is in the knowledge base');
+ok(knowledgeBase().includes('Centurion'), 'Centurion is in the knowledge base');
+ok(knowledgeBase().includes('pta-pien'), 'route keys are in the knowledge base');
+ok(describeRoute('pta-pien').includes('Pienaarspoort'), 'pta-pien is Pretoria to Pienaarspoort');
+ok(describeRoute('herc-koed').includes('no Saturday'), 'Hercules to Koedoespoort has no Saturday trains');
+ok(describeRoute('ec-berlin').includes('no Saturday'), 'East London to Berlin has no Saturday trains');
+ok(knowledgeBase().includes('first Monday'), 'Cato Ridge maintenance day is in the knowledge base');
+ok(knowledgeBase().includes('R180.00'), 'zone 1 monthly fare is in the knowledge base');
+ok(knowledgeBase().includes('09:30'), 'off-peak window is in the knowledge base');
+const photoUrl = 'https://firebasestorage.googleapis.com/v0/b/app/o/feedback_attachments%2Fa.jpg?alt=media&token=abc';
+const pdfUrl = 'https://firebasestorage.googleapis.com/v0/b/app/o/feedback_attachments%2Fa.pdf?alt=media&token=abc';
+ok(isThreadFileUrl(photoUrl), 'a chat photo URL is allowed');
+ok(isThreadFileUrl(pdfUrl), 'a chat PDF URL is allowed');
+ok(!isThreadFileUrl('https://evil.example/a.jpg'), 'a foreign file URL is dropped');
+ok(whatsappMarkupToHtml('*Metrorail Update*') === '<b>Metrorail Update</b>', 'WhatsApp stars become bold');
+ok(whatsappMarkupToHtml('hello') === '', 'plain alert paste stays plain text');
+const gap = unansweredCommuterMessages([
+    { from: 'commuter', text: 'The Sunday train' },
+    { from: 'commuter', text: 'Also the monthly ticket' },
+]);
+ok(gap.length === 2, 'two messages with no admin reply both stay unanswered');
+const answered = unansweredCommuterMessages([
+    { from: 'commuter', text: 'First' },
+    { from: 'admin', text: 'Replied' },
+    { from: 'commuter', text: 'Latest' },
+]);
+ok(answered.length === 1 && answered[0].text === 'Latest', 'an earlier reply is not asked again');
+const longThread = Array.from({ length: 45 }, (_, i) => ({
+    deviceId: 'usr_long',
+    text: `Message ${i}`,
+    timestamp: i + 1,
+    region: 'GP',
+    routeId: 'pta-pien',
+}));
+const longPayload = buildSuggestPayload(longThread, { deviceId: 'usr_long' });
+ok(longPayload.thread.length === 45, 'the whole thread is sent');
+ok(longPayload.thread[0].text === 'Message 0', 'the earliest message is kept');
+const withFile = buildSuggestPayload([
+    { deviceId: 'usr_file', text: 'See this', attachmentUrl: photoUrl, timestamp: 1, region: 'GP', routeId: 'pta-pien' },
+    { deviceId: 'usr_file', text: 'And this', attachmentUrls: [pdfUrl], timestamp: 2 },
+], { deviceId: 'usr_file' });
+ok(withFile.files.length === 2, 'chat photos and PDFs are attached to the draft');
+ok(withFile.files.some((file) => file.kind === 'pdf'), 'a PDF is marked as a PDF');
+const contextText = buildSuggestUserText({
+    thread: [{ from: 'commuter', text: 'Why does it end on the 31st?', at: 1 }],
+    draftContext: 'Monthly tickets end on the last day of the calendar month.',
+    routeId: 'pta-pien',
+}, '');
+ok(contextText.includes('last day of the calendar month'), 'operator context is sent with the rerun');
+ok(contextText.includes('Pienaarspoort'), 'the open route is named in the prompt');
+ok(contextText.includes('Answer every one') || contextText.includes('One message still needs a reply'), 'unanswered messages are called out');
 ok(knowledgeBase().includes('Midway'), 'Vereeniging operating stations are in the knowledge base');
 ok(!liaisonRules('KZN').includes('011 013 0306'), 'KZN rules do not hand the model a Gauteng number');
 
@@ -167,6 +221,10 @@ ok(gemini.contents[0].parts.some((part) => part.inlineData?.mimeType === 'image/
 
 const adminJs = readFileSync(join(ROOT, 'public/js/admin.js'), 'utf8');
 ok(adminJs.includes('id="reply-suggest"'), 'reply composer has Suggest reply');
+ok(adminJs.includes('id="admin-reply-suggest-context"'), 'a halt can take the missing fact');
+ok(adminJs.includes('id="admin-reply-suggest-status"'), 'suggest shows progress while it writes');
+ok(adminJs.includes('shrink-0 rounded-t-lg'), 'the reply formatting bar does not shrink away');
+ok(adminJs.includes('whatsappMarkupToHtml'), 'service alerts convert WhatsApp paste marks');
 ok(adminJs.includes('Admin.suggestReplyForThread'), 'thread options can suggest a reply');
 const suggestStart = adminJs.indexOf('runSuggestReply: async () => {');
 const suggestEnd = adminJs.indexOf('openReplyModal:', suggestStart);
@@ -259,6 +317,13 @@ const editDenied = await handleRequest(new Request('https://reply.test/edit', {
 ok(editDenied.status === 401, 'write without an operator token is rejected');
 const health = await handleRequest(new Request('https://reply.test/health'), {});
 ok(health.status === 200, 'health check stays open');
+
+const png = new Uint8Array([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0, 0, 0, 0]);
+const loadedPng = await loadSuggestFile({ url: photoUrl, from: 'commuter' }, async () => new Response(png, { status: 200 }));
+ok(loadedPng?.mimeType === 'image/png' && loadedPng.data, 'a chat photo is read from its bytes');
+const pdfBytes = new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2D, 0x31, 0x2E, 0x34]);
+const loadedPdf = await loadSuggestFile({ url: pdfUrl, from: 'commuter' }, async () => new Response(pdfBytes, { status: 200 }));
+ok(loadedPdf?.mimeType === 'application/pdf', 'a chat PDF is read from its bytes');
 
 if (failures.length) {
     console.error('verify-reply-suggest FAILED:\n - ' + failures.join('\n - '));

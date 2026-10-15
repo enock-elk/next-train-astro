@@ -282,6 +282,15 @@ const expressExport = Renderer._buildGridHTML(expressSheet, 'sheet', 'ct-bellv',
 if (!expressExport.includes('EXPR') || expressExport.includes('nt-expr-btn')) {
     fail('export grid must keep the text EXPR and not a button');
 }
+if (!expressHtml.includes('w-max max-w-[140px] truncate') || expressHtml.includes('min-w-[140px]')) {
+    fail('in-app station column must shrink to the name and stop at 140px');
+}
+if (!expressExport.includes('min-w-[140px]') || !expressExport.includes('max-w-[140px]') || expressExport.includes('w-max max-w-[140px]')) {
+    fail('exported station column must keep its fixed width');
+}
+if (!noWeekend.includes('w-max max-w-[140px] truncate') || noWeekend.includes('min-w-[140px]')) {
+    fail('no-weekend in-app station column must shrink to the name and stop at 140px');
+}
 const forked = filterStopsForFork(
     [
         { name: 'DURBAN' },

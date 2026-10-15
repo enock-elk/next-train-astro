@@ -11984,8 +11984,17 @@ const Admin = {
 
     replySuggestMarkup: () => `
                     <div id="admin-reply-suggest" class="mt-3 shrink-0">
-                        <div id="admin-reply-suggest-halt" class="hidden mb-2 rounded-lg border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/40 text-amber-950 dark:text-amber-100 text-xs p-2 whitespace-pre-wrap"></div>
+                        <div id="admin-reply-suggest-halt" class="hidden mb-2 rounded-lg border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/40 text-amber-950 dark:text-amber-100 p-2">
+                            <div id="admin-reply-suggest-halt-text" class="text-xs whitespace-pre-wrap"></div>
+                            <label for="admin-reply-suggest-context" class="block text-[10px] font-bold mt-2 mb-1">Add the missing fact</label>
+                            <textarea id="admin-reply-suggest-context" rows="3" maxlength="2000" class="w-full rounded-lg border border-amber-300 dark:border-amber-700 bg-white dark:bg-gray-900 text-xs text-gray-900 dark:text-white p-2 focus:outline-none" placeholder="Type what the draft should use, then suggest again."></textarea>
+                            <button type="button" id="reply-suggest-again" class="mt-2 w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-3 rounded-lg text-xs focus:outline-none">Suggest again</button>
+                        </div>
                         <button type="button" id="reply-suggest" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 px-3 rounded-lg shadow-sm transition-colors focus:outline-none text-sm">Suggest reply</button>
+                        <div id="admin-reply-suggest-status" class="hidden mt-2 rounded-lg border border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-950/40 p-2" aria-live="polite">
+                            <p id="admin-reply-suggest-status-text" class="text-[11px] font-bold text-indigo-950 dark:text-indigo-100"></p>
+                            <ul id="admin-reply-suggest-status-steps" class="mt-1 space-y-0.5 text-[11px] text-indigo-900 dark:text-indigo-100"></ul>
+                        </div>
                         <details class="mt-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-900/40">
                             <summary class="cursor-pointer px-3 py-2 text-[11px] font-bold text-gray-600 dark:text-gray-300 select-none">Instructions and images</summary>
                             <div class="px-3 pb-3">
@@ -12081,19 +12090,45 @@ const Admin = {
         Admin.runSuggestReply();
     },
 
+    _suggestTicker: null,
+
+    setSuggestProgress: (state) => {
+        const box = document.getElementById('admin-reply-suggest-status');
+        const title = document.getElementById('admin-reply-suggest-status-text');
+        const list = document.getElementById('admin-reply-suggest-status-steps');
+        if (!box || !title || !list) return;
+        if (!state) {
+            box.classList.add('hidden');
+            title.textContent = '';
+            list.replaceChildren();
+            return;
+        }
+        box.classList.remove('hidden');
+        title.textContent = state.title || '';
+        list.replaceChildren();
+        (state.steps || []).forEach((step) => {
+            const li = document.createElement('li');
+            const mark = step.state === 'done' ? 'Done' : (step.state === 'active' ? 'Now' : 'Next');
+            li.textContent = `${mark}. ${step.label || ''}`;
+            list.appendChild(li);
+        });
+    },
+
     showSuggestHalt: (result) => {
         const panel = document.getElementById('admin-reply-suggest-halt');
+        const textEl = document.getElementById('admin-reply-suggest-halt-text');
         const text = window.ntReplySuggest?.haltPanelText(result) || '';
         if (!panel) {
             if (text && typeof showToast === 'function') showToast(text, 'warning', 5000);
             return;
         }
         if (!text) {
-            panel.textContent = '';
+            if (textEl) textEl.textContent = '';
             panel.classList.add('hidden');
             return;
         }
-        panel.textContent = text;
+        if (textEl) textEl.textContent = text;
+        else panel.textContent = text;
         panel.classList.remove('hidden');
     },
 
@@ -12111,10 +12146,12 @@ const Admin = {
         const items = (Admin.cachedFeedbackData || []).filter((item) => (item.device_id || item.deviceId) === deviceId);
         const alias = (Admin.cachedAliases && Admin.cachedAliases[deviceId]) || '';
         const note = document.getElementById('admin-reply-suggest-note')?.value || '';
+        const draftContext = document.getElementById('admin-reply-suggest-context')?.value || '';
         const payload = api.buildSuggestPayload(items, {
             deviceId,
             alias,
             note,
+            draftContext,
             allItems: Admin.cachedFeedbackData || [],
             routeRegionOf: (routeId) => (typeof ROUTES !== 'undefined' && ROUTES[routeId]?.region) || '',
         });
@@ -12122,11 +12159,52 @@ const Admin = {
             Admin.showSuggestHalt({ action: 'halt', reason: 'This thread has no message to answer.', questions: [] });
             return;
         }
-        if (btn) {
-            btn.disabled = true;
-            btn.textContent = 'Suggesting...';
+        const again = document.getElementById('reply-suggest-again');
+        const unanswered = typeof api.unansweredCommuterMessages === 'function'
+            ? api.unansweredCommuterMessages(payload.thread)
+            : [];
+        const fileCount = Array.isArray(payload.files) ? payload.files.length : 0;
+        const started = Date.now();
+        const paintProgress = (seconds) => {
+            const waiting = seconds == null ? 'Sending the prompt' : `Waiting for the draft, ${seconds}s`;
+            Admin.setSuggestProgress({
+                title: seconds == null ? 'Preparing the draft' : `Writing the draft, ${seconds}s`,
+                steps: [
+                    { state: 'done', label: `Read the whole thread, ${payload.thread.length} messages` },
+                    {
+                        state: 'done',
+                        label: unanswered.length > 1
+                            ? `${unanswered.length} messages still need a reply in this same draft`
+                            : 'Checked which messages still need a reply',
+                    },
+                    {
+                        state: fileCount ? 'active' : 'done',
+                        label: fileCount
+                            ? `Reading ${fileCount} photo or PDF from the chat`
+                            : 'No photos or PDFs on this thread',
+                    },
+                    { state: 'active', label: waiting },
+                ],
+            });
+            if (btn) btn.textContent = seconds == null ? 'Suggesting...' : `Writing draft, ${seconds}s`;
+        };
+        const setSuggestBusy = (busy) => {
+            if (btn) btn.disabled = busy;
+            if (again) {
+                again.disabled = busy;
+                again.textContent = busy ? 'Suggesting...' : 'Suggest again';
+            }
+            if (!busy && btn) btn.textContent = 'Suggest reply';
+        };
+        if (Admin._suggestTicker) {
+            clearInterval(Admin._suggestTicker);
+            Admin._suggestTicker = null;
         }
-        Admin.showSuggestHalt(null);
+        setSuggestBusy(true);
+        paintProgress(null);
+        Admin._suggestTicker = setInterval(() => {
+            paintProgress(Math.max(1, Math.round((Date.now() - started) / 1000)));
+        }, 1000);
         try {
             const secret = await Admin.getAuthKey();
             if (!secret) throw new Error('Sign in as an operator first.');
@@ -12145,19 +12223,36 @@ const Admin = {
             const html = api.composerHtmlFromResult(guarded);
             if (!html) {
                 Admin.showSuggestHalt(guarded);
+                Admin.setSuggestProgress({
+                    title: 'Needs a fact before it can draft',
+                    steps: [{ state: 'active', label: 'Add the missing fact below, then suggest again.' }],
+                });
                 return;
             }
             const editor = document.getElementById('admin-reply-text');
             if (editor) editor.innerHTML = html;
             Admin.showSuggestHalt(null);
+            Admin.setSuggestProgress({
+                title: 'Draft ready',
+                steps: [
+                    { state: 'done', label: `Used ${payload.thread.length} messages` },
+                    { state: 'done', label: 'The draft is in the box. Edit it, then send.' },
+                ],
+            });
             if (typeof showToast === 'function') showToast('Draft ready. Edit it, then send.', 'success');
         } catch (err) {
-            if (typeof showToast === 'function') showToast(err.message || 'Could not draft a reply.', 'error');
+            const message = err.message || 'Could not draft a reply.';
+            Admin.setSuggestProgress({
+                title: 'Could not finish',
+                steps: [{ state: 'active', label: message }],
+            });
+            if (typeof showToast === 'function') showToast(message, 'error');
         } finally {
-            if (btn) {
-                btn.disabled = false;
-                btn.textContent = 'Suggest reply';
+            if (Admin._suggestTicker) {
+                clearInterval(Admin._suggestTicker);
+                Admin._suggestTicker = null;
             }
+            setSuggestBusy(false);
         }
     },
 
@@ -12368,16 +12463,16 @@ const Admin = {
             modal.id = 'admin-reply-modal';
             modal.className = 'fixed inset-0 bg-black/80 z-[200] hidden flex items-center justify-center p-4 backdrop-blur-sm transition-opacity duration-300';
             modal.innerHTML = `
-                <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-lg max-h-[90dvh] flex flex-col p-4 transform transition-all scale-95 border border-gray-200 dark:border-gray-700">
+                <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-lg max-h-[90dvh] min-h-0 overflow-y-auto flex flex-col p-4 transform transition-all scale-95 border border-gray-200 dark:border-gray-700">
                     <h3 id="admin-reply-title" class="text-lg font-black text-gray-900 dark:text-white mb-0.5 tracking-tight flex items-center gap-2 shrink-0"><span class="text-sky-500">${Admin.icon('message', 'w-5 h-5')}</span> <span id="admin-reply-title-text">Reply to Commuter</span></h3>
                     <p id="admin-reply-recipient" class="text-[11px] text-gray-600 dark:text-gray-300 mb-1 break-all leading-snug shrink-0"></p>
                     <p id="admin-reply-hint" class="text-[10px] text-gray-500 dark:text-gray-400 mb-3 shrink-0">Message will be delivered to their personal inbox upon next app launch.</p>
                     
-                    <div class="flex flex-col min-h-0 flex-1">
-                    <div class="rounded-t-lg overflow-hidden border border-gray-300 dark:border-gray-600 border-b-0">
+                    <div class="flex flex-col min-h-0 flex-1 overflow-hidden">
+                    <div class="shrink-0 rounded-t-lg border border-gray-300 dark:border-gray-600 border-b-0">
                             ${Admin.wysiwygToolbarHtml('admin-reply-text', { fileInputId: 'admin-reply-upload-file', fileLabelId: 'admin-reply-upload-label' })}
                     </div>
-                        <div contenteditable="true" id="admin-reply-text" class="nt-rich-body w-full min-h-[240px] max-h-[50dvh] overflow-y-auto p-3 bg-gray-50 dark:bg-gray-900 border border-t-0 border-gray-300 dark:border-gray-600 rounded-b-lg text-sm text-gray-900 dark:text-white focus:outline-none empty:before:content-[attr(placeholder)] empty:before:text-gray-400 custom-scrollbar" placeholder="Type your response..."></div>
+                        <div contenteditable="true" id="admin-reply-text" class="nt-rich-body w-full flex-1 min-h-0 overflow-y-auto p-3 bg-gray-50 dark:bg-gray-900 border border-t-0 border-gray-300 dark:border-gray-600 rounded-b-lg text-sm text-gray-900 dark:text-white focus:outline-none empty:before:content-[attr(placeholder)] empty:before:text-gray-400 custom-scrollbar" placeholder="Type your response..."></div>
                     </div>
 
                     ${Admin.replySuggestMarkup()}
@@ -12393,20 +12488,26 @@ const Admin = {
             // Upgrade short modal from earlier session in this page load
             const panel = modal.firstElementChild;
             if (panel) {
-                panel.className = 'bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-lg max-h-[90dvh] flex flex-col p-4 transform transition-all scale-95 border border-gray-200 dark:border-gray-700';
+                panel.className = 'bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-lg max-h-[90dvh] min-h-0 overflow-y-auto flex flex-col p-4 transform transition-all scale-95 border border-gray-200 dark:border-gray-700';
             }
             const editor = document.getElementById('admin-reply-text');
             if (editor) {
-                editor.classList.remove('min-h-[120px]', 'p-2.5');
-                editor.classList.add('nt-rich-body', 'min-h-[240px]', 'max-h-[50dvh]', 'overflow-y-auto', 'p-3', 'custom-scrollbar');
+                editor.classList.remove('min-h-[120px]', 'min-h-[240px]', 'max-h-[50dvh]', 'p-2.5');
+                editor.classList.add('nt-rich-body', 'flex-1', 'min-h-0', 'overflow-y-auto', 'p-3', 'custom-scrollbar');
                 const bar = editor.previousElementSibling;
-                if (bar && !bar.querySelector('[data-nt-font-select]')) {
-                    bar.outerHTML = `<div class="rounded-t-lg overflow-hidden border border-gray-300 dark:border-gray-600 border-b-0">${Admin.wysiwygToolbarHtml('admin-reply-text', { fileInputId: 'admin-reply-upload-file', fileLabelId: 'admin-reply-upload-label' })}</div>`;
+                if (bar) {
+                    bar.classList.add('shrink-0');
+                    bar.classList.remove('overflow-hidden');
                 }
+                if (bar && !bar.querySelector('[data-nt-font-select]')) {
+                    bar.outerHTML = `<div class="shrink-0 rounded-t-lg border border-gray-300 dark:border-gray-600 border-b-0">${Admin.wysiwygToolbarHtml('admin-reply-text', { fileInputId: 'admin-reply-upload-file', fileLabelId: 'admin-reply-upload-label' })}</div>`;
+                }
+                editor.parentElement?.classList.add('min-h-0', 'flex-1', 'overflow-hidden');
             }
-            if (!document.getElementById('reply-suggest')) {
-                const sendRow = document.getElementById('reply-cancel')?.parentElement;
-                if (sendRow) sendRow.insertAdjacentHTML('beforebegin', Admin.replySuggestMarkup());
+            const sendRow = document.getElementById('reply-cancel')?.parentElement;
+            if (sendRow && !document.getElementById('admin-reply-suggest-context')) {
+                document.getElementById('admin-reply-suggest')?.remove();
+                sendRow.insertAdjacentHTML('beforebegin', Admin.replySuggestMarkup());
             }
             if (!document.getElementById('admin-reply-recipient')) {
                 const h3 = panel?.querySelector('h3');
@@ -12545,6 +12646,11 @@ const Admin = {
         document.getElementById('reply-cancel').onclick = cleanup;
         const suggestBtn = document.getElementById('reply-suggest');
         if (suggestBtn) suggestBtn.onclick = () => Admin.runSuggestReply();
+        const suggestAgain = document.getElementById('reply-suggest-again');
+        if (suggestAgain) suggestAgain.onclick = () => Admin.runSuggestReply();
+        const contextBox = document.getElementById('admin-reply-suggest-context');
+        if (contextBox) contextBox.value = '';
+        Admin.setSuggestProgress(null);
         const saveNoteBtn = document.getElementById('reply-suggest-save-note');
         if (saveNoteBtn) saveNoteBtn.onclick = () => Admin.saveReplySuggestNote();
         if (!editKey) Admin.loadReplySuggestNote(modal);
@@ -15361,11 +15467,16 @@ const Admin = {
         }
 
         // GUARDIAN WYSIWYG FIX: Strip formatting on paste to prevent CSS corruption
-        if (alertMsg) {
+        if (alertMsg && !alertMsg.dataset.ntPasteBound) {
+            alertMsg.dataset.ntPasteBound = '1';
             alertMsg.addEventListener('paste', (e) => {
                 e.preventDefault();
                 const text = (e.originalEvent || e).clipboardData.getData('text/plain');
-                document.execCommand('insertText', false, text);
+                const marked = typeof window.whatsappMarkupToHtml === 'function'
+                    ? window.whatsappMarkupToHtml(text)
+                    : '';
+                if (marked) document.execCommand('insertHTML', false, marked);
+                else document.execCommand('insertText', false, text);
             });
         }
 

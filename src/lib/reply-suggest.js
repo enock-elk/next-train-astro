@@ -4,10 +4,16 @@
  * Drafts never include another person's email. A halt never becomes composer HTML.
  */
 
+import { classifyAttachmentUrl, sanitizeAttachmentDisplayUrl, sniffAttachmentBytes } from './attachments.js';
+import { describeRoute, replyKnowledgeText } from './reply-knowledge.js';
+
 export const SUGGEST_SIMILAR_LIMIT = 8;
 export const SUGGEST_NOTE_MAX = 4000;
+export const SUGGEST_CONTEXT_MAX = 2000;
 export const SUGGEST_MAX_IMAGES = 3;
 export const SUGGEST_MAX_IMAGE_BYTES = 1_500_000;
+export const SUGGEST_MAX_FILES = 4;
+export const SUGGEST_MAX_FILE_BYTES = 4_000_000;
 export const SUGGEST_THREAD_LIMIT = 40;
 
 export const PRASA_SURVEY_URL = 'https://docs.google.com/forms/d/e/1FAIpQLSeGSJmZlpg8dq2Dvupm9xyHcFJudGsegZ2uyhS3UEq3O9fGkA/viewform';
@@ -90,13 +96,22 @@ function threadMessages(items) {
     return items
         .slice()
         .sort((a, b) => Number(a?.timestamp || 0) - Number(b?.timestamp || 0))
-        .slice(-SUGGEST_THREAD_LIMIT)
         .map((item) => ({
             from: item?.isFromAdmin ? 'admin' : 'commuter',
-            text: clip(redactEmails(item?.text || item?.message || ''), 1200),
+            text: clip(redactEmails(item?.text || item?.message || ''), 4000),
             at: Number(item?.timestamp || 0) || 0,
         }))
         .filter((row) => row.text);
+}
+
+/** Commuter messages with no admin reply after them. The whole thread is kept. */
+export function unansweredCommuterMessages(thread) {
+    const rows = Array.isArray(thread) ? thread : [];
+    let lastAdmin = -1;
+    rows.forEach((row, index) => {
+        if (row?.from === 'admin') lastAdmin = index;
+    });
+    return rows.slice(lastAdmin + 1).filter((row) => row?.from !== 'admin' && String(row?.text || '').trim());
 }
 
 /**
@@ -302,7 +317,10 @@ export function buildSuggestPayload(items, options = {}) {
         thread,
         similar,
         note: options.note || '',
+        draftContext: options.draftContext || '',
         greeting,
+        files: collectThreadFiles(list),
+        appVersion: [...list].reverse().map((item) => item?.appVersion).find(Boolean) || '',
     });
 }
 
@@ -315,9 +333,9 @@ export function sanitizeSuggestPayload(input) {
         alias: clip(redactEmails(source.alias), 80),
         region: normalizeSuggestRegion(source.region),
         routeId: clip(source.routeId, 80),
-        thread: thread.slice(-SUGGEST_THREAD_LIMIT).map((row) => ({
+        thread: thread.map((row) => ({
             from: row?.from === 'admin' ? 'admin' : 'commuter',
-            text: clip(redactEmails(row?.text || ''), 1200),
+            text: clip(redactEmails(row?.text || ''), 4000),
             at: Number(row?.at || row?.timestamp || 0) || 0,
         })).filter((row) => row.text),
         similar: similar.slice(0, SUGGEST_SIMILAR_LIMIT).map((row) => ({
@@ -328,8 +346,144 @@ export function sanitizeSuggestPayload(input) {
             admin: clip(redactEmails(row?.admin || ''), 700),
         })).filter((row) => row.admin),
         note: clip(String(source.note || ''), SUGGEST_NOTE_MAX),
+        draftContext: clip(String(source.draftContext || ''), SUGGEST_CONTEXT_MAX),
         greeting: sanitizeGreeting(source.greeting),
+        appVersion: clip(String(source.appVersion || ''), 32),
+        files: sanitizeThreadFiles(source.files),
     };
+}
+
+function htmlFileUrls(value) {
+    const text = String(value || '').replace(/&amp;/gi, '&');
+    const found = [];
+    const re = /https:\/\/[^\s"'<>\\]+/gi;
+    let match = re.exec(text);
+    while (match) {
+        found.push(match[0].replace(/[),.;]+$/g, ''));
+        match = re.exec(text);
+    }
+    return found;
+}
+
+/** Firebase Storage photos and PDFs already on this thread. Other hosts are dropped. */
+export function isThreadFileUrl(url) {
+    const safe = sanitizeAttachmentDisplayUrl(url);
+    if (!safe || !/^https:\/\//i.test(safe)) return false;
+    let parsed;
+    try {
+        parsed = new URL(safe);
+    } catch {
+        return false;
+    }
+    if (parsed.username || parsed.password || parsed.protocol !== 'https:') return false;
+    const host = parsed.hostname.toLowerCase();
+    const hostOk = host === 'firebasestorage.googleapis.com'
+        || host === 'storage.googleapis.com'
+        || host.endsWith('.firebasestorage.app');
+    if (!hostOk) return false;
+    let path = parsed.pathname;
+    try { path = decodeURIComponent(parsed.pathname); } catch { /* keep raw */ }
+    if (!path.includes('feedback_attachments') && !path.includes('admin_attachments')) return false;
+    const kind = classifyAttachmentUrl(safe);
+    return kind === 'image' || kind === 'pdf';
+}
+
+export function collectThreadFiles(items) {
+    const ordered = (Array.isArray(items) ? items : [])
+        .slice()
+        .sort((a, b) => Number(a?.timestamp || 0) - Number(b?.timestamp || 0));
+    const seen = new Set();
+    const files = [];
+    for (const item of ordered) {
+        const from = item?.isFromAdmin ? 'admin' : 'commuter';
+        const urls = [];
+        const push = (value) => {
+            const text = String(value || '').trim();
+            if (text) urls.push(text);
+        };
+        push(item?.attachmentUrl);
+        const many = item?.attachmentUrls;
+        if (Array.isArray(many)) many.forEach(push);
+        else if (many && typeof many === 'object') Object.values(many).forEach(push);
+        htmlFileUrls(item?.text || item?.message || '').forEach(push);
+        for (const url of urls) {
+            if (!isThreadFileUrl(url)) continue;
+            const safe = sanitizeAttachmentDisplayUrl(url);
+            if (!safe || seen.has(safe)) continue;
+            seen.add(safe);
+            files.push({
+                url: safe,
+                from,
+                kind: classifyAttachmentUrl(safe) === 'pdf' ? 'pdf' : 'image',
+            });
+        }
+    }
+    return files.slice(-SUGGEST_MAX_FILES);
+}
+
+function sanitizeThreadFiles(files) {
+    const list = Array.isArray(files) ? files : [];
+    const seen = new Set();
+    const kept = [];
+    for (const file of list) {
+        const url = sanitizeAttachmentDisplayUrl(file?.url || file);
+        if (!url || seen.has(url) || !isThreadFileUrl(url)) continue;
+        seen.add(url);
+        kept.push({
+            url,
+            from: file?.from === 'admin' ? 'admin' : 'commuter',
+            kind: classifyAttachmentUrl(url) === 'pdf' ? 'pdf' : 'image',
+        });
+        if (kept.length >= SUGGEST_MAX_FILES) break;
+    }
+    return kept;
+}
+
+function bytesToBase64(bytes) {
+    let binary = '';
+    const chunk = 0x8000;
+    for (let i = 0; i < bytes.length; i += chunk) {
+        binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
+    }
+    return btoa(binary);
+}
+
+/** Download one allowlisted thread photo or PDF. A bad file is skipped. */
+export async function loadSuggestFile(entry, fetchImpl = globalThis.fetch) {
+    const url = String(entry?.url || '').trim();
+    if (!isThreadFileUrl(url)) return null;
+    const res = await fetchImpl(url, { redirect: 'follow' });
+    if (!res?.ok) return null;
+    const finalUrl = res.url || url;
+    if (finalUrl !== url && !isThreadFileUrl(finalUrl)) return null;
+    const announced = Number(res.headers?.get?.('content-length') || 0);
+    if (announced > SUGGEST_MAX_FILE_BYTES) return null;
+    const buf = new Uint8Array(await res.arrayBuffer());
+    if (!buf.length || buf.length > SUGGEST_MAX_FILE_BYTES) return null;
+    const sniffed = sniffAttachmentBytes(buf);
+    if (!sniffed) return null;
+    if (sniffed.mime !== 'application/pdf' && !String(sniffed.mime).startsWith('image/')) return null;
+    return {
+        mimeType: sniffed.mime,
+        data: bytesToBase64(buf),
+        kind: sniffed.mime === 'application/pdf' ? 'pdf' : 'image',
+        from: entry?.from === 'admin' ? 'admin' : 'commuter',
+    };
+}
+
+export async function loadSuggestFiles(files, fetchImpl = globalThis.fetch) {
+    const loaded = [];
+    let missed = 0;
+    for (const file of sanitizeThreadFiles(files)) {
+        try {
+            const got = await loadSuggestFile(file, fetchImpl);
+            if (got) loaded.push(got);
+            else missed += 1;
+        } catch {
+            missed += 1;
+        }
+    }
+    return { files: loaded, missed };
 }
 
 function sanitizeGreeting(value) {
@@ -368,14 +522,12 @@ export const STALE_REPLY_MS = 7 * 24 * 60 * 60 * 1000;
 
 export function knowledgeBase() {
     return [
-        'Knowledge base. If the specific answer is not here, in the thread, in similar replies, or in the operator note, halt. Do not guess.',
-        'Centurion to Irene sinkhole, Pretoria line: there is no confirmed reopening date. Acknowledge the frustration, say there is no official update yet, and say an in-app alert will go up when reliable information is available. Do not invent a date.',
+        'Knowledge base. If the specific answer is not here, in the thread, in attached photos or PDFs, in similar replies, in the shared note, or in Context for this draft, halt. Do not guess.',
         'Vereeniging to Johannesburg is partly running. Operating: JHB Park, Braamfontein, Mayfair, Grosvenor, Langlaagte, Croesus, Longdale, New Canada, Mlamlankunzi, Orlando, Nancefield, Kliptown, Tshiawelo, Midway, Lenasia. Suspended: Lawley, Anglers, Ennerdale, Grasmere, Orange Farm, Residensia, Eatonside, Kwaggastroom, Houthouwel, Kleigrond, Leeuhof, Duncanville, Vereeniging. PRASA targets repairs reaching Houthouwel by June 2027. Weekdays from 04:15. Saturdays and public holidays from 04:50.',
         'Upcoming Gauteng repair priority: Daveyton to Germiston, and Springs to Dunswart.',
         'Cape Town train series: 25xx Kraaifontein to Cape Town, 35xx Wellington to Cape Town, 34xx Du Toit to Eerste Rivier, 32xx Strand to Cape Town, 23xx Eerste Rivier to Cape Town, 26xx Malmesbury to Cape Town, 28xx Bellville to Cape Town via Monte Vista, 01xx Fish Hoek to Cape Town, 02xx Simon\'s Town to Fish Hoek, 99xx Chris Hani to Cape Town, 94xx Nolungile to Cape Town, 93xx Nyanga to Cape Town via Pinelands, 90xx Bellville to Mutual via Belhar, 05xx Retreat to Cape Town. Odd train numbers are one direction. Even numbers are the other direction.',
-        'Fares: off-peak is 40% off the standard fare, weekdays only, 09:30 to 14:30. No off-peak discount on weekends or public holidays. The discount depends on the commuter profile. Do not invent a monthly-ticket rule.',
-        'There is no Sunday train service in the timetable.',
         'App versions look like V7_05.31 (major, then month and day).',
+        replyKnowledgeText(),
     ].join('\n');
 }
 
@@ -392,15 +544,20 @@ export function liaisonRules(region) {
         'End every draft, including a short thank-you, with this exact final line: Thank you for using Next Train.',
         'One thought per paragraph. A blank line between paragraphs.',
         'If you already replied and the commuter has not written since, action is halt. Say that no reply is needed.',
+        'The whole thread is included. If more than one commuter message has no admin reply after it, answer every one of those in this same draft, oldest first, and still answer the latest. Do not reply only to the last line.',
         'If the latest commuter message is more than 7 days old, say sorry for the late reply in calm everyday language near the start. Do not use the phrase "we apologize for the inconvenience".',
         'Do not invent a route, a transfer, a departure time, a fare, a ticket validity rule, a reopening date, or a hiring fact.',
-        'A route or connection question that is not answered by the knowledge base, the thread, or the operator note is a halt. Ask what to tell them.',
+        'Route keys such as pta-pien are for you. The commuter reply uses station names, never the key.',
+        'The route key on the message is the board they had open, usually their pinned route. Use the resolved name, termini, and transfer.',
+        'A route or connection question that is not answered by the knowledge base, the thread, the attached files, or Context for this draft is a halt. Ask what to tell them.',
         'Operational complaints can be acknowledged. Point to PRASA only through the contact block, as the best way to actually get results. On a phone call, remind them to ask for a reference number.',
         'Do not say these are not your trains. Do not mention a full-time job or building the app alone. Do not promise a feature date unless the knowledge base states it.',
         'Do not use these words: delve, furthermore, please be advised, we apologize for the inconvenience, crucial, ensure.',
         'Do not use em dashes in the reply. No citation markers.',
         'Emoji are rare. One is enough, and only when it fits the thread.',
-        'Operator notes and images are extra context. They do not let you invent a fact that is still missing.',
+        'Photos and PDFs already in the thread follow this message. Read them. A ticket photo or a notice PDF can answer a fare or a date.',
+        'Context for this draft is a fact the operator has confirmed. Use it. Do not halt again for a question that context answers. Do not add facts past what it says.',
+        'The shared operator note does not let you invent a fact that is still missing.',
         '',
         knowledgeBase(),
         '',
@@ -427,7 +584,12 @@ export function buildSuggestUserText(payload, sharedNote, now = Date.now()) {
         `Device: ${clean.deviceId || 'unknown'}`,
         `Alias: ${clean.alias || 'None'}`,
         `Region: ${clean.region || 'unknown'}`,
-        `Route: ${clean.routeId || 'unknown'}`,
+        `Route key: ${clean.routeId || 'unknown'}`,
+        clean.routeId && describeRoute(clean.routeId)
+            ? `Pinned route on this message: ${describeRoute(clean.routeId)}`
+            : 'Pinned route on this message: unknown.',
+        clean.appVersion ? `App version on the message: ${clean.appVersion}` : 'App version on the message: unknown.',
+        `Thread files: ${(clean.files || []).length}. Read every photo and PDF that follows.`,
         stale
             ? 'Latest commuter message is more than 7 days old. Apologize calmly for the late reply.'
             : 'Latest commuter message is within 7 days. Do not apologize for a delay.',
@@ -452,11 +614,28 @@ export function buildSuggestUserText(payload, sharedNote, now = Date.now()) {
         lines.push(`Admin: ${row.admin}`);
         lines.push('');
     });
+    const unanswered = unansweredCommuterMessages(clean.thread);
+    lines.push('Unanswered commuter messages:');
+    if (!unanswered.length) {
+        lines.push('None. If the last message is from ADMIN, halt. No reply is needed.');
+    } else if (unanswered.length === 1) {
+        lines.push('One message still needs a reply. Answer it.');
+        lines.push(unanswered[0].text);
+    } else {
+        lines.push(`There are ${unanswered.length} commuter messages with no admin reply after them. Answer every one in this same draft, oldest first, and still answer the latest. Do not leave an earlier point out.`);
+        unanswered.forEach((row, index) => {
+            lines.push(`${index + 1}. ${row.text}`);
+        });
+    }
+    lines.push('');
     lines.push('Shared operator note:');
     lines.push(clip(sharedNote, SUGGEST_NOTE_MAX) || '(none)');
     lines.push('');
     lines.push('Note for this draft:');
     lines.push(clean.note || '(none)');
+    lines.push('');
+    lines.push('Context for this draft (operator confirmed, use it):');
+    lines.push(clean.draftContext || '(none)');
     return lines.join('\n');
 }
 
@@ -477,10 +656,26 @@ export function normalizeSuggestImages(images) {
     return kept;
 }
 
-export function buildGeminiRequest({ payload, sharedNote, images } = {}) {
+export function buildGeminiRequest({ payload, sharedNote, images, threadFiles, filesMissed = 0 } = {}) {
     const clean = sanitizeSuggestPayload(payload);
     const parts = [{ text: buildSuggestUserText(clean, sharedNote) }];
+    const attached = Array.isArray(threadFiles) ? threadFiles : [];
+    let fileCount = 0;
+    for (const file of attached) {
+        if (fileCount >= SUGGEST_MAX_FILES) break;
+        const mimeType = String(file?.mimeType || '');
+        const data = String(file?.data || '');
+        if (!data || (mimeType !== 'application/pdf' && !mimeType.startsWith('image/'))) continue;
+        fileCount += 1;
+        const who = file.from === 'admin' ? 'admin' : 'commuter';
+        const what = mimeType === 'application/pdf' ? 'PDF' : 'photo';
+        parts.push({ text: `Thread file ${fileCount}, from the ${who}, ${what}.` });
+        parts.push({ inlineData: { mimeType, data } });
+    }
+    const missed = Number(filesMissed) || 0;
+    if (missed > 0) parts.push({ text: `${missed} thread file(s) could not be loaded.` });
     for (const image of normalizeSuggestImages(images)) {
+        parts.push({ text: 'Operator image for this draft.' });
         parts.push({ inlineData: { mimeType: image.mimeType, data: image.data } });
     }
     return {

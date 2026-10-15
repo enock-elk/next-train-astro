@@ -12161,6 +12161,196 @@ const Admin = {
         }
     },
 
+    _writeTarget: null,
+
+    ensureWriteModal: () => {
+        let modal = document.getElementById('admin-write-modal');
+        if (modal) return modal;
+        modal = document.createElement('div');
+        modal.id = 'admin-write-modal';
+        modal.className = 'fixed inset-0 bg-black/80 z-[280] hidden flex items-end sm:items-center justify-center p-3 backdrop-blur-sm';
+        modal.innerHTML = `
+            <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-lg max-h-[90dvh] flex flex-col p-4 border border-gray-200 dark:border-gray-700" role="dialog" aria-labelledby="admin-write-title">
+                <div class="flex items-center justify-between gap-2 mb-1 shrink-0">
+                    <h3 id="admin-write-title" class="text-lg font-black text-gray-900 dark:text-white">Write</h3>
+                    <button type="button" id="admin-write-close" class="p-1 rounded-full text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none" aria-label="Close">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                    </button>
+                </div>
+                <p class="text-[10px] text-gray-500 dark:text-gray-400 mb-2 shrink-0">Uses the text in this box. Replace puts it back in the field. Nothing is posted until you save or send.</p>
+                <textarea id="admin-write-text" rows="7" class="w-full min-h-[8rem] flex-1 rounded-lg border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-900 text-sm text-gray-900 dark:text-white p-3 focus:outline-none"></textarea>
+                <div id="admin-write-actions" class="flex flex-wrap gap-1.5 mt-3 shrink-0"></div>
+                <p id="admin-write-status" class="min-h-[1rem] text-[10px] text-gray-500 dark:text-gray-400 mt-2 shrink-0"></p>
+                <div class="flex space-x-2 mt-2 shrink-0">
+                    <button type="button" id="admin-write-copy" class="flex-1 bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200 font-bold py-2.5 rounded-lg text-sm focus:outline-none">Copy</button>
+                    <button type="button" id="admin-write-replace" class="flex-1 bg-violet-600 hover:bg-violet-700 text-white font-bold py-2.5 rounded-lg text-sm focus:outline-none">Replace</button>
+                </div>
+            </div>`;
+        document.body.appendChild(modal);
+        modal.querySelector('#admin-write-close').onclick = () => Admin.closeWriteAssist();
+        modal.addEventListener('click', (event) => {
+            if (event.target === modal) Admin.closeWriteAssist();
+        });
+        modal.querySelector('#admin-write-copy').onclick = async () => {
+            const text = document.getElementById('admin-write-text')?.value || '';
+            if (!text.trim()) return;
+            try {
+                await navigator.clipboard.writeText(text);
+                if (typeof showToast === 'function') showToast('Copied', 'success');
+            } catch {
+                if (typeof showToast === 'function') showToast('Copy failed', 'error');
+            }
+        };
+        modal.querySelector('#admin-write-replace').onclick = () => Admin.applyWriteAssist();
+        const actions = modal.querySelector('#admin-write-actions');
+        const list = window.ntTextAssist?.TEXT_ASSIST_ACTIONS || [];
+        actions.innerHTML = list.map((action) =>
+            `<button type="button" data-write-action="${action.id}" class="px-2.5 py-1.5 rounded-full text-[11px] font-bold bg-violet-50 text-violet-800 dark:bg-violet-900/40 dark:text-violet-200 border border-violet-200 dark:border-violet-800 focus:outline-none">${action.label}</button>`
+        ).join('');
+        actions.addEventListener('click', (event) => {
+            const button = event.target.closest('[data-write-action]');
+            if (!button) return;
+            Admin.runWriteAssist(button.getAttribute('data-write-action'), button);
+        });
+        return modal;
+    },
+
+    readWriteField: (el) => {
+        if (!el) return { text: '', full: true };
+        const editable = el.getAttribute && el.getAttribute('contenteditable') === 'true';
+        if (!editable) {
+            const value = String(el.value || '');
+            const start = Number(el.selectionStart);
+            const end = Number(el.selectionEnd);
+            if (Number.isFinite(start) && Number.isFinite(end) && end > start) {
+                return { text: value.slice(start, end), full: false, start, end };
+            }
+            return { text: value, full: true, start: 0, end: value.length };
+        }
+        const saved = Admin._savedRange;
+        const live = window.getSelection && window.getSelection().rangeCount ? window.getSelection().getRangeAt(0) : null;
+        const range = [saved, live].find((candidate) => {
+            if (!candidate || candidate.collapsed) return false;
+            const node = candidate.commonAncestorContainer;
+            const parent = node && node.nodeType === 1 ? node : node?.parentNode;
+            return parent && el.contains(parent);
+        });
+        if (range) {
+            return { text: range.toString(), full: false, range: range.cloneRange() };
+        }
+        return { text: el.innerText || el.textContent || '', full: true };
+    },
+
+    openWriteAssist: (targetId) => {
+        const el = document.getElementById(targetId);
+        if (!el) return;
+        const read = Admin.readWriteField(el);
+        const text = String(read.text || '').trim();
+        if (!text) {
+            if (typeof showToast === 'function') showToast('Type or select some text first.', 'error');
+            return;
+        }
+        if (!window.ntTextAssist?.TEXT_ASSIST_ACTIONS) {
+            if (typeof showToast === 'function') showToast('Write is not loaded.', 'error');
+            return;
+        }
+        Admin._writeTarget = { id: targetId, full: read.full, start: read.start, end: read.end, range: read.range || null };
+        const modal = Admin.ensureWriteModal();
+        const box = document.getElementById('admin-write-text');
+        if (box) box.value = String(read.text || '').replace(/\r\n/g, '\n');
+        const status = document.getElementById('admin-write-status');
+        if (status) status.textContent = read.full ? 'Using the whole field.' : 'Using the selected text.';
+        modal.classList.remove('hidden');
+    },
+
+    closeWriteAssist: () => {
+        document.getElementById('admin-write-modal')?.classList.add('hidden');
+        Admin._writeTarget = null;
+    },
+
+    runWriteAssist: async (action, button) => {
+        const box = document.getElementById('admin-write-text');
+        const status = document.getElementById('admin-write-status');
+        const text = box?.value || '';
+        if (!text.trim()) {
+            if (typeof showToast === 'function') showToast('Type or select some text first.', 'error');
+            return;
+        }
+        const buttons = document.querySelectorAll('#admin-write-actions button');
+        buttons.forEach((node) => { node.disabled = true; });
+        if (button) button.textContent = 'Working...';
+        if (status) status.textContent = '';
+        try {
+            const secret = await Admin.getAuthKey();
+            if (!secret) throw new Error('Sign in as an operator first.');
+            const res = await fetch(`${Admin.replyWorkerUrl()}/edit`, {
+                method: 'POST',
+                headers: {
+                    Authorization: `Bearer ${secret}`,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ text, action }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(data.error || 'Could not rewrite that text.');
+            if (!data.text) throw new Error('The writer returned nothing.');
+            if (box) box.value = data.text;
+            if (status) status.textContent = 'Review it, then Replace.';
+        } catch (err) {
+            if (typeof showToast === 'function') showToast(err.message || 'Could not rewrite that text.', 'error');
+        } finally {
+            buttons.forEach((node) => { node.disabled = false; });
+            const label = (window.ntTextAssist?.TEXT_ASSIST_ACTIONS || []).find((item) => item.id === action);
+            if (button && label) button.textContent = label.label;
+        }
+    },
+
+    applyWriteAssist: () => {
+        const target = Admin._writeTarget;
+        const text = document.getElementById('admin-write-text')?.value || '';
+        const el = target && document.getElementById(target.id);
+        if (!el) {
+            if (typeof showToast === 'function') showToast('That field is no longer open.', 'error');
+            return;
+        }
+        const max = Number(el.getAttribute('maxlength')) || 0;
+        let next = text.replace(/\r\n/g, '\n');
+        let clipped = false;
+        const editable = el.getAttribute('contenteditable') === 'true';
+        if (!editable && !target.full && Number.isFinite(target.start) && Number.isFinite(target.end)) {
+            const value = String(el.value || '');
+            next = value.slice(0, target.start) + next + value.slice(target.end);
+        }
+        if (max && next.length > max) {
+            next = next.slice(0, max);
+            clipped = true;
+        }
+        if (editable) {
+            const lines = next.split('\n');
+            const frag = document.createDocumentFragment();
+            lines.forEach((line, index) => {
+                if (index) frag.appendChild(document.createElement('br'));
+                frag.appendChild(document.createTextNode(line));
+            });
+            const range = !target.full && target.range;
+            const parent = range && range.commonAncestorContainer;
+            const host = parent && (parent.nodeType === 1 ? parent : parent.parentNode);
+            if (range && host && el.contains(host)) {
+                range.deleteContents();
+                range.insertNode(frag);
+            } else {
+                el.replaceChildren(frag);
+            }
+        } else {
+            el.value = next;
+            el.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+        Admin.closeWriteAssist();
+        if (typeof showToast === 'function') {
+            showToast(clipped ? `Replaced. Cut to ${max} characters.` : 'Replaced in the field.', 'success');
+        }
+    },
+
     openReplyModal: (feedbackId, deviceId, editMsg) => {
         if (!deviceId) {
             if (typeof showToast === 'function') showToast("No device ID linked to this feedback.", "error");
@@ -12610,6 +12800,12 @@ const Admin = {
         }
     },
 
+    writeAssistButtonHtml: (targetId) => {
+        const id = String(targetId || '').replace(/[^a-z0-9_-]/gi, '');
+        if (!id) return '';
+        return `<button type="button" onmousedown="event.preventDefault();" ontouchstart="Admin.saveCursorRange()" onclick="Admin.openWriteAssist('${id}')" class="shrink-0 px-2 py-1 text-xs font-bold text-violet-700 dark:text-violet-300 hover:bg-violet-100 dark:hover:bg-gray-600 rounded focus:outline-none whitespace-nowrap" title="Grammar, summarise, tone">Write</button>`;
+    },
+
     wysiwygToolbarHtml: (editorId, opts = {}) => {
         const id = String(editorId || 'alert-msg').replace(/[^a-z0-9_-]/gi, '');
         const fileInputId = opts.fileInputId ? String(opts.fileInputId).replace(/[^a-z0-9_-]/gi, '') : '';
@@ -12659,6 +12855,7 @@ const Admin = {
                             ${btn('smaller', 'Decrease Size', 'A-')}
                             ${btn('larger', 'Increase Size', 'A+')}
                             </div>
+                            ${Admin.writeAssistButtonHtml(id)}
                             <button type="button" onmousedown="event.preventDefault();" ontouchstart="Admin.saveCursorRange()" onclick="Admin.formatAlertText('link', '${id}')" class="shrink-0 px-2 py-1 text-xs font-medium text-blue-600 dark:text-blue-400 hover:bg-gray-200 dark:hover:bg-gray-600 rounded flex items-center justify-center gap-1 focus:outline-none whitespace-nowrap" title="Add Custom Link">URL ${Admin.icon('globe', 'w-3.5 h-3.5')}</button>
                         </div>
                     </div>`;
@@ -17310,9 +17507,12 @@ const Admin = {
                 <details class="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg border border-blue-200 dark:border-blue-800 space-y-2">
                     <summary class="text-[10px] font-black uppercase tracking-wider text-blue-800 dark:text-blue-300 cursor-pointer">2. Timetable grid banner</summary>
                     <p class="text-[10px] text-blue-700 dark:text-blue-400 leading-snug">Route-wide banner inside the full timetable grid. Separate from the NO SVC / SPL train tag below.</p>
-                    <label class="block text-[10px] font-bold text-blue-800 dark:text-blue-300 uppercase mb-1">Banner text</label>
+                    <div class="flex items-center justify-between mb-1">
+                        <label class="text-[10px] font-bold text-blue-800 dark:text-blue-300 uppercase" for="excl-grid-notice">Banner text</label>
+                        ${Admin.writeAssistButtonHtml('excl-grid-notice')}
+                    </div>
                     <div class="flex space-x-2">
-                        <input type="text" id="excl-grid-notice" class="w-full h-10 px-3 bg-white dark:bg-gray-800 border border-blue-200 dark:border-blue-700 rounded-lg text-xs text-gray-900 dark:text-white outline-none" placeholder="e.g. Trains 9116 & 9118 cancelled due to maintenance...">
+                        <input type="text" id="excl-grid-notice" class="flex-1 min-w-0 h-10 px-3 bg-white dark:bg-gray-800 border border-blue-200 dark:border-blue-700 rounded-lg text-xs text-gray-900 dark:text-white outline-none" placeholder="e.g. Trains 9116 & 9118 cancelled due to maintenance...">
                         <button id="excl-save-notice-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-3 rounded-lg shadow-sm transition-colors text-xs whitespace-nowrap focus:outline-none">Save</button>
                     </div>
                     <div>
@@ -19376,13 +19576,19 @@ const Admin = {
                     <input id="push-notifications-user" class="w-full h-10 px-3 rounded-lg bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-xs text-gray-900 dark:text-white" placeholder="Signed-in Account uid" autocomplete="off">
                 </div>
                 <div>
-                    <label class="block text-[9px] font-black uppercase tracking-wider text-gray-500 mb-1" for="push-notifications-title">Title</label>
+                    <div class="flex items-center justify-between mb-1">
+                        <label class="text-[9px] font-black uppercase tracking-wider text-gray-500" for="push-notifications-title">Title</label>
+                        ${Admin.writeAssistButtonHtml('push-notifications-title')}
+                    </div>
                     <input id="push-notifications-title" maxlength="80" class="w-full h-10 px-3 rounded-lg bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-xs text-gray-900 dark:text-white" placeholder="Next Train service update">
                 </div>
                 <div>
                     <div class="flex items-center justify-between mb-1">
                         <label class="text-[9px] font-black uppercase tracking-wider text-gray-500" for="push-notifications-message">Message</label>
-                        <span id="push-notifications-count" class="text-[9px] text-gray-400">0 / 180</span>
+                        <span class="inline-flex items-center gap-2">
+                            ${Admin.writeAssistButtonHtml('push-notifications-message')}
+                            <span id="push-notifications-count" class="text-[9px] text-gray-400">0 / 180</span>
+                        </span>
                     </div>
                     <textarea id="push-notifications-message" maxlength="180" rows="3" class="w-full px-3 py-2 rounded-lg bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-xs text-gray-900 dark:text-white resize-none" placeholder="What commuters need to know"></textarea>
                 </div>
@@ -22089,8 +22295,16 @@ const Admin = {
                     <select class="sched-override-day w-full h-9 px-2 rounded-md bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-[10px] text-gray-900 dark:text-white outline-none" data-region="${code}">
                         ${schedDayTypesForRegion(code).map((t) => `<option value="${t.value}">${t.label}</option>`).join('')}
                     </select>
-                    <input type="text" class="sched-override-title w-full h-9 px-2 rounded-md bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-[10px] text-gray-900 dark:text-white outline-none" data-region="${code}" placeholder="Popup title (e.g. Public holiday today)" maxlength="120">
-                    <textarea class="sched-override-body w-full min-h-[56px] px-2 py-1.5 rounded-md bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-[10px] text-gray-900 dark:text-white outline-none resize-y" data-region="${code}" placeholder="Popup message explaining the situation" maxlength="500"></textarea>
+                    <div class="flex items-center justify-between">
+                        <span class="text-[9px] font-bold uppercase tracking-wide text-gray-500">Title</span>
+                        ${Admin.writeAssistButtonHtml('sched-override-title-' + code)}
+                    </div>
+                    <input type="text" id="sched-override-title-${code}" class="sched-override-title w-full h-9 px-2 rounded-md bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-[10px] text-gray-900 dark:text-white outline-none" data-region="${code}" placeholder="Popup title (e.g. Public holiday today)" maxlength="120">
+                    <div class="flex items-center justify-between">
+                        <span class="text-[9px] font-bold uppercase tracking-wide text-gray-500">Message</span>
+                        ${Admin.writeAssistButtonHtml('sched-override-msg-' + code)}
+                    </div>
+                    <textarea id="sched-override-msg-${code}" class="sched-override-body w-full min-h-[56px] px-2 py-1.5 rounded-md bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-[10px] text-gray-900 dark:text-white outline-none resize-y" data-region="${code}" placeholder="Popup message explaining the situation" maxlength="500"></textarea>
                 </div>
             `).join('');
         }

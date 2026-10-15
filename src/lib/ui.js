@@ -797,8 +797,13 @@ function toastAllowsShow(message, type, options = {}) {
 }
 
 export function showToast(message, type = 'info', duration = 2500, actionHTML = '', options = {}) { 
+    const plainToast = String(message || '').replace(/<[^>]*>?/gm, ' ').replace(/\s+/g, ' ').trim();
+    if (type === 'error' && plainToast) console.error('Toast:', plainToast);
     if (typeof document === 'undefined') return;
     const toastEl = document.getElementById('toast');
+    const errorToast = type === 'error';
+    const dismissible = errorToast || !!options.dismissible;
+    const holdMs = errorToast ? Math.max(duration, 12000) : duration;
     
     // Debounce spamming. Ignore if the exact same message is already visible.
     if (toastEl && toastEl.classList.contains('show') && toastEl.innerText.includes(message.replace(/<[^>]*>?/gm, '').trim())) {
@@ -807,7 +812,7 @@ export function showToast(message, type = 'info', duration = 2500, actionHTML = 
     if (!toastAllowsShow(message, type, options)) return;
 
     if (toastTimeout) clearTimeout(toastTimeout); 
-    const safeDuration = Math.min(duration, options.dismissible ? 12000 : 5000);
+    const safeDuration = Math.min(holdMs, dismissible ? 12000 : 5000);
 
     // Inject Toast CSS dynamically if not present
     if (!document.getElementById('toast-guardian-style')) {
@@ -860,16 +865,16 @@ export function showToast(message, type = 'info', duration = 2500, actionHTML = 
         iconHTML = `<svg class="w-4 h-4 text-yellow-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>`;
     }
 
-    toastEl.className = `flex items-center justify-center gap-2 px-3 py-2 rounded-2xl shadow-2xl backdrop-blur-md border ${bgClass} ${borderClass} ${textClass} w-[min(22rem,calc(100vw-1.5rem))] max-w-[calc(100vw-1.5rem)]`; 
+    toastEl.className = `flex ${errorToast ? 'items-start' : 'items-center'} justify-center gap-2 px-3 py-2 rounded-2xl shadow-2xl backdrop-blur-md border ${bgClass} ${borderClass} ${textClass} w-[min(22rem,calc(100vw-1.5rem))] max-w-[calc(100vw-1.5rem)]`; 
 
-    const dismissHTML = options.dismissible
+    const dismissHTML = dismissible
         ? `<button type="button" class="nt-toast-dismiss shrink-0 p-1 rounded-full hover:bg-white/10 focus:outline-none" aria-label="Dismiss"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg></button>`
         : '';
 
     toastEl.innerHTML = `
         <div class="flex items-center justify-center gap-1.5 min-w-0 flex-1 text-center">
             ${iconHTML}
-            <span class="text-xs font-semibold tracking-wide leading-snug text-center whitespace-normal break-words line-clamp-2">${message}</span>
+            <span class="text-xs font-semibold tracking-wide leading-snug whitespace-normal break-words ${errorToast ? 'text-left max-h-40 overflow-y-auto' : 'text-center line-clamp-2'}">${message}</span>
         </div>
         ${actionHTML ? `<div class="pl-2 border-l border-white/20 shrink-0">${actionHTML}</div>` : ''}
         ${dismissHTML}

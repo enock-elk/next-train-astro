@@ -487,8 +487,7 @@ export function buildGeminiRequest({ payload, sharedNote, images } = {}) {
         systemInstruction: { parts: [{ text: liaisonRules(clean.region) }] },
         contents: [{ role: 'user', parts }],
         generationConfig: {
-            temperature: 0.4,
-            maxOutputTokens: 1024,
+            maxOutputTokens: 2048,
             responseMimeType: 'application/json',
             responseSchema: {
                 type: 'object',
@@ -500,6 +499,7 @@ export function buildGeminiRequest({ payload, sharedNote, images } = {}) {
                 },
                 required: ['action'],
             },
+            thinkingConfig: { thinkingLevel: 'MINIMAL' },
         },
     };
 }

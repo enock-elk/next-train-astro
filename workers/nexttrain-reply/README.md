@@ -13,7 +13,7 @@ Until this is done, Feedback, Send, WhatsApp, and email keep working. Suggest re
 3. Copy the key into a note on your computer. You will paste it once in step 3. Do not email it, and do not paste it into the website code.
 4. In [Google Cloud billing](https://console.cloud.google.com/billing), open the same project and add a budget alert around **R200** a month. Drafts on the cheap model sit near R20 a month at the current volume. The alert is so a mistake cannot run up a bill quietly.
 
-The worker uses `gemini-2.5-flash-lite`.
+The worker uses `gemini-3.5-flash-lite`. New API keys cannot call `gemini-2.5-flash-lite`. Write (grammar, summarise, tone, compose) uses the same key and the same worker.
 
 ## 2. Create the note store
 

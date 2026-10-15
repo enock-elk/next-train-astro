@@ -26,6 +26,7 @@ import {
     SUGGEST_MAX_IMAGES,
     whatsappReplyUrl,
 } from './reply-suggest.js';
+import { TEXT_ASSIST_ACTIONS } from './text-assist.js';
 import {
     showToast, openSmoothModal, closeSmoothModal, triggerHaptic,
     lockBackgroundScroll, unlockBackgroundScroll, bindPasswordReveal
@@ -122,6 +123,7 @@ export function exposeAdminGlobals() {
         SUGGEST_MAX_IMAGES,
         whatsappReplyUrl,
     };
+    window.ntTextAssist = { TEXT_ASSIST_ACTIONS };
     window.APP_VERSION = APP_VERSION;
     window.ADMIN_EMAILS = ADMIN_EMAILS;
     window.isAdminEmail = isAdminEmail;

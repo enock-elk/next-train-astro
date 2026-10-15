@@ -25,6 +25,12 @@ import {
     PRASA_SURVEY_URL,
     whatsappReplyUrl,
 } from '../src/lib/reply-suggest.js';
+import {
+    buildTextAssistRequest,
+    parseTextAssistResult,
+    sanitizeTextAssist,
+    textAssistRules,
+} from '../src/lib/text-assist.js';
 import { handleRequest } from '../workers/nexttrain-reply/worker.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -212,7 +218,32 @@ ok(bridge.includes('window.ntReplySuggest'), 'admin bridge exposes the suggest h
 const worker = readFileSync(join(ROOT, 'workers/nexttrain-reply/worker.js'), 'utf8');
 ok(!worker.includes('inbox.json'), 'reply worker does not read the inbox tree');
 ok(!worker.includes('feedback.json'), 'reply worker does not read the feedback tree');
-ok(worker.includes('gemini-2.5-flash-lite'), 'reply worker uses Flash-Lite');
+ok(worker.includes('gemini-3.5-flash-lite'), 'reply worker uses 3.5 Flash-Lite');
+ok(!worker.includes('gemini-2.5-flash-lite'), 'reply worker no longer calls 2.5 Flash-Lite');
+ok(worker.includes("pathname === '/edit'"), 'write assist has its own route');
+const geminiConfig = buildGeminiRequest({
+    payload: { thread: [{ from: 'commuter', text: 'Sunday train', at: 1 }], region: 'KZN' },
+}).generationConfig;
+ok(geminiConfig.thinkingConfig.thinkingLevel === 'MINIMAL', 'drafts ask for minimal thinking');
+ok(!('temperature' in geminiConfig), '3.5 requests leave temperature at the model default');
+const grammar = buildTextAssistRequest({ text: 'train is late today', action: 'grammar' });
+ok(grammar.generationConfig.thinkingConfig.thinkingLevel === 'MINIMAL', 'grammar uses minimal thinking');
+ok(textAssistRules('compose').includes('Do not invent'), 'compose cannot invent a fact');
+ok(sanitizeTextAssist({ text: 'hi', action: 'nope' }).action === '', 'an unknown writing action is dropped');
+let emptyAction = '';
+try { buildTextAssistRequest({ text: '', action: 'grammar' }); } catch (err) { emptyAction = err.message; }
+ok(emptyAction.includes('text'), 'empty text is refused before Gemini');
+ok(parseTextAssistResult('{"text":"The train is late today."}') === 'The train is late today.', 'a writing result is plain text');
+ok(adminJs.includes('openWriteAssist'), 'admin opens the write modal');
+ok(adminJs.includes("writeAssistButtonHtml('excl-grid-notice')"), 'exclusions have Write');
+ok(adminJs.includes("writeAssistButtonHtml('push-notifications-message')"), 'notifications have Write');
+ok(adminJs.includes('sched-override-msg-'), 'holiday popups have Write');
+ok(adminJs.includes("fetch(`${Admin.replyWorkerUrl()}/edit`"), 'write calls the reply worker');
+const ui = readFileSync(join(ROOT, 'src/lib/ui.js'), 'utf8');
+ok(ui.includes("console.error('Toast:'"), 'error toasts are written to the console log');
+ok(ui.includes('max-h-40 overflow-y-auto'), 'error toasts can show the whole message');
+const layout = readFileSync(join(ROOT, 'src/layouts/Layout.astro'), 'utf8');
+ok(layout.includes('MAX_ERROR_LINE = 800'), 'error log lines keep the full toast');
 
 const denied = await handleRequest(new Request('https://reply.test/suggest', {
     method: 'POST',
@@ -220,6 +251,12 @@ const denied = await handleRequest(new Request('https://reply.test/suggest', {
     body: '{}',
 }), {});
 ok(denied.status === 401, 'suggest without an operator token is rejected');
+const editDenied = await handleRequest(new Request('https://reply.test/edit', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text: 'Late', action: 'grammar' }),
+}), {});
+ok(editDenied.status === 401, 'write without an operator token is rejected');
 const health = await handleRequest(new Request('https://reply.test/health'), {});
 ok(health.status === 200, 'health check stays open');
 

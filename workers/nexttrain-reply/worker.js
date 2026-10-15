@@ -5,6 +5,10 @@
  *   Body: { deviceId, alias, region, routeId, thread, similar, note, images? }
  *   Returns: { action: "draft", reply } or { action: "halt", reason, questions }
  *
+ * POST /edit      same operator token
+ *   Body: { text, action }
+ *   Returns: { text }  (grammar, summarise, tone, compose). Does not post.
+ *
  * GET  /context   shared operator note
  * PUT  /context   { note }  (both allowlisted operators)
  *
@@ -22,9 +26,14 @@ import {
     sanitizeSuggestPayload,
     SUGGEST_NOTE_MAX,
 } from '../../src/lib/reply-suggest.js';
+import {
+    buildTextAssistRequest,
+    parseTextAssistResult,
+} from '../../src/lib/text-assist.js';
 
 const ADMIN_EMAILS = new Set(['enockelk@gmail.com', 'thandeka05nxumalo@gmail.com']);
-const GEMINI_MODEL = 'gemini-2.5-flash-lite';
+/** New API keys cannot call 2.5 Flash-Lite. 3.5 Flash-Lite is the current low-cost fit. */
+const GEMINI_MODEL = 'gemini-3.5-flash-lite';
 const NOTE_KEY = 'shared-note';
 
 /** @type {Map<string, number[]>} */
@@ -111,7 +120,10 @@ async function requireOperator(env, request) {
         return { error: err.message || 'Invalid token', status: 401 };
     }
     if (!ADMIN_EMAILS.has(user.email)) return { error: 'Operators only', status: 403 };
-    if (!checkRate(user.email)) return { error: 'Too many drafts. Wait a minute.', status: 429 };
+    const path = new URL(request.url).pathname;
+    if (!checkRate(`${user.email}:${path}`, 30)) {
+        return { error: 'Too many requests. Wait a minute.', status: 429 };
+    }
     return { user };
 }
 
@@ -135,7 +147,7 @@ export async function handleRequest(request, env) {
     if (url.pathname === '/health' && request.method === 'GET') {
         return json(env, request, 200, { ok: true });
     }
-    if (url.pathname !== '/suggest' && url.pathname !== '/context') {
+    if (url.pathname !== '/suggest' && url.pathname !== '/context' && url.pathname !== '/edit') {
         return json(env, request, 404, { error: 'Not found' });
     }
 
@@ -157,7 +169,30 @@ export async function handleRequest(request, env) {
     if (url.pathname === '/suggest' && request.method === 'POST') {
         return suggestReply(request, env);
     }
+    if (url.pathname === '/edit' && request.method === 'POST') {
+        return editText(request, env);
+    }
     return json(env, request, 405, { error: 'Method not allowed' });
+}
+
+async function callGemini(env, geminiBody) {
+    const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`,
+        {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'x-goog-api-key': env.GEMINI_API_KEY,
+            },
+            body: JSON.stringify(geminiBody),
+        }
+    );
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+        const message = data?.error?.message || `Gemini returned ${res.status}`;
+        return { error: String(message).slice(0, 500), status: 502 };
+    }
+    return { data };
 }
 
 async function suggestReply(request, env) {
@@ -189,29 +224,38 @@ async function suggestReply(request, env) {
     } catch (err) {
         return json(env, request, 400, { error: err.message || 'Could not read those images.' });
     }
-    const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`,
-        {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'x-goog-api-key': env.GEMINI_API_KEY,
-            },
-            body: JSON.stringify(geminiBody),
-        }
-    );
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-        const message = data?.error?.message || `Gemini returned ${res.status}`;
-        return json(env, request, 502, { error: message.slice(0, 240) });
-    }
-    const parsed = applyDraftGuard(parseSuggestResult(geminiText(data)), payload.region);
+    const gemini = await callGemini(env, geminiBody);
+    if (gemini.error) return json(env, request, gemini.status, { error: gemini.error });
+    const parsed = applyDraftGuard(parseSuggestResult(geminiText(gemini.data)), payload.region);
     return json(env, request, 200, {
         action: parsed.action,
         reply: parsed.action === 'draft' ? parsed.reply : '',
         reason: parsed.reason || '',
         questions: parsed.questions || [],
     });
+}
+
+async function editText(request, env) {
+    if (!env?.GEMINI_API_KEY) {
+        return json(env, request, 503, { error: 'GEMINI_API_KEY is not set on the reply worker.' });
+    }
+    let body = {};
+    try {
+        body = await request.json();
+    } catch {
+        return json(env, request, 400, { error: 'Expected JSON.' });
+    }
+    let geminiBody;
+    try {
+        geminiBody = buildTextAssistRequest(body);
+    } catch (err) {
+        return json(env, request, 400, { error: err.message || 'Could not read that text.' });
+    }
+    const gemini = await callGemini(env, geminiBody);
+    if (gemini.error) return json(env, request, gemini.status, { error: gemini.error });
+    const text = parseTextAssistResult(geminiText(gemini.data));
+    if (!text) return json(env, request, 502, { error: 'The writer returned nothing.' });
+    return json(env, request, 200, { text });
 }
 
 export default {

@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_10.15.4': [
+        'Suggest reply and Write use Gemini 3.5 Flash-Lite, which new API keys can call. Error toasts show the full message, stay until dismissed, and are stored in the console log. Write is on alerts, notifications, exclusions, disruptions, replies, and holiday popups. Replace puts the text back. Nothing posts until you save or send. No commuter What\'s New. forceShow stays false.',
+    ],
     'V9_10.15.3': [
         'Suggest reply uses Dear and a first name, or Dear Mr and a surname, only when that name is clear from the alias, the message, or the email. Otherwise it stays Hi there. The email address itself is not sent to the draft. No commuter What\'s New. forceShow stays false.',
     ],

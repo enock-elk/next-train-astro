@@ -483,6 +483,7 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
       (function () {
         var MAX_LOGS = 500;
         var MAX_LINE = 240;
+        var MAX_ERROR_LINE = 800;
         var LOG_KEY = 'nt_blackbox_logs';
         function skipLog(type, msg) {
           if (type === 'ERROR') return false;
@@ -506,7 +507,8 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
               if (a instanceof Error) return a.message + ' ' + (a.stack || '');
               return typeof a === 'object' ? JSON.stringify(a) : String(a);
             }).join(' ');
-            if (msg.length > MAX_LINE) msg = msg.slice(0, MAX_LINE);
+            var cap = type === 'ERROR' ? MAX_ERROR_LINE : MAX_LINE;
+            if (msg.length > cap) msg = msg.slice(0, cap);
             if (skipLog(type, msg)) return;
             var logs = [];
             try { logs = JSON.parse(localStorage.getItem(LOG_KEY) || '[]'); } catch (e) {}

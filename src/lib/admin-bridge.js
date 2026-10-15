@@ -9,10 +9,23 @@
 import {
     ROUTES, DYNAMIC_BASE_URL, APP_VERSION, DEFAULT_EXCLUSIONS, REGIONS, FARE_CONFIG, withBase,
     ADMIN_EMAILS, isAdminEmail, COMMUNITY_WORKER_URL, COMMUNITY_WORKER_FALLBACK_URL,
+    REPLY_WORKER_URL,
     SPECIAL_DATES, HOLIDAY_NAMES, SATURDAY_PLACEHOLDER_ROUTES
 } from './config.js';
 import { safeStorage, escapeHTML, formatAppDate, formatAppTime, formatThreadDateLabel, normalizeStationName, flattenPublicHolidays } from './utils.js';
 import { parseFeedbackAlertQuote } from './feedback-quote.js';
+import {
+    applyDraftGuard,
+    buildSuggestPayload,
+    composerHtmlFromResult,
+    haltPanelText,
+    htmlAttrUrl,
+    mailtoReplyUrl,
+    outreachPlainText,
+    SUGGEST_MAX_IMAGE_BYTES,
+    SUGGEST_MAX_IMAGES,
+    whatsappReplyUrl,
+} from './reply-suggest.js';
 import {
     showToast, openSmoothModal, closeSmoothModal, triggerHaptic,
     lockBackgroundScroll, unlockBackgroundScroll, bindPasswordReveal
@@ -96,6 +109,19 @@ export function exposeAdminGlobals() {
     window.ROUTES = ROUTES;
     window.DYNAMIC_BASE_URL = DYNAMIC_BASE_URL;
     window.COMMUNITY_WORKER_URL = COMMUNITY_WORKER_URL || COMMUNITY_WORKER_FALLBACK_URL;
+    window.REPLY_WORKER_URL = REPLY_WORKER_URL;
+    window.ntReplySuggest = {
+        applyDraftGuard,
+        buildSuggestPayload,
+        composerHtmlFromResult,
+        haltPanelText,
+        htmlAttrUrl,
+        mailtoReplyUrl,
+        outreachPlainText,
+        SUGGEST_MAX_IMAGE_BYTES,
+        SUGGEST_MAX_IMAGES,
+        whatsappReplyUrl,
+    };
     window.APP_VERSION = APP_VERSION;
     window.ADMIN_EMAILS = ADMIN_EMAILS;
     window.isAdminEmail = isAdminEmail;

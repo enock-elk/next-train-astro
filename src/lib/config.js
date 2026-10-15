@@ -14,7 +14,7 @@
  * Changelog / What’s New is optional: skip both, or write only "no release notes."
  * Always add ADMIN_CHANGELOG[APP_VERSION] (System Health Build notes).
  */
-export const APP_VERSION = "V9_10.14.2";
+export const APP_VERSION = "V9_10.15.1";
 
 /** Public support channels (About modal, lifeboat help.html, Safe Mode). */
 export const SUPPORT_EMAIL = 'admin@nexttrain.co.za';
@@ -108,6 +108,16 @@ export const PILOT_ROUTE_IDS = ['pta-pien', 'pta-mabopane', 'ct-bellv'];
  * Cloudflare Pages Git builds omit the public env var.
  */
 export const COMMUNITY_WORKER_FALLBACK_URL = 'https://nexttrain-community.enock.workers.dev';
+/** Operator suggest-a-reply. Override with PUBLIC_REPLY_WORKER_URL at build time. */
+export const REPLY_WORKER_FALLBACK_URL = 'https://nexttrain-reply.enock.workers.dev';
+export const REPLY_WORKER_URL = (() => {
+    try {
+        const fromEnv = String(import.meta.env?.PUBLIC_REPLY_WORKER_URL || '').replace(/\/$/, '');
+        return fromEnv || REPLY_WORKER_FALLBACK_URL;
+    } catch {
+        return REPLY_WORKER_FALLBACK_URL;
+    }
+})();
 export const COMMUNITY_WORKER_URL = (() => {
     try {
         return String(import.meta.env?.PUBLIC_COMMUNITY_WORKER_URL || '').replace(/\/$/, '');

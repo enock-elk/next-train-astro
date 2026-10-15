@@ -1,0 +1,47 @@
+# Deploy nexttrain-reply (operator suggest-a-reply). Skips until the KV id is real.
+name: Deploy nexttrain-reply worker
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'workers/nexttrain-reply/**'
+      - 'src/lib/reply-suggest.js'
+      - '.github/workflows/deploy-reply-worker.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-reply-worker
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Deploy worker
+        working-directory: workers/nexttrain-reply
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          if grep -q 'REPLACE_ME' wrangler.jsonc; then
+            echo "::warning::REPLY_CONTEXT KV id is still REPLACE_ME. Create the namespace, paste the id, then re-run."
+            exit 0
+          fi
+          if [ -z "${CLOUDFLARE_API_TOKEN:-}" ] || [ -z "${CLOUDFLARE_ACCOUNT_ID:-}" ]; then
+            echo "::warning::CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID not set. Reply worker was not deployed."
+            exit 0
+          fi
+          npx --yes wrangler deploy

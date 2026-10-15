@@ -1,7 +1,7 @@
 {
   "name": "next-train-2.0",
   "type": "module",
-  "version": "9.10.14.2",
+  "version": "9.10.15.1",
   "scripts": {
     "dev": "astro dev",
     "prebuild": "node scripts/generate-sitemap.mjs",
@@ -24,6 +24,7 @@
     "verify:update-fouc": "node scripts/verify-update-fouc.mjs",
     "apply:edge-cache-rules": "node scripts/apply-nexttrain-edge-cache-rules.mjs",
     "verify:admin-allowlist": "node scripts/verify-admin-allowlist.mjs",
+    "verify:reply-suggest": "node scripts/verify-reply-suggest.mjs",
     "verify:admin-panels": "node scripts/verify-admin-panels.mjs",
     "verify:admin-telemetry": "node scripts/verify-admin-telemetry.mjs",
     "verify:analytics": "node scripts/verify-analytics.mjs",

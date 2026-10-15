@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_10.15.1': [
+        'Feedback Options and the reply composer can Suggest reply. The draft lands in the box for editing and does not send. A missing route, fare, or ticket rule stops and asks. Gauteng office numbers stay off other regions. A shared note and up to three images can shape the draft. WhatsApp and email open with that same reply already written. No commuter What’s New. forceShow stays false.',
+    ],
     'V9_10.14.2': [
         'Black box lines cap at 240 characters. Ad-script lines and expected offline, abort, and signed-out publisher misses are not stored. The scheduled publisher skips a tick when the phone is offline or signed out. Badge sync ignores a second call that is already running. Planner batches flush at 5 successful trips. Route, region, corridor, and the station map lead with the city, the termini, Saturday, and the adult single when it is known. No commuter What’s New. forceShow stays false.',
     ],

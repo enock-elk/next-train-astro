@@ -8968,19 +8968,29 @@ const Admin = {
                     sourceTab: Admin.currentFeedbackTab === 'archive' ? 'archive' : 'inbox',
                 });
 
+                let replyPlain = '';
+                for (let ri = groupItems.length - 1; ri >= 0; ri--) {
+                    if (!groupItems[ri]?.isFromAdmin) continue;
+                    replyPlain = window.ntReplySuggest?.outreachPlainText
+                        ? window.ntReplySuggest.outreachPlainText(groupItems[ri].text || groupItems[ri].message || '')
+                        : '';
+                    break;
+                }
+
                 let contactHtml = '';
                 if (allEmails.size > 0 || allPhones.size > 0) {
                     contactHtml = '<div class="flex flex-wrap gap-1.5 min-w-0">';
                     allEmails.forEach(em => {
+                        const mailHref = Admin.outreachHref('email', em, replyPlain) || `mailto:${String(em).replace(/"/g, '')}`;
                         contactHtml += `
                             <div class="flex items-center min-w-0 max-w-full bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded px-1.5 py-0.5">
-                                <a href="mailto:${em}" onclick="event.stopPropagation()" class="text-[10px] text-blue-500 hover:underline font-mono tracking-tight lowercase break-all whitespace-normal inline-flex items-center gap-1 min-w-0">${Admin.icon('mail', 'w-3 h-3 shrink-0')} ${em}</a>
+                                <a href="${mailHref}" onclick="event.stopPropagation()" class="text-[10px] text-blue-500 hover:underline font-mono tracking-tight lowercase break-all whitespace-normal inline-flex items-center gap-1 min-w-0">${Admin.icon('mail', 'w-3 h-3 shrink-0')} ${em}</a>
                                 <button onclick="event.stopPropagation(); navigator.clipboard.writeText('${em}'); if(typeof showToast === 'function') showToast('Copied!', 'success', 1000);" class="ml-1.5 text-gray-400 hover:text-blue-500 transition-colors focus:outline-none inline-flex shrink-0" title="Copy">${Admin.icon('copy', 'w-3 h-3')}</button>
                             </div>`;
                     });
                     allPhones.forEach(ph => {
                         const isNum = /^\d+$/.test(ph);
-                        const link = isNum ? `https://wa.me/${ph}` : '#';
+                        const link = isNum ? (Admin.outreachHref('whatsapp', ph, replyPlain) || `https://wa.me/${ph}`) : '#';
                         const target = isNum ? `target="_blank"` : '';
                         const aClass = isNum ? 'text-emerald-700 dark:text-emerald-300 hover:underline' : 'text-gray-500 dark:text-gray-400';
                         
@@ -11844,7 +11854,25 @@ const Admin = {
         return { emails: [...emails], phones: [...phones] };
     },
 
-    showOutreachModal: ({ emails = [], phones = [], commuterName = 'this commuter' } = {}) => {
+    outreachHref: (kind, address, message) => {
+        const api = window.ntReplySuggest || {};
+        let raw = '';
+        if (kind === 'whatsapp') {
+            const digits = String(address || '').replace(/\D/g, '');
+            raw = api.whatsappReplyUrl
+                ? api.whatsappReplyUrl(address, message)
+                : (digits ? `https://wa.me/${digits}` : '');
+        } else {
+            const addr = String(address || '').trim();
+            raw = api.mailtoReplyUrl
+                ? api.mailtoReplyUrl(address, message)
+                : (addr.includes('@') ? `mailto:${addr}` : '');
+        }
+        if (!raw) return '';
+        return api.htmlAttrUrl ? api.htmlAttrUrl(raw) : String(raw).replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+    },
+
+    showOutreachModal: ({ emails = [], phones = [], commuterName = 'this commuter', message = '' } = {}) => {
         if (!emails.length && !phones.length) return;
         document.getElementById('admin-outreach-modal')?.remove();
         const modal = document.createElement('div');
@@ -11853,13 +11881,15 @@ const Admin = {
         const safeName = String(commuterName).replace(/</g, '&lt;');
         const waButtons = phones.map((ph) => {
             const safe = String(ph).replace(/[^0-9]/g, '');
-            if (!safe) return '';
-            return `<a href="https://wa.me/${safe}" target="_blank" rel="noopener noreferrer" class="w-full inline-flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 px-3 rounded-lg text-sm">${Admin.icon('message', 'w-4 h-4')} WhatsApp ${safe}</a>`;
+            const href = Admin.outreachHref('whatsapp', safe, message);
+            if (!safe || !href) return '';
+            return `<a href="${href}" target="_blank" rel="noopener noreferrer" class="w-full inline-flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 px-3 rounded-lg text-sm">${Admin.icon('message', 'w-4 h-4')} WhatsApp ${safe}</a>`;
         }).join('');
         const mailButtons = emails.map((em) => {
-            const safeHref = String(em).replace(/"/g, '').replace(/</g, '');
             const label = String(em).replace(/</g, '&lt;');
-            return `<a href="mailto:${safeHref}" target="_blank" rel="noopener noreferrer" class="w-full inline-flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-3 rounded-lg text-sm">${Admin.icon('mail', 'w-4 h-4')} Email ${label}</a>`;
+            const href = Admin.outreachHref('email', em, message);
+            if (!href) return '';
+            return `<a href="${href}" target="_blank" rel="noopener noreferrer" class="w-full inline-flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-3 rounded-lg text-sm">${Admin.icon('mail', 'w-4 h-4')} Email ${label}</a>`;
         }).join('');
         modal.innerHTML = `
             <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md p-5 border border-gray-200 dark:border-gray-700" role="dialog" aria-labelledby="outreach-title">
@@ -11952,6 +11982,184 @@ const Admin = {
         window.visualViewport?.addEventListener('scroll', update, { passive: true });
     },
 
+    replySuggestMarkup: () => `
+                    <div id="admin-reply-suggest" class="mt-3 shrink-0">
+                        <div id="admin-reply-suggest-halt" class="hidden mb-2 rounded-lg border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/40 text-amber-950 dark:text-amber-100 text-xs p-2 whitespace-pre-wrap"></div>
+                        <button type="button" id="reply-suggest" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 px-3 rounded-lg shadow-sm transition-colors focus:outline-none text-sm">Suggest reply</button>
+                        <details class="mt-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-900/40">
+                            <summary class="cursor-pointer px-3 py-2 text-[11px] font-bold text-gray-600 dark:text-gray-300 select-none">Instructions and images</summary>
+                            <div class="px-3 pb-3">
+                                <textarea id="admin-reply-suggest-note" rows="3" maxlength="4000" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-xs text-gray-900 dark:text-white p-2 focus:outline-none" placeholder="Shared by both operators. Sent with the next draft. Does not let the draft invent a missing fact."></textarea>
+                                <div class="flex items-center gap-2 mt-2">
+                                    <button type="button" id="reply-suggest-save-note" class="shrink-0 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 font-bold py-1.5 px-2.5 rounded-lg text-[11px] focus:outline-none">Save shared note</button>
+                                    <input id="reply-suggest-images" type="file" accept="image/jpeg,image/png,image/webp,image/gif" multiple class="block w-full text-[11px] text-gray-600 dark:text-gray-300" />
+                                </div>
+                            </div>
+                        </details>
+                    </div>`,
+
+    replyWorkerUrl: () => String(window.REPLY_WORKER_URL || 'https://nexttrain-reply.enock.workers.dev').replace(/\/$/, ''),
+
+    readSuggestImages: async (fileList) => {
+        const maxImages = window.ntReplySuggest?.SUGGEST_MAX_IMAGES || 3;
+        const maxBytes = window.ntReplySuggest?.SUGGEST_MAX_IMAGE_BYTES || 1500000;
+        const files = Array.from(fileList || []).slice(0, maxImages);
+        const images = [];
+        for (const file of files) {
+            if (!file || !String(file.type || '').startsWith('image/')) continue;
+            if (file.size > maxBytes) throw new Error('Each image must be under 1.5 MB.');
+            const dataUrl = await new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(String(reader.result || ''));
+                reader.onerror = () => reject(new Error('Could not read that image.'));
+                reader.readAsDataURL(file);
+            });
+            const match = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
+            if (!match) continue;
+            images.push({ mimeType: match[1], data: match[2] });
+        }
+        return images;
+    },
+
+    loadReplySuggestNote: async (modal) => {
+        const ta = document.getElementById('admin-reply-suggest-note');
+        if (!ta || !modal) return;
+        const gen = String(Date.now());
+        modal.dataset.noteGen = gen;
+        try {
+            const secret = await Admin.getAuthKey();
+            if (!secret) return;
+            const res = await fetch(`${Admin.replyWorkerUrl()}/context`, {
+                headers: { Authorization: `Bearer ${secret}` },
+            });
+            if (!res.ok) return;
+            const data = await res.json().catch(() => ({}));
+            if (modal.dataset.noteGen !== gen) return;
+            if (document.activeElement === ta) return;
+            ta.value = String(data.note || '');
+        } catch { /* shared note is optional */ }
+    },
+
+    saveReplySuggestNote: async () => {
+        const ta = document.getElementById('admin-reply-suggest-note');
+        const btn = document.getElementById('reply-suggest-save-note');
+        if (!ta) return;
+        if (btn) btn.disabled = true;
+        try {
+            const secret = await Admin.getAuthKey();
+            if (!secret) throw new Error('Sign in as an operator first.');
+            const res = await fetch(`${Admin.replyWorkerUrl()}/context`, {
+                method: 'PUT',
+                headers: {
+                    Authorization: `Bearer ${secret}`,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ note: ta.value || '' }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(data.error || 'Could not save the shared note.');
+            if (typeof showToast === 'function') showToast('Shared note saved.', 'success');
+        } catch (err) {
+            if (typeof showToast === 'function') showToast(err.message || 'Could not save the shared note.', 'error');
+        } finally {
+            if (btn) btn.disabled = false;
+        }
+    },
+
+    suggestReplyForThread: (did) => {
+        const deviceId = String(did || '').trim();
+        if (!deviceId || deviceId === 'Anonymous / Legacy') {
+            if (typeof showToast === 'function') showToast('This thread has no device to reply to.', 'error');
+            return;
+        }
+        const items = (Admin.cachedFeedbackData || [])
+            .filter((item) => (item.device_id || item.deviceId) === deviceId)
+            .sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+        const commuter = items.filter((item) => !item.isFromAdmin);
+        const feedbackId = commuter.length ? (commuter[commuter.length - 1].id || '') : '';
+        Admin.openReplyModal(feedbackId, deviceId);
+        Admin.runSuggestReply();
+    },
+
+    showSuggestHalt: (result) => {
+        const panel = document.getElementById('admin-reply-suggest-halt');
+        const text = window.ntReplySuggest?.haltPanelText(result) || '';
+        if (!panel) {
+            if (text && typeof showToast === 'function') showToast(text, 'warning', 5000);
+            return;
+        }
+        if (!text) {
+            panel.textContent = '';
+            panel.classList.add('hidden');
+            return;
+        }
+        panel.textContent = text;
+        panel.classList.remove('hidden');
+    },
+
+    runSuggestReply: async () => {
+        const modal = document.getElementById('admin-reply-modal');
+        const btn = document.getElementById('reply-suggest');
+        if (!modal || modal.classList.contains('hidden')) return;
+        if (String(modal.dataset.editMsgKey || '').trim()) return;
+        const deviceId = modal.dataset.replyDeviceId || '';
+        const api = window.ntReplySuggest;
+        if (!api?.buildSuggestPayload || !api.composerHtmlFromResult) {
+            if (typeof showToast === 'function') showToast('Suggest reply is not loaded.', 'error');
+            return;
+        }
+        const items = (Admin.cachedFeedbackData || []).filter((item) => (item.device_id || item.deviceId) === deviceId);
+        const alias = (Admin.cachedAliases && Admin.cachedAliases[deviceId]) || '';
+        const note = document.getElementById('admin-reply-suggest-note')?.value || '';
+        const payload = api.buildSuggestPayload(items, {
+            deviceId,
+            alias,
+            note,
+            allItems: Admin.cachedFeedbackData || [],
+            routeRegionOf: (routeId) => (typeof ROUTES !== 'undefined' && ROUTES[routeId]?.region) || '',
+        });
+        if (!payload.thread.length) {
+            Admin.showSuggestHalt({ action: 'halt', reason: 'This thread has no message to answer.', questions: [] });
+            return;
+        }
+        if (btn) {
+            btn.disabled = true;
+            btn.textContent = 'Suggesting...';
+        }
+        Admin.showSuggestHalt(null);
+        try {
+            const secret = await Admin.getAuthKey();
+            if (!secret) throw new Error('Sign in as an operator first.');
+            const images = await Admin.readSuggestImages(document.getElementById('reply-suggest-images')?.files);
+            const res = await fetch(`${Admin.replyWorkerUrl()}/suggest`, {
+                method: 'POST',
+                headers: {
+                    Authorization: `Bearer ${secret}`,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ ...payload, images }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(data.error || 'Could not draft a reply.');
+            const guarded = api.applyDraftGuard(data, payload.region);
+            const html = api.composerHtmlFromResult(guarded);
+            if (!html) {
+                Admin.showSuggestHalt(guarded);
+                return;
+            }
+            const editor = document.getElementById('admin-reply-text');
+            if (editor) editor.innerHTML = html;
+            Admin.showSuggestHalt(null);
+        } catch (err) {
+            if (typeof showToast === 'function') showToast(err.message || 'Could not draft a reply.', 'error');
+        } finally {
+            if (btn) {
+                btn.disabled = false;
+                btn.textContent = 'Suggest reply';
+            }
+        }
+    },
+
     openReplyModal: (feedbackId, deviceId, editMsg) => {
         if (!deviceId) {
             if (typeof showToast === 'function') showToast("No device ID linked to this feedback.", "error");
@@ -11981,6 +12189,8 @@ const Admin = {
                         <div contenteditable="true" id="admin-reply-text" class="nt-rich-body w-full min-h-[240px] max-h-[50dvh] overflow-y-auto p-3 bg-gray-50 dark:bg-gray-900 border border-t-0 border-gray-300 dark:border-gray-600 rounded-b-lg text-sm text-gray-900 dark:text-white focus:outline-none empty:before:content-[attr(placeholder)] empty:before:text-gray-400 custom-scrollbar" placeholder="Type your response..."></div>
                     </div>
 
+                    ${Admin.replySuggestMarkup()}
+
                     <div class="flex space-x-2 mt-3 shrink-0">
                         <button id="reply-cancel" class="flex-1 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 font-bold py-2.5 px-3 rounded-lg transition-colors focus:outline-none text-sm">Cancel</button>
                         <button id="reply-send" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-3 rounded-lg shadow-sm transition-colors focus:outline-none text-sm">Send Reply</button>
@@ -12002,6 +12212,10 @@ const Admin = {
                 if (bar && !bar.querySelector('[data-nt-font-select]')) {
                     bar.outerHTML = `<div class="rounded-t-lg overflow-hidden border border-gray-300 dark:border-gray-600 border-b-0">${Admin.wysiwygToolbarHtml('admin-reply-text', { fileInputId: 'admin-reply-upload-file', fileLabelId: 'admin-reply-upload-label' })}</div>`;
                 }
+            }
+            if (!document.getElementById('reply-suggest')) {
+                const sendRow = document.getElementById('reply-cancel')?.parentElement;
+                if (sendRow) sendRow.insertAdjacentHTML('beforebegin', Admin.replySuggestMarkup());
             }
             if (!document.getElementById('admin-reply-recipient')) {
                 const h3 = panel?.querySelector('h3');
@@ -12032,6 +12246,9 @@ const Admin = {
                 : 'Message will be delivered to their personal inbox upon next app launch.';
         }
         if (sendBtn) sendBtn.textContent = editKey ? 'Save' : 'Send Reply';
+        const suggestBox = document.getElementById('admin-reply-suggest');
+        if (suggestBox) suggestBox.classList.toggle('hidden', !!editKey);
+        Admin.showSuggestHalt(null);
 
         const editorEl = document.getElementById('admin-reply-text');
         if (editorEl) editorEl.innerHTML = editKey ? String(editMsg.text || editMsg.message || '') : '';
@@ -12135,6 +12352,11 @@ const Admin = {
         }
 
         document.getElementById('reply-cancel').onclick = cleanup;
+        const suggestBtn = document.getElementById('reply-suggest');
+        if (suggestBtn) suggestBtn.onclick = () => Admin.runSuggestReply();
+        const saveNoteBtn = document.getElementById('reply-suggest-save-note');
+        if (saveNoteBtn) saveNoteBtn.onclick = () => Admin.saveReplySuggestNote();
+        if (!editKey) Admin.loadReplySuggestNote(modal);
         document.getElementById('reply-send').onclick = async () => {
             let text = document.getElementById('admin-reply-text').innerHTML.trim();
             if (!text || text === '<br>') {
@@ -12217,7 +12439,7 @@ const Admin = {
                 }
                 cleanup();
                 if (contacts.emails.length || contacts.phones.length) {
-                    Admin.showOutreachModal({ ...contacts, commuterName });
+                    Admin.showOutreachModal({ ...contacts, commuterName, message: text });
                 }
             } catch (e) {
                 if (typeof showToast === 'function') showToast(editingKey ? 'Failed to save reply.' : 'Failed to send reply.', 'error');
@@ -18239,6 +18461,7 @@ const Admin = {
                                     <svg class="w-3 h-3 opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
                                 </button>
                                 <div data-fb-more-menu class="hidden absolute right-0 top-full mt-1 z-[40] w-56 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 shadow-xl py-1 text-left">
+                                    ${did !== 'Anonymous / Legacy' ? `<button type="button" onclick="event.stopPropagation(); Admin.suggestReplyForThread('${safeDidAttr}')" class="w-full px-3 py-2 text-left text-[11px] font-bold text-indigo-700 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 focus:outline-none flex items-center gap-2">${Admin.icon('reply', 'w-3.5 h-3.5')} Suggest reply</button>` : ''}
                                     <button type="button" onclick="event.stopPropagation(); Admin.exportThreadForAI('${safeDidAttr}')" class="w-full px-3 py-2 text-left text-[11px] font-bold text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-900/30 focus:outline-none flex items-center gap-2">${Admin.icon('download', 'w-3.5 h-3.5')} Export</button>
                                     <button type="button" data-escalate="${escalateAttr}" onclick="event.stopPropagation(); Admin.escalateFromEl(this)" class="w-full px-3 py-2 text-left text-[11px] font-bold text-orange-600 dark:text-orange-400 hover:bg-orange-50 dark:hover:bg-orange-900/30 focus:outline-none flex items-center gap-2">${Admin.icon('alert', 'w-3.5 h-3.5')} Escalate</button>
                                     ${did !== 'Anonymous / Legacy' ? `<button type="button" onclick="event.stopPropagation(); Admin.openFeedbackBetaGrant('${safeDidAttr}')" class="w-full px-3 py-2 text-left text-[11px] font-bold text-violet-700 dark:text-violet-300 hover:bg-violet-50 dark:hover:bg-violet-900/30 focus:outline-none flex items-center gap-2">${Admin.icon('star', 'w-3.5 h-3.5')} Add to beta</button>` : ''}

@@ -45,6 +45,10 @@ ok(bridge.includes('return isAdminEmail(user.email) ? user : null'), 'bridge ski
 const worker = readFileSync(join(ROOT, 'workers/nexttrain-telemetry/worker.js'), 'utf8');
 ok(worker.includes('thandeka05nxumalo@gmail.com'), 'telemetry worker still allowlists Thandeka');
 
+const replyWorker = readFileSync(join(ROOT, 'workers/nexttrain-reply/worker.js'), 'utf8');
+ok(replyWorker.includes('thandeka05nxumalo@gmail.com'), 'reply worker still allowlists Thandeka');
+ok(replyWorker.includes('enockelk@gmail.com'), 'reply worker still allowlists Enock');
+
 if (failures.length) {
     console.error('verify-admin-allowlist FAILED:\n - ' + failures.join('\n - '));
     process.exit(1);

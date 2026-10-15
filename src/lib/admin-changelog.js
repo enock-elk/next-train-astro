@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_10.15.7': [
+        'Dev Hub has a Brief button. It stays until dismissed for the day, and it only reads logs after it is opened. The report covers the next few days (Cato Ridge first Monday, Saturday gaps, 0618/0619, holidays), expiries, trip plans, fare notes, routing failures, feature switches, and crash cards. Explain sends that crash log to the reply worker after emails and phone numbers are removed. Check for Updates keeps its bottom message up while the download runs, and a quick download still shows it for up to 6 seconds. No commuter What\'s New for the brief. forceShow stays false.',
+    ],
     'V9_10.15.6': [
         'Suggest reply reads the whole thread, the route key they had open, and any photo or PDF already in the chat. If earlier messages never got a reply, that same draft answers those too. A halt can take the missing fact and run again. The reply box keeps its formatting bar. Service alert paste turns WhatsApp bold marks into bold. While a draft is writing, the status lists what it is doing. No commuter What\'s New. forceShow stays false.',
     ],

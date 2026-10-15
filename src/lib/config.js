@@ -14,7 +14,7 @@
  * Changelog / What’s New is optional: skip both, or write only "no release notes."
  * Always add ADMIN_CHANGELOG[APP_VERSION] (System Health Build notes).
  */
-export const APP_VERSION = "V9_10.15.6";
+export const APP_VERSION = "V9_10.15.7";
 
 /** Public support channels (About modal, lifeboat help.html, Safe Mode). */
 export const SUPPORT_EMAIL = 'admin@nexttrain.co.za';
@@ -984,6 +984,16 @@ export const HERC_KOED_JUNCTIONS = ['KOEDOESPOORT', 'HERCULES'];
 // comma, a period, or a hyphen. Do not explain strategy or "we fixed."
 // Leave every forceShow false. Never auto-open What's New over the welcome screen.
 export const CHANGELOG_DATA = [
+    {
+        id: "V9_10.15.7",
+        title: "Check for Updates",
+        date: "15 Oct 2026",
+        forceShow: false,
+        features: [
+            "Check for Updates keeps its message on screen while the download runs.",
+            "A quick download still shows that message, for up to 6 seconds."
+        ]
+    },
     {
         id: "V9_10.13.2",
         title: "Scholar passes",

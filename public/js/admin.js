@@ -2048,6 +2048,7 @@ const Admin = {
             return;
         }
         child.style.display = '';
+        if (child.id === 'operator-brief-slot') child.style.gridColumn = '1 / -1';
         if (child.dataset.originalClasses) {
             child.className = child.dataset.originalClasses;
         }
@@ -4817,6 +4818,7 @@ const Admin = {
                 }
             } catch (e) { console.error('[Admin] alert rebuild failed:', e); }
             Admin.ensureGlobalStateMonitorTile();
+            Admin.ensureOperatorBriefSlot();
             Admin.initGridView(); // Ensure grid is bound if re-opened
             Admin.fetchActionRequired();
             return;
@@ -4869,6 +4871,7 @@ const Admin = {
 
         // Stub Global State Monitor before grid packs tiles (fetch fills body async)
         Admin.ensureGlobalStateMonitorTile();
+        Admin.ensureOperatorBriefSlot();
 
         // GROWTH SPRINT PHASE 5: Transform Dev Hub into native Grid / Drill-Down Dashboard
         Admin.initGridView();
@@ -4905,6 +4908,219 @@ const Admin = {
     },
 
 
+    ensureOperatorBriefSlot: () => {
+        const adminContainer = document.getElementById('admin-modules-container');
+        const api = window.ntOperatorBrief;
+        if (!adminContainer || !api?.briefLauncherHtml) return;
+        let slot = document.getElementById('operator-brief-slot');
+        if (!slot) {
+            slot = document.createElement('div');
+            slot.id = 'operator-brief-slot';
+            slot.className = 'mb-4';
+        }
+        slot.style.gridColumn = '1 / -1';
+        if (adminContainer.firstElementChild !== slot) {
+            adminContainer.insertBefore(slot, adminContainer.firstChild);
+        }
+        const hidden = api.briefDismissed(typeof safeStorage !== 'undefined' ? safeStorage : null);
+        slot.innerHTML = api.briefLauncherHtml({
+            hidden,
+            clock: api.johannesburgClock(Date.now()),
+        });
+        slot.querySelector('#operator-brief-open')?.addEventListener('click', () => Admin.openOperatorBrief());
+        slot.querySelector('#operator-brief-dismiss')?.addEventListener('click', (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            api.dismissBrief(typeof safeStorage !== 'undefined' ? safeStorage : null);
+            Admin.ensureOperatorBriefSlot();
+        });
+        slot.querySelector('#operator-brief-restore')?.addEventListener('click', () => {
+            api.restoreBrief(typeof safeStorage !== 'undefined' ? safeStorage : null);
+            Admin.ensureOperatorBriefSlot();
+            Admin.openOperatorBrief();
+        });
+    },
+
+    ensureBriefOverlay: () => {
+        let overlay = document.getElementById('operator-brief-overlay');
+        if (!overlay) {
+            overlay = document.createElement('div');
+            overlay.id = 'operator-brief-overlay';
+            overlay.className = 'fixed inset-0 z-[150] hidden overflow-y-auto';
+            document.body.appendChild(overlay);
+        }
+        return overlay;
+    },
+
+    fetchBriefNode: async (path, limit) => {
+        const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
+        const secret = await Admin.getAuthKey();
+        const auth = secret ? `&auth=${encodeURIComponent(secret)}` : '';
+        const limited = `${dynamicEndpoint}${path}.json?orderBy=%22%24key%22&limitToLast=${limit}${auth}`;
+        let res = await fetch(limited).catch(() => null);
+        if (!res || !res.ok) {
+            const plainAuth = secret ? `?auth=${encodeURIComponent(secret)}` : '';
+            res = await fetch(`${dynamicEndpoint}${path}.json${plainAuth}`).catch(() => null);
+        }
+        if (!res || !res.ok) return {};
+        const data = await res.json().catch(() => ({}));
+        return data && typeof data === 'object' ? data : {};
+    },
+
+    gatherOperatorBrief: async () => {
+        const api = window.ntOperatorBrief;
+        const [trips, pairs, users, fails, fares, crashes, featuresRes, sheetRes] = await Promise.all([
+            Admin.fetchBriefNode('sys_logs/trip_plans', 40).catch(() => ({})),
+            (async () => {
+                const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
+                const secret = await Admin.getAuthKey();
+                const auth = secret ? `?auth=${encodeURIComponent(secret)}` : '';
+                const res = await fetch(`${dynamicEndpoint}sys_logs/trip_plan_pairs.json${auth}`).catch(() => null);
+                if (!res || !res.ok) return {};
+                const data = await res.json().catch(() => ({}));
+                return data && typeof data === 'object' ? data : {};
+            })(),
+            (async () => {
+                const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
+                const secret = await Admin.getAuthKey();
+                const auth = secret ? `&auth=${encodeURIComponent(secret)}` : '';
+                const res = await fetch(`${dynamicEndpoint}sys_logs/trip_plan_users.json?shallow=true${auth}`).catch(() => null);
+                if (!res || !res.ok) return 0;
+                const data = await res.json().catch(() => ({}));
+                return data && typeof data === 'object' ? Object.keys(data).length : 0;
+            })(),
+            Admin.fetchBriefNode('sys_logs/routing_fails', 80).catch(() => ({})),
+            Admin.fetchBriefNode('sys_logs/fare_votes', 80).catch(() => ({})),
+            Admin.fetchBriefNode('sys_logs/crashes', 20).catch(() => ({})),
+            fetch(`${typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/'}config/features.json`).catch(() => null),
+            fetch(`${typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/'}config/schedule_override.json`).catch(() => null),
+        ]);
+        const tripRows = [];
+        Object.values(trips || {}).forEach((batch) => {
+            (batch?.trips || []).forEach((trip) => tripRows.push(trip));
+        });
+        const crashRows = Object.entries(crashes || {}).map(([id, row]) => ({ id, ...(row || {}) }));
+        Admin._briefCrashes = Object.fromEntries(crashRows.map((row) => [row.id, row]));
+        let features = {};
+        let scheduleOverride = {};
+        try { if (featuresRes && featuresRes.ok) features = await featuresRes.json(); } catch { /* optional */ }
+        try { if (sheetRes && sheetRes.ok) scheduleOverride = await sheetRes.json(); } catch { /* optional */ }
+        return api.buildOperatorBrief({
+            now: Date.now(),
+            appVersion: typeof APP_VERSION !== 'undefined' ? APP_VERSION : '',
+            trips: tripRows,
+            pairs,
+            usersEver: users,
+            fails,
+            fares,
+            crashes: crashRows,
+            features,
+            scheduleOverride,
+            expiring: Admin._gsmItems || [],
+        });
+    },
+
+    paintBriefNote: (text) => {
+        const note = document.getElementById('operator-brief-note');
+        if (note) note.textContent = text || '';
+    },
+
+    askBriefWriter: async (kind, body) => {
+        const secret = await Admin.getAuthKey();
+        if (!secret) throw new Error('Sign in as an operator first.');
+        const res = await fetch(`${Admin.replyWorkerUrl()}/brief`, {
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${secret}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(body),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || 'Could not write the brief.');
+        return String(data.text || '');
+    },
+
+    openOperatorBrief: async () => {
+        const api = window.ntOperatorBrief;
+        if (!api?.buildOperatorBrief || !api.briefReportHtml) {
+            if (typeof showToast === 'function') showToast('The brief is not loaded.', 'error');
+            return;
+        }
+        const overlay = Admin.ensureBriefOverlay();
+        overlay.classList.remove('hidden');
+        overlay.innerHTML = `<div class="min-h-full bg-slate-100 dark:bg-gray-950 px-4 pt-8"><div class="max-w-lg mx-auto rounded-3xl px-4 py-5 text-white" style="background: linear-gradient(145deg, #1e1b4b, #4338ca);"><p class="text-[11px] font-bold uppercase tracking-[0.18em] text-indigo-100">Brief</p><p id="operator-brief-note" class="mt-2 text-lg font-semibold">Reading plans, failures, fares, crashes, and what is about to expire.</p><button type="button" id="operator-brief-close" class="mt-4 text-sm font-bold underline focus:outline-none">Close</button></div></div>`;
+        overlay.querySelector('#operator-brief-close')?.addEventListener('click', () => overlay.classList.add('hidden'));
+        try {
+            const model = await Admin.gatherOperatorBrief();
+            overlay.innerHTML = api.briefReportHtml(model);
+            overlay.querySelector('#operator-brief-close')?.addEventListener('click', () => overlay.classList.add('hidden'));
+            overlay.querySelectorAll('.operator-brief-crash').forEach((button) => {
+                button.addEventListener('click', () => Admin.explainBriefCrash(button.getAttribute('data-crash-id') || '', button));
+            });
+            try {
+                const text = await Admin.askBriefWriter('report', { kind: 'report', digest: model.digest });
+                Admin.paintBriefNote(text || 'The note came back empty. The cards above are still the sample.');
+            } catch (err) {
+                Admin.paintBriefNote(err?.message || 'The note could not be written. The cards above are still the sample.');
+            }
+        } catch (err) {
+            Admin.paintBriefNote(err?.message || 'Could not read the logs.');
+            if (typeof showToast === 'function') showToast(err?.message || 'Could not open the brief.', 'error');
+        }
+    },
+
+    explainBriefCrash: async (id, button) => {
+        const row = (Admin._briefCrashes && Admin._briefCrashes[id]) || {};
+        const note = button?.parentElement?.querySelector('.operator-brief-crash-note');
+        if (note) {
+            note.classList.remove('hidden');
+            note.textContent = 'Reading this crash.';
+        }
+        if (button) button.disabled = true;
+        try {
+            let preview = row.preview || '';
+            let stack = row.stack || row.raw || '';
+            const blobPath = row.blobPath || (id ? `sys_logs/blackbox/${id}` : '');
+            if (!stack && blobPath) {
+                const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
+                const secret = await Admin.getAuthKey();
+                const auth = secret ? `?auth=${encodeURIComponent(secret)}` : '';
+                const res = await fetch(`${dynamicEndpoint}${blobPath}.json${auth}`).catch(() => null);
+                if (res && res.ok) {
+                    const blob = await res.json().catch(() => ({}));
+                    const logs = Array.isArray(blob?.logs) ? blob.logs.slice(-30) : [];
+                    stack = logs.map((line) => (typeof line === 'string' ? line : JSON.stringify(line))).join('\n');
+                }
+            }
+            const scrub = window.ntOperatorBrief?.scrubOperatorText || ((value) => String(value || ''));
+            const text = await Admin.askBriefWriter('crash', {
+                kind: 'crash',
+                crash: {
+                    error: scrub(row.error || '', 400),
+                    preview: scrub(preview, 1200),
+                    stack: scrub(stack, 1500),
+                    appVersion: row.appVersion || '',
+                    routeId: row.routeId || '',
+                },
+            });
+            if (note) note.textContent = text || 'The reading came back empty.';
+        } catch (err) {
+            if (note) note.textContent = err?.message || 'Could not read this crash.';
+            if (typeof showToast === 'function') showToast(err?.message || 'Could not read this crash.', 'error');
+        } finally {
+            if (button) button.disabled = false;
+        }
+    },
+
+    placeBelowBrief: (node) => {
+        const adminContainer = document.getElementById('admin-modules-container');
+        if (!adminContainer || !node) return;
+        const brief = document.getElementById('operator-brief-slot');
+        const before = (brief && brief.parentElement === adminContainer) ? brief.nextSibling : adminContainer.firstChild;
+        if (node !== before) adminContainer.insertBefore(node, before);
+    },
+
     ensureGlobalStateMonitorTile: () => {
         const adminContainer = document.getElementById('admin-modules-container');
         if (!adminContainer) return null;
@@ -4912,7 +5128,7 @@ const Admin = {
         if (!actionBanner) {
             actionBanner = document.createElement('div');
             actionBanner.id = 'action-required-panel';
-            adminContainer.insertBefore(actionBanner, adminContainer.firstChild);
+            Admin.placeBelowBrief(actionBanner);
         }
         // Match other tiles: visible overflow so grid titles/icons are never clipped
         actionBanner.className = "bg-white dark:bg-gray-800 rounded-xl shadow-md border border-gray-200 dark:border-gray-700 p-4 mb-4 relative overflow-visible transition-all duration-300";
@@ -4933,9 +5149,7 @@ const Admin = {
                 </div>
             `;
         }
-        if (adminContainer.firstElementChild !== actionBanner) {
-            adminContainer.insertBefore(actionBanner, adminContainer.firstChild);
-        }
+        Admin.placeBelowBrief(actionBanner);
         return actionBanner;
     },
 
@@ -5159,9 +5373,7 @@ const Admin = {
             actionBanner.querySelector('#action-header-btn')?.style.setProperty('display', 'none', 'important');
             document.getElementById('action-body')?.classList.remove('hidden');
         }
-        if (adminContainer && adminContainer.firstElementChild !== actionBanner) {
-            adminContainer.insertBefore(actionBanner, adminContainer.firstChild);
-        }
+        Admin.placeBelowBrief(actionBanner);
     },
 
     fetchActionRequired: async () => {
@@ -5200,9 +5412,7 @@ const Admin = {
         } else if (actionBody) {
             actionBody.innerHTML = `<div class="animate-pulse text-xs text-center text-gray-500 py-3">Scanning for expiring entities...</div>`;
         }
-        if (adminContainer && adminContainer.firstElementChild !== actionBanner) {
-            adminContainer.insertBefore(actionBanner, adminContainer.firstChild);
-        }
+        Admin.placeBelowBrief(actionBanner);
 
         try {
             const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';

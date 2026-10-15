@@ -802,6 +802,7 @@ export function showToast(message, type = 'info', duration = 2500, actionHTML = 
     if (typeof document === 'undefined') return;
     const toastEl = document.getElementById('toast');
     const errorToast = type === 'error';
+    const persist = !!options.persist;
     const dismissible = errorToast || !!options.dismissible;
     const holdMs = errorToast ? Math.max(duration, 12000) : duration;
     
@@ -811,8 +812,9 @@ export function showToast(message, type = 'info', duration = 2500, actionHTML = 
     }
     if (!toastAllowsShow(message, type, options)) return;
 
-    if (toastTimeout) clearTimeout(toastTimeout); 
-    const safeDuration = Math.min(holdMs, dismissible ? 12000 : 5000);
+    if (toastTimeout) clearTimeout(toastTimeout);
+    toastTimeout = null;
+    const safeDuration = persist ? 0 : Math.min(holdMs, dismissible ? 12000 : 5000);
 
     // Inject Toast CSS dynamically if not present
     if (!document.getElementById('toast-guardian-style')) {
@@ -891,7 +893,9 @@ export function showToast(message, type = 'info', duration = 2500, actionHTML = 
     toastEl.ontouchmove = (e) => e.stopPropagation();
     
     toastEl.classList.add('show');
-    toastTimeout = setTimeout(() => { toastEl.classList.remove('show'); }, safeDuration); 
+    if (!persist && safeDuration > 0) {
+        toastTimeout = setTimeout(() => { toastEl.classList.remove('show'); }, safeDuration);
+    }
 }
 
 /** Hide the toast only when it is still showing this message, so a later toast stays. */

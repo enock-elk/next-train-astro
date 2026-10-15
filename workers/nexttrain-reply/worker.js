@@ -16,8 +16,13 @@
  * Var: FIREBASE_WEB_API_KEY
  * KV: REPLY_CONTEXT (optional until the namespace id is set)
  *
+ * POST /brief     same operator token
+ *   Body: { kind: "report", digest } or { kind: "crash", crash }
+ *   Returns: { text }
+ *
  * The browser never sees the Gemini key. The worker does not download the feedback tree.
  * It may download photo and PDF URLs from this thread when they are on Firebase Storage.
+ * The brief digest is posted by the operator. The worker does not read sys_logs.
  */
 import {
     applyDraftGuard,
@@ -32,6 +37,11 @@ import {
     buildTextAssistRequest,
     parseTextAssistResult,
 } from '../../src/lib/text-assist.js';
+import {
+    buildBriefRequest,
+    buildCrashExplainRequest,
+    parseBriefText,
+} from '../../src/lib/operator-brief.js';
 
 const ADMIN_EMAILS = new Set(['enockelk@gmail.com', 'thandeka05nxumalo@gmail.com']);
 /** New API keys cannot call 2.5 Flash-Lite. 3.5 Flash-Lite is the current low-cost fit. */
@@ -149,7 +159,7 @@ export async function handleRequest(request, env) {
     if (url.pathname === '/health' && request.method === 'GET') {
         return json(env, request, 200, { ok: true });
     }
-    if (url.pathname !== '/suggest' && url.pathname !== '/context' && url.pathname !== '/edit') {
+    if (url.pathname !== '/suggest' && url.pathname !== '/context' && url.pathname !== '/edit' && url.pathname !== '/brief') {
         return json(env, request, 404, { error: 'Not found' });
     }
 
@@ -173,6 +183,9 @@ export async function handleRequest(request, env) {
     }
     if (url.pathname === '/edit' && request.method === 'POST') {
         return editText(request, env);
+    }
+    if (url.pathname === '/brief' && request.method === 'POST') {
+        return writeBrief(request, env);
     }
     return json(env, request, 405, { error: 'Method not allowed' });
 }
@@ -243,6 +256,31 @@ async function suggestReply(request, env) {
         reason: parsed.reason || '',
         questions: parsed.questions || [],
     });
+}
+
+async function writeBrief(request, env) {
+    if (!env?.GEMINI_API_KEY) {
+        return json(env, request, 503, { error: 'GEMINI_API_KEY is not set on the reply worker.' });
+    }
+    let body = {};
+    try {
+        body = await request.json();
+    } catch {
+        return json(env, request, 400, { error: 'Expected JSON.' });
+    }
+    let geminiBody;
+    try {
+        geminiBody = body?.kind === 'crash'
+            ? buildCrashExplainRequest(body.crash)
+            : buildBriefRequest(body.digest);
+    } catch (err) {
+        return json(env, request, 400, { error: err.message || 'Could not read that brief.' });
+    }
+    const gemini = await callGemini(env, geminiBody);
+    if (gemini.error) return json(env, request, gemini.status, { error: gemini.error });
+    const text = parseBriefText(geminiText(gemini.data));
+    if (!text) return json(env, request, 502, { error: 'The brief returned nothing.' });
+    return json(env, request, 200, { text });
 }
 
 async function editText(request, env) {

@@ -29,6 +29,16 @@ import {
 } from './reply-suggest.js';
 import { TEXT_ASSIST_ACTIONS } from './text-assist.js';
 import {
+    briefDismissed,
+    briefLauncherHtml,
+    briefReportHtml,
+    buildOperatorBrief,
+    dismissBrief,
+    johannesburgClock,
+    restoreBrief,
+    scrubOperatorText,
+} from './operator-brief.js';
+import {
     showToast, openSmoothModal, closeSmoothModal, triggerHaptic,
     lockBackgroundScroll, unlockBackgroundScroll, bindPasswordReveal
 } from './ui.js';
@@ -126,6 +136,16 @@ export function exposeAdminGlobals() {
         whatsappReplyUrl,
     };
     window.ntTextAssist = { TEXT_ASSIST_ACTIONS };
+    window.ntOperatorBrief = {
+        briefDismissed,
+        briefLauncherHtml,
+        briefReportHtml,
+        buildOperatorBrief,
+        dismissBrief,
+        johannesburgClock,
+        restoreBrief,
+        scrubOperatorText,
+    };
     window.APP_VERSION = APP_VERSION;
     window.ADMIN_EMAILS = ADMIN_EMAILS;
     window.isAdminEmail = isAdminEmail;

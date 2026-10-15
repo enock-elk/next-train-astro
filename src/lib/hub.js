@@ -44,7 +44,7 @@ import { bindMapOverrideSaveListener } from './map-overrides.js';
 import { trackAnalyticsEvent } from './analytics.js';
 import { prepareRichHtml, injectRichTextStyles, isSafeHref } from './rich-text.js';
 import {
-    showToast, triggerHaptic, openSmoothModal, closeSmoothModal, canAutoOpenHomeNotices,
+    showToast, hideToastIfMessage, triggerHaptic, openSmoothModal, closeSmoothModal, canAutoOpenHomeNotices,
     hapticsAreEnabled, bindPasswordReveal
 } from './ui.js';
 import { whenSettledForAutoNotices } from './session-stability.js';
@@ -576,6 +576,18 @@ export function resetProfile() {
     setTimeout(() => openSmoothModal('profile-modal'), 50);
 }
 
+const UPDATE_TOAST_MAX_MS = 6000;
+
+function showUpdateToast(message) {
+    showToast(message, 'info', UPDATE_TOAST_MAX_MS, '', { persist: true });
+}
+
+function waitOutUpdateToast(startedAt) {
+    const left = UPDATE_TOAST_MAX_MS - (Date.now() - startedAt);
+    if (left <= 0) return Promise.resolve();
+    return new Promise((resolve) => setTimeout(resolve, left));
+}
+
 export async function performHardCacheClear(source = 'modal_confirm', { latestVersion = false, skipNetworkPreflight = false } = {}) {
     const policy = cacheClearPolicy(source);
     const requiresNetworkPreflight = policy.systemKillswitch || (source === 'check_updates' && !skipNetworkPreflight);
@@ -606,12 +618,13 @@ export async function performHardCacheClear(source = 'modal_confirm', { latestVe
 
     if (policy.downloadThenSwap) {
         const incoming = await peekIncomingVersion();
+        const updateToastStarted = Date.now();
         if (incoming && isAppVersionNewer(incoming, APP_VERSION)) {
             console.log(`🛡️ Guardian: NEW APP VERSION found: ${incoming} (running ${APP_VERSION}). Not downloaded yet. Check for Updates will download, then restart to implement it.`);
-            showToast(`Downloading ${incoming}…`, 'info', 5000);
+            showUpdateToast(`Downloading ${incoming}…`);
         } else {
             console.log(`🛡️ Guardian: Check for Updates — running ${APP_VERSION}, published ${incoming || 'unknown'}. Downloading the worker, then restart.`);
-            showToast('Downloading the update…', 'info', 5000);
+            showUpdateToast('Downloading the update…');
         }
         const installed = await installIncomingServiceWorker();
         if (!installed.ok) {
@@ -619,6 +632,7 @@ export async function performHardCacheClear(source = 'modal_confirm', { latestVe
             showToast('Kept your saved app. Try again on a stronger connection.', 'error', 4500);
             return false;
         }
+        showUpdateToast('Update ready. Opening it now.');
         console.log(`🛡️ Guardian: Incoming version ${incoming || APP_VERSION} downloaded (${installed.reason}).`);
         if (installed.reason === 'already_current' && incoming && isAppVersionNewer(incoming, APP_VERSION)) {
             console.warn(`🛡️ Guardian: Service worker still ${APP_VERSION} while published ${incoming}. Unsticking so Check for Updates can land one shell.`);
@@ -626,6 +640,7 @@ export async function performHardCacheClear(source = 'modal_confirm', { latestVe
         } else {
             try { await activateWaitingServiceWorker(); } catch { /* reload still applies the new shell */ }
         }
+        await waitOutUpdateToast(updateToastStarted);
         closeAppHub(true);
         const updateModal = document.getElementById('cache-clear-modal');
         if (updateModal) closeSmoothModal('cache-clear-modal');
@@ -751,9 +766,18 @@ function openCacheClearConfirm(onProceed) {
 
 export async function showCacheClearWarning() {
     triggerHaptic();
+    const checkStarted = Date.now();
+    showUpdateToast('Checking for updates…');
     const incomingVersion = (typeof navigator === 'undefined' || navigator.onLine)
         ? await peekIncomingVersion()
         : null;
+    const newer = incomingVersion && isAppVersionNewer(incomingVersion, APP_VERSION);
+    const checkLine = newer
+        ? `A newer copy is published (${incomingVersion}).`
+        : 'Checked for a newer copy.';
+    showUpdateToast(checkLine);
+    const checkLeft = UPDATE_TOAST_MAX_MS - (Date.now() - checkStarted);
+    setTimeout(() => hideToastIfMessage(checkLine), checkLeft > 0 ? checkLeft : 1500);
     if (incomingVersion && isAppVersionNewer(incomingVersion, APP_VERSION)) {
         console.log(`🛡️ Guardian: Check for Updates — NEW APP VERSION found: ${incomingVersion} (running ${APP_VERSION}). Not downloaded yet.`);
     } else {

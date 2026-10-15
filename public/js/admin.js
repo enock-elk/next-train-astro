@@ -6906,11 +6906,10 @@ const Admin = {
         const container = document.getElementById('admin-modules-container');
         if (!container) return;
 
-        // Ensure Telemetry is neatly packed inside the wrapper so it grids perfectly
+        // Pack Live Telemetry into the grid under the brief. Inserting it at the
+        // first child put the tile, and its sync time, on the row above the brief.
         const telPanel = document.getElementById('telemetry-panel');
-        if (telPanel && telPanel.parentNode !== container) {
-            container.insertBefore(telPanel, container.firstElementChild);
-        }
+        if (telPanel) Admin.placeBelowBrief(telPanel);
 
         // Re-open path: grid toggle already exists — still re-engage so tiles stay tappable.
         Admin.ensureGridViewEngaged();
@@ -6945,8 +6944,11 @@ const Admin = {
                     .admin-grid-view > div[data-admin-shell="empty"],
                     .admin-grid-view > [data-admin-subview="true"] { display: none !important; height: 0 !important; margin: 0 !important; padding: 0 !important; border: 0 !important; overflow: hidden !important; pointer-events: none !important; }
                     .admin-grid-view > div:not(.hidden):not(:empty):not([data-admin-shell="empty"]):not([data-admin-subview="true"]) { margin-bottom: 0 !important; cursor: pointer; transition: transform 0.2s, box-shadow 0.2s; height: 110px; display: flex; flex-direction: column; justify-content: center; position: relative; overflow: visible !important; }
-                    .admin-grid-view > #operator-brief-slot { height: auto !important; grid-column: 1 / -1; cursor: default; display: block !important; justify-content: flex-start; }
+                    .admin-grid-view > #operator-brief-slot { height: auto !important; grid-column: 1 / -1; cursor: default; display: block !important; justify-content: flex-start; overflow: visible !important; }
                     .admin-grid-view > #operator-brief-slot:hover { transform: none; box-shadow: none; border-color: transparent; }
+                    .admin-grid-view > #telemetry-panel { overflow: hidden !important; }
+                    .admin-grid-view > #telemetry-panel [id$="-header-btn"] { overflow: hidden; }
+                    .admin-grid-view > #telemetry-panel #telemetry-last-sync { display: none !important; }
                     .admin-grid-view > div:not(.hidden):not(:empty):not([data-admin-shell="empty"]):not([data-admin-subview="true"]):hover { transform: scale(1.02); box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); border-color: #3b82f6; }
                     .admin-grid-view > div [id$="-body"] { display: none !important; }
                     .admin-grid-view > div [id$="-header-btn"] { flex-direction: column; justify-content: center; height: 100%; align-items: center; text-align: center; margin-bottom: 0 !important; position: relative; overflow: visible; }

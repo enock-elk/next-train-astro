@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_10.15.9': [
+        'Dev Hub keeps Live Telemetry under the brief. The sync time stays inside that tile. No commuter What\'s New. forceShow stays false.',
+    ],
     'V9_10.15.8': [
         'Write is Next Train Composer and uses the whole field, with larger buttons. Reply to a commuter is Next Train Co-Pilot and fills the screen. A finished draft note sits inside Instructions and images. A blank shared note is not saved, and a save waits until the current note has loaded. Signing in checks scheduled alerts again, on top of the existing minute timer. The brief sits on its own row. No commuter What\'s New. forceShow stays false.',
     ],

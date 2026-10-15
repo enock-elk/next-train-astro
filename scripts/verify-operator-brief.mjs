@@ -110,6 +110,8 @@ ok(hub.includes('await waitOutUpdateToast(updateToastStarted)'), 'a quick downlo
 ok(hub.includes("persist: true"), 'the update toast stays until the download concludes');
 const admin = readFileSync(join(ROOT, 'public/js/admin.js'), 'utf8');
 ok(admin.includes('ensureOperatorBriefSlot'), 'Dev Hub paints the brief button');
+ok(admin.includes('Admin.placeBelowBrief(telPanel)'), 'Live Telemetry sits under the brief');
+ok(!admin.includes('insertBefore(telPanel, container.firstElementChild)'), 'the grid does not pin telemetry above the brief');
 ok(admin.includes("Admin.replyWorkerUrl()}/brief`"), 'Explain and the note call the reply worker');
 ok(!admin.includes('operator-brief-open') || admin.includes('openOperatorBrief'), 'the report opens from the button');
 const worker = readFileSync(join(ROOT, 'workers/nexttrain-reply/worker.js'), 'utf8');

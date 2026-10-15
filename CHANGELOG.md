@@ -1,5 +1,9 @@
 # Changelog
 
+## V9_10.15.9 — no release notes
+
+Dev Hub places Live Telemetry under the brief. The sync time stays inside that tile.
+
 ## V9_10.15.8 — no release notes
 
 Operator composer and co-pilot layout. A blank shared note is refused. Scheduled alerts are checked again on sign-in.

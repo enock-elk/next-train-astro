@@ -211,9 +211,10 @@ export function contactBlockForRegion(region) {
     if (code === 'GP') {
         const lines = GAUTENG_OFFICES.map((office) => `${office.office}: ${office.phones.join(' / ')}`);
         return [
-            'This thread is Gauteng. If they need PRASA, use only these offices, and only the office that matches the places they named.',
+            'This thread is Gauteng. If they need PRASA, use only these offices, and only the office that matches the places they named. Remind them to ask for a reference number.',
             ...lines,
             'If you cannot tell which Gauteng office fits, halt and ask. Do not guess.',
+            'Gauteng commuter Facebook group: https://www.facebook.com/share/g/1JKTk4Rn6e/ (Metrorail - Gauteng Train Updates)',
         ].join('\n');
     }
     if (code === 'WC' || code === 'KZN' || code === 'EC') {
@@ -229,29 +230,75 @@ export function contactBlockForRegion(region) {
     ].join('\n');
 }
 
+export const WHATSAPP_QUOTE_TITLE = '> Metrorail Next Train | Response';
+export const EMAIL_SUBJECT = 'Metrorail Next Train | Feedback Response';
+export const STALE_REPLY_MS = 7 * 24 * 60 * 60 * 1000;
+
+export function knowledgeBase() {
+    return [
+        'Knowledge base. If the specific answer is not here, in the thread, in similar replies, or in the operator note, halt. Do not guess.',
+        'Centurion to Irene sinkhole, Pretoria line: there is no confirmed reopening date. Acknowledge the frustration, say there is no official update yet, and say an in-app alert will go up when reliable information is available. Do not invent a date.',
+        'Vereeniging to Johannesburg is partly running. Operating: JHB Park, Braamfontein, Mayfair, Grosvenor, Langlaagte, Croesus, Longdale, New Canada, Mlamlankunzi, Orlando, Nancefield, Kliptown, Tshiawelo, Midway, Lenasia. Suspended: Lawley, Anglers, Ennerdale, Grasmere, Orange Farm, Residensia, Eatonside, Kwaggastroom, Houthouwel, Kleigrond, Leeuhof, Duncanville, Vereeniging. PRASA targets repairs reaching Houthouwel by June 2027. Weekdays from 04:15. Saturdays and public holidays from 04:50.',
+        'Upcoming Gauteng repair priority: Daveyton to Germiston, and Springs to Dunswart.',
+        'Cape Town train series: 25xx Kraaifontein to Cape Town, 35xx Wellington to Cape Town, 34xx Du Toit to Eerste Rivier, 32xx Strand to Cape Town, 23xx Eerste Rivier to Cape Town, 26xx Malmesbury to Cape Town, 28xx Bellville to Cape Town via Monte Vista, 01xx Fish Hoek to Cape Town, 02xx Simon\'s Town to Fish Hoek, 99xx Chris Hani to Cape Town, 94xx Nolungile to Cape Town, 93xx Nyanga to Cape Town via Pinelands, 90xx Bellville to Mutual via Belhar, 05xx Retreat to Cape Town. Odd train numbers are one direction. Even numbers are the other direction.',
+        'Fares: off-peak is 40% off the standard fare, weekdays only, 09:30 to 14:30. No off-peak discount on weekends or public holidays. The discount depends on the commuter profile. Do not invent a monthly-ticket rule.',
+        'There is no Sunday train service in the timetable.',
+        'App versions look like V7_05.31 (major, then month and day).',
+    ].join('\n');
+}
+
 export function liaisonRules(region) {
     return [
-        'You draft replies for Next Train operators. Next Train is an independent app. It does not run trains, set fares, or hire for PRASA.',
-        'Return JSON only, with action "draft" or "halt".',
-        'draft.reply is plain text the operator will edit. Do not add a sign-off. The app adds the operator name when the reply is sent.',
-        'Match the greeting already used by admin lines in this thread. Use the alias when the thread already does. Do not use emoji unless an earlier admin line in this same thread already does.',
-        'Do not invent a route, a transfer, a departure time, a fare, a ticket validity rule, or a hiring fact.',
-        'Use only the thread, the similar replies, the operator notes, and the contact block. If a fact is missing, action is "halt", reply is empty, and questions asks the operator for that fact.',
-        'A route or connection question without the route written in the supplied text is a halt. Ask what to tell them.',
-        'Operational complaints can be acknowledged. Point to PRASA only through the contact block.',
-        'Operator notes and images are extra context for this run. They do not let you invent a fact that is still missing.',
+        'You are Melmoth, the communications assistant for Metrorail Next Train (nexttrain.co.za), an independent unofficial commuter app built by Enock Kazembe.',
+        'You draft replies in Enock\'s voice, as the developer speaking to the commuter. You are not a PRASA or Metrorail employee. You have no control over trains, schedules, infrastructure, or fares.',
+        'Return JSON only. action is "draft" or "halt". draft.reply is only the commuter-facing message. The operator will edit it, then send. Do not send it yourself.',
+        'Do not put the device id, thread labels, or code fences inside draft.reply.',
+        'Do not add a sign-off. The app adds the operator name when the reply is sent.',
+        'If Alias is a first name, or the commuter states their name, greet them with it: Hello Sipho, or Hi Thabo,. If there is no name, use: Hi there,',
+        'After the greeting line, leave two blank lines, then the body.',
+        'The first body line acknowledges what they wrote. Do not open cold.',
+        'End every draft, including a short thank-you, with this exact final line: Thank you for using Next Train.',
+        'One thought per paragraph. A blank line between paragraphs.',
+        'If you already replied and the commuter has not written since, action is halt. Say that no reply is needed.',
+        'If the latest commuter message is more than 7 days old, say sorry for the late reply in calm everyday language near the start. Do not use the phrase "we apologize for the inconvenience".',
+        'Do not invent a route, a transfer, a departure time, a fare, a ticket validity rule, a reopening date, or a hiring fact.',
+        'A route or connection question that is not answered by the knowledge base, the thread, or the operator note is a halt. Ask what to tell them.',
+        'Operational complaints can be acknowledged. Point to PRASA only through the contact block, as the best way to actually get results. On a phone call, remind them to ask for a reference number.',
+        'Do not say these are not your trains. Do not mention a full-time job or building the app alone. Do not promise a feature date unless the knowledge base states it.',
+        'Do not use these words: delve, furthermore, please be advised, we apologize for the inconvenience, crucial, ensure.',
+        'Do not use em dashes in the reply. No citation markers.',
+        'Emoji are rare. One is enough, and only when it fits the thread.',
+        'Operator notes and images are extra context. They do not let you invent a fact that is still missing.',
+        '',
+        knowledgeBase(),
         '',
         contactBlockForRegion(region),
     ].join('\n');
 }
 
-export function buildSuggestUserText(payload, sharedNote) {
+export function latestCommuterAt(payload) {
+    const rows = (payload?.thread || []).filter((row) => row?.from !== 'admin' && Number(row?.at));
+    if (!rows.length) return 0;
+    return Math.max(...rows.map((row) => Number(row.at) || 0));
+}
+
+export function replyIsStale(payload, now = Date.now()) {
+    const at = latestCommuterAt(payload);
+    if (!at || !now) return false;
+    return (Number(now) - at) > STALE_REPLY_MS;
+}
+
+export function buildSuggestUserText(payload, sharedNote, now = Date.now()) {
     const clean = sanitizeSuggestPayload(payload);
+    const stale = replyIsStale(clean, now);
     const lines = [
         `Device: ${clean.deviceId || 'unknown'}`,
         `Alias: ${clean.alias || 'None'}`,
         `Region: ${clean.region || 'unknown'}`,
         `Route: ${clean.routeId || 'unknown'}`,
+        stale
+            ? 'Latest commuter message is more than 7 days old. Apologize calmly for the late reply.'
+            : 'Latest commuter message is within 7 days. Do not apologize for a delay.',
         '',
         'Thread:',
     ];
@@ -335,7 +382,7 @@ export function parseSuggestResult(raw) {
     if (!data || typeof data !== 'object') {
         return { action: 'halt', reply: '', reason: 'The model did not return a draft.', questions: [] };
     }
-    const reply = String(data.reply || '').trim();
+    const reply = commuterFacingReply(data.reply || '');
     const questions = Array.isArray(data.questions)
         ? data.questions.map((q) => String(q || '').trim()).filter(Boolean).slice(0, 5)
         : [];
@@ -366,13 +413,27 @@ export function guardDraft(reply, region) {
 }
 
 export function applyDraftGuard(result, region) {
-    const parsed = result && result.action ? result : parseSuggestResult(result);
-    if (parsed.action !== 'draft') return { ...parsed, reply: '' };
-    const guard = guardDraft(parsed.reply, region);
+    const base = result && result.action ? result : parseSuggestResult(result);
+    if (base.action !== 'draft') return { ...base, reply: '' };
+    const reply = commuterFacingReply(base.reply || '');
+    if (!reply) {
+        return { action: 'halt', reply: '', reason: 'The model returned an empty draft.', questions: [] };
+    }
+    const guard = guardDraft(reply, region);
     if (!guard.ok) {
         return { action: 'halt', reply: '', reason: guard.reason, questions: guard.questions };
     }
-    return parsed;
+    return { action: 'draft', reply, reason: '', questions: [] };
+}
+
+/** Drop admin-only lines so the composer stays the message the commuter will read. */
+export function commuterFacingReply(value) {
+    let text = String(value || '').trim();
+    text = text.replace(/^```[a-z]*\s*/i, '').replace(/\s*```$/, '').trim();
+    text = text.replace(/^\[Device:[^\]]*\]\s*/i, '').trim();
+    text = text.replace(/[—–]/g, ', ');
+    text = text.replace(/[ \t]{2,}/g, ' ');
+    return text.trim();
 }
 
 /** Plain draft only. Halt, empty, and unsafe results stay out of the composer. */
@@ -394,10 +455,18 @@ export function outreachPlainText(value) {
     return plainThreadText(value).replace(/\n[ \t]+/g, '\n').trim();
 }
 
+export function whatsappPrefill(body) {
+    const text = outreachPlainText(body);
+    if (!text) return '';
+    if (text.startsWith(WHATSAPP_QUOTE_TITLE)) return text.slice(0, OUTREACH_BODY_MAX);
+    const room = OUTREACH_BODY_MAX - WHATSAPP_QUOTE_TITLE.length - 2;
+    return `${WHATSAPP_QUOTE_TITLE}\n\n${text.slice(0, Math.max(0, room))}`;
+}
+
 export function whatsappReplyUrl(phone, body) {
     const digits = phoneDigits(phone);
     if (!digits) return '';
-    const text = outreachPlainText(body).slice(0, OUTREACH_BODY_MAX);
+    const text = whatsappPrefill(body);
     const base = `https://wa.me/${digits}`;
     if (!text) return base;
     return `${base}?text=${encodeURIComponent(text)}`;
@@ -408,7 +477,7 @@ export function mailtoReplyUrl(email, body) {
     if (!addr.includes('@') || /[\s<>"']/.test(addr)) return '';
     const text = outreachPlainText(body).slice(0, OUTREACH_BODY_MAX);
     if (!text) return `mailto:${addr}`;
-    return `mailto:${addr}?subject=${encodeURIComponent('Next Train')}&body=${encodeURIComponent(text)}`;
+    return `mailto:${addr}?subject=${encodeURIComponent(EMAIL_SUBJECT)}&body=${encodeURIComponent(text)}`;
 }
 
 export function htmlAttrUrl(url) {

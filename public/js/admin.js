@@ -12150,6 +12150,7 @@ const Admin = {
             const editor = document.getElementById('admin-reply-text');
             if (editor) editor.innerHTML = html;
             Admin.showSuggestHalt(null);
+            if (typeof showToast === 'function') showToast('Draft ready. Edit it, then send.', 'success');
         } catch (err) {
             if (typeof showToast === 'function') showToast(err.message || 'Could not draft a reply.', 'error');
         } finally {

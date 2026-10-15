@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_10.15.2': [
+        'Suggest reply still waits in the box until Send. A reply older than a week gets a calm late-reply line. WhatsApp opens with the quote title Metrorail Next Train | Response. Email subject is Metrorail Next Train | Feedback Response. No commuter What\'s New. forceShow stays false.',
+    ],
     'V9_10.15.1': [
         'Feedback Options and the reply composer can Suggest reply. The draft lands in the box for editing and does not send. A missing route, fare, or ticket rule stops and asks. Gauteng office numbers stay off other regions. A shared note and up to three images can shape the draft. WhatsApp and email open with that same reply already written. No commuter What’s New. forceShow stays false.',
     ],

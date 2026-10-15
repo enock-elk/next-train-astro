@@ -10,12 +10,14 @@ import {
     applyDraftGuard,
     buildGeminiRequest,
     buildSuggestPayload,
+    buildSuggestUserText,
     composerHtmlFromResult,
     contactBlockForRegion,
     GAUTENG_OFFICES,
     haltPanelText,
     htmlAttrUrl,
     liaisonRules,
+    knowledgeBase,
     mailtoReplyUrl,
     outreachPlainText,
     parseSuggestResult,
@@ -39,6 +41,11 @@ ok(guide.includes(PRASA_SURVEY_URL), 'guide lists the PRASA survey');
 ok(contactBlockForRegion('KZN').includes(PRASA_SURVEY_URL), 'KZN contact block uses the survey');
 ok(!contactBlockForRegion('KZN').includes('011 013 0306'), 'KZN contact block has no Pretoria number');
 ok(liaisonRules('KZN').includes('halt'), 'liaison rules tell the model to halt');
+ok(liaisonRules('KZN').includes('Thank you for using Next Train'), 'drafts close with the standard line');
+ok(liaisonRules('KZN').includes('two blank lines'), 'greeting leaves two blank lines');
+ok(liaisonRules('KZN').includes('more than 7 days'), 'a week-old message gets a late-reply line');
+ok(knowledgeBase().includes('Centurion'), 'sinkhole note is in the knowledge base');
+ok(knowledgeBase().includes('Midway'), 'Vereeniging operating stations are in the knowledge base');
 ok(!liaisonRules('KZN').includes('011 013 0306'), 'KZN rules do not hand the model a Gauteng number');
 
 const thread = [
@@ -138,11 +145,31 @@ ok(suggestBody.includes('composerHtmlFromResult'), 'suggest fills the composer f
 const sent = outreachPlainText('Hi there<br><br><span style="color: #9ca3af; font-style: italic;">- Enock</span>');
 ok(sent === 'Hi there\n\n- Enock', 'outreach text keeps the same reply and sign-off');
 const wa = whatsappReplyUrl('27821234567', sent);
+const waText = decodeURIComponent(wa.split('?text=')[1]);
 ok(wa.startsWith('https://wa.me/27821234567?text='), 'WhatsApp opens on the number they gave');
-ok(decodeURIComponent(wa.split('?text=')[1]) === sent, 'WhatsApp body is the same reply');
+ok(waText.startsWith('> Metrorail Next Train | Response\n\n'), 'WhatsApp quote title sits on the first line');
+ok(waText.endsWith(sent), 'WhatsApp body is the same reply under the title');
 const mail = mailtoReplyUrl('rider@example.com', sent);
 ok(mail.startsWith('mailto:rider@example.com?'), 'email opens to their address');
+ok(decodeURIComponent(mail.split('subject=')[1].split('&')[0]) === 'Metrorail Next Train | Feedback Response', 'email subject is the feedback response line');
 ok(decodeURIComponent(mail.split('body=')[1]) === sent, 'email body is the same reply');
+const weekAgo = Date.parse('2026-10-01T00:00:00Z');
+const today = Date.parse('2026-10-15T00:00:00Z');
+const staleText = buildSuggestUserText({
+    thread: [{ from: 'commuter', text: 'Is the sinkhole open yet?', at: weekAgo }],
+}, '', today);
+ok(staleText.includes('Apologize calmly'), 'a message older than a week asks for a late reply');
+const freshText = buildSuggestUserText({
+    thread: [{ from: 'commuter', text: 'Is the sinkhole open yet?', at: Date.parse('2026-10-14T00:00:00Z') }],
+}, '', today);
+ok(freshText.includes('Do not apologize'), 'a recent message does not get a delay apology');
+const stripped = parseSuggestResult({
+    action: 'draft',
+    reply: '[Device: usr_x]\nHi there,\n\n\nThanks for writing.\n\nThank you for using Next Train.',
+});
+ok(!stripped.reply.includes('[Device:'), 'device id stays out of the reply the operator edits');
+ok(stripped.reply.startsWith('Hi there,'), 'the greeting stays in the draft');
+ok(!composerHtmlFromResult(stripped).includes('Metrorail Next Train | Response'), 'the in-app draft has no WhatsApp quote title');
 ok(htmlAttrUrl(wa).includes('&amp;') === false || wa.includes('&') === false, 'a single-field WhatsApp link needs no extra escape');
 ok(htmlAttrUrl(mail).includes('&amp;body='), 'email link escapes the body join for HTML');
 ok(whatsappReplyUrl('0821234567', '') === 'https://wa.me/0821234567', 'a number with no reply yet still opens WhatsApp');
@@ -150,6 +177,7 @@ ok(whatsappReplyUrl('0821234567', '') === 'https://wa.me/0821234567', 'a number 
 ok(suggestBody.includes('/suggest'), 'suggest calls the reply worker');
 ok(!suggestBody.includes('inbox/'), 'suggest does not post to inbox');
 ok(!suggestBody.includes('resolveFeedback'), 'suggest does not archive the thread');
+ok(suggestBody.includes('Draft ready. Edit it, then send.'), 'suggest leaves the draft for editing');
 ok(adminJs.includes('message: text'), 'the sent reply is handed to WhatsApp and email');
 ok(adminJs.includes("Admin.outreachHref('whatsapp', ph, replyPlain)"), 'the thread WhatsApp chip uses the reply');
 ok(adminJs.includes("Admin.outreachHref('email', em, replyPlain)"), 'the thread email chip uses the reply');

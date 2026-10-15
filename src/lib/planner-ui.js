@@ -1263,40 +1263,52 @@ function buildPlannerNotice({
     return `<div class="${shellClass}">${inner}</div>`;
 }
 
-/** Shrink notice body lines so they stay on one row when the viewport allows. */
+/** Shrink notice body lines so they stay on one row when the card allows. */
 function fitPlannerNoticeCopy(root) {
     const scope = root && typeof root.querySelectorAll === 'function' ? root : document;
-    const nodes = scope.querySelectorAll('.planner-notice-copy p, .planner-notice-copy');
+    const nodes = scope.querySelectorAll('.planner-notice-copy p');
     nodes.forEach((el) => {
-        if (el.classList?.contains('planner-notice-copy') && el.querySelector('p')) return;
+        const shell = el.closest('.planner-notice');
+        const aside = shell?.querySelector('.planner-notice-aside');
+        const bar = shell?.querySelector('.planner-notice-bar');
+        const shellW = shell?.clientWidth || 0;
+        const limit = shellW - (aside?.offsetWidth || 0) - (bar?.offsetWidth || 0) - 28;
         el.style.fontSize = '';
         el.style.whiteSpace = '';
+        // A zero-width first frame used to lock nowrap and clip the departed banner.
+        if (limit < 40) {
+            el.style.whiteSpace = 'normal';
+            return;
+        }
         const maxPx = 14;
         const minPx = 10;
         el.style.whiteSpace = 'nowrap';
         el.style.fontSize = `${maxPx}px`;
-        const fits = () => el.scrollWidth <= el.clientWidth + 0.5;
-        if (fits()) {
-            el.style.whiteSpace = 'nowrap';
-            return;
-        }
+        const fits = () => el.scrollWidth <= limit + 0.5;
+        if (fits()) return;
         let best = minPx;
+        let found = false;
         for (let size = maxPx; size >= minPx; size -= 0.25) {
             el.style.fontSize = `${size}px`;
             if (fits()) {
                 best = size;
+                found = true;
                 break;
             }
         }
         el.style.fontSize = `${best}px`;
-        if (!fits()) el.style.whiteSpace = 'normal';
+        if (!found) el.style.whiteSpace = 'normal';
     });
 }
 
 function scheduleFitPlannerNotices(root) {
     const run = () => fitPlannerNoticeCopy(root);
-    if (typeof requestAnimationFrame === 'function') requestAnimationFrame(run);
-    else run();
+    if (typeof requestAnimationFrame === 'function') {
+        requestAnimationFrame(() => {
+            run();
+            requestAnimationFrame(run);
+        });
+    } else run();
 }
 
 if (typeof window !== 'undefined' && !window.__ntPlannerNoticeFitBound) {

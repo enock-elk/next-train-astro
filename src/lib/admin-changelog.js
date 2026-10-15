@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_10.15.11': [
+        'Homepage and Gauteng descriptions name Gauteng, timetables, and view and download. Select Route no longer rebuilds the list on every tap, and a corridor already in memory is sliced instead of reloading the dump. The Next Train station list is a step darker than the card. The planner To field lets the header scroll away with the keyboard. All trains departed measures the card before it locks one line. Check for Updates waits for Update before it says it is checking, and every toast leaves on its own. A shared train reads last seen at, approaching, or after a station. Speed, heading, GPS, rail, accuracy, and rider count stay on the tracking card for operators only. About feedback is tagged About Next Train. The feedback field says Only if you want a reply, and the details box takes the spare height. The guide transfer label matches the yellow trip card, and a download is a timetable image. No commuter What\'s New. forceShow stays false.',
+    ],
     'V9_10.15.10': [
         'Alerts show a WhatsApp-style link card. The card is reserved while it loads, then fills in. A posted alert keeps the card so every commuter sees the same preview. Suggest reply keeps the draft for that commuter message. Closing Co-Pilot and opening it again shows that draft. Suggest reply writes a new one. A quoted inactive poll loads its real vote counts. Co-Pilot leaves a blurred strip, and tapping that strip closes it. A short modal no longer scrolls the screen behind it. Community Monitor messages are left-side bubbles and open on the latest message. No commuter What\'s New. forceShow stays false.',
     ],

@@ -451,6 +451,9 @@ export function openFeedbackModal({ location = 'unknown', skipClear = false } = 
         clearFeedbackReplyMode();
         restoreFeedbackReturnOverlay();
     }
+    const fType = document.getElementById('feedback-type');
+    if (fType && location === 'about') fType.value = 'about';
+    else if (fType && !skipClear && fType.value !== 'thread_reply') fType.value = 'general';
     trackAlertEvent('open_feedback_modal', { location });
     syncFeedbackModalViewport();
     openSmoothModal('feedback-modal');
@@ -581,7 +584,7 @@ export function resetProfile() {
 const UPDATE_TOAST_MAX_MS = 6000;
 
 function showUpdateToast(message) {
-    showToast(message, 'info', UPDATE_TOAST_MAX_MS, '', { persist: true });
+    showToast(message, 'info', UPDATE_TOAST_MAX_MS, '', { persist: true, force: true });
 }
 
 function waitOutUpdateToast(startedAt) {
@@ -766,30 +769,24 @@ function openCacheClearConfirm(onProceed) {
     openSmoothModal('cache-clear-modal');
 }
 
-export async function showCacheClearWarning() {
+export function showCacheClearWarning() {
     triggerHaptic();
-    const checkStarted = Date.now();
-    showUpdateToast('Checking for updates…');
-    const incomingVersion = (typeof navigator === 'undefined' || navigator.onLine)
-        ? await peekIncomingVersion()
-        : null;
-    const newer = incomingVersion && isAppVersionNewer(incomingVersion, APP_VERSION);
-    const checkLine = newer
-        ? `A newer copy is published (${incomingVersion}).`
-        : 'Checked for a newer copy.';
-    showUpdateToast(checkLine);
-    const checkLeft = UPDATE_TOAST_MAX_MS - (Date.now() - checkStarted);
-    setTimeout(() => hideToastIfMessage(checkLine), checkLeft > 0 ? checkLeft : 1500);
-    if (incomingVersion && isAppVersionNewer(incomingVersion, APP_VERSION)) {
-        console.log(`🛡️ Guardian: Check for Updates — NEW APP VERSION found: ${incomingVersion} (running ${APP_VERSION}). Not downloaded yet.`);
-    } else {
-        console.log(`🛡️ Guardian: Check for Updates — running ${APP_VERSION}, published ${incomingVersion || 'unknown'}.`);
-    }
-    const runReset = (skipNetworkPreflight) => performHardCacheClear('check_updates', {
-        latestVersion: !!(incomingVersion && !isAppVersionNewer(incomingVersion, APP_VERSION)),
-        skipNetworkPreflight,
-    });
-    const afterConfirm = async () => {
+    // The confirm sheet opens first. "Checking…" only starts after Update.
+    openCacheClearConfirm(async () => {
+        showUpdateToast('Checking for updates…');
+        const incomingVersion = (typeof navigator === 'undefined' || navigator.onLine)
+            ? await peekIncomingVersion()
+            : null;
+        hideToastIfMessage('Checking for updates…');
+        if (incomingVersion && isAppVersionNewer(incomingVersion, APP_VERSION)) {
+            console.log(`🛡️ Guardian: Check for Updates — NEW APP VERSION found: ${incomingVersion} (running ${APP_VERSION}). Not downloaded yet.`);
+        } else {
+            console.log(`🛡️ Guardian: Check for Updates — running ${APP_VERSION}, published ${incomingVersion || 'unknown'}.`);
+        }
+        const runReset = (skipNetworkPreflight) => performHardCacheClear('check_updates', {
+            latestVersion: !!(incomingVersion && !isAppVersionNewer(incomingVersion, APP_VERSION)),
+            skipNetworkPreflight,
+        });
         if (!navigator.onLine || !incomingVersion) {
             openNetworkSlowConfirm(() => runReset(true));
             return;
@@ -798,8 +795,7 @@ export async function showCacheClearWarning() {
         if (!restarted) {
             openNetworkSlowConfirm(() => runReset(true));
         }
-    };
-    openCacheClearConfirm(afterConfirm);
+    });
 }
 
 function syncProfileDisplay() {
@@ -2934,7 +2930,9 @@ export function initHub() {
     });
     document.getElementById('about-contact-btn')?.addEventListener('click', () => {
         trackAlertEvent('click_about_inapp_message', { location: 'about_modal' });
-        openFeedbackModal({ location: 'about', skipClear: true });
+        openFeedbackModal({ location: 'about' });
+        const fType = document.getElementById('feedback-type');
+        if (fType) fType.value = 'about';
     });
     document.getElementById('about-email-btn')?.addEventListener('click', () => {
         trackAlertEvent('click_about_email', { location: 'about_modal' });

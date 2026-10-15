@@ -380,8 +380,12 @@ const stationIndex = {
 const projected = progressAlongStopsDetailed(-25, 28.015, stops, stationIndex);
 assert(projected?.progress > 1 && projected.progress < 2, 'journey projection stays on ordered stop sequence');
 assert(
-    journeyPositionLabel(stops, projected?.progress) === 'approaching TERMINUS',
-    'halfway along a hop is approaching the next station'
+    journeyPositionLabel(stops, projected?.progress, { stationIndex }) === 'after MIDDLE',
+    'until the next station is closer the train is after the last one'
+);
+assert(
+    journeyPositionLabel(stops, 1.7, { stationIndex }) === 'approaching TERMINUS',
+    'once the next station is closer the train is approaching it'
 );
 assert(journeyPositionLabel(stops, 1.2) === 'at MIDDLE', 'before midpoint stays at the last passed station');
 assert(journeyPositionLabel(stops, 2) === 'at TERMINUS', 'last stop is at the terminus');

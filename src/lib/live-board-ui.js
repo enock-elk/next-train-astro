@@ -5,7 +5,7 @@
 import { ROUTES, FARE_CONFIG, fareMultiplierForListedTicket, getCorridorLabel } from './config.js';
 import { normalizeStationName, timeToSeconds, safeStorage, escapeHTML, formatTimeDisplay, formatRouteLabelPlain, formatRouteLabelHtml, expandJhbLabel, applyFittedLabel, fitRouteNameNodes, fitJhbNodes, isRealTime, shortSharedSourceLabel, scheduleCacheSlot, warningTriangleSvg, schedulesBelongToRoute } from './utils.js';
 import { $currentRouteId, $userRegion, $userProfile, $fullDatabase, $schedules } from '../store.js';
-import { currentTime, loadAllSchedules } from './logic.js';
+import { currentTime, loadAllSchedules, processRouteDataFromDBAsync } from './logic.js';
 import { showToast, triggerHaptic, openSmoothModal, closeSmoothModal } from './ui.js';
 import { applyPilotChrome } from './admin-chrome.js';
 import { trackAnalyticsEvent } from './analytics.js';
@@ -112,6 +112,8 @@ export function syncRouteModalCloseBtn() {
 
 /** Region route picker (pin/unpin, cold boot with no pin, header chevron). */
 export function openRegionRoutePicker() {
+    const routeModal = document.getElementById('route-modal');
+    if (routeModal) delete routeModal.dataset.ntRoutePicked;
     const region = $userRegion.get() || 'GP';
     import('./logic.js').then(({ syncRegionDisplayDom }) => {
         syncRegionDisplayDom(region);
@@ -185,7 +187,7 @@ export function setupNextTrainAutocomplete() {
     if (!list && input.parentNode) {
         list = document.createElement('ul');
         list.id = 'next-train-autocomplete-list';
-        list.className = "absolute z-50 w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-b-lg shadow-xl max-h-60 overflow-y-auto hidden mt-1 left-0 custom-scrollbar text-left";
+        list.className = "nt-station-menu absolute z-50 w-full border border-gray-300 dark:border-gray-600 rounded-b-lg shadow-xl max-h-60 overflow-y-auto hidden mt-1 left-0 custom-scrollbar text-left";
         input.parentNode.appendChild(list);
     }
 
@@ -545,7 +547,10 @@ export function updatePinUI() {
     // repainted whenever the pin or the active route changes.
     const routeModal = typeof document !== 'undefined' ? document.getElementById('route-modal') : null;
     const menuOpen = !!(routeModal && !routeModal.classList.contains('hidden'));
-    if (menuOpen && typeof window !== 'undefined' && window.Renderer?.renderRouteMenu) {
+    // A route tap closes this sheet. Rebuilding the whole list on that tap
+    // was the lag when commuters switched corridors quickly.
+    const picking = routeModal?.dataset.ntRoutePicked === '1';
+    if (menuOpen && !picking && typeof window !== 'undefined' && window.Renderer?.renderRouteMenu) {
         window.Renderer.renderRouteMenu('route-list', getRoutesForCurrentRegion(), routeId);
     }
     try { applyPilotChrome(); } catch { /* ignore */ }
@@ -907,18 +912,42 @@ export function initLiveBoardUi() {
         }
     });
 
+    let routeSliceToken = 0;
     $currentRouteId.subscribe((routeId) => {
         syncRouteModalCloseBtn();
         if (!routeId) return;
         updatePinUI();
-        scheduleBoardRefresh();
+        const route = ROUTES[routeId];
+        const db = $fullDatabase.get();
+        const sheetKey = route?.sheetKeys?.weekday_to_a;
+        const sheet = sheetKey ? db?.[sheetKey] : null;
+        const canSlice = !!(route?.isActive && sheet && (Array.isArray(sheet) || typeof sheet === 'object'));
+        // Same region is already in memory. Slice that corridor instead of
+        // aborting the dump load and reading IndexedDB again.
+        if (canSlice) {
+            const token = ++routeSliceToken;
+            if (!schedulesBelongToRoute($schedules.get(), routeId)) {
+                $schedules.set({});
+            }
+            scheduleBoardRefresh();
+            processRouteDataFromDBAsync(route, db).then((schedules) => {
+                if (token !== routeSliceToken || $currentRouteId.get() !== routeId) return;
+                if (!schedules?._routeId) return;
+                $schedules.set(schedules);
+                populateStationList();
+                scheduleBoardRefresh();
+                maybeAutoLocateBoard().catch(() => {});
+            }).catch((err) => console.error(err));
+            return;
+        }
+        routeSliceToken += 1;
         // Drop the previous corridor's generic weekday_to_* slots before reload so
         // VIEW FULL TIMETABLE cannot paint Mabopane chrome over Pienaarspoort rows.
         if (!schedulesBelongToRoute($schedules.get(), routeId)) {
             $schedules.set({});
         }
-        // Always reload on route change — region swaps clear fullDatabase, so a
-        // "only if cache exists" guard left the board empty after picking a route.
+        scheduleBoardRefresh();
+        // Region swaps clear fullDatabase, so a cache-only guard left the board empty.
         loadAllSchedules(true).then(() => {
             populateStationList();
             scheduleBoardRefresh();
@@ -1073,6 +1102,8 @@ export function initLiveBoardUi() {
         if (!item) return;
         const id = item.getAttribute('data-route-id');
         if (!id || !ROUTES[id]) return;
+        const routeModal = document.getElementById('route-modal');
+        if (routeModal) routeModal.dataset.ntRoutePicked = '1';
         triggerHaptic();
         trackAnalyticsEvent(ROUTES[id].isActive ? 'select_route' : 'select_inactive_route', {
             route_id: id,

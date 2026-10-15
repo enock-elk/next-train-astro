@@ -201,6 +201,10 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
             var cv = document.getElementById('view-community');
             communityOn = !!(cv && cv.classList.contains('active'));
           } catch (e) {}
+          // Select To Station sits low on the planner. Keep the shell at full
+          // height so #app-scroll can carry the Next Train header off screen
+          // while the keyboard is open.
+          var plannerTo = !!(ae && ae.id === 'planner-to-search');
           var hubOn = false;
           try {
             var hubEl = document.getElementById('messages-thread-modal');
@@ -234,7 +238,7 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
             // Hub also keeps the last shell so the composer can dock to --nt-kb-h.
             layoutH = full;
             lastLayoutH = full;
-            if (communityOn || hubOn) {
+            if (communityOn || hubOn || plannerTo) {
               shellTop = lastShellTop;
               shellH = lastShellH || full;
             } else if (shellH < 240) {
@@ -1102,8 +1106,9 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
          and body fill the layout (no white slab). --nt-shell-* pin the frame
          to the visible hole so NEXT TRAIN sits below the URL bar and the
          oval sits on the visual bottom. While the IME is open those tokens
-         follow the live visual hole except on Community, where the header
-         stays free in #app-scroll. Do not pad a tray under the floating
+         follow the live visual hole except on Community and the planner
+         To station field, where the header stays free in #app-scroll.
+         Do not pad a tray under the floating
          pill. 100svh fallback keeps first paint on-screen before JS
          measures. Do not transform #nt-shell. */
       #nt-shell {

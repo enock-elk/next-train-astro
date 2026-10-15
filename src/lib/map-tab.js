@@ -30,7 +30,7 @@ import { relaxLiveShareGuards } from './features.js';
 import { isAdminAuthed } from './admin-chrome.js';
 import { bindMapOverrideSaveListener } from './map-overrides.js';
 import { getLiveTrainFollow } from './live-train-follow.js';
-import { formatGpsPingAge, formatGpsPingClock, formatLastSeenWithPingClock, gpsPingSuccessAt, RIDE_GPS_STALE_MS } from './gps-freshness.js';
+import { formatGpsPingAge, formatLastSeenWithPingClock, gpsPingSuccessAt, RIDE_GPS_STALE_MS } from './gps-freshness.js';
 import {
     acquireGeoWatch,
     releaseGeoWatch,
@@ -331,24 +331,18 @@ export function stationTitleCase(name) {
 }
 
 /**
- * Honest position line. "Last seen at Rissik" only when the projection is on
- * the platform; between stations it is "Approaching Rissik".
+ * Honest position line.
+ * Last seen at Mears, last seen approaching Mears, or last seen after Mears.
  */
 export function trackingLastSeenLine(place, pingAt) {
     const raw = String(place || '').trim();
-    const clock = formatGpsPingClock(pingAt);
-    let line = '';
-    const approaching = raw.match(/^approaching\s+(.+)$/i);
-    if (approaching) {
-        const station = stationTitleCase(approaching[1]);
-        line = clock ? `Approaching ${station} - last seen ${clock}` : `Approaching ${station}`;
-    } else {
-        const at = raw.match(/^at\s+(.+)$/i);
-        if (at) line = formatLastSeenWithPingClock(`at ${stationTitleCase(at[1])}`, pingAt);
-        else if (!raw || /^on the route$/i.test(raw)) line = formatLastSeenWithPingClock('on the route', pingAt);
-        else line = formatLastSeenWithPingClock(`near ${stationTitleCase(raw)}`, pingAt);
+    const placed = raw.match(/^(approaching|at|after)\s+(.+)$/i);
+    if (placed) {
+        const station = stationTitleCase(placed[2]);
+        return formatLastSeenWithPingClock(`${placed[1].toLowerCase()} ${station}`, pingAt);
     }
-    return line ? line.replace(/^Last seen/i, 'Last Seen') : '';
+    if (!raw || /^on the route$/i.test(raw)) return formatLastSeenWithPingClock('on the route', pingAt);
+    return formatLastSeenWithPingClock(`near ${stationTitleCase(raw)}`, pingAt);
 }
 
 /** Card copy spells the unit: "47 minutes late". */
@@ -713,7 +707,9 @@ function renderTrackingStatusCard(active, marker = null) {
     railEl?.classList.toggle('dark:text-gray-100', !railFar);
     setTrackingText('map-tracking-accuracy', Number.isFinite(accuracy) ? `±${Math.round(accuracy)} m` : 'Unknown');
     setTrackingText('map-tracking-count', String(Math.max(1, Number(subjectMarker?.n || subject.n) || 1)));
-    document.getElementById('map-tracking-warning')?.classList.toggle('hidden', !subject.directionWarning);
+    const showDiag = isAdminAuthed();
+    document.getElementById('map-tracking-diagnostics')?.classList.toggle('hidden', !showDiag);
+    document.getElementById('map-tracking-warning')?.classList.toggle('hidden', !showDiag || !subject.directionWarning);
     setTrackingText('map-tracking-restore-label', `${trainHeadboardTitle(subject.trainId, subject.destination)} · ${stateLabel.toLowerCase()}`);
     const toggle = document.getElementById('map-tracking-toggle');
     if (toggle) {

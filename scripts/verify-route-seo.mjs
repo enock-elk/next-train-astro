@@ -253,8 +253,11 @@ if (!/Cape Town to Bellville/i.test(capeMeta) || !/train schedule/i.test(capeMet
   if (!indexAstro.includes("const pageTitle = 'Metrorail Next Train | 2026 PRASA Train Times and Schedules';")) {
     fail('homepage document title must stay Metrorail Next Train | 2026 PRASA Train Times and Schedules');
   }
-  if (!indexAstro.includes('Today: PRASA Metrorail train schedule for Pretoria, Johannesburg, Cape Town, Durban and East London.')) {
-    fail('homepage meta description must lead with today for the four cities');
+  if (!indexAstro.includes('Today: PRASA Metrorail timetables and schedules for Gauteng (Pretoria, Johannesburg), Cape Town, Durban and East London.')) {
+    fail('homepage meta description must lead with today, Gauteng, and timetables');
+  }
+  if (!indexAstro.includes('View and download weekday and Saturday sheets.')) {
+    fail('homepage meta description must offer view and download');
   }
   const faqLine = 'Commuters can send a delay note, and some testers can share a trip location.';
   if (!indexAstro.includes(faqLine)) {
@@ -799,8 +802,11 @@ if (existsSync(DIST)) {
   if (!indexHtml.includes('PRASA Train Times')) {
     fail('homepage title should include PRASA Train Times');
   }
-  if (!/Today: PRASA Metrorail train schedule for Pretoria, Johannesburg, Cape Town, Durban and East London/i.test(indexHtml)) {
-    fail('homepage meta should lead with today for the four cities');
+  if (!/Today: PRASA Metrorail timetables and schedules for Gauteng \(Pretoria, Johannesburg\), Cape Town, Durban and East London/i.test(indexHtml)) {
+    fail('homepage meta should lead with today, Gauteng, and timetables');
+  }
+  if (!/View and download weekday and Saturday sheets/i.test(indexHtml)) {
+    fail('homepage meta should offer view and download');
   }
   if (!/works offline/i.test(indexHtml) || !/ticket prices/i.test(indexHtml)) {
     fail('homepage meta should mention offline and ticket prices');

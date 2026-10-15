@@ -814,7 +814,10 @@ export function showToast(message, type = 'info', duration = 2500, actionHTML = 
 
     if (toastTimeout) clearTimeout(toastTimeout);
     toastTimeout = null;
-    const safeDuration = persist ? 0 : Math.min(holdMs, dismissible ? 12000 : 5000);
+    // persist keeps a status up while work continues, and it still leaves on its own.
+    const safeDuration = persist
+        ? Math.min(Math.max(duration, 4000), 12000)
+        : Math.min(holdMs, dismissible ? 12000 : 5000);
 
     // Inject Toast CSS dynamically if not present
     if (!document.getElementById('toast-guardian-style')) {
@@ -893,7 +896,7 @@ export function showToast(message, type = 'info', duration = 2500, actionHTML = 
     toastEl.ontouchmove = (e) => e.stopPropagation();
     
     toastEl.classList.add('show');
-    if (!persist && safeDuration > 0) {
+    if (safeDuration > 0) {
         toastTimeout = setTimeout(() => { toastEl.classList.remove('show'); }, safeDuration);
     }
 }

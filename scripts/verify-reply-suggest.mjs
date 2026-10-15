@@ -22,6 +22,7 @@ import {
     knowledgeBase,
     loadSuggestFile,
     unansweredCommuterMessages,
+    suggestDraftMessageId,
     mailtoReplyUrl,
     outreachPlainText,
     parseSuggestResult,
@@ -37,6 +38,7 @@ import {
     textAssistRules,
 } from '../src/lib/text-assist.js';
 import { handleRequest } from '../workers/nexttrain-reply/worker.js';
+import { isPublicPreviewUrl, parseLinkPreviewHtml } from '../src/lib/link-preview.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const failures = [];
@@ -323,6 +325,32 @@ const editDenied = await handleRequest(new Request('https://reply.test/edit', {
 ok(editDenied.status === 401, 'write without an operator token is rejected');
 const health = await handleRequest(new Request('https://reply.test/health'), {});
 ok(health.status === 200, 'health check stays open');
+ok(suggestDraftMessageId([
+    { id: 'm1', text: 'first', timestamp: 1 },
+    { id: 'm2', text: 'admin', timestamp: 2, isFromAdmin: true },
+    { id: 'm3', text: 'latest', timestamp: 3 },
+]) === 'm3', 'a draft belongs to the latest unanswered message');
+ok(suggestDraftMessageId([
+    { id: 'm1', text: 'first', timestamp: 1 },
+    { id: 'm2', text: 'admin', timestamp: 2, isFromAdmin: true },
+]) === 'm1', 'an answered thread keeps the draft on that commuter message');
+const preview = parseLinkPreviewHtml('<html><head><meta property="og:title" content="UCV Survey"><meta property="og:description" content="One minute"><meta property="og:image" content="https://example.com/banner.jpg"></head></html>', 'https://docs.google.com/forms/d/e/abc/viewform');
+ok(preview?.title === 'UCV Survey', 'a link preview reads the page title');
+ok(preview?.description === 'One minute', 'a link preview reads the page description');
+ok(preview?.image === 'https://example.com/banner.jpg', 'a link preview reads the page image');
+ok(!isPublicPreviewUrl('http://example.com/a'), 'a preview refuses plain http');
+ok(!isPublicPreviewUrl('https://127.0.0.1/secret'), 'a preview refuses a local address');
+ok(isPublicPreviewUrl('https://forms.gle/abc'), 'a public https link can be previewed');
+const blockedPreview = await handleRequest(new Request('https://reply.test/unfurl?url=' + encodeURIComponent('https://127.0.0.1/x')), {});
+ok(blockedPreview.status === 400, 'unfurl refuses a private host');
+const draftDenied = await handleRequest(new Request('https://reply.test/draft?id=m1'), {});
+ok(draftDenied.status === 401, 'a saved draft stays behind the operator token');
+ok(adminJs.includes('persistReplyDraft'), 'closing Co-Pilot keeps the draft');
+ok(adminJs.includes('restoreReplyDraft'), 'opening Co-Pilot loads the saved draft');
+ok(adminJs.includes('items-end justify-center p-0 backdrop-blur-sm'), 'Co-Pilot leaves a blurred strip that can be tapped');
+ok(adminJs.includes('cm-bubble'), 'community monitor paints message bubbles');
+ok(adminJs.includes('target.scrollTop = target.scrollHeight'), 'community monitor opens on the latest message');
+ok(ui.includes('bindModalBackgroundGuard'), 'a short modal does not scroll the page behind it');
 
 const png = new Uint8Array([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0, 0, 0, 0]);
 const loadedPng = await loadSuggestFile({ url: photoUrl, from: 'commuter' }, async () => new Response(png, { status: 200 }));

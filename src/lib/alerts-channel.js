@@ -1,7 +1,8 @@
 /**
  * Alerts channel UI — bell gateway, WhatsApp-style column, reactions.
  */
-import { DYNAMIC_BASE_URL, ROUTES, withBase } from './config.js';
+import { DYNAMIC_BASE_URL, REPLY_WORKER_URL, ROUTES, withBase } from './config.js';
+import { hydrateLinkPreviews, linkPreviewMarkup } from './link-preview.js';
 import { safeStorage, escapeHTML, repairMojibake, formatAppTime, formatThreadDateLabel } from './utils.js';
 import { prepareRichHtml, injectRichTextStyles } from './rich-text.js';
 import { showToast, triggerHaptic, openSmoothModal, closeSmoothModal } from './ui.js';
@@ -653,6 +654,7 @@ function renderPostCard(notice, opts = {}) {
         ${titleHtml}
         ${mediaHtml}
         ${bodyHtml}
+        ${linkPreviewMarkup(notice)}
         ${extra}
         ${renderPollHtml(notice)}
         ${footerHtml}
@@ -746,6 +748,7 @@ export function renderAlertsChannel(notices = cachedLiveNotices, opts = {}) {
     if (feed.dataset.ntAlertsSig === html) {
         hydrateAlertPosterImages(feed);
         hydratePollResults(feed);
+        hydrateLinkPreviews(feed, REPLY_WORKER_URL);
         return true;
     }
     feed.dataset.ntAlertsSig = html;
@@ -754,6 +757,7 @@ export function renderAlertsChannel(notices = cachedLiveNotices, opts = {}) {
     list.forEach((n) => cacheAlertImages(n, resolveAlertImageSrc));
     hydrateAlertPosterImages(feed);
     hydratePollResults(feed);
+    hydrateLinkPreviews(feed, REPLY_WORKER_URL);
     return true;
 }
 

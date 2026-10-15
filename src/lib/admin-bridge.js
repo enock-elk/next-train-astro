@@ -21,6 +21,7 @@ import {
     haltPanelText,
     htmlAttrUrl,
     unansweredCommuterMessages,
+    suggestDraftMessageId,
     mailtoReplyUrl,
     outreachPlainText,
     SUGGEST_MAX_IMAGE_BYTES,
@@ -28,6 +29,7 @@ import {
     whatsappReplyUrl,
 } from './reply-suggest.js';
 import { TEXT_ASSIST_ACTIONS } from './text-assist.js';
+import { fetchLinkPreview, firstHttpUrl } from './link-preview.js';
 import {
     briefDismissed,
     briefLauncherHtml,
@@ -129,6 +131,7 @@ export function exposeAdminGlobals() {
         haltPanelText,
         htmlAttrUrl,
         unansweredCommuterMessages,
+        suggestDraftMessageId,
         mailtoReplyUrl,
         outreachPlainText,
         SUGGEST_MAX_IMAGE_BYTES,
@@ -136,6 +139,7 @@ export function exposeAdminGlobals() {
         whatsappReplyUrl,
     };
     window.ntTextAssist = { TEXT_ASSIST_ACTIONS };
+    window.ntLinkPreview = { fetchLinkPreview, firstHttpUrl };
     window.ntOperatorBrief = {
         briefDismissed,
         briefLauncherHtml,

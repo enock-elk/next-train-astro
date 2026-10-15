@@ -20,6 +20,11 @@
  *   Body: { kind: "report", digest } or { kind: "crash", crash }
  *   Returns: { text }
  *
+ * GET  /unfurl?url=  public. Reads a public https page and returns title,
+ *   description, and image. No operator token. No Gemini.
+ * GET  /draft?id=   operator. The last Suggest draft for one commuter message.
+ * PUT  /draft       { id, html }  operator. Keeps that draft for the next open.
+ *
  * The browser never sees the Gemini key. The worker does not download the feedback tree.
  * It may download photo and PDF URLs from this thread when they are on Firebase Storage.
  * The brief digest is posted by the operator. The worker does not read sys_logs.
@@ -42,6 +47,10 @@ import {
     buildCrashExplainRequest,
     parseBriefText,
 } from '../../src/lib/operator-brief.js';
+import {
+    isPublicPreviewUrl,
+    parseLinkPreviewHtml,
+} from '../../src/lib/link-preview.js';
 
 const ADMIN_EMAILS = new Set(['enockelk@gmail.com', 'thandeka05nxumalo@gmail.com']);
 /** New API keys cannot call 2.5 Flash-Lite. 3.5 Flash-Lite is the current low-cost fit. */
@@ -161,7 +170,10 @@ export async function handleRequest(request, env) {
     if (url.pathname === '/health' && request.method === 'GET') {
         return json(env, request, 200, { ok: true });
     }
-    if (url.pathname !== '/suggest' && url.pathname !== '/context' && url.pathname !== '/edit' && url.pathname !== '/brief') {
+    if (url.pathname === '/unfurl' && request.method === 'GET') {
+        return unfurlLink(request, env, url);
+    }
+    if (url.pathname !== '/suggest' && url.pathname !== '/context' && url.pathname !== '/edit' && url.pathname !== '/brief' && url.pathname !== '/draft') {
         return json(env, request, 404, { error: 'Not found' });
     }
 
@@ -193,7 +205,143 @@ export async function handleRequest(request, env) {
     if (url.pathname === '/brief' && request.method === 'POST') {
         return writeBrief(request, env);
     }
+    if (url.pathname === '/draft' && request.method === 'GET') {
+        return readDraft(env, request, url, auth.user);
+    }
+    if (url.pathname === '/draft' && request.method === 'PUT') {
+        return writeDraft(env, request, auth.user);
+    }
     return json(env, request, 405, { error: 'Method not allowed' });
+}
+
+function draftIdOk(value) {
+    return /^[A-Za-z0-9_.:-]{1,160}$/.test(String(value || ''));
+}
+
+async function unfurlCacheKey(target) {
+    const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(target));
+    const hex = [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
+    return `unfurl:${hex}`;
+}
+
+async function readPreviewHtml(start) {
+    let current = start;
+    for (let hop = 0; hop < 4; hop += 1) {
+        if (!isPublicPreviewUrl(current)) return null;
+        const res = await fetch(current, {
+            redirect: 'manual',
+            headers: {
+                Accept: 'text/html,application/xhtml+xml',
+                'User-Agent': 'Mozilla/5.0 (compatible; NextTrainPreview/1.0; +https://nexttrain.co.za)',
+            },
+        });
+        if (res.status >= 300 && res.status < 400) {
+            const loc = res.headers.get('Location');
+            if (!loc) return null;
+            current = new URL(loc, current).href;
+            continue;
+        }
+        if (!res.ok) return null;
+        const type = String(res.headers.get('content-type') || '');
+        if (type && !/html|xml/i.test(type)) return null;
+        const reader = res.body?.getReader?.();
+        if (!reader) {
+            const text = await res.text();
+            return { html: text.slice(0, 180000), url: current };
+        }
+        const chunks = [];
+        let size = 0;
+        while (size < 180000) {
+            const step = await reader.read();
+            if (step.done) break;
+            size += step.value?.byteLength || 0;
+            chunks.push(step.value);
+        }
+        try { await reader.cancel(); } catch { /* ignore */ }
+        const merged = new Uint8Array(Math.min(size, 180000));
+        let offset = 0;
+        for (const chunk of chunks) {
+            if (!chunk || offset >= merged.length) break;
+            const slice = chunk.subarray(0, merged.length - offset);
+            merged.set(slice, offset);
+            offset += slice.length;
+        }
+        const html = new TextDecoder().decode(merged).slice(0, 180000);
+        return { html, url: current };
+    }
+    return null;
+}
+
+async function unfurlLink(request, env, url) {
+    const ip = request.headers.get('CF-Connecting-IP') || 'anon';
+    if (!checkRate(`unfurl:${ip}`, 30)) {
+        return json(env, request, 429, { error: 'Too many preview requests.' });
+    }
+    const target = String(url.searchParams.get('url') || '').trim();
+    if (!isPublicPreviewUrl(target)) {
+        return json(env, request, 400, { error: 'That link cannot be previewed.' });
+    }
+    const key = await unfurlCacheKey(target);
+    if (env?.REPLY_CONTEXT) {
+        try {
+            const cached = await env.REPLY_CONTEXT.get(key);
+            if (cached) {
+                const parsed = JSON.parse(cached);
+                if (parsed?.url) return json(env, request, 200, parsed);
+            }
+        } catch { /* fetch live */ }
+    }
+    let page;
+    try {
+        page = await readPreviewHtml(target);
+    } catch {
+        page = null;
+    }
+    const preview = page ? parseLinkPreviewHtml(page.html, page.url) : null;
+    if (!preview) return json(env, request, 404, { error: 'This page has no preview.' });
+    if (env?.REPLY_CONTEXT) {
+        try {
+            await env.REPLY_CONTEXT.put(key, JSON.stringify(preview), { expirationTtl: 60 * 60 * 24 * 7 });
+        } catch { /* the caller still gets the card */ }
+    }
+    return json(env, request, 200, preview);
+}
+
+async function readDraft(env, request, url, user) {
+    if (!checkRate(`${user.email}:draft`, 30)) {
+        return json(env, request, 429, { error: 'Too many draft reads.' });
+    }
+    const id = String(url.searchParams.get('id') || '').trim();
+    if (!draftIdOk(id)) return json(env, request, 400, { error: 'Missing message id.' });
+    if (!env?.REPLY_CONTEXT) return json(env, request, 200, { html: '', at: 0 });
+    try {
+        const raw = await env.REPLY_CONTEXT.get(`draft:${id}`);
+        const parsed = raw ? JSON.parse(raw) : null;
+        return json(env, request, 200, {
+            html: String(parsed?.html || '').slice(0, 20000),
+            at: Number(parsed?.at) || 0,
+        });
+    } catch {
+        return json(env, request, 200, { html: '', at: 0 });
+    }
+}
+
+async function writeDraft(env, request, user) {
+    if (!checkRate(`${user.email}:draft`, 20)) {
+        return json(env, request, 429, { error: 'Too many draft saves.' });
+    }
+    let body = {};
+    try { body = await request.json(); } catch { body = {}; }
+    const id = String(body?.id || '').trim();
+    const html = String(body?.html || '').slice(0, 20000);
+    if (!draftIdOk(id)) return json(env, request, 400, { error: 'Missing message id.' });
+    if (!html.trim() || html.trim() === '<br>') {
+        return json(env, request, 400, { error: 'Empty draft is not saved.' });
+    }
+    if (!env?.REPLY_CONTEXT) return json(env, request, 200, { ok: true, stored: 'local' });
+    const at = Date.now();
+    await env.REPLY_CONTEXT.put(`draft:${id}`, JSON.stringify({ html, at }), { expirationTtl: 60 * 60 * 24 * 45 });
+    return json(env, request, 200, { ok: true, at });
 }
 
 async function callGemini(env, geminiBody) {

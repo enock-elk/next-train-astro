@@ -5,6 +5,7 @@ import {
     APP_VERSION,
     CHANGELOG_DATA,
     DYNAMIC_BASE_URL,
+    REPLY_WORKER_URL,
     withBase,
     getLatestChangelog,
     getChangelogVersionId,
@@ -43,6 +44,7 @@ import { isAdminAuthed } from './admin-chrome.js';
 import { bindMapOverrideSaveListener } from './map-overrides.js';
 import { trackAnalyticsEvent } from './analytics.js';
 import { prepareRichHtml, injectRichTextStyles, isSafeHref } from './rich-text.js';
+import { hydrateLinkPreviews, linkPreviewMarkup } from './link-preview.js';
 import {
     showToast, hideToastIfMessage, triggerHaptic, openSmoothModal, closeSmoothModal, canAutoOpenHomeNotices,
     hapticsAreEnabled, bindPasswordReveal
@@ -1857,8 +1859,9 @@ export function renderServiceAlertModal(notice, options = {}) {
         const grid = posterUrls.length > 1 ? 'grid grid-cols-2 gap-2' : 'grid grid-cols-1';
         mediaHtml = `<div class="${grid} mt-2 mb-1">${cells}</div>`;
     }
-    content.innerHTML = `${titleHtml}${mediaHtml}${formattedMsg}`;
+    content.innerHTML = `${titleHtml}${mediaHtml}${formattedMsg}${linkPreviewMarkup(notice)}`;
     ensureLightboxPlusBadges(content);
+    hydrateLinkPreviews(content, REPLY_WORKER_URL);
 
     if (notice.ctaUrl && notice.ctaText) {
         content.innerHTML += `
@@ -1871,7 +1874,7 @@ export function renderServiceAlertModal(notice, options = {}) {
     if (notice.poll && notice.poll.active) {
         content.innerHTML += buildPollShellHtml({ ...notice, severity: severity || notice.severity }, { mode });
         const pollEl = content.querySelector('[data-poll-shell]');
-        if (pollEl && mode === 'live') hydratePollResults(pollEl);
+        if (pollEl) hydratePollResults(pollEl);
     }
 
     if (timestamp) {

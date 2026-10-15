@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_10.15.10': [
+        'Alerts show a WhatsApp-style link card. The card is reserved while it loads, then fills in. A posted alert keeps the card so every commuter sees the same preview. Suggest reply keeps the draft for that commuter message. Closing Co-Pilot and opening it again shows that draft. Suggest reply writes a new one. A quoted inactive poll loads its real vote counts. Co-Pilot leaves a blurred strip, and tapping that strip closes it. A short modal no longer scrolls the screen behind it. Community Monitor messages are left-side bubbles and open on the latest message. No commuter What\'s New. forceShow stays false.',
+    ],
     'V9_10.15.9': [
         'Dev Hub keeps Live Telemetry under the brief. The sync time stays inside that tile. No commuter What\'s New. forceShow stays false.',
     ],

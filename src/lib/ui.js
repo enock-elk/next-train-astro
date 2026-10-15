@@ -2408,6 +2408,48 @@ function installAnalyticsOfflineBridge() {
  * Full-screen sheets have no blur strip. The sheet body is a child, so taps inside stay put.
  * Select Route still refuses to close when no corridor is chosen (closeSmoothModal).
  */
+function scrollableAncestor(node, dy) {
+    let el = node && node.nodeType === 1 ? node : node?.parentElement;
+    while (el && el !== document.body && el !== document.documentElement) {
+        if (el.id === 'alert-image-lightbox') return true;
+        const style = window.getComputedStyle(el);
+        const overflow = `${style.overflowY} ${style.overflow}`;
+        if (/(auto|scroll)/.test(overflow) && el.scrollHeight > el.clientHeight + 2) {
+            const atTop = el.scrollTop <= 0;
+            const atBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 2;
+            if (dy < 0 && !atTop) return true;
+            if (dy > 0 && !atBottom) return true;
+            return false;
+        }
+        el = el.parentElement;
+    }
+    return false;
+}
+
+/** A short sheet must not drag the page or admin panel behind it. */
+function bindModalBackgroundGuard() {
+    if (typeof document === 'undefined' || window.__ntModalScrollGuard) return;
+    window.__ntModalScrollGuard = true;
+    let lastY = 0;
+    document.addEventListener('touchstart', (event) => {
+        lastY = event.touches?.[0]?.clientY || 0;
+    }, { passive: true, capture: true });
+    const block = (event, dy) => {
+        if (!document.body.classList.contains('modal-active')) return;
+        if (scrollableAncestor(event.target, dy)) return;
+        event.preventDefault();
+    };
+    document.addEventListener('touchmove', (event) => {
+        const y = event.touches?.[0]?.clientY || 0;
+        const dy = lastY - y;
+        lastY = y;
+        block(event, dy);
+    }, { passive: false, capture: true });
+    document.addEventListener('wheel', (event) => {
+        block(event, event.deltaY);
+    }, { passive: false, capture: true });
+}
+
 function bindBlurBackdropDismiss() {
     if (typeof document === 'undefined' || window.__ntBlurDismissBound) return;
     window.__ntBlurDismissBound = true;
@@ -2468,6 +2510,7 @@ if (typeof window !== 'undefined') {
     initGlobalErrorHandler();
     bindHistoryBackNavigation();
     bindBlurBackdropDismiss();
+    bindModalBackgroundGuard();
     installAnalyticsOfflineBridge();
     // Defer until #main-content exists (this module can load before the shell)
     if (document.readyState === 'loading') {

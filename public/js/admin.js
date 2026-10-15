@@ -10796,7 +10796,7 @@ const Admin = {
                         </summary>
                         <div class="community-monitor-route-body border-t border-gray-100 dark:border-gray-700 p-3 space-y-2">
                             ${row.held.map(renderHeld).join('')}
-                            <div class="community-route-conversation text-xs text-gray-400 text-center py-3">Open to load conversation.</div>
+                            <div class="community-route-conversation cm-chat text-left">Open to load conversation.</div>
                         </div>
                     </details>
                 `).join('');
@@ -10810,19 +10810,23 @@ const Admin = {
                     const quoteUid = message.replyTo?.uid || message.replyTo?.deviceId || '';
                     const quoteHint = quoteUid && typeof Admin.userIdJoinHintHtml === 'function' ? Admin.userIdJoinHintHtml(quoteUid) : '';
                     const quote = message.replyTo?.body
-                        ? `<div class="border-l-2 border-emerald-500 bg-gray-50 dark:bg-gray-900 rounded-r-lg px-2 py-1 mb-2 text-[10px] text-gray-500"><b>${esc(message.replyTo.displayName || 'Passenger')}</b>${quoteHint}<br>${esc(message.replyTo.body)}</div>`
+                        ? `<div class="cm-quote"><b>${esc(message.replyTo.displayName || 'Passenger')}</b>${quoteHint}<br>${esc(message.replyTo.body)}</div>`
                         : '';
                     const postId = message.postId || '';
-                    return `<div class="${isReply ? 'ml-6 bg-gray-50 dark:bg-gray-900/60' : 'bg-emerald-50/50 dark:bg-emerald-950/10'} border border-gray-200 dark:border-gray-700 rounded-xl p-3 ${message.hidden ? 'opacity-50 ring-1 ring-red-400' : ''}" data-community-message data-community-post="${esc(postId)}" ${isReply ? `data-community-reply="${esc(message.replyId || '')}"` : ''}>
-                        <div class="flex items-center justify-between gap-2 mb-1">
-                            <span class="text-[11px] font-black text-gray-900 dark:text-white">${esc(message.displayName || 'Passenger')} ${authorHint} ${category}</span>
-                            <span class="text-[9px] font-mono text-gray-400">${esc(formatWhen(message.timestamp))}</span>
-                        </div>
-                        ${quote}<p class="text-[12px] leading-relaxed text-gray-800 dark:text-gray-200 whitespace-pre-wrap">${esc(message.body || '')}</p>
-                        <div class="flex flex-wrap gap-2 mt-2">
-                            <button type="button" class="cm-hide-message text-[10px] font-bold text-amber-700 dark:text-amber-400 underline" data-route="${esc(routeId)}" data-post="${esc(postId)}" ${isReply ? `data-reply="${esc(message.replyId || '')}"` : ''}>Hide</button>
-                            <button type="button" class="cm-delete-message text-[10px] font-bold text-red-600 dark:text-red-400 underline" data-route="${esc(routeId)}" data-post="${esc(postId)}" ${isReply ? `data-reply="${esc(message.replyId || '')}"` : ''}>Delete</button>
-                            ${message.uid ? `<button type="button" class="cm-shadow-ban text-[10px] font-bold text-red-600 dark:text-red-400 underline" data-uid="${esc(message.uid)}">Shadow ban</button>` : ''}
+                    return `<div class="cm-row ${isReply ? 'cm-row-reply' : ''}" data-community-message data-community-post="${esc(postId)}" ${isReply ? `data-community-reply="${esc(message.replyId || '')}"` : ''}>
+                        <div class="cm-bubble ${message.hidden ? 'is-hidden' : ''}">
+                            <div class="cm-bubble-name">
+                                <span>${esc(message.displayName || 'Passenger')} ${authorHint} ${category}</span>
+                                <span class="cm-bubble-time">${esc(formatWhen(message.timestamp))}</span>
+                            </div>
+                            <div class="cm-bubble-body">
+                                ${quote}<p class="cm-bubble-text">${esc(message.body || '')}</p>
+                                <div class="cm-bubble-actions">
+                                    <button type="button" class="cm-hide-message" data-route="${esc(routeId)}" data-post="${esc(postId)}" ${isReply ? `data-reply="${esc(message.replyId || '')}"` : ''}>Hide</button>
+                                    <button type="button" class="cm-delete-message" data-route="${esc(routeId)}" data-post="${esc(postId)}" ${isReply ? `data-reply="${esc(message.replyId || '')}"` : ''}>Delete</button>
+                                    ${message.uid ? `<button type="button" class="cm-shadow-ban" data-uid="${esc(message.uid)}">Shadow ban</button>` : ''}
+                                </div>
+                            </div>
                         </div>
                     </div>`;
                 };
@@ -10895,7 +10899,8 @@ const Admin = {
                             postId: post.postId,
                         })).sort((a, b) => Number(a.timestamp || 0) - Number(b.timestamp || 0));
                         return `${renderMessage(post, routeId)}${replies.map((reply) => renderMessage(reply, routeId, true)).join('')}`;
-                    }).join('') : '<p class="py-3">No published messages on this route.</p>';
+                    }).join('') : '<p class="cm-empty">No published messages on this route.</p>';
+                    target.scrollTop = target.scrollHeight;
                     details.dataset.loaded = 'true';
                     details.dataset.communitySearch += ` ${esc(posts.map((post) => [post.body, ...Object.values(post.replies || {}).map((reply) => reply.body)].join(' ')).join(' ').toLowerCase())}`;
                 };
@@ -12185,14 +12190,15 @@ const Admin = {
         modal.style.right = '0';
         modal.style.width = '100%';
         modal.style.bottom = 'auto';
-        modal.style.alignItems = 'stretch';
-        modal.style.justifyContent = 'stretch';
+        modal.style.alignItems = 'flex-end';
+        modal.style.justifyContent = 'center';
         const card = modal.firstElementChild;
         if (card) {
-            card.style.maxHeight = 'none';
-            card.style.height = '100%';
+            card.style.maxHeight = '92%';
+            card.style.height = '92%';
             card.style.width = '100%';
-            card.style.margin = '0';
+            card.style.marginTop = 'auto';
+            card.style.marginBottom = '0';
             card.style.overflowY = 'auto';
         }
     },
@@ -12324,7 +12330,95 @@ const Admin = {
         }
     },
 
-    suggestReplyForThread: (did) => {
+    replyDraftStorageKey: 'nt_reply_drafts_v1',
+
+    readLocalReplyDraft: (messageId) => {
+        const id = String(messageId || '').trim();
+        if (!id) return null;
+        try {
+            const all = JSON.parse(localStorage.getItem(Admin.replyDraftStorageKey) || '{}');
+            const row = all[id];
+            if (!row?.html) return null;
+            return { html: String(row.html), at: Number(row.at) || 0 };
+        } catch {
+            return null;
+        }
+    },
+
+    writeLocalReplyDraft: (messageId, html, at = Date.now()) => {
+        const id = String(messageId || '').trim();
+        const body = String(html || '');
+        if (!id || !Admin.draftHasText(body)) return;
+        try {
+            const all = JSON.parse(localStorage.getItem(Admin.replyDraftStorageKey) || '{}');
+            all[id] = { html: body.slice(0, 20000), at: Number(at) || Date.now() };
+            const keys = Object.keys(all);
+            if (keys.length > 40) {
+                keys.sort((a, b) => Number(all[a]?.at || 0) - Number(all[b]?.at || 0));
+                keys.slice(0, keys.length - 40).forEach((key) => { delete all[key]; });
+            }
+            localStorage.setItem(Admin.replyDraftStorageKey, JSON.stringify(all));
+        } catch { /* the worker copy can still exist */ }
+    },
+
+    draftHasText: (html) => String(html || '').replace(/<[^>]+>/g, '').replace(/&nbsp;/gi, ' ').trim().length > 0,
+
+    draftMessageIdForDevice: (deviceId) => {
+        const items = (Admin.cachedFeedbackData || []).filter((item) => (item.device_id || item.deviceId) === deviceId);
+        return window.ntReplySuggest?.suggestDraftMessageId?.(items) || '';
+    },
+
+    restoreReplyDraft: async (messageId) => {
+        const id = String(messageId || '').trim();
+        const gen = `${Date.now()}-${Math.random()}`;
+        Admin._draftGen = gen;
+        const local = Admin.readLocalReplyDraft(id);
+        const editor = document.getElementById('admin-reply-text');
+        const editing = String(document.getElementById('admin-reply-modal')?.dataset.editMsgKey || '').trim();
+        if (editor && local?.html && !editing) editor.innerHTML = local.html;
+        let remote = null;
+        try {
+            const secret = await Admin.getAuthKey();
+            if (secret && id) {
+                const res = await fetch(`${Admin.replyWorkerUrl()}/draft?id=${encodeURIComponent(id)}`, {
+                    headers: { Authorization: `Bearer ${secret}` },
+                });
+                if (res.ok) remote = await res.json();
+            }
+        } catch { remote = null; }
+        if (Admin._draftGen !== gen) return local?.html || '';
+        const box = document.getElementById('admin-reply-text');
+        const remoteHtml = String(remote?.html || '');
+        const remoteAt = Number(remote?.at) || 0;
+        if (box && remoteHtml && !editing && !box.dataset.draftTouched && remoteAt >= Number(local?.at || 0)) {
+            box.innerHTML = remoteHtml;
+            Admin.writeLocalReplyDraft(id, remoteHtml, remoteAt);
+        }
+        return box?.innerHTML || local?.html || '';
+    },
+
+    persistReplyDraft: async () => {
+        const modal = document.getElementById('admin-reply-modal');
+        const id = String(modal?.dataset.draftMessageId || '').trim();
+        const html = document.getElementById('admin-reply-text')?.innerHTML || '';
+        if (!id || !Admin.draftHasText(html)) return;
+        const at = Date.now();
+        Admin.writeLocalReplyDraft(id, html, at);
+        try {
+            const secret = await Admin.getAuthKey();
+            if (!secret) return;
+            await fetch(`${Admin.replyWorkerUrl()}/draft`, {
+                method: 'PUT',
+                headers: {
+                    Authorization: `Bearer ${secret}`,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ id, html }),
+            });
+        } catch { /* this phone still has the draft */ }
+    },
+
+    suggestReplyForThread: async (did) => {
         const deviceId = String(did || '').trim();
         if (!deviceId || deviceId === 'Anonymous / Legacy') {
             if (typeof showToast === 'function') showToast('This thread has no device to reply to.', 'error');
@@ -12336,7 +12430,9 @@ const Admin = {
         const commuter = items.filter((item) => !item.isFromAdmin);
         const feedbackId = commuter.length ? (commuter[commuter.length - 1].id || '') : '';
         Admin.openReplyModal(feedbackId, deviceId);
-        Admin.runSuggestReply();
+        const modal = document.getElementById('admin-reply-modal');
+        const html = modal?._draftRestore ? await modal._draftRestore : '';
+        if (!Admin.draftHasText(html)) Admin.runSuggestReply();
     },
 
     _suggestTicker: null,
@@ -12484,7 +12580,11 @@ const Admin = {
                 return;
             }
             const editor = document.getElementById('admin-reply-text');
-            if (editor) editor.innerHTML = html;
+            if (editor) {
+                editor.innerHTML = html;
+                delete editor.dataset.draftTouched;
+            }
+            Admin.persistReplyDraft();
             Admin.showSuggestHalt(null);
             Admin.setSuggestProgress(null);
             const ready = document.getElementById('admin-reply-suggest-done');
@@ -12700,9 +12800,9 @@ const Admin = {
         if (!modal) {
             modal = document.createElement('div');
             modal.id = 'admin-reply-modal';
-            modal.className = 'fixed inset-0 bg-black/70 z-[200] hidden flex items-stretch justify-stretch p-0';
+            modal.className = 'fixed inset-0 bg-black/60 z-[200] hidden flex items-end justify-center p-0 backdrop-blur-sm';
             modal.innerHTML = `
-                <div class="bg-white dark:bg-gray-800 shadow-2xl w-full h-full max-w-none max-h-none min-h-0 overflow-y-auto flex flex-col p-3 sm:p-4 border-0">
+                <div class="bg-white dark:bg-gray-800 shadow-2xl w-full h-[92%] max-h-[92%] min-h-0 overflow-y-auto flex flex-col p-3 sm:p-4 border-0 rounded-t-3xl">
                     <h3 id="admin-reply-title" class="text-xl font-black text-gray-900 dark:text-white mb-0.5 tracking-tight flex items-center gap-2 shrink-0"><span class="text-sky-500">${Admin.icon('message', 'w-5 h-5')}</span> <span id="admin-reply-title-text">Next Train Co-Pilot</span></h3>
                     <p id="admin-reply-recipient" class="text-[11px] text-gray-600 dark:text-gray-300 mb-1 break-all leading-snug shrink-0"></p>
                     <p id="admin-reply-hint" class="text-[10px] text-gray-500 dark:text-gray-400 mb-3 shrink-0">Message will be delivered to their personal inbox upon next app launch.</p>
@@ -12724,10 +12824,10 @@ const Admin = {
             `;
             document.body.appendChild(modal);
         } else {
-            modal.className = 'fixed inset-0 bg-black/70 z-[200] hidden flex items-stretch justify-stretch p-0';
+            modal.className = 'fixed inset-0 bg-black/60 z-[200] hidden flex items-end justify-center p-0 backdrop-blur-sm';
             const panel = modal.firstElementChild;
             if (panel) {
-                panel.className = 'bg-white dark:bg-gray-800 shadow-2xl w-full h-full max-w-none max-h-none min-h-0 overflow-y-auto flex flex-col p-3 sm:p-4 border-0';
+                panel.className = 'bg-white dark:bg-gray-800 shadow-2xl w-full h-[92%] max-h-[92%] min-h-0 overflow-y-auto flex flex-col p-3 sm:p-4 border-0 rounded-t-3xl';
             }
             const editor = document.getElementById('admin-reply-text');
             if (editor) {
@@ -12782,9 +12882,28 @@ const Admin = {
         if (suggestBox) suggestBox.classList.toggle('hidden', !!editKey);
         Admin.showSuggestHalt(null);
 
+        const draftId = editKey ? '' : Admin.draftMessageIdForDevice(deviceId);
+        modal.dataset.draftMessageId = draftId;
         const editorEl = document.getElementById('admin-reply-text');
-        if (editorEl) editorEl.innerHTML = editKey ? String(editMsg.text || editMsg.message || '') : '';
+        if (editorEl) {
+            delete editorEl.dataset.draftTouched;
+            if (!editorEl.dataset.draftInputBound) {
+                editorEl.dataset.draftInputBound = '1';
+                editorEl.addEventListener('input', () => { editorEl.dataset.draftTouched = '1'; });
+            }
+            const kept = !editKey ? Admin.readLocalReplyDraft(draftId) : null;
+            editorEl.innerHTML = editKey ? String(editMsg.text || editMsg.message || '') : (kept?.html || '');
+        }
+        modal._draftRestore = editKey ? Promise.resolve('') : Admin.restoreReplyDraft(draftId);
+        if (!modal.dataset.scrimBound) {
+            modal.dataset.scrimBound = '1';
+            modal.addEventListener('click', (event) => {
+                if (event.target !== modal) return;
+                document.getElementById('reply-cancel')?.click();
+            });
+        }
         modal.classList.remove('hidden');
+        if (typeof lockBackgroundScroll === 'function') lockBackgroundScroll();
         void modal.offsetWidth; // Trigger reflow
         modal.firstElementChild.classList.remove('scale-95');
         modal.firstElementChild.classList.add('scale-100');
@@ -12792,9 +12911,14 @@ const Admin = {
         Admin.syncAdminReplyModalViewport();
 
         const cleanup = () => {
+            Admin.persistReplyDraft();
             modal.classList.add('hidden');
             modal.firstElementChild.classList.remove('scale-100');
             modal.firstElementChild.classList.add('scale-95');
+            const stillOpen = document.querySelector('div[id$="-modal"].fixed:not(.hidden), #alerts-channel:not(.hidden)');
+            if (!stillOpen && !document.body.classList.contains('sidenav-open') && typeof unlockBackgroundScroll === 'function') {
+                unlockBackgroundScroll();
+            }
         };
 
         // GUARDIAN PHASE 3: Inline WYSIWYG File Uploader (Admin Inbox Reply)
@@ -13087,7 +13211,7 @@ const Admin = {
         openSmoothModal('admin-context-modal');
 
         const showPreview = async (foundData) => {
-            if (foundData.poll && foundData.poll.active && !foundData.pollResults && foundData.id) {
+            if (foundData.poll && foundData.id && (foundData.poll.active || foundData.poll.question)) {
                 const liveTallies = await Admin.fetchPollResultsSnapshot(foundData.id, secret);
                 if (liveTallies) foundData = { ...foundData, pollResults: liveTallies };
             }
@@ -13432,12 +13556,20 @@ const Admin = {
     /** Tally votes from polls/{id} payload ? { A, B, C, total }. */
     tallyPollVotes: (pollData) => {
         let A = 0, B = 0, C = 0;
+        const keysOf = (vote) => {
+            const raw = vote.optionKeys || vote.optionKey;
+            const list = Array.isArray(raw) ? raw : String(raw || '').split(/[,|]/);
+            return list.map((key) => String(key || '').trim().toUpperCase()).filter((key) => key === 'A' || key === 'B' || key === 'C');
+        };
         if (pollData && typeof pollData === 'object') {
-            Object.values(pollData).forEach((vote) => {
+            Object.entries(pollData).forEach(([key, vote]) => {
                 if (!vote || typeof vote !== 'object') return;
-                if (vote.optionKey === 'A') A++;
-                else if (vote.optionKey === 'B') B++;
-                else if (vote.optionKey === 'C') C++;
+                if (key === '_meta' || String(key).startsWith('_')) return;
+                keysOf(vote).forEach((letter) => {
+                    if (letter === 'A') A += 1;
+                    else if (letter === 'B') B += 1;
+                    else if (letter === 'C') C += 1;
+                });
             });
         }
         return { A, B, C, total: A + B + C };
@@ -13888,10 +14020,24 @@ const Admin = {
         }
     },
 
+    attachLinkPreview: async (payload) => {
+        if (!payload || payload.linkPreview?.url) return payload;
+        const api = window.ntLinkPreview;
+        if (!api?.firstHttpUrl || !api.fetchLinkPreview) return payload;
+        const url = api.firstHttpUrl(payload);
+        if (!url) return payload;
+        try {
+            const preview = await api.fetchLinkPreview(url, Admin.replyWorkerUrl());
+            if (preview?.url) payload.linkPreview = preview;
+        } catch { /* the alert still posts; the feed can load the card itself */ }
+        return payload;
+    },
+
     publishNoticeToTarget: async (target, payload, secret) => {
         const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
         const id = String(payload.id || Date.now());
         payload.id = id;
+        await Admin.attachLinkPreview(payload);
         const fetchRes = await window.guardianFetch(`${dynamicEndpoint}notices/${target}.json`, {}, 6000);
         const existing = fetchRes.ok ? await fetchRes.json() : null;
         const listed = Admin.listNoticesInTarget(existing);

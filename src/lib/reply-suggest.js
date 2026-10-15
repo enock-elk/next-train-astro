@@ -114,6 +114,22 @@ export function unansweredCommuterMessages(thread) {
     return rows.slice(lastAdmin + 1).filter((row) => row?.from !== 'admin' && String(row?.text || '').trim());
 }
 
+/** The commuter message this draft belongs to. A later message is a new draft. */
+export function suggestDraftMessageId(items) {
+    const list = (Array.isArray(items) ? items : [])
+        .slice()
+        .sort((a, b) => Number(a?.timestamp || 0) - Number(b?.timestamp || 0));
+    let lastAdmin = -1;
+    list.forEach((item, index) => {
+        if (item?.isFromAdmin) lastAdmin = index;
+    });
+    const pending = list.slice(lastAdmin + 1).filter((item) => item && !item.isFromAdmin);
+    const target = pending.length
+        ? pending[pending.length - 1]
+        : [...list].reverse().find((item) => item && !item.isFromAdmin);
+    return String(target?.id || target?.key || target?.feedbackId || '').trim();
+}
+
 /**
  * Up to eight other threads that share words, and the same route or region when known.
  * Each example is one commuter snippet plus one admin reply. No emails.

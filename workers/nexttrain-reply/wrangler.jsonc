@@ -1,19 +1,23 @@
 {
-  "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "nexttrain-reply",
-  "main": "worker.js",
-  "compatibility_date": "2026-03-22",
-  "workers_dev": true,
-  "observability": {
-    "enabled": true
-  },
-  // Replace REPLACE_ME after: npx wrangler kv namespace create REPLY_CONTEXT
-  // Until then the worker still drafts. Save shared note returns 503.
-  "kv_namespaces": [
-    { "binding": "REPLY_CONTEXT", "id": "REPLACE_ME" }
-  ],
-  "vars": {
-    "FIREBASE_WEB_API_KEY": "AIzaSyAU303BRMrH3A5n5zbJH4MVwWdkfznqxMY",
-    "ALLOWED_ORIGINS": "https://lab.nexttrain.co.za,https://nexttrain.co.za,https://www.nexttrain.co.za,https://enock-elk.github.io,https://enockelk.github.io,http://localhost:4321"
-  }
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "nexttrain-reply",
+	"main": "worker.js",
+	"compatibility_date": "2026-03-22",
+	"workers_dev": true,
+	"observability": {
+		"enabled": true
+	},
+	// Replace REPLACE_ME after: npx wrangler kv namespace create REPLY_CONTEXT
+	// Until then the worker still drafts. Save shared note returns 503.
+	"kv_namespaces": [
+		{
+			"binding": "REPLY_CONTEXT",
+			"id": "e12f606a57d848fa8ea47b3c04d3235a",
+			"remote": true
+		}
+	],
+	"vars": {
+		"FIREBASE_WEB_API_KEY": "AIzaSyAU303BRMrH3A5n5zbJH4MVwWdkfznqxMY",
+		"ALLOWED_ORIGINS": "https://lab.nexttrain.co.za,https://nexttrain.co.za,https://www.nexttrain.co.za,https://enock-elk.github.io,https://enockelk.github.io,http://localhost:4321"
+	}
 }

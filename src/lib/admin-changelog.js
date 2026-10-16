@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_10.16.05': [
+        'The grid via mark is Monte Vista or Maitland in the one-row status slot above the train number. The word Via is not on the grid. Tap explains the route. NO SVC and SPL still take that slot. Saved grids keep the same words in light-sheet ink. EXPR is dark red on the in-app grid and the saved grid only. Media on a service alert, a reply, and a disruption asks for a file from this device or an image file from the internet. An https JPEG, PNG, GIF, or WebP link is shown to commuters and is not uploaded. What\'s New covers the timetable marks. forceShow stays false.',
+    ],
     'V9_10.16.04': [
         'A pasted https link gets a link card in the alert preview and on the posted alert. The reply worker is tried first. When that route is missing, the card is read from the public page and stored on the notice. A failed lookup is not retried until the next visit. No commuter What\'s New. forceShow stays false.',
     ],

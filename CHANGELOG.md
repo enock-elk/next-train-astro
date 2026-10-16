@@ -1,5 +1,11 @@
 # Changelog
 
+## V9_10.16.05
+
+A Monte Vista train shows Monte Vista above the train number. Tap it to read the route. A Maitland train shows Maitland the same way. EXPR on the timetable is dark red.
+
+An image on a service alert or a reply can be the file's own https address. That file is shown as it is, and it is not uploaded.
+
 ## V9_10.16.04 — no release notes
 
 A pasted link in an alert shows its page title, description, and image in the preview and after it is posted. The card stays inside the alert on a phone.

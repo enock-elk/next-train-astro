@@ -93,7 +93,13 @@ function bytes(...vals) {
     assert(classifyAttachmentUrl(bare) === 'image', 'storage photo without a file extension still previews as an image');
     const pdf = 'https://firebasestorage.googleapis.com/v0/b/app/o/feedback_attachments%2Fx.pdf?alt=media&token=abc';
     assert(classifyAttachmentUrl(pdf) === 'pdf', 'storage pdf stays a pdf');
-    assert(sanitizeAttachmentDisplayUrl('https://evil.example/x.jpg') === null, 'foreign https blocked');
+    const imgur = 'https://i.imgur.com/abcdEFG.jpg';
+    assert(sanitizeAttachmentDisplayUrl(imgur) === imgur, 'public image file allowed');
+    assert(classifyAttachmentUrl(imgur) === 'image', 'public image file classifies as an image');
+    assert(sanitizeAttachmentDisplayUrl('https://i.imgur.com/abcdEFG') === null, 'imgur page is not an image file');
+    assert(sanitizeAttachmentDisplayUrl('https://evil.example/page') === null, 'foreign page blocked');
+    assert(sanitizeAttachmentDisplayUrl('https://10.1.1.1/a.jpg') === null, 'private image host blocked');
+    assert(sanitizeAttachmentDisplayUrl('http://i.imgur.com/abcdEFG.jpg') === null, 'http image file blocked');
     assert(sanitizeAttachmentDisplayUrl('javascript:alert(1)') === null, 'javascript: blocked');
     assert(sanitizeAttachmentDisplayUrl('data:text/html;base64,PHNjcmlwdD4=') === null, 'data: blocked');
     assert(sanitizeAttachmentDisplayUrl('http://firebasestorage.googleapis.com/v0/b/app/o/x.jpg') === null, 'http storage blocked');
@@ -110,14 +116,17 @@ function bytes(...vals) {
     assert(isSafeLightboxOnclick(js), 'generated onclick is safe');
     assert(isSafeLightboxOnclick(`event.stopPropagation(); ${js}`), 'stopPropagation prefix is safe');
     assert(isSafeLightboxOnclick(`Admin.openLightbox(${JSON.stringify(firebase)})`), 'Admin.openLightbox is safe');
-    assert(!isSafeLightboxOnclick(`window.openLightbox(${JSON.stringify('https://evil.example/x.jpg')})`), 'foreign onclick rejected');
+    assert(isSafeLightboxOnclick(`window.openLightbox(${JSON.stringify('https://i.imgur.com/abcdEFG.jpg')})`), 'public image file onclick is safe');
+    assert(!isSafeLightboxOnclick(`window.openLightbox(${JSON.stringify('https://evil.example/page')})`), 'foreign page onclick rejected');
     assert(!isSafeLightboxOnclick("window.openLightbox('javascript:alert(1)')"), 'javascript onclick rejected');
     assert(!isSafeLightboxOnclick('window.openLightbox(alert(1))'), 'bare-call onclick rejected');
     assert(!isSafeLightboxOnclick(`window.openLightbox(${JSON.stringify(firebase)}); alert(1)`), 'trailing statements rejected');
     const html = attachmentPreviewHtml(firebase, { admin: true });
     assert(html.includes('window.openLightbox') && html.includes('firebasestorage.googleapis.com'), 'admin preview uses the alert lightbox');
     assert(!html.includes('Admin.openLightbox'), 'admin preview does not use a second lightbox');
-    assert(!attachmentPreviewHtml('https://evil.example/x.jpg'), 'evil preview is empty');
+    const imgurPreview = attachmentPreviewHtml('https://i.imgur.com/abcdEFG.jpg');
+    assert(imgurPreview.includes('<img') && imgurPreview.includes('i.imgur.com'), 'public image file previews as an image');
+    assert(!attachmentPreviewHtml('https://evil.example/page'), 'foreign page preview is empty');
 }
 
 {
@@ -139,6 +148,8 @@ function bytes(...vals) {
     assert(hub.includes('contentType: kind.mime'), 'commuter upload stores sniffed content-type');
     const admin = readFileSync(join(ROOT, 'public/js/admin.js'), 'utf8');
     assert(admin.includes('prepareSafeUpload'), 'admin upload sniffs via prepareSafeUpload');
+    assert(admin.includes('pickMediaSource') && admin.includes('From this device') && admin.includes('From the internet'), 'Media asks for a device file or an internet image');
+    assert(admin.includes('insertInternetImage'), 'an internet image is inserted without upload');
     assert(!admin.includes("file.name.split('.').pop()"), 'admin no longer trusts file extension');
     assert(admin.includes('sanitizeAttachmentDisplayUrl'), 'admin lightbox allowlists URLs');
     const rich = readFileSync(join(ROOT, 'src/lib/rich-text.js'), 'utf8');

@@ -13337,6 +13337,86 @@ const Admin = {
         return `<button type="button" onmousedown="event.preventDefault();" ontouchstart="Admin.saveCursorRange()" onclick="Admin.openWriteAssist('${id}')" class="shrink-0 px-2 py-1 text-xs font-bold text-violet-700 dark:text-violet-300 hover:bg-violet-100 dark:hover:bg-gray-600 rounded focus:outline-none whitespace-nowrap" title="Grammar, summarise, tone">Write</button>`;
     },
 
+    openMediaSourceSheet: (fileInputId, editorId) => {
+        const existing = document.getElementById('nt-media-source');
+        if (existing) existing.remove();
+        const inputId = String(fileInputId || '').replace(/[^a-z0-9_-]/gi, '');
+        const editId = String(editorId || '').replace(/[^a-z0-9_-]/gi, '');
+        const sheet = document.createElement('div');
+        sheet.id = 'nt-media-source';
+        sheet.className = 'fixed inset-0 z-[240] flex items-end sm:items-center justify-center bg-black/50 p-4';
+        sheet.innerHTML = `
+            <div class="w-full max-w-sm rounded-2xl bg-white dark:bg-gray-800 p-4 shadow-xl" role="dialog" aria-modal="true" aria-label="Image source">
+                <p class="text-sm font-black text-gray-900 dark:text-white mb-1">Add an image</p>
+                <p class="text-xs text-gray-500 dark:text-gray-400 mb-3">A file from this device can be a photo or a PDF. An internet image must be the file itself.</p>
+                <button type="button" data-media-choice="device" class="w-full mb-2 h-11 rounded-xl bg-blue-600 text-white text-sm font-bold">From this device</button>
+                <button type="button" data-media-choice="url" class="w-full mb-2 h-11 rounded-xl border border-gray-300 dark:border-gray-600 text-sm font-bold text-gray-800 dark:text-gray-100">From the internet</button>
+                <button type="button" data-media-choice="cancel" class="w-full h-10 text-sm font-bold text-gray-500">Cancel</button>
+            </div>`;
+        const close = () => sheet.remove();
+        sheet.addEventListener('click', (event) => {
+            const choice = event.target?.closest?.('[data-media-choice]')?.getAttribute('data-media-choice');
+            if (!choice) {
+                if (event.target === sheet) close();
+                return;
+            }
+            if (choice === 'device') {
+                close();
+                document.getElementById(inputId)?.click();
+                return;
+            }
+            if (choice === 'url') {
+                close();
+                Admin.insertInternetImage(editId);
+                return;
+            }
+            close();
+        });
+        document.body.appendChild(sheet);
+    },
+
+    insertInternetImage: (editorId) => {
+        const raw = window.prompt('Paste the image file link (https, ending in .jpg, .png, .gif, or .webp):', 'https://');
+        if (raw == null) return;
+        const typed = String(raw).trim();
+        if (!typed || typed === 'https://') return;
+        const safe = typeof window.sanitizeAttachmentDisplayUrl === 'function'
+            ? window.sanitizeAttachmentDisplayUrl(typed)
+            : '';
+        const kind = safe && typeof window.classifyAttachmentUrl === 'function'
+            ? window.classifyAttachmentUrl(safe)
+            : '';
+        if (!safe || kind !== 'image') {
+            if (typeof showToast === 'function') {
+                showToast('Use a link to the image file. It needs to start with https and end in .jpg, .png, .gif, or .webp.', 'error', 4500);
+            }
+            return;
+        }
+        const htmlToInsert = Admin.inlineAttachmentHtml(safe, false);
+        const editor = document.getElementById(editorId);
+        if (!htmlToInsert || !editor) {
+            if (typeof showToast === 'function') showToast('Could not use that image link.', 'error');
+            return;
+        }
+        editor.focus();
+        const savedRange = Admin._savedRange;
+        if (savedRange) {
+            const sel = window.getSelection();
+            sel.removeAllRanges();
+            try { sel.addRange(savedRange); } catch { /* range left the editor */ }
+        }
+        if (!document.execCommand('insertHTML', false, htmlToInsert)) {
+            editor.innerHTML += htmlToInsert;
+        }
+        Admin._savedRange = null;
+        if (typeof showToast === 'function') showToast('Image inserted.', 'success');
+    },
+
+    pickMediaSource: (fileInputId, editorId) => {
+        Admin.saveCursorRange();
+        Admin.openMediaSourceSheet(fileInputId, editorId);
+    },
+
     wysiwygToolbarHtml: (editorId, opts = {}) => {
         const id = String(editorId || 'alert-msg').replace(/[^a-z0-9_-]/gi, '');
         const fileInputId = opts.fileInputId ? String(opts.fileInputId).replace(/[^a-z0-9_-]/gi, '') : '';
@@ -13347,7 +13427,7 @@ const Admin = {
             `<button type="button" onmousedown="event.preventDefault();" ontouchstart="Admin.saveCursorRange()" onclick="Admin.formatAlertText('${tag}', '${id}')" class="px-1.5 py-1 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 rounded flex justify-center items-center focus:outline-none" title="${title}">${svg}</button>`;
         const sep = `<div class="w-px h-4 bg-gray-300 dark:bg-gray-600 my-auto mx-0.5 shrink-0"></div>`;
         const media = fileInputId
-            ? `<label for="${fileInputId}" id="${fileLabelId}" onmousedown="Admin.saveCursorRange()" ontouchstart="Admin.saveCursorRange()" onclick="Admin.saveCursorRange()" class="shrink-0 px-2 py-1 text-xs font-medium text-purple-600 dark:text-purple-400 hover:bg-gray-200 dark:hover:bg-gray-600 rounded flex items-center justify-center gap-1 focus:outline-none cursor-pointer whitespace-nowrap" title="Upload Image or PDF">${Admin.icon('paperclip', 'w-3.5 h-3.5')} Media</label>
+            ? `<button type="button" id="${fileLabelId}" onmousedown="event.preventDefault(); Admin.saveCursorRange();" ontouchstart="Admin.saveCursorRange()" onclick="Admin.pickMediaSource('${fileInputId}', '${id}')" class="shrink-0 px-2 py-1 text-xs font-medium text-purple-600 dark:text-purple-400 hover:bg-gray-200 dark:hover:bg-gray-600 rounded flex items-center justify-center gap-1 focus:outline-none cursor-pointer whitespace-nowrap" title="Add an image from this device or from the internet">${Admin.icon('paperclip', 'w-3.5 h-3.5')} Media</button>
                             <input type="file" id="${fileInputId}" class="hidden" accept="image/*,.pdf">`
             : '';
         const alignL = '<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h10M4 18h16"></path></svg>';

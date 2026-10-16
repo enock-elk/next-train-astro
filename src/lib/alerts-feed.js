@@ -1,6 +1,7 @@
 /**
  * Pure alerts-channel feed rules (no DOM). Union scoping, expiry, posters, paging.
  */
+import { cleanHttpUrl, isPublicPreviewUrl } from './link-preview.js';
 export const ALERTS_PAGE_SIZE = 10;
 export const ALERT_PIN_SVG = `<svg class="nt-alert-pin-icon w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16 3H8v2h1v6.2L7 14v2h4v5h2v-5h4v-2l-2-2.8V5h1V3z"/></svg>`;
 export const ALERT_IMAGE_PREFIX = '/images/alerts/';
@@ -453,7 +454,20 @@ export function splitAlertTitleAndBody(html, explicitTitle = '') {
     return { title: explicit, body };
 }
 
-/** Allow already-published Firebase Storage attachments; reject everything else. */
+const PUBLIC_IMAGE_FILE = /\.(jpe?g|png|gif|webp)$/i;
+
+function isStoredImageHost(host) {
+    const name = String(host || '').toLowerCase();
+    return name === 'firebasestorage.googleapis.com'
+        || name === 'storage.googleapis.com'
+        || name.endsWith('.firebasestorage.app')
+        || name.endsWith('.googleusercontent.com');
+}
+
+/**
+ * Catalog posters, Firebase Storage, or a public https image file.
+ * The file can live on Imgur or any other public host. Pages are not images.
+ */
 export function sanitizeInlineAlertImageUrl(url) {
     const s = String(url || '').trim();
     if (!s || /[\s<>]/.test(s)) return null;
@@ -463,19 +477,17 @@ export function sanitizeInlineAlertImageUrl(url) {
         const u = new URL(s);
         if (u.protocol !== 'https:') return null;
         if (u.username || u.password) return null;
-        const host = u.hostname.toLowerCase();
-        if (
-            host === 'firebasestorage.googleapis.com'
-            || host === 'storage.googleapis.com'
-            || host.endsWith('.firebasestorage.app')
-            || host.endsWith('.googleusercontent.com')
-        ) {
-            return u.href;
-        }
+        if (isStoredImageHost(u.hostname)) return u.href;
+        const cleaned = cleanHttpUrl(u.href);
+        if (!cleaned || !isPublicPreviewUrl(cleaned)) return null;
+        const pub = new URL(cleaned);
+        let path = pub.pathname || '';
+        try { path = decodeURIComponent(path); } catch { /* keep the raw path */ }
+        if (!PUBLIC_IMAGE_FILE.test(path)) return null;
+        return pub.href;
     } catch {
         return null;
     }
-    return null;
 }
 
 /** Pull lightbox/img tags out of the body so photos can sit above the text. */

@@ -195,7 +195,12 @@ const now = 1_700_000_000_000;
     const hoisted = hoistAlertImagesFromHtml('Hello<br><img src="/images/alerts/fare.png" alt="x"><p>After</p>');
     assert(hoisted.urls[0] === '/images/alerts/fare.png' && !hoisted.body.includes('<img'), `hoist imgs ${hoisted.body}`);
 
-    assert(sanitizeInlineAlertImageUrl('https://evil.example/x.png') === null, 'foreign inline image blocked');
+    const imgur = 'https://i.imgur.com/abcdEFG.png';
+    assert(sanitizeInlineAlertImageUrl(imgur) === imgur, 'public image file allowed');
+    assert(sanitizeInlineAlertImageUrl('https://evil.example/x.html') === null, 'foreign page blocked');
+    assert(sanitizeInlineAlertImageUrl('https://192.168.1.8/x.png') === null, 'private image host blocked');
+    const internetLaid = layoutAlertPost({ message: `<p>Poster</p><img src="${imgur}">` });
+    assert(internetLaid.imageUrls[0] === imgur, 'internet image file is shown on the alert');
     assert(sanitizeInlineAlertImageUrl('https://firebasestorage.googleapis.com/v0/b/app/o/x.png') === 'https://firebasestorage.googleapis.com/v0/b/app/o/x.png', 'firebase storage allowed');
     assert(sanitizeInlineAlertImageUrl('https://user:pass@firebasestorage.googleapis.com/v0/b/app/o/x.png') === null, 'storage URL with credentials blocked');
 

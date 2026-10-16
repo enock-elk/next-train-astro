@@ -14,19 +14,20 @@ import {
     ROUTES, CHANGELOG_DATA, CORRIDOR_META, getCorridorLabel, APP_VERSION, SPECIAL_DATES, HOLIDAY_NAMES
 } from './config.js';
 
-import { orderGridTrainIds } from './grid-order.js';
+import { orderGridTrainIds, getRuntimeGridOrderRecord } from './grid-order.js';
 
 import { 
     normalizeStationName, timeToSeconds, formatTimeDisplay, isRealTime, isExpressSkip,
-    isVariantStationName, variantMapFromSchedule, escapeHTML, safeStorage,
+    isVariantStationName, mergeVariantLabels, viaCodesFromGridOrderRecord, escapeHTML, safeStorage,
     formatRouteLabelHtml, formatRouteLabelPlain, expandJhbLabel, fitRouteNameNodes, fitJhbNodes, routePrimaryGridDirection, shortSharedSourceLabel,
     scheduleCacheSlot, routeSheetKeyForDay, warningTriangleSvg, gridNoticeShowsOnDay,
     resolveOperatingDayType, simUsesSpecificDate
 } from './utils.js';
 
 import { 
-    currentTime, currentDayType, currentDayIndex 
+    currentTime, currentDayType, currentDayIndex, getScheduleFromDb
 } from './logic.js';
+import { kempTrainIds, siblingSheetKey } from './live-board.js';
 
 import { buildTrainReportSlotHtml, buildTrainTitleReportButton } from './delay-reports.js';
 import { showToast, triggerHaptic } from './ui.js';
@@ -1033,7 +1034,19 @@ export const Renderer = {
             }
         }
 
-        const variantByTrain = variantMapFromSchedule(schedule);
+        const viaRegion = ROUTES[routeId]?.region || $userRegion.get();
+        const variantByTrain = mergeVariantLabels(
+            schedule,
+            viaCodesFromGridOrderRecord(getRuntimeGridOrderRecord(viaRegion, sheetName))
+        );
+        const kempIds = new Set();
+        if (routeId === 'pta-irene') {
+            const sibKey = siblingSheetKey(routeId, sheetName);
+            const db = $fullDatabase.get();
+            if (sibKey && db && db[sibKey]) {
+                for (const id of kempTrainIds(routeId, schedule, getScheduleFromDb(db, sibKey))) kempIds.add(id);
+            }
+        }
 
         let html = `
             ${gridNoticeHtml}
@@ -1059,9 +1072,16 @@ export const Renderer = {
                                 return `<span class="nt-grid-train-head" style="display:grid;grid-template-rows:11px ${isExport ? '21px' : '14px'};align-items:center;justify-items:center;gap:2px;line-height:1;white-space:nowrap;"><span class="nt-grid-train-status" style="display:flex;height:11px;align-items:center;justify-content:center;${statusStyle}">${statusHtml}</span><span class="nt-grid-train-id" style="${trainIdStyle}">${h}</span></span>`;
                             };
                             let headerContent = stack('&nbsp;', 'visibility:hidden;');
-                            const viaHtml = viaLabel
-                                ? `<span class="nt-grid-via" title="Via ${escapeHTML(viaLabel)}" style="display:block;margin-top:2px;font-size:8px;font-weight:800;letter-spacing:0.02em;line-height:1.15;white-space:normal;">Via ${escapeHTML(viaLabel)}</span>`
+                            const viaLines = viaLabel
+                                ? ['Via', ...String(viaLabel).split(/\s+/).filter(Boolean)]
+                                    .map((word) => `<span style="display:block;">${escapeHTML(word)}</span>`)
+                                    .join('')
                                 : '';
+                            const viaInk = isExport ? 'color:#334155;' : '';
+                            const viaHtml = viaLabel
+                                ? `<span class="nt-grid-via" title="Via ${escapeHTML(viaLabel)}" style="display:block;box-sizing:border-box;width:100%;max-width:4.5rem;margin:2px auto 0;font-size:8px;font-weight:800;letter-spacing:0.01em;line-height:1.15;white-space:normal;text-align:center;${viaInk}">${viaLines}</span>`
+                                : '';
+                            const continuesToKemp = kempIds.has(String(h));
                             
                             if (paintExclusion && exclusionType === 'special') {
                                 const splIcon = `<svg class="inline-block w-2 h-2 mr-0.5 mb-[1px]" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>`;
@@ -1081,6 +1101,15 @@ export const Renderer = {
                                     bgClass = 'bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 opacity-90';
                                     headerContent = stack(`${banIcon} NO SVC`, 'font-size:8px;color:#dc2626;font-weight:900;letter-spacing:0.02em;text-decoration:underline dotted #f87171;text-underline-offset:2px;');
                                 }
+                            } else if (continuesToKemp) {
+                                if (isExport) {
+                                    headerContent = stack('KEMP', 'font-size:9px;font-weight:800;letter-spacing:0.08em;color:#334155;');
+                                } else {
+                                    headerContent = stack('KEMP', 'font-size:8px;font-weight:900;letter-spacing:0.04em;text-decoration:underline dotted currentColor;text-underline-offset:2px;');
+                                }
+                                if (!isExport && isHighlight) {
+                                    bgClass = 'bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-300 font-bold';
+                                }
                             } else if (!isExport && isHighlight) {
                                 bgClass = 'bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-300 font-bold';
                             }
@@ -1088,9 +1117,12 @@ export const Renderer = {
                             const exclHeadAttrs = (!isExport && paintExclusion && exclusionType !== 'special')
                                 ? ` data-excl-open="1" data-excl-route="${escapeHTML(String(routeId || ''))}" data-excl-train="${escapeHTML(String(h || ''))}" data-excl-day="${Number(dayIdx)}" tabindex="0" role="button" aria-label="Why train ${escapeHTML(String(h))} has no service"`
                                 : '';
+                            const kempHeadAttrs = (!isExport && continuesToKemp && !paintExclusion)
+                                ? ` data-kemp-open="1" data-kemp-train="${escapeHTML(String(h || ''))}" tabindex="0" role="button" aria-label="Train ${escapeHTML(String(h))} continues to Kempton Park"`
+                                : '';
                             headerContent += viaHtml;
-                            const wrapClass = (isExport && paintExclusion && exclusionType !== 'special') ? 'whitespace-normal' : 'whitespace-nowrap';
-                            return `<th class="${paddingClass} border-b border-r ${borderClass} ${wrapClass} text-center ${bgClass} ${minWidthClass}" ${isHighlight ? 'id="grid-active-col"' : ''} ${!isExport ? `data-nt-live-host="${escapeHTML(String(h || ''))}"` : ''}${exclHeadAttrs}>${headerContent}</th>`;
+                            const wrapClass = viaLabel || (isExport && paintExclusion && exclusionType !== 'special') ? 'whitespace-normal' : 'whitespace-nowrap';
+                            return `<th class="${paddingClass} border-b border-r ${borderClass} ${wrapClass} text-center ${bgClass} ${minWidthClass}" ${isHighlight ? 'id="grid-active-col"' : ''} ${!isExport ? `data-nt-live-host="${escapeHTML(String(h || ''))}"` : ''}${exclHeadAttrs}${kempHeadAttrs}>${headerContent}</th>`;
                         }).join('')}
                         ${showRightAnchor ? `<th class="right-anchor-header ${paddingClass} border-b border-l font-bold min-w-[50px] text-center">STN</th>` : ''}
                     </tr>
@@ -1202,8 +1234,11 @@ export const Renderer = {
                         const exclCellAttrs = (!isExport && paintExclusion && exclusionType !== 'special')
                             ? ` data-excl-open="1" data-excl-route="${escapeHTML(String(routeId || ''))}" data-excl-train="${escapeHTML(String(col || ''))}" data-excl-day="${Number(dayIdx)}"`
                             : '';
+                        const kempCellAttrs = (!isExport && kempIds.has(String(col)) && !paintExclusion)
+                            ? ` data-kemp-open="1" data-kemp-train="${escapeHTML(String(col || ''))}"`
+                            : '';
                         
-                        return `<td class="${cellClass}"${exclCellAttrs}>${val}</td>`;
+                        return `<td class="${cellClass}"${exclCellAttrs}${kempCellAttrs}>${val}</td>`;
                     }).join('')}
                     ${showRightAnchor ? `<td class="right-anchor-col ${paddingClass} border-l border-b font-mono font-bold text-center text-[10px] sm:text-xs">${getAbbrev(cleanStation)}</td>` : ''}
                 </tr>

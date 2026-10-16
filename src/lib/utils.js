@@ -431,26 +431,139 @@ export function isVariantStationName(rawName) {
     return bare === 'VARIANT';
 }
 
-/** Known VARIANT cell codes. Unknown prose is ignored. */
-export function variantViaLabel(code) {
+const SHEET_META_COLS = new Set(['STATION', 'COORDINATES', 'KM_MARK', 'row_index']);
+
+/**
+ * Branch code for a via note.
+ * Sheets spell a Monte Vista working as one cell "Via MV", or as
+ * Woodstock "via" / Salt River "Monte" / Koeberg Rd "Vista".
+ * A timed call at Maitland is the normal line, not a via mark.
+ */
+export function canonicalViaCode(code) {
     const key = String(code || '').trim().toUpperCase().replace(/[\s-]+/g, '_');
-    if (key === 'MONTE_VISTA') return 'Monte Vista';
+    if (key === 'MONTE_VISTA' || key === 'VIA_MV' || key === 'VIA_MONTE_VISTA') return 'MONTE_VISTA';
+    if (key === 'MAITLAND' || key === 'VIA_MAITLAND') return 'MAITLAND';
     return '';
 }
 
-/** Train id → "Monte Vista" from a VARIANT row. */
+/** Codes an admin may store. Sheet prose is recognised separately. */
+export function adminViaCode(code) {
+    const key = String(code || '').trim().toUpperCase();
+    if (key === 'MONTE_VISTA' || key === 'MAITLAND') return key;
+    return '';
+}
+
+/** Known branch codes. Display label, or empty when the code is not a branch. */
+export function variantViaLabel(code) {
+    const key = canonicalViaCode(code);
+    if (key === 'MONTE_VISTA') return 'Monte Vista';
+    if (key === 'MAITLAND') return 'Maitland';
+    return '';
+}
+
+function viaNoteToken(val) {
+    const raw = String(val || '').trim();
+    if (!raw || raw === '-' || raw === '—' || raw === '–') return '';
+    if (isRealTime(raw) || isExpressSkip(raw)) return '';
+    if (raw.length > 24) return '';
+    const token = raw.toUpperCase().replace(/[^A-Z]/g, '');
+    if (!token || token.length > 12) return '';
+    return token;
+}
+
+function tokensInOrder(tokens, words) {
+    let index = 0;
+    for (const token of tokens) {
+        if (token === words[index]) index += 1;
+        if (index === words.length) return true;
+    }
+    return false;
+}
+
+/**
+ * Train id → "Monte Vista" or "Maitland".
+ * A VARIANT row wins over split prose. A real clock at Monte Vista or
+ * Maitland does not mark the column: that station is already on the sheet.
+ */
 export function variantMapFromSchedule(schedule) {
     const map = {};
+    const notes = {};
     const rows = schedule?.rows || [];
     for (const row of rows) {
         if (!isVariantStationName(row?.STATION)) continue;
         for (const [col, val] of Object.entries(row)) {
-            if (col === 'STATION' || col === 'COORDINATES' || col === 'KM_MARK' || col === 'row_index') continue;
+            if (SHEET_META_COLS.has(col)) continue;
             const label = variantViaLabel(val);
             if (label) map[String(col)] = label;
         }
     }
+    for (const row of rows) {
+        if (isVariantStationName(row?.STATION)) continue;
+        for (const [col, val] of Object.entries(row)) {
+            if (SHEET_META_COLS.has(col) || map[String(col)]) continue;
+            const direct = canonicalViaCode(val);
+            if (direct) {
+                map[String(col)] = variantViaLabel(direct);
+                continue;
+            }
+            const token = viaNoteToken(val);
+            if (!token) continue;
+            const id = String(col);
+            if (!notes[id]) notes[id] = [];
+            notes[id].push(token);
+        }
+    }
+    for (const [col, tokens] of Object.entries(notes)) {
+        if (map[col]) continue;
+        if (tokensInOrder(tokens, ['VIA', 'MONTE', 'VISTA'])) map[col] = 'Monte Vista';
+        else if (tokensInOrder(tokens, ['VIA', 'MAITLAND'])) map[col] = 'Maitland';
+    }
     return map;
+}
+
+/** Sheet notes first. An admin code on the same sheet replaces the sheet note. */
+export function mergeVariantLabels(schedule, adminVia) {
+    const map = variantMapFromSchedule(schedule);
+    if (!adminVia || typeof adminVia !== 'object' || Array.isArray(adminVia)) return map;
+    for (const [id, code] of Object.entries(adminVia)) {
+        const label = variantViaLabel(adminViaCode(code));
+        if (label) map[String(id)] = label;
+    }
+    return map;
+}
+
+const VIA_TRAIN_RE = /^\d{4}[a-zA-Z]*$/;
+
+/** `{ trainId: 'MONTE_VISTA' | 'MAITLAND' }` from a grid-order RTDB record. */
+export function viaCodesFromGridOrderRecord(record) {
+    const via = record?.via;
+    if (!via || typeof via !== 'object' || Array.isArray(via)) return {};
+    const out = {};
+    for (const [id, code] of Object.entries(via)) {
+        const train = String(id || '').trim();
+        const norm = adminViaCode(code);
+        if (!VIA_TRAIN_RE.test(train) || !norm) continue;
+        out[train] = norm;
+    }
+    return out;
+}
+
+/**
+ * Full PUT body for config/grid_order/{region}/{sheetKey}.
+ * A reset drops the saved order and keeps via. An empty via map is omitted
+ * so the replace clears marks the operator removed.
+ */
+export function buildGridOrderWriteRecord({ order, via, action, updatedAt, updatedBy, source } = {}) {
+    const record = {
+        updatedAt: Number(updatedAt) || Date.now(),
+        updatedBy: String(updatedBy || 'unknown'),
+        source: String(source || 'admin'),
+    };
+    if (action === 'reset') record.action = 'reset';
+    else if (Array.isArray(order)) record.order = order.slice();
+    const clean = viaCodesFromGridOrderRecord({ via });
+    if (Object.keys(clean).length) record.via = clean;
+    return record;
 }
 
 export function formatTimeDisplay(timeStr) {

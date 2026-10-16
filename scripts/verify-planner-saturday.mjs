@@ -17,6 +17,8 @@ import {
 } from '../src/lib/saturday-service.js';
 import { extractTrainSheetStops } from '../src/lib/planner-core.js';
 import { Renderer } from '../src/lib/renderer.js';
+import { setRuntimeGridOrderConfig, clearRuntimeGridOrderConfig } from '../src/lib/grid-order.js';
+import { buildGridOrderWriteRecord } from '../src/lib/utils.js';
 import { filterStopsForFork } from '../src/lib/map-overrides.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -275,12 +277,18 @@ const expressHtml = Renderer._buildGridHTML(expressSheet, 'sheet', 'ct-bellv', 1
 if (!expressHtml.includes('>EXPR<') || !expressHtml.includes('Via Monte Vista')) {
     fail('grid must render EXPR and Via Monte Vista');
 }
+if (!expressHtml.includes('<span style="display:block;">Via</span><span style="display:block;">Monte</span><span style="display:block;">Vista</span>') || expressHtml.includes('overflow-wrap:anywhere')) {
+    fail('via label must stack on word breaks inside a narrow column');
+}
 if (/<td[^>]*>VARIANT</i.test(expressHtml) || />Via MV</.test(expressHtml)) {
     fail('grid must not paint VARIANT as a station or leftover Via MV prose');
 }
 const expressExport = Renderer._buildGridHTML(expressSheet, 'sheet', 'ct-bellv', 1, false, true, 'weekday');
 if (!expressExport.includes('EXPR') || expressExport.includes('nt-expr-btn')) {
     fail('export grid must keep the text EXPR and not a button');
+}
+if (!expressExport.includes('<span style="display:block;">Via</span><span style="display:block;">Monte</span>') || !expressExport.includes('color:#334155')) {
+    fail('export via label must stay stacked light-sheet ink');
 }
 if (!expressHtml.includes('w-max max-w-[140px] truncate') || expressHtml.includes('min-w-[140px]')) {
     fail('in-app station column must shrink to the name and stop at 140px');
@@ -319,6 +327,153 @@ if (saturdayNoServiceCopy('eerst-dtoit').body !== cape.body) {
     fail('Saturday sheet copy must stay the Saturday sentence');
 }
 if (gridJs.includes('onclick="window.renderFullScheduleGrid')) fail('timetable-grid fallback must not use inline onclick');
+
+const maitlandSheet = {
+    headers: ['STATION', '2522'],
+    stationColumnName: 'STATION',
+    rows: [
+        { STATION: 'VARIANT', '2522': 'MAITLAND' },
+        { STATION: 'CAPE TOWN', '2522': '08:00:00' },
+        { STATION: 'BELLVILLE', '2522': '08:40:00' },
+    ],
+};
+const maitlandHtml = Renderer._buildGridHTML(maitlandSheet, 'maitland-sheet', 'ct-kraai', 1, false, false, 'weekday');
+if (!maitlandHtml.includes('Via Maitland')) fail('grid must render Via Maitland from a VARIANT code');
+if (!maitlandHtml.includes('max-width:4.5rem') || !maitlandHtml.includes('whitespace-normal')) {
+    fail('via label must wrap inside the column');
+}
+
+const proseSheet = {
+    headers: ['STATION', '2301', '2501'],
+    stationColumnName: 'STATION',
+    rows: [
+        { STATION: 'CAPE TOWN', '2301': '5:15:00', '2501': '6:00:00' },
+        { STATION: 'WOODSTOCK', '2301': 'via', '2501': '6:04:00' },
+        { STATION: 'SALT RIVER', '2301': 'Monte', '2501': '6:06:00' },
+        { STATION: 'KOEBERG RD', '2301': 'Vista', '2501': '6:08:00' },
+        { STATION: 'MAITLAND', '2501': '6:12:00' },
+        { STATION: 'MONTE VISTA', '2301': '5:50:00' },
+        { STATION: 'BELLVILLE', '2301': '6:10:00', '2501': '6:30:00' },
+    ],
+};
+const proseHtml = Renderer._buildGridHTML(proseSheet, 'prose-sheet', 'ct-eerst', 1, false, false, 'weekday');
+if (!proseHtml.includes('Via Monte Vista')) fail('via / Monte / Vista notes must label the column');
+const proseCells = proseHtml.replace(/<th\b[\s\S]*?<\/th>/g, '');
+if (/>via</.test(proseCells) || />Monte</.test(proseCells) || />Vista</.test(proseCells) || />Via MV</.test(proseCells)) {
+    fail('branch notes must not stay in the cells');
+}
+if (proseHtml.includes('Via Maitland')) fail('a timed Maitland call must not become a via label');
+const monteOnly = Renderer._buildGridHTML({
+    headers: ['STATION', '2804'],
+    stationColumnName: 'STATION',
+    rows: [
+        { STATION: 'BELLVILLE', '2804': '10:05:00' },
+        { STATION: 'MONTE VISTA', '2804': '10:25:00' },
+        { STATION: 'CAPE TOWN', '2804': '11:00:00' },
+    ],
+}, 'monte-sheet', 'ct-bellv', 1, false, false, 'weekday');
+if (monteOnly.includes('Via Monte Vista')) fail('a real Monte Vista time must not add a via label');
+
+setRuntimeGridOrderConfig('WC', {
+    'prose-sheet': {
+        order: ['2301', '2501'],
+        via: { '2301': 'MAITLAND' },
+        updatedAt: 1,
+        updatedBy: 'test',
+        source: 'admin',
+    },
+});
+const overridden = Renderer._buildGridHTML(proseSheet, 'prose-sheet', 'ct-eerst', 1, false, false, 'weekday');
+clearRuntimeGridOrderConfig('WC');
+if (!overridden.includes('Via Maitland') || overridden.includes('Via Monte Vista')) {
+    fail('an admin via mark must replace the sheet note on that sheet');
+}
+
+const kept = buildGridOrderWriteRecord({
+    order: ['2804', '2301'],
+    via: { '2301': 'MONTE_VISTA', 'nope': 'MAITLAND' },
+    updatedAt: 5,
+    updatedBy: 'operator',
+    source: 'admin',
+});
+if (kept.order.join(',') !== '2804,2301' || kept.via?.['2301'] !== 'MONTE_VISTA' || kept.via?.nope) {
+    fail(`grid order save must keep a valid via mark: ${JSON.stringify(kept)}`);
+}
+const reset = buildGridOrderWriteRecord({
+    action: 'reset',
+    via: { '2301': 'MONTE_VISTA' },
+    updatedAt: 6,
+    updatedBy: 'operator',
+    source: 'admin',
+});
+if (reset.action !== 'reset' || reset.order || reset.via?.['2301'] !== 'MONTE_VISTA') {
+    fail(`grid order reset must keep via and drop order: ${JSON.stringify(reset)}`);
+}
+const cleared = buildGridOrderWriteRecord({ order: ['2804'], via: {}, updatedAt: 7, updatedBy: 'operator', source: 'admin' });
+if (cleared.via) fail('an empty via map must be omitted so the replace clears it');
+
+$fullDatabase.set({
+    pta_to_irene_weekday: [
+        { STATION: 'PRETORIA', '0604': '5:10:00', '0626': '6:30:00' },
+        { STATION: 'CENTURION', '0604': '5:26:00', '0626': '6:46:00' },
+        { STATION: 'IRENE', '0604': '5:35:00', '0626': '6:55:00' },
+    ],
+    pta_to_kemp_weekday: [
+        { STATION: 'PRETORIA', '0604': '5:10:00', '0626': '6:30:00' },
+        { STATION: 'CENTURION', '0604': '5:26:00', '0626': '6:46:00' },
+        { STATION: 'IRENE', '0604': '5:35:00', '0626': '6:55:00' },
+        { STATION: 'OLIFANTSFONTEIN', '0604': '6:16:00' },
+        { STATION: 'KEMPTON PARK', '0604': '6:40:00' },
+    ],
+    irene_to_pta_weekday: [{ STATION: 'IRENE' }],
+    ct_to_bellv_weekday: [
+        { STATION: 'VARIANT', '2630': 'MONTE_VISTA' },
+        { STATION: 'CAPE TOWN', '2630': '7:00:00' },
+        { STATION: 'TYGERBERG', '2630': 'EXPRESS' },
+        { STATION: 'BELLVILLE', '2630': '7:30:00' },
+    ],
+});
+const through = extractTrainSheetStops('pta-irene', '0604', 'weekday');
+if (!through || through.terminus !== 'KEMPTON PARK' || !through.stops.some((stop) => stop.station === 'KEMPTON PARK')) {
+    fail(`0604 on Irene must continue to Kempton Park: ${JSON.stringify(through)}`);
+}
+const ireneEnd = extractTrainSheetStops('pta-irene', '0626', 'weekday');
+if (!ireneEnd || ireneEnd.terminus !== 'IRENE' || ireneEnd.stops.some((stop) => stop.station === 'KEMPTON PARK')) {
+    fail(`0626 must stay an Irene train: ${JSON.stringify(ireneEnd)}`);
+}
+const expressStops = extractTrainSheetStops('ct-bellv', '2630', 'weekday');
+if (!expressStops || expressStops.viaLabel !== 'Monte Vista' || !expressStops.stops.some((stop) => stop.express && stop.time === 'EXPR')) {
+    fail(`express sheet must keep EXPR and Via Monte Vista: ${JSON.stringify(expressStops)}`);
+}
+
+const ireneGrid = {
+    headers: ['STATION', '0604', '0626'],
+    stationColumnName: 'STATION',
+    rows: [
+        { STATION: 'PRETORIA', '0604': '5:10:00', '0626': '6:30:00' },
+        { STATION: 'IRENE', '0604': '5:35:00', '0626': '6:55:00' },
+    ],
+};
+const kempHtml = Renderer._buildGridHTML(ireneGrid, 'pta_to_irene_weekday', 'pta-irene', 1, false, false, 'weekday');
+if (!kempHtml.includes('>KEMP<') || !kempHtml.includes('data-kemp-train="0604"')) fail('through Irene column must show clickable KEMP');
+if (kempHtml.includes('data-kemp-train="0626"')) fail('an Irene terminator must not be marked KEMP');
+if (/0604[\s\S]{0,400}bg-red-50/.test(kempHtml) || /bg-green-50[\s\S]{0,80}KEMP/.test(kempHtml)) {
+    fail('KEMP must not take a ban or special colour');
+}
+const kempExport = Renderer._buildGridHTML(ireneGrid, 'pta_to_irene_weekday', 'pta-irene', 1, false, true, 'weekday');
+if (!kempExport.includes('KEMP') || kempExport.includes('data-kemp-open') || kempExport.includes('nt-expr-btn')) {
+    fail('export KEMP must be plain text');
+}
+if (!kempExport.includes('color:#334155')) fail('export KEMP must use the light sheet ink');
+globalThis.window = { isTrainExcluded: (train) => (train === '0604' ? 'banned' : false) };
+const bannedHtml = Renderer._buildGridHTML(ireneGrid, 'pta_to_irene_weekday', 'pta-irene', 1, false, false, 'weekday');
+delete globalThis.window;
+if (!bannedHtml.includes('NO SVC') || bannedHtml.includes('>KEMP<')) fail('NO SVC must keep the status slot ahead of KEMP');
+
+if (!ui.includes('flex-col items-start text-left') || !ui.includes('Via ${escapeHTML(via)}')) {
+    fail('planner train name must stack Via under the train on a narrow card');
+}
+if (!gridJs.includes('Irene is not the last stop')) fail('KEMP tap must explain the train continues');
 
 if (failures.length) {
     console.error(`\n✗ planner-saturday failed (${failures.length}):`);

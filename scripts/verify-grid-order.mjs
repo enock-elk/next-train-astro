@@ -87,6 +87,8 @@ const gridRules = rules.rules.config.grid_order;
 assert.equal(gridRules['.read'], true, 'grid order must be public-readable');
 assert.match(gridRules['.write'], /enockelk@gmail\.com/);
 assert.match(gridRules['.write'], /thandeka05nxumalo@gmail\.com/);
+assert.match(JSON.stringify(gridRules), /MONTE_VISTA/);
+assert.match(JSON.stringify(gridRules), /MAITLAND/);
 
 const admin = read('public/js/admin.js');
 for (const required of [
@@ -97,6 +99,10 @@ for (const required of [
   'beforeunload',
   'Discard unsaved grid order changes?',
   'config/grid_order/',
+  'data-grid-via',
+  'Via marks the branch',
+  'MONTE_VISTA',
+  'MAITLAND',
   'ensureGridOrderDb',
   'schedules/westerncape.json',
   'schedules/kzn.json',

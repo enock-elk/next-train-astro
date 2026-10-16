@@ -46,6 +46,11 @@
               "$index": {
                 ".validate": "newData.isString() && newData.val().matches(/^\\d{4}[a-zA-Z]*$/)"
               }
+            },
+            "via": {
+              "$trainId": {
+                ".validate": "$trainId.matches(/^\\d{4}[a-zA-Z]*$/) && (newData.val() === 'MONTE_VISTA' || newData.val() === 'MAITLAND')"
+              }
             }
           }
         }

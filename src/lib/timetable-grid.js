@@ -170,6 +170,7 @@ function paintOpenGridBody() {
         : window.Renderer._buildGridHTML(schedule, routeSheetKey, routeId, targetDayIdx, isTodayType, false, lastGridBody.selectedDay);
     if (noServiceSheet) bindNoWeekendWeekdaySwitch(lastGridBody.direction || window._gridSwapDir || 'A');
     bindGridExpressSkips();
+    bindGridKempNotes();
 }
 
 function bindGridExpressSkips() {
@@ -184,6 +185,29 @@ function bindGridExpressSkips() {
         const station = btn.getAttribute('data-expr-station') || 'this station';
         const train = btn.getAttribute('data-expr-train') || 'This train';
         showToast(`Train ${train} does not stop at ${station}.`, 'info', 3500);
+    });
+}
+
+function bindGridKempNotes() {
+    const grid = document.getElementById('grid-container');
+    if (!grid || grid.dataset.kempBound === '1') return;
+    grid.dataset.kempBound = '1';
+    const open = (el) => {
+        const train = el?.getAttribute?.('data-kemp-train') || 'This train';
+        showToast(`Train ${train} continues to Kempton Park. Irene is not the last stop.`, 'info', 4000);
+    };
+    grid.addEventListener('click', (e) => {
+        const hit = e.target?.closest?.('[data-kemp-open="1"]');
+        if (!hit || hit.closest('[data-expr-skip="1"]')) return;
+        e.preventDefault();
+        open(hit);
+    });
+    grid.addEventListener('keydown', (e) => {
+        if (e.key !== 'Enter' && e.key !== ' ') return;
+        const hit = e.target?.closest?.('[data-kemp-open="1"]');
+        if (!hit || hit.tagName === 'TD') return;
+        e.preventDefault();
+        open(hit);
     });
 }
 

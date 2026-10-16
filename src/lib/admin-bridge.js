@@ -12,7 +12,7 @@ import {
     REPLY_WORKER_URL,
     SPECIAL_DATES, HOLIDAY_NAMES, SATURDAY_PLACEHOLDER_ROUTES
 } from './config.js';
-import { safeStorage, escapeHTML, formatAppDate, formatAppTime, formatThreadDateLabel, normalizeStationName, flattenPublicHolidays } from './utils.js';
+import { safeStorage, escapeHTML, formatAppDate, formatAppTime, formatThreadDateLabel, normalizeStationName, flattenPublicHolidays, buildGridOrderWriteRecord, viaCodesFromGridOrderRecord } from './utils.js';
 import { noticeQuotePlain, parseFeedbackAlertQuote } from './feedback-quote.js';
 import {
     applyDraftGuard,
@@ -197,6 +197,8 @@ export function exposeAdminGlobals() {
     window.normalizeGridOrder = normalizeGridOrder;
     window.orderGridTrainIds = orderGridTrainIds;
     window.setRuntimeGridOrderConfig = setRuntimeGridOrderConfig;
+    window.buildGridOrderWriteRecord = buildGridOrderWriteRecord;
+    window.viaCodesFromGridOrderRecord = viaCodesFromGridOrderRecord;
     window.inboxReactionActorId = inboxReactionActorId;
     window.renderInboxReactionChips = renderInboxReactionChips;
     window.renderInboxReactionPickerHtml = renderInboxReactionPickerHtml;

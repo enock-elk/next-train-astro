@@ -1,5 +1,11 @@
 # Changelog
 
+## V9_10.16.03
+
+On the Irene timetable, a train that continues to Kempton Park is marked KEMP. Trip Planner names that train a Kempton Park train. A stop an express train skips shows EXPR.
+
+The Northern line splits after Cape Town. Weekday Bellville runs Esplanade, Century City, and Monte Vista. Kraaifontein, Strand, Wellington, and Eerste River run via Maitland, and a few columns skip that line. Those cells say via, Monte, Vista, or Via MV. The grid keeps the cells blank and puts Via Monte Vista under the train number. A train that simply calls at Maitland is not labelled. Admins set the same mark from Grid Column Order. The save keeps via when the column order changes, and reset keeps via.
+
 ## V9_10.16.02 — no release notes
 
 The crucial update line keeps the version with the sentence. A narrow screen centres the version on the next line.

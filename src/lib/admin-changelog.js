@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_10.16.03': [
+        'Cape Town sheets that spell via / Monte / Vista, or Via MV, label that column Via Monte Vista. A timed call at Monte Vista or Maitland does not. Grid order can set Via Monte Vista or Via Maitland on config/grid_order via, and that mark wins over the sheet. The via line wraps inside the column. Irene columns that continue to Kempton Park, Elandsfontein, or Rhodesfield show KEMP with no colour wash. NO SVC keeps the status slot. Trip Planner names the further same-day terminus and extends the train sheet past Irene. What’s New covers KEMP, the Kempton Park train name, and EXPR. forceShow stays false.',
+    ],
     'V9_10.16.02': [
         'Crucial system update keeps the version on the same line as the sentence. When the screen is too narrow, that version drops to the next line and the line is centred. The phone still reads same-origin /app-version.json only, so nexttrain.co.za stays on the last production shell until Deploy production. No commuter What\'s New. forceShow stays false.',
     ],

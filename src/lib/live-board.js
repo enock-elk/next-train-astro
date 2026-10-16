@@ -369,6 +369,50 @@ function stripStationWord(name) {
     return String(name || '').replace(/\s+STATION$/i, '').trim();
 }
 
+const IRENE_KEMP_PAIR = Object.freeze({
+    'pta-irene': 'pta-kempton',
+    'pta-kempton': 'pta-irene',
+});
+
+/** The other South line sheet. Empty for every other route. */
+export function siblingCorridorRouteId(routeId) {
+    return IRENE_KEMP_PAIR[routeId] || '';
+}
+
+/** Same day and direction on the sibling route. Weekday never borrows Saturday. */
+export function siblingSheetKey(routeId, sheetKey) {
+    const siblingId = siblingCorridorRouteId(routeId);
+    const route = ROUTES[routeId];
+    const sibling = ROUTES[siblingId];
+    const key = String(sheetKey || '');
+    if (!route || !sibling || !key) return '';
+    const field = Object.keys(route.sheetKeys || {}).find((name) => route.sheetKeys[name] === key);
+    if (!field) return '';
+    return sibling.sheetKeys?.[field] || '';
+}
+
+/** Elandsfontein and Rhodesfield are shown to commuters as Kempton Park. */
+export function displaysAsKemptonPark(station) {
+    const upper = normalizeStationName(station);
+    return upper === 'KEMPTON PARK' || upper === 'ELANDSFONTEIN' || upper === 'RHODESFIELD';
+}
+
+/**
+ * Irene columns whose same-day terminus is Kempton Park.
+ * A train that ends at Irene is not in the list.
+ */
+export function kempTrainIds(routeId, ownSchedule, siblingSchedule) {
+    if (routeId !== 'pta-irene' || !ownSchedule?.headers || !siblingSchedule?.rows?.length) return [];
+    const ids = [];
+    for (const raw of ownSchedule.headers) {
+        const id = String(raw || '').trim();
+        if (!/^\d{4}[a-zA-Z]*$/.test(id)) continue;
+        const terminus = realTrainTerminus(id, [ownSchedule, siblingSchedule]);
+        if (displaysAsKemptonPark(terminus)) ids.push(id);
+    }
+    return ids;
+}
+
 /**
  * Shared-corridor pill. "To Kempton Park" only when this train, on this day
  * type, really ends somewhere other than the board's destination.

@@ -9,14 +9,15 @@
 import { $isSimMode, $userRegion, $fullDatabase, $globalStationIndex, $globalDisruptions } from '../store.js';
 import { ROUTES, SPECIAL_DATES } from './config.js';
 import { resolveHolidayDayType } from './holiday-approvals.js';
-import { normalizeStationName, timeToSeconds, normalizeScheduleSheetDay, resolveOperatingDayType, isRealTime, resolvePlannerStationInput } from './utils.js';
+import { normalizeStationName, timeToSeconds, normalizeScheduleSheetDay, resolveOperatingDayType, isRealTime, isExpressSkip, isVariantStationName, mergeVariantLabels, viaCodesFromGridOrderRecord, resolvePlannerStationInput } from './utils.js';
 import {
     getScheduleFromDb,
     currentTime as logicCurrentTime,
     currentDayType as logicCurrentDayType,
     currentDayIndex as logicCurrentDayIndex,
 } from './logic.js';
-import { getLookaheadDayInfo, isTrainExcluded, isWeekdayPatternExcluded } from './live-board.js';
+import { getLookaheadDayInfo, isTrainExcluded, isWeekdayPatternExcluded, realTrainTerminus, siblingCorridorRouteId, siblingSheetKey } from './live-board.js';
+import { getRuntimeGridOrderRecord } from './grid-order.js';
 import {
     classifySaturdayPlaceholderTrip,
     isPlaceholderRouteClosed,
@@ -560,9 +561,54 @@ export function getDirectionsForRoute(route, dayType) {
     ].filter((d) => !!d.key);
 }
 
+function columnCalls(schedule, trainId) {
+    const id = String(trainId);
+    const calls = [];
+    for (const row of schedule?.rows || []) {
+        const station = String(row.STATION || '').trim();
+        if (!station || isVariantStationName(station)) continue;
+        if (/^last updated/i.test(station) || /^updated:/i.test(station)) continue;
+        const time = row[id];
+        if (isExpressSkip(time)) {
+            calls.push({ station, time: 'EXPR', express: true });
+            continue;
+        }
+        if (!isRealTime(time)) continue;
+        calls.push({ station, time, express: false });
+    }
+    return calls;
+}
+
+function viaLabelForTrain(schedule, route, sheetKey, trainId) {
+    const record = getRuntimeGridOrderRecord(route?.region, sheetKey);
+    const labels = mergeVariantLabels(schedule, viaCodesFromGridOrderRecord(record));
+    return labels[String(trainId)] || '';
+}
+
+/** Irene sheet stops continue onto the Kempton sheet when that number runs through. */
+function extendSharedCorridorSheet(sheet, ownSchedule, db) {
+    if (!siblingCorridorRouteId(sheet.route?.id)) return sheet;
+    const sibKey = siblingSheetKey(sheet.route.id, sheet.sheetKey);
+    if (!sibKey) return sheet;
+    const sibSchedule = getScheduleFromDb(db, sibKey);
+    const terminus = realTrainTerminus(sheet.trainId, [ownSchedule, sibSchedule]);
+    if (!terminus || normalizeStationName(terminus) === normalizeStationName(sheet.terminus)) return sheet;
+    const sibCalls = columnCalls(sibSchedule, sheet.trainId);
+    const anchor = normalizeStationName(sheet.terminus);
+    const idx = sibCalls.findIndex((stop) => !stop.express && normalizeStationName(stop.station) === anchor);
+    if (idx < 0) return sheet;
+    const extra = sibCalls.slice(idx + 1);
+    const timedExtra = extra.filter((stop) => !stop.express);
+    if (!timedExtra.length) return sheet;
+    sheet.stops = [...sheet.stops, ...extra];
+    sheet.terminus = timedExtra[timedExtra.length - 1].station;
+    return sheet;
+}
+
 /**
  * Full origin→terminus column for one train on a corridor (planner train-sheet modal).
  * Tries the requested day first, then the other published sheet day if needed.
+ * On the Irene / Kempton pair, the further same-day stop is the terminus.
  */
 export function extractTrainSheetStops(routeId, trainId, dayType = 'weekday') {
     const route = ROUTES[routeId];
@@ -579,23 +625,22 @@ export function extractTrainSheetStops(routeId, trainId, dayType = 'weekday') {
             const schedule = getScheduleFromDb(db, dir.key);
             const col = schedule?.headers?.find((h) => h && String(h) === id);
             if (!col) continue;
-            const stops = (schedule.rows || [])
-                .map((row) => ({
-                    station: String(row.STATION || '').trim(),
-                    time: row[col] ?? row[id],
-                }))
-                .filter((s) => s.station && isRealTime(s.time));
-            if (stops.length) {
-                return {
-                    route,
-                    trainId: id,
-                    dayType: day,
-                    sheetKey: dir.key,
-                    origin: stops[0].station,
-                    terminus: stops[stops.length - 1].station,
-                    stops,
-                };
-            }
+            const calls = columnCalls(schedule, id);
+            const timed = calls.filter((stop) => !stop.express);
+            if (!timed.length) continue;
+            const first = calls.indexOf(timed[0]);
+            const last = calls.lastIndexOf(timed[timed.length - 1]);
+            const sheet = {
+                route,
+                trainId: id,
+                dayType: day,
+                sheetKey: dir.key,
+                origin: timed[0].station,
+                terminus: timed[timed.length - 1].station,
+                stops: calls.slice(first, last + 1),
+                viaLabel: viaLabelForTrain(schedule, route, dir.key, id),
+            };
+            return extendSharedCorridorSheet(sheet, schedule, db);
         }
     }
     return null;

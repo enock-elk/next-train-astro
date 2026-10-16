@@ -2866,20 +2866,30 @@ function plannerSheetDayLabel(dayType, routeId, trainId) {
 
 const _plannerTrainTerminusCache = new Map();
 
-/** Last real-timed stop on that train's own column. Never corridor destB. */
-function plannerTrainColumnTerminus(routeId, trainId) {
+function plannerTrainSheetFacts(routeId, trainId) {
     const id = String(trainId || '').trim();
     const route = String(routeId || '').trim();
-    if (!id || !route) return '';
+    const empty = { terminus: '', viaLabel: '' };
+    if (!id || !route) return empty;
     const dayType = selectedPlannerDay || getCurrentDayType();
     const key = `${route}|${id}|${dayType}`;
     if (_plannerTrainTerminusCache.has(key)) return _plannerTrainTerminusCache.get(key);
     const sheet = extractTrainSheetStops(route, id, dayType);
-    const terminus = sheet?.terminus
-        ? PlannerRenderer.applyUIIntercepts(sheet.terminus)
-        : '';
-    _plannerTrainTerminusCache.set(key, terminus);
-    return terminus;
+    const facts = {
+        terminus: sheet?.terminus ? PlannerRenderer.applyUIIntercepts(sheet.terminus) : '',
+        viaLabel: sheet?.viaLabel || '',
+    };
+    _plannerTrainTerminusCache.set(key, facts);
+    return facts;
+}
+
+/** Last real stop, or the further Irene/Kempton terminus on the same day. */
+function plannerTrainColumnTerminus(routeId, trainId) {
+    return plannerTrainSheetFacts(routeId, trainId).terminus;
+}
+
+function plannerTrainViaLabel(routeId, trainId) {
+    return plannerTrainSheetFacts(routeId, trainId).viaLabel;
 }
 
 function plannerTrainHeadboardLabel(routeId, trainId) {
@@ -2892,13 +2902,20 @@ function plannerTrainHeadboardLabel(routeId, trainId) {
 
 function plannerTrainNameButton(routeId, dest, trainId, extraClass = '') {
     const fromColumn = plannerTrainColumnTerminus(routeId, trainId);
+    const via = plannerTrainViaLabel(routeId, trainId);
     const destSafe = escapeHTML(fromColumn || String(dest || '').replace(/ STATION/gi, ''));
     const trainSafe = escapeHTML(String(trainId || ''));
     const routeSafe = escapeHTML(String(routeId || ''));
     const routeJs = String(routeId || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
     const trainJs = String(trainId || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
     const label = destSafe ? `${destSafe} Train ${trainSafe}` : `Train ${trainSafe}`;
-    return `<button type="button" class="planner-train-name-btn inline-flex items-center gap-0.5 underline underline-offset-2 decoration-1 decoration-blue-400/60 font-medium hover:decoration-blue-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 rounded-sm ${extraClass}" data-route-id="${routeSafe}" data-train-id="${trainSafe}" onclick="event.stopPropagation(); if(typeof window.openPlannerTrainSheet==='function') window.openPlannerTrainSheet('${routeJs}','${trainJs}')">${label}</button>`;
+    const viaHtml = via
+        ? `<span class="block max-w-full break-words text-[10px] font-bold leading-tight normal-case tracking-normal">Via ${escapeHTML(via)}</span>`
+        : '';
+    const stack = via ? 'flex-col items-start text-left' : 'items-center';
+    const nameLine = via ? 'break-words underline underline-offset-2 decoration-1 decoration-blue-400/60' : 'break-words';
+    const btnLine = via ? '' : 'underline underline-offset-2 decoration-1 decoration-blue-400/60';
+    return `<button type="button" class="planner-train-name-btn inline-flex ${stack} gap-0.5 max-w-full min-w-0 ${btnLine} font-medium hover:decoration-blue-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 rounded-sm ${extraClass}" data-route-id="${routeSafe}" data-train-id="${trainSafe}" onclick="event.stopPropagation(); if(typeof window.openPlannerTrainSheet==='function') window.openPlannerTrainSheet('${routeJs}','${trainJs}')"><span class="${nameLine}">${label}</span>${viaHtml}</button>`;
 }
 
 export function openPlannerTrainSheet(routeId, trainId) {
@@ -2909,15 +2926,19 @@ export function openPlannerTrainSheet(routeId, trainId) {
         if (typeof showToast === 'function') showToast('Full timetable for this train is not available.', 'error');
         return;
     }
-    const origin = stationDisplayName(sheet.origin);
-    const terminus = stationDisplayName(sheet.terminus);
+    const origin = PlannerRenderer.applyUIIntercepts(sheet.origin);
+    const terminus = PlannerRenderer.applyUIIntercepts(sheet.terminus);
+    const via = sheet.viaLabel || '';
     const titleEl = document.getElementById('planner-train-sheet-title');
     const dirEl = document.getElementById('planner-train-sheet-direction');
     const dayEl = document.getElementById('planner-train-sheet-day');
     const fareEl = document.getElementById('planner-train-sheet-fare');
     const listEl = document.getElementById('planner-train-sheet-stops');
     if (titleEl) titleEl.textContent = `${terminus} Train ${sheet.trainId}`;
-    if (dirEl) dirEl.textContent = `${origin} → ${terminus}`;
+    if (dirEl) {
+        dirEl.style.whiteSpace = 'pre-line';
+        dirEl.textContent = via ? `${origin} → ${terminus}\nVia ${via}` : `${origin} → ${terminus}`;
+    }
     const liveEl = document.getElementById('planner-train-sheet-live');
     if (liveEl) {
         liveEl.classList.add('hidden');
@@ -2952,8 +2973,8 @@ export function openPlannerTrainSheet(routeId, trainId) {
     if (listEl) {
         listEl.innerHTML = sheet.stops.map((stop, i) => {
             const isEnd = i === 0 || i === sheet.stops.length - 1;
-            const name = escapeHTML(stationDisplayName(stop.station));
-            const time = escapeHTML(formatTimeDisplay(stop.time));
+            const name = escapeHTML(PlannerRenderer.applyUIIntercepts(stop.station));
+            const time = escapeHTML(stop.express ? 'EXPR' : formatTimeDisplay(stop.time));
             const weight = isEnd ? 'font-black text-slate-900 dark:text-white' : 'font-semibold text-slate-700 dark:text-slate-200';
             const role = i === 0 ? 'Origin' : (i === sheet.stops.length - 1 ? 'Terminus' : '');
             return `

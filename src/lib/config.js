@@ -14,7 +14,7 @@
  * Changelog / What’s New is optional: skip both, or write only "no release notes."
  * Always add ADMIN_CHANGELOG[APP_VERSION] (System Health Build notes).
  */
-export const APP_VERSION = "V9_10.16.02";
+export const APP_VERSION = "V9_10.16.03";
 
 /** Public support channels (About modal, lifeboat help.html, Safe Mode). */
 export const SUPPORT_EMAIL = 'admin@nexttrain.co.za';
@@ -984,6 +984,17 @@ export const HERC_KOED_JUNCTIONS = ['KOEDOESPOORT', 'HERCULES'];
 // comma, a period, or a hyphen. Do not explain strategy or "we fixed."
 // Leave every forceShow false. Never auto-open What's New over the welcome screen.
 export const CHANGELOG_DATA = [
+    {
+        id: "V9_10.16.03",
+        title: "Train names",
+        date: "16 Oct 2026",
+        forceShow: false,
+        features: [
+            "On the Irene timetable, a train that continues to Kempton Park is marked KEMP.",
+            "Trip Planner names that train a Kempton Park train.",
+            "A stop an express train skips shows EXPR."
+        ]
+    },
     {
         id: "V9_10.15.7",
         title: "Check for Updates",

@@ -17728,7 +17728,7 @@ const Admin = {
                 <svg id="grid-order-chevron" class="w-4 h-4 transform transition-transform -rotate-90 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
             </button>
             <div id="grid-order-body" class="hidden mt-4 space-y-3">
-                <p class="text-[10px] leading-snug text-gray-500 dark:text-gray-400">Choose a route, service day, and direction. Drag trains or use the accessible move buttons, then save the explicit array to RTDB.</p>
+                <p class="text-[10px] leading-snug text-gray-500 dark:text-gray-400">Choose a route, service day, and direction. Drag trains or use the move buttons, then save. Via marks the branch under that train number. Blank leaves the sheet note in charge.</p>
                 <label class="block text-[10px] font-black uppercase tracking-wider text-gray-500">Route
                     <select id="grid-order-route" class="mt-1 w-full h-10 px-2 rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-xs text-gray-900 dark:text-white"></select>
                 </label>
@@ -17766,6 +17766,8 @@ const Admin = {
         const actionsEl = panel.querySelector('#grid-order-actions');
         let currentOrder = [];
         let baseline = [];
+        let currentVia = {};
+        let baselineVia = {};
         let currentSheetKey = '';
         let currentRecord = null;
         let draggedIndex = -1;
@@ -17818,10 +17820,33 @@ const Admin = {
             return [...found];
         };
 
+        const viaSnapshot = (map) => JSON.stringify(Object.keys(map || {}).sort().map((id) => [id, map[id]]));
+
         const markDirty = () => {
-            Admin.gridOrderDirty = JSON.stringify(currentOrder) !== JSON.stringify(baseline);
+            Admin.gridOrderDirty = JSON.stringify(currentOrder) !== JSON.stringify(baseline)
+                || viaSnapshot(currentVia) !== viaSnapshot(baselineVia);
             panel.querySelector('#grid-order-save').disabled = !Admin.gridOrderDirty;
             panel.querySelector('#grid-order-save').classList.toggle('opacity-50', !Admin.gridOrderDirty);
+        };
+
+        const writeBody = (action) => {
+            const build = window.buildGridOrderWriteRecord;
+            const base = {
+                via: currentVia,
+                updatedAt: Date.now(),
+                updatedBy: Admin.currentUser?.email || 'unknown',
+                source: 'admin',
+            };
+            if (typeof build === 'function') {
+                return action === 'reset'
+                    ? build({ ...base, action: 'reset' })
+                    : build({ ...base, order: currentOrder.slice() });
+            }
+            const record = { ...base };
+            if (action === 'reset') record.action = 'reset';
+            else record.order = currentOrder.slice();
+            if (!Object.keys(currentVia).length) delete record.via;
+            return record;
         };
 
         const move = (from, to) => {
@@ -17834,14 +17859,38 @@ const Admin = {
         };
 
         const paintList = () => {
-            listEl.innerHTML = currentOrder.map((id, index) => `
-                <li draggable="true" data-grid-order-row="${index}" class="flex items-center gap-2 p-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
-                    <button type="button" data-grid-order-index="${index}" class="cursor-grab touch-none text-gray-400 px-1 focus:outline-none" aria-label="Drag train ${id}">⋮⋮</button>
-                    <span class="font-mono font-bold text-xs text-gray-800 dark:text-gray-100 flex-1">${ntAdminSecureEscape(id)}</span>
-                    <button type="button" data-grid-order-up="${index}" class="px-2 py-1 rounded bg-gray-100 dark:bg-gray-700 text-xs disabled:opacity-30" aria-label="Move train ${id} up" ${index === 0 ? 'disabled' : ''}>↑</button>
-                    <button type="button" data-grid-order-down="${index}" class="px-2 py-1 rounded bg-gray-100 dark:bg-gray-700 text-xs disabled:opacity-30" aria-label="Move train ${id} down" ${index === currentOrder.length - 1 ? 'disabled' : ''}>↓</button>
-                </li>
-            `).join('');
+            listEl.innerHTML = currentOrder.map((id, index) => {
+                const via = currentVia[id] || '';
+                return `
+                <li draggable="true" data-grid-order-row="${index}" class="flex flex-col gap-1.5 p-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+                    <div class="flex items-center gap-2">
+                        <button type="button" data-grid-order-index="${index}" class="cursor-grab touch-none text-gray-400 px-1 focus:outline-none" aria-label="Drag train ${id}">⋮⋮</button>
+                        <span class="font-mono font-bold text-xs text-gray-800 dark:text-gray-100 flex-1">${ntAdminSecureEscape(id)}</span>
+                        <button type="button" data-grid-order-up="${index}" class="min-h-10 min-w-10 px-2 py-1 rounded bg-gray-100 dark:bg-gray-700 text-xs disabled:opacity-30" aria-label="Move train ${id} up" ${index === 0 ? 'disabled' : ''}>↑</button>
+                        <button type="button" data-grid-order-down="${index}" class="min-h-10 min-w-10 px-2 py-1 rounded bg-gray-100 dark:bg-gray-700 text-xs disabled:opacity-30" aria-label="Move train ${id} down" ${index === currentOrder.length - 1 ? 'disabled' : ''}>↓</button>
+                    </div>
+                    <label class="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                        <span class="shrink-0 w-8">Via</span>
+                        <select data-grid-via="${ntAdminSecureEscape(id)}" class="min-w-0 flex-1 h-10 px-2 rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-xs font-semibold normal-case text-gray-900 dark:text-white" aria-label="Via branch for train ${ntAdminSecureEscape(id)}">
+                            <option value="" ${via ? '' : 'selected'}>None</option>
+                            <option value="MONTE_VISTA" ${via === 'MONTE_VISTA' ? 'selected' : ''}>Monte Vista</option>
+                            <option value="MAITLAND" ${via === 'MAITLAND' ? 'selected' : ''}>Maitland</option>
+                        </select>
+                    </label>
+                </li>`;
+            }).join('');
+            listEl.querySelectorAll('[data-grid-via]').forEach((select) => {
+                const stopDrag = (event) => event.stopPropagation();
+                select.addEventListener('mousedown', stopDrag);
+                select.addEventListener('touchstart', stopDrag, { passive: true });
+                select.addEventListener('change', () => {
+                    const trainId = select.getAttribute('data-grid-via');
+                    if (!trainId) return;
+                    if (select.value === 'MONTE_VISTA' || select.value === 'MAITLAND') currentVia[trainId] = select.value;
+                    else delete currentVia[trainId];
+                    markDirty();
+                });
+            });
             listEl.querySelectorAll('[data-grid-order-up]').forEach((button) => {
                 button.onclick = () => move(Number(button.dataset.gridOrderUp), Number(button.dataset.gridOrderUp) - 1);
             });
@@ -17886,6 +17935,8 @@ const Admin = {
                 metaEl.textContent = `Could not load ${route?.region || ''} schedule dump.`;
                 currentOrder = [];
                 baseline = [];
+                currentVia = {};
+                baselineVia = {};
                 paintList();
                 actionsEl.classList.add('hidden');
                 Admin.gridOrderDirty = false;
@@ -17895,6 +17946,8 @@ const Admin = {
             if (!currentSheetKey || !ids.length) {
                 currentOrder = [];
                 baseline = [];
+                currentVia = {};
+                baselineVia = {};
                 paintList();
                 actionsEl.classList.add('hidden');
                 metaEl.classList.remove('hidden');
@@ -17922,6 +17975,10 @@ const Admin = {
                 manifestOrder,
             });
             baseline = currentOrder.slice();
+            currentVia = typeof window.viaCodesFromGridOrderRecord === 'function'
+                ? window.viaCodesFromGridOrderRecord(currentRecord)
+                : {};
+            baselineVia = { ...currentVia };
             loadedSelection = {
                 route: routeEl.value,
                 day: dayEl.value,
@@ -17947,6 +18004,7 @@ const Admin = {
             if (!response.ok) throw new Error(`RTDB write failed (${response.status})`);
             currentRecord = record;
             baseline = currentOrder.slice();
+            baselineVia = { ...currentVia };
             Admin.gridOrderDirty = false;
             markDirty();
             describeRecord(record);
@@ -17960,12 +18018,7 @@ const Admin = {
             const button = panel.querySelector('#grid-order-save');
             button.disabled = true;
             try {
-                await writeRecord({
-                    order: currentOrder.slice(),
-                    updatedAt: Date.now(),
-                    updatedBy: Admin.currentUser?.email || 'unknown',
-                    source: 'admin',
-                });
+                await writeRecord(writeBody());
                 if (typeof showToast === 'function') showToast('Grid order saved.', 'success');
             } catch (error) {
                 if (typeof showToast === 'function') showToast(error.message || 'Grid order save failed.', 'error');
@@ -17988,12 +18041,7 @@ const Admin = {
             paintList();
             markDirty();
             try {
-                await writeRecord({
-                    action: 'reset',
-                    updatedAt: Date.now(),
-                    updatedBy: Admin.currentUser?.email || 'unknown',
-                    source: 'admin',
-                });
+                await writeRecord(writeBody('reset'));
                 if (typeof showToast === 'function') showToast('Grid order reset to fallback.', 'success');
             } catch (error) {
                 if (typeof showToast === 'function') showToast(error.message || 'Grid order reset failed.', 'error');

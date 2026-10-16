@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_10.16.01': [
+        'Next Train cards follow the station that is actually selected. With no station, both directions say Select station above, including while a corridor\'s sheets are still opening. Standing at Pretoria says You\'re here, and does not keep an earlier stop\'s train such as 0603. The minute countdown still updates in place. No commuter What\'s New. forceShow stays false.',
+    ],
     'V9_10.15.13': [
         'Suggest reply stays off the independent-app speech unless the commuter asked who runs the trains or the fares. A quoted advisory is sent to the draft in full, including the poll and the vote counts. The inbox no longer shows Sent while signed out. A shared train uses its own last stop on that day sheet, so 0626 on the Irene board is not labelled To Kempton Park, and a train that does run through to Kempton Park still is. No commuter What\'s New. forceShow stays false.',
     ],

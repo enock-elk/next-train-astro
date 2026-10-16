@@ -15,7 +15,8 @@ import {
     normalizeStationName, timeToSeconds, formatTimeDisplay, isRealTime, isVariantStationName, safeStorage,
     getDistanceFromLatLonInKm, escapeHTML, formatAppDate, usesWeekdayScheduleSheet, usesSaturdayScheduleSheet,
     usesPublicHolidayScheduleSheet, resolveOperatingDayType, scheduleCacheSlot, routeSheetKeyForDay,
-    simUsesSpecificDate, exclusionAppliesToSurface, resolveStationLatLon, weekdaySheetsForRoute
+    simUsesSpecificDate, exclusionAppliesToSurface, resolveStationLatLon, weekdaySheetsForRoute,
+    schedulesBelongToRoute
 } from './utils.js';
 import {
     parseJSONSchedule, currentTime, currentDayType, currentDayIndex,
@@ -33,6 +34,7 @@ import {
 } from './auto-locate.js';
 import { peekLastGeoFix, reusableGeoFix } from './geo-watch.js';
 import { resolveHolidayDayType } from './holiday-approvals.js';
+import { liveBoardStaticKey, stampLiveBoardCard } from './live-board-paint.js';
 import { isAdminAuthed } from './admin-chrome.js';
 import {
     lastSafeStopBeforeDangerZone,
@@ -883,6 +885,113 @@ export function getDetailedFareForRoute(routeId) {
     return { code: zoneCode, prices: FARE_CONFIG.zones_detailed[zoneCode] };
 }
 
+/** What one direction card is allowed to show for this station and sheet state. */
+export function boardDirectionState(selectedStation, destination, sheetsReady) {
+    if (!String(selectedStation || '').trim()) return 'placeholder';
+    if (normalizeStationName(selectedStation) === normalizeStationName(destination)) return 'here';
+    if (!sheetsReady) return 'await';
+    return 'ready';
+}
+
+/** True once this route's day sheets have been sliced. An empty wipe is not a timetable. */
+export function sheetsReadyForBoard(schedules = getSchedules(), routeId = getCurrentRouteId(), dayType = getCurrentDayType()) {
+    const route = routeId ? ROUTES[routeId] : null;
+    if (!route || !routeId) return false;
+    if (!schedulesBelongToRoute(schedules, routeId)) return false;
+    if (dayType === 'sunday') return true;
+    const region = route.region || getCurrentRegion();
+    const slotA = schedules?.[scheduleCacheSlot(dayType, region, 'a')];
+    const slotB = schedules?.[scheduleCacheSlot(dayType, region, 'b')];
+    const parsed = (sheet) => !!(sheet && Array.isArray(sheet.rows));
+    return parsed(slotA) || parsed(slotB);
+}
+
+let boardCtx = { routeId: '', station: '' };
+
+export function clearBoardJourneyLists() {
+    for (const key of Object.keys(currentScheduleData)) delete currentScheduleData[key];
+}
+
+/** Drop cached journeys when the route or station changes so a later paint cannot replay them. */
+export function syncBoardContext(routeId, station) {
+    const nextRoute = routeId || '';
+    const nextStation = station || '';
+    if (boardCtx.routeId === nextRoute && boardCtx.station === nextStation) return;
+    clearBoardJourneyLists();
+    boardCtx = { routeId: nextRoute, station: nextStation };
+}
+
+export function boardJourneysAreCurrent(routeId = getCurrentRouteId(), station = selectedBoardStation()) {
+    return !!station && boardCtx.routeId === (routeId || '') && boardCtx.station === station;
+}
+
+export function boardContextKey() {
+    return `${getCurrentRouteId() || ''}|${selectedBoardStation()}`;
+}
+
+/**
+ * Hidden select is what the board computes. The visible field is what the commuter sees.
+ * If they disagree, treat it as no station so a cleared field cannot keep the previous train.
+ */
+export function selectedBoardStation() {
+    const select = stationSelectEl();
+    const value = select?.value || '';
+    if (value === 'FIND_NEAREST') return value;
+    const input = typeof document !== 'undefined' ? document.getElementById('station-search-input') : null;
+    const inputVisible = !!(input && !input.classList.contains('hidden'));
+    if (!inputVisible) return value;
+    const shown = String(input.value || '').trim();
+    const expected = value.replace(/ STATION/gi, '').trim();
+    if (value && shown && normalizeStationName(shown) === normalizeStationName(expected)) return value;
+    if (select && value) select.value = '';
+    if (shown) input.value = '';
+    delete input.dataset.resolvedValue;
+    return '';
+}
+
+function paintSelectStation() {
+    const key = liveBoardStaticKey('placeholder');
+    const a = pretoriaTimeEl();
+    const b = pienaarspoortTimeEl();
+    if (a?.getAttribute('data-nt-board-key') === key && b?.getAttribute('data-nt-board-key') === key
+        && String(a.textContent || '').includes('Select station above')
+        && String(b.textContent || '').includes('Select station above')) return;
+    if (typeof window !== 'undefined' && window.Renderer) window.Renderer.renderPlaceholder(a, b);
+}
+
+function paintAwaitingCard(el) {
+    if (!el || typeof window === 'undefined' || !window.Renderer?.renderSkeletonLoader) return;
+    const key = liveBoardStaticKey('await');
+    if (el.getAttribute('data-nt-board-key') === key) return;
+    window.Renderer.renderSkeletonLoader(el);
+    stampLiveBoardCard(el, key);
+}
+
+function paintHeldDirection(el, station, destination) {
+    const state = boardDirectionState(station, destination, false);
+    if (state === 'here') {
+        if (typeof window !== 'undefined' && window.Renderer) window.Renderer.renderAtDestination(el);
+        if (destination) delete currentScheduleData[destination];
+        return;
+    }
+    paintAwaitingCard(el);
+}
+
+/** Route just changed and its sheets are not sliced yet. Do not call that "no trains". */
+export function holdBoardForSheets() {
+    const route = ROUTES[getCurrentRouteId()];
+    const station = selectedBoardStation();
+    syncBoardContext(getCurrentRouteId(), station === 'FIND_NEAREST' ? '' : station);
+    clearBoardJourneyLists();
+    if (!route) return;
+    if (!station) {
+        paintSelectStation();
+        return;
+    }
+    paintHeldDirection(pretoriaTimeEl(), station, route.destA);
+    paintHeldDirection(pienaarspoortTimeEl(), station, route.destB);
+}
+
 export function findNextTrains(opts) {
     const includeShared = !opts || opts.includeShared !== false;
     const keepCards = !!(opts && opts.keepCards);
@@ -890,7 +999,6 @@ export function findNextTrains(opts) {
     if (!quietPaint && typeof paintHeaderDayLabel === 'function') paintHeaderDayLabel();
     if(!getCurrentRouteId()) return;
 
-    const selectedStation = (stationSelectEl() && stationSelectEl().value);
     const currentRoute = ROUTES[getCurrentRouteId()];
     
     const isAtStation = (s1, s2) => normalizeStationName(s1) === normalizeStationName(s2);
@@ -919,25 +1027,25 @@ export function findNextTrains(opts) {
         if (footer) footer.classList.remove('hidden');
     }
 
-    if (selectedStation === "FIND_NEAREST") {
+    const rawStation = (stationSelectEl() && stationSelectEl().value) || '';
+    if (rawStation === "FIND_NEAREST") {
         trackAnalyticsEvent('click_auto_locate', { source: 'find_nearest', route_id: getCurrentRouteId() });
         findNearestStation(false);
         return;
     }
+    const selectedStation = selectedBoardStation();
+    syncBoardContext(getCurrentRouteId(), selectedStation);
     
     const uiDestA = typeof window.Renderer !== 'undefined' ? window.Renderer._applyUIIntercepts(currentRoute.destA).toUpperCase() : currentRoute.destA.replace(' STATION', '').toUpperCase();
     const uiDestB = typeof window.Renderer !== 'undefined' ? window.Renderer._applyUIIntercepts(currentRoute.destB).toUpperCase() : currentRoute.destB.replace(' STATION', '').toUpperCase();
 
-    if (!quietPaint && !keepCards) {
-        if (pretoriaTimeEl()) pretoriaTimeEl().innerHTML = "";
-        if (pienaarspoortTimeEl()) pienaarspoortTimeEl().innerHTML = "";
-    }
     setHeaderDest(pretoriaHeaderEl(), uiDestA);
     setHeaderDest(pienaarspoortHeaderEl(), uiDestB);
     import('./ride-pings.js').then((m) => m.paintLiveDirectionHeaders?.()).catch(() => {});
     
     if (!selectedStation) {
-        if (typeof window.Renderer !== 'undefined') window.Renderer.renderPlaceholder(pretoriaTimeEl(), pienaarspoortTimeEl());
+        clearBoardJourneyLists();
+        paintSelectStation();
         const fallbackSheetKey = routeSheetKeyForDay(currentRoute, getCurrentDayType(), 'a');
         if (typeof window.updateFareDisplay === 'function') window.updateFareDisplay(fallbackSheetKey);
         return;
@@ -979,6 +1087,22 @@ export function findNextTrains(opts) {
             }
         }
         return;
+    }
+
+    // Sheets wiped on a corridor change are not an empty timetable.
+    if (!sheetsReadyForBoard()) {
+        clearBoardJourneyLists();
+        paintHeldDirection(pretoriaTimeEl(), selectedStation, currentRoute.destA);
+        paintHeldDirection(pienaarspoortTimeEl(), selectedStation, currentRoute.destB);
+        return;
+    }
+
+    if (!quietPaint && !keepCards) {
+        [pretoriaTimeEl(), pienaarspoortTimeEl()].forEach((el) => {
+            if (!el) return;
+            el.innerHTML = "";
+            el.removeAttribute?.('data-nt-board-key');
+        });
     }
 
     // Routes with empty Saturday sheets (e.g. Hercules–Koedoespoort, Eastern Cape).
@@ -1042,6 +1166,7 @@ export function findNextTrains(opts) {
 
     // --- DESTINATION A ---
     if (isAtStation(selectedStation, currentRoute.destA)) {
+        delete currentScheduleData[currentRoute.destA];
         if(typeof window.Renderer !== 'undefined') window.Renderer.renderAtDestination(pretoriaTimeEl());
     } else {
         const schedule = getSchedules()[scheduleCacheSlot(boardDayType, boardRegion, 'a')];
@@ -1107,6 +1232,7 @@ export function findNextTrains(opts) {
 
     // --- DESTINATION B ---
     if (isAtStation(selectedStation, currentRoute.destB)) {
+        delete currentScheduleData[currentRoute.destB];
         if(typeof window.Renderer !== 'undefined') window.Renderer.renderAtDestination(pienaarspoortTimeEl());
     } else {
         const schedule = getSchedules()[scheduleCacheSlot(boardDayType, boardRegion, 'b')];

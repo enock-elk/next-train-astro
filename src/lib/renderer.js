@@ -340,8 +340,15 @@ export const Renderer = {
                 <span class="text-xs font-bold group-hover:text-blue-500 transition-colors">Select station above</span>
             </div>`;
 
-        if (element1) element1.innerHTML = placeholderHTML;
-        if (element2) element2.innerHTML = placeholderHTML;
+        const placeholderKey = liveBoardStaticKey('placeholder');
+        if (element1) {
+            element1.innerHTML = placeholderHTML;
+            stampLiveBoardCard(element1, placeholderKey);
+        }
+        if (element2) {
+            element2.innerHTML = placeholderHTML;
+            stampLiveBoardCard(element2, placeholderKey);
+        }
     },
 
     renderRouteError: (element, error) => {
@@ -397,7 +404,9 @@ export const Renderer = {
     renderAtDestination: (element) => {
         if (!element) return;
         const hereKey = liveBoardStaticKey('here');
-        if (isQuietBoardPaint() && element.getAttribute('data-nt-board-key') === hereKey) return;
+        const showingHere = element.getAttribute('data-nt-board-key') === hereKey
+            && String(element.textContent || '').includes("You're here");
+        if (isQuietBoardPaint() && showingHere) return;
         element.innerHTML = `
             <div class="h-24 flex flex-col justify-center items-center gap-1.5">
                 <svg class="w-7 h-7 text-blue-500 dark:text-blue-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
@@ -667,7 +676,7 @@ export const Renderer = {
             ? `<div class="text-[9px] font-bold text-blue-600 dark:text-blue-300 mt-0.5">${escapeHTML(liveDeco.liveHint)}</div>`
             : '';
         const onTrainHtml = '';
-        const boardKey = liveBoardJourneyKey(journey, destination);
+        const boardKey = liveBoardJourneyKey(journey, destination, liveStation);
         if (tryPatchLiveBoardCountdown(element, boardKey, timeDiffStr, { clockTime: safeDepTime })) return;
         element.innerHTML = "";
         

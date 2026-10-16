@@ -1,16 +1,16 @@
 /**
  * Quiet live-board paints: update countdown text without remounting cards.
  */
-export function liveBoardJourneyIdentity(journey, destination = '') {
+export function liveBoardJourneyIdentity(journey, destination = '', origin = '') {
     if (!journey || typeof journey !== 'object') return '';
     const train = journey.train || journey.train1?.train || '';
     const dep = journey.departureTime || journey.train1?.departureTime || '';
     const type = journey.type || 'direct';
-    return `${type}|${train}|${dep}|${destination || ''}`;
+    return `${type}|${train}|${dep}|${destination || ''}|${origin || ''}`;
 }
 
-export function liveBoardJourneyKey(journey, destination = '') {
-    const identity = liveBoardJourneyIdentity(journey, destination);
+export function liveBoardJourneyKey(journey, destination = '', origin = '') {
+    const identity = liveBoardJourneyIdentity(journey, destination, origin);
     if (!identity) return '';
     const first = journey.isFirstTrain ? '1' : '0';
     const last = journey.isLastTrain ? '1' : '0';
@@ -25,12 +25,16 @@ export function liveBoardStaticKey(kind, destination = '', extra = '') {
     return `${kind || 'static'}|${destination || ''}|${extra || ''}`;
 }
 
-/** Train identity for quiet-patch: ignore first/last flags that flip styling only. */
+/**
+ * Train identity for quiet-patch: ignore first/last flags that flip styling only.
+ * Origin is part of the identity, so a station change cannot keep the previous stop's train.
+ */
 export function boardPaintIdentity(key) {
     const raw = String(key || '');
     const parts = raw.split('|');
     if (!parts[0]) return raw;
     if (parts[0] === 'direct' || parts[0] === 'transfer') {
+        if (parts.length >= 6) return parts.slice(0, parts.length - 2).join('|');
         return parts.length >= 4 ? parts.slice(0, 4).join('|') : raw;
     }
     return raw;

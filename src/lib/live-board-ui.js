@@ -18,6 +18,13 @@ import {
     getDetailedFareForRoute,
     populateStationList,
     findNextTrains,
+    boardDirectionState,
+    sheetsReadyForBoard,
+    boardJourneysAreCurrent,
+    boardContextKey,
+    holdBoardForSheets,
+    clearBoardJourneyLists,
+    selectedBoardStation,
     updateLastUpdatedText,
     attachLiveBoardGlobals,
     startSmartRefresh,
@@ -61,6 +68,7 @@ export function scheduleBoardRefresh() {
         }
     };
     const run = () => {
+        const contextAtPin = boardContextKey();
         let pending = false;
         try {
             pending = !!findNextTrains({ includeShared: false })?.pendingShared;
@@ -73,7 +81,11 @@ export function scheduleBoardRefresh() {
             return;
         }
         const mergeShared = () => {
-            try { findNextTrains({ includeShared: true, keepCards: true }); }
+            try {
+                const sameContext = boardContextKey() === contextAtPin;
+                if (!sameContext && !sheetsReadyForBoard()) holdBoardForSheets();
+                else findNextTrains({ includeShared: true, keepCards: sameContext });
+            }
             catch (e) { console.error(e); }
             finish();
         };
@@ -287,6 +299,33 @@ export function renderNextAvailableTrain(element, destination) {
 
 export function processAndRenderJourney(allJourneys, element, _header, destination) {
     if (!element || !Array.isArray(allJourneys)) return;
+    const selectedStation = selectedBoardStation();
+    const state = boardDirectionState(selectedStation, destination, sheetsReadyForBoard());
+    if (state === 'placeholder') {
+        clearBoardJourneyLists();
+        const a = document.getElementById('pretoria-time');
+        const b = document.getElementById('pienaarspoort-time');
+        const key = liveBoardStaticKey('placeholder');
+        const shown = (el) => el
+            && el.getAttribute('data-nt-board-key') === key
+            && String(el.textContent || '').includes('Select station above');
+        if (shown(a) && shown(b)) return;
+        window.Renderer?.renderPlaceholder?.(a, b);
+        return;
+    }
+    if (state === 'here') {
+        if (destination) delete currentScheduleData[destination];
+        window.Renderer?.renderAtDestination?.(element);
+        return;
+    }
+    if (state === 'await') {
+        const awaitKey = liveBoardStaticKey('await');
+        if (element.getAttribute('data-nt-board-key') === awaitKey) return;
+        window.Renderer?.renderSkeletonLoader?.(element);
+        stampLiveBoardCard(element, awaitKey);
+        if (destination) delete currentScheduleData[destination];
+        return;
+    }
     // Look ahead past invalid cells ("Monte", etc.) to the next real clock departure
     const validJourneys = allJourneys.filter((j) => isRealTime(j.departureTime || j.train1?.departureTime));
     if (destination) currentScheduleData[destination] = validJourneys;
@@ -315,7 +354,9 @@ export function processAndRenderJourney(allJourneys, element, _header, destinati
             window.renderNoWeekendService(element, destination);
         } else {
             const emptyKey = liveBoardStaticKey('empty', destination, 'nosched');
-            if (isQuietBoardPaint() && element.getAttribute('data-nt-board-key') === emptyKey) return;
+            const showingEmpty = element.getAttribute('data-nt-board-key') === emptyKey
+                && String(element.textContent || '').includes('No scheduled trains');
+            if (isQuietBoardPaint() && showingEmpty) return;
             if (!window.Renderer) return;
             window.Renderer.renderEmptyScheduledBoard(element, 'No scheduled trains.');
             stampLiveBoardCard(element, emptyKey);
@@ -928,8 +969,12 @@ export function initLiveBoardUi() {
             const token = ++routeSliceToken;
             if (!schedulesBelongToRoute($schedules.get(), routeId)) {
                 $schedules.set({});
+                // Do not score an empty wipe as "no trains". Hold the cards until the slice lands.
+                updateNextTrainView();
+                holdBoardForSheets();
+            } else {
+                scheduleBoardRefresh();
             }
-            scheduleBoardRefresh();
             processRouteDataFromDBAsync(route, db).then((schedules) => {
                 if (token !== routeSliceToken || $currentRouteId.get() !== routeId) return;
                 if (!schedules?._routeId) return;
@@ -945,8 +990,11 @@ export function initLiveBoardUi() {
         // VIEW FULL TIMETABLE cannot paint Mabopane chrome over Pienaarspoort rows.
         if (!schedulesBelongToRoute($schedules.get(), routeId)) {
             $schedules.set({});
+            updateNextTrainView();
+            holdBoardForSheets();
+        } else {
+            scheduleBoardRefresh();
         }
-        scheduleBoardRefresh();
         // Region swaps clear fullDatabase, so a cache-only guard left the board empty.
         loadAllSchedules(true).then(() => {
             populateStationList();
@@ -1022,9 +1070,14 @@ export function initLiveBoardUi() {
         stationSelect.dataset.bound = '1';
         stationSelect.addEventListener('change', () => {
             const searchInput = document.getElementById('station-search-input');
-            if (searchInput && stationSelect.value) {
-                searchInput.value = stationSelect.value.replace(/ STATION/g, '');
-                searchInput.dataset.resolvedValue = stationSelect.value;
+            if (searchInput) {
+                if (stationSelect.value) {
+                    searchInput.value = stationSelect.value.replace(/ STATION/g, '');
+                    searchInput.dataset.resolvedValue = stationSelect.value;
+                } else {
+                    searchInput.value = '';
+                    delete searchInput.dataset.resolvedValue;
+                }
             }
             // Board paint waits until this tap has drawn. Planner mirror and analytics follow.
             scheduleBoardRefresh();
@@ -1181,14 +1234,39 @@ export function initLiveBoardUi() {
                 try {
                     const route = ROUTES[$currentRouteId.get()];
                     if (!route || typeof window.processAndRenderJourney !== 'function') return;
-                    const data = currentScheduleData || {};
+                    const station = selectedBoardStation();
                     const elA = document.getElementById('pretoria-time');
                     const elB = document.getElementById('pienaarspoort-time');
-                    if (elA && data[route.destA]) {
-                        window.processAndRenderJourney(data[route.destA], elA, document.getElementById('pretoria-header'), route.destA);
+                    if (!station) {
+                        clearBoardJourneyLists();
+                        window.Renderer?.renderPlaceholder?.(elA, elB);
+                        return;
                     }
-                    if (elB && data[route.destB]) {
-                        window.processAndRenderJourney(data[route.destB], elB, document.getElementById('pienaarspoort-header'), route.destB);
+                    if (!boardJourneysAreCurrent(route.id, station)) return;
+                    const sheetsReady = sheetsReadyForBoard();
+                    const data = currentScheduleData || {};
+                    const paintLive = (el, dest) => {
+                        if (!el) return;
+                        const state = boardDirectionState(station, dest, sheetsReady);
+                        if (state === 'placeholder') {
+                            window.processAndRenderJourney([], el, null, dest);
+                            return;
+                        }
+                        if (state === 'here') {
+                            window.Renderer?.renderAtDestination?.(el);
+                            return;
+                        }
+                        if (state !== 'ready') return;
+                        const list = data[dest];
+                        if (!Array.isArray(list) || list.length === 0) return;
+                        window.processAndRenderJourney(list, el, null, dest);
+                    };
+                    window.__ntQuietBoardPaint = true;
+                    try {
+                        paintLive(elA, route.destA);
+                        paintLive(elB, route.destB);
+                    } finally {
+                        window.__ntQuietBoardPaint = false;
                     }
                 } catch { /* ignore */ }
             }, 50);

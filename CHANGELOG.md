@@ -1,5 +1,9 @@
 # Changelog
 
+## V9_10.16.01 — no release notes
+
+Next train cards follow the selected station. No station stays on Select station above. Standing at a terminus says You're here.
+
 ## V9_10.15.13 — no release notes
 
 A train on a shared line is labelled with the last station it actually calls on that day's sheet. 0626 toward Irene stays Irene. A train that continues to Kempton Park still says so.

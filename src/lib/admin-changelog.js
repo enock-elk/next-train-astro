@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_10.16.04': [
+        'A pasted https link gets a link card in the alert preview and on the posted alert. The reply worker is tried first. When that route is missing, the card is read from the public page and stored on the notice. A failed lookup is not retried until the next visit. No commuter What\'s New. forceShow stays false.',
+    ],
     'V9_10.16.03': [
         'Cape Town sheets that spell via / Monte / Vista, or Via MV, label that column Via Monte Vista. A timed call at Monte Vista or Maitland does not. Grid order can set Via Monte Vista or Via Maitland on config/grid_order via, and that mark wins over the sheet. The via line wraps inside the column. Irene columns that continue to Kempton Park, Elandsfontein, or Rhodesfield show KEMP with no colour wash. NO SVC keeps the status slot. Trip Planner names the further same-day terminus and extends the train sheet past Irene. What’s New covers KEMP, the Kempton Park train name, and EXPR. forceShow stays false.',
     ],

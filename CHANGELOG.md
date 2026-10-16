@@ -1,5 +1,9 @@
 # Changelog
 
+## V9_10.16.04 — no release notes
+
+A pasted link in an alert shows its page title, description, and image in the preview and after it is posted. The card stays inside the alert on a phone.
+
 ## V9_10.16.03
 
 On the Irene timetable, a train that continues to Kempton Park is marked KEMP. Trip Planner names that train a Kempton Park train. A stop an express train skips shows EXPR.

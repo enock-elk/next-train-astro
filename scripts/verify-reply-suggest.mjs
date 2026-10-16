@@ -40,7 +40,7 @@ import {
     textAssistRules,
 } from '../src/lib/text-assist.js';
 import { handleRequest } from '../workers/nexttrain-reply/worker.js';
-import { isPublicPreviewUrl, parseLinkPreviewHtml } from '../src/lib/link-preview.js';
+import { fetchLinkPreview, isPublicPreviewUrl, parseLinkPreviewHtml, previewFromMicrolink } from '../src/lib/link-preview.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const failures = [];
@@ -376,6 +376,61 @@ ok(preview?.image === 'https://example.com/banner.jpg', 'a link preview reads th
 ok(!isPublicPreviewUrl('http://example.com/a'), 'a preview refuses plain http');
 ok(!isPublicPreviewUrl('https://127.0.0.1/secret'), 'a preview refuses a local address');
 ok(isPublicPreviewUrl('https://forms.gle/abc'), 'a public https link can be previewed');
+const microCard = previewFromMicrolink({
+    status: 'success',
+    data: {
+        title: 'UCV Commuter Survey: PRASA Monthly Ticket Increase',
+        description: 'One minute.',
+        publisher: 'Google Docs',
+        image: { url: 'https://lh4.googleusercontent.com/survey.png' },
+        url: 'https://docs.google.com/forms/d/e/abc/viewform?usp=embed_facebook',
+    },
+}, 'https://forms.gle/8XeSgtyJZFr1tp9cA');
+ok(microCard?.title.startsWith('UCV Commuter Survey'), 'a forms link keeps the page title');
+ok(microCard?.description === 'One minute.', 'a forms link keeps the page description');
+ok(microCard?.image === 'https://lh4.googleusercontent.com/survey.png', 'a forms link keeps the page image');
+ok(microCard?.url === 'https://forms.gle/8XeSgtyJZFr1tp9cA', 'the card opens the pasted link');
+ok(microCard?.site === 'Google Docs', 'the card names the page site');
+const realFetch = globalThis.fetch;
+const seen = [];
+globalThis.fetch = async (input) => {
+    const href = String(input);
+    seen.push(href);
+    if (href.includes('/unfurl')) {
+        return new Response(JSON.stringify({ error: 'Not found' }), { status: 404, headers: { 'Content-Type': 'application/json' } });
+    }
+    if (href.includes('api.microlink.io')) {
+        return new Response(JSON.stringify({
+            status: 'success',
+            data: {
+                title: 'UCV Commuter Survey',
+                description: 'Anonymous and one minute.',
+                publisher: 'Google Docs',
+                image: { url: 'https://lh4.googleusercontent.com/survey.png' },
+            },
+        }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
+    return new Response('no', { status: 500 });
+};
+const fallen = await fetchLinkPreview('https://forms.gle/8XeSgtyJZFr1tp9cA', 'https://reply.test');
+ok(fallen?.title === 'UCV Commuter Survey' && fallen?.url === 'https://forms.gle/8XeSgtyJZFr1tp9cA', 'a missing unfurl route still builds the link card');
+ok(seen.some((href) => href.includes('/unfurl')) && seen.some((href) => href.includes('api.microlink.io')), 'the reply worker is tried before the public page reader');
+globalThis.fetch = async (input) => {
+    const href = String(input);
+    if (href.includes('/unfurl')) {
+        return new Response(JSON.stringify({
+            url: 'https://example.com/survey',
+            title: 'From the worker',
+            description: 'Ready',
+            image: '',
+            site: 'example.com',
+        }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
+    return new Response('no', { status: 500 });
+};
+const workerCard = await fetchLinkPreview('https://example.com/other-survey', 'https://reply.test');
+ok(workerCard?.title === 'From the worker', 'the reply worker card is stored when the route answers');
+globalThis.fetch = realFetch;
 const blockedPreview = await handleRequest(new Request('https://reply.test/unfurl?url=' + encodeURIComponent('https://127.0.0.1/x')), {});
 ok(blockedPreview.status === 400, 'unfurl refuses a private host');
 const draftDenied = await handleRequest(new Request('https://reply.test/draft?id=m1'), {});

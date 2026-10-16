@@ -5,7 +5,9 @@
  */
 
 const memory = new Map();
+const failedUrls = new Set();
 const STORAGE_PREFIX = 'nt_link_preview:';
+const PREVIEW_FALLBACK = 'https://api.microlink.io';
 
 function decodeEntities(value) {
     return String(value || '')
@@ -236,25 +238,53 @@ export function linkPreviewMarkup(notice) {
     return loadingMarkup(url);
 }
 
+/** Microlink's card, kept on the link the operator pasted. */
+export function previewFromMicrolink(payload, requestedUrl) {
+    const body = payload && typeof payload === 'object' ? payload : null;
+    const data = body?.data && typeof body.data === 'object' ? body.data : body;
+    if (!data || body?.status === 'fail' || body?.status === 'error') return null;
+    const image = typeof data.image === 'string' ? data.image : data.image?.url;
+    return normalizeLinkPreview({
+        url: requestedUrl,
+        title: data.title,
+        description: data.description,
+        image,
+        site: data.publisher || '',
+    });
+}
+
+async function readPreviewJson(url, ms) {
+    const ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    const timer = ctrl ? setTimeout(() => ctrl.abort(), ms) : null;
+    try {
+        const res = await fetch(url, ctrl ? { signal: ctrl.signal } : {});
+        const data = await res.json().catch(() => null);
+        return { ok: res.ok, data };
+    } catch {
+        return { ok: false, data: null };
+    } finally {
+        if (timer) clearTimeout(timer);
+    }
+}
+
 export async function fetchLinkPreview(url, workerBase) {
     const clean = cleanHttpUrl(url);
     if (!clean || !isPublicPreviewUrl(clean)) return null;
     const peeked = peekLinkPreview(clean);
     if (peeked) return peeked;
+    if (failedUrls.has(clean)) return null;
+
     const base = String(workerBase || '').replace(/\/$/, '');
-    if (!base) return null;
-    const ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
-    const timer = ctrl ? setTimeout(() => ctrl.abort(), 8000) : null;
-    try {
-        const res = await fetch(`${base}/unfurl?url=${encodeURIComponent(clean)}`, ctrl ? { signal: ctrl.signal } : {});
-        const data = await res.json().catch(() => null);
-        if (!res.ok) return null;
-        return rememberLinkPreview(data);
-    } catch {
-        return null;
-    } finally {
-        if (timer) clearTimeout(timer);
+    if (base) {
+        const worker = await readPreviewJson(`${base}/unfurl?url=${encodeURIComponent(clean)}`, 8000);
+        const stored = worker.ok ? rememberLinkPreview(worker.data) : null;
+        if (stored) return stored;
     }
+    const micro = await readPreviewJson(`${PREVIEW_FALLBACK}/?url=${encodeURIComponent(clean)}`, 8000);
+    const card = micro.ok ? rememberLinkPreview(previewFromMicrolink(micro.data, clean)) : null;
+    if (card) return card;
+    failedUrls.add(clean);
+    return null;
 }
 
 export function hydrateLinkPreviews(root, workerBase) {

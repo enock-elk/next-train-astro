@@ -7,6 +7,7 @@ on:
     paths:
       - 'workers/nexttrain-reply/**'
       - 'src/lib/reply-suggest.js'
+      - 'src/lib/link-preview.js'
       - '.github/workflows/deploy-reply-worker.yml'
   workflow_dispatch:
 

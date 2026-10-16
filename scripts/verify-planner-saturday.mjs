@@ -274,21 +274,25 @@ const expressSheet = {
     ],
 };
 const expressHtml = Renderer._buildGridHTML(expressSheet, 'sheet', 'ct-bellv', 1, false, false, 'weekday');
-if (!expressHtml.includes('>EXPR<') || !expressHtml.includes('Via Monte Vista')) {
-    fail('grid must render EXPR and Via Monte Vista');
+const viaAt = expressHtml.indexOf('>Monte Vista<');
+const idAt = expressHtml.indexOf('>2630<');
+if (!expressHtml.includes('>EXPR<') || !expressHtml.includes('text-[#7f1d1d]') || viaAt < 0 || idAt < viaAt) {
+    fail('grid must render dark-red EXPR and Monte Vista above the train number');
 }
-if (!expressHtml.includes('<span style="display:block;">Via</span><span style="display:block;">Monte</span><span style="display:block;">Vista</span>') || expressHtml.includes('overflow-wrap:anywhere')) {
-    fail('via label must stack on word breaks inside a narrow column');
+if (!expressHtml.includes('data-via-open="1"') || !expressHtml.includes('data-via-route="Monte Vista"') || expressHtml.includes('<span style="display:block;">Via</span>')) {
+    fail('Monte Vista must be one status button, not a stacked Via label');
 }
 if (/<td[^>]*>VARIANT</i.test(expressHtml) || />Via MV</.test(expressHtml)) {
     fail('grid must not paint VARIANT as a station or leftover Via MV prose');
 }
 const expressExport = Renderer._buildGridHTML(expressSheet, 'sheet', 'ct-bellv', 1, false, true, 'weekday');
-if (!expressExport.includes('EXPR') || expressExport.includes('nt-expr-btn')) {
-    fail('export grid must keep the text EXPR and not a button');
+if (!expressExport.includes('>EXPR<') || !expressExport.includes('color:#7f1d1d') || expressExport.includes('nt-expr-btn')) {
+    fail('export grid must keep dark-red EXPR text and not a button');
 }
-if (!expressExport.includes('<span style="display:block;">Via</span><span style="display:block;">Monte</span>') || !expressExport.includes('color:#334155')) {
-    fail('export via label must stay stacked light-sheet ink');
+const exportVia = expressExport.indexOf('>Monte Vista<');
+const exportId = expressExport.indexOf('>2630<');
+if (exportVia < 0 || exportId < exportVia || expressExport.includes('data-via-open') || !expressExport.includes('color:#334155')) {
+    fail('export via label must sit above the number in light-sheet ink');
 }
 if (!expressHtml.includes('w-max max-w-[140px] truncate') || expressHtml.includes('min-w-[140px]')) {
     fail('in-app station column must shrink to the name and stop at 140px');
@@ -338,9 +342,13 @@ const maitlandSheet = {
     ],
 };
 const maitlandHtml = Renderer._buildGridHTML(maitlandSheet, 'maitland-sheet', 'ct-kraai', 1, false, false, 'weekday');
-if (!maitlandHtml.includes('Via Maitland')) fail('grid must render Via Maitland from a VARIANT code');
-if (!maitlandHtml.includes('max-width:4.5rem') || !maitlandHtml.includes('whitespace-normal')) {
-    fail('via label must wrap inside the column');
+const maitlandAt = maitlandHtml.indexOf('>Maitland<');
+const maitlandId = maitlandHtml.indexOf('>2522<');
+if (maitlandAt < 0 || maitlandId < maitlandAt || !maitlandHtml.includes('data-via-route="Maitland"')) {
+    fail('grid must render Maitland above the train number from a VARIANT code');
+}
+if (maitlandHtml.includes('max-width:4.5rem') || maitlandHtml.includes('<span style="display:block;">Via</span>')) {
+    fail('via label must stay on one row above the number');
 }
 
 const proseSheet = {
@@ -357,7 +365,9 @@ const proseSheet = {
     ],
 };
 const proseHtml = Renderer._buildGridHTML(proseSheet, 'prose-sheet', 'ct-eerst', 1, false, false, 'weekday');
-if (!proseHtml.includes('Via Monte Vista')) fail('via / Monte / Vista notes must label the column');
+if (!proseHtml.includes('>Monte Vista<') || !proseHtml.includes('data-via-route="Monte Vista"')) {
+    fail('via / Monte / Vista notes must label the column Monte Vista');
+}
 const proseCells = proseHtml.replace(/<th\b[\s\S]*?<\/th>/g, '');
 if (/>via</.test(proseCells) || />Monte</.test(proseCells) || />Vista</.test(proseCells) || />Via MV</.test(proseCells)) {
     fail('branch notes must not stay in the cells');
@@ -385,7 +395,7 @@ setRuntimeGridOrderConfig('WC', {
 });
 const overridden = Renderer._buildGridHTML(proseSheet, 'prose-sheet', 'ct-eerst', 1, false, false, 'weekday');
 clearRuntimeGridOrderConfig('WC');
-if (!overridden.includes('Via Maitland') || overridden.includes('Via Monte Vista')) {
+if (!overridden.includes('>Maitland<') || overridden.includes('>Monte Vista<')) {
     fail('an admin via mark must replace the sheet note on that sheet');
 }
 
@@ -474,6 +484,7 @@ if (!ui.includes('flex-col items-start text-left') || !ui.includes('Via ${escape
     fail('planner train name must stack Via under the train on a narrow card');
 }
 if (!gridJs.includes('Irene is not the last stop')) fail('KEMP tap must explain the train continues');
+if (!gridJs.includes('goes via the ${route} route')) fail('via tap must explain the route');
 
 if (failures.length) {
     console.error(`\n✗ planner-saturday failed (${failures.length}):`);

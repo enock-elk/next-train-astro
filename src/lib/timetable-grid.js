@@ -171,6 +171,7 @@ function paintOpenGridBody() {
     if (noServiceSheet) bindNoWeekendWeekdaySwitch(lastGridBody.direction || window._gridSwapDir || 'A');
     bindGridExpressSkips();
     bindGridKempNotes();
+    bindGridViaNotes();
 }
 
 function bindGridExpressSkips() {
@@ -205,6 +206,31 @@ function bindGridKempNotes() {
     grid.addEventListener('keydown', (e) => {
         if (e.key !== 'Enter' && e.key !== ' ') return;
         const hit = e.target?.closest?.('[data-kemp-open="1"]');
+        if (!hit || hit.tagName === 'TD') return;
+        e.preventDefault();
+        open(hit);
+    });
+}
+
+function bindGridViaNotes() {
+    const grid = document.getElementById('grid-container');
+    if (!grid || grid.dataset.viaBound === '1') return;
+    grid.dataset.viaBound = '1';
+    const open = (el) => {
+        const train = el?.getAttribute?.('data-via-train') || 'This train';
+        const route = el?.getAttribute?.('data-via-route') || 'that';
+        showToast(`Train ${train} goes via the ${route} route.`, 'info', 4000);
+    };
+    grid.addEventListener('click', (e) => {
+        const hit = e.target?.closest?.('[data-via-open="1"]');
+        if (!hit) return;
+        e.preventDefault();
+        e.stopPropagation();
+        open(hit);
+    });
+    grid.addEventListener('keydown', (e) => {
+        if (e.key !== 'Enter' && e.key !== ' ') return;
+        const hit = e.target?.closest?.('[data-via-open="1"]');
         if (!hit || hit.tagName === 'TD') return;
         e.preventDefault();
         open(hit);
@@ -710,6 +736,8 @@ export function renderFullScheduleGrid(direction = null, dayOverride = null, opt
     if (grid) grid.innerHTML = html;
     if (noServiceSheet) bindNoWeekendWeekdaySwitch(direction);
     bindGridExpressSkips();
+    bindGridKempNotes();
+    bindGridViaNotes();
     bindGridExclusionRefresh();
 
     openSmoothModal('full-schedule-modal');

@@ -1,5 +1,9 @@
 # Changelog
 
+## V9_10.16.02 — no release notes
+
+The crucial update line keeps the version with the sentence. A narrow screen centres the version on the next line.
+
 ## V9_10.16.01 — no release notes
 
 Next train cards follow the selected station. No station stays on Select station above. Standing at a terminus says You're here.

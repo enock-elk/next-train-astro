@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_10.16.02': [
+        'Crucial system update keeps the version on the same line as the sentence. When the screen is too narrow, that version drops to the next line and the line is centred. The phone still reads same-origin /app-version.json only, so nexttrain.co.za stays on the last production shell until Deploy production. No commuter What\'s New. forceShow stays false.',
+    ],
     'V9_10.16.01': [
         'Next Train cards follow the station that is actually selected. With no station, both directions say Select station above, including while a corridor\'s sheets are still opening. Standing at Pretoria says You\'re here, and does not keep an earlier stop\'s train such as 0603. The minute countdown still updates in place. No commuter What\'s New. forceShow stays false.',
     ],

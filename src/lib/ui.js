@@ -802,6 +802,8 @@ export function showToast(message, type = 'info', duration = 2500, actionHTML = 
     if (typeof document === 'undefined') return;
     const toastEl = document.getElementById('toast');
     const errorToast = type === 'error';
+    const center = options.center === true;
+    const fitLine = options.fitLine === true;
     const persist = !!options.persist;
     const dismissible = errorToast || !!options.dismissible;
     const holdMs = errorToast ? Math.max(duration, 12000) : duration;
@@ -870,16 +872,36 @@ export function showToast(message, type = 'info', duration = 2500, actionHTML = 
         iconHTML = `<svg class="w-4 h-4 text-yellow-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>`;
     }
 
-    toastEl.className = `flex ${errorToast ? 'items-start' : 'items-center'} justify-center gap-2 px-3 py-2 rounded-2xl shadow-2xl backdrop-blur-md border ${bgClass} ${borderClass} ${textClass} w-[min(22rem,calc(100vw-1.5rem))] max-w-[calc(100vw-1.5rem)]`; 
+    const widthClass = fitLine
+        ? 'w-max max-w-[min(92vw,40rem)]'
+        : 'w-[min(22rem,calc(100vw-1.5rem))] max-w-[calc(100vw-1.5rem)]';
+    toastEl.className = `flex ${errorToast && !center ? 'items-start' : 'items-center'} justify-center gap-2 px-3 py-2 rounded-2xl shadow-2xl backdrop-blur-md border ${bgClass} ${borderClass} ${textClass} ${widthClass}`;
+    // #toast sets width and max-width as an id rule. Inline wins so this line can stay one line.
+    if (fitLine) {
+        toastEl.style.width = 'max-content';
+        toastEl.style.maxWidth = 'min(92vw, 40rem)';
+        toastEl.style.textAlign = 'center';
+    } else {
+        toastEl.style.width = '';
+        toastEl.style.maxWidth = '';
+        toastEl.style.textAlign = '';
+    }
 
     const dismissHTML = dismissible
         ? `<button type="button" class="nt-toast-dismiss shrink-0 p-1 rounded-full hover:bg-white/10 focus:outline-none" aria-label="Dismiss"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg></button>`
         : '';
 
+    const copyClass = fitLine
+        ? 'text-xs font-semibold tracking-wide leading-snug text-center'
+        : `text-xs font-semibold tracking-wide leading-snug whitespace-normal break-words ${errorToast ? 'text-left max-h-40 overflow-y-auto' : 'text-center line-clamp-2'}`;
+    const rowClass = fitLine
+        ? 'flex items-center justify-center gap-1.5 max-w-full text-center'
+        : 'flex items-center justify-center gap-1.5 min-w-0 flex-1 text-center';
+
     toastEl.innerHTML = `
-        <div class="flex items-center justify-center gap-1.5 min-w-0 flex-1 text-center">
+        <div class="${rowClass}">
             ${iconHTML}
-            <span class="text-xs font-semibold tracking-wide leading-snug whitespace-normal break-words ${errorToast ? 'text-left max-h-40 overflow-y-auto' : 'text-center line-clamp-2'}">${message}</span>
+            <span class="${copyClass}">${message}</span>
         </div>
         ${actionHTML ? `<div class="pl-2 border-l border-white/20 shrink-0">${actionHTML}</div>` : ''}
         ${dismissHTML}

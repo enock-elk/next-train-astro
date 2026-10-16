@@ -1,8 +1,8 @@
 {
   "branch": "map-gold",
-  "frozenAt": "c99c6ca4743bf4338afd4954bee45a2145c685f9",
+  "frozenAt": "9800e74518563cee08c5dd9fd6afeb838043a95d",
   "version": "V9_09.20.11",
-  "note": "Gold snapshot of this build: the map tab fits Johannesburg when the line has room, and the live-location check sheet is tighter. Tracks and advert handling unchanged. Diff against origin/map-gold. Fast-forward map-gold after this lands on main. Never force-push map-gold.",
+  "note": "Gold snapshot of this build: the map page title names the station map, and the tracking card hides speed, heading, and GPS unless an operator is signed in. Last seen reads at, approaching, or after a station. Tracks and advert handling unchanged. Diff against origin/map-gold. Fast-forward map-gold after this lands on main. Never force-push map-gold.",
   "files": {
     "public/tracks/rail-tracks-EC.geojson": {
       "md5": "43409bfd05405205e596f0d03345ab18",
@@ -25,20 +25,20 @@
       "sha256": "b990068e26657c71d2e099728cda4b2b27b3a06b5592a1f3dde753d03d50fdb9"
     },
     "src/pages/map.astro": {
-      "md5": "7f9b77f9f05d7631bf20ab165f8fdc80",
-      "sha256": "ae6d235e85fe04f39b485c31d674de3a12819d7080547f740430391250a15e00"
+      "md5": "0590622e0e1b3883aa82bfdd1e6911f3",
+      "sha256": "311dc18576b546819a1d47123c000d70460bad530c41639fc286b8795f218ed5"
     },
     "src/components/MapView.astro": {
-      "md5": "16dbaf31821bf9a3af688fc9f7a1bf56",
-      "sha256": "7d782b7a706b0020b5c64d7b7b4b2586504d06e7042d6ce92f2cf7ffde14060d"
+      "md5": "e7569a91aa07509e307811d8a9cc6a0f",
+      "sha256": "f80b3d4abafc2df6cdd70d8ec55051ac02ba9bb7e5aa2e50b9f0e34633e2c2f9"
     },
     "src/lib/rail-tracks.js": {
       "md5": "4d01be4e4e6347559351a8d039770d3d",
       "sha256": "e7385a8e07415f0862e983a5ffca225fc23e68c22f550ee13bc84ffdb52cf3dc"
     },
     "src/lib/map-tab.js": {
-      "md5": "ef2c2af248788396d22c4c904c5da5b2",
-      "sha256": "0d16b6b46b06dccb6e711f70f5ae9a9f2a3632a461c0c0dbd39f96e7b4d711cd"
+      "md5": "6531141210d6a0383859f2279cbbfb01",
+      "sha256": "8233bf366d50cbd9410ffec32171d308c55ee062d4c67d0dfc8eb32372e32fa0"
     },
     "src/lib/clever-ads.js": {
       "md5": "4d78da253d60d3ba285de6c41d697cad",

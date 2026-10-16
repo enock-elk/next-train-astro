@@ -759,6 +759,7 @@ function fillPlannerFareBreakdown(trip, { km, crowKm, zone, fare } = {}) {
     const peakLabel = fare.alwaysDiscount
         ? '50% all day'
         : (fare.isOffPeak ? 'Off-peak' : 'Peak');
+    const peakWhen = [dayLabel, depLabel ? `@ ${depLabel}` : ''].filter(Boolean).join(' ');
     const peakTitle = fare.alwaysDiscount ? 'Discount' : 'Peak / off-peak';
     const kmLabel = km != null ? `${km} km` : 'Unavailable';
     const crowLabel = crowKm != null ? `${crowKm} km` : 'Unavailable';
@@ -807,7 +808,7 @@ function fillPlannerFareBreakdown(trip, { km, crowKm, zone, fare } = {}) {
             <div class="flex justify-between gap-3"><dt class="text-gray-500 dark:text-gray-400">Distance</dt><dd class="font-bold">${escapeHTML(kmLabel)}</dd></div>
             <div data-admin-authed-only hidden inert aria-hidden="true" class="flex justify-between gap-3"><dt class="text-gray-500 dark:text-gray-400">Straight-line</dt><dd class="font-bold">${escapeHTML(crowLabel)}</dd></div>
             <div data-admin-authed-only hidden inert aria-hidden="true" class="flex justify-between gap-3"><dt class="text-gray-500 dark:text-gray-400">Zone</dt><dd class="font-bold">${escapeHTML(zone || '-')}${band ? ` <span class="font-medium text-gray-500 dark:text-gray-400">(${escapeHTML(band)})</span>` : ''}</dd></div>
-            <div class="flex justify-between gap-3"><dt class="text-gray-500 dark:text-gray-400">${escapeHTML(peakTitle)}</dt><dd class="font-bold">${escapeHTML(peakLabel)} <span class="font-medium text-gray-500 dark:text-gray-400">${escapeHTML(dayLabel)}${depLabel ? ` ${escapeHTML(depLabel)}` : ''}</span></dd></div>
+            <div class="flex justify-between gap-3"><dt class="text-gray-500 dark:text-gray-400">${escapeHTML(peakTitle)}</dt><dd class="font-bold text-right">${escapeHTML(peakLabel)}${peakWhen ? ` (${escapeHTML(peakWhen)})` : ''}</dd></div>
             <div class="flex justify-between gap-3 items-center"><dt class="text-gray-500 dark:text-gray-400">Profile</dt><dd><button type="button" id="planner-fare-profile-btn" class="font-bold text-blue-600 dark:text-blue-400 underline decoration-dotted underline-offset-2 hover:text-blue-700 dark:hover:text-blue-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 rounded px-1">${profileLabel}</button></dd></div>
             ${plannerTicketRowsHtml(zone, fare)}
         </dl>

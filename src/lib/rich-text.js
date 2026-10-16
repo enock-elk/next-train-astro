@@ -45,6 +45,12 @@ font[face="Times New Roman"], font[face="Times New Roman"], font[face="times new
 .nt-rich-body code, #notice-content code, #alert-msg code, #admin-reply-text code, #disr-msg code {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
+.nt-rich-body p, #notice-content p, #alert-msg p, #admin-reply-text p, #disr-msg p, #disruption-modal-body p {
+  margin: 0 0 0.7rem;
+}
+.nt-rich-body p:last-child, #notice-content p:last-child, #alert-msg p:last-child, #admin-reply-text p:last-child, #disr-msg p:last-child {
+  margin-bottom: 0;
+}
 .nt-rich-body h1, .nt-rich-body h2, .nt-rich-body h3, .nt-rich-body h4,
 #notice-content h1, #notice-content h2, #notice-content h3, #notice-content h4,
 #developer-reply-content h1, #developer-reply-content h2, #developer-reply-content h3,

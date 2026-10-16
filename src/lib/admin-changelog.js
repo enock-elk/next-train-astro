@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_10.16.06': [
+        'Trip fare peak line reads Peak (Saturday @ 7:20). The passenger type sheet has a close X. State Monitor and the scheduled queue only show an image when the address is a real poster or image file, with the site base applied, and a failed image is removed. Next Train Composer fills the screen. Its actions are small chips. A rewrite comes back as a short title and paragraphs, and Replace keeps that shape in the field. What\'s New covers the fare line and the close button. forceShow stays false.',
+    ],
     'V9_10.16.05': [
         'The grid via mark is Monte Vista or Maitland in the one-row status slot above the train number. The word Via is not on the grid. Tap explains the route. NO SVC and SPL still take that slot. Saved grids keep the same words in light-sheet ink. EXPR is dark red on the in-app grid and the saved grid only. Media on a service alert, a reply, and a disruption asks for a file from this device or an image file from the internet. An https JPEG, PNG, GIF, or WebP link is shown to commuters and is not uploaded. What\'s New covers the timetable marks. forceShow stays false.',
     ],

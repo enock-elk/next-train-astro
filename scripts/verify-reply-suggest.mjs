@@ -38,6 +38,8 @@ import {
     parseTextAssistResult,
     sanitizeTextAssist,
     textAssistRules,
+    comfortAssistText,
+    assistHtmlFromText,
 } from '../src/lib/text-assist.js';
 import { handleRequest } from '../workers/nexttrain-reply/worker.js';
 import { fetchLinkPreview, isPublicPreviewUrl, parseLinkPreviewHtml, previewFromMicrolink } from '../src/lib/link-preview.js';
@@ -335,6 +337,21 @@ let emptyAction = '';
 try { buildTextAssistRequest({ text: '', action: 'grammar' }); } catch (err) { emptyAction = err.message; }
 ok(emptyAction.includes('text'), 'empty text is refused before Gemini');
 ok(parseTextAssistResult('{"text":"The train is late today."}') === 'The train is late today.', 'a writing result is plain text');
+const wall = 'Service update: Delays of 40 to 50 minutes due to TFR planned maintenance at Muldersvlei affecting Wellington trains. Single line working is in place between Muldersvlei and Dal Josafat. Train T3503 at 05:20 from Cape Town to Wellington';
+const comfort = comfortAssistText(wall);
+ok(comfort.startsWith('Service update\n\n'), `a labelled wall gets a title: ${comfort}`);
+ok(comfort.includes('\n\nDelays of 40 to 50 minutes'), 'the title is not stuck to the first paragraph');
+ok((comfort.match(/\n\n/g) || []).length >= 2, 'the wall is split into paragraphs');
+const assistHtml = assistHtmlFromText(comfort);
+ok(assistHtml.startsWith('<p><strong>Service update</strong></p>'), 'the title is strong');
+ok(assistHtml.includes('<p>Delays of 40 to 50 minutes'), 'the first paragraph stays a paragraph');
+ok(!assistHtml.includes('<script'), 'assist html does not pass markup through');
+ok(textAssistRules('compose').includes('blank line'), 'compose asks for paragraphs');
+ok(adminJs.includes('composer-v3'), 'composer is the full-screen revision');
+ok(adminJs.includes('gsmNoticeImageSrc'), 'state monitor resolves poster addresses');
+ok(adminJs.includes('comfortAssistText'), 'the composer comforts a wall of text');
+ok(adminJs.includes('assistHtmlFromText'), 'the composer paints a title and paragraphs');
+ok(adminJs.includes('writeAssistShow'), 'the composer shows the formatted result');
 ok(adminJs.includes('openWriteAssist'), 'admin opens the write modal');
 ok(adminJs.includes("writeAssistButtonHtml('excl-grid-notice')"), 'exclusions have Write');
 ok(adminJs.includes("writeAssistButtonHtml('push-notifications-message')"), 'notifications have Write');

@@ -161,6 +161,8 @@ assert(ui.includes('Straight-line'), 'fare sheet still has the crow-flies line')
 assert(ui.includes('data-admin-authed-only') && ui.includes('Straight-line') && ui.includes('Zone'), 'straight-line and zone are admin-only');
 assert(ui.includes('applyAdminAuthedChrome(isAdminAuthed())'), 'fare sheet re-applies admin chrome after innerHTML');
 assert(ui.includes("peakTitle = fare.alwaysDiscount ? 'Discount'"), 'scholar sheet labels Discount, not Peak / off-peak');
+assert(ui.includes('peakWhen') && ui.includes('`@ ${depLabel}`'), 'peak line includes the day and time in parentheses');
+assert(readFileSync(new URL('../src/components/LiveBoardModals.astro', import.meta.url), 'utf8').includes('id="profile-modal-close"'), 'passenger type has a close button');
 assert(ui.includes('50% all day'), 'scholar sheet says 50% all day');
 assert(ui.includes('planner-fare-breakdown-sheet'), 'fare sheet is wired');
 assert(ui.includes('applyApprovedPlannerFare'), 'planner results apply approved live prices');

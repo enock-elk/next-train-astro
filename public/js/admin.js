@@ -5240,6 +5240,22 @@ const Admin = {
         return '';
     },
 
+    gsmNoticeImageSrc: (raw) => {
+        const value = String(raw || '').trim();
+        if (!value) return '';
+        const safe = typeof window.sanitizeAttachmentDisplayUrl === 'function'
+            ? window.sanitizeAttachmentDisplayUrl(value)
+            : '';
+        return safe || '';
+    },
+
+    gsmNoticeImageHtml: (raw) => {
+        const src = Admin.gsmNoticeImageSrc(raw);
+        if (!src) return '';
+        const esc = String(src).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+        return `<div class="w-full mb-2 rounded-lg overflow-hidden border border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-900"><img src="${esc}" alt="" class="w-full max-h-32 object-contain" onerror="this.parentElement.remove()"></div>`;
+    },
+
     gsmItemCardHtml: (item, now) => {
         const isPermanent = !item.expiresAt;
         const hrsLeft = isPermanent ? null : Math.max(0, Math.floor((item.expiresAt - now) / (1000 * 60 * 60)));
@@ -5265,8 +5281,8 @@ const Admin = {
                 <span class="text-sm font-black text-slate-900 dark:text-white leading-tight break-words w-full mb-2">
                     ${item.label}
                 </span>
-                ${item.imageUrl ? `<div class="w-full mb-2 rounded-lg overflow-hidden border border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-900"><img src="${String(item.imageUrl).replace(/"/g, '&quot;')}" alt="" class="w-full h-24 object-cover"></div>` : ''}
-                ${item.preview ? `<p class="text-[11px] text-gray-600 dark:text-gray-300 leading-snug break-words w-full mb-2">${String(item.preview).replace(/</g, '&lt;')}</p>` : ''}
+                ${Admin.gsmNoticeImageHtml(item.imageUrl)}
+                ${item.preview ? `<p class="text-[11px] text-gray-600 dark:text-gray-300 leading-snug break-words whitespace-pre-line w-full mb-2">${String(item.preview).replace(/</g, '&lt;')}</p>` : ''}
                 <div class="flex gap-2 pt-2.5 border-t border-gray-100 dark:border-gray-700 mt-auto w-full">
                     <button onclick="event.stopPropagation(); Admin.resolveActionRequired('${safeType}', '${safeId}', '${safeRoute}')" class="flex-1 bg-white dark:bg-gray-800 hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 dark:text-red-400 border border-slate-200 dark:border-slate-600 text-xs font-bold py-1.5 rounded-lg shadow-sm transition-colors focus:outline-none flex items-center justify-center">
                         <svg class="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg> Resolve
@@ -5441,8 +5457,17 @@ const Admin = {
                                 if (!item.expiresAt || item.expiresAt > now) {
                                     const sev = item.severity === 'critical' ? 'Critical' : (item.severity === 'warning' ? 'Warning' : 'Info');
                                     const title = String(item.title || '').trim();
-                                    const rawBody = String(item.message || item.text || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
-                                    const img = (Array.isArray(item.imageUrls) && item.imageUrls[0]) || item.imageUrl || '';
+                                    const msgHtml = String(item.message || item.text || '');
+                                    const rawBody = msgHtml
+                                        .replace(/<br\s*\/?>/gi, '\n')
+                                        .replace(/<\/(p|div|h[1-4]|li)>/gi, '\n')
+                                        .replace(/<[^>]+>/g, ' ')
+                                        .replace(/[ \t]+\n/g, '\n')
+                                        .replace(/\n{3,}/g, '\n\n')
+                                        .replace(/[ \t]{2,}/g, ' ')
+                                        .trim();
+                                    const imgTag = msgHtml.match(/<img\b[^>]*\bsrc=["']([^"']+)["']/i);
+                                    const img = (Array.isArray(item.imageUrls) && item.imageUrls[0]) || item.imageUrl || (imgTag && imgTag[1]) || '';
                                     activeItems.push({
                                         type: 'Alert',
                                         label: title || rawBody.slice(0, 72) || `${sev} channel post`,
@@ -12672,29 +12697,64 @@ const Admin = {
 
     _writeTarget: null,
 
+    writeAssistRead: (el) => {
+        if (!el) return '';
+        if (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT') return String(el.value || '');
+        return String(el.innerText || el.textContent || '').replace(/\u00a0/g, ' ');
+    },
+
+    writeAssistShow: (el, text, formatted) => {
+        if (!el) return;
+        const plain = String(text || '').replace(/\r\n/g, '\n');
+        if (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT') {
+            el.value = plain;
+            return;
+        }
+        if (formatted) {
+            const asHtml = window.ntTextAssist?.assistHtmlFromText;
+            const html = typeof asHtml === 'function' ? asHtml(plain) : '';
+            if (html) {
+                el.innerHTML = html;
+                el.dataset.writeFormatted = '1';
+                return;
+            }
+        }
+        el.textContent = plain;
+        delete el.dataset.writeFormatted;
+    },
+
     ensureWriteModal: () => {
         let modal = document.getElementById('admin-write-modal');
-        if (modal && modal.dataset.writeRev === 'composer-v2') return modal;
+        if (modal && modal.dataset.writeRev === 'composer-v3') return modal;
         if (modal) modal.remove();
         modal = document.createElement('div');
         modal.id = 'admin-write-modal';
-        modal.dataset.writeRev = 'composer-v2';
-        modal.className = 'fixed inset-0 bg-black/80 z-[280] hidden flex items-end sm:items-center justify-center p-0 sm:p-4 backdrop-blur-sm';
+        modal.dataset.writeRev = 'composer-v3';
+        modal.className = 'fixed inset-0 z-[280] hidden bg-white dark:bg-gray-900';
         modal.innerHTML = `
-            <div class="bg-white dark:bg-gray-800 shadow-2xl w-full sm:max-w-xl sm:rounded-3xl max-h-[100dvh] h-[100dvh] sm:h-auto sm:max-h-[92dvh] flex flex-col p-4 sm:p-5 border-0 sm:border border-gray-200 dark:border-gray-700" role="dialog" aria-labelledby="admin-write-title">
-                <div class="flex items-center justify-between gap-3 mb-2 shrink-0">
-                    <h3 id="admin-write-title" class="text-xl font-black text-gray-900 dark:text-white">Next Train Composer</h3>
-                    <button type="button" id="admin-write-close" class="p-2 rounded-full text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none" aria-label="Close">
+            <style>
+                #admin-write-text { white-space: pre-wrap; }
+                #admin-write-text[data-write-formatted="1"] { white-space: normal; }
+                #admin-write-text p { margin: 0 0 0.85rem; }
+                #admin-write-text p:last-child { margin: 0; }
+                #admin-write-text strong { font-weight: 800; letter-spacing: -0.01em; }
+                #admin-write-text ul { margin: 0.2rem 0 0.85rem; padding-left: 1.15rem; list-style: disc; }
+                #admin-write-text li { margin: 0.15rem 0; }
+            </style>
+            <div class="flex flex-col h-[100dvh] w-full min-h-0" role="dialog" aria-labelledby="admin-write-title">
+                <div class="flex items-center justify-between gap-3 px-4 pt-[max(0.75rem,env(safe-area-inset-top))] pb-2 shrink-0 border-b border-gray-200 dark:border-gray-800">
+                    <h3 id="admin-write-title" class="text-lg font-black text-gray-900 dark:text-white">Next Train Composer</h3>
+                    <button type="button" id="admin-write-close" class="p-2 rounded-full text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 focus:outline-none" aria-label="Close">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
                     </button>
                 </div>
-                <p class="text-xs text-gray-500 dark:text-gray-400 mb-3 shrink-0">Uses the whole field. Replace puts it back. Nothing is posted until you save or send.</p>
-                <textarea id="admin-write-text" rows="8" class="w-full min-h-[10rem] flex-1 rounded-2xl border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-900 text-base text-gray-900 dark:text-white p-3 focus:outline-none"></textarea>
-                <div id="admin-write-actions" class="grid grid-cols-2 gap-2 mt-3 shrink-0"></div>
-                <p id="admin-write-status" class="min-h-[1.25rem] text-xs text-gray-500 dark:text-gray-400 mt-2 shrink-0"></p>
-                <div class="grid grid-cols-2 gap-2 mt-2 shrink-0">
-                    <button type="button" id="admin-write-copy" class="bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200 font-bold py-3.5 rounded-2xl text-base focus:outline-none">Copy</button>
-                    <button type="button" id="admin-write-replace" class="bg-violet-600 hover:bg-violet-700 text-white font-bold py-3.5 rounded-2xl text-base focus:outline-none">Replace</button>
+                <p class="text-[11px] text-gray-500 dark:text-gray-400 px-4 py-2 shrink-0">Uses the whole field. Replace puts it back. Nothing is posted until you save or send.</p>
+                <div id="admin-write-text" contenteditable="true" role="textbox" aria-multiline="true" class="mx-4 mb-2 min-h-0 flex-1 overflow-y-auto rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-950 text-[15px] leading-relaxed text-gray-900 dark:text-white p-4 focus:outline-none"></div>
+                <div id="admin-write-actions" class="px-4 flex flex-wrap gap-1 shrink-0"></div>
+                <p id="admin-write-status" class="min-h-[1.1rem] text-[11px] text-gray-500 dark:text-gray-400 px-4 mt-2 shrink-0"></p>
+                <div class="grid grid-cols-2 gap-2 px-4 pt-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] shrink-0">
+                    <button type="button" id="admin-write-copy" class="bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 font-bold py-2 rounded-lg text-sm focus:outline-none">Copy</button>
+                    <button type="button" id="admin-write-replace" class="bg-violet-600 hover:bg-violet-700 text-white font-bold py-2 rounded-lg text-sm focus:outline-none">Replace</button>
                 </div>
             </div>`;
         document.body.appendChild(modal);
@@ -12703,7 +12763,7 @@ const Admin = {
             if (event.target === modal) Admin.closeWriteAssist();
         });
         modal.querySelector('#admin-write-copy').onclick = async () => {
-            const text = document.getElementById('admin-write-text')?.value || '';
+            const text = Admin.writeAssistRead(document.getElementById('admin-write-text'));
             if (!text.trim()) return;
             try {
                 await navigator.clipboard.writeText(text);
@@ -12716,7 +12776,7 @@ const Admin = {
         const actions = modal.querySelector('#admin-write-actions');
         const list = window.ntTextAssist?.TEXT_ASSIST_ACTIONS || [];
         actions.innerHTML = list.map((action) =>
-            `<button type="button" data-write-action="${action.id}" class="w-full px-3 py-3.5 rounded-2xl text-base font-bold bg-violet-50 text-violet-800 dark:bg-violet-900/40 dark:text-violet-200 border border-violet-200 dark:border-violet-800 focus:outline-none">${action.label}</button>`
+            `<button type="button" data-write-action="${action.id}" class="h-7 px-2 rounded-md text-[11px] font-semibold leading-none bg-violet-50 dark:bg-violet-950/40 text-violet-800 dark:text-violet-100 border border-violet-200/80 dark:border-violet-800 focus:outline-none">${action.label}</button>`
         ).join('');
         actions.addEventListener('click', (event) => {
             const button = event.target.closest('[data-write-action]');
@@ -12752,7 +12812,7 @@ const Admin = {
         Admin._writeTarget = { id: targetId, full: true, start: 0, end: String(read.text || '').length };
         const modal = Admin.ensureWriteModal();
         const box = document.getElementById('admin-write-text');
-        if (box) box.value = String(read.text || '').replace(/\r\n/g, '\n');
+        Admin.writeAssistShow(box, read.text, false);
         const status = document.getElementById('admin-write-status');
         if (status) status.textContent = 'Using the whole field.';
         modal.classList.remove('hidden');
@@ -12766,7 +12826,7 @@ const Admin = {
     runWriteAssist: async (action, button) => {
         const box = document.getElementById('admin-write-text');
         const status = document.getElementById('admin-write-status');
-        const text = box?.value || '';
+        const text = Admin.writeAssistRead(box);
         if (!text.trim()) {
             if (typeof showToast === 'function') showToast('Type something in the field first.', 'error');
             return;
@@ -12789,7 +12849,9 @@ const Admin = {
             const data = await res.json().catch(() => ({}));
             if (!res.ok) throw new Error(data.error || 'Could not rewrite that text.');
             if (!data.text) throw new Error('The writer returned nothing.');
-            if (box) box.value = data.text;
+            const comfort = window.ntTextAssist?.comfortAssistText;
+            const next = typeof comfort === 'function' ? comfort(data.text) : data.text;
+            Admin.writeAssistShow(box, next, true);
             if (status) status.textContent = 'Review it, then Replace.';
         } catch (err) {
             if (typeof showToast === 'function') showToast(err.message || 'Could not rewrite that text.', 'error');
@@ -12802,7 +12864,7 @@ const Admin = {
 
     applyWriteAssist: () => {
         const target = Admin._writeTarget;
-        const text = document.getElementById('admin-write-text')?.value || '';
+        const text = Admin.writeAssistRead(document.getElementById('admin-write-text'));
         const el = target && document.getElementById(target.id);
         if (!el) {
             if (typeof showToast === 'function') showToast('That field is no longer open.', 'error');
@@ -12821,21 +12883,10 @@ const Admin = {
             clipped = true;
         }
         if (editable) {
-            const lines = next.split('\n');
-            const frag = document.createDocumentFragment();
-            lines.forEach((line, index) => {
-                if (index) frag.appendChild(document.createElement('br'));
-                frag.appendChild(document.createTextNode(line));
-            });
-            const range = !target.full && target.range;
-            const parent = range && range.commonAncestorContainer;
-            const host = parent && (parent.nodeType === 1 ? parent : parent.parentNode);
-            if (range && host && el.contains(host)) {
-                range.deleteContents();
-                range.insertNode(frag);
-            } else {
-                el.replaceChildren(frag);
-            }
+            const asHtml = window.ntTextAssist?.assistHtmlFromText;
+            const html = typeof asHtml === 'function' ? asHtml(next) : '';
+            if (html) el.innerHTML = html;
+            else el.textContent = next;
         } else {
             el.value = next;
             el.dispatchEvent(new Event('input', { bubbles: true }));
@@ -14662,10 +14713,16 @@ const Admin = {
             const plain = (() => {
                 try {
                     const d = document.createElement('div');
-                    d.innerHTML = job.notice?.message || '';
-                    return (d.textContent || '').trim().slice(0, 100) || '(empty)';
+                    d.innerHTML = String(job.notice?.message || '')
+                        .replace(/<br\s*\/?>/gi, '\n')
+                        .replace(/<\/(p|div|h[1-4]|li)>/gi, '\n');
+                    return (d.textContent || '').replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').replace(/[ \t]{2,}/g, ' ').trim().slice(0, 220) || '(empty)';
                 } catch { return '(empty)'; }
             })();
+            const schedImg = (Array.isArray(job.notice?.imageUrls) && job.notice.imageUrls[0])
+                || job.notice?.imageUrl
+                || ((job.notice?.message || '').match(/<img\b[^>]*\bsrc=["']([^"']+)["']/i) || [])[1]
+                || '';
             const freqKey = job.frequency === 'weekly' && job.weekdays && job.weekdays.length
                 ? 'Weekly'
                 : (job.frequency === 'monthly' ? 'Monthly' : (job.frequency === 'once' ? 'Later' : String(job.frequency || 'once')));
@@ -14685,7 +14742,8 @@ const Admin = {
                         ${paused ? '<span class="px-1.5 py-0.5 rounded text-[9px] font-black uppercase bg-amber-100 text-amber-700">Paused</span>' : ''}
                     </div>
                     ${summary ? `<p class="text-[10px] text-indigo-700 dark:text-indigo-300 font-medium mb-1">${summary}</p>` : ''}
-                    <p class="text-xs text-gray-800 dark:text-gray-200 leading-snug line-clamp-2 mb-1">${escapeHTML(plain)}</p>
+                    ${Admin.gsmNoticeImageHtml(schedImg)}
+                    <p class="text-xs text-gray-800 dark:text-gray-200 leading-snug line-clamp-4 whitespace-pre-line mb-1">${escapeHTML(plain)}</p>
                     <p class="text-[9px] font-mono text-gray-400 mb-2">Next ${escapeHTML(nextStr)} - Last ${escapeHTML(lastStr)}</p>
                     <div class="grid grid-cols-3 gap-2">
                         <button type="button" class="alert-sched-edit min-h-[44px] px-2 rounded-lg bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-[11px] font-black uppercase tracking-wider border border-blue-200 dark:border-blue-800 focus:outline-none" data-sched-id="${idSafe}">Edit</button>

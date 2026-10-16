@@ -28,7 +28,7 @@ import {
     SUGGEST_MAX_IMAGES,
     whatsappReplyUrl,
 } from './reply-suggest.js';
-import { TEXT_ASSIST_ACTIONS } from './text-assist.js';
+import { TEXT_ASSIST_ACTIONS, comfortAssistText, assistHtmlFromText } from './text-assist.js';
 import { fetchLinkPreview, firstHttpUrl } from './link-preview.js';
 import {
     briefDismissed,
@@ -139,7 +139,7 @@ export function exposeAdminGlobals() {
         whatsappReplyUrl,
         noticeQuotePlain,
     };
-    window.ntTextAssist = { TEXT_ASSIST_ACTIONS };
+    window.ntTextAssist = { TEXT_ASSIST_ACTIONS, comfortAssistText, assistHtmlFromText };
     window.ntLinkPreview = { fetchLinkPreview, firstHttpUrl };
     window.ntOperatorBrief = {
         briefDismissed,

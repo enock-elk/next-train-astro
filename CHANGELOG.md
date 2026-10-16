@@ -1,5 +1,11 @@
 # Changelog
 
+## V9_10.16.06
+
+Trip fare shows the day and time with the peak, such as Peak (Saturday @ 7:20). Passenger type has a close button.
+
+State Monitor and the scheduled queue show a poster only when the image address is real. Next Train Composer fills the screen, uses smaller action chips, and lays a rewrite out as a title and short paragraphs.
+
 ## V9_10.16.05
 
 A Monte Vista train shows Monte Vista above the train number. Tap it to read the route. A Maitland train shows Maitland the same way. EXPR on the timetable is dark red.

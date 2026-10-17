@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_10.17.8': [
+        'The alert image preview fills the screen. Close is a small control. When the picture belongs to an alert, the same reactions sit along the bottom. After an in-app reply, Later saves that reply on the roadmap under To do or In progress, and that card can open WhatsApp or email. Email keeps the paragraphs and leaves off the operator sign-off. Co-Pilot fills the screen from top to bottom. Suggest reply stays hidden while the draft is halted. No commuter What\'s New. forceShow stays false.',
+    ],
     'V9_10.17.7': [
         'Alert Title is its own field under the formatting row, off until Title is pressed. Selected text becomes the title. Title, body, attached images, and the link preview stay apart, so Write replaces the words and leaves the picture. An image or a link preview leaves only from its X. Clearing the preview keeps it off for commuters. A URL in the title or the body is a link. A- and A+ move one size from the size under the cursor, so small then A+ is normal. Holding an alert opens reactions at 400 milliseconds. The header bell keeps its icon. While alerts are up, the blue header has a soft torch from the bell and no ring around it. No commuter What\'s New. forceShow stays false.',
     ],

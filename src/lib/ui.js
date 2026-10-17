@@ -1207,6 +1207,37 @@ function bindAlertImageLightbox() {
     });
 }
 
+function lightboxNoticeMeta(host) {
+    const node = host?.nodeType === 1 ? host : null;
+    if (!node?.getAttribute && !node?.closest) return null;
+    const card = node.closest?.('.nt-alert-card, [data-alert-post]') || null;
+    const id = node.getAttribute?.('data-alert-notice-id')
+        || card?.getAttribute?.('data-alert-id')
+        || '';
+    const src = node.getAttribute?.('data-alert-src')
+        || card?.getAttribute?.('data-alert-src')
+        || '';
+    if (!id) return null;
+    return { id: String(id), src: String(src || '') };
+}
+
+function announceLightboxNotice(host) {
+    const meta = lightboxNoticeMeta(host);
+    const { overlay } = lightboxEls();
+    if (overlay) {
+        if (meta) {
+            overlay.dataset.ntNoticeId = meta.id;
+            overlay.dataset.ntNoticeSrc = meta.src;
+        } else {
+            delete overlay.dataset.ntNoticeId;
+            delete overlay.dataset.ntNoticeSrc;
+        }
+    }
+    try {
+        window.dispatchEvent(new CustomEvent('nt-alert-lightbox', { detail: meta }));
+    } catch { /* ignore */ }
+}
+
 function lightboxCandidateSrc(url, host) {
     const direct = sanitizeAttachmentDisplayUrl(url);
     const wrap = lightboxPosterHost(url, host) || (host?.nodeType === 1 ? host : null);
@@ -1256,6 +1287,7 @@ export function openLightbox(url, host) {
     overlay.classList.remove('hidden');
     overlay.classList.add('flex');
     if (img.getAttribute('src') !== displaySrc) img.src = displaySrc;
+    announceLightboxNotice(wrap || host);
 }
 
 export function closeLightbox(fromPopState = false) {
@@ -1275,6 +1307,7 @@ export function closeLightbox(fromPopState = false) {
         }
         resetAlertLightboxTransform();
         if (img) img.alt = '';
+        announceLightboxNotice(null);
         window._isLightboxMode = false;
         if (!anyFixedModalOpen() && !document.body.classList.contains('sidenav-open')) {
             unlockBackgroundScroll();

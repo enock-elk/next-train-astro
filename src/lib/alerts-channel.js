@@ -965,6 +965,7 @@ export async function submitAlertReaction(notice, emoji) {
             const wrap = card.querySelector('[data-alert-summary]');
             if (wrap) wrap.outerHTML = renderReactionsHtml(notice);
         }
+        paintLightboxReactions({ id: String(notice.id || ''), src: String(notice._sourceKey || '') });
         triggerHaptic();
         return true;
     } catch (e) {
@@ -972,6 +973,51 @@ export async function submitAlertReaction(notice, emoji) {
         showToast('Could not save reaction.', 'error');
         return false;
     }
+}
+
+function noticeForLightbox(detail) {
+    if (!detail?.id) return null;
+    const id = String(detail.id);
+    const src = String(detail.src || '');
+    const byBoth = cachedLiveNotices.find((n) => String(n.id) === id && (!src || String(n._sourceKey) === src));
+    return byBoth || cachedLiveNotices.find((n) => String(n.id) === id) || null;
+}
+
+function paintLightboxReactions(detail) {
+    const dock = document.getElementById('alert-image-lightbox-dock');
+    const row = document.getElementById('alert-image-lightbox-react');
+    if (!dock || !row) return;
+    const notice = noticeForLightbox(detail);
+    if (!notice) {
+        dock.classList.add('hidden');
+        row.replaceChildren();
+        return;
+    }
+    const mine = mineReactionKey(notice);
+    row.innerHTML = ALERT_REACTION_KEYS.map((key) => {
+        const on = mine === key;
+        const emoji = ALERT_REACTION_EMOJI[key];
+        return `<button type="button" data-lightbox-react="${escapeHTML(key)}" data-alert-id="${escapeHTML(String(notice.id || ''))}" data-alert-src="${escapeHTML(String(notice._sourceKey || ''))}" class="w-11 h-11 text-[1.65rem] leading-none rounded-full ${on ? 'bg-white/20 ring-2 ring-white/70' : 'bg-black/35'} focus:outline-none" aria-pressed="${on ? 'true' : 'false'}" aria-label="${on ? 'Remove reaction' : `React ${emoji}`}">${emoji}</button>`;
+    }).join('');
+    dock.classList.remove('hidden');
+}
+
+function bindLightboxReactionClicks() {
+    const overlay = document.getElementById('alert-image-lightbox');
+    if (!overlay || overlay.dataset.ntReactBound === '1') return;
+    overlay.dataset.ntReactBound = '1';
+    overlay.addEventListener('click', (e) => {
+        const btn = e.target.closest?.('[data-lightbox-react]');
+        if (!btn || !overlay.contains(btn)) return;
+        e.preventDefault();
+        e.stopPropagation();
+        const id = btn.getAttribute('data-alert-id');
+        const src = btn.getAttribute('data-alert-src');
+        const emoji = btn.getAttribute('data-lightbox-react');
+        const notice = cachedLiveNotices.find((n) => String(n.id) === String(id) && String(n._sourceKey) === String(src))
+            || cachedLiveNotices.find((n) => String(n.id) === String(id));
+        if (notice && emoji) submitAlertReaction(notice, emoji);
+    });
 }
 
 function bindAlertsChannelOnce() {
@@ -1150,6 +1196,7 @@ function bindAlertsChannelOnce() {
 
 export function initAlertsChannel() {
     bindAlertsChannelOnce();
+    bindLightboxReactionClicks();
     if (typeof window === 'undefined') return;
     window.openAlertsChannel = openAlertsChannel;
     window.closeAlertsChannel = closeAlertsChannel;
@@ -1165,6 +1212,10 @@ export function initAlertsChannel() {
 }
 
 if (typeof window !== 'undefined') {
+    window.addEventListener('nt-alert-lightbox', (event) => {
+        bindLightboxReactionClicks();
+        paintLightboxReactions(event?.detail || null);
+    });
     window.withBase = window.withBase || withBase;
     window.sanitizeAlertImageUrl = sanitizeAlertImageUrl;
     window.collectNoticeImageUrls = collectNoticeImageUrls;

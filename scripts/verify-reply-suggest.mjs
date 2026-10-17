@@ -25,6 +25,7 @@ import {
     loadSuggestFile,
     unansweredCommuterMessages,
     suggestDraftMessageId,
+    emailOutreachText,
     mailtoReplyUrl,
     outreachPlainText,
     parseSuggestResult,
@@ -277,15 +278,19 @@ const suggestBody = adminJs.slice(suggestStart, suggestEnd);
 ok(suggestBody.includes('composerHtmlFromResult'), 'suggest fills the composer from the helper');
 const sent = outreachPlainText('Hi there<br><br><span style="color: #9ca3af; font-style: italic;">- Enock</span>');
 ok(sent === 'Hi there\n\n- Enock', 'outreach text keeps the same reply and sign-off');
+const rich = '<div>Hi there,</div><div>Thanks for sharing your thoughts.</div><br><br><span style="color: #9ca3af; font-style: italic;">- Enock</span>';
+ok(outreachPlainText(rich) === 'Hi there,\nThanks for sharing your thoughts.\n\n- Enock', 'outreach keeps paragraphs and the sign-off');
+ok(emailOutreachText(rich) === 'Hi there,\nThanks for sharing your thoughts.', 'email text keeps paragraphs and drops the sign-off');
 const wa = whatsappReplyUrl('27821234567', sent);
 const waText = decodeURIComponent(wa.split('?text=')[1]);
 ok(wa.startsWith('https://wa.me/27821234567?text='), 'WhatsApp opens on the number they gave');
 ok(waText.startsWith('> Metrorail Next Train | Response\n\n'), 'WhatsApp quote title sits on the first line');
 ok(waText.endsWith(sent), 'WhatsApp body is the same reply under the title');
-const mail = mailtoReplyUrl('rider@example.com', sent);
+const mail = mailtoReplyUrl('rider@example.com', rich);
 ok(mail.startsWith('mailto:rider@example.com?'), 'email opens to their address');
 ok(decodeURIComponent(mail.split('subject=')[1].split('&')[0]) === 'Metrorail Next Train | Feedback Response', 'email subject is the feedback response line');
-ok(decodeURIComponent(mail.split('body=')[1]) === sent, 'email body is the same reply');
+ok(decodeURIComponent(mail.split('body=')[1]).replace(/\r\n/g, '\n') === 'Hi there,\nThanks for sharing your thoughts.', 'email body keeps paragraphs and drops the sign-off');
+ok(!decodeURIComponent(mail.split('body=')[1]).includes('- Enock'), 'email body has no operator sign-off');
 const weekAgo = Date.parse('2026-10-01T00:00:00Z');
 const today = Date.parse('2026-10-15T00:00:00Z');
 const staleText = buildSuggestUserText({
@@ -312,8 +317,8 @@ ok(!suggestBody.includes('inbox/'), 'suggest does not post to inbox');
 ok(!suggestBody.includes('resolveFeedback'), 'suggest does not archive the thread');
 ok(suggestBody.includes('Draft ready. Edit it, then send.'), 'suggest leaves the draft for editing');
 ok(adminJs.includes('message: text'), 'the sent reply is handed to WhatsApp and email');
-ok(adminJs.includes("Admin.outreachHref('whatsapp', ph, replyPlain)"), 'the thread WhatsApp chip uses the reply');
-ok(adminJs.includes("Admin.outreachHref('email', em, replyPlain)"), 'the thread email chip uses the reply');
+ok(adminJs.includes("Admin.outreachHref('whatsapp', ph, replyHtml)"), 'the thread WhatsApp chip uses the reply');
+ok(adminJs.includes("Admin.outreachHref('email', em, replyHtml)"), 'the thread email chip uses the reply');
 
 const bridge = readFileSync(join(ROOT, 'src/lib/admin-bridge.js'), 'utf8');
 ok(bridge.includes('window.ntReplySuggest'), 'admin bridge exposes the suggest helper');
@@ -454,7 +459,10 @@ const draftDenied = await handleRequest(new Request('https://reply.test/draft?id
 ok(draftDenied.status === 401, 'a saved draft stays behind the operator token');
 ok(adminJs.includes('persistReplyDraft'), 'closing Co-Pilot keeps the draft');
 ok(adminJs.includes('restoreReplyDraft'), 'opening Co-Pilot loads the saved draft');
-ok(adminJs.includes('items-end justify-center p-0 backdrop-blur-sm'), 'Co-Pilot leaves a blurred strip that can be tapped');
+ok(adminJs.includes('card.style.height = `${height}px`'), 'Co-Pilot fills the screen');
+ok(adminJs.includes("suggestBtn.classList.toggle('hidden', halted)"), 'Suggest reply hides while Co-Pilot is halted');
+ok(adminJs.includes('id="outreach-later-backlog"') && adminJs.includes('id="outreach-later-progress"'), 'Later saves the reply under To do or In progress');
+ok(adminJs.includes('outreachMessage'), 'a later ticket keeps the reply for WhatsApp and email');
 ok(adminJs.includes('cm-bubble'), 'community monitor paints message bubbles');
 ok(adminJs.includes('target.scrollTop = target.scrollHeight'), 'community monitor opens on the latest message');
 ok(ui.includes('bindModalBackgroundGuard'), 'a short modal does not scroll the page behind it');

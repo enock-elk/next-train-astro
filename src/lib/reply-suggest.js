@@ -830,10 +830,36 @@ export function composerHtmlFromResult(result) {
 }
 
 const OUTREACH_BODY_MAX = 3500;
+const EMAIL_SIGNOFF_RE = /(?:\n[ \t]*)?[-–—]\s*(?:Enock|Thandeka|Admin)\s*$/i;
+
+/** Keep paragraph breaks from the composer. Block tags become lines. */
+function htmlToPlainBlocks(value) {
+    return String(value || '')
+        .replace(/<br\s*\/?>/gi, '\n')
+        .replace(/<\/(p|div|h[1-6]|li|tr|blockquote)>/gi, '\n')
+        .replace(/<li(\s[^>]*)?>/gi, '\n- ')
+        .replace(/<[^>]+>/g, ' ')
+        .replace(/&nbsp;/gi, ' ')
+        .replace(/&amp;/g, '&')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&quot;/g, '"')
+        .replace(/&#39;/g, "'")
+        .replace(/[ \t]+\n/g, '\n')
+        .replace(/\n[ \t]+/g, '\n')
+        .replace(/[ \t]{2,}/g, ' ')
+        .replace(/\n{3,}/g, '\n\n')
+        .trim();
+}
 
 /** Plain text of the in-app reply, including the operator sign-off. */
 export function outreachPlainText(value) {
-    return plainThreadText(value).replace(/\n[ \t]+/g, '\n').trim();
+    return htmlToPlainBlocks(value);
+}
+
+/** Email body. Paragraphs stay. The operator sign-off stays off, because the mailbox already signs it. */
+export function emailOutreachText(value) {
+    return outreachPlainText(value).replace(EMAIL_SIGNOFF_RE, '').replace(/\n{3,}/g, '\n\n').trim();
 }
 
 export function whatsappPrefill(body) {
@@ -856,7 +882,7 @@ export function whatsappReplyUrl(phone, body) {
 export function mailtoReplyUrl(email, body) {
     const addr = String(email || '').trim();
     if (!addr.includes('@') || /[\s<>"']/.test(addr)) return '';
-    const text = outreachPlainText(body).slice(0, OUTREACH_BODY_MAX);
+    const text = emailOutreachText(body).replace(/\n/g, '\r\n').slice(0, OUTREACH_BODY_MAX);
     if (!text) return `mailto:${addr}`;
     return `mailto:${addr}?subject=${encodeURIComponent(EMAIL_SUBJECT)}&body=${encodeURIComponent(text)}`;
 }

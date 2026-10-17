@@ -2503,6 +2503,7 @@ const Admin = {
         } catch { /* ignore */ }
         Admin.bindFeedbackPreviewChrome(overlay);
         Admin.paintFeedbackPreviewChrome(overlay);
+        try { window.dispatchEvent(new CustomEvent('nt-alert-lightbox', { detail: null })); } catch { /* ignore */ }
         return !overlay.classList.contains('hidden');
     },
 
@@ -9442,12 +9443,10 @@ const Admin = {
                     sourceTab: Admin.currentFeedbackTab === 'archive' ? 'archive' : 'inbox',
                 });
 
-                let replyPlain = '';
+                let replyHtml = '';
                 for (let ri = groupItems.length - 1; ri >= 0; ri--) {
                     if (!groupItems[ri]?.isFromAdmin) continue;
-                    replyPlain = window.ntReplySuggest?.outreachPlainText
-                        ? window.ntReplySuggest.outreachPlainText(groupItems[ri].text || groupItems[ri].message || '')
-                        : '';
+                    replyHtml = groupItems[ri].text || groupItems[ri].message || '';
                     break;
                 }
 
@@ -9455,7 +9454,7 @@ const Admin = {
                 if (allEmails.size > 0 || allPhones.size > 0) {
                     contactHtml = '<div class="flex flex-wrap gap-1.5 min-w-0">';
                     allEmails.forEach(em => {
-                        const mailHref = Admin.outreachHref('email', em, replyPlain) || `mailto:${String(em).replace(/"/g, '')}`;
+                        const mailHref = Admin.outreachHref('email', em, replyHtml) || `mailto:${String(em).replace(/"/g, '')}`;
                         contactHtml += `
                             <div class="flex items-center min-w-0 max-w-full bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded px-1.5 py-0.5">
                                 <a href="${mailHref}" onclick="event.stopPropagation()" class="text-[10px] text-blue-500 hover:underline font-mono tracking-tight lowercase break-all whitespace-normal inline-flex items-center gap-1 min-w-0">${Admin.icon('mail', 'w-3 h-3 shrink-0')} ${em}</a>
@@ -9464,7 +9463,7 @@ const Admin = {
                     });
                     allPhones.forEach(ph => {
                         const isNum = /^\d+$/.test(ph);
-                        const link = isNum ? (Admin.outreachHref('whatsapp', ph, replyPlain) || `https://wa.me/${ph}`) : '#';
+                        const link = isNum ? (Admin.outreachHref('whatsapp', ph, replyHtml) || `https://wa.me/${ph}`) : '#';
                         const target = isNum ? `target="_blank"` : '';
                         const aClass = isNum ? 'text-emerald-700 dark:text-emerald-300 hover:underline' : 'text-gray-500 dark:text-gray-400';
                         
@@ -12351,7 +12350,87 @@ const Admin = {
         return api.htmlAttrUrl ? api.htmlAttrUrl(raw) : String(raw).replace(/&/g, '&amp;').replace(/"/g, '&quot;');
     },
 
-    showOutreachModal: ({ emails = [], phones = [], commuterName = 'this commuter', message = '' } = {}) => {
+    outreachList: (value) => {
+        if (Array.isArray(value)) return value.map((item) => String(item || '').trim()).filter(Boolean);
+        if (value && typeof value === 'object') return Object.values(value).map((item) => String(item || '').trim()).filter(Boolean);
+        return [];
+    },
+
+    roadmapOutreachButtons: (ticket, { compact = false } = {}) => {
+        const emails = Admin.outreachList(ticket?.outreachEmails);
+        const phones = Admin.outreachList(ticket?.outreachPhones);
+        const message = ticket?.outreachMessage || '';
+        if (!emails.length && !phones.length) return '';
+        const wa = phones.map((ph) => {
+            const safe = String(ph).replace(/[^0-9]/g, '');
+            const href = Admin.outreachHref('whatsapp', safe, message);
+            if (!safe || !href) return '';
+            const cls = compact
+                ? 'inline-flex items-center gap-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-1 px-2 rounded-lg text-[10px]'
+                : 'w-full inline-flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 px-3 rounded-lg text-sm';
+            return `<a href="${href}" target="_blank" rel="noopener noreferrer" class="${cls}">${Admin.icon('message', 'w-3.5 h-3.5')} WhatsApp ${safe}</a>`;
+        }).join('');
+        const mail = emails.map((em) => {
+            const label = String(em).replace(/</g, '&lt;');
+            const href = Admin.outreachHref('email', em, message);
+            if (!href) return '';
+            const cls = compact
+                ? 'inline-flex items-center gap-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-1 px-2 rounded-lg text-[10px]'
+                : 'w-full inline-flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-3 rounded-lg text-sm';
+            return `<a href="${href}" target="_blank" rel="noopener noreferrer" class="${cls}">${Admin.icon('mail', 'w-3.5 h-3.5')} Email ${label}</a>`;
+        }).join('');
+        if (!wa && !mail) return '';
+        const wrap = compact ? 'flex flex-wrap gap-1.5' : 'mt-3 space-y-2';
+        return `<div class="${wrap}" data-roadmap-outreach="1">${wa}${mail}</div>`;
+    },
+
+    saveOutreachLater: async ({ status = 'backlog', emails = [], phones = [], message = '', commuterName = 'commuter', deviceId = '', feedbackId = '' } = {}) => {
+        const secret = await Admin.getAuthKey();
+        if (!secret) {
+            if (typeof showToast === 'function') showToast('Sign in as an operator first.', 'error');
+            return false;
+        }
+        const column = status === 'progress' ? 'progress' : 'backlog';
+        const who = String(commuterName || 'commuter').replace(/\s+/g, ' ').trim() || 'commuter';
+        const plain = window.ntReplySuggest?.outreachPlainText
+            ? window.ntReplySuggest.outreachPlainText(message)
+            : String(message || '').replace(/<[^>]+>/g, ' ').trim();
+        const payload = {
+            title: `Reply to ${who}`.slice(0, 120),
+            description: plain || 'Reply later',
+            type: 'feature',
+            severity: 'low',
+            source: feedbackId ? `Feedback ${feedbackId}` : (deviceId ? `Feedback device ${deviceId}` : 'Feedback'),
+            status: column,
+            timestamp: Date.now(),
+            updatedAt: Date.now(),
+            sourceKind: 'feedback',
+            sourceId: String(feedbackId || ''),
+            deviceId: String(deviceId || ''),
+            sourceTab: 'archive',
+            outreachEmails: emails,
+            outreachPhones: phones,
+            outreachMessage: String(message || ''),
+        };
+        try {
+            const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
+            const res = await fetch(`${dynamicEndpoint}roadmap/${Date.now()}.json?auth=${secret}`, {
+                method: 'PUT',
+                body: JSON.stringify(payload),
+            });
+            if (!res.ok) throw new Error('Failed to save');
+            document.getElementById('admin-outreach-modal')?.remove();
+            if (typeof showToast === 'function') {
+                showToast(column === 'progress' ? 'Saved under In progress.' : 'Saved under To do.', 'success');
+            }
+            return true;
+        } catch {
+            if (typeof showToast === 'function') showToast('Could not save that reply for later.', 'error');
+            return false;
+        }
+    },
+
+    showOutreachModal: ({ emails = [], phones = [], commuterName = 'this commuter', message = '', deviceId = '', feedbackId = '' } = {}) => {
         if (!emails.length && !phones.length) return;
         document.getElementById('admin-outreach-modal')?.remove();
         const modal = document.createElement('div');
@@ -12375,12 +12454,27 @@ const Admin = {
                 <h3 id="outreach-title" class="text-lg font-black text-gray-900 dark:text-white mb-1">Also reach ${safeName}?</h3>
                 <p class="text-xs text-gray-500 dark:text-gray-400 mb-4 leading-relaxed">The in-app reply is sent and the thread is archived. WhatsApp and email open in a new tab so this admin screen stays on the current list.</p>
                 <div class="space-y-2 mb-3">${waButtons}${mailButtons}</div>
+                <div class="mb-3">
+                    <p class="text-[10px] font-bold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-1.5">Later</p>
+                    <div class="grid grid-cols-2 gap-2">
+                        <button type="button" id="outreach-later-backlog" class="bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-100 font-bold py-2.5 rounded-lg text-sm">To do</button>
+                        <button type="button" id="outreach-later-progress" class="bg-indigo-50 dark:bg-indigo-900/40 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 text-indigo-800 dark:text-indigo-100 font-bold py-2.5 rounded-lg text-sm border border-indigo-200 dark:border-indigo-800">In progress</button>
+                    </div>
+                    <p class="text-[10px] text-gray-500 dark:text-gray-400 mt-1.5 leading-relaxed">Saves this reply on the roadmap. Open that card to send the WhatsApp or email.</p>
+                </div>
                 <button type="button" id="outreach-dismiss" class="w-full bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 font-bold py-2.5 rounded-lg text-sm">Not now</button>
             </div>
         `;
         document.body.appendChild(modal);
         const close = () => modal.remove();
+        const saveLater = async (status, btn) => {
+            if (btn) btn.disabled = true;
+            const ok = await Admin.saveOutreachLater({ status, emails, phones, message, commuterName, deviceId, feedbackId });
+            if (!ok && btn) btn.disabled = false;
+        };
         document.getElementById('outreach-dismiss').onclick = close;
+        document.getElementById('outreach-later-backlog').onclick = (e) => saveLater('backlog', e.currentTarget);
+        document.getElementById('outreach-later-progress').onclick = (e) => saveLater('progress', e.currentTarget);
         modal.addEventListener('click', (e) => { if (e.target === modal) close(); });
     },
 
@@ -12446,16 +12540,19 @@ const Admin = {
         modal.style.right = '0';
         modal.style.width = '100%';
         modal.style.bottom = 'auto';
-        modal.style.alignItems = 'flex-end';
-        modal.style.justifyContent = 'center';
+        modal.style.alignItems = 'stretch';
+        modal.style.justifyContent = 'flex-start';
         const card = modal.firstElementChild;
         if (card) {
-            card.style.maxHeight = '92%';
-            card.style.height = '92%';
+            card.style.position = 'absolute';
+            card.style.inset = '0';
+            card.style.maxHeight = 'none';
+            card.style.height = `${height}px`;
             card.style.width = '100%';
-            card.style.marginTop = 'auto';
+            card.style.marginTop = '0';
             card.style.marginBottom = '0';
-            card.style.overflowY = 'auto';
+            card.style.overflow = 'hidden';
+            card.style.borderRadius = '0';
         }
     },
 
@@ -12477,11 +12574,11 @@ const Admin = {
                                 <button type="button" id="admin-reply-guide-go" class="shrink-0 px-3 rounded-lg bg-gray-900 dark:bg-white dark:text-gray-900 text-white text-[11px] font-bold focus:outline-none">Regenerate</button>
                             </div>
                         </div>
-                        <div id="admin-reply-suggest-halt" class="hidden mb-2 rounded-lg border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/40 text-amber-950 dark:text-amber-100 p-2">
-                            <div id="admin-reply-suggest-halt-text" class="text-xs whitespace-pre-wrap"></div>
-                            <label for="admin-reply-suggest-context" class="block text-[10px] font-bold mt-2 mb-1">Add the missing fact</label>
-                            <textarea id="admin-reply-suggest-context" rows="3" maxlength="2000" class="w-full rounded-lg border border-amber-300 dark:border-amber-700 bg-white dark:bg-gray-900 text-xs text-gray-900 dark:text-white p-2 focus:outline-none" placeholder="Type what the draft should use, then suggest again."></textarea>
-                            <button type="button" id="reply-suggest-again" class="mt-2 w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-3 rounded-lg text-xs focus:outline-none">Suggest again</button>
+                        <div id="admin-reply-suggest-halt" class="hidden mb-2 rounded-2xl border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/40 text-amber-950 dark:text-amber-100 p-3">
+                            <div id="admin-reply-suggest-halt-text" class="text-sm leading-relaxed whitespace-pre-wrap"></div>
+                            <label for="admin-reply-suggest-context" class="block text-[11px] font-bold mt-3 mb-1">Add the missing fact</label>
+                            <textarea id="admin-reply-suggest-context" rows="4" maxlength="2000" class="w-full min-h-[5.5rem] rounded-xl border border-amber-300 dark:border-amber-700 bg-white dark:bg-gray-900 text-sm text-gray-900 dark:text-white p-2.5 focus:outline-none" placeholder="Type what the draft should use, then suggest again."></textarea>
+                            <button type="button" id="reply-suggest-again" class="mt-3 w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-3 rounded-xl text-sm focus:outline-none">Suggest again</button>
                         </div>
                         <button type="button" id="reply-suggest" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-3 rounded-xl shadow-sm transition-colors focus:outline-none text-sm">Suggest reply</button>
                         <div id="admin-reply-suggest-status" class="hidden mt-2 rounded-lg border border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-950/40 p-2" aria-live="polite">
@@ -12747,8 +12844,10 @@ const Admin = {
         const guide = document.getElementById('admin-reply-guide');
         const editor = document.getElementById('admin-reply-text');
         const halt = document.getElementById('admin-reply-suggest-halt');
-        if (!guide || !editor) return;
+        const suggestBtn = document.getElementById('reply-suggest');
         const halted = !!(halt && !halt.classList.contains('hidden'));
+        if (suggestBtn) suggestBtn.classList.toggle('hidden', halted);
+        if (!guide || !editor) return;
         guide.classList.toggle('hidden', halted || !Admin.draftHasText(editor.innerHTML));
     },
 
@@ -13181,14 +13280,14 @@ const Admin = {
         if (!modal) {
             modal = document.createElement('div');
             modal.id = 'admin-reply-modal';
-            modal.className = 'fixed inset-0 bg-black/60 z-[200] hidden flex items-end justify-center p-0 backdrop-blur-sm';
+            modal.className = 'fixed inset-0 bg-black/70 z-[200] hidden flex p-0 backdrop-blur-sm';
             modal.innerHTML = `
-                <div class="bg-white dark:bg-gray-800 shadow-2xl w-full h-[92%] max-h-[92%] min-h-0 overflow-y-auto flex flex-col p-3 sm:p-4 border-0 rounded-t-3xl">
+                <div class="bg-white dark:bg-gray-800 shadow-2xl w-full min-h-0 overflow-hidden flex flex-col px-3 sm:px-4 pt-[max(0.75rem,env(safe-area-inset-top))] pb-[max(0.75rem,env(safe-area-inset-bottom))] border-0 rounded-none">
                     <h3 id="admin-reply-title" class="text-xl font-black text-gray-900 dark:text-white mb-0.5 tracking-tight flex items-center gap-2 shrink-0"><span class="text-sky-500">${Admin.icon('message', 'w-5 h-5')}</span> <span id="admin-reply-title-text">Next Train Co-Pilot</span></h3>
                     <p id="admin-reply-recipient" class="text-[11px] text-gray-600 dark:text-gray-300 mb-1 break-all leading-snug shrink-0"></p>
                     <p id="admin-reply-hint" class="text-[10px] text-gray-500 dark:text-gray-400 mb-3 shrink-0">Message will be delivered to their personal inbox upon next app launch.</p>
-                    
-                    <div class="flex flex-col min-h-[14rem] flex-1">
+                    <div id="admin-reply-scroll" class="flex-1 min-h-0 overflow-y-auto flex flex-col">
+                    <div class="flex flex-col min-h-[12rem] flex-1">
                     <div class="shrink-0 rounded-t-lg border border-gray-300 dark:border-gray-600 border-b-0">
                             ${Admin.wysiwygToolbarHtml('admin-reply-text', { fileInputId: 'admin-reply-upload-file', fileLabelId: 'admin-reply-upload-label' })}
                     </div>
@@ -13196,6 +13295,7 @@ const Admin = {
                     </div>
 
                     ${Admin.replySuggestMarkup()}
+                    </div>
 
                     <div class="grid grid-cols-2 gap-2 mt-3 shrink-0">
                         <button id="reply-cancel" class="bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 font-bold py-3.5 px-3 rounded-2xl transition-colors focus:outline-none text-base">Cancel</button>
@@ -13205,10 +13305,10 @@ const Admin = {
             `;
             document.body.appendChild(modal);
         } else {
-            modal.className = 'fixed inset-0 bg-black/60 z-[200] hidden flex items-end justify-center p-0 backdrop-blur-sm';
+            modal.className = 'fixed inset-0 bg-black/70 z-[200] hidden flex p-0 backdrop-blur-sm';
             const panel = modal.firstElementChild;
             if (panel) {
-                panel.className = 'bg-white dark:bg-gray-800 shadow-2xl w-full h-[92%] max-h-[92%] min-h-0 overflow-y-auto flex flex-col p-3 sm:p-4 border-0 rounded-t-3xl';
+                panel.className = 'bg-white dark:bg-gray-800 shadow-2xl w-full min-h-0 overflow-hidden flex flex-col px-3 sm:px-4 pt-[max(0.75rem,env(safe-area-inset-top))] pb-[max(0.75rem,env(safe-area-inset-bottom))] border-0 rounded-none';
             }
             const editor = document.getElementById('admin-reply-text');
             if (editor) {
@@ -13482,7 +13582,13 @@ const Admin = {
                 }
                 cleanup();
                 if (contacts.emails.length || contacts.phones.length) {
-                    Admin.showOutreachModal({ ...contacts, commuterName, message: text });
+                    Admin.showOutreachModal({
+                        ...contacts,
+                        commuterName,
+                        message: text,
+                        deviceId: replyDeviceId,
+                        feedbackId: replyFeedbackId,
+                    });
                 }
             } catch (e) {
                 if (typeof showToast === 'function') showToast(editingKey ? 'Failed to save reply.' : 'Failed to send reply.', 'error');
@@ -24632,6 +24738,7 @@ const Admin = {
                 const sourceBtn = srcMeta.canOpen
                     ? `<button type="button" class="text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded ${sStyles.bg} ${sStyles.text} hover:underline focus:outline-none" onclick="event.stopPropagation(); Admin.openRoadmapOriginal('${safeTicketId}')">${safeHTML(sStyles.label)}</button>`
                     : `<span class="text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded ${sStyles.bg} ${sStyles.text}">${safeHTML(sStyles.label)}</span>`;
+                const outreachHtml = Admin.roadmapOutreachButtons(ticket, { compact: true });
 
                 const cardHtml = `
                     <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 border-l-4 ${pStyles.stripe} p-3 rounded-xl shadow-sm hover:shadow-md hover:border-blue-400 dark:hover:border-blue-500 transition-all cursor-pointer group flex flex-col gap-2 text-left overflow-hidden" onclick="Admin.openViewModal('${safeTicketId}')">
@@ -24646,6 +24753,7 @@ const Admin = {
                             <h4 class="font-bold text-slate-900 dark:text-slate-100 text-sm leading-snug break-words text-left min-w-0 flex-1">${safeTitle}</h4>
                         </div>
                         <p class="text-[11px] text-slate-600 dark:text-slate-300 text-left break-words whitespace-normal leading-relaxed line-clamp-3">${shortDesc}</p>
+                        ${outreachHtml ? `<div onclick="event.stopPropagation()">${outreachHtml}</div>` : ''}
                         <div class="flex items-center justify-between gap-2 pt-2 border-t border-slate-100 dark:border-slate-700">
                             <span class="text-[9px] text-slate-400 font-medium">${dateStr.split(',')[0]}</span>
                             <div class="flex items-center gap-0.5 shrink-0">
@@ -24811,6 +24919,7 @@ const Admin = {
             const originalBtn = srcMeta.canOpen
                 ? `<button type="button" id="roadmap-open-original" class="mt-3 w-full text-left px-3 py-2.5 rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200 text-xs font-bold hover:bg-blue-100 dark:hover:bg-blue-900/50 focus:outline-none">Open original ${safeHTML(srcMeta.label)}</button>`
                 : '';
+            const outreachHtml = Admin.roadmapOutreachButtons(ticket, { compact: false });
 
             modal.innerHTML = `
                 <div class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-2xl flex flex-col max-h-[90vh] transform transition-all scale-95 border border-gray-200 dark:border-gray-700">
@@ -24844,6 +24953,7 @@ const Admin = {
                     <div class="p-4 sm:p-6 overflow-y-auto flex-1 bg-white dark:bg-gray-800 custom-scrollbar text-left">
                         <h4 class="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2 text-left">Description</h4>
                         <div id="roadmap-ticket-desc" class="text-left text-sm leading-relaxed text-slate-800 dark:text-slate-100 bg-slate-50 dark:bg-slate-900 p-3 rounded-lg border border-slate-200 dark:border-slate-700 whitespace-pre-wrap break-words">${safeDesc}</div>
+                        ${outreachHtml}
                         ${originalBtn}
                     </div>
                 </div>
@@ -25021,6 +25131,9 @@ const Admin = {
                     sourceId: ticket.sourceId || inferred.sourceId || '',
                     deviceId: ticket.deviceId || inferred.deviceId || '',
                     sourceTab: ticket.sourceTab || inferred.tab || '',
+                    outreachEmails: Admin.outreachList(ticket.outreachEmails),
+                    outreachPhones: Admin.outreachList(ticket.outreachPhones),
+                    outreachMessage: String(ticket.outreachMessage || ''),
                 };
 
                 const targetId = ticketId || Date.now().toString();

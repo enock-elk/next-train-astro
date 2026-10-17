@@ -133,6 +133,7 @@ const MODAL_HASH = {
     'planner-fare-breakdown-sheet': '#trip-fare',
     'cache-clear-modal': '#cacheclear',
     'phone-reset-modal': '#phone-reset',
+    'phone-reset-network-modal': '#phone-reset-network',
     'account-modal': '#account',
     'login-modal': '#login',
     'dev-modal': '#dev',

@@ -1,5 +1,11 @@
 # Changelog
 
+## V9_10.17.2
+
+Options names this Reset this App. It clears this App's saved data. A weak connection asks before that reset.
+
+A train that reaches Durban on a Durban route is marked Direct. On the Irene timetable, a train that continues to Kempton Park is marked KEMP. Monte Vista, Maitland, and KEMP use the same kind of mark as NO SVC. Tap the mark to read it.
+
 ## V9_10.17.1
 
 Options has Reset this phone. It clears this phone and keeps your user id. Pull down at the top of Next Train, Trip Planner, or Community to refresh.

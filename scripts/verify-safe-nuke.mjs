@@ -139,7 +139,14 @@ assert(!hub.includes('openNetworkSlowConfirm'), 'Check for Updates does not ask 
 assert(hub.includes('installIncomingServiceWorker'), 'Check for Updates downloads the incoming worker before dropping the cached shell');
 assert(hub.includes('Kept your saved app. Try again on a stronger connection.'), 'failed Check for Updates keeps the cached app');
 assert(!hub.includes('skipNetworkPreflight'), 'Check for Updates cannot skip the network preflight');
-assert(hub.includes('resetPhoneKeepDeviceId'), 'Reset this phone keeps a device id path');
+assert(hub.includes('resetPhoneKeepDeviceId'), 'Reset this App keeps a device id path');
+{
+    const resetAt = hub.indexOf('export function showPhoneResetWarning');
+    const resetBody = hub.slice(resetAt, resetAt + 1400);
+    assert(resetBody.includes('openPhoneResetNetworkConfirm'), 'Reset this App asks when the connection is weak');
+    assert(resetBody.includes('probeReachability(3500)'), 'Reset this App probes the connection');
+    assert(resetBody.indexOf('probeReachability(3500)') < resetBody.indexOf('resetPhoneKeepDeviceId()'), 'Reset this App probes before it wipes');
+}
 assert(hub.includes("deleteIndexedDatabase('GuardianIdentityDB')"), 'Reset this phone clears the pinned identity store');
 assert(hub.includes('next_train_device_id'), 'Reset this phone writes the user id back');
 assert(!hub.includes("path + '?v=' + Date.now()"), 'Reset this phone does not invent a numeric hop');

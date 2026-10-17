@@ -3,10 +3,10 @@
  */
 import { ROUTES, HOLIDAY_NAMES } from './config.js';
 import { safeStorage, escapeHTML, routeArrowSvg, routePrimaryGridDirection, scheduleCacheSlot, normalizeScheduleSheetDay, schedulesBelongToRoute } from './utils.js';
-import { $currentRouteId, $userRegion, $schedules, $globalExclusions, $globalDisruptions, $opsOverlaysReady } from '../store.js';
-import { loadAllSchedules, ensureRoutePinnedForRegion } from './logic.js';
+import { $currentRouteId, $userRegion, $schedules, $fullDatabase, $globalExclusions, $globalDisruptions, $opsOverlaysReady } from '../store.js';
+import { loadAllSchedules, ensureRoutePinnedForRegion, processRouteDataFromDBAsync } from './logic.js';
 import { showToast, triggerHaptic, openSmoothModal, closeSmoothModal, switchTab, toggleDropdownScrim } from './ui.js';
-import { simulateNextActiveService, routeHasSaturdayService, scheduleHasService } from './live-board.js';
+import { simulateNextActiveService, routeHasSaturdayService, scheduleHasService, openTrainMarkSheet } from './live-board.js';
 import {
     buildRouteShareUrl,
     parseRouteDeepLinkParams,
@@ -172,6 +172,7 @@ function paintOpenGridBody() {
     bindGridExpressSkips();
     bindGridKempNotes();
     bindGridViaNotes();
+    window.Renderer?.fitGridStatusTags?.(grid);
 }
 
 function bindGridExpressSkips() {
@@ -185,7 +186,11 @@ function bindGridExpressSkips() {
         e.stopPropagation();
         const station = btn.getAttribute('data-expr-station') || 'this station';
         const train = btn.getAttribute('data-expr-train') || 'This train';
-        showToast(`Train ${train} does not stop at ${station}.`, 'info', 3500);
+        openTrainMarkSheet({
+            train,
+            body: `Train ${train} does not stop at ${station}.`,
+            badge: 'EXPR',
+        });
     });
 }
 
@@ -195,11 +200,15 @@ function bindGridKempNotes() {
     grid.dataset.kempBound = '1';
     const open = (el) => {
         const train = el?.getAttribute?.('data-kemp-train') || 'This train';
-        showToast(`Train ${train} continues to Kempton Park. Irene is not the last stop.`, 'info', 4000);
+        openTrainMarkSheet({
+            train,
+            body: `Train ${train} continues to Kempton Park. Irene is not the last stop.`,
+            badge: 'KEMP',
+        });
     };
     grid.addEventListener('click', (e) => {
         const hit = e.target?.closest?.('[data-kemp-open="1"]');
-        if (!hit || hit.closest('[data-expr-skip="1"]')) return;
+        if (!hit || e.target?.closest?.('[data-expr-skip="1"]')) return;
         e.preventDefault();
         open(hit);
     });
@@ -219,11 +228,15 @@ function bindGridViaNotes() {
     const open = (el) => {
         const train = el?.getAttribute?.('data-via-train') || 'This train';
         const route = el?.getAttribute?.('data-via-route') || 'that';
-        showToast(`Train ${train} goes via the ${route} route.`, 'info', 4000);
+        openTrainMarkSheet({
+            train,
+            body: `Train ${train} goes via the ${route} route.`,
+            badge: route,
+        });
     };
     grid.addEventListener('click', (e) => {
         const hit = e.target?.closest?.('[data-via-open="1"]');
-        if (!hit) return;
+        if (!hit || e.target?.closest?.('[data-expr-skip="1"]')) return;
         e.preventDefault();
         e.stopPropagation();
         open(hit);
@@ -439,14 +452,35 @@ export function renderFullScheduleGrid(direction = null, dayOverride = null, opt
     if (!schedulesBelongToRoute(scheds, routeId) || !scheduleBundleHasRows(scheds)) {
         const alreadyWaiting = !!(gridOpenIntent && gridOpenIntent.routeId === routeId);
         gridOpenIntent = { routeId, direction, dayOverride };
-        if (!alreadyWaiting) showToast('Loading latest schedules... please wait.', 'info', 2000);
+        const db = $fullDatabase.get();
+        const memoryKey = route?.sheetKeys?.weekday_to_a;
+        const memorySheet = memoryKey ? db?.[memoryKey] : null;
+        const canSlice = !!(memorySheet && (Array.isArray(memorySheet) || typeof memorySheet === 'object'));
+        if (canSlice) {
+            processRouteDataFromDBAsync(route, db).then((schedules) => {
+                if ($currentRouteId.get() !== routeId || !schedules?._routeId) return;
+                $schedules.set(schedules);
+                tryHonorPendingGridOpen();
+            }).catch(() => { /* the saved copy still opens below */ });
+            return;
+        }
         if (gridReloadPendingFor !== routeId) {
             gridReloadPendingFor = routeId;
-            loadAllSchedules(true).then(() => {
+            const toastTimer = setTimeout(() => {
+                if (gridOpenIntent && gridOpenIntent.routeId === routeId) {
+                    showToast('Loading latest schedules... please wait.', 'info', 2000);
+                }
+            }, 1200);
+            loadAllSchedules(false).then(() => {
+                clearTimeout(toastTimer);
                 tryHonorPendingGridOpen();
-            }).catch(() => { /* ignore */ }).finally(() => {
+            }).catch(() => {
+                clearTimeout(toastTimer);
+            }).finally(() => {
                 if (gridReloadPendingFor === routeId) gridReloadPendingFor = '';
             });
+        } else if (!alreadyWaiting) {
+            showToast('Loading latest schedules... please wait.', 'info', 2000);
         }
         return;
     }
@@ -741,6 +775,7 @@ export function renderFullScheduleGrid(direction = null, dayOverride = null, opt
     bindGridExclusionRefresh();
 
     openSmoothModal('full-schedule-modal');
+    window.Renderer?.fitGridStatusTags?.(grid);
     if (location.hash !== '#grid') {
         history.pushState({ modal: 'grid' }, '', '#grid');
     }

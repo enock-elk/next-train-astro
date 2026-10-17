@@ -398,6 +398,17 @@ export function displaysAsKemptonPark(station) {
 }
 
 /**
+ * End the commuter is looking at. Durban Yard is Durban.
+ * Elandsfontein and Rhodesfield stay Kempton Park.
+ */
+export function commuterEndKey(station) {
+    const upper = normalizeStationName(station);
+    if (displaysAsKemptonPark(upper)) return 'KEMPTON PARK';
+    if (upper === 'DURBAN YARD' || upper === 'DURBAN') return 'DURBAN';
+    return upper;
+}
+
+/**
  * Irene columns whose same-day terminus is Kempton Park.
  * A train that ends at Irene is not in the list.
  */
@@ -413,16 +424,81 @@ export function kempTrainIds(routeId, ownSchedule, siblingSchedule) {
     return ids;
 }
 
+function sheetStopNames(schedule) {
+    const col = schedule?.stationColumnName || 'STATION';
+    const names = new Set();
+    for (const row of schedule?.rows || []) {
+        const name = normalizeStationName(row?.[col] || row?.STATION);
+        if (!name || name.startsWith('LAST UPDATED') || name === 'VARIANT') continue;
+        names.add(name);
+    }
+    return names;
+}
+
+/**
+ * Kempton Park columns that call on the Irene sheet but are not printed there.
+ * A train that only ends at Irene is not included.
+ */
+export function extraKempTrainIds(ownSchedule, siblingSchedule) {
+    if (!ownSchedule?.rows?.length || !siblingSchedule?.headers?.length) return [];
+    const ownIds = new Set((ownSchedule.headers || []).map((id) => String(id)));
+    const ownStops = sheetStopNames(ownSchedule);
+    const col = siblingSchedule.stationColumnName || 'STATION';
+    const ids = [];
+    for (const raw of siblingSchedule.headers) {
+        const id = String(raw || '').trim();
+        if (!/^\d{4}[a-zA-Z]*$/.test(id) || ownIds.has(id)) continue;
+        let serves = false;
+        let kemp = false;
+        for (const row of siblingSchedule.rows || []) {
+            if (!isRealTime(row?.[id])) continue;
+            const name = normalizeStationName(row?.[col] || row?.STATION);
+            if (ownStops.has(name)) serves = true;
+            if (displaysAsKemptonPark(name)) kemp = true;
+        }
+        if (serves && kemp) ids.push(id);
+    }
+    return ids;
+}
+
+/** Copy sibling times onto the stations this sheet already lists. Does not add stations. */
+export function withExtraTrainColumns(schedule, siblingSchedule, ids) {
+    const list = (ids || []).map((id) => String(id)).filter(Boolean);
+    if (!schedule || !list.length) return schedule;
+    const col = schedule.stationColumnName || 'STATION';
+    const sibCol = siblingSchedule?.stationColumnName || 'STATION';
+    const byName = new Map();
+    for (const row of siblingSchedule?.rows || []) {
+        const name = normalizeStationName(row?.[sibCol] || row?.STATION);
+        if (name) byName.set(name, row);
+    }
+    const rows = (schedule.rows || []).map((row) => {
+        const name = normalizeStationName(row?.[col] || row?.STATION);
+        const src = byName.get(name);
+        if (!src) return row;
+        const next = { ...row };
+        for (const id of list) {
+            if (src[id] != null && String(src[id]).trim() !== '') next[id] = src[id];
+        }
+        return next;
+    });
+    const headers = [...(schedule.headers || [])];
+    for (const id of list) {
+        if (!headers.includes(id)) headers.push(id);
+    }
+    return { ...schedule, headers, rows };
+}
+
 /**
  * Shared-corridor pill. "To Kempton Park" only when this train, on this day
  * type, really ends somewhere other than the board's destination.
  * Same-end corridors still say "From …". A short working that ends here does not.
  */
 export function sharedDestTag(currentDest, otherDest, terminus) {
-    const board = normalizeStationName(currentDest);
-    const other = normalizeStationName(otherDest);
+    const board = commuterEndKey(currentDest);
+    const other = commuterEndKey(otherDest);
     const raw = stripStationWord(terminus || otherDest || '');
-    const actual = normalizeStationName(raw);
+    const actual = commuterEndKey(raw);
     const leaves = !!(actual && board && actual !== board);
     const sameEnd = !!(other && board && other === board);
     return {
@@ -505,8 +581,40 @@ export function isTrainExcluded(trainNumber, routeId, dayIdx, surface = 'in_app'
     return exclusionAppliesToSurface(rule, surface) ? (rule.type || 'banned') : false;
 }
 
+const ADVISORY_WARN_PATH = 'M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z';
+const ADVISORY_INFO_PATH = 'M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z';
+
+/** critical stays red. caution is a delay. info is a timetable note, not a cancellation. */
+export function paintAdvisoryFrame(tone = 'critical') {
+    if (typeof document === 'undefined') return;
+    const card = document.getElementById('disruption-modal-card');
+    const icon = document.getElementById('disruption-icon-svg');
+    const reply = document.getElementById('disruption-modal-reply-btn');
+    const critical = tone === 'critical';
+    const caution = tone === 'caution';
+    if (card) {
+        card.classList.remove('border-red-500', 'border-yellow-500', 'border-blue-500');
+        card.classList.add(critical ? 'border-red-500' : caution ? 'border-yellow-500' : 'border-blue-500');
+    }
+    if (icon) {
+        icon.setAttribute('class', critical
+            ? 'w-5 h-5 mr-2 text-red-500'
+            : caution
+                ? 'w-5 h-5 mr-2 text-yellow-500'
+                : 'w-5 h-5 mr-2 text-blue-500');
+        const path = icon.querySelector('path');
+        if (path) path.setAttribute('d', tone === 'info' ? ADVISORY_INFO_PATH : ADVISORY_WARN_PATH);
+    }
+    if (reply) {
+        reply.classList.remove('bg-red-600', 'hover:bg-red-700', 'bg-blue-600', 'hover:bg-blue-700');
+        if (critical) reply.classList.add('bg-red-600', 'hover:bg-red-700');
+        else reply.classList.add('bg-blue-600', 'hover:bg-blue-700');
+    }
+}
+
 export function openTrainExclusionSheet(routeId, trainNumber, dayIdx) {
     if (typeof triggerHaptic === 'function') triggerHaptic();
+    paintAdvisoryFrame('critical');
     const rule = getTrainExclusionRule(trainNumber, routeId, dayIdx);
     const titleEl = typeof document !== 'undefined' ? document.getElementById('disruption-modal-stations') : null;
     const bodyEl = typeof document !== 'undefined' ? document.getElementById('disruption-modal-body') : null;
@@ -550,6 +658,53 @@ export function openTrainExclusionSheet(routeId, trainNumber, dayIdx) {
                 if (typeof closeSmoothModal === 'function') closeSmoothModal('disruption-modal');
                 if (typeof window.openFeedbackModal === 'function') {
                     window.openFeedbackModal({ location: 'grid_exclusion_reply' });
+                }
+            }
+        };
+    }
+    if (typeof openSmoothModal === 'function') openSmoothModal('disruption-modal');
+}
+
+/** Timetable note. Same advisory sheet as no service, without the critical treatment. */
+export function openTrainMarkSheet({ train, body, badge } = {}) {
+    if (typeof triggerHaptic === 'function') triggerHaptic();
+    paintAdvisoryFrame('info');
+    const titleEl = typeof document !== 'undefined' ? document.getElementById('disruption-modal-stations') : null;
+    const bodyEl = typeof document !== 'undefined' ? document.getElementById('disruption-modal-body') : null;
+    const badgeEl = typeof document !== 'undefined' ? document.getElementById('disruption-modal-tier-badge') : null;
+    const timeEl = typeof document !== 'undefined' ? document.getElementById('disruption-modal-timestamp') : null;
+    const trainLabel = String(train || '').trim() || 'This train';
+    const note = String(body || '').trim() || 'This train has a timetable note.';
+    const badgeText = String(badge || 'NOTE').trim();
+    if (titleEl) titleEl.textContent = `Train ${trainLabel}`;
+    if (bodyEl) bodyEl.textContent = note;
+    if (badgeEl) {
+        badgeEl.className = 'w-full text-center text-[10px] font-black uppercase tracking-widest text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/20 py-2.5 rounded-lg border border-blue-200 dark:border-blue-800/50';
+        badgeEl.textContent = badgeText;
+    }
+    if (timeEl) {
+        timeEl.textContent = '';
+        timeEl.classList.add('hidden');
+    }
+    const replyBtn = typeof document !== 'undefined' ? document.getElementById('disruption-modal-reply-btn') : null;
+    if (replyBtn) {
+        replyBtn.onclick = async (e) => {
+            e.preventDefault();
+            const snippet = `Train ${trainLabel}: ${note}`;
+            const replyOptions = {
+                label: 'Replying to Advisory:',
+                snippet,
+                rawMsg: snippet,
+                alertId: `mark-${trainLabel}`,
+                alertKind: 'disruption',
+            };
+            try {
+                const { openFeedbackReplyFromOverlay } = await import('./hub.js');
+                openFeedbackReplyFromOverlay('disruption-modal', replyOptions);
+            } catch {
+                if (typeof closeSmoothModal === 'function') closeSmoothModal('disruption-modal');
+                if (typeof window.openFeedbackModal === 'function') {
+                    window.openFeedbackModal({ location: 'grid_mark_reply' });
                 }
             }
         };
@@ -1837,6 +1992,7 @@ export function attachLiveBoardGlobals() {
     window.isTrainExcluded = isTrainExcluded;
     window.getTrainExclusionRule = getTrainExclusionRule;
     window.openTrainExclusionSheet = openTrainExclusionSheet;
+    window.openTrainMarkSheet = openTrainMarkSheet;
     if (!window.__ntExclGridBound) {
         window.__ntExclGridBound = true;
         const openFromGrid = (el) => {

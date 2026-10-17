@@ -24,7 +24,7 @@ import {
 } from './utils.js';
 import { planUnifiedTrip, extractTrainSheetStops } from './planner-core.js';
 import { noticeQuotePlain } from './feedback-quote.js';
-import { trainSheetOperatingLabel } from './live-board.js';
+import { paintAdvisoryFrame, trainSheetOperatingLabel } from './live-board.js';
 import { saturdayNoServiceCopy, buildSaturdayAdvisoryCopy, stationDisplayName } from './saturday-service.js';
 import { buildPlannerShareUrl, buildRouteShareUrl, parsePlannerDeepLink, stripShareParamsFromUrl, compactTime, isSeoAppHandoff } from './share-links.js';
 import { consumeShareDeeplinkSnapshot, peekShareDeeplinkSnapshot, armSlowDeeplinkToast, lockShareBoot } from './deeplink.js';
@@ -2096,6 +2096,7 @@ function paintSaturdayBetweenLine(line) {
 
 export function openSaturdayServiceModal(routeId = 'herc-koed') {
     if (typeof triggerHaptic === 'function') triggerHaptic();
+    paintAdvisoryFrame('critical');
     const payload = {
         ...(currentPlannerErrorPayload || {}),
         routeId: routeId || currentPlannerErrorPayload?.routeId || 'herc-koed',
@@ -2179,6 +2180,7 @@ export function openDisruptionModal(id) {
         bodyEl.innerHTML = prepareRichHtml(raw);
     }
     
+    paintAdvisoryFrame(targetDisruption.tier === 'CRITICAL' ? 'critical' : 'caution');
     if (badgeEl) {
         if (targetDisruption.tier === 'CRITICAL') {
             badgeEl.className = "w-full text-center text-[10px] font-black uppercase tracking-widest text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 py-2.5 rounded-lg border border-red-200 dark:border-red-800/50";

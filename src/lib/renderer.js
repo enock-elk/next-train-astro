@@ -27,7 +27,7 @@ import {
 import { 
     currentTime, currentDayType, currentDayIndex, getScheduleFromDb
 } from './logic.js';
-import { kempTrainIds, siblingSheetKey } from './live-board.js';
+import { extraKempTrainIds, kempTrainIds, siblingSheetKey, withExtraTrainColumns } from './live-board.js';
 
 import { buildTrainReportSlotHtml, buildTrainTitleReportButton } from './delay-reports.js';
 import { showToast, triggerHaptic } from './ui.js';
@@ -50,6 +50,75 @@ import {
     isQuietBoardPaint,
 } from './live-board-paint.js';
 import { disruptedStationMap, disruptionAppliesToTime, disruptionIsAllDay } from './disruption-zones.js';
+
+/**
+ * Font size for a status tag that is wider than its column.
+ * Short tags (NO SVC, KEMP) pass through at the gold size.
+ * Long names scale down, and stop at a readable floor.
+ */
+export function fittedStatusFontPx(basePx, neededPx, availablePx, minPx = 6.5) {
+    const base = Number(basePx);
+    const needed = Number(neededPx);
+    const available = Number(availablePx);
+    const floor = Number(minPx) > 0 ? Number(minPx) : 6.5;
+    if (!(base > 0) || !(needed > 0) || !(available > 0)) return base > 0 ? base : floor;
+    const comfort = Math.max(1, available - 4);
+    if (needed <= comfort) return base;
+    const scaled = Math.round((base * (comfort / needed)) * 10) / 10;
+    return Math.min(base, Math.max(floor, scaled));
+}
+
+/** Shrink a long status name into the normal train column. NO SVC stays put. */
+export function fitGridStatusTags(root) {
+    if (!root || typeof root.querySelectorAll !== 'function') return;
+    root.querySelectorAll('.nt-fit-status').forEach((label) => {
+        const status = label.closest('.nt-grid-train-status');
+        const th = label.closest('th');
+        if (!status || !th) return;
+        const row = th.parentElement;
+        const sample = row
+            ? [...row.children].find((cell) => cell !== th && cell.querySelector?.('.nt-grid-train-id') && !cell.querySelector('.nt-fit-status'))
+            : null;
+        const box = sample?.clientWidth || parseFloat(getComputedStyle(th).minWidth) || 0;
+        if (!(box > 0)) return;
+        const boxCs = getComputedStyle(sample || th);
+        const pad = (parseFloat(boxCs.paddingLeft) || 0) + (parseFloat(boxCs.paddingRight) || 0);
+        const available = Math.max(8, box - pad);
+        label.style.display = 'inline-block';
+        label.style.whiteSpace = 'nowrap';
+        label.style.fontSize = '';
+        label.style.letterSpacing = '';
+        const base = parseFloat(getComputedStyle(status).fontSize) || 8;
+        const track = /letter-spacing:\s*0\.08em/.test(status.getAttribute('style') || '') ? 0.08 : 0.02;
+        const floor = 7;
+        const room = Math.max(8, available - 4);
+        label.style.position = 'absolute';
+        let size = base;
+        const applySize = (px) => {
+            label.style.fontSize = `${px}px`;
+            label.style.letterSpacing = px >= base - 0.05
+                ? `${track}em`
+                : `${Math.round(track * (px / base) * 1000) / 1000}em`;
+        };
+        applySize(size);
+        while (size > floor && label.scrollWidth > room) {
+            size = Math.round((size - 0.5) * 10) / 10;
+            applySize(size);
+        }
+        const fittedWidth = label.scrollWidth;
+        label.style.position = '';
+        if (size >= base - 0.05) {
+            label.style.fontSize = '';
+            label.style.letterSpacing = '';
+            return;
+        }
+        if (fittedWidth > room) {
+            const thCs = getComputedStyle(th);
+            const thPad = (parseFloat(thCs.paddingLeft) || 0) + (parseFloat(thCs.paddingRight) || 0);
+            th.style.minWidth = `${Math.ceil(fittedWidth + thPad + 4)}px`;
+        }
+    });
+}
 
 // --- Astro MPA Migration Shims ---
 const getCurrentDayType = () => typeof window !== 'undefined' && window.currentDayType ? window.currentDayType : 'weekday';
@@ -933,6 +1002,22 @@ export const Renderer = {
     // --- 3. TIMETABLE DAILY MATRIX COMPILER ---
 
     _buildGridHTML: (schedule, sheetName, routeId, dayIdx, highlightNextTrain = true, isExport = false, dayType = null) => {
+        const kempIds = new Set();
+        if (routeId === 'pta-irene') {
+            const sibKey = siblingSheetKey(routeId, sheetName);
+            const db = $fullDatabase.get();
+            if (sibKey && db && db[sibKey]) {
+                const sibling = getScheduleFromDb(db, sibKey);
+                for (const id of kempTrainIds(routeId, schedule, sibling)) kempIds.add(String(id));
+                if (!isExport) {
+                    const extra = extraKempTrainIds(schedule, sibling);
+                    if (extra.length) {
+                        schedule = withExtraTrainColumns(schedule, sibling, extra);
+                        for (const id of extra) kempIds.add(String(id));
+                    }
+                }
+            }
+        }
         const trainCols = schedule.headers.slice(1).filter(header => /^\d{4}[a-zA-Z]*$/.test(header.trim()));
         const masterStations = (typeof window !== 'undefined' && typeof window.routeGeometryStations === 'function')
             ? (window.routeGeometryStations(routeId) || [])
@@ -1039,15 +1124,6 @@ export const Renderer = {
             schedule,
             viaCodesFromGridOrderRecord(getRuntimeGridOrderRecord(viaRegion, sheetName))
         );
-        const kempIds = new Set();
-        if (routeId === 'pta-irene') {
-            const sibKey = siblingSheetKey(routeId, sheetName);
-            const db = $fullDatabase.get();
-            if (sibKey && db && db[sibKey]) {
-                for (const id of kempTrainIds(routeId, schedule, getScheduleFromDb(db, sibKey))) kempIds.add(id);
-            }
-        }
-
         let html = `
             ${gridNoticeHtml}
             <table class="w-full ${fontSizeClass} text-left border-collapse ${tableClass}">
@@ -1073,14 +1149,14 @@ export const Renderer = {
                             };
                             let headerContent = stack('&nbsp;', 'visibility:hidden;');
                             const continuesToKemp = kempIds.has(String(h));
-                            const viaStatusStyle = isExport
-                                ? 'font-size:8px;font-weight:800;letter-spacing:0;line-height:1;white-space:nowrap;color:#334155;'
-                                : 'font-size:8px;font-weight:900;letter-spacing:0;line-height:1;white-space:nowrap;';
-                            const viaStatusHtml = viaLabel
-                                ? (isExport
-                                    ? escapeHTML(viaLabel)
-                                    : `<button type="button" class="nt-via-btn focus:outline-none" data-via-open="1" data-via-train="${escapeHTML(String(h || ''))}" data-via-route="${escapeHTML(viaLabel)}" style="font:inherit;letter-spacing:inherit;line-height:1;white-space:nowrap;text-decoration:underline dotted currentColor;text-underline-offset:2px;background:transparent;border:0;padding:0;margin:0;color:inherit;cursor:pointer;" aria-label="Train ${escapeHTML(String(h))} goes via the ${escapeHTML(viaLabel)} route">${escapeHTML(viaLabel)}</button>`)
-                                : '';
+                            // Same status-slot metrics as NO SVC. Blue, because the train runs.
+                            // A longer name is marked nt-fit-status and scaled into this column.
+                            const noteTagStyle = isExport
+                                ? 'font-size:9px;font-weight:800;letter-spacing:0.08em;color:#1e40af;'
+                                : 'font-size:8px;color:#1d4ed8;font-weight:900;letter-spacing:0.02em;text-decoration:underline dotted #93c5fd;text-underline-offset:2px;';
+                            const noteHeadClass = isExport
+                                ? 'export-note-col'
+                                : 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300';
                             
                             if (paintExclusion && exclusionType === 'special') {
                                 const splIcon = `<svg class="inline-block w-2 h-2 mr-0.5 mb-[1px]" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>`;
@@ -1101,19 +1177,13 @@ export const Renderer = {
                                     headerContent = stack(`${banIcon} NO SVC`, 'font-size:8px;color:#dc2626;font-weight:900;letter-spacing:0.02em;text-decoration:underline dotted #f87171;text-underline-offset:2px;');
                                 }
                             } else if (continuesToKemp) {
-                                if (isExport) {
-                                    headerContent = stack('KEMP', 'font-size:9px;font-weight:800;letter-spacing:0.08em;color:#334155;');
-                                } else {
-                                    headerContent = stack('KEMP', 'font-size:8px;font-weight:900;letter-spacing:0.04em;text-decoration:underline dotted currentColor;text-underline-offset:2px;');
-                                }
-                                if (!isExport && isHighlight) {
-                                    bgClass = 'bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-300 font-bold';
-                                }
+                                headerContent = stack('KEMP', noteTagStyle);
+                                bgClass = noteHeadClass;
+                                if (!isExport && isHighlight) bgClass += ' font-bold';
                             } else if (viaLabel) {
-                                headerContent = stack(viaStatusHtml, viaStatusStyle);
-                                if (!isExport && isHighlight) {
-                                    bgClass = 'bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-300 font-bold';
-                                }
+                                headerContent = stack(`<span class="nt-fit-status">${escapeHTML(viaLabel)}</span>`, noteTagStyle);
+                                bgClass = noteHeadClass;
+                                if (!isExport && isHighlight) bgClass += ' font-bold';
                             } else if (!isExport && isHighlight) {
                                 bgClass = 'bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-300 font-bold';
                             }
@@ -1124,8 +1194,12 @@ export const Renderer = {
                             const kempHeadAttrs = (!isExport && continuesToKemp && !paintExclusion)
                                 ? ` data-kemp-open="1" data-kemp-train="${escapeHTML(String(h || ''))}" tabindex="0" role="button" aria-label="Train ${escapeHTML(String(h))} continues to Kempton Park"`
                                 : '';
+                            const viaColumn = !!(viaLabel && !paintExclusion && !continuesToKemp);
+                            const viaHeadAttrs = (!isExport && viaColumn)
+                                ? ` data-via-open="1" data-via-train="${escapeHTML(String(h || ''))}" data-via-route="${escapeHTML(viaLabel)}" tabindex="0" role="button" aria-label="Train ${escapeHTML(String(h))} goes via the ${escapeHTML(viaLabel)} route"`
+                                : '';
                             const wrapClass = (isExport && paintExclusion && exclusionType !== 'special') ? 'whitespace-normal' : 'whitespace-nowrap';
-                            return `<th class="${paddingClass} border-b border-r ${borderClass} ${wrapClass} text-center ${bgClass} ${minWidthClass}" ${isHighlight ? 'id="grid-active-col"' : ''} ${!isExport ? `data-nt-live-host="${escapeHTML(String(h || ''))}"` : ''}${exclHeadAttrs}${kempHeadAttrs}>${headerContent}</th>`;
+                            return `<th class="${paddingClass} border-b border-r ${borderClass} ${wrapClass} text-center ${bgClass} ${minWidthClass}" ${isHighlight ? 'id="grid-active-col"' : ''} ${!isExport ? `data-nt-live-host="${escapeHTML(String(h || ''))}"` : ''}${exclHeadAttrs}${kempHeadAttrs}${viaHeadAttrs}>${headerContent}</th>`;
                         }).join('')}
                         ${showRightAnchor ? `<th class="right-anchor-header ${paddingClass} border-b border-l font-bold min-w-[50px] text-center">STN</th>` : ''}
                     </tr>
@@ -1240,8 +1314,12 @@ export const Renderer = {
                         const kempCellAttrs = (!isExport && kempIds.has(String(col)) && !paintExclusion)
                             ? ` data-kemp-open="1" data-kemp-train="${escapeHTML(String(col || ''))}"`
                             : '';
+                        const viaForCol = variantByTrain[String(col)] || '';
+                        const viaCellAttrs = (!isExport && viaForCol && !paintExclusion && !kempIds.has(String(col)))
+                            ? ` data-via-open="1" data-via-train="${escapeHTML(String(col || ''))}" data-via-route="${escapeHTML(viaForCol)}"`
+                            : '';
                         
-                        return `<td class="${cellClass}"${exclCellAttrs}${kempCellAttrs}>${val}</td>`;
+                        return `<td class="${cellClass}"${exclCellAttrs}${kempCellAttrs}${viaCellAttrs}>${val}</td>`;
                     }).join('')}
                     ${showRightAnchor ? `<td class="right-anchor-col ${paddingClass} border-l border-b font-mono font-bold text-center text-[10px] sm:text-xs">${getAbbrev(cleanStation)}</td>` : ''}
                 </tr>
@@ -1431,6 +1509,8 @@ export const Renderer = {
         }
     }
 };
+
+Renderer.fitGridStatusTags = fitGridStatusTags;
 
 // --- 5. CANVAS GRID EXPORT & SOCIAL SHARE SHIELD ---
 
@@ -1679,6 +1759,13 @@ export async function takeGridSnapshot(direction = 'A', dayType = 'weekday') {
             headerCell.style.color = '#991b1b';
             headerCell.style.verticalAlign = 'middle';
         });
+        t.querySelectorAll('th.export-note-col').forEach(headerCell => {
+            // Zebra rows are already #eff6ff. Blue-100 keeps the note tag
+            // visible the way NO SVC's #fef2f2 sits off the zebra.
+            headerCell.style.backgroundColor = '#dbeafe';
+            headerCell.style.color = '#1e40af';
+            headerCell.style.verticalAlign = 'middle';
+        });
         t.querySelectorAll('td.export-spl-cell').forEach(td => {
             td.style.backgroundColor = '#f0fdf4';
             td.style.color = '#15803d'; 
@@ -1739,6 +1826,7 @@ export async function takeGridSnapshot(direction = 'A', dayType = 'weekday') {
     try {
         await new Promise(r => setTimeout(r, 100));
 
+        fitGridStatusTags(exportContainer);
         exportContainer.querySelectorAll('.nt-export-route-title').forEach((title) => {
             const section = title.closest('.mb-4, .mb-8');
             const table = section?.querySelector('table');

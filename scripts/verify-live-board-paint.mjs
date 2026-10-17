@@ -13,6 +13,7 @@ import {
 import {
     realTrainTerminus,
     sharedDestTag,
+    commuterEndKey,
     boardDirectionState,
     sheetsReadyForBoard,
     findNextTrains,
@@ -139,6 +140,12 @@ function assert(cond, msg) {
     assert(shortOnKemp.isDivergent === true && shortOnKemp.actualDestName === 'IRENE', '0626 on the Kempton board says To Irene');
     const sameEnd = sharedDestTag('PRETORIA STATION', 'PRETORIA STATION', 'PRETORIA');
     assert(sameEnd.isShared === true && sameEnd.isDivergent === false, 'a shared same-end corridor still says From');
+    assert(commuterEndKey('DURBAN YARD STATION') === 'DURBAN' && commuterEndKey('DURBAN') === 'DURBAN', 'Durban Yard is the Durban end');
+    assert(commuterEndKey('ELANDSFONTEIN') === 'KEMPTON PARK' && commuterEndKey('RHODESFIELD') === 'KEMPTON PARK', 'Elandsfontein and Rhodesfield stay Kempton Park');
+    const durbanDirect = sharedDestTag('DURBAN YARD STATION', 'UMLAZI STATION', 'DURBAN');
+    assert(durbanDirect.isDivergent === false, 'a Durban train is not a short trip off Durban Yard');
+    const elands = sharedDestTag('KEMPTON PARK STATION', 'IRENE STATION', 'ELANDSFONTEIN');
+    assert(elands.isDivergent === false, 'Elandsfontein stays the Kempton Park end');
 }
 
 {

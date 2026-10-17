@@ -16,7 +16,7 @@ import {
     tripNeedsHercKoedBridge,
 } from '../src/lib/saturday-service.js';
 import { extractTrainSheetStops } from '../src/lib/planner-core.js';
-import { Renderer } from '../src/lib/renderer.js';
+import { Renderer, fittedStatusFontPx } from '../src/lib/renderer.js';
 import { setRuntimeGridOrderConfig, clearRuntimeGridOrderConfig } from '../src/lib/grid-order.js';
 import { buildGridOrderWriteRecord } from '../src/lib/utils.js';
 import { filterStopsForFork } from '../src/lib/map-overrides.js';
@@ -291,9 +291,27 @@ if (!expressExport.includes('>EXPR<') || !expressExport.includes('color:#7f1d1d'
 }
 const exportVia = expressExport.indexOf('>Monte Vista<');
 const exportId = expressExport.indexOf('>2630<');
-if (exportVia < 0 || exportId < exportVia || expressExport.includes('data-via-open') || !expressExport.includes('color:#334155')) {
-    fail('export via label must sit above the number in light-sheet ink');
+if (exportVia < 0 || exportId < exportVia || expressExport.includes('data-via-open') || !expressExport.includes('color:#1e40af') || !expressExport.includes('export-note-col') || !expressExport.includes('letter-spacing:0.08em') || expressExport.includes('export-banned-col')) {
+    fail('export via label must use the NO SVC tag metrics in informational ink');
 }
+if (!expressHtml.includes('color:#1d4ed8') || !expressHtml.includes('text-decoration:underline dotted #93c5fd') || !expressHtml.includes('bg-blue-50') || !expressHtml.includes('class="nt-fit-status"')) {
+    fail('in-app via label must use the NO SVC tag metrics in informational ink');
+}
+if (!expressExport.includes('class="nt-fit-status"') || expressExport.includes('min-width:112px') || expressHtml.includes('min-width:96px')) {
+    fail('a long via name must scale inside the column, not widen it up front');
+}
+if (fittedStatusFontPx(8, 40, 70) !== 8) fail('a short tag must keep the NO SVC size');
+if (fittedStatusFontPx(9, 90, 80) !== 7.6) fail(`a long tag must scale down to fit: ${fittedStatusFontPx(9, 90, 80)}`);
+if (fittedStatusFontPx(9, 120, 40) !== 6.5) fail('shrink must stop at a readable floor');
+const rendererSrc = readFileSync(join(ROOT, 'src/lib/renderer.js'), 'utf8');
+const notePaint = rendererSrc.slice(rendererSrc.indexOf('th.export-note-col'), rendererSrc.indexOf('th.export-note-col') + 500);
+if (!notePaint.includes("#dbeafe") || notePaint.includes("backgroundColor = '#eff6ff'")) {
+    fail('export note header wash must read as a tag, not the zebra row');
+}
+const fitAt = rendererSrc.indexOf('fitGridStatusTags(exportContainer)');
+const canvasAt = rendererSrc.indexOf('window.html2canvas(exportContainer');
+if (fitAt < 0 || canvasAt < 0 || fitAt > canvasAt) fail('export must fit long status tags before the snapshot');
+if (!rendererSrc.includes('size - 0.5')) fail('a long status tag must step down until it fits');
 if (!expressHtml.includes('w-max max-w-[140px] truncate') || expressHtml.includes('min-w-[140px]')) {
     fail('in-app station column must shrink to the name and stop at 140px');
 }
@@ -429,11 +447,11 @@ $fullDatabase.set({
         { STATION: 'IRENE', '0604': '5:35:00', '0626': '6:55:00' },
     ],
     pta_to_kemp_weekday: [
-        { STATION: 'PRETORIA', '0604': '5:10:00', '0626': '6:30:00' },
+        { STATION: 'PRETORIA', '0604': '5:10:00', '0618': '6:00:00', '0626': '6:30:00' },
         { STATION: 'CENTURION', '0604': '5:26:00', '0626': '6:46:00' },
-        { STATION: 'IRENE', '0604': '5:35:00', '0626': '6:55:00' },
-        { STATION: 'OLIFANTSFONTEIN', '0604': '6:16:00' },
-        { STATION: 'KEMPTON PARK', '0604': '6:40:00' },
+        { STATION: 'IRENE', '0604': '5:35:00', '0618': '6:20:00', '0626': '6:55:00' },
+        { STATION: 'OLIFANTSFONTEIN', '0604': '6:16:00', '0618': '6:40:00' },
+        { STATION: 'KEMPTON PARK', '0604': '6:40:00', '0618': '7:10:00' },
     ],
     irene_to_pta_weekday: [{ STATION: 'IRENE' }],
     ct_to_bellv_weekday: [
@@ -465,26 +483,35 @@ const ireneGrid = {
     ],
 };
 const kempHtml = Renderer._buildGridHTML(ireneGrid, 'pta_to_irene_weekday', 'pta-irene', 1, false, false, 'weekday');
-if (!kempHtml.includes('>KEMP<') || !kempHtml.includes('data-kemp-train="0604"')) fail('through Irene column must show clickable KEMP');
+if (!kempHtml.includes('>KEMP<') || !kempHtml.includes('data-kemp-train="0604"') || !kempHtml.includes('data-kemp-train="0618"')) fail('through Irene columns must show clickable KEMP');
 if (kempHtml.includes('data-kemp-train="0626"')) fail('an Irene terminator must not be marked KEMP');
+if (!kempHtml.includes('color:#1d4ed8') || !kempHtml.includes('letter-spacing:0.02em')) fail('KEMP must use the NO SVC tag metrics');
 if (/0604[\s\S]{0,400}bg-red-50/.test(kempHtml) || /bg-green-50[\s\S]{0,80}KEMP/.test(kempHtml)) {
     fail('KEMP must not take a ban or special colour');
 }
 const kempExport = Renderer._buildGridHTML(ireneGrid, 'pta_to_irene_weekday', 'pta-irene', 1, false, true, 'weekday');
-if (!kempExport.includes('KEMP') || kempExport.includes('data-kemp-open') || kempExport.includes('nt-expr-btn')) {
-    fail('export KEMP must be plain text');
+if (!kempExport.includes('KEMP') || kempExport.includes('data-kemp-open') || kempExport.includes('nt-expr-btn') || kempExport.includes('data-kemp-train="0618"')) {
+    fail('export KEMP must be plain text and must not add trains that are not on the Irene sheet');
 }
-if (!kempExport.includes('color:#334155')) fail('export KEMP must use the light sheet ink');
+if (!kempExport.includes('color:#1e40af') || !kempExport.includes('letter-spacing:0.08em') || !kempExport.includes('export-note-col')) {
+    fail('export KEMP must use the NO SVC tag metrics in informational ink');
+}
 globalThis.window = { isTrainExcluded: (train) => (train === '0604' ? 'banned' : false) };
 const bannedHtml = Renderer._buildGridHTML(ireneGrid, 'pta_to_irene_weekday', 'pta-irene', 1, false, false, 'weekday');
 delete globalThis.window;
-if (!bannedHtml.includes('NO SVC') || bannedHtml.includes('>KEMP<')) fail('NO SVC must keep the status slot ahead of KEMP');
+if (!bannedHtml.includes('NO SVC') || bannedHtml.includes('data-kemp-train="0604"') || !bannedHtml.includes('data-excl-train="0604"')) {
+    fail('NO SVC must keep the status slot ahead of KEMP');
+}
 
 if (!ui.includes('flex-col items-start text-left') || !ui.includes('Via ${escapeHTML(via)}')) {
     fail('planner train name must stack Via under the train on a narrow card');
 }
 if (!gridJs.includes('Irene is not the last stop')) fail('KEMP tap must explain the train continues');
 if (!gridJs.includes('goes via the ${route} route')) fail('via tap must explain the route');
+if (!gridJs.includes('fitGridStatusTags')) fail('in-app grid must fit long status tags after paint');
+if (!gridJs.includes("e.target?.closest?.('[data-expr-skip=\"1\"]')")) {
+    fail('a via or KEMP column must not steal an EXPR tap');
+}
 
 if (failures.length) {
     console.error(`\n✗ planner-saturday failed (${failures.length}):`);

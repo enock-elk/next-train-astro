@@ -14,7 +14,7 @@
  * Changelog / What’s New is optional: skip both, or write only "no release notes."
  * Always add ADMIN_CHANGELOG[APP_VERSION] (System Health Build notes).
  */
-export const APP_VERSION = "V9_10.17.1";
+export const APP_VERSION = "V9_10.17.2";
 
 /** Public support channels (About modal, lifeboat help.html, Safe Mode). */
 export const SUPPORT_EMAIL = 'admin@nexttrain.co.za';
@@ -984,6 +984,19 @@ export const HERC_KOED_JUNCTIONS = ['KOEDOESPOORT', 'HERCULES'];
 // comma, a period, or a hyphen. Do not explain strategy or "we fixed."
 // Leave every forceShow false. Never auto-open What's New over the welcome screen.
 export const CHANGELOG_DATA = [
+    {
+        id: "V9_10.17.2",
+        title: "Timetable marks",
+        date: "17 Oct 2026",
+        forceShow: false,
+        features: [
+            "Options names this Reset this App. It clears this App's saved data.",
+            "A weak connection asks before that reset.",
+            "A train that reaches Durban on a Durban route is marked Direct.",
+            "On the Irene timetable, a train that continues to Kempton Park is marked KEMP.",
+            "Monte Vista, Maitland, and KEMP use the same kind of mark as NO SVC. Tap the mark to read it."
+        ]
+    },
     {
         id: "V9_10.17.1",
         title: "Refresh",

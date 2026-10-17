@@ -30,6 +30,7 @@ import {
     startSmartRefresh,
     findNextJourneyToDestA,
     findNextJourneyToDestB,
+    commuterEndKey,
     currentScheduleData,
     routeHasSaturdayService
 } from './live-board.js';
@@ -819,8 +820,8 @@ export function openScheduleModal(destination, dayOverride = null) {
         let shortDestName = '';
 
         if (j.type === 'direct' && j.actualDestination) {
-            const actual = normalizeStationName(j.actualDestination);
-            const target = normalizeStationName(destination);
+            const actual = commuterEndKey(j.actualDestination);
+            const target = commuterEndKey(destination);
             if (actual !== target) {
                 isShortTrip = true;
                 shortDestName = toTitleCase(String(j.actualDestination).replace(/ STATION/gi, ''));
@@ -996,7 +997,7 @@ export function initLiveBoardUi() {
             scheduleBoardRefresh();
         }
         // Region swaps clear fullDatabase, so a cache-only guard left the board empty.
-        loadAllSchedules(true).then(() => {
+        loadAllSchedules(false).then(() => {
             populateStationList();
             scheduleBoardRefresh();
             maybeAutoLocateBoard().catch(() => {});

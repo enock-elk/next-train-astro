@@ -1727,7 +1727,7 @@ export function executeRegionSwap(newRegion, isFromWelcomeScreen = false) {
             if (pien) window.Renderer.renderSkeletonLoader(pien);
         }
 
-        loadAllSchedules(true).then(() => {
+        loadAllSchedules(false).then(() => {
             hideRegionSwapLoader();
             if (typeof window !== 'undefined' && typeof window.checkServiceAlerts === 'function') {
                 window.checkServiceAlerts();

@@ -856,9 +856,45 @@ function openPhoneResetConfirm(onProceed) {
     openSmoothModal('phone-reset-modal');
 }
 
+function openPhoneResetNetworkConfirm(onProceed) {
+    const modal = document.getElementById('phone-reset-network-modal');
+    const cancelBtn = document.getElementById('phone-reset-network-cancel-btn');
+    const proceedBtn = document.getElementById('phone-reset-network-confirm-btn');
+    if (!modal || !cancelBtn || !proceedBtn) {
+        onProceed?.();
+        return;
+    }
+    const finish = (proceed) => {
+        cancelBtn.onclick = null;
+        proceedBtn.onclick = null;
+        closeSmoothModal('phone-reset-network-modal');
+        if (proceed) onProceed?.();
+    };
+    cancelBtn.onclick = () => finish(false);
+    proceedBtn.onclick = () => finish(true);
+    openSmoothModal('phone-reset-network-modal');
+}
+
 export function showPhoneResetWarning() {
     triggerHaptic();
-    openPhoneResetConfirm(() => {
+    openPhoneResetConfirm(async () => {
+        const online = typeof navigator === 'undefined' || navigator.onLine !== false;
+        let preflight = 'ok';
+        if (typeof window !== 'undefined' && typeof window.probeReachability === 'function') {
+            showToast('Checking the connection…', 'info', 4000);
+            try {
+                preflight = await window.probeReachability(3500);
+            } catch {
+                preflight = 'timeout';
+            }
+            hideToastIfMessage('Checking the connection…');
+        }
+        if (!destructiveNetworkIsSafe({ online, lieFi: isLieFi, preflight })) {
+            openPhoneResetNetworkConfirm(() => {
+                resetPhoneKeepDeviceId();
+            });
+            return;
+        }
         resetPhoneKeepDeviceId();
     });
 }

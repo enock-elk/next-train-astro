@@ -23,16 +23,19 @@ let lastWatchCallbackAt = 0;
 let shareWatchdogTimer = 0;
 let wakeLockSentinel = null;
 let wantShareWakeLock = false;
+let shareFixInFlight = false;
 
 const SEEK_OPTS = { enableHighAccuracy: false, maximumAge: 2500, timeout: 15000 };
-const SHARE_OPTS = { enableHighAccuracy: true, maximumAge: 1000, timeout: 20000 };
+const SHARE_OPTS = { enableHighAccuracy: true, maximumAge: 1000, timeout: 9000 };
 const LOCATE_OPTS = { enableHighAccuracy: true, maximumAge: 4000, timeout: 12000 };
 const STATIONARY_SPEED_MPS = 1.5;
 const MAX_PLAUSIBLE_SPEED_MPS = 70;
-/** Restart a silent share watch so Android cannot freeze fused GPS for minutes. */
-const SHARE_SILENT_RESTART_MS = 8 * 1000;
-/** One-shot GPS before the 15s grey window. */
-const SHARE_FRESH_OPTS = { enableHighAccuracy: true, maximumAge: 0, timeout: 12000 };
+/** Restart a silent share watch after three missed 3s tries, not on every attempt. */
+const SHARE_SILENT_RESTART_MS = 9 * 1000;
+/** Manual Refresh GPS / resume. The share loop uses the shorter attempt below. */
+const SHARE_FRESH_OPTS = { enableHighAccuracy: true, maximumAge: 0, timeout: 8000 };
+/** One try while sharing. Times out inside the 3s cadence so the next try is not stacked. */
+const SHARE_ATTEMPT_OPTS = { enableHighAccuracy: true, maximumAge: 0, timeout: 2800 };
 
 /** Map pin / last fused sample is still good enough to attach or list nearby trains. */
 export const GEO_REUSE_MAX_AGE_MS = 30 * 1000;
@@ -232,12 +235,11 @@ function syncShareWatchdog(on) {
     // Worker-backed so a backgrounded tab cannot throttle the restart check.
     shareWatchdogTimer = startBackgroundTicker(() => {
         if (desiredWatchKind() !== 'share') return;
-        const last = lastWatchCallbackAt || lastFix?.t || 0;
+        const last = lastWatchCallbackAt || 0;
         if (last && Date.now() - last < SHARE_SILENT_RESTART_MS) return;
         clearWatch();
         startWatch('share');
-        requestFreshShareFix().catch(() => {});
-    }, 4000);
+    }, 3000);
 }
 
 async function syncShareWakeLock(on) {
@@ -358,45 +360,70 @@ export function restartShareWatch() {
 }
 
 /**
- * Force a new GPS sample for an active share (Refresh GPS / silent watchdog).
- * Stamps `t` to now so a cached OS position cannot grey the card.
+ * One high-accuracy sample for an active share.
+ * `fresh` is true only when this call received a new GPS callback.
+ * A timeout or a fallback to the previous fix is not a success, so the
+ * share loop can count misses and pause after six of them.
  */
-export function requestFreshShareFix() {
-    return new Promise((resolve, reject) => {
+export function attemptShareGpsFix({ timeoutMs = SHARE_ATTEMPT_OPTS.timeout } = {}) {
+    const timeout = Math.max(500, Number(timeoutMs) || SHARE_ATTEMPT_OPTS.timeout);
+    return new Promise((resolve) => {
         if (typeof navigator === 'undefined' || !navigator.geolocation) {
-            if (lastFix) {
-                resolve(lastFix);
-                return;
-            }
-            reject(Object.assign(new Error('Location isn’t available on this device.'), { code: 2 }));
+            resolve({ ok: false, fresh: false });
             return;
         }
+        if (shareFixInFlight) {
+            resolve({ ok: false, fresh: false, busy: true });
+            return;
+        }
+        shareFixInFlight = true;
+        let settled = false;
+        const finish = (result) => {
+            if (settled) return;
+            settled = true;
+            shareFixInFlight = false;
+            resolve(result);
+        };
+        const timer = setTimeout(() => finish({ ok: false, fresh: false }), timeout + 400);
         acquireGeoWatch('share');
         navigator.geolocation.getCurrentPosition(
             (pos) => {
+                clearTimeout(timer);
                 lastWatchCallbackAt = Date.now();
                 if (!pos?.coords) {
-                    if (lastFix) {
-                        resolve(lastFix);
-                        return;
-                    }
-                    reject(Object.assign(new Error('Couldn’t get a GPS fix.'), { code: 2 }));
+                    finish({ ok: false, fresh: false });
                     return;
                 }
                 const raw = fromCoords(pos.coords, Date.now());
                 const fix = refineMotionFix(raw, lastFix) || confirmStationaryWatchTick(raw, lastFix) || raw;
-                emit(fix);
-                resolve(fix);
+                if (fix) emit(fix);
+                finish(fix ? { ok: true, fresh: true, fix } : { ok: false, fresh: false });
             },
-            (err) => {
-                if (lastFix) {
-                    resolve(lastFix);
-                    return;
-                }
-                reject(err);
+            () => {
+                clearTimeout(timer);
+                finish({ ok: false, fresh: false });
             },
-            SHARE_FRESH_OPTS
+            { ...SHARE_ATTEMPT_OPTS, timeout }
         );
+    });
+}
+
+/**
+ * Force a new GPS sample for an active share (Refresh GPS / resume).
+ * Stamps `t` to now so a cached OS position cannot grey the card.
+ * On failure this still resolves the previous fix for callers that only
+ * need a coordinate. That fallback is not a new fix: use attemptShareGpsFix
+ * when a miss must count.
+ */
+export function requestFreshShareFix() {
+    return attemptShareGpsFix({ timeoutMs: SHARE_FRESH_OPTS.timeout }).then((attempt) => {
+        if (attempt?.fresh && attempt.fix) return attempt.fix;
+        if (lastFix) return lastFix;
+        throw Object.assign(new Error(
+            typeof navigator === 'undefined' || !navigator.geolocation
+                ? 'Location isn’t available on this device.'
+                : 'Couldn’t get a GPS fix.'
+        ), { code: 2 });
     });
 }
 

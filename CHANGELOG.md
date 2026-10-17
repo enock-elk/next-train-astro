@@ -1,5 +1,9 @@
 # Changelog
 
+## V9_10.17.4 — no release notes
+
+A live share asks for GPS every 3 seconds and pauses after 18 seconds without a fix. Sharing ends after 10 minutes without a ping. Receivers follow new pings within a few seconds. Two phones on one train are averaged only while they sit within about one train length. Otherwise the map keeps the more credible phone.
+
 ## V9_10.17.3 — no release notes
 
 Community rooms stay on the routes that are switched on. The operator brief follows the time of day, splits a two-fact card into paragraphs, and keeps Add to alerts as a bell. A missing written note stays on the card. Back closes the brief. An operator's installed icon can show a count of new messages.

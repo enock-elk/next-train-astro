@@ -81,8 +81,8 @@ const HIGHWAY_KMH = 90;
  * listener-less receiver inside two glide windows (sharers publish every 3-6s,
  * receivers glide for 15s). Live updates come from the route listener.
  */
-const PINGS_POLL_MS = 20 * 1000;
-const PINGS_POLL_WITH_LISTENER_MS = 120 * 1000;
+const PINGS_POLL_MS = 3 * 1000;
+const PINGS_POLL_WITH_LISTENER_MS = 5 * 1000;
 let pingsTimer = 0;
 let lastMapPingSig = '';
 let trackingCardMode = 'expanded';
@@ -698,6 +698,8 @@ function renderTrackingStatusCard(active, marker = null) {
     speedEl?.classList.toggle('dark:text-gray-100', !fast);
     setTrackingText('map-tracking-heading', trackingHeadingLabel(bearing));
     setTrackingText('map-tracking-gps', formatGpsPingAge(pingAt));
+    document.getElementById('map-tracking-gps')?.setAttribute('data-nt-gps-at', pingAt ? String(pingAt) : '');
+    document.getElementById('map-tracking-last-seen')?.setAttribute('data-nt-last-place', place || '');
     setTrackingText('map-tracking-rail', trackingDistanceLabel(railM));
     const railEl = document.getElementById('map-tracking-rail');
     const railFar = Number.isFinite(railM) && railM >= RIDE_OFFTRACK_HARD_M;
@@ -717,6 +719,14 @@ function renderTrackingStatusCard(active, marker = null) {
         toggle.setAttribute('aria-label', paused ? 'Restart sharing' : 'Pause sharing');
     }
     setTrackingOwnerChrome(owner);
+    const joinBtn = document.getElementById('map-tracking-join');
+    const showJoin = !owner && !!trainId && !cancelled;
+    if (joinBtn) {
+        joinBtn.classList.toggle('hidden', !showJoin);
+        if (showJoin) joinBtn.removeAttribute('hidden');
+        else joinBtn.setAttribute('hidden', '');
+        joinBtn.textContent = trainId ? `Join train ${trainId}` : 'Join this train';
+    }
     // Community trust: anyone watching someone else's train can say whether it
     // is where the map shows it. The sharer never votes on their own share.
     const sharerDeviceId = subjectMarker?.deviceId || subject.deviceId || '';
@@ -2582,7 +2592,6 @@ function startPingsPolling() {
         } catch { /* keep REST interval */ }
         pingsTimer = setTimeout(async () => {
             if (document.getElementById('view-map')?.classList.contains('active')) {
-                lastMapPingSig = '';
                 await syncRidePingsToMap();
             }
             if (pingsTimer) schedule();
@@ -3071,6 +3080,32 @@ async function shareLiveTrain() {
     }
 }
 
+function tickTrackingShareReadout() {
+    const card = document.getElementById('map-tracking-card');
+    const restore = document.getElementById('map-tracking-restore');
+    const cardOn = !!(card && !card.classList.contains('hidden'));
+    const pillOn = !!(restore && !restore.classList.contains('hidden'));
+    if (!cardOn && !pillOn) return;
+    const gps = document.getElementById('map-tracking-gps');
+    const at = Number(gps?.getAttribute('data-nt-gps-at') || 0);
+    if (!at) return;
+    if (gps) gps.textContent = formatGpsPingAge(at);
+    const seen = document.getElementById('map-tracking-last-seen');
+    const place = seen?.getAttribute('data-nt-last-place') || '';
+    if (seen && place) seen.textContent = trackingLastSeenLine(place, at);
+    const title = document.getElementById('map-tracking-title');
+    const saidPaused = /Paused|Cancelled|Stuck/.test(title?.textContent || '');
+    if ((Date.now() - at) >= RIDE_GPS_STALE_MS && !saidPaused) {
+        import('./ride-pings.js').then((ride) => {
+            const active = ride.getActiveShare?.();
+            const own = active
+                ? (ride.getCachedRidePings?.(active.routeId) || []).find((p) => p.deviceId === getDeviceId())
+                : null;
+            renderTrackingStatusCard(active, viewedTrain?.ping || own || null);
+        }).catch(() => {});
+    }
+}
+
 function locateSharedTrainOnMap() {
     import('./ride-pings.js').then((ride) => {
         const active = ride.getActiveShare?.();
@@ -3081,6 +3116,9 @@ function locateSharedTrainOnMap() {
 export function bindMapTabUi() {
     if (typeof document === 'undefined' || window.__ntMapTabBound) return;
     window.__ntMapTabBound = true;
+    if (!window.__ntTrackingReadoutTick) {
+        window.__ntTrackingReadoutTick = setInterval(tickTrackingShareReadout, 1000);
+    }
     bindMapOverrideSaveListener();
     window.__ntFullscreenMapTab = fullscreenMapTab;
     exposeEmbedBridge();
@@ -3229,6 +3267,19 @@ export function bindMapTabUi() {
             syncMapShareChrome();
             syncRidePingsToMap();
         }
+    });
+    document.getElementById('map-tracking-join')?.addEventListener('click', () => {
+        const trainId = String(viewedTrain?.trainId || '').trim();
+        if (!trainId) return;
+        triggerHaptic();
+        contributeForTrain({
+            trainId,
+            routeId: viewedTrain?.routeId || $currentRouteId.get(),
+            station: viewedTrain?.ping?.station || document.getElementById('station-select')?.value || '',
+            destination: viewedTrain?.destination || viewedTrain?.ping?.destination || '',
+            source: 'map_join',
+            skipVolunteer: true,
+        });
     });
     document.getElementById('map-tracking-share')?.addEventListener('click', () => {
         shareLiveTrain();

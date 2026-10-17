@@ -3587,7 +3587,19 @@
                         ? L.point(dir === 'right' ? 16 : -16, 0)
                         : L.point(0, -5);
                     var el = tip.getElement && tip.getElement();
-                    if (el) el.classList.toggle('nt-station-callout', close);
+                    if (el) {
+                        var wasCallout = el.classList.contains('nt-station-callout');
+                        if (wasCallout !== close) {
+                            el.style.transition = 'none';
+                            el.classList.toggle('nt-station-callout', close);
+                            if (!close) {
+                                var node = el;
+                                requestAnimationFrame(function () {
+                                    if (node && !node.classList.contains('nt-station-callout')) node.style.transition = '';
+                                });
+                            }
+                        }
+                    }
                     if (typeof tip._updatePosition === 'function') {
                         try { tip._updatePosition(); } catch (_) {}
                     }
@@ -3625,7 +3637,7 @@
                 var numHtml = (spec && spec.far)
                     ? ''
                     : '<span class="nt-live-train-num" style="font-size:' + numSize + ';transform:rotate(' + labelCounterYaw + 'deg)">' + id + '</span>';
-                return '<div class="' + wrapCls + '" title="Train ' + id + '">'
+                return '<div class="' + wrapCls + '">'
                     + '<span class="nt-live-train-ring" aria-hidden="true"></span>'
                     + '<span class="nt-live-train-ring nt-live-train-ring--delay" aria-hidden="true"></span>'
                     + '<span class="' + cls + '" style="transform:rotate(' + yaw + 'deg)">'
@@ -3693,6 +3705,19 @@
                     tickRidePopupFreshness();
                     applyRideTrainStalePause();
                 }, 1000);
+                setInterval(function () {
+                    if (document.hidden) return;
+                    var ids = Object.keys(rideTrainMarkers);
+                    if (!ids.length) return;
+                    var pts = [];
+                    ids.forEach(function (id) {
+                        var marker = rideTrainMarkers[id];
+                        var ll = marker && marker.getLatLng && marker.getLatLng();
+                        if (!ll) return;
+                        pts.push({ lat: ll.lat, lng: ll.lng });
+                    });
+                    updateStationCallouts(pts);
+                }, 200);
             }
             function applyRideTrainStalePause() {
                 var now = Date.now();
@@ -3731,8 +3756,8 @@
                 }
             }
             // Keep in sync with src/lib/gps-freshness.js (RIDE_GPS_STALE_MS / RIDE_INTERPOLATION_MAX_MS).
-            var RIDE_GPS_STALE_MS = 15000;
-            var RIDE_INTERPOLATION_MAX_MS = 15000;
+            var RIDE_GPS_STALE_MS = 18000;
+            var RIDE_INTERPOLATION_MAX_MS = 18000;
             var STATION_APPROACH_M = 160;
             var STATION_DWELL_SEC = 0.7;
             var STATION_CRAWL_SEC = 0.22;

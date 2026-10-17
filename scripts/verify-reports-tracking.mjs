@@ -30,6 +30,11 @@ import {
     ONBOARD_FAST_PING_MS,
     ONBOARD_MOVING_PING_MS,
     ONBOARD_STATIONARY_PING_MS,
+    SHARE_EAGER_GPS_MS,
+    SHARE_GPS_MISS_LIMIT,
+    STANDARD_TRAIN_LENGTH_M,
+    RIDE_SHARE_IDLE_MS,
+    blendSameTrainSharers,
     pingPublicTrainId,
     projectTrainTrackerFix,
     terminusStopShouldFire,
@@ -256,12 +261,16 @@ assert(
     )?.lat === -25.751,
     'trusted high-accuracy locate wins over the map pin'
 );
-assert(RIDE_GPS_STALE_MS === 15000 && RIDE_INTERPOLATION_MAX_MS === 15000, 'grey pause and interpolation share a 15 second window');
-assert(ONBOARD_FAST_PING_MS === 3000 && ONBOARD_MOVING_PING_MS === 4000 && ONBOARD_STATIONARY_PING_MS === 6000, 'onboard bands: 3s moving, 4s slow, 6s parked');
-assert(ONBOARD_STATIONARY_PING_MS * 2 < RIDE_GPS_STALE_MS, 'a parked heartbeat can miss once and still beat the 15s grey window');
+assert(RIDE_GPS_STALE_MS === 18000 && RIDE_INTERPOLATION_MAX_MS === 18000, 'grey pause and interpolation share an 18 second window');
+assert(ONBOARD_FAST_PING_MS === 3000 && ONBOARD_MOVING_PING_MS === 3000 && ONBOARD_STATIONARY_PING_MS === 3000, 'onboard bands publish every 3 seconds');
+assert(SHARE_EAGER_GPS_MS === 3000 && SHARE_GPS_MISS_LIMIT === 6, 'GPS is tried every 3 seconds and pauses after 6 misses');
+assert(SHARE_EAGER_GPS_MS * SHARE_GPS_MISS_LIMIT === RIDE_GPS_STALE_MS, 'six 3 second misses are the 18 second pause');
+assert(RIDE_SHARE_IDLE_MS === 10 * 60 * 1000, 'share stops after 10 minutes idle');
+assert(STANDARD_TRAIN_LENGTH_M === 250, 'same-train average stays inside one train length');
+assert(ONBOARD_STATIONARY_PING_MS * 2 < RIDE_GPS_STALE_MS, 'a parked heartbeat can miss once and still beat the 18s grey window');
 assert(adaptiveOnboardPingMs(12) === ONBOARD_FAST_PING_MS, 'fast train broadcasts every 3 seconds');
-assert(adaptiveOnboardPingMs(2) === ONBOARD_MOVING_PING_MS, 'slow movement broadcasts every 4 seconds');
-assert(adaptiveOnboardPingMs(0) === ONBOARD_STATIONARY_PING_MS, 'stationary share heartbeats every 6 seconds');
+assert(adaptiveOnboardPingMs(2) === ONBOARD_MOVING_PING_MS, 'slow movement still broadcasts every 3 seconds');
+assert(adaptiveOnboardPingMs(0) === ONBOARD_STATIONARY_PING_MS, 'a parked share still broadcasts every 3 seconds');
 assert(SHARE_PROMPT_TIMEOUT_MS === 90000, 'share prompts time out after 90 seconds');
 assert(OFFTRACK_PROMPT_MS === 15000, 'off-track still-on-this-train prompt waits 15 seconds before asking again');
 assert(REVERSE_SUSTAIN_MS === 20000, 'backward progress must persist 20 seconds before the share pauses');
@@ -311,8 +320,8 @@ assert(TRAIN_STATUS.STUCK === 'stuck' && TRAIN_STATUS.CANCELLED === 'cancelled',
         ...base, nowSec: 10 * 3600, exclusions: { 'pta-pien': { 1000: { type: 'banned', expiresAt: Date.now() - 1000 } } },
     }).ok, 'an expired ban does not block sharing');
 }
-assert(!isRidePingGpsStale({ acceptedAt: Date.now() - 14000 }), 'a 14 second GPS ping is still live');
-assert(isRidePingGpsStale({ acceptedAt: Date.now() - 16000 }), 'a 16 second GPS ping is stale');
+assert(!isRidePingGpsStale({ acceptedAt: Date.now() - 17000 }), 'a 17 second GPS ping is still live');
+assert(isRidePingGpsStale({ acceptedAt: Date.now() - 18000 }), 'an 18 second GPS ping is stale');
 assert(!terminusStopShouldFire({
     atLast: true, lastIndex: 12, minProgressSeen: 12,
 }), 'sitting at the last station when sharing starts does not end the share');
@@ -575,6 +584,118 @@ assert(
     switchedMarkers[0]?.lat === -25.02 && switchedMarkers[0]?.lng === 28.02,
     'the train switches to the reachable rider’s last GPS'
 );
+assert(switchedMarkers[0]?.n === 1, 'a far second phone is not counted into the averaged train');
+
+const closeNow = Date.now();
+const closeMarkers = await compactPingsForMap([
+    {
+        deviceId: 'coach-a',
+        routeId: 'pta-pien',
+        trainId: '1001',
+        station: 'MIDDLE',
+        coarseLat: -25,
+        coarseLng: 28,
+        projectedLat: -25,
+        projectedLng: 28,
+        projectedProgress: 1,
+        routeProgressM: 1000,
+        railDistanceM: 12,
+        acceptedAt: closeNow - 2000,
+        fixAt: closeNow - 2000,
+        at: closeNow - 2000,
+        expiresAt: closeNow + 600000,
+        speedMps: 10,
+        accuracy: 20,
+        trackingState: TRACKING_STATE.ACTIVE,
+    },
+    {
+        deviceId: 'coach-b',
+        routeId: 'pta-pien',
+        trainId: '1001',
+        station: 'MIDDLE',
+        coarseLat: -25.0007,
+        coarseLng: 28,
+        projectedLat: -25.0007,
+        projectedLng: 28,
+        projectedProgress: 1.02,
+        routeProgressM: 1080,
+        railDistanceM: 14,
+        acceptedAt: closeNow - 1000,
+        fixAt: closeNow - 1000,
+        at: closeNow - 1000,
+        expiresAt: closeNow + 600000,
+        speedMps: 10,
+        accuracy: 18,
+        trackingState: TRACKING_STATE.ACTIVE,
+    },
+], { routeId: 'pta-pien' });
+assert(closeMarkers.length === 1, 'two phones on one train stay one marker');
+assert(closeMarkers[0]?.n === 2, 'both phones count while they are within a train length');
+assert(
+    Math.abs(closeMarkers[0].lat - (-25.00035)) < 1e-9 && closeMarkers[0].lng === 28,
+    'phones within a train length are averaged on the projected rail'
+);
+assert(closeMarkers[0]?.deviceId === 'coach-a', 'the vote stays on the more credible phone');
+
+const apartNow = Date.now();
+const apartMarkers = await compactPingsForMap([
+    {
+        deviceId: 'near-rail',
+        routeId: 'pta-pien',
+        trainId: '1002',
+        station: 'ORIGIN',
+        coarseLat: -25,
+        coarseLng: 28,
+        projectedLat: -25,
+        projectedLng: 28,
+        projectedProgress: 0.2,
+        routeProgressM: 0,
+        railDistanceM: 8,
+        acceptedAt: apartNow - 4000,
+        fixAt: apartNow - 4000,
+        at: apartNow - 4000,
+        expiresAt: apartNow + 600000,
+        speedMps: 12,
+        accuracy: 30,
+        trackingState: TRACKING_STATE.ACTIVE,
+    },
+    {
+        deviceId: 'far-phone',
+        routeId: 'pta-pien',
+        trainId: '1002',
+        station: 'TERMINUS',
+        coarseLat: -25.01,
+        coarseLng: 28,
+        projectedLat: -25.01,
+        projectedLng: 28,
+        projectedProgress: 4,
+        routeProgressM: 900,
+        railDistanceM: 40,
+        acceptedAt: apartNow - 500,
+        fixAt: apartNow - 500,
+        at: apartNow - 500,
+        expiresAt: apartNow + 600000,
+        speedMps: 4,
+        accuracy: 12,
+        trackingState: TRACKING_STATE.ACTIVE,
+    },
+], { routeId: 'pta-pien' });
+assert(apartMarkers.length === 1, 'a distant second phone does not create a second marker');
+assert(
+    apartMarkers[0]?.lat === -25 && apartMarkers[0]?.lng === 28,
+    'past one train length the closer-to-rail phone wins, even if the other fix is newer'
+);
+assert(apartMarkers[0]?.n === 1, 'the distant phone is not averaged in');
+const blendClose = blendSameTrainSharers([
+    { lat: -25, lng: 28, routeProgressM: 0, projectedProgress: 0, railDistanceM: 10, fixAt: 1, trackingState: TRACKING_STATE.ACTIVE },
+    { lat: -25.001, lng: 28, routeProgressM: 80, projectedProgress: 0.1, railDistanceM: 10, fixAt: 2, trackingState: TRACKING_STATE.ACTIVE },
+], '1001');
+assert(blendClose.members.length === 2, 'blend keeps both phones inside one train length');
+const blendFar = blendSameTrainSharers([
+    { lat: -25, lng: 28, routeProgressM: 0, projectedProgress: 0, railDistanceM: 5, fixAt: 1, deviceId: 'a', trackingState: TRACKING_STATE.ACTIVE },
+    { lat: -25.02, lng: 28, routeProgressM: 2000, projectedProgress: 2, railDistanceM: 5, fixAt: 9, deviceId: 'b', trackingState: TRACKING_STATE.ACTIVE },
+], '1001');
+assert(blendFar.members.length === 1 && blendFar.painted?.lat === blendFar.anchor?.lat, 'blend does not average phones a train apart');
 assert(
     pingPublicTrainId({
         trainId: '1000',
@@ -659,9 +780,20 @@ assert(mapAppSource.includes('interpolateRideMarkerLatLng'), 'remote map marker 
 assert(mapAppSource.includes('interpolateAlongRidePath'), 'train interpolation follows the painted rail, not a Euclidean jump');
 assert(mapAppSource.includes('STATION_APPROACH_M'), 'trains slow approaching a station');
 assert(mapAppSource.includes('STATION_DWELL_SEC'), 'trains dwell when GPS is at a station');
-assert(mapAppSource.includes('RIDE_INTERPOLATION_MAX_MS = 15000'), 'map interpolation caps at 15 seconds');
+assert(mapAppSource.includes('RIDE_INTERPOLATION_MAX_MS = 18000'), 'map interpolation caps at 18 seconds');
 assert(mapAppSource.includes('A successful GPS ping always cancels'), 'a new GPS ping retargets and cancels the previous glide');
-assert(mapAppSource.includes('applyRideTrainStalePause'), 'receivers grey the glyph after 15s without a ping');
+assert(mapAppSource.includes('applyRideTrainStalePause'), 'receivers grey the glyph after 18s without a ping');
+assert(mapAppSource.includes('updateStationCallouts(pts)'), 'station callouts follow the moving train between pings');
+assert(mapPageSource.includes('transition: none !important'), 'the sharing station callout does not fade');
+assert(mapViewSource.includes('id="map-tracking-join"'), 'a receiver can join the train from the tracking card');
+assert(mapTabSource.includes('map-tracking-join') && mapTabSource.includes("source: 'map_join'"), 'Join this train starts a share on that train');
+assert(mapTabSource.includes('tickTrackingShareReadout'), 'the sharing card clock updates every second');
+assert(mapTabSource.includes('PINGS_POLL_MS = 3 * 1000'), 'receivers poll ride pings every 3 seconds');
+assert(geoWatchSource.includes('attemptShareGpsFix'), 'a share asks for a GPS fix on its own cadence');
+assert(geoWatchSource.includes('timeout: 2800'), 'each GPS try times out inside the 3 second cadence');
+assert(ridePingsSource.includes('SHARE_GPS_MISS_LIMIT'), 'the share pauses after six missed GPS tries');
+assert(ridePingsSource.includes('blendSameTrainSharers'), 'same-train phones are blended on the rail');
+assert(ridePingsSource.includes('STANDARD_TRAIN_LENGTH_M'), 'the blend is limited to one train length');
 assert(mapTabSource.includes('if (mapOn) syncRidePingsToMap()'), 'map tab recompacts pings so a fresh rider can take over');
 assert(ridePingsSource.includes('}, ONBOARD_LOOP_TICK_MS)'), 'onboard loop ticks on the worker-backed 3 second cadence');
 assert(ridePingsSource.includes('autoPaused'), 'a successful GPS ping after grey pause broadcasts immediately');

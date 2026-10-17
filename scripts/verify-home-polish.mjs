@@ -566,12 +566,12 @@ assert(hubModals.includes('id="nt-admin-publish-train"'), 'admin nearby sheet ca
     assert(mapPage.includes('nt-live-train-halo'), 'map train ring animation is slow and faint');
     assert(mapPage.includes('overflow: visible'), 'leaflet icon does not clip the pulse');
     assert(mapPage.includes('nt-live-train-num'), 'map page styles the train number');
-    assert(gpsFreshness.includes('RIDE_INTERPOLATION_MAX_MS = 15 * 1000'), 'interpolation caps at 15 seconds');
-    assert(gpsFreshness.includes('RIDE_GPS_STALE_MS = RIDE_INTERPOLATION_MAX_MS'), 'GPS stale window matches the 15 second interpolation cap');
-    assert(ridePings.includes('RIDE_SHARE_IDLE_MS = 30 * 60 * 1000'), 'share stops after 30 minutes idle');
+    assert(gpsFreshness.includes('RIDE_INTERPOLATION_MAX_MS = 18 * 1000'), 'interpolation caps at 18 seconds');
+    assert(gpsFreshness.includes('RIDE_GPS_STALE_MS = RIDE_INTERPOLATION_MAX_MS'), 'GPS stale window matches the 18 second interpolation cap');
+    assert(ridePings.includes('RIDE_SHARE_IDLE_MS = 10 * 60 * 1000'), 'share stops after 10 minutes idle');
     assert(ridePings.includes('RIDE_GPS_STALE_MS'), 'GPS stale window is exported');
     assert(ridePings.includes('ONBOARD_FAST_PING_MS = 3 * 1000'), 'a moving train publishes every 3 seconds');
-    assert(ridePings.includes('ONBOARD_STATIONARY_PING_MS = 6 * 1000'), 'a parked train heartbeats every 6 seconds, inside the 15s grey window');
+    assert(ridePings.includes('ONBOARD_STATIONARY_PING_MS = 3 * 1000'), 'a parked train still publishes every 3 seconds');
     assert(ridePings.includes('startBackgroundTicker(') && ridePings.includes('ONBOARD_LOOP_TICK_MS'), 'onboard loop ticks from a Web Worker so background throttling cannot starve it');
     assert(ridePings.includes('SHARE_PROMPT_TIMEOUT_MS = 90 * 1000'), 'unanswered share prompts stop the share after 90 seconds');
     assert(ridePings.includes("title: 'Is the train moving?'") && ridePings.includes("id: 'stuck'") && ridePings.includes("id: 'cancelled'"), 'a parked sharer can mark the train stuck or cancelled');
@@ -583,7 +583,7 @@ assert(hubModals.includes('id="nt-admin-publish-train"'), 'admin nearby sheet ca
     assert(mapTab.includes('trackingLastSeenLine'), 'last seen says at or approaching honestly');
     assert(mapApp.includes('RIDE_BACK_JITTER_M') && mapApp.includes('rideTravelDirAlongPath'), 'receivers hold the glyph on small backward jitter and never flip the nose from glide direction');
     assert(!mapApp.includes('travelDir < 0'), 'glide direction no longer flips the train glyph');
-    assert(mapApp.includes('RIDE_INTERPOLATION_MAX_MS = 15000'), 'map glide matches the 15 second cap');
+    assert(mapApp.includes('RIDE_INTERPOLATION_MAX_MS = 18000'), 'map glide matches the 18 second cap');
     assert(mapApp.includes('applyRideTrainStalePause'), 'listeners grey the train when GPS goes stale locally');
     assert(mapTab.includes('RIDE_GPS_STALE_MS'), 'tracking card uses the shared GPS stale window');
     assert(ridePings.includes('compactPingsForMap'), 'map pings are compacted per train');

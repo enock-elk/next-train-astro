@@ -6,8 +6,11 @@
  * ping, sharers and listeners pause the glyph to grey.
  */
 
-/** Glide toward the last GPS at most this long. Keep in sync with map-app.js. */
-export const RIDE_INTERPOLATION_MAX_MS = 15 * 1000;
+/**
+ * Glide toward the last GPS at most this long. Keep in sync with map-app.js.
+ * Six missed 3s fixes is 18s. The glyph pauses to grey at that same cap.
+ */
+export const RIDE_INTERPOLATION_MAX_MS = 18 * 1000;
 /** No successful GPS ping for this long → pause to grey (same window as the glide cap). */
 export const RIDE_GPS_STALE_MS = RIDE_INTERPOLATION_MAX_MS;
 

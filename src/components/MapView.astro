@@ -108,6 +108,7 @@ const mapSrc = `${withBase('/map.html')}?embed=1&v=${APP_VERSION}`;
                         </span>
                     </div>
                     <div class="mt-2.5 flex flex-col gap-2">
+                        <button type="button" id="map-tracking-join" class="hidden w-full py-2.5 rounded-xl bg-blue-600 text-white text-sm font-black focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500" hidden>Join this train</button>
                         <button type="button" id="map-tracking-refresh" class="py-2 rounded-xl bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-200 text-[11px] font-black border border-blue-200 dark:border-blue-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">Refresh GPS</button>
                         <div class="grid grid-cols-2 gap-2">
                             <button type="button" id="map-tracking-toggle" class="py-2 rounded-xl bg-slate-900 dark:bg-white text-white dark:text-gray-900 text-[11px] font-black focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">Pause</button>

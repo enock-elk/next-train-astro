@@ -493,15 +493,23 @@ export function sanitizeInlineAlertImageUrl(url) {
 /** Pull lightbox/img tags out of the body so photos can sit above the text. */
 export function hoistAlertImagesFromHtml(html) {
     const urls = [];
-    let body = String(html || '');
-    body = body.replace(/<button\b[^>]*>[\s\S]*?<img\b[^>]*\bsrc=["']([^"']+)["'][^>]*>[\s\S]*?<\/button>/gi, (_, src) => {
-        const s = String(src || '').trim();
+    const pushUrl = (raw) => {
+        const s = String(raw || '').trim().replace(/&amp;/gi, '&');
         if (s && !urls.includes(s)) urls.push(s);
+    };
+    const pushImgTag = (tag) => {
+        pushUrl((String(tag || '').match(/\bsrc=["']([^"']+)["']/i) || [])[1]);
+        pushUrl((String(tag || '').match(/\bdata-nt-src=["']([^"']+)["']/i) || [])[1]);
+    };
+    let body = String(html || '');
+    body = body.replace(/<button\b[^>]*>[\s\S]*?<\/button>/gi, (tag) => {
+        const img = tag.match(/<img\b[^>]*>/i);
+        if (!img) return tag;
+        pushImgTag(img[0]);
         return '';
     });
-    body = body.replace(/<img\b[^>]*\bsrc=["']([^"']+)["'][^>]*>/gi, (_, src) => {
-        const s = String(src || '').trim();
-        if (s && !urls.includes(s)) urls.push(s);
+    body = body.replace(/<img\b[^>]*>/gi, (tag) => {
+        pushImgTag(tag);
         return '';
     });
     body = body.replace(/^(?:\s|&nbsp;|<br\s*\/?>)+/gi, '');

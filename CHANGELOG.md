@@ -1,5 +1,9 @@
 # Changelog
 
+## V9_10.17.5 — no release notes
+
+Account sign-in, create, and reset each have their own screen. An internet image shows in the composer and in the post preview.
+
 ## V9_10.17.4 — no release notes
 
 A live share asks for GPS every 3 seconds and pauses after 18 seconds without a fix. Sharing ends after 10 minutes without a ping. Receivers follow new pings within a few seconds. Two phones on one train are averaged only while they sit within about one train length. Otherwise the map keeps the more credible phone.

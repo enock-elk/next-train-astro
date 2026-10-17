@@ -961,6 +961,20 @@ html.dark .nt-offline-strip {
 #alert-msg {
   white-space: pre-wrap;
 }
+#alert-msg img,
+#admin-reply-text img,
+#disr-msg img {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  height: auto;
+  min-height: 4rem;
+  white-space: normal;
+  object-fit: contain;
+  background: #f3f4f6;
+  border-radius: 12px;
+  margin: 8px 0;
+}
 @keyframes nt-alert-force-flash {
   0% { box-shadow: 0 0 0 3px color-mix(in srgb, var(--nt-primary, #2563eb) 72%, white); }
   55% { box-shadow: 0 0 0 3px color-mix(in srgb, var(--nt-primary, #2563eb) 28%, transparent); }

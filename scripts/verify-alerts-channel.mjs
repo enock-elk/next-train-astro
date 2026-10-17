@@ -219,6 +219,13 @@ const now = 1_700_000_000_000;
     assert(inlineLaid.title === 'Good news', 'inline heading becomes title');
     assert(inlineLaid.imageUrls[0].includes('firebasestorage.googleapis.com'), 'inline img hoisted');
     assert(inlineLaid.body.includes('Resume Monday') && !inlineLaid.body.includes('<img'), 'text stays below image');
+
+    const kept = layoutAlertPost({
+        message: '<p>All thanks to the UCV</p><img alt="" src="blob:https://nexttrain.co.za/abc" data-nt-src="https://i.ibb.co/hR3kQ1p/ucv.png">',
+    });
+    assert(kept.imageUrls.includes('https://i.ibb.co/hR3kQ1p/ucv.png'), 'composer image address survives a blob src');
+    assert(!kept.imageUrls.includes('blob:https://nexttrain.co.za/abc'), 'blob src is not shown');
+    assert(kept.body.includes('All thanks to the UCV') && !kept.body.includes('<img'), 'caption stays when the image is hoisted');
 }
 
 {
@@ -321,6 +328,7 @@ const now = 1_700_000_000_000;
     assert(js.includes('hydrateLinkPreviews(feed, REPLY_WORKER_URL)'), 'alert cards load a link preview in place');
     assert(hub.includes('if (pollEl) hydratePollResults(pollEl)'), 'a quoted alert preview loads poll counts');
     assert(hub.includes('linkPreviewMarkup(notice)'), 'the notice modal reserves a link card');
+    assert(hub.includes('min-h-[8rem]') && hub.includes('referrerpolicy="no-referrer"'), 'alert preview keeps a visible image and does not send a hotlink referrer');
     assert(js.includes('buildPollShellHtml'), 'feed uses the shared poll shell');
     assert(js.includes('feed.dataset.ntAlertsSig'), 'alerts skip innerHTML rewrite when the feed is unchanged');
     assert(hub.includes('paintPollShellsAfterVote'), 'a vote paints every poll shell for that notice');

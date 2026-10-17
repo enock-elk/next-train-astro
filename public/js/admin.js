@@ -1951,11 +1951,35 @@ const Admin = {
         if (isPdf) {
             return `&nbsp;<a href="${href}" target="_blank" rel="noopener noreferrer" class="text-blue-500 dark:text-blue-400 underline font-bold px-1 inline-flex items-center gap-1">${Admin.icon('file', 'w-3.5 h-3.5')} View Attached PDF</a>&nbsp;`;
         }
-        const js = typeof window.lightboxOnclickJs === 'function'
-            ? window.lightboxOnclickJs(safe, 'window.openLightbox')
-            : '';
-        if (!js) return '';
-        return `<br><button type="button" onclick='${js}' class="relative block w-full focus:outline-none my-2 cursor-zoom-in rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm active:scale-[0.98] transition-transform"><img src="${href}" class="w-full h-auto object-cover hover:opacity-90 transition-opacity" alt="Admin Attachment"><span class="nt-zoom-plus absolute bottom-1.5 right-1.5 w-5 h-5 rounded-full bg-black/40 text-white text-xs font-bold leading-none flex items-center justify-center border border-white/20 pointer-events-none select-none shadow-sm" aria-hidden="true">+</span></button><br>`;
+        return `<br><img src="${href}" data-nt-src="${href}" alt="" referrerpolicy="no-referrer" draggable="false" class="nt-composer-image" style="display:block;width:100%;max-width:100%;height:auto;min-height:4rem;white-space:normal;object-fit:contain;background:#f3f4f6;border-radius:12px;margin:8px 0"><br>`;
+    },
+
+    /** Contenteditable drops a picture that sits inside a button. Stamp the live image so the preview can still read it. */
+    stampComposerImages: (editor) => {
+        if (!editor?.querySelectorAll) return;
+        editor.querySelectorAll('img').forEach((img) => {
+            const src = img.getAttribute('data-nt-src') || img.getAttribute('src') || '';
+            if (!src) return;
+            if (img.getAttribute('src') !== src) img.setAttribute('src', src);
+            if (img.getAttribute('data-nt-src') !== src) img.setAttribute('data-nt-src', src);
+            img.referrerPolicy = 'no-referrer';
+            img.setAttribute('alt', '');
+            img.draggable = false;
+        });
+    },
+
+    ensureComposerImageOpen: () => {
+        if (Admin._composerImageOpenBound) return;
+        Admin._composerImageOpenBound = true;
+        document.addEventListener('click', (event) => {
+            const img = event.target?.closest?.('#alert-msg img, #admin-reply-text img, #disr-msg img');
+            if (!img) return;
+            const src = img.getAttribute('data-nt-src') || img.getAttribute('src') || '';
+            if (!src || typeof window.openLightbox !== 'function') return;
+            event.preventDefault();
+            event.stopPropagation();
+            window.openLightbox(src);
+        });
     },
 
     wrapLightboxImgHtml: function(srcUrl, borderClass) {
@@ -13335,6 +13359,8 @@ const Admin = {
                                         if (!document.execCommand('insertHTML', false, htmlToInsert)) {
                                             editor.innerHTML += htmlToInsert;
                                         }
+                                        Admin.stampComposerImages(editor);
+                                        Admin.ensureComposerImageOpen();
                                     }
                                     if (typeof showToast === 'function') showToast("Attachment inserted!", "success");
                                 } catch(e) {
@@ -13706,6 +13732,8 @@ const Admin = {
         if (!document.execCommand('insertHTML', false, htmlToInsert)) {
             editor.innerHTML += htmlToInsert;
         }
+        Admin.stampComposerImages(editor);
+        Admin.ensureComposerImageOpen();
         Admin._savedRange = null;
         if (typeof showToast === 'function') showToast('Image inserted.', 'success');
     },
@@ -16429,6 +16457,8 @@ const Admin = {
                                         if (!document.execCommand('insertHTML', false, htmlToInsert)) {
                                             editor.innerHTML += htmlToInsert;
                                         }
+                                        Admin.stampComposerImages(editor);
+                                        Admin.ensureComposerImageOpen();
                                         Admin._savedRange = null; // Clear lock
                                     }
                                     if (typeof showToast === 'function') showToast("Attachment inserted!", "success");
@@ -16634,6 +16664,7 @@ const Admin = {
         if (dateInput) dateInput.value = Admin.endOfTodayLocalValue();
 
         sendBtn.onclick = async () => {
+            if (alertMsg) Admin.stampComposerImages(alertMsg);
             let msg = alertMsg.innerHTML.trim();
             const targets = Admin.getSelectedAlertTargets();
             const severity = severitySelect.value;
@@ -17651,6 +17682,8 @@ const Admin = {
                                         if (!document.execCommand('insertHTML', false, htmlToInsert)) {
                                             editor.innerHTML += htmlToInsert;
                                         }
+                                        Admin.stampComposerImages(editor);
+                                        Admin.ensureComposerImageOpen();
                                         Admin._savedRange = null;
                                     }
                                     if (typeof showToast === 'function') showToast("Attachment inserted!", "success");

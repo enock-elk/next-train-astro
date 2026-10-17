@@ -448,7 +448,11 @@ assert(hubModals.includes('id="account-guest-points-wrap"'), 'guest points row c
 assert(hubModals.includes('id="account-settings-host"'), 'Account can host Passenger Type and Theme');
 assert(!hubModals.includes('id="account-identity-host"'), 'Passenger Type is no longer a separate Community identity card');
 assert(!hubModals.includes('id="account-notify-block"'), 'Account no longer has a duplicate Notifications accordion');
-assert(hubModals.includes('id="account-modal-close"') && hubModals.includes('M10 19l-7-7m0 0l7-7m-7 7h18'), 'Account close control uses the guide Back arrow');
+assert(/id="account-modal-close"[\s\S]{0,500}M15 19l-7-7 7-7/.test(hubModals), 'Account close is the back chevron');
+assert(!/id="account-modal-close"[\s\S]{0,300}>\s*Back\s*</.test(hubModals), 'Account close is not labelled Back');
+assert(hubModals.includes('Welcome back') && hubModals.includes("What's your email?") && hubModals.includes('Reset your password'), 'account guest screens use the sign-in, create, and reset layout');
+assert(hubModals.includes('id="account-reset-send-btn"') && hubModals.includes('id="account-goto-create"'), 'reset and create are their own steps');
+assert(hubModals.includes('data-account-screen="signin"'), 'account opens on the sign-in screen');
 assert(!/id="account-modal-close"[^>]*>\s*Done\s*</.test(hubModals), 'Account close is not labelled Done');
 assert(!/<h3[^>]*>Account<\/h3>/.test(hubModals), 'Account overlay has no large Account title');
 assert(hubModals.includes('placeholder="Email or WhatsApp for a reply"'), 'Hub contact placeholder is the shorter line');

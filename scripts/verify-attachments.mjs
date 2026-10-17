@@ -150,6 +150,9 @@ function bytes(...vals) {
     assert(admin.includes('prepareSafeUpload'), 'admin upload sniffs via prepareSafeUpload');
     assert(admin.includes('pickMediaSource') && admin.includes('From this device') && admin.includes('From the internet'), 'Media asks for a device file or an internet image');
     assert(admin.includes('insertInternetImage'), 'an internet image is inserted without upload');
+    assert(admin.includes('data-nt-src') && admin.includes('referrerpolicy="no-referrer"'), 'composer image keeps its address and does not send a hotlink referrer');
+    assert(!admin.includes('alt="Admin Attachment"'), 'composer image does not fall back to the attachment label');
+    assert(admin.includes('stampComposerImages'), 'preview reads the live image address');
     assert(!admin.includes("file.name.split('.').pop()"), 'admin no longer trusts file extension');
     assert(admin.includes('sanitizeAttachmentDisplayUrl'), 'admin lightbox allowlists URLs');
     const rich = readFileSync(join(ROOT, 'src/lib/rich-text.js'), 'utf8');

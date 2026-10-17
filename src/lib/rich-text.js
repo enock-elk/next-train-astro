@@ -20,6 +20,18 @@ export const RICH_TEXT_CSS = `
 #alert-msg {
   white-space: pre-wrap;
 }
+#alert-msg img, #admin-reply-text img, #disr-msg img {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  height: auto;
+  min-height: 4rem;
+  white-space: normal;
+  object-fit: contain;
+  background: #f3f4f6;
+  border-radius: 12px;
+  margin: 8px 0;
+}
 .nt-rich-body a, #notice-content a, #developer-reply-content a, #alert-msg a, #admin-reply-text a, #disr-msg a, #disruption-modal-body a {
   overflow-wrap: anywhere;
   word-break: break-word;

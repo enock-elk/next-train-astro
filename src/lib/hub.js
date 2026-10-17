@@ -1953,7 +1953,7 @@ export function renderServiceAlertModal(notice, options = {}) {
             const src = escapeHTML(href);
             const onclick = lightboxOnclickJs(href);
             if (!onclick) return '';
-            return `<button type="button" onclick='event.stopPropagation(); ${onclick}' class="relative block w-full focus:outline-none cursor-zoom-in rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm"><img src="${src}" alt="Service poster" class="w-full h-auto max-h-56 object-cover"></button>`;
+            return `<button type="button" onclick='event.stopPropagation(); ${onclick}' class="relative block w-full min-h-[8rem] focus:outline-none cursor-zoom-in rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm bg-gray-100 dark:bg-gray-900"><img src="${src}" alt="" referrerpolicy="no-referrer" class="w-full h-auto max-h-56 min-h-[8rem] object-contain bg-gray-100 dark:bg-gray-900"></button>`;
         }).join('');
         const grid = posterUrls.length > 1 ? 'grid grid-cols-2 gap-2' : 'grid grid-cols-1';
         mediaHtml = `<div class="${grid} mt-2 mb-1">${cells}</div>`;

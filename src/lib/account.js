@@ -712,6 +712,24 @@ export async function signOutAccount() {
     import('./rider-marks.js').then((m) => m.switchMarksAccount(null)).catch(() => {});
 }
 
+export function showAccountGuestScreen(screen) {
+    if (typeof document === 'undefined') return;
+    const guest = document.getElementById('account-guest');
+    if (!guest) return;
+    const name = screen === 'create' || screen === 'reset' ? screen : 'signin';
+    guest.setAttribute('data-account-screen', name);
+    guest.querySelectorAll('[data-account-only]').forEach((el) => {
+        const list = (el.getAttribute('data-account-only') || '').split(/\s+/);
+        el.classList.toggle('hidden', !list.includes(name));
+    });
+    document.getElementById('account-signin-create-hint')?.classList.add('hidden');
+    const title = document.getElementById('account-screen-title');
+    const signedOpen = document.getElementById('account-signed-in') && !document.getElementById('account-signed-in').classList.contains('hidden');
+    if (title && !signedOpen) {
+        title.textContent = name === 'create' ? 'Create account' : name === 'reset' ? 'Reset your password' : '';
+    }
+}
+
 export function openAccountModal() {
     const modal = typeof document !== 'undefined' ? document.getElementById('account-modal') : null;
     if (modal) {
@@ -721,6 +739,8 @@ export function openAccountModal() {
         modal.style.removeProperty('--nt-feedback-vv-top');
         modal.style.removeProperty('--nt-feedback-vv-height');
     }
+    const signedOpen = document.getElementById('account-signed-in') && !document.getElementById('account-signed-in').classList.contains('hidden');
+    if (!signedOpen) showAccountGuestScreen('signin');
     if (typeof window.openSmoothModal === 'function') {
         window.openSmoothModal('account-modal');
     }
@@ -978,6 +998,14 @@ export function syncAccountSettingsUi(state = $account.get()) {
     if (avatarEl) avatarEl.setAttribute('data-signed-in', signed ? 'true' : 'false');
     if (signedBlock) signedBlock.classList.toggle('hidden', !signed);
     if (guestBlock) guestBlock.classList.toggle('hidden', signed || state.status === 'loading');
+    const screenTitle = document.getElementById('account-screen-title');
+    if (screenTitle) {
+        if (signed) screenTitle.textContent = 'Account';
+        else {
+            const screen = guestBlock?.getAttribute('data-account-screen') || 'signin';
+            screenTitle.textContent = screen === 'create' ? 'Create account' : screen === 'reset' ? 'Reset your password' : '';
+        }
+    }
     document.getElementById('account-prefs-label')?.classList.toggle('hidden', !signed);
     document.getElementById('account-signin-create-hint')?.classList.add('hidden');
     const deleteWrap = document.getElementById('account-delete-wrap');
@@ -1354,7 +1382,16 @@ export function bindAccountUi() {
     };
     document.getElementById('settings-account-btn')?.addEventListener('click', open);
 
-    document.getElementById('account-modal-close')?.addEventListener('click', closeAccountModal);
+    document.getElementById('account-modal-close')?.addEventListener('click', () => {
+        const guest = document.getElementById('account-guest');
+        const screen = guest?.getAttribute('data-account-screen') || 'signin';
+        const guestOpen = guest && !guest.classList.contains('hidden');
+        if (guestOpen && screen !== 'signin') {
+            showAccountGuestScreen('signin');
+            return;
+        }
+        closeAccountModal();
+    });
 
     const setBusy = (busy) => {
         _accountUiBusy = !!busy;
@@ -1425,12 +1462,22 @@ export function bindAccountUi() {
         }
     });
 
-    document.getElementById('account-forgot-btn')?.addEventListener('click', async () => {
+    document.getElementById('account-forgot-btn')?.addEventListener('click', () => {
+        showAccountGuestScreen('reset');
+    });
+    document.getElementById('account-goto-create')?.addEventListener('click', () => {
+        showAccountGuestScreen('create');
+    });
+    document.getElementById('account-goto-signin')?.addEventListener('click', () => {
+        showAccountGuestScreen('signin');
+    });
+    document.getElementById('account-reset-send-btn')?.addEventListener('click', async () => {
         const email = document.getElementById('account-email')?.value;
         setBusy(true);
         try {
             await sendAccountPasswordReset(email);
             if (typeof window.showToast === 'function') window.showToast('Password reset email sent', 'success');
+            showAccountGuestScreen('signin');
         } catch (e) {
             showErr(friendlyAuthError(e) || e?.message || 'Could not send reset email.');
         } finally {

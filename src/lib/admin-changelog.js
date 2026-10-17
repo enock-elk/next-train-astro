@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_10.17.9': [
+        'View full timetable is a light outline and stays full width. Close Timetable is a short light control. In the app, a long station name wraps to two lines, rows are tighter, the selected station scrolls into view, and a fade on the right shows there are more trains. The header is a flat colour. Alerts keeps the back arrow and the bottom Close, and drops the header X. Reply is an outline. A pinned notice says Pinned. The operator scope is a small tag. The downloaded sheet is unchanged. No commuter What\'s New. forceShow stays false.',
+    ],
     'V9_10.17.8': [
         'The alert image preview fills the screen. Close is a small control. When the picture belongs to an alert, the same reactions sit along the bottom. After an in-app reply, Later saves that reply on the roadmap under To do or In progress, and that card can open WhatsApp or email. Email keeps the paragraphs and leaves off the operator sign-off. Co-Pilot fills the screen from top to bottom. Suggest reply stays hidden while the draft is halted. No commuter What\'s New. forceShow stays false.',
     ],

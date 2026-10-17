@@ -662,7 +662,7 @@ function renderPostCard(notice, opts = {}) {
         <div class="nt-alert-strip flex items-center justify-between gap-2 px-3 py-1 ${chrome.strip}">
             <span class="nt-alert-signoff text-xs font-semibold leading-none tracking-wide">${escapeHTML(signoff)}</span>
             <span class="nt-alert-chip-wrap inline-flex items-center gap-1.5 shrink-0">
-                ${isNoticePinned(notice) ? `<span class="nt-alert-pin" title="Pinned" aria-label="Pinned">${ALERT_PIN_SVG}</span>` : ''}
+                ${isNoticePinned(notice) ? `<span class="nt-alert-pin" title="Pinned" aria-label="Pinned">${ALERT_PIN_SVG}<span class="nt-alert-pin-label">Pinned</span></span>` : ''}
                 <span class="nt-alert-chip inline-flex items-center shrink-0 px-1.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider leading-none ${chrome.chip}">${chrome.emoji} ${chrome.label}</span>
             </span>
         </div>
@@ -856,10 +856,8 @@ export function applyBellFromNotices(notices) {
     if (!bellBtn) return;
     notices = scopedLiveNotices(notices);
 
-    const header = document.getElementById('app-header');
     if (!notices || notices.length === 0) {
         bellBtn.classList.add('hidden');
-        header?.classList.remove('nt-alerts-lit');
         return;
     }
 
@@ -882,7 +880,6 @@ export function applyBellFromNotices(notices) {
     }
     bellBtn.className = bellClass;
     bellBtn.classList.remove('hidden');
-    header?.classList.add('nt-alerts-lit');
     bellBtn.setAttribute('aria-label', 'Service alerts');
     const bellSvg = bellBtn.querySelector('svg');
     if (bellSvg) bellSvg.setAttribute('class', 'w-6 h-6');
@@ -1032,7 +1029,6 @@ function bindAlertsChannelOnce() {
         closeAlertsChannel();
     };
     document.getElementById('alerts-channel-back')?.addEventListener('click', closeChannel);
-    document.getElementById('alerts-channel-close')?.addEventListener('click', closeChannel);
     document.getElementById('alerts-channel-footer-close')?.addEventListener('click', closeChannel);
 
     document.getElementById('alerts-load-earlier')?.addEventListener('click', () => {

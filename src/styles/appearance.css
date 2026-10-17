@@ -563,7 +563,6 @@ html[data-colour-pack="contrast"] .bottom-nav-item.is-active {
 /* Pack-tinted CTAs — rounded, inset, drop shadow; extra canvas gap above nav */
 #locate-btn,
 #planner-locate-btn,
-#view-full-timetable-btn,
 #planner-search-btn {
   background-color: var(--nt-primary) !important;
   border-color: color-mix(in srgb, var(--nt-primary) 70%, #000) !important;
@@ -571,18 +570,27 @@ html[data-colour-pack="contrast"] .bottom-nav-item.is-active {
 }
 #locate-btn:hover,
 #planner-locate-btn:hover,
-#view-full-timetable-btn:hover,
 #planner-search-btn:hover {
   background-color: var(--nt-primary-hover) !important;
 }
 #view-full-timetable-btn {
   text-align: center;
-  width: calc(100% - 0.5rem);
-  margin-inline: auto;
-  box-shadow: 0 0 0 4px color-mix(in srgb, var(--nt-primary) 18%, transparent), 0 10px 22px color-mix(in srgb, var(--nt-primary) 32%, transparent);
+  width: 100%;
+  margin-inline: 0;
+  background-color: color-mix(in srgb, var(--nt-primary) 12%, #fff) !important;
+  color: var(--nt-primary) !important;
+  border: 1px solid color-mix(in srgb, var(--nt-primary) 35%, #fff) !important;
+  box-shadow: none !important;
+}
+#view-full-timetable-btn:hover {
+  background-color: color-mix(in srgb, var(--nt-primary) 20%, #fff) !important;
+  color: var(--nt-primary) !important;
 }
 html[data-colour-pack="earthy"] #view-full-timetable-btn {
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--nt-primary) 10%, transparent), 0 4px 12px color-mix(in srgb, var(--nt-primary) 16%, transparent);
+  background-color: color-mix(in srgb, var(--nt-primary) 14%, #fff) !important;
+  color: var(--nt-primary) !important;
+  border-color: color-mix(in srgb, var(--nt-primary) 40%, #fff) !important;
+  box-shadow: none !important;
 }
 
 /* Pale --nt-blue-600 is the paper CTA wash. Labels (Zone, Saturday,
@@ -651,6 +659,43 @@ html[data-colour-pack="earthy"] #pinned-section .text-blue-400,
 html[data-colour-pack="earthy"] #pinned-section .text-blue-300 {
   color: inherit !important;
 }
+#grid-container {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, #94a3b8 55%, transparent) transparent;
+}
+#grid-container::-webkit-scrollbar {
+  width: 6px;
+  height: 0;
+}
+#grid-container .nt-grid-station {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  max-width: 8.75rem;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  font-size: 10px;
+  line-height: 1.15;
+}
+.nt-grid-edge-fade {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 1.75rem;
+  pointer-events: none;
+  z-index: 20;
+  opacity: 0;
+  background: linear-gradient(to right, rgba(255, 255, 255, 0), #fff 82%);
+}
+html.dark .nt-grid-edge-fade {
+  background: linear-gradient(to right, rgba(17, 24, 39, 0), #111827 82%);
+}
+.nt-grid-frame.can-scroll-x .nt-grid-edge-fade {
+  opacity: 1;
+}
+
 html[data-colour-pack="earthy"]:not(.dark) #grid-container .nt-station-col.bg-blue-100 {
   background-color: #e7e1d4 !important;
   color: #2a261f !important;
@@ -886,16 +931,7 @@ html.dark .nt-offline-strip {
   z-index: 10;
 }
 
-/* The alerts bell stays the same icon. While it is showing, a soft torch
-   sits behind it and fades across the header. No ring on the bell itself. */
-#app-header.nt-alerts-lit {
-  background-image: radial-gradient(180% 420% at calc(100% - 1.35rem) 45%, rgba(255, 246, 220, 0.5) 0%, rgba(255, 214, 140, 0.2) 24%, rgba(255, 255, 255, 0) 68%);
-  background-repeat: no-repeat;
-}
-html.dark #app-header.nt-alerts-lit {
-  background-image: radial-gradient(190% 440% at calc(100% - 1.35rem) 45%, rgba(226, 236, 255, 0.38) 0%, rgba(160, 190, 245, 0.14) 26%, rgba(255, 255, 255, 0) 70%);
-  background-repeat: no-repeat;
-}
+/* The alerts bell stays the same icon. The header stays a flat colour. */
 
 .nt-brief-meaning {
   background: rgba(255, 255, 255, 0.97);
@@ -1308,15 +1344,11 @@ body.nav-bottom:not(.nt-immersive) #sidenav {
 #alerts-channel header,
 #alerts-channel header #alerts-channel-title,
 #alerts-channel header p,
-#alerts-channel header #alerts-channel-back,
-#alerts-channel header #alerts-channel-close {
+#alerts-channel header #alerts-channel-back {
   color: var(--nt-chrome-fg) !important;
 }
 #alerts-channel header p {
   opacity: 0.82;
-}
-#alerts-channel-close {
-  background-color: color-mix(in srgb, var(--nt-chrome-fg) 18%, transparent) !important;
 }
 #alerts-channel-footer {
   background-color: color-mix(in srgb, var(--nt-surface) 92%, transparent) !important;
@@ -1327,12 +1359,18 @@ body.nav-bottom:not(.nt-immersive) #sidenav {
   color: var(--nt-primary-fg) !important;
   border-color: transparent !important;
 }
-#close-timetable-footer-btn,
 #close-help-btn-2,
 #fare-modal-close-btn {
   background-color: var(--nt-primary) !important;
   color: var(--nt-primary-fg) !important;
   border-color: transparent !important;
+}
+
+#close-timetable-footer-btn {
+  background-color: color-mix(in srgb, var(--nt-primary) 12%, #fff) !important;
+  color: var(--nt-primary) !important;
+  border: 1px solid color-mix(in srgb, var(--nt-primary) 35%, #fff) !important;
+  box-shadow: none !important;
 }
 html.dark #fare-modal > div,
 html.dark #fare-modal > div > .rounded-t-2xl,
@@ -1585,15 +1623,15 @@ html.dark .cm-bubble-name { background: rgba(255, 255, 255, 0.07); }
   background-color: color-mix(in srgb, #fff 16%, transparent);
 }
 .nt-alert-reply {
-  background-color: var(--nt-primary) !important;
-  color: var(--nt-primary-fg) !important;
-  border: 1px solid transparent !important;
-  box-shadow: 0 1px 2px color-mix(in srgb, #000 12%, transparent);
+  background-color: color-mix(in srgb, var(--nt-primary) 10%, var(--nt-surface)) !important;
+  color: var(--nt-primary) !important;
+  border: 1px solid color-mix(in srgb, var(--nt-primary) 45%, var(--nt-border)) !important;
+  box-shadow: none;
 }
 .nt-alert-reply:hover {
-  background-color: color-mix(in srgb, var(--nt-primary) 86%, #000) !important;
-  color: var(--nt-primary-fg) !important;
-  border-color: transparent !important;
+  background-color: color-mix(in srgb, var(--nt-primary) 18%, var(--nt-surface)) !important;
+  color: var(--nt-primary) !important;
+  border-color: color-mix(in srgb, var(--nt-primary) 55%, var(--nt-border)) !important;
 }
 .nt-alert-source {
   display: inline;
@@ -1864,10 +1902,18 @@ a.nt-alert-source:focus-visible {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 0.2rem;
   opacity: 0.95;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  line-height: 1;
 }
 .nt-alert-pin-icon {
   display: block;
+}
+.nt-alert-pin-label {
+  line-height: 1;
 }
 
 #alerts-channel .nt-alert-card-footer {
@@ -1897,7 +1943,16 @@ a.nt-alert-source:focus-visible {
   color: var(--nt-text-faint);
 }
 #alerts-channel .nt-alert-scope {
+  display: inline-flex;
+  align-items: center;
+  margin-right: 8px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--nt-border) 80%, var(--nt-text-faint));
+  background: color-mix(in srgb, var(--nt-surface) 70%, transparent);
   font-size: 10px;
+  font-weight: 700;
+  line-height: 1.3;
   color: var(--nt-text-faint);
 }
 #alerts-channel .nt-alert-action-row {

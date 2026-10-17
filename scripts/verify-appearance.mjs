@@ -34,7 +34,9 @@ assert(css.includes('#route-list a.text-blue-700.bg-blue-50'), 'Earthy light sel
 assert(css.includes('#telemetry-region-modal .bg-blue-50'), 'Earthy Gauteng tile is paper and charcoal');
 assert(!/html\[data-colour-pack="classic"\][^{]*\.bg-blue-600/.test(css), 'Classic blue-600 buttons are not restyled');
 assert(!/html\[data-colour-pack="classic"\][^{]*#planner-swap-btn/.test(css), 'Classic planner swap is not restyled');
-assert(/html\[data-colour-pack="earthy"\] #view-full-timetable-btn/.test(css), 'Earthy weakens the timetable CTA halo');
+assert(/html\[data-colour-pack="earthy"\] #view-full-timetable-btn/.test(css), 'Earthy timetable button stays a light control');
+assert(/html\[data-colour-pack="earthy"\] #view-full-timetable-btn\s*\{[\s\S]*?box-shadow:\s*none/.test(css), 'Earthy timetable button has no halo');
+assert(/#view-full-timetable-btn\s*\{[\s\S]*?box-shadow:\s*none/.test(css), 'timetable button has no glow');
 assert(!css.includes('data-colour-pack="ember"'), 'Ember pack CSS is gone');
 assert(/\.text-gray-400,[\s\S]*?--nt-text-faint/.test(css), 'gray-400 maps to faint, not muted');
 assert(css.includes('--nt-chrome-nav'), 'appearance defines --nt-chrome-nav');

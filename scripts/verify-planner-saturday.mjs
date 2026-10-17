@@ -312,14 +312,14 @@ const fitAt = rendererSrc.indexOf('fitGridStatusTags(exportContainer)');
 const canvasAt = rendererSrc.indexOf('window.html2canvas(exportContainer');
 if (fitAt < 0 || canvasAt < 0 || fitAt > canvasAt) fail('export must fit long status tags before the snapshot');
 if (!rendererSrc.includes('size - 0.5')) fail('a long status tag must step down until it fits');
-if (!expressHtml.includes('w-max max-w-[140px] truncate') || expressHtml.includes('min-w-[140px]')) {
-    fail('in-app station column must shrink to the name and stop at 140px');
+if (!expressHtml.includes('nt-grid-station') || expressHtml.includes('min-w-[140px]')) {
+    fail('in-app station names wrap on two lines and do not widen the column');
 }
-if (!expressExport.includes('min-w-[140px]') || !expressExport.includes('max-w-[140px]') || expressExport.includes('w-max max-w-[140px]')) {
+if (!expressExport.includes('min-w-[140px]') || !expressExport.includes('max-w-[140px]') || expressExport.includes('nt-grid-station')) {
     fail('exported station column must keep its fixed width');
 }
-if (!noWeekend.includes('w-max max-w-[140px] truncate') || noWeekend.includes('min-w-[140px]')) {
-    fail('no-weekend in-app station column must shrink to the name and stop at 140px');
+if (!noWeekend.includes('nt-grid-station') || noWeekend.includes('min-w-[140px]')) {
+    fail('no-weekend in-app station names wrap on two lines');
 }
 const forked = filterStopsForFork(
     [

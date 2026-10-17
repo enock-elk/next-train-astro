@@ -75,7 +75,7 @@
     "workbox-window": "latest"
   },
   "devDependencies": {
-    "firebase-tools": "^13.29.1",
+    "firebase-tools": "^15.33.0",
     "terser": "latest"
   }
 }

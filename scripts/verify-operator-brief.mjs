@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { handleRequest } from '../workers/nexttrain-reply/worker.js';
 import {
     BRIEF_DISMISS_KEY,
+    alertDraftFromBriefCard,
     briefDismissed,
     briefLauncherHtml,
     briefReportHtml,
@@ -36,9 +37,20 @@ ok(greetingForHour(clock.hour) === 'Evening brief', '17:30 is an evening brief')
 const notes = upcomingOpsNotes(thursdayEvening);
 const joined = notes.map((note) => `${note.title} ${note.body}`).join('\n');
 ok(joined.includes('0618 and 0619'), 'Friday ahead names trains 0618 and 0619');
-ok(joined.includes('Hercules to Koedoespoort'), 'Saturday ahead names the two lines with no weekend trains');
-ok(joined.includes('other routes'), 'Saturday ahead keeps other Hercules and Koedoespoort trains');
+ok(!joined.includes('Hercules to Koedoespoort'), 'Thursday does not repeat Saturday Hercules');
+ok(notes.some((note) => note.id === 'country'), 'the country scan is on the brief');
+const country = notes.find((note) => note.id === 'country');
+const countryText = (country?.details || []).join('\n');
+ok(countryText.includes('Gauteng') && countryText.includes('KwaZulu-Natal'), 'the country scan names the regions');
+ok(countryText.includes('0618 and 0619'), 'the Gauteng scan uses the Kempton Park route-page note');
+ok(countryText.includes('first Monday'), 'the KwaZulu-Natal scan uses the Cato Ridge route-page note');
+ok(countryText.includes('Western Cape'), 'a region with no route-page note is still listed');
 ok(!joined.includes('Cato Ridge'), '15 Oct is not near the next first Monday');
+
+const friday = Date.parse('2026-10-16T09:00:00+02:00');
+const fridayJoined = upcomingOpsNotes(friday).map((note) => `${note.title} ${note.body}`).join('\n');
+ok(fridayJoined.includes('Hercules to Koedoespoort'), 'Friday names Saturday Hercules');
+ok(fridayJoined.includes('other routes'), 'Friday keeps the other-routes line with Hercules');
 
 const beforeNovemberMonday = Date.parse('2026-11-01T12:00:00+02:00');
 const cato = upcomingOpsNotes(beforeNovemberMonday).map((note) => note.body).join(' ');
@@ -90,10 +102,39 @@ ok(launcher.includes('id="operator-brief-open"'), 'the launcher is a button');
 ok(launcher.includes('id="operator-brief-dismiss"'), 'the launcher can be dismissed');
 ok(launcher.includes('w-full'), 'the launcher is full width');
 ok(briefLauncherHtml({ hidden: true, clock }).includes('id="operator-brief-restore"'), 'a dismissed brief can be opened again');
+ok(!brief.cards.some((card) => card.id === 'rail'), 'an empty disruption list does not add a rail card');
+const withRail = buildOperatorBrief({
+    now: thursdayEvening,
+    disruptions: [{ region: 'GP', route: 'Pretoria to Kempton Park', stretch: 'Centurion - Irene', tier: 'CRITICAL' }],
+});
+ok(withRail.cards.some((card) => card.id === 'rail' && card.body.includes('Centurion')), 'a live disruption names the region stretch');
+const oldFail = Date.parse('2026-10-01T12:00:00+02:00');
+const week = buildOperatorBrief({
+    now: thursdayEvening,
+    fails: [
+        { reason: 'OLD', origin: 'A', destination: 'B', timestamp: oldFail },
+        { reason: 'NEW', origin: 'C', destination: 'D', timestamp: thursdayEvening },
+    ],
+    crashes: [
+        { id: 'old', error: 'old boom', timestamp: oldFail },
+        { id: 'new', error: 'new boom', timestamp: thursdayEvening },
+    ],
+});
+ok(week.cards.find((card) => card.id === 'fails')?.title.startsWith('1 '), 'routing rows older than a week stay out');
+ok(!week.digest.crashes.recent.some((row) => /old boom/.test(row.error)), 'crash rows older than a week stay out');
+
 const report = briefReportHtml(brief);
 ok(report.includes('What this means'), 'the report has a written note');
 ok(report.includes('Explain this crash'), 'a crash card can be sent for a reading');
+ok(report.includes('Crashes this week'), 'crash rows start collapsed');
+ok(report.includes('data-brief-card'), 'a brief card can expand');
+ok(report.includes('Add to alerts'), 'a brief card can become an alert');
 ok(report.includes('Google Analytics is not'), 'analytics that we cannot read are named as absent');
+const draft = alertDraftFromBriefCard(country);
+ok(draft.target === 'all', 'the country card posts to the whole network');
+ok(draft.message.startsWith('<h3>'), 'the alert keeps a title');
+ok(draft.message.includes('<p>'), 'the alert body is paragraphs');
+ok(!draft.message.includes('Add to alerts'), 'the alert is the card, not the button');
 
 const gemini = buildBriefRequest(brief.digest);
 ok(gemini.generationConfig.thinkingConfig.thinkingLevel === 'MINIMAL', 'the brief asks for minimal thinking');

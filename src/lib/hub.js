@@ -82,7 +82,7 @@ import {
     renderPollResultsInto,
 } from './alert-poll.js';
 import { $userProfile, $currentRouteId, $userRegion, $deviceId } from '../store.js';
-import { $account, accountNeedsEmailVerify, openAccountModal, openAccountProfile } from './account.js';
+import { $account, accountNeedsEmailVerify, openAccountModal, openAccountProfile, signOutAccount } from './account.js';
 import { isLieFi } from './logic.js';
 import { bindColourPackControls, setColourPack, getColourPack, resetLookToClassicLight } from './prefs.js';
 import { markPendingReload } from './session-stability.js';
@@ -597,9 +597,9 @@ function waitOutUpdateToast(startedAt) {
     return new Promise((resolve) => setTimeout(resolve, left));
 }
 
-export async function performHardCacheClear(source = 'modal_confirm', { latestVersion = false, skipNetworkPreflight = false } = {}) {
+export async function performHardCacheClear(source = 'modal_confirm', { latestVersion = false } = {}) {
     const policy = cacheClearPolicy(source);
-    const requiresNetworkPreflight = policy.systemKillswitch || (source === 'check_updates' && !skipNetworkPreflight);
+    const requiresNetworkPreflight = policy.systemKillswitch || source === 'check_updates';
     if (requiresNetworkPreflight) {
         const online = typeof navigator === 'undefined' || navigator.onLine === true;
         // A manual retry must actively probe again so a stale Lie-Fi flag cannot
@@ -618,6 +618,9 @@ export async function performHardCacheClear(source = 'modal_confirm', { latestVe
             lieFi: isLieFi,
             preflight,
         })) {
+            if (source === 'check_updates') {
+                showToast('Kept your saved app. Try again on a stronger connection.', 'error', 4500);
+            }
             return false;
         }
     }
@@ -735,25 +738,6 @@ export async function performHardCacheClear(source = 'modal_confirm', { latestVe
     return true;
 }
 
-function openNetworkSlowConfirm(onProceed) {
-    const modal = document.getElementById('network-slow-confirm-modal');
-    const cancelBtn = document.getElementById('network-slow-cancel-btn');
-    const proceedBtn = document.getElementById('network-slow-proceed-btn');
-    if (!modal || !cancelBtn || !proceedBtn) {
-        onProceed?.();
-        return;
-    }
-    const finish = (proceed) => {
-        cancelBtn.onclick = null;
-        proceedBtn.onclick = null;
-        closeSmoothModal('network-slow-confirm-modal');
-        if (proceed) onProceed?.();
-    };
-    cancelBtn.onclick = () => finish(false);
-    proceedBtn.onclick = () => finish(true);
-    openSmoothModal('network-slow-confirm-modal');
-}
-
 function openCacheClearConfirm(onProceed) {
     const modal = document.getElementById('cache-clear-modal');
     const cancelBtn = document.getElementById('cache-clear-cancel-btn');
@@ -787,18 +771,95 @@ export function showCacheClearWarning() {
         } else {
             console.log(`🛡️ Guardian: Check for Updates — running ${APP_VERSION}, published ${incomingVersion || 'unknown'}.`);
         }
-        const runReset = (skipNetworkPreflight) => performHardCacheClear('check_updates', {
-            latestVersion: !!(incomingVersion && !isAppVersionNewer(incomingVersion, APP_VERSION)),
-            skipNetworkPreflight,
-        });
-        if (!navigator.onLine || !incomingVersion) {
-            openNetworkSlowConfirm(() => runReset(true));
+        if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+            showToast('Kept your saved app. Try again on a stronger connection.', 'error', 4500);
             return;
         }
-        const restarted = await runReset(false);
-        if (!restarted) {
-            openNetworkSlowConfirm(() => runReset(true));
+        await performHardCacheClear('check_updates', {
+            latestVersion: !!(incomingVersion && !isAppVersionNewer(incomingVersion, APP_VERSION)),
+        });
+    });
+}
+
+function deleteIndexedDatabase(name) {
+    return new Promise((resolve) => {
+        if (typeof indexedDB === 'undefined') {
+            resolve();
+            return;
         }
+        try {
+            const req = indexedDB.deleteDatabase(name);
+            req.onsuccess = () => resolve();
+            req.onerror = () => resolve();
+            req.onblocked = () => resolve();
+        } catch {
+            resolve();
+        }
+    });
+}
+
+/** Wipe this phone back to welcome. Keeps next_train_device_id. Does not delete the account. */
+export async function resetPhoneKeepDeviceId() {
+    const keep = safeStorage.getItem('next_train_device_id')
+        || (typeof window !== 'undefined' ? window.NEXT_TRAIN_DEVICE_ID : '')
+        || '';
+    try { await signOutAccount(); } catch { /* the account stays on the server */ }
+    try { sessionStorage.clear(); } catch { /* ignore */ }
+    try { localStorage.clear(); } catch { /* ignore */ }
+    safeStorage.memoryFallback = {};
+    if (keep) {
+        try { localStorage.setItem('next_train_device_id', keep); } catch { /* ignore */ }
+        try {
+            document.cookie = `nt_did=${encodeURIComponent(keep)}; max-age=31536000; path=/; SameSite=Lax`;
+        } catch { /* ignore */ }
+        if (typeof window !== 'undefined') window.NEXT_TRAIN_DEVICE_ID = keep;
+    }
+    try { safeStorage._idbInstance?.close(); } catch { /* ignore */ }
+    safeStorage._idbInstance = null;
+    safeStorage._idbOpenPromise = null;
+    await deleteIndexedDatabase('NextTrainDB');
+    await deleteIndexedDatabase('GuardianIdentityDB');
+    if (keep) {
+        try { await safeStorage.setResilientItem('next_train_device_id', keep); } catch { /* local copy remains */ }
+    }
+    try {
+        if (typeof caches !== 'undefined') {
+            const names = await caches.keys();
+            await Promise.all(names.map((name) => caches.delete(name)));
+        }
+    } catch { /* ignore */ }
+    try {
+        if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
+            const regs = await navigator.serviceWorker.getRegistrations();
+            for (const reg of regs) await reg.unregister();
+        }
+    } catch { /* ignore */ }
+    window.location.replace(withBase('/'));
+}
+
+function openPhoneResetConfirm(onProceed) {
+    const modal = document.getElementById('phone-reset-modal');
+    const cancelBtn = document.getElementById('phone-reset-cancel-btn');
+    const proceedBtn = document.getElementById('phone-reset-confirm-btn');
+    if (!modal || !cancelBtn || !proceedBtn) {
+        onProceed?.();
+        return;
+    }
+    const finish = (proceed) => {
+        cancelBtn.onclick = null;
+        proceedBtn.onclick = null;
+        closeSmoothModal('phone-reset-modal');
+        if (proceed) onProceed?.();
+    };
+    cancelBtn.onclick = () => finish(false);
+    proceedBtn.onclick = () => finish(true);
+    openSmoothModal('phone-reset-modal');
+}
+
+export function showPhoneResetWarning() {
+    triggerHaptic();
+    openPhoneResetConfirm(() => {
+        resetPhoneKeepDeviceId();
     });
 }
 
@@ -2704,6 +2765,9 @@ export function initHub() {
         trackAnalyticsEvent('check_updates_click', { location: 'sidenav' });
         showCacheClearWarning();
     });
+    const openPhoneReset = () => showPhoneResetWarning();
+    document.getElementById('reset-phone-btn')?.addEventListener('click', openPhoneReset);
+    document.getElementById('account-reset-phone-btn')?.addEventListener('click', openPhoneReset);
 
     // About / Help / Changelog
     document.getElementById('settings-about-btn')?.addEventListener('click', () => {

@@ -4968,9 +4968,37 @@ const Admin = {
         return data && typeof data === 'object' ? data : {};
     },
 
+    liveBriefDisruptions: (data) => {
+        const now = Date.now();
+        const out = [];
+        if (!data || typeof data !== 'object') return out;
+        Object.entries(data).forEach(([rId, routeNode]) => {
+            if (!routeNode || typeof routeNode !== 'object') return;
+            const route = (typeof ROUTES !== 'undefined' && ROUTES[rId]) || null;
+            const routeName = route
+                ? (Admin.formatRouteLabelPlain ? Admin.formatRouteLabelPlain(route.name) : String(route.name || rId))
+                : rId;
+            Object.values(routeNode).forEach((item) => {
+                if (!item || typeof item !== 'object') return;
+                if (item.expiresAt && Number(item.expiresAt) < now) return;
+                const stretch = Array.isArray(item.stations) && item.stations.length
+                    ? item.stations.join(' - ').replace(/ STATION/g, '')
+                    : 'the whole route';
+                out.push({
+                    region: route?.region || '',
+                    route: routeName,
+                    stretch,
+                    tier: item.tier === 'CRITICAL' ? 'CRITICAL' : '',
+                });
+            });
+        });
+        return out.slice(0, 8);
+    },
+
     gatherOperatorBrief: async () => {
         const api = window.ntOperatorBrief;
-        const [trips, pairs, users, fails, fares, crashes, featuresRes, sheetRes] = await Promise.all([
+        const dynamicBase = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
+        const [trips, pairs, users, fails, fares, crashes, featuresRes, sheetRes, disruptions] = await Promise.all([
             Admin.fetchBriefNode('sys_logs/trip_plans', 40).catch(() => ({})),
             (async () => {
                 const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
@@ -4993,8 +5021,16 @@ const Admin = {
             Admin.fetchBriefNode('sys_logs/routing_fails', 80).catch(() => ({})),
             Admin.fetchBriefNode('sys_logs/fare_votes', 80).catch(() => ({})),
             Admin.fetchBriefNode('sys_logs/crashes', 20).catch(() => ({})),
-            fetch(`${typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/'}config/features.json`).catch(() => null),
-            fetch(`${typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/'}config/schedule_override.json`).catch(() => null),
+            fetch(`${dynamicBase}config/features.json`).catch(() => null),
+            fetch(`${dynamicBase}config/schedule_override.json`).catch(() => null),
+            (async () => {
+                const secret = await Admin.getAuthKey();
+                const auth = secret ? `?auth=${encodeURIComponent(secret)}` : '';
+                const res = await fetch(`${dynamicBase}disruptions.json${auth}`).catch(() => null);
+                if (!res || !res.ok) return [];
+                const data = await res.json().catch(() => null);
+                return Admin.liveBriefDisruptions(data);
+            })(),
         ]);
         const tripRows = [];
         Object.values(trips || {}).forEach((batch) => {
@@ -5018,6 +5054,7 @@ const Admin = {
             features,
             scheduleOverride,
             expiring: Admin._gsmItems || [],
+            disruptions,
         });
     },
 
@@ -5045,6 +5082,118 @@ const Admin = {
         return String(data.text || '');
     },
 
+    openBriefAlert: (index) => {
+        const card = (Admin._briefCards || [])[index];
+        const api = window.ntOperatorBrief;
+        if (!card || !api?.alertDraftFromBriefCard) return;
+        const draft = api.alertDraftFromBriefCard(card);
+        let sheet = document.getElementById('operator-brief-alert-sheet');
+        if (!sheet) {
+            sheet = document.createElement('div');
+            sheet.id = 'operator-brief-alert-sheet';
+            sheet.className = 'fixed inset-0 z-[320] hidden bg-black/50 flex items-end justify-center';
+            sheet.innerHTML = `
+                <form id="operator-brief-alert-form" class="w-full max-w-lg rounded-t-3xl bg-white dark:bg-gray-900 px-4 pt-4 pb-6 shadow-2xl">
+                    <p class="text-[10px] font-bold uppercase tracking-[0.16em] text-rose-600">Add to alerts</p>
+                    <h3 id="operator-brief-alert-title" class="mt-1 text-base font-semibold text-slate-900 dark:text-white"></h3>
+                    <div id="operator-brief-alert-preview" class="mt-2 max-h-40 overflow-y-auto text-sm text-slate-700 dark:text-slate-200 leading-relaxed"></div>
+                    <label class="block mt-3 text-[11px] font-bold text-slate-500" for="operator-brief-alert-target">Who sees it</label>
+                    <select id="operator-brief-alert-target" class="mt-1 w-full h-10 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-gray-950 text-sm px-2"></select>
+                    <label class="block mt-3 text-[11px] font-bold text-slate-500" for="operator-brief-alert-severity">Severity</label>
+                    <select id="operator-brief-alert-severity" class="mt-1 w-full h-10 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-gray-950 text-sm px-2">
+                        <option value="info">Info</option>
+                        <option value="warning">Warning</option>
+                        <option value="critical">Critical</option>
+                    </select>
+                    <label class="block mt-3 text-[11px] font-bold text-slate-500" for="operator-brief-alert-expiry">Expires</label>
+                    <input id="operator-brief-alert-expiry" type="datetime-local" class="mt-1 w-full h-10 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-gray-950 text-sm px-2">
+                    <div class="mt-4 flex gap-2">
+                        <button type="button" id="operator-brief-alert-cancel" class="flex-1 py-2 rounded-lg bg-slate-100 dark:bg-gray-800 text-sm font-bold">Cancel</button>
+                        <button type="submit" class="flex-1 py-2 rounded-lg bg-rose-600 text-white text-sm font-bold">Post alert</button>
+                    </div>
+                </form>`;
+            document.body.appendChild(sheet);
+            sheet.querySelector('#operator-brief-alert-cancel').onclick = () => sheet.classList.add('hidden');
+            sheet.addEventListener('click', (event) => {
+                if (event.target === sheet) sheet.classList.add('hidden');
+            });
+            sheet.querySelector('#operator-brief-alert-form').addEventListener('submit', (event) => {
+                event.preventDefault();
+                Admin.postBriefAlert();
+            });
+        }
+        Admin._briefAlertDraft = draft;
+        const title = sheet.querySelector('#operator-brief-alert-title');
+        const preview = sheet.querySelector('#operator-brief-alert-preview');
+        const target = sheet.querySelector('#operator-brief-alert-target');
+        const severity = sheet.querySelector('#operator-brief-alert-severity');
+        const expiry = sheet.querySelector('#operator-brief-alert-expiry');
+        if (title) title.textContent = draft.title || 'Alert';
+        if (preview) preview.innerHTML = draft.message || '';
+        if (target) {
+            const chips = Admin.ALERT_SCOPE_CHIPS || [];
+            target.innerHTML = chips.map((chip) => `<option value="${chip.value}">${chip.label}</option>`).join('');
+            if (draft.target && !chips.some((chip) => chip.value === draft.target)) {
+                target.insertAdjacentHTML('beforeend', `<option value="${draft.target}">${Admin.alertTargetLabel(draft.target)}</option>`);
+            }
+            target.value = draft.target || 'all';
+        }
+        if (severity) severity.value = draft.severity || 'info';
+        if (expiry) expiry.value = Admin.endOfTodayLocalValue();
+        sheet.classList.remove('hidden');
+    },
+
+    postBriefAlert: async () => {
+        const draft = Admin._briefAlertDraft;
+        const sheet = document.getElementById('operator-brief-alert-sheet');
+        if (!draft?.message) return;
+        const target = document.getElementById('operator-brief-alert-target')?.value || draft.target || 'all';
+        const severity = document.getElementById('operator-brief-alert-severity')?.value || 'info';
+        const expiryRaw = document.getElementById('operator-brief-alert-expiry')?.value || '';
+        const expiresAt = expiryRaw ? new Date(expiryRaw).getTime() : NaN;
+        if (!Number.isFinite(expiresAt) || expiresAt <= Date.now()) {
+            if (typeof showToast === 'function') showToast('Pick an expiry that is still ahead.', 'error');
+            return;
+        }
+        const secret = await Admin.getAuthKey();
+        if (!secret) {
+            if (typeof showToast === 'function') showToast('Sign in as an operator first.', 'error');
+            return;
+        }
+        const signoff = 'Next Train Ops';
+        const message = /<span[^>]*>.*?<\/span>\s*$/i.test(draft.message)
+            ? draft.message
+            : `${draft.message}<br><br><span class="opacity-75 text-[10px] uppercase font-bold tracking-wider">- ${signoff}</span>`;
+        const nowTs = Date.now();
+        const payload = {
+            id: String(nowTs),
+            title: draft.title || '',
+            message,
+            authorName: signoff,
+            forcePopup: false,
+            pinned: false,
+            pinnedAt: null,
+            expiresAt,
+            severity,
+            imageUrls: [],
+            imageUrl: null,
+            ctaUrl: null,
+            ctaText: null,
+            sourceName: null,
+            sourceUrl: null,
+            postedAt: nowTs,
+            poll: { active: false },
+        };
+        try {
+            await Admin.publishNoticeToTarget(target, payload, secret);
+            sheet?.classList.add('hidden');
+            if (typeof showToast === 'function') showToast(`Alert posted to ${Admin.alertTargetLabel(target)}.`, 'success');
+            if (typeof checkServiceAlerts === 'function') checkServiceAlerts();
+        } catch (err) {
+            if (typeof showToast === 'function') showToast(err?.message || 'Could not post that alert.', 'error');
+        }
+    },
+
     openOperatorBrief: async () => {
         const api = window.ntOperatorBrief;
         if (!api?.buildOperatorBrief || !api.briefReportHtml) {
@@ -5057,8 +5206,22 @@ const Admin = {
         overlay.querySelector('#operator-brief-close')?.addEventListener('click', () => overlay.classList.add('hidden'));
         try {
             const model = await Admin.gatherOperatorBrief();
+            Admin._briefCards = model.cards || [];
             overlay.innerHTML = api.briefReportHtml(model);
             overlay.querySelector('#operator-brief-close')?.addEventListener('click', () => overlay.classList.add('hidden'));
+            overlay.addEventListener('click', (event) => {
+                if (event.target.closest('button, summary, a, input, select')) return;
+                const card = event.target.closest('[data-brief-card]');
+                if (!card) return;
+                card.querySelector('[data-brief-detail]')?.classList.toggle('hidden');
+            });
+            overlay.querySelectorAll('.operator-brief-alert').forEach((button) => {
+                button.addEventListener('click', (event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    Admin.openBriefAlert(Number(button.getAttribute('data-brief-index')));
+                });
+            });
             overlay.querySelectorAll('.operator-brief-crash').forEach((button) => {
                 button.addEventListener('click', () => Admin.explainBriefCrash(button.getAttribute('data-crash-id') || '', button));
             });
@@ -12239,6 +12402,13 @@ const Admin = {
 
     replySuggestMarkup: () => `
                     <div id="admin-reply-suggest" class="mt-3 shrink-0">
+                        <div id="admin-reply-guide" class="hidden">
+                            <button type="button" id="admin-reply-guide-open" class="text-[11px] font-normal text-gray-500 dark:text-gray-400 underline focus:outline-none">Guide this reply</button>
+                            <div id="admin-reply-guide-box" class="hidden mt-1 flex gap-2">
+                                <input id="admin-reply-guide-text" maxlength="500" class="flex-1 h-9 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-xs text-gray-900 dark:text-white px-2 focus:outline-none" placeholder="One note for this draft">
+                                <button type="button" id="admin-reply-guide-go" class="shrink-0 px-3 rounded-lg bg-gray-900 dark:bg-white dark:text-gray-900 text-white text-[11px] font-bold focus:outline-none">Regenerate</button>
+                            </div>
+                        </div>
                         <div id="admin-reply-suggest-halt" class="hidden mb-2 rounded-lg border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/40 text-amber-950 dark:text-amber-100 p-2">
                             <div id="admin-reply-suggest-halt-text" class="text-xs whitespace-pre-wrap"></div>
                             <label for="admin-reply-suggest-context" class="block text-[10px] font-bold mt-2 mb-1">Add the missing fact</label>
@@ -12419,6 +12589,7 @@ const Admin = {
             box.innerHTML = remoteHtml;
             Admin.writeLocalReplyDraft(id, remoteHtml, remoteAt);
         }
+        Admin.syncReplyGuide();
         return box?.innerHTML || local?.html || '';
     },
 
@@ -12495,11 +12666,22 @@ const Admin = {
         if (!text) {
             if (textEl) textEl.textContent = '';
             panel.classList.add('hidden');
+            Admin.syncReplyGuide();
             return;
         }
         if (textEl) textEl.textContent = text;
         else panel.textContent = text;
         panel.classList.remove('hidden');
+        Admin.syncReplyGuide();
+    },
+
+    syncReplyGuide: () => {
+        const guide = document.getElementById('admin-reply-guide');
+        const editor = document.getElementById('admin-reply-text');
+        const halt = document.getElementById('admin-reply-suggest-halt');
+        if (!guide || !editor) return;
+        const halted = !!(halt && !halt.classList.contains('hidden'));
+        guide.classList.toggle('hidden', halted || !Admin.draftHasText(editor.innerHTML));
     },
 
     quotedNoticesForSuggest: async (items) => {
@@ -12575,7 +12757,12 @@ const Admin = {
         const items = (Admin.cachedFeedbackData || []).filter((item) => (item.device_id || item.deviceId) === deviceId);
         const alias = (Admin.cachedAliases && Admin.cachedAliases[deviceId]) || '';
         const note = document.getElementById('admin-reply-suggest-note')?.value || '';
-        const draftContext = document.getElementById('admin-reply-suggest-context')?.value || '';
+        const guideText = document.getElementById('admin-reply-guide-box') && !document.getElementById('admin-reply-guide-box').classList.contains('hidden')
+            ? (document.getElementById('admin-reply-guide-text')?.value || '')
+            : '';
+        const contextEl = document.getElementById('admin-reply-suggest-context');
+        if (guideText && contextEl) contextEl.value = guideText;
+        const draftContext = guideText || contextEl?.value || '';
         const quotedNotices = await Admin.quotedNoticesForSuggest(items);
         const payload = api.buildSuggestPayload(items, {
             deviceId,
@@ -12678,6 +12865,7 @@ const Admin = {
                 ready.textContent = `Draft ready. Used ${payload.thread.length} messages. The draft is in the box. Edit it, then send.`;
                 ready.classList.remove('hidden');
             }
+            Admin.syncReplyGuide();
             if (typeof showToast === 'function') showToast('Draft ready. Edit it, then send.', 'success');
         } catch (err) {
             const message = err.message || 'Could not draft a reply.';
@@ -13126,6 +13314,21 @@ const Admin = {
         if (suggestAgain) suggestAgain.onclick = () => Admin.runSuggestReply();
         const contextBox = document.getElementById('admin-reply-suggest-context');
         if (contextBox) contextBox.value = '';
+        const guideBox = document.getElementById('admin-reply-guide-box');
+        const guideInput = document.getElementById('admin-reply-guide-text');
+        if (guideInput) guideInput.value = '';
+        if (guideBox) guideBox.classList.add('hidden');
+        const guideOpen = document.getElementById('admin-reply-guide-open');
+        if (guideOpen) guideOpen.onclick = () => guideBox?.classList.toggle('hidden');
+        const guideGo = document.getElementById('admin-reply-guide-go');
+        if (guideGo) {
+            guideGo.onclick = () => {
+                const text = guideInput?.value || '';
+                if (contextBox) contextBox.value = text;
+                Admin.runSuggestReply();
+            };
+        }
+        Admin.syncReplyGuide();
         Admin.setSuggestProgress(null);
         const saveNoteBtn = document.getElementById('reply-suggest-save-note');
         if (saveNoteBtn) saveNoteBtn.onclick = () => Admin.saveReplySuggestNote();

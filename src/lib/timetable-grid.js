@@ -29,7 +29,7 @@ const GRID_INTENT_BLOCKING_MODALS = [
     'route-modal', 'fare-modal', 'alerts-channel', 'notice-modal', 'schedule-modal',
     'profile-modal', 'feedback-modal', 'about-modal', 'legal-modal', 'messages-thread-modal',
     'dev-modal', 'login-modal', 'holiday-notice-modal', 'exit-modal', 'cache-clear-modal',
-    'network-slow-confirm-modal', 'region-confirm-modal', 'schedule-override-modal',
+    'region-confirm-modal', 'schedule-override-modal',
 ];
 
 function scheduleBundleHasRows(scheds) {

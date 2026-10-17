@@ -232,8 +232,8 @@ export let _networkStruggleCount = 0;
 let _lastSlowNetworkToastTime = 0;
 let _reachabilityProbed = false;
 
-/** Banner/toast only after this much continuous struggle + foreground. */
-const STRUGGLE_UI_MIN_MS = 30_000;
+/** Banner/toast only after this much of the current visible session. */
+const STRUGGLE_UI_MIN_MS = 15_000;
 let _struggleClockStartedAt = 0;
 let _pendingStruggleReason = null;
 let _struggleUiTimer = null;
@@ -242,6 +242,7 @@ let _struggleVisibilityBound = false;
 const REGION_DISPLAY_NAMES = { 'GP': 'Gauteng', 'WC': 'Western Cape', 'KZN': 'KwaZulu-Natal', 'EC': 'Eastern Cape' };
 
 function noteStruggleAttempt() {
+    bindStruggleVisibilityListener();
     if (!_struggleClockStartedAt) _struggleClockStartedAt = Date.now();
 }
 
@@ -268,9 +269,10 @@ function bindStruggleVisibilityListener() {
     document.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'hidden') {
             try { hideOfflineChrome(); } catch { /* ignore */ }
-            _pendingStruggleReason = null;
+            clearStruggleClock();
             return;
         }
+        clearStruggleClock();
         scheduleOfflineChrome();
     });
 }
@@ -320,7 +322,7 @@ function paintConnectionStruggleUi(reason = 'offline') {
 /**
  * Offline chrome only (banner + toast). Weak / Lie-Fi still arm network guards
  * via isLieFi / captive modal, but do not paint alternate banners.
- * Banner + toast only after ≥30s of trying and only while the tab is foreground.
+ * Banner + toast only after 15s of this visible session, and only while the tab is foreground.
  * @param {'offline'|'liefi'|'weak'|'slow_boot'} reason
  */
 export function engageConnectionStruggleUi(reason = 'offline') {
@@ -590,7 +592,7 @@ export async function guardianFetch(url, options = {}, timeoutMs = 8000) {
                     const hasDiskCache = !!safeStorage.getItem(`full_db_${$userRegion.get() || 'GP'}`);
                     _networkStruggleCount = 0;
                     engageConnectionStruggleUi('liefi');
-                    // Modal also waits for the 30s struggle gate (same clock).
+                    // Modal also waits for the 15s struggle gate of this visible session.
                     if (!hasRamCache && !hasDiskCache && typeof window !== 'undefined' && typeof window.triggerNetworkStruggleModal === 'function' && struggleElapsedOk() && isActiveForegroundSession()) {
                         window.triggerNetworkStruggleModal();
                     }
@@ -1983,6 +1985,122 @@ export function startClock() {
     if (typeof window !== 'undefined') {
         setInterval(updateTime, 1000);
     }
+}
+
+const PULL_ARM_PX = 72;
+
+function sessionRefreshBlocked() {
+    if (typeof document === 'undefined') return true;
+    if (document.body.classList.contains('sidenav-open')) return true;
+    if (document.body.classList.contains('modal-active')) return true;
+    const tab = safeStorage.getItem('activeTab') || 'next-train';
+    return tab !== 'next-train' && tab !== 'trip-planner' && tab !== 'community';
+}
+
+function chainIsAtTop(start, scroller) {
+    let node = start instanceof Element ? start : null;
+    while (node && node !== scroller) {
+        const style = window.getComputedStyle(node);
+        const scrollable = /(auto|scroll)/.test(`${style.overflowY} ${style.overflow}`)
+            && node.scrollHeight > node.clientHeight + 2;
+        if (scrollable && node.scrollTop > 2) return false;
+        node = node.parentElement;
+    }
+    return scroller.scrollTop <= 2;
+}
+
+/** Pull down at the top of Next Train, Trip Planner, or Community to reload this session. */
+export function initSessionPullRefresh() {
+    if (typeof document === 'undefined' || window.__ntPullRefreshBound) return;
+    const scroller = document.getElementById('app-scroll');
+    if (!scroller) return;
+    window.__ntPullRefreshBound = true;
+    let startY = 0;
+    let startX = 0;
+    let tracking = false;
+    let armed = false;
+    let hint = null;
+
+    const paintHint = (px, ready) => {
+        if (!hint) {
+            hint = document.createElement('div');
+            hint.id = 'nt-pull-refresh';
+            hint.setAttribute('aria-hidden', 'true');
+            hint.style.cssText = 'height:0;overflow:hidden;text-align:center;font-size:11px;font-weight:700;line-height:56px;color:#64748b;';
+            scroller.prepend(hint);
+        }
+        const height = Math.min(56, Math.max(0, px));
+        hint.style.height = height ? `${height}px` : '0';
+        hint.textContent = ready ? 'Release to refresh' : '';
+    };
+
+    scroller.addEventListener('touchstart', (event) => {
+        if (sessionRefreshBlocked()) {
+            tracking = false;
+            return;
+        }
+        const touch = event.touches?.[0];
+        if (!touch || !chainIsAtTop(event.target, scroller)) {
+            tracking = false;
+            return;
+        }
+        startY = touch.clientY;
+        startX = touch.clientX;
+        tracking = true;
+        armed = false;
+    }, { passive: true });
+
+    scroller.addEventListener('touchmove', (event) => {
+        if (!tracking) return;
+        const touch = event.touches?.[0];
+        if (!touch) return;
+        const dy = touch.clientY - startY;
+        const dx = Math.abs(touch.clientX - startX);
+        if (!chainIsAtTop(event.target, scroller) || dy <= 0 || dx > dy) {
+            if (dy > 8) {
+                tracking = false;
+                armed = false;
+                paintHint(0, false);
+            }
+            return;
+        }
+        if (dy < 10) return;
+        if (event.cancelable) event.preventDefault();
+        armed = dy >= PULL_ARM_PX;
+        paintHint(dy, armed);
+    }, { passive: false });
+
+    const release = async () => {
+        const go = tracking && armed && !sessionRefreshBlocked();
+        tracking = false;
+        armed = false;
+        paintHint(0, false);
+        if (!go || window.__ntPullRefreshing) return;
+        window.__ntPullRefreshing = true;
+        try {
+            const tab = safeStorage.getItem('activeTab') || 'next-train';
+            await loadAllSchedules(true);
+            if (typeof window.findNextTrains === 'function') window.findNextTrains();
+            if (typeof window.updateNextTrainView === 'function') window.updateNextTrainView();
+            if (tab === 'trip-planner') {
+                const results = document.getElementById('planner-results-section');
+                if (results && !results.classList.contains('hidden')) {
+                    document.getElementById('planner-search-btn')?.click();
+                }
+            }
+            if (tab === 'community') {
+                const community = await import('./community.js');
+                community.openRouteCommunity?.();
+            }
+        } catch { /* the open tab keeps the times it already has */ }
+        finally { window.__ntPullRefreshing = false; }
+    };
+    scroller.addEventListener('touchend', () => { release(); }, { passive: true });
+    scroller.addEventListener('touchcancel', () => {
+        tracking = false;
+        armed = false;
+        paintHint(0, false);
+    }, { passive: true });
 }
 
 // Attach to window namespace for backward-compatible triggers & third-party shims

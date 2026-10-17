@@ -500,13 +500,13 @@ assert(delayReports.includes('WEEKDAY_REPORT_MAX_AGE_MS = 60 * 60 * 1000'), 'wee
 assert(delayReports.includes('isReportStillLive'), 'stale and past-time reports are filtered');
 assert(trainGhosts.includes('TRACKING_WINDOW_SEC = 45 * 60'), 'tracking window is 45 minutes');
 assert(hubModals.includes('No trains in the next 45 minutes'), 'nearby empty copy matches the 45-minute window');
-assert(hubModals.includes('id="network-slow-confirm-modal"'), 'Check for Updates has a slow-network confirm');
+assert(!hubModals.includes('id="network-slow-confirm-modal"'), 'Check for Updates has no slow-network confirm');
 assert(hubModals.includes('id="cache-clear-modal"'), 'Check for Updates has a confirm popup');
 assert(hubModals.includes('This downloads the latest app onto this phone, then restarts Next Train.'), 'Check for Updates confirm explains the restart');
 assert(hubModals.includes('Your pinned route stays.'), 'Check for Updates confirm says the pinned route stays');
 assert(!hubModals.includes('the look goes back to Classic light'), 'Check for Updates confirm does not reset the look to Classic light');
 assert(!hubModals.includes('stuck copy'), 'Check for Updates does not mention stuck copy');
-assert(hubModals.includes('Your network seems slow. Are you sure?'), 'slow-network confirm asks before wiping');
+assert(!hubModals.includes('Your network seems slow. Are you sure?'), 'slow-network confirm is not offered');
 assert(hubModals.includes('id="nt-admin-publish-train"'), 'admin nearby sheet can publish a test train');
     assert(hubModals.includes('Share on the map as this train'), 'admin publish button copy is Share on the map as this train');
 {

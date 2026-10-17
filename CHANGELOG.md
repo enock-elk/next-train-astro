@@ -1,5 +1,11 @@
 # Changelog
 
+## V9_10.17.1
+
+Options has Reset this phone. It clears this phone and keeps your user id. Pull down at the top of Next Train, Trip Planner, or Community to refresh.
+
+Check for Updates keeps the saved app when the download does not finish. The operator brief uses the route-page notes for the country scan, and a card can be posted as an alert. App stuck waits on the starting screen. A slow connection is reported after 15 seconds of the current visit.
+
 ## V9_10.16.06
 
 Trip fare shows the day and time with the peak, such as Peak (Saturday @ 7:20). Passenger type has a close button.

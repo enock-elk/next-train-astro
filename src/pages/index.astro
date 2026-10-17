@@ -250,12 +250,13 @@ const faqLd = {
 
 <script>
     // @ts-nocheck
-    import { loadAllSchedules, startClock, currentTime, currentDayType, syncRegionDisplayDom, ensureReachabilityProbed, bindKillswitchWatch } from '../lib/logic.js';
+    import { loadAllSchedules, startClock, currentTime, currentDayType, syncRegionDisplayDom, ensureReachabilityProbed, bindKillswitchWatch, initSessionPullRefresh } from '../lib/logic.js';
     import { $currentRouteId, $userRegion, hydrateStores } from '../store.js';
     import { ROUTES, withBase } from '../lib/config.js';
     import { safeStorage, restorePinnedSession } from '../lib/utils.js';
 
-    const revealAppShell = () => {
+    const revealAppShell = (force = false) => {
+        if (window.__ntHoldBootCover && force !== true) return;
         const main = document.getElementById('main-content');
         const overlay = document.getElementById('loading-overlay');
         if (main) main.style.visibility = '';
@@ -307,10 +308,11 @@ const faqLd = {
         bindWebViewDeeplinkResume,
     } from '../lib/deeplink.js';
     import { setupBlackBoxLogger } from '../lib/blackbox.js';
-    import { initRecoveryWatchdog } from '../lib/recovery.js';
+    import { initRecoveryWatchdog, holdStuckBoot } from '../lib/recovery.js';
 
     window.openLegal = openLegal;
     initRecoveryWatchdog();
+    initSessionPullRefresh();
     // Empathy modal "Try Again" (and admin) can call this before/without bridge
     window.loadAllSchedules = loadAllSchedules;
     prepareDeeplinkIntents();
@@ -458,6 +460,10 @@ const faqLd = {
     }
 
     window.revealAppShell = revealAppShell;
+    document.querySelector('#loading-overlay [data-nt-help-escape]')?.addEventListener('click', (event) => {
+        event.preventDefault();
+        holdStuckBoot();
+    });
 
     const igniteDataEngine = async () => {
         // 14.1: two-frame / 700ms drop already ran. Later reveals are no-ops.

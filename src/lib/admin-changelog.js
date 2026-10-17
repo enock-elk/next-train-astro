@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_10.17.1': [
+        'Check for Updates no longer asks about a slow network. A failed download keeps the saved app. Reset this phone, in Data and Sync and on the signed-in Account sheet, clears this phone and writes back only next_train_device_id. The account stays. The operator brief holds standing notes to today or tomorrow, and the country card is the route-page insights. A live disruption adds a Rail card. Crashes this week start collapsed, and a card opens its rows. Add to alerts turns that card into an alert and asks only who sees it, the severity, and the expiry. Guide this reply regenerates the current draft. App stuck stays on the starting screen until the shell lands, then toasts Next Train loaded. Pull to refresh reloads the open tab. The slow-connection toast waits 15 seconds of the current visible session. What\'s New covers the phone reset and pull to refresh. forceShow stays false.',
+    ],
     'V9_10.16.06': [
         'Trip fare peak line reads Peak (Saturday @ 7:20). The passenger type sheet has a close X. State Monitor and the scheduled queue only show an image when the address is a real poster or image file, with the site base applied, and a failed image is removed. Next Train Composer fills the screen. Its actions are small chips. A rewrite comes back as a short title and paragraphs, and Replace keeps that shape in the field. What\'s New covers the fare line and the close button. forceShow stays false.',
     ],

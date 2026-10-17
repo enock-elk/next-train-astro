@@ -31,6 +31,7 @@ import {
 import { TEXT_ASSIST_ACTIONS, comfortAssistText, assistHtmlFromText } from './text-assist.js';
 import { fetchLinkPreview, firstHttpUrl } from './link-preview.js';
 import {
+    alertDraftFromBriefCard,
     briefDismissed,
     briefLauncherHtml,
     briefReportHtml,
@@ -142,6 +143,7 @@ export function exposeAdminGlobals() {
     window.ntTextAssist = { TEXT_ASSIST_ACTIONS, comfortAssistText, assistHtmlFromText };
     window.ntLinkPreview = { fetchLinkPreview, firstHttpUrl };
     window.ntOperatorBrief = {
+        alertDraftFromBriefCard,
         briefDismissed,
         briefLauncherHtml,
         briefReportHtml,

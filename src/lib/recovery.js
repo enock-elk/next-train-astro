@@ -9,7 +9,9 @@ import {
     withBase,
     SUPPORT_EMAIL,
     SUPPORT_FACEBOOK_URL,
+    ROUTES,
 } from './config.js';
+import { safeStorage } from './utils.js';
 
 export { SUPPORT_EMAIL, SUPPORT_FACEBOOK_URL };
 
@@ -191,10 +193,88 @@ function onVisibleElapsed(ms, fn) {
     if (isForeground()) arm();
 }
 
+let helpHeld = false;
+let visibleBootMs = 0;
+
+function pinnedRouteId() {
+    const region = safeStorage.getItem('userRegion') || 'GP';
+    const saved = safeStorage.getItem(`defaultRoute_${region}`) || '';
+    const route = saved ? ROUTES[saved] : null;
+    if (!route || route.isActive === false) return '';
+    if (route.region && route.region !== region) return '';
+    return saved;
+}
+
+function finishHeldBoot() {
+    if (!helpHeld) return;
+    helpHeld = false;
+    if (typeof window !== 'undefined') window.__ntHoldBootCover = false;
+    try {
+        if (typeof window.revealAppShell === 'function') window.revealAppShell(true);
+        else document.getElementById('loading-overlay')?.classList.add('hidden');
+    } catch { /* ignore */ }
+    const welcome = document.getElementById('welcome-modal');
+    if (pinnedRouteId()) {
+        welcome?.classList.add('hidden');
+    } else if (safeStorage.getItem('welcomeSeen') !== 'true' && welcome?.classList.contains('hidden')) {
+        if (typeof window.openSmoothModal === 'function') window.openSmoothModal('welcome-modal');
+        else welcome?.classList.remove('hidden');
+    }
+    if (typeof window.showToast === 'function') window.showToast('Next Train loaded.', 'success', 2500);
+}
+
+function bootHasLanded() {
+    if (typeof window !== 'undefined' && window._appStabilized) return true;
+    if (!overlayStillBlocking() && !window.__ntHoldBootCover) return true;
+    const welcome = document.getElementById('welcome-modal');
+    if (welcome && !welcome.classList.contains('hidden')) return true;
+    return coreUiIsUsable() && !overlayStillBlocking();
+}
+
+/** Stay on the starting screen. Help opens only if it is still covered after the visible wait. */
+export function holdStuckBoot() {
+    if (typeof window === 'undefined') return;
+    if (!overlayStillBlocking() && !window.__ntHoldBootCover) {
+        openRecoveryHelp('boot');
+        return;
+    }
+    helpHeld = true;
+    window.__ntHoldBootCover = true;
+    const overlay = document.getElementById('loading-overlay');
+    if (overlay) overlay.style.display = '';
+    if (visibleBootMs >= RECOVERY_AUTO_REDIRECT_MS) {
+        helpHeld = false;
+        window.__ntHoldBootCover = false;
+        openRecoveryHelp('boot');
+    }
+}
+
+function watchHeldBoot() {
+    if (typeof window === 'undefined' || window.__ntHeldBootWatch) return;
+    window.__ntHeldBootWatch = true;
+    setInterval(() => {
+        if (!helpHeld) return;
+        if (bootHasLanded()) finishHeldBoot();
+    }, 400);
+}
+
+function bindStuckBootEscape() {
+    if (typeof document === 'undefined' || window.__ntStuckBootBound) return;
+    window.__ntStuckBootBound = true;
+    document.addEventListener('click', (event) => {
+        const link = event.target?.closest?.('[data-nt-help-escape]');
+        if (!link) return;
+        const overlay = document.getElementById('loading-overlay');
+        if (!overlay || !overlay.contains(link)) return;
+        event.preventDefault();
+        holdStuckBoot();
+    }, true);
+}
+
 /**
  * Boot watchdog + loader escape hatch.
- * Manual escape is immediate; auto-lifeboat only if the logo overlay is still
- * covering a broken shell after 55s of on-screen time.
+ * App stuck stays on the starting screen until the shell lands, or the
+ * visible wait runs out and the lifeboat opens.
  */
 export function initRecoveryWatchdog() {
     if (typeof window === 'undefined' || typeof document === 'undefined') return;
@@ -206,6 +286,28 @@ export function initRecoveryWatchdog() {
 
     ensureLoaderEscape();
     setTimeout(ensureLoaderEscape, 500);
+    bindStuckBootEscape();
+    watchHeldBoot();
+    let bootElapsed = 0;
+    let bootLast = Date.now();
+    const tickBoot = () => {
+        if (!isForeground()) {
+            bootLast = Date.now();
+            return;
+        }
+        bootElapsed += Date.now() - bootLast;
+        bootLast = Date.now();
+        visibleBootMs = bootElapsed;
+        if (helpHeld && bootElapsed >= RECOVERY_AUTO_REDIRECT_MS && overlayStillBlocking()) {
+            helpHeld = false;
+            if (typeof window !== 'undefined') window.__ntHoldBootCover = false;
+            openRecoveryHelp('boot');
+        }
+    };
+    setInterval(tickBoot, 1000);
+    document.addEventListener('visibilitychange', () => {
+        bootLast = Date.now();
+    });
     // Remove any leftover soft banner from older builds
     try { document.getElementById('nt-recovery-banner')?.remove(); } catch { /* ignore */ }
 

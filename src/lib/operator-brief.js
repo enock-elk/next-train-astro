@@ -4,10 +4,11 @@
  * The written note is optional and must not invent a date the digest does not have.
  */
 import { GRANTABLE_FEATURES } from './features.js';
-import { HOLIDAY_NAMES, SATURDAY_PLACEHOLDER_ROUTES, SPECIAL_DATES } from './config.js';
+import { HOLIDAY_NAMES, ROUTES, SATURDAY_PLACEHOLDER_ROUTES, SPECIAL_DATES } from './config.js';
+import { CORRIDOR_INSIGHTS, SEO_INSIGHTS, displayRouteName, listSeoCorridors } from './seo-routes.js';
 
 export const BRIEF_DISMISS_KEY = 'nt_operator_brief_hidden_day';
-export const BRIEF_LOOKAHEAD_DAYS = 8;
+export const BRIEF_LOOKAHEAD_DAYS = 2;
 const DIGEST_MAX = 12000;
 
 const FEATURE_LABELS = Object.fromEntries(
@@ -123,11 +124,67 @@ export function restoreBrief(storage) {
     try { storage?.removeItem(BRIEF_DISMISS_KEY); } catch { /* ignore */ }
 }
 
+const REGION_NAMES = {
+    GP: 'Gauteng',
+    WC: 'Western Cape',
+    KZN: 'KwaZulu-Natal',
+    EC: 'Eastern Cape',
+};
+
+function countryInsightCard() {
+    const byRegion = { GP: [], WC: [], KZN: [], EC: [] };
+    const push = (code, line) => {
+        if (code && byRegion[code] && line) byRegion[code].push(line);
+    };
+    Object.entries(SEO_INSIGHTS).forEach(([routeId, text]) => {
+        const route = ROUTES[routeId];
+        const name = displayRouteName(route);
+        push(route?.region, `${name}. ${String(text || '').trim()}`);
+    });
+    const corridors = listSeoCorridors();
+    Object.entries(CORRIDOR_INSIGHTS).forEach(([slug, text]) => {
+        const corridor = corridors.find((row) => row.slug === slug);
+        const code = corridor?.region || '';
+        const label = corridor?.label || 'Corridor';
+        push(code, `${label}. ${String(text || '').trim()}`);
+    });
+    const details = Object.entries(byRegion).map(([code, rows]) => (
+        rows.length
+            ? `${REGION_NAMES[code]}: ${rows.join(' ')}`
+            : `${REGION_NAMES[code]}: no extra corridor note on the route pages.`
+    ));
+    return {
+        id: 'country',
+        kicker: 'Across the country',
+        tone: 'calm',
+        title: 'Corridor notes from the route pages',
+        body: 'Gauteng, Western Cape, KwaZulu-Natal, and Eastern Cape, from the notes already on those pages.',
+        details,
+        region: '',
+    };
+}
+
+export function alertDraftFromBriefCard(card) {
+    const title = String(card?.title || '').trim();
+    const parts = [card?.body, ...(Array.isArray(card?.details) ? card.details : [])]
+        .map((line) => String(line || '').trim())
+        .filter(Boolean)
+        .filter((line, index, list) => list.indexOf(line) === index);
+    const message = `${title ? `<h3>${esc(title)}</h3>` : ''}${parts.map((line) => `<p>${esc(line)}</p>`).join('')}`;
+    const region = ['GP', 'WC', 'KZN', 'EC'].includes(card?.region) ? card.region : '';
+    return {
+        title,
+        message,
+        target: region ? `all_${region}` : 'all',
+        severity: card?.tone === 'watch' ? 'warning' : 'info',
+    };
+}
+
 export function upcomingOpsNotes(now = Date.now()) {
     const clock = johannesburgClock(now);
     const notes = [];
     const seen = new Set();
-    for (let offset = 0; offset <= BRIEF_LOOKAHEAD_DAYS; offset += 1) {
+    for (let offset = 0; offset <= 1; offset += 1) {
         const day = addDays(clock, offset);
         const when = dayPhrase(clock, day);
         const monday = firstMonday(day.year, day.month);
@@ -141,40 +198,50 @@ export function upcomingOpsNotes(now = Date.now()) {
                     tone: 'watch',
                     title: `${when}, Cato Ridge has no booked Metrorail`,
                     body: 'Transnet takes the Cato Ridge line on the first Monday of the month. No Metrorail is booked unless PRASA says otherwise.',
+                    details: ['KwaZulu-Natal: Cato Ridge has no booked Metrorail unless PRASA says otherwise.'],
+                    region: 'KZN',
                 });
             }
         }
-        if (day.weekday === 'Sat' && offset <= 3) {
+        if (day.weekday === 'Sat') {
             notes.push({
                 id: `sat-${day.key}`,
                 kicker: 'Ahead',
                 tone: 'watch',
                 title: `${when} has no trains on two lines`,
                 body: 'Hercules to Koedoespoort and East London to Berlin have no Saturday trains and no public-holiday trains. Hercules and Koedoespoort still have Saturday trains on other routes.',
+                details: [
+                    'Gauteng: Hercules to Koedoespoort has no Saturday trains. Other routes at those stations still run.',
+                    'Eastern Cape: East London to Berlin has no Saturday trains.',
+                ],
             });
         }
-        if ((day.weekday === 'Mon' || day.weekday === 'Fri') && offset <= 3) {
+        if (day.weekday === 'Mon' || day.weekday === 'Fri') {
             notes.push({
                 id: `blue-${day.key}`,
                 kicker: 'Ahead',
                 tone: 'calm',
                 title: `${when}, trains 0618 and 0619 do not run`,
                 body: 'Those two stay off on Mondays and Fridays so the Blue Train and Rovos Rail can pass. Tuesday to Thursday they run.',
+                details: ['Gauteng: trains 0618 and 0619 stay off so the Blue Train and Rovos Rail can pass.'],
+                region: 'GP',
             });
         }
-        if (day.weekday === 'Wed' && offset <= 2) {
+        if (day.weekday === 'Wed') {
             notes.push({
                 id: `wed-${day.key}`,
                 kicker: 'Check the sheet',
                 tone: 'calm',
                 title: `${when} may hold some KwaZulu-Natal off-peak trains`,
                 body: 'Bridge City holds some off-peak trains on selected Wednesdays. Umlazi and Winklespruit hold some off-peak trains on selected days. The pages do not name which day. Check that sheet before you post a notice.',
+                details: ['KwaZulu-Natal: the pages do not name which day. Check that sheet before you post a notice.'],
+                region: 'KZN',
             });
         }
         const holidayKey = monthDayKey(day);
         const holidayType = SPECIAL_DATES[holidayKey];
         const holidayName = HOLIDAY_NAMES[holidayKey];
-        if (holidayType && holidayName && offset <= BRIEF_LOOKAHEAD_DAYS) {
+        if (holidayType && holidayName) {
             const noService = holidayType === 'sunday';
             notes.push({
                 id: `hol-${day.key}`,
@@ -184,10 +251,17 @@ export function upcomingOpsNotes(now = Date.now()) {
                 body: noService
                     ? 'That day has no service.'
                     : 'Gauteng, KwaZulu-Natal, and Eastern Cape follow the Saturday sheet. Western Cape may use the public-holiday sheet or the Saturday sheet. Hercules to Koedoespoort and East London to Berlin stay closed.',
+                details: noService
+                    ? ['No service in Gauteng, Western Cape, KwaZulu-Natal, or Eastern Cape.']
+                    : [
+                        'Gauteng, KwaZulu-Natal, and Eastern Cape follow the Saturday sheet.',
+                        'Western Cape may use the public-holiday sheet or the Saturday sheet.',
+                    ],
             });
         }
     }
-    return notes.slice(0, 6);
+    notes.push(countryInsightCard());
+    return notes;
 }
 
 function asList(value) {
@@ -264,8 +338,16 @@ export function summarizeTrips(rows, pairs, usersEver = 0) {
     };
 }
 
-export function summarizeFails(fails) {
-    const list = asList(fails);
+const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+
+function withinWeek(row, now) {
+    const at = Number(row?.timestamp || row?.at || row?.exportedAt || 0);
+    if (!at) return true;
+    return at >= now - WEEK_MS;
+}
+
+export function summarizeFails(fails, now = Date.now()) {
+    const list = asList(fails).filter((row) => withinWeek(row, now));
     const reasons = {};
     const pairs = {};
     list.forEach((row) => {
@@ -314,7 +396,7 @@ export function summarizeFares(votes) {
     return { sample: list.length, agree, disagree, widest, types };
 }
 
-export function summarizeCrashes(crashes) {
+export function summarizeCrashes(crashes, now = Date.now()) {
     const list = asList(crashes)
         .map((row) => ({
             id: String(row.id || ''),
@@ -322,14 +404,14 @@ export function summarizeCrashes(crashes) {
             version: String(row.appVersion || ''),
             at: Number(row.timestamp || row.exportedAt || 0),
         }))
-        .filter((row) => row.id || row.error)
+        .filter((row) => (row.id || row.error) && withinWeek(row, now))
         .sort((a, b) => b.at - a.at)
-        .slice(0, 4);
+        .slice(0, 8);
     const versions = {};
     list.forEach((row) => {
         if (row.version) versions[row.version] = (versions[row.version] || 0) + 1;
     });
-    return { sample: asList(crashes).length, recent: list, versions };
+    return { sample: list.length, recent: list, versions };
 }
 
 export function summarizeFeatures(features) {
@@ -424,6 +506,7 @@ function tripCard(summary) {
         tone: summary.noSaturdayLine || summary.cato ? 'watch' : 'calm',
         title: top ? top[0] : 'Plans in the latest batches',
         body: `${headline} ${extra}`.replace(/\s+/g, ' ').trim(),
+        details: summary.top.map(([pair, count]) => `${pair} (${count})`).concat(summary.recentPairs || []),
     };
 }
 
@@ -447,6 +530,9 @@ function failCard(summary) {
         tone: 'watch',
         title: `${summary.sample} routing failures in this sample`,
         body: `${reasonText} ${pairText}`.trim(),
+        details: summary.reasons.map(([name, count]) => `${name} (${count})`).concat(
+            summary.pairs.map(([pair, count]) => pair + ` (${count})`)
+        ),
     };
 }
 
@@ -471,6 +557,7 @@ function fareCard(summary) {
             ? `${summary.disagree} fare notes say the quote was wrong`
             : 'Fare notes match the quote',
         body: `${summary.sample} notes in this sample. ${summary.agree} agreed and ${summary.disagree} did not.${wide}`,
+        details: wide ? [wide.trim()] : [],
     };
 }
 
@@ -491,6 +578,7 @@ function crashCard(summary) {
         tone: 'watch',
         title: `${summary.sample} crash cards, newest first`,
         body: `Latest: ${latest.error}${latest.version ? ` on ${latest.version}` : ''}. Open Explain on a card to send that log for a reading. Emails and phone numbers are removed first.`,
+        details: summary.recent.map((row) => `${row.error}${row.version ? ` (${row.version})` : ''}`),
     };
 }
 
@@ -528,6 +616,7 @@ function expiryCard(summary) {
         tone: 'watch',
         title: `${summary.soonCount} items expire within 48 hours`,
         body: `${lines.join(' ')}${more}`,
+        details: lines,
     };
 }
 
@@ -543,6 +632,27 @@ function settingsCard(features, sheets, appVersion) {
         tone: 'calm',
         title: appVersion || 'Current build',
         body: `${featureLine}${offLine}${sheetLine}`.replace(/\s+/g, ' ').trim(),
+        details: on.concat(off.map((label) => `Off: ${label}`)).concat(sheets),
+    };
+}
+
+function railCard(issues) {
+    const list = Array.isArray(issues) ? issues.filter(Boolean) : [];
+    if (!list.length) return null;
+    const lines = list.slice(0, 8).map((item) => {
+        const region = REGION_NAMES[item.region] || item.region || 'Network';
+        const stretch = item.stretch || 'the whole route';
+        const name = item.route ? `${item.route}, ` : '';
+        const tier = item.tier === 'CRITICAL' ? ' Critical.' : '';
+        return `${region}: ${name}${stretch}.${tier}`;
+    });
+    return {
+        id: 'rail',
+        kicker: 'Rail',
+        tone: 'watch',
+        title: list.length === 1 ? '1 live rail issue' : `${list.length} live rail issues`,
+        body: lines[0],
+        details: lines,
     };
 }
 
@@ -550,15 +660,17 @@ export function buildOperatorBrief(input = {}) {
     const now = Number(input.now) || Date.now();
     const clock = johannesburgClock(now);
     const trips = summarizeTrips(input.trips, input.pairs, input.usersEver);
-    const fails = summarizeFails(input.fails);
+    const fails = summarizeFails(input.fails, now);
     const fares = summarizeFares(input.fares);
-    const crashes = summarizeCrashes(input.crashes);
+    const crashes = summarizeCrashes(input.crashes, now);
     const features = summarizeFeatures(input.features);
     const sheets = summarizeScheduleOverride(input.scheduleOverride);
     const expiring = summarizeExpiring(input.expiring, now);
     const ahead = upcomingOpsNotes(now);
+    const rail = railCard(input.disruptions);
     const cards = [
         ...ahead,
+        ...(rail ? [rail] : []),
         expiryCard(expiring),
         tripCard(trips),
         failCard(fails),
@@ -620,12 +732,20 @@ function toneClass(tone) {
 }
 
 export function briefReportHtml(model) {
-    const cards = (model?.cards || []).map((card) => `
-        <article class="rounded-3xl border ${toneClass(card.tone)} bg-white/95 dark:bg-gray-900/80 px-4 py-3 shadow-sm">
+    const cards = (model?.cards || []).map((card, index) => {
+        const details = Array.isArray(card.details) ? card.details.filter(Boolean) : [];
+        const extra = details.length
+            ? `<div data-brief-detail class="hidden mt-2 space-y-1">${details.map((line) => `<p class="text-sm text-slate-700 dark:text-slate-200 leading-relaxed">${esc(line)}</p>`).join('')}</div>`
+            : '';
+        return `
+        <article data-brief-card data-brief-index="${index}" class="rounded-3xl border ${toneClass(card.tone)} bg-white/95 dark:bg-gray-900/80 px-4 py-3 shadow-sm text-left w-full cursor-pointer">
             <p class="text-[10px] font-bold uppercase tracking-[0.16em] text-indigo-500 dark:text-indigo-300">${esc(card.kicker)}</p>
             <h3 class="mt-1 text-base font-semibold text-slate-900 dark:text-white leading-snug">${esc(card.title)}</h3>
             <p class="mt-1 text-sm text-slate-600 dark:text-slate-300 leading-relaxed">${esc(card.body)}</p>
-        </article>`).join('');
+            ${extra}
+            <button type="button" class="operator-brief-alert mt-3 text-[11px] font-bold text-rose-700 dark:text-rose-300 underline focus:outline-none" data-brief-index="${index}">Add to alerts</button>
+        </article>`;
+    }).join('');
     const crashes = (model?.crashes || []).map((row) => `
         <div class="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white/90 dark:bg-gray-900/70 px-3 py-2">
             <p class="text-sm text-slate-800 dark:text-slate-100 leading-snug">${esc(row.error)}</p>
@@ -651,7 +771,7 @@ export function briefReportHtml(model) {
                     <p id="operator-brief-note" class="mt-2 text-sm leading-relaxed whitespace-pre-wrap">Writing a note from this sample.</p>
                 </section>
                 <div class="mt-4 space-y-3">${cards}</div>
-                ${crashes ? `<div class="mt-4 space-y-2"><p class="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500 px-1">Crash logs</p>${crashes}</div>` : ''}
+                ${crashes ? `<details class="mt-4"><summary class="cursor-pointer text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500 px-1">Crashes this week</summary><div class="mt-2 space-y-2">${crashes}</div></details>` : ''}
                 <p class="mt-4 text-[11px] leading-relaxed text-slate-500">Counts are from trip plans, fare notes, routing failures, and crash cards saved for operators. Google Analytics is not in this brief. A plan is a search, not a boarding.</p>
             </div>
         </div>`;

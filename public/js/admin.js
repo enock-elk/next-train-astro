@@ -1972,7 +1972,7 @@ const Admin = {
         if (Admin._composerImageOpenBound) return;
         Admin._composerImageOpenBound = true;
         document.addEventListener('click', (event) => {
-            const img = event.target?.closest?.('#alert-msg img, #admin-reply-text img, #disr-msg img');
+            const img = event.target?.closest?.('#alert-msg img, #admin-reply-text img, #disr-msg img, [data-nt-media-slot] img');
             if (!img) return;
             const src = img.getAttribute('data-nt-src') || img.getAttribute('src') || '';
             if (!src || typeof window.openLightbox !== 'function') return;
@@ -13055,6 +13055,7 @@ const Admin = {
     openWriteAssist: (targetId) => {
         const el = document.getElementById(targetId);
         if (!el) return;
+        if (el.id === 'alert-msg') Admin.hoistEditorImages(el);
         const read = Admin.readWriteField(el);
         const text = String(read.text || '').trim();
         if (!text) {
@@ -13139,10 +13140,22 @@ const Admin = {
             clipped = true;
         }
         if (editable) {
+            const parked = [];
+            if (el.id === 'alert-msg') Admin.hoistEditorImages(el);
+            else {
+                el.querySelectorAll('img').forEach((img) => {
+                    parked.push(img.outerHTML);
+                    img.remove();
+                });
+            }
             const asHtml = window.ntTextAssist?.assistHtmlFromText;
             const html = typeof asHtml === 'function' ? asHtml(next) : '';
             if (html) el.innerHTML = html;
             else el.textContent = next;
+            if (parked.length) {
+                el.insertAdjacentHTML('beforeend', parked.join(''));
+                Admin.stampComposerImages(el);
+            }
         } else {
             el.value = next;
             el.dispatchEvent(new Event('input', { bubbles: true }));
@@ -13341,26 +13354,10 @@ const Admin = {
                                 if (labelEl) labelEl.innerHTML = originalLabel;
                                 try {
                                     const url = await window.firebaseGetDownloadURL(uploadTask.snapshot.ref);
-                                    
-                                    const htmlToInsert = Admin.inlineAttachmentHtml(url, isPdf);
-                                    if (!htmlToInsert) {
+                                    if (!editor || !Admin.placeComposerAttachment(editor, url, isPdf, savedRange)) {
                                         if (typeof showToast === 'function') showToast("Failed to insert attachment link", "error");
                                         this.value = '';
                                         return;
-                                    }
-                                    
-                                    if (editor) {
-                                        editor.focus();
-                                        if (savedRange) {
-                                            const sel = window.getSelection();
-                                            sel.removeAllRanges();
-                                            sel.addRange(savedRange);
-                                        }
-                                        if (!document.execCommand('insertHTML', false, htmlToInsert)) {
-                                            editor.innerHTML += htmlToInsert;
-                                        }
-                                        Admin.stampComposerImages(editor);
-                                        Admin.ensureComposerImageOpen();
                                     }
                                     if (typeof showToast === 'function') showToast("Attachment inserted!", "success");
                                 } catch(e) {
@@ -13716,24 +13713,11 @@ const Admin = {
             }
             return;
         }
-        const htmlToInsert = Admin.inlineAttachmentHtml(safe, false);
         const editor = document.getElementById(editorId);
-        if (!htmlToInsert || !editor) {
+        if (!editor || !Admin.placeComposerAttachment(editor, safe, false, Admin._savedRange)) {
             if (typeof showToast === 'function') showToast('Could not use that image link.', 'error');
             return;
         }
-        editor.focus();
-        const savedRange = Admin._savedRange;
-        if (savedRange) {
-            const sel = window.getSelection();
-            sel.removeAllRanges();
-            try { sel.addRange(savedRange); } catch { /* range left the editor */ }
-        }
-        if (!document.execCommand('insertHTML', false, htmlToInsert)) {
-            editor.innerHTML += htmlToInsert;
-        }
-        Admin.stampComposerImages(editor);
-        Admin.ensureComposerImageOpen();
         Admin._savedRange = null;
         if (typeof showToast === 'function') showToast('Image inserted.', 'success');
     },
@@ -13896,6 +13880,398 @@ const Admin = {
         });
     },
 
+    composerXButton: (kind) => {
+        const label = kind === 'preview' ? 'Remove link preview' : 'Remove image';
+        return `<button type="button" class="nt-composer-x" data-nt-composer-x="${kind}" aria-label="${label}"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg></button>`;
+    },
+
+    slotBeforeEditor: (editor, attr, className) => {
+        if (!editor?.parentElement) return null;
+        const parent = editor.parentElement;
+        let slot = parent.querySelector(`:scope > [${attr}]`);
+        if (slot) return slot;
+        slot = document.createElement('div');
+        slot.setAttribute(attr, '');
+        slot.className = className;
+        parent.insertBefore(slot, editor);
+        return slot;
+    },
+
+    titleSlotFor: (editor) => Admin.slotBeforeEditor(editor, 'data-nt-title-slot', 'hidden border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900'),
+
+    mediaSlotFor: (editor) => Admin.slotBeforeEditor(editor, 'data-nt-media-slot', 'hidden px-2.5 pt-2 space-y-2'),
+
+    previewSlotFor: (editor) => {
+        if (!editor || editor.id !== 'alert-msg') return null;
+        return Admin.slotBeforeEditor(editor, 'data-nt-preview-slot', 'hidden px-2.5 pt-2');
+    },
+
+    revealComposerTitle: (editor) => {
+        const slot = Admin.titleSlotFor(editor);
+        if (!slot) return;
+        if (!slot.querySelector('[data-nt-title]')) {
+            slot.innerHTML = '<div data-nt-title contenteditable="true" role="textbox" data-placeholder="Title" class="text-gray-900 dark:text-white"></div>';
+        }
+        const titleEl = slot.querySelector('[data-nt-title]');
+        const sel = window.getSelection();
+        if (sel && sel.rangeCount && !sel.isCollapsed && editor.contains(sel.anchorNode)) {
+            const picked = sel.toString().replace(/\s+/g, ' ').trim();
+            if (picked) {
+                titleEl.textContent = picked;
+                sel.deleteFromDocument();
+                const first = editor.firstChild;
+                if (first && first.nodeType === 3) first.nodeValue = first.nodeValue.replace(/^\s+/, '');
+            }
+        }
+        slot.classList.remove('hidden');
+        if (titleEl) Admin.linkifyEditable(titleEl);
+        titleEl?.focus();
+        Admin.bindAlertComposeFields();
+    },
+
+    addComposerImage: (editor, url) => {
+        const safe = typeof window.sanitizeAttachmentDisplayUrl === 'function'
+            ? window.sanitizeAttachmentDisplayUrl(url)
+            : String(url || '').trim();
+        const slot = Admin.mediaSlotFor(editor);
+        if (!safe || !slot) return false;
+        const esc = typeof escapeHTML === 'function' ? escapeHTML(safe) : safe;
+        if ([...slot.querySelectorAll('img')].some((img) => (img.getAttribute('data-nt-src') || img.getAttribute('src')) === safe)) {
+            slot.classList.remove('hidden');
+            return true;
+        }
+        if (slot.querySelectorAll('img').length >= 4) {
+            if (typeof showToast === 'function') showToast('Maximum 4 images.', 'warning');
+            return false;
+        }
+        const fig = document.createElement('figure');
+        fig.className = 'nt-composer-media';
+        fig.innerHTML = `<img src="${esc}" data-nt-src="${esc}" alt="" referrerpolicy="no-referrer" draggable="false" class="nt-composer-image">${Admin.composerXButton('image')}`;
+        slot.appendChild(fig);
+        slot.classList.remove('hidden');
+        Admin.ensureComposerImageOpen();
+        return true;
+    },
+
+    hoistEditorImages: (editor) => {
+        if (!editor?.querySelectorAll) return;
+        editor.querySelectorAll('img').forEach((img) => {
+            const src = img.getAttribute('data-nt-src') || img.getAttribute('src') || '';
+            img.remove();
+            if (src) Admin.addComposerImage(editor, src);
+        });
+    },
+
+    placeComposerAttachment: (editor, url, isPdf, savedRange) => {
+        if (!editor) return false;
+        if (!isPdf && editor.id === 'alert-msg' && Admin.addComposerImage(editor, url)) return true;
+        const htmlToInsert = Admin.inlineAttachmentHtml(url, isPdf);
+        if (!htmlToInsert) return false;
+        editor.focus();
+        if (savedRange) {
+            const sel = window.getSelection();
+            sel.removeAllRanges();
+            try { sel.addRange(savedRange); } catch { /* range left the editor */ }
+        }
+        if (!document.execCommand('insertHTML', false, htmlToInsert)) editor.innerHTML += htmlToInsert;
+        Admin.stampComposerImages(editor);
+        Admin.ensureComposerImageOpen();
+        return true;
+    },
+
+    linkifyEditable: (root) => {
+        if (!root || typeof window.splitContactTokens !== 'function') return;
+        const sel = window.getSelection();
+        const caretNode = sel && sel.rangeCount && root.contains(sel.anchorNode) && sel.anchorNode.nodeType === 3
+            ? sel.anchorNode
+            : null;
+        const caretOff = caretNode ? sel.anchorOffset : -1;
+        const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+        const nodes = [];
+        let node = walker.nextNode();
+        while (node) {
+            nodes.push(node);
+            node = walker.nextNode();
+        }
+        nodes.forEach((textNode) => {
+            if (!textNode.parentNode || textNode.parentElement?.closest?.('a, button')) return;
+            const value = textNode.nodeValue || '';
+            const tokens = window.splitContactTokens(value);
+            if (!tokens.some((t) => t.type !== 'text')) return;
+            const frag = document.createDocumentFragment();
+            let consumed = 0;
+            let parked = null;
+            tokens.forEach((t, index) => {
+                const stillTyping = textNode === caretNode
+                    && t.type === 'url'
+                    && index === tokens.length - 1
+                    && caretOff >= consumed
+                    && caretOff <= consumed + t.value.length
+                    && !/\s$/.test(value);
+                if (t.type === 'text' || stillTyping) {
+                    const tn = document.createTextNode(t.value);
+                    frag.appendChild(tn);
+                    if (textNode === caretNode && caretOff >= consumed && caretOff <= consumed + t.value.length) {
+                        parked = { node: tn, off: Math.max(0, caretOff - consumed) };
+                    }
+                } else {
+                    const a = document.createElement('a');
+                    a.setAttribute('href', t.href);
+                    a.setAttribute('target', '_blank');
+                    a.setAttribute('rel', 'noopener');
+                    a.className = 'text-blue-600 dark:text-blue-400 underline underline-offset-2';
+                    a.textContent = t.value;
+                    frag.appendChild(a);
+                }
+                consumed += t.value.length;
+            });
+            textNode.parentNode.replaceChild(frag, textNode);
+            if (parked && sel) {
+                const range = document.createRange();
+                const off = Math.min(parked.off, parked.node.nodeValue.length);
+                range.setStart(parked.node, off);
+                range.collapse(true);
+                sel.removeAllRanges();
+                sel.addRange(range);
+            }
+        });
+    },
+
+    paintComposerPreview: (preview) => {
+        const editor = document.getElementById('alert-msg');
+        const slot = Admin.previewSlotFor(editor);
+        if (!slot || !preview?.url) return;
+        const esc = typeof escapeHTML === 'function' ? escapeHTML : (v) => String(v || '');
+        const image = preview.image
+            ? `<img class="nt-link-preview-media" alt="" src="${esc(preview.image)}" referrerpolicy="no-referrer">`
+            : '';
+        slot.dataset.cleared = '';
+        slot.dataset.previewUrl = preview.url;
+        slot.dataset.previewJson = JSON.stringify(preview);
+        slot.classList.remove('hidden');
+        slot.innerHTML = `<div class="nt-composer-preview"><a class="nt-link-preview" href="${esc(preview.url)}" target="_blank" rel="noopener noreferrer">${image}<div class="nt-link-preview-copy"><div class="nt-link-preview-title">${esc(preview.title || preview.url)}</div><div class="nt-link-preview-site">${esc(preview.site || '')}</div></div></a>${Admin.composerXButton('preview')}</div>`;
+    },
+
+    scheduleAlertPreview: () => {
+        clearTimeout(Admin._previewTimer);
+        Admin._previewTimer = setTimeout(() => Admin.refreshAlertLinkPreview(), 280);
+    },
+
+    refreshAlertLinkPreview: async () => {
+        const editor = document.getElementById('alert-msg');
+        const slot = Admin.previewSlotFor(editor);
+        if (!editor || !slot || !window.ntLinkPreview?.fetchLinkPreview) return;
+        const titleEl = editor.parentElement?.querySelector('[data-nt-title]');
+        const text = `${titleEl?.innerText || ''} ${editor.innerText || ''}`;
+        const anchors = [
+            ...(titleEl?.querySelectorAll('a[href]') || []),
+            ...editor.querySelectorAll('a[href]'),
+        ];
+        const fromAnchor = anchors
+            .map((a) => a.getAttribute('href') || '')
+            .find((href) => /^https?:\/\//i.test(href));
+        const found = text.match(/https?:\/\/[^\s<>"']+/i) || text.match(/\bwww\.[^\s<>"']+/i);
+        let url = fromAnchor || (found ? found[0].replace(/[.,;:!?)]+$/, '') : '');
+        if (/^www\./i.test(url)) url = `https://${url}`;
+        if (!url) {
+            if (slot.dataset.cleared !== '1') {
+                slot.innerHTML = '';
+                slot.classList.add('hidden');
+                delete slot.dataset.previewJson;
+            }
+            return;
+        }
+        if (slot.dataset.cleared === '1' && slot.dataset.clearedUrl === url) return;
+        if (slot.dataset.previewUrl === url && slot.querySelector('.nt-link-preview')) return;
+        try {
+            const preview = await window.ntLinkPreview.fetchLinkPreview(url, Admin.replyWorkerUrl());
+            if (!preview?.url) return;
+            if (slot.dataset.cleared === '1' && slot.dataset.clearedUrl === preview.url) return;
+            Admin.paintComposerPreview(preview);
+        } catch { /* the words stay a link even when the card cannot load */ }
+    },
+
+    readAlertCompose: () => {
+        const editor = document.getElementById('alert-msg');
+        const empty = { title: '', message: '', suppressLinkPreview: false, linkPreview: null, hasImage: false };
+        if (!editor) return empty;
+        Admin.linkifyEditable(editor);
+        const titleEl = editor.parentElement?.querySelector('[data-nt-title]');
+        if (titleEl) Admin.linkifyEditable(titleEl);
+        Admin.hoistEditorImages(editor);
+        const title = String(titleEl?.innerText || '').replace(/\s+/g, ' ').trim();
+        const slot = Admin.mediaSlotFor(editor);
+        const imgs = [...(slot?.querySelectorAll('img') || [])];
+        const esc = typeof escapeHTML === 'function' ? escapeHTML : (v) => String(v || '');
+        const imgHtml = imgs.map((img) => {
+            const src = img.getAttribute('data-nt-src') || img.getAttribute('src') || '';
+            const safe = esc(src);
+            return safe ? `<img src="${safe}" data-nt-src="${safe}" alt="">` : '';
+        }).join('');
+        const body = String(editor.innerHTML || '').trim();
+        const previewSlot = document.getElementById('alert-preview-slot') || editor.parentElement?.querySelector('[data-nt-preview-slot]');
+        let linkPreview = null;
+        try { linkPreview = previewSlot?.dataset.previewJson ? JSON.parse(previewSlot.dataset.previewJson) : null; } catch { linkPreview = null; }
+        const suppressLinkPreview = previewSlot?.dataset.cleared === '1';
+        const clearedUrl = previewSlot?.dataset.clearedUrl || '';
+        const keptPreview = suppressLinkPreview
+            ? (linkPreview || (clearedUrl ? { url: clearedUrl } : null))
+            : linkPreview;
+        return {
+            title,
+            message: `${imgHtml}${body}`.trim(),
+            suppressLinkPreview,
+            linkPreview: keptPreview,
+            hasImage: imgs.length > 0,
+        };
+    },
+
+    loadAlertCompose: (item) => {
+        const editor = document.getElementById('alert-msg');
+        if (!editor || !item) return;
+        Admin.titleSlotFor(editor);
+        Admin.mediaSlotFor(editor);
+        Admin.previewSlotFor(editor);
+        const media = editor.parentElement?.querySelector('[data-nt-media-slot]');
+        if (media) {
+            media.innerHTML = '';
+            media.classList.add('hidden');
+        }
+        const holder = document.createElement('div');
+        holder.innerHTML = Admin.repairMojibake(item.message || '');
+        let title = String(item.title || '').trim();
+        const first = holder.firstElementChild;
+        if (first && /^H[1-4]$/i.test(first.tagName)) {
+            const extracted = (first.textContent || '').replace(/\s+/g, ' ').trim();
+            if (!title) title = extracted;
+            if (extracted && (!item.title || title === extracted)) first.remove();
+        }
+        holder.querySelectorAll('img').forEach((img) => {
+            const src = img.getAttribute('data-nt-src') || img.getAttribute('src') || '';
+            img.remove();
+            if (src) Admin.addComposerImage(editor, src);
+        });
+        editor.innerHTML = holder.innerHTML.trim();
+        const titleSlot = editor.parentElement?.querySelector('[data-nt-title-slot]');
+        const titleEl = titleSlot?.querySelector('[data-nt-title]');
+        if (titleEl) {
+            titleEl.textContent = title;
+            if (title) Admin.linkifyEditable(titleEl);
+        }
+        titleSlot?.classList.toggle('hidden', !title);
+        const previewSlot = editor.parentElement?.querySelector('[data-nt-preview-slot]');
+        if (previewSlot) {
+            previewSlot.innerHTML = '';
+            previewSlot.classList.add('hidden');
+            delete previewSlot.dataset.previewJson;
+            if (item.suppressLinkPreview) {
+                previewSlot.dataset.cleared = '1';
+                previewSlot.dataset.clearedUrl = item.linkPreview?.url || '';
+            } else {
+                previewSlot.dataset.cleared = '';
+                previewSlot.dataset.clearedUrl = '';
+                if (item.linkPreview?.url) Admin.paintComposerPreview(item.linkPreview);
+                else Admin.scheduleAlertPreview();
+            }
+        }
+    },
+
+    bindComposerChrome: () => {
+        if (Admin._composerChromeBound) return;
+        Admin._composerChromeBound = true;
+        document.addEventListener('click', (event) => {
+            const x = event.target?.closest?.('[data-nt-composer-x]');
+            if (!x) return;
+            event.preventDefault();
+            event.stopPropagation();
+            if (x.getAttribute('data-nt-composer-x') === 'preview') {
+                const slot = x.closest('[data-nt-preview-slot]');
+                if (!slot) return;
+                slot.dataset.cleared = '1';
+                slot.dataset.clearedUrl = slot.dataset.previewUrl || '';
+                slot.innerHTML = '';
+                delete slot.dataset.previewJson;
+                slot.classList.add('hidden');
+                return;
+            }
+            const fig = x.closest('.nt-composer-media');
+            const slot = fig?.parentElement;
+            fig?.remove();
+            if (slot && !slot.querySelector('img')) slot.classList.add('hidden');
+        });
+    },
+
+    bindAlertComposeFields: () => {
+        const editor = document.getElementById('alert-msg');
+        if (!editor) return;
+        const onEdit = (event) => {
+            const root = event?.currentTarget;
+            if (!root) return;
+            const text = root.innerText || '';
+            if (event.type !== 'input' || /\s$/.test(text)) Admin.linkifyEditable(root);
+            const body = document.getElementById('alert-msg');
+            if (body) Admin.hoistEditorImages(body);
+            Admin.scheduleAlertPreview();
+        };
+        const bind = (el) => {
+            if (!el || el.dataset.ntLinkBound === '1') return;
+            el.dataset.ntLinkBound = '1';
+            el.addEventListener('keydown', () => {
+                if (el.id === 'alert-msg') Admin.hoistEditorImages(el);
+            });
+            el.addEventListener('input', onEdit);
+            el.addEventListener('blur', (event) => {
+                onEdit(event);
+                if (!(el.innerText || '').trim()) el.innerHTML = '';
+            });
+            el.addEventListener('paste', () => setTimeout(() => onEdit({ currentTarget: el, type: 'paste' }), 0));
+        };
+        bind(editor);
+        bind(editor.parentElement?.querySelector('[data-nt-title]'));
+    },
+
+    draftAlertNotice: (signoff) => {
+        const composed = Admin.readAlertCompose();
+        let message = String(composed.message || '').trim();
+        const hasText = Admin.alertComposeHasBody(message);
+        message = (hasText || composed.hasImage) ? Admin.repairMojibake(message) : '';
+        const name = String(signoff || '').trim() || 'Next Train Ops';
+        if (hasText && !/<span[^>]*>.*?<\/span>\s*$/i.test(message)) {
+            message += `<br><br><span class="opacity-75 text-[10px] uppercase font-bold tracking-wider">- ${name}</span>`;
+        }
+        return {
+            title: composed.title || null,
+            message,
+            suppressLinkPreview: !!composed.suppressLinkPreview,
+            linkPreview: composed.linkPreview || null,
+            hasContent: hasText || !!composed.title || composed.hasImage,
+        };
+    },
+
+    clearAlertComposeSlots: () => {
+        const editor = document.getElementById('alert-msg');
+        if (editor) editor.innerHTML = '';
+        const parent = editor?.parentElement;
+        const titleSlot = parent?.querySelector('[data-nt-title-slot]');
+        const titleEl = titleSlot?.querySelector('[data-nt-title]');
+        if (titleEl) titleEl.innerHTML = '';
+        titleSlot?.classList.add('hidden');
+        const media = parent?.querySelector('[data-nt-media-slot]');
+        if (media) {
+            media.innerHTML = '';
+            media.classList.add('hidden');
+        }
+        const preview = parent?.querySelector('[data-nt-preview-slot]');
+        if (preview) {
+            preview.innerHTML = '';
+            preview.classList.add('hidden');
+            preview.dataset.cleared = '';
+            preview.dataset.clearedUrl = '';
+            delete preview.dataset.previewJson;
+            delete preview.dataset.previewUrl;
+        }
+    },
+
 // RICH TEXT FORMATTING HELPER ---
     formatAlertText: (tag, targetId = 'alert-msg') => {
         const editor = document.getElementById(targetId);
@@ -13947,19 +14323,24 @@ const Admin = {
         } else if (tag === 'underline') {
             document.execCommand('underline', false, null);
         } else if (tag === 'title') {
-            let block = 'h3';
-            const sel = window.getSelection();
-            if (sel.rangeCount > 0) {
-                let node = sel.anchorNode;
-                while (node && node !== editor) {
-                    if (node.nodeType === 1 && /^H[1-4]$/.test(node.tagName)) {
-                        block = 'p';
-                        break;
+            if (editor.id === 'alert-msg') {
+                Admin.revealComposerTitle(editor);
+                Admin.bindAlertComposeFields();
+            } else {
+                let block = 'h3';
+                const sel = window.getSelection();
+                if (sel.rangeCount > 0) {
+                    let node = sel.anchorNode;
+                    while (node && node !== editor) {
+                        if (node.nodeType === 1 && /^H[1-4]$/.test(node.tagName)) {
+                            block = 'p';
+                            break;
+                        }
+                        node = node.parentNode;
                     }
-                    node = node.parentNode;
                 }
+                document.execCommand('formatBlock', false, block);
             }
-            document.execCommand('formatBlock', false, block);
         } else if (tag === 'fontDefault' || tag === 'fontVerdana' || tag === 'fontTimes') {
             Admin.applyWysiwygFont(editor, tag);
         } else if (tag === 'larger' || tag === 'smaller') {
@@ -13967,39 +14348,53 @@ const Admin = {
             // We manually traverse the DOM to find the exact font size tag applied to the cursor.
             let currentSize = 3; // Default to Normal
             const sel = window.getSelection();
-            
+            let foundFont = false;
+
             if (sel.rangeCount > 0) {
                 let node = sel.anchorNode;
-                while (node && node !== editor) {
+                const host = node && (node.nodeType === 1 ? node : node.parentElement);
+                const root = host?.closest?.('[contenteditable="true"]') || editor;
+                while (node && node !== root && node !== document.documentElement) {
                     if (node.nodeType === 1 && node.tagName.toLowerCase() === 'font' && node.hasAttribute('size')) {
                         const sizeAttr = parseInt(node.getAttribute('size'), 10);
                         if (!isNaN(sizeAttr)) {
                             currentSize = sizeAttr;
+                            foundFont = true;
                             break;
                         }
                     }
                     node = node.parentNode;
                 }
+                if (!foundFont && typeof window.fontStepFromPixels === 'function' && host && root) {
+                    const px = parseFloat(window.getComputedStyle(host).fontSize);
+                    const base = parseFloat(window.getComputedStyle(root).fontSize) || 12;
+                    if (px) currentSize = window.fontStepFromPixels(px, base);
+                }
             }
 
-            // Map any chaotic legacy sizes into 2 → 3 → 4 → 5
+            // One step from the size under the cursor: small, normal, medium, large.
             if (currentSize <= 2) currentSize = 2;
             else if (currentSize === 3) currentSize = 3;
             else if (currentSize === 4) currentSize = 4;
-            else currentSize = 5;
+            else if (currentSize >= 5) currentSize = 5;
+            else currentSize = 3;
 
-            let newSize = 3;
+            let newSize = currentSize;
             if (tag === 'larger') {
-                if (currentSize === 2) newSize = 3;
+                if (typeof window.nextRichFontSize === 'function') newSize = window.nextRichFontSize(currentSize, 'larger');
+                else if (currentSize === 2) newSize = 3;
                 else if (currentSize === 3) newSize = 4;
+                else if (currentSize === 4) newSize = 5;
                 else newSize = 5;
             } else if (tag === 'smaller') {
-                if (currentSize === 5) newSize = 4;
+                if (typeof window.nextRichFontSize === 'function') newSize = window.nextRichFontSize(currentSize, 'smaller');
+                else if (currentSize === 5) newSize = 4;
                 else if (currentSize === 4) newSize = 3;
                 else newSize = 2;
             }
 
-            document.execCommand('fontSize', false, newSize.toString());
+            try { document.execCommand('styleWithCSS', false, false); } catch { /* keep real font tags */ }
+            document.execCommand('fontSize', false, String(newSize));
         } else if (tag === 'justifyLeft') {
             document.execCommand('justifyLeft', false, null);
         } else if (tag === 'justifyCenter') {
@@ -14488,7 +14883,7 @@ const Admin = {
     },
 
     attachLinkPreview: async (payload) => {
-        if (!payload || payload.linkPreview?.url) return payload;
+        if (!payload || payload.suppressLinkPreview || payload.linkPreview?.url) return payload;
         const api = window.ntLinkPreview;
         if (!api?.firstHttpUrl || !api.fetchLinkPreview) return payload;
         const url = api.firstHttpUrl(payload);
@@ -15274,6 +15669,11 @@ const Admin = {
                     <label class="block text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Message</label>
                     <div class="border border-gray-300 dark:border-gray-600 rounded-lg overflow-hidden min-w-0 max-w-full focus-within:ring-2 focus-within:ring-blue-500">
                         ${Admin.wysiwygToolbarHtml('alert-msg', { fileInputId: 'alert-upload-file', fileLabelId: 'alert-upload-label' })}
+                        <div data-nt-title-slot class="hidden border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
+                            <div data-nt-title contenteditable="true" role="textbox" data-placeholder="Title" class="text-gray-900 dark:text-white"></div>
+                        </div>
+                        <div data-nt-media-slot class="hidden px-2.5 pt-2 space-y-2"></div>
+                        <div data-nt-preview-slot id="alert-preview-slot" class="hidden px-2.5 pt-2"></div>
                         <div contenteditable="true" id="alert-msg" class="nt-rich-body w-full max-w-full min-w-0 overflow-x-hidden min-h-[120px] p-2.5 bg-gray-50 dark:bg-gray-900 border-0 text-gray-900 dark:text-white text-xs focus:ring-0 outline-none whitespace-pre-wrap empty:before:content-[attr(placeholder)] empty:before:text-gray-400" placeholder="e.g. Delays of 45min due to cable theft..."></div>
                         <div id="alert-poster-preview" class="px-2.5 pb-2.5 empty:hidden"></div>
                     </div>
@@ -15633,6 +16033,8 @@ const Admin = {
         alertPanel.classList.remove('hidden');
         alertPanel.dataset.adminLoaded = ALERT_PANEL_REV;
         if (typeof window.injectRichTextStyles === 'function') window.injectRichTextStyles();
+        Admin.bindComposerChrome();
+        Admin.bindAlertComposeFields();
 
         // --- Logic Wiring ---
         const header = document.getElementById('alert-header-btn');
@@ -16058,11 +16460,10 @@ const Admin = {
         syncAlertWhenMode('now');
 
         document.getElementById('alert-schedule-save-btn')?.addEventListener('click', async () => {
-            let msg = (alertMsg?.innerHTML || '').trim();
+            const draft = Admin.draftAlertNotice(signoffInput?.value || '');
             const targets = Admin.getSelectedAlertTargets();
-            const hasBody = Admin.alertComposeHasBody(msg);
             const posters = Admin.getSelectedAlertPosters();
-            if (composeNeedsContentToast(hasBody, posters)) return;
+            if (composeNeedsContentToast(draft.hasContent, posters)) return;
             if (!composePollFieldsOk()) return;
             if (!targets.length) { if (typeof showToast === 'function') showToast('Pick a target audience.', 'error'); return; }
             const meta = readComposeScheduleMeta();
@@ -16072,10 +16473,6 @@ const Admin = {
             if (!secret) { if (typeof showToast === 'function') showToast('Authentication required.', 'error'); return; }
 
             const signoff = (signoffInput?.value || '').trim() || 'Next Train Ops';
-            msg = hasBody ? Admin.repairMojibake(msg) : '';
-            if (hasBody && !/<span[^>]*>.*?<\/span>\s*$/i.test(msg)) {
-                msg += `<br><br><span class="opacity-75 text-[10px] uppercase font-bold tracking-wider">- ${signoff}</span>`;
-            }
             const schedId = Admin._editingSchedId || `sched_${Date.now()}`;
             const alertExpiresAt = Number(meta.nextRunAt || 0) + Number(meta.expiresInMs || 0);
             const pollClosesAt = readPollClosesAt(alertExpiresAt);
@@ -16096,7 +16493,10 @@ const Admin = {
                 monthDay: meta.monthDay,
                 untilAt: meta.untilAt,
                 notice: {
-                    message: msg,
+                    title: draft.title,
+                    message: draft.message,
+                    suppressLinkPreview: draft.suppressLinkPreview,
+                    linkPreview: draft.linkPreview,
                     authorName: signoff,
                     forcePopup: !!(forcePopupToggle && forcePopupToggle.checked),
                     pinned: !!(pinToggle && pinToggle.checked),
@@ -16144,7 +16544,7 @@ const Admin = {
             let cleanedMsg = Admin.repairMojibake(item.message || '');
             cleanedMsg = cleanedMsg.replace(/(<br\s*\/?>\s*){1,2}<span[^>]*>.*?<\/span>\s*$/i, '');
             cleanedMsg = cleanedMsg.replace(/<span[^>]*>.*?<\/span>\s*$/i, '');
-            if (alertMsg) alertMsg.innerHTML = cleanedMsg.trim();
+            Admin.loadAlertCompose({ ...item, message: cleanedMsg.trim() });
 
             if (item.expiresAt && dateInput) {
                 const floor = mode === 'review' ? item.expiresAt : Math.max(item.expiresAt, Date.now() + 2 * 3600 * 1000);
@@ -16438,29 +16838,12 @@ const Admin = {
                                 if (labelEl) labelEl.innerHTML = originalLabel;
                                 try {
                                     const url = await window.firebaseGetDownloadURL(uploadTask.snapshot.ref);
-                                    
-                                    const htmlToInsert = Admin.inlineAttachmentHtml(url, isPdf);
-                                    if (!htmlToInsert) {
+                                    if (!editor || !Admin.placeComposerAttachment(editor, url, isPdf, savedRange)) {
                                         if (typeof showToast === 'function') showToast("Failed to insert attachment link", "error");
                                         this.value = '';
                                         return;
                                     }
-                                    
-                                    if (editor) {
-                                        editor.focus();
-                                        if (savedRange) {
-                                            const sel = window.getSelection();
-                                            sel.removeAllRanges();
-                                            sel.addRange(savedRange);
-                                        }
-                                        // Use native execCommand for undo-stack support, fallback to manual append if strict sandboxed
-                                        if (!document.execCommand('insertHTML', false, htmlToInsert)) {
-                                            editor.innerHTML += htmlToInsert;
-                                        }
-                                        Admin.stampComposerImages(editor);
-                                        Admin.ensureComposerImageOpen();
-                                        Admin._savedRange = null; // Clear lock
-                                    }
+                                    Admin._savedRange = null;
                                     if (typeof showToast === 'function') showToast("Attachment inserted!", "success");
                                 } catch(e) {
                                     if (typeof showToast === 'function') showToast("Failed to insert attachment link", "error");
@@ -16664,28 +17047,21 @@ const Admin = {
         if (dateInput) dateInput.value = Admin.endOfTodayLocalValue();
 
         sendBtn.onclick = async () => {
-            if (alertMsg) Admin.stampComposerImages(alertMsg);
-            let msg = alertMsg.innerHTML.trim();
+            const signoff = signoffInput.value.trim() || "Next Train Ops";
+            const draft = Admin.draftAlertNotice(signoff);
             const targets = Admin.getSelectedAlertTargets();
             const severity = severitySelect.value;
             
-            const signoff = signoffInput.value.trim() || "Next Train Ops";
             const isForcePopup = forcePopupToggle.checked;
             const isPinned = !!(pinToggle && pinToggle.checked);
             
             const secret = await Admin.getAuthKey();
             
-            const hasBody = Admin.alertComposeHasBody(msg);
             const posters = Admin.getSelectedAlertPosters();
-            if (composeNeedsContentToast(hasBody, posters)) return;
+            if (composeNeedsContentToast(draft.hasContent, posters)) return;
             if (!composePollFieldsOk()) return;
             if (!targets.length) { if (typeof showToast === 'function') showToast("Pick at least one route or region.", "error"); return; }
             if (!secret) { if (typeof showToast === 'function') showToast("Authentication required! Sign in again.", "error"); return; }
-
-            msg = hasBody ? Admin.repairMojibake(msg) : '';
-            if (hasBody && !/<span[^>]*>.*?<\/span>\s*$/i.test(msg)) {
-                msg += `<br><br><span class="opacity-75 text-[10px] uppercase font-bold tracking-wider">- ${signoff}</span>`;
-            }
 
             let expiresAtVal = dateInput && dateInput.value ? new Date(dateInput.value).getTime() : new Date(Admin.endOfTodayLocalValue()).getTime();
 
@@ -16694,7 +17070,10 @@ const Admin = {
             const nowTs = Date.now();
             const payload = {
                 id: existingAlertId || nowTs.toString(),
-                message: msg,
+                title: draft.title,
+                message: draft.message,
+                suppressLinkPreview: draft.suppressLinkPreview,
+                linkPreview: draft.linkPreview,
                 authorName: signoff,
                 forcePopup: isForcePopup,
                 pinned: isPinned,
@@ -16738,7 +17117,7 @@ const Admin = {
                     const returnToActive = !!Admin._alertEditFromActive && isUpdate;
                     Admin._alertEditFromActive = false;
                     Admin.setSelectedAlertPosters([]);
-                    if (alertMsg) alertMsg.innerHTML = '';
+                    Admin.clearAlertComposeSlots();
                     if (sourceNameInput) sourceNameInput.value = '';
                     if (sourceUrlInput) sourceUrlInput.value = '';
                     renderSavedSourceDropdown('');
@@ -16811,7 +17190,7 @@ const Admin = {
                 if (typeof showToast === 'function') showToast("Cleared & Archived!", "info");
 
                 existingAlertId = null;
-                alertMsg.innerHTML = "";
+                Admin.clearAlertComposeSlots();
                 signoffInput.value = "Next Train Ops";
                 if (sourceNameInput) sourceNameInput.value = '';
                 if (sourceUrlInput) sourceUrlInput.value = '';
@@ -17666,26 +18045,12 @@ const Admin = {
                                 if (labelEl) labelEl.innerHTML = originalLabel;
                                 try {
                                     const url = await window.firebaseGetDownloadURL(uploadTask.snapshot.ref);
-                                    const htmlToInsert = Admin.inlineAttachmentHtml(url, isPdf);
-                                    if (!htmlToInsert) {
+                                    if (!editor || !Admin.placeComposerAttachment(editor, url, isPdf, savedRange)) {
                                         if (typeof showToast === 'function') showToast("Failed to insert attachment link", "error");
                                         this.value = '';
                                         return;
                                     }
-                                    if (editor) {
-                                        editor.focus();
-                                        if (savedRange) {
-                                            const sel = window.getSelection();
-                                            sel.removeAllRanges();
-                                            sel.addRange(savedRange);
-                                        }
-                                        if (!document.execCommand('insertHTML', false, htmlToInsert)) {
-                                            editor.innerHTML += htmlToInsert;
-                                        }
-                                        Admin.stampComposerImages(editor);
-                                        Admin.ensureComposerImageOpen();
-                                        Admin._savedRange = null;
-                                    }
+                                    Admin._savedRange = null;
                                     if (typeof showToast === 'function') showToast("Attachment inserted!", "success");
                                 } catch (e) {
                                     if (typeof showToast === 'function') showToast("Failed to insert attachment link", "error");

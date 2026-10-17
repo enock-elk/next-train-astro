@@ -43,7 +43,7 @@ import {
 import { isAdminAuthed } from './admin-chrome.js';
 import { bindMapOverrideSaveListener } from './map-overrides.js';
 import { trackAnalyticsEvent } from './analytics.js';
-import { prepareRichHtml, injectRichTextStyles, isSafeHref } from './rich-text.js';
+import { prepareRichHtml, injectRichTextStyles, isSafeHref, linkedPlainHtml } from './rich-text.js';
 import { hydrateLinkPreviews, linkPreviewMarkup } from './link-preview.js';
 import {
     showToast, hideToastIfMessage, triggerHaptic, openSmoothModal, closeSmoothModal, canAutoOpenHomeNotices,
@@ -1949,7 +1949,7 @@ export function renderServiceAlertModal(notice, options = {}) {
 
     const layout = layoutAlertPost(notice);
     const titleHtml = layout.title
-        ? `<h3 class="text-base font-black text-gray-900 dark:text-white leading-snug mb-2">${escapeHTML(layout.title)}</h3>`
+        ? `<h3 class="text-base font-black text-gray-900 dark:text-white leading-snug mb-2">${linkedPlainHtml(layout.title)}</h3>`
         : '';
     let formattedMsg = sanitizeHTML(layout.body);
     if (alertCopyNeedsSeeMore(layout.body)) {
@@ -1980,7 +1980,7 @@ export function renderServiceAlertModal(notice, options = {}) {
         const grid = posterUrls.length > 1 ? 'grid grid-cols-2 gap-2' : 'grid grid-cols-1';
         mediaHtml = `<div class="${grid} mt-2 mb-1">${cells}</div>`;
     }
-    content.innerHTML = `${titleHtml}${mediaHtml}${formattedMsg}${linkPreviewMarkup(notice)}`;
+    content.innerHTML = `${titleHtml}${mediaHtml}${linkPreviewMarkup(notice)}${formattedMsg}`;
     ensureLightboxPlusBadges(content);
     hydrateLinkPreviews(content, REPLY_WORKER_URL);
 

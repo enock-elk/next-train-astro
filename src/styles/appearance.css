@@ -886,13 +886,15 @@ html.dark .nt-offline-strip {
   z-index: 10;
 }
 
-/* The alerts bell stays the same icon. Light mode glows like a sun, dark mode
-   like a moon, and a faint wash sits on the header only while that bell is up. */
+/* The alerts bell stays the same icon. While it is showing, a soft torch
+   sits behind it and fades across the header. No ring on the bell itself. */
 #app-header.nt-alerts-lit {
-  background-image: linear-gradient(105deg, rgba(255, 214, 120, 0.22) 0%, rgba(255, 244, 214, 0.08) 34%, rgba(255, 255, 255, 0) 68%);
+  background-image: radial-gradient(180% 420% at calc(100% - 1.35rem) 45%, rgba(255, 246, 220, 0.5) 0%, rgba(255, 214, 140, 0.2) 24%, rgba(255, 255, 255, 0) 68%);
+  background-repeat: no-repeat;
 }
 html.dark #app-header.nt-alerts-lit {
-  background-image: linear-gradient(105deg, rgba(198, 214, 255, 0.2) 0%, rgba(148, 176, 230, 0.08) 36%, rgba(17, 24, 39, 0) 70%);
+  background-image: radial-gradient(190% 440% at calc(100% - 1.35rem) 45%, rgba(226, 236, 255, 0.38) 0%, rgba(160, 190, 245, 0.14) 26%, rgba(255, 255, 255, 0) 70%);
+  background-repeat: no-repeat;
 }
 
 .nt-brief-meaning {
@@ -1030,6 +1032,42 @@ html.dark .nt-brief-fact dd {
 }
 #alert-msg {
   white-space: pre-wrap;
+}
+[data-nt-title-slot] [data-nt-title] {
+  min-height: 2.4rem;
+  padding: 0.55rem 0.65rem 0.4rem;
+  font-size: 1rem;
+  font-weight: 800;
+  line-height: 1.3;
+  outline: none;
+}
+[data-nt-title][data-placeholder]:empty:before {
+  content: attr(data-placeholder);
+  color: #9ca3af;
+  font-weight: 700;
+}
+.nt-composer-media,
+.nt-composer-preview {
+  position: relative;
+}
+.nt-composer-x {
+  position: absolute;
+  top: 0.4rem;
+  right: 0.4rem;
+  z-index: 2;
+  width: 1.75rem;
+  height: 1.75rem;
+  border: 0;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(15, 23, 42, 0.72);
+  color: #fff;
+  cursor: pointer;
+}
+.nt-composer-preview .nt-link-preview {
+  margin: 0;
 }
 #alert-msg img,
 #admin-reply-text img,
@@ -1920,20 +1958,6 @@ html[data-colour-pack="earthy"] #notice-bell.nt-bell-info {
   box-shadow: 0 0 0 1.5px color-mix(in srgb, #000 26%, transparent), 0 1px 3px color-mix(in srgb, #000 14%, transparent);
 }
 
-/* Sun in light, moon in dark. The disc and the icon stay as they are.
-   This only wins while the header is lit, so a hidden bell has no halo. */
-#app-header.nt-alerts-lit #notice-bell {
-  box-shadow:
-    0 0 0 1px color-mix(in srgb, #000 12%, transparent),
-    0 0 0 8px rgba(255, 196, 64, 0.38),
-    0 0 24px 8px rgba(255, 176, 32, 0.48) !important;
-}
-html.dark #app-header.nt-alerts-lit #notice-bell {
-  box-shadow:
-    0 0 0 1px color-mix(in srgb, #fff 32%, transparent),
-    0 0 0 8px rgba(226, 236, 255, 0.32),
-    0 0 28px 10px rgba(186, 206, 255, 0.46) !important;
-}
 
 .nt-planner-map-btn {
   background-color: color-mix(in srgb, var(--nt-text) 10%, var(--nt-surface, #fff)) !important;

@@ -105,8 +105,8 @@ const STYLE_ALLOW = new Set([
 
 const SAFE_HREF = /^(https?|mailto|tel):/i;
 
-/** Combined scanner: URL, email, then SA phone (0xx xxx xxxx / +27). */
-const CONTACT_RE = /https?:\/\/[^\s<>"'()]+|[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}|(?:\+?27|0)[\s.-]*[1-8]\d[\s.-]*\d{3}[\s.-]*\d{4}(?!\d)/g;
+/** Combined scanner: URL (http or www), email, then SA phone (0xx xxx xxxx / +27). */
+const CONTACT_RE = /(?:https?:\/\/|www\.)[^\s<>"'()]+|[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}|(?:\+?27|0)[\s.-]*[1-8]\d[\s.-]*\d{3}[\s.-]*\d{4}(?!\d)/g;
 
 function escapeMarkup(value) {
     return String(value || '')
@@ -197,9 +197,10 @@ export function splitContactTokens(text) {
     while (m) {
         if (m.index > last) parts.push({ type: 'text', value: src.slice(last, m.index) });
         const raw = m[0];
-        if (/^https?:\/\//i.test(raw)) {
+        if (/^https?:\/\//i.test(raw) || /^www\./i.test(raw)) {
             const { href, trail } = peelTrailingPunctuation(raw);
-            parts.push({ type: 'url', value: href, href });
+            const abs = /^www\./i.test(href) ? `https://${href}` : href;
+            parts.push({ type: 'url', value: href, href: abs });
             if (trail) parts.push({ type: 'text', value: trail });
         } else if (raw.includes('@')) {
             parts.push({ type: 'email', value: raw, href: `mailto:${raw}` });
@@ -318,6 +319,43 @@ export function sanitizeRichHtml(dirtyHtml) {
     return doc.body.innerHTML;
 }
 
+/** Escaped plain text with bare URLs, emails, and phones turned into links. */
+export function linkedPlainHtml(text) {
+    const tokens = splitContactTokens(text);
+    return tokens.map((t) => {
+        if (t.type === 'text') return escapeMarkup(t.value);
+        const extra = t.type === 'url' ? ' target="_blank" rel="noopener"' : '';
+        return `<a href="${escapeMarkup(t.href)}" class="text-blue-600 dark:text-blue-400 underline underline-offset-2"${extra}>${escapeMarkup(t.value)}</a>`;
+    }).join('');
+}
+
+/**
+ * Composer size steps: 2 small, 3 normal, 4 medium, 5 large.
+ * A pixel size is compared with the field's own size, so small steps to normal.
+ */
+export function fontStepFromPixels(px, basePx) {
+    const size = Number(px);
+    const base = Number(basePx) > 0 ? Number(basePx) : 16;
+    if (!Number.isFinite(size) || size <= 0) return 3;
+    const ratio = size / base;
+    if (ratio <= 0.9) return 2;
+    if (ratio <= 1.15) return 3;
+    if (ratio <= 1.45) return 4;
+    return 5;
+}
+
+/** One step. Small plus A+ is normal. It does not jump to large. */
+export function nextRichFontSize(current, direction) {
+    const steps = [2, 3, 4, 5];
+    let n = Number(current);
+    if (!steps.includes(n)) n = 3;
+    const index = steps.indexOf(n);
+    const next = direction === 'smaller'
+        ? Math.max(0, index - 1)
+        : Math.min(steps.length - 1, index + 1);
+    return steps[next];
+}
+
 /** Sanitize + autolink emails, phones, and bare http(s) URLs. */
 export function prepareRichHtml(dirtyHtml) {
     injectRichTextStyles();
@@ -334,4 +372,8 @@ if (typeof window !== 'undefined') {
     window.sanitizeRichHtml = sanitizeRichHtml;
     window.isSafeHref = isSafeHref;
     window.whatsappMarkupToHtml = whatsappMarkupToHtml;
+    window.splitContactTokens = splitContactTokens;
+    window.linkedPlainHtml = linkedPlainHtml;
+    window.fontStepFromPixels = fontStepFromPixels;
+    window.nextRichFontSize = nextRichFontSize;
 }

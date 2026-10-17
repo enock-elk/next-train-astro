@@ -5,7 +5,7 @@ import { DYNAMIC_BASE_URL, REPLY_WORKER_URL, ROUTES, withBase } from './config.j
 import { noticeQuotePlain } from './feedback-quote.js';
 import { hydrateLinkPreviews, linkPreviewMarkup } from './link-preview.js';
 import { safeStorage, escapeHTML, repairMojibake, formatAppTime, formatThreadDateLabel } from './utils.js';
-import { prepareRichHtml, injectRichTextStyles } from './rich-text.js';
+import { prepareRichHtml, injectRichTextStyles, linkedPlainHtml } from './rich-text.js';
 import { showToast, triggerHaptic, openSmoothModal, closeSmoothModal } from './ui.js';
 import { isAdminAuthed } from './admin-chrome.js';
 import { $currentRouteId, $userRegion } from '../store.js';
@@ -611,7 +611,7 @@ function renderPostCard(notice, opts = {}) {
     const highlight = opts.highlight && String(notice.id) === String(opts.highlight);
     const body = prepareRichHtml(stripAlertSignoffHtml(layout.body));
     const titleHtml = layout.title
-        ? `<h3 class="text-base font-black text-gray-900 dark:text-white leading-snug mb-2" data-alert-title>${escapeHTML(layout.title)}</h3>`
+        ? `<h3 class="text-base font-black text-gray-900 dark:text-white leading-snug mb-2" data-alert-title>${linkedPlainHtml(layout.title)}</h3>`
         : '';
     const mediaHtml = renderPosterHtml(layout.imageUrls, notice);
     const bodyHtml = body
@@ -669,8 +669,8 @@ function renderPostCard(notice, opts = {}) {
         <div class="px-4 pt-3 pb-4">
         ${titleHtml}
         ${mediaHtml}
-        ${bodyHtml}
         ${linkPreviewMarkup(notice)}
+        ${bodyHtml}
         ${extra}
         ${renderPollHtml(notice)}
         ${footerHtml}
@@ -1021,7 +1021,7 @@ function bindAlertsChannelOnce() {
             const notice = cachedLiveNotices.find((n) => String(n.id) === String(id) && String(n._sourceKey) === String(src));
             if (notice) openAlertReactionPicker(notice, card);
             card.classList.remove('is-pressing');
-        }, 480);
+        }, 400);
     };
 
     root.addEventListener('pointerdown', (e) => {

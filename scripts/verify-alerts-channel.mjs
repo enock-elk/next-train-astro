@@ -36,6 +36,7 @@ import {
     buildAlertSeeMoreMarkup,
     expandAlertSeeMore,
 } from '../src/lib/alerts-feed.js';
+import { firstHttpUrl, linkPreviewMarkup } from '../src/lib/link-preview.js';
 
 const failures = [];
 function assert(cond, msg) {
@@ -328,6 +329,19 @@ const now = 1_700_000_000_000;
     assert(js.includes('hydrateLinkPreviews(feed, REPLY_WORKER_URL)'), 'alert cards load a link preview in place');
     assert(hub.includes('if (pollEl) hydratePollResults(pollEl)'), 'a quoted alert preview loads poll counts');
     assert(hub.includes('linkPreviewMarkup(notice)'), 'the notice modal reserves a link card');
+    const titleAt = js.indexOf('${titleHtml}');
+    const mediaAt = js.indexOf('${mediaHtml}');
+    const previewAt = js.indexOf('${linkPreviewMarkup(notice)}');
+    const bodyAt = js.indexOf('${bodyHtml}');
+    assert(titleAt >= 0 && titleAt < mediaAt && mediaAt < previewAt && previewAt < bodyAt, 'alert card is title, image, link preview, then body');
+    assert(hub.includes('${titleHtml}${mediaHtml}${linkPreviewMarkup(notice)}${formattedMsg}'), 'notice modal is title, image, link preview, then body');
+    assert(js.includes('}, 400);') && !js.includes('}, 480)'), 'alert hold is 400ms');
+    assert(linkPreviewMarkup({
+        suppressLinkPreview: true,
+        linkPreview: { url: 'https://nexttrain.co.za', title: 'Next Train', site: 'nexttrain.co.za' },
+        message: 'https://nexttrain.co.za',
+    }) === '', 'a cleared preview stays hidden');
+    assert(firstHttpUrl({ title: 'See www.nexttrain.co.za today' }) === 'https://www.nexttrain.co.za/', 'a www title is a url');
     assert(hub.includes('min-h-[8rem]') && hub.includes('referrerpolicy="no-referrer"'), 'alert preview keeps a visible image and does not send a hotlink referrer');
     assert(js.includes('buildPollShellHtml'), 'feed uses the shared poll shell');
     assert(js.includes('feed.dataset.ntAlertsSig'), 'alerts skip innerHTML rewrite when the feed is unchanged');

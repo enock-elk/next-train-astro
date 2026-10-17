@@ -2,7 +2,7 @@
  * Node checks for alert rich-text: contact autolink tokens and style/href guards.
  * Run: node scripts/verify-rich-text.mjs
  */
-import { splitContactTokens, isSafeHref, sanitizeStyleAttr, sanitizeRichHtml } from '../src/lib/rich-text.js';
+import { splitContactTokens, isSafeHref, sanitizeStyleAttr, sanitizeRichHtml, linkedPlainHtml, fontStepFromPixels, nextRichFontSize } from '../src/lib/rich-text.js';
 
 const failures = [];
 function assert(cond, msg) {
@@ -63,6 +63,19 @@ assert(!isSafeHref('data:text/html,x'), 'data href blocked');
     assert(/<ul>/i.test(list) && /<li>/i.test(list), `bullet list kept: ${list}`);
     const poster = sanitizeRichHtml('<img src="/images/alerts/fare.png" alt="Fare">');
     assert(/src="\/images\/alerts\/fare.png"/i.test(poster), `alerts poster src kept: ${poster}`);
+}
+
+{
+    const www = splitContactTokens('Open www.nexttrain.co.za today');
+    const url = www.find((p) => p.type === 'url');
+    assert(url?.href === 'https://www.nexttrain.co.za', `www becomes https, got ${url?.href}`);
+    const linked = linkedPlainHtml('See https://nexttrain.co.za');
+    assert(linked.includes('<a') && linked.includes('https://nexttrain.co.za'), 'plain title text keeps a clickable url');
+    assert(fontStepFromPixels(10, 12) === 2, '10px on a 12px field is small');
+    assert(nextRichFontSize(2, 'larger') === 3, 'A+ from small is normal');
+    assert(nextRichFontSize(3, 'larger') === 4, 'A+ from normal is medium');
+    assert(nextRichFontSize(5, 'larger') === 5, 'A+ stays on large');
+    assert(nextRichFontSize(4, 'smaller') === 3, 'A- from medium is normal');
 }
 
 if (failures.length) {

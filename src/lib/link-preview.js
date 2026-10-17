@@ -71,7 +71,7 @@ function siteLabel(href) {
 }
 
 export function firstHttpUrl(notice) {
-    const html = String(notice?.message || notice?.text || notice?.longExplanation || '');
+    const html = `${notice?.title || ''} ${notice?.message || notice?.text || notice?.longExplanation || ''}`;
     const hrefs = [];
     const re = /href\s*=\s*["']([^"']+)["']/gi;
     let match = re.exec(html);
@@ -80,10 +80,11 @@ export function firstHttpUrl(notice) {
         match = re.exec(html);
     }
     const plain = html.replace(/<[^>]+>/g, ' ');
-    const bare = plain.match(/https?:\/\/[^\s<>"']+/gi) || [];
+    const bare = plain.match(/(?:https?:\/\/|www\.)[^\s<>"']+/gi) || [];
     const list = [...hrefs, ...bare, notice?.ctaUrl, notice?.sourceUrl];
     for (const item of list) {
-        const url = cleanHttpUrl(item);
+        const raw = String(item || '').trim();
+        const url = cleanHttpUrl(/^www\./i.test(raw) ? `https://${raw}` : raw);
         if (url && isPublicPreviewUrl(url)) return url;
     }
     return '';
@@ -229,6 +230,7 @@ function loadingMarkup(url) {
 }
 
 export function linkPreviewMarkup(notice) {
+    if (notice?.suppressLinkPreview) return '';
     const stored = normalizeLinkPreview(notice?.linkPreview);
     if (stored) return readyMarkup(stored);
     const url = firstHttpUrl(notice);

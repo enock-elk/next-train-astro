@@ -15,6 +15,41 @@ import {
 } from './share-links.js';
 import { consumeShareDeeplinkSnapshot, peekShareDeeplinkSnapshot, armSlowDeeplinkToast, lockShareBoot } from './deeplink.js';
 
+function centerInScroller(scroller, el, axis) {
+    if (!scroller || !el) return;
+    const sRect = scroller.getBoundingClientRect();
+    const eRect = el.getBoundingClientRect();
+    if (axis === 'y') {
+        scroller.scrollTop += eRect.top - sRect.top - (sRect.height - eRect.height) / 2;
+    } else {
+        scroller.scrollLeft += eRect.left - sRect.left - (sRect.width - eRect.width) / 2;
+    }
+}
+
+function syncGridEdgeFade() {
+    const grid = document.getElementById('grid-container');
+    const frame = grid?.closest('.nt-grid-frame');
+    if (!grid || !frame) return;
+    const overflow = grid.scrollWidth - grid.clientWidth > 8;
+    const atEnd = grid.scrollLeft + grid.clientWidth >= grid.scrollWidth - 8;
+    frame.classList.toggle('can-scroll-x', overflow && !atEnd);
+}
+
+function bindGridEdgeFade() {
+    const grid = document.getElementById('grid-container');
+    if (!grid || grid.dataset.ntEdgeFade === '1') return;
+    grid.dataset.ntEdgeFade = '1';
+    grid.addEventListener('scroll', syncGridEdgeFade, { passive: true });
+}
+
+function alignOpenGrid() {
+    const grid = document.getElementById('grid-container');
+    if (!grid) return;
+    centerInScroller(grid, document.getElementById('grid-selected-row'), 'y');
+    centerInScroller(grid, document.getElementById('grid-active-col'), 'x');
+    syncGridEdgeFade();
+}
+
 let lastGridBody = null;
 let gridSchedulesRefreshBound = false;
 let gridSchedulesRefreshPrimed = false;
@@ -579,7 +614,10 @@ export function renderFullScheduleGrid(direction = null, dayOverride = null, opt
                     </button>
                 </div>
                 <div id="grid-controls" class="px-2 py-1.5 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 flex items-center shadow-sm relative z-10 shrink-0"></div>
-                <div id="grid-container" class="flex-1 min-h-0 overflow-auto bg-white dark:bg-gray-900 relative z-10"></div>
+                <div class="nt-grid-frame relative flex-1 min-h-0">
+                    <div id="grid-container" class="h-full overflow-auto bg-white dark:bg-gray-900 relative z-10"></div>
+                    <div class="nt-grid-edge-fade" aria-hidden="true"></div>
+                </div>
                 <div class="shrink-0 p-3 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 z-20">
                     <button type="button" id="close-timetable-footer-btn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-4 rounded-lg shadow-md transition-colors text-sm focus:outline-none">Close Timetable</button>
                 </div>
@@ -783,8 +821,9 @@ export function renderFullScheduleGrid(direction = null, dayOverride = null, opt
         ensureOpsOverlaysReady().then(() => paintOpenGridBody());
     }
 
+    bindGridEdgeFade();
     setTimeout(() => {
-        document.getElementById('grid-active-col')?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+        alignOpenGrid();
     }, 100);
 }
 

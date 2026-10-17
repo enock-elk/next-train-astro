@@ -34,7 +34,9 @@ assert(css.includes('#route-list a.text-blue-700.bg-blue-50'), 'Earthy light sel
 assert(css.includes('#telemetry-region-modal .bg-blue-50'), 'Earthy Gauteng tile is paper and charcoal');
 assert(!/html\[data-colour-pack="classic"\][^{]*\.bg-blue-600/.test(css), 'Classic blue-600 buttons are not restyled');
 assert(!/html\[data-colour-pack="classic"\][^{]*#planner-swap-btn/.test(css), 'Classic planner swap is not restyled');
-assert(/html\[data-colour-pack="earthy"\] #view-full-timetable-btn/.test(css), 'Earthy weakens the timetable CTA halo');
+assert(/html\[data-colour-pack="earthy"\] #view-full-timetable-btn/.test(css), 'Earthy timetable button stays a light control');
+assert(/html\[data-colour-pack="earthy"\] #view-full-timetable-btn\s*\{[\s\S]*?box-shadow:\s*none/.test(css), 'Earthy timetable button has no halo');
+assert(/#view-full-timetable-btn\s*\{[\s\S]*?box-shadow:\s*none/.test(css), 'timetable button has no glow');
 assert(!css.includes('data-colour-pack="ember"'), 'Ember pack CSS is gone');
 assert(/\.text-gray-400,[\s\S]*?--nt-text-faint/.test(css), 'gray-400 maps to faint, not muted');
 assert(css.includes('--nt-chrome-nav'), 'appearance defines --nt-chrome-nav');
@@ -54,8 +56,9 @@ assert(css.includes('--nt-chrome-nav: #0e0d0c'), 'Earthy dark nav is near-black,
 assert(!/html\.dark #app-header\.nt-maint-active \{\s*background-color: rgb\(31 41 55\)/.test(css), 'maint header must not hardcode gray-800');
 assert(css.includes('#grid-trigger-container'), 'timetable CTA has extra canvas gap');
 assert(css.includes('.nt-board-footer.mt-auto'), 'board footer padding stays on nt-board-footer mt-auto');
-assert(css.includes('0 6px 18px') || css.includes('0 -10px 28px') || css.includes('0 -8px'), 'nav has a drop shadow');
-assert(css.includes('border-radius: 999px'), 'bottom nav is a floating pill');
+assert(/#bottom-nav\.bottom-nav-bar \{[\s\S]*?box-shadow: none/.test(css), 'bottom nav does not float on a drop shadow');
+assert(/#bottom-nav\.bottom-nav-bar \{[\s\S]*?background-color: var\(--nt-chrome-header\)/.test(css), 'bottom nav matches the header colour');
+assert(/#bottom-nav\.bottom-nav-bar \{[\s\S]*?border-radius: 0;/.test(css), 'bottom nav is rectangular');
 assert(css.includes('#current-day'), 'day label letter-spacing rule present');
 
 ['midnight', 'contrast', 'signal', 'earthy'].forEach((pack) => {
@@ -493,7 +496,7 @@ assert(layout.includes('--nt-sys-bottom'), 'Layout still measures --nt-sys-botto
 assert(!layout.includes('pinBottomNav'), 'bottom nav has no synthetic geometry pin');
 assert(!layout.includes('--nt-nav-lift'), 'bottom nav has no synthetic lift token');
 assert(layout.includes('html.nt-standalone.nt-in-app body.nav-bottom:not(.nt-immersive) #bottom-nav.bottom-nav-bar'), 'standalone oval clears the home indicator');
-assert(layout.includes('bottom: var(--nt-sys-bottom, env(safe-area-inset-bottom, 0px));'), 'oval uses only the measured system inset on standalone');
+assert(layout.includes('padding-bottom: var(--nt-sys-bottom, env(safe-area-inset-bottom, 0px));'), 'standalone bar pads the home indicator inside the header colour');
 assert(layout.includes('if (!markStandalone()) sys = 0'), 'Safari does not lift the oval by the home-indicator inset');
 assert(layout.includes('100svh'), 'shell first-paint height falls back to 100svh');
 assert(layout.includes('Never use Math.max(inner, client)'), 'shell height never grows past the visible frame');

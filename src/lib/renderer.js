@@ -1086,7 +1086,7 @@ export const Renderer = {
         };
 
         const isTallGrid = !isExport && schedule.rows.length > 15;
-        const paddingClass = isExport ? 'p-2' : (isTallGrid ? 'py-2 px-3' : 'p-3'); 
+        const paddingClass = isExport ? 'p-2' : (isTallGrid ? 'py-1 px-2' : 'py-1.5 px-2'); 
         const fontSizeClass = isExport ? 'text-sm' : 'text-xs'; 
         const minWidthClass = showRightAnchor ? 'min-w-[46px]' : 'min-w-[70px]';
         const stationHeadWidth = isExport ? 'min-w-[140px]' : 'w-0';
@@ -1251,8 +1251,8 @@ export const Renderer = {
                 : '';
 
             html += `
-                <tr class="${rowClass.trim()}"${disrRowAttrs}>
-                    <td class="sticky left-0 z-10 ${currentStickyCellClass} ${paddingClass} border-r font-bold ${stationCellWidth} shadow-lg border-b text-left pl-3">${isExport ? cleanStation : `<div class="w-max max-w-[140px] truncate">${cleanStation}</div>`}</td>
+                <tr class="${rowClass.trim()}"${isSelectedRow ? ' id="grid-selected-row"' : ''}${disrRowAttrs}>
+                    <td class="sticky left-0 z-10 ${currentStickyCellClass} ${paddingClass} border-r font-bold ${stationCellWidth} shadow-lg border-b text-left pl-3">${isExport ? cleanStation : `<div class="nt-grid-station">${cleanStation}</div>`}</td>
                     ${sortedCols.map((col, i) => {
                         let val = row[col] || "-";
                         const expressSkip = isExpressSkip(val);
@@ -1370,7 +1370,7 @@ export const Renderer = {
                 ? 'nt-station-col bg-gray-200 dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white'
                 : 'nt-station-col bg-gray-100 dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-white';
             return `<tr class="${rowClass}">
-                <td class="sticky left-0 z-10 ${stationBg} py-2.5 px-3 pl-3 border-r border-b font-bold text-xs w-0 shadow-lg text-left"><div class="w-max max-w-[140px] truncate">${escapeHTML(name)}</div></td>
+                <td class="sticky left-0 z-10 ${stationBg} py-1.5 px-2 pl-3 border-r border-b font-bold text-xs w-0 shadow-lg text-left"><div class="nt-grid-station">${escapeHTML(name)}</div></td>
             </tr>`;
         }).join('');
 

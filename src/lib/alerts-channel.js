@@ -662,7 +662,7 @@ function renderPostCard(notice, opts = {}) {
         <div class="nt-alert-strip flex items-center justify-between gap-2 px-3 py-1 ${chrome.strip}">
             <span class="nt-alert-signoff text-xs font-semibold leading-none tracking-wide">${escapeHTML(signoff)}</span>
             <span class="nt-alert-chip-wrap inline-flex items-center gap-1.5 shrink-0">
-                ${isNoticePinned(notice) ? `<span class="nt-alert-pin" title="Pinned" aria-label="Pinned">${ALERT_PIN_SVG}</span>` : ''}
+                ${isNoticePinned(notice) ? `<span class="nt-alert-pin" title="Pinned" aria-label="Pinned">${ALERT_PIN_SVG}<span class="nt-alert-pin-label">Pinned</span></span>` : ''}
                 <span class="nt-alert-chip inline-flex items-center shrink-0 px-1.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider leading-none ${chrome.chip}">${chrome.emoji} ${chrome.label}</span>
             </span>
         </div>
@@ -856,10 +856,8 @@ export function applyBellFromNotices(notices) {
     if (!bellBtn) return;
     notices = scopedLiveNotices(notices);
 
-    const header = document.getElementById('app-header');
     if (!notices || notices.length === 0) {
         bellBtn.classList.add('hidden');
-        header?.classList.remove('nt-alerts-lit');
         return;
     }
 
@@ -882,7 +880,6 @@ export function applyBellFromNotices(notices) {
     }
     bellBtn.className = bellClass;
     bellBtn.classList.remove('hidden');
-    header?.classList.add('nt-alerts-lit');
     bellBtn.setAttribute('aria-label', 'Service alerts');
     const bellSvg = bellBtn.querySelector('svg');
     if (bellSvg) bellSvg.setAttribute('class', 'w-6 h-6');
@@ -983,22 +980,56 @@ function noticeForLightbox(detail) {
     return byBoth || cachedLiveNotices.find((n) => String(n.id) === id) || null;
 }
 
+const LIGHTBOX_BAR_REACTIONS = ['love', 'pray', 'laugh'];
+
+function openLightboxReply(notice) {
+    if (!notice || typeof window.openFeedbackReplyFromOverlay !== 'function') return;
+    const rawHtml = repairMojibake(notice.message || notice.text || '');
+    const snippet = htmlToPlainSnippet(rawHtml, 6).replace(/[—–].*/, '').trim();
+    const start = () => {
+        window.openFeedbackReplyFromOverlay('alerts-channel', {
+            label: 'Replying to Advisory:',
+            snippet,
+            rawMsg: snippet,
+            alertId: String(notice.id || ''),
+            alertKind: 'notice',
+            quotedText: noticeQuotePlain(notice),
+        });
+    };
+    if (location.hash === '#lightbox') {
+        window.addEventListener('popstate', () => setTimeout(start, 0), { once: true });
+        window.closeLightbox?.();
+        return;
+    }
+    window.closeLightbox?.(true);
+    start();
+}
+
 function paintLightboxReactions(detail) {
     const dock = document.getElementById('alert-image-lightbox-dock');
     const row = document.getElementById('alert-image-lightbox-react');
     if (!dock || !row) return;
     const notice = noticeForLightbox(detail);
+    const reply = document.getElementById('alert-image-lightbox-reply');
     if (!notice) {
         dock.classList.add('hidden');
         row.replaceChildren();
+        if (reply) {
+            delete reply.dataset.alertId;
+            delete reply.dataset.alertSrc;
+        }
         return;
     }
     const mine = mineReactionKey(notice);
-    row.innerHTML = ALERT_REACTION_KEYS.map((key) => {
+    row.innerHTML = LIGHTBOX_BAR_REACTIONS.map((key) => {
         const on = mine === key;
         const emoji = ALERT_REACTION_EMOJI[key];
-        return `<button type="button" data-lightbox-react="${escapeHTML(key)}" data-alert-id="${escapeHTML(String(notice.id || ''))}" data-alert-src="${escapeHTML(String(notice._sourceKey || ''))}" class="w-11 h-11 text-[1.65rem] leading-none rounded-full ${on ? 'bg-white/20 ring-2 ring-white/70' : 'bg-black/35'} focus:outline-none" aria-pressed="${on ? 'true' : 'false'}" aria-label="${on ? 'Remove reaction' : `React ${emoji}`}">${emoji}</button>`;
+        return `<button type="button" data-lightbox-react="${escapeHTML(key)}" data-alert-id="${escapeHTML(String(notice.id || ''))}" data-alert-src="${escapeHTML(String(notice._sourceKey || ''))}" class="w-10 h-10 text-[1.7rem] leading-none focus:outline-none ${on ? 'scale-110' : ''}" aria-pressed="${on ? 'true' : 'false'}" aria-label="${on ? 'Remove reaction' : `React ${emoji}`}">${emoji}</button>`;
     }).join('');
+    if (reply) {
+        reply.dataset.alertId = String(notice.id || '');
+        reply.dataset.alertSrc = String(notice._sourceKey || '');
+    }
     dock.classList.remove('hidden');
 }
 
@@ -1007,6 +1038,18 @@ function bindLightboxReactionClicks() {
     if (!overlay || overlay.dataset.ntReactBound === '1') return;
     overlay.dataset.ntReactBound = '1';
     overlay.addEventListener('click', (e) => {
+        const reply = e.target.closest?.('#alert-image-lightbox-reply');
+        if (reply && overlay.contains(reply)) {
+            e.preventDefault();
+            e.stopPropagation();
+            triggerHaptic();
+            const id = reply.dataset.alertId || '';
+            const src = reply.dataset.alertSrc || '';
+            const notice = cachedLiveNotices.find((n) => String(n.id) === String(id) && String(n._sourceKey) === String(src))
+                || cachedLiveNotices.find((n) => String(n.id) === String(id));
+            if (notice) openLightboxReply(notice);
+            return;
+        }
         const btn = e.target.closest?.('[data-lightbox-react]');
         if (!btn || !overlay.contains(btn)) return;
         e.preventDefault();
@@ -1032,7 +1075,6 @@ function bindAlertsChannelOnce() {
         closeAlertsChannel();
     };
     document.getElementById('alerts-channel-back')?.addEventListener('click', closeChannel);
-    document.getElementById('alerts-channel-close')?.addEventListener('click', closeChannel);
     document.getElementById('alerts-channel-footer-close')?.addEventListener('click', closeChannel);
 
     document.getElementById('alerts-load-earlier')?.addEventListener('click', () => {

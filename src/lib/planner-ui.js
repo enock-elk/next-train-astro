@@ -3917,7 +3917,7 @@ export function initPlanner() {
                 const sig = disruptionSignature();
                 if (sig === lastPlannerDisruptionSig) return;
                 console.log('🛡️ Guardian: Disruptions updated — replanning active trip.');
-                executeTripPlan(plannerOrigin, plannerDest, lastPlannerPreferredTime);
+                executeTripPlan(plannerOrigin, plannerDest, lastPlannerPreferredTime, { countTelemetry: false });
             } catch (e) {
                 console.warn('🛡️ Guardian: Disruption replan failed', e);
             }
@@ -4890,7 +4890,7 @@ function samePlannerStation(a, b) {
 }
 
 // --- ORCHESTRATION ---
-export function executeTripPlan(origin, dest, preferredTime = null) {
+export function executeTripPlan(origin, dest, preferredTime = null, opts = {}) {
     const fromCanon = canonicalPlannerStation(origin);
     const toCanon = canonicalPlannerStation(dest);
     if (fromCanon) origin = fromCanon;
@@ -5047,16 +5047,18 @@ export function executeTripPlan(origin, dest, preferredTime = null) {
             capturePlannerSnapshot({ kind: 'trips' });
             try { savePlannerHistory(origin, dest, { status: currentPlannerStatus }); } catch { /* ignore */ }
             try {
-                const sample = currentTripOptions[nextTripIndex] || currentTripOptions[0];
-                enqueueSuccessfulTripPlan({
-                    origin,
-                    destination: dest,
-                    dayType: selectedPlannerDay || getCurrentDayType(),
-                    specificDate: selectedPlannerDate || null,
-                    depTime: sample?.depTime || null,
-                    arrTime: sample?.arrTime || null,
-                    transfers: Array.isArray(sample?.legs) ? Math.max(0, sample.legs.length - 1) : null,
-                });
+                if (opts.countTelemetry !== false) {
+                    const sample = currentTripOptions[nextTripIndex] || currentTripOptions[0];
+                    enqueueSuccessfulTripPlan({
+                        origin,
+                        destination: dest,
+                        dayType: selectedPlannerDay || getCurrentDayType(),
+                        specificDate: selectedPlannerDate || null,
+                        depTime: sample?.depTime || null,
+                        arrTime: sample?.arrTime || null,
+                        transfers: Array.isArray(sample?.legs) ? Math.max(0, sample.legs.length - 1) : null,
+                    });
+                }
             } catch { /* ignore telemetry */ }
 
         } else {

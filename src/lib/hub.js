@@ -44,7 +44,7 @@ import { isAdminAuthed } from './admin-chrome.js';
 import { bindMapOverrideSaveListener } from './map-overrides.js';
 import { trackAnalyticsEvent } from './analytics.js';
 import { prepareRichHtml, injectRichTextStyles, isSafeHref } from './rich-text.js';
-import { hydrateLinkPreviews, linkPreviewMarkup } from './link-preview.js';
+import { hydrateLinkPreviews, linkPreviewMarkup, messagePreviewUrls, relocateBarePreviewUrls } from './link-preview.js';
 import {
     showToast, hideToastIfMessage, triggerHaptic, openSmoothModal, closeSmoothModal, canAutoOpenHomeNotices,
     hapticsAreEnabled, bindPasswordReveal
@@ -1893,8 +1893,8 @@ export function renderServiceAlertModal(notice, options = {}) {
     const titleHtml = layout.title
         ? `<h3 class="text-base font-black text-gray-900 dark:text-white leading-snug mb-2">${escapeHTML(layout.title)}</h3>`
         : '';
-    let formattedMsg = sanitizeHTML(layout.body);
-    if (alertCopyNeedsSeeMore(layout.body)) {
+    let formattedMsg = relocateBarePreviewUrls(sanitizeHTML(layout.body), messagePreviewUrls(notice));
+    if (alertCopyNeedsSeeMore(formattedMsg)) {
         formattedMsg = buildAlertSeeMoreMarkup(formattedMsg);
     }
     if (options.prefixHtml) formattedMsg = `${options.prefixHtml}${formattedMsg}`;
@@ -1922,23 +1922,22 @@ export function renderServiceAlertModal(notice, options = {}) {
         const grid = posterUrls.length > 1 ? 'grid grid-cols-2 gap-2' : 'grid grid-cols-1';
         mediaHtml = `<div class="${grid} mt-2 mb-1">${cells}</div>`;
     }
-    content.innerHTML = `${titleHtml}${mediaHtml}${formattedMsg}${linkPreviewMarkup(notice)}`;
-    ensureLightboxPlusBadges(content);
-    hydrateLinkPreviews(content, REPLY_WORKER_URL);
-
+    let ctaHtml = '';
     if (notice.ctaUrl && notice.ctaText) {
-        content.innerHTML += `
+        ctaHtml = `
             <a href="${escapeHTML(notice.ctaUrl)}" target="_blank" rel="noopener" class="mt-4 flex items-center justify-center w-full bg-blue-50 dark:bg-blue-900/30 hover:bg-blue-100 dark:hover:bg-blue-800 text-blue-700 dark:text-blue-300 font-bold py-2.5 px-4 rounded-lg transition-colors text-xs uppercase tracking-wide border border-blue-200 dark:border-blue-800 shadow-sm focus:outline-none">
                 ${escapeHTML(notice.ctaText)}
                 <svg class="w-4 h-4 ml-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
             </a>`;
     }
-
-    if (notice.poll && notice.poll.active) {
-        content.innerHTML += buildPollShellHtml({ ...notice, severity: severity || notice.severity }, { mode });
-        const pollEl = content.querySelector('[data-poll-shell]');
-        if (pollEl) hydratePollResults(pollEl);
-    }
+    const pollHtml = notice.poll && notice.poll.active
+        ? buildPollShellHtml({ ...notice, severity: severity || notice.severity }, { mode })
+        : '';
+    content.innerHTML = `${titleHtml}${mediaHtml}${linkPreviewMarkup(notice)}${formattedMsg}${ctaHtml}${pollHtml}`;
+    ensureLightboxPlusBadges(content);
+    hydrateLinkPreviews(content, REPLY_WORKER_URL, notice);
+    const pollEl = content.querySelector('[data-poll-shell]');
+    if (pollEl) hydratePollResults(pollEl);
 
     if (timestamp) {
         if (options.timestampHtml) {

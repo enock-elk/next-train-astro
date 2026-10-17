@@ -29,7 +29,7 @@ import {
     whatsappReplyUrl,
 } from './reply-suggest.js';
 import { TEXT_ASSIST_ACTIONS, comfortAssistText, assistHtmlFromText } from './text-assist.js';
-import { fetchLinkPreview, firstHttpUrl } from './link-preview.js';
+import { fetchLinkPreview, firstHttpUrl, messagePreviewUrls, previewCardHtml, samePreviewUrl } from './link-preview.js';
 import {
     alertDraftFromBriefCard,
     briefDismissed,
@@ -141,7 +141,7 @@ export function exposeAdminGlobals() {
         noticeQuotePlain,
     };
     window.ntTextAssist = { TEXT_ASSIST_ACTIONS, comfortAssistText, assistHtmlFromText };
-    window.ntLinkPreview = { fetchLinkPreview, firstHttpUrl };
+    window.ntLinkPreview = { fetchLinkPreview, firstHttpUrl, messagePreviewUrls, previewCardHtml, samePreviewUrl };
     window.ntOperatorBrief = {
         alertDraftFromBriefCard,
         briefDismissed,

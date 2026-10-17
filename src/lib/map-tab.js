@@ -2708,6 +2708,7 @@ async function runTripWatch(watch) {
             lateBucket: 'unsure',
             source: 'trip_watch',
         });
+        if (!result.ok && result.quiet) return;
         showToast(
             result.ok ? 'Thanks - we’ll show this train as late' : (result.message || 'Couldn’t send the late report'),
             result.ok ? 'success' : 'error',
@@ -2783,15 +2784,10 @@ export function maybeOfferPlannerContribute() {
 }
 
 async function sharePlannerTrip(c) {
-    const { $account, openAccountModal, waitForSignedIn } = await import('./account.js');
+    const { $account, requestAccountSignIn } = await import('./account.js');
     if ($account.get().status !== 'signed-in') {
-        showToast('Quick sign-in to share this trip and earn points.', 'info');
-        openAccountModal();
-        const ok = await waitForSignedIn();
-        if (!ok) {
-            showToast('Sign in when you’re ready - you can still use the trip plan.', 'info');
-            return;
-        }
+        const ok = await requestAccountSignIn();
+        if (!ok) return;
     }
 
     showToast('Checking you’re near the station…', 'info');

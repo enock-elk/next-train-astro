@@ -543,17 +543,10 @@ export function openAppHub() {
     try { window.cancelPendingGridOpen?.(); } catch { /* ignore */ }
     // Sign-in / account chrome lives in a deferred chunk — kick it as soon as
     // the hub is actually opened so first tap is not a no-op.
-    import('./account.js')
-        .then(({ bindAccountUi, initAccount }) => {
-            bindAccountUi();
-            initAccount();
-        })
-        .catch(() => {});
     const sidenav = document.getElementById('sidenav');
     const overlay = document.getElementById('sidenav-overlay');
     sidenav?.classList.remove('-translate-x-full', 'translate-x-full');
     sidenav?.classList.add('translate-x-0', 'open');
-    import('./ui.js').then((m) => m.syncBottomNavActive?.()).catch(() => {});
     if (overlay) {
         overlay.classList.remove('hidden');
         overlay.classList.add('open');
@@ -564,6 +557,17 @@ export function openAppHub() {
     if (location.hash !== '#sidenav') {
         try { history.pushState({ view: 'sidenav' }, '', '#sidenav'); } catch { /* ignore */ }
     }
+    // Account sync moves Options rows. Do it after the drawer has painted,
+    // so the open is not waiting on that layout.
+    setTimeout(() => {
+        import('./ui.js').then((m) => m.syncBottomNavActive?.()).catch(() => {});
+        import('./account.js')
+            .then(({ bindAccountUi, initAccount }) => {
+                bindAccountUi();
+                initAccount();
+            })
+            .catch(() => {});
+    }, 160);
 }
 
 function collapsePrefsAccordion() {
@@ -585,10 +589,15 @@ export function resetProfile() {
     setTimeout(() => openSmoothModal('profile-modal'), 50);
 }
 
-const UPDATE_TOAST_MAX_MS = 6000;
+const UPDATE_TOAST_MAX_MS = 4000;
+const KEPT_APP_TOAST = 'Kept your saved app. Try again on a stronger connection.';
 
 function showUpdateToast(message) {
     showToast(message, 'info', UPDATE_TOAST_MAX_MS, '', { persist: true, force: true });
+}
+
+function showKeptAppToast() {
+    showToast(KEPT_APP_TOAST, 'error');
 }
 
 function waitOutUpdateToast(startedAt) {
@@ -613,14 +622,27 @@ export async function performHardCacheClear(source = 'modal_confirm', { latestVe
         } catch {
             preflight = 'unavailable';
         }
-        if (!destructiveNetworkIsSafe({
-            online: typeof navigator === 'undefined' || navigator.onLine === true,
+        // A 3.5s miss is common on a phone that can still download. Check for
+        // Updates retries once, then continues when the phone is online and
+        // not a captive portal. Offline and Lie-Fi still stop. Killswitch
+        // keeps the strict 3.5s result.
+        if (source === 'check_updates' && preflight === 'timeout') {
+            try {
+                preflight = typeof window.probeReachability === 'function'
+                    ? await window.probeReachability(9000)
+                    : preflight;
+            } catch {
+                preflight = 'timeout';
+            }
+        }
+        const onlineNow = typeof navigator === 'undefined' || navigator.onLine === true;
+        const networkSafe = destructiveNetworkIsSafe({
+            online: onlineNow,
             lieFi: isLieFi,
             preflight,
-        })) {
-            if (source === 'check_updates') {
-                showToast('Kept your saved app. Try again on a stronger connection.', 'error', 4500);
-            }
+        }) || (source === 'check_updates' && preflight === 'timeout' && onlineNow && isLieFi !== true);
+        if (!networkSafe) {
+            if (source === 'check_updates') showKeptAppToast();
             return false;
         }
     }
@@ -641,7 +663,7 @@ export async function performHardCacheClear(source = 'modal_confirm', { latestVe
         const installed = await installIncomingServiceWorker();
         if (!installed.ok) {
             console.warn(`🛡️ Guardian: Incoming version ${incoming || APP_VERSION} NOT downloaded (${installed.reason}). Keeping ${APP_VERSION}.`);
-            showToast('Kept your saved app. Try again on a stronger connection.', 'error', 4500);
+            showKeptAppToast();
             return false;
         }
         showUpdateToast('Update ready. Opening it now.');
@@ -772,7 +794,7 @@ export function showCacheClearWarning() {
             console.log(`🛡️ Guardian: Check for Updates — running ${APP_VERSION}, published ${incomingVersion || 'unknown'}.`);
         }
         if (typeof navigator !== 'undefined' && navigator.onLine === false) {
-            showToast('Kept your saved app. Try again on a stronger connection.', 'error', 4500);
+            showKeptAppToast();
             return;
         }
         await performHardCacheClear('check_updates', {

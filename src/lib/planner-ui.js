@@ -1057,6 +1057,7 @@ let lastPlannerPreferredTime = null;
 /** Signature of disruptions used for the currently shown planner result. */
 let lastPlannerDisruptionSig = '';
 let plannerDisrListenBound = false;
+let plannerSearchGen = 0;
 
 function disruptionSignature(disr = $globalDisruptions.get()) {
     try {
@@ -3919,7 +3920,7 @@ export function initPlanner() {
                 const sig = disruptionSignature();
                 if (sig === lastPlannerDisruptionSig) return;
                 console.log('🛡️ Guardian: Disruptions updated — replanning active trip.');
-                executeTripPlan(plannerOrigin, plannerDest, lastPlannerPreferredTime);
+                executeTripPlan(plannerOrigin, plannerDest, lastPlannerPreferredTime, { quiet: true });
             } catch (e) {
                 console.warn('🛡️ Guardian: Disruption replan failed', e);
             }
@@ -4892,7 +4893,8 @@ function samePlannerStation(a, b) {
 }
 
 // --- ORCHESTRATION ---
-export function executeTripPlan(origin, dest, preferredTime = null) {
+export function executeTripPlan(origin, dest, preferredTime = null, opts = {}) {
+    const quiet = opts?.quiet === true;
     const fromCanon = canonicalPlannerStation(origin);
     const toCanon = canonicalPlannerStation(dest);
     if (fromCanon) origin = fromCanon;
@@ -4906,7 +4908,8 @@ export function executeTripPlan(origin, dest, preferredTime = null) {
     plannerDest = dest;
     try { savePlannerHistory(origin, dest); } catch { /* ignore */ }
     const resultsContainer = document.getElementById('planner-results-list');
-    if (resultsContainer) {
+    const searchGen = ++plannerSearchGen;
+    if (resultsContainer && !quiet) {
         resultsContainer.innerHTML = `
         <div class="min-h-[400px] flex flex-col justify-center items-center text-center p-4">
             <svg class="w-10 h-10 animate-spin mx-auto text-blue-500 mb-4" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
@@ -4916,36 +4919,36 @@ export function executeTripPlan(origin, dest, preferredTime = null) {
     }
     // Keep loading header as centred "Your Journey" (not the day/share toolbar)
     const headerTitle = document.querySelector('#planner-results-section h4');
-    if (headerTitle) {
+    if (headerTitle && !quiet) {
         headerTitle.className = 'text-lg font-bold text-gray-900 dark:text-white text-center justify-self-center px-1 m-0';
         headerTitle.textContent = 'Your Journey';
     }
     const shareSlot = document.querySelector('#planner-results-section .planner-share-slot');
-    if (shareSlot) {
+    if (shareSlot && !quiet) {
         shareSlot.className = 'planner-share-slot justify-self-end min-h-[32px] flex items-center justify-end';
         shareSlot.innerHTML = '';
     }
 
-    let isSearching = true;
+    let isSearching = !quiet;
     const updateSpinnerText = (text) => {
         const el = document.getElementById('planner-spinner-text');
         if (el && isSearching) el.textContent = text;
     };
-    const spinnerTimers = [
+    const spinnerTimers = quiet ? [] : [
         setTimeout(() => updateSpinnerText("Evaluating alternative corridors..."), 3500),
         setTimeout(() => updateSpinnerText("Line Severance detected. Rerouting..."), 7000),
         setTimeout(() => updateSpinnerText("Calculating partial journeys..."), 10500)
     ];
     
     const inputSecEl = document.getElementById('planner-input-section');
-    if (inputSecEl) inputSecEl.classList.add('hidden');
+    if (inputSecEl && !quiet) inputSecEl.classList.add('hidden');
     
     const resultsSecEl = document.getElementById('planner-results-section');
     if (resultsSecEl) resultsSecEl.classList.remove('hidden');
     
-    plannerExpandedState.clear();
+    if (!quiet) plannerExpandedState.clear();
 
-    if (typeof location !== 'undefined' && location.hash !== '#planner-results') {
+    if (!quiet && typeof location !== 'undefined' && location.hash !== '#planner-results') {
         history.pushState({ view: 'planner-results' }, '', '#planner-results');
     }
 
@@ -4973,11 +4976,8 @@ export function executeTripPlan(origin, dest, preferredTime = null) {
             return;
         }
 
-        // Avoid publishing a full through-trip before the sinkhole overlay arrives.
-        updateSpinnerText('Checking live line alerts...');
-        await ensureOpsOverlaysReady(2800);
-
         spinnerTimers.forEach(t => clearTimeout(t));
+        if (searchGen !== plannerSearchGen) return;
         isSearching = false;
         if (typeof planUnifiedTrip === 'function') {
             const extContext = {};
@@ -4997,6 +4997,7 @@ export function executeTripPlan(origin, dest, preferredTime = null) {
                 plannerResponse = { status: 'NO_PATH', trips: [], errorPayload: null };
             }
         }
+        if (searchGen !== plannerSearchGen) return;
 
         lastPlannerDisruptionSig = disruptionSignature();
         currentTripOptions = plannerResponse.trips || [];

@@ -185,11 +185,11 @@ export function checkDelayReportRateLimit(routeId) {
     } else if (data.global.length >= 1) {
         const last = data.global[data.global.length - 1] || now;
         const retryAfterMs = Math.max(1000, GUEST_GLOBAL_MS - (now - last));
-        return { ok: false, reason: 'quota', retryAfterMs, message: `Guests can report once every 45 minutes. Wait ${Math.ceil(retryAfterMs / 60000)} min, or sign in for higher limits.` };
+        return { ok: false, reason: 'quota', retryAfterMs, needsAuth: true, message: `Wait ${Math.ceil(retryAfterMs / 60000)} min before another report.` };
     } else if (routeTimes.length >= 1) {
         const last = routeTimes[routeTimes.length - 1] || now;
         const retryAfterMs = Math.max(1000, GUEST_ROUTE_MS - (now - last));
-        return { ok: false, reason: 'route', retryAfterMs, message: `Already reported for this route. Wait ${Math.ceil(retryAfterMs / 60000)} min, or sign in to report again sooner.` };
+        return { ok: false, reason: 'route', retryAfterMs, needsAuth: true, message: `Wait ${Math.ceil(retryAfterMs / 60000)} min before another report on this route.` };
     }
     return { ok: true };
 }
@@ -785,7 +785,13 @@ export async function submitQuickDelayReport({
     status = 'late', lateBucket = 'unsure', source = 'trip_watch',
 } = {}) {
     if (!routeId || !trainId) return { ok: false, message: 'Missing train' };
-    const limit = checkDelayReportRateLimit(routeId);
+    let limit = checkDelayReportRateLimit(routeId);
+    if (!limit.ok && limit.needsAuth) {
+        const { requestAccountSignIn } = await import('./account.js');
+        const signed = await requestAccountSignIn();
+        if (!signed) return { ok: false, quiet: true };
+        limit = checkDelayReportRateLimit(routeId);
+    }
     if (!limit.ok) return { ok: false, message: limit.message };
     const trainKey = trainReportKey({ routeId, trainId, scheduledTime, station });
     const existing = getOwnReport(trainKey);
@@ -983,7 +989,13 @@ async function submitTrainReportPayload({ status, lateBucket, note }) {
 
     const trainKey = trainReportKey({ routeId, trainId, scheduledTime, station });
     const existing = getOwnReport(trainKey);
-    const limit = checkDelayReportRateLimit(routeId);
+    let limit = checkDelayReportRateLimit(routeId);
+    if (!existing && !limit.ok && limit.needsAuth) {
+        const { requestAccountSignIn } = await import('./account.js');
+        const signed = await requestAccountSignIn();
+        if (!signed) return false;
+        limit = checkDelayReportRateLimit(routeId);
+    }
     if (!existing && !limit.ok) {
         showErr(limit.message);
         startRateLimitCountdown(errEl, limit.retryAfterMs || 60000, { reason: limit.reason || 'quota' });

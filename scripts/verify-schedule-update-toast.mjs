@@ -53,6 +53,9 @@ assert(ui.includes('function toastAllowsShow'), 'every toast goes through a rate
 assert(ui.includes('TOAST_MAX_PER_WINDOW = 4'), 'at most four toasts in 30s');
 assert(ui.includes('TOAST_GLOBAL_GAP_MS = 1200'), 'toasts cannot replace each other faster than 1.2s');
 assert(ui.includes('error: 25_000'), 'error toasts wait 25s before repeating');
+assert(ui.includes('const TOAST_MATCH_MS = 2500'), 'toasts match the Found station toast');
+assert(ui.includes('const TOAST_LONG_MS = 4000'), 'a longer toast may stay a little past 2.5 seconds');
+assert(!ui.includes('Math.max(duration, 12000)'), 'error toasts are not held for 12 seconds');
 assert(logic.includes('_lastSlowNetworkToastTime > 120_000'), 'slow-connection warning waits 2 minutes');
 
 console.log('✓ route-specific schedule update baseline, dedupe, coalescing, and two-line toast OK');

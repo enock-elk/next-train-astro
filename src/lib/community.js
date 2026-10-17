@@ -15,7 +15,7 @@ import { formatAccountDisplayName } from './display-name.js';
 import { safeStorage, escapeHTML } from './utils.js';
 import { sanitizeCommunityPhotoUrl } from './community-photo.js';
 import { $currentRouteId, $userRegion, $deviceId } from '../store.js';
-import { $account } from './account.js';
+import { $account, requestAccountSignIn } from './account.js';
 import { isAdminAuthed } from './admin-chrome.js';
 import { showToast, triggerHaptic, openSmoothModal } from './ui.js';
 import { bootFirebase } from './firebase-boot.js';
@@ -515,7 +515,7 @@ export async function submitCommunityPost(body, routeId = $currentRouteId.get())
     const text = (body || '').trim();
     const acct = $account.get();
     if (acct.status !== 'signed-in' || !acct.uid) {
-        return { ok: false, message: 'Sign in to post in this route’s community.' };
+        return { ok: false, needsAuth: true };
     }
     if (acct.authProvider === 'password' && !acct.emailVerified) {
         return { ok: false, message: 'Verify your email before posting. Open Account and use the link we sent.' };
@@ -614,7 +614,7 @@ export async function submitCommunityPost(body, routeId = $currentRouteId.get())
         // Prefer Cloudflare write bouncer when configured (rate + sanitize + Admin write).
         if (COMMUNITY_WORKER_URL) {
             const token = await ensureAuthToken();
-            if (!token) return { ok: false, message: 'Sign in to post in this route’s community.' };
+            if (!token) return { ok: false, needsAuth: true };
             const res = await fetch(`${COMMUNITY_WORKER_URL}/community/post`, {
                 method: 'POST',
                 headers: {
@@ -704,7 +704,7 @@ export async function submitCommunityReply(postId, body, routeId = $currentRoute
     const text = (body || '').trim();
     const acct = $account.get();
     if (acct.status !== 'signed-in' || !acct.uid) {
-        return { ok: false, message: 'Sign in to reply.' };
+        return { ok: false, needsAuth: true };
     }
     if (acct.authProvider === 'password' && !acct.emailVerified) {
         return { ok: false, message: 'Verify your email before replying. Open Account and use the link we sent.' };
@@ -919,7 +919,7 @@ export async function fetchPostReactions(routeId, postIds = null) {
 export async function togglePostReaction(routeId, postId, emojiId) {
     const acct = $account.get();
     if (acct.status !== 'signed-in' || !acct.uid) {
-        return { ok: false, message: 'Sign in to react.', needsAuth: true };
+        return { ok: false, needsAuth: true };
     }
     if (!WA_REACTIONS.some((r) => r.id === emojiId)) {
         return { ok: false, message: 'Unknown reaction.' };
@@ -962,11 +962,17 @@ function summarizeReactions(postId) {
     return { counts, myEmoji };
 }
 
-function renderReactionSummary(postId, isOwn = false) {
-    const { counts } = summarizeReactions(postId);
+function renderReactionSummary(postId, isOwn = false, routeId = '') {
+    const { counts, myEmoji } = summarizeReactions(postId);
     const pills = WA_REACTIONS
         .filter((r) => (counts[r.id] || 0) > 0)
-        .map((r) => `<span class="community-reaction-pill">${r.emoji}${counts[r.id] > 1 ? ` ${counts[r.id]}` : ''}</span>`)
+        .map((r) => {
+            const label = `${r.emoji}${counts[r.id] > 1 ? ` ${counts[r.id]}` : ''}`;
+            if (myEmoji === r.id) {
+                return `<button type="button" class="community-reaction-pill community-react-btn" data-post-id="${escapeHTML(postId)}" data-route="${escapeHTML(routeId)}" data-emoji="${r.id}" aria-label="Remove reaction">${label}</button>`;
+            }
+            return `<span class="community-reaction-pill">${label}</span>`;
+        })
         .join('');
     if (!pills) return '';
     return `<div class="community-reaction-pills ${isOwn ? 'ml-auto mr-1' : ''}" data-reactions-for="${escapeHTML(postId)}">${pills}</div>`;
@@ -1004,9 +1010,14 @@ function openReactionSheet(postId, routeId) {
             ? `<button type="button" class="community-sheet-lookup col-span-2 py-2.5 rounded-xl text-xs font-bold bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300">Look up rider</button>
                     <button type="button" class="community-sheet-delete col-span-2 py-2.5 rounded-xl text-xs font-bold bg-red-600 text-white">Delete for everyone</button>`
             : '';
+        const { myEmoji: mineNow } = summarizeReactions(postId);
+        const removeMine = mineNow
+            ? `<button type="button" class="community-react-btn col-span-2 py-2.5 rounded-xl text-xs font-bold bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-100" data-post-id="${escapeHTML(postId)}" data-route="${escapeHTML(routeId)}" data-emoji="${escapeHTML(mineNow)}" aria-label="Remove reaction">Remove reaction</button>`
+            : '';
         actions.innerHTML = `
                     <button type="button" class="community-sheet-reply py-2.5 rounded-xl text-xs font-bold bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-100">Reply</button>
                     <button type="button" class="community-sheet-report py-2.5 rounded-xl text-xs font-bold bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400">Report</button>
+                    ${removeMine}
                     ${adminActions}
         `;
     }
@@ -1014,7 +1025,7 @@ function openReactionSheet(postId, routeId) {
     const row = sheet.querySelector('#community-reaction-sheet-emojis');
     if (row) {
         row.innerHTML = WA_REACTIONS.map((r) => `
-            <button type="button" class="community-react-btn flex-1 h-11 text-xl rounded-xl ${myEmoji === r.id ? 'bg-blue-50 dark:bg-blue-900/40 ring-1 ring-blue-400' : 'hover:bg-gray-50 dark:hover:bg-gray-700'}" data-post-id="${escapeHTML(postId)}" data-route="${escapeHTML(routeId)}" data-emoji="${r.id}" aria-label="React ${r.emoji}">${r.emoji}</button>
+            <button type="button" class="community-react-btn flex-1 h-11 text-xl rounded-xl ${myEmoji === r.id ? 'bg-blue-50 dark:bg-blue-900/40 ring-1 ring-blue-400' : 'hover:bg-gray-50 dark:hover:bg-gray-700'}" data-post-id="${escapeHTML(postId)}" data-route="${escapeHTML(routeId)}" data-emoji="${r.id}" aria-label="${myEmoji === r.id ? 'Remove reaction' : 'React ' + r.emoji}">${r.emoji}</button>
         `).join('');
     }
     sheet.classList.remove('hidden');
@@ -1073,7 +1084,7 @@ function renderPostCard(post, routeId, { grouped = false } = {}) {
                 <div class="community-msg-text">${body}<span class="community-msg-time">${clock}</span></div>
               </div>
             </div>
-            ${renderReactionSummary(post.postId || '', isOwn)}
+            ${renderReactionSummary(post.postId || '', isOwn, routeId)}
           </article>
         </div>
       </div>`;
@@ -1525,19 +1536,12 @@ function setCommunityRouteListOpen(open) {
 
 const KIND_PLACEHOLDER = 'Please be kind and respectful.';
 
-function syncComposerChrome(signed = $account.get().status === 'signed-in') {
+function syncComposerChrome() {
     const composer = document.getElementById('community-composer');
     if (!composer) return;
-    composer.disabled = !signed;
-    if (!signed) {
-        composer.placeholder = 'Sign in to post';
-        return;
-    }
-    if (document.activeElement === composer) {
-        composer.placeholder = '';
-    } else {
-        composer.placeholder = KIND_PLACEHOLDER;
-    }
+    composer.disabled = false;
+    if (document.activeElement === composer) composer.placeholder = '';
+    else composer.placeholder = KIND_PLACEHOLDER;
 }
 
 export function openRouteCommunity(opts = {}) {
@@ -1557,11 +1561,9 @@ async function openRouteCommunityNow(opts = {}) {
     syncReplyDraftForRoute(routeId);
     syncCommunityRoutePicker(routeId);
 
-    // Always re-show guest hint when an unsigned user opens Community
     guestHintDismissedThisOpen = false;
-    const signed = $account.get().status === 'signed-in';
-    if (guestHint) guestHint.classList.toggle('hidden', signed);
-    syncComposerChrome(signed);
+    if (guestHint) guestHint.classList.add('hidden');
+    syncComposerChrome();
     if (errEl) errEl.textContent = '';
 
     const activeRoute = routeSel?.value || routeId;
@@ -1685,18 +1687,24 @@ async function handlePostSubmit() {
     const body = composer?.value || '';
 
     if (errEl) errEl.textContent = '';
+    if ($account.get().status !== 'signed-in') {
+        if (btn) btn.disabled = false;
+        const ok = await requestAccountSignIn();
+        if (!ok) return;
+    }
     if (btn) btn.disabled = true;
 
     const result = await submitCommunityPost(body, routeId);
     paintCommunityQuotaHint();
     if (!result.ok) {
-        if (errEl) errEl.textContent = result.message;
+        if (errEl) errEl.textContent = result.needsAuth ? '' : (result.message || '');
         if (result.retryAfterMs) {
             paintCommunityWait(result);
         }
         if (btn) btn.disabled = false;
-        if (result.message?.includes('Sign in')) {
-            setTimeout(() => openSmoothModal('account-modal'), 80);
+        if (result.needsAuth) {
+            const ok = await requestAccountSignIn();
+            if (ok) return handlePostSubmit();
         }
         return;
     }
@@ -1729,8 +1737,6 @@ async function expandReplies(postId, routeId, container) {
     container.classList.remove('hidden');
     container.innerHTML = `<p class="text-[10px] text-gray-400 py-1">Loading…</p>`;
     const replies = await fetchReplies(routeId, postId);
-    const acct = $account.get();
-    const signed = acct.status === 'signed-in';
 
     let html = replies.length
         ? replies.map((r) => `
@@ -1742,8 +1748,8 @@ async function expandReplies(postId, routeId, container) {
 
     html += `
       <div class="pt-2 flex gap-2 items-start">
-        <input type="text" maxlength="${BODY_MAX}" class="community-reply-input flex-1 p-2 rounded-lg bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-xs text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500" placeholder="${signed ? 'Write a reply…' : 'Sign in to reply'}" ${signed ? '' : 'disabled'} data-post-id="${escapeHTML(postId)}" />
-        <button type="button" class="community-reply-send shrink-0 px-2.5 py-2 rounded-lg bg-blue-600 text-white text-[10px] font-bold disabled:opacity-50" data-post-id="${escapeHTML(postId)}" data-route="${escapeHTML(routeId)}" ${signed ? '' : 'disabled'}>Reply</button>
+        <input type="text" maxlength="${BODY_MAX}" class="community-reply-input flex-1 p-2 rounded-lg bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-xs text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500" placeholder="Write a reply…" data-post-id="${escapeHTML(postId)}" />
+        <button type="button" class="community-reply-send shrink-0 px-2.5 py-2 rounded-lg bg-blue-600 text-white text-[10px] font-bold disabled:opacity-50" data-post-id="${escapeHTML(postId)}" data-route="${escapeHTML(routeId)}">Reply</button>
       </div>`;
     container.innerHTML = html;
 }
@@ -1963,14 +1969,14 @@ export function bindCommunityUi() {
             const postId = reactBtn.getAttribute('data-post-id');
             const routeId = reactBtn.getAttribute('data-route');
             const emojiId = reactBtn.getAttribute('data-emoji');
-            const result = await togglePostReaction(routeId, postId, emojiId);
+            let result = await togglePostReaction(routeId, postId, emojiId);
+            if (!result.ok && result.needsAuth) {
+                const ok = await requestAccountSignIn();
+                if (!ok) return;
+                result = await togglePostReaction(routeId, postId, emojiId);
+            }
             if (!result.ok) {
-                if (result.needsAuth) {
-                    showToast('Sign in to react', 'info');
-                    setTimeout(() => openSmoothModal('account-modal'), 80);
-                } else {
-                    showToast(result.message || 'Could not react', 'error');
-                }
+                if (!result.needsAuth) showToast(result.message || 'Could not react', 'error');
                 return;
             }
             closeReactionSheet();
@@ -1985,9 +1991,14 @@ export function bindCommunityUi() {
             const postId = send.getAttribute('data-post-id');
             const routeId = send.getAttribute('data-route');
             const input = document.querySelector(`.community-reply-input[data-post-id="${postId}"]`);
+            if ($account.get().status !== 'signed-in') {
+                const ok = await requestAccountSignIn();
+                if (!ok) return;
+            }
             const result = await submitCommunityReply(postId, input?.value || '', routeId);
             paintCommunityQuotaHint();
             if (!result.ok) {
+                if (result.needsAuth) return;
                 showToast(result.message || 'Reply failed', 'error');
                 if (result.retryAfterMs) paintCommunityWait(result);
                 return;

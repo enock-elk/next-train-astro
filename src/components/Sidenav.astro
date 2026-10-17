@@ -8,12 +8,12 @@ import { APP_VERSION } from '../lib/config.js';
 const versionBadge = String(APP_VERSION);
 ---
 
-<div id="sidenav-overlay" class="fixed inset-0 bg-black/50 z-[90] hidden opacity-0 transition-opacity duration-300"></div>
+<div id="sidenav-overlay" class="fixed inset-0 bg-black/50 z-[90] hidden opacity-0 transition-opacity duration-150"></div>
 
 <!-- APP HUB SIDENAV — slides in from the right -->
 <div
   id="sidenav"
-  class="fixed top-0 bottom-0 right-0 w-[80vw] sm:w-[21.5rem] shadow-2xl bg-white dark:bg-gray-900 flex flex-col z-[100] translate-x-full transition-transform duration-300"
+  class="fixed top-0 bottom-0 right-0 w-[80vw] sm:w-[21.5rem] shadow-2xl bg-white dark:bg-gray-900 flex flex-col z-[100] translate-x-full transition-transform duration-150"
   role="dialog"
   aria-label="App Hub"
   style="transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);"
@@ -382,7 +382,7 @@ const versionBadge = String(APP_VERSION);
   /* Mirror SPA JIT bypass so open class wins over Tailwind translate utilities */
   #sidenav {
     transform: translateX(100%);
-    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    transition: transform 0.16s cubic-bezier(0.4, 0, 0.2, 1) !important;
   }
   #sidenav.open {
     transform: translateX(0) !important;

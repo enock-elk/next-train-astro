@@ -49,7 +49,7 @@ export function renderInboxReactionChips(entry, actorId = inboxReactionActorId()
                 row.mine
                     ? 'bg-blue-50 dark:bg-blue-900/40 border-blue-400 text-blue-800 dark:text-blue-100'
                     : 'bg-white/80 dark:bg-gray-800/80 border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-200'
-            }" aria-label="${row.count} ${escapeHTML(row.key)}">
+            }" aria-label="${row.mine ? 'Remove your reaction' : `${row.count} ${escapeHTML(row.key)}`}">
                 <span aria-hidden="true">${row.emoji}</span>
                 <span class="font-bold tabular-nums">${row.count}</span>
             </button>

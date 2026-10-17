@@ -160,9 +160,9 @@ try { buildCrashExplainRequest({}); } catch (err) { emptyCrash = err.message; }
 ok(emptyCrash.includes('empty'), 'an empty crash is refused');
 
 const hub = readFileSync(join(ROOT, 'src/lib/hub.js'), 'utf8');
-ok(hub.includes('UPDATE_TOAST_MAX_MS = 6000'), 'Check for Updates caps the toast hold at 6 seconds');
+ok(hub.includes('UPDATE_TOAST_MAX_MS = 4000'), 'Check for Updates keeps its status toast a little past the Found toast');
 ok(hub.includes("showUpdateToast('Checking for updates…')"), 'the check shows a toast before the probe returns');
-ok(hub.includes('await waitOutUpdateToast(updateToastStarted)'), 'a quick download keeps the toast up to 6 seconds');
+ok(hub.includes('await waitOutUpdateToast(updateToastStarted)'), 'a quick download keeps the update toast up a little longer');
 ok(hub.includes("persist: true"), 'the update toast stays until the download concludes');
 const admin = readFileSync(join(ROOT, 'public/js/admin.js'), 'utf8');
 ok(admin.includes('ensureOperatorBriefSlot'), 'Dev Hub paints the brief button');

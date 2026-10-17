@@ -7,7 +7,7 @@
 import { safeStorage } from './utils.js';
 import { $currentRouteId, $userRegion } from '../store.js';
 import { $account } from './account.js';
-import { FEATURE_KEYS, fetchFeatures, getGrantedFeatures, isFeatureEnabled, isFeatureGranted, isRideCheckInPinned } from './features.js';
+import { FEATURE_KEYS, fetchFeatures, getGrantedFeatures, isFeatureEnabled, isFeatureGranted, isListedAccountsRoute, isRideCheckInPinned } from './features.js';
 import { isLiveTrainFollowActive } from './live-train-follow.js';
 
 function isSignedInAccount() {
@@ -56,21 +56,27 @@ export function canAccessPilotSurface(surface, routeId = '') {
     if (isAdminAuthed()) return true;
     if (surface === 'map' && isFeatureGranted(FEATURE_KEYS.MAP_TAB)) return true;
     if (surface === 'community' && isFeatureGranted(FEATURE_KEYS.COMMUNITY_TAB)) return true;
-    // A signed-in commuter must always reach Account, even if extra features
-    // (Map / Community / ride check-in) are switched off in Dev Hub.
+    // Someone who already signed in can still open Account to sign out.
     if (surface === 'account' && isSignedInAccount()) return true;
-    if (surface === 'account' && (
-        isFeatureGranted(FEATURE_KEYS.MAP_TAB)
-        || isFeatureGranted(FEATURE_KEYS.COMMUNITY_TAB)
-        || isFeatureGranted(FEATURE_KEYS.RIDE_CHECKIN)
-    )) return true;
+    if (surface === 'account' && isFeatureGranted(FEATURE_KEYS.ACCOUNTS)) return true;
     const hit = (key) => experimentalFeatureMatches(key, routeId);
     if (surface === 'map') return hit(FEATURE_KEYS.MAP_TAB);
     if (surface === 'community') return hit(FEATURE_KEYS.COMMUNITY_TAB);
-    if (surface === 'account') {
-        return hit(FEATURE_KEYS.MAP_TAB) || hit(FEATURE_KEYS.COMMUNITY_TAB);
-    }
+    if (surface === 'account') return accountsOnForVisitor(routeId);
     return false;
+}
+
+/** Accounts follow the listed routes. A region does not open every route when routes are listed. */
+function accountsOnForVisitor(routeId = '') {
+    const ids = new Set();
+    if (routeId) ids.add(String(routeId));
+    else {
+        getPinnedRouteIds().forEach((id) => ids.add(String(id)));
+        const current = String($currentRouteId.get() || '');
+        if (current) ids.add(current);
+    }
+    if (!ids.size) return isListedAccountsRoute('');
+    return [...ids].some((id) => isListedAccountsRoute(id));
 }
 
 /**

@@ -34,6 +34,13 @@ export function scrubOperatorText(value, max = 500) {
         .slice(0, max);
 }
 
+function stripMarks(value) {
+    return String(value || '')
+        .replace(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE0F}\u{200D}]/gu, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
 export function johannesburgClock(now = Date.now()) {
     const fmt = new Intl.DateTimeFormat('en-GB', {
         timeZone: 'Africa/Johannesburg',
@@ -522,28 +529,33 @@ function tripCard(summary) {
         };
     }
     const top = summary.top[0];
-    const region = summary.topRegion
-        ? `${summary.topRegion.code} has ${summary.topRegion.count} of the plans in this sample.`
-        : '';
-    const headline = top
-        ? `${top[0]} is the pair people ask for most in this sample (${top[1]}).`
-        : `${summary.sample} plans are in the latest batches.`;
-    const extra = [
-        summary.usersEver ? `${summary.usersEver} people have planned at least once.` : '',
-        summary.saturday ? `${summary.saturday} plans in the sample are for Saturday.` : '',
-        summary.noSaturdayLine
-            ? `${summary.noSaturdayLine} Saturday or holiday plans use a line that has no trains that day.`
-            : '',
-        summary.cato ? `${summary.cato} plans name Cato Ridge.` : '',
-        summary.transfer ? `${summary.direct} are direct and ${summary.transfer} change trains.` : '',
-        region,
-    ].filter(Boolean).join(' ');
+    const facts = [];
+    if (top) facts.push({ label: 'Most asked', value: `${top[0]} · ${top[1]} in this sample` });
+    else if (summary.sample) facts.push({ label: 'Sample', value: `${summary.sample} plans in the latest batches` });
+    if (summary.usersEver) facts.push({ label: 'People', value: `${summary.usersEver} have planned at least once` });
+    if (summary.saturday) facts.push({ label: 'Saturday', value: `${summary.saturday} plans in this sample` });
+    if (summary.noSaturdayLine) {
+        facts.push({
+            label: 'No service',
+            value: `${summary.noSaturdayLine} Saturday or holiday plans use a line that has no trains that day.`,
+        });
+    }
+    if (summary.cato) facts.push({ label: 'Cato Ridge', value: `${summary.cato} plans name Cato Ridge.` });
+    if (summary.direct || summary.transfer) {
+        facts.push({ label: 'Direct', value: String(summary.direct || 0) });
+        facts.push({ label: 'Change trains', value: String(summary.transfer || 0) });
+    }
+    if (summary.topRegion) {
+        const name = REGION_NAMES[summary.topRegion.code] || summary.topRegion.code;
+        facts.push({ label: name, value: `${summary.topRegion.count} of the plans in this sample` });
+    }
     return {
         id: 'trips',
         kicker: 'Trip plans',
         tone: summary.noSaturdayLine || summary.cato ? 'watch' : 'calm',
         title: top ? top[0] : 'Plans in the latest batches',
-        body: `${headline} ${extra}`.replace(/\s+/g, ' ').trim(),
+        body: facts.map((row) => `${row.label}: ${row.value}`).join('\n\n'),
+        facts,
         details: summary.top.map(([pair, count]) => `${pair} (${count})`).concat(summary.recentPairs || []),
     };
 }
@@ -642,19 +654,26 @@ function expiryCard(summary) {
         };
     }
     const lines = summary.soon.map((item) => {
-        const when = item.hours === 0 ? 'under an hour' : `in ${item.hours}h`;
-        return `${item.type}: ${item.label} (${when})`;
+        const when = item.hours === 0 ? 'under an hour' : (item.hours === 1 ? 'in 1 hour' : `in ${item.hours} hours`);
+        const label = stripMarks(item.label) || item.type;
+        return { type: item.type, label, when };
     });
     const more = summary.soonCount > summary.soon.length
-        ? ` ${summary.soonCount - summary.soon.length} more are also inside 48 hours.`
+        ? `${summary.soonCount - summary.soon.length} more are also inside 48 hours.`
         : '';
+    const facts = lines.map((item) => ({ label: item.type, value: `${item.label} (${item.when})` }));
+    if (more) facts.push({ label: 'Also', value: more });
+    const title = summary.soonCount === 1
+        ? '1 item expires within 48 hours'
+        : `${summary.soonCount} items expire within 48 hours`;
     return {
         id: 'expiring',
         kicker: 'Expiring',
         tone: 'watch',
-        title: `${summary.soonCount} items expire within 48 hours`,
-        body: `${lines.join(' ')}${more}`,
-        details: lines,
+        title,
+        body: facts.map((row) => `${row.label}: ${row.value}`).join('\n\n'),
+        facts,
+        details: facts.map((row) => `${row.label}: ${row.value}`),
     };
 }
 
@@ -746,6 +765,13 @@ export function buildOperatorBrief(input = {}) {
 
 const ALERT_ICON = '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path></svg>';
 
+function briefFacts(facts) {
+    if (!Array.isArray(facts) || !facts.length) return '';
+    return `<dl class="nt-brief-facts">${facts.map((row) => (
+        `<div class="nt-brief-fact"><dt>${esc(row.label)}</dt><dd>${esc(row.value)}</dd></div>`
+    )).join('')}</dl>`;
+}
+
 function briefParagraphs(text) {
     const blocks = String(text || '').split(/\n\n+/).map((line) => line.trim()).filter(Boolean);
     if (!blocks.length) return '';
@@ -785,10 +811,10 @@ export function localBriefNote(model) {
     const watch = cards.filter((card) => card?.tone === 'watch');
     const first = watch[0] || cards[0];
     if (!first) return 'Nothing in this sample needs a note.';
-    const lead = `${first.title}. ${String(first.body || '').split('\n\n')[0]}`.replace(/\s+/g, ' ').trim();
+    const lead = stripMarks(`${first.title}. ${String(first.body || '').split('\n\n')[0]}`);
     const second = watch[1] || cards.find((card) => card !== first);
     const follow = second
-        ? `${second.title}. ${String(second.body || '').split('\n\n')[0]}`.replace(/\s+/g, ' ').trim()
+        ? stripMarks(`${second.title}. ${String(second.body || '').split('\n\n')[0]}`)
         : 'The cards below are the rest of this brief.';
     return `${lead}\n\n${follow}`;
 }
@@ -800,11 +826,12 @@ export function briefReportHtml(model) {
         const extra = details.length
             ? `<div data-brief-detail class="hidden mt-2 space-y-1">${details.map((line) => `<p class="text-sm text-slate-700 dark:text-slate-200 leading-relaxed">${esc(line)}</p>`).join('')}</div>`
             : '';
+        const facts = briefFacts(card.facts);
         return `
         <article data-brief-card data-brief-index="${index}" class="relative rounded-3xl border ${toneClass(card.tone)} bg-white/95 dark:bg-gray-900/80 px-4 pt-3 pb-12 shadow-sm text-left w-full cursor-pointer">
             <p class="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">${esc(card.kicker)}</p>
             <h3 class="mt-1 text-base font-semibold text-slate-900 dark:text-white leading-snug">${esc(card.title)}</h3>
-            ${briefParagraphs(card.body)}
+            ${facts || briefParagraphs(card.body)}
             ${extra}
             <button type="button" class="operator-brief-alert absolute bottom-3 right-3 p-2 rounded-full text-rose-600 dark:text-rose-300 focus:outline-none" data-brief-index="${index}" aria-label="Add to alerts">${ALERT_ICON}</button>
         </article>`;
@@ -829,9 +856,9 @@ export function briefReportHtml(model) {
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
                     </button>
                 </div>
-                <section class="mt-4 rounded-3xl bg-white/95 px-4 py-4 text-slate-800 shadow-lg">
-                    <p class="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500">What this means</p>
-                    <p id="operator-brief-note" class="mt-2 text-sm leading-relaxed whitespace-pre-wrap">Writing a note from this sample.</p>
+                <section class="nt-brief-meaning mt-4 rounded-3xl px-4 py-4 shadow-lg">
+                    <p class="nt-brief-meaning-kicker">What this means</p>
+                    <p id="operator-brief-note" class="nt-brief-meaning-body">Writing a note from this sample.</p>
                 </section>
                 <div class="mt-4 space-y-3">${cards}</div>
                 ${crashes ? `<details class="mt-4"><summary class="cursor-pointer text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500 px-1">Crashes this week</summary><div class="mt-2 space-y-2">${crashes}</div></details>` : ''}

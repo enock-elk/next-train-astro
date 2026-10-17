@@ -886,6 +886,76 @@ html.dark .nt-offline-strip {
   z-index: 10;
 }
 
+/* The alerts bell stays the same icon. Light mode glows like a sun, dark mode
+   like a moon, and a faint wash sits on the header only while that bell is up. */
+#app-header.nt-alerts-lit {
+  background-image: linear-gradient(105deg, rgba(255, 214, 120, 0.22) 0%, rgba(255, 244, 214, 0.08) 34%, rgba(255, 255, 255, 0) 68%);
+}
+html.dark #app-header.nt-alerts-lit {
+  background-image: linear-gradient(105deg, rgba(198, 214, 255, 0.2) 0%, rgba(148, 176, 230, 0.08) 36%, rgba(17, 24, 39, 0) 70%);
+}
+
+.nt-brief-meaning {
+  background: rgba(255, 255, 255, 0.97);
+  color: #0f172a;
+}
+html.dark .nt-brief-meaning {
+  background: rgba(15, 23, 42, 0.94);
+  color: #f8fafc;
+}
+.nt-brief-meaning-kicker {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #334155;
+}
+html.dark .nt-brief-meaning-kicker {
+  color: #e2e8f0;
+}
+.nt-brief-meaning-body {
+  margin-top: 0.55rem;
+  font-size: 0.95rem;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  color: #0f172a;
+}
+html.dark .nt-brief-meaning-body {
+  color: #f8fafc;
+}
+.nt-brief-facts {
+  display: grid;
+  gap: 0.45rem;
+  margin: 0.75rem 0 0;
+}
+.nt-brief-fact {
+  display: grid;
+  grid-template-columns: 7.25rem 1fr;
+  gap: 0.65rem;
+  align-items: baseline;
+}
+.nt-brief-fact dt {
+  margin: 0;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #475569;
+}
+html.dark .nt-brief-fact dt {
+  color: #cbd5e1;
+}
+.nt-brief-fact dd {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+  line-height: 1.35;
+  color: #0f172a;
+}
+html.dark .nt-brief-fact dd {
+  color: #f8fafc;
+}
+
 /* Toggle switches (settings + admin maint / alert toggles). Must be global —
    Sidenav scoped <style> does not reach #admin-panel injected markup. */
 .toggle-checkbox {
@@ -1848,6 +1918,21 @@ html[data-colour-pack="contrast"] #notice-bell.nt-bell-info,
 html[data-colour-pack="signal"] #notice-bell.nt-bell-info,
 html[data-colour-pack="earthy"] #notice-bell.nt-bell-info {
   box-shadow: 0 0 0 1.5px color-mix(in srgb, #000 26%, transparent), 0 1px 3px color-mix(in srgb, #000 14%, transparent);
+}
+
+/* Sun in light, moon in dark. The disc and the icon stay as they are.
+   This only wins while the header is lit, so a hidden bell has no halo. */
+#app-header.nt-alerts-lit #notice-bell {
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, #000 12%, transparent),
+    0 0 0 8px rgba(255, 196, 64, 0.38),
+    0 0 24px 8px rgba(255, 176, 32, 0.48) !important;
+}
+html.dark #app-header.nt-alerts-lit #notice-bell {
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, #fff 32%, transparent),
+    0 0 0 8px rgba(226, 236, 255, 0.32),
+    0 0 28px 10px rgba(186, 206, 255, 0.46) !important;
 }
 
 .nt-planner-map-btn {

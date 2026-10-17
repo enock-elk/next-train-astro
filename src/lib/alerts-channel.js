@@ -418,8 +418,11 @@ function openAlertReactionPicker(notice, anchorEl) {
     const reactBtns = ALERT_REACTION_KEYS.map((key) => (
         `<button type="button" data-alert-react="${escapeHTML(key)}" data-alert-id="${escapeHTML(String(notice.id || ''))}" data-alert-src="${escapeHTML(String(notice._sourceKey || ''))}" class="w-10 h-10 text-xl rounded-full ${
             mine === key ? 'bg-white/15 ring-1 ring-white/40' : 'hover:bg-white/10'
-        }" aria-label="React ${ALERT_REACTION_EMOJI[key]}">${ALERT_REACTION_EMOJI[key]}</button>`
+        }" aria-label="${mine === key ? 'Remove reaction' : `React ${ALERT_REACTION_EMOJI[key]}`}">${ALERT_REACTION_EMOJI[key]}</button>`
     )).join('');
+    const removeMine = mine
+        ? `<button type="button" data-alert-react="${escapeHTML(mine)}" data-alert-id="${escapeHTML(String(notice.id || ''))}" data-alert-src="${escapeHTML(String(notice._sourceKey || ''))}" class="text-[11px] font-bold text-white/90 px-3 py-1 rounded-full bg-white/10">Remove</button>`
+        : '';
     const menuBtn = (attrs, label, danger = false) => (
         `<button type="button" ${attrs} class="nt-alert-admin-item${danger ? ' is-danger' : ''}">${label}</button>`
     );
@@ -437,6 +440,7 @@ function openAlertReactionPicker(notice, anchorEl) {
         : '';
     sheet.innerHTML = `<div class="flex flex-col items-center gap-2">
         <div class="nt-alert-react-pill flex items-center gap-0.5 px-2 py-1.5 rounded-full bg-gray-950/95 text-white shadow-2xl border border-white/10" data-alert-picker-row>${reactBtns}</div>
+        ${removeMine}
         ${adminMenu}
     </div>`;
     const rect = anchorEl.getBoundingClientRect();
@@ -572,6 +576,17 @@ function openAlertReactionBreakdown(notice) {
             </div>`;
         document.body.appendChild(sheet);
         sheet.querySelector('[data-breakdown-scrim]')?.addEventListener('click', hideAlertReactionBreakdown);
+        sheet.addEventListener('click', (e) => {
+            const btn = e.target.closest?.('[data-alert-react]');
+            if (!btn) return;
+            e.preventDefault();
+            const id = btn.getAttribute('data-alert-id');
+            const src = btn.getAttribute('data-alert-src');
+            const emoji = btn.getAttribute('data-alert-react');
+            const target = cachedLiveNotices.find((n) => String(n.id) === String(id) && String(n._sourceKey) === String(src));
+            hideAlertReactionBreakdown();
+            if (target && emoji) submitAlertReaction(target, emoji);
+        });
     }
     const mine = mineReactionKey(notice);
     const { total, rows } = buildAlertReactionBreakdown(notice, mine);
@@ -580,9 +595,9 @@ function openAlertReactionBreakdown(notice) {
     const chips = sheet.querySelector('[data-breakdown-chips]');
     if (chips) {
         chips.innerHTML = rows.map((row) => (
-            `<span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gray-100 dark:bg-gray-900/80 border border-gray-200 dark:border-gray-600 text-sm font-bold text-gray-900 dark:text-white ${
-                row.mine ? 'ring-1 ring-blue-400' : ''
-            }">${row.emoji} <span class="tabular-nums">${row.count}</span></span>`
+            row.mine
+                ? `<button type="button" data-alert-react="${escapeHTML(row.key)}" data-alert-id="${escapeHTML(String(notice.id || ''))}" data-alert-src="${escapeHTML(String(notice._sourceKey || ''))}" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gray-100 dark:bg-gray-900/80 border border-gray-200 dark:border-gray-600 text-sm font-bold text-gray-900 dark:text-white ring-1 ring-blue-400" aria-label="Remove reaction">${row.emoji} <span class="tabular-nums">${row.count}</span></button>`
+                : `<span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gray-100 dark:bg-gray-900/80 border border-gray-200 dark:border-gray-600 text-sm font-bold text-gray-900 dark:text-white">${row.emoji} <span class="tabular-nums">${row.count}</span></span>`
         )).join('');
     }
     sheet.classList.remove('hidden');
@@ -841,8 +856,10 @@ export function applyBellFromNotices(notices) {
     if (!bellBtn) return;
     notices = scopedLiveNotices(notices);
 
+    const header = document.getElementById('app-header');
     if (!notices || notices.length === 0) {
         bellBtn.classList.add('hidden');
+        header?.classList.remove('nt-alerts-lit');
         return;
     }
 
@@ -865,6 +882,7 @@ export function applyBellFromNotices(notices) {
     }
     bellBtn.className = bellClass;
     bellBtn.classList.remove('hidden');
+    header?.classList.add('nt-alerts-lit');
     bellBtn.setAttribute('aria-label', 'Service alerts');
     const bellSvg = bellBtn.querySelector('svg');
     if (bellSvg) bellSvg.setAttribute('class', 'w-6 h-6');
@@ -901,29 +919,47 @@ async function ensureReactAuthToken() {
     return '';
 }
 
+async function writeAlertReactionCount(path, emoji, token, delta) {
+    const url = `${DYNAMIC_BASE_URL}notices/${path}/reactions/${encodeURIComponent(emoji)}.json?auth=${encodeURIComponent(token)}`;
+    const curRes = await fetch(url);
+    const cur = curRes.ok ? await curRes.json() : 0;
+    const next = Math.max(0, (Number(cur) || 0) + delta);
+    const put = await fetch(url, {
+        method: 'PUT',
+        body: JSON.stringify(next > 0 ? next : null),
+    });
+    if (!put.ok) throw new Error(`react ${put.status}`);
+    return next;
+}
+
 export async function submitAlertReaction(notice, emoji) {
     if (!notice || !ALERT_REACTION_KEYS.includes(emoji)) return false;
     const storeKey = reactionStorageKey(notice);
-    if (safeStorage.getItem(storeKey)) {
-        showToast('You already reacted to this notice.', 'info');
-        return false;
-    }
+    const prev = safeStorage.getItem(storeKey) || '';
+    const removing = prev === emoji;
     const token = await ensureReactAuthToken();
     if (!token) {
         showToast('Could not save reaction. Try again in a moment.', 'error');
         return false;
     }
     const path = notice._reactPath || `${notice._sourceKey}/${notice.id}`;
-    const url = `${DYNAMIC_BASE_URL}notices/${path}/reactions/${encodeURIComponent(emoji)}.json?auth=${encodeURIComponent(token)}`;
     try {
-        const curRes = await fetch(url);
-        const cur = curRes.ok ? await curRes.json() : 0;
-        const next = (Number(cur) || 0) + 1;
-        const put = await fetch(url, { method: 'PUT', body: JSON.stringify(next) });
-        if (!put.ok) throw new Error(`react ${put.status}`);
-        safeStorage.setItem(storeKey, emoji);
         if (!notice.reactions || typeof notice.reactions !== 'object') notice.reactions = {};
-        notice.reactions[emoji] = next;
+        if (prev && prev !== emoji) {
+            const left = await writeAlertReactionCount(path, prev, token, -1);
+            if (left > 0) notice.reactions[prev] = left;
+            else delete notice.reactions[prev];
+        }
+        if (removing) {
+            const left = await writeAlertReactionCount(path, emoji, token, -1);
+            if (left > 0) notice.reactions[emoji] = left;
+            else delete notice.reactions[emoji];
+            safeStorage.removeItem(storeKey);
+        } else if (prev !== emoji) {
+            const next = await writeAlertReactionCount(path, emoji, token, 1);
+            notice.reactions[emoji] = next;
+            safeStorage.setItem(storeKey, emoji);
+        }
         const card = document.querySelector(`[data-alert-post="${CSS.escape ? CSS.escape(String(notice.id)) : notice.id}"]`);
         if (card) {
             const wrap = card.querySelector('[data-alert-summary]');

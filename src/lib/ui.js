@@ -775,6 +775,20 @@ const TOAST_COOLDOWN_MS = {
     warning: 20_000,
     error: 25_000,
 };
+/** Same hold as "Found: Rissik Station (0.5km)". */
+const TOAST_MATCH_MS = 2500;
+/** A longer sentence, or a status that has to stay up, may run a little past that. */
+const TOAST_LONG_MS = 4000;
+
+function toastHoldMs(message, duration, options = {}) {
+    if (options.persist) return TOAST_LONG_MS;
+    const text = String(message || '').replace(/<[^>]*>?/gm, ' ').replace(/\s+/g, ' ').trim();
+    const extra = Math.max(0, text.length - 64) * 18;
+    const fromLength = Math.min(TOAST_LONG_MS, TOAST_MATCH_MS + extra);
+    const asked = Number(duration);
+    if (!Number.isFinite(asked) || asked <= TOAST_MATCH_MS) return fromLength;
+    return Math.min(TOAST_LONG_MS, Math.max(fromLength, asked));
+}
 
 function toastMessageKey(message, type) {
     const text = String(message || '').replace(/<[^>]*>?/gm, '').replace(/\s+/g, ' ').trim().slice(0, 180);
@@ -812,8 +826,8 @@ export function showToast(message, type = 'info', duration = 2500, actionHTML = 
     const fitLine = options.fitLine === true;
     const persist = !!options.persist;
     const dismissible = errorToast || !!options.dismissible;
-    const holdMs = errorToast ? Math.max(duration, 12000) : duration;
-    
+    const holdMs = toastHoldMs(message, duration, { persist });
+
     // Debounce spamming. Ignore if the exact same message is already visible.
     if (toastEl && toastEl.classList.contains('show') && toastEl.innerText.includes(message.replace(/<[^>]*>?/gm, '').trim())) {
         return;
@@ -822,10 +836,7 @@ export function showToast(message, type = 'info', duration = 2500, actionHTML = 
 
     if (toastTimeout) clearTimeout(toastTimeout);
     toastTimeout = null;
-    // persist keeps a status up while work continues, and it still leaves on its own.
-    const safeDuration = persist
-        ? Math.min(Math.max(duration, 4000), 12000)
-        : Math.min(holdMs, dismissible ? 12000 : 5000);
+    const safeDuration = holdMs;
 
     // Inject Toast CSS dynamically if not present
     if (!document.getElementById('toast-guardian-style')) {

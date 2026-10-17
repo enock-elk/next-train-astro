@@ -730,6 +730,13 @@ export function showAccountGuestScreen(screen) {
     }
 }
 
+/** Open sign-in when an action needs an account. Resolves false if they close it. */
+export function requestAccountSignIn() {
+    if ($account.get()?.status === 'signed-in') return Promise.resolve(true);
+    openAccountModal();
+    return waitForSignedIn(120000);
+}
+
 export function openAccountModal() {
     const modal = typeof document !== 'undefined' ? document.getElementById('account-modal') : null;
     if (modal) {
@@ -1348,11 +1355,7 @@ export function paintAccountPoints(state) {
 
 export function bindAccountUi() {
     if (typeof document === 'undefined') return;
-    if (window.__ntAccountUiBound) {
-        syncAccountSettingsUi();
-        syncAuthProviderUi();
-        return;
-    }
+    if (window.__ntAccountUiBound) return;
     window.__ntAccountUiBound = true;
 
     const watchPhoto = (imgId, letterId) => {
@@ -1725,6 +1728,7 @@ function friendlyAuthError(e) {
 if (typeof window !== 'undefined') {
     window.__ntAccountSheetOnPop = accountSheetOnPop;
     window.openAccountModal = openAccountModal;
+    window.requestAccountSignIn = requestAccountSignIn;
     window.waitForSignedIn = waitForSignedIn;
     window.signOutAccount = signOutAccount;
     window.paintAccountPoints = paintAccountPoints;

@@ -1,5 +1,9 @@
 # Changelog
 
+## V9_10.17.6 — no release notes
+
+Trip Planner shows the journey first, then fills in live reports.
+
 ## V9_10.17.5 — no release notes
 
 Account sign-in, create, and reset each have their own screen. An internet image shows in the composer and in the post preview.

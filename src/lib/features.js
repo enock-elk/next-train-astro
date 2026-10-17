@@ -7,7 +7,8 @@
  *   delayReportsUi:    { enabled: true, routeIds: ["*"] },
  *   pushNotify:        { enabled: true, routeIds: ["pta-pien", "ct-bellv"] },
  *   mapTab:            { enabled: true, routeIds: ["pta-kempton"], regionIds: ["KZN"] },
- *   communityTab:      { enabled: true, routeIds: ["pta-kempton"], regionIds: [] }
+ *   communityTab:      { enabled: true, routeIds: ["pta-kempton"], regionIds: [] },
+ *   accounts:          { enabled: true, routeIds: ["pta-kempton"], regionIds: [] }
  * }
  *
  * A region, route, or device grant stays on until an admin turns that
@@ -15,6 +16,7 @@
  * Community rooms are stricter: a listed route is the only room, and a
  * region checkbox does not open the other communities in that region.
  * Empty routeIds with a region still opens every community there.
+ * Accounts use that same route rule. The switch starts off.
  *
  * Lab (`lab.nexttrain.co.za` or PUBLIC_LAB_MODE=true): missing/empty config →
  * realtime / delay / push / ride-checkin on (sharing still works for admins).
@@ -32,6 +34,7 @@ export const FEATURE_KEYS = {
     RIDE_CHECKIN: 'rideCheckIn',
     MAP_TAB: 'mapTab',
     COMMUNITY_TAB: 'communityTab',
+    ACCOUNTS: 'accounts',
     /** Always-on planner fare. Kept so leftover RTDB / grants cannot hide it. */
     TRIP_PRICE: 'tripPrice',
 };
@@ -45,6 +48,7 @@ export const GRANTABLE_FEATURES = [
     { key: FEATURE_KEYS.DELAY_REPORTS_UI, label: 'Delay reports' },
     { key: FEATURE_KEYS.COMMUNITY_REALTIME, label: 'Community realtime' },
     { key: FEATURE_KEYS.PUSH_NOTIFY, label: 'Push notifications' },
+    { key: FEATURE_KEYS.ACCOUNTS, label: 'Accounts' },
 ];
 
 const CACHE_TTL_MS = 60 * 1000;
@@ -72,6 +76,7 @@ const LAB_DEFAULTS = {
     rideCheckIn: { enabled: true, routeIds: ['*'] },
     mapTab: { enabled: false, routeIds: [] },
     communityTab: { enabled: false, routeIds: [] },
+    accounts: { enabled: false, routeIds: [] },
 };
 
 /** Production defaults stay off until RTDB config/features is set (see docs/config-features-pilot.json). */
@@ -82,6 +87,7 @@ const PROD_DEFAULTS = {
     rideCheckIn: { enabled: false, routeIds: [] },
     mapTab: { enabled: false, routeIds: [] },
     communityTab: { enabled: false, routeIds: [] },
+    accounts: { enabled: false, routeIds: [] },
 };
 
 /** Suggested first production allow-list (paste into RTDB config/features). */
@@ -92,6 +98,7 @@ export const PILOT_FEATURES_SEED = {
     rideCheckIn: { enabled: true, routeIds: [...PILOT_ROUTE_IDS] },
     mapTab: { enabled: false, routeIds: [] },
     communityTab: { enabled: false, routeIds: [] },
+    accounts: { enabled: false, routeIds: [] },
 };
 
 /**
@@ -271,6 +278,14 @@ export function communityRouteOnEntry(entry, routeId) {
     return !!(regionCode && regions.includes(regionCode));
 }
 
+/** Account sheet from the loaded config. Same route rule as a community room. */
+export function isListedAccountsRoute(routeId) {
+    if (isFeatureGranted(FEATURE_KEYS.ACCOUNTS)) return true;
+    const bag = cachedFeatures || defaultsForEnv();
+    const entry = normalizeEntry(FEATURE_KEYS.ACCOUNTS, bag?.[FEATURE_KEYS.ACCOUNTS]);
+    return communityRouteOnEntry(entry, routeId);
+}
+
 /** Community room from the loaded config. A device grant opens every room. */
 export function isListedCommunityRoute(routeId) {
     if (isFeatureGranted(FEATURE_KEYS.COMMUNITY_TAB)) return true;
@@ -309,6 +324,7 @@ if (typeof window !== 'undefined') {
     window.fetchFeatures = fetchFeatures;
     window.isFeatureEnabled = isFeatureEnabled;
     window.isListedCommunityRoute = isListedCommunityRoute;
+    window.isListedAccountsRoute = isListedAccountsRoute;
     window.isFeatureGranted = isFeatureGranted;
     window.getGrantedFeatures = getGrantedFeatures;
     window.isRideCheckInPinned = isRideCheckInPinned;

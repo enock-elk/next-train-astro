@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_10.17.6': [
+        'Check for Updates retries a slow probe and still downloads when the phone is online and not a captive portal. Offline and Lie-Fi still keep the saved app. Every toast matches the Found station toast at 2.5 seconds. A longer message, and the update status, may stay up to 4 seconds. The brief trip card is rows. What this means keeps readable text in dark mode, and an expiring alert is a short line without the raw countdown. Accounts is its own experimental switch and starts off. A listed route is the only route. Operators and someone who is already signed in still see Account. Community, a reply, a reaction, a late report, and sharing a trip ask for sign-in in the account sheet when the action needs it. The composer does not say sign in first. Options opens without waiting on the account layout. Planner results paint before live line alerts, then update when those alerts arrive. The homepage bell keeps its icon and glows while alerts are up, with a faint header wash that leaves when the bell is hidden. A reaction can be removed on an alert, in Community, and in Feedback Hub. No commuter What\'s New. forceShow stays false.',
+    ],
     'V9_10.17.5': [
         'Account opens on a sign-in screen, with separate create and reset steps. The back chevron returns to sign-in before it closes. An internet image in the composer is a picture, not a button labelled Admin Attachment. The preview keeps that picture above the text, and the image request does not send the site as a referrer. No commuter What\'s New. forceShow stays false.',
     ],

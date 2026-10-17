@@ -672,25 +672,27 @@ html[data-colour-pack="earthy"] #pinned-section .text-blue-300 {
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
   overflow: hidden;
+  width: 8.75rem;
+  min-width: 8.75rem;
   max-width: 8.75rem;
   white-space: normal;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
   font-size: 10px;
-  line-height: 1.15;
+  line-height: 1.2;
 }
 .nt-grid-edge-fade {
   position: absolute;
   top: 0;
   right: 0;
   bottom: 0;
-  width: 1.75rem;
+  width: 1.5rem;
   pointer-events: none;
   z-index: 20;
   opacity: 0;
-  background: linear-gradient(to right, rgba(255, 255, 255, 0), #fff 82%);
+  background: linear-gradient(to right, rgba(15, 23, 42, 0), rgba(15, 23, 42, 0.18));
 }
 html.dark .nt-grid-edge-fade {
-  background: linear-gradient(to right, rgba(17, 24, 39, 0), #111827 82%);
+  background: linear-gradient(to right, rgba(0, 0, 0, 0), rgba(0, 0, 0, 0.5));
 }
 .nt-grid-frame.can-scroll-x .nt-grid-edge-fade {
   opacity: 1;

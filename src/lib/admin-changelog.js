@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_10.17.5': [
+        'Trip Planner blurs the station field when results open, and a trip map or fare sheet blurs itself on close. A hidden field was still focused, so Chrome kept scrolling the layout viewport after the keyboard closed. That stuck scroll hid the blue header and left a blank band under the oval. The layout scroll is cleared once the keyboard is gone, and the shell fills the screen again. No commuter What\'s New. forceShow stays false.',
+    ],
     'V9_10.17.4': [
         'A live share asks for a GPS fix every 3 seconds and pauses after six misses, 18 seconds. It keeps publishing every 3 seconds while it has a fix, and it stops after 10 minutes without a ping. Receivers follow new pings within a few seconds. The station name beside a moving train opens and closes with the train. Join train is on the tracking card when someone else is already sharing it. Two phones are averaged on the rail only while they are within 250 m, about one train length. Farther apart, the map keeps the phone whose heading matches the trip, then the one closer to the rail, then the fresher fix, then a train-like speed. No commuter What\'s New. forceShow stays false.',
     ],

@@ -1,5 +1,9 @@
 # Changelog
 
+## V9_10.17.5 — no release notes
+
+Trip Planner releases the station field when results open. Closing the trip map or the fare sheet releases it too. A layout scroll left by the keyboard is cleared, so the blue header can come back and the blank band under the oval does not stay.
+
 ## V9_10.17.4 — no release notes
 
 A live share asks for GPS every 3 seconds and pauses after 18 seconds without a fix. Sharing ends after 10 minutes without a ping. Receivers follow new pings within a few seconds. Two phones on one train are averaged only while they sit within about one train length. Otherwise the map keeps the more credible phone.

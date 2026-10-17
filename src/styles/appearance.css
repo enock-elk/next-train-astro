@@ -416,16 +416,16 @@ html, body, #nt-shell {
 }
 
 #bottom-nav.bottom-nav-bar {
-  background-color: var(--nt-chrome-nav) !important;
-  border: 1px solid var(--nt-chrome-nav-border) !important;
-  border-top: 1px solid var(--nt-chrome-nav-border) !important;
-  box-shadow: 0 6px 18px color-mix(in srgb, #000 18%, transparent);
+  background-color: var(--nt-chrome-header) !important;
+  border: none !important;
+  border-top: 1px solid var(--nt-chrome-header-border) !important;
+  box-shadow: none;
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
-  border-radius: 999px;
-  margin-left: 0.75rem;
-  margin-right: 0.75rem;
-  margin-bottom: 0.5rem;
+  border-radius: 0;
+  margin-left: 0;
+  margin-right: 0;
+  margin-bottom: 0;
   overflow: hidden;
   background-clip: padding-box;
 }
@@ -463,8 +463,8 @@ html[data-pilot-community="1"] #bottom-nav-community {
   color: var(--nt-chrome-fg) !important;
   font-weight: 600;
   background: var(--nt-chrome-nav-active);
-  border-radius: 999px;
-  margin: 0.16rem 0.1rem;
+  border-radius: 0;
+  margin: 0;
 }
 
 html.dark #bottom-nav .bottom-nav-item.is-active {
@@ -474,7 +474,7 @@ html.dark #bottom-nav .bottom-nav-item.is-active {
 
 @media (max-height: 740px) {
   #bottom-nav.bottom-nav-bar {
-    margin-bottom: 0.35rem;
+    margin-bottom: 0;
   }
   #bottom-nav .bottom-nav-item {
     min-height: 2.45rem !important;
@@ -493,13 +493,13 @@ html.dark #bottom-nav .bottom-nav-item.is-active {
     font-size: 8px !important;
   }
   #bottom-nav .bottom-nav-item.is-active {
-    margin: 0.08rem 0.08rem;
+    margin: 0;
   }
 }
 
 @media (max-height: 620px) {
   #bottom-nav.bottom-nav-bar {
-    margin-bottom: 0.25rem;
+    margin-bottom: 0;
   }
   #bottom-nav .bottom-nav-item {
     min-height: 2.15rem !important;
@@ -1361,18 +1361,12 @@ body.nav-bottom:not(.nt-immersive) #sidenav {
   color: var(--nt-primary-fg) !important;
   border-color: transparent !important;
 }
+#close-timetable-footer-btn,
 #close-help-btn-2,
 #fare-modal-close-btn {
   background-color: var(--nt-primary) !important;
   color: var(--nt-primary-fg) !important;
   border-color: transparent !important;
-}
-
-#close-timetable-footer-btn {
-  background-color: color-mix(in srgb, var(--nt-primary) 12%, #fff) !important;
-  color: var(--nt-primary) !important;
-  border: 1px solid color-mix(in srgb, var(--nt-primary) 35%, #fff) !important;
-  box-shadow: none !important;
 }
 html.dark #fare-modal > div,
 html.dark #fare-modal > div > .rounded-t-2xl,
@@ -2147,15 +2141,15 @@ html[data-colour-pack="classic"] .bottom-nav-item.is-active {
   color: var(--nt-chrome-fg) !important;
   font-weight: 600;
   background: var(--nt-chrome-nav-active);
-  border-radius: 999px;
-  margin: 0.16rem 0.1rem;
+  border-radius: 0;
+  margin: 0;
 }
 html.dark[data-colour-pack="classic"] #bottom-nav .bottom-nav-item.is-active,
 html.dark:not([data-colour-pack]) #bottom-nav .bottom-nav-item.is-active {
   background: var(--nt-chrome-nav-active);
   box-shadow: none;
-  border-radius: 999px;
-  margin: 0.16rem 0.1rem;
+  border-radius: 0;
+  margin: 0;
 }
 
 /* Non-fullscreen cards/sheets sit above the bottom nav, not under it.

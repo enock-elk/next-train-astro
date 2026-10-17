@@ -980,22 +980,56 @@ function noticeForLightbox(detail) {
     return byBoth || cachedLiveNotices.find((n) => String(n.id) === id) || null;
 }
 
+const LIGHTBOX_BAR_REACTIONS = ['love', 'pray', 'laugh'];
+
+function openLightboxReply(notice) {
+    if (!notice || typeof window.openFeedbackReplyFromOverlay !== 'function') return;
+    const rawHtml = repairMojibake(notice.message || notice.text || '');
+    const snippet = htmlToPlainSnippet(rawHtml, 6).replace(/[—–].*/, '').trim();
+    const start = () => {
+        window.openFeedbackReplyFromOverlay('alerts-channel', {
+            label: 'Replying to Advisory:',
+            snippet,
+            rawMsg: snippet,
+            alertId: String(notice.id || ''),
+            alertKind: 'notice',
+            quotedText: noticeQuotePlain(notice),
+        });
+    };
+    if (location.hash === '#lightbox') {
+        window.addEventListener('popstate', () => setTimeout(start, 0), { once: true });
+        window.closeLightbox?.();
+        return;
+    }
+    window.closeLightbox?.(true);
+    start();
+}
+
 function paintLightboxReactions(detail) {
     const dock = document.getElementById('alert-image-lightbox-dock');
     const row = document.getElementById('alert-image-lightbox-react');
     if (!dock || !row) return;
     const notice = noticeForLightbox(detail);
+    const reply = document.getElementById('alert-image-lightbox-reply');
     if (!notice) {
         dock.classList.add('hidden');
         row.replaceChildren();
+        if (reply) {
+            delete reply.dataset.alertId;
+            delete reply.dataset.alertSrc;
+        }
         return;
     }
     const mine = mineReactionKey(notice);
-    row.innerHTML = ALERT_REACTION_KEYS.map((key) => {
+    row.innerHTML = LIGHTBOX_BAR_REACTIONS.map((key) => {
         const on = mine === key;
         const emoji = ALERT_REACTION_EMOJI[key];
-        return `<button type="button" data-lightbox-react="${escapeHTML(key)}" data-alert-id="${escapeHTML(String(notice.id || ''))}" data-alert-src="${escapeHTML(String(notice._sourceKey || ''))}" class="w-11 h-11 text-[1.65rem] leading-none rounded-full ${on ? 'bg-white/20 ring-2 ring-white/70' : 'bg-black/35'} focus:outline-none" aria-pressed="${on ? 'true' : 'false'}" aria-label="${on ? 'Remove reaction' : `React ${emoji}`}">${emoji}</button>`;
+        return `<button type="button" data-lightbox-react="${escapeHTML(key)}" data-alert-id="${escapeHTML(String(notice.id || ''))}" data-alert-src="${escapeHTML(String(notice._sourceKey || ''))}" class="w-10 h-10 text-[1.7rem] leading-none focus:outline-none ${on ? 'scale-110' : ''}" aria-pressed="${on ? 'true' : 'false'}" aria-label="${on ? 'Remove reaction' : `React ${emoji}`}">${emoji}</button>`;
     }).join('');
+    if (reply) {
+        reply.dataset.alertId = String(notice.id || '');
+        reply.dataset.alertSrc = String(notice._sourceKey || '');
+    }
     dock.classList.remove('hidden');
 }
 
@@ -1004,6 +1038,18 @@ function bindLightboxReactionClicks() {
     if (!overlay || overlay.dataset.ntReactBound === '1') return;
     overlay.dataset.ntReactBound = '1';
     overlay.addEventListener('click', (e) => {
+        const reply = e.target.closest?.('#alert-image-lightbox-reply');
+        if (reply && overlay.contains(reply)) {
+            e.preventDefault();
+            e.stopPropagation();
+            triggerHaptic();
+            const id = reply.dataset.alertId || '';
+            const src = reply.dataset.alertSrc || '';
+            const notice = cachedLiveNotices.find((n) => String(n.id) === String(id) && String(n._sourceKey) === String(src))
+                || cachedLiveNotices.find((n) => String(n.id) === String(id));
+            if (notice) openLightboxReply(notice);
+            return;
+        }
         const btn = e.target.closest?.('[data-lightbox-react]');
         if (!btn || !overlay.contains(btn)) return;
         e.preventDefault();

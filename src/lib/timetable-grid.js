@@ -619,7 +619,7 @@ export function renderFullScheduleGrid(direction = null, dayOverride = null, opt
                     <div class="nt-grid-edge-fade" aria-hidden="true"></div>
                 </div>
                 <div class="shrink-0 p-3 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 z-20">
-                    <button type="button" id="close-timetable-footer-btn" class="mx-auto block w-auto max-w-xs px-8 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold py-2 rounded-xl border border-blue-200 transition-colors text-sm focus:outline-none">Close Timetable</button>
+                    <button type="button" id="close-timetable-footer-btn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-4 rounded-lg shadow-md transition-colors text-sm focus:outline-none">Close Timetable</button>
                 </div>
             </div>`;
         document.body.appendChild(modal);
@@ -634,7 +634,7 @@ export function renderFullScheduleGrid(direction = null, dayOverride = null, opt
         if (shell && !shell.querySelector('#close-timetable-footer-btn')) {
             const footer = document.createElement('div');
             footer.className = 'shrink-0 p-3 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 z-20';
-            footer.innerHTML = '<button type="button" id="close-timetable-footer-btn" class="mx-auto block w-auto max-w-xs px-8 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold py-2 rounded-xl border border-blue-200 transition-colors text-sm focus:outline-none">Close Timetable</button>';
+            footer.innerHTML = '<button type="button" id="close-timetable-footer-btn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-4 rounded-lg shadow-md transition-colors text-sm focus:outline-none">Close Timetable</button>';
             shell.appendChild(footer);
             document.getElementById('close-timetable-footer-btn')?.addEventListener('click', () => {
                 triggerHaptic();

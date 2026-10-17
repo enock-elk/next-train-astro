@@ -86,8 +86,18 @@ export function lockBackgroundScroll() {
 }
 
 export function unlockBackgroundScroll() {
-    if (typeof document !== 'undefined') document.body.classList.remove('modal-active');
+    if (typeof document !== 'undefined') {
+        document.body.classList.remove('modal-active');
+        const ae = document.activeElement;
+        if (ae && ae !== document.body && typeof ae.closest === 'function' && ae.closest('.hidden, [hidden]')) {
+            try { ae.blur(); } catch { /* ignore */ }
+        }
+    }
     syncFullOverlayChrome();
+    if (typeof window !== 'undefined' && typeof window.ntFitAppViewport === 'function') {
+        window.ntFitAppViewport();
+        setTimeout(window.ntFitAppViewport, 320);
+    }
 }
 
 
@@ -265,6 +275,10 @@ export function closeSmoothModal(modalId, fromPopState = false) {
     
     const modal = document.getElementById(modalId);
     if (modal) {
+        const focused = document.activeElement;
+        if (focused && focused !== document.body && modal.contains(focused)) {
+            try { focused.blur(); } catch { /* ignore */ }
+        }
         const inner = modal.firstElementChild;
         if (inner && inner.classList.contains('scale-100')) {
             inner.classList.remove('scale-100');

@@ -109,6 +109,10 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
         var paintedKb = -1;
         var cachedEnv = -1;
         var fitQueued = false;
+        var pinAttempts = 0;
+        var kbLiftBase = null;
+        var kbLiftTarget = 0;
+        var kbLiftEl = null;
         function markStandalone() {
           var on = false;
           try {
@@ -168,6 +172,20 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
           // Some Android builds shrink layout height with the keyboard (gap≈0).
           // If an editable is focused and the frame collapsed, keep the last full height.
           var ae = document.activeElement;
+          // Results, the trip map, and the fare sheet hide the field that was
+          // typing. Chrome still treats that hidden control as focused and
+          // keeps scrolling the layout viewport toward it.
+          if (ae && ae !== document.body) {
+            var buried = false;
+            try {
+              if (typeof ae.closest === 'function' && ae.closest('.hidden, [hidden]')) buried = true;
+              else if (ae.getClientRects && ae.getClientRects().length === 0) buried = true;
+            } catch (e) {}
+            if (buried) {
+              try { ae.blur(); } catch (e2) {}
+              ae = document.activeElement;
+            }
+          }
           // A readonly station field opens a list, not the IME. Treating it
           // as typing shrank the shell and left a gap under the bottom nav.
           var editing = !!(ae && (
@@ -217,6 +235,55 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
           // Do not keep a 1px first reading: iOS PWA often reports 0/1 before
           // layout, and `last || tiny || 240` would collapse the shell to white.
           if (shellH < 240) shellH = atLeastFull(lastShellH) || atLeastFull(lastFullLayoutH) || atLeastFull(layoutH) || 0;
+          // A stuck layout scroll hides the header and paints a blank band
+          // under the oval. html/body are overflow:hidden, so the swipe never
+          // returns. The layout viewport never lifts a field. Station fields,
+          // Community, Feedback Hub, and every other typed control rise inside
+          // their own scroller, or dock on --nt-kb-h. Chrome's focus scroll is
+          // cleared even while the field stays focused. There is no spacer
+          // under the oval for the keyboard.
+          var scale = vv && vv.scale ? vv.scale : 1;
+          var layoutScroll = window.scrollY || root.scrollTop || (document.body && document.body.scrollTop) || 0;
+          var pinned = false;
+          if (scale <= 1.01 && layoutScroll > 8) {
+            try { window.scrollTo(0, 0); } catch (e) {}
+            root.scrollTop = 0;
+            if (document.body) document.body.scrollTop = 0;
+            pinned = true;
+            off = vv && typeof vv.offsetTop === 'number' ? vv.offsetTop : 0;
+            shellTop = Math.max(0, off);
+            vh = vv && vv.height ? vv.height : inner;
+            shellH = Math.round(vh || layoutH);
+            if (shellH < 240) shellH = atLeastFull(lastShellH) || atLeastFull(layoutH) || 0;
+            if (pinAttempts < 4) {
+              pinAttempts += 1;
+              scheduleApply();
+            }
+          } else if (!keyboard && !editing && scale <= 1.01 && off > 8) {
+            try { window.scrollTo(0, 0); } catch (e) {}
+            off = vv && typeof vv.offsetTop === 'number' ? vv.offsetTop : 0;
+            shellTop = Math.max(0, off);
+          } else if (layoutScroll <= 1 && off <= 1) {
+            pinAttempts = 0;
+          }
+          if (keyboard && editing && ae && ae.closest && !ae.closest('#community-composer-dock, #messages-thread-form')) {
+            var liftScroller = ae.closest('#app-scroll, [data-feedback-scroll]');
+            if (liftScroller) {
+              var visBottom = (vv && vv.height) ? (off + vv.height) : (window.innerHeight || 0);
+              var fieldRect = ae.getBoundingClientRect();
+              if (fieldRect.height > 1 && fieldRect.bottom > visBottom - 12) {
+                if (kbLiftBase == null) kbLiftBase = liftScroller.scrollTop;
+                liftScroller.scrollTop += Math.round(fieldRect.bottom - (visBottom - 12));
+                kbLiftTarget = liftScroller.scrollTop;
+                kbLiftEl = liftScroller;
+              }
+            }
+          } else if (!keyboard && kbLiftBase != null) {
+            if (kbLiftEl && Math.abs(kbLiftEl.scrollTop - kbLiftTarget) < 48) kbLiftEl.scrollTop = kbLiftBase;
+            kbLiftBase = null;
+            kbLiftTarget = 0;
+            kbLiftEl = null;
+          }
           if (!keyboard && layoutH >= 240 && shellH >= 240) {
             // Pin #nt-shell to the visible hole. Shrinking --nt-app-h to
             // visualViewport while leaving the shell at top:0 put NEXT TRAIN
@@ -232,7 +299,9 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
             // remainder paints as a light band under the oval. Stay inside
             // layoutH so the oval cannot ride past the screen.
             var tail = Math.round(layoutH - shellTop - shellH);
-            if (tail > 8 && tail < 180) shellH += tail;
+            // Keyboard is already ruled out. Any remainder is the blank band
+            // under the oval, including one taller than the URL-bar allowance.
+            if (tail > 8) shellH += tail;
             lastLayoutH = layoutH;
             lastFullLayoutH = layoutH;
             lastShellTop = shellTop;
@@ -253,7 +322,19 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
             }
           }
           var h = layoutH;
-          if (shellTop + shellH > h) h = shellTop + shellH;
+          // Do not stack shellTop on top of shellH. That made the document
+          // taller than the screen, so the stuck scroll showed empty page
+          // under the oval. A visual viewport that is simply taller than
+          // the layout (offset already cleared) may grow the document to match.
+          if (!keyboard && off < 1 && shellH > h && shellH < h + 320) h = shellH;
+          if (shellTop + shellH > h && h >= 240) {
+            var extra = shellTop + shellH - h;
+            if (shellTop >= extra) shellTop -= extra;
+            else {
+              shellH = Math.max(240, shellH - (extra - shellTop));
+              shellTop = 0;
+            }
+          }
           if (h < 240) h = atLeastFull(lastFullLayoutH) || atLeastFull(lastLayoutH) || atLeastFull(inner) || atLeastFull(vh) || 0;
           // Only a real safe-area inset. Do not invent 48px — that pad was a
           // white/black tray under the floating pill while the system nav
@@ -300,6 +381,25 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
             paintedKb = kbH;
             root.style.setProperty('--nt-kb-h', kbH + 'px');
           }
+          if (!keyboard && !editing && !pinned && shellH < 1400) {
+            var shellEl = document.getElementById('nt-shell');
+            var visualBottom = (vv && vv.height) ? vv.height : 0;
+            if (shellEl && visualBottom > 240) {
+              var shellRect = shellEl.getBoundingClientRect();
+              var below = visualBottom - shellRect.bottom;
+              if (shellRect.height > 200 && below > 24 && below < 420) {
+                shellH = Math.round(shellH + below);
+                if (off < 1 && h < shellTop + shellH) h = shellTop + shellH;
+                root.style.setProperty('--nt-shell-h', shellH + 'px');
+                paintedShellH = shellH;
+                lastShellH = shellH;
+                if (h >= 240) {
+                  root.style.setProperty('--nt-app-h', h + 'px');
+                  lastH = h;
+                }
+              }
+            }
+          }
           root.classList.toggle('nt-keyboard', keyboard);
           root.classList.toggle('nt-standalone', markStandalone());
           root.classList.toggle('nt-android', isAndroid());
@@ -323,7 +423,27 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
           setTimeout(apply, 80);
         });
         document.addEventListener('focusin', apply, { passive: true });
-        document.addEventListener('focusout', function () { setTimeout(apply, 50); }, { passive: true });
+        document.addEventListener('focusout', function () {
+          setTimeout(apply, 50);
+          setTimeout(apply, 320);
+          setTimeout(apply, 800);
+        }, { passive: true });
+        var scrollPinGuard = 0;
+        window.addEventListener('scroll', function () {
+          var sc = 1;
+          try {
+            sc = window.visualViewport && window.visualViewport.scale ? window.visualViewport.scale : 1;
+          } catch (e) {}
+          var y = window.scrollY || root.scrollTop || (document.body && document.body.scrollTop) || 0;
+          if (sc <= 1.01 && y > 1 && scrollPinGuard < 3) {
+            scrollPinGuard += 1;
+            try { window.scrollTo(0, 0); } catch (e2) {}
+            root.scrollTop = 0;
+            if (document.body) document.body.scrollTop = 0;
+            scrollPinGuard -= 1;
+          }
+          scheduleApply();
+        }, { passive: true });
         if (window.visualViewport) {
           window.visualViewport.addEventListener('resize', scheduleApply, { passive: true });
           window.visualViewport.addEventListener('scroll', scheduleApply, { passive: true });
@@ -1105,6 +1225,7 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
       html.nt-in-app, html.nt-in-app body {
         height: var(--nt-app-h, 100svh);
         overflow: hidden;
+        overscroll-behavior: none;
         background-color: var(--nt-chrome-header, #1d4ed8);
       }
 

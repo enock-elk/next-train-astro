@@ -1514,6 +1514,16 @@ function keyboardOpen() {
  * Select To Station is at the bottom: do not pin #app-scroll, or the blue
  * header stays locked in view and the list cannot rise with the field.
  */
+/** Drop focus before the station form is hidden, or Chrome keeps scrolling to it. */
+function blurPlannerFieldIfFocused() {
+    const section = document.getElementById('planner-input-section');
+    const ae = typeof document !== 'undefined' ? document.activeElement : null;
+    if (!section || !ae || ae === document.body) return;
+    if (section.contains(ae)) {
+        try { ae.blur(); } catch { /* ignore */ }
+    }
+}
+
 function holdPlannerScroll(input) {
     if (input && input.id === 'planner-to-search') return;
     const scroller = document.getElementById('app-scroll');
@@ -4752,6 +4762,7 @@ export async function applyPlannerDeepLink() {
                 <div id="planner-spinner-text" class="text-sm font-bold text-gray-600 dark:text-gray-400 animate-pulse">Searching all possible routes...</div>
             </div>`;
         }
+        blurPlannerFieldIfFocused();
         document.getElementById('planner-input-section')?.classList.add('hidden');
         document.getElementById('planner-results-section')?.classList.remove('hidden');
     };
@@ -4937,6 +4948,7 @@ export function executeTripPlan(origin, dest, preferredTime = null) {
         setTimeout(() => updateSpinnerText("Calculating partial journeys..."), 10500)
     ];
     
+    blurPlannerFieldIfFocused();
     const inputSecEl = document.getElementById('planner-input-section');
     if (inputSecEl) inputSecEl.classList.add('hidden');
     

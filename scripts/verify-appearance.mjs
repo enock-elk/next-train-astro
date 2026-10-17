@@ -536,6 +536,13 @@ assert(/<body[^>]*>\s*<RecoveryLifeline \/>/.test(layout), 'lifeline stays the f
 assert(layout.includes('--nt-shell-top'), 'shell is pinned below overlay chrome');
 assert(layout.includes('--nt-shell-h'), 'shell height follows the visible hole');
 assert(layout.includes('missing < 180'), 'URL-bar overlay uses the missing layout strip, not an invented tray');
+assert(layout.includes('scrollTo(0, 0)'), 'a stuck layout scroll is cleared after the keyboard closes');
+assert(layout.includes('A stuck layout scroll hides the header'), 'viewport fit records why the blank band appears');
+assert(layout.includes('The layout viewport never lifts a field'), 'typing does not lift the page to clear the keyboard');
+assert(layout.includes('There is no spacer'), 'keyboard lift does not inject a blank band under the oval');
+assert(layout.includes('overscroll-behavior: none'), 'in-app frame does not chain a swipe into the layout viewport');
+assert(layout.includes("ae.closest('.hidden, [hidden]')"), 'a focused control inside a hidden sheet is released');
+assert(plannerUi.includes('blurPlannerFieldIfFocused'), 'planner results blur the station field before hiding it');
 assert(layout.includes('Pin #nt-shell to the LIVE visual hole'), 'keyboard sizes the shell to the live visual hole');
 assert(layout.includes('#app-scroll:has(#view-map.active)'), 'Map still locks #app-scroll');
 assert(layout.includes('#view-community.view-section.active'), 'Community composer sits above the IME');

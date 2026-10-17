@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_10.17.6': [
+        'Typing does not lift the page. Station fields, Community, Feedback Hub, and every other field rise inside their own scroller, or dock above the keyboard. Chrome was scrolling the layout viewport to clear the keys, and that scroll stayed after the keyboard closed, so the blue header sat above the screen and a blank band sat under the oval. The layout scroll is cleared even while a field is still focused. No spacer is added under the oval. No commuter What\'s New. forceShow stays false.',
+    ],
     'V9_10.17.5': [
         'Trip Planner blurs the station field when results open, and a trip map or fare sheet blurs itself on close. A hidden field was still focused, so Chrome kept scrolling the layout viewport after the keyboard closed. That stuck scroll hid the blue header and left a blank band under the oval. The layout scroll is cleared once the keyboard is gone, and the shell fills the screen again. No commuter What\'s New. forceShow stays false.',
     ],

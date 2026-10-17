@@ -110,6 +110,9 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
         var cachedEnv = -1;
         var fitQueued = false;
         var pinAttempts = 0;
+        var kbLiftBase = null;
+        var kbLiftTarget = 0;
+        var kbLiftEl = null;
         function markStandalone() {
           var on = false;
           try {
@@ -172,9 +175,16 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
           // Results, the trip map, and the fare sheet hide the field that was
           // typing. Chrome still treats that hidden control as focused and
           // keeps scrolling the layout viewport toward it.
-          if (ae && ae !== document.body && typeof ae.closest === 'function' && ae.closest('.hidden, [hidden]')) {
-            try { ae.blur(); } catch (e) {}
-            ae = document.activeElement;
+          if (ae && ae !== document.body) {
+            var buried = false;
+            try {
+              if (typeof ae.closest === 'function' && ae.closest('.hidden, [hidden]')) buried = true;
+              else if (ae.getClientRects && ae.getClientRects().length === 0) buried = true;
+            } catch (e) {}
+            if (buried) {
+              try { ae.blur(); } catch (e2) {}
+              ae = document.activeElement;
+            }
           }
           // A readonly station field opens a list, not the IME. Treating it
           // as typing shrank the shell and left a gap under the bottom nav.
@@ -227,21 +237,24 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
           if (shellH < 240) shellH = atLeastFull(lastShellH) || atLeastFull(lastFullLayoutH) || atLeastFull(layoutH) || 0;
           // A stuck layout scroll hides the header and paints a blank band
           // under the oval. html/body are overflow:hidden, so the swipe never
-          // returns. Snap the layout back once the keyboard is gone. Leave
-          // #app-scroll alone while a field is actually focused.
+          // returns. The layout viewport never lifts a field. Station fields,
+          // Community, Feedback Hub, and every other typed control rise inside
+          // their own scroller, or dock on --nt-kb-h. Chrome's focus scroll is
+          // cleared even while the field stays focused. There is no spacer
+          // under the oval for the keyboard.
           var scale = vv && vv.scale ? vv.scale : 1;
           var layoutScroll = window.scrollY || root.scrollTop || (document.body && document.body.scrollTop) || 0;
-          if (!keyboard && !editing && scale <= 1.01 && layoutScroll > 8) {
+          var pinned = false;
+          if (scale <= 1.01 && layoutScroll > 8) {
             try { window.scrollTo(0, 0); } catch (e) {}
             root.scrollTop = 0;
             if (document.body) document.body.scrollTop = 0;
+            pinned = true;
             off = vv && typeof vv.offsetTop === 'number' ? vv.offsetTop : 0;
             shellTop = Math.max(0, off);
             vh = vv && vv.height ? vv.height : inner;
             shellH = Math.round(vh || layoutH);
             if (shellH < 240) shellH = atLeastFull(lastShellH) || atLeastFull(layoutH) || 0;
-            var healed = document.getElementById('app-scroll');
-            if (healed && healed.scrollTop > 2) healed.scrollTop = 0;
             if (pinAttempts < 4) {
               pinAttempts += 1;
               scheduleApply();
@@ -252,6 +265,24 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
             shellTop = Math.max(0, off);
           } else if (layoutScroll <= 1 && off <= 1) {
             pinAttempts = 0;
+          }
+          if (keyboard && editing && ae && ae.closest && !ae.closest('#community-composer-dock, #messages-thread-form')) {
+            var liftScroller = ae.closest('#app-scroll, [data-feedback-scroll]');
+            if (liftScroller) {
+              var visBottom = (vv && vv.height) ? (off + vv.height) : (window.innerHeight || 0);
+              var fieldRect = ae.getBoundingClientRect();
+              if (fieldRect.height > 1 && fieldRect.bottom > visBottom - 12) {
+                if (kbLiftBase == null) kbLiftBase = liftScroller.scrollTop;
+                liftScroller.scrollTop += Math.round(fieldRect.bottom - (visBottom - 12));
+                kbLiftTarget = liftScroller.scrollTop;
+                kbLiftEl = liftScroller;
+              }
+            }
+          } else if (!keyboard && kbLiftBase != null) {
+            if (kbLiftEl && Math.abs(kbLiftEl.scrollTop - kbLiftTarget) < 48) kbLiftEl.scrollTop = kbLiftBase;
+            kbLiftBase = null;
+            kbLiftTarget = 0;
+            kbLiftEl = null;
           }
           if (!keyboard && layoutH >= 240 && shellH >= 240) {
             // Pin #nt-shell to the visible hole. Shrinking --nt-app-h to
@@ -350,7 +381,7 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
             paintedKb = kbH;
             root.style.setProperty('--nt-kb-h', kbH + 'px');
           }
-          if (!keyboard && !editing && shellH < 1400) {
+          if (!keyboard && !editing && !pinned && shellH < 1400) {
             var shellEl = document.getElementById('nt-shell');
             var visualBottom = (vv && vv.height) ? vv.height : 0;
             if (shellEl && visualBottom > 240) {
@@ -397,7 +428,22 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
           setTimeout(apply, 320);
           setTimeout(apply, 800);
         }, { passive: true });
-        window.addEventListener('scroll', scheduleApply, { passive: true });
+        var scrollPinGuard = 0;
+        window.addEventListener('scroll', function () {
+          var sc = 1;
+          try {
+            sc = window.visualViewport && window.visualViewport.scale ? window.visualViewport.scale : 1;
+          } catch (e) {}
+          var y = window.scrollY || root.scrollTop || (document.body && document.body.scrollTop) || 0;
+          if (sc <= 1.01 && y > 1 && scrollPinGuard < 3) {
+            scrollPinGuard += 1;
+            try { window.scrollTo(0, 0); } catch (e2) {}
+            root.scrollTop = 0;
+            if (document.body) document.body.scrollTop = 0;
+            scrollPinGuard -= 1;
+          }
+          scheduleApply();
+        }, { passive: true });
         if (window.visualViewport) {
           window.visualViewport.addEventListener('resize', scheduleApply, { passive: true });
           window.visualViewport.addEventListener('scroll', scheduleApply, { passive: true });

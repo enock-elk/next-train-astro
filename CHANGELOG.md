@@ -1,5 +1,9 @@
 # Changelog
 
+## V9_10.17.6 — no release notes
+
+Typing no longer leaves the page scrolled. The blue header comes back when the keyboard closes, and the blank band under the oval does not stay.
+
 ## V9_10.17.5 — no release notes
 
 Trip Planner releases the station field when results open. Closing the trip map or the fare sheet releases it too. A layout scroll left by the keyboard is cleared, so the blue header can come back and the blank band under the oval does not stay.

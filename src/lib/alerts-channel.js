@@ -3,7 +3,7 @@
  */
 import { DYNAMIC_BASE_URL, REPLY_WORKER_URL, ROUTES, withBase } from './config.js';
 import { noticeQuotePlain } from './feedback-quote.js';
-import { hydrateLinkPreviews, linkPreviewMarkup } from './link-preview.js';
+import { hydrateLinkPreviews, linkPreviewMarkup, messagePreviewUrls, relocateBarePreviewUrls } from './link-preview.js';
 import { safeStorage, escapeHTML, repairMojibake, formatAppTime, formatThreadDateLabel } from './utils.js';
 import { prepareRichHtml, injectRichTextStyles } from './rich-text.js';
 import { showToast, triggerHaptic, openSmoothModal, closeSmoothModal } from './ui.js';
@@ -594,7 +594,10 @@ function renderPostCard(notice, opts = {}) {
     const chrome = severityChrome(severity);
     const layout = layoutAlertPost(notice);
     const highlight = opts.highlight && String(notice.id) === String(opts.highlight);
-    const body = prepareRichHtml(stripAlertSignoffHtml(layout.body));
+    const body = relocateBarePreviewUrls(
+        prepareRichHtml(stripAlertSignoffHtml(layout.body)),
+        messagePreviewUrls(notice),
+    );
     const titleHtml = layout.title
         ? `<h3 class="text-base font-black text-gray-900 dark:text-white leading-snug mb-2" data-alert-title>${escapeHTML(layout.title)}</h3>`
         : '';
@@ -654,8 +657,8 @@ function renderPostCard(notice, opts = {}) {
         <div class="px-4 pt-3 pb-4">
         ${titleHtml}
         ${mediaHtml}
-        ${bodyHtml}
         ${linkPreviewMarkup(notice)}
+        ${bodyHtml}
         ${extra}
         ${renderPollHtml(notice)}
         ${footerHtml}
@@ -749,7 +752,7 @@ export function renderAlertsChannel(notices = cachedLiveNotices, opts = {}) {
     if (feed.dataset.ntAlertsSig === html) {
         hydrateAlertPosterImages(feed);
         hydratePollResults(feed);
-        hydrateLinkPreviews(feed, REPLY_WORKER_URL);
+        hydrateLinkPreviews(feed, REPLY_WORKER_URL, list);
         return true;
     }
     feed.dataset.ntAlertsSig = html;
@@ -758,7 +761,7 @@ export function renderAlertsChannel(notices = cachedLiveNotices, opts = {}) {
     list.forEach((n) => cacheAlertImages(n, resolveAlertImageSrc));
     hydrateAlertPosterImages(feed);
     hydratePollResults(feed);
-    hydrateLinkPreviews(feed, REPLY_WORKER_URL);
+    hydrateLinkPreviews(feed, REPLY_WORKER_URL, list);
     return true;
 }
 

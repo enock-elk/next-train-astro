@@ -1225,17 +1225,36 @@ html.dark #planner-train-sheet-fare {
   background-color: #ffffff !important;
   color: #1e3a8a !important;
 }
+.nt-link-preview-stack {
+  margin-top: 0.65rem;
+}
+.nt-link-preview-slot + .nt-link-preview-slot,
+.nt-link-preview-extra {
+  margin-top: 0.65rem;
+}
 .nt-link-preview {
   display: flex;
   flex-direction: column;
-  margin-top: 0.65rem;
   border-radius: 0.75rem;
   overflow: hidden;
   text-decoration: none;
   background: #f0f2f5;
-  border-left: 4px solid #25d366;
+  border-left: 4px solid #3b82f6;
   color: #111b21;
 }
+.nt-link-preview.is-warning { border-left-color: #eab308; }
+.nt-link-preview.is-critical { border-left-color: #ef4444; }
+.nt-link-preview-raw,
+.nt-link-preview-extra .nt-link-preview-raw {
+  display: block;
+  margin-top: 0.4rem;
+  font-size: 0.8rem;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+  color: #2563eb;
+}
+html.dark .nt-link-preview-raw { color: #93c5fd; }
+.nt-link-preview-slot.is-settled .nt-link-preview-raw { display: none; }
 html.dark .nt-link-preview {
   background: #1f2c34;
   color: #e9edef;
@@ -1263,9 +1282,17 @@ html.dark .nt-link-preview {
   line-height: 1.35;
   color: #667781;
   display: -webkit-box;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: 6;
   -webkit-box-orient: vertical;
   overflow: hidden;
+}
+#alert-msg .nt-compose-preview {
+  margin: 0.4rem 0;
+  user-select: none;
+}
+#alert-msg .nt-compose-preview .nt-link-preview-stack,
+#alert-msg .nt-compose-preview .nt-link-preview {
+  margin-top: 0;
 }
 html.dark .nt-link-preview-desc { color: #aebac1; }
 .nt-link-preview-site {

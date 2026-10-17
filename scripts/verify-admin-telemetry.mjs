@@ -18,6 +18,7 @@ import {
     dispatchProductionDeploy,
     shaMatches,
 } from '../workers/nexttrain-telemetry/deploy-github.js';
+import { enqueueSuccessfulTripPlan, getTripPlanQueueLength, retainUnflushedTripQueue, TRIP_FLUSH_SIZE } from '../src/lib/planner-telemetry.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const failures = [];
@@ -172,6 +173,38 @@ ok(adminJs.includes("Admin.icon('map', 'w-3 h-3')"), 'trip-plans indicator is th
     ok(tel.includes('trip_plan_pairs'), 'client upserts trip_plan_pairs');
     ok(tel.includes('sys_logs/fare_votes'), 'client writes fare_votes immediately');
     ok(tel.includes('fare_ticket_photos'), 'client can write fare_ticket_photos sidecar');
+    ok(tel.includes('retainUnflushedTripQueue'), 'flush drops uploaded rows by id');
+    ok(tel.includes('nt_trip_plan_pending_batch_v1'), 'a retry reuses the same batch id');
+    ok(!/getItem\([^)]*plannerHistory/.test(tel) && !tel.includes("from './planner-ui.js'"), 'telemetry does not read saved Recent Trips');
+    ok(tel.includes("source === 'saved'"), 'a saved-trip copy is refused');
+    ok(tel.includes('TRIP_FLUSH_SIZE = 5'), 'telemetry still flushes every 5 searches');
+}
+{
+    const plannerUi = readFileSync(join(ROOT, 'src/lib/planner-ui.js'), 'utf8');
+    ok(plannerUi.includes('countTelemetry: false'), 'a disruption refresh does not count as another search');
+    ok(plannerUi.includes('PLANNER_HISTORY_DISPLAY_CAP = 5'), 'Recent Trips on the phone stay capped at 5');
+    ok(!plannerUi.includes('enqueueSuccessfulTripPlan') || plannerUi.includes('countTelemetry !== false'), 'only a search writes a trip plan');
+}
+ok(TRIP_FLUSH_SIZE === 5, 'flush size is 5, not 10');
+{
+    const kept = retainUnflushedTripQueue(
+        [
+            { id: 'a', origin: 'PRETORIA', destination: 'KOEDOESPOORT' },
+            { id: 'b', origin: 'CAPE TOWN', destination: 'BELLVILLE' },
+        ],
+        ['a'],
+        [
+            { id: 'a', origin: 'PRETORIA', destination: 'KOEDOESPOORT' },
+            { id: 'b', origin: 'CAPE TOWN', destination: 'BELLVILLE' },
+            { id: 'c', origin: 'DURBAN', destination: 'UMLZI' },
+        ],
+    );
+    ok(kept.map((row) => row.id).join(',') === 'b,c', 'a flushed search leaves the bucket and a newer search stays');
+}
+{
+    const before = getTripPlanQueueLength();
+    enqueueSuccessfulTripPlan({ origin: 'PRETORIA', destination: 'KOEDOESPOORT', source: 'saved' });
+    ok(getTripPlanQueueLength() === before, 'a saved Recent Trip is not copied into the telemetry bucket');
 }
 ok(adminJs.includes('confirmClearDb'), 'Clear DB uses a second confirmation popup');
 ok(adminJs.includes("telemetryRange === 'ALL'"), 'admin ALL range does not use the 7-point slicer');

@@ -22,6 +22,8 @@
  *
  * GET  /unfurl?url=  public. Reads a public https page and returns title,
  *   description, and image. No operator token. No Gemini.
+ * GET  /unfurl-image?url=  public. Returns the image bytes so a phone can
+ *   keep the picture when the other site blocks a direct save. No token.
  * GET  /draft?id=   operator. The last Suggest draft for one commuter message.
  * PUT  /draft       { id, html }  operator. Keeps that draft for the next open.
  *
@@ -173,6 +175,9 @@ export async function handleRequest(request, env) {
     if (url.pathname === '/unfurl' && request.method === 'GET') {
         return unfurlLink(request, env, url);
     }
+    if (url.pathname === '/unfurl-image' && request.method === 'GET') {
+        return unfurlImage(request, env, url);
+    }
     if (url.pathname !== '/suggest' && url.pathname !== '/context' && url.pathname !== '/edit' && url.pathname !== '/brief' && url.pathname !== '/draft') {
         return json(env, request, 404, { error: 'Not found' });
     }
@@ -305,6 +310,64 @@ async function unfurlLink(request, env, url) {
         } catch { /* the caller still gets the card */ }
     }
     return json(env, request, 200, preview);
+}
+
+const PREVIEW_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/avif']);
+const PREVIEW_IMAGE_MAX = 2_000_000;
+
+async function unfurlImage(request, env, url) {
+    const ip = request.headers.get('CF-Connecting-IP') || 'anon';
+    if (!checkRate(`unfurl-img:${ip}`, 40)) {
+        return new Response('Too many image requests.', { status: 429, headers: corsHeaders(env, request) });
+    }
+    let current = String(url.searchParams.get('url') || '').trim();
+    if (!isPublicPreviewUrl(current)) {
+        return new Response('That image cannot be cached.', { status: 400, headers: corsHeaders(env, request) });
+    }
+    for (let hop = 0; hop < 3; hop += 1) {
+        let res;
+        try {
+            res = await fetch(current, {
+                redirect: 'manual',
+                headers: {
+                    Accept: 'image/avif,image/webp,image/*,*/*;q=0.8',
+                    'User-Agent': 'Mozilla/5.0 (compatible; NextTrainPreview/1.0; +https://nexttrain.co.za)',
+                },
+            });
+        } catch {
+            return new Response('Image missing.', { status: 404, headers: corsHeaders(env, request) });
+        }
+        if (res.status >= 300 && res.status < 400) {
+            const loc = res.headers.get('Location');
+            if (!loc) break;
+            current = new URL(loc, current).href;
+            if (!isPublicPreviewUrl(current)) break;
+            continue;
+        }
+        if (!res.ok) return new Response('Image missing.', { status: 404, headers: corsHeaders(env, request) });
+        const type = String(res.headers.get('content-type') || '').split(';')[0].trim().toLowerCase();
+        if (!PREVIEW_IMAGE_TYPES.has(type)) {
+            return new Response('Not an image.', { status: 415, headers: corsHeaders(env, request) });
+        }
+        const announced = Number(res.headers.get('content-length') || 0);
+        if (announced > PREVIEW_IMAGE_MAX) {
+            return new Response('Image too large.', { status: 413, headers: corsHeaders(env, request) });
+        }
+        const buf = await res.arrayBuffer();
+        if (buf.byteLength > PREVIEW_IMAGE_MAX) {
+            return new Response('Image too large.', { status: 413, headers: corsHeaders(env, request) });
+        }
+        return new Response(buf, {
+            status: 200,
+            headers: {
+                ...corsHeaders(env, request),
+                'Content-Type': type,
+                'Cache-Control': 'public, max-age=604800',
+                'X-Content-Type-Options': 'nosniff',
+            },
+        });
+    }
+    return new Response('Image missing.', { status: 404, headers: corsHeaders(env, request) });
 }
 
 async function readDraft(env, request, url, user) {

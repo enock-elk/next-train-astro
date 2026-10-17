@@ -14416,16 +14416,192 @@ const Admin = {
     },
 
     attachLinkPreview: async (payload) => {
-        if (!payload || payload.linkPreview?.url) return payload;
         const api = window.ntLinkPreview;
-        if (!api?.firstHttpUrl || !api.fetchLinkPreview) return payload;
-        const url = api.firstHttpUrl(payload);
-        if (!url) return payload;
-        try {
-            const preview = await api.fetchLinkPreview(url, Admin.replyWorkerUrl());
-            if (preview?.url) payload.linkPreview = preview;
-        } catch { /* the alert still posts; the feed can load the card itself */ }
+        if (!payload || !api?.fetchLinkPreview) return payload;
+        const urls = typeof api.messagePreviewUrls === 'function'
+            ? api.messagePreviewUrls(payload, 2)
+            : [api.firstHttpUrl ? api.firstHttpUrl(payload) : ''].filter(Boolean);
+        if (!urls.length) return payload;
+        const same = typeof api.samePreviewUrl === 'function'
+            ? api.samePreviewUrl
+            : (a, b) => String(a || '') === String(b || '');
+        const have = [
+            ...(Array.isArray(payload.linkPreviews) ? payload.linkPreviews : []),
+            payload.linkPreview,
+        ].filter((card) => card && card.url);
+        const cards = [];
+        for (const url of urls) {
+            const stored = have.find((card) => same(card.url, url));
+            if (stored && (stored.title || stored.image || stored.description)) {
+                cards.push(stored);
+                continue;
+            }
+            try {
+                const preview = await api.fetchLinkPreview(url, Admin.replyWorkerUrl());
+                if (preview?.url) cards.push(preview);
+            } catch { /* this link stays as a URL; the other card can still post */ }
+        }
+        if (cards[0]) payload.linkPreview = cards[0];
+        if (cards.length) payload.linkPreviews = cards;
         return payload;
+    },
+
+    composePreviewTone: (severity) => (
+        severity === 'critical' ? 'is-critical' : severity === 'warning' ? 'is-warning' : 'is-info'
+    ),
+
+    paintComposePreviewTones: () => {
+        const tone = Admin.composePreviewTone(document.getElementById('alert-severity')?.value || 'info');
+        document.querySelectorAll('#alert-msg .nt-link-preview').forEach((el) => {
+            el.classList.remove('is-info', 'is-warning', 'is-critical');
+            el.classList.add(tone);
+        });
+    },
+
+    readDismissedComposePreviews: (editor) => (
+        String(editor?.dataset?.dismissedPreviews || '').split('\n').map((s) => s.trim()).filter(Boolean)
+    ),
+
+    writeDismissedComposePreviews: (editor, urls) => {
+        if (!editor) return;
+        editor.dataset.dismissedPreviews = (urls || []).slice(0, 8).join('\n');
+    },
+
+    htmlWithoutComposeCards: (editor) => {
+        if (!editor) return '';
+        const clone = editor.cloneNode(true);
+        clone.querySelectorAll('[data-compose-preview], br[data-compose-pocket]').forEach((node) => node.remove());
+        return clone.innerHTML || '';
+    },
+
+    packAlertComposeMessage: (editor) => {
+        const root = editor || document.getElementById('alert-msg');
+        if (!root) return { html: '', previews: [] };
+        const api = window.ntLinkPreview;
+        const same = api?.samePreviewUrl || ((a, b) => String(a || '') === String(b || ''));
+        const previews = [];
+        const clone = root.cloneNode(true);
+        clone.querySelectorAll('[data-compose-preview]').forEach((node) => {
+            let card = null;
+            try { card = JSON.parse(node.getAttribute('data-preview-json') || 'null'); } catch { card = null; }
+            const url = node.getAttribute('data-compose-preview') || card?.url || '';
+            if (card?.url) previews.push(card);
+            else if (url) previews.push({ url });
+            node.remove();
+        });
+        clone.querySelectorAll('br[data-compose-pocket]').forEach((node) => node.remove());
+        let html = String(clone.innerHTML || '').trim();
+        previews.slice(0, 2).forEach((card) => {
+            const url = card.url || '';
+            if (!url || !api?.messagePreviewUrls) return;
+            const present = api.messagePreviewUrls({ message: html }, 8);
+            if (!present.some((item) => same(item, url))) html = `${html}${html ? '<br>' : ''}${url}`;
+        });
+        return { html, previews: previews.slice(0, 2) };
+    },
+
+    ensureComposePocket: (editor) => {
+        let pocket = editor.querySelector('br[data-compose-pocket]');
+        if (!pocket) {
+            pocket = document.createElement('br');
+            pocket.setAttribute('data-compose-pocket', '1');
+            editor.insertBefore(pocket, editor.firstChild);
+        }
+        return pocket;
+    },
+
+    stripBareComposeUrl: (editor, url) => {
+        if (!editor || !url) return;
+        const walker = document.createTreeWalker(editor, NodeFilter.SHOW_TEXT);
+        const nodes = [];
+        let node = walker.nextNode();
+        while (node) {
+            nodes.push(node);
+            node = walker.nextNode();
+        }
+        nodes.forEach((textNode) => {
+            if (textNode.parentElement?.closest('a, [data-compose-preview]')) return;
+            const value = textNode.nodeValue || '';
+            if (!value.includes(url)) return;
+            textNode.nodeValue = value.split(url).join('').replace(/[ \t]{2,}/g, ' ');
+        });
+        editor.querySelectorAll('a[href]').forEach((anchor) => {
+            if (anchor.closest('[data-compose-preview]')) return;
+            const href = anchor.getAttribute('href') || '';
+            const text = (anchor.textContent || '').trim();
+            const same = window.ntLinkPreview?.samePreviewUrl;
+            if (same ? !same(href, url) : href !== url) return;
+            if (same ? same(text, url) : text === url) anchor.replaceWith(document.createTextNode(''));
+        });
+    },
+
+    syncAlertComposePreviews: (knownCards) => {
+        const editor = document.getElementById('alert-msg');
+        const api = window.ntLinkPreview;
+        if (!editor || !api?.messagePreviewUrls || typeof api.previewCardHtml !== 'function') return;
+        const same = api.samePreviewUrl || ((a, b) => a === b);
+        const typedHtml = Admin.htmlWithoutComposeCards(editor);
+        const typed = api.messagePreviewUrls({ message: typedHtml }, 2);
+        const known = (Array.isArray(knownCards) ? knownCards : []).filter((card) => card && card.url);
+        let dismissed = Admin.readDismissedComposePreviews(editor);
+        const previous = String(editor.dataset.previewUrls || '').split('\n').filter(Boolean);
+        const live = [...editor.querySelectorAll('[data-compose-preview]')].map((node) => node.getAttribute('data-compose-preview') || '');
+        previous.forEach((url) => {
+            const stillCard = live.some((item) => same(item, url));
+            const stillTyped = typed.some((item) => same(item, url));
+            if (!stillCard && !stillTyped && !dismissed.some((item) => same(item, url))) dismissed.push(url);
+            if (stillTyped) dismissed = dismissed.filter((item) => !same(item, url));
+        });
+        Admin.writeDismissedComposePreviews(editor, dismissed);
+
+        const wanted = [];
+        const pushUrl = (url) => {
+            if (!url || wanted.some((item) => same(item, url))) return;
+            if (dismissed.some((item) => same(item, url))) return;
+            if (wanted.length >= 2) return;
+            wanted.push(url);
+        };
+        live.forEach(pushUrl);
+        typed.forEach(pushUrl);
+        known.forEach((card) => pushUrl(card.url));
+
+        editor.querySelectorAll('[data-compose-preview]').forEach((node) => {
+            const url = node.getAttribute('data-compose-preview') || '';
+            if (!wanted.some((item) => same(item, url))) node.remove();
+        });
+        if (!wanted.length) {
+            editor.querySelectorAll('br[data-compose-pocket]').forEach((node) => node.remove());
+            editor.dataset.previewUrls = '';
+            return;
+        }
+
+        const severity = document.getElementById('alert-severity')?.value || 'info';
+        const pocket = Admin.ensureComposePocket(editor);
+        let after = pocket;
+        wanted.forEach((url) => {
+            let block = [...editor.querySelectorAll('[data-compose-preview]')].find((node) => same(node.getAttribute('data-compose-preview') || '', url));
+            if (!block) {
+                const stored = known.find((card) => same(card.url, url)) || null;
+                block = document.createElement('div');
+                block.className = 'nt-compose-preview';
+                block.setAttribute('contenteditable', 'false');
+                block.setAttribute('data-compose-preview', url);
+                if (stored) block.setAttribute('data-preview-json', JSON.stringify(stored));
+                block.innerHTML = api.previewCardHtml(url, severity, stored);
+                after.after(block);
+                Admin.stripBareComposeUrl(editor, url);
+                if (!stored) {
+                    api.fetchLinkPreview(url, Admin.replyWorkerUrl()).then((preview) => {
+                        if (!preview || !block.isConnected) return;
+                        block.setAttribute('data-preview-json', JSON.stringify(preview));
+                        block.innerHTML = api.previewCardHtml(url, document.getElementById('alert-severity')?.value || severity, preview);
+                    }).catch(() => {});
+                }
+            }
+            after = block;
+        });
+        editor.dataset.previewUrls = wanted.join('\n');
+        Admin.paintComposePreviewTones();
     },
 
     publishNoticeToTarget: async (target, payload, secret) => {
@@ -15986,9 +16162,10 @@ const Admin = {
         syncAlertWhenMode('now');
 
         document.getElementById('alert-schedule-save-btn')?.addEventListener('click', async () => {
-            let msg = (alertMsg?.innerHTML || '').trim();
+            const packed = Admin.packAlertComposeMessage(alertMsg);
+            let msg = packed.html.trim();
             const targets = Admin.getSelectedAlertTargets();
-            const hasBody = Admin.alertComposeHasBody(msg);
+            const hasBody = Admin.alertComposeHasBody(msg) || packed.previews.length > 0;
             const posters = Admin.getSelectedAlertPosters();
             if (composeNeedsContentToast(hasBody, posters)) return;
             if (!composePollFieldsOk()) return;
@@ -16038,6 +16215,8 @@ const Admin = {
                     sourceUrl: sourceUrlInput ? sourceUrlInput.value.trim() || null : null,
                     expiresInMs: meta.expiresInMs || 0,
                     poll: assembleComposePoll({ closesInMs: pollClosesInMs }),
+                    linkPreview: packed.previews[0] || null,
+                    linkPreviews: packed.previews,
                 },
             };
             const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
@@ -16072,7 +16251,15 @@ const Admin = {
             let cleanedMsg = Admin.repairMojibake(item.message || '');
             cleanedMsg = cleanedMsg.replace(/(<br\s*\/?>\s*){1,2}<span[^>]*>.*?<\/span>\s*$/i, '');
             cleanedMsg = cleanedMsg.replace(/<span[^>]*>.*?<\/span>\s*$/i, '');
-            if (alertMsg) alertMsg.innerHTML = cleanedMsg.trim();
+            if (alertMsg) {
+                alertMsg.innerHTML = cleanedMsg.trim();
+                delete alertMsg.dataset.dismissedPreviews;
+                delete alertMsg.dataset.previewUrls;
+                const known = []
+                    .concat(Array.isArray(item.linkPreviews) ? item.linkPreviews : [])
+                    .concat(item.linkPreview ? [item.linkPreview] : []);
+                Admin.syncAlertComposePreviews(known);
+            }
 
             if (item.expiresAt && dateInput) {
                 const floor = mode === 'review' ? item.expiresAt : Math.max(item.expiresAt, Date.now() + 2 * 3600 * 1000);
@@ -16266,8 +16453,16 @@ const Admin = {
                     : '';
                 if (marked) document.execCommand('insertHTML', false, marked);
                 else document.execCommand('insertText', false, text);
+                Admin.syncAlertComposePreviews();
+            });
+            alertMsg.addEventListener('input', () => {
+                clearTimeout(Admin._composePreviewTimer);
+                Admin._composePreviewTimer = setTimeout(() => Admin.syncAlertComposePreviews(), 400);
             });
         }
+        document.getElementById('alert-severity-list')?.addEventListener('click', () => {
+            setTimeout(() => Admin.paintComposePreviewTones(), 0);
+        });
 
         header.onclick = () => {
 
@@ -16590,7 +16785,8 @@ const Admin = {
         if (dateInput) dateInput.value = Admin.endOfTodayLocalValue();
 
         sendBtn.onclick = async () => {
-            let msg = alertMsg.innerHTML.trim();
+            const packed = Admin.packAlertComposeMessage(alertMsg);
+            let msg = packed.html.trim();
             const targets = Admin.getSelectedAlertTargets();
             const severity = severitySelect.value;
             
@@ -16600,7 +16796,7 @@ const Admin = {
             
             const secret = await Admin.getAuthKey();
             
-            const hasBody = Admin.alertComposeHasBody(msg);
+            const hasBody = Admin.alertComposeHasBody(msg) || packed.previews.length > 0;
             const posters = Admin.getSelectedAlertPosters();
             if (composeNeedsContentToast(hasBody, posters)) return;
             if (!composePollFieldsOk()) return;
@@ -16633,6 +16829,8 @@ const Admin = {
                 sourceName: sourceNameInput ? sourceNameInput.value.trim() || null : null,
                 sourceUrl: sourceUrlInput ? sourceUrlInput.value.trim() || null : null,
                 isRepost: isRepost || false,
+                linkPreview: packed.previews[0] || null,
+                linkPreviews: packed.previews,
             };
             if (isUpdate && Admin._reviewPostedAt) {
                 payload.postedAt = Admin._reviewPostedAt;
@@ -16663,7 +16861,11 @@ const Admin = {
                     const returnToActive = !!Admin._alertEditFromActive && isUpdate;
                     Admin._alertEditFromActive = false;
                     Admin.setSelectedAlertPosters([]);
-                    if (alertMsg) alertMsg.innerHTML = '';
+                    if (alertMsg) {
+                        alertMsg.innerHTML = '';
+                        delete alertMsg.dataset.dismissedPreviews;
+                        delete alertMsg.dataset.previewUrls;
+                    }
                     if (sourceNameInput) sourceNameInput.value = '';
                     if (sourceUrlInput) sourceUrlInput.value = '';
                     renderSavedSourceDropdown('');
@@ -16737,6 +16939,8 @@ const Admin = {
 
                 existingAlertId = null;
                 alertMsg.innerHTML = "";
+                delete alertMsg.dataset.dismissedPreviews;
+                delete alertMsg.dataset.previewUrls;
                 signoffInput.value = "Next Train Ops";
                 if (sourceNameInput) sourceNameInput.value = '';
                 if (sourceUrlInput) sourceUrlInput.value = '';

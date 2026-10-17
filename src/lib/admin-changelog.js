@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_10.17.2': [
+        'A pasted link sits under its card, then hides once that card has drawn. The card keeps a longer page description. The card stripe is blue for info, yellow for a warning, and red for critical. Two different links get two cards. The same link twice stays one card. A third link stays a plain link under the cards. A link that cannot be read stays visible. A named link stays in the sentence. While writing, the card sits in the text field and typing works above it and below it. On the alert, the link image and the poster sit above the typed text. Those pictures are kept on the phone for the next open. Trip plans still upload every 5 searches. After that upload, saved Recent Trips are not sent again unless that trip is searched again. No commuter What\'s New. forceShow stays false.',
+    ],
     'V9_10.17.1': [
         'Check for Updates no longer asks about a slow network. A failed download keeps the saved app. Reset this phone, in Data and Sync and on the signed-in Account sheet, clears this phone and writes back only next_train_device_id. The account stays. The operator brief holds standing notes to today or tomorrow, and the country card is the route-page insights. A live disruption adds a Rail card. Crashes this week start collapsed, and a card opens its rows. Add to alerts turns that card into an alert and asks only who sees it, the severity, and the expiry. Guide this reply regenerates the current draft. App stuck stays on the starting screen until the shell lands, then toasts Next Train loaded. Pull to refresh reloads the open tab. The slow-connection toast waits 15 seconds of the current visible session. What\'s New covers the phone reset and pull to refresh. forceShow stays false.',
     ],

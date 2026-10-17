@@ -4,6 +4,7 @@
  * Two trip buckets (intentionally separate):
  *  1. UI recent trips — plannerHistory_* in planner-ui.js (display cap 5)
  *  2. Telemetry queue — nt_trip_plan_queue_v1 here (flush to RTDB every 5)
+ * Recent Trips stay on the phone after a flush. They are not copied back into the queue.
  *
  * Fare votes write immediately to sys_logs/fare_votes/$voteId (create-once).
  * Offline devices keep a queue of one vote and flush on reconnect.
@@ -34,14 +35,20 @@ function authUid() {
 }
 
 const FAIL_DEBOUNCE_MS = 45_000;
+/** Same search fired twice in one tap is one plan. A later search still counts. */
+const TRIP_SEARCH_DEBOUNCE_MS = 1_500;
 /** Flush telemetry batch size — independent of UI history display cap. */
 export const TRIP_FLUSH_SIZE = 5;
 /** Soft cap if flush keeps failing offline — avoid unbounded local growth. */
 const TRIP_QUEUE_HARD_CAP = 50;
 export const TRIP_QUEUE_KEY = 'nt_trip_plan_queue_v1';
+/** Batch id kept until the queue drop lands, so a retry does not write a second batch. */
+const TRIP_PENDING_BATCH_KEY = 'nt_trip_plan_pending_batch_v1';
 
 let lastFailKey = '';
 let lastFailAt = 0;
+let lastTripSearchKey = '';
+let lastTripSearchAt = 0;
 /** Prevent overlapping flushes from double-enqueue / online+visibility races. */
 let flushInFlight = null;
 
@@ -124,10 +131,68 @@ export async function logRoutingFail({ origin, destination, reason, dayType, tim
 function readTripQueue() {
     try {
         const arr = JSON.parse(safeStorage.getItem(TRIP_QUEUE_KEY) || '[]');
-        return Array.isArray(arr) ? arr : [];
+        return Array.isArray(arr) ? arr.filter((row) => row && typeof row === 'object') : [];
     } catch {
         return [];
     }
+}
+
+function readPendingBatch() {
+    try {
+        const raw = JSON.parse(safeStorage.getItem(TRIP_PENDING_BATCH_KEY) || 'null');
+        if (!raw || typeof raw.batchId !== 'string' || !Array.isArray(raw.ids)) return null;
+        return { batchId: raw.batchId, ids: raw.ids.map(String) };
+    } catch {
+        return null;
+    }
+}
+
+function writePendingBatch(batch) {
+    if (!batch) {
+        safeStorage.removeItem(TRIP_PENDING_BATCH_KEY);
+        return;
+    }
+    safeStorage.setItem(TRIP_PENDING_BATCH_KEY, JSON.stringify({
+        batchId: String(batch.batchId || ''),
+        ids: (batch.ids || []).map(String),
+    }));
+}
+
+function sameIdList(left, right) {
+    const a = left || [];
+    const b = right || [];
+    return a.length === b.length && a.every((id, index) => id === b[index]);
+}
+
+/**
+ * Rows that survive a successful flush.
+ * Flushed ids are dropped even if they are still sitting in the latest queue.
+ * Saved Recent Trips are not an input. Only this telemetry queue is.
+ * A search that landed during the write (a new id) is kept.
+ */
+export function retainUnflushedTripQueue(snapshot, flushedIds, latest) {
+    const flushed = new Set((flushedIds || []).map(String).filter(Boolean));
+    const seen = new Set();
+    const snapshotIds = new Set();
+    const kept = [];
+    const push = (row) => {
+        if (!row || typeof row !== 'object') return;
+        const id = String(row.id || '');
+        if (!id || flushed.has(id) || seen.has(id)) return;
+        seen.add(id);
+        kept.push(row);
+    };
+    (snapshot || []).forEach((row) => {
+        const id = String(row?.id || '');
+        if (id) snapshotIds.add(id);
+        push(row);
+    });
+    (latest || []).forEach((row) => {
+        const id = String(row?.id || '');
+        if (!id || snapshotIds.has(id)) return;
+        push(row);
+    });
+    return kept;
 }
 
 function writeTripQueue(arr) {
@@ -205,12 +270,31 @@ async function upsertTripPlanIndexes(userId, region, trips, q) {
     }
 }
 
+function tripSearchKey(entry) {
+    return [
+        String(entry?.origin || '').toUpperCase(),
+        String(entry?.destination || '').toUpperCase(),
+        String(entry?.dayType || ''),
+        String(entry?.region || $userRegion.get() || ''),
+    ].join('|');
+}
+
 export function enqueueSuccessfulTripPlan(entry) {
+    if (!entry?.origin || !entry?.destination) return;
+    // Recent Trips are a display list. They must never be copied into this bucket.
+    if (entry.fromHistory || entry.source === 'history' || entry.source === 'saved') return;
+    const key = tripSearchKey(entry);
+    const now = Date.now();
+    if (key === lastTripSearchKey && now - lastTripSearchAt < TRIP_SEARCH_DEBOUNCE_MS) return;
+    lastTripSearchKey = key;
+    lastTripSearchAt = now;
+
     const queue = readTripQueue();
     const did = deviceId();
     queue.push({
         ...entry,
-        timestamp: Date.now(),
+        id: uid(),
+        timestamp: now,
         userId: did,
         deviceId: did,
         authUid: authUid(),
@@ -245,28 +329,43 @@ function dedupeTripsForBatch(trips) {
     return out;
 }
 
+function stampQueueIds(queue) {
+    let changed = false;
+    const next = (queue || []).map((row) => {
+        if (row?.id) return row;
+        changed = true;
+        return { ...row, id: uid() };
+    });
+    return { next, changed };
+}
+
 /**
  * Flush queued trip plans to RTDB. Only clears local queue after a successful write.
  * Still waits for TRIP_FLUSH_SIZE queue items, then writes unique trips only.
- * A later batch from the same user can log the same OD again.
+ * Saved Recent Trips are not read and are not uploaded again from this phone.
+ * A later search of the same trip is a new row.
  */
 export async function flushTripPlanQueue(force = false) {
     if (flushInFlight) return flushInFlight;
 
     flushInFlight = (async () => {
-        const queue = readTripQueue();
+        const stamped = stampQueueIds(readTripQueue());
+        const queue = stamped.next;
+        if (stamped.changed) writeTripQueue(queue.slice(-TRIP_QUEUE_HARD_CAP));
         if (!queue.length) return;
         if (!force && queue.length < TRIP_FLUSH_SIZE) return;
 
         const rawBatch = queue.slice(0, TRIP_FLUSH_SIZE);
-        const remainder = queue.slice(TRIP_FLUSH_SIZE);
+        const flushedIds = rawBatch.map((row) => String(row.id || '')).filter(Boolean);
         const batch = dedupeTripsForBatch(rawBatch);
         if (!batch.length) {
-            // All duplicates — drop the raw slice locally so the queue can progress
-            writeTripQueue(remainder.slice(-TRIP_QUEUE_HARD_CAP));
+            writeTripQueue(retainUnflushedTripQueue(queue, flushedIds, []).slice(-TRIP_QUEUE_HARD_CAP));
             return;
         }
-        const batchId = uid();
+        const pending = readPendingBatch();
+        const retry = !!(pending && sameIdList(pending.ids, flushedIds));
+        const batchId = retry ? pending.batchId : uid();
+        writePendingBatch({ batchId, ids: flushedIds });
         const did = deviceId();
         const payload = {
             count: batch.length,
@@ -287,23 +386,25 @@ export async function flushTripPlanQueue(force = false) {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload),
             });
-            if (!res.ok) {
+            // Create-once: a retry of a batch that already landed is permission denied.
+            const alreadyStored = retry && (res.status === 401 || res.status === 403);
+            if (!res.ok && !alreadyStored) {
                 console.warn('🛡️ Guardian: trip_plans write failed', res.status);
                 return;
             }
-            try {
-                await upsertTripPlanIndexes(did, payload.region, batch, q);
-            } catch (idxErr) {
-                console.warn('🛡️ Guardian: trip_plan index write failed', idxErr);
+            if (res.ok) {
+                try {
+                    await upsertTripPlanIndexes(did, payload.region, batch, q);
+                } catch (idxErr) {
+                    console.warn('🛡️ Guardian: trip_plan index write failed', idxErr);
+                }
             }
-            // Success — reset flushed portion; keep any trips enqueued during the request
             const latest = readTripQueue();
-            // Prefer remainder + anything appended after we snapshotted `queue`
-            const appended = latest.length > queue.length ? latest.slice(queue.length) : [];
-            writeTripQueue([...remainder, ...appended].slice(-TRIP_QUEUE_HARD_CAP));
+            writePendingBatch(null);
+            writeTripQueue(retainUnflushedTripQueue(queue, flushedIds, latest).slice(-TRIP_QUEUE_HARD_CAP));
         } catch (e) {
             console.warn('🛡️ Guardian: trip_plans write error', e);
-            // Leave queue intact for retry
+            // Leave queue and pending batch intact for retry
         }
     })();
 

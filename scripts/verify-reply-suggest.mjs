@@ -42,7 +42,17 @@ import {
     assistHtmlFromText,
 } from '../src/lib/text-assist.js';
 import { handleRequest } from '../workers/nexttrain-reply/worker.js';
-import { fetchLinkPreview, isPublicPreviewUrl, parseLinkPreviewHtml, previewFromMicrolink } from '../src/lib/link-preview.js';
+import {
+    fetchLinkPreview,
+    isPublicPreviewUrl,
+    linkPreviewMarkup,
+    PREVIEW_DESCRIPTION_MAX,
+    messagePreviewUrls,
+    parseLinkPreviewHtml,
+    previewFromMicrolink,
+    relocateBarePreviewUrls,
+    samePreviewUrl,
+} from '../src/lib/link-preview.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const failures = [];
@@ -389,10 +399,57 @@ ok(suggestDraftMessageId([
 const preview = parseLinkPreviewHtml('<html><head><meta property="og:title" content="UCV Survey"><meta property="og:description" content="One minute"><meta property="og:image" content="https://example.com/banner.jpg"></head></html>', 'https://docs.google.com/forms/d/e/abc/viewform');
 ok(preview?.title === 'UCV Survey', 'a link preview reads the page title');
 ok(preview?.description === 'One minute', 'a link preview reads the page description');
+const longCopy = 'The love that these buses are getting is Mind-blowing, too big to be true, it is just amazing, job well done by Prasa. '.repeat(8);
+const longPreview = parseLinkPreviewHtml(`<html><head><meta property="og:title" content="Buses"><meta property="og:description" content="${longCopy}"></head></html>`, 'https://example.com/buses');
+ok((longPreview?.description || '').length > 220, 'a link preview keeps more than a two-line clip of the page');
+ok((longPreview?.description || '').length <= PREVIEW_DESCRIPTION_MAX, 'a link preview still stops the page text at a fixed length');
 ok(preview?.image === 'https://example.com/banner.jpg', 'a link preview reads the page image');
 ok(!isPublicPreviewUrl('http://example.com/a'), 'a preview refuses plain http');
 ok(!isPublicPreviewUrl('https://127.0.0.1/secret'), 'a preview refuses a local address');
 ok(isPublicPreviewUrl('https://forms.gle/abc'), 'a public https link can be previewed');
+const channelUrl = 'https://whatsapp.com/channel/0029Vb5ueHpCsU9YpEsHJd0K/1556';
+const second = 'https://example.com/buses';
+const third = 'https://example.com/third';
+const twoLinks = {
+    severity: 'info',
+    message: `${channelUrl} ${second}`,
+    sourceUrl: 'https://example.com/source-only',
+    ctaUrl: 'https://example.com/button-only',
+};
+ok(messagePreviewUrls(twoLinks).length === 2, 'two pasted links are both kept');
+ok(messagePreviewUrls(twoLinks)[0] === channelUrl && messagePreviewUrls(twoLinks)[1] === second, 'pasted links stay in reading order');
+ok(!messagePreviewUrls(twoLinks).includes('https://example.com/source-only'), 'a source line is not another card');
+ok(messagePreviewUrls({ message: `${channelUrl} and ${channelUrl}/` }).length === 1, 'the same link twice is one card');
+ok(samePreviewUrl(`${second}/`, second), 'a trailing slash does not make a second card');
+ok(messagePreviewUrls({ message: `http://example.com/plain ${second}` }).join(' ') === second, 'plain http is not previewed');
+const infoCard = linkPreviewMarkup({
+    severity: 'info',
+    message: channelUrl,
+    linkPreview: { url: channelUrl, title: 'Channel', description: 'Welcome', image: 'https://example.com/bus.jpg', site: 'whatsapp.com' },
+});
+ok(infoCard.indexOf('nt-link-preview-raw') > infoCard.indexOf('nt-link-preview-title'), 'the raw link sits under the card');
+ok(infoCard.includes(channelUrl), 'the raw link is still there until the picture draws');
+ok(!infoCard.includes('is-settled'), 'a card with a picture keeps the link until that picture draws');
+ok(infoCard.includes('is-info'), 'an info card uses the info stripe');
+ok(!infoCard.includes('#25d366'), 'the card stripe is not fixed green');
+const textOnly = linkPreviewMarkup({
+    severity: 'warning',
+    message: second,
+    linkPreview: { url: second, title: 'Buses', description: 'Parked', image: '', site: 'example.com' },
+});
+ok(textOnly.includes('is-settled'), 'a card with no picture hides the raw link immediately');
+ok(textOnly.includes('is-warning'), 'a warning card uses the warning stripe');
+const criticalCard = linkPreviewMarkup({ severity: 'critical', message: second });
+ok(criticalCard.includes('is-critical') && criticalCard.includes('data-link-preview-state="loading"'), 'a critical card keeps the link while it is still loading');
+ok(!criticalCard.includes('is-settled'), 'a loading card does not hide the link');
+const many = linkPreviewMarkup({ severity: 'info', message: `${channelUrl}\n${second}\n${third}` });
+ok((many.match(/nt-link-preview-slot/g) || []).length === 2, 'only the first two links grow cards');
+ok(many.includes('nt-link-preview-extra') && many.includes(third), 'a third link stays a plain link under the cards');
+const moved = relocateBarePreviewUrls(`<p>See <a href="${second}">${second}</a> today</p><p><a href="${channelUrl}">Read this</a></p>`, [second, channelUrl]);
+ok(!moved.includes(`>${second}<`), 'a pasted url leaves the sentence');
+ok(moved.includes('See') && moved.includes('today'), 'the words around a pasted url stay');
+ok(moved.includes('Read this'), 'a named link stays in the sentence');
+ok(relocateBarePreviewUrls(`<p><a href="${channelUrl}">${channelUrl}</a></p>`, [channelUrl]) === '', 'a message that is only a url leaves the card to carry it');
 const microCard = previewFromMicrolink({
     status: 'success',
     data: {
@@ -450,6 +507,8 @@ ok(workerCard?.title === 'From the worker', 'the reply worker card is stored whe
 globalThis.fetch = realFetch;
 const blockedPreview = await handleRequest(new Request('https://reply.test/unfurl?url=' + encodeURIComponent('https://127.0.0.1/x')), {});
 ok(blockedPreview.status === 400, 'unfurl refuses a private host');
+const blockedImage = await handleRequest(new Request('https://reply.test/unfurl-image?url=' + encodeURIComponent('https://127.0.0.1/x.png')), {});
+ok(blockedImage.status === 400, 'unfurl-image is public and refuses a private host');
 const draftDenied = await handleRequest(new Request('https://reply.test/draft?id=m1'), {});
 ok(draftDenied.status === 401, 'a saved draft stays behind the operator token');
 ok(adminJs.includes('persistReplyDraft'), 'closing Co-Pilot keeps the draft');

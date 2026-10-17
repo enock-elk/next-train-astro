@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_10.17.3': [
+        'Community rooms follow the routes that are actually on. A region checkbox does not open the other communities in that region. The brief sky follows the time of day. A card is two short paragraphs when it has two facts. Add to alerts is the bell at the bottom right of the card. What this means uses the cards when the written note is unavailable, and Explain this crash keeps that reading on the card. Back on the brief closes the brief. A signed-in operator gets a home-screen count of new messages without opening Dev Mode. A commuter does not. No commuter What\'s New. forceShow stays false.',
+    ],
     'V9_10.17.2': [
         'Reset this App is the name in Data and Sync, on the signed-in Account sheet, and on the confirm. The user-id sentence is gone. A weak or failed connection probe asks before the wipe. Cancel keeps the saved schedules. Check for Updates still does not ask. The full timetable paints the saved dump first and only downloads when the live stamp is newer. Upcoming trains treat Durban Yard as Durban, so a Dalbridge to Durban train is Direct. Elandsfontein and Rhodesfield stay Kempton Park. Irene sheets also show the Kempton Park trains that call there, tagged KEMP. Monte Vista, Maitland, and KEMP use the same status-slot tag as NO SVC, in the app and on the light export, in blue. A long name such as Monte Vista scales down inside that slot so the column stays with the others. The export header wash is blue-100 so it is not the zebra row. Tap opens the advisory in blue, not the red no-service sheet. EXPR opens that same note. What\'s New covers the reset name, Direct, KEMP, and the marks. forceShow stays false.',
     ],

@@ -11,12 +11,14 @@ import {
     briefDismissed,
     briefLauncherHtml,
     briefReportHtml,
+    briefSky,
     buildBriefRequest,
     buildCrashExplainRequest,
     buildOperatorBrief,
     dismissBrief,
     greetingForHour,
     johannesburgClock,
+    localBriefNote,
     parseBriefText,
     scrubOperatorText,
     upcomingOpsNotes,
@@ -51,6 +53,11 @@ const friday = Date.parse('2026-10-16T09:00:00+02:00');
 const fridayJoined = upcomingOpsNotes(friday).map((note) => `${note.title} ${note.body}`).join('\n');
 ok(fridayJoined.includes('Hercules to Koedoespoort'), 'Friday names Saturday Hercules');
 ok(fridayJoined.includes('other routes'), 'Friday keeps the other-routes line with Hercules');
+const saturday = upcomingOpsNotes(friday).find((note) => String(note.id).startsWith('sat-'));
+ok(saturday?.body.includes('\n\n'), 'the Saturday note is two paragraphs');
+ok(saturday.body.split('\n\n')[1].startsWith('Hercules and Koedoespoort'), 'the other-routes line is its own paragraph');
+ok(briefSky(8).name === 'morning' && briefSky(14).name === 'afternoon', 'morning and afternoon have their own sky');
+ok(briefSky(18).name === 'evening' && briefSky(1).name === 'night', 'evening and night have their own sky');
 
 const beforeNovemberMonday = Date.parse('2026-11-01T12:00:00+02:00');
 const cato = upcomingOpsNotes(beforeNovemberMonday).map((note) => note.body).join(' ');
@@ -99,6 +106,8 @@ ok(memory.value === BRIEF_DISMISS_KEY || memory.value.length === 10, 'dismiss is
 
 const launcher = briefLauncherHtml({ hidden: false, clock });
 ok(launcher.includes('id="operator-brief-open"'), 'the launcher is a button');
+ok(launcher.includes('data-brief-sky="evening"'), 'the launcher uses the evening sky');
+ok(!launcher.includes('#4c1d95'), 'the launcher is not one purple gradient');
 ok(launcher.includes('id="operator-brief-dismiss"'), 'the launcher can be dismissed');
 ok(launcher.includes('w-full'), 'the launcher is full width');
 ok(briefLauncherHtml({ hidden: true, clock }).includes('id="operator-brief-restore"'), 'a dismissed brief can be opened again');
@@ -128,7 +137,13 @@ ok(report.includes('What this means'), 'the report has a written note');
 ok(report.includes('Explain this crash'), 'a crash card can be sent for a reading');
 ok(report.includes('Crashes this week'), 'crash rows start collapsed');
 ok(report.includes('data-brief-card'), 'a brief card can expand');
-ok(report.includes('Add to alerts'), 'a brief card can become an alert');
+ok(report.includes('aria-label="Add to alerts"'), 'a brief card can become an alert');
+ok(report.includes('absolute bottom-3 right-3'), 'add to alerts sits at the bottom right');
+ok(!report.includes('>Add to alerts<'), 'add to alerts has no visible label');
+ok(report.includes('data-brief-sky="evening"'), 'the report sky follows the hour');
+ok(!/wrangler/i.test(report), 'the report does not ask for a deploy');
+const localNote = localBriefNote(brief);
+ok(localNote.includes('\n\n') && !/wrangler/i.test(localNote), 'a missing writer still leaves a two-paragraph note');
 ok(report.includes('Google Analytics is not'), 'analytics that we cannot read are named as absent');
 const draft = alertDraftFromBriefCard(country);
 ok(draft.target === 'all', 'the country card posts to the whole network');
@@ -154,7 +169,20 @@ ok(admin.includes('ensureOperatorBriefSlot'), 'Dev Hub paints the brief button')
 ok(admin.includes('Admin.placeBelowBrief(telPanel)'), 'Live Telemetry sits under the brief');
 ok(!admin.includes('insertBefore(telPanel, container.firstElementChild)'), 'the grid does not pin telemetry above the brief');
 ok(admin.includes("Admin.replyWorkerUrl()}/brief`"), 'Explain and the note call the reply worker');
+ok(!admin.includes('npx wrangler deploy'), 'the brief does not tell the operator to deploy');
+ok(admin.includes('localBriefNote'), 'a missing writer falls back to the cards');
+ok(admin.includes('onBriefPopState'), 'back closes the brief before Dev Mode');
+ok(admin.includes('messageUnread'), 'the home-screen badge counts messages');
+ok(!admin.includes('setAppBadge(totalUnread)'), 'crashes and fails do not set the home-screen badge');
+ok(!admin.includes('Could not read this crash.'), 'a crash reading stays on the card');
 ok(!admin.includes('operator-brief-open') || admin.includes('openOperatorBrief'), 'the report opens from the button');
+const ui = readFileSync(join(ROOT, 'src/lib/ui.js'), 'utf8');
+ok(ui.includes('Admin.onBriefPopState'), 'back reaches the brief before Dev Mode');
+const badge = readFileSync(join(ROOT, 'src/lib/operator-badge.js'), 'utf8');
+ok(badge.includes('isAdminEmail') && badge.includes('clearAppBadge'), 'only an operator email can badge the icon');
+ok(badge.includes('feedback.json'), 'the icon reads commuter messages');
+const account = readFileSync(join(ROOT, 'src/lib/account.js'), 'utf8');
+ok(account.includes('operator-badge.js'), 'the icon updates without opening Dev Mode');
 const worker = readFileSync(join(ROOT, 'workers/nexttrain-reply/worker.js'), 'utf8');
 ok(worker.includes("pathname === '/brief'"), 'the reply worker has a brief route');
 ok(!worker.includes('feedback.json'), 'the brief route does not read the feedback tree');

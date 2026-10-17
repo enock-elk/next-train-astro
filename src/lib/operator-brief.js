@@ -108,6 +108,44 @@ export function greetingForHour(hour) {
     return 'Night brief';
 }
 
+/**
+ * Sky behind the brief. Johannesburg hour, same bands as the greeting.
+ * Afternoon is a bright blue sky with a sun, the way a weather card looks after noon.
+ */
+export function briefSky(hour) {
+    const n = Number(hour);
+    if (n >= 5 && n < 12) {
+        return {
+            name: 'morning',
+            background: 'radial-gradient(circle at 84% 8%, #fff6d8 0 16px, rgba(255,246,216,0) 40px), linear-gradient(180deg, #7eb6ef 0%, #b7dcff 58%, #ffe3bf 100%)',
+            ink: '#0f2744',
+            muted: 'rgba(15,39,68,0.78)',
+        };
+    }
+    if (n >= 12 && n < 17) {
+        return {
+            name: 'afternoon',
+            background: 'radial-gradient(circle at 78% 12%, #fff7c2 0 18px, #ffe08a 7%, rgba(255,224,138,0) 20%), linear-gradient(180deg, #2f95ee 0%, #7ecbff 42%, #e5f5ff 74%, #fff3cc 100%)',
+            ink: '#0b2744',
+            muted: 'rgba(11,39,68,0.76)',
+        };
+    }
+    if (n >= 17 && n < 22) {
+        return {
+            name: 'evening',
+            background: 'radial-gradient(circle at 80% 18%, #ffd29a 0 14px, rgba(255,210,154,0) 36px), linear-gradient(180deg, #243e8a 0%, #c45c2a 62%, #f0b429 100%)',
+            ink: '#fff7ed',
+            muted: 'rgba(255,247,237,0.88)',
+        };
+    }
+    return {
+        name: 'night',
+        background: 'linear-gradient(180deg, #071426 0%, #16325c 58%, #0c2344 100%)',
+        ink: '#f8fafc',
+        muted: 'rgba(226,232,240,0.86)',
+    };
+}
+
 export function briefDismissed(storage, now = Date.now()) {
     try {
         return storage?.getItem(BRIEF_DISMISS_KEY) === johannesburgClock(now).key;
@@ -209,7 +247,7 @@ export function upcomingOpsNotes(now = Date.now()) {
                 kicker: 'Ahead',
                 tone: 'watch',
                 title: `${when} has no trains on two lines`,
-                body: 'Hercules to Koedoespoort and East London to Berlin have no Saturday trains and no public-holiday trains. Hercules and Koedoespoort still have Saturday trains on other routes.',
+                body: 'Hercules to Koedoespoort and East London to Berlin have no Saturday trains and no public-holiday trains.\n\nHercules and Koedoespoort still have Saturday trains on other routes.',
                 details: [
                     'Gauteng: Hercules to Koedoespoort has no Saturday trains. Other routes at those stations still run.',
                     'Eastern Cape: East London to Berlin has no Saturday trains.',
@@ -706,20 +744,31 @@ export function buildOperatorBrief(input = {}) {
     };
 }
 
+const ALERT_ICON = '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path></svg>';
+
+function briefParagraphs(text) {
+    const blocks = String(text || '').split(/\n\n+/).map((line) => line.trim()).filter(Boolean);
+    if (!blocks.length) return '';
+    return blocks.map((block, index) => (
+        `<p class="${index ? 'mt-2' : 'mt-1'} text-sm text-slate-600 dark:text-slate-300 leading-relaxed">${esc(block)}</p>`
+    )).join('');
+}
+
 export function briefLauncherHtml({ hidden = false, clock } = {}) {
     const when = clock || johannesburgClock();
     const greeting = greetingForHour(when.hour);
+    const sky = briefSky(when.hour);
     if (hidden) {
-        return `<button type="button" id="operator-brief-restore" class="w-full rounded-2xl border border-indigo-200 dark:border-indigo-800 bg-white dark:bg-gray-900 px-4 py-3 text-left text-sm font-bold text-indigo-700 dark:text-indigo-200 focus:outline-none">Show the brief</button>`;
+        return `<button type="button" id="operator-brief-restore" class="w-full rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-gray-900 px-4 py-3 text-left text-sm font-bold text-slate-800 dark:text-slate-100 focus:outline-none">Show the brief</button>`;
     }
     return `
         <div class="relative">
-            <button type="button" id="operator-brief-open" class="w-full text-left rounded-3xl px-5 py-4 pr-12 shadow-md focus:outline-none" style="background: linear-gradient(145deg, #312e81 0%, #4c1d95 48%, #6d28d9 100%); color: #f8fafc;">
-                <p class="text-[11px] font-bold uppercase tracking-[0.16em] text-indigo-100">${esc(greeting)}</p>
+            <button type="button" id="operator-brief-open" data-brief-sky="${esc(sky.name)}" class="w-full text-left rounded-3xl px-5 py-4 pr-12 shadow-md focus:outline-none" style="background: ${sky.background}; color: ${sky.ink};">
+                <p class="text-[11px] font-bold uppercase tracking-[0.16em]" style="color: ${sky.muted}">${esc(greeting)}</p>
                 <p class="mt-1 text-lg font-semibold leading-tight">See the brief</p>
-                <p class="mt-1 text-sm text-indigo-100/90 leading-snug">${esc(when.label)}. Expiring items, plans, failures, and the lines to watch.</p>
+                <p class="mt-1 text-sm leading-snug" style="color: ${sky.muted}">${esc(when.label)}. Expiring items, plans, failures, and the lines to watch.</p>
             </button>
-            <button type="button" id="operator-brief-dismiss" class="absolute top-3 right-3 p-1.5 rounded-full text-indigo-100 hover:bg-white/10 focus:outline-none" aria-label="Dismiss">
+            <button type="button" id="operator-brief-dismiss" class="absolute top-3 right-3 p-1.5 rounded-full hover:bg-black/10 focus:outline-none" style="color: ${sky.ink}" aria-label="Dismiss">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
             </button>
         </div>`;
@@ -731,19 +780,33 @@ function toneClass(tone) {
     return 'border-indigo-100 dark:border-indigo-900/60';
 }
 
+export function localBriefNote(model) {
+    const cards = Array.isArray(model?.cards) ? model.cards : [];
+    const watch = cards.filter((card) => card?.tone === 'watch');
+    const first = watch[0] || cards[0];
+    if (!first) return 'Nothing in this sample needs a note.';
+    const lead = `${first.title}. ${String(first.body || '').split('\n\n')[0]}`.replace(/\s+/g, ' ').trim();
+    const second = watch[1] || cards.find((card) => card !== first);
+    const follow = second
+        ? `${second.title}. ${String(second.body || '').split('\n\n')[0]}`.replace(/\s+/g, ' ').trim()
+        : 'The cards below are the rest of this brief.';
+    return `${lead}\n\n${follow}`;
+}
+
 export function briefReportHtml(model) {
+    const sky = briefSky(model?.clock?.hour);
     const cards = (model?.cards || []).map((card, index) => {
         const details = Array.isArray(card.details) ? card.details.filter(Boolean) : [];
         const extra = details.length
             ? `<div data-brief-detail class="hidden mt-2 space-y-1">${details.map((line) => `<p class="text-sm text-slate-700 dark:text-slate-200 leading-relaxed">${esc(line)}</p>`).join('')}</div>`
             : '';
         return `
-        <article data-brief-card data-brief-index="${index}" class="rounded-3xl border ${toneClass(card.tone)} bg-white/95 dark:bg-gray-900/80 px-4 py-3 shadow-sm text-left w-full cursor-pointer">
-            <p class="text-[10px] font-bold uppercase tracking-[0.16em] text-indigo-500 dark:text-indigo-300">${esc(card.kicker)}</p>
+        <article data-brief-card data-brief-index="${index}" class="relative rounded-3xl border ${toneClass(card.tone)} bg-white/95 dark:bg-gray-900/80 px-4 pt-3 pb-12 shadow-sm text-left w-full cursor-pointer">
+            <p class="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">${esc(card.kicker)}</p>
             <h3 class="mt-1 text-base font-semibold text-slate-900 dark:text-white leading-snug">${esc(card.title)}</h3>
-            <p class="mt-1 text-sm text-slate-600 dark:text-slate-300 leading-relaxed">${esc(card.body)}</p>
+            ${briefParagraphs(card.body)}
             ${extra}
-            <button type="button" class="operator-brief-alert mt-3 text-[11px] font-bold text-rose-700 dark:text-rose-300 underline focus:outline-none" data-brief-index="${index}">Add to alerts</button>
+            <button type="button" class="operator-brief-alert absolute bottom-3 right-3 p-2 rounded-full text-rose-600 dark:text-rose-300 focus:outline-none" data-brief-index="${index}" aria-label="Add to alerts">${ALERT_ICON}</button>
         </article>`;
     }).join('');
     const crashes = (model?.crashes || []).map((row) => `
@@ -754,20 +817,20 @@ export function briefReportHtml(model) {
             <p class="operator-brief-crash-note mt-2 hidden text-sm text-slate-700 dark:text-slate-200 leading-relaxed whitespace-pre-wrap"></p>
         </div>`).join('');
     return `
-        <div class="min-h-full bg-slate-100 dark:bg-gray-950 px-4 pt-6 pb-10">
+        <div class="min-h-full px-4 pt-6 pb-10" data-brief-sky="${esc(sky.name)}" style="background: ${sky.background};">
             <div class="max-w-lg mx-auto">
-                <div class="flex items-start justify-between gap-3 rounded-3xl px-4 py-4 text-white" style="background: linear-gradient(145deg, #1e1b4b, #4338ca);">
+                <div class="flex items-start justify-between gap-3 px-1 py-2" style="color: ${sky.ink};">
                     <div>
-                        <p class="text-[11px] font-bold uppercase tracking-[0.18em] text-indigo-100">${esc(model?.greeting || 'Brief')}</p>
+                        <p class="text-[11px] font-bold uppercase tracking-[0.18em]" style="color: ${sky.muted}">${esc(model?.greeting || 'Brief')}</p>
                         <h2 class="mt-1 text-2xl font-semibold leading-tight">${esc(model?.headline || '')}</h2>
-                        <p class="mt-1 text-sm text-indigo-100/90">${esc(model?.clock?.label || '')}</p>
+                        <p class="mt-1 text-sm" style="color: ${sky.muted}">${esc(model?.clock?.label || '')}</p>
                     </div>
-                    <button type="button" id="operator-brief-close" class="shrink-0 p-2 rounded-full bg-white/10 focus:outline-none" aria-label="Close">
+                    <button type="button" id="operator-brief-close" class="shrink-0 p-2 rounded-full bg-black/10 focus:outline-none" style="color: ${sky.ink}" aria-label="Close">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
                     </button>
                 </div>
-                <section class="mt-5 rounded-3xl px-4 py-4 text-white shadow-lg" style="background: linear-gradient(160deg, #4c1d95, #6d28d9 55%, #7c3aed);">
-                    <p class="text-[10px] font-bold uppercase tracking-[0.16em] text-indigo-100">What this means</p>
+                <section class="mt-4 rounded-3xl bg-white/95 px-4 py-4 text-slate-800 shadow-lg">
+                    <p class="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500">What this means</p>
                     <p id="operator-brief-note" class="mt-2 text-sm leading-relaxed whitespace-pre-wrap">Writing a note from this sample.</p>
                 </section>
                 <div class="mt-4 space-y-3">${cards}</div>

@@ -12,6 +12,9 @@
  *
  * A region, route, or device grant stays on until an admin turns that
  * switch off. Empty routeIds with a region still enables the feature.
+ * Community rooms are stricter: a listed route is the only room, and a
+ * region checkbox does not open the other communities in that region.
+ * Empty routeIds with a region still opens every community there.
  *
  * Lab (`lab.nexttrain.co.za` or PUBLIC_LAB_MODE=true): missing/empty config →
  * realtime / delay / push / ride-checkin on (sharing still works for admins).
@@ -249,6 +252,34 @@ export function isFeatureEnabled(name, routeId = '', region = '') {
 }
 
 /**
+ * One community room. A specific routeIds list does not inherit the region.
+ * Empty routeIds with a region still means every route in that region.
+ * `*` means every route. A device grant is applied by the caller.
+ * @param {{ enabled?: boolean, routeIds?: string[], regionIds?: string[] } | null | undefined} entry
+ * @param {string} routeId
+ */
+export function communityRouteOnEntry(entry, routeId) {
+    if (!entry || entry.enabled !== true) return false;
+    const ids = Array.isArray(entry.routeIds) ? entry.routeIds.map((id) => String(id)) : [];
+    const regions = Array.isArray(entry.regionIds)
+        ? entry.regionIds.map((id) => String(id).toUpperCase())
+        : [];
+    if (ids.includes('*')) return true;
+    const id = String(routeId || '');
+    if (ids.length) return !!id && ids.includes(id);
+    const regionCode = regionForRouteId(id);
+    return !!(regionCode && regions.includes(regionCode));
+}
+
+/** Community room from the loaded config. A device grant opens every room. */
+export function isListedCommunityRoute(routeId) {
+    if (isFeatureGranted(FEATURE_KEYS.COMMUNITY_TAB)) return true;
+    const bag = cachedFeatures || defaultsForEnv();
+    const entry = normalizeEntry(FEATURE_KEYS.COMMUNITY_TAB, bag?.[FEATURE_KEYS.COMMUNITY_TAB]);
+    return communityRouteOnEntry(entry, routeId);
+}
+
+/**
  * Commuter live-share chrome. No lab always-on, and lab default `*` is not a pin.
  * Explicit RTDB route ids (or production `*`) count.
  * @param {string} [routeId]
@@ -277,6 +308,7 @@ export async function isFeatureEnabledAsync(name, routeId = '') {
 if (typeof window !== 'undefined') {
     window.fetchFeatures = fetchFeatures;
     window.isFeatureEnabled = isFeatureEnabled;
+    window.isListedCommunityRoute = isListedCommunityRoute;
     window.isFeatureGranted = isFeatureGranted;
     window.getGrantedFeatures = getGrantedFeatures;
     window.isRideCheckInPinned = isRideCheckInPinned;

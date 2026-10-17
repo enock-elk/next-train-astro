@@ -509,6 +509,7 @@ export async function initAccount() {
         if (user && user.isAnonymous) {
             publishUser(null);
             import('./rider-marks.js').then((m) => m.switchMarksAccount(null)).catch(() => {});
+            import('./operator-badge.js').then((m) => m.syncOperatorMessageBadge()).catch(() => {});
             return;
         }
         let openedFromVerifyLink = false;
@@ -523,6 +524,10 @@ export async function initAccount() {
             } catch { /* keep the query */ }
         }
         publishUser(user);
+        import('./operator-badge.js').then((m) => {
+            m.watchOperatorMessageBadge();
+            return m.syncOperatorMessageBadge();
+        }).catch(() => {});
         if (openedFromVerifyLink && typeof window.showToast === 'function') {
             window.showToast(user?.emailVerified ? 'Email verified' : 'Open the link in your email, then come back.', user?.emailVerified ? 'success' : 'info');
         }

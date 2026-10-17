@@ -3176,7 +3176,8 @@ const Admin = {
         const secret = await Admin.getAuthKey();
         if (!secret) return;
         const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
-        let totalUnread = 0; // GUARDIAN PHASE 11: Accumulator for PWA Badge
+        let totalUnread = 0; // GUARDIAN PHASE 11: Accumulator for in-panel tiles
+        let messageUnread = null; // Home-screen badge is new commuter messages only
 
         try {
             // Fetch Universal Cross-Device Admin State
@@ -3198,7 +3199,8 @@ const Admin = {
                 if (fbData && typeof fbData === 'object') {
                     Object.values(fbData).forEach(i => { if (i.timestamp > lastChecked) fbUnread++; });
                 }
-                
+
+                messageUnread = fbUnread;
                 totalUnread += fbUnread;
                 const fbBadge = document.getElementById('fb-unread-badge');
                 if (fbBadge) {
@@ -3300,9 +3302,9 @@ const Admin = {
                 }
             }
             
-            // GUARDIAN 2.4.1: Native PWA App Icon Badging
-            if ('setAppBadge' in navigator) {
-                if (totalUnread > 0) navigator.setAppBadge(totalUnread);
+            // Home-screen badge is unread commuter messages. Tiles above keep their own counts.
+            if (messageUnread != null && 'setAppBadge' in navigator) {
+                if (messageUnread > 0) navigator.setAppBadge(messageUnread);
                 else navigator.clearAppBadge();
             }
         } catch(e) {
@@ -5076,7 +5078,9 @@ const Admin = {
         });
         const data = await res.json().catch(() => ({}));
         if (res.status === 404) {
-            throw new Error('The reply worker does not have the brief yet. From the workers/nexttrain-reply folder, run npx wrangler deploy.');
+            const missing = new Error('The written note is not available.');
+            missing.localBrief = true;
+            throw missing;
         }
         if (!res.ok) throw new Error(data.error || 'Could not write the brief.');
         return String(data.text || '');
@@ -5113,9 +5117,9 @@ const Admin = {
                     </div>
                 </form>`;
             document.body.appendChild(sheet);
-            sheet.querySelector('#operator-brief-alert-cancel').onclick = () => sheet.classList.add('hidden');
+            sheet.querySelector('#operator-brief-alert-cancel').onclick = () => Admin.closeBriefAlert();
             sheet.addEventListener('click', (event) => {
-                if (event.target === sheet) sheet.classList.add('hidden');
+                if (event.target === sheet) Admin.closeBriefAlert();
             });
             sheet.querySelector('#operator-brief-alert-form').addEventListener('submit', (event) => {
                 event.preventDefault();
@@ -5141,6 +5145,45 @@ const Admin = {
         if (severity) severity.value = draft.severity || 'info';
         if (expiry) expiry.value = Admin.endOfTodayLocalValue();
         sheet.classList.remove('hidden');
+        Admin.rememberBriefLayer('#brief-alert');
+    },
+
+    rememberBriefLayer: (hash) => {
+        try {
+            if ((location.hash || '') === hash) return;
+            history.pushState({ brief: hash }, '', hash);
+        } catch { /* ignore */ }
+    },
+
+    onBriefPopState: () => {
+        const sheet = document.getElementById('operator-brief-alert-sheet');
+        if (sheet && !sheet.classList.contains('hidden')) {
+            sheet.classList.add('hidden');
+            return true;
+        }
+        const overlay = document.getElementById('operator-brief-overlay');
+        if (overlay && !overlay.classList.contains('hidden')) {
+            overlay.classList.add('hidden');
+            return true;
+        }
+        return false;
+    },
+
+    closeBriefAlert: () => {
+        if ((location.hash || '') === '#brief-alert') {
+            history.back();
+            return;
+        }
+        document.getElementById('operator-brief-alert-sheet')?.classList.add('hidden');
+    },
+
+    closeOperatorBrief: () => {
+        const hash = location.hash || '';
+        if (hash === '#brief' || hash === '#brief-alert') {
+            history.back();
+            return;
+        }
+        document.getElementById('operator-brief-overlay')?.classList.add('hidden');
     },
 
     postBriefAlert: async () => {
@@ -5186,7 +5229,7 @@ const Admin = {
         };
         try {
             await Admin.publishNoticeToTarget(target, payload, secret);
-            sheet?.classList.add('hidden');
+            Admin.closeBriefAlert();
             if (typeof showToast === 'function') showToast(`Alert posted to ${Admin.alertTargetLabel(target)}.`, 'success');
             if (typeof checkServiceAlerts === 'function') checkServiceAlerts();
         } catch (err) {
@@ -5201,14 +5244,16 @@ const Admin = {
             return;
         }
         const overlay = Admin.ensureBriefOverlay();
+        const sky = api.briefSky?.(api.johannesburgClock?.(Date.now())?.hour) || { background: '#e5f5ff', ink: '#0b2744', muted: '#0b2744' };
         overlay.classList.remove('hidden');
-        overlay.innerHTML = `<div class="min-h-full bg-slate-100 dark:bg-gray-950 px-4 pt-8"><div class="max-w-lg mx-auto rounded-3xl px-4 py-5 text-white" style="background: linear-gradient(145deg, #1e1b4b, #4338ca);"><p class="text-[11px] font-bold uppercase tracking-[0.18em] text-indigo-100">Brief</p><p id="operator-brief-note" class="mt-2 text-lg font-semibold">Reading plans, failures, fares, crashes, and what is about to expire.</p><button type="button" id="operator-brief-close" class="mt-4 text-sm font-bold underline focus:outline-none">Close</button></div></div>`;
-        overlay.querySelector('#operator-brief-close')?.addEventListener('click', () => overlay.classList.add('hidden'));
+        Admin.rememberBriefLayer('#brief');
+        overlay.innerHTML = `<div class="min-h-full px-4 pt-8" style="background: ${sky.background}; color: ${sky.ink};"><div class="max-w-lg mx-auto px-1 py-4"><p class="text-[11px] font-bold uppercase tracking-[0.18em]" style="color: ${sky.muted}">Brief</p><p id="operator-brief-note" class="mt-2 text-lg font-semibold">Reading plans, failures, fares, crashes, and what is about to expire.</p><button type="button" id="operator-brief-close" class="mt-4 text-sm font-bold underline focus:outline-none">Close</button></div></div>`;
+        overlay.querySelector('#operator-brief-close')?.addEventListener('click', () => Admin.closeOperatorBrief());
         try {
             const model = await Admin.gatherOperatorBrief();
             Admin._briefCards = model.cards || [];
             overlay.innerHTML = api.briefReportHtml(model);
-            overlay.querySelector('#operator-brief-close')?.addEventListener('click', () => overlay.classList.add('hidden'));
+            overlay.querySelector('#operator-brief-close')?.addEventListener('click', () => Admin.closeOperatorBrief());
             overlay.addEventListener('click', (event) => {
                 if (event.target.closest('button, summary, a, input, select')) return;
                 const card = event.target.closest('[data-brief-card]');
@@ -5227,9 +5272,9 @@ const Admin = {
             });
             try {
                 const text = await Admin.askBriefWriter('report', { kind: 'report', digest: model.digest });
-                Admin.paintBriefNote(text || 'The note came back empty. The cards above are still the sample.');
-            } catch (err) {
-                Admin.paintBriefNote(err?.message || 'The note could not be written. The cards above are still the sample.');
+                Admin.paintBriefNote(text || api.localBriefNote?.(model) || 'The cards below are the brief.');
+            } catch {
+                Admin.paintBriefNote(api.localBriefNote?.(model) || 'The cards below are the brief.');
             }
         } catch (err) {
             Admin.paintBriefNote(err?.message || 'Could not read the logs.');
@@ -5272,9 +5317,8 @@ const Admin = {
                 },
             });
             if (note) note.textContent = text || 'The reading came back empty.';
-        } catch (err) {
-            if (note) note.textContent = err?.message || 'Could not read this crash.';
-            if (typeof showToast === 'function') showToast(err?.message || 'Could not read this crash.', 'error');
+        } catch {
+            if (note) note.textContent = 'A reading is not available for this log yet. The line above is the crash.';
         } finally {
             if (button) button.disabled = false;
         }

@@ -454,6 +454,11 @@ export function bindHistoryBackNavigation() {
             return;
         }
 
+        // The brief sits on Dev Mode. Back closes the alert sheet, then the brief.
+        if (typeof window.Admin?.onBriefPopState === 'function' && window.Admin.onBriefPopState()) {
+            return;
+        }
+
         if (window._isSidenavClosing) return;
 
         // Points / name / badge / trip sheets are not *-modal. Close only the top

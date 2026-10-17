@@ -35,9 +35,11 @@ import {
     briefDismissed,
     briefLauncherHtml,
     briefReportHtml,
+    briefSky,
     buildOperatorBrief,
     dismissBrief,
     johannesburgClock,
+    localBriefNote,
     restoreBrief,
     scrubOperatorText,
 } from './operator-brief.js';
@@ -147,9 +149,11 @@ export function exposeAdminGlobals() {
         briefDismissed,
         briefLauncherHtml,
         briefReportHtml,
+        briefSky,
         buildOperatorBrief,
         dismissBrief,
         johannesburgClock,
+        localBriefNote,
         restoreBrief,
         scrubOperatorText,
     };

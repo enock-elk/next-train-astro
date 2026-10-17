@@ -30,7 +30,7 @@ import {
     startRateLimitCountdown,
 } from './trust.js';
 import { joinCommunityPresence, leaveCommunityPresence, signalCommunityTyping } from './community-presence.js';
-import { FEATURE_KEYS, fetchFeatures, isFeatureEnabled } from './features.js';
+import { FEATURE_KEYS, fetchFeatures, isFeatureEnabled, isFeatureGranted, isListedCommunityRoute } from './features.js';
 import {
     awardCommunityMarks,
     marksPublicSnapshot,
@@ -389,10 +389,17 @@ async function startRealtimeReactions(routeId) {
  * Live RTDB feed when communityRealtime is enabled for this route.
  * Falls back to REST (fetchRoutePosts) when flag off or SDK unavailable.
  */
+function communityRoomAllowed(routeId) {
+    if (!routeId || !ROUTES[routeId]) return false;
+    if (isAdminAuthed() || isFeatureGranted(FEATURE_KEYS.COMMUNITY_TAB)) return true;
+    return isListedCommunityRoute(routeId);
+}
+
 async function startRealtimePosts(routeId) {
     stopRealtimePosts();
     if (!routeId) return false;
     await fetchFeatures();
+    if (!communityRoomAllowed(routeId)) return false;
     if (!isFeatureEnabled(FEATURE_KEYS.COMMUNITY_REALTIME, routeId)) return false;
 
     await bootFirebase();
@@ -1220,7 +1227,16 @@ function getPinnedRouteId() {
 
 function regionCommunityRoutes() {
     const region = $userRegion.get() || 'GP';
-    return Object.values(ROUTES).filter((r) => r.isActive && r.region === region && r.id !== 'special_event');
+    return Object.values(ROUTES).filter((r) => (
+        r.isActive && r.region === region && r.id !== 'special_event' && communityRoomAllowed(r.id)
+    ));
+}
+
+function resolveCommunityRoute(routeId) {
+    const routes = regionCommunityRoutes();
+    const id = String(routeId || '');
+    if (id && routes.some((r) => r.id === id)) return id;
+    return routes[0]?.id || '';
 }
 
 function viewingCommunityRouteId() {
@@ -1360,6 +1376,7 @@ async function countUnreadOnRoute(routeId, viewingId) {
  * Count unread posts per region room (newer than last visit) and name them on the badge.
  */
 export async function refreshCommunityUnreadBadge() {
+    try { await fetchFeatures(); } catch { /* defaults */ }
     const routes = regionCommunityRoutes();
     if (!routes.length) {
         cachedUnreadByRoute = {};
@@ -1397,6 +1414,15 @@ export async function renderCommunityFeed(routeId = $currentRouteId.get(), opts 
     const emptyEl = document.getElementById('community-feed-empty');
     const titleEl = document.getElementById('community-route-title');
     if (!listEl) return;
+    try { await fetchFeatures(); } catch { /* defaults */ }
+    if (!communityRoomAllowed(routeId)) routeId = resolveCommunityRoute('');
+    else routeId = resolveCommunityRoute(routeId);
+    if (!routeId) {
+        if (titleEl) titleEl.textContent = 'Community';
+        listEl.innerHTML = `<p class="text-xs text-gray-400 text-center py-8">No community is open for this region.</p>`;
+        if (emptyEl) emptyEl.classList.add('hidden');
+        return;
+    }
 
     if (titleEl) titleEl.textContent = routeLabel(routeId);
     paintCategoryFilters();
@@ -1438,26 +1464,14 @@ function syncCommunityRoutePicker(routeId) {
     const list = document.getElementById('community-route-list');
     if (!routeSel) return;
 
-    const region = $userRegion.get() || 'GP';
-    const routes = Object.values(ROUTES).filter((r) => r.isActive && r.region === region && r.id !== 'special_event');
-    let activeId = routeId || routeSel.value || $currentRouteId.get() || '';
-    if (activeId && !routes.find((r) => r.id === activeId) && ROUTES[activeId]) {
-        // keep foreign route at top of list for deep links
-    }
+    const routes = regionCommunityRoutes();
+    let activeId = resolveCommunityRoute(routeId || routeSel.value || $currentRouteId.get() || '');
 
     routeSel.innerHTML = routes.map((r) =>
         `<option value="${r.id}" ${r.id === activeId ? 'selected' : ''}>${escapeHTML(formatRouteDisplayName(r.name || r.id))}</option>`
     ).join('') || '<option value="">No routes</option>';
 
-    if (activeId && !routes.find((r) => r.id === activeId) && ROUTES[activeId]) {
-        routeSel.insertAdjacentHTML('afterbegin', `<option value="${activeId}" selected>${escapeHTML(formatRouteDisplayName(ROUTES[activeId].name))}</option>`);
-    }
-    if (!activeId && routes[0]) {
-        activeId = routes[0].id;
-        routeSel.value = activeId;
-    } else if (activeId) {
-        routeSel.value = activeId;
-    }
+    if (activeId) routeSel.value = activeId;
 
     const label = formatRouteDisplayName(ROUTES[routeSel.value]?.name || routeSel.value || 'Select route');
     if (display) display.textContent = label;
@@ -1477,9 +1491,6 @@ function syncCommunityRoutePicker(routeId) {
 
     if (list) {
         const allRoutes = [...routes];
-        if (activeId && !allRoutes.find((r) => r.id === activeId) && ROUTES[activeId]) {
-            allRoutes.unshift(ROUTES[activeId]);
-        }
         list.innerHTML = allRoutes.map((r) => {
             const selected = r.id === routeSel.value;
             const unread = cachedUnreadByRoute[r.id] || 0;
@@ -1530,7 +1541,13 @@ function syncComposerChrome(signed = $account.get().status === 'signed-in') {
 }
 
 export function openRouteCommunity(opts = {}) {
-    const routeId = opts.routeId || getLastCommunityRoom() || $currentRouteId.get() || getPinnedRouteId() || '';
+    void openRouteCommunityNow(opts);
+}
+
+async function openRouteCommunityNow(opts = {}) {
+    try { await fetchFeatures(); } catch { /* defaults */ }
+    const requested = opts.routeId || getLastCommunityRoom() || $currentRouteId.get() || getPinnedRouteId() || '';
+    const routeId = resolveCommunityRoute(requested);
     const routeSel = document.getElementById('community-route-select');
     const guestHint = document.getElementById('community-guest-hint');
     const errEl = document.getElementById('community-error');
@@ -1586,8 +1603,8 @@ function bindCommunityVisibilityTeardown() {
         }
         if (safeStorage.getItem('activeTab') === 'community') {
             const routeSel = document.getElementById('community-route-select');
-            const rid = routeSel?.value || getLastCommunityRoom() || $currentRouteId.get();
-            if (rid) {
+            const rid = resolveCommunityRoute(routeSel?.value || getLastCommunityRoom() || $currentRouteId.get());
+            if (rid && communityRoomAllowed(rid)) {
                 startRealtimePosts(rid);
                 startRealtimeReactions(rid);
                 joinCommunityPresence(rid);
@@ -1758,7 +1775,8 @@ export function bindCommunityUi() {
 
     document.getElementById('community-post-btn')?.addEventListener('click', () => handlePostSubmit());
     document.getElementById('community-route-select')?.addEventListener('change', (e) => {
-        const rid = e.target.value;
+        const rid = resolveCommunityRoute(e.target.value);
+        if (!rid || !communityRoomAllowed(rid)) return;
         const titleEl = document.getElementById('community-route-title');
         if (titleEl) titleEl.textContent = routeLabel(rid);
         const display = document.getElementById('community-route-display');

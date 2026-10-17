@@ -1,5 +1,9 @@
 # Changelog
 
+## V9_10.17.3 — no release notes
+
+Community rooms stay on the routes that are switched on. The operator brief follows the time of day, splits a two-fact card into paragraphs, and keeps Add to alerts as a bell. A missing written note stays on the card. Back closes the brief. An operator's installed icon can show a count of new messages.
+
 ## V9_10.17.2
 
 Options names this Reset this App. It clears this App's saved data. A weak connection asks before that reset.

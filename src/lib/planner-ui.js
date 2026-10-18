@@ -684,6 +684,18 @@ function bindPlannerFareVote(trip, detail) {
     const ticketTypeEl = document.getElementById('planner-fare-vote-type');
     const sendBtn = document.getElementById('planner-fare-vote-send');
     let voting = false;
+    const yesClass = 'inline-flex items-center justify-center gap-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-3 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400';
+    const quietClass = 'inline-flex items-center justify-center gap-1.5 rounded-xl bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-100 font-bold py-2.5 px-3 text-sm border border-gray-200 dark:border-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400';
+    const paintFareChoice = (chosen) => {
+        if (yesBtn) {
+            yesBtn.className = chosen === 'yes' ? yesClass : quietClass;
+            yesBtn.setAttribute('aria-pressed', chosen === 'yes' ? 'true' : 'false');
+        }
+        if (noBtn) {
+            noBtn.className = chosen === 'no' ? yesClass : quietClass;
+            noBtn.setAttribute('aria-pressed', chosen === 'no' ? 'true' : 'false');
+        }
+    };
     const sendVote = async (extra) => {
         let km = detail?.km;
         let crowKm = detail?.crowKm;
@@ -712,6 +724,7 @@ function bindPlannerFareVote(trip, detail) {
     noBtn?.addEventListener('click', (ev) => {
         ev.preventDefault();
         ev.stopPropagation();
+        paintFareChoice('no');
         correct?.classList.remove('hidden');
         ticketTypeEl?.focus();
     });
@@ -5864,6 +5877,55 @@ export function updatePlannerHeader(dayLabel, showShare = true) {
     }
 }
 
+/** Scaled-down festive sheet PRASA has not released. Inclusive. */
+const FESTIVE_SCHEDULE_START = '2026-12-21';
+const FESTIVE_SCHEDULE_END = '2027-01-01';
+
+function isoFromDate(date) {
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
+function shiftIsoDate(iso, days) {
+    if (!iso || !/^\d{4}-\d{2}-\d{2}$/.test(iso)) return '';
+    const [y, m, d] = iso.split('-').map(Number);
+    const dt = new Date(y, m - 1, d);
+    dt.setDate(dt.getDate() + (Number(days) || 0));
+    return isoFromDate(dt);
+}
+
+function isoInFestiveWindow(iso) {
+    return !!iso && iso >= FESTIVE_SCHEDULE_START && iso <= FESTIVE_SCHEDULE_END;
+}
+
+/** Calendar day the commuter asked for. A bare Weekday/Saturday pick is not a date. */
+function plannerQueryIsoDate() {
+    if (selectedPlannerDate && /^\d{4}-\d{2}-\d{2}$/.test(selectedPlannerDate)) return selectedPlannerDate;
+    if (selectedPlannerDay && selectedPlannerDay !== getCurrentDayType()) return '';
+    try {
+        if ($isSimMode.get() && simUsesSpecificDate()) {
+            const dateInput = typeof document !== 'undefined' ? document.getElementById('sim-date') : null;
+            if (dateInput instanceof HTMLInputElement && /^\d{4}-\d{2}-\d{2}$/.test(dateInput.value)) {
+                return dateInput.value;
+            }
+        }
+    } catch { /* ignore */ }
+    if ($isSimMode.get()) return '';
+    return isoFromDate(new Date());
+}
+
+function buildFestiveScheduleNotice(trip) {
+    const query = plannerQueryIsoDate();
+    const presented = query ? shiftIsoDate(query, Number(trip?.dayOffset) || 0) : '';
+    if (!isoInFestiveWindow(query) && !isoInFestiveWindow(presented)) return '';
+    return buildPlannerNotice({
+        tone: 'schedule',
+        title: 'Festive schedule not confirmed',
+        bodyHtml: `<p class="text-sm font-semibold text-gray-900 dark:text-gray-100 leading-snug">This is not the confirmed festive timetable.</p>
+            <p>A scaled-down schedule usually runs from 21 December 2026 to 1 January 2027. Next Train will update these times when that sheet is released. The trip below still uses the schedule on file.</p>`,
+        icon: 'calendar',
+    });
+}
+
 export function renderTripResult(container, trips, selectedIndex = 0, isPartial = false) {
     const selectedTrip = trips[selectedIndex];
     if (!selectedTrip) return; 
@@ -5872,8 +5934,8 @@ export function renderTripResult(container, trips, selectedIndex = 0, isPartial 
     
     updatePlannerHeader(dayLabel, true);
 
-    // Advisories attach in one stack: holiday → line severed → expect delays → long layover
-    const leading = [buildHolidayNoticeHtml(selectedTrip)].filter(Boolean);
+    // Advisories attach in one stack: festive → holiday → line severed → expect delays → long layover
+    const leading = [buildFestiveScheduleNotice(selectedTrip), buildHolidayNoticeHtml(selectedTrip)].filter(Boolean);
     container.innerHTML = PlannerRenderer.buildCard(selectedTrip, false, trips, selectedIndex, leading)
         + '<div id="planner-crowd-delay-slot"></div>';
     injectPlannerCrowdDelay(selectedTrip);
@@ -5893,6 +5955,7 @@ export function renderAllDepartedResult(container, trips, selectedIndex = 0) {
     const safeD = dest.replace(/'/g, "\\'");
 
     // Notice only — CTA must stay a sibling outside the notice card chrome.
+    const festiveNotice = buildFestiveScheduleNotice(selectedTrip);
     const departedNotice = buildPlannerNotice({
         tone: 'schedule',
         title: 'All Trains Departed',
@@ -5911,7 +5974,7 @@ export function renderAllDepartedResult(container, trips, selectedIndex = 0) {
 
     container.innerHTML = `
         ${nextDayCta}
-        ${PlannerRenderer.buildCard(selectedTrip, false, trips, selectedIndex, [buildHolidayNoticeHtml(selectedTrip), departedNotice])}
+        ${PlannerRenderer.buildCard(selectedTrip, false, trips, selectedIndex, [festiveNotice, buildHolidayNoticeHtml(selectedTrip), departedNotice])}
         <div id="planner-crowd-delay-slot"></div>
     `;
     injectPlannerCrowdDelay(selectedTrip);
@@ -5923,6 +5986,7 @@ export function renderNextDayResult(container, trips, selectedIndex = 0) {
     const selectedTrip = trips[selectedIndex];
     if (!selectedTrip) return;
 
+    const festiveNotice = buildFestiveScheduleNotice(selectedTrip);
     syncPlannerDayControls(presentedPlannerDayType(selectedTrip));
     const dayLabel = getPlanningDayLabel();
     updatePlannerHeader(dayLabel, true);
@@ -5941,7 +6005,7 @@ export function renderNextDayResult(container, trips, selectedIndex = 0) {
     });
 
     container.innerHTML = `
-        ${stackPlannerNotices(buildHolidayNoticeHtml(selectedTrip), scheduleNotice)}
+        ${stackPlannerNotices(festiveNotice, buildHolidayNoticeHtml(selectedTrip), scheduleNotice)}
         ${PlannerRenderer.buildCard(selectedTrip, true, trips, selectedIndex)}
         <div id="planner-crowd-delay-slot"></div>
     `;
@@ -5958,6 +6022,7 @@ export function renderSundayRolloverResult(container, trips, selectedIndex = 0) 
     const selectedTrip = trips[selectedIndex];
     if (!selectedTrip) return;
 
+    const festiveNotice = buildFestiveScheduleNotice(selectedTrip);
     syncPlannerDayControls(presentedPlannerDayType(selectedTrip));
     const dayLabel = getPlanningDayLabel();
     updatePlannerHeader(dayLabel, true);
@@ -5984,7 +6049,7 @@ export function renderSundayRolloverResult(container, trips, selectedIndex = 0) 
     });
 
     container.innerHTML = `
-        ${sundayNotice}
+        ${stackPlannerNotices(festiveNotice, sundayNotice)}
         ${PlannerRenderer.buildCard(selectedTrip, true, trips, selectedIndex)}
         <div id="planner-crowd-delay-slot"></div>
     `;
@@ -5996,6 +6061,7 @@ export function renderImpossibleTodayResult(container, trips, selectedIndex = 0)
     const selectedTrip = trips[selectedIndex];
     if (!selectedTrip) return;
 
+    const festiveNotice = buildFestiveScheduleNotice(selectedTrip);
     syncPlannerDayControls(presentedPlannerDayType(selectedTrip));
     const dayLabel = getPlanningDayLabel();
     updatePlannerHeader(dayLabel, true);
@@ -6014,7 +6080,7 @@ export function renderImpossibleTodayResult(container, trips, selectedIndex = 0)
     });
 
     container.innerHTML = `
-        ${stackPlannerNotices(buildHolidayNoticeHtml(selectedTrip, { absorbSunday: true }), unavailableNotice)}
+        ${stackPlannerNotices(festiveNotice, buildHolidayNoticeHtml(selectedTrip, { absorbSunday: true }), unavailableNotice)}
         ${PlannerRenderer.buildCard(selectedTrip, true, trips, selectedIndex)}
         <div id="planner-crowd-delay-slot"></div>
     `;

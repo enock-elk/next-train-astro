@@ -116,7 +116,12 @@ assert(header.includes('flex items-center justify-between gap-2'), 'bell centers
 assert(!header.includes('-mt-0.5'), 'bell is not nudged above the wordmark');
 assert(header.includes('text-[11px] sm:text-xs font-medium'), 'Header day line uses the original subtitle face');
 assert(header.includes('<button type="button" id="current-day"'), 'the day line is a button');
+assert(header.includes('header-title-row'), 'the sim clock shares a row with the title');
+assert(/header-title-row[\s\S]{0,500}id="current-time"/.test(header), 'the sim clock sits beside Next Train');
+assert(!/id="current-day"[\s\S]{0,240}id="current-time"/.test(header), 'the sim clock is not under the day line');
 assert(css.includes('button#current-day'), 'the day line reads as a control');
+assert(!/button#current-day \{[\s\S]{0,420}border:\s*1px solid/.test(css), 'the day button has no outer oval border');
+assert(!/button#current-day \{[\s\S]{0,420}linear-gradient/.test(css), 'the day button has no outer oval shading');
 assert(css.includes('nt-day-quiet'), 'No service stays a quiet day pill on the day button');
 assert(css.includes('#changelog-modal'), 'What\'s New skips the bottom-nav clearance gap');
 assert(logic.includes("title: 'No service'") || logic.includes('No service'), 'Sunday note title is sentence case');

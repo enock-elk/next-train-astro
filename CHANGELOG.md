@@ -1,5 +1,15 @@
 # Changelog
 
+## V10_10.18.14
+
+- Pull down anywhere on a bottom sheet to close it, when that sheet is scrolled to the top.
+- Trip fare: No takes the blue highlight.
+- What's New opens on the latest entries. Older entries load from Show earlier updates.
+- A monthly ticket is valid for that calendar month, and current-month tickets stay on sale until about the 10th.
+- Planner searches for 21 December 2026 to 1 January 2027 still show the trip, and say the festive timetable is not confirmed.
+- Route pages and the guide mention the scaled-down festive timetable.
+- The day button has no outer oval. The sim clock sits beside the Next Train title.
+
 ## V10_10.18.13 — no release notes
 
 ## V10_10.18.12 — no release notes

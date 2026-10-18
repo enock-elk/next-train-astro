@@ -30,7 +30,13 @@ const fareRows = [
 });
 
 const holidayFaqText =
-    "Metrorail generally does not operate train services on Sundays. Public holidays are not always the same as Saturday. In Gauteng, KZN, and Eastern Cape, some holidays follow a Saturday/holiday timetable; others (such as Christmas Day or National Women's Day in 2026) have no service. Western Cape public holidays may use a Public Holiday sheet or the Saturday timetable. PRASA announces which. Check Next Train: https://nexttrain.co.za/regions/western-cape-public-holidays.html. A few routes, including Hercules / Koedoespoort and Eastern Cape, also have no Saturday service. Next Train's True Day Simulator applies the correct 2026 holiday and route rules automatically.";
+    "Metrorail generally does not operate train services on Sundays. Public holidays are not always the same as Saturday. In Gauteng, KZN, and Eastern Cape, some holidays follow a Saturday/holiday timetable; others (such as Christmas Day or National Women's Day in 2026) have no service. Western Cape public holidays may use a Public Holiday sheet or the Saturday timetable. PRASA announces which. Check Next Train: https://nexttrain.co.za/regions/western-cape-public-holidays.html. A few routes, including Hercules / Koedoespoort and Eastern Cape, also have no Saturday service. December is different again: most regions use a dedicated scaled-down festive timetable, not the usual weekday, Saturday, or public holiday sheet. That timetable typically starts in the week of the early 20s of December and runs through the first week of January. Next Train does not have the 21 December 2026 to 1 January 2027 sheets yet, and will update the schedules when PRASA releases them. Next Train's True Day Simulator applies the correct 2026 holiday and route rules automatically.";
+
+const monthlyTicketFaqText =
+    "A monthly ticket bought during the month, for example on the 5th, is valid only for that calendar month. It does not last for the next 30 days. Monthly tickets for the current month stay on sale until about the 10th of that month.";
+
+const festiveFaqText =
+    "December schedules are not the usual weekday, Saturday, or public holiday sheets. Most regions have a dedicated scaled-down timetable for the festive season. It typically starts in the week of the early 20s of December and runs through the first week of January. Next Train does not have the 21 December 2026 to 1 January 2027 scaled-down timetables yet. The times published now stay the weekday, Saturday, and public holiday sheets. Next Train will update the schedules when PRASA releases the festive timetable.";
 
 const faqJsonLd = {
   "@context": "https://schema.org",
@@ -50,6 +56,22 @@ const faqJsonLd = {
       "acceptedAnswer": {
         "@type": "Answer",
         "text": holidayFaqText
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "How long is a Metrorail monthly ticket valid?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": monthlyTicketFaqText
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Is there a Metrorail festive season or December scaled-down timetable?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": festiveFaqText
       }
     },
     {
@@ -476,6 +498,7 @@ const faqJsonLd = {
                                 </table>
                             </div>
                             <p class="text-xs text-gray-500 mt-2"><em>Note: These are the same adult fares the app uses in Ticket Prices. The estimated fare shown for a trip is typically the maximum route cost (terminus-to-terminus). If you are traveling a shorter distance along the line, your actual ticket price at the station may be slightly cheaper. Tickets must be bought at the station.</em></p>
+                            <p class="mt-3">A monthly ticket bought during the month, for example on the 5th, is valid only for that calendar month. It does not last for the next 30 days. Monthly tickets for the current month stay on sale until about the 10th of that month.</p>
                         </div>
                     </details>
 
@@ -490,6 +513,18 @@ const faqJsonLd = {
                             <p class="mt-2"><strong>Western Cape can use either sheet.</strong> Some holidays follow a dedicated <strong>Public Holiday</strong> timetable; others use the Saturday timetable when PRASA announces it. Check Next Train on the day. See the <a href={withBase(WC_PUBLIC_HOLIDAYS_PATH)} class="text-blue-600 dark:text-blue-400 underline">Western Cape public holiday timetable</a>.</p>
                             <p class="mt-2">A few routes, including Hercules / Koedoespoort and Eastern Cape, also have <strong>no Saturday service</strong> even when other lines are running.</p>
                             <p class="mt-2">You don't need to guess: the app's <strong>True Day Simulator</strong> applies the correct 2026 holiday and route rules automatically.</p>
+                        </div>
+                    </details>
+
+                    <details class="group bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden transition-all duration-300">
+                        <summary class="cursor-pointer flex items-center justify-between p-4 font-bold text-gray-900 dark:text-white select-none focus:outline-none hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                            Is there a festive season or December scaled-down timetable?
+                            <svg class="w-5 h-5 text-gray-400 transform transition-transform group-open:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                        </summary>
+                        <div class="p-4 pt-1 border-t border-gray-200 dark:border-gray-700 text-sm text-gray-600 dark:text-gray-300 leading-relaxed">
+                            <p>December schedules are <strong>not</strong> the usual weekday, Saturday, or public holiday sheets. Most regions have a dedicated <strong>scaled-down timetable</strong> for the festive season.</p>
+                            <p class="mt-2">That timetable typically starts in the week of the <strong>early 20s of December</strong> and runs through the <strong>first week of January</strong>.</p>
+                            <p class="mt-2">Next Train does not have the <strong>21 December 2026 to 1 January 2027</strong> scaled-down timetables yet. The times on each route page stay the published weekday, Saturday, and public holiday sheets. Next Train will update the schedules when PRASA releases the festive timetable.</p>
                         </div>
                     </details>
 

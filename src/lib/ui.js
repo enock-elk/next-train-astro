@@ -3034,12 +3034,15 @@ function bindBottomSheetPullDismiss() {
         if (!host) return;
         const card = sheetCardFromHost(host);
         if (!card || !card.contains(target)) return;
+        const el = target?.nodeType === 1 ? target : target?.parentElement;
+        if (!el) return;
+        // Buttons and fields keep their tap. The rest of the card, including the
+        // body under the header, can pull the sheet down when that scroller is at the top.
+        if (el.closest('button, a, input, textarea, select, label, option')) return;
         const scrollers = card.querySelectorAll('[class*="overflow-y"], .overflow-y-auto, .custom-scrollbar');
         for (const sc of scrollers) {
-            if (sc.contains(target) && sc.scrollTop > 2) return;
+            if (sc.contains(el) && sc.scrollTop > 2) return;
         }
-        const rect = card.getBoundingClientRect();
-        if (clientY > rect.top + Math.min(96, rect.height * 0.35)) return;
         drag = {
             host,
             card,

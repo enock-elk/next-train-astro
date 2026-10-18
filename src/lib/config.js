@@ -14,7 +14,7 @@
  * Changelog / What’s New is optional: skip both, or write only "no release notes."
  * Always add ADMIN_CHANGELOG[APP_VERSION] (System Health Build notes).
  */
-export const APP_VERSION = "V10_10.18.13";
+export const APP_VERSION = "V10_10.18.14";
 
 /** Public support channels (About modal, lifeboat help.html, Safe Mode). */
 export const SUPPORT_EMAIL = 'admin@nexttrain.co.za';
@@ -984,6 +984,18 @@ export const HERC_KOED_JUNCTIONS = ['KOEDOESPOORT', 'HERCULES'];
 // comma, a period, or a hyphen. Do not explain strategy or "we fixed."
 // Leave every forceShow false. Never auto-open What's New over the welcome screen.
 export const CHANGELOG_DATA = [
+    {
+        id: "V10_10.18.14",
+        title: "Sheets and the day line",
+        date: "18 Oct 2026",
+        forceShow: false,
+        features: [
+            "Pull down anywhere on Trip fare, Share your trip, and the same cards to close them.",
+            "Choosing No on a trip fare uses the blue highlight.",
+            "The day line keeps the schedule name in its pill.",
+            "A trip from 21 December 2026 to 1 January 2027 says the festive timetable is not confirmed yet."
+        ]
+    },
     {
         id: "V9_10.17.2",
         title: "Timetable marks",

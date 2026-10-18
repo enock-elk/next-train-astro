@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_10.18.14': [
+        'A bottom sheet pulls closed from anywhere on the card when that scroller is at the top. Trip fare No takes the blue highlight. What\'s New paints the latest six cards first and loads older ones on Show earlier updates. The guide FAQ says a monthly ticket covers that calendar month and is on sale until about the 10th, and that December uses a scaled-down festive timetable from the early 20s of December through the first week of January. A planner search for 21 Dec 2026 to 1 Jan 2027 still shows the trip, with a banner that the festive sheet is not confirmed. Route pages mention that timetable. The day button has no outer oval. The sim clock sits beside the Next Train title. forceShow stays false.',
+    ],
     'V10_10.18.13': [
         'Bottom sheets close on a pull down. Sunday No service is one quiet pill with an amber dot. Signed-in Account matches a ride-app layout: large name, photo on the right, quick tiles, then Sign out. Feedback Hub header is shorter. What\'s New and Today\'s schedule share the same type stack and Got it button, without a blank slab under the card. Trip fare bolds only the word Peak. No commuter What\'s New. forceShow stays false.',
     ],

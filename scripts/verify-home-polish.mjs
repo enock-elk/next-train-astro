@@ -159,6 +159,8 @@ assert(!CHANGELOG_DATA.some((e) => e.id === 'V8_08.18.1'), 'Alerts channel card 
     const changelogRenderer = readFileSync(new URL('../src/lib/renderer.js', import.meta.url), 'utf8');
     assert(changelogRenderer.includes('sanitizeWhatsNewText'), 'What’s New renderer strips em dashes');
     assert(changelogRenderer.includes('changelog-app-version'), 'What’s New header paints APP_VERSION');
+    assert(changelogRenderer.includes('changelog-show-earlier'), 'What’s New defers older entries');
+    assert(!changelogRenderer.includes('listContainer.innerHTML +='), 'What’s New does not rebuild the list on every entry');
 }
 const hub = readFileSync(new URL('../src/lib/hub.js', import.meta.url), 'utf8');
 assert(hub.includes("welcomeSeen") && hub.includes('maybeForceShowChangelog'), 'What’s New auto-open waits until welcome is done');

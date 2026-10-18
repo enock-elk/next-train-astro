@@ -1458,29 +1458,50 @@ export const Renderer = {
 
         const listContainer = document.getElementById('changelog-list');
         if (listContainer) {
+            const entryMarkup = (entry, index) => {
+                const isLatest = index === 0;
+                const verId = entry.id || String(entry.version || '').split('<')[0].trim().replace(/\s+/g, '_');
+                const titleHtml = entry.title
+                    ? `<br><span class="text-sm text-blue-600 dark:text-blue-400">${sanitizeWhatsNewText(entry.title)}</span>`
+                    : '';
+                const features = (entry.features || []).slice(0, 5).map(sanitizeWhatsNewText);
+                return `
+                    <div class="relative pl-4 border-l-2 ${isLatest ? 'border-blue-500' : 'border-gray-300 dark:border-gray-700'}">
+                        ${isLatest ? '<span class="absolute -left-[5px] top-0 w-2.5 h-2.5 rounded-full bg-blue-500 ring-4 ring-blue-100 dark:ring-blue-900"></span>' : '<span class="absolute -left-[5px] top-0 w-2.5 h-2.5 rounded-full bg-gray-300 dark:bg-gray-700"></span>'}
+                        <div class="mb-1 flex items-baseline justify-between gap-2">
+                            <h4 class="font-bold text-gray-900 dark:text-white ${isLatest ? 'text-lg' : 'text-sm'}">${verId}${titleHtml}</h4>
+                            <span class="text-xs text-gray-500 dark:text-gray-400 font-mono shrink-0">${entry.date || ''}</span>
+                        </div>
+                        <ul class="space-y-2">
+                            ${features.map(f => `<li class="text-sm text-gray-600 dark:text-gray-300 leading-relaxed">${f}</li>`).join('')}
+                        </ul>
+                    </div>`;
+            };
             listContainer.innerHTML = '';
+            listContainer.scrollTop = 0;
             if (!changelogData || changelogData.length === 0) {
                 listContainer.innerHTML = '<p class="text-center text-gray-500 italic">No updates found.</p>';
             } else {
-                changelogData.forEach((entry, index) => {
-                    const isLatest = index === 0;
-                    const verId = entry.id || String(entry.version || '').split('<')[0].trim().replace(/\s+/g, '_');
-                    const titleHtml = entry.title
-                        ? `<br><span class="text-sm text-blue-600 dark:text-blue-400">${sanitizeWhatsNewText(entry.title)}</span>`
-                        : '';
-                    const features = (entry.features || []).slice(0, 5).map(sanitizeWhatsNewText);
-                    listContainer.innerHTML += `
-                        <div class="relative pl-4 border-l-2 ${isLatest ? 'border-blue-500' : 'border-gray-300 dark:border-gray-700'}">
-                            ${isLatest ? '<span class="absolute -left-[5px] top-0 w-2.5 h-2.5 rounded-full bg-blue-500 ring-4 ring-blue-100 dark:ring-blue-900"></span>' : '<span class="absolute -left-[5px] top-0 w-2.5 h-2.5 rounded-full bg-gray-300 dark:bg-gray-700"></span>'}
-                            <div class="mb-1 flex items-baseline justify-between gap-2">
-                                <h4 class="font-bold text-gray-900 dark:text-white ${isLatest ? 'text-lg' : 'text-sm'}">${verId}${titleHtml}</h4>
-                                <span class="text-xs text-gray-500 dark:text-gray-400 font-mono shrink-0">${entry.date || ''}</span>
-                            </div>
-                            <ul class="space-y-2">
-                                ${features.map(f => `<li class="text-sm text-gray-600 dark:text-gray-300 leading-relaxed">${f}</li>`).join('')}
-                            </ul>
-                        </div>`;
-                });
+                const firstCount = 6;
+                const first = changelogData.slice(0, firstCount);
+                listContainer.innerHTML = first.map((entry, index) => entryMarkup(entry, index)).join('');
+                const rest = changelogData.slice(firstCount);
+                if (rest.length) {
+                    const more = document.createElement('button');
+                    more.type = 'button';
+                    more.id = 'changelog-show-earlier';
+                    more.className = 'w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 text-sm font-bold text-blue-600 dark:text-blue-400 py-2.5';
+                    more.textContent = 'Show earlier updates';
+                    let shown = firstCount;
+                    more.addEventListener('click', () => {
+                        const batch = rest.slice(shown - firstCount, shown - firstCount + 8);
+                        const start = shown;
+                        more.insertAdjacentHTML('beforebegin', batch.map((entry, index) => entryMarkup(entry, start + index)).join(''));
+                        shown += batch.length;
+                        if (shown >= changelogData.length) more.remove();
+                    });
+                    listContainer.appendChild(more);
+                }
             }
         }
 

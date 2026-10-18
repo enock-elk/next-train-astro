@@ -543,6 +543,16 @@ if (!gridJs.includes("e.target?.closest?.('[data-expr-skip=\"1\"]')")) {
     fail('a via or KEMP column must not steal an EXPR tap');
 }
 
+if (!ui.includes('Festive schedule not confirmed')) fail('planner must banner an unconfirmed festive timetable');
+if (!ui.includes("FESTIVE_SCHEDULE_START = '2026-12-21'")) fail('festive window starts 21 Dec 2026');
+if (!ui.includes("FESTIVE_SCHEDULE_END = '2027-01-01'")) fail('festive window ends 1 Jan 2027');
+if (!ui.includes('paintFareChoice(\'no\')')) fail('trip fare No must take the highlighted choice');
+for (const fn of ['renderTripResult', 'renderAllDepartedResult', 'renderNextDayResult', 'renderSundayRolloverResult', 'renderImpossibleTodayResult']) {
+    const start = ui.indexOf(`function ${fn}`);
+    const body = start >= 0 ? ui.slice(start, start + 1800) : '';
+    if (!body.includes('buildFestiveScheduleNotice')) fail(`${fn} must attach the festive banner`);
+}
+
 if (failures.length) {
     console.error(`\n✗ planner-saturday failed (${failures.length}):`);
     for (const f of failures) console.error(`  - ${f}`);

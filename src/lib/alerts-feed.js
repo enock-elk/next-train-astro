@@ -501,27 +501,80 @@ export function preferSavedPosterSrc(objectUrl, liveSrc, fallback) {
     return String(fallback || live || '');
 }
 
-/**
- * A direct video file on a public https host.
- * Pages and players are not videos. Nothing is fetched here.
- */
-export function sanitizeAlertVideoUrl(url) {
-    const s = String(url || '').trim();
-    if (!s || /[\s<>]/.test(s)) return null;
+const YOUTUBE_ID = /^[A-Za-z0-9_-]{11}$/;
+
+/** YouTube watch id, or empty. Nothing is fetched. */
+export function youtubeVideoId(url) {
+    let u;
+    try { u = new URL(String(url || '')); } catch { return ''; }
+    const host = u.hostname.toLowerCase().replace(/\.$/, '').replace(/^(www|m)\./, '');
+    let id = '';
+    if (host === 'youtu.be') id = u.pathname.split('/').filter(Boolean)[0] || '';
+    else if (host === 'youtube.com' || host === 'youtube-nocookie.com' || host === 'music.youtube.com') {
+        if (u.pathname === '/watch') id = u.searchParams.get('v') || '';
+        else {
+            const parts = u.pathname.split('/').filter(Boolean);
+            if (['embed', 'shorts', 'live', 'v'].includes(parts[0])) id = parts[1] || '';
+        }
+    }
+    id = String(id || '').split(/[?&#]/)[0];
+    return YOUTUBE_ID.test(id) ? id : '';
+}
+
+/** Vimeo clip id, or empty. Nothing is fetched. */
+export function vimeoVideoId(url) {
+    let u;
+    try { u = new URL(String(url || '')); } catch { return ''; }
+    const host = u.hostname.toLowerCase().replace(/\.$/, '').replace(/^www\./, '');
+    if (host !== 'vimeo.com' && host !== 'player.vimeo.com') return '';
+    const parts = u.pathname.split('/').filter(Boolean);
+    return parts.find((part) => /^\d{6,12}$/.test(part)) || '';
+}
+
+/** file, youtube, or vimeo. Empty when the address is not a video we can show. */
+export function alertVideoKind(url) {
+    const clean = cleanHttpUrl(url);
+    if (!clean || !isPublicPreviewUrl(clean)) return '';
+    if (youtubeVideoId(clean)) return 'youtube';
+    if (vimeoVideoId(clean)) return 'vimeo';
     try {
-        const u = new URL(s);
-        if (u.protocol !== 'https:') return null;
-        if (u.username || u.password) return null;
-        const cleaned = cleanHttpUrl(u.href);
-        if (!cleaned || !isPublicPreviewUrl(cleaned)) return null;
-        const pub = new URL(cleaned);
+        const pub = new URL(clean);
         let path = pub.pathname || '';
         try { path = decodeURIComponent(path); } catch { /* keep the raw path */ }
-        if (!PUBLIC_VIDEO_FILE.test(path)) return null;
-        return pub.href;
-    } catch {
-        return null;
-    }
+        if (PUBLIC_VIDEO_FILE.test(path)) return 'file';
+    } catch { /* ignore */ }
+    return '';
+}
+
+/**
+ * Still picture for a YouTube link. Same jpeg an embed shows before play.
+ * Vimeo has no fixed picture address. A video file has no picture until it plays.
+ */
+export function alertVideoPosterUrl(url) {
+    const id = youtubeVideoId(url);
+    return id ? `https://i.ytimg.com/vi/${id}/hqdefault.jpg` : '';
+}
+
+/** Player address. Only used after the commuter taps Play. */
+export function alertVideoEmbedUrl(url) {
+    const yt = youtubeVideoId(url);
+    if (yt) return `https://www.youtube-nocookie.com/embed/${yt}?rel=0&playsinline=1`;
+    const vimeo = vimeoVideoId(url);
+    if (vimeo) return `https://player.vimeo.com/video/${vimeo}?playsinline=1`;
+    return '';
+}
+
+/**
+ * A direct video file, or a YouTube / Vimeo watch page.
+ * The returned address is safe to keep. It does not load the video.
+ */
+export function sanitizeAlertVideoUrl(url) {
+    const kind = alertVideoKind(url);
+    if (!kind) return null;
+    const clean = cleanHttpUrl(url);
+    if (kind === 'youtube') return `https://www.youtube.com/watch?v=${youtubeVideoId(clean)}`;
+    if (kind === 'vimeo') return `https://vimeo.com/${vimeoVideoId(clean)}`;
+    return clean;
 }
 
 function pushVideoUrl(urls, raw) {
@@ -633,20 +686,34 @@ export function layoutAlertPost(notice) {
     };
 }
 
-const ALERT_VIDEO_PLAY_ICON = `<svg class="h-8 w-8" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5.14v13.72a1 1 0 0 0 1.54.84l10.14-6.86a1 1 0 0 0 0-1.68L9.54 4.3A1 1 0 0 0 8 5.14z"></path></svg>`;
+const ALERT_VIDEO_PLAY_ICON = `<svg class="h-8 w-8" width="32" height="32" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5.14v13.72a1 1 0 0 0 1.54.84l10.14-6.86a1 1 0 0 0 0-1.68L9.54 4.3A1 1 0 0 0 8 5.14z"></path></svg>`;
 
 /**
  * A play control only. The video element has no address until the commuter taps,
  * so nothing is fetched or played on its own.
  */
+function escapeAlertAttr(value) {
+    return String(value || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+}
+
 export function renderAlertVideoMarkup(urls) {
     const list = (Array.isArray(urls) ? urls : []).map((u) => sanitizeAlertVideoUrl(u)).filter(Boolean);
     if (!list.length) return '';
     const cells = list.map((href) => {
-        const src = href.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
-        return `<div class="relative overflow-hidden rounded-xl border border-gray-200 bg-gray-900 dark:border-gray-700" data-alert-video>
-            <video controls playsinline preload="none" class="hidden max-h-72 w-full bg-black" data-alert-video-el></video>
-            <button type="button" data-alert-video-play data-alert-video-src="${src}" class="flex min-h-[10rem] w-full items-center justify-center gap-2 font-bold text-white focus:outline-none">${ALERT_VIDEO_PLAY_ICON}<span>Play video</span></button>
+        const src = escapeAlertAttr(href);
+        const kind = alertVideoKind(href);
+        const poster = alertVideoPosterUrl(href);
+        const picture = poster
+            ? `<img alt="" src="${escapeAlertAttr(poster)}" referrerpolicy="no-referrer" draggable="false" class="absolute inset-0 h-full w-full object-cover" data-alert-video-poster>`
+            : (kind === 'vimeo'
+                ? `<img alt="" referrerpolicy="no-referrer" draggable="false" class="absolute inset-0 h-full w-full object-cover" data-alert-video-poster data-alert-video-poster-pending data-alert-video-page="${src}">`
+                : '');
+        const file = kind === 'file'
+            ? `<video controls playsinline preload="none" class="hidden max-h-72 w-full bg-black" data-alert-video-el></video>`
+            : '';
+        return `<div class="relative overflow-hidden rounded-xl border border-gray-200 bg-gray-900 dark:border-gray-700" data-alert-video data-alert-video-kind="${kind}">
+            ${file}
+            <button type="button" data-alert-video-play data-alert-video-src="${src}" class="relative flex min-h-[10rem] w-full items-center justify-center focus:outline-none">${picture}<span class="relative z-[1] flex items-center gap-2 rounded-full bg-black/55 px-3 py-2 font-bold text-white">${ALERT_VIDEO_PLAY_ICON}<span>Play video</span></span></button>
         </div>`;
     }).join('');
     return `<div class="mb-1 mt-2 grid grid-cols-1 gap-2" data-alert-media>${cells}</div>`;

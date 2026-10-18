@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_10.18.3': [
+        'A YouTube or Vimeo link in an alert shows the preview picture, the same still an embed shows before play. The player is not loaded until Play video. A direct video file still waits for that tap. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_10.18.2': [
         'Pretoria to Pienaarspoort uses the olive of the Rissik to Hartbeesspruit line. The pink was the Rayton branch. Pinch keeps the point under the fingers. On a desktop, zoom controls sit at the bottom right of the network map, photo view, and SEO map, and a double click zooms. The homepage description leads with train schedule today. An alert poster is kept on the device until that alert expires, and full view opens that saved picture with a loading line if it is not ready yet. A direct video link can be posted. It does not play or download until Play video. No commuter What\'s New. forceShow stays false.',
     ],

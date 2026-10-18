@@ -17,6 +17,8 @@ import {
     layoutAlertPost,
     sanitizeInlineAlertImageUrl,
     sanitizeAlertVideoUrl,
+    alertVideoPosterUrl,
+    alertVideoEmbedUrl,
     renderAlertVideoMarkup,
     preferSavedPosterSrc,
     shouldIgnoreAlertLongPress,
@@ -236,7 +238,21 @@ const now = 1_700_000_000_000;
 
     const clip = 'https://cdn.example.com/briefing/ucv-update.mp4';
     assert(sanitizeAlertVideoUrl(clip) === clip, 'public mp4 allowed');
-    assert(sanitizeAlertVideoUrl('https://youtu.be/dQw4w9wg') === null, 'a player page is not a video file');
+    assert(sanitizeAlertVideoUrl('https://youtu.be/dQw4w9wg') === null, 'a short YouTube id is not a video');
+    const watch = 'https://youtu.be/dQw4w9WgXcQ';
+    assert(sanitizeAlertVideoUrl(watch) === 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', 'YouTube watch page is a video');
+    assert(alertVideoPosterUrl(watch) === 'https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg', 'YouTube preview is the still picture');
+    assert(!alertVideoEmbedUrl(watch).includes('autoplay'), 'YouTube player does not autoplay');
+    const ytLaid = layoutAlertPost({ message: `<p>Watch ${watch} today.</p>` });
+    assert(ytLaid.videoUrls[0] === 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', 'YouTube link is lifted onto the alert');
+    assert(!ytLaid.body.includes('youtu.be'), 'YouTube address is not left as a plain link');
+    const ytHtml = renderAlertVideoMarkup(ytLaid.videoUrls);
+    assert(ytHtml.includes('src="https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg"'), 'YouTube card loads the preview picture');
+    assert(!/<iframe\b/i.test(ytHtml), 'YouTube card does not load the player');
+    assert(sanitizeAlertVideoUrl('https://vimeo.com/76979871') === 'https://vimeo.com/76979871', 'Vimeo page is a video');
+    const vimeoHtml = renderAlertVideoMarkup(['https://vimeo.com/76979871']);
+    assert(vimeoHtml.includes('data-alert-video-poster-pending'), 'Vimeo card asks for its preview picture');
+    assert(!/<iframe\b/i.test(vimeoHtml), 'Vimeo card does not load the player');
     assert(sanitizeAlertVideoUrl('http://cdn.example.com/a.mp4') === null, 'plain http video blocked');
     assert(sanitizeAlertVideoUrl('https://192.168.1.8/a.mp4') === null, 'private video host blocked');
     const withVideo = layoutAlertPost({

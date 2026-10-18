@@ -6,6 +6,7 @@ import { noticeQuotePlain } from './feedback-quote.js';
 import { hydrateLinkPreviews, linkPreviewMarkup } from './link-preview.js';
 import { safeStorage, escapeHTML, repairMojibake, formatAppTime, formatThreadDateLabel } from './utils.js';
 import { prepareRichHtml, injectRichTextStyles, linkedPlainHtml } from './rich-text.js';
+import { isPublicPreviewUrl } from './link-preview.js';
 import { showToast, triggerHaptic, openSmoothModal, closeSmoothModal } from './ui.js';
 import { isAdminAuthed } from './admin-chrome.js';
 import { $currentRouteId, $userRegion } from '../store.js';
@@ -30,6 +31,8 @@ import {
     sanitizeAlertImageUrl,
     sanitizeInlineAlertImageUrl,
     sanitizeAlertVideoUrl,
+    alertVideoEmbedUrl,
+    alertVideoKind,
     renderAlertVideoMarkup,
     collectNoticeImageUrls,
     hoistAlertImagesFromHtml,
@@ -226,6 +229,17 @@ export function renderLazyPosterHtml(urls, notice = null) {
 }
 
 function bindAlertVideoPlayers(root) {
+    root.querySelectorAll('[data-alert-video-poster-pending]').forEach((img) => {
+        if (img.dataset.ntVideoPosterBound === '1') return;
+        img.dataset.ntVideoPosterBound = '1';
+        const page = img.getAttribute('data-alert-video-page') || '';
+        if (alertVideoKind(page) !== 'vimeo') return;
+        const endpoint = `https://vimeo.com/api/oembed.json?url=${encodeURIComponent(page)}`;
+        fetch(endpoint).then((res) => (res.ok ? res.json() : null)).then((data) => {
+            const thumb = data && typeof data.thumbnail_url === 'string' ? data.thumbnail_url : '';
+            if (thumb && isPublicPreviewUrl(thumb)) img.src = thumb;
+        }).catch(() => {});
+    });
     root.querySelectorAll('[data-alert-video-play]').forEach((btn) => {
         if (btn.dataset.ntVideoBound === '1') return;
         btn.dataset.ntVideoBound = '1';
@@ -233,8 +247,25 @@ function bindAlertVideoPlayers(root) {
             e.preventDefault();
             e.stopPropagation();
             const src = btn.getAttribute('data-alert-video-src') || '';
-            const video = btn.parentElement?.querySelector('video');
-            if (!video || !src) return;
+            const host = btn.parentElement;
+            if (!host || !src) return;
+            const kind = host.getAttribute('data-alert-video-kind') || alertVideoKind(src);
+            if (kind === 'youtube' || kind === 'vimeo') {
+                const embed = alertVideoEmbedUrl(src);
+                if (!embed || host.querySelector('iframe')) return;
+                const frame = document.createElement('iframe');
+                frame.src = embed;
+                frame.title = 'Video';
+                frame.allowFullscreen = true;
+                frame.setAttribute('allow', 'encrypted-media; picture-in-picture; fullscreen');
+                frame.setAttribute('referrerpolicy', 'strict-origin-when-cross-origin');
+                frame.className = 'aspect-video w-full max-h-72 bg-black';
+                host.textContent = '';
+                host.appendChild(frame);
+                return;
+            }
+            const video = host.querySelector('video');
+            if (!video) return;
             video.autoplay = false;
             video.preload = 'none';
             if (!video.getAttribute('src')) video.src = src;

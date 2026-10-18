@@ -1101,13 +1101,8 @@ body.chrome-compact #app-header,
 #app-header .header-meta {
   margin-top: clamp(0.08rem, 0.35dvh, 0.22rem);
 }
-#app-header #notice-bell {
-  padding: clamp(0.22rem, 0.55dvh, 0.4rem);
-}
-#app-header #notice-bell svg {
-  width: clamp(1.1rem, 2.5dvh, 1.5rem);
-  height: clamp(1.1rem, 2.5dvh, 1.5rem);
-}
+/* Bell stays the pre-18 Oct size: w-6 (1.5rem) inside p-2. The header
+   centers that disc on the wordmark and the day line together. */
 
 /* The alerts bell stays the same icon. The header stays a flat colour. */
 

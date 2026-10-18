@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_10.18.9': [
+        'The alerts bell is the 24px icon with its previous padding again, and it sits on the vertical middle of Next Train and the day line. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_10.18.8': [
         'Reply uses the same speech-bubble icon as Next Train Advisory. The Sunday No Service chip has no dots between the day and the pill. Alerts is the same large sheet, centered on the scrim. No commuter What\'s New. forceShow stays false.',
     ],

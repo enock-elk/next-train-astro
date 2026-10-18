@@ -107,6 +107,9 @@ assert(!header.includes("names[day] + ' · <span"), 'Header boot dropped the mid
 assert(!header.includes('ml-1'), 'Header boot dropped ml-1');
 assert(header.includes('translate-x-1/4 -translate-y-1/4'), 'unread dot sits on the outer corner of the bell');
 assert(header.includes('w-6 h-6'), 'header bell icon is 24px');
+assert(!css.includes('clamp(1.1rem, 2.5dvh, 1.5rem)'), 'alerts bell keeps the 24px icon');
+assert(header.includes('flex items-center justify-between gap-2'), 'bell centers on the title and the day line');
+assert(!header.includes('-mt-0.5'), 'bell is not nudged above the wordmark');
 assert(header.includes('text-[11px] sm:text-xs font-medium'), 'Header day line uses the original subtitle face');
 assert(header.includes('<button type="button" id="current-day"'), 'the day line is a button');
 assert(css.includes('button#current-day'), 'the day line reads as a control');

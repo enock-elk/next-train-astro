@@ -101,8 +101,16 @@ const logic = readFileSync(join(ROOT, 'src/lib/logic.js'), 'utf8');
 if (!logic.includes('paintHeaderDayLabel') || !logic.includes('currentRouteSaturdayClosed')) {
     fail('header must show No Service when both Saturday directions are empty');
 }
-if (!logic.includes('Metrorail does not run regular Sunday trains on this line.')) {
-    fail('Sunday note must explain that this line has no regular Sunday trains');
+if (!logic.includes('does not run regular Sunday trains on the ${line} line.')) {
+    fail('Sunday note must name the region and the line');
+}
+if (!logic.includes('Metrorail ${regionName}')) {
+    fail('Sunday note must name the Metrorail region');
+}
+const presence = readFileSync(join(ROOT, 'src/lib/community-presence.js'), 'utf8');
+if (presence.includes('not a contact list')) fail('Who’s here must not say it is not a contact list');
+if (!presence.includes('It’s a live room count, so you can tell when the line is quiet or active.')) {
+    fail('Who’s here keeps the live room count sentence');
 }
 if (!logic.includes('Metrorail Gauteng does not have Saturday train service on the Hercules to Koedoespoort line.')) {
     fail('Hercules Saturday note must name that line');

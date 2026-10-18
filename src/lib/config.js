@@ -4,7 +4,7 @@
 /**
  * App version scheme: V{major}_{MM.DD}.{n}
  *
- * - major: product generation (currently 9)
+ * - major: product generation (currently 10)
  * - MM.DD: calendar date of this development session (use today's date)
  * - n: deployment counter for that date (1 = first ship that day)
  *
@@ -14,7 +14,7 @@
  * Changelog / What’s New is optional: skip both, or write only "no release notes."
  * Always add ADMIN_CHANGELOG[APP_VERSION] (System Health Build notes).
  */
-export const APP_VERSION = "V9_10.18.8";
+export const APP_VERSION = "V10_10.18.1";
 
 /** Public support channels (About modal, lifeboat help.html, Safe Mode). */
 export const SUPPORT_EMAIL = 'admin@nexttrain.co.za';

@@ -163,7 +163,12 @@ export function describeHeaderDayNote({
     }
     const holiday = String(holidayName || '').trim();
     if (dayType === 'sunday') {
-        const body = 'Metrorail does not run regular Sunday trains on this line.';
+        const regionName = REGIONS[region]?.name || '';
+        const line = lineServiceName(routeId);
+        const who = regionName ? `Metrorail ${regionName}` : 'Metrorail';
+        const body = line
+            ? `${who} does not run regular Sunday trains on the ${line} line.`
+            : `${who} does not run regular Sunday trains on this line.`;
         return { title: 'No Service', body: holiday ? `${holiday}. ${body}` : body };
     }
     const publicHoliday = holidayType === 'public_holiday' || holidayType === 'saturday' || dayType === 'public_holiday';

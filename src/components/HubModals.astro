@@ -670,18 +670,17 @@ import { withBase } from '../lib/config.js';
                 <h3 class="text-base font-black text-gray-900 dark:text-white tracking-tight">Feedback Hub</h3>
             </div>
         </div>
-        <div class="relative flex-1 min-h-0">
+        <div class="relative flex flex-col flex-1 min-h-0">
             <div class="nt-pack-wallpaper" aria-hidden="true"></div>
-            <div id="messages-thread-list" class="inbox-thread-list relative z-[1] h-full overflow-y-auto custom-scrollbar p-3 space-y-2 bg-transparent">
+            <div id="messages-thread-list" class="inbox-thread-list relative z-[1] flex-1 min-h-0 overflow-y-auto custom-scrollbar p-3 space-y-2 bg-transparent">
                 <p class="text-xs text-gray-400 text-center py-8">Loading…</p>
             </div>
-        </div>
-        <form id="messages-thread-form" class="shrink-0 p-3 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 space-y-2">
+            <form id="messages-thread-form" class="relative z-[1] shrink-0 px-3 pt-3 space-y-2 bg-transparent">
             <p id="messages-thread-hint" class="text-[11px] font-semibold text-amber-700 dark:text-amber-300 empty:hidden" aria-live="polite"></p>
             <div class="rounded-2xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/80">
                 <button type="button" id="messages-thread-contact-toggle" class="w-full flex items-center gap-2 px-3 py-2 text-left focus:outline-none" aria-expanded="false" aria-controls="messages-thread-contact-panel">
                     <span class="min-w-0 flex-1">
-                        <span class="block text-[10px] font-bold uppercase tracking-wide text-gray-500 dark:text-gray-400">Contact for a reply</span>
+                        <span class="block text-[10px] font-bold uppercase tracking-wide text-gray-500 dark:text-gray-400 leading-tight">Add contact details for a reply</span>
                         <span id="messages-thread-contact-summary" class="block truncate text-[12px] font-semibold text-gray-800 dark:text-gray-100">Optional</span>
                     </span>
                     <svg id="messages-thread-contact-chevron" class="w-4 h-4 shrink-0 text-gray-400 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
@@ -704,7 +703,7 @@ import { withBase } from '../lib/config.js';
             </div>
             <div class="flex gap-2 items-end">
                 <div class="relative flex-1 min-w-0">
-                    <textarea id="messages-thread-input" rows="2" maxlength="800" class="w-full min-h-[3.75rem] pl-3.5 pr-11 py-2.5 rounded-[1.35rem] bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-sm leading-5 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none resize-none overflow-y-hidden" placeholder="Write a message…"></textarea>
+                    <textarea id="messages-thread-input" rows="2" maxlength="800" class="block w-full min-h-[3.75rem] pl-3.5 pr-11 py-2.5 rounded-[1.35rem] bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-sm leading-5 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none resize-none overflow-y-hidden" placeholder="Write a message…"></textarea>
                     <label for="messages-thread-file" class="absolute right-1.5 bottom-1.5 w-9 h-9 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-200/80 dark:hover:bg-gray-700 flex items-center justify-center cursor-pointer" title="Attach image or PDF" aria-label="Attach image or PDF">
                         <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/></svg>
                         <input type="file" id="messages-thread-file" class="hidden" accept="image/*,.pdf" multiple>
@@ -714,7 +713,8 @@ import { withBase } from '../lib/config.js';
                     <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
                 </button>
             </div>
-        </form>
+            </form>
+        </div>
     </div>
 </div>
 
@@ -886,8 +886,14 @@ import { withBase } from '../lib/config.js';
   #reports-feed-list details[open] summary svg {
     transform: rotate(180deg);
   }
+  /* Wallpaper covers the thread and the composer. The fields clear the
+     bottom bar the way the board cleared the old floating nav: the pattern
+     keeps going, and the controls sit above the bar. */
   #messages-thread-form {
     flex-shrink: 0;
+    background: transparent;
+    border-top: 0;
+    padding-bottom: calc(var(--nt-nav-h, 4rem) + var(--nt-sys-bottom, env(safe-area-inset-bottom, 0px)) + 0.75rem);
   }
   html.nt-keyboard #messages-thread-form {
     position: fixed;
@@ -896,6 +902,8 @@ import { withBase } from '../lib/config.js';
     bottom: var(--nt-kb-h, 0px);
     z-index: 136;
     width: 100%;
+    padding-bottom: max(0.75rem, var(--nt-sys-bottom, env(safe-area-inset-bottom, 0px)));
+    background-color: color-mix(in srgb, var(--nt-chrome-header) 16%, var(--nt-canvas));
   }
   html.nt-keyboard #messages-thread-modal > div {
     transform: none !important;

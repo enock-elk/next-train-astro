@@ -698,10 +698,10 @@ html.nt-keyboard #alert-image-lightbox-dock {
 }
 #alert-image-lightbox-dock.is-composing #alert-image-lightbox-quote,
 #alert-image-lightbox-dock.is-composing #alert-image-lightbox-send {
-  display: flex;
+  display: flex !important;
 }
 #alert-image-lightbox-dock.is-composing #alert-image-lightbox-react {
-  display: none;
+  display: none !important;
 }
 
 html[data-colour-pack="earthy"]:not(.dark) #grid-container .nt-station-col.bg-blue-100 {

@@ -1001,7 +1001,8 @@ function fillLightboxQuote(notice) {
     const titleEl = document.getElementById('alert-image-lightbox-quote-title');
     const thumb = document.getElementById('alert-image-lightbox-quote-img');
     const img = document.getElementById('alert-image-lightbox-img');
-    const title = String(notice?.title || notice?.buttonText || '').replace(/<[^>]+>/g, '').trim();
+    const reply = document.getElementById('alert-image-lightbox-reply');
+    const title = String(notice?.title || notice?.buttonText || reply?.dataset.alertTitle || '').replace(/<[^>]+>/g, '').trim();
     if (titleEl) titleEl.textContent = title || 'Photo';
     const src = img?.currentSrc || img?.getAttribute('src') || '';
     if (thumb && src) thumb.src = src;
@@ -1083,6 +1084,7 @@ function paintLightboxReactions(detail) {
             reply.value = '';
             delete reply.dataset.alertId;
             delete reply.dataset.alertSrc;
+            delete reply.dataset.alertTitle;
         }
         return;
     }
@@ -1097,6 +1099,7 @@ function paintLightboxReactions(detail) {
         if (reply.dataset.alertId && reply.dataset.alertId !== nextId) reply.value = '';
         reply.dataset.alertId = nextId;
         reply.dataset.alertSrc = String(notice._sourceKey || '');
+        reply.dataset.alertTitle = String(notice.title || notice.buttonText || '').replace(/<[^>]+>/g, '').trim();
     }
     if (!String(reply?.value || '').trim()) setLightboxComposing(false);
     dock.classList.remove('hidden');

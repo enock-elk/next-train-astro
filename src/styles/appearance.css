@@ -667,19 +667,6 @@ html[data-colour-pack="earthy"] #pinned-section .text-blue-300 {
   width: 6px;
   height: 0;
 }
-#grid-container .nt-grid-station {
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  overflow: hidden;
-  width: 8.75rem;
-  min-width: 8.75rem;
-  max-width: 8.75rem;
-  white-space: normal;
-  overflow-wrap: break-word;
-  font-size: 10px;
-  line-height: 1.2;
-}
 .nt-grid-edge-fade {
   position: absolute;
   top: 0;
@@ -696,6 +683,25 @@ html.dark .nt-grid-edge-fade {
 }
 .nt-grid-frame.can-scroll-x .nt-grid-edge-fade {
   opacity: 1;
+}
+
+#alert-image-lightbox-dock {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 170;
+  touch-action: manipulation;
+}
+html.nt-keyboard #alert-image-lightbox-dock {
+  bottom: var(--nt-kb-h, 0px);
+}
+#alert-image-lightbox-dock.is-composing #alert-image-lightbox-quote,
+#alert-image-lightbox-dock.is-composing #alert-image-lightbox-send {
+  display: flex;
+}
+#alert-image-lightbox-dock.is-composing #alert-image-lightbox-react {
+  display: none;
 }
 
 html[data-colour-pack="earthy"]:not(.dark) #grid-container .nt-station-col.bg-blue-100 {

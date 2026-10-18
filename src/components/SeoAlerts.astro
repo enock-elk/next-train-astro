@@ -26,11 +26,24 @@ const routeIdAttr = routeIds.join(',');
   <button type="button" id="alert-image-lightbox-close" class="absolute top-[max(0.75rem,env(safe-area-inset-top))] right-3 z-20 w-11 h-11 rounded-full bg-black/55 text-white flex items-center justify-center border border-white/20 focus:outline-none [touch-action:manipulation]" aria-label="Close">
     <svg class="w-6 h-6 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
   </button>
-  <div id="alert-image-lightbox-dock" class="hidden absolute inset-x-0 bottom-0 z-10 shrink-0 px-3 pt-8 pb-[max(1rem,env(safe-area-inset-bottom))] bg-gradient-to-t from-black via-black/70 to-transparent pointer-events-none">
-    <div class="pointer-events-auto flex items-center gap-3">
-      <button type="button" id="alert-image-lightbox-reply" class="flex-1 min-w-0 text-left text-[15px] font-medium text-white/80 px-4 py-2.5 rounded-full bg-white/10 border border-white/10 focus:outline-none">Reply</button>
-      <div id="alert-image-lightbox-react" class="flex items-center gap-1.5 shrink-0" role="group" aria-label="Reactions"></div>
-    </div>
+  <div id="alert-image-lightbox-dock" class="hidden absolute inset-x-0 bottom-0 z-10 shrink-0 px-3 pt-8 pb-[max(1rem,env(safe-area-inset-bottom))] bg-gradient-to-t from-black via-black/70 to-transparent pointer-events-none [touch-action:manipulation]">
+    <form id="alert-image-lightbox-form" class="pointer-events-auto flex flex-col gap-2 [touch-action:manipulation]">
+      <div id="alert-image-lightbox-quote" class="hidden items-stretch overflow-hidden rounded-xl bg-white text-gray-900">
+        <span class="w-1 shrink-0 bg-[#25D366]" aria-hidden="true"></span>
+        <div class="min-w-0 flex-1 py-2 pl-2 pr-1">
+          <div id="alert-image-lightbox-quote-title" class="truncate text-[13px] font-semibold text-[#128C7E]"></div>
+          <div class="text-[12px] text-gray-500">Photo</div>
+        </div>
+        <img id="alert-image-lightbox-quote-img" alt="" class="m-1 h-12 w-12 shrink-0 rounded object-cover">
+      </div>
+      <div class="flex items-center gap-2">
+        <input id="alert-image-lightbox-reply" type="text" enterkeyhint="send" autocomplete="off" maxlength="2000" placeholder="Reply" class="min-w-0 flex-1 rounded-full border border-white/15 bg-white/10 px-4 py-2.5 text-[16px] text-white placeholder:text-white/70 focus:outline-none [touch-action:manipulation]">
+        <div id="alert-image-lightbox-react" class="flex shrink-0 items-center gap-1.5" role="group" aria-label="Reactions"></div>
+        <button type="submit" id="alert-image-lightbox-send" class="hidden h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#25D366] text-white focus:outline-none [touch-action:manipulation]" aria-label="Send">
+          <svg class="pointer-events-none h-5 w-5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3.4 20.6 21 12 3.4 3.4l2.2 7.2L16 12l-10.4 1.4-2.2 7.2z"></path></svg>
+        </button>
+      </div>
+    </form>
   </div>
 </div>
 

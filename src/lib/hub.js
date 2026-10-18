@@ -974,7 +974,8 @@ function maybeForceShowChangelog() {
     openChangelog();
 }
 
-async function submitFeedback() {
+async function submitFeedback(opts = {}) {
+    let sent = false;
     const type = document.getElementById('feedback-type')?.value;
     let text = document.getElementById('feedback-text')?.value.trim() || '';
     const fileInput = document.getElementById('feedback-file');
@@ -1137,11 +1138,12 @@ async function submitFeedback() {
             });
         } catch { /* thread copy is best-effort */ }
 
+        sent = true;
         showToast('Feedback sent! Thank you.', 'success');
         closeSmoothModal('feedback-modal');
         clearFeedbackReplyMode();
         feedbackReturnModalId = null;
-        setTimeout(() => openMessagesThread(), 420);
+        if (!opts.skipThread) setTimeout(() => openMessagesThread(), 420);
         const ta = document.getElementById('feedback-text');
         const em = document.getElementById('feedback-email');
         if (ta) ta.value = '';
@@ -1163,6 +1165,20 @@ async function submitFeedback() {
         if (submitText) submitText.textContent = 'Submit';
         spinner?.classList.add('hidden');
     }
+    return sent;
+}
+
+/** Send an advisory reply from the photo field. The feedback sheet stays closed. */
+export async function submitAdvisoryReplyFromLightbox({ text = '', label = 'Replying to Advisory:', snippet = '', rawMsg = '', alertId = '', alertKind = 'notice', quotedText = '' } = {}) {
+    enterFeedbackReplyMode({ label, snippet, rawMsg: rawMsg || snippet, alertId, alertKind, quotedText });
+    const fText = document.getElementById('feedback-text');
+    if (fText) fText.value = String(text || '');
+    const ok = await submitFeedback({ skipThread: true });
+    if (!ok) {
+        clearFeedbackReplyMode();
+        if (fText) fText.value = '';
+    }
+    return !!ok;
 }
 
 /** Survives sanitizeHTML (no SVG) — clear circular “+” expand affordance on alert images. */
@@ -2324,6 +2340,7 @@ export function initHub() {
     window.prepareRichHtml = prepareRichHtml;
     window.injectRichTextStyles = injectRichTextStyles;
     window.openFeedbackReplyFromOverlay = openFeedbackReplyFromOverlay;
+    window.submitAdvisoryReplyFromLightbox = submitAdvisoryReplyFromLightbox;
     window.openFeedbackModal = openFeedbackModal;
     window.syncFeedbackModalViewport = syncFeedbackModalViewport;
     bindChatAccountListener();

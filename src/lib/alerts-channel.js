@@ -981,13 +981,75 @@ function noticeForLightbox(detail) {
 }
 
 const LIGHTBOX_BAR_REACTIONS = ['love', 'pray', 'laugh'];
+let lightboxReplySending = false;
 
-function openLightboxReply(notice) {
-    if (!notice || typeof window.openFeedbackReplyFromOverlay !== 'function') return;
+function setLightboxComposing(on) {
+    document.getElementById('alert-image-lightbox-dock')?.classList.toggle('is-composing', !!on);
+}
+
+function lightboxNoticeFromField() {
+    const reply = document.getElementById('alert-image-lightbox-reply');
+    const id = reply?.dataset.alertId || '';
+    const src = reply?.dataset.alertSrc || '';
+    if (!id) return null;
+    return cachedLiveNotices.find((n) => String(n.id) === String(id) && String(n._sourceKey) === String(src))
+        || cachedLiveNotices.find((n) => String(n.id) === String(id))
+        || null;
+}
+
+function fillLightboxQuote(notice) {
+    const titleEl = document.getElementById('alert-image-lightbox-quote-title');
+    const thumb = document.getElementById('alert-image-lightbox-quote-img');
+    const img = document.getElementById('alert-image-lightbox-img');
+    const title = String(notice?.title || notice?.buttonText || '').replace(/<[^>]+>/g, '').trim();
+    if (titleEl) titleEl.textContent = title || 'Photo';
+    const src = img?.currentSrc || img?.getAttribute('src') || '';
+    if (thumb && src) thumb.src = src;
+}
+
+function revealThreadAfterLightbox() {
+    let opened = false;
+    const openThread = () => {
+        if (opened) return;
+        opened = true;
+        try { window.openMessagesThread?.(); } catch { /* ignore */ }
+    };
+    if (location.hash === '#lightbox' && window._isLightboxMode) {
+        window.addEventListener('popstate', () => setTimeout(openThread, 0), { once: true });
+        window.closeLightbox?.();
+        setTimeout(() => {
+            if (window._isLightboxMode) window.closeLightbox?.(true);
+            openThread();
+        }, 700);
+        return;
+    }
+    window.closeLightbox?.(true);
+    openThread();
+}
+
+async function sendLightboxReply(notice) {
+    const input = document.getElementById('alert-image-lightbox-reply');
+    const text = String(input?.value || '').trim();
+    if (text.length < 5) {
+        showToast('Please provide more details (at least 5 characters).', 'error');
+        input?.focus();
+        return;
+    }
+    if (!notice || lightboxReplySending) return;
+    lightboxReplySending = true;
     const rawHtml = repairMojibake(notice.message || notice.text || '');
     const snippet = htmlToPlainSnippet(rawHtml, 6).replace(/[—–].*/, '').trim();
-    const start = () => {
-        window.openFeedbackReplyFromOverlay('alerts-channel', {
+    let ok = false;
+    try {
+        if (typeof window.submitAdvisoryReplyFromLightbox !== 'function') {
+            const hub = await import('./hub.js');
+            if (typeof hub.submitAdvisoryReplyFromLightbox === 'function') {
+                window.submitAdvisoryReplyFromLightbox = hub.submitAdvisoryReplyFromLightbox;
+            }
+        }
+        if (typeof window.submitAdvisoryReplyFromLightbox !== 'function') return;
+        ok = await window.submitAdvisoryReplyFromLightbox({
+            text,
             label: 'Replying to Advisory:',
             snippet,
             rawMsg: snippet,
@@ -995,14 +1057,16 @@ function openLightboxReply(notice) {
             alertKind: 'notice',
             quotedText: noticeQuotePlain(notice),
         });
-    };
-    if (location.hash === '#lightbox') {
-        window.addEventListener('popstate', () => setTimeout(start, 0), { once: true });
-        window.closeLightbox?.();
-        return;
+    } catch (e) {
+        console.warn('Lightbox reply failed', e);
+        showToast('Could not send feedback.', 'error');
+    } finally {
+        lightboxReplySending = false;
     }
-    window.closeLightbox?.(true);
-    start();
+    if (!ok) return;
+    if (input) input.value = '';
+    setLightboxComposing(false);
+    revealThreadAfterLightbox();
 }
 
 function paintLightboxReactions(detail) {
@@ -1014,7 +1078,9 @@ function paintLightboxReactions(detail) {
     if (!notice) {
         dock.classList.add('hidden');
         row.replaceChildren();
+        setLightboxComposing(false);
         if (reply) {
+            reply.value = '';
             delete reply.dataset.alertId;
             delete reply.dataset.alertSrc;
         }
@@ -1027,9 +1093,12 @@ function paintLightboxReactions(detail) {
         return `<button type="button" data-lightbox-react="${escapeHTML(key)}" data-alert-id="${escapeHTML(String(notice.id || ''))}" data-alert-src="${escapeHTML(String(notice._sourceKey || ''))}" class="w-10 h-10 text-[1.7rem] leading-none focus:outline-none ${on ? 'scale-110' : ''}" aria-pressed="${on ? 'true' : 'false'}" aria-label="${on ? 'Remove reaction' : `React ${emoji}`}">${emoji}</button>`;
     }).join('');
     if (reply) {
-        reply.dataset.alertId = String(notice.id || '');
+        const nextId = String(notice.id || '');
+        if (reply.dataset.alertId && reply.dataset.alertId !== nextId) reply.value = '';
+        reply.dataset.alertId = nextId;
         reply.dataset.alertSrc = String(notice._sourceKey || '');
     }
+    if (!String(reply?.value || '').trim()) setLightboxComposing(false);
     dock.classList.remove('hidden');
 }
 
@@ -1037,19 +1106,28 @@ function bindLightboxReactionClicks() {
     const overlay = document.getElementById('alert-image-lightbox');
     if (!overlay || overlay.dataset.ntReactBound === '1') return;
     overlay.dataset.ntReactBound = '1';
+    overlay.addEventListener('focusin', (e) => {
+        if (e.target?.id !== 'alert-image-lightbox-reply') return;
+        fillLightboxQuote(lightboxNoticeFromField());
+        setLightboxComposing(true);
+    });
+    overlay.addEventListener('focusout', () => {
+        setTimeout(() => {
+            if (lightboxReplySending) return;
+            const input = document.getElementById('alert-image-lightbox-reply');
+            const active = document.activeElement;
+            if (active && overlay.contains(active)) return;
+            if (String(input?.value || '').trim()) return;
+            setLightboxComposing(false);
+        }, 120);
+    });
+    document.getElementById('alert-image-lightbox-form')?.addEventListener('submit', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const notice = lightboxNoticeFromField();
+        if (notice) sendLightboxReply(notice);
+    });
     overlay.addEventListener('click', (e) => {
-        const reply = e.target.closest?.('#alert-image-lightbox-reply');
-        if (reply && overlay.contains(reply)) {
-            e.preventDefault();
-            e.stopPropagation();
-            triggerHaptic();
-            const id = reply.dataset.alertId || '';
-            const src = reply.dataset.alertSrc || '';
-            const notice = cachedLiveNotices.find((n) => String(n.id) === String(id) && String(n._sourceKey) === String(src))
-                || cachedLiveNotices.find((n) => String(n.id) === String(id));
-            if (notice) openLightboxReply(notice);
-            return;
-        }
         const btn = e.target.closest?.('[data-lightbox-react]');
         if (!btn || !overlay.contains(btn)) return;
         e.preventDefault();

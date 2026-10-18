@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_10.18.1': [
+        'The timetable grid is the previous size again. On an alert photo, Reply is a text field. Focusing it lifts the field above the keyboard, and the photo stays up. Send uses the same advisory reply. Heart, pray, and laugh stay on that bar until the field is focused. No commuter What\'s New. forceShow stays false.',
+    ],
     'V9_10.17.10': [
         'Close Timetable is the solid full-width button again. The bottom bar is a rectangle in the same colour as the top bar. The alert photo fills the screen, and the bottom is a reply bar with a few reactions. No commuter What\'s New. forceShow stays false.',
     ],

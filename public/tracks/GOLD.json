@@ -1,8 +1,8 @@
 {
   "branch": "map-gold",
-  "frozenAt": "9800e74518563cee08c5dd9fd6afeb838043a95d",
+  "frozenAt": "e1b3a66e3f90f6433cf5f5de25e017850bd2247a",
   "version": "V9_09.20.11",
-  "note": "Gold snapshot of this build: the map page title names the station map, and the tracking card hides speed, heading, and GPS unless an operator is signed in. Last seen reads at, approaching, or after a station. Tracks and advert handling unchanged. Diff against origin/map-gold. Fast-forward map-gold after this lands on main. Never force-push map-gold.",
+  "note": "Gold snapshot of main e1b3a66. Map runtime on main had moved past the previous freeze: official line colours, station callouts without a slide, a route loading mark, Join this train, and a faster ping poll. Baked tracks and advert handling are unchanged. Fast-forward map-gold to this main. Never force-push map-gold.",
   "files": {
     "public/tracks/rail-tracks-EC.geojson": {
       "md5": "43409bfd05405205e596f0d03345ab18",
@@ -21,24 +21,24 @@
       "sha256": "090a5d7fc45cafb8c7b81dc583ae24978540f38278cab447953bc90c8821f01f"
     },
     "public/js/map-app.js": {
-      "md5": "063fa36c399bf1f5ee9fc50c3ceb187b",
-      "sha256": "b990068e26657c71d2e099728cda4b2b27b3a06b5592a1f3dde753d03d50fdb9"
+      "md5": "25da9862acf5c0fb109cc09579bfd115",
+      "sha256": "34e33acc9feaf22af198a0e3013dc97364afc5257bb70d87bbc7d7c7b997b260"
     },
     "src/pages/map.astro": {
-      "md5": "0590622e0e1b3883aa82bfdd1e6911f3",
-      "sha256": "311dc18576b546819a1d47123c000d70460bad530c41639fc286b8795f218ed5"
+      "md5": "561681619ddb9781ac6ba513ec54670e",
+      "sha256": "e024ea5463448149c56a4a0821758a0dac8fe58bd91fc182fbe7bb2affe4ea47"
     },
     "src/components/MapView.astro": {
-      "md5": "e7569a91aa07509e307811d8a9cc6a0f",
-      "sha256": "f80b3d4abafc2df6cdd70d8ec55051ac02ba9bb7e5aa2e50b9f0e34633e2c2f9"
+      "md5": "444c75381d8a8049d0051aeccf559118",
+      "sha256": "95ea01a70f2b515e802eb5fe4b4c1a63e637b7afa2ded62aa09d383576892880"
     },
     "src/lib/rail-tracks.js": {
       "md5": "4d01be4e4e6347559351a8d039770d3d",
       "sha256": "e7385a8e07415f0862e983a5ffca225fc23e68c22f550ee13bc84ffdb52cf3dc"
     },
     "src/lib/map-tab.js": {
-      "md5": "6531141210d6a0383859f2279cbbfb01",
-      "sha256": "8233bf366d50cbd9410ffec32171d308c55ee062d4c67d0dfc8eb32372e32fa0"
+      "md5": "0f49766c7c086c372ec12242aef7f55a",
+      "sha256": "e59779b4869caaac24f0f6538cc338a32ca2126ce2cc170425e7e8930c6fd01c"
     },
     "src/lib/clever-ads.js": {
       "md5": "4d78da253d60d3ba285de6c41d697cad",

@@ -21,7 +21,7 @@ import {
     SUPPORT_EMAIL,
 } from './recovery.js';
 import { sanitizeAttachmentDisplayUrl } from './attachments.js';
-import { preferSavedPosterSrc } from './alerts-feed.js';
+import { alertVideoPosterUrl, preferSavedPosterSrc } from './alerts-feed.js';
 import { pinchGestureMove, pinchGestureStart, zoomAboutPoint } from './pinch-math.js';
 
 
@@ -1037,8 +1037,14 @@ let lbTracking = false;
 let lbLastTap = 0;
 let lbTapX = 0;
 let lbTapY = 0;
+let lbSlides = [];
+let lbSlide = 0;
+let lbDragX = 0;
+let lbAxis = '';
+let lbStepping = false;
 const LB_ZOOM = 2.5;
 const LB_DISMISS_PX = 96;
+const LB_STEP_PX = 56;
 
 function lightboxEls() {
     return {
@@ -1233,6 +1239,134 @@ function resolveLightboxDisplaySrc(src, host) {
     return src;
 }
 
+function videoPreviewHost(host) {
+    if (!host || host.nodeType !== 1) return null;
+    if (host.matches?.('[data-alert-video]')) return host;
+    return host.closest?.('[data-alert-video]') || null;
+}
+
+/** The still on a video cell. Full view shows this picture and does not play the video. */
+function videoPreviewStill(host) {
+    const el = videoPreviewHost(host);
+    if (!el) return '';
+    const poster = el.querySelector('[data-alert-video-poster]');
+    const page = el.querySelector('[data-alert-video-play]')?.getAttribute('data-alert-video-src')
+        || poster?.getAttribute('data-alert-video-page')
+        || '';
+    const live = poster ? (poster.currentSrc || poster.getAttribute('src') || '') : '';
+    const still = alertVideoPosterUrl(page) || live;
+    const safe = sanitizeAttachmentDisplayUrl(still);
+    if (safe) return safe;
+    return String(still).startsWith('blob:') ? String(still) : '';
+}
+
+function lightboxGalleryBlocked() {
+    return !!lightboxEls().overlay?.dataset?.ntFeedbackGallery;
+}
+
+/**
+ * Pictures already on the open Alerts channel, in the order they appear:
+ * poster buttons, then each video's preview still. One step, no wrap.
+ */
+function collectChannelSlides(host) {
+    const channel = document.getElementById('alerts-channel');
+    const node = host?.nodeType === 1 ? host : null;
+    if (!channel || !node || !channel.contains(node) || lightboxGalleryBlocked()) return [];
+    const slides = [];
+    channel.querySelectorAll('[data-alert-lightbox], [data-alert-video]').forEach((el) => {
+        if (el.matches('[data-alert-lightbox]')) {
+            const src = el.getAttribute('data-alert-lightbox') || '';
+            if (src) slides.push({ host: el, kind: 'image', src });
+            return;
+        }
+        const still = videoPreviewStill(el);
+        if (still) slides.push({ host: el, kind: 'video', src: still });
+    });
+    return slides;
+}
+
+function slideDisplaySrc(slide) {
+    if (!slide) return '';
+    if (slide.kind === 'video') return videoPreviewStill(slide.host) || slide.src || '';
+    return resolveLightboxDisplaySrc(slide.src, slide.host);
+}
+
+function rememberLightboxSlides(host) {
+    lbSlides = collectChannelSlides(host);
+    const node = host?.nodeType === 1 ? host : null;
+    const index = node
+        ? lbSlides.findIndex((slide) => slide.host === node || slide.host.contains(node))
+        : -1;
+    lbSlide = index >= 0 ? index : 0;
+    lbAxis = '';
+    lbDragX = 0;
+}
+
+function showLightboxSlide(index) {
+    if (index < 0 || index >= lbSlides.length) return;
+    const slide = lbSlides[index];
+    lbSlide = index;
+    lbAxis = '';
+    lbDragX = 0;
+    lbStepping = false;
+    resetAlertLightboxTransform();
+    paintLightboxImage(slideDisplaySrc(slide));
+    announceLightboxNotice(slide.host);
+}
+
+function finishLightboxStep(index, exitX) {
+    if (lbStepping || index < 0 || index >= lbSlides.length) return;
+    lbStepping = true;
+    const { img } = lightboxEls();
+    if (img) img.style.transition = 'transform 180ms ease';
+    lbScale = 1;
+    lbY = 0;
+    lbDismissY = 0;
+    lbX = exitX;
+    applyAlertLightboxTransform();
+    window.setTimeout(() => showLightboxSlide(index), 170);
+}
+
+function commitLightboxDrag() {
+    if (lbAxis !== 'x') return false;
+    const drag = lbDragX;
+    const width = lightboxEls().stage?.clientWidth || 320;
+    lbAxis = '';
+    lbDragX = 0;
+    if (drag <= -LB_STEP_PX && lbSlide < lbSlides.length - 1) {
+        finishLightboxStep(lbSlide + 1, -width);
+        return true;
+    }
+    if (drag >= LB_STEP_PX && lbSlide > 0) {
+        finishLightboxStep(lbSlide - 1, width);
+        return true;
+    }
+    applyLightboxState({ scale: 1, x: 0, y: 0 }, true);
+    return true;
+}
+
+function trackLightboxAxis(dx, dy) {
+    if (lbAxis || Math.hypot(dx, dy) <= 12) return;
+    const horizontal = Math.abs(dx) > Math.abs(dy) * 1.15;
+    if (horizontal && (lightboxGalleryBlocked() || lbSlides.length < 2)) lbAxis = 'skip';
+    else lbAxis = horizontal ? 'x' : 'y';
+}
+
+function followLightboxDrag(dx) {
+    let drag = dx;
+    const atStart = lbSlide <= 0 && drag > 0;
+    const atEnd = lbSlide >= lbSlides.length - 1 && drag < 0;
+    if (lbSlides.length < 2 || atStart || atEnd) drag *= 0.28;
+    lbDragX = drag;
+    lbX = drag;
+    lbY = 0;
+    lbDismissY = 0;
+    const { img, overlay } = lightboxEls();
+    if (img) img.style.transition = 'none';
+    if (overlay) overlay.style.transition = '';
+    applyAlertLightboxTransform();
+}
+
 function bindAlertImageLightbox() {
     if (typeof document === 'undefined' || window._alertLightboxBound) return;
     window._alertLightboxBound = true;
@@ -1292,14 +1426,33 @@ function bindAlertImageLightbox() {
         e.preventDefault();
         lbStartX = e.clientX - lbX;
         lbStartY = e.clientY - lbY;
+        lbRawX = e.clientX;
+        lbRawY = e.clientY;
         lbPanning = true;
+        lbAxis = '';
+        lbDragX = 0;
     });
-    stage.addEventListener('mouseup', () => { lbPanning = false; });
-    stage.addEventListener('mouseleave', () => { lbPanning = false; });
+    stage.addEventListener('mouseup', () => {
+        if (lbPanning && lbAxis === 'x') commitLightboxDrag();
+        lbPanning = false;
+        lbAxis = '';
+    });
+    stage.addEventListener('mouseleave', () => {
+        if (lbPanning && lbAxis === 'x') commitLightboxDrag();
+        lbPanning = false;
+        lbAxis = '';
+    });
     stage.addEventListener('mousemove', (e) => {
         if (!lbPanning) return;
         e.preventDefault();
         if (lbScale <= 1) {
+            const dx = e.clientX - lbRawX;
+            const dy = e.clientY - lbRawY;
+            trackLightboxAxis(dx, dy);
+            if (lbAxis === 'x') {
+                followLightboxDrag(dx);
+                return;
+            }
             lbX = 0;
             lbY = 0;
             applyAlertLightboxTransform();
@@ -1320,6 +1473,8 @@ function bindAlertImageLightbox() {
             lbPanning = false;
             lbTracking = false;
             lbMoved = true;
+            lbAxis = '';
+            lbDragX = 0;
             lbDismissY = 0;
             const { img } = lightboxEls();
             const rect = (img || stage).getBoundingClientRect();
@@ -1328,6 +1483,7 @@ function bindAlertImageLightbox() {
             return;
         }
         if (e.touches.length === 1) {
+            if (lbStepping) return;
             lbRawX = e.touches[0].clientX;
             lbRawY = e.touches[0].clientY;
             lbStartX = lbRawX - lbX;
@@ -1335,6 +1491,8 @@ function bindAlertImageLightbox() {
             lbPanning = lbScale > 1;
             lbTracking = true;
             lbMoved = false;
+            lbAxis = '';
+            lbDragX = 0;
             lbDismissY = 0;
         }
     }, { passive: false });
@@ -1372,13 +1530,22 @@ function bindAlertImageLightbox() {
             applyAlertLightboxTransform();
             return;
         }
-        // At fit, a downward swipe follows the finger and closes the preview.
-        if (dy > 12 && dy > Math.abs(dx) * 1.2) {
+        if (lbStepping) return;
+        trackLightboxAxis(dx, dy);
+        // At fit, a sideways swipe moves to the next picture. A downward swipe closes.
+        if (lbAxis === 'x') {
+            e.preventDefault();
+            lbMoved = true;
+            followLightboxDrag(dx);
+            return;
+        }
+        if (lbAxis === 'y' && dy > 12) {
             e.preventDefault();
             const { img, overlay } = lightboxEls();
             if (img) img.style.transition = '';
             if (overlay) overlay.style.transition = '';
             lbDismissY = dy;
+            lbX = 0;
             applyAlertLightboxTransform();
         }
     }, { passive: false });
@@ -1406,6 +1573,11 @@ function bindAlertImageLightbox() {
         if (e.touches.length > 0) return;
         lbTracking = false;
         lbPanning = false;
+        if (lbAxis === 'x') {
+            commitLightboxDrag();
+            return;
+        }
+        lbAxis = '';
         if (lbScale <= 1 && lbDismissY > LB_DISMISS_PX) {
             lbDismissY = 0;
             closeLightbox();
@@ -1427,6 +1599,18 @@ function bindAlertImageLightbox() {
         lbTapX = tx;
         lbTapY = ty;
     }, { passive: false });
+    document.addEventListener('keydown', (e) => {
+        if (!window._isLightboxMode || lightboxGalleryBlocked() || lbScale > 1) return;
+        const tag = document.activeElement && document.activeElement.tagName;
+        if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+        if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+        const dir = e.key === 'ArrowRight' ? 1 : -1;
+        const index = lbSlide + dir;
+        if (index < 0 || index >= lbSlides.length) return;
+        e.preventDefault();
+        const width = lightboxEls().stage?.clientWidth || 320;
+        finishLightboxStep(index, dir > 0 ? -width : width);
+    });
 }
 
 function lightboxNoticeMeta(host) {
@@ -1483,7 +1667,11 @@ function lightboxCandidateSrc(url, host) {
 
 export function openLightbox(url, host) {
     if (typeof window === 'undefined') return;
-    const picked = lightboxCandidateSrc(url, host);
+    const videoHost = videoPreviewHost(host);
+    const still = videoHost ? videoPreviewStill(videoHost) : '';
+    const picked = still
+        ? { src: still, wrap: videoHost, loaded: true }
+        : lightboxCandidateSrc(url, host);
     const src = picked.src;
     if (!src) return;
     const wrap = picked.wrap;
@@ -1500,7 +1688,7 @@ export function openLightbox(url, host) {
     resetAlertLightboxTransform();
     img.alt = 'Image Preview';
     img.decoding = 'async';
-    const displaySrc = resolveLightboxDisplaySrc(src, wrap || host);
+    const displaySrc = still || resolveLightboxDisplaySrc(src, wrap || host);
     const devOpen = !!document.getElementById('dev-modal') && !document.getElementById('dev-modal').classList.contains('hidden');
     if (devOpen) {
         overlay.style.zIndex = '10050';
@@ -1510,6 +1698,7 @@ export function openLightbox(url, host) {
     overlay.classList.add('flex');
     paintLightboxImage(displaySrc);
     announceLightboxNotice(wrap || host);
+    rememberLightboxSlides(wrap || host);
 }
 
 export function closeLightbox(fromPopState = false) {
@@ -1528,6 +1717,11 @@ export function closeLightbox(fromPopState = false) {
             delete overlay.dataset.ntAdminLift;
         }
         resetAlertLightboxTransform();
+        lbSlides = [];
+        lbSlide = 0;
+        lbAxis = '';
+        lbDragX = 0;
+        lbStepping = false;
         hideLightboxStatus();
         if (img) img.alt = '';
         announceLightboxNotice(null);

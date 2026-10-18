@@ -713,7 +713,7 @@ export function renderAlertVideoMarkup(urls) {
             : '';
         return `<div class="relative overflow-hidden rounded-xl border border-gray-200 bg-gray-900 dark:border-gray-700" data-alert-video data-alert-video-kind="${kind}">
             ${file}
-            <button type="button" data-alert-video-play data-alert-video-src="${src}" class="relative flex min-h-[10rem] w-full items-center justify-center focus:outline-none">${picture}<span class="relative z-[1] flex items-center gap-2 rounded-full bg-black/55 px-3 py-2 font-bold text-white">${ALERT_VIDEO_PLAY_ICON}<span>Play video</span></span></button>
+            <button type="button" data-alert-video-play data-alert-video-src="${src}" class="relative flex min-h-[10rem] w-full items-center justify-center focus:outline-none">${picture}<span data-alert-video-play-chip class="relative z-[1] flex items-center gap-2 rounded-full bg-black/55 px-3 py-2 font-bold text-white">${ALERT_VIDEO_PLAY_ICON}<span>Play video</span></span></button>
         </div>`;
     }).join('');
     return `<div class="mb-1 mt-2 grid grid-cols-1 gap-2" data-alert-media>${cells}</div>`;

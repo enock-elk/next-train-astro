@@ -68,6 +68,9 @@ assert(/#route-subtitle-text \{\s*text-shadow: 0 1px 0 rgba\(15, 23, 42, 0\.32\)
 assert(/html\.dark #route-subtitle-text \{[\s\S]*?color-mix\(in srgb, var\(--nt-line/.test(css), 'dark route name uses a lighter tint of the line colour');
 assert(/html\.dark #route-subtitle-text \{[\s\S]*?text-shadow: 0 1px 0 rgba\(15, 23, 42, 0\.55\);/.test(css), 'dark route name keeps a dark edge under the lighter tint');
 assert(css.includes('html.dark [id$="-modal"].fixed > div[class*="rounded-xl"]'), 'dark floating modals keep a visible edge');
+assert(css.includes('color-mix(in srgb, var(--nt-text) 22%, transparent)'), 'dark modal edge is a quiet line');
+assert(!css.includes('color-mix(in srgb, var(--nt-text) 58%, transparent)'), 'dark modal edge is not a white halo');
+assert(css.includes('color-mix(in srgb, var(--nt-surface) 96%, var(--nt-text))'), 'dark modal header stays with the card');
 assert(/#bottom-nav\.bottom-nav-bar \{[\s\S]*?border-radius: 0;/.test(css), 'bottom nav is rectangular');
 assert(css.includes('#current-day'), 'day label letter-spacing rule present');
 

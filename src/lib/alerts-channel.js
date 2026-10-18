@@ -249,6 +249,10 @@ function bindAlertVideoPlayers(root) {
             const src = btn.getAttribute('data-alert-video-src') || '';
             const host = btn.parentElement;
             if (!host || !src) return;
+            if (!e.target.closest?.('[data-alert-video-play-chip]')) {
+                if (typeof window.openLightbox === 'function') window.openLightbox('', host);
+                return;
+            }
             const kind = host.getAttribute('data-alert-video-kind') || alertVideoKind(src);
             if (kind === 'youtube' || kind === 'vimeo') {
                 const embed = alertVideoEmbedUrl(src);

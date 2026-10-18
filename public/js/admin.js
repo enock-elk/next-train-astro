@@ -5213,6 +5213,7 @@ const Admin = {
             return;
         }
         document.getElementById('operator-brief-overlay')?.classList.add('hidden');
+        document.getElementById('operator-brief-card-menu')?.classList.add('hidden');
     },
 
     postBriefAlert: async () => {
@@ -5266,6 +5267,132 @@ const Admin = {
         }
     },
 
+    briefCardPlainText: (card) => {
+        if (!card) return '';
+        const lines = [];
+        card.querySelectorAll('p, h3, dt, dd').forEach((el) => {
+            if (el.closest('button')) return;
+            const text = String(el.textContent || '').replace(/\s+/g, ' ').trim();
+            if (text) lines.push(text);
+        });
+        return lines.join('\n');
+    },
+
+    copyBriefText: async (text) => {
+        const value = String(text || '');
+        if (!value) return false;
+        try {
+            if (navigator.clipboard?.writeText) {
+                await navigator.clipboard.writeText(value);
+                return true;
+            }
+        } catch { /* fall through */ }
+        try {
+            const area = document.createElement('textarea');
+            area.value = value;
+            area.setAttribute('readonly', '');
+            area.style.position = 'fixed';
+            area.style.left = '-9999px';
+            document.body.appendChild(area);
+            area.select();
+            const copied = document.execCommand('copy');
+            area.remove();
+            return !!copied;
+        } catch {
+            return false;
+        }
+    },
+
+    openBriefCardMenu: (card, x, y) => {
+        const text = Admin.briefCardPlainText(card);
+        if (!text) return;
+        Admin._briefCopyText = text;
+        let menu = document.getElementById('operator-brief-card-menu');
+        if (!menu) {
+            menu = document.createElement('div');
+            menu.id = 'operator-brief-card-menu';
+            menu.className = 'fixed z-[400] hidden';
+            document.body.appendChild(menu);
+            menu.addEventListener('click', async (event) => {
+                const copy = event.target.closest?.('[data-brief-copy]');
+                if (!copy) return;
+                event.preventDefault();
+                event.stopPropagation();
+                const value = Admin._briefCopyText || '';
+                menu.classList.add('hidden');
+                const copied = await Admin.copyBriefText(value);
+                if (typeof showToast === 'function') {
+                    showToast(copied ? 'Copied' : 'Could not copy that card.', copied ? 'success' : 'error');
+                }
+            });
+            document.addEventListener('pointerdown', (event) => {
+                if (!menu || menu.classList.contains('hidden') || menu.contains(event.target)) return;
+                menu.classList.add('hidden');
+            }, true);
+        }
+        menu.innerHTML = '<div class="min-w-[9.5rem] rounded-2xl bg-white dark:bg-gray-900 text-slate-900 dark:text-white shadow-2xl border border-slate-200 dark:border-slate-700 overflow-hidden"><button type="button" data-brief-copy class="block w-full text-left px-4 py-3 text-sm font-semibold focus:outline-none">Copy</button></div>';
+        menu.classList.remove('hidden');
+        const width = 160;
+        const height = 52;
+        const pad = 8;
+        const left = Math.max(pad, Math.min((Number(x) || 0) - 20, window.innerWidth - width - pad));
+        const top = Math.max(pad, Math.min((Number(y) || 0) - height - 6, window.innerHeight - height - pad));
+        menu.style.left = `${left}px`;
+        menu.style.top = `${top}px`;
+    },
+
+    bindBriefCardHold: (overlay) => {
+        if (!overlay || overlay.dataset.briefHoldBound === '1') return;
+        overlay.dataset.briefHoldBound = '1';
+        let holdTimer = null;
+        let holdCard = null;
+        let holdFired = false;
+        let holdX = 0;
+        let holdY = 0;
+        const clearHold = () => {
+            if (holdTimer) clearTimeout(holdTimer);
+            holdTimer = null;
+            holdCard = null;
+        };
+        overlay.addEventListener('pointerdown', (event) => {
+            if (event.pointerType === 'mouse' && event.button !== 0) return;
+            if (event.target.closest?.('button, summary, a, input, select, #operator-brief-card-menu')) return;
+            const card = event.target.closest?.('[data-brief-card]');
+            if (!card || !overlay.contains(card)) return;
+            holdFired = false;
+            holdCard = card;
+            holdX = event.clientX;
+            holdY = event.clientY;
+            clearTimeout(holdTimer);
+            holdTimer = setTimeout(() => {
+                holdFired = true;
+                holdTimer = null;
+                if (holdCard) Admin.openBriefCardMenu(holdCard, holdX, holdY);
+                holdCard = null;
+            }, 400);
+        });
+        overlay.addEventListener('pointermove', (event) => {
+            if (!holdCard) return;
+            if (Math.hypot(event.clientX - holdX, event.clientY - holdY) > 10) clearHold();
+        });
+        overlay.addEventListener('pointerup', clearHold);
+        overlay.addEventListener('pointercancel', clearHold);
+        overlay.addEventListener('contextmenu', (event) => {
+            const card = event.target.closest?.('[data-brief-card]');
+            if (!card || event.target.closest?.('button, summary, a, input, select')) return;
+            event.preventDefault();
+            clearHold();
+            Admin.openBriefCardMenu(card, event.clientX, event.clientY);
+        });
+        overlay.addEventListener('click', (event) => {
+            if (!holdFired) return;
+            event.preventDefault();
+            event.stopPropagation();
+            if (typeof event.stopImmediatePropagation === 'function') event.stopImmediatePropagation();
+            holdFired = false;
+        }, true);
+    },
+
     openOperatorBrief: async () => {
         const api = window.ntOperatorBrief;
         if (!api?.buildOperatorBrief || !api.briefReportHtml) {
@@ -5283,6 +5410,7 @@ const Admin = {
             Admin._briefCards = model.cards || [];
             overlay.innerHTML = api.briefReportHtml(model);
             overlay.querySelector('#operator-brief-close')?.addEventListener('click', () => Admin.closeOperatorBrief());
+            Admin.bindBriefCardHold(overlay);
             overlay.addEventListener('click', (event) => {
                 if (event.target.closest('button, summary, a, input, select')) return;
                 const card = event.target.closest('[data-brief-card]');

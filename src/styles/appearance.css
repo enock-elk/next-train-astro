@@ -1422,14 +1422,15 @@ html.dark .dark\:bg-gray-950\/40 {
 }
 
 /* Floating sheets sit on a dimmed page that is the same navy as their
-   header and footer, so the card edge disappears. A light stroke plus a
-   dark outer line shows the rim. Full-screen sheets use rounded-none. */
+   header and footer, so the card edge disappears. A quiet stroke plus a
+   dark outer line shows the rim without a white halo. Light packs are
+   not in this rule. Full-screen sheets use rounded-none. */
 html.dark [id$="-modal"].fixed > div[class*="rounded-xl"],
 html.dark [id$="-modal"].fixed > div[class*="rounded-2xl"],
 html.dark [id$="-modal"].fixed > div[class*="rounded-3xl"],
 html.dark [id$="-modal"].fixed > div[class*="rounded-lg"] {
   box-shadow:
-    0 0 0 1px color-mix(in srgb, var(--nt-text) 58%, transparent),
+    0 0 0 1px color-mix(in srgb, var(--nt-text) 22%, transparent),
     0 0 0 3px rgba(0, 0, 0, 0.72),
     0 18px 40px rgba(0, 0, 0, 0.45) !important;
 }
@@ -1437,7 +1438,7 @@ html.dark #help-modal > div > .rounded-t-xl,
 html.dark #help-modal > div > .rounded-b-xl,
 html.dark #schedule-modal > #modal-content > .rounded-t-xl,
 html.dark #schedule-modal > #modal-content > .rounded-b-xl {
-  background-color: color-mix(in srgb, var(--nt-surface) 86%, var(--nt-text)) !important;
+  background-color: color-mix(in srgb, var(--nt-surface) 96%, var(--nt-text)) !important;
 }
 
 .border-gray-100,

@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_10.18.11': [
+        'Alert full view swipes one picture at a time through the posters and video previews on the channel. Dark and Earthy dark modal edges are quieter. Holding a brief card copies its text. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_10.18.10': [
         'Alerts is the full-screen sheet again. A suggested reply is told which lines Next Train posted and which lines the commuter wrote. An alert is Next Train\'s notice. The commuter only replies to it. No commuter What\'s New. forceShow stays false.',
     ],

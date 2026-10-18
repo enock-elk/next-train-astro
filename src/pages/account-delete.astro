@@ -8,7 +8,7 @@ import ContentLayout from '../layouts/ContentLayout.astro';
 import LegalArticle from '../components/LegalArticle.astro';
 import { SUPPORT_EMAIL } from '../lib/config.js';
 
-const title = 'Delete your Next Train account';
+const title = 'Delete Account';
 const description = 'How to delete a Next Train account and ask us to remove your data.';
 const mail = `mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent('Please delete my Next Train account')}`;
 ---
@@ -20,7 +20,7 @@ const mail = `mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent('Please delet
   seoPageType="account_delete"
   bodyClass="bg-[#f2f2f7] dark:bg-black text-gray-900 min-h-screen"
 >
-  <LegalArticle title="Delete your account" current="delete">
+  <LegalArticle title="Delete Account" current="delete">
     <p class="mb-3">You can remove a Next Train account in the app, or by email. We do not need Facebook to finish the request.</p>
 
     <h2>In the app</h2>

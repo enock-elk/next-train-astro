@@ -34,6 +34,8 @@ import {
     SHARE_GPS_MISS_LIMIT,
     STANDARD_TRAIN_LENGTH_M,
     RIDE_SHARE_IDLE_MS,
+    RIDE_SHARE_MAX_MS,
+    shareRecordedEnd,
     blendSameTrainSharers,
     pingPublicTrainId,
     projectTrainTrackerFix,
@@ -266,6 +268,15 @@ assert(ONBOARD_FAST_PING_MS === 3000 && ONBOARD_MOVING_PING_MS === 3000 && ONBOA
 assert(SHARE_EAGER_GPS_MS === 3000 && SHARE_GPS_MISS_LIMIT === 6, 'GPS is tried every 3 seconds and pauses after 6 misses');
 assert(SHARE_EAGER_GPS_MS * SHARE_GPS_MISS_LIMIT === RIDE_GPS_STALE_MS, 'six 3 second misses are the 18 second pause');
 assert(RIDE_SHARE_IDLE_MS === 10 * 60 * 1000, 'share stops after 10 minutes idle');
+assert(RIDE_SHARE_MAX_MS === 4 * 60 * 60 * 1000, 'a share cannot record longer than 4 hours');
+{
+    const start = 1_700_000_000_000;
+    const late = start + (43 * 60 * 60 * 1000) + (56 * 60 * 1000);
+    const capped = shareRecordedEnd({ startedAt: start, lastPingAt: start + (5 * 60 * 1000), lastRealPingAt: start + (5 * 60 * 1000) }, late);
+    assert(capped === start + (15 * 60 * 1000), 'a late stop ends 10 minutes after the last real ping');
+    const hard = shareRecordedEnd({ startedAt: start, lastRealPingAt: late, lastPingAt: late }, late);
+    assert(hard === start + RIDE_SHARE_MAX_MS, 'a share that stays alive is capped at 4 hours');
+}
 assert(STANDARD_TRAIN_LENGTH_M === 250, 'same-train average stays inside one train length');
 assert(ONBOARD_STATIONARY_PING_MS * 2 < RIDE_GPS_STALE_MS, 'a parked heartbeat can miss once and still beat the 18s grey window');
 assert(adaptiveOnboardPingMs(12) === ONBOARD_FAST_PING_MS, 'fast train broadcasts every 3 seconds');

@@ -297,21 +297,20 @@ import { withBase } from '../lib/config.js';
             <p id="account-screen-title" class="absolute inset-x-12 text-center text-[17px] font-semibold text-gray-900 dark:text-white truncate pointer-events-none"></p>
         </div>
 
-        <div class="px-4 pt-2 pb-6 space-y-6 flex-1 min-h-0 overflow-y-auto custom-scrollbar" data-feedback-scroll>
+        <div class="px-4 pt-1 pb-4 space-y-4 flex-1 min-h-0 overflow-y-auto custom-scrollbar" data-feedback-scroll>
             <p id="account-error" class="px-1 text-[13px] font-normal text-red-600 dark:text-red-400 empty:hidden" role="alert"></p>
 
             <!-- Signed-in panel -->
-            <div id="account-signed-in" class="hidden space-y-5">
-                <p class="px-1 text-[12px] font-normal uppercase tracking-wide text-gray-500 dark:text-gray-500">Profile</p>
+            <div id="account-signed-in" class="hidden space-y-3">
                 <div class="rounded-[12px] overflow-hidden bg-white dark:bg-[#1c1c1e] border border-black/10 dark:border-white/10">
-                    <button type="button" id="account-profile-toggle" class="w-full flex items-center gap-3.5 px-4 py-4 text-left focus:outline-none active:bg-black/[0.03] dark:active:bg-white/[0.04]" aria-expanded="false" aria-controls="account-profile-panel">
-                        <div class="w-16 h-16 rounded-full bg-[#e5e5ea] dark:bg-[#3a3a3c] flex items-center justify-center text-[22px] font-semibold text-gray-600 dark:text-gray-300 shrink-0 overflow-hidden ring-1 ring-black/5 dark:ring-white/10">
-                            <img id="account-modal-avatar-img" class="hidden w-full h-full object-cover" alt="" referrerpolicy="no-referrer">
-                            <span id="account-modal-avatar-letter" class="select-none"></span>
-                        </div>
+                    <button type="button" id="account-profile-toggle" class="w-full flex items-center gap-3 px-4 py-2.5 text-left focus:outline-none active:bg-black/[0.03] dark:active:bg-white/[0.04]" aria-expanded="false" aria-controls="account-profile-panel">
                         <div class="min-w-0 flex-1">
                             <p id="account-modal-display-name" class="text-[17px] font-semibold tracking-tight text-gray-900 dark:text-white truncate">Passenger</p>
                             <p id="account-modal-email" class="text-[13px] font-normal text-gray-500 dark:text-gray-400 truncate"></p>
+                        </div>
+                        <div class="w-12 h-12 rounded-full bg-[#e5e5ea] dark:bg-[#3a3a3c] flex items-center justify-center text-[18px] font-semibold text-gray-600 dark:text-gray-300 shrink-0 overflow-hidden ring-1 ring-black/5 dark:ring-white/10">
+                            <img id="account-modal-avatar-img" class="hidden w-full h-full object-cover" alt="" referrerpolicy="no-referrer">
+                            <span id="account-modal-avatar-letter" class="select-none"></span>
                         </div>
                         <svg id="account-profile-chevron" class="w-4 h-4 text-gray-400 shrink-0 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7"></path></svg>
                     </button>
@@ -479,17 +478,24 @@ import { withBase } from '../lib/config.js';
                 <a href={`${withBase('terms.html')}?from=account`} class="whitespace-nowrap text-[#4C8DFF] underline underline-offset-2">Terms of Use</a>
                 and
                 <a href={`${withBase('privacy.html')}?from=account`} class="whitespace-nowrap text-[#4C8DFF] underline underline-offset-2">Privacy Policy</a>.
-                <a href={`${withBase('account-delete.html')}?from=account`} class="whitespace-nowrap text-[#4C8DFF] underline underline-offset-2">Delete account help</a>
+                <a href={`${withBase('account-delete.html')}?from=account`} class="whitespace-nowrap text-[#4C8DFF] underline underline-offset-2">Delete Account</a>
             </p>
         </div>
     </div>
 </div>
 
-<div id="account-badge-how-sheet" class="fixed inset-0 z-[130] hidden flex items-end justify-center p-0 bg-black/40" role="dialog" aria-modal="true" aria-labelledby="account-badge-how-title">
+<div id="account-badge-how-sheet" class="fixed inset-0 z-[130] hidden flex items-end justify-center p-0 bg-black/40 backdrop-blur-md" role="dialog" aria-modal="true" aria-labelledby="account-badge-how-title">
     <button type="button" id="account-badge-how-overlay" class="absolute inset-0" aria-label="Close"></button>
     <div class="relative z-10 w-full max-w-md rounded-t-2xl bg-white dark:bg-[#1c1c1e] px-4 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))] space-y-3">
         <p id="account-badge-how-title" class="text-[17px] font-semibold text-gray-900 dark:text-white"></p>
         <p id="account-badge-how-status" class="text-[13px] font-normal text-gray-500 dark:text-gray-400"></p>
+        <div id="account-badge-how-meter" class="space-y-1" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+            <div class="h-1.5 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden">
+                <div id="account-badge-how-bar" class="h-full rounded-full bg-amber-500" style="width:0%"></div>
+            </div>
+            <p id="account-badge-how-meter-label" class="text-[12px] font-normal text-gray-500 dark:text-gray-400"></p>
+        </div>
+        <p id="account-badge-how-how" class="text-[13px] font-normal text-gray-600 dark:text-gray-300 leading-snug"></p>
         <div id="account-badge-how-body" class="max-h-[40vh] overflow-y-auto space-y-3 text-[13px] font-normal text-gray-600 dark:text-gray-300 leading-snug"></div>
         <p id="account-badge-how-prereq" class="hidden text-[13px] font-normal text-gray-500 dark:text-gray-400 leading-snug"></p>
         <button type="button" id="account-badge-how-close" class="w-full py-2.5 rounded-xl text-[13px] font-normal text-blue-600 dark:text-blue-400 bg-[#f2f2f7] dark:bg-[#2c2c2e] focus:outline-none">Close</button>
@@ -1298,7 +1304,7 @@ import { withBase } from '../lib/config.js';
             <span id="notice-modal-signoff" class="nt-alert-signoff text-xs font-semibold leading-none tracking-wide">Next Train Ops</span>
             <div class="flex items-center gap-1.5">
                 <span id="notice-modal-pin" class="nt-alert-pin hidden" title="Pinned" aria-label="Pinned"></span>
-                <span id="notice-modal-sev-chip" class="nt-alert-chip inline-flex items-center shrink-0 px-1.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider leading-none">🔵 Info</span>
+                <span id="notice-modal-sev-chip" class="nt-alert-chip inline-flex items-center shrink-0 px-1.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider leading-none">Info</span>
                 <button type="button" id="notice-modal-x" onclick="if(location.hash==='#notice')history.back();else closeSmoothModal('notice-modal')" class="opacity-80 hover:opacity-100 focus:outline-none" aria-label="Close">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
                 </button>

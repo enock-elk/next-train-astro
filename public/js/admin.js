@@ -12679,6 +12679,7 @@ const Admin = {
         modal.style.bottom = 'auto';
         modal.style.alignItems = 'stretch';
         modal.style.justifyContent = 'flex-start';
+        Admin.keepReplyCaretVisible();
         const card = modal.firstElementChild;
         if (card) {
             card.style.position = 'absolute';
@@ -12700,6 +12701,23 @@ const Admin = {
         window.addEventListener('resize', update, { passive: true });
         window.visualViewport?.addEventListener('resize', update, { passive: true });
         window.visualViewport?.addEventListener('scroll', update, { passive: true });
+    },
+
+    keepReplyCaretVisible: () => {
+        const editor = document.getElementById('admin-reply-text');
+        if (!editor) return;
+        const sel = window.getSelection?.();
+        if (!sel || sel.rangeCount < 1) return;
+        const node = sel.anchorNode;
+        if (!node || !editor.contains(node)) return;
+        const range = sel.getRangeAt(0);
+        const rects = range.getClientRects();
+        const rect = rects.length ? rects[rects.length - 1] : range.getBoundingClientRect();
+        if (!rect || (!rect.height && !rect.width)) return;
+        const box = editor.getBoundingClientRect();
+        const pad = 16;
+        if (rect.bottom > box.bottom - pad) editor.scrollTop += rect.bottom - (box.bottom - pad);
+        else if (rect.top < box.top + pad) editor.scrollTop -= (box.top + pad) - rect.top;
     },
 
     replySuggestMarkup: () => `
@@ -13423,16 +13441,16 @@ const Admin = {
                     <h3 id="admin-reply-title" class="text-xl font-black text-gray-900 dark:text-white mb-0.5 tracking-tight flex items-center gap-2 shrink-0"><span class="text-sky-500">${Admin.icon('message', 'w-5 h-5')}</span> <span id="admin-reply-title-text">Next Train Co-Pilot</span></h3>
                     <p id="admin-reply-recipient" class="text-[11px] text-gray-600 dark:text-gray-300 mb-1 break-all leading-snug shrink-0"></p>
                     <p id="admin-reply-hint" class="text-[10px] text-gray-500 dark:text-gray-400 mb-3 shrink-0">Message will be delivered to their personal inbox upon next app launch.</p>
-                    <div id="admin-reply-scroll" class="flex-1 min-h-0 overflow-y-auto flex flex-col">
-                    <div class="flex flex-col min-h-[12rem] flex-1">
+                    <div id="admin-reply-scroll" class="flex-1 min-h-0 overflow-hidden flex flex-col">
+                    <div class="flex flex-col min-h-0 flex-1">
                     <div class="shrink-0 rounded-t-lg border border-gray-300 dark:border-gray-600 border-b-0">
                             ${Admin.wysiwygToolbarHtml('admin-reply-text', { fileInputId: 'admin-reply-upload-file', fileLabelId: 'admin-reply-upload-label' })}
                     </div>
-                        <div contenteditable="true" id="admin-reply-text" class="nt-rich-body w-full flex-1 min-h-[12rem] overflow-y-auto p-3 bg-gray-50 dark:bg-gray-900 border border-t-0 border-gray-300 dark:border-gray-600 rounded-b-lg text-sm text-gray-900 dark:text-white focus:outline-none empty:before:content-[attr(placeholder)] empty:before:text-gray-400 custom-scrollbar" placeholder="Type your response..."></div>
+                        <div contenteditable="true" id="admin-reply-text" class="nt-rich-body w-full flex-1 min-h-0 overflow-y-auto p-3 pb-4 bg-gray-50 dark:bg-gray-900 border border-t-0 border-gray-300 dark:border-gray-600 rounded-b-lg text-sm text-gray-900 dark:text-white focus:outline-none empty:before:content-[attr(placeholder)] empty:before:text-gray-400 custom-scrollbar" placeholder="Type your response..."></div>
+                    </div>
                     </div>
 
                     ${Admin.replySuggestMarkup()}
-                    </div>
 
                     <div class="grid grid-cols-2 gap-2 mt-3 shrink-0">
                         <button id="reply-cancel" class="bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 font-bold py-3.5 px-3 rounded-2xl transition-colors focus:outline-none text-base">Cancel</button>
@@ -13449,8 +13467,8 @@ const Admin = {
             }
             const editor = document.getElementById('admin-reply-text');
             if (editor) {
-                editor.classList.remove('min-h-[120px]', 'min-h-[240px]', 'max-h-[50dvh]', 'p-2.5', 'min-h-0');
-                editor.classList.add('nt-rich-body', 'flex-1', 'min-h-[12rem]', 'overflow-y-auto', 'p-3', 'custom-scrollbar');
+                editor.classList.remove('min-h-[120px]', 'min-h-[240px]', 'max-h-[50dvh]', 'p-2.5', 'min-h-[12rem]');
+                editor.classList.add('nt-rich-body', 'flex-1', 'min-h-0', 'overflow-y-auto', 'p-3', 'pb-4', 'custom-scrollbar');
                 const bar = editor.previousElementSibling;
                 if (bar) {
                     bar.classList.add('shrink-0');
@@ -13459,13 +13477,22 @@ const Admin = {
                 if (bar && !bar.querySelector('[data-nt-font-select]')) {
                     bar.outerHTML = `<div class="shrink-0 rounded-t-lg border border-gray-300 dark:border-gray-600 border-b-0">${Admin.wysiwygToolbarHtml('admin-reply-text', { fileInputId: 'admin-reply-upload-file', fileLabelId: 'admin-reply-upload-label' })}</div>`;
                 }
-                editor.parentElement?.classList.remove('min-h-0', 'overflow-hidden');
-                editor.parentElement?.classList.add('min-h-[14rem]', 'flex-1');
+                editor.parentElement?.classList.remove('min-h-[12rem]', 'min-h-[14rem]', 'overflow-hidden');
+                editor.parentElement?.classList.add('min-h-0', 'flex-1');
+                const scroll = document.getElementById('admin-reply-scroll');
+                if (scroll) {
+                    scroll.classList.add('overflow-hidden', 'min-h-0');
+                    scroll.classList.remove('overflow-y-auto');
+                }
             }
             const sendRow = document.getElementById('reply-cancel')?.parentElement;
             if (sendRow && !document.getElementById('admin-reply-suggest-context')) {
                 document.getElementById('admin-reply-suggest')?.remove();
                 sendRow.insertAdjacentHTML('beforebegin', Admin.replySuggestMarkup());
+            }
+            const parkedSuggest = document.getElementById('admin-reply-suggest');
+            if (sendRow && parkedSuggest && parkedSuggest.parentElement !== sendRow.parentElement) {
+                sendRow.before(parkedSuggest);
             }
             if (!document.getElementById('admin-reply-recipient')) {
                 const h3 = panel?.querySelector('h3');
@@ -13507,7 +13534,17 @@ const Admin = {
             delete editorEl.dataset.draftTouched;
             if (!editorEl.dataset.draftInputBound) {
                 editorEl.dataset.draftInputBound = '1';
-                editorEl.addEventListener('input', () => { editorEl.dataset.draftTouched = '1'; });
+                editorEl.addEventListener('input', () => {
+                    editorEl.dataset.draftTouched = '1';
+                    Admin.keepReplyCaretVisible();
+                });
+            }
+            if (!modal.dataset.caretBound) {
+                modal.dataset.caretBound = '1';
+                document.addEventListener('selectionchange', () => {
+                    if (modal.classList.contains('hidden')) return;
+                    Admin.keepReplyCaretVisible();
+                });
             }
             const kept = !editKey ? Admin.readLocalReplyDraft(draftId) : null;
             editorEl.innerHTML = editKey ? String(editMsg.text || editMsg.message || '') : (kept?.html || '');

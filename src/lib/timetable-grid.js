@@ -32,13 +32,22 @@ function syncGridEdgeFade() {
     if (!grid || !frame) return;
     const overflow = grid.scrollWidth - grid.clientWidth > 8;
     const atEnd = grid.scrollLeft + grid.clientWidth >= grid.scrollWidth - 8;
+    const atStart = grid.scrollLeft <= 8;
     frame.classList.toggle('can-scroll-x', overflow && !atEnd);
+    frame.classList.toggle('can-scroll-x-start', overflow && !atStart);
 }
 
 function bindGridEdgeFade() {
     const grid = document.getElementById('grid-container');
     if (!grid || grid.dataset.ntEdgeFade === '1') return;
     grid.dataset.ntEdgeFade = '1';
+    const frame = grid.closest('.nt-grid-frame');
+    if (frame && !frame.querySelector('.nt-grid-edge-fade-left')) {
+        const left = document.createElement('div');
+        left.className = 'nt-grid-edge-fade-left';
+        left.setAttribute('aria-hidden', 'true');
+        frame.appendChild(left);
+    }
     grid.addEventListener('scroll', syncGridEdgeFade, { passive: true });
 }
 
@@ -617,6 +626,7 @@ export function renderFullScheduleGrid(direction = null, dayOverride = null, opt
                 <div class="nt-grid-frame relative flex-1 min-h-0">
                     <div id="grid-container" class="h-full overflow-auto bg-white dark:bg-gray-900 relative z-10"></div>
                     <div class="nt-grid-edge-fade" aria-hidden="true"></div>
+                    <div class="nt-grid-edge-fade-left" aria-hidden="true"></div>
                 </div>
                 <div class="shrink-0 p-3 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 z-20">
                     <button type="button" id="close-timetable-footer-btn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-4 rounded-lg shadow-md transition-colors text-sm focus:outline-none">Close Timetable</button>

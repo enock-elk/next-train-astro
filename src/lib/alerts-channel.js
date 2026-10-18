@@ -200,7 +200,7 @@ function severityChrome(severity) {
         bar: 'border-blue-500',
         strip: 'nt-alert-strip-info bg-blue-50 text-blue-800',
         chip: 'text-blue-700',
-        emoji: '🔵',
+        emoji: '',
         label: 'Info',
     };
 }
@@ -722,7 +722,7 @@ function renderPostCard(notice, opts = {}) {
             <span class="nt-alert-signoff text-xs font-semibold leading-none tracking-wide">${escapeHTML(signoff)}</span>
             <span class="nt-alert-chip-wrap inline-flex items-center gap-1.5 shrink-0">
                 ${isNoticePinned(notice) ? `<span class="nt-alert-pin" title="Pinned" aria-label="Pinned">${ALERT_PIN_SVG}<span class="nt-alert-pin-label">Pinned</span></span>` : ''}
-                <span class="nt-alert-chip inline-flex items-center shrink-0 px-1.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider leading-none ${chrome.chip}">${chrome.emoji} ${chrome.label}</span>
+                <span class="nt-alert-chip inline-flex items-center shrink-0 px-1.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider leading-none ${chrome.chip}">${chrome.emoji ? `${chrome.emoji} ` : ''}${chrome.label}</span>
             </span>
         </div>
         <div class="px-4 pt-3 pb-4">

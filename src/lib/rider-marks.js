@@ -153,12 +153,19 @@ export function contributionDetailLines(itemOrDetail) {
     return lines;
 }
 
+/** Matches ride-pings. A closed tab used to stamp the stop days later. */
+const SHARE_DURATION_IDLE_MS = 10 * 60 * 1000;
+const SHARE_DURATION_CAP_MS = 4 * 60 * 60 * 1000;
+
 /** Trip length for the contribution sheet. Empty when we never stored a start. */
 export function formatContributionDuration(detail) {
     const start = Number(detail?.startedAt) || 0;
-    const end = Number(detail?.endedAt) || 0;
+    let end = Number(detail?.endedAt) || 0;
     if (start && !end) return 'Still on this trip';
+    const real = Number(detail?.lastRealPingAt) || 0;
+    if (real && end) end = Math.min(end, real + SHARE_DURATION_IDLE_MS);
     if (!start || !end || end < start) return '';
+    if (end - start > SHARE_DURATION_CAP_MS) return '';
     const mins = Math.round((end - start) / 60000);
     if (mins < 1) return 'Under 1 min';
     if (mins < 60) return `${mins} min`;
@@ -183,7 +190,7 @@ function previousServiceDay(d = new Date()) {
 }
 
 const HISTORY_LIMIT = 240;
-const DETAIL_FIELDS = ['trainId', 'routeId', 'route', 'origin', 'destination', 'note', 'startedAt', 'endedAt'];
+const DETAIL_FIELDS = ['trainId', 'routeId', 'route', 'origin', 'destination', 'note', 'startedAt', 'endedAt', 'lastRealPingAt'];
 const STICKY_DETAIL = new Set(['origin', 'startedAt']);
 
 function contributionRouteLabel(routeId) {
@@ -201,7 +208,7 @@ function sanitizeDetail(raw) {
     const out = {};
     for (const field of DETAIL_FIELDS) {
         const value = raw[field];
-        if (field === 'startedAt' || field === 'endedAt') {
+        if (field === 'startedAt' || field === 'endedAt' || field === 'lastRealPingAt') {
             const n = Number(value);
             if (Number.isFinite(n) && n > 0) out[field] = n;
             continue;

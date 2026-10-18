@@ -311,6 +311,19 @@ function cancelPendingGridOpenFromUi() {
     } catch { /* ignore */ }
 }
 
+function markPassengerSelection() {
+    let current = '';
+    try { current = safeStorage.getItem('userProfile') || ''; } catch { /* ignore */ }
+    if (!current) {
+        current = (document.getElementById('account-passenger-type-display')?.textContent || '').trim();
+    }
+    document.querySelectorAll('#profile-modal [data-passenger]').forEach((btn) => {
+        const on = btn.getAttribute('data-passenger') === current;
+        btn.classList.toggle('is-selected', on);
+        btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+    });
+}
+
 function markFullGridClosedFromUi() {
     try {
         if (typeof window !== 'undefined' && typeof window.markFullGridClosed === 'function') {
@@ -330,6 +343,7 @@ export function openSmoothModal(modalId, customOrigin = null, opts = null) {
     }
 
     const modal = document.getElementById(modalId);
+    if (modalId === 'profile-modal') markPassengerSelection();
     const wasHidden = !modal || modal.classList.contains('hidden');
     const skipHash = !!(opts && opts.skipHash);
 

@@ -192,11 +192,22 @@ function desiredWatchKind() {
     return 'map';
 }
 
+function hiddenCachedFix(coords, osT, now) {
+    const hidden = typeof document !== 'undefined' && document.hidden;
+    if (!hidden) return false;
+    const osFresh = Number.isFinite(osT) && (now - osT) <= 2000;
+    if (osFresh) return false;
+    const raw = fromCoords(coords, Number.isFinite(osT) ? osT : now);
+    const moved = lastFix && distanceM(lastFix, raw) > Math.max(12, Number(raw.accuracy) || 25);
+    return !moved;
+}
+
 function ingestWatchPosition(pos) {
     lastWatchCallbackAt = Date.now();
     if (!pos?.coords) return;
     const osT = Number(pos.timestamp);
     const now = Date.now();
+    if (hiddenCachedFix(pos.coords, osT, now)) return;
     // Cached OS timestamps make a live callback look 30-60s stale.
     const t = Number.isFinite(osT) && (now - osT) <= 2000 ? osT : now;
     const raw = fromCoords(pos.coords, t);
@@ -206,7 +217,7 @@ function ingestWatchPosition(pos) {
         speedMps: Number.isFinite(raw.speedMps) ? raw.speedMps : 0,
         stationary: true,
     };
-    if (fix) emit(fix);
+    if (fix) emit({ ...fix, live: true });
 }
 
 function startWatch(kind) {
@@ -394,8 +405,15 @@ export function attemptShareGpsFix({ timeoutMs = SHARE_ATTEMPT_OPTS.timeout } = 
                     finish({ ok: false, fresh: false });
                     return;
                 }
-                const raw = fromCoords(pos.coords, Date.now());
-                const fix = refineMotionFix(raw, lastFix) || confirmStationaryWatchTick(raw, lastFix) || raw;
+                const osT = Number(pos.timestamp);
+                const now = Date.now();
+                if (hiddenCachedFix(pos.coords, osT, now)) {
+                    finish({ ok: false, fresh: false, cached: true });
+                    return;
+                }
+                const raw = fromCoords(pos.coords, now);
+                const next = refineMotionFix(raw, lastFix) || confirmStationaryWatchTick(raw, lastFix) || raw;
+                const fix = next ? { ...next, live: true } : null;
                 if (fix) emit(fix);
                 finish(fix ? { ok: true, fresh: true, fix } : { ok: false, fresh: false });
             },

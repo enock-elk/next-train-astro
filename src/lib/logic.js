@@ -2121,10 +2121,19 @@ export function initScrollHint() {
     const hint = document.getElementById('nt-scroll-hint');
     if (!scroller || !hint) return;
     window.__ntScrollHintBound = true;
+    let topHint = document.getElementById('nt-scroll-hint-top');
+    if (!topHint) {
+        topHint = document.createElement('div');
+        topHint.id = 'nt-scroll-hint-top';
+        topHint.className = 'nt-scroll-hint nt-scroll-hint-top';
+        topHint.setAttribute('aria-hidden', 'true');
+        hint.parentElement?.insertBefore(topHint, hint);
+    }
     const sync = () => {
         const mapOpen = document.getElementById('view-map')?.classList.contains('active');
         const remain = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight;
         hint.classList.toggle('is-on', !mapOpen && remain > 28);
+        topHint.classList.toggle('is-on', !mapOpen && scroller.scrollTop > 28);
     };
     scroller.addEventListener('scroll', sync, { passive: true });
     window.addEventListener('resize', sync);
@@ -2143,9 +2152,17 @@ function bindSheetShades() {
         const scroller = document.getElementById(shade.getAttribute('data-shade-for') || '');
         if (!scroller || scroller.dataset.shadeBound === '1') return;
         scroller.dataset.shadeBound = '1';
+        let topShade = shade.parentElement?.querySelector(':scope > .nt-sheet-shade-top');
+        if (!topShade && shade.parentElement) {
+            topShade = document.createElement('div');
+            topShade.className = 'nt-sheet-shade nt-sheet-shade-top';
+            topShade.setAttribute('aria-hidden', 'true');
+            shade.parentElement.appendChild(topShade);
+        }
         const sync = () => {
             const remain = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight;
             shade.classList.toggle('is-on', remain > 20);
+            topShade?.classList.toggle('is-on', scroller.scrollTop > 20);
         };
         scroller.addEventListener('scroll', sync, { passive: true });
         if (typeof ResizeObserver !== 'undefined') new ResizeObserver(sync).observe(scroller);

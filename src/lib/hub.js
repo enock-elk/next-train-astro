@@ -1970,7 +1970,7 @@ export function renderServiceAlertModal(notice, options = {}) {
             ? '🔴 Critical'
             : severity === 'warning'
                 ? '🟡 Warning'
-                : '🔵 Info';
+                : 'Info';
     }
     if (pinEl) {
         const pinned = isNoticePinned(notice);

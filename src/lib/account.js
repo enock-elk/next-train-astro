@@ -1007,7 +1007,7 @@ export function syncAccountSettingsUi(state = $account.get()) {
     if (guestBlock) guestBlock.classList.toggle('hidden', signed || state.status === 'loading');
     const screenTitle = document.getElementById('account-screen-title');
     if (screenTitle) {
-        if (signed) screenTitle.textContent = 'Account';
+        if (signed) screenTitle.textContent = '';
         else {
             const screen = guestBlock?.getAttribute('data-account-screen') || 'signin';
             screenTitle.textContent = screen === 'create' ? 'Create account' : screen === 'reset' ? 'Reset your password' : '';
@@ -1214,6 +1214,10 @@ function openBadgeHowSheet(badgeId, state, marks) {
     const title = document.getElementById('account-badge-how-title');
     const status = document.getElementById('account-badge-how-status');
     const body = document.getElementById('account-badge-how-body');
+    const how = document.getElementById('account-badge-how-how');
+    const bar = document.getElementById('account-badge-how-bar');
+    const meter = document.getElementById('account-badge-how-meter');
+    const meterLabel = document.getElementById('account-badge-how-meter-label');
     const prereq = document.getElementById('account-badge-how-prereq');
     if (title) title.textContent = cat.title;
     if (status) {
@@ -1221,6 +1225,19 @@ function openBadgeHowSheet(badgeId, state, marks) {
         else if (progress.total > 1 && progress.current > 0) status.textContent = `${progress.current} of ${progress.total} service days`;
         else status.textContent = 'Not unlocked yet';
     }
+    const ratio = Math.max(0, Math.min(1, Number(progress.ratio) || 0));
+    const pct = Math.round(ratio * 100);
+    if (bar) bar.style.width = `${pct}%`;
+    if (meter) {
+        meter.setAttribute('aria-valuenow', String(pct));
+        meter.setAttribute('aria-valuemax', '100');
+    }
+    if (meterLabel) {
+        const current = Math.max(0, Number(progress.current) || 0);
+        const total = Math.max(1, Number(progress.total) || 1);
+        meterLabel.textContent = `${current} of ${total}`;
+    }
+    if (how) how.textContent = `${cat.how} ${cat.points} ${marks.pointsWord(cat.points)}.`;
     if (body) {
         if (badgeId === 'first_share_day') {
             const trips = shareTripBlocks(state, marks);
@@ -1235,10 +1252,10 @@ function openBadgeHowSheet(badgeId, state, marks) {
             } else if (on) {
                 body.textContent = 'Trip details were not saved for this share.';
             } else {
-                body.textContent = `${cat.how} ${cat.points} ${marks.pointsWord(cat.points)}.`;
+                body.textContent = '';
             }
         } else {
-            body.textContent = `${cat.how} ${cat.points} ${marks.pointsWord(cat.points)}.`;
+            body.textContent = '';
         }
     }
     const needs = Array.isArray(cat.requires) ? cat.requires : [];

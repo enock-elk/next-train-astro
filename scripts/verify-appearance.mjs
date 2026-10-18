@@ -58,7 +58,7 @@ assert(css.includes('#grid-trigger-container'), 'timetable CTA has extra canvas 
 assert(css.includes('.nt-board-footer.mt-auto'), 'board footer padding stays on nt-board-footer mt-auto');
 assert(/#bottom-nav\.bottom-nav-bar \{[\s\S]*?box-shadow: none/.test(css), 'bottom nav does not float on a drop shadow');
 assert(/#bottom-nav\.bottom-nav-bar \{[\s\S]*?background-color: var\(--nt-chrome-nav\)/.test(css), 'bottom nav is one step darker than the header');
-assert(css.includes('--nt-nav-h: 4rem'), 'bottom nav is about 64px tall');
+assert(css.includes('--nt-nav-h: 3.25rem'), 'bottom nav is about 52px tall');
 assert(css.includes('color-mix(in srgb, var(--nt-chrome-fg) 20%, transparent)'), 'active tab icon sits on a soft pill');
 assert(css.includes('color-mix(in srgb, var(--nt-chrome-fg) 45%, transparent)'), 'inactive tabs are clearly dimmer than the active label');
 assert(!css.includes('color-mix(in srgb, var(--nt-chrome-fg) 70%, transparent)'), 'inactive tabs are not 70% white');

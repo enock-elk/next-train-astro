@@ -4,7 +4,7 @@
  */
 import { readFileSync } from 'node:fs';
 import { warningTriangleSvg, expandJhbLabel, applyFittedLabel } from '../src/lib/utils.js';
-import { APP_VERSION, CHANGELOG_DATA, FARE_CONFIG, FORCE_UPDATE_REQUIRED } from '../src/lib/config.js';
+import { APP_VERSION, CHANGELOG_DATA, FARE_CONFIG, FORCE_UPDATE_REQUIRED, ROUTES } from '../src/lib/config.js';
 import {
     collectHubOnwardOptions,
     fitStationLabel,
@@ -457,6 +457,18 @@ assert(!/id="account-modal-close"[^>]*>\s*Done\s*</.test(hubModals), 'Account cl
 assert(!/<h3[^>]*>Account<\/h3>/.test(hubModals), 'Account overlay has no large Account title');
 assert(hubModals.includes('placeholder="Email or WhatsApp for a reply"'), 'Hub contact placeholder is the shorter line');
 assert(hubModals.includes('id="messages-thread-contact-toggle"'), 'Hub contact sits in a row above the message');
+assert(hubModals.includes('padding-bottom: max(0.75rem, var(--nt-sys-bottom, env(safe-area-inset-bottom, 0px)));'), 'Hub composer sits on the bottom edge');
+assert(ROUTES['pta-pien'].colorClass === 'text-pink-600', 'Pienaarspoort uses the map magenta');
+assert(ROUTES['pta-dewildt'].colorClass === 'text-orange-500' && ROUTES['pta-mabopane'].colorClass === 'text-orange-500', 'De Wildt shares the orange north line');
+assert(ROUTES['herc-koed'].colorClass === 'text-[#887c4c]', 'Hercules to Koedoespoort uses the olive line');
+assert(ROUTES['pta-saul'].colorClass === 'text-sky-500', 'Saulsville uses the light blue line');
+assert(ROUTES['jhb-rand'].colorClass === 'text-green-600', 'Randfontein uses the green line');
+assert(ROUTES['jhb-soweto'].colorClass === 'text-pink-600', 'Naledi uses the magenta line');
+assert(ROUTES['jhb-midway'].colorClass === 'text-green-800', 'Lenz uses the dark green line');
+assert(ROUTES['germ-kwesine'].colorClass === 'text-red-600', 'Kwesine uses the red line');
+assert(ROUTES['pta-irene'].colorClass === 'text-sky-700' && ROUTES['pta-kempton'].colorClass === 'text-sky-700' && ROUTES['germ-leralla'].colorClass === 'text-sky-700', 'Irene, Kempton Park, and Leralla use the blue line');
+assert(ROUTES['ct-malm'].colorClass === 'text-lime-500', 'Western Cape Malmesbury colour stays');
+assert(!hubModals.includes('#messages-thread-form {\n    flex-shrink: 0;\n    background: transparent;\n    border-top: 0;\n    padding-bottom: calc(var(--nt-nav-h'), 'Hub composer does not reserve a bar-sized gap');
 assert(hubModals.includes('id="messages-thread-input" rows="2"'), 'Hub message box starts at two rows');
 assert(/id="messages-thread-close"[\s\S]{0,400}M15 19l-7-7 7-7/.test(hubModals), 'Feedback Hub close is the back chevron');
 assert(hubModals.includes('id="schedule-day-modal"') && hubModals.includes('id="schedule-day-body"'), 'the day line opens its own schedule note');
@@ -725,6 +737,7 @@ const mapPage = readFileSync(new URL('../src/pages/map.astro', import.meta.url),
 const mapTab = readFileSync(new URL('../src/lib/map-tab.js', import.meta.url), 'utf8');
 assert(!mapView.includes('Loading network map'), 'Map tab overlay does not duplicate the iframe loader');
 assert(mapPage.includes('Loading network…'), 'iframe keeps one loading heading');
+assert(mapPage.includes('M9 19h8.5a3.5 3.5 0 0 0 0-7h-11') && !mapPage.includes('L15 7m0 13V7'), 'map loading mark is a route, not the broken folded map');
 assert(!mapPage.includes('Loading Network...'), 'iframe heading is not Title Case Loading Network');
 assert(mapTab.includes("map-tab-placeholder')?.classList.add('hidden')"), 'Map tab does not unhide a second loader');
 assert(!mapTab.includes("map-tab-placeholder')?.classList.remove('hidden')"), 'Map tab never shows the outer loader');
@@ -796,6 +809,8 @@ assert(refuseDisplayName('Enock').ok === true, 'ordinary first names are still a
     const appearance = readFileSync(new URL('../src/styles/appearance.css', import.meta.url), 'utf8');
     assert(layout.includes('font-size: max(16px, 1em) !important'), 'Layout keeps the iOS 16px input floor');
     assert(appearance.includes('font-size: max(16px, 1em) !important'), 'appearance.css keeps the iOS 16px input floor');
+    assert(appearance.includes('.nt-scroll-hint') && appearance.includes('rgba(15, 23, 42, 0.18)'), 'board fade matches the timetable edge darkening');
+    assert(logic.includes('export function initScrollHint'), 'board fade tracks whether more content is below');
     const plannerModals = readFileSync(new URL('../src/components/PlannerModals.astro', import.meta.url), 'utf8');
     assert(plannerModals.includes('id="alert-image-lightbox"') && plannerModals.includes('id="alert-image-lightbox-img"'), 'dedicated alert image lightbox markup exists');
     assert(plannerModals.includes('id="alert-image-lightbox-stage"'), 'alert preview zoom lives on a dedicated stage');

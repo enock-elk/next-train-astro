@@ -886,14 +886,15 @@ import { withBase } from '../lib/config.js';
   #reports-feed-list details[open] summary svg {
     transform: rotate(180deg);
   }
-  /* Wallpaper covers the thread and the composer. The fields clear the
-     bottom bar the way the board cleared the old floating nav: the pattern
-     keeps going, and the controls sit above the bar. */
+  /* Wallpaper covers the thread and the composer. The hub covers the
+     bottom bar, so the contact row and the message sit on the bottom edge.
+     Only the home indicator needs room. */
   #messages-thread-form {
     flex-shrink: 0;
+    margin-top: auto;
     background: transparent;
     border-top: 0;
-    padding-bottom: calc(var(--nt-nav-h, 4rem) + var(--nt-sys-bottom, env(safe-area-inset-bottom, 0px)) + 0.75rem);
+    padding-bottom: max(0.75rem, var(--nt-sys-bottom, env(safe-area-inset-bottom, 0px)));
   }
   html.nt-keyboard #messages-thread-form {
     position: fixed;

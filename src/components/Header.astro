@@ -15,7 +15,7 @@ for (const [id, route] of Object.entries(ROUTES)) {
         <h1 id="app-title" class="header-title text-[2.55rem] sm:text-[2.75rem] font-black text-blue-600 dark:text-blue-400 select-none cursor-pointer tracking-[-0.035em] leading-none">
             Next Train
         </h1>
-        <div class="header-meta mt-1.5 min-w-0">
+        <div class="header-meta mt-1 min-w-0">
             <button type="button" id="current-day" class="text-[11px] sm:text-xs font-medium text-gray-500 dark:text-gray-400 leading-tight" aria-haspopup="dialog" aria-controls="schedule-day-modal">Getting schedules…</button>
             <!-- Sim clock only — diagnostic, shown by logic.js when $isSimMode -->
             <p id="current-time" class="hidden mt-0.5 text-[10px] font-mono text-amber-700 dark:text-amber-400 tabular-nums" aria-hidden="true"></p>

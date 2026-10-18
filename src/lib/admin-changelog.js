@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_10.18.8': [
+        'The bottom bar is shorter, and the day line pill sits tighter under the title. A short fade sits just above the bar while the board still has more below it, and it lifts when you reach the end. Gauteng route colours follow the network map, with a thin bar on each route row. The home route name keeps that colour and its shadow. The map loading mark is a route, on the GPS map and in the map tab. Feedback Hub contact and message sit on the bottom edge. No commuter What\'s New. forceShow stays false.',
+    ],
     'V9_10.18.7': [
         'Feedback Hub wallpaper continues behind the message and contact fields, and those fields sit above the bottom bar. The send button lines up with the message box. The contact row says Add contact details for a reply. No commuter What\'s New. forceShow stays false.',
     ],

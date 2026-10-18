@@ -336,6 +336,51 @@ export function exclusionAppliesToSurface(rule, surface = 'in_app') {
         : configured === 'in_app';
 }
 
+/**
+ * Solid swatch for a route's map colour. Full class strings so Tailwind
+ * keeps them. Gauteng values follow the network map; other regions keep
+ * the colour they already shipped with.
+ */
+export function lineSwatchClass(colorClass, kind = 'bg') {
+    const c = String(colorClass || '');
+    if (kind === 'border') {
+        if (c.includes('#887c4c')) return 'border-[#887c4c]';
+        if (c.includes('pink')) return 'border-pink-600';
+        if (c.includes('sky-700') || c.includes('sky-800')) return 'border-sky-700';
+        if (c.includes('sky')) return 'border-sky-500';
+        if (c.includes('green-800')) return 'border-green-800';
+        if (c.includes('green-600')) return 'border-green-600';
+        if (c.includes('lime')) return 'border-lime-500';
+        if (c.includes('green')) return 'border-green-500';
+        if (c.includes('orange')) return 'border-orange-500';
+        if (c.includes('purple')) return 'border-purple-500';
+        if (c.includes('indigo')) return 'border-indigo-500';
+        if (c.includes('yellow-600')) return 'border-yellow-600';
+        if (c.includes('yellow')) return 'border-yellow-500';
+        if (c.includes('red-600')) return 'border-red-600';
+        if (c.includes('red')) return 'border-red-500';
+        if (c.includes('blue')) return 'border-blue-500';
+        return 'border-gray-400';
+    }
+    if (c.includes('#887c4c')) return 'bg-[#887c4c]';
+    if (c.includes('pink')) return 'bg-pink-600';
+    if (c.includes('sky-700') || c.includes('sky-800')) return 'bg-sky-700';
+    if (c.includes('sky')) return 'bg-sky-500';
+    if (c.includes('green-800')) return 'bg-green-800';
+    if (c.includes('green-600')) return 'bg-green-600';
+    if (c.includes('lime')) return 'bg-lime-500';
+    if (c.includes('green')) return 'bg-green-500';
+    if (c.includes('orange')) return 'bg-orange-500';
+    if (c.includes('purple')) return 'bg-purple-500';
+    if (c.includes('indigo')) return 'bg-indigo-500';
+    if (c.includes('yellow-600')) return 'bg-yellow-600';
+    if (c.includes('yellow')) return 'bg-yellow-500';
+    if (c.includes('red-600')) return 'bg-red-600';
+    if (c.includes('red')) return 'bg-red-500';
+    if (c.includes('blue')) return 'bg-blue-500';
+    return 'bg-gray-400';
+}
+
 /** HTML route label with SVG arrow between corridor ends. */
 export function formatRouteLabelHtml(raw) {
     if (typeof raw !== 'string' || !raw) return escapeHTML('Select a route');

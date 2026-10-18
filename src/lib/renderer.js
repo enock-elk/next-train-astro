@@ -19,7 +19,7 @@ import { orderGridTrainIds, getRuntimeGridOrderRecord } from './grid-order.js';
 import { 
     normalizeStationName, timeToSeconds, formatTimeDisplay, isRealTime, isExpressSkip,
     isVariantStationName, mergeVariantLabels, viaCodesFromGridOrderRecord, escapeHTML, safeStorage,
-    formatRouteLabelHtml, formatRouteLabelPlain, expandJhbLabel, fitRouteNameNodes, fitJhbNodes, routePrimaryGridDirection, shortSharedSourceLabel,
+    formatRouteLabelHtml, formatRouteLabelPlain, expandJhbLabel, fitRouteNameNodes, fitJhbNodes, routePrimaryGridDirection, shortSharedSourceLabel, lineSwatchClass,
     scheduleCacheSlot, routeSheetKeyForDay, warningTriangleSvg, gridNoticeShowsOnDay,
     resolveOperatingDayType, simUsesSpecificDate
 } from './utils.js';
@@ -230,12 +230,14 @@ export const Renderer = {
             const isActive = r.id === activeRouteId;
             const activeBg = isActive ? 'bg-blue-50 dark:bg-blue-900/20 font-black text-blue-700 dark:text-blue-300' : 'hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-800 dark:text-gray-200 font-bold';
             const dotColor = Renderer._getDotColor(r.colorClass);
+            const pinBar = lineSwatchClass(r.colorClass, 'bg');
             
             html += `
                 <div id="pinned-section" class="mb-3 rounded-xl overflow-hidden border border-blue-200 dark:border-blue-900/50 shadow-sm">
                     <li class="list-none">
-                        <a class="block px-4 py-3 ${activeBg} transition-colors cursor-pointer flex items-center justify-between text-sm" data-route-id="${r.id}">
-                            <div class="flex items-center min-w-0 pr-2">
+                        <a class="flex items-stretch ${activeBg} transition-colors cursor-pointer text-sm" data-route-id="${r.id}">
+                            <span class="nt-line-bar w-1 shrink-0 ${pinBar}" aria-hidden="true"></span>
+                            <div class="flex items-center min-w-0 flex-1 py-3 pl-3 pr-2">
                                 <span class="w-3 h-3 rounded-full mr-3 flex-shrink-0 ${dotColor} ${isActive ? 'ring-2 ring-blue-300 dark:ring-blue-700' : ''}"></span>
                                 <span class="text-[10px] font-black text-blue-500 dark:text-blue-400 uppercase tracking-widest mr-2 flex-shrink-0">Pinned:</span>
                                 <span class="truncate" data-route-raw="${escapeHTML(r.name)}">${formatRouteLabelHtml(r.name)}</span>
@@ -259,38 +261,32 @@ export const Renderer = {
                     if (!r.isActive) {
                         html += `
                             <li class="list-none opacity-60 bg-gray-50 dark:bg-gray-800/30">
-                                <a class="block px-4 py-3 cursor-not-allowed flex items-center justify-between text-sm text-gray-500 dark:text-gray-400" data-route-id="${r.id}">
-                                    <div class="flex items-center min-w-0 pr-2">
-                                        <div class="w-7 h-7 rounded-md flex items-center justify-center mr-3 flex-shrink-0 bg-gray-200 dark:bg-gray-700 text-gray-400 shadow-sm">
+                                <a class="flex items-stretch cursor-not-allowed text-sm text-gray-500 dark:text-gray-400" data-route-id="${r.id}">
+                                    <span class="nt-line-bar w-1 shrink-0 bg-gray-300 dark:bg-gray-600" aria-hidden="true"></span>
+                                    <div class="flex items-center min-w-0 flex-1 py-3 pl-3 pr-3">
+                                        <div class="w-7 h-7 rounded-md flex items-center justify-center mr-3 flex-shrink-0 bg-gray-200 dark:bg-gray-700 text-gray-400">
                                             <svg class="w-4 h-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="16" rx="2" ry="2"></rect><path d="M4 11h16"></path><path d="M12 3v8"></path><path d="M8 19l-2 3"></path><path d="M18 22l-2-3"></path><path d="M8 15h0"></path><path d="M16 15h0"></path></svg>
                                         </div>
                                         <span class="truncate" data-route-raw="${escapeHTML(r.name)}">${displayName}</span>
+                                        <span class="ml-2 text-[8px] bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 px-1.5 py-0.5 rounded uppercase font-black tracking-widest flex-shrink-0">Soon</span>
                                     </div>
-                                    <span class="ml-2 text-[8px] bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 px-1.5 py-0.5 rounded uppercase font-black tracking-widest flex-shrink-0">Soon</span>
                                 </a>
                             </li>
                         `;
                     } else {
-                        let tileBg = 'bg-gray-100 dark:bg-gray-800 text-gray-500';
-                        if (r.colorClass.includes('green')) tileBg = 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400';
-                        else if (r.colorClass.includes('orange')) tileBg = 'bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400';
-                        else if (r.colorClass.includes('purple')) tileBg = 'bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400';
-                        else if (r.colorClass.includes('indigo')) tileBg = 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400';
-                        else if (r.colorClass.includes('blue')) tileBg = 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400';
-                        else if (r.colorClass.includes('yellow')) tileBg = 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-600 dark:text-yellow-400';
-                        else if (r.colorClass.includes('red')) tileBg = 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400';
-                        else if (r.colorClass.includes('lime')) tileBg = 'bg-lime-100 dark:bg-lime-900/30 text-lime-600 dark:text-lime-400';
+                        const bar = lineSwatchClass(r.colorClass, 'bg');
 
                         html += `
                             <li class="list-none">
-                                <a class="block px-4 py-3.5 ${activeBg} transition-colors cursor-pointer flex items-center justify-between text-sm group rounded-lg mx-2 mb-1 w-[calc(100%-1rem)]" data-route-id="${r.id}">
-                                    <div class="flex items-center min-w-0 pr-2">
-                                        <div class="w-7 h-7 rounded-md flex items-center justify-center mr-3 flex-shrink-0 ${tileBg} shadow-sm group-hover:scale-105 transition-transform">
+                                <a class="flex items-stretch ${activeBg} transition-colors cursor-pointer text-sm rounded-lg mx-2 mb-1 w-[calc(100%-1rem)] overflow-hidden" data-route-id="${r.id}">
+                                    <span class="nt-line-bar w-1 shrink-0 ${bar}" aria-hidden="true"></span>
+                                    <div class="flex items-center min-w-0 flex-1 py-3.5 pl-3 pr-3">
+                                        <div class="w-7 h-7 rounded-md flex items-center justify-center mr-3 flex-shrink-0 bg-gray-100 dark:bg-gray-700/70 text-gray-500 dark:text-gray-300">
                                             <svg class="w-4 h-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="16" rx="2" ry="2"></rect><path d="M4 11h16"></path><path d="M12 3v8"></path><path d="M8 19l-2 3"></path><path d="M18 22l-2-3"></path><path d="M8 15h0"></path><path d="M16 15h0"></path></svg>
                                         </div>
                                         <span class="truncate" data-route-raw="${escapeHTML(r.name)}">${displayName}</span>
+                                        ${isActive ? '<svg class="w-4 h-4 ml-2 text-blue-600 dark:text-blue-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"></path></svg>' : ''}
                                     </div>
-                                    ${isActive ? '<svg class="w-4 h-4 text-blue-600 dark:text-blue-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"></path></svg>' : ''}
                                 </a>
                             </li>
                         `;
@@ -324,14 +320,7 @@ export const Renderer = {
             const displayName = formatRouteLabelHtml(route.name);
             
             if (route.isActive) {
-                let borderColor = 'border-gray-500';
-                if (route.colorClass.includes('orange')) borderColor = 'border-orange-500';
-                else if (route.colorClass.includes('purple')) borderColor = 'border-purple-500';
-                else if (route.colorClass.includes('green')) borderColor = 'border-green-500';
-                else if (route.colorClass.includes('blue')) borderColor = 'border-blue-500';
-                else if (route.colorClass.includes('red')) borderColor = 'border-red-500';
-                else if (route.colorClass.includes('yellow')) borderColor = 'border-yellow-500';
-                else if (route.colorClass.includes('indigo')) borderColor = 'border-indigo-500';
+                const borderColor = lineSwatchClass(route.colorClass, 'border');
 
                 btn.className = `w-full text-left p-4 rounded-xl shadow-md flex items-center justify-between group transition-all transform hover:scale-[1.02] active:scale-95 bg-white dark:bg-gray-800 border-l-4 ${borderColor}`;
                 
@@ -1408,15 +1397,8 @@ export const Renderer = {
     },
     
     _getDotColor: (colorClass) => {
-        if (!colorClass) return 'bg-gray-400';
-        if (colorClass.includes('green')) return 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.5)]';
-        if (colorClass.includes('orange')) return 'bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.5)]';
-        if (colorClass.includes('purple')) return 'bg-purple-500 shadow-[0_0_8px_rgba(168,85,247,0.5)]';
-        if (colorClass.includes('indigo')) return 'bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.5)]'; 
-        if (colorClass.includes('blue')) return 'bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.5)]';
-        if (colorClass.includes('yellow')) return 'bg-yellow-400 shadow-[0_0_8px_rgba(250,204,21,0.5)]';
-        if (colorClass.includes('red')) return 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]';
-        return 'bg-gray-400';
+        const swatch = lineSwatchClass(colorClass, 'bg');
+        return `${swatch} shadow-sm`;
     },
 
     _applyUIIntercepts: (stationName) => {

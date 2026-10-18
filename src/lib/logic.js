@@ -2107,6 +2107,28 @@ function chainIsAtTop(start, scroller) {
     return scroller.scrollTop <= 2;
 }
 
+/** Darken the edge above the bottom bar only while more of the page is below. */
+export function initScrollHint() {
+    if (typeof document === 'undefined' || window.__ntScrollHintBound) return;
+    const scroller = document.getElementById('app-scroll');
+    const hint = document.getElementById('nt-scroll-hint');
+    if (!scroller || !hint) return;
+    window.__ntScrollHintBound = true;
+    const sync = () => {
+        const mapOpen = document.getElementById('view-map')?.classList.contains('active');
+        const remain = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight;
+        hint.classList.toggle('is-on', !mapOpen && remain > 28);
+    };
+    scroller.addEventListener('scroll', sync, { passive: true });
+    window.addEventListener('resize', sync);
+    if (typeof ResizeObserver !== 'undefined') {
+        const ro = new ResizeObserver(sync);
+        ro.observe(scroller);
+        Array.from(scroller.children).forEach((child) => ro.observe(child));
+    }
+    sync();
+}
+
 /** Pull down at the top of Next Train, Trip Planner, or Community to reload this session. */
 export function initSessionPullRefresh() {
     if (typeof document === 'undefined' || window.__ntPullRefreshBound) return;

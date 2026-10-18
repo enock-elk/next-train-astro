@@ -41,7 +41,7 @@ import { withBase } from '../lib/config.js';
     // @ts-nocheck — pre-existing bridge; typed globals live in env.d.ts
     import { $userRegion, $currentRouteId } from '../store.js';
     import { ROUTES, getCorridorLabel } from '../lib/config.js';
-    import { safeStorage, formatRouteLabelHtml, expandJhbLabel, fitRouteNameNodes, fitJhbNodes, escapeHTML, restorePinnedSession } from '../lib/utils.js';
+    import { safeStorage, formatRouteLabelHtml, expandJhbLabel, fitRouteNameNodes, fitJhbNodes, escapeHTML, restorePinnedSession, lineSwatchClass } from '../lib/utils.js';
     import { loadAllSchedules, executeRegionSwap } from '../lib/logic.js';
     import { prepareDeeplinkIntents, flushPendingDeeplinkIntents, hasInboundShareIntent } from '../lib/deeplink.js';
     import { markWelcomeShownThisVisit, snapshotReturningForStartupLocate, maybeAutoLocateBoard } from '../lib/auto-locate.js';
@@ -87,14 +87,7 @@ import { withBase } from '../lib/config.js';
             const displayName = formatRouteLabelHtml(route.name);
             
             if (route.isActive) {
-                let borderColor = 'border-gray-500';
-                if (route.colorClass.includes('orange')) borderColor = 'border-orange-500';
-                else if (route.colorClass.includes('purple')) borderColor = 'border-purple-500';
-                else if (route.colorClass.includes('green')) borderColor = 'border-green-500';
-                else if (route.colorClass.includes('blue')) borderColor = 'border-blue-500';
-                else if (route.colorClass.includes('red')) borderColor = 'border-red-500';
-                else if (route.colorClass.includes('yellow')) borderColor = 'border-yellow-500';
-                else if (route.colorClass.includes('indigo')) borderColor = 'border-indigo-500';
+                const borderColor = lineSwatchClass(route.colorClass, 'border');
 
                 const corridor = getCorridorLabel(route);
                 const corridorText = corridor || 'View schedules';

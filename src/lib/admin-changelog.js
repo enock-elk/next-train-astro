@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_10.18.15': [
+        'Alert cards keep a rounded top. The Ops strip was painting square corners because the card stays overflow visible so a reaction can hang off the bottom. View full timetable uses the same light shadow as the route and station rows. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_10.18.14': [
         'A bottom sheet pulls closed from anywhere on the card when that scroller is at the top. Trip fare No takes the blue highlight. What\'s New paints the latest six cards first and loads older ones on Show earlier updates. The guide FAQ says a monthly ticket covers that calendar month and is on sale until about the 10th, and that December uses a scaled-down festive timetable from the early 20s of December through the first week of January. A planner search for 21 Dec 2026 to 1 Jan 2027 still shows the trip, with a banner that the festive sheet is not confirmed. Route pages mention that timetable. The day button has no outer oval. The sim clock sits beside the Next Train title. forceShow stays false.',
     ],

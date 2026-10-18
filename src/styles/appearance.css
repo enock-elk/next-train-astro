@@ -665,7 +665,7 @@ html[data-colour-pack="contrast"] .bottom-nav-item.is-active {
   background-color: color-mix(in srgb, var(--nt-primary) 12%, #fff) !important;
   color: var(--nt-primary) !important;
   border: 1px solid color-mix(in srgb, var(--nt-primary) 35%, #fff) !important;
-  box-shadow: none !important;
+  box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
 }
 #view-full-timetable-btn:hover {
   background-color: color-mix(in srgb, var(--nt-primary) 20%, #fff) !important;
@@ -1895,6 +1895,10 @@ html.dark .cm-bubble-name { background: rgba(255, 255, 255, 0.07); }
   min-height: 0;
   padding-top: 0.4rem;
   padding-bottom: 0.4rem;
+  /* The card stays overflow:visible so a reaction can hang off the bottom.
+     That also lets this strip paint square over the rounded top. Match the card. */
+  border-top-left-radius: 0.85rem;
+  border-top-right-radius: 0.85rem;
 }
 .nt-alert-signoff {
   letter-spacing: 0.02em;

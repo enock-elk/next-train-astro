@@ -37,7 +37,8 @@ assert(!/html\[data-colour-pack="classic"\][^{]*#planner-swap-btn/.test(css), 'C
 assert(/html\[data-colour-pack="earthy"\]:not\(\.dark\) #view-full-timetable-btn/.test(css), 'Earthy timetable button is a paper chip');
 assert(/html\.dark #view-full-timetable-btn/.test(css), 'dark timetable button does not mix against white');
 assert(/html\[data-colour-pack="earthy"\]\.dark #view-full-timetable-btn/.test(css), 'Earthy dark timetable button is its own chip');
-assert(/#view-full-timetable-btn\s*\{[\s\S]*?box-shadow:\s*none/.test(css), 'timetable button has no glow');
+assert(/#view-full-timetable-btn\s*\{[^}]*box-shadow:\s*0 1px 2px 0 rgb\(0 0 0 \/ 0\.05\)/.test(css), 'timetable button uses the home card shadow');
+assert(!/#view-full-timetable-btn\s*\{[^}]*box-shadow:\s*none/.test(css), 'timetable button is not flat');
 assert(!css.includes('data-colour-pack="ember"'), 'Ember pack CSS is gone');
 assert(/\.text-gray-400,[\s\S]*?--nt-text-faint/.test(css), 'gray-400 maps to faint, not muted');
 assert(css.includes('--nt-chrome-nav'), 'appearance defines --nt-chrome-nav');
@@ -325,6 +326,7 @@ assert(
 );
 assert(css.includes('mask-image'), 'alerts wallpaper tiles via mask-image so pack tokens colour it');
 assert(css.includes('color-mix(in srgb, var(--nt-chrome-header) 16%, var(--nt-canvas))'), 'alerts wallpaper wash follows chrome + canvas');
+assert(css.includes('border-top-left-radius: 0.85rem'), 'alert strip follows the card’s top corners');
 assert(/nt-alert-strip-info \{\s*background-color: color-mix\(in srgb, var\(--nt-primary\)/.test(css), 'info strip is a quiet primary wash');
 assert(!/nt-alert-strip-info \{\s*background-color: #2563eb/.test(css), 'info strip is no longer a solid blue banner');
 assert(css.includes('.nt-alert-card'), 'alert posts have a distinct card rule');

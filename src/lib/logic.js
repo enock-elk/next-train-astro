@@ -191,8 +191,10 @@ export function describeHeaderDayNote({
 }
 
 function openHeaderDayNote() {
+    const kicker = document.getElementById('schedule-day-kicker');
     const titleEl = document.getElementById('schedule-day-title');
     const bodyEl = document.getElementById('schedule-day-body');
+    if (kicker) kicker.textContent = "Today's schedule";
     if (titleEl) titleEl.textContent = headerDayNote.title || 'Schedule';
     if (bodyEl) bodyEl.textContent = headerDayNote.body || '';
     const ok = document.getElementById('schedule-day-ok');
@@ -2132,6 +2134,28 @@ export function initScrollHint() {
         Array.from(scroller.children).forEach((child) => ro.observe(child));
     }
     sync();
+    bindSheetShades();
+}
+
+/** Fade the bottom of a sheet only while that sheet still has more below. */
+function bindSheetShades() {
+    document.querySelectorAll('.nt-sheet-shade').forEach((shade) => {
+        const scroller = document.getElementById(shade.getAttribute('data-shade-for') || '');
+        if (!scroller || scroller.dataset.shadeBound === '1') return;
+        scroller.dataset.shadeBound = '1';
+        const sync = () => {
+            const remain = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight;
+            shade.classList.toggle('is-on', remain > 20);
+        };
+        scroller.addEventListener('scroll', sync, { passive: true });
+        if (typeof ResizeObserver !== 'undefined') new ResizeObserver(sync).observe(scroller);
+        if (typeof MutationObserver !== 'undefined') {
+            new MutationObserver(sync).observe(scroller, { childList: true, subtree: true });
+            const modal = scroller.closest('.fixed');
+            if (modal) new MutationObserver(sync).observe(modal, { attributes: true, attributeFilter: ['class'] });
+        }
+        sync();
+    });
 }
 
 /** Pull down at the top of Next Train, Trip Planner, or Community to reload this session. */

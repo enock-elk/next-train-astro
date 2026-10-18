@@ -40,6 +40,7 @@ import {
     dismissBrief,
     johannesburgClock,
     localBriefNote,
+    localCrashReading,
     restoreBrief,
     scrubOperatorText,
 } from './operator-brief.js';
@@ -154,6 +155,7 @@ export function exposeAdminGlobals() {
         dismissBrief,
         johannesburgClock,
         localBriefNote,
+        localCrashReading,
         restoreBrief,
         scrubOperatorText,
     };

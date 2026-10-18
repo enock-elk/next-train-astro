@@ -19,6 +19,7 @@ import {
     greetingForHour,
     johannesburgClock,
     localBriefNote,
+    localCrashReading,
     parseBriefText,
     scrubOperatorText,
     upcomingOpsNotes,
@@ -40,14 +41,22 @@ const notes = upcomingOpsNotes(thursdayEvening);
 const joined = notes.map((note) => `${note.title} ${note.body}`).join('\n');
 ok(joined.includes('0618 and 0619'), 'Friday ahead names trains 0618 and 0619');
 ok(!joined.includes('Hercules to Koedoespoort'), 'Thursday does not repeat Saturday Hercules');
-ok(notes.some((note) => note.id === 'country'), 'the country scan is on the brief');
-const country = notes.find((note) => note.id === 'country');
-const countryText = (country?.details || []).join('\n');
-ok(countryText.includes('Gauteng') && countryText.includes('KwaZulu-Natal'), 'the country scan names the regions');
-ok(countryText.includes('0618 and 0619'), 'the Gauteng scan uses the Kempton Park route-page note');
-ok(countryText.includes('first Monday'), 'the KwaZulu-Natal scan uses the Cato Ridge route-page note');
-ok(countryText.includes('Western Cape'), 'a region with no route-page note is still listed');
-ok(!joined.includes('Cato Ridge'), '15 Oct is not near the next first Monday');
+ok(notes.some((note) => note.id === 'region-GP' && note.region === 'GP'), 'Gauteng has its own rules card');
+ok(notes.some((note) => note.id === 'region-WC' && note.region === 'WC'), 'Western Cape has its own card');
+ok(notes.some((note) => note.id === 'region-KZN' && note.region === 'KZN'), 'KwaZulu-Natal has its own rules card');
+ok(notes.some((note) => note.id === 'region-EC' && note.region === 'EC'), 'Eastern Cape has its own card');
+const gpRules = notes.find((note) => note.id === 'region-GP');
+const kznRules = notes.find((note) => note.id === 'region-KZN');
+const wcRules = notes.find((note) => note.id === 'region-WC');
+ok((gpRules?.body || '').includes('0618 and 0619'), 'the Gauteng card uses the Kempton Park day rule');
+ok((kznRules?.body || '').includes('selected Wednesdays'), 'the KwaZulu-Natal card names the Wednesday hold');
+ok((kznRules?.body || '').includes('Umlazi'), 'the KwaZulu-Natal card names the Umlazi hold');
+ok((kznRules?.body || '').includes('first Monday'), 'the KwaZulu-Natal card uses the Cato Ridge rule');
+ok((wcRules?.body || '').includes('No recurring') || (wcRules?.title || '').includes('No recurring'), 'a region with no day rule says so');
+ok(!(gpRules?.body || '').includes('2020 lockdown'), 'the Gauteng rules card leaves the standing essay out');
+const others = notes.find((note) => note.id === 'country-other');
+ok((others?.details || []).join(' ').includes('shuttle'), 'standing notes sit in Others');
+ok(!notes.some((note) => String(note.id).startsWith('cato-')), '15 Oct is not near the next first Monday');
 
 const friday = Date.parse('2026-10-16T09:00:00+02:00');
 const fridayJoined = upcomingOpsNotes(friday).map((note) => `${note.title} ${note.body}`).join('\n');
@@ -73,9 +82,12 @@ const brief = buildOperatorBrief({
     appVersion: 'V9_10.15.7',
     usersEver: 12,
     trips: [
-        { origin: 'PRETORIA', destination: 'JOHANNESBURG', region: 'GP', dayType: 'saturday', transfers: 1, routeIds: ['pta-kempton'] },
-        { origin: 'HERCULES', destination: 'KOEDOESPOORT', region: 'GP', dayType: 'saturday', routeIds: ['herc-koed'] },
-        { origin: 'CATO RIDGE', destination: 'DURBAN', region: 'KZN', dayType: 'weekday', routeIds: ['kzn-catoridge'] },
+        { origin: 'PRETORIA', destination: 'JOHANNESBURG', region: 'GP', dayType: 'saturday', transfers: 1, routeIds: ['pta-kempton'], timestamp: thursdayEvening, userId: 'a' },
+        { origin: 'HERCULES', destination: 'KOEDOESPOORT', region: 'GP', dayType: 'saturday', routeIds: ['herc-koed'], timestamp: thursdayEvening, userId: 'b' },
+        { origin: 'CATO RIDGE', destination: 'DURBAN', region: 'KZN', dayType: 'weekday', routeIds: ['kzn-catoridge'], timestamp: thursdayEvening, userId: 'c' },
+        { origin: 'OLD', destination: 'PLACE', region: 'GP', dayType: 'weekday', timestamp: thursdayEvening - 20 * 24 * 3600000, userId: 'z' },
+        { origin: 'PRETORIA', destination: 'JOHANNESBURG', region: 'GP', dayType: 'weekday', timestamp: thursdayEvening - 8 * 24 * 3600000, userId: 'd' },
+        { origin: 'PRETORIA', destination: 'JOHANNESBURG', region: 'GP', dayType: 'weekday', timestamp: thursdayEvening - 9 * 24 * 3600000, userId: 'e' },
     ],
     pairs: { 'PRETORIA~JOHANNESBURG': { origin: 'PRETORIA', destination: 'JOHANNESBURG', lastSeen: 1 } },
     fails: [{ reason: 'NO_SERVICE', origin: 'HERCULES', destination: 'GEZINA' }],
@@ -88,6 +100,10 @@ const brief = buildOperatorBrief({
 ok(brief.greeting === 'Evening brief', 'the report greets by the time of day');
 ok(brief.cards.some((card) => card.id === 'trips' && card.body.includes('no trains that day')), 'a Saturday plan on herc-koed is called out');
 ok(brief.cards.some((card) => card.body.includes('Cato Ridge')), 'a Cato Ridge plan is counted');
+const tripCard = brief.cards.find((card) => card.id === 'trips');
+ok((tripCard?.body || '').includes('last 48 hours'), 'trip plans are counted inside 48 hours');
+ok(!(tripCard?.body || '').includes('OLD'), 'a plan older than 48 hours stays out of the recent card');
+ok((tripCard?.body || '').includes('week before'), 'trip plans compare this week with the week before');
 ok(brief.cards.some((card) => card.body.includes('R4')), 'a fare gap is stated in rand');
 ok(brief.cards.some((card) => card.title.includes('48 hours')), 'an alert due inside two days is listed');
 ok(brief.cards.some((card) => card.body.includes('Map') && card.body.includes('KZN')), 'a feature switch names its region');
@@ -145,8 +161,17 @@ ok(!/wrangler/i.test(report), 'the report does not ask for a deploy');
 const localNote = localBriefNote(brief);
 ok(localNote.includes('\n\n') && !/wrangler/i.test(localNote), 'a missing writer still leaves a two-paragraph note');
 ok(report.includes('Google Analytics is not'), 'analytics that we cannot read are named as absent');
-const draft = alertDraftFromBriefCard(country);
-ok(draft.target === 'all', 'the country card posts to the whole network');
+const draft = alertDraftFromBriefCard(gpRules);
+ok(draft.target === 'all_GP', 'a region card posts to that region');
+const otherDraft = alertDraftFromBriefCard(others);
+ok(otherDraft.target === 'all', 'standing notes stay a network draft');
+const crashRead = localCrashReading({
+    error: "Uncaught SyntaxError: The requested module 'src/lib/alerts-feed.js' does not provide an export named 'sanitizeAlertVideoUrl'",
+    appVersion: 'V10_10.18.2',
+});
+ok(crashRead.includes('sanitizeAlertVideoUrl') && crashRead.includes('V10_10.18.2'), 'a missing export is read from the log');
+const undefRead = localCrashReading({ error: 'Uncaught ReferenceError: bindBlurBackdropDismiss is not defined', appVersion: 'V9_10.18.10' });
+ok(undefRead.includes('bindBlurBackdropDismiss') && undefRead.includes('does not define'), 'a missing name is read from the log');
 ok(draft.message.startsWith('<h3>'), 'the alert keeps a title');
 ok(draft.message.includes('<p>'), 'the alert body is paragraphs');
 ok(!draft.message.includes('Add to alerts'), 'the alert is the card, not the button');
@@ -171,6 +196,7 @@ ok(!admin.includes('insertBefore(telPanel, container.firstElementChild)'), 'the 
 ok(admin.includes("Admin.replyWorkerUrl()}/brief`"), 'Explain and the note call the reply worker');
 ok(!admin.includes('npx wrangler deploy'), 'the brief does not tell the operator to deploy');
 ok(admin.includes('localBriefNote'), 'a missing writer falls back to the cards');
+ok(admin.includes('localCrashReading'), 'a missing writer still reads the crash line');
 ok(admin.includes('onBriefPopState'), 'back closes the brief before Dev Mode');
 ok(admin.includes('messageUnread'), 'the home-screen badge counts messages');
 ok(!admin.includes('setAppBadge(totalUnread)'), 'crashes and fails do not set the home-screen badge');

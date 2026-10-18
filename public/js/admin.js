@@ -5061,7 +5061,11 @@ const Admin = {
         ]);
         const tripRows = [];
         Object.values(trips || {}).forEach((batch) => {
-            (batch?.trips || []).forEach((trip) => tripRows.push(trip));
+            const flushed = Number(batch?.flushedAt || 0);
+            (batch?.trips || []).forEach((trip) => {
+                const stamped = Number(trip?.timestamp || trip?.at || 0);
+                tripRows.push(stamped ? trip : { ...trip, timestamp: flushed || undefined });
+            });
         });
         const crashRows = Object.entries(crashes || {}).map(([id, row]) => ({ id, ...(row || {}) }));
         Admin._briefCrashes = Object.fromEntries(crashRows.map((row) => [row.id, row]));
@@ -5343,7 +5347,12 @@ const Admin = {
             });
             if (note) note.textContent = text || 'The reading came back empty.';
         } catch {
-            if (note) note.textContent = 'A reading is not available for this log yet. The line above is the crash.';
+            const read = window.ntOperatorBrief?.localCrashReading;
+            if (note) {
+                note.textContent = typeof read === 'function'
+                    ? read({ error: row.error || row.preview || '', appVersion: row.appVersion || '' })
+                    : 'A reading is not available for this log yet. The line above is the crash.';
+            }
         } finally {
             if (button) button.disabled = false;
         }

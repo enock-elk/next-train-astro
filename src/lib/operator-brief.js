@@ -176,37 +176,84 @@ const REGION_NAMES = {
     EC: 'Eastern Cape',
 };
 
-function countryInsightCard() {
-    const byRegion = { GP: [], WC: [], KZN: [], EC: [] };
-    const push = (code, line) => {
-        if (code && byRegion[code] && line) byRegion[code].push(line);
+/** Recurring rules already written on the route pages. Anchor must still be in the insight. */
+const REGION_RULE_BITS = [
+    { id: 'pta-kempton', anchor: 'Mondays or Fridays', line: 'Pretoria to Kempton Park: trains 0618 and 0619 do not run on Mondays or Fridays. They run Tuesday to Thursday so the Blue Train and Rovos Rail can pass.' },
+    { id: 'pta-pien', anchor: 'peaks', line: 'Pretoria to Pienaarspoort: the peaks mix shuttle workings that turn at Koedoespoort with through trains. Off-peak is mostly Pretoria to Pienaarspoort the whole way. Some Mamelodi trains stop short at Mamelodi Gardens.' },
+    { id: 'pta-dewildt', anchor: 'testing new sets', line: 'Pretoria to De Wildt: some off-peak trains are taken out when PRASA is testing new sets, so the middle of the day can be thinner than the weekday grid.' },
+    { id: 'kzn-bridgecity', anchor: 'selected Wednesdays', line: 'Durban to Bridge City: on selected Wednesdays some off-peak trains are held for planned maintenance.' },
+    { id: 'kzn-umlazi', anchor: 'selected days', line: 'Durban to Umlazi: certain off-peak trains do not run on selected days because of planned maintenance. The pages do not name the day.' },
+    { id: 'kzn-winklespruit', anchor: 'selected days', line: 'Durban to Winklespruit: certain off-peak trains do not run on selected days because of planned maintenance. The pages do not name the day.' },
+    { id: 'kzn-catoridge', anchor: 'first Monday', line: 'Durban to Cato Ridge: the first Monday of each month has no booked Metrorail unless PRASA says otherwise.' },
+];
+
+function regionInsightCards() {
+    const rules = { GP: [], WC: [], KZN: [], EC: [] };
+    const others = { GP: [], WC: [], KZN: [], EC: [] };
+    const used = new Set();
+    REGION_RULE_BITS.forEach((bit) => {
+        const text = String(SEO_INSIGHTS[bit.id] || '');
+        const code = ROUTES[bit.id]?.region;
+        if (!code || !rules[code] || !text.includes(bit.anchor)) return;
+        rules[code].push(bit.line);
+        used.add(bit.id);
+    });
+    const pushOther = (code, line) => {
+        if (code && others[code] && line) others[code].push(line);
     };
     Object.entries(SEO_INSIGHTS).forEach(([routeId, text]) => {
         const route = ROUTES[routeId];
+        const code = route?.region;
         const name = displayRouteName(route);
-        push(route?.region, `${name}. ${String(text || '').trim()}`);
+        const body = String(text || '').trim();
+        if (routeId === 'kzn-umlazi' && body.includes('15 km/h')) {
+            pushOther(code, `${name}. All trains run at 15 km/h between Umlazi and Reunion until the track can be improved.`);
+            return;
+        }
+        if (routeId === 'pta-kempton') {
+            pushOther(code, `${name}. Pretoria to Irene is the inner stretch of this line. A sinkhole near Centurion in early 2026 was patched and trains are running again.`);
+            return;
+        }
+        if (routeId === 'pta-dewildt') {
+            pushOther(code, `${name}. For Marabastad or Gezina, get off at Hercules. For Atteridgeville, get off at Pretoria West. For Mamelodi, Tembisa, Kempton Park, Germiston or Johannesburg, change at Pretoria.`);
+            return;
+        }
+        if (used.has(routeId)) return;
+        pushOther(code, `${name}. ${body}`);
     });
     const corridors = listSeoCorridors();
     Object.entries(CORRIDOR_INSIGHTS).forEach(([slug, text]) => {
         const corridor = corridors.find((row) => row.slug === slug);
-        const code = corridor?.region || '';
         const label = corridor?.label || 'Corridor';
-        push(code, `${label}. ${String(text || '').trim()}`);
+        pushOther(corridor?.region || '', `${label}. ${String(text || '').trim()}`);
     });
-    const details = Object.entries(byRegion).map(([code, rows]) => (
-        rows.length
-            ? `${REGION_NAMES[code]}: ${rows.join(' ')}`
-            : `${REGION_NAMES[code]}: no extra corridor note on the route pages.`
-    ));
-    return {
-        id: 'country',
-        kicker: 'Across the country',
+    const cards = ['GP', 'WC', 'KZN', 'EC'].map((code) => {
+        const lines = rules[code];
+        return {
+            id: `region-${code}`,
+            kicker: REGION_NAMES[code],
+            tone: lines.length ? 'watch' : 'quiet',
+            title: lines.length ? 'Recurring rules' : 'No recurring rule on the route pages',
+            body: lines.length
+                ? lines.join('\n\n')
+                : 'Nothing on these route pages names a day, a peak, or a held train.',
+            details: lines,
+            region: code,
+        };
+    });
+    const details = ['GP', 'WC', 'KZN', 'EC']
+        .filter((code) => others[code].length)
+        .map((code) => `${REGION_NAMES[code]}: ${others[code].join(' ')}`);
+    cards.push({
+        id: 'country-other',
+        kicker: 'Others',
         tone: 'calm',
-        title: 'Corridor notes from the route pages',
-        body: 'Gauteng, Western Cape, KwaZulu-Natal, and Eastern Cape, from the notes already on those pages.',
+        title: 'Standing notes from the route pages',
+        body: 'These are the corridor notes that are not a day rule.',
         details,
         region: '',
-    };
+    });
+    return cards;
 }
 
 export function alertDraftFromBriefCard(card) {
@@ -305,7 +352,7 @@ export function upcomingOpsNotes(now = Date.now()) {
             });
         }
     }
-    notes.push(countryInsightCard());
+    notes.push(...regionInsightCards());
     return notes;
 }
 
@@ -324,12 +371,24 @@ function stationPlain(value) {
     return String(value || '').replace(/ STATION/gi, '').replace(/\s+/g, ' ').trim();
 }
 
-export function summarizeTrips(rows, pairs, usersEver = 0) {
-    const list = asList(rows);
-    const pairIndex = pairs && typeof pairs === 'object' && !Array.isArray(pairs) ? pairs : {};
+const RECENT_MS = 48 * 60 * 60 * 1000;
+
+function rowTime(row) {
+    return Number(row?.timestamp || row?.at || row?.exportedAt || row?.flushedAt || 0);
+}
+
+function tripPairName(row) {
+    const origin = stationPlain(row?.origin);
+    const dest = stationPlain(row?.destination || row?.dest);
+    if (!origin || !dest) return '';
+    return `${origin} to ${dest}`;
+}
+
+function tallyTrips(list) {
     const regionCounts = {};
     const dayCounts = {};
     const pairCounts = {};
+    const pairUsers = {};
     let saturday = 0;
     let noSaturdayLine = 0;
     let cato = 0;
@@ -341,11 +400,14 @@ export function summarizeTrips(rows, pairs, usersEver = 0) {
         const dest = stationPlain(row.destination || row.dest);
         const region = String(row.region || '').toUpperCase();
         const day = String(row.dayType || 'unknown');
+        const who = String(row.userId || row.deviceId || '');
         if (region) regionCounts[region] = (regionCounts[region] || 0) + 1;
         dayCounts[day] = (dayCounts[day] || 0) + 1;
-        if (origin && dest) {
-            const key = `${origin} to ${dest}`;
+        const key = tripPairName(row);
+        if (key) {
             pairCounts[key] = (pairCounts[key] || 0) + 1;
+            if (!pairUsers[key]) pairUsers[key] = new Set();
+            if (who) pairUsers[key].add(who);
         }
         if (day === 'saturday' || day === 'sat') saturday += 1;
         const routes = Array.isArray(row.routeIds) ? row.routeIds : [];
@@ -357,29 +419,76 @@ export function summarizeTrips(rows, pairs, usersEver = 0) {
         const hops = Number(row.transfers || 0);
         if (hops > 0) transfer += 1;
         else direct += 1;
-        if (row.userId || row.deviceId) users.add(String(row.userId || row.deviceId));
+        if (who) users.add(who);
     });
-    const recentPairs = Object.values(pairIndex)
-        .filter((pair) => pair && (pair.origin || pair.destination))
-        .sort((a, b) => Number(b.lastSeen || 0) - Number(a.lastSeen || 0))
-        .slice(0, 5)
-        .map((pair) => `${stationPlain(pair.origin)} to ${stationPlain(pair.destination)}`);
-    const top = topEntries(pairCounts, 3);
-    const topRegion = topEntries(regionCounts, 1)[0];
     return {
         sample: list.length,
-        usersInSample: users.size,
-        usersEver: Number(usersEver) || 0,
-        pairsEver: Object.keys(pairIndex).length,
+        users: users.size,
         saturday,
         noSaturdayLine,
         cato,
         direct,
         transfer,
-        top,
-        topRegion: topRegion ? { code: topRegion[0], count: topRegion[1] } : null,
-        recentPairs,
+        pairCounts,
+        pairUsers,
+        top: topEntries(pairCounts, 3),
+        topRegion: topEntries(regionCounts, 1)[0] || null,
         dayCounts,
+    };
+}
+
+function peopleCount(tally, pair) {
+    const set = tally.pairUsers[pair];
+    if (set && set.size) return set.size;
+    return tally.pairCounts[pair] || 0;
+}
+
+export function summarizeTrips(rows, pairs, usersEver = 0, now = Date.now()) {
+    const list = asList(rows).filter((row) => rowTime(row) > 0);
+    const pairIndex = pairs && typeof pairs === 'object' && !Array.isArray(pairs) ? pairs : {};
+    const recent = tallyTrips(list.filter((row) => rowTime(row) >= now - RECENT_MS));
+    const week = tallyTrips(list.filter((row) => rowTime(row) >= now - WEEK_MS));
+    const prev = tallyTrips(list.filter((row) => {
+        const at = rowTime(row);
+        return at >= now - (2 * WEEK_MS) && at < now - WEEK_MS;
+    }));
+    const names = new Set([
+        ...Object.keys(week.pairCounts),
+        ...Object.keys(prev.pairCounts),
+    ]);
+    let comparison = null;
+    names.forEach((pair) => {
+        const thisWeek = peopleCount(week, pair);
+        const weekBefore = peopleCount(prev, pair);
+        const gap = Math.abs(thisWeek - weekBefore);
+        if (!comparison || gap > comparison.gap) {
+            comparison = { pair, thisWeek, weekBefore, gap };
+        }
+    });
+    const recentPairs = Object.values(pairIndex)
+        .filter((pair) => pair && (pair.origin || pair.destination) && Number(pair.lastSeen || 0) >= now - RECENT_MS)
+        .sort((a, b) => Number(b.lastSeen || 0) - Number(a.lastSeen || 0))
+        .slice(0, 5)
+        .map((pair) => `${stationPlain(pair.origin)} to ${stationPlain(pair.destination)}`);
+    return {
+        sample: recent.sample,
+        usersInSample: recent.users,
+        usersEver: Number(usersEver) || 0,
+        pairsEver: Object.keys(pairIndex).length,
+        saturday: recent.saturday,
+        noSaturdayLine: recent.noSaturdayLine,
+        cato: recent.cato,
+        direct: recent.direct,
+        transfer: recent.transfer,
+        top: recent.top,
+        topRegion: recent.topRegion ? { code: recent.topRegion[0], count: recent.topRegion[1] } : null,
+        recentPairs,
+        dayCounts: recent.dayCounts,
+        weekPlans: week.sample,
+        prevWeekPlans: prev.sample,
+        weekPeople: week.users,
+        prevWeekPeople: prev.users,
+        comparison,
     };
 }
 
@@ -518,22 +627,46 @@ export function summarizeExpiring(items, now = Date.now()) {
     };
 }
 
+function comparisonSentence(row) {
+    if (!row) return '';
+    const { pair, thisWeek, weekBefore } = row;
+    if (thisWeek > weekBefore) {
+        return `More people searched ${pair} this week than the week before (${thisWeek} this week, ${weekBefore} the week before).`;
+    }
+    if (thisWeek < weekBefore) {
+        return `Fewer people searched ${pair} this week than the week before (${thisWeek} this week, ${weekBefore} the week before).`;
+    }
+    if (thisWeek) {
+        return `${pair} was searched by the same number of people this week and the week before (${thisWeek}).`;
+    }
+    return '';
+}
+
 function tripCard(summary) {
-    if (!summary.sample && !summary.pairsEver) {
+    const compared = comparisonSentence(summary.comparison);
+    if (!summary.sample && !summary.weekPlans && !summary.prevWeekPlans) {
         return {
             id: 'trips',
             kicker: 'Trip plans',
             tone: 'quiet',
-            title: 'No recent plans in this sample',
-            body: 'A phone sends a batch after 5 successful plans. The pair index is empty too, so there is nothing to prepare for yet.',
+            title: 'No plans in the last 48 hours',
+            body: compared || 'A phone sends a batch after 5 successful plans. Nothing in the last 48 hours, this week, or the week before.',
         };
     }
     const top = summary.top[0];
     const facts = [];
-    if (top) facts.push({ label: 'Most asked', value: `${top[0]} · ${top[1]} in this sample` });
-    else if (summary.sample) facts.push({ label: 'Sample', value: `${summary.sample} plans in the latest batches` });
-    if (summary.usersEver) facts.push({ label: 'People', value: `${summary.usersEver} have planned at least once` });
-    if (summary.saturday) facts.push({ label: 'Saturday', value: `${summary.saturday} plans in this sample` });
+    if (top) facts.push({ label: 'Most asked', value: `${top[0]} · ${top[1]} in the last 48 hours` });
+    else if (summary.sample) facts.push({ label: 'Last 48 hours', value: `${summary.sample} plans` });
+    facts.push({ label: 'This week', value: `${summary.weekPlans || 0} plans` });
+    facts.push({ label: 'Week before', value: `${summary.prevWeekPlans || 0} plans` });
+    if (summary.weekPeople || summary.prevWeekPeople) {
+        facts.push({
+            label: 'People',
+            value: `${summary.weekPeople || 0} searched this week, ${summary.prevWeekPeople || 0} the week before`,
+        });
+    }
+    if (compared) facts.push({ label: 'Compared', value: compared });
+    if (summary.saturday) facts.push({ label: 'Saturday', value: `${summary.saturday} plans in the last 48 hours` });
     if (summary.noSaturdayLine) {
         facts.push({
             label: 'No service',
@@ -547,16 +680,16 @@ function tripCard(summary) {
     }
     if (summary.topRegion) {
         const name = REGION_NAMES[summary.topRegion.code] || summary.topRegion.code;
-        facts.push({ label: name, value: `${summary.topRegion.count} of the plans in this sample` });
+        facts.push({ label: name, value: `${summary.topRegion.count} of the plans in the last 48 hours` });
     }
     return {
         id: 'trips',
         kicker: 'Trip plans',
         tone: summary.noSaturdayLine || summary.cato ? 'watch' : 'calm',
-        title: top ? top[0] : 'Plans in the latest batches',
+        title: top ? top[0] : 'Plans in the last 48 hours',
         body: facts.map((row) => `${row.label}: ${row.value}`).join('\n\n'),
         facts,
-        details: summary.top.map(([pair, count]) => `${pair} (${count})`).concat(summary.recentPairs || []),
+        details: summary.top.map(([pair, count]) => `${pair} (${count} in the last 48 hours)`).concat(summary.recentPairs || []),
     };
 }
 
@@ -716,7 +849,7 @@ function railCard(issues) {
 export function buildOperatorBrief(input = {}) {
     const now = Number(input.now) || Date.now();
     const clock = johannesburgClock(now);
-    const trips = summarizeTrips(input.trips, input.pairs, input.usersEver);
+    const trips = summarizeTrips(input.trips, input.pairs, input.usersEver, now);
     const fails = summarizeFails(input.fails, now);
     const fares = summarizeFares(input.fares);
     const crashes = summarizeCrashes(input.crashes, now);
@@ -896,6 +1029,23 @@ export function buildBriefRequest(digest) {
             thinkingConfig: { thinkingLevel: 'MINIMAL' },
         },
     };
+}
+
+/** A reading from the crash line itself, when the written note is not available. */
+export function localCrashReading(crash) {
+    const error = scrubOperatorText(crash?.error || crash?.preview || '', 400);
+    const version = String(crash?.appVersion || crash?.version || '').trim();
+    const versionBit = version ? ` This card is from ${version}.` : '';
+    const missing = error.match(/does not provide an export named ['"]([^'"]+)['"]/);
+    if (missing) {
+        return `The page asked for ${missing[1]}, and the module that loaded does not export it. That is a phone still holding an older page while a newer file arrived, or the other way around.${versionBit} The line above is the crash. A written note was not available.`;
+    }
+    const undef = error.match(/([A-Za-z_$][\w$]*) is not defined/);
+    if (undef) {
+        return `${undef[1]} was called, and this build does not define it.${versionBit} The line above is the crash. A written note was not available.`;
+    }
+    if (error) return `${error}${versionBit} A written note was not available, so this is the log itself.`;
+    return 'A reading is not available for this log yet. The line above is the crash.';
 }
 
 export function buildCrashExplainRequest(crash) {

@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_10.18.5': [
+        'Dark route names use a light edge. View full timetable stays off white in every dark pack, and Earthy uses a paper chip. Earthy full train sheet is blue with a cream corner, and the day pill opens the same schedule note as the header. Earthy Plan Trip, Close Timetable, Got it, and Reply keep a hard edge. Upcoming trains and Trip Planner Tips fade while more is below. Trip plans in the brief are the last 48 hours, with this week against the week before. Across the country is one card per region for the day rules, and standing notes sit in Others. Explain this crash reads the log when the written note is down. GPS lines are not restyled by Earthy. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_10.18.4': [
         'Route names and the GPS map lines use the colours on the official network maps. Naledi to Merafe is the light green line. Hercules to Koedoespoort is the pink Capital Park line. Cape Flats is brown, the Central line is cyan, Malmesbury is lime, and the Northern line is green. Umlazi and Bridge City are red, the South Coast is blue, Crossmoor is yellow, Cato Ridge is cyan, and Pinetown is maroon. Berlin is orange. No commuter What\'s New. forceShow stays false.',
     ],

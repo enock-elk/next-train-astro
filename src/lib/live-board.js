@@ -558,6 +558,41 @@ export function trainSheetOperatingLabel(dayType, routeId, trainId, now = Date.n
     return runs.map((d) => SHEET_DAY_SHORT[d]).join(', ');
 }
 
+const SHEET_DAY_FULL = {
+    Mon: 'Monday',
+    Tue: 'Tuesday',
+    Wed: 'Wednesday',
+    Thu: 'Thursday',
+    Fri: 'Friday',
+    Sat: 'Saturday',
+    Sun: 'Sunday',
+};
+
+/** Same day modal as the header chip, for the train on this sheet. */
+export function describeTrainSheetDayNote(dayType, routeId, trainId, now = Date.now()) {
+    const label = trainSheetOperatingLabel(dayType, routeId, trainId, now);
+    if (label === 'Saturdays') {
+        return { title: 'Saturday Schedule', body: 'This train runs on Saturdays.' };
+    }
+    if (label === 'Sundays') {
+        return { title: 'Sunday Schedule', body: 'This train is listed on the Sunday sheet.' };
+    }
+    if (label === 'Public Holidays') {
+        return { title: 'Public Holiday', body: 'This train runs on the public holiday sheet.' };
+    }
+    if (label === 'Special') {
+        return { title: 'Special Train', body: 'This train is a special working. It is not on the ordinary weekday pattern.' };
+    }
+    if (label === 'Weekdays') {
+        return { title: 'Weekday Schedule', body: 'This train runs on weekdays, Monday to Friday.' };
+    }
+    const names = String(label).split(',').map((part) => SHEET_DAY_FULL[part.trim()] || part.trim()).filter(Boolean);
+    const list = names.length > 1
+        ? `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`
+        : (names[0] || 'weekdays');
+    return { title: 'Weekday Schedule', body: `This train runs on ${list}.` };
+}
+
 /**
  * Generic Weekday chip (no picked date). A Mon/Fri-only ban does not remove
  * the train, because it still runs Tue–Thu. A ban with no days, or all of

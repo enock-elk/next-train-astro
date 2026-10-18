@@ -570,13 +570,13 @@ button#current-day:focus-visible {
 }
 
 /* Line colour on the route card. Yellow on white is about 2:1, so a slight
-   shadow gives the letters an edge. Dark cards already hold the gold; the
-   shadow there is only a soft lower edge, not a light halo. */
+   dark edge gives the letters a boundary. On a dark card that edge flips
+   to a light halo, or the colour sinks into the card. */
 #route-subtitle-text {
   text-shadow: 0 1px 0 rgba(15, 23, 42, 0.32);
 }
 html.dark #route-subtitle-text {
-  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.5);
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.72);
 }
 
 /* Brand-left header: solid pack primary */
@@ -619,13 +619,25 @@ html[data-colour-pack="contrast"] .bottom-nav-item.is-active {
   font-weight: 900;
 }
 
-/* Pack-tinted CTAs — rounded, inset, drop shadow; extra canvas gap above nav */
+/* Pack-tinted CTAs. A large soft shadow reads as a blurred bottom edge,
+   especially on Earthy's pale fill. A solid fill and a 1px edge stay crisp
+   in Classic and Earthy. */
 #locate-btn,
 #planner-locate-btn,
-#planner-search-btn {
+#planner-search-btn,
+#close-timetable-footer-btn,
+#close-help-btn-2,
+#close-modal-btn-2,
+#fare-modal-close-btn,
+#schedule-day-ok,
+#planner-train-sheet-close {
   background-color: var(--nt-primary) !important;
-  border-color: color-mix(in srgb, var(--nt-primary) 70%, #000) !important;
+  border: 1px solid color-mix(in srgb, var(--nt-primary) 70%, #000) !important;
   color: var(--nt-primary-fg) !important;
+  box-shadow: none !important;
+  filter: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
 }
 #locate-btn:hover,
 #planner-locate-btn:hover,
@@ -645,11 +657,33 @@ html[data-colour-pack="contrast"] .bottom-nav-item.is-active {
   background-color: color-mix(in srgb, var(--nt-primary) 20%, #fff) !important;
   color: var(--nt-primary) !important;
 }
-html[data-colour-pack="earthy"] #view-full-timetable-btn {
-  background-color: color-mix(in srgb, var(--nt-primary) 14%, #fff) !important;
-  color: var(--nt-primary) !important;
-  border-color: color-mix(in srgb, var(--nt-primary) 40%, #fff) !important;
-  box-shadow: none !important;
+/* Dark packs: mix against the card, not white, or Classic paints a white button. */
+html.dark #view-full-timetable-btn {
+  background-color: color-mix(in srgb, var(--nt-primary) 22%, var(--nt-surface)) !important;
+  color: var(--nt-text) !important;
+  border-color: color-mix(in srgb, var(--nt-primary) 42%, var(--nt-border)) !important;
+}
+html.dark #view-full-timetable-btn:hover {
+  background-color: color-mix(in srgb, var(--nt-primary) 34%, var(--nt-surface)) !important;
+  color: var(--nt-text) !important;
+}
+html[data-colour-pack="earthy"]:not(.dark) #view-full-timetable-btn {
+  background-color: #e7e1d4 !important;
+  color: #2a261f !important;
+  border-color: #c4baa6 !important;
+}
+html[data-colour-pack="earthy"]:not(.dark) #view-full-timetable-btn:hover {
+  background-color: #ddd6c6 !important;
+  color: #2a261f !important;
+}
+html[data-colour-pack="earthy"].dark #view-full-timetable-btn {
+  background-color: #3a342c !important;
+  color: #f5f1e9 !important;
+  border-color: #6a6458 !important;
+}
+html[data-colour-pack="earthy"].dark #view-full-timetable-btn:hover {
+  background-color: #4a4338 !important;
+  color: #f5f1e9 !important;
 }
 
 /* Pale --nt-blue-600 is the paper CTA wash. Labels (Zone, Saturday,
@@ -763,6 +797,24 @@ html.dark .nt-scroll-hint {
   background: linear-gradient(to bottom, rgba(0, 0, 0, 0), rgba(0, 0, 0, 0.5));
 }
 body.nav-bottom .nt-scroll-hint.is-on {
+  opacity: 1;
+}
+/* Same fade inside a sheet, only while that sheet still has more below. */
+.nt-sheet-shade {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2.25rem;
+  pointer-events: none;
+  z-index: 5;
+  opacity: 0;
+  background: linear-gradient(to bottom, rgba(15, 23, 42, 0), rgba(15, 23, 42, 0.2));
+}
+html.dark .nt-sheet-shade {
+  background: linear-gradient(to bottom, rgba(0, 0, 0, 0), rgba(0, 0, 0, 0.55));
+}
+.nt-sheet-shade.is-on {
   opacity: 1;
 }
 html.nt-keyboard .nt-scroll-hint {
@@ -1451,12 +1503,23 @@ body.nav-bottom:not(.nt-immersive) #sidenav {
   color: var(--nt-primary-fg) !important;
   border-color: transparent !important;
 }
-#close-timetable-footer-btn,
-#close-help-btn-2,
-#fare-modal-close-btn {
-  background-color: var(--nt-primary) !important;
-  color: var(--nt-primary-fg) !important;
-  border-color: transparent !important;
+html[data-colour-pack="earthy"] .nt-train-sheet-head {
+  background: linear-gradient(to bottom right, #1d4ed8 0%, #2563eb 58%, #efe6d4 100%) !important;
+  color: #ffffff;
+}
+html[data-colour-pack="earthy"] .nt-train-sheet-head #planner-train-sheet-day {
+  background: #efe6d4 !important;
+  color: #1e3a5f !important;
+}
+html[data-colour-pack="earthy"]:not(.dark) .nt-alert-reply {
+  background-color: #3a342c !important;
+  color: #f7f3eb !important;
+  border-color: #3a342c !important;
+}
+html[data-colour-pack="earthy"].dark .nt-alert-reply {
+  background-color: #efeae0 !important;
+  color: #2a261f !important;
+  border-color: #efeae0 !important;
 }
 html.dark #fare-modal > div,
 html.dark #fare-modal > div > .rounded-t-2xl,
@@ -1469,6 +1532,11 @@ html.dark #fare-modal > div > .rounded-b-2xl {
 }
 html.dark #planner-train-sheet-fare {
   background-color: #ffffff !important;
+  color: #1e3a8a !important;
+}
+html[data-colour-pack="earthy"] #planner-train-sheet-fare,
+html.dark[data-colour-pack="earthy"] #planner-train-sheet-fare {
+  background-color: #efe6d4 !important;
   color: #1e3a8a !important;
 }
 .nt-link-preview {

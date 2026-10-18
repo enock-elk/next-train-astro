@@ -24,7 +24,7 @@ import {
 } from './utils.js';
 import { planUnifiedTrip, extractTrainSheetStops } from './planner-core.js';
 import { noticeQuotePlain } from './feedback-quote.js';
-import { paintAdvisoryFrame, trainSheetOperatingLabel } from './live-board.js';
+import { describeTrainSheetDayNote, paintAdvisoryFrame, trainSheetOperatingLabel } from './live-board.js';
 import { saturdayNoServiceCopy, buildSaturdayAdvisoryCopy, stationDisplayName } from './saturday-service.js';
 import { buildPlannerShareUrl, buildRouteShareUrl, parsePlannerDeepLink, stripShareParamsFromUrl, compactTime, isSeoAppHandoff } from './share-links.js';
 import { consumeShareDeeplinkSnapshot, peekShareDeeplinkSnapshot, armSlowDeeplinkToast, lockShareBoot } from './deeplink.js';
@@ -2962,7 +2962,28 @@ export function openPlannerTrainSheet(routeId, trainId) {
             liveEl.classList.remove('hidden');
         }).catch(() => {});
     }
-    if (dayEl) dayEl.textContent = plannerSheetDayLabel(sheet.dayType, sheet.route?.id, sheet.trainId);
+    if (dayEl) {
+        dayEl.textContent = plannerSheetDayLabel(sheet.dayType, sheet.route?.id, sheet.trainId);
+        const note = describeTrainSheetDayNote(sheet.dayType, sheet.route?.id, sheet.trainId);
+        dayEl.onclick = (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            const kicker = document.getElementById('schedule-day-kicker');
+            const titleEl = document.getElementById('schedule-day-title');
+            const bodyEl = document.getElementById('schedule-day-body');
+            if (kicker) kicker.textContent = 'This train';
+            if (titleEl) titleEl.textContent = note.title || 'Schedule';
+            if (bodyEl) bodyEl.textContent = note.body || '';
+            const ok = document.getElementById('schedule-day-ok');
+            if (ok && ok.getAttribute('data-day-ok') !== '1') {
+                ok.setAttribute('data-day-ok', '1');
+                ok.addEventListener('click', () => {
+                    if (typeof closeSmoothModal === 'function') closeSmoothModal('schedule-day-modal');
+                });
+            }
+            if (typeof openSmoothModal === 'function') openSmoothModal('schedule-day-modal');
+        };
+    }
     const zone = resolvePlannerRouteZone(sheet.route.id);
     const detailed = zone && FARE_CONFIG.zones_detailed?.[zone];
     if (fareEl) {

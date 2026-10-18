@@ -34,8 +34,9 @@ assert(css.includes('#route-list a.text-blue-700.bg-blue-50'), 'Earthy light sel
 assert(css.includes('#telemetry-region-modal .bg-blue-50'), 'Earthy Gauteng tile is paper and charcoal');
 assert(!/html\[data-colour-pack="classic"\][^{]*\.bg-blue-600/.test(css), 'Classic blue-600 buttons are not restyled');
 assert(!/html\[data-colour-pack="classic"\][^{]*#planner-swap-btn/.test(css), 'Classic planner swap is not restyled');
-assert(/html\[data-colour-pack="earthy"\] #view-full-timetable-btn/.test(css), 'Earthy timetable button stays a light control');
-assert(/html\[data-colour-pack="earthy"\] #view-full-timetable-btn\s*\{[\s\S]*?box-shadow:\s*none/.test(css), 'Earthy timetable button has no halo');
+assert(/html\[data-colour-pack="earthy"\]:not\(\.dark\) #view-full-timetable-btn/.test(css), 'Earthy timetable button is a paper chip');
+assert(/html\.dark #view-full-timetable-btn/.test(css), 'dark timetable button does not mix against white');
+assert(/html\[data-colour-pack="earthy"\]\.dark #view-full-timetable-btn/.test(css), 'Earthy dark timetable button is its own chip');
 assert(/#view-full-timetable-btn\s*\{[\s\S]*?box-shadow:\s*none/.test(css), 'timetable button has no glow');
 assert(!css.includes('data-colour-pack="ember"'), 'Ember pack CSS is gone');
 assert(/\.text-gray-400,[\s\S]*?--nt-text-faint/.test(css), 'gray-400 maps to faint, not muted');
@@ -64,7 +65,7 @@ assert(css.includes('color-mix(in srgb, var(--nt-chrome-fg) 45%, transparent)'),
 assert(!css.includes('color-mix(in srgb, var(--nt-chrome-fg) 70%, transparent)'), 'inactive tabs are not 70% white');
 assert(!css.includes('#bottom-nav .bottom-nav-item.is-active::before'), 'active tab has no top bar');
 assert(/#route-subtitle-text \{\s*text-shadow: 0 1px 0 rgba\(15, 23, 42, 0\.32\);/.test(css), 'route name has a slight shadow on light cards');
-assert(/html\.dark #route-subtitle-text \{\s*text-shadow: 0 1px 1px rgba\(0, 0, 0, 0\.5\);/.test(css), 'route name shadow stays a soft edge on dark cards');
+assert(/html\.dark #route-subtitle-text \{\s*text-shadow: 0 1px 0 rgba\(255, 255, 255, 0\.72\);/.test(css), 'route name shadow flips to a light edge on dark cards');
 assert(/#bottom-nav\.bottom-nav-bar \{[\s\S]*?border-radius: 0;/.test(css), 'bottom nav is rectangular');
 assert(css.includes('#current-day'), 'day label letter-spacing rule present');
 

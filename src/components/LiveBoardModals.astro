@@ -46,7 +46,7 @@
 
 <!-- UPCOMING TRAINS / SCHEDULE MODAL -->
 <div id="schedule-modal" class="fixed inset-0 bg-black bg-opacity-70 z-[125] hidden flex items-center justify-center p-4 backdrop-blur-sm transition-opacity duration-300">
-    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-md max-h-[95dvh] flex flex-col transform transition-transform duration-300 scale-95" id="modal-content">
+    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-md max-h-[95dvh] flex flex-col overflow-hidden transform transition-transform duration-300 scale-95" id="modal-content">
         <div class="p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-start gap-2 bg-gray-50 dark:bg-gray-900 rounded-t-xl">
             <h3 id="modal-title" class="min-w-0 flex-1 text-lg font-bold text-gray-900 dark:text-white leading-tight">
                 <span id="modal-title-route" class="block whitespace-nowrap overflow-hidden">Full Schedule</span>
@@ -56,7 +56,10 @@
                 <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
             </button>
         </div>
-        <div id="modal-list" class="p-2 overflow-y-auto flex-grow space-y-2 bg-gray-100 dark:bg-gray-800"></div>
+        <div class="relative min-h-0">
+            <div id="modal-list" class="max-h-[62dvh] p-2 overflow-y-auto space-y-2 bg-gray-100 dark:bg-gray-800"></div>
+            <div class="nt-sheet-shade" data-shade-for="modal-list" aria-hidden="true"></div>
+        </div>
         <div class="p-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 rounded-b-xl">
             <button id="close-modal-btn-2" type="button" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg shadow-md transition-colors">Close</button>
         </div>

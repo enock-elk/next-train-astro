@@ -343,44 +343,44 @@ export function exclusionAppliesToSurface(rule, surface = 'in_app') {
  */
 export function lineSwatchClass(colorClass, kind = 'bg') {
     const c = String(colorClass || '');
-    if (kind === 'border') {
-        if (c.includes('#937e3b')) return 'border-[#937e3b]';
-        if (c.includes('#887c4c')) return 'border-[#887c4c]';
-        if (c.includes('pink')) return 'border-pink-600';
-        if (c.includes('sky-700') || c.includes('sky-800')) return 'border-sky-700';
-        if (c.includes('sky')) return 'border-sky-500';
-        if (c.includes('green-800')) return 'border-green-800';
-        if (c.includes('green-600')) return 'border-green-600';
-        if (c.includes('lime')) return 'border-lime-500';
-        if (c.includes('green')) return 'border-green-500';
-        if (c.includes('orange')) return 'border-orange-500';
-        if (c.includes('purple')) return 'border-purple-500';
-        if (c.includes('indigo')) return 'border-indigo-500';
-        if (c.includes('yellow-600')) return 'border-yellow-600';
-        if (c.includes('yellow')) return 'border-yellow-500';
-        if (c.includes('red-600')) return 'border-red-600';
-        if (c.includes('red')) return 'border-red-500';
-        if (c.includes('blue')) return 'border-blue-500';
-        return 'border-gray-400';
-    }
-    if (c.includes('#937e3b')) return 'bg-[#937e3b]';
-    if (c.includes('#887c4c')) return 'bg-[#887c4c]';
-    if (c.includes('pink')) return 'bg-pink-600';
-    if (c.includes('sky-700') || c.includes('sky-800')) return 'bg-sky-700';
-    if (c.includes('sky')) return 'bg-sky-500';
-    if (c.includes('green-800')) return 'bg-green-800';
-    if (c.includes('green-600')) return 'bg-green-600';
-    if (c.includes('lime')) return 'bg-lime-500';
-    if (c.includes('green')) return 'bg-green-500';
-    if (c.includes('orange')) return 'bg-orange-500';
-    if (c.includes('purple')) return 'bg-purple-500';
-    if (c.includes('indigo')) return 'bg-indigo-500';
-    if (c.includes('yellow-600')) return 'bg-yellow-600';
-    if (c.includes('yellow')) return 'bg-yellow-500';
-    if (c.includes('red-600')) return 'bg-red-600';
-    if (c.includes('red')) return 'bg-red-500';
-    if (c.includes('blue')) return 'bg-blue-500';
-    return 'bg-gray-400';
+    const border = kind === 'border';
+    if (c.includes('#937e3b')) return border ? 'border-[#937e3b]' : 'bg-[#937e3b]';
+    if (c.includes('#ec008c')) return border ? 'border-[#ec008c]' : 'bg-[#ec008c]';
+    if (c.includes('#f58220')) return border ? 'border-[#f58220]' : 'bg-[#f58220]';
+    if (c.includes('#f5821f')) return border ? 'border-[#f5821f]' : 'bg-[#f5821f]';
+    if (c.includes('#00b9f1')) return border ? 'border-[#00b9f1]' : 'bg-[#00b9f1]';
+    if (c.includes('#0071bb')) return border ? 'border-[#0071bb]' : 'bg-[#0071bb]';
+    if (c.includes('#ed262e')) return border ? 'border-[#ed262e]' : 'bg-[#ed262e]';
+    if (c.includes('#ee1a24')) return border ? 'border-[#ee1a24]' : 'bg-[#ee1a24]';
+    if (c.includes('#ee2f33')) return border ? 'border-[#ee2f33]' : 'bg-[#ee2f33]';
+    if (c.includes('#036630')) return border ? 'border-[#036630]' : 'bg-[#036630]';
+    if (c.includes('#00a651')) return border ? 'border-[#00a651]' : 'bg-[#00a651]';
+    if (c.includes('#00a650')) return border ? 'border-[#00a650]' : 'bg-[#00a650]';
+    if (c.includes('#a9cf41')) return border ? 'border-[#a9cf41]' : 'bg-[#a9cf41]';
+    if (c.includes('#a6ce38')) return border ? 'border-[#a6ce38]' : 'bg-[#a6ce38]';
+    if (c.includes('#8f5644')) return border ? 'border-[#8f5644]' : 'bg-[#8f5644]';
+    if (c.includes('#00b9f3')) return border ? 'border-[#00b9f3]' : 'bg-[#00b9f3]';
+    if (c.includes('#2d88c7')) return border ? 'border-[#2d88c7]' : 'bg-[#2d88c7]';
+    if (c.includes('#fad561')) return border ? 'border-[#fad561]' : 'bg-[#fad561]';
+    if (c.includes('#0abcf2')) return border ? 'border-[#0abcf2]' : 'bg-[#0abcf2]';
+    if (c.includes('#6f2729')) return border ? 'border-[#6f2729]' : 'bg-[#6f2729]';
+    if (c.includes('#887c4c')) return border ? 'border-[#887c4c]' : 'bg-[#887c4c]';
+    if (c.includes('pink')) return border ? 'border-pink-600' : 'bg-pink-600';
+    if (c.includes('sky-700') || c.includes('sky-800')) return border ? 'border-sky-700' : 'bg-sky-700';
+    if (c.includes('sky')) return border ? 'border-sky-500' : 'bg-sky-500';
+    if (c.includes('green-800')) return border ? 'border-green-800' : 'bg-green-800';
+    if (c.includes('green-600')) return border ? 'border-green-600' : 'bg-green-600';
+    if (c.includes('lime')) return border ? 'border-lime-500' : 'bg-lime-500';
+    if (c.includes('green')) return border ? 'border-green-500' : 'bg-green-500';
+    if (c.includes('orange')) return border ? 'border-orange-500' : 'bg-orange-500';
+    if (c.includes('purple')) return border ? 'border-purple-500' : 'bg-purple-500';
+    if (c.includes('indigo')) return border ? 'border-indigo-500' : 'bg-indigo-500';
+    if (c.includes('yellow-600')) return border ? 'border-yellow-600' : 'bg-yellow-600';
+    if (c.includes('yellow')) return border ? 'border-yellow-500' : 'bg-yellow-500';
+    if (c.includes('red-600')) return border ? 'border-red-600' : 'bg-red-600';
+    if (c.includes('red')) return border ? 'border-red-500' : 'bg-red-500';
+    if (c.includes('blue')) return border ? 'border-blue-500' : 'bg-blue-500';
+    return border ? 'border-gray-400' : 'bg-gray-400';
 }
 
 /** HTML route label with SVG arrow between corridor ends. */

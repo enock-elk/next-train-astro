@@ -3,7 +3,7 @@
  * Run: node scripts/verify-home-polish.mjs
  */
 import { readFileSync } from 'node:fs';
-import { warningTriangleSvg, expandJhbLabel, applyFittedLabel } from '../src/lib/utils.js';
+import { warningTriangleSvg, expandJhbLabel, applyFittedLabel, lineSwatchClass } from '../src/lib/utils.js';
 import { APP_VERSION, CHANGELOG_DATA, FARE_CONFIG, FORCE_UPDATE_REQUIRED, ROUTES } from '../src/lib/config.js';
 import {
     collectHubOnwardOptions,
@@ -460,15 +460,37 @@ assert(hubModals.includes('placeholder="Email or WhatsApp for a reply"'), 'Hub c
 assert(hubModals.includes('id="messages-thread-contact-toggle"'), 'Hub contact sits in a row above the message');
 assert(hubModals.includes('padding-bottom: max(0.75rem, var(--nt-sys-bottom, env(safe-area-inset-bottom, 0px)));'), 'Hub composer sits on the bottom edge');
 assert(ROUTES['pta-pien'].colorClass === 'text-[#937e3b]', 'Pienaarspoort uses the Rissik to Hartbeesspruit olive');
-assert(ROUTES['pta-dewildt'].colorClass === 'text-orange-500' && ROUTES['pta-mabopane'].colorClass === 'text-orange-500', 'De Wildt shares the orange north line');
-assert(ROUTES['herc-koed'].colorClass === 'text-[#887c4c]', 'Hercules to Koedoespoort uses the olive line');
-assert(ROUTES['pta-saul'].colorClass === 'text-sky-500', 'Saulsville uses the light blue line');
-assert(ROUTES['jhb-rand'].colorClass === 'text-green-600', 'Randfontein uses the green line');
-assert(ROUTES['jhb-soweto'].colorClass === 'text-pink-600', 'Naledi uses the magenta line');
-assert(ROUTES['jhb-midway'].colorClass === 'text-green-800', 'Lenz uses the dark green line');
-assert(ROUTES['germ-kwesine'].colorClass === 'text-red-600', 'Kwesine uses the red line');
-assert(ROUTES['pta-irene'].colorClass === 'text-sky-700' && ROUTES['pta-kempton'].colorClass === 'text-sky-700' && ROUTES['germ-leralla'].colorClass === 'text-sky-700', 'Irene, Kempton Park, and Leralla use the blue line');
-assert(ROUTES['ct-malm'].colorClass === 'text-lime-500', 'Western Cape Malmesbury colour stays');
+assert(ROUTES['pta-dewildt'].colorClass === 'text-[#f58220]' && ROUTES['pta-mabopane'].colorClass === 'text-[#f58220]' && ROUTES['mab-belle'].colorClass === 'text-[#f58220]', 'De Wildt, Mabopane, and Belle Ombre share the orange north line');
+assert(ROUTES['herc-koed'].colorClass === 'text-[#ec008c]', 'Hercules to Koedoespoort uses the Capital Park pink line');
+assert(ROUTES['pta-saul'].colorClass === 'text-[#00b9f1]', 'Saulsville uses the light blue line');
+assert(ROUTES['jhb-rand'].colorClass === 'text-[#00a651]', 'Randfontein uses the green line');
+assert(ROUTES['jhb-soweto'].colorClass === 'text-[#a9cf41]', 'Naledi to Merafe uses the light green line');
+assert(ROUTES['jhb-midway'].colorClass === 'text-[#036630]', 'Lenz uses the dark green line');
+assert(ROUTES['germ-kwesine'].colorClass === 'text-[#ed262e]' && ROUTES['jhb-germiston'].colorClass === 'text-[#ed262e]', 'Kwesine and Germiston use the red line');
+assert(ROUTES['pta-irene'].colorClass === 'text-[#0071bb]' && ROUTES['pta-kempton'].colorClass === 'text-[#0071bb]' && ROUTES['germ-leralla'].colorClass === 'text-[#0071bb]', 'Irene, Kempton Park, and Leralla use the blue line');
+assert(ROUTES['ct-malm'].colorClass === 'text-[#a6ce38]', 'Malmesbury uses the lime Worcester line');
+assert(ROUTES['ct-simon'].colorClass === 'text-[#ee1a24]', 'Simon\'s Town uses the Southern red line');
+assert(ROUTES['ct-flats'].colorClass === 'text-[#8f5644]', 'Retreat uses the Cape Flats brown line');
+assert(ROUTES['ct-chrishani'].colorClass === 'text-[#00b9f3]' && ROUTES['ct-kapteinsklip'].colorClass === 'text-[#00b9f3]' && ROUTES['ct-nolu'].colorClass === 'text-[#00b9f3]', 'Chris Hani, Kapteinsklip, and Nolungile use the Central cyan line');
+assert(ROUTES['ct-bellv'].colorClass === 'text-[#00a650]' && ROUTES['ct-well'].colorClass === 'text-[#00a650]' && ROUTES['ct-strnd'].colorClass === 'text-[#00a650]' && ROUTES['eerst-dtoit'].colorClass === 'text-[#00a650]', 'Bellville, Wellington, Strand, and Du Toit use the Northern green line');
+assert(ROUTES['kzn-umlazi'].colorClass === 'text-[#ee2f33]' && ROUTES['kzn-bridgecity'].colorClass === 'text-[#ee2f33]', 'Umlazi and Bridge City use the kwaMashu red line');
+assert(ROUTES['kzn-winklespruit'].colorClass === 'text-[#2d88c7]', 'Winklespruit uses the South Coast blue line');
+assert(ROUTES['kzn-crossmoor'].colorClass === 'text-[#fad561]', 'Crossmoor uses the yellow line');
+assert(ROUTES['kzn-catoridge'].colorClass === 'text-[#0abcf2]', 'Cato Ridge uses the New Main cyan line');
+assert(ROUTES['kzn-pinetown'].colorClass === 'text-[#6f2729]', 'Pinetown uses the Old Main maroon line');
+assert(ROUTES['ec-berlin'].colorClass === 'text-[#f5821f]', 'Berlin uses the orange line');
+{
+    const mapApp = readFileSync(new URL('../public/js/map-app.js', import.meta.url), 'utf8');
+    Object.values(ROUTES).forEach((route) => {
+        if (!route.isActive) return;
+        const hex = String(route.colorClass).match(/#([0-9a-fA-F]{6})/);
+        assert(hex, `${route.id} colour is a map hex`);
+        assert(mapApp.includes(`'${route.colorClass}': '#${hex[1]}'`), `${route.id} GPS line uses ${route.colorClass}`);
+        const swatch = lineSwatchClass(route.colorClass, 'bg');
+        assert(swatch === `bg-[#${hex[1]}]`, `${route.id} route stripe uses ${swatch}`);
+    });
+    assert(mapApp.includes("color: '#00a650'"), 'Maitland to Mutual uses the Northern green line');
+}
 assert(!hubModals.includes('#messages-thread-form {\n    flex-shrink: 0;\n    background: transparent;\n    border-top: 0;\n    padding-bottom: calc(var(--nt-nav-h'), 'Hub composer does not reserve a bar-sized gap');
 assert(hubModals.includes('id="messages-thread-input" rows="2"'), 'Hub message box starts at two rows');
 assert(/id="messages-thread-close"[\s\S]{0,400}M15 19l-7-7 7-7/.test(hubModals), 'Feedback Hub close is the back chevron');

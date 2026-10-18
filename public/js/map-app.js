@@ -1519,14 +1519,34 @@
 
             // --- DYNAMIC ROUTE & STATION EXTRACTOR ---
             const colorMap = {
+                'text-[#937e3b]': '#937e3b',
+                'text-[#ec008c]': '#ec008c',
+                'text-[#f58220]': '#f58220',
+                'text-[#f5821f]': '#f5821f',
+                'text-[#00b9f1]': '#00b9f1',
+                'text-[#0071bb]': '#0071bb',
+                'text-[#ed262e]': '#ed262e',
+                'text-[#ee1a24]': '#ee1a24',
+                'text-[#ee2f33]': '#ee2f33',
+                'text-[#036630]': '#036630',
+                'text-[#00a651]': '#00a651',
+                'text-[#00a650]': '#00a650',
+                'text-[#a9cf41]': '#a9cf41',
+                'text-[#a6ce38]': '#a6ce38',
+                'text-[#8f5644]': '#8f5644',
+                'text-[#00b9f3]': '#00b9f3',
+                'text-[#2d88c7]': '#2d88c7',
+                'text-[#fad561]': '#fad561',
+                'text-[#0abcf2]': '#0abcf2',
+                'text-[#6f2729]': '#6f2729',
+                'text-yellow-500': '#eab308',
                 'text-green-500': '#22c55e',
-                'text-lime-500': '#84cc16', 
+                'text-lime-500': '#84cc16',
                 'text-orange-500': '#f97316',
                 'text-purple-500': '#a855f7',
                 'text-indigo-500': '#6366f1',
                 'text-blue-500': '#3b82f6',
-                'text-yellow-600': '#ca8a04', 
-                'text-yellow-500': '#eab308',
+                'text-yellow-600': '#ca8a04',
                 'text-red-500': '#ef4444'
             };
 
@@ -1859,7 +1879,7 @@
                     drawnRoutes.push({
                         routeId: 'wc-maitland-mutual',
                         name: 'Maitland ↔ Mutual',
-                        color: '#22c55e',
+                        color: '#00a650',
                         isActive: true,
                         coords: [mai, mut],
                         validStops: [

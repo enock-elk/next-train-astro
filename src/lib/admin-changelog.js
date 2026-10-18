@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_10.18.4': [
+        'Route names and the GPS map lines use the colours on the official network maps. Naledi to Merafe is the light green line. Hercules to Koedoespoort is the pink Capital Park line. Cape Flats is brown, the Central line is cyan, Malmesbury is lime, and the Northern line is green. Umlazi and Bridge City are red, the South Coast is blue, Crossmoor is yellow, Cato Ridge is cyan, and Pinetown is maroon. Berlin is orange. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_10.18.3': [
         'A YouTube or Vimeo link in an alert shows the preview picture, the same still an embed shows before play. The player is not loaded until Play video. A direct video file still waits for that tap. No commuter What\'s New. forceShow stays false.',
     ],

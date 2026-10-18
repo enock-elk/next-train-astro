@@ -1249,15 +1249,16 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
         transform: scale(0.95);
       }
 
-      /* Compact header (returning users) — slim WhatsApp-style bar */
+      /* Compact header still follows screen height. A fixed 2rem wordmark
+         stayed tall on a short phone. */
       .chrome-compact .app-header,
       body.chrome-compact .app-header {
-        padding-top: 0.45rem !important;
-        padding-bottom: 0.45rem !important;
+        padding-top: clamp(0.16rem, 0.55dvh, 0.4rem) !important;
+        padding-bottom: clamp(0.12rem, 0.45dvh, 0.32rem) !important;
       }
       .chrome-compact .header-title,
       body.chrome-compact .header-title {
-        font-size: 2rem !important;
+        font-size: clamp(1.25rem, 3.7dvh, 2rem) !important;
         letter-spacing: -0.035em !important;
       }
 

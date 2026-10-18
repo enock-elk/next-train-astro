@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_10.18.7': [
+        'Full train sheet, Trip Planner Tips, and the upcoming list fill the screen, so a long list is not stuck in a short card with empty space underneath. The blue header wordmark, padding, and bell track the screen height. Sunday No Service is a red status pill on the day button. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_10.18.6': [
         'The full train sheet fades while more stops are below. Opening Add contact details for a reply focuses that field so the keyboard stays up. Dark floating sheets keep a light rim, because the header was the same navy as the page. Dark route names stay the line colour, lightened so olive and the other map colours can be read on the navy card. No grey title and no dot. No commuter What\'s New. forceShow stays false.',
     ],

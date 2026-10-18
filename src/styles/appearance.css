@@ -553,12 +553,18 @@ html.dark #bottom-nav .bottom-nav-item.is-active {
 button#current-day {
   appearance: none;
   -webkit-appearance: none;
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
   margin: 0;
-  padding: 0 0.4rem;
-  border: 0;
+  padding: 0.08rem 0.12rem 0.08rem 0.48rem;
+  border: 1px solid color-mix(in srgb, var(--nt-chrome-fg) 36%, transparent);
   border-radius: 999px;
-  background: color-mix(in srgb, var(--nt-chrome-fg) 14%, transparent);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--nt-chrome-fg) 20%, transparent),
+    color-mix(in srgb, var(--nt-chrome-fg) 8%, transparent)
+  );
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--nt-chrome-fg) 34%, transparent);
   text-align: left;
   cursor: pointer;
   max-width: 100%;
@@ -1070,10 +1076,37 @@ html.dark .nt-offline-strip {
   white-space: nowrap;
 }
 
-/* Keep header chrome (menu / bell) below app modals */
+/* Keep header chrome (menu / bell) below app modals.
+   The blue bar tracks screen height so a short phone does not lose the board
+   to a fixed wordmark. */
 #app-header {
   position: relative;
   z-index: 10;
+  padding-top: clamp(0.2rem, 0.7dvh, 0.5rem) !important;
+  padding-bottom: clamp(0.16rem, 0.55dvh, 0.4rem) !important;
+}
+#app-title.header-title {
+  font-size: clamp(1.35rem, 4.15dvh, 2.35rem) !important;
+  line-height: 0.92;
+}
+body.chrome-compact #app-title.header-title,
+.chrome-compact #app-title.header-title {
+  font-size: clamp(1.25rem, 3.7dvh, 2rem) !important;
+}
+body.chrome-compact #app-header,
+.chrome-compact #app-header {
+  padding-top: clamp(0.16rem, 0.55dvh, 0.4rem) !important;
+  padding-bottom: clamp(0.12rem, 0.45dvh, 0.32rem) !important;
+}
+#app-header .header-meta {
+  margin-top: clamp(0.08rem, 0.35dvh, 0.22rem);
+}
+#app-header #notice-bell {
+  padding: clamp(0.22rem, 0.55dvh, 0.4rem);
+}
+#app-header #notice-bell svg {
+  width: clamp(1.1rem, 2.5dvh, 1.5rem);
+  height: clamp(1.1rem, 2.5dvh, 1.5rem);
 }
 
 /* The alerts bell stays the same icon. The header stays a flat colour. */
@@ -2301,11 +2334,43 @@ html[data-colour-pack="classic"] #current-day span:not(.text-red-600):not(.dark\
 html:not([data-colour-pack]) #current-day span:not(.text-red-600):not(.dark\:text-red-400) {
   color: var(--nt-chrome-muted) !important;
 }
-/* Same No Service red in light and dark. Classic light used red-600
-   (#dc2626) that fought the blue header; match dark red-400 (#f87171). */
-#current-day span.text-red-600,
-html.dark #current-day span.text-red-600,
-html.dark #current-day span.dark\:text-red-400 {
+/* Weekday and Saturday sit in a quiet capsule. No Service is a solid
+   status pill: white type on red, with a small light. Pale red type on
+   the blue bar was too faint. SEO pages keep the pale red on a paragraph. */
+html[data-colour-pack="classic"] button#current-day span:not(.text-red-600):not(.dark\:text-red-400),
+html:not([data-colour-pack]) button#current-day span:not(.text-red-600):not(.dark\:text-red-400) {
+  color: var(--nt-chrome-fg) !important;
+  margin-left: 0.12rem;
+  padding: 0.05rem 0.42rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--nt-chrome-fg) 16%, transparent);
+}
+button#current-day span.text-red-600,
+html.dark button#current-day span.text-red-600,
+html.dark button#current-day span.dark\:text-red-400 {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.28rem;
+  margin-left: 0.16rem;
+  padding: 0.06rem 0.46rem 0.06rem 0.32rem;
+  border-radius: 999px;
+  background: #e11d48;
+  color: #fff !important;
+  letter-spacing: 0.035em;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 1px 1px rgba(0, 0, 0, 0.22);
+}
+button#current-day span.text-red-600::before,
+html.dark button#current-day span.dark\:text-red-400::before {
+  content: "";
+  width: 0.32rem;
+  height: 0.32rem;
+  border-radius: 999px;
+  background: #fff;
+  box-shadow: 0 0 0 1.5px rgba(255, 255, 255, 0.35);
+}
+p#current-day span.text-red-600,
+html.dark p#current-day span.text-red-600,
+html.dark p#current-day span.dark\:text-red-400 {
   color: #f87171 !important;
 }
 
@@ -2337,13 +2402,22 @@ html.dark:not([data-colour-pack]) #bottom-nav .bottom-nav-item.is-active {
    sheets, and this pair (4.5rem of padding plus a card capped at
    --nt-app-h - 5.5rem) is what left a blank slab below their content. The Hub
    slab closed after a keyboard cycle only because the IME hid the URL bar,
-   which grows --nt-app-h enough for the cap to clear the sheet. */
-[id$="-modal"].fixed:not(.full-screen):not(#welcome-modal):not(#blackbox-modal):not(#messages-thread-modal):not(#account-modal):not(#admin-reply-modal),
+   which grows --nt-app-h enough for the cap to clear the sheet.
+   The full train sheet, Trip Planner Tips, and the upcoming list also skip it.
+   Their lists are taller than the card, and the reserved band was empty space
+   under a scrim that already covers the nav. A safe-area inset still keeps
+   Close above the home indicator. */
+#planner-train-sheet-modal,
+#help-modal,
+#schedule-modal {
+  padding-bottom: max(0.5rem, env(safe-area-inset-bottom, 0px));
+}
+[id$="-modal"].fixed:not(.full-screen):not(#welcome-modal):not(#blackbox-modal):not(#messages-thread-modal):not(#account-modal):not(#admin-reply-modal):not(#planner-train-sheet-modal):not(#help-modal):not(#schedule-modal),
 #nt-on-train-sheet {
   padding-bottom: calc(4.5rem + var(--nt-sys-bottom, env(safe-area-inset-bottom, 0px)));
   box-sizing: border-box;
 }
-[id$="-modal"].fixed:not(.full-screen):not(#welcome-modal):not(#blackbox-modal):not(#messages-thread-modal):not(#account-modal):not(#admin-reply-modal) > div,
+[id$="-modal"].fixed:not(.full-screen):not(#welcome-modal):not(#blackbox-modal):not(#messages-thread-modal):not(#account-modal):not(#admin-reply-modal):not(#planner-train-sheet-modal):not(#help-modal):not(#schedule-modal) > div,
 #nt-on-train-sheet > div {
   max-height: calc(var(--nt-app-h, 100dvh) - 5.5rem - var(--nt-sys-bottom, env(safe-area-inset-bottom, 0px))) !important;
 }

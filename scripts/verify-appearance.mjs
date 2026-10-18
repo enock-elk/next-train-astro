@@ -87,10 +87,13 @@ assert(!logic.includes('titlePx * 0.55'), 'day line is not scaled as a second he
 assert(!/#current-day,[\s\S]{0,220}font-size: 2\.55rem/.test(css), 'day line no longer defaults to the title size');
 assert(!css.includes('#current-day span {\n  font-weight: inherit'), 'day line span no longer inherits the title color');
 assert(!css.includes('color: #fecaca !important'), 'Classic No Service is not peach-red');
-assert(css.includes('#current-day span.text-red-600'), 'No Service targets the red-600 span');
-assert(css.includes('color: #f87171 !important;'), 'No Service uses dark-mode red-400 in light and dark');
+assert(css.includes('button#current-day span.text-red-600'), 'No Service targets the day button');
+assert(css.includes('background: #e11d48'), 'No Service is a solid red status pill');
+assert(css.includes('color: #fff !important;'), 'No Service pill uses white type');
+assert(css.includes('color: #f87171 !important;'), 'SEO day line keeps pale red');
 assert(!/#current-day span\.text-red-600[\s\S]{0,180}color:\s*#dc2626 !important;/.test(css), 'No Service no longer uses red-600 on Classic light');
-assert(css.includes('html.dark #current-day span.text-red-600'), 'dark No Service uses one red-400');
+assert(css.includes('html.dark button#current-day span.text-red-600'), 'dark No Service uses the same pill');
+assert(css.includes('clamp(1.35rem, 4.15dvh, 2.35rem)'), 'header wordmark tracks screen height');
 assert(css.includes('color: var(--nt-chrome-muted) !important'), 'Classic Sunday stays muted chrome, not white');
 assert(css.includes('#notice-bell.nt-bell-info {\n  background-color: #ffffff !important;'), 'info bell is a white disc on every pack');
 assert(css.includes('html.dark #notice-bell.nt-bell-info {\n  background-color: #ffffff !important;'), 'dark info bell keeps a white disc');
@@ -105,7 +108,7 @@ assert(header.includes('w-6 h-6'), 'header bell icon is 24px');
 assert(header.includes('text-[11px] sm:text-xs font-medium'), 'Header day line uses the original subtitle face');
 assert(header.includes('<button type="button" id="current-day"'), 'the day line is a button');
 assert(css.includes('button#current-day'), 'the day line reads as a control');
-assert(css.includes('color: #f87171 !important;'), 'No Service stays pale red on the day button');
+assert(css.includes('background: #e11d48'), 'No Service stays a red pill on the day button');
 assert(!header.includes('header-day-label'), 'Header day line is not a second bold title');
 assert(header.includes('fitHeaderDayLabel') || logic.includes('fitHeaderDayLabel'), 'day line fit helper is present');
 
@@ -239,6 +242,9 @@ assert(planner.includes('min-h-[32px]'), 'planner results toolbar row is the old
 assert(plannerUi.includes('h-8') && plannerUi.includes('text-xs font-bold'), 'planner weekday and Share use the same 2rem text-xs pill');
 
 const plannerModals = readFileSync(new URL('../src/components/PlannerModals.astro', import.meta.url), 'utf8');
+assert(plannerModals.includes('id="planner-train-sheet-modal"') && plannerModals.includes('flex-1 min-h-0 flex flex-col'), 'full train sheet fills the screen');
+assert(!plannerModals.includes('h-[min(96dvh,100%)]'), 'full train sheet is not capped short of the screen');
+assert(!plannerModals.includes('max-h-[58dvh]'), 'trip planner tips are not capped short of the card');
 assert(plannerModals.includes('id="close-help-btn"') && plannerModals.includes('text-gray-700 dark:text-gray-200'), 'Tips close uses ink on a chip');
 assert(!plannerModals.includes('text-gray-50 hover:text-gray-700'), 'Tips close is not white-on-white');
 
@@ -309,6 +315,7 @@ assert(css.includes('.nt-train-flag'), 'train flags are CSS-gated');
 assert(css.includes('html[data-admin-authed="1"] .nt-train-flag'), 'train flags only show after admin auth');
 assert(css.includes('html:not([data-admin-authed="1"]) #ride-nearby-btn'), 'Trains near you hidden unless admin authed');
 assert(css.includes('padding-bottom: calc(4.5rem + var(--nt-sys-bottom, env(safe-area-inset-bottom, 0px)))'), 'non-fullscreen modals clear the bottom nav');
+assert(css.includes(':not(#planner-train-sheet-modal):not(#help-modal):not(#schedule-modal)'), 'tall sheets are not held short above the nav');
 assert(css.includes('--nt-sys-bottom'), 'appearance defines --nt-sys-bottom');
 assert(css.includes('max-height: 620px'), 'very short screens ease the bottom nav');
 assert(css.includes('--nt-chrome-nav-active'), 'active tab uses --nt-chrome-nav-active');
@@ -332,6 +339,8 @@ assert(ridePings.includes('shareReachedTerminus'), 'share ends at the last stati
 assert(ridePings.includes('RIDE_SHARE_IDLE_MS = 10 * 60 * 1000'), 'ride ping idle TTL is 10 minutes');
 
 const liveBoardModals = readFileSync(new URL('../src/components/LiveBoardModals.astro', import.meta.url), 'utf8');
+assert(liveBoardModals.includes('id="schedule-modal"') && liveBoardModals.includes('flex-1 min-h-0 flex flex-col'), 'upcoming list fills the screen');
+assert(!liveBoardModals.includes('max-h-[62dvh]'), 'upcoming list is not capped short of the card');
 assert(liveBoardModals.includes('id="schedule-modal"') && liveBoardModals.includes('z-[125]'), 'upcoming trains modal sits above bottom nav z-110');
 assert(!liveBoardModals.includes('id="schedule-modal" class="fixed inset-0 bg-black bg-opacity-70 z-[90]'), 'upcoming trains no longer z-90 under the nav');
 assert(liveBoardModals.includes('id="modal-title-route"'), 'upcoming title has a shrink-to-fit route line');
@@ -520,11 +529,11 @@ assert(/#nt-shell #messages-thread-modal\.fixed \{\s*position: absolute !importa
 assert(!/#nt-shell #messages-thread-modal\.fixed \{[^}]*var\(--nt-(app-h|shell-h|vv-h|feedback-vv)/.test(layout), 'Feedback Hub is not sized from a measured viewport token');
 assert(layout.includes('hubOn'), 'keyboard keeps Feedback Hub shell height like Community');
 assert(
-    css.includes(':not(#blackbox-modal):not(#messages-thread-modal):not(#account-modal):not(#admin-reply-modal) > div'),
+    css.includes(':not(#blackbox-modal):not(#messages-thread-modal):not(#account-modal):not(#admin-reply-modal):not(#planner-train-sheet-modal):not(#help-modal):not(#schedule-modal) > div'),
     'Feedback Hub, Account, and Co-Pilot cards are not capped by the bottom-nav clearance that left the slab'
 );
 assert(
-    css.includes(':not(#blackbox-modal):not(#messages-thread-modal):not(#account-modal):not(#admin-reply-modal),'),
+    css.includes(':not(#blackbox-modal):not(#messages-thread-modal):not(#account-modal):not(#admin-reply-modal):not(#planner-train-sheet-modal):not(#help-modal):not(#schedule-modal),'),
     'Feedback Hub, Account, and Co-Pilot do not get the bottom-nav padding meant for centred cards'
 );
 assert(layout.includes('#nt-shell #account-modal.fixed'), 'Account overlay is a full-screen page');

@@ -570,13 +570,14 @@ button#current-day:focus-visible {
 }
 
 /* Line colour on the route card. Yellow on white is about 2:1, so a slight
-   dark edge gives the letters a boundary. On a dark card that edge flips
-   to a light halo, or the colour sinks into the card. */
+   dark edge gives the letters a boundary. Dark cards keep that same hue,
+   mixed toward white so olive and the other map colours clear the navy. */
 #route-subtitle-text {
   text-shadow: 0 1px 0 rgba(15, 23, 42, 0.32);
 }
 html.dark #route-subtitle-text {
-  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.72);
+  color: color-mix(in srgb, var(--nt-line, currentColor) 46%, #f8fafc);
+  text-shadow: 0 1px 0 rgba(15, 23, 42, 0.55);
 }
 
 /* Brand-left header: solid pack primary */
@@ -1390,6 +1391,25 @@ html.dark .dark\:bg-gray-900\/50,
 html.dark .dark\:bg-gray-900\/95,
 html.dark .dark\:bg-gray-950\/40 {
   background-color: var(--nt-canvas) !important;
+}
+
+/* Floating sheets sit on a dimmed page that is the same navy as their
+   header and footer, so the card edge disappears. A light stroke plus a
+   dark outer line shows the rim. Full-screen sheets use rounded-none. */
+html.dark [id$="-modal"].fixed > div[class*="rounded-xl"],
+html.dark [id$="-modal"].fixed > div[class*="rounded-2xl"],
+html.dark [id$="-modal"].fixed > div[class*="rounded-3xl"],
+html.dark [id$="-modal"].fixed > div[class*="rounded-lg"] {
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--nt-text) 58%, transparent),
+    0 0 0 3px rgba(0, 0, 0, 0.72),
+    0 18px 40px rgba(0, 0, 0, 0.45) !important;
+}
+html.dark #help-modal > div > .rounded-t-xl,
+html.dark #help-modal > div > .rounded-b-xl,
+html.dark #schedule-modal > #modal-content > .rounded-t-xl,
+html.dark #schedule-modal > #modal-content > .rounded-b-xl {
+  background-color: color-mix(in srgb, var(--nt-surface) 86%, var(--nt-text)) !important;
 }
 
 .border-gray-100,

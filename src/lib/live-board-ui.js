@@ -631,6 +631,9 @@ export function updateNextTrainView() {
             : 'text-base sm:text-lg font-medium text-gray-700 dark:text-gray-200';
         const fitClass = expands ? 'whitespace-nowrap overflow-hidden' : 'line-clamp-2';
         title.className = `${color} group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors ${fitClass} w-full text-center leading-tight`;
+        const lineHex = String(route?.colorClass || '').match(/#([0-9a-fA-F]{6})/);
+        if (lineHex) title.style.setProperty('--nt-line', `#${lineHex[1]}`);
+        else title.style.removeProperty('--nt-line');
         if (expands) applyFittedLabel(title, shortHtml, longHtml, true);
         else title.innerHTML = shortHtml;
         title.title = longPlain;

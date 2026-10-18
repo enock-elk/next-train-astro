@@ -92,6 +92,8 @@ assert(hub.includes("safeStorage.setItem(THREAD_CONTACT_KEY"), 'valid contact ca
 assert(hub.includes('looksLikeContactOnlyMessage'), 'hub can hint when the message is only a number or email');
 assert(hub.includes('put it in the contact field'), 'contact-only hint does not rewrite the message');
 assert(hub.includes('commuterFeedbackText'), 'Feedback Hub strips diagnostic ALERT prefixes for commuters');
+assert(hub.includes("input?.focus({ preventScroll: true })"), 'opening contact details focuses the field in the same tap');
+assert(hub.includes("contactToggle?.addEventListener('touchend'"), 'contact row keeps the keyboard on a touch tap');
 
 const modals = readFileSync(join(ROOT, 'src/components/HubModals.astro'), 'utf8');
 assert(modals.includes('id="messages-thread-contact-hint"'), 'Hub has a contact hint');

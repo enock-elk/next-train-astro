@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_10.18.6': [
+        'The full train sheet fades while more stops are below. Opening Add contact details for a reply focuses that field so the keyboard stays up. Dark floating sheets keep a light rim, because the header was the same navy as the page. Dark route names stay the line colour, lightened so olive and the other map colours can be read on the navy card. No grey title and no dot. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_10.18.5': [
         'Dark route names use a light edge. View full timetable stays off white in every dark pack, and Earthy uses a paper chip. Earthy full train sheet is blue with a cream corner, and the day pill opens the same schedule note as the header. Earthy Plan Trip, Close Timetable, Got it, and Reply keep a hard edge. Upcoming trains and Trip Planner Tips fade while more is below. Trip plans in the brief are the last 48 hours, with this week against the week before. Across the country is one card per region for the day rules, and standing notes sit in Others. Explain this crash reads the log when the written note is down. GPS lines are not restyled by Earthy. No commuter What\'s New. forceShow stays false.',
     ],

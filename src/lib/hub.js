@@ -216,6 +216,10 @@ function setThreadContactOpen(open) {
     if (panel) panel.classList.toggle('hidden', !open);
     if (toggle) toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
     chevron?.classList.toggle('rotate-180', !!open);
+    if (open) {
+        const input = document.getElementById('messages-thread-contact');
+        input?.focus({ preventScroll: true });
+    }
 }
 
 function paintThreadContactRow() {
@@ -2922,9 +2926,23 @@ export function initHub() {
         openMessagesThread();
     });
     document.getElementById('messages-thread-close')?.addEventListener('click', () => closeSmoothModal('messages-thread-modal'));
-    document.getElementById('messages-thread-contact-toggle')?.addEventListener('click', () => {
-        const toggle = document.getElementById('messages-thread-contact-toggle');
-        setThreadContactOpen(toggle?.getAttribute('aria-expanded') !== 'true');
+    const contactToggle = document.getElementById('messages-thread-contact-toggle');
+    const toggleThreadContact = () => {
+        setThreadContactOpen(contactToggle?.getAttribute('aria-expanded') !== 'true');
+    };
+    // touchend, not a later click: iOS drops the keyboard when the tap blurs
+    // the message field, and a delayed focus cannot bring it back.
+    contactToggle?.addEventListener('touchend', (event) => {
+        event.preventDefault();
+        toggleThreadContact();
+        contactToggle.dataset.ntTouchToggle = '1';
+    });
+    contactToggle?.addEventListener('click', () => {
+        if (contactToggle.dataset.ntTouchToggle === '1') {
+            delete contactToggle.dataset.ntTouchToggle;
+            return;
+        }
+        toggleThreadContact();
     });
     document.getElementById('messages-thread-form')?.addEventListener('submit', async (e) => {
         e.preventDefault();

@@ -208,7 +208,10 @@ import ZoomControls from './ZoomControls.astro';
                 <button type="button" id="planner-train-sheet-fare" data-route-id="" class="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-bold tracking-tight bg-white text-blue-800 hover:bg-blue-50 transition cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-white/80">Fare</button>
             </div>
         </div>
-        <ol id="planner-train-sheet-stops" class="px-5 py-2 overflow-y-auto custom-scrollbar flex-1 min-h-0"></ol>
+        <div class="relative flex-1 min-h-0">
+            <ol id="planner-train-sheet-stops" class="absolute inset-0 px-5 py-2 overflow-y-auto custom-scrollbar"></ol>
+            <div class="nt-sheet-shade" data-shade-for="planner-train-sheet-stops" aria-hidden="true"></div>
+        </div>
         <div class="p-4 border-t border-slate-100 dark:border-slate-700/70 bg-slate-50 dark:bg-slate-900/40 shrink-0">
             <button type="button" id="planner-train-sheet-close" onclick="if(location.hash === '#train-sheet') history.back(); else if(typeof window.closeSmoothModal === 'function') window.closeSmoothModal('planner-train-sheet-modal');" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-xl transition-colors focus:outline-none">
                 Close

@@ -65,7 +65,9 @@ assert(css.includes('color-mix(in srgb, var(--nt-chrome-fg) 45%, transparent)'),
 assert(!css.includes('color-mix(in srgb, var(--nt-chrome-fg) 70%, transparent)'), 'inactive tabs are not 70% white');
 assert(!css.includes('#bottom-nav .bottom-nav-item.is-active::before'), 'active tab has no top bar');
 assert(/#route-subtitle-text \{\s*text-shadow: 0 1px 0 rgba\(15, 23, 42, 0\.32\);/.test(css), 'route name has a slight shadow on light cards');
-assert(/html\.dark #route-subtitle-text \{\s*text-shadow: 0 1px 0 rgba\(255, 255, 255, 0\.72\);/.test(css), 'route name shadow flips to a light edge on dark cards');
+assert(/html\.dark #route-subtitle-text \{[\s\S]*?color-mix\(in srgb, var\(--nt-line/.test(css), 'dark route name uses a lighter tint of the line colour');
+assert(/html\.dark #route-subtitle-text \{[\s\S]*?text-shadow: 0 1px 0 rgba\(15, 23, 42, 0\.55\);/.test(css), 'dark route name keeps a dark edge under the lighter tint');
+assert(css.includes('html.dark [id$="-modal"].fixed > div[class*="rounded-xl"]'), 'dark floating modals keep a visible edge');
 assert(/#bottom-nav\.bottom-nav-bar \{[\s\S]*?border-radius: 0;/.test(css), 'bottom nav is rectangular');
 assert(css.includes('#current-day'), 'day label letter-spacing rule present');
 

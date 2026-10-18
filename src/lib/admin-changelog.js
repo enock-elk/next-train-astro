@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_10.18.4': [
+        'The route name, No Service line, fare label, timetable button, and page padding are back to the previous treatment. The bottom bar stays a pill behind the icon, with dimmer inactive labels and no top line. No commuter What\'s New. forceShow stays false.',
+    ],
     'V9_10.18.3': [
         'The current tab is only the pill behind the icon. The top line is gone. Other tab labels are dimmer. The route name is dark ink with a small stripe in the line colour. No Service is white on a red pill. The fare label is one colour. View full timetable is sentence case. The page padding matches the bar height. No commuter What\'s New. forceShow stays false.',
     ],

@@ -535,23 +535,6 @@ html.dark #bottom-nav .bottom-nav-item.is-active {
   letter-spacing: 0.01em;
 }
 
-/* Route name stays pack ink. The line colour is only the stripe. */
-#route-subtitle-text {
-  color: var(--nt-text) !important;
-}
-#route-subtitle-text .nt-route-name {
-  color: inherit;
-}
-#route-subtitle-text .nt-line-mark {
-  display: inline-block;
-  width: 0.28rem;
-  height: 0.82em;
-  margin-right: 0.38rem;
-  border-radius: 999px;
-  background: currentColor;
-  vertical-align: -0.08em;
-}
-
 /* Brand-left header: solid pack primary */
 #tab-sliding-indicator {
   background-color: var(--nt-primary) !important;
@@ -2127,7 +2110,7 @@ select.text-base {
     line-height: 1.2;
   }
   #view-full-timetable-btn .nt-timetable-label {
-    letter-spacing: 0;
+    letter-spacing: 0.04em;
     white-space: nowrap;
   }
 }
@@ -2161,19 +2144,12 @@ html[data-colour-pack="classic"] #current-day span:not(.text-red-600):not(.dark\
 html:not([data-colour-pack]) #current-day span:not(.text-red-600):not(.dark\:text-red-400) {
   color: var(--nt-chrome-muted) !important;
 }
-/* No Service is white on a red pill. Pale red (#f87171) on the blue
-   header was about 2:1. Sunday itself stays muted chrome. */
+/* Same No Service red in light and dark. Classic light used red-600
+   (#dc2626) that fought the blue header; match dark red-400 (#f87171). */
 #current-day span.text-red-600,
 html.dark #current-day span.text-red-600,
 html.dark #current-day span.dark\:text-red-400 {
-  color: #fff !important;
-  background: #b91c1c;
-  border-radius: 999px;
-  padding: 0.06em 0.42em;
-  font-weight: 600;
-  line-height: 1.25;
-  display: inline-block;
-  vertical-align: middle;
+  color: #f87171 !important;
 }
 
 html[data-colour-pack="classic"] #bottom-nav .bottom-nav-item:not(.is-active),

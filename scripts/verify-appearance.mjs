@@ -100,6 +100,9 @@ assert(!header.includes('ml-1'), 'Header boot dropped ml-1');
 assert(header.includes('translate-x-1/4 -translate-y-1/4'), 'unread dot sits on the outer corner of the bell');
 assert(header.includes('w-6 h-6'), 'header bell icon is 24px');
 assert(header.includes('text-[11px] sm:text-xs font-medium'), 'Header day line uses the original subtitle face');
+assert(header.includes('<button type="button" id="current-day"'), 'the day line is a button');
+assert(css.includes('button#current-day'), 'the day line reads as a control');
+assert(css.includes('color: #f87171 !important;'), 'No Service stays pale red on the day button');
 assert(!header.includes('header-day-label'), 'Header day line is not a second bold title');
 assert(header.includes('fitHeaderDayLabel') || logic.includes('fitHeaderDayLabel'), 'day line fit helper is present');
 

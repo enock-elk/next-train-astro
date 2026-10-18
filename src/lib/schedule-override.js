@@ -93,6 +93,28 @@ function revisionFor(entry) {
     return `c${h}`;
 }
 
+function forcedDayLabel(dayType) {
+    if (dayType === 'sunday') return 'Sunday';
+    if (dayType === 'saturday') return 'Saturday';
+    if (dayType === 'public_holiday') return 'public holiday';
+    return 'weekday';
+}
+
+/** Title and body for the day-line note, only after this override is in effect. */
+export function appliedScheduleOverrideNote(region) {
+    const entry = regionOverrideEntry(region);
+    if (!entry) return null;
+    const rev = revisionFor(entry);
+    const seen = safeStorage.getItem(seenKeyFor(entry, rev)) === 'true';
+    if (!seen && !appliedOverrides[entry.code]) return null;
+    const label = forcedDayLabel(entry.dayType);
+    return {
+        dayType: entry.dayType,
+        title: String(entry.title || '').trim() || 'Schedule update',
+        body: String(entry.body || '').trim() || `Our team has set this line to the ${label} timetable.`,
+    };
+}
+
 /**
  * Apply admin override to a calendar-derived day type (after holiday resolution).
  */

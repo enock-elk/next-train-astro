@@ -23165,7 +23165,7 @@ const Admin = {
                         <svg id="sched-override-chevron" class="w-4 h-4 transform transition-transform -rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
                     </button>
                     <div id="sched-override-body" class="hidden p-4 space-y-3">
-                        <p class="text-[10px] text-blue-600 dark:text-blue-400 leading-snug">Override the live timetable per region. Commuters boot normally, then see your message and switch.</p>
+                        <p class="text-[10px] text-blue-600 dark:text-blue-400 leading-snug">Override the live timetable per region. Commuters boot normally, then see your message and switch. A message is required whenever a region is Active.</p>
                         <div id="sched-override-regions" class="space-y-3"></div>
                         <button type="button" id="sched-override-save" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded-lg text-xs uppercase tracking-wide focus:outline-none">Save schedule overrides</button>
                     </div>
@@ -23794,10 +23794,10 @@ const Admin = {
                     </div>
                     <input type="text" id="sched-override-title-${code}" class="sched-override-title w-full h-9 px-2 rounded-md bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-[10px] text-gray-900 dark:text-white outline-none" data-region="${code}" placeholder="Popup title (e.g. Public holiday today)" maxlength="120">
                     <div class="flex items-center justify-between">
-                        <span class="text-[9px] font-bold uppercase tracking-wide text-gray-500">Message</span>
+                        <span class="text-[9px] font-bold uppercase tracking-wide text-gray-500">Message (required if active)</span>
                         ${Admin.writeAssistButtonHtml('sched-override-msg-' + code)}
                     </div>
-                    <textarea id="sched-override-msg-${code}" class="sched-override-body w-full min-h-[56px] px-2 py-1.5 rounded-md bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-[10px] text-gray-900 dark:text-white outline-none resize-y" data-region="${code}" placeholder="Popup message explaining the situation" maxlength="500"></textarea>
+                    <textarea id="sched-override-msg-${code}" class="sched-override-body w-full min-h-[56px] px-2 py-1.5 rounded-md bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-[10px] text-gray-900 dark:text-white outline-none resize-y" data-region="${code}" placeholder="Required when Active is on" maxlength="500"></textarea>
                 </div>
             `).join('');
         }
@@ -24090,17 +24090,29 @@ const Admin = {
                         return;
                     }
                     const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
+                    const missingMessage = [];
                     const regions = {};
                     SCHED_OVERRIDE_REGIONS.forEach((code) => {
+                        const active = !!schedOverrideRegions.querySelector(`.sched-override-active[data-region="${code}"]`)?.checked;
+                        const body = (schedOverrideRegions.querySelector(`.sched-override-body[data-region="${code}"]`)?.value || '').trim();
+                        if (active && !body) missingMessage.push(code);
                         regions[code] = {
-                            active: !!schedOverrideRegions.querySelector(`.sched-override-active[data-region="${code}"]`)?.checked,
+                            active,
                             dayType: schedOverrideRegions.querySelector(`.sched-override-day[data-region="${code}"]`)?.value
                                 || (code === 'WC' ? 'public_holiday' : 'saturday'),
                             title: (schedOverrideRegions.querySelector(`.sched-override-title[data-region="${code}"]`)?.value || '').trim(),
-                            body: (schedOverrideRegions.querySelector(`.sched-override-body[data-region="${code}"]`)?.value || '').trim(),
+                            body,
                             updatedAt: Date.now(),
                         };
                     });
+                    if (missingMessage.length) {
+                        const first = schedOverrideRegions.querySelector(`.sched-override-body[data-region="${missingMessage[0]}"]`);
+                        first?.focus();
+                        if (typeof showToast === 'function') {
+                            showToast(`Add a message for ${missingMessage.join(', ')} before forcing that schedule.`, 'error');
+                        }
+                        return;
+                    }
                     const payload = {
                         updatedAt: Date.now(),
                         updatedBy: Admin.currentUser?.email || 'Admin',

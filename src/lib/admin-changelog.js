@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_10.18.6': [
+        'A full-screen photo closes when you swipe down, and a double tap zooms in. Feedback Hub keeps contact details in a row above the message, and the message box starts at two lines. The day line under the title opens a note for the timetable in use, including Sunday, Saturday closures, public holidays, and a forced schedule. Forcing a schedule requires a message. No commuter What\'s New. forceShow stays false.',
+    ],
     'V9_10.18.5': [
         'The route name keeps its line colour. A slight shadow separates yellow from a white card. On a dark card the shadow is a soft lower edge. No commuter What\'s New. forceShow stays false.',
     ],

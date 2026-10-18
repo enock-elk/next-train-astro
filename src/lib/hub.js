@@ -182,6 +182,7 @@ function paintContactField(input, { toast = false, persist = false, showError = 
         input.classList.remove('nt-contact-invalid');
         input.removeAttribute('aria-invalid');
         if (hint) hint.textContent = '';
+        paintThreadContactSummary();
         return { ok: true, value: signedInContactEmail() };
     }
     const result = validateFeedbackContact(input.value);
@@ -191,11 +192,30 @@ function paintContactField(input, { toast = false, persist = false, showError = 
     else input.removeAttribute('aria-invalid');
     if (hint) hint.textContent = show ? contactHintMessage(result.reason) : '';
     if (!result.ok) {
+        if (input.id === 'messages-thread-contact') paintThreadContactSummary();
         if (toast) showToast(contactHintMessage(result.reason), 'error');
         return result;
     }
     if (persist && !signedInContactEmail()) persistValidContact(result.value);
+    if (input.id === 'messages-thread-contact') paintThreadContactSummary();
     return result;
+}
+
+function paintThreadContactSummary() {
+    const summary = document.getElementById('messages-thread-contact-summary');
+    const input = document.getElementById('messages-thread-contact');
+    if (!summary || !input) return;
+    const value = String(input.value || '').trim();
+    summary.textContent = value || 'Optional';
+}
+
+function setThreadContactOpen(open) {
+    const panel = document.getElementById('messages-thread-contact-panel');
+    const toggle = document.getElementById('messages-thread-contact-toggle');
+    const chevron = document.getElementById('messages-thread-contact-chevron');
+    if (panel) panel.classList.toggle('hidden', !open);
+    if (toggle) toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+    chevron?.classList.toggle('rotate-180', !!open);
 }
 
 function paintThreadContactRow() {
@@ -213,6 +233,7 @@ function paintThreadContactRow() {
     }
     if (!input.value) input.value = readStoredContact();
     paintContactField(input, { showError: false });
+    paintThreadContactSummary();
 }
 
 function paintThreadFileChip(fileInput) {
@@ -236,7 +257,7 @@ function autosizeMessagesThreadInput() {
     const cs = window.getComputedStyle(el);
     const line = parseFloat(cs.lineHeight) || 20;
     const pad = (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0);
-    const minH = Math.max(44, line + pad);
+    const minH = Math.max(60, (2 * line) + pad);
     const maxByRows = (10 * line) + pad;
     const maxByVp = Math.round((window.visualViewport?.height || window.innerHeight) * 0.35);
     const maxH = Math.max(minH, Math.min(maxByRows, maxByVp));
@@ -1879,6 +1900,7 @@ export async function openMessagesThread(replyToAcknowledge = latestPendingAdmin
         else host.innerHTML = '<p class="text-xs text-gray-400 text-center py-8">Loading…</p>';
     }
     paintThreadContactRow();
+    setThreadContactOpen(false);
     setTimeout(() => {
         try { window.ntFitAppViewport?.(); } catch { /* ignore */ }
         openSmoothModal('messages-thread-modal');
@@ -2900,6 +2922,10 @@ export function initHub() {
         openMessagesThread();
     });
     document.getElementById('messages-thread-close')?.addEventListener('click', () => closeSmoothModal('messages-thread-modal'));
+    document.getElementById('messages-thread-contact-toggle')?.addEventListener('click', () => {
+        const toggle = document.getElementById('messages-thread-contact-toggle');
+        setThreadContactOpen(toggle?.getAttribute('aria-expanded') !== 'true');
+    });
     document.getElementById('messages-thread-form')?.addEventListener('submit', async (e) => {
         e.preventDefault();
         const input = document.getElementById('messages-thread-input');
@@ -2913,7 +2939,10 @@ export function initHub() {
             return;
         }
         const contactField = paintContactField(document.getElementById('messages-thread-contact'), { toast: true, persist: true });
-        if (!contactField.ok) return;
+        if (!contactField.ok) {
+            setThreadContactOpen(true);
+            return;
+        }
         const email = signedInContactEmail() || contactField.value || resolveThreadContact();
         const limit = checkFeedbackRate();
         if (!limit.ok) {
@@ -3111,9 +3140,11 @@ export function initHub() {
     });
     document.getElementById('messages-thread-contact')?.addEventListener('input', () => {
         paintContactField(document.getElementById('messages-thread-contact'), { showError: false });
+        paintThreadContactSummary();
     });
     document.getElementById('messages-thread-contact')?.addEventListener('blur', () => {
         paintContactField(document.getElementById('messages-thread-contact'), { persist: true, showError: true });
+        paintThreadContactSummary();
     });
 
     // Legal in sidenav

@@ -101,6 +101,28 @@ const logic = readFileSync(join(ROOT, 'src/lib/logic.js'), 'utf8');
 if (!logic.includes('paintHeaderDayLabel') || !logic.includes('currentRouteSaturdayClosed')) {
     fail('header must show No Service when both Saturday directions are empty');
 }
+if (!logic.includes('Metrorail does not run regular Sunday trains on this line.')) {
+    fail('Sunday note must explain that this line has no regular Sunday trains');
+}
+if (!logic.includes('Metrorail Gauteng does not have Saturday train service on the Hercules to Koedoespoort line.')) {
+    fail('Hercules Saturday note must name that line');
+}
+if (!logic.includes('Metrorail Eastern Cape does not have Saturday train service on the East London to Berlin line.')) {
+    fail('East London Saturday note must name that line');
+}
+if (!logic.includes('This public holiday uses the Saturday timetable.')) {
+    fail('public holiday note must name the Saturday timetable outside the Western Cape');
+}
+if (!logic.includes('The Western Cape uses its public holiday timetable today.')) {
+    fail('Western Cape public holiday note must name that timetable');
+}
+if (!logic.includes('appliedScheduleOverrideNote')) {
+    fail('an applied force uses the admin message on the day note');
+}
+const adminJs = readFileSync(join(ROOT, 'public/js/admin.js'), 'utf8');
+if (!adminJs.includes('missingMessage') || !adminJs.includes('before forcing that schedule')) {
+    fail('forcing a schedule requires a message');
+}
 if (ui.includes('Try Saturday / Holiday') && !ui.includes("selectedPlannerDay === 'saturday'")) {
     fail('Saturday no-service must not suggest Try Saturday / Holiday');
 }

@@ -19,8 +19,8 @@ import {
 
 import { 
     normalizeStationName, timeToSeconds, formatTimeDisplay, safeStorage, 
-    getDistanceFromLatLonInKm, resolveOperatingDayType, routeSheetKeyForDay,
-    simUsesSpecificDate, isRealTime, usesSaturdayScheduleSheet,
+    getDistanceFromLatLonInKm,     resolveOperatingDayType, routeSheetKeyForDay,
+    simUsesSpecificDate, isRealTime, usesSaturdayScheduleSheet, resolveScheduleSheetFamily,
     pruneExclusionsTree, readCachedExclusions, writeCachedExclusions,
     KILLSWITCH_APPLIED_KEY, KILLSWITCH_PENDING_KEY,
     newestUnappliedKillswitchTimestamp, createAsyncMutex, flattenPublicHolidays,
@@ -32,6 +32,7 @@ import {
     fetchScheduleOverride,
     resolveDayTypeWithOverride,
     maybePromptScheduleOverride,
+    appliedScheduleOverrideNote,
 } from './schedule-override.js';
 import {
     getGridOrderManifest,
@@ -111,6 +112,92 @@ function headerDateParts(opts = {}) {
     return { calendarDay: dateToCheck.getDay(), dateKey, year: dateToCheck.getFullYear() };
 }
 
+let headerDayNote = {
+    title: 'Schedule',
+    body: 'Weekday trains are running on this line today.',
+};
+
+function lineServiceName(routeId) {
+    const raw = String(ROUTES[routeId]?.name || '');
+    return raw.replace(/\s*<->\s*/g, ' to ').replace(/\s*↔\s*/g, ' to ').trim();
+}
+
+function saturdayClosedBody(routeId, publicHoliday, holidayName) {
+    const dayWord = String(holidayName || '').trim() || 'public holiday';
+    if (routeId === 'ec-berlin') {
+        return publicHoliday
+            ? `Metrorail Eastern Cape does not have ${dayWord} train service on the East London to Berlin line.`
+            : 'Metrorail Eastern Cape does not have Saturday train service on the East London to Berlin line.';
+    }
+    if (routeId === 'herc-koed') {
+        return publicHoliday
+            ? `Metrorail Gauteng does not have ${dayWord} train service on the Hercules to Koedoespoort line.`
+            : 'Metrorail Gauteng does not have Saturday train service on the Hercules to Koedoespoort line.';
+    }
+    const name = lineServiceName(routeId);
+    if (publicHoliday) {
+        return name
+            ? `${name} does not have ${dayWord} train service.`
+            : `This line does not have ${dayWord} train service.`;
+    }
+    return name
+        ? `${name} does not have a regular Saturday service.`
+        : 'This line does not have a regular Saturday service.';
+}
+
+/** Copy for the day-line button. An applied admin force uses that message. */
+export function describeHeaderDayNote({
+    dayType = 'weekday',
+    region = 'GP',
+    routeId = '',
+    holidayName = '',
+    holidayType = null,
+    satClosed = false,
+    override = null,
+} = {}) {
+    if (override?.title || override?.body) {
+        return {
+            title: String(override.title || '').trim() || 'Schedule update',
+            body: String(override.body || '').trim() || 'Our team has set this line to the weekday timetable.',
+        };
+    }
+    const holiday = String(holidayName || '').trim();
+    if (dayType === 'sunday') {
+        const body = 'Metrorail does not run regular Sunday trains on this line.';
+        return { title: 'No Service', body: holiday ? `${holiday}. ${body}` : body };
+    }
+    const publicHoliday = holidayType === 'public_holiday' || holidayType === 'saturday' || dayType === 'public_holiday';
+    if (satClosed) {
+        return { title: 'No Service', body: saturdayClosedBody(routeId, publicHoliday, holiday) };
+    }
+    if (publicHoliday) {
+        const sheet = resolveScheduleSheetFamily(dayType === 'public_holiday' ? 'public_holiday' : 'saturday', region);
+        const using = sheet === 'public_holiday'
+            ? 'The Western Cape uses its public holiday timetable today.'
+            : 'This public holiday uses the Saturday timetable.';
+        return { title: holiday || 'Public Holiday', body: holiday ? `${holiday}. ${using}` : using };
+    }
+    if (dayType === 'saturday') {
+        const running = 'Saturday trains are running on this line today.';
+        return { title: holiday || 'Saturday Schedule', body: holiday ? `${holiday}. ${running}` : running };
+    }
+    const running = 'Weekday trains are running on this line today.';
+    return { title: holiday || 'Weekday Schedule', body: holiday ? `${holiday}. ${running}` : running };
+}
+
+function openHeaderDayNote() {
+    const titleEl = document.getElementById('schedule-day-title');
+    const bodyEl = document.getElementById('schedule-day-body');
+    if (titleEl) titleEl.textContent = headerDayNote.title || 'Schedule';
+    if (bodyEl) bodyEl.textContent = headerDayNote.body || '';
+    const ok = document.getElementById('schedule-day-ok');
+    if (ok && ok.getAttribute('data-day-ok') !== '1') {
+        ok.setAttribute('data-day-ok', '1');
+        ok.addEventListener('click', () => closeSmoothModal('schedule-day-modal'));
+    }
+    openSmoothModal('schedule-day-modal');
+}
+
 /**
  * Header day chip. Sunday is always No Service. Saturday / GP-holiday shows
  * red No Service when the pinned route has no Saturday times in either direction.
@@ -156,6 +243,16 @@ export function paintHeaderDayLabel(opts = {}) {
         : 'font-bold text-blue-600 dark:text-blue-400';
     const html = `${dayNames[day] || ''} · <span class="${typeClass}">${displayType}</span>`;
     if (el.innerHTML !== html) el.innerHTML = html;
+    const holidayName = dateKey && HOLIDAY_NAMES[dateKey] ? HOLIDAY_NAMES[dateKey] : '';
+    headerDayNote = describeHeaderDayNote({
+        dayType,
+        region,
+        routeId: $currentRouteId.get() || '',
+        holidayName,
+        holidayType,
+        satClosed,
+        override: appliedScheduleOverrideNote(region),
+    });
     fitHeaderDayLabel();
     bindHeaderDayFit();
 }
@@ -174,7 +271,7 @@ export function fitHeaderDayLabel() {
     const avail = titleW > 8 ? titleW : (el.closest('.header-brand-block')?.clientWidth || 0);
     el.style.whiteSpace = 'nowrap';
     el.style.maxWidth = 'none';
-    el.style.display = 'block';
+    el.style.display = 'inline-block';
     el.style.boxSizing = 'border-box';
     el.style.fontWeight = '';
     el.style.color = '';
@@ -218,6 +315,7 @@ function bindHeaderDayFit() {
 
 if (typeof window !== 'undefined') {
     window.paintHeaderDayLabel = paintHeaderDayLabel;
+    window.openHeaderDayNote = openHeaderDayNote;
     window.fitHeaderDayLabel = fitHeaderDayLabel;
 }
 

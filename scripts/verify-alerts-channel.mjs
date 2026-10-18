@@ -370,6 +370,8 @@ const now = 1_700_000_000_000;
     assert(!ui.includes('toDataURL'), 'full view does not re-encode the poster on the main thread');
     assert(!ui.includes('snapshotDecodedImage'), 'full view does not snapshot via canvas');
     assert(ui.includes('alert-image-lightbox-stage'), 'alert full view pinch is isolated to the image stage');
+    assert(ui.includes('lbDismissY') && ui.includes('closeLightbox()'), 'a downward swipe closes the image preview');
+    assert(ui.includes('zoomLightboxAt') && ui.includes('LB_ZOOM'), 'a double tap zooms the image preview');
     assert(ui.includes("new CustomEvent('nt-alert-lightbox'"), 'opening the preview names the notice');
     assert(js.includes('alert-image-lightbox-react'), 'the image preview has a reaction row');
     assert(js.includes("const LIGHTBOX_BAR_REACTIONS = ['love', 'pray', 'laugh']"), 'the image preview shows a few reactions');

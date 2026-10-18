@@ -535,6 +535,25 @@ html.dark #bottom-nav .bottom-nav-item.is-active {
   letter-spacing: 0.01em;
 }
 
+button#current-day {
+  appearance: none;
+  -webkit-appearance: none;
+  display: inline-block;
+  margin: 0.15rem 0 0;
+  padding: 0.12rem 0.55rem;
+  border: 0;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--nt-chrome-fg) 14%, transparent);
+  text-align: left;
+  cursor: pointer;
+  max-width: 100%;
+  line-height: 1.3;
+}
+button#current-day:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--nt-chrome-fg) 75%, transparent);
+  outline-offset: 2px;
+}
+
 /* Line colour on the route card. Yellow on white is about 2:1, so a slight
    shadow gives the letters an edge. Dark cards already hold the gold; the
    shadow there is only a soft lower edge, not a light halo. */

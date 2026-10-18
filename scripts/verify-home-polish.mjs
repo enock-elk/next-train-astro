@@ -456,6 +456,10 @@ assert(hubModals.includes('data-account-screen="signin"'), 'account opens on the
 assert(!/id="account-modal-close"[^>]*>\s*Done\s*</.test(hubModals), 'Account close is not labelled Done');
 assert(!/<h3[^>]*>Account<\/h3>/.test(hubModals), 'Account overlay has no large Account title');
 assert(hubModals.includes('placeholder="Email or WhatsApp for a reply"'), 'Hub contact placeholder is the shorter line');
+assert(hubModals.includes('id="messages-thread-contact-toggle"'), 'Hub contact sits in a row above the message');
+assert(hubModals.includes('id="messages-thread-input" rows="2"'), 'Hub message box starts at two rows');
+assert(/id="messages-thread-close"[\s\S]{0,400}M15 19l-7-7 7-7/.test(hubModals), 'Feedback Hub close is the back chevron');
+assert(hubModals.includes('id="schedule-day-modal"') && hubModals.includes('id="schedule-day-body"'), 'the day line opens its own schedule note');
 assert(!hubModals.includes('Email or WhatsApp if you want a reply'), 'Hub contact placeholder is not the long iOS-clipping line');
 assert(hubModals.includes('id="messages-thread-contact-row"') && hubModals.includes('min-w-0'), 'Hub contact row can shrink without changing input font-size');
 assert(hubModals.includes('id="account-delete-type"'), 'delete confirm requires typing DELETE');

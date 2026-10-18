@@ -626,13 +626,14 @@ export function updateNextTrainView() {
 
     const title = document.getElementById('route-subtitle-text');
     if (title) {
-        const color = route?.colorClass
-            ? `text-base sm:text-lg font-medium ${route.colorClass}`
-            : 'text-base sm:text-lg font-medium text-gray-700 dark:text-gray-200';
         const fitClass = expands ? 'whitespace-nowrap overflow-hidden' : 'line-clamp-2';
-        title.className = `${color} group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors ${fitClass} w-full text-center leading-tight`;
-        if (expands) applyFittedLabel(title, shortHtml, longHtml, true);
-        else title.innerHTML = shortHtml;
+        title.className = `nt-route-title text-base sm:text-lg font-medium ${fitClass} w-full text-center leading-tight`;
+        const mark = route?.colorClass
+            ? `<span class="nt-line-mark ${route.colorClass}" aria-hidden="true"></span>`
+            : '';
+        const withMark = (html) => `${mark}<span class="nt-route-name">${html}</span>`;
+        if (expands) applyFittedLabel(title, withMark(shortHtml), withMark(longHtml), true);
+        else title.innerHTML = withMark(shortHtml);
         title.title = longPlain;
         try {
             if (route?.name) safeStorage.setItem('nt_last_route_label', labelPlain);

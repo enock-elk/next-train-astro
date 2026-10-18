@@ -15,7 +15,7 @@
             </button>
 
             <button type="button" id="route-selector-btn" class="flex flex-col items-center justify-center w-full h-full px-2 py-1.5 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors focus:outline-none group min-w-0">
-                <h2 id="route-subtitle-text" class="text-base sm:text-lg font-medium text-gray-700 dark:text-gray-200 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors line-clamp-2 w-full text-center leading-tight">
+                <h2 id="route-subtitle-text" class="nt-route-title text-base sm:text-lg font-medium line-clamp-2 w-full text-center leading-tight">
                     …
                 </h2>
                 <span id="route-corridor-label" class="hidden text-[9px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500 truncate w-full text-center leading-none mt-0.5"></span>
@@ -82,14 +82,14 @@
 
     <!-- Full timetable — calendar + label, effective date on the button -->
     <div id="grid-trigger-container" class="mb-4 relative">
-        <button type="button" id="view-full-timetable-btn" class="w-full grid grid-cols-[3rem_1fr_3rem] items-center bg-blue-50 text-blue-700 font-black py-3 px-2 rounded-xl border border-blue-200 hover:bg-blue-100 active:scale-[0.99] transition-colors duration-200 group focus:outline-none">
+        <button type="button" id="view-full-timetable-btn" class="w-full grid grid-cols-[3rem_1fr_3rem] items-center bg-blue-50 text-blue-700 font-semibold py-3 px-2 rounded-xl border border-blue-200 hover:bg-blue-100 active:scale-[0.99] transition-colors duration-200 group focus:outline-none">
             <svg class="w-8 h-8 shrink-0 justify-self-center opacity-95 group-hover:scale-105 transition-transform" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 <rect x="3" y="4" width="18" height="18" rx="2"/>
                 <path d="M16 2v4M8 2v4M3 10h18"/>
                 <path d="M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01"/>
             </svg>
             <span class="flex flex-col items-center justify-center leading-tight text-center min-w-0 px-1">
-            <span class="nt-timetable-label tracking-wide whitespace-nowrap">VIEW FULL TIMETABLE</span>
+            <span class="nt-timetable-label whitespace-nowrap">View full timetable</span>
             <span id="last-updated-date" class="text-[9px] font-semibold uppercase tracking-wide opacity-80 leading-none mt-0.5">Effective from: --</span>
             </span>
             <svg class="w-4 h-4 justify-self-center opacity-80 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"></path></svg>
@@ -101,7 +101,7 @@
         <div class="flex flex-col items-start justify-center min-w-0 flex-1 overflow-hidden">
             <div class="flex items-center space-x-1 flex-wrap leading-none">
                 <span class="text-[10px] text-gray-500 dark:text-gray-400 uppercase font-bold tracking-wider">Estimated</span>
-                <span id="passenger-type-label" class="text-[10px] text-blue-500 dark:text-blue-400 uppercase font-black tracking-widest">Adult</span>
+                <span id="passenger-type-label" class="text-[10px] text-gray-500 dark:text-gray-400 uppercase font-bold tracking-wider">Adult</span>
                 <span class="text-[10px] text-gray-500 dark:text-gray-400 uppercase font-bold tracking-wider">Fare</span>
             </div>
             <span id="fare-type" class="hidden text-[10px] font-bold text-gray-500 dark:text-gray-400 bg-gray-200 dark:bg-gray-700 px-1.5 py-0.5 rounded-full mt-0.5 max-w-full truncate"></span>

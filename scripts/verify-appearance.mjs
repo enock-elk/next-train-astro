@@ -60,6 +60,11 @@ assert(/#bottom-nav\.bottom-nav-bar \{[\s\S]*?box-shadow: none/.test(css), 'bott
 assert(/#bottom-nav\.bottom-nav-bar \{[\s\S]*?background-color: var\(--nt-chrome-nav\)/.test(css), 'bottom nav is one step darker than the header');
 assert(css.includes('--nt-nav-h: 4rem'), 'bottom nav is about 64px tall');
 assert(css.includes('color-mix(in srgb, var(--nt-chrome-fg) 20%, transparent)'), 'active tab icon sits on a soft pill');
+assert(css.includes('color-mix(in srgb, var(--nt-chrome-fg) 45%, transparent)'), 'inactive tabs are clearly dimmer than the active label');
+assert(!css.includes('color-mix(in srgb, var(--nt-chrome-fg) 70%, transparent)'), 'inactive tabs are not 70% white');
+assert(!css.includes('#bottom-nav .bottom-nav-item.is-active::before'), 'active tab has no top bar');
+assert(css.includes('#route-subtitle-text .nt-line-mark'), 'route colour is a stripe, not the title ink');
+assert(/#route-subtitle-text \{\s*color: var\(--nt-text\) !important;/.test(css), 'route name uses pack ink');
 assert(/#bottom-nav\.bottom-nav-bar \{[\s\S]*?border-radius: 0;/.test(css), 'bottom nav is rectangular');
 assert(css.includes('#current-day'), 'day label letter-spacing rule present');
 
@@ -80,9 +85,11 @@ assert(!/#current-day,[\s\S]{0,220}font-size: 2\.55rem/.test(css), 'day line no 
 assert(!css.includes('#current-day span {\n  font-weight: inherit'), 'day line span no longer inherits the title color');
 assert(!css.includes('color: #fecaca !important'), 'Classic No Service is not peach-red');
 assert(css.includes('#current-day span.text-red-600'), 'No Service targets the red-600 span');
-assert(css.includes('color: #f87171 !important;'), 'No Service uses dark-mode red-400 in light and dark');
+assert(/#current-day span\.text-red-600[\s\S]{0,280}color:\s*#fff !important;/.test(css), 'No Service text is white');
+assert(/#current-day span\.text-red-600[\s\S]{0,280}background:\s*#b91c1c/.test(css), 'No Service sits on a red pill');
+assert(!css.includes('color: #f87171 !important;'), 'No Service is not pale red on the blue header');
 assert(!/#current-day span\.text-red-600[\s\S]{0,180}color:\s*#dc2626 !important;/.test(css), 'No Service no longer uses red-600 on Classic light');
-assert(css.includes('html.dark #current-day span.text-red-600'), 'dark No Service uses one red-400');
+assert(css.includes('html.dark #current-day span.text-red-600'), 'dark No Service uses the same pill');
 assert(css.includes('color: var(--nt-chrome-muted) !important'), 'Classic Sunday stays muted chrome, not white');
 assert(css.includes('#notice-bell.nt-bell-info {\n  background-color: #ffffff !important;'), 'info bell is a white disc on every pack');
 assert(css.includes('html.dark #notice-bell.nt-bell-info {\n  background-color: #ffffff !important;'), 'dark info bell keeps a white disc');
@@ -134,7 +141,8 @@ assert(chrome.includes('applyAdminAuthedChrome'), 'admin-chrome reveal helper ex
 assert(chrome.includes('Never use five-tap unlock'), 'admin chrome is not five-tap gated');
 
 const layout = readFileSync(new URL('../src/layouts/Layout.astro', import.meta.url), 'utf8');
-assert(layout.includes('calc(var(--nt-nav-h, 4rem) + var(--nt-sys-bottom, env(safe-area-inset-bottom, 0px)) + 0.75rem)'), 'board padding clears the nav plus the safe area');
+assert(layout.includes('calc(var(--nt-nav-h, 4rem) + var(--nt-sys-bottom, env(safe-area-inset-bottom, 0px)));'), 'board padding equals the nav height plus the safe area');
+assert(!layout.includes('calc(var(--nt-nav-h, 4rem) + var(--nt-sys-bottom, env(safe-area-inset-bottom, 0px)) + 0.75rem)'), 'board padding does not add a gap past the nav');
 assert(layout.includes('window.ntCartoVoyagerUrl'), 'Layout exposes optional CARTO Voyager URL helper');
 assert(layout.includes('PUBLIC_CARTO_API_KEY'), 'Layout reads PUBLIC_CARTO_API_KEY');
 assert(layout.includes('html.nt-onboarding #bottom-nav'), 'Welcome hides the bottom bar');
@@ -328,6 +336,8 @@ assert(liveBoardModals.includes('id="modal-title-day"'), 'upcoming title has a d
 assert(liveBoardModals.includes('id="route-modal-close-btn"'), 'Select Route Close has an id');
 
 const liveBoardUi = readFileSync(new URL('../src/lib/live-board-ui.js', import.meta.url), 'utf8');
+assert(liveBoardUi.includes('class="nt-line-mark'), 'route colour is a stripe beside the name');
+assert(!liveBoardUi.includes('group-hover:text-blue-600'), 'route name does not turn blue on hover');
 assert(liveBoardUi.includes('fitScheduleModalRouteTitle'), 'upcoming route title shrinks to one line');
 assert(liveBoardUi.includes('pinRouteIfRegionHasNoDefault'), 'first route pick in a new region is pinned');
 assert(liveBoardUi.includes('syncRouteModalCloseBtn'), 'Select Route Close syncs to current route');
@@ -437,7 +447,11 @@ assert(!board.includes('absolute right-3 top-1/2'), 'timetable chevron is in the
 assert(board.includes('w-8 h-8'), 'timetable calendar spans both CTA lines');
 assert(board.includes('rect x="3" y="4" width="18" height="18"'), 'timetable CTA has calendar SVG');
 assert(board.includes('M8 14h.01M12 14h.01'), 'timetable calendar has day dots');
-assert(board.includes('VIEW FULL TIMETABLE'), 'timetable label is the production all-caps row');
+assert(board.includes('View full timetable'), 'timetable label is sentence case');
+assert(!board.includes('VIEW FULL TIMETABLE'), 'timetable label is not all caps');
+assert(/id="view-full-timetable-btn"[^>]*font-semibold/.test(board), 'timetable button is not heavy black weight');
+assert(/id="passenger-type-label"[^>]*text-gray-500/.test(board), 'fare profile word matches the rest of the label');
+assert(!/id="passenger-type-label"[^>]*text-blue-500/.test(board), 'fare profile word is not blue');
 assert(board.includes('id="last-updated-date"'), 'effective date element exists');
 assert(/id="view-full-timetable-btn"[\s\S]{0,1200}id="last-updated-date"/.test(board), 'effective date sits inside the timetable button');
 assert(!board.includes('id="share-app-btn"'), 'board footer no longer has Share App');

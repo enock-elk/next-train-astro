@@ -63,6 +63,8 @@ assert(css.includes('color-mix(in srgb, var(--nt-chrome-fg) 20%, transparent)'),
 assert(css.includes('color-mix(in srgb, var(--nt-chrome-fg) 45%, transparent)'), 'inactive tabs are clearly dimmer than the active label');
 assert(!css.includes('color-mix(in srgb, var(--nt-chrome-fg) 70%, transparent)'), 'inactive tabs are not 70% white');
 assert(!css.includes('#bottom-nav .bottom-nav-item.is-active::before'), 'active tab has no top bar');
+assert(/#route-subtitle-text \{\s*text-shadow: 0 1px 0 rgba\(15, 23, 42, 0\.32\);/.test(css), 'route name has a slight shadow on light cards');
+assert(/html\.dark #route-subtitle-text \{\s*text-shadow: 0 1px 1px rgba\(0, 0, 0, 0\.5\);/.test(css), 'route name shadow stays a soft edge on dark cards');
 assert(/#bottom-nav\.bottom-nav-bar \{[\s\S]*?border-radius: 0;/.test(css), 'bottom nav is rectangular');
 assert(css.includes('#current-day'), 'day label letter-spacing rule present');
 

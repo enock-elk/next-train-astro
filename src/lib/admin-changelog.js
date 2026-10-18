@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_10.18.5': [
+        'The route name keeps its line colour. A slight shadow separates yellow from a white card. On a dark card the shadow is a soft lower edge. No commuter What\'s New. forceShow stays false.',
+    ],
     'V9_10.18.4': [
         'The route name, No Service line, fare label, timetable button, and page padding are back to the previous treatment. The bottom bar stays a pill behind the icon, with dimmer inactive labels and no top line. No commuter What\'s New. forceShow stays false.',
     ],

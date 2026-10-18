@@ -535,6 +535,16 @@ html.dark #bottom-nav .bottom-nav-item.is-active {
   letter-spacing: 0.01em;
 }
 
+/* Line colour on the route card. Yellow on white is about 2:1, so a slight
+   shadow gives the letters an edge. Dark cards already hold the gold; the
+   shadow there is only a soft lower edge, not a light halo. */
+#route-subtitle-text {
+  text-shadow: 0 1px 0 rgba(15, 23, 42, 0.32);
+}
+html.dark #route-subtitle-text {
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.5);
+}
+
 /* Brand-left header: solid pack primary */
 #tab-sliding-indicator {
   background-color: var(--nt-primary) !important;

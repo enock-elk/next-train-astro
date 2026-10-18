@@ -2988,6 +2988,118 @@ function bindBlurBackdropDismiss() {
     });
 }
 
+/** Bottom sheets that rise from the bottom. Pull down on the card to close. */
+const BOTTOM_SHEET_CLOSE = {
+    'planner-fare-breakdown-sheet': () => closeSmoothModal('planner-fare-breakdown-sheet'),
+    'reports-feed-modal': () => closeSmoothModal('reports-feed-modal'),
+    'nt-nearby-trains-modal': () => document.getElementById('nt-nearby-close')?.click(),
+    'nt-live-tracker-modal': () => document.getElementById('nt-live-tracker-close')?.click(),
+    'nt-on-train-sheet': () => document.getElementById('nt-on-train-secondary')?.click()
+        || document.getElementById('nt-on-train-tertiary')?.click(),
+    'account-badge-how-sheet': () => document.getElementById('account-badge-how-overlay')?.click(),
+    'account-contrib-sheet': () => document.getElementById('account-contrib-overlay')?.click(),
+    'account-points-sheet': () => document.getElementById('account-points-overlay')?.click(),
+};
+
+function isBottomSheetHost(el) {
+    if (!el || el.nodeType !== 1 || !el.id) return false;
+    if (el.classList.contains('hidden')) return false;
+    if (BOTTOM_SHEET_CLOSE[el.id]) return true;
+    const cls = typeof el.className === 'string' ? el.className : '';
+    return el.classList.contains('fixed') && cls.includes('items-end') && cls.includes('inset-0');
+}
+
+function sheetCardFromHost(host) {
+    return host.querySelector(':scope > div:not([aria-hidden])') || host.firstElementChild;
+}
+
+function bindBottomSheetPullDismiss() {
+    if (typeof document === 'undefined' || window.__ntSheetPullBound) return;
+    window.__ntSheetPullBound = true;
+    let drag = null;
+
+    const resolveHost = (target) => {
+        let node = target;
+        while (node && node !== document.body) {
+            if (isBottomSheetHost(node)) return node;
+            node = node.parentElement;
+        }
+        return Object.keys(BOTTOM_SHEET_CLOSE)
+            .map((id) => document.getElementById(id))
+            .find((el) => el && !el.classList.contains('hidden') && el.contains(target)) || null;
+    };
+
+    const onStart = (clientY, target) => {
+        const host = resolveHost(target);
+        if (!host) return;
+        const card = sheetCardFromHost(host);
+        if (!card || !card.contains(target)) return;
+        const scrollers = card.querySelectorAll('[class*="overflow-y"], .overflow-y-auto, .custom-scrollbar');
+        for (const sc of scrollers) {
+            if (sc.contains(target) && sc.scrollTop > 2) return;
+        }
+        const rect = card.getBoundingClientRect();
+        if (clientY > rect.top + Math.min(96, rect.height * 0.35)) return;
+        drag = {
+            host,
+            card,
+            startY: clientY,
+            lastY: clientY,
+            moved: false,
+        };
+        card.style.transition = 'none';
+        card.style.willChange = 'transform';
+    };
+
+    const onMove = (clientY, event) => {
+        if (!drag) return;
+        const dy = Math.max(0, clientY - drag.startY);
+        drag.lastY = clientY;
+        drag.moved = dy > 6;
+        drag.card.style.transform = `translateY(${dy}px)`;
+        if (event && dy > 0) event.preventDefault();
+    };
+
+    const onEnd = () => {
+        if (!drag) return;
+        const { host, card, startY, lastY } = drag;
+        const dy = Math.max(0, lastY - startY);
+        drag = null;
+        card.style.transition = 'transform 0.22s ease-out';
+        const shouldClose = dy > 80;
+        if (shouldClose) {
+            card.style.transform = `translateY(${Math.max(dy, card.getBoundingClientRect().height)}px)`;
+            const close = BOTTOM_SHEET_CLOSE[host.id] || (() => closeSmoothModal(host.id));
+            setTimeout(() => {
+                close();
+                card.style.transform = '';
+                card.style.transition = '';
+                card.style.willChange = '';
+            }, 180);
+            return;
+        }
+        card.style.transform = '';
+        setTimeout(() => {
+            card.style.transition = '';
+            card.style.willChange = '';
+        }, 220);
+    };
+
+    document.addEventListener('touchstart', (ev) => {
+        const t = ev.touches?.[0];
+        if (!t) return;
+        onStart(t.clientY, ev.target);
+    }, { passive: true, capture: true });
+    document.addEventListener('touchmove', (ev) => {
+        if (!drag) return;
+        const t = ev.touches?.[0];
+        if (!t) return;
+        onMove(t.clientY, ev);
+    }, { passive: false, capture: true });
+    document.addEventListener('touchend', onEnd, { capture: true });
+    document.addEventListener('touchcancel', onEnd, { capture: true });
+}
+
 // --- ATTACH EXPORTS TO WINDOW FOR GLOBAL HTML ACCESS ---
 if (typeof window !== 'undefined') {
     window.triggerHaptic = triggerHaptic;
@@ -3027,6 +3139,7 @@ if (typeof window !== 'undefined') {
     initGlobalErrorHandler();
     bindHistoryBackNavigation();
     bindBlurBackdropDismiss();
+    bindBottomSheetPullDismiss();
     bindModalBackgroundGuard();
     installAnalyticsOfflineBridge();
     // Defer until #main-content exists (this module can load before the shell)

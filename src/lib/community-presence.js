@@ -227,7 +227,7 @@ function explainCommunityPresence() {
                 <p class="text-xs text-gray-500 dark:text-gray-400 leading-relaxed mb-4">
                     Presence updates while you’re on the page and clears shortly after you leave.
                 </p>
-                <button type="button" id="community-presence-info-close" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded-xl focus:outline-none">Got it</button>
+                <button type="button" id="community-presence-info-close" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg shadow-md transition-colors focus:outline-none">Got it</button>
             </div>`;
         document.body.appendChild(modal);
         modal.addEventListener('click', (e) => {

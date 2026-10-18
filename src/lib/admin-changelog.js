@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_10.18.13': [
+        'Bottom sheets close on a pull down. Sunday No service is one quiet pill with an amber dot. Signed-in Account matches a ride-app layout: large name, photo on the right, quick tiles, then Sign out. Feedback Hub header is shorter. What\'s New and Today\'s schedule share the same type stack and Got it button, without a blank slab under the card. Trip fare bolds only the word Peak. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_10.18.12': [
         'Scroll fades show on the opposite edge once you leave the start of a sheet, the page, or the timetable. Earthy light buttons use the fare Zone badge outline. The info strip name and the Info chip share one ink, and the chip is the word Info. Co-Pilot keeps the line you are typing above Suggest reply. Account drops the Account and Profile headings, puts the photo on the right, and opens Passenger type on the saved choice. Share your trip blurs the screen behind it and shows a progress bar. A share that outlives the browser is recorded from the last real ping, and stops after 10 minutes idle or 4 hours. No commuter What\'s New. forceShow stays false.',
     ],

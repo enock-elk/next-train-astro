@@ -500,12 +500,13 @@ assert(hubModals.includes('id="messages-thread-contact-row"') && hubModals.inclu
 assert(hubModals.includes('id="account-delete-type"'), 'delete confirm requires typing DELETE');
 assert(hubModals.includes('id="account-badge-how-sheet"') && hubModals.includes('id="account-badge-how-close"'), 'badge how-to sheet exists');
 assert(
-    hubModals.indexOf('id="account-modal-display-name"') < hubModals.indexOf('id="account-signout-btn"')
+    hubModals.indexOf('id="account-modal-display-name"') < hubModals.indexOf('id="account-profile-panel"')
+    && hubModals.indexOf('id="account-profile-panel"') < hubModals.indexOf('id="account-points-btn"')
+    && hubModals.indexOf('id="account-points-btn"') < hubModals.indexOf('id="account-passenger-type-btn"')
+    && hubModals.indexOf('id="account-passenger-type-btn"') < hubModals.indexOf('id="account-signout-btn"')
     && hubModals.indexOf('id="account-signout-btn"') < hubModals.indexOf('id="account-delete-btn"')
-    && hubModals.indexOf('id="account-delete-btn"') < hubModals.indexOf('id="account-passenger-type-btn"')
-    && hubModals.indexOf('id="account-passenger-type-btn"') < hubModals.indexOf('id="account-points-btn"')
-    && hubModals.indexOf('id="account-points-btn"') < hubModals.indexOf('id="account-settings-host"'),
-    'signed-in Account order is profile accordion, then passenger type, points, and settings',
+    && hubModals.indexOf('id="account-delete-btn"') < hubModals.indexOf('id="account-settings-host"'),
+    'signed-in Account order is identity, profile edit, points and passenger tiles, then Sign out and settings',
 );
 assert(hubModals.includes('?from=account'), 'Account legal links return with from=account');
 assert(hubModals.includes('account-points-panel'), 'points details live inside Account');
@@ -519,7 +520,7 @@ assert(
     && hubModals.indexOf('id="account-edit-display-name"') < hubModals.indexOf('id="account-photo-alerts"')
     && hubModals.indexOf('id="account-photo-alerts"') < hubModals.indexOf('id="account-save-display-name"')
     && hubModals.indexOf('id="account-save-display-name"') < hubModals.indexOf('id="account-signout-btn"'),
-    'profile accordion holds the name field, photo switch, Save, and Sign out',
+    'profile edit holds the name field, photo switch, and Save before Sign out',
 );
 assert(!accountJs.includes("insertAdjacentElement('afterend'"), 'points panel stays in the tall sheet');
 assert(accountJs.includes("openSmoothModal('profile-modal')"), 'passenger type opens the profile modal on the account back stack');

@@ -555,8 +555,8 @@ button#current-day {
   -webkit-appearance: none;
   display: inline-flex;
   align-items: center;
-  margin: 0;
-  padding: 0.08rem 0.12rem 0.08rem 0.48rem;
+  margin: 0.2rem 0 0.15rem;
+  padding: 0.2rem 0.75rem;
   border: 1px solid color-mix(in srgb, var(--nt-chrome-fg) 36%, transparent);
   border-radius: 999px;
   background: linear-gradient(
@@ -569,6 +569,13 @@ button#current-day {
   cursor: pointer;
   max-width: 100%;
   line-height: 1.15;
+}
+/* Sunday / closed Saturday: one quiet pill. Amber dot carries status; text stays calm. */
+button#current-day.nt-day-quiet {
+  border: none;
+  background: color-mix(in srgb, var(--nt-chrome-fg) 14%, transparent);
+  box-shadow: none;
+  color: color-mix(in srgb, var(--nt-chrome-fg) 90%, transparent) !important;
 }
 button#current-day:focus-visible {
   outline: 2px solid color-mix(in srgb, var(--nt-chrome-fg) 75%, transparent);
@@ -637,6 +644,9 @@ html[data-colour-pack="contrast"] .bottom-nav-item.is-active {
 #close-modal-btn-2,
 #fare-modal-close-btn,
 #schedule-day-ok,
+#schedule-override-ok,
+#changelog-got-it,
+#community-presence-info-close,
 #planner-train-sheet-close {
   background-color: var(--nt-primary) !important;
   border: 1px solid color-mix(in srgb, var(--nt-primary) 70%, #000) !important;
@@ -722,6 +732,9 @@ html[data-colour-pack="earthy"]:not(.dark) :is(
   #close-modal-btn-2,
   #fare-modal-close-btn,
   #schedule-day-ok,
+  #schedule-override-ok,
+  #changelog-got-it,
+  #community-presence-info-close,
   #planner-train-sheet-close,
   #alerts-channel-footer-close,
   #close-map-btn-2,
@@ -2435,30 +2448,41 @@ html[data-colour-pack="classic"] #current-day span:not(.text-red-600):not(.dark\
 html:not([data-colour-pack]) #current-day span:not(.text-red-600):not(.dark\:text-red-400) {
   color: var(--nt-chrome-muted) !important;
 }
-/* Weekday and Saturday sit in a quiet capsule. No Service is a solid
-   status pill: white type on red. Pale red type on the blue bar was too
-   faint. SEO pages keep the pale red on a paragraph. */
-html[data-colour-pack="classic"] button#current-day span:not(.text-red-600):not(.dark\:text-red-400),
-html:not([data-colour-pack]) button#current-day span:not(.text-red-600):not(.dark\:text-red-400) {
+/* Weekday and Saturday sit in a quiet capsule inside the day control.
+   Sunday / closed Saturday use .nt-day-quiet: no nested red pill. */
+html[data-colour-pack="classic"] button#current-day:not(.nt-day-quiet) span:not(.text-red-600):not(.dark\:text-red-400),
+html:not([data-colour-pack]) button#current-day:not(.nt-day-quiet) span:not(.text-red-600):not(.dark\:text-red-400) {
   color: var(--nt-chrome-fg) !important;
   margin-left: 0.12rem;
   padding: 0.05rem 0.42rem;
   border-radius: 999px;
   background: color-mix(in srgb, var(--nt-chrome-fg) 16%, transparent);
 }
-button#current-day span.text-red-600,
-html.dark button#current-day span.text-red-600,
-html.dark button#current-day span.dark\:text-red-400 {
+button#current-day.nt-day-quiet span.text-red-600,
+html.dark button#current-day.nt-day-quiet span.text-red-600,
+html.dark button#current-day.nt-day-quiet span.dark\:text-red-400 {
   display: inline-flex;
   align-items: center;
-  gap: 0.28rem;
-  margin-left: 0.28rem;
-  padding: 0.06rem 0.48rem;
-  border-radius: 999px;
-  background: #e11d48;
-  color: #fff !important;
-  letter-spacing: 0.035em;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 1px 1px rgba(0, 0, 0, 0.22);
+  gap: 0.375rem;
+  margin-left: 0.35rem;
+  padding: 0;
+  border-radius: 0;
+  background: none;
+  color: color-mix(in srgb, var(--nt-chrome-fg) 90%, transparent) !important;
+  letter-spacing: 0.01em;
+  font-weight: 600 !important;
+  box-shadow: none;
+}
+button#current-day.nt-day-quiet span.text-red-600::before,
+html.dark button#current-day.nt-day-quiet span.text-red-600::before,
+html.dark button#current-day.nt-day-quiet span.dark\:text-red-400::before {
+  content: "";
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #fbbf24;
+  flex-shrink: 0;
 }
 p#current-day span.text-red-600,
 html.dark p#current-day span.text-red-600,
@@ -2504,12 +2528,40 @@ html.dark:not([data-colour-pack]) #bottom-nav .bottom-nav-item.is-active {
 #schedule-modal {
   padding-bottom: max(0.5rem, env(safe-area-inset-bottom, 0px));
 }
-[id$="-modal"].fixed:not(.full-screen):not(#welcome-modal):not(#blackbox-modal):not(#messages-thread-modal):not(#account-modal):not(#admin-reply-modal):not(#planner-train-sheet-modal):not(#help-modal):not(#schedule-modal),
+/* Centered info cards (What's New, Today's schedule, and the same type) sit
+   in the middle of the scrim. The bottom-nav clearance left a blank slab
+   under the card. Bottom sheets and tall lists keep the clearance below. */
+#changelog-modal,
+#schedule-day-modal,
+#schedule-override-modal,
+#holiday-notice-modal,
+#community-presence-info-modal,
+#notice-modal,
+#profile-modal,
+#cache-clear-modal,
+#phone-reset-modal,
+#phone-reset-network-modal,
+#exit-modal,
+#redirect-modal,
+#region-confirm-modal,
+#network-struggle-modal {
+  padding-bottom: max(0.75rem, env(safe-area-inset-bottom, 0px));
+}
+#changelog-modal > div,
+#schedule-day-modal > div,
+#schedule-override-modal > div,
+#holiday-notice-modal > div,
+#community-presence-info-modal > div,
+#notice-modal > div,
+#profile-modal > div {
+  max-height: min(85dvh, calc(var(--nt-app-h, 100dvh) - 1.5rem - var(--nt-sys-bottom, env(safe-area-inset-bottom, 0px)))) !important;
+}
+[id$="-modal"].fixed:not(.full-screen):not(#welcome-modal):not(#blackbox-modal):not(#messages-thread-modal):not(#account-modal):not(#admin-reply-modal):not(#planner-train-sheet-modal):not(#help-modal):not(#schedule-modal):not(#changelog-modal):not(#schedule-day-modal):not(#schedule-override-modal):not(#holiday-notice-modal):not(#community-presence-info-modal):not(#notice-modal):not(#profile-modal):not(#cache-clear-modal):not(#phone-reset-modal):not(#phone-reset-network-modal):not(#exit-modal):not(#redirect-modal):not(#region-confirm-modal):not(#network-struggle-modal),
 #nt-on-train-sheet {
   padding-bottom: calc(4.5rem + var(--nt-sys-bottom, env(safe-area-inset-bottom, 0px)));
   box-sizing: border-box;
 }
-[id$="-modal"].fixed:not(.full-screen):not(#welcome-modal):not(#blackbox-modal):not(#messages-thread-modal):not(#account-modal):not(#admin-reply-modal):not(#planner-train-sheet-modal):not(#help-modal):not(#schedule-modal) > div,
+[id$="-modal"].fixed:not(.full-screen):not(#welcome-modal):not(#blackbox-modal):not(#messages-thread-modal):not(#account-modal):not(#admin-reply-modal):not(#planner-train-sheet-modal):not(#help-modal):not(#schedule-modal):not(#changelog-modal):not(#schedule-day-modal):not(#schedule-override-modal):not(#holiday-notice-modal):not(#community-presence-info-modal):not(#notice-modal):not(#profile-modal):not(#cache-clear-modal):not(#phone-reset-modal):not(#phone-reset-network-modal):not(#exit-modal):not(#redirect-modal):not(#region-confirm-modal):not(#network-struggle-modal) > div,
 #nt-on-train-sheet > div {
   max-height: calc(var(--nt-app-h, 100dvh) - 5.5rem - var(--nt-sys-bottom, env(safe-area-inset-bottom, 0px))) !important;
 }

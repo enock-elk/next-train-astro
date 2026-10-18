@@ -894,7 +894,7 @@ function setAccountProfileOpen(open) {
     const chevron = document.getElementById('account-profile-chevron');
     if (panel) panel.classList.toggle('hidden', !open);
     if (toggle) toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
-    if (chevron) chevron.classList.toggle('rotate-180', !!open);
+    if (chevron && chevron.classList) chevron.classList.toggle('rotate-180', !!open);
     if (open) {
         const input = document.getElementById('account-edit-display-name');
         if (input && document.activeElement !== input) {

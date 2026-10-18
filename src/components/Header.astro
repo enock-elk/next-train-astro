@@ -67,16 +67,18 @@ for (const [id, route] of Object.entries(ROUTES)) {
         var holidayName = HOLIDAY_NAMES && HOLIDAY_NAMES[key];
         var satClosed = !!(routeId && SATURDAY_PLACEHOLDER_ROUTES && SATURDAY_PLACEHOLDER_ROUTES.indexOf(routeId) !== -1)
           && dayType !== 'sunday' && dayType !== 'weekday';
-        var type = dayType === 'sunday' ? 'No Service'
+        var quiet = dayType === 'sunday' || satClosed;
+        var type = dayType === 'sunday' ? 'No service'
           : (dayType === 'public_holiday' ? 'Public Holiday Schedule'
           : (dayType === 'saturday' ? 'Saturday Schedule' : 'Weekday Schedule'));
         if (holidayName) {
-          type = dayType === 'sunday' ? (holidayName + ' · No Service')
+          type = dayType === 'sunday' ? (holidayName + ' · No service')
             : (dayType === 'public_holiday' ? (holidayName + ' · Public Holiday') : (holidayName + ' Schedule'));
         }
-        if (satClosed) type = holidayName ? (holidayName + ' · No Service') : 'No Service';
-        var typeClass = (dayType === 'sunday' || satClosed)
-          ? 'font-bold text-red-600 dark:text-red-400'
+        if (satClosed) type = holidayName ? (holidayName + ' · No service') : 'No service';
+        el.classList.toggle('nt-day-quiet', quiet);
+        var typeClass = quiet
+          ? 'font-semibold text-red-600 dark:text-red-400'
           : 'font-bold text-blue-600 dark:text-blue-400';
         el.innerHTML = names[day] + '<span class="' + typeClass + '">' + type + '</span>';
         if (typeof window.fitHeaderDayLabel === 'function') window.fitHeaderDayLabel();

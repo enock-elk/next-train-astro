@@ -169,11 +169,11 @@ export function describeHeaderDayNote({
         const body = line
             ? `${who} does not run regular Sunday trains on the ${line} line.`
             : `${who} does not run regular Sunday trains on this line.`;
-        return { title: 'No Service', body: holiday ? `${holiday}. ${body}` : body };
+        return { title: 'No service', body: holiday ? `${holiday}. ${body}` : body };
     }
     const publicHoliday = holidayType === 'public_holiday' || holidayType === 'saturday' || dayType === 'public_holiday';
     if (satClosed) {
-        return { title: 'No Service', body: saturdayClosedBody(routeId, publicHoliday, holiday) };
+        return { title: 'No service', body: saturdayClosedBody(routeId, publicHoliday, holiday) };
     }
     if (publicHoliday) {
         const sheet = resolveScheduleSheetFamily(dayType === 'public_holiday' ? 'public_holiday' : 'saturday', region);
@@ -230,24 +230,26 @@ export function paintHeaderDayLabel(opts = {}) {
     const noSatOnRoute = opts.noSaturdayOnRoute != null ? !!opts.noSaturdayOnRoute : currentRouteSaturdayClosed();
     const satClosed = usesSaturdayScheduleSheet(dayType, region) && noSatOnRoute;
 
-    let displayType = dayType === 'sunday' ? 'No Service'
+    const noService = dayType === 'sunday' || satClosed;
+    let displayType = dayType === 'sunday' ? 'No service'
         : (dayType === 'public_holiday' ? 'Public Holiday Schedule'
         : (dayType === 'saturday' ? 'Saturday Schedule' : 'Weekday Schedule'));
     if (dateKey && HOLIDAY_NAMES[dateKey]) {
         displayType = dayType === 'sunday'
-            ? `${HOLIDAY_NAMES[dateKey]} · No Service`
+            ? `${HOLIDAY_NAMES[dateKey]} · No service`
             : (dayType === 'public_holiday'
                 ? `${HOLIDAY_NAMES[dateKey]} · Public Holiday`
                 : `${HOLIDAY_NAMES[dateKey]} Schedule`);
     }
     if (satClosed && dayType !== 'sunday') {
         displayType = (dateKey && HOLIDAY_NAMES[dateKey])
-            ? `${HOLIDAY_NAMES[dateKey]} · No Service`
-            : 'No Service';
+            ? `${HOLIDAY_NAMES[dateKey]} · No service`
+            : 'No service';
     }
-    const typeClass = (dayType === 'sunday' || satClosed)
-        ? 'font-bold text-red-600 dark:text-red-400'
+    const typeClass = noService
+        ? 'font-semibold text-red-600 dark:text-red-400'
         : 'font-bold text-blue-600 dark:text-blue-400';
+    el.classList.toggle('nt-day-quiet', noService);
     const html = `${dayNames[day] || ''}<span class="${typeClass}">${displayType}</span>`;
     if (el.innerHTML !== html) el.innerHTML = html;
     const holidayName = dateKey && HOLIDAY_NAMES[dateKey] ? HOLIDAY_NAMES[dateKey] : '';

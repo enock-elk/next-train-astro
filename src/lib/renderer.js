@@ -1435,8 +1435,8 @@ export const Renderer = {
             modal.id = 'changelog-modal';
             modal.className = 'fixed inset-0 bg-black bg-opacity-70 z-[140] hidden flex items-center justify-center p-4 backdrop-blur-sm transition-opacity duration-300';
             modal.innerHTML = `
-                <div class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-sm p-0 overflow-hidden transform transition-all scale-95 flex flex-col max-h-[85vh]">
-                    <div class="p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center bg-gray-50 dark:bg-gray-900">
+                <div class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-sm p-0 overflow-hidden transform transition-all scale-95 flex flex-col max-h-[min(85dvh,calc(100dvh-2rem))]">
+                    <div class="p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center bg-gray-50 dark:bg-gray-900 shrink-0">
                         <div>
                             <h3 class="font-bold text-lg text-gray-900 dark:text-white">What's New</h3>
                             <p class="changelog-app-version mt-0.5 font-mono text-[11px] font-black tracking-widest text-gray-400">${escapeHTML(APP_VERSION)}</p>
@@ -1445,9 +1445,9 @@ export const Renderer = {
                             <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
                         </button>
                     </div>
-                    <div class="p-6 overflow-y-auto flex-grow space-y-6" id="changelog-list"></div>
-                    <div class="p-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 text-center">
-                        <button type="button" onclick="if(window.closeSmoothModal) closeSmoothModal('changelog-modal'); else history.back();" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg shadow-md transition-colors">Got it!</button>
+                    <div class="p-6 overflow-y-auto flex-grow space-y-6 min-h-0" id="changelog-list"></div>
+                    <div class="p-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 text-center shrink-0">
+                        <button type="button" id="changelog-got-it" onclick="if(window.closeSmoothModal) closeSmoothModal('changelog-modal'); else history.back();" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg shadow-md transition-colors">Got it</button>
                     </div>
                 </div>`;
             document.body.appendChild(modal);

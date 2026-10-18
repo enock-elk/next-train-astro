@@ -91,12 +91,13 @@ assert(!logic.includes('titlePx * 0.55'), 'day line is not scaled as a second he
 assert(!/#current-day,[\s\S]{0,220}font-size: 2\.55rem/.test(css), 'day line no longer defaults to the title size');
 assert(!css.includes('#current-day span {\n  font-weight: inherit'), 'day line span no longer inherits the title color');
 assert(!css.includes('color: #fecaca !important'), 'Classic No Service is not peach-red');
-assert(css.includes('button#current-day span.text-red-600'), 'No Service targets the day button');
-assert(css.includes('background: #e11d48'), 'No Service is a solid red status pill');
-assert(css.includes('color: #fff !important;'), 'No Service pill uses white type');
+assert(css.includes('button#current-day.nt-day-quiet'), 'Sunday uses the quiet day class');
+assert(css.includes('background: #fbbf24'), 'Sunday status is an amber dot');
+assert(css.includes('button#current-day.nt-day-quiet span.text-red-600::before'), 'Sunday status paints a leading dot');
 assert(css.includes('color: #f87171 !important;'), 'SEO day line keeps pale red');
+assert(!css.includes('background: #e11d48'), 'Sunday is no longer a solid red nested pill');
 assert(!/#current-day span\.text-red-600[\s\S]{0,180}color:\s*#dc2626 !important;/.test(css), 'No Service no longer uses red-600 on Classic light');
-assert(css.includes('html.dark button#current-day span.text-red-600'), 'dark No Service uses the same pill');
+assert(css.includes('html.dark button#current-day.nt-day-quiet span.text-red-600'), 'dark Sunday uses the quiet pill');
 assert(css.includes('clamp(1.35rem, 4.15dvh, 2.35rem)'), 'header wordmark tracks screen height');
 assert(css.includes('color: var(--nt-chrome-muted) !important'), 'Classic Sunday stays muted chrome, not white');
 assert(css.includes('#notice-bell.nt-bell-info {\n  background-color: #ffffff !important;'), 'info bell is a white disc on every pack');
@@ -116,7 +117,10 @@ assert(!header.includes('-mt-0.5'), 'bell is not nudged above the wordmark');
 assert(header.includes('text-[11px] sm:text-xs font-medium'), 'Header day line uses the original subtitle face');
 assert(header.includes('<button type="button" id="current-day"'), 'the day line is a button');
 assert(css.includes('button#current-day'), 'the day line reads as a control');
-assert(css.includes('background: #e11d48'), 'No Service stays a red pill on the day button');
+assert(css.includes('nt-day-quiet'), 'No service stays a quiet day pill on the day button');
+assert(css.includes('#changelog-modal'), 'What\'s New skips the bottom-nav clearance gap');
+assert(logic.includes("title: 'No service'") || logic.includes('No service'), 'Sunday note title is sentence case');
+assert(logic.includes('nt-day-quiet'), 'header day label toggles the quiet class');
 assert(!header.includes('header-day-label'), 'Header day line is not a second bold title');
 assert(header.includes('fitHeaderDayLabel') || logic.includes('fitHeaderDayLabel'), 'day line fit helper is present');
 
@@ -537,11 +541,15 @@ assert(/#nt-shell #messages-thread-modal\.fixed \{\s*position: absolute !importa
 assert(!/#nt-shell #messages-thread-modal\.fixed \{[^}]*var\(--nt-(app-h|shell-h|vv-h|feedback-vv)/.test(layout), 'Feedback Hub is not sized from a measured viewport token');
 assert(layout.includes('hubOn'), 'keyboard keeps Feedback Hub shell height like Community');
 assert(
-    css.includes(':not(#blackbox-modal):not(#messages-thread-modal):not(#account-modal):not(#admin-reply-modal):not(#planner-train-sheet-modal):not(#help-modal):not(#schedule-modal) > div'),
+    css.includes(':not(#messages-thread-modal):not(#account-modal):not(#admin-reply-modal)')
+        && css.includes(':not(#changelog-modal)')
+        && css.includes('> div'),
     'Feedback Hub, Account, and Co-Pilot cards are not capped by the bottom-nav clearance that left the slab'
 );
 assert(
-    css.includes(':not(#blackbox-modal):not(#messages-thread-modal):not(#account-modal):not(#admin-reply-modal):not(#planner-train-sheet-modal):not(#help-modal):not(#schedule-modal),'),
+    css.includes(':not(#messages-thread-modal):not(#account-modal):not(#admin-reply-modal)')
+        && css.includes(':not(#schedule-day-modal)')
+        && css.includes('padding-bottom: calc(4.5rem'),
     'Feedback Hub, Account, and Co-Pilot do not get the bottom-nav padding meant for centred cards'
 );
 assert(layout.includes('#nt-shell #account-modal.fixed'), 'Account overlay is a full-screen page');

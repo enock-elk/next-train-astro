@@ -300,93 +300,89 @@ import { withBase } from '../lib/config.js';
         <div class="px-4 pt-1 pb-4 space-y-4 flex-1 min-h-0 overflow-y-auto custom-scrollbar" data-feedback-scroll>
             <p id="account-error" class="px-1 text-[13px] font-normal text-red-600 dark:text-red-400 empty:hidden" role="alert"></p>
 
-            <!-- Signed-in panel -->
-            <div id="account-signed-in" class="hidden space-y-3">
-                <div class="rounded-[12px] overflow-hidden bg-white dark:bg-[#1c1c1e] border border-black/10 dark:border-white/10">
-                    <button type="button" id="account-profile-toggle" class="w-full flex items-center gap-3 px-4 py-2.5 text-left focus:outline-none active:bg-black/[0.03] dark:active:bg-white/[0.04]" aria-expanded="false" aria-controls="account-profile-panel">
-                        <div class="min-w-0 flex-1">
-                            <p id="account-modal-display-name" class="text-[17px] font-semibold tracking-tight text-gray-900 dark:text-white truncate">Passenger</p>
-                            <p id="account-modal-email" class="text-[13px] font-normal text-gray-500 dark:text-gray-400 truncate"></p>
-                        </div>
-                        <div class="w-12 h-12 rounded-full bg-[#e5e5ea] dark:bg-[#3a3a3c] flex items-center justify-center text-[18px] font-semibold text-gray-600 dark:text-gray-300 shrink-0 overflow-hidden ring-1 ring-black/5 dark:ring-white/10">
-                            <img id="account-modal-avatar-img" class="hidden w-full h-full object-cover" alt="" referrerpolicy="no-referrer">
-                            <span id="account-modal-avatar-letter" class="select-none"></span>
-                        </div>
-                        <svg id="account-profile-chevron" class="w-4 h-4 text-gray-400 shrink-0 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7"></path></svg>
-                    </button>
-                    <div id="account-profile-panel" class="hidden border-t border-black/10 dark:border-white/10">
-                        <div id="account-verify-card" class="hidden mx-4 mt-4 rounded-2xl border border-amber-200/80 dark:border-amber-700/50 bg-gradient-to-br from-amber-50 to-white dark:from-amber-950/40 dark:to-[#1c1c1e] px-4 py-4 space-y-3">
-                            <p id="account-verify-label" class="text-[15px] font-semibold text-gray-900 dark:text-white">Your email needs to be verified</p>
-                            <p class="text-[13px] font-normal text-gray-600 dark:text-gray-300 leading-snug">We sent a link to this address. Open it before this account can use messages. Google sign-in does not need this step.</p>
-                            <button type="button" id="account-verify-check-btn" class="w-full py-2.5 rounded-xl text-[13px] font-semibold text-white bg-gray-900 dark:bg-white dark:text-gray-900 focus:outline-none">I've verified</button>
-                            <button type="button" id="account-verify-resend-btn" class="w-full py-2.5 rounded-xl text-[13px] font-normal text-gray-800 dark:text-gray-100 bg-white/80 dark:bg-black/30 border border-black/10 dark:border-white/10 focus:outline-none">Send the email again</button>
-                        </div>
-                        <div class="px-4 pt-4 pb-2 space-y-3">
-                            <p class="text-[13px] font-normal text-gray-500 dark:text-gray-400 leading-snug">Used on the Community tab.</p>
-                            <div>
-                                <label class="block text-[12px] font-normal text-gray-500 dark:text-gray-400 mb-1" for="account-edit-display-name">Name</label>
-                                <input id="account-edit-display-name" type="text" maxlength="80" autocomplete="nickname" class="w-full h-11 px-3 rounded-[10px] bg-[#f2f2f7] dark:bg-[#2c2c2e] text-[13px] font-normal text-gray-900 dark:text-white focus:outline-none" placeholder="First name">
-                            </div>
-                            <p id="account-name-error" class="text-[13px] font-normal text-red-600 dark:text-red-400 empty:hidden" role="alert"></p>
-                            <button type="button" id="account-photo-toggle" class="w-full flex items-center justify-between gap-3 py-1 text-left focus:outline-none">
-                                <span class="min-w-0">
-                                    <span class="block text-[13px] font-normal text-gray-900 dark:text-white">Show my photo next to my name</span>
-                                    <span class="block text-[12px] font-normal text-gray-500 dark:text-gray-400 mt-0.5 leading-snug">Off unless you turn it on.</span>
-                                </span>
-                                <span class="relative inline-block w-10 align-middle select-none shrink-0">
-                                    <input type="checkbox" id="account-photo-alerts" class="toggle-checkbox absolute block w-5 h-5 rounded-full bg-white border-4 border-gray-300 appearance-none cursor-pointer outline-none" />
-                                    <label for="account-photo-alerts" class="toggle-label block overflow-hidden h-5 rounded-full bg-gray-300 cursor-pointer"></label>
-                                </span>
-                            </button>
-                            <button type="button" id="account-save-display-name" data-account-action class="w-full py-2.5 rounded-xl text-[13px] font-semibold text-white bg-blue-600 focus:outline-none">Save</button>
-                        </div>
-                        <button type="button" id="account-signout-btn" data-account-action class="w-full flex items-center px-4 py-[13px] text-left border-t border-black/10 dark:border-white/10 focus:outline-none active:bg-black/[0.03] dark:active:bg-white/[0.04]">
-                            <span class="text-[13px] font-normal text-[#ff3b30]">Sign out</span>
-                        </button>
-                        <div id="account-signout-confirm" class="hidden px-4 py-3 space-y-3 border-t border-black/10 dark:border-white/10">
-                            <p class="text-[13px] font-normal text-gray-600 dark:text-gray-300 leading-snug">Sign out of this account?</p>
-                            <div class="flex gap-2">
-                                <button type="button" id="account-signout-cancel-btn" class="flex-1 py-2 rounded-lg text-[13px] font-normal text-gray-700 dark:text-gray-200 bg-[#f2f2f7] dark:bg-[#2c2c2e] focus:outline-none">Cancel</button>
-                                <button type="button" id="account-signout-confirm-btn" class="flex-1 py-2 rounded-lg text-[13px] font-normal text-white bg-[#ff3b30] focus:outline-none">Sign out</button>
-                            </div>
-                        </div>
-                        <div id="account-session-actions" class="border-t border-black/10 dark:border-white/10">
-                            <div id="account-delete-wrap">
-                                <button type="button" id="account-delete-btn" class="w-full px-4 py-[13px] text-[13px] font-normal text-[#ff3b30] text-left focus:outline-none">
-                                    Delete account
-                                </button>
-                                <div id="account-delete-confirm" class="hidden px-4 pb-4 space-y-3">
-                                    <p class="text-[13px] font-normal text-gray-600 dark:text-gray-300 leading-snug">This sends a deletion request. You will be signed out.</p>
-                                    <label class="block text-[12px] font-normal text-gray-500 dark:text-gray-400" for="account-delete-type">Type DELETE to confirm</label>
-                                    <input id="account-delete-type" type="text" autocomplete="off" autocapitalize="characters" class="w-full h-11 px-3 rounded-lg bg-[#f2f2f7] dark:bg-[#2c2c2e] text-[13px] font-normal text-gray-900 dark:text-white focus:outline-none" placeholder="DELETE">
-                                    <div class="flex gap-2">
-                                        <button type="button" id="account-delete-cancel-btn" class="flex-1 py-2 rounded-lg text-[13px] font-normal text-gray-700 dark:text-gray-200 bg-[#f2f2f7] dark:bg-[#2c2c2e] focus:outline-none">Cancel</button>
-                                        <button type="button" id="account-delete-confirm-btn" data-account-action disabled class="flex-1 py-2 rounded-lg text-[13px] font-normal text-white bg-[#ff3b30] opacity-40 focus:outline-none">Delete</button>
-                                    </div>
-                                </div>
-                            </div>
-                            <button type="button" id="account-reset-phone-btn" class="w-full px-4 py-[13px] text-[13px] font-normal text-[#ff3b30] text-left border-t border-black/10 dark:border-white/10 focus:outline-none">
-                                Reset this App
-                            </button>
-                        </div>
+            <!-- Signed-in panel. Large name left, photo right; quick tiles; then account actions. -->
+            <div id="account-signed-in" class="hidden space-y-4">
+                <button type="button" id="account-profile-toggle" class="w-full flex items-center gap-4 px-1 py-1 text-left focus:outline-none" aria-expanded="false" aria-controls="account-profile-panel">
+                    <div class="min-w-0 flex-1">
+                        <p id="account-modal-display-name" class="text-[28px] font-bold tracking-tight text-gray-900 dark:text-white truncate leading-none">Passenger</p>
+                        <p id="account-modal-email" class="mt-1.5 text-[14px] font-normal text-gray-500 dark:text-gray-400 truncate"></p>
                     </div>
-                    <button type="button" id="account-passenger-type-btn" class="w-full flex items-center justify-between gap-3 px-4 py-[13px] text-left border-t border-black/10 dark:border-white/10 focus:outline-none active:bg-black/[0.03] dark:active:bg-white/[0.04]">
-                        <span class="text-[13px] font-normal text-gray-900 dark:text-white">Passenger type</span>
-                        <span class="flex items-center gap-1 min-w-0">
+                    <div class="w-16 h-16 rounded-full bg-[#e8e8e8] dark:bg-[#3a3a3c] flex items-center justify-center text-[22px] font-semibold text-gray-600 dark:text-gray-300 shrink-0 overflow-hidden">
+                        <img id="account-modal-avatar-img" class="hidden w-full h-full object-cover" alt="" referrerpolicy="no-referrer">
+                        <span id="account-modal-avatar-letter" class="select-none"></span>
+                    </div>
+                    <svg id="account-profile-chevron" class="sr-only" aria-hidden="true"></svg>
+                </button>
+                <div id="account-profile-panel" class="hidden rounded-2xl bg-[#f6f6f6] dark:bg-[#1c1c1e] overflow-hidden">
+                    <div id="account-verify-card" class="hidden mx-4 mt-4 rounded-2xl border border-amber-200/80 dark:border-amber-700/50 bg-gradient-to-br from-amber-50 to-white dark:from-amber-950/40 dark:to-[#1c1c1e] px-4 py-4 space-y-3">
+                        <p id="account-verify-label" class="text-[15px] font-semibold text-gray-900 dark:text-white">Your email needs to be verified</p>
+                        <p class="text-[13px] font-normal text-gray-600 dark:text-gray-300 leading-snug">We sent a link to this address. Open it before this account can use messages. Google sign-in does not need this step.</p>
+                        <button type="button" id="account-verify-check-btn" class="w-full py-2.5 rounded-xl text-[13px] font-semibold text-white bg-gray-900 dark:bg-white dark:text-gray-900 focus:outline-none">I've verified</button>
+                        <button type="button" id="account-verify-resend-btn" class="w-full py-2.5 rounded-xl text-[13px] font-normal text-gray-800 dark:text-gray-100 bg-white/80 dark:bg-black/30 border border-black/10 dark:border-white/10 focus:outline-none">Send the email again</button>
+                    </div>
+                    <div class="px-4 pt-4 pb-4 space-y-3">
+                        <p class="text-[13px] font-normal text-gray-500 dark:text-gray-400 leading-snug">Used on the Community tab.</p>
+                        <div>
+                            <label class="block text-[12px] font-normal text-gray-500 dark:text-gray-400 mb-1" for="account-edit-display-name">Name</label>
+                            <input id="account-edit-display-name" type="text" maxlength="80" autocomplete="nickname" class="w-full h-11 px-3 rounded-[10px] bg-white dark:bg-[#2c2c2e] text-[13px] font-normal text-gray-900 dark:text-white focus:outline-none" placeholder="First name">
+                        </div>
+                        <p id="account-name-error" class="text-[13px] font-normal text-red-600 dark:text-red-400 empty:hidden" role="alert"></p>
+                        <button type="button" id="account-photo-toggle" class="w-full flex items-center justify-between gap-3 py-1 text-left focus:outline-none">
+                            <span class="min-w-0">
+                                <span class="block text-[13px] font-normal text-gray-900 dark:text-white">Show my photo next to my name</span>
+                                <span class="block text-[12px] font-normal text-gray-500 dark:text-gray-400 mt-0.5 leading-snug">Off unless you turn it on.</span>
+                            </span>
+                            <span class="relative inline-block w-10 align-middle select-none shrink-0">
+                                <input type="checkbox" id="account-photo-alerts" class="toggle-checkbox absolute block w-5 h-5 rounded-full bg-white border-4 border-gray-300 appearance-none cursor-pointer outline-none" />
+                                <label for="account-photo-alerts" class="toggle-label block overflow-hidden h-5 rounded-full bg-gray-300 cursor-pointer"></label>
+                            </span>
+                        </button>
+                        <button type="button" id="account-save-display-name" data-account-action class="w-full py-2.5 rounded-xl text-[13px] font-semibold text-white bg-blue-600 focus:outline-none">Save</button>
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <button type="button" id="account-points-btn" class="rounded-2xl bg-[#f3f3f3] dark:bg-[#1c1c1e] px-4 py-4 text-left focus:outline-none active:bg-[#ececec] dark:active:bg-[#2c2c2e]">
+                        <span class="block text-[16px] font-semibold text-gray-900 dark:text-white">Points</span>
+                        <span data-rider-marks class="block mt-0.5 text-[13px] font-normal text-gray-500 dark:text-gray-400 truncate">Bronze · 0 points</span>
+                    </button>
+                    <button type="button" id="account-passenger-type-btn" class="rounded-2xl bg-[#f3f3f3] dark:bg-[#1c1c1e] px-4 py-4 text-left focus:outline-none active:bg-[#ececec] dark:active:bg-[#2c2c2e]">
+                        <span class="block text-[16px] font-semibold text-gray-900 dark:text-white">Passenger type</span>
+                        <span class="mt-0.5 flex items-center gap-1 min-w-0">
                             <span id="account-passenger-type-display" class="text-[13px] font-normal text-gray-500 dark:text-gray-400 truncate">Adult</span>
                             <svg class="w-3.5 h-3.5 text-gray-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"></path></svg>
                         </span>
                     </button>
                 </div>
-                <p class="px-1 text-[12px] font-normal uppercase tracking-wide text-gray-500 dark:text-gray-500">Activity</p>
-                <div class="rounded-[12px] overflow-hidden bg-white dark:bg-[#1c1c1e] border border-black/10 dark:border-white/10">
-                    <button type="button" id="account-points-btn" class="w-full flex items-center justify-between gap-3 px-4 py-[13px] text-left focus:outline-none active:bg-black/[0.03] dark:active:bg-white/[0.04]">
-                        <span class="text-[13px] font-normal text-gray-900 dark:text-white">Points</span>
-                        <span class="flex items-center gap-1 min-w-0">
-                            <span data-rider-marks class="text-[13px] font-normal text-gray-500 dark:text-gray-400 truncate">Bronze · 0 points</span>
-                            <svg class="w-3.5 h-3.5 text-gray-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"></path></svg>
-                        </span>
+                <div class="rounded-2xl overflow-hidden bg-[#f3f3f3] dark:bg-[#1c1c1e]">
+                    <button type="button" id="account-signout-btn" data-account-action class="w-full flex items-center px-4 py-[13px] text-left focus:outline-none active:bg-black/[0.03] dark:active:bg-white/[0.04]">
+                        <span class="text-[15px] font-normal text-[#ff3b30]">Sign out</span>
                     </button>
+                    <div id="account-signout-confirm" class="hidden px-4 py-3 space-y-3 border-t border-black/10 dark:border-white/10">
+                        <p class="text-[13px] font-normal text-gray-600 dark:text-gray-300 leading-snug">Sign out of this account?</p>
+                        <div class="flex gap-2">
+                            <button type="button" id="account-signout-cancel-btn" class="flex-1 py-2 rounded-lg text-[13px] font-normal text-gray-700 dark:text-gray-200 bg-white dark:bg-[#2c2c2e] focus:outline-none">Cancel</button>
+                            <button type="button" id="account-signout-confirm-btn" class="flex-1 py-2 rounded-lg text-[13px] font-normal text-white bg-[#ff3b30] focus:outline-none">Sign out</button>
+                        </div>
+                    </div>
+                    <div id="account-session-actions" class="border-t border-black/10 dark:border-white/10">
+                        <div id="account-delete-wrap">
+                            <button type="button" id="account-delete-btn" class="w-full px-4 py-[13px] text-[15px] font-normal text-[#ff3b30] text-left focus:outline-none">
+                                Delete account
+                            </button>
+                            <div id="account-delete-confirm" class="hidden px-4 pb-4 space-y-3">
+                                <p class="text-[13px] font-normal text-gray-600 dark:text-gray-300 leading-snug">This sends a deletion request. You will be signed out.</p>
+                                <label class="block text-[12px] font-normal text-gray-500 dark:text-gray-400" for="account-delete-type">Type DELETE to confirm</label>
+                                <input id="account-delete-type" type="text" autocomplete="off" autocapitalize="characters" class="w-full h-11 px-3 rounded-lg bg-white dark:bg-[#2c2c2e] text-[13px] font-normal text-gray-900 dark:text-white focus:outline-none" placeholder="DELETE">
+                                <div class="flex gap-2">
+                                    <button type="button" id="account-delete-cancel-btn" class="flex-1 py-2 rounded-lg text-[13px] font-normal text-gray-700 dark:text-gray-200 bg-white dark:bg-[#2c2c2e] focus:outline-none">Cancel</button>
+                                    <button type="button" id="account-delete-confirm-btn" data-account-action disabled class="flex-1 py-2 rounded-lg text-[13px] font-normal text-white bg-[#ff3b30] opacity-40 focus:outline-none">Delete</button>
+                                </div>
+                            </div>
+                        </div>
+                        <button type="button" id="account-reset-phone-btn" class="w-full px-4 py-[13px] text-[15px] font-normal text-[#ff3b30] text-left border-t border-black/10 dark:border-white/10 focus:outline-none">
+                            Reset this App
+                        </button>
+                    </div>
                 </div>
             </div>
 
@@ -667,14 +663,11 @@ import { withBase } from '../lib/config.js';
 <!-- MESSAGES THREAD (commuter POV — WhatsApp-style Feedback Hub) -->
 <div id="messages-thread-modal" class="fixed inset-0 bg-white dark:bg-gray-900 z-[135] hidden flex items-stretch justify-center p-0 transition-opacity duration-300">
     <div class="bg-white dark:bg-gray-900 rounded-none shadow-none w-full max-w-md h-full flex flex-col overflow-hidden border-0">
-        <div class="flex items-center gap-1 px-2 pt-[max(1rem,env(safe-area-inset-top))] pb-3 border-b border-gray-200 dark:border-gray-700 shrink-0">
-            <button type="button" id="messages-thread-close" class="p-2 rounded-full text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none" aria-label="Back">
+        <div class="flex items-center gap-1 px-1 h-12 shrink-0 border-b border-gray-200 dark:border-gray-700" style="margin-top: env(safe-area-inset-top, 0px);">
+            <button type="button" id="messages-thread-close" class="w-10 h-10 inline-flex items-center justify-center rounded-full text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none" aria-label="Back">
                 <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
             </button>
-            <div class="min-w-0">
-                <p class="text-[10px] font-black uppercase tracking-widest text-gray-400">Next Train</p>
-                <h3 class="text-base font-black text-gray-900 dark:text-white tracking-tight">Feedback Hub</h3>
-            </div>
+            <h3 class="min-w-0 truncate text-[17px] font-semibold text-gray-900 dark:text-white tracking-tight">Feedback Hub</h3>
         </div>
         <div class="relative flex flex-col flex-1 min-h-0">
             <div class="nt-pack-wallpaper" aria-hidden="true"></div>
@@ -1270,30 +1263,35 @@ import { withBase } from '../lib/config.js';
     </div>
 </div>
 
-<!-- Today's timetable, opened from the day line under the title. -->
+<!-- Today's timetable, opened from the day line under the title. Same type stack as What's New. -->
 <div id="schedule-day-modal" class="fixed inset-0 bg-black/75 z-[220] hidden flex items-center justify-center p-4 backdrop-blur-sm transition-opacity duration-300">
-    <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-sm p-6 border border-blue-200 dark:border-blue-900/50 transform transition-all scale-95">
-        <p id="schedule-day-kicker" class="text-[10px] font-black uppercase tracking-widest text-blue-600 dark:text-blue-400">Today's schedule</p>
-        <h3 id="schedule-day-title" class="text-lg font-black text-gray-900 dark:text-white tracking-tight leading-snug mt-1">Schedule</h3>
-        <p id="schedule-day-body" class="text-sm text-gray-600 dark:text-gray-300 leading-relaxed mt-3 mb-6"></p>
-        <button type="button" id="schedule-day-ok" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 rounded-xl shadow-md transition-colors focus:outline-none text-sm">Got it</button>
+    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-sm overflow-hidden transform transition-all scale-95 flex flex-col">
+        <div class="p-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
+            <h3 id="schedule-day-kicker" class="font-bold text-lg text-gray-900 dark:text-white">Today's schedule</h3>
+            <p id="schedule-day-title" class="mt-0.5 font-mono text-[11px] font-black tracking-widest text-gray-400">Schedule</p>
+        </div>
+        <div class="p-4">
+            <p id="schedule-day-body" class="text-sm text-gray-600 dark:text-gray-300 leading-relaxed"></p>
+        </div>
+        <div class="p-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
+            <button type="button" id="schedule-day-ok" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg shadow-md transition-colors focus:outline-none">Got it</button>
+        </div>
     </div>
 </div>
 
 <!-- SCHEDULE OVERRIDE (admin-forced day type) -->
 <div id="schedule-override-modal" class="fixed inset-0 bg-black/75 z-[225] hidden flex items-center justify-center p-4 backdrop-blur-sm transition-opacity duration-300">
-    <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-sm p-6 border border-blue-200 dark:border-blue-900/50 transform transition-all scale-95">
-        <div class="flex items-start gap-3 mb-4">
-            <div class="shrink-0 w-11 h-11 rounded-full bg-blue-100 dark:bg-blue-900/40 flex items-center justify-center">
-                <svg class="w-6 h-6 text-blue-600 dark:text-blue-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>
-            </div>
-            <div class="min-w-0">
-                <p class="text-[10px] font-black uppercase tracking-widest text-blue-600 dark:text-blue-400">Schedule notice</p>
-                <h3 id="schedule-override-title" class="text-lg font-black text-gray-900 dark:text-white tracking-tight leading-snug mt-0.5">Schedule update</h3>
-            </div>
+    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-sm overflow-hidden transform transition-all scale-95 flex flex-col">
+        <div class="p-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
+            <h3 class="font-bold text-lg text-gray-900 dark:text-white">Schedule notice</h3>
+            <p id="schedule-override-title" class="mt-0.5 font-mono text-[11px] font-black tracking-widest text-gray-400">Schedule update</p>
         </div>
-        <p id="schedule-override-body" class="text-sm text-gray-600 dark:text-gray-300 leading-relaxed mb-6 whitespace-pre-wrap"></p>
-        <button type="button" id="schedule-override-ok" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 rounded-xl shadow-md transition-colors focus:outline-none text-sm">Got it</button>
+        <div class="p-4">
+            <p id="schedule-override-body" class="text-sm text-gray-600 dark:text-gray-300 leading-relaxed whitespace-pre-wrap"></p>
+        </div>
+        <div class="p-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
+            <button type="button" id="schedule-override-ok" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg shadow-md transition-colors focus:outline-none">Got it</button>
+        </div>
     </div>
 </div>
 

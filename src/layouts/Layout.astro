@@ -1323,12 +1323,12 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
         background-color: var(--nt-canvas);
       }
       html.nt-in-app body.nav-bottom:not(.nt-immersive) .view-section.active {
-        padding-bottom: 4.75rem;
+        padding-bottom: calc(var(--nt-nav-h, 4rem) + var(--nt-sys-bottom, env(safe-area-inset-bottom, 0px)) + 0.75rem);
         box-sizing: border-box;
       }
       html.nt-in-app body.nav-bottom:not(.nt-immersive) #view-map.view-section.active,
       html.nt-in-app body.nav-bottom:not(.nt-immersive) #view-community.view-section.active {
-        padding-bottom: 4.75rem;
+        padding-bottom: calc(var(--nt-nav-h, 4rem) + var(--nt-sys-bottom, env(safe-area-inset-bottom, 0px)) + 0.75rem);
         box-sizing: border-box;
       }
       /* Keyboard: keep Community filling leftover height (no gray slab)
@@ -1378,28 +1378,20 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
         position: absolute;
         left: 0;
         right: 0;
-        bottom: 4.5rem;
+        bottom: calc(var(--nt-nav-h, 4rem) + var(--nt-sys-bottom, env(safe-area-inset-bottom, 0px)) + 0.35rem);
         z-index: 111;
         background: transparent;
       }
       @media (max-height: 740px) {
-        html.nt-in-app body.nav-bottom:not(.nt-immersive) .view-section.active {
-          padding-bottom: 3.85rem;
-        }
         html.nt-in-app body.nav-bottom:not(.nt-immersive) #offline-wrapper:not(.hidden) {
-          bottom: 3.6rem;
-        }
-      }
-      @media (max-height: 620px) {
-        html.nt-in-app body.nav-bottom:not(.nt-immersive) .view-section.active {
-          padding-bottom: 3.35rem;
+          bottom: calc(var(--nt-nav-h, 4rem) + 0.35rem);
         }
       }
       /* Drawer sits above the bar so Options stays tappable for right-handers.
          The scrim stays inset:0 — raising overlay bottom left a full-width
          undimmed strip behind the oval (white on Classic light). Nav is z-110. */
       body.nav-bottom:not(.nt-immersive) #sidenav {
-        bottom: calc(3.5rem + var(--nt-sys-bottom, env(safe-area-inset-bottom, 0px)));
+        bottom: calc(var(--nt-nav-h, 4rem) + var(--nt-sys-bottom, env(safe-area-inset-bottom, 0px)));
         height: auto;
         border-bottom-left-radius: 1.25rem;
       }
@@ -1418,7 +1410,7 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
         transform: scale(0.96);
       }
       body.nav-bottom #offline-toast {
-        bottom: calc(4.5rem + var(--nt-sys-bottom, env(safe-area-inset-bottom, 0px)));
+        bottom: calc(var(--nt-nav-h, 4rem) + var(--nt-sys-bottom, env(safe-area-inset-bottom, 0px)) + 0.5rem);
       }
 
       /* CleverAds is a vendor overlay. Never reserve page space for it. */

@@ -57,7 +57,9 @@ assert(!/html\.dark #app-header\.nt-maint-active \{\s*background-color: rgb\(31 
 assert(css.includes('#grid-trigger-container'), 'timetable CTA has extra canvas gap');
 assert(css.includes('.nt-board-footer.mt-auto'), 'board footer padding stays on nt-board-footer mt-auto');
 assert(/#bottom-nav\.bottom-nav-bar \{[\s\S]*?box-shadow: none/.test(css), 'bottom nav does not float on a drop shadow');
-assert(/#bottom-nav\.bottom-nav-bar \{[\s\S]*?background-color: var\(--nt-chrome-header\)/.test(css), 'bottom nav matches the header colour');
+assert(/#bottom-nav\.bottom-nav-bar \{[\s\S]*?background-color: var\(--nt-chrome-nav\)/.test(css), 'bottom nav is one step darker than the header');
+assert(css.includes('--nt-nav-h: 4rem'), 'bottom nav is about 64px tall');
+assert(css.includes('color-mix(in srgb, var(--nt-chrome-fg) 20%, transparent)'), 'active tab icon sits on a soft pill');
 assert(/#bottom-nav\.bottom-nav-bar \{[\s\S]*?border-radius: 0;/.test(css), 'bottom nav is rectangular');
 assert(css.includes('#current-day'), 'day label letter-spacing rule present');
 
@@ -132,6 +134,7 @@ assert(chrome.includes('applyAdminAuthedChrome'), 'admin-chrome reveal helper ex
 assert(chrome.includes('Never use five-tap unlock'), 'admin chrome is not five-tap gated');
 
 const layout = readFileSync(new URL('../src/layouts/Layout.astro', import.meta.url), 'utf8');
+assert(layout.includes('calc(var(--nt-nav-h, 4rem) + var(--nt-sys-bottom, env(safe-area-inset-bottom, 0px)) + 0.75rem)'), 'board padding clears the nav plus the safe area');
 assert(layout.includes('window.ntCartoVoyagerUrl'), 'Layout exposes optional CARTO Voyager URL helper');
 assert(layout.includes('PUBLIC_CARTO_API_KEY'), 'Layout reads PUBLIC_CARTO_API_KEY');
 assert(layout.includes('html.nt-onboarding #bottom-nav'), 'Welcome hides the bottom bar');
@@ -296,7 +299,7 @@ assert(css.includes('html[data-admin-authed="1"] .nt-train-flag'), 'train flags 
 assert(css.includes('html:not([data-admin-authed="1"]) #ride-nearby-btn'), 'Trains near you hidden unless admin authed');
 assert(css.includes('padding-bottom: calc(4.5rem + var(--nt-sys-bottom, env(safe-area-inset-bottom, 0px)))'), 'non-fullscreen modals clear the bottom nav');
 assert(css.includes('--nt-sys-bottom'), 'appearance defines --nt-sys-bottom');
-assert(css.includes('max-height: 740px'), 'short screens compact the bottom nav');
+assert(css.includes('max-height: 620px'), 'very short screens ease the bottom nav');
 assert(css.includes('--nt-chrome-nav-active'), 'active tab uses --nt-chrome-nav-active');
 assert(css.includes('color-mix(in srgb, #fff 10%, var(--nt-chrome-nav))'), 'Classic light tab chip is a quiet white mix');
 assert(css.includes('color-mix(in srgb, #fff 12%, var(--nt-chrome-nav))'), 'dark active tab uses a quieter mix, not a loud ring');

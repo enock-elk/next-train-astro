@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V9_10.18.2': [
+        'The bottom bar is one step darker than the header. The current tab is a soft pill behind the icon, a filled icon, a bold label, and a thin line on the top edge. Other tabs are quieter. The fare card scrolls clear of the bar. No commuter What\'s New. forceShow stays false.',
+    ],
     'V9_10.18.1': [
         'The timetable grid is the previous size again. On an alert photo, Reply is a text field. Focusing it lifts the field above the keyboard, and the photo stays up. Send uses the same advisory reply. Heart, pray, and laugh stay on that bar until the field is focused. No commuter What\'s New. forceShow stays false.',
     ],

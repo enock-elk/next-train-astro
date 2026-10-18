@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_10.19.1': [
+        'Alert reaction chips sit on the same line as Reply. The 12px hang is gone. Reply stays where it was. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_10.18.15': [
         'Alert cards keep a rounded top. The Ops strip was painting square corners because the card stays overflow visible so a reaction can hang off the bottom. View full timetable uses the same light shadow as the route and station rows. No commuter What\'s New. forceShow stays false.',
     ],

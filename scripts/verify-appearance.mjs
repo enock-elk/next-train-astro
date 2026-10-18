@@ -682,6 +682,8 @@ assert(css.includes('.nt-alert-card-footer'), 'alert footer is styled as two row
 assert(css.includes('.nt-alert-meta-row'), 'alert source/time row is styled');
 assert(css.includes('.nt-alert-action-row'), 'alert reactions/Reply row is styled');
 assert(css.includes('.nt-alert-react-hang'), 'reaction chips hang off the card');
+assert(/\.nt-alert-react-hang\s*\{[^}]*transform:\s*none/.test(css), 'reaction chips line up with Reply');
+assert(!css.includes('transform: translateY(12px)'), 'reaction chips are not pushed below Reply');
 assert(adminJs.includes("APP_MONTHS_SHORT") || readFileSync(new URL('../src/lib/utils.js', import.meta.url), 'utf8').includes("'Sept'"), 'app dates use Sept');
 assert(/font\[size="4"\][^{]*\{[^}]*1\.05rem/.test(css), 'composer size 4 is the in-between tier');
 assert(/font\[size="5"\][^{]*\{[^}]*font-weight:\s*inherit/.test(css), 'size 5 is not auto-bold');

@@ -2290,13 +2290,10 @@ a.nt-alert-source:focus-visible {
 #alerts-channel .nt-alert-card {
   overflow: visible;
 }
-#alerts-channel .nt-alert-card:has(.nt-alert-react-hang) {
-  margin-bottom: 10px;
-}
 #alerts-channel .nt-alert-react-hang {
   position: relative;
   z-index: 2;
-  transform: translateY(12px);
+  transform: none;
   box-shadow: 0 1px 2px color-mix(in srgb, #000 18%, transparent);
 }
 #alerts-channel .nt-alert-action-meta {

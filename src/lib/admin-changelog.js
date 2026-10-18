@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_10.19.2': [
+        'The bottom bar is 4rem again, with the larger icon and label from before the shorten. Very short screens stay at 3.25rem. The bar stays a rectangle. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_10.19.1': [
         'Alert reaction chips sit on the same line as Reply. The 12px hang is gone. Reply stays where it was. No commuter What\'s New. forceShow stays false.',
     ],

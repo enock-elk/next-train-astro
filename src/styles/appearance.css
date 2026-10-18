@@ -52,7 +52,7 @@
   --nt-app-h: 100svh;
   --nt-shell-h: 100svh;
   --nt-shell-top: 0px;
-  --nt-nav-h: 3.25rem;
+  --nt-nav-h: 4rem;
   --nt-chrome-nav-active: color-mix(in srgb, #fff 10%, var(--nt-chrome-nav));
 
   --nt-blue-50: 239 246 255;
@@ -474,9 +474,9 @@ html[data-pilot-community="1"] #bottom-nav-community {
 
 #bottom-nav .bottom-nav-item {
   position: relative;
-  min-height: var(--nt-nav-h, 3.25rem) !important;
-  padding-top: 0.2rem !important;
-  padding-bottom: 0.15rem !important;
+  min-height: var(--nt-nav-h, 4rem) !important;
+  padding-top: 0.4rem !important;
+  padding-bottom: 0.3rem !important;
   background: transparent !important;
   border-radius: 0 !important;
   margin: 0 !important;
@@ -494,10 +494,10 @@ html[data-pilot-community="1"] #bottom-nav-community {
   display: flex;
   align-items: center;
   justify-content: center;
-  min-width: 2.5rem;
-  height: 1.55rem;
-  margin-bottom: 0.04rem;
-  padding: 0 0.35rem;
+  min-width: 2.85rem;
+  height: 1.95rem;
+  margin-bottom: 0.12rem;
+  padding: 0 0.4rem;
   border-radius: 999px;
   background: transparent;
 }
@@ -505,15 +505,15 @@ html[data-pilot-community="1"] #bottom-nav-community {
   background: color-mix(in srgb, var(--nt-chrome-fg) 20%, transparent);
 }
 #bottom-nav .bottom-nav-item svg {
-  width: 1.35rem !important;
-  height: 1.35rem !important;
+  width: 1.625rem !important;
+  height: 1.625rem !important;
   margin-bottom: 0 !important;
 }
 #bottom-nav .nt-nav-icon-fill { display: none; }
 #bottom-nav .bottom-nav-item.is-active .nt-nav-icon-line { display: none; }
 #bottom-nav .bottom-nav-item.is-active .nt-nav-icon-fill { display: block; }
 #bottom-nav .nt-nav-label {
-  font-size: 11px !important;
+  font-size: 12.5px !important;
   font-weight: 600 !important;
   letter-spacing: 0 !important;
   line-height: 1.1 !important;
@@ -529,7 +529,7 @@ html.dark #bottom-nav .bottom-nav-item.is-active {
 }
 
 @media (max-height: 620px) {
-  :root { --nt-nav-h: 3rem; }
+  :root { --nt-nav-h: 3.25rem; }
   #bottom-nav.bottom-nav-bar {
     margin-bottom: 0;
   }

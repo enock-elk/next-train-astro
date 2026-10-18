@@ -94,19 +94,40 @@ function itemRegion(item, routeRegionOf) {
 }
 
 function threadMessages(items) {
-    return items
-        .slice()
-        .sort((a, b) => Number(a?.timestamp || 0) - Number(b?.timestamp || 0))
-        .map((item) => {
-            const raw = redactEmails(item?.text || item?.message || '');
-            const limit = raw.startsWith('Quoted ') ? 8000 : 4000;
-            return {
-                from: item?.isFromAdmin ? 'admin' : 'commuter',
-                text: clip(raw, limit),
-                at: Number(item?.timestamp || 0) || 0,
-            };
-        })
-        .filter((row) => row.text);
+    const rows = [];
+    const sorted = items.slice().sort((a, b) => Number(a?.timestamp || 0) - Number(b?.timestamp || 0));
+    for (const item of sorted) {
+        const at = Number(item?.timestamp || 0) || 0;
+        const alertPlain = String(item?.alertPlain || '').trim();
+        if (alertPlain) {
+            rows.push({
+                from: 'admin',
+                role: 'alert',
+                text: clip(redactEmails(alertPlain), 8000),
+                at,
+            });
+        }
+        const raw = redactEmails(item?.text || item?.message || '');
+        const text = clip(raw, alertPlain || raw.startsWith('Quoted ') ? 8000 : 4000);
+        if (!text) continue;
+        rows.push({
+            from: item?.isFromAdmin ? 'admin' : 'commuter',
+            role: alertPlain && !item?.isFromAdmin ? 'reply' : '',
+            text,
+            at,
+        });
+    }
+    return rows.filter((row) => row.text);
+}
+
+/** A commuter line that quotes an alert is their reply, not the alert itself. */
+function commuterWordsForModel(text) {
+    const raw = String(text || '');
+    const parsed = parseFeedbackAlertQuote(raw);
+    if (!parsed) return raw;
+    const reply = String(parsed.body || '').trim();
+    const about = parsed.snippet ? ` Next Train alert: "${parsed.snippet}".` : '';
+    return `Reply to a Next Train alert.${about} Their words, not the alert: ${reply || '(none)'}`;
 }
 
 /**
@@ -129,8 +150,13 @@ export function withQuotedNoticeText(items, noticesById = {}) {
         const kind = parsed?.kind === 'disruption' || item.quotedAlertKind === 'disruption'
             ? 'incident'
             : 'advisory';
-        const next = `Quoted ${kind} in full:\n${full}\n\nCommuter:\n${commuter || text}`;
-        return { ...item, text: next, message: next };
+        return {
+            ...item,
+            text: commuter,
+            message: commuter,
+            alertPlain: full,
+            alertKind: kind,
+        };
     });
 }
 
@@ -141,7 +167,7 @@ export function unansweredCommuterMessages(thread) {
     const rows = Array.isArray(thread) ? thread : [];
     let lastAdmin = -1;
     rows.forEach((row, index) => {
-        if (row?.from === 'admin') lastAdmin = index;
+        if (row?.from === 'admin' && row?.role !== 'alert') lastAdmin = index;
     });
     return rows.slice(lastAdmin + 1).filter((row) => row?.from !== 'admin' && String(row?.text || '').trim());
 }
@@ -186,8 +212,12 @@ export function pickSimilarReplies(allItems, threadItems, options = {}) {
         const admin = [...ordered].reverse().find((item) => item?.isFromAdmin && plainThreadText(item?.text || item?.message || '').length >= 8);
         if (!admin) continue;
         const commuterBits = ordered.filter((item) => !item?.isFromAdmin);
-        const commuterText = commuterBits.map((item) => item?.text || item?.message || '').join('\n');
-        const words = contentWords(commuterText);
+        const commuterRaw = commuterBits.map((item) => {
+            const parsed = parseFeedbackAlertQuote(item?.text || item?.message || '');
+            return parsed ? parsed.body : (item?.text || item?.message || '');
+        }).join('\n');
+        const commuterText = commuterBits.map((item) => commuterWordsForModel(item?.text || item?.message || '')).join('\n');
+        const words = contentWords(commuterRaw);
         let shared = 0;
         for (const word of words) {
             if (currentWords.has(word)) shared += 1;
@@ -381,11 +411,15 @@ export function sanitizeSuggestPayload(input) {
         alias: clip(redactEmails(source.alias), 80),
         region: normalizeSuggestRegion(source.region),
         routeId: clip(source.routeId, 80),
-        thread: thread.map((row) => ({
-            from: row?.from === 'admin' ? 'admin' : 'commuter',
-            text: clip(redactEmails(row?.text || ''), 4000),
-            at: Number(row?.at || row?.timestamp || 0) || 0,
-        })).filter((row) => row.text),
+        thread: thread.map((row) => {
+            const role = row?.role === 'alert' ? 'alert' : (row?.role === 'reply' ? 'reply' : '');
+            return {
+                from: role === 'alert' || row?.from === 'admin' ? 'admin' : 'commuter',
+                role,
+                text: clip(redactEmails(row?.text || ''), role === 'alert' ? 8000 : 4000),
+                at: Number(row?.at || row?.timestamp || 0) || 0,
+            };
+        }).filter((row) => row.text),
         similar: similar.slice(0, SUGGEST_SIMILAR_LIMIT).map((row) => ({
             deviceId: clip(row?.deviceId, 80),
             region: normalizeSuggestRegion(row?.region),
@@ -585,7 +619,10 @@ export function liaisonRules(region) {
         'You are not a PRASA employee. Do not write that into the reply, and do not say the app is independent or unofficial, unless they asked who runs the trains or who sets the fares. If they did ask, one short sentence, then the useful part.',
         'Do not open with a disclaimer. Do not write "I want to gently mention". Do not copy an independence disclaimer from a similar past reply. Agreement, thanks, and a comment on a notice do not need a speech about the app, and they do not need a phone number.',
         'Give a PRASA number only when they want PRASA to change something: a fare, a timetable, a closed office, or a broken train. One calm sentence. The contact block is the only source for that number.',
-        'When the thread has a block that starts with "Quoted advisory in full" or "Quoted incident in full", that block is the whole quoted message. Use all of it. Do not answer from the short title alone.',
+        'Each thread line is labeled ADMIN or COMMUTER. ADMIN is Next Train. COMMUTER is the person you are replying to. Do not swap those speakers.',
+        'Only Next Train can post an alert, an advisory, or an incident notice. A commuter cannot post one. They can only reply to one.',
+        'An ADMIN ALERT line is a notice Next Train already posted. The COMMUTER line after it is their reply to that notice. Use the whole alert so you know what they are answering. Thank them for the reply. Do not thank them for sharing, posting, or announcing the alert. Do not write as if they told you the news in the alert.',
+        'A short [ALERT:…] chip inside an older example is also a Next Train alert they replied to. The words after "Their words, not the alert" are the only words they wrote.',
         'Return JSON only. action is "draft" or "halt". draft.reply is only the commuter-facing message. The operator will edit it, then send. Do not send it yourself.',
         'Do not put the device id, thread labels, or code fences inside draft.reply.',
         'Do not add a sign-off. The app adds the operator name when the reply is sent.',
@@ -628,6 +665,20 @@ export function replyIsStale(payload, now = Date.now()) {
     return (Number(now) - at) > STALE_REPLY_MS;
 }
 
+function threadSpeaker(row) {
+    if (row?.role === 'alert') {
+        return 'ADMIN ALERT. Next Train posted this. Only Next Train can post an alert. The commuter did not write it.';
+    }
+    if (row?.from === 'admin') return 'ADMIN. Next Train wrote this.';
+    if (row?.role === 'reply') return 'COMMUTER. This is their reply to the ADMIN ALERT above. They did not post that alert.';
+    return 'COMMUTER. This person wrote this. They are not Next Train.';
+}
+
+function unansweredLead(row) {
+    if (row?.role === 'reply') return 'Their reply to the ADMIN ALERT above. Answer these words only: ';
+    return '';
+}
+
 export function buildSuggestUserText(payload, sharedNote, now = Date.now()) {
     const clean = sanitizeSuggestPayload(payload);
     const stale = replyIsStale(clean, now);
@@ -653,7 +704,7 @@ export function buildSuggestUserText(payload, sharedNote, now = Date.now()) {
     if (!clean.thread.length) lines.push('(empty)');
     for (const row of clean.thread) {
         const when = row.at ? new Date(row.at).toISOString() : '';
-        lines.push(`[${when}] ${row.from === 'admin' ? 'ADMIN' : 'COMMUTER'}:`);
+        lines.push(`[${when}] ${threadSpeaker(row)}`);
         lines.push(row.text);
         lines.push('');
     }
@@ -671,11 +722,12 @@ export function buildSuggestUserText(payload, sharedNote, now = Date.now()) {
         lines.push('None. If the last message is from ADMIN, halt. No reply is needed.');
     } else if (unanswered.length === 1) {
         lines.push('One message still needs a reply. Answer it.');
+        lines.push(unansweredLead(unanswered[0]));
         lines.push(unanswered[0].text);
     } else {
         lines.push(`There are ${unanswered.length} commuter messages with no admin reply after them. Answer every one in this same draft, oldest first, and still answer the latest. Do not leave an earlier point out.`);
         unanswered.forEach((row, index) => {
-            lines.push(`${index + 1}. ${row.text}`);
+            lines.push(`${index + 1}. ${unansweredLead(row)}${row.text}`);
         });
     }
     lines.push('');

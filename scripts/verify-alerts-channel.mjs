@@ -317,7 +317,8 @@ const now = 1_700_000_000_000;
     assert(channel.includes('When Next Train posts a notice for your region or route, it will show up here.'), 'empty-state copy');
     assert(!channel.includes('When PRASA or Next Train'), 'empty-state no longer mentions PRASA');
     assert(channel.includes('bg-slate-200 dark:bg-gray-950'), 'channel background contrasts with white cards');
-    assert(channel.includes('items-center justify-center'), 'alerts sheet is centered on the scrim');
+    assert(channel.includes('h-full w-full'), 'alerts sheet fills the screen');
+    assert(!channel.includes('items-center justify-center'), 'alerts sheet is not a centered card');
 
     const js = readFileSync(new URL('../src/lib/alerts-channel.js', import.meta.url), 'utf8');
     assert(js.includes('scopedLiveNotices'), 'feed filters to the current route union');

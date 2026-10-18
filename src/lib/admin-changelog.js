@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_10.18.10': [
+        'Alerts is the full-screen sheet again. A suggested reply is told which lines Next Train posted and which lines the commuter wrote. An alert is Next Train\'s notice. The commuter only replies to it. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_10.18.9': [
         'The alerts bell is the 24px icon with its previous padding again, and it sits on the vertical middle of Next Train and the day line. No commuter What\'s New. forceShow stays false.',
     ],

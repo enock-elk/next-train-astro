@@ -88,7 +88,9 @@ ok(!JSON.stringify(named).includes('enockelk@gmail.com'), 'the email address sta
 ok(liaisonRules('KZN').includes('more than 7 days'), 'a week-old message gets a late-reply line');
 ok(liaisonRules('GP').includes('unless they asked'), 'independence is only mentioned when they ask');
 ok(liaisonRules('GP').includes('Do not write "I want to gently mention"'), 'the draft does not open with a disclaimer');
-ok(liaisonRules('GP').includes('Quoted advisory in full'), 'a quoted notice is used in full');
+ok(liaisonRules('GP').includes('ADMIN ALERT'), 'a quoted notice is an admin alert');
+ok(liaisonRules('GP').includes('Only Next Train can post an alert'), 'only admin posts alerts');
+ok(liaisonRules('GP').includes('Do not thank them for sharing'), 'a reply is not treated as the commuter posting the alert');
 ok(!liaisonRules('GP').includes('independent unofficial'), 'the system prompt does not hand the model the old disclaimer');
 const quoted = buildSuggestPayload([
     {
@@ -112,11 +114,26 @@ const quoted = buildSuggestPayload([
         }),
     },
 });
-const quotedThread = quoted.thread.map((row) => row.text).join('\n');
-ok(quotedThread.includes('Student prices and the Sunday schedule'), 'the draft receives the full quoted notice');
-ok(quotedThread.includes('694 votes'), 'the draft receives the poll counts');
-ok(quotedThread.includes('They are right about the student prices'), 'the commuter line stays with the quote');
-ok(withQuotedNoticeText([{ text: 'Hello', quotedText: 'Full stored advisory' }])[0].text.includes('Full stored advisory'), 'a stored quote is used when the notice is gone');
+const quotedAlert = quoted.thread.find((row) => row.role === 'alert');
+const quotedReply = quoted.thread.find((row) => row.role === 'reply');
+ok(quotedAlert && quotedAlert.from === 'admin' && quotedAlert.text.includes('Student prices and the Sunday schedule'), 'the alert is labeled as admin');
+ok(quotedAlert.text.includes('694 votes'), 'the draft receives the poll counts');
+ok(quotedReply && quotedReply.from === 'commuter' && quotedReply.text.includes('They are right about the student prices'), 'the commuter line is only their reply');
+ok(!quotedReply.text.includes('Student prices and the Sunday schedule'), 'the alert text is not inside the commuter line');
+const quotedPrompt = buildSuggestUserText(quoted, '');
+ok(quotedPrompt.indexOf('ADMIN ALERT') >= 0 && quotedPrompt.indexOf('ADMIN ALERT') < quotedPrompt.indexOf('COMMUTER. This is their reply'), 'the prompt names the alert before the reply');
+const storedQuote = withQuotedNoticeText([{ text: 'Hello', quotedText: 'Full stored advisory' }])[0];
+ok(storedQuote.alertPlain.includes('Full stored advisory') && storedQuote.text === 'Hello', 'a stored quote stays separate from the commuter words');
+const visit = buildSuggestPayload([{
+    deviceId: 'usr_visit',
+    text: '[ALERT:visit1|notice|Ministerial Oversight Visit and the new bus fleet]\nThe service is good.',
+    timestamp: 50,
+    quotedText: 'Ministerial Oversight Visit\nThe new bus fleet is in service.',
+}], { deviceId: 'usr_visit' });
+const visitAlert = visit.thread.find((row) => row.role === 'alert');
+const visitReply = visit.thread.find((row) => row.role === 'reply');
+ok(visitAlert && visitAlert.from === 'admin' && visitAlert.text.includes('new bus fleet'), 'the ministerial notice is an admin alert');
+ok(visitReply && visitReply.text === 'The service is good.' && !visitReply.text.includes('Ministerial'), 'the service comment is only the commuter reply');
 ok(knowledgeBase().includes('Centurion'), 'Centurion is in the knowledge base');
 ok(knowledgeBase().includes('pta-pien'), 'route keys are in the knowledge base');
 ok(describeRoute('pta-pien').includes('Pienaarspoort'), 'pta-pien is Pretoria to Pienaarspoort');

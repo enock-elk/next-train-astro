@@ -1484,28 +1484,10 @@ body.nav-bottom:not(.nt-immersive) #sidenav {
   overflow: hidden;
 }
 
-/* The channel is the scrim. The card keeps the canvas, at the same
-   size as the full sheet, centered in the safe area. */
-#alerts-channel {
-  align-items: center;
-  justify-content: center;
-  box-sizing: border-box;
-  padding-top: max(0.75rem, env(safe-area-inset-top, 0px), env(safe-area-inset-bottom, 0px));
-  padding-bottom: max(0.75rem, env(safe-area-inset-top, 0px), env(safe-area-inset-bottom, 0px));
-  padding-left: 0.75rem;
-  padding-right: 0.75rem;
-  background-color: rgb(0 0 0 / 0.78) !important;
-  color: var(--nt-text);
-}
+#alerts-channel,
 #alerts-channel-card {
-  width: min(100%, 28rem);
-  height: 100%;
-  max-height: 100%;
-  margin-inline: auto;
-  border-radius: 1.25rem;
   background-color: var(--nt-canvas) !important;
   color: var(--nt-text);
-  box-shadow: 0 24px 48px rgb(0 0 0 / 0.38);
 }
 #alerts-channel-wallpaper,
 .nt-pack-wallpaper {

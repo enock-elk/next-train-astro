@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_10.18.8': [
+        'Reply uses the same speech-bubble icon as Next Train Advisory. The Sunday No Service chip has no dots between the day and the pill. Alerts is the same large sheet, centered on the scrim. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_10.18.7': [
         'Full train sheet, Trip Planner Tips, and the upcoming list fill the screen, so a long list is not stuck in a short card with empty space underneath. The blue header wordmark, padding, and bell track the screen height. Sunday No Service is a red status pill on the day button. No commuter What\'s New. forceShow stays false.',
     ],

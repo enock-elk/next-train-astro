@@ -78,7 +78,7 @@ for (const [id, route] of Object.entries(ROUTES)) {
         var typeClass = (dayType === 'sunday' || satClosed)
           ? 'font-bold text-red-600 dark:text-red-400'
           : 'font-bold text-blue-600 dark:text-blue-400';
-        el.innerHTML = names[day] + ' · <span class="' + typeClass + '">' + type + '</span>';
+        el.innerHTML = names[day] + '<span class="' + typeClass + '">' + type + '</span>';
         if (typeof window.fitHeaderDayLabel === 'function') window.fitHeaderDayLabel();
         else {
           var title = document.getElementById('app-title');

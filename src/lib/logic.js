@@ -248,7 +248,7 @@ export function paintHeaderDayLabel(opts = {}) {
     const typeClass = (dayType === 'sunday' || satClosed)
         ? 'font-bold text-red-600 dark:text-red-400'
         : 'font-bold text-blue-600 dark:text-blue-400';
-    const html = `${dayNames[day] || ''} · <span class="${typeClass}">${displayType}</span>`;
+    const html = `${dayNames[day] || ''}<span class="${typeClass}">${displayType}</span>`;
     if (el.innerHTML !== html) el.innerHTML = html;
     const holidayName = dateKey && HOLIDAY_NAMES[dateKey] ? HOLIDAY_NAMES[dateKey] : '';
     headerDayNote = describeHeaderDayNote({

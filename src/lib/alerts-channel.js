@@ -697,7 +697,7 @@ function renderPostCard(notice, opts = {}) {
     const adminMetaHtml = scope
         ? `<span class="nt-alert-scope">${escapeHTML(scope)}</span>`
         : '';
-    const replyBtn = `<button type="button" class="nt-alert-reply text-xs font-bold inline-flex items-center gap-1 px-3 py-1.5 rounded-full shrink-0 focus:outline-none" data-alert-reply="${escapeHTML(String(notice.id || ''))}" data-alert-snippet="${escapeHTML(snippet)}"><svg class="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>Reply</button>`;
+    const replyBtn = `<button type="button" class="nt-alert-reply text-xs font-bold inline-flex items-center gap-1 px-3 py-1.5 rounded-full shrink-0 focus:outline-none" data-alert-reply="${escapeHTML(String(notice.id || ''))}" data-alert-snippet="${escapeHTML(snippet)}"><svg class="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>Reply</button>`;
     const footerHtml = `<div class="nt-alert-card-footer">
             <div class="nt-alert-meta-row">
                 <div class="nt-alert-meta-source">${sourceHtml}</div>

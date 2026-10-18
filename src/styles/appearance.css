@@ -1489,10 +1489,28 @@ body.nav-bottom:not(.nt-immersive) #sidenav {
   overflow: hidden;
 }
 
-#alerts-channel,
+/* The channel is the scrim. The card keeps the canvas, at the same
+   size as the full sheet, centered in the safe area. */
+#alerts-channel {
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  padding-top: max(0.75rem, env(safe-area-inset-top, 0px), env(safe-area-inset-bottom, 0px));
+  padding-bottom: max(0.75rem, env(safe-area-inset-top, 0px), env(safe-area-inset-bottom, 0px));
+  padding-left: 0.75rem;
+  padding-right: 0.75rem;
+  background-color: rgb(0 0 0 / 0.78) !important;
+  color: var(--nt-text);
+}
 #alerts-channel-card {
+  width: min(100%, 28rem);
+  height: 100%;
+  max-height: 100%;
+  margin-inline: auto;
+  border-radius: 1.25rem;
   background-color: var(--nt-canvas) !important;
   color: var(--nt-text);
+  box-shadow: 0 24px 48px rgb(0 0 0 / 0.38);
 }
 #alerts-channel-wallpaper,
 .nt-pack-wallpaper {
@@ -2335,8 +2353,8 @@ html:not([data-colour-pack]) #current-day span:not(.text-red-600):not(.dark\:tex
   color: var(--nt-chrome-muted) !important;
 }
 /* Weekday and Saturday sit in a quiet capsule. No Service is a solid
-   status pill: white type on red, with a small light. Pale red type on
-   the blue bar was too faint. SEO pages keep the pale red on a paragraph. */
+   status pill: white type on red. Pale red type on the blue bar was too
+   faint. SEO pages keep the pale red on a paragraph. */
 html[data-colour-pack="classic"] button#current-day span:not(.text-red-600):not(.dark\:text-red-400),
 html:not([data-colour-pack]) button#current-day span:not(.text-red-600):not(.dark\:text-red-400) {
   color: var(--nt-chrome-fg) !important;
@@ -2351,22 +2369,13 @@ html.dark button#current-day span.dark\:text-red-400 {
   display: inline-flex;
   align-items: center;
   gap: 0.28rem;
-  margin-left: 0.16rem;
-  padding: 0.06rem 0.46rem 0.06rem 0.32rem;
+  margin-left: 0.28rem;
+  padding: 0.06rem 0.48rem;
   border-radius: 999px;
   background: #e11d48;
   color: #fff !important;
   letter-spacing: 0.035em;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 1px 1px rgba(0, 0, 0, 0.22);
-}
-button#current-day span.text-red-600::before,
-html.dark button#current-day span.dark\:text-red-400::before {
-  content: "";
-  width: 0.32rem;
-  height: 0.32rem;
-  border-radius: 999px;
-  background: #fff;
-  box-shadow: 0 0 0 1.5px rgba(255, 255, 255, 0.35);
 }
 p#current-day span.text-red-600,
 html.dark p#current-day span.text-red-600,

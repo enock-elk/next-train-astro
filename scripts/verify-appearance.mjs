@@ -78,7 +78,8 @@ assert(css.includes('#current-day'), 'day label letter-spacing rule present');
 });
 
 const logic = readFileSync(new URL('../src/lib/logic.js', import.meta.url), 'utf8');
-assert(logic.includes(' · <span class="${typeClass}">'), 'logic.js day label uses middot');
+assert(logic.includes('${dayNames[day] || \'\'}<span class="${typeClass}">'), 'logic.js day label has no middot before the status');
+assert(!logic.includes(' · <span class="${typeClass}">'), 'logic.js day label dropped the middot');
 assert(!logic.includes('ml-1'), 'logic.js day type span dropped ml-1');
 assert(logic.includes('export function fitHeaderDayLabel'), 'day line scales to the Next Train title width');
 assert(logic.includes('title.scrollWidth'), 'day line measures the Next Train title width');
@@ -101,7 +102,8 @@ assert(!css.includes('background-color: var(--nt-surface) !important;\n  color: 
 assert(css.includes('html[data-colour-pack="earthy"] #notice-bell.nt-bell-info'), 'paper packs keep a stronger bell ring');
 
 const header = readFileSync(new URL('../src/components/Header.astro', import.meta.url), 'utf8');
-assert(header.includes("names[day] + ' · <span"), 'Header boot uses middot');
+assert(header.includes("names[day] + '<span"), 'Header boot has no middot before the status');
+assert(!header.includes("names[day] + ' · <span"), 'Header boot dropped the middot');
 assert(!header.includes('ml-1'), 'Header boot dropped ml-1');
 assert(header.includes('translate-x-1/4 -translate-y-1/4'), 'unread dot sits on the outer corner of the bell');
 assert(header.includes('w-6 h-6'), 'header bell icon is 24px');

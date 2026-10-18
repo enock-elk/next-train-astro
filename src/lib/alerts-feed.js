@@ -274,6 +274,7 @@ export function collectNoticeImageUrls(notice) {
  */
 export function shouldIgnoreAlertLongPress(target) {
     if (!target || typeof target.closest !== 'function') return true;
+    if (target.closest('[data-alert-video]')) return true;
     if (target.closest('[data-alert-lightbox]')) return false;
     if (target.closest('[data-alert-media]')) return false;
     if (target.closest('button[onclick*="openLightbox"]')) return false;
@@ -455,6 +456,7 @@ export function splitAlertTitleAndBody(html, explicitTitle = '') {
 }
 
 const PUBLIC_IMAGE_FILE = /\.(jpe?g|png|gif|webp)$/i;
+const PUBLIC_VIDEO_FILE = /\.(mp4|webm|mov|m4v|ogv)$/i;
 
 function isStoredImageHost(host) {
     const name = String(host || '').toLowerCase();
@@ -488,6 +490,67 @@ export function sanitizeInlineAlertImageUrl(url) {
     } catch {
         return null;
     }
+}
+
+/** Full view uses the saved poster bytes, not a second download of the https address. */
+export function preferSavedPosterSrc(objectUrl, liveSrc, fallback) {
+    const blob = String(objectUrl || '');
+    if (blob.startsWith('blob:')) return blob;
+    const live = String(liveSrc || '');
+    if (live.startsWith('blob:')) return live;
+    return String(fallback || live || '');
+}
+
+/**
+ * A direct video file on a public https host.
+ * Pages and players are not videos. Nothing is fetched here.
+ */
+export function sanitizeAlertVideoUrl(url) {
+    const s = String(url || '').trim();
+    if (!s || /[\s<>]/.test(s)) return null;
+    try {
+        const u = new URL(s);
+        if (u.protocol !== 'https:') return null;
+        if (u.username || u.password) return null;
+        const cleaned = cleanHttpUrl(u.href);
+        if (!cleaned || !isPublicPreviewUrl(cleaned)) return null;
+        const pub = new URL(cleaned);
+        let path = pub.pathname || '';
+        try { path = decodeURIComponent(path); } catch { /* keep the raw path */ }
+        if (!PUBLIC_VIDEO_FILE.test(path)) return null;
+        return pub.href;
+    } catch {
+        return null;
+    }
+}
+
+function pushVideoUrl(urls, raw) {
+    const clean = sanitizeAlertVideoUrl(String(raw || '').trim().replace(/&amp;/gi, '&'));
+    if (clean && !urls.includes(clean)) urls.push(clean);
+}
+
+/** Lift direct video files out of the body. The player is added separately and must not preload. */
+export function extractAlertVideoUrls(html) {
+    const urls = [];
+    let body = String(html || '');
+    body = body.replace(/<video\b[^>]*>[\s\S]*?<\/video>/gi, (tag) => {
+        const found = String(tag || '').matchAll(/\bsrc=["']([^"']+)["']/gi);
+        for (const match of found) pushVideoUrl(urls, match[1]);
+        return '';
+    });
+    body = body.replace(/<a\b[^>]*\bhref=["']([^"']+)["'][^>]*>[\s\S]*?<\/a>/gi, (tag, href) => {
+        const before = urls.length;
+        pushVideoUrl(urls, href);
+        return urls.length > before ? '' : tag;
+    });
+    body = body.replace(/https:\/\/[^\s<>"']+/gi, (raw) => {
+        const trimmed = raw.replace(/[),.;]+$/, '');
+        const before = urls.length;
+        pushVideoUrl(urls, trimmed);
+        if (urls.length === before) return raw;
+        return raw.slice(trimmed.length);
+    });
+    return { urls, body };
 }
 
 /** Pull lightbox/img tags out of the body so photos can sit above the text. */
@@ -554,11 +617,39 @@ export function layoutAlertPost(notice) {
         const clean = sanitizeInlineAlertImageUrl(u);
         if (clean && !images.includes(clean)) images.push(clean);
     });
+    const videos = [];
+    const rawMedia = (Array.isArray(notice?.imageUrls) && notice.imageUrls.length)
+        ? notice.imageUrls
+        : (notice?.imageUrl ? [notice.imageUrl] : []);
+    rawMedia.forEach((u) => pushVideoUrl(videos, u));
+    pushVideoUrl(videos, notice?.ctaUrl);
+    const extracted = extractAlertVideoUrls(hoisted.body);
+    extracted.urls.forEach((u) => pushVideoUrl(videos, u));
     return {
         title: split.title,
-        imageUrls: images.slice(0, 4),
-        body: stripAlertSignoffHtml(hoisted.body),
+        imageUrls: images.filter((u) => !sanitizeAlertVideoUrl(u)).slice(0, 4),
+        videoUrls: videos.slice(0, 2),
+        body: stripAlertSignoffHtml(extracted.body),
     };
+}
+
+const ALERT_VIDEO_PLAY_ICON = `<svg class="h-8 w-8" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5.14v13.72a1 1 0 0 0 1.54.84l10.14-6.86a1 1 0 0 0 0-1.68L9.54 4.3A1 1 0 0 0 8 5.14z"></path></svg>`;
+
+/**
+ * A play control only. The video element has no address until the commuter taps,
+ * so nothing is fetched or played on its own.
+ */
+export function renderAlertVideoMarkup(urls) {
+    const list = (Array.isArray(urls) ? urls : []).map((u) => sanitizeAlertVideoUrl(u)).filter(Boolean);
+    if (!list.length) return '';
+    const cells = list.map((href) => {
+        const src = href.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+        return `<div class="relative overflow-hidden rounded-xl border border-gray-200 bg-gray-900 dark:border-gray-700" data-alert-video>
+            <video controls playsinline preload="none" class="hidden max-h-72 w-full bg-black" data-alert-video-el></video>
+            <button type="button" data-alert-video-play data-alert-video-src="${src}" class="flex min-h-[10rem] w-full items-center justify-center gap-2 font-bold text-white focus:outline-none">${ALERT_VIDEO_PLAY_ICON}<span>Play video</span></button>
+        </div>`;
+    }).join('');
+    return `<div class="mb-1 mt-2 grid grid-cols-1 gap-2" data-alert-media>${cells}</div>`;
 }
 
 export function buildNoticesMeta(notices) {

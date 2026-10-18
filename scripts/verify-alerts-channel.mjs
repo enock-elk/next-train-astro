@@ -16,6 +16,9 @@ import {
     hoistAlertImagesFromHtml,
     layoutAlertPost,
     sanitizeInlineAlertImageUrl,
+    sanitizeAlertVideoUrl,
+    renderAlertVideoMarkup,
+    preferSavedPosterSrc,
     shouldIgnoreAlertLongPress,
     shouldForceOpen,
     pickAutoOpenNotice,
@@ -36,7 +39,9 @@ import {
     buildAlertSeeMoreMarkup,
     expandAlertSeeMore,
 } from '../src/lib/alerts-feed.js';
+import { readFileSync } from 'node:fs';
 import { firstHttpUrl, linkPreviewMarkup } from '../src/lib/link-preview.js';
+import { imageMimeForUrl } from '../src/lib/alert-image-cache.js';
 
 const failures = [];
 function assert(cond, msg) {
@@ -181,6 +186,7 @@ const now = 1_700_000_000_000;
     assert(shouldIgnoreAlertLongPress(fake(['.nt-poll-vote', 'button'])), 'poll vote is not hold-to-react');
     assert(shouldIgnoreAlertLongPress(fake(['.nt-poll'])), 'poll results panel is not hold-to-react');
     assert(shouldIgnoreAlertLongPress(fake(['[data-poll-shell]'])), 'poll shell is not hold-to-react');
+    assert(shouldIgnoreAlertLongPress(fake(['[data-alert-video]', 'button'])), 'video play is not hold-to-react');
     assert(shouldIgnoreAlertLongPress(fake(['a'])), 'links are not hold-to-react');
     assert(shouldIgnoreAlertLongPress(null), 'missing target ignored');
 }
@@ -227,6 +233,32 @@ const now = 1_700_000_000_000;
     assert(kept.imageUrls.includes('https://i.ibb.co/hR3kQ1p/ucv.png'), 'composer image address survives a blob src');
     assert(!kept.imageUrls.includes('blob:https://nexttrain.co.za/abc'), 'blob src is not shown');
     assert(kept.body.includes('All thanks to the UCV') && !kept.body.includes('<img'), 'caption stays when the image is hoisted');
+
+    const clip = 'https://cdn.example.com/briefing/ucv-update.mp4';
+    assert(sanitizeAlertVideoUrl(clip) === clip, 'public mp4 allowed');
+    assert(sanitizeAlertVideoUrl('https://youtu.be/dQw4w9wg') === null, 'a player page is not a video file');
+    assert(sanitizeAlertVideoUrl('http://cdn.example.com/a.mp4') === null, 'plain http video blocked');
+    assert(sanitizeAlertVideoUrl('https://192.168.1.8/a.mp4') === null, 'private video host blocked');
+    const withVideo = layoutAlertPost({
+        message: `<p>Watch the briefing ${clip} today.</p>`,
+        ctaUrl: clip,
+        ctaText: 'Watch',
+    });
+    assert(withVideo.videoUrls[0] === clip, 'video link is lifted onto the alert');
+    assert(!withVideo.body.includes(clip), 'video address is not left in the text');
+    assert(!withVideo.imageUrls.includes(clip), 'video is not treated as a poster');
+    const videoHtml = renderAlertVideoMarkup(withVideo.videoUrls);
+    assert(videoHtml.includes('preload="none"'), 'video does not preload');
+    assert(!/autoplay/i.test(videoHtml), 'video markup does not autoplay');
+    assert(!/<video\b[^>]*\ssrc=/i.test(videoHtml), 'player has no address until play');
+    assert(videoHtml.includes('data-alert-video-src="https://cdn.example.com/briefing/ucv-update.mp4"'), 'play control keeps the address');
+    assert(preferSavedPosterSrc('blob:poster', 'https://i.ibb.co/x.png', 'https://i.ibb.co/x.png') === 'blob:poster', 'full view reuses the saved poster');
+    assert(imageMimeForUrl('https://i.ibb.co/hR3kQ1p/ucv.png') === 'image/png', 'saved poster keeps a png type');
+    const cacheSrc = readFileSync(new URL('../src/lib/alert-image-cache.js', import.meta.url), 'utf8');
+    assert(cacheSrc.includes("mode: 'no-cors'"), 'posters are saved when the host blocks script fetches');
+    const uiSrc = readFileSync(new URL('../src/lib/ui.js', import.meta.url), 'utf8');
+    assert(uiSrc.includes('Loading picture'), 'full view says the picture is still loading');
+    assert(uiSrc.includes('Could not load this picture'), 'full view says when the picture failed');
 }
 
 {
@@ -297,12 +329,12 @@ const now = 1_700_000_000_000;
     assert(js.includes('nt-alert-signoff'), 'card has signature class');
     assert(js.includes('nt-alert-poster-loading'), 'poster box has a loading overlay');
     assert(js.includes('hydrateAlertPosterImages'), 'posters hydrate after feed paint');
-    assert(js.includes('img.decode'), 'poster reveal waits on decode when available');
+    assert(js.includes('if (img.naturalWidth > 0) reveal()'), 'poster reveals once the picture has pixels');
     assert(js.includes("data-alert-ready"), 'poster click waits until the image is ready');
     assert(js.includes('data-alert-object-url'), 'decoded poster keeps an object URL for full view');
     assert(js.includes('window.openLightbox(src, lightbox)'), 'feed tap passes the loaded poster into full view');
     assert(!js.includes('setTimeout(resolve, 2500)'), 'poster decode is not raced against a timeout');
-    assert(js.includes('fetchpriority="high"'), 'poster img asks for high fetch priority');
+    assert(js.includes("setAttribute('fetchpriority', 'high')"), 'poster img asks for high fetch priority');
     assert(js.includes('watchAlertPosterHydration'), 'poster hydrate survives innerHTML rewrites');
     assert(js.includes('pointer-events-none'), 'loading overlay does not steal hold-to-react');
     assert(!js.includes('onclick='), 'alert posters must not use inline onclick');

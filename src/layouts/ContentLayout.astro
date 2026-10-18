@@ -449,5 +449,9 @@ const resolvedHtmlClass = [forceDark ? 'dark' : '', htmlClass].filter(Boolean).j
       else ntFitJhbLabels();
       window.addEventListener('resize', ntFitJhbLabels);
     </script>
+    <script>
+      import { bindDesktopZoomFrames } from '../lib/desktop-zoom.js';
+      bindDesktopZoomFrames();
+    </script>
   </body>
 </html>

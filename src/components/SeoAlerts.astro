@@ -5,6 +5,7 @@
  * The bell stays hidden until a live notice exists.
  */
 import AlertsChannel from './AlertsChannel.astro';
+import ZoomControls from './ZoomControls.astro';
 
 interface Props {
   region: string;
@@ -22,6 +23,7 @@ const routeIdAttr = routeIds.join(',');
 <div id="alert-image-lightbox" class="fixed inset-0 bg-black z-[160] hidden flex-col [touch-action:none]" role="dialog" aria-modal="true" aria-label="Image Preview">
   <div id="alert-image-lightbox-stage" class="relative flex-1 min-h-0 overflow-hidden flex items-center justify-center [touch-action:none]">
     <img id="alert-image-lightbox-img" alt="Image Preview" draggable="false" decoding="sync" class="max-w-full max-h-full object-contain select-none pointer-events-none">
+    <ZoomControls />
   </div>
   <button type="button" id="alert-image-lightbox-close" class="absolute top-[max(0.75rem,env(safe-area-inset-top))] right-3 z-20 w-11 h-11 rounded-full bg-black/55 text-white flex items-center justify-center border border-white/20 focus:outline-none [touch-action:manipulation]" aria-label="Close">
     <svg class="w-6 h-6 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>

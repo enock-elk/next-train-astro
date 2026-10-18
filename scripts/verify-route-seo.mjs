@@ -262,12 +262,21 @@ if (!/Cape Town to Bellville/i.test(capeMeta) || !/train schedule/i.test(capeMet
   if (!indexAstro.includes('View and download weekday and Saturday sheets for today.')) {
     fail('homepage meta description must offer view and download for today');
   }
+  if (!indexAstro.includes('Train schedule today.')) {
+    fail('homepage meta description must lead with train schedule today');
+  }
+  if (!indexAstro.includes("pageDescription =\n  'Train schedule today.")) {
+    fail('homepage meta description must start with train schedule today');
+  }
   const regionAstro = readFileSync(new URL('../src/pages/regions/[slug].astro', import.meta.url), 'utf8');
   if (!regionAstro.includes('Metrorail Gauteng timetables for Pretoria and Johannesburg')) {
     fail('Gauteng region description must say Metrorail Gauteng');
   }
   if (/description:\s*['"]Today:/.test(regionAstro)) {
     fail('region descriptions must not start with Today');
+  }
+  if (!regionAstro.includes('data-nt-zoom-frame') || !regionAstro.includes('ZoomControls')) {
+    fail('region pages must offer desktop zoom on the network map');
   }
   const faqLine = 'Commuters can send a delay note, and some testers can share a trip location.';
   if (!indexAstro.includes(faqLine)) {
@@ -460,6 +469,9 @@ if (!gridPathSa.includes('d=sa') || gridPathSa.includes('dir=')) {
   const mapPreview = readFileSync(new URL('../src/components/SeoNetworkMap.astro', import.meta.url), 'utf8');
   if (!mapPreview.includes('loading="lazy"') || mapPreview.includes('fetchpriority')) {
     fail('SEO map preview must be lazy and must not set fetchpriority');
+  }
+  if (!mapPreview.includes('data-nt-zoom-frame') || !mapPreview.includes('ZoomControls')) {
+    fail('SEO map preview must offer desktop zoom controls');
   }
   if (!mapPreview.includes('Interactive map ·') || !mapPreview.includes('map.html?region=')) {
     fail('SEO map preview must link to the Leaflet map page');

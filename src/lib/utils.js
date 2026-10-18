@@ -344,6 +344,7 @@ export function exclusionAppliesToSurface(rule, surface = 'in_app') {
 export function lineSwatchClass(colorClass, kind = 'bg') {
     const c = String(colorClass || '');
     if (kind === 'border') {
+        if (c.includes('#937e3b')) return 'border-[#937e3b]';
         if (c.includes('#887c4c')) return 'border-[#887c4c]';
         if (c.includes('pink')) return 'border-pink-600';
         if (c.includes('sky-700') || c.includes('sky-800')) return 'border-sky-700';
@@ -362,6 +363,7 @@ export function lineSwatchClass(colorClass, kind = 'bg') {
         if (c.includes('blue')) return 'border-blue-500';
         return 'border-gray-400';
     }
+    if (c.includes('#937e3b')) return 'bg-[#937e3b]';
     if (c.includes('#887c4c')) return 'bg-[#887c4c]';
     if (c.includes('pink')) return 'bg-pink-600';
     if (c.includes('sky-700') || c.includes('sky-800')) return 'bg-sky-700';

@@ -1,0 +1,54 @@
+---
+/** Desktop zoom. Hidden on touch screens, where pinch is the control. */
+---
+<div class="nt-zoom-controls" data-nt-zoom-controls>
+  <button type="button" data-nt-zoom="in" class="nt-zoom-btn" aria-label="Zoom in">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
+  </button>
+  <button type="button" data-nt-zoom="out" class="nt-zoom-btn" aria-label="Zoom out">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M5 12h14"></path></svg>
+  </button>
+</div>
+
+<style is:global>
+  .nt-zoom-controls {
+    display: none;
+  }
+  @media (hover: hover) and (pointer: fine) {
+    .nt-zoom-controls {
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+      position: absolute;
+      right: 0.75rem;
+      bottom: 0.75rem;
+      z-index: 30;
+    }
+    .nt-zoom-btn {
+      width: 2.5rem;
+      height: 2.5rem;
+      border: 0;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.94);
+      color: #0f172a;
+      box-shadow: 0 1px 4px rgba(15, 23, 42, 0.28);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      padding: 0;
+    }
+    .nt-zoom-btn svg {
+      width: 1.15rem;
+      height: 1.15rem;
+      pointer-events: none;
+    }
+    .nt-zoom-btn:hover {
+      background: #fff;
+    }
+    .nt-zoom-btn:focus-visible {
+      outline: 2px solid #2563eb;
+      outline-offset: 2px;
+    }
+  }
+</style>

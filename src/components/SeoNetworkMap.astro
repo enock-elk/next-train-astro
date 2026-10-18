@@ -1,5 +1,6 @@
 ---
 import { withBase } from '../lib/config.js';
+import ZoomControls from './ZoomControls.astro';
 
 const { region = 'GP', regionLabel = '' } = Astro.props;
 const REGION_MAP_IMAGES = {
@@ -18,15 +19,19 @@ const label = regionLabel || region;
     {label} network map
   </h2>
   <figure class="rounded-xl overflow-hidden border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/60">
-    <img
-      src={mapImageSrc}
-      alt={`${label} Metrorail network map`}
-      class="w-full h-auto object-cover bg-slate-100 dark:bg-slate-900 aspect-[3/2]"
-      loading="lazy"
-      decoding="async"
-      width="1200"
-      height="800"
-    />
+    <div class="relative overflow-hidden" data-nt-zoom-frame>
+      <img
+        src={mapImageSrc}
+        alt={`${label} Metrorail network map`}
+        data-nt-zoom-target
+        class="w-full h-auto object-cover bg-slate-100 dark:bg-slate-900 aspect-[3/2] origin-center"
+        loading="lazy"
+        decoding="async"
+        width="1200"
+        height="800"
+      />
+      <ZoomControls />
+    </div>
     <figcaption class="px-4 py-3 text-sm text-slate-600 dark:text-slate-300">
       Static network map for {label}. Use the button below for the full map.
     </figcaption>

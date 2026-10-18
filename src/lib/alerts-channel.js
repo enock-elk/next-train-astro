@@ -9,7 +9,7 @@ import { prepareRichHtml, injectRichTextStyles, linkedPlainHtml } from './rich-t
 import { showToast, triggerHaptic, openSmoothModal, closeSmoothModal } from './ui.js';
 import { isAdminAuthed } from './admin-chrome.js';
 import { $currentRouteId, $userRegion } from '../store.js';
-import { cacheAlertImages, pruneExpiredAlertImages, resolveCachedAlertImage } from './alert-image-cache.js';
+import { loadAlertImageBlob, pruneExpiredAlertImages } from './alert-image-cache.js';
 import {
     ALERTS_PAGE_SIZE,
     ALERT_PIN_SVG,
@@ -29,6 +29,8 @@ import {
     pickAutoOpenNotice as pickAutoOpenFromFeed,
     sanitizeAlertImageUrl,
     sanitizeInlineAlertImageUrl,
+    sanitizeAlertVideoUrl,
+    renderAlertVideoMarkup,
     collectNoticeImageUrls,
     hoistAlertImagesFromHtml,
     layoutAlertPost,
@@ -215,7 +217,7 @@ export function renderLazyPosterHtml(urls, notice = null) {
         const src = escapeHTML(href);
         return `<button type="button" data-alert-lightbox="${src}" data-alert-notice-id="${noticeId}" data-alert-expires="${expiresAt}" class="relative block w-full aspect-square min-h-[10rem] max-h-72 focus:outline-none cursor-zoom-in rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm active:scale-[0.99] transition-transform">
             <span class="nt-alert-poster-loading absolute inset-0 flex items-center justify-center bg-gray-100 dark:bg-gray-900 pointer-events-none" aria-hidden="true">${spinner}</span>
-            <img src="${src}" alt="" referrerpolicy="no-referrer" draggable="false" fetchpriority="high" decoding="async" class="nt-alert-poster-img absolute inset-0 w-full h-full object-cover opacity-0">
+            <img alt="" referrerpolicy="no-referrer" draggable="false" decoding="async" class="nt-alert-poster-img absolute inset-0 w-full h-full object-cover opacity-0">
             <span class="nt-zoom-plus absolute bottom-1.5 right-1.5 w-5 h-5 rounded-full bg-black/40 text-white text-xs font-bold leading-none flex items-center justify-center border border-white/20 pointer-events-none select-none shadow-sm" aria-hidden="true">+</span>
         </button>`;
     }).join('');
@@ -223,9 +225,31 @@ export function renderLazyPosterHtml(urls, notice = null) {
     return `<div class="${grid} mt-2 mb-1" data-alert-media>${cells}</div>`;
 }
 
+function bindAlertVideoPlayers(root) {
+    root.querySelectorAll('[data-alert-video-play]').forEach((btn) => {
+        if (btn.dataset.ntVideoBound === '1') return;
+        btn.dataset.ntVideoBound = '1';
+        btn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const src = btn.getAttribute('data-alert-video-src') || '';
+            const video = btn.parentElement?.querySelector('video');
+            if (!video || !src) return;
+            video.autoplay = false;
+            video.preload = 'none';
+            if (!video.getAttribute('src')) video.src = src;
+            video.classList.remove('hidden');
+            btn.classList.add('hidden');
+            const started = video.play();
+            if (started && typeof started.catch === 'function') started.catch(() => {});
+        });
+    });
+}
+
 export function hydrateAlertPosterImages(root = typeof document !== 'undefined' ? document : null) {
     if (!root?.querySelectorAll) return;
     watchAlertPosterHydration(root);
+    bindAlertVideoPlayers(root);
     root.querySelectorAll('[data-alert-lightbox] img.nt-alert-poster-img').forEach((img) => {
         if (img.dataset.ntPosterBound === '1') return;
         img.dataset.ntPosterBound = '1';
@@ -233,6 +257,7 @@ export function hydrateAlertPosterImages(root = typeof document !== 'undefined' 
         img.decoding = 'async';
         const host = img.closest('[data-alert-lightbox]');
         const originalSrc = host?.getAttribute('data-alert-lightbox') || img.getAttribute('src') || '';
+        if (!originalSrc) return;
         const rememberObjectUrl = (blob) => {
             if (!blob || !host) return '';
             try {
@@ -247,15 +272,26 @@ export function hydrateAlertPosterImages(root = typeof document !== 'undefined' 
                 return '';
             }
         };
-        resolveCachedAlertImage(originalSrc).then((cached) => {
-            if (!cached) return;
-            return cached.blob().then((blob) => {
-                const obj = rememberObjectUrl(blob);
-                if (!obj) return;
-                if (img.dataset.ntPosterRevealed === '1' || img.naturalWidth > 0) return;
+        loadAlertImageBlob(originalSrc, {
+            expiresAt: Number(host?.getAttribute('data-alert-expires') || 0),
+            noticeId: host?.getAttribute('data-alert-notice-id') || '',
+        }).then((blob) => {
+            const obj = rememberObjectUrl(blob);
+            img.setAttribute('fetchpriority', 'high');
+            if (obj) {
                 img.src = obj;
-            });
-        }).catch(() => {});
+                if (window._isLightboxMode && typeof window.ntPaintAlertLightbox === 'function') {
+                    const full = document.getElementById('alert-image-lightbox-img');
+                    if (full && !String(full.getAttribute('src') || '').startsWith('blob:')) {
+                        window.ntPaintAlertLightbox(obj);
+                    }
+                }
+                return;
+            }
+            if (!img.getAttribute('src')) img.src = originalSrc;
+        }).catch(() => {
+            if (!img.getAttribute('src')) img.src = originalSrc;
+        });
         const reveal = () => {
             if (img.dataset.ntPosterRevealed === '1') return;
             if (!(img.naturalWidth > 0)) return;
@@ -266,13 +302,6 @@ export function hydrateAlertPosterImages(root = typeof document !== 'undefined' 
             host?.setAttribute('data-alert-ready', '1');
             const live = img.currentSrc || img.src || '';
             if (live.startsWith('blob:')) host?.setAttribute('data-alert-object-url', live);
-            if (originalSrc) {
-                cacheAlertImages({
-                    id: host?.getAttribute('data-alert-notice-id') || '',
-                    expiresAt: Number(host?.getAttribute('data-alert-expires') || 0),
-                    imageUrls: [originalSrc],
-                }, (u) => u);
-            }
         };
         const fail = () => {
             if (img.dataset.ntPosterRevealed === '1') return;
@@ -280,26 +309,21 @@ export function hydrateAlertPosterImages(root = typeof document !== 'undefined' 
             host?.querySelector('.nt-alert-poster-loading')?.classList.add('hidden');
             host?.removeAttribute('data-alert-ready');
         };
-        const tryDecode = () => {
-            if (!(img.naturalWidth > 0)) return;
-            if (typeof img.decode === 'function') {
-                img.decode().then(reveal, () => {
-                    if (img.naturalWidth > 0) reveal();
-                });
-                return;
-            }
-            reveal();
-        };
         const onLoad = () => {
-            if (img.naturalWidth > 0) tryDecode();
+            if (img.naturalWidth > 0) reveal();
         };
         let errors = 0;
         img.addEventListener('load', onLoad);
         img.addEventListener('error', () => {
             if (img.dataset.ntPosterRevealed === '1') return;
-            if (errors++ < 2) {
-                const src = img.getAttribute('src');
-                if (src) setTimeout(() => { img.src = src; }, 400 * errors);
+            const src = img.getAttribute('src') || '';
+            if (src.startsWith('blob:') && originalSrc && img.dataset.ntBlobFailed !== '1') {
+                img.dataset.ntBlobFailed = '1';
+                img.src = originalSrc;
+                return;
+            }
+            if (errors++ < 2 && src) {
+                setTimeout(() => { img.src = src; }, 400 * errors);
                 return;
             }
             fail();
@@ -309,7 +333,7 @@ export function hydrateAlertPosterImages(root = typeof document !== 'undefined' 
             const kick = () => {
                 if (img.dataset.ntPosterRevealed === '1') return;
                 if (img.naturalWidth > 0) {
-                    tryDecode();
+                    reveal();
                     return;
                 }
                 if (!img.complete) setTimeout(kick, 4000);
@@ -613,14 +637,14 @@ function renderPostCard(notice, opts = {}) {
     const titleHtml = layout.title
         ? `<h3 class="text-base font-black text-gray-900 dark:text-white leading-snug mb-2" data-alert-title>${linkedPlainHtml(layout.title)}</h3>`
         : '';
-    const mediaHtml = renderPosterHtml(layout.imageUrls, notice);
+    const mediaHtml = `${renderPosterHtml(layout.imageUrls, notice)}${renderAlertVideoMarkup(layout.videoUrls)}`;
     const bodyHtml = body
         ? (alertCopyNeedsSeeMore(body)
             ? buildAlertSeeMoreMarkup(body, { className: mediaHtml ? 'mt-3' : '' })
             : `<div class="nt-rich-body text-sm text-gray-800 dark:text-gray-200 leading-relaxed ${mediaHtml ? 'mt-3' : ''}" data-alert-body>${body}</div>`)
         : '';
     let extra = '';
-    if (notice.ctaUrl && notice.ctaText) {
+    if (notice.ctaUrl && notice.ctaText && !sanitizeAlertVideoUrl(notice.ctaUrl)) {
         extra += `<a href="${escapeHTML(notice.ctaUrl)}" target="_blank" rel="noopener" class="mt-3 inline-flex items-center justify-center w-full bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 font-bold py-2 px-3 rounded-lg text-xs uppercase tracking-wide border border-blue-200 dark:border-blue-800">${escapeHTML(notice.ctaText)}</a>`;
     }
     const rawHtml = repairMojibake(notice.message || notice.text || '');
@@ -770,7 +794,6 @@ export function renderAlertsChannel(notices = cachedLiveNotices, opts = {}) {
     feed.dataset.ntAlertsSig = html;
     feed.innerHTML = html;
     pruneExpiredAlertImages(list);
-    list.forEach((n) => cacheAlertImages(n, resolveAlertImageSrc));
     hydrateAlertPosterImages(feed);
     hydratePollResults(feed);
     hydrateLinkPreviews(feed, REPLY_WORKER_URL);

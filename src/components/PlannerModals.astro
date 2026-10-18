@@ -2,6 +2,7 @@
 // Planner-critical modals + shared shells (strict clone from old SPA index.html)
 // Admin modals intentionally omitted until Phase 4.
 import { withBase } from '../lib/config.js';
+import ZoomControls from './ZoomControls.astro';
 ---
 
 <!-- Dropdown scrim (shared by planner day/time dropdowns) -->
@@ -25,8 +26,9 @@ import { withBase } from '../lib/config.js';
             </button>
         </div>
         
-        <div id="map-container" class="flex-grow overflow-hidden bg-gray-900 relative cursor-grab active:cursor-grabbing flex items-center justify-center">
+        <div id="map-container" class="flex-grow overflow-hidden bg-gray-900 relative flex items-center justify-center">
             <img id="map-image" data-map-src={withBase('images/network-map.png')} alt="Metrorail Network Map" class="w-full h-full object-contain transition-transform duration-75 origin-center" loading="lazy" decoding="async" onerror="if(!this.getAttribute('src'))return;this.style.display='none';var f=this.nextElementSibling;if(f){f.classList.remove('hidden');f.style.display='flex';}">
+            <ZoomControls />
             <div class="hidden flex-col items-center justify-center p-8 text-center text-gray-500 absolute inset-0">
                 <svg class="w-12 h-12 mb-4 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
                 <p class="font-bold text-gray-800 dark:text-gray-100">Map isn’t available offline</p>
@@ -45,6 +47,7 @@ import { withBase } from '../lib/config.js';
 <div id="alert-image-lightbox" class="fixed inset-0 bg-black z-[160] hidden flex-col [touch-action:none]" role="dialog" aria-modal="true" aria-label="Image Preview">
     <div id="alert-image-lightbox-stage" class="relative flex-1 min-h-0 overflow-hidden flex items-center justify-center [touch-action:none]">
         <img id="alert-image-lightbox-img" alt="Image Preview" draggable="false" decoding="sync" class="max-w-full max-h-full object-contain select-none pointer-events-none">
+        <ZoomControls />
     </div>
     <button type="button" id="alert-image-lightbox-close" class="absolute top-[max(0.75rem,env(safe-area-inset-top))] right-3 z-20 w-11 h-11 rounded-full bg-black/55 text-white flex items-center justify-center border border-white/20 focus:outline-none [touch-action:manipulation]" aria-label="Close">
         <svg class="w-6 h-6 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>

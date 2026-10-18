@@ -21,6 +21,8 @@ import {
     SUPPORT_EMAIL,
 } from './recovery.js';
 import { sanitizeAttachmentDisplayUrl } from './attachments.js';
+import { preferSavedPosterSrc } from './alerts-feed.js';
+import { pinchGestureMove, pinchGestureStart, zoomAboutPoint } from './pinch-math.js';
 
 
 /** Vibrations are opt-in. Missing key (new users) means off. */
@@ -1029,8 +1031,7 @@ let lbStartX = 0;
 let lbStartY = 0;
 let lbRawX = 0;
 let lbRawY = 0;
-let lbPinchDist = null;
-let lbPinchScale = 1;
+let lbPinch = null;
 let lbMoved = false;
 let lbTracking = false;
 let lbLastTap = 0;
@@ -1053,7 +1054,7 @@ function resetAlertLightboxTransform() {
     lbY = 0;
     lbDismissY = 0;
     lbPanning = false;
-    lbPinchDist = null;
+    lbPinch = null;
     lbMoved = false;
     lbTracking = false;
     lbLastTap = 0;
@@ -1069,8 +1070,9 @@ function resetAlertLightboxTransform() {
 }
 
 function applyAlertLightboxTransform() {
-    const { img, overlay } = lightboxEls();
+    const { img, overlay, stage } = lightboxEls();
     if (img) img.style.transform = `translate(${lbX}px, ${lbY + lbDismissY}px) scale(${lbScale})`;
+    stage?.classList.toggle('is-zoomed', lbScale > 1.01);
     if (!overlay) return;
     if (lbScale <= 1 && lbDismissY > 0) {
         const fade = Math.max(0.25, 1 - (lbDismissY / 320));
@@ -1080,28 +1082,39 @@ function applyAlertLightboxTransform() {
     }
 }
 
-/** Double tap zooms toward the tap. A second double tap returns to fit. */
-function zoomLightboxAt(clientX, clientY) {
+function lightboxState() {
+    return { scale: lbScale, x: lbX, y: lbY };
+}
+
+function applyLightboxState(next, animate) {
+    lbScale = next.scale;
+    lbX = next.x;
+    lbY = next.y;
+    lbDismissY = 0;
     const { img } = lightboxEls();
-    if (!img) return;
-    img.style.transition = 'transform 180ms ease';
-    if (lbScale > 1.05) {
-        lbScale = 1;
-        lbX = 0;
-        lbY = 0;
-        lbDismissY = 0;
-    } else {
-        const rect = img.getBoundingClientRect();
-        const cx = clientX - (rect.left + rect.width / 2);
-        const cy = clientY - (rect.top + rect.height / 2);
-        lbScale = LB_ZOOM;
-        lbX = cx * (1 - lbScale);
-        lbY = cy * (1 - lbScale);
-        lbDismissY = 0;
-        clampAlertLightboxPan();
-    }
+    if (img) img.style.transition = animate ? 'transform 160ms ease' : 'none';
     applyAlertLightboxTransform();
-    window.setTimeout(() => { img.style.transition = ''; }, 220);
+    if (animate && img) window.setTimeout(() => { img.style.transition = ''; }, 180);
+}
+
+/** Double tap zooms toward the tap. A second double tap returns to fit. */
+function zoomLightboxAt(clientX, clientY, nextScale = LB_ZOOM) {
+    const { img, stage } = lightboxEls();
+    if (!img) return;
+    if (lbScale > 1.05 && nextScale === LB_ZOOM) {
+        applyLightboxState({ scale: 1, x: 0, y: 0 }, true);
+        return;
+    }
+    const rect = img.getBoundingClientRect();
+    applyLightboxState(zoomAboutPoint(
+        lightboxState(),
+        clientX,
+        clientY,
+        rect,
+        nextScale,
+        stage?.clientWidth || img.clientWidth,
+        stage?.clientHeight || img.clientHeight,
+    ), true);
 }
 
 function snapLightboxDismiss() {
@@ -1145,18 +1158,69 @@ function lightboxPosterHost(src, host) {
     return null;
 }
 
-/** Reuse the on-screen poster URL so full view does not re-encode or refetch. */
+function ensureLightboxStatus() {
+    let el = document.getElementById('alert-image-lightbox-status');
+    if (el) return el;
+    const stage = document.getElementById('alert-image-lightbox-stage');
+    if (!stage) return null;
+    el = document.createElement('div');
+    el.id = 'alert-image-lightbox-status';
+    el.className = 'absolute inset-0 z-[5] hidden flex-col items-center justify-center gap-3 px-6 text-center text-white pointer-events-none';
+    el.innerHTML = `<svg class="h-8 w-8 animate-spin text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" aria-hidden="true"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg><p data-lb-status-text class="text-sm font-semibold">Loading picture</p>`;
+    stage.appendChild(el);
+    return el;
+}
+
+function showLightboxStatus(message, spinning) {
+    const el = ensureLightboxStatus();
+    if (!el) return;
+    const text = el.querySelector('[data-lb-status-text]');
+    if (text) text.textContent = message;
+    el.querySelector('svg')?.classList.toggle('hidden', !spinning);
+    el.classList.remove('hidden');
+    el.classList.add('flex');
+}
+
+function hideLightboxStatus() {
+    const el = document.getElementById('alert-image-lightbox-status');
+    if (!el) return;
+    el.classList.add('hidden');
+    el.classList.remove('flex');
+}
+
+/** Paint the full-screen picture and say so while it is still arriving. */
+function paintLightboxImage(displaySrc) {
+    const { img } = lightboxEls();
+    if (!img || !displaySrc) return;
+    const finish = () => {
+        if (img.naturalWidth > 0) {
+            hideLightboxStatus();
+            return;
+        }
+        const decoded = typeof img.decode === 'function' ? img.decode() : Promise.resolve();
+        Promise.resolve(decoded).then(() => {
+            if (img.naturalWidth > 0) hideLightboxStatus();
+            else showLightboxStatus('Could not load this picture', false);
+        }, () => showLightboxStatus('Could not load this picture', false));
+    };
+    img.onload = finish;
+    img.onerror = () => showLightboxStatus('Could not load this picture', false);
+    showLightboxStatus('Loading picture', true);
+    if (img.getAttribute('src') !== displaySrc) img.src = displaySrc;
+    else if (img.complete) finish();
+}
+
+/** Reuse the saved poster so full view does not fetch the picture again. */
 function resolveLightboxDisplaySrc(src, host) {
     try {
         const wrap = lightboxPosterHost(src, host);
         const poster = wrap?.querySelector?.('img') || null;
-        if (/^https:\/\//i.test(src)) return src;
-        if (poster && poster.naturalWidth > 0) {
-            const live = poster.currentSrc || poster.getAttribute('src') || poster.src || '';
-            if (live) return live;
-        }
         const objectUrl = wrap?.getAttribute('data-alert-object-url') || '';
-        if (objectUrl) return objectUrl;
+        const live = poster && poster.naturalWidth > 0
+            ? (poster.currentSrc || poster.getAttribute('src') || poster.src || '')
+            : '';
+        const saved = preferSavedPosterSrc(objectUrl, live, '');
+        if (saved) return saved;
         const imgs = document.querySelectorAll('img');
         for (const node of imgs) {
             if (node.id === 'alert-image-lightbox-img') continue;
@@ -1190,7 +1254,41 @@ function bindAlertImageLightbox() {
     }
     if (!stage) return;
     stage.style.touchAction = 'none';
+    const zoomCenter = () => {
+        const rect = stage.getBoundingClientRect();
+        return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+    };
+    stage.querySelector('[data-nt-zoom="in"]')?.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const c = zoomCenter();
+        zoomLightboxAt(c.x, c.y, Math.min(5, lbScale * 1.35));
+    });
+    stage.querySelector('[data-nt-zoom="out"]')?.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const c = zoomCenter();
+        zoomLightboxAt(c.x, c.y, lbScale / 1.35);
+    });
+    stage.querySelector('[data-nt-zoom-controls]')?.addEventListener('mousedown', (e) => e.stopPropagation());
+    stage.addEventListener('wheel', (e) => {
+        if (!window.matchMedia('(hover: hover) and (pointer: fine)').matches) return;
+        e.preventDefault();
+        const delta = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY;
+        const { img } = lightboxEls();
+        const rect = (img || stage).getBoundingClientRect();
+        applyLightboxState(zoomAboutPoint(
+            lightboxState(),
+            e.clientX,
+            e.clientY,
+            rect,
+            lbScale * Math.exp(-delta * 0.0016),
+            stage.clientWidth,
+            stage.clientHeight,
+        ), false);
+    }, { passive: false });
     stage.addEventListener('mousedown', (e) => {
+        if (e.target?.closest?.('[data-nt-zoom-controls]')) return;
         e.preventDefault();
         lbStartX = e.clientX - lbX;
         lbStartY = e.clientY - lbY;
@@ -1223,11 +1321,10 @@ function bindAlertImageLightbox() {
             lbTracking = false;
             lbMoved = true;
             lbDismissY = 0;
-            lbPinchDist = Math.hypot(
-                e.touches[0].pageX - e.touches[1].pageX,
-                e.touches[0].pageY - e.touches[1].pageY
-            );
-            lbPinchScale = lbScale;
+            const { img } = lightboxEls();
+            const rect = (img || stage).getBoundingClientRect();
+            lbPinch = pinchGestureStart(lightboxState(), rect, e.touches[0], e.touches[1]);
+            if (img) img.style.transition = 'none';
             return;
         }
         if (e.touches.length === 1) {
@@ -1242,23 +1339,22 @@ function bindAlertImageLightbox() {
         }
     }, { passive: false });
     stage.addEventListener('touchmove', (e) => {
-        if (e.touches.length === 2 && lbPinchDist) {
+        if (e.touches.length === 2 && lbPinch) {
             e.preventDefault();
             lbMoved = true;
-            const currentDistance = Math.hypot(
-                e.touches[0].pageX - e.touches[1].pageX,
-                e.touches[0].pageY - e.touches[1].pageY
+            const { img } = lightboxEls();
+            const next = pinchGestureMove(
+                lbPinch,
+                e.touches[0],
+                e.touches[1],
+                stage.clientWidth,
+                stage.clientHeight,
             );
-            let next = lbPinchScale * (currentDistance / lbPinchDist);
-            if (next < 1) next = 1;
-            if (next > 5) next = 5;
-            lbScale = next;
-            if (lbScale === 1) {
-                lbX = 0;
-                lbY = 0;
-            }
+            lbScale = next.scale;
+            lbX = next.x;
+            lbY = next.y;
             lbDismissY = 0;
-            clampAlertLightboxPan();
+            if (img) img.style.transition = 'none';
             applyAlertLightboxTransform();
             return;
         }
@@ -1287,7 +1383,16 @@ function bindAlertImageLightbox() {
         }
     }, { passive: false });
     stage.addEventListener('touchend', (e) => {
-        if (e.touches.length < 2) lbPinchDist = null;
+        if (e.touches.length < 2) {
+            const wasPinch = !!lbPinch;
+            lbPinch = null;
+            if (wasPinch && lbScale < 1.02) {
+                applyLightboxState({ scale: 1, x: 0, y: 0 }, true);
+                lbTracking = false;
+                lbPanning = false;
+                return;
+            }
+        }
         if (e.touches.length === 1) {
             lbRawX = e.touches[0].clientX;
             lbRawY = e.touches[0].clientY;
@@ -1356,10 +1461,14 @@ function announceLightboxNotice(host) {
 }
 
 function lightboxCandidateSrc(url, host) {
-    const direct = sanitizeAttachmentDisplayUrl(url);
     const wrap = lightboxPosterHost(url, host) || (host?.nodeType === 1 ? host : null);
-    const posterImg = wrap?.querySelector?.('img') || null;
+    const posterImg = wrap?.querySelector?.('img.nt-alert-poster-img') || wrap?.querySelector?.('img') || null;
     const loaded = !!(posterImg && posterImg.naturalWidth > 0);
+    const blob = String(wrap?.getAttribute?.('data-alert-object-url') || '');
+    const live = String(posterImg?.currentSrc || posterImg?.getAttribute?.('src') || '');
+    const objectUrl = preferSavedPosterSrc(blob, live, '');
+    if (objectUrl.startsWith('blob:')) return { src: objectUrl, wrap, posterImg, loaded: true };
+    const direct = sanitizeAttachmentDisplayUrl(url);
     const tries = [
         direct,
         wrap?.getAttribute?.('data-alert-lightbox'),
@@ -1369,10 +1478,6 @@ function lightboxCandidateSrc(url, host) {
         const safe = sanitizeAttachmentDisplayUrl(candidate);
         if (safe) return { src: safe, wrap, posterImg, loaded };
     }
-    const blob = String(wrap?.getAttribute?.('data-alert-object-url') || '');
-    const live = loaded ? String(posterImg.currentSrc || posterImg.src || '') : '';
-    const objectUrl = live.startsWith('blob:') ? live : (blob.startsWith('blob:') ? blob : '');
-    if (objectUrl) return { src: objectUrl, wrap, posterImg, loaded: true };
     return { src: '', wrap, posterImg, loaded };
 }
 
@@ -1403,7 +1508,7 @@ export function openLightbox(url, host) {
     }
     overlay.classList.remove('hidden');
     overlay.classList.add('flex');
-    if (img.getAttribute('src') !== displaySrc) img.src = displaySrc;
+    paintLightboxImage(displaySrc);
     announceLightboxNotice(wrap || host);
 }
 
@@ -1423,6 +1528,7 @@ export function closeLightbox(fromPopState = false) {
             delete overlay.dataset.ntAdminLift;
         }
         resetAlertLightboxTransform();
+        hideLightboxStatus();
         if (img) img.alt = '';
         announceLightboxNotice(null);
         window._isLightboxMode = false;
@@ -2691,6 +2797,7 @@ if (typeof window !== 'undefined') {
     window.hideOfflineChrome = hideOfflineChrome;
     window.scheduleOfflineChrome = scheduleOfflineChrome;
     window.openLightbox = openLightbox;
+    window.ntPaintAlertLightbox = paintLightboxImage;
     window.closeLightbox = closeLightbox;
     window.lockBackgroundScroll = lockBackgroundScroll;
     window.unlockBackgroundScroll = unlockBackgroundScroll;

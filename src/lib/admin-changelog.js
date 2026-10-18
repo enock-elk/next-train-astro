@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_10.18.2': [
+        'Pretoria to Pienaarspoort uses the olive of the Rissik to Hartbeesspruit line. The pink was the Rayton branch. Pinch keeps the point under the fingers. On a desktop, zoom controls sit at the bottom right of the network map, photo view, and SEO map, and a double click zooms. The homepage description leads with train schedule today. An alert poster is kept on the device until that alert expires, and full view opens that saved picture with a loading line if it is not ready yet. A direct video link can be posted. It does not play or download until Play video. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_10.18.1': [
         'Sunday’s day note names the region and the line. Who’s here counts everyone with that route’s Community open, including people who are not signed in, and no longer says it is not a contact list. Version moves to V10 after the design changes. No commuter What\'s New. forceShow stays false.',
     ],

@@ -11,6 +11,7 @@ import {
 } from '../../lib/seo-routes.js';
 import SeoCrossLinks from '../../components/SeoCrossLinks.astro';
 import JhbFit from '../../components/JhbFit.astro';
+import ZoomControls from '../../components/ZoomControls.astro';
 
 export function getStaticPaths() {
   return listSeoRegions().map((r) => ({ params: { slug: r.slug } }));
@@ -131,16 +132,20 @@ const jsonLd = {
           id="region-seo-map"
           class="rounded-xl overflow-hidden border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/60"
         >
-          <img
-            src={mapImageSrc}
-            alt={`${entry.regionLabel} Metrorail network map`}
-            class="w-full h-auto object-cover bg-slate-100 dark:bg-slate-900 aspect-[3/2]"
-            loading="eager"
-            fetchpriority="high"
-            decoding="async"
-            width="1200"
-            height="800"
-          />
+          <div class="relative overflow-hidden" data-nt-zoom-frame>
+            <img
+              src={mapImageSrc}
+              alt={`${entry.regionLabel} Metrorail network map`}
+              data-nt-zoom-target
+              class="w-full h-auto object-cover bg-slate-100 dark:bg-slate-900 aspect-[3/2] origin-center"
+              loading="eager"
+              fetchpriority="high"
+              decoding="async"
+              width="1200"
+              height="800"
+            />
+            <ZoomControls />
+          </div>
           <figcaption class="px-4 py-3 text-sm text-slate-600 dark:text-slate-300">
             Static network map for {entry.regionLabel}. Use the button below for live routes, stations, and disruptions.
           </figcaption>

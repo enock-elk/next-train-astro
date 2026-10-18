@@ -457,6 +457,21 @@ html[data-pilot-community="1"] #bottom-nav-community {
   display: flex !important;
 }
 
+@media (hover: hover) and (pointer: fine) {
+  #map-container,
+  #alert-image-lightbox-stage {
+    cursor: zoom-in;
+  }
+  #map-container.is-zoomed,
+  #alert-image-lightbox-stage.is-zoomed {
+    cursor: grab;
+  }
+  #map-container.is-zoomed:active,
+  #alert-image-lightbox-stage.is-zoomed:active {
+    cursor: grabbing;
+  }
+}
+
 #bottom-nav .bottom-nav-item {
   position: relative;
   min-height: var(--nt-nav-h, 3.25rem) !important;

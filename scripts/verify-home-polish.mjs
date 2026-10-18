@@ -16,6 +16,7 @@ import { formatAccountDisplayName, clampDisplayName, refuseDisplayName, DISPLAY_
 import { pickCanonicalChatDeviceId } from '../src/lib/account.js';
 import { normalizeAdminChangelogKey } from '../src/lib/admin-changelog.js';
 import { hoistAlertImagesFromHtml } from '../src/lib/alerts-feed.js';
+import { pinchGestureMove, pinchGestureStart, zoomAboutPoint } from '../src/lib/pinch-math.js';
 
 const failures = [];
 
@@ -458,7 +459,7 @@ assert(!/<h3[^>]*>Account<\/h3>/.test(hubModals), 'Account overlay has no large 
 assert(hubModals.includes('placeholder="Email or WhatsApp for a reply"'), 'Hub contact placeholder is the shorter line');
 assert(hubModals.includes('id="messages-thread-contact-toggle"'), 'Hub contact sits in a row above the message');
 assert(hubModals.includes('padding-bottom: max(0.75rem, var(--nt-sys-bottom, env(safe-area-inset-bottom, 0px)));'), 'Hub composer sits on the bottom edge');
-assert(ROUTES['pta-pien'].colorClass === 'text-pink-600', 'Pienaarspoort uses the map magenta');
+assert(ROUTES['pta-pien'].colorClass === 'text-[#937e3b]', 'Pienaarspoort uses the Rissik to Hartbeesspruit olive');
 assert(ROUTES['pta-dewildt'].colorClass === 'text-orange-500' && ROUTES['pta-mabopane'].colorClass === 'text-orange-500', 'De Wildt shares the orange north line');
 assert(ROUTES['herc-koed'].colorClass === 'text-[#887c4c]', 'Hercules to Koedoespoort uses the olive line');
 assert(ROUTES['pta-saul'].colorClass === 'text-sky-500', 'Saulsville uses the light blue line');
@@ -834,6 +835,26 @@ assert(normalizeAdminChangelogKey('V9_09.15.5 - extra') === 'V9_09.15.5', 'versi
     assert(!/<img/i.test(hoisted.body), 'hoist removes leftover img tags');
 }
 
+{
+    const rect = { left: 0, right: 400, top: 0, bottom: 400 };
+    const start = { scale: 1, x: 0, y: 0 };
+    const gesture = pinchGestureStart(start, rect, { clientX: 250, clientY: 200 }, { clientX: 350, clientY: 200 });
+    const zoomed = pinchGestureMove(gesture, { clientX: 200, clientY: 200 }, { clientX: 400, clientY: 200 }, 400, 400);
+    const originX = 200;
+    const contentX = gesture.contentX;
+    const landed = originX + contentX * zoomed.scale + zoomed.x;
+    assert(Math.abs(landed - 300) < 0.6, `pinch keeps the midpoint under the fingers, landed ${landed}`);
+    assert(zoomed.scale > 1.4 && zoomed.scale < 2.2, `pinch scale follows the finger span, got ${zoomed.scale}`);
+    const button = zoomAboutPoint(start, 300, 200, rect, 2, 400, 400);
+    const buttonLanded = 200 + ((300 - 200 - 0) / 1) * button.scale + button.x;
+    assert(Math.abs(buttonLanded - 300) < 0.6, 'a zoom control keeps the clicked point still');
+    const mapJs = readFileSync(new URL('../src/lib/map-viewer.js', import.meta.url), 'utf8');
+    assert(mapJs.includes("addEventListener('dblclick'"), 'desktop double click zooms the network map');
+    assert(mapJs.includes('pinchGestureMove'), 'map pinch stays under the fingers');
+    const mapModal = readFileSync(new URL('../src/components/PlannerModals.astro', import.meta.url), 'utf8');
+    assert(mapModal.includes('<ZoomControls />') && mapModal.includes('id="map-container"'), 'the network map has desktop zoom controls');
+    assert(!mapModal.includes('cursor-grab'), 'the map does not use a hand cursor before it is zoomed');
+}
 if (failures.length) {
     console.error('verify-home-polish failed:');
     failures.forEach((f) => console.error(' -', f));

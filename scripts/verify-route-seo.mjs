@@ -275,7 +275,7 @@ if (!/Cape Town to Bellville/i.test(capeMeta) || !/train schedule/i.test(capeMet
   if (/description:\s*['"]Today:/.test(regionAstro)) {
     fail('region descriptions must not start with Today');
   }
-  if (!regionAstro.includes('data-nt-zoom-frame') || !regionAstro.includes('ZoomControls')) {
+  if (!regionAstro.includes('<SeoNetworkMap') || !regionAstro.includes('figureId="region-seo-map"')) {
     fail('region pages must offer desktop zoom on the network map');
   }
   const faqLine = 'Commuters can send a delay note, and some testers can share a trip location.';
@@ -473,8 +473,11 @@ if (!gridPathSa.includes('d=sa') || gridPathSa.includes('dir=')) {
   if (!mapPreview.includes('data-nt-zoom-frame') || !mapPreview.includes('ZoomControls')) {
     fail('SEO map preview must offer desktop zoom controls');
   }
-  if (!mapPreview.includes('Interactive map ·') || !mapPreview.includes('map.html?region=')) {
-    fail('SEO map preview must link to the Leaflet map page');
+  if (!mapPreview.includes('GPS Network Map ·') || !mapPreview.includes('map.html?region=')) {
+    fail('SEO map preview must link to the Leaflet GPS Network Map page');
+  }
+  if (!mapPreview.includes('data-seo-map-open') || !mapPreview.includes('seo-map-lightbox')) {
+    fail('SEO map preview must open a full-screen map lightbox on tap');
   }
   if (mapPreview.includes('map-app.js') || mapPreview.includes('leaflet')) {
     fail('SEO map preview must not load Leaflet');
@@ -898,8 +901,11 @@ if (existsSync(DIST)) {
     if (!html.includes('>Download</a>')) {
       fail('Kempton route HTML missing a Download button');
     }
-    if (!html.includes('Interactive map · GP')) {
-      fail('Kempton route HTML missing the map preview link');
+    if (!html.includes('GPS Network Map · GP')) {
+      fail('Kempton route HTML missing the GPS Network Map link');
+    }
+    if (!html.includes('data-seo-map-open') || !html.includes('id="seo-map-lightbox"')) {
+      fail('Kempton route HTML missing the enlargeable network map lightbox');
     }
     if (!html.includes('v=g') || !html.includes('rt=pta-kempton')) {
       fail('Kempton route HTML missing in-app grid deep link (?rt=&v=g)');
@@ -1049,7 +1055,10 @@ if (existsSync(DIST)) {
     if (/<a[^>]+href="[^"]*map\.html[^"]*"[^>]*>[\s\S]{0,800}network-map/.test(html)) {
       fail('Gauteng network map image must not be wrapped in a map.html link');
     }
-    if (!html.includes('Interactive map')) fail('Gauteng region page missing Interactive map control');
+    if (!html.includes('GPS Network Map')) fail('Gauteng region page missing GPS Network Map control');
+    if (!html.includes('data-seo-map-open') || !html.includes('id="seo-map-lightbox"')) {
+      fail('Gauteng region page missing the enlargeable network map lightbox');
+    }
     const gautengHeader = html.match(/<header\b[\s\S]*?<\/header>/i)?.[0] || '';
     if (gautengHeader.includes('Open Next Train · Gauteng')) {
       fail('Gauteng region page should not put Open Next Train · Gauteng in the header');

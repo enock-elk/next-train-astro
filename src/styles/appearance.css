@@ -1154,11 +1154,27 @@ html.dark .nt-offline-strip {
   justify-content: center;
   gap: 0.4rem;
   max-width: 100%;
+  width: 100%;
+  min-width: 0;
 }
 .nt-maint-wrench {
   width: 0.9rem;
   height: 0.9rem;
   flex-shrink: 0;
+}
+.nt-maint-marquee {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+  mask-image: linear-gradient(90deg, transparent 0, #000 0.75rem, #000 calc(100% - 0.75rem), transparent 100%);
+  -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 0.75rem, #000 calc(100% - 0.75rem), transparent 100%);
+}
+.nt-maint-track {
+  display: inline-flex;
+  align-items: center;
+  gap: 2.5rem;
+  width: max-content;
+  will-change: transform;
 }
 .nt-maint-label {
   min-width: 0;
@@ -1167,9 +1183,41 @@ html.dark .nt-offline-strip {
   letter-spacing: 0.14em;
   text-transform: uppercase;
   line-height: 1.2;
-  overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
+}
+/* Short copy stays centred and still. Long copy scrolls as a seamless marquee. */
+.nt-maint-strip:not(.nt-maint-is-marquee) .nt-maint-marquee {
+  display: flex;
+  justify-content: center;
+  mask-image: none;
+  -webkit-mask-image: none;
+}
+.nt-maint-strip:not(.nt-maint-is-marquee) .nt-maint-track {
+  gap: 0;
+}
+.nt-maint-strip:not(.nt-maint-is-marquee) .nt-maint-label + .nt-maint-label {
+  display: none;
+}
+.nt-maint-strip.nt-maint-is-marquee .nt-maint-track {
+  animation-name: nt-maint-slide;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+@keyframes nt-maint-slide {
+  to { transform: translateX(-50%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .nt-maint-strip.nt-maint-is-marquee .nt-maint-track {
+    animation: none;
+  }
+  .nt-maint-strip.nt-maint-is-marquee .nt-maint-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+  }
+  .nt-maint-strip.nt-maint-is-marquee .nt-maint-label + .nt-maint-label {
+    display: none;
+  }
 }
 
 /* Keep header chrome (menu / bell) below app modals.

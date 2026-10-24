@@ -287,6 +287,8 @@ assert(ui.includes("hideOfflineChrome({ dismissed: true })"), 'Close / auto-hide
 assert(ui.includes('PLANNER_INLINE_LISTS'), 'Travel Day scrim does not steal pointer events');
 assert(ui.includes('header.parentNode.insertBefore(banner, header)'), 'maintenance bar sits above #app-header inside the scroller');
 assert(ui.includes('nt-maint-wrench'), 'maintenance bar uses the wrench SVG');
+assert(ui.includes('syncMaintenanceMarquee'), 'long maintenance copy enables a marquee');
+assert(ui.includes('nt-maint-track'), 'maintenance marquee duplicates the label for a seamless loop');
 assert(!ui.includes('repeating-linear-gradient'), 'maintenance bar is not hazard tape');
 
 const manifest = JSON.parse(readFileSync(new URL('../public/images/alerts/manifest.json', import.meta.url), 'utf8'));

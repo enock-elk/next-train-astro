@@ -275,7 +275,7 @@ if (!/Cape Town to Bellville/i.test(capeMeta) || !/train schedule/i.test(capeMet
   if (/description:\s*['"]Today:/.test(regionAstro)) {
     fail('region descriptions must not start with Today');
   }
-  if (!regionAstro.includes('data-nt-zoom-frame') || !regionAstro.includes('ZoomControls')) {
+  if (!regionAstro.includes('<SeoNetworkMap') || !regionAstro.includes('figureId="region-seo-map"')) {
     fail('region pages must offer desktop zoom on the network map');
   }
   const faqLine = 'Commuters can send a delay note, and some testers can share a trip location.';

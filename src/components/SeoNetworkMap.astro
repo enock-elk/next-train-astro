@@ -6,7 +6,6 @@ const {
   region = 'GP',
   regionLabel = '',
   figureId = '',
-  loading = 'lazy',
   caption = '',
 } = Astro.props;
 const REGION_MAP_IMAGES = {
@@ -47,7 +46,7 @@ const modalTitle = `${label} network map`;
         alt={`${label} Metrorail network map`}
         data-nt-zoom-target
         class="w-full h-auto object-cover bg-slate-100 dark:bg-slate-900 aspect-[3/2] origin-center pointer-events-none"
-        loading={loading === 'eager' ? 'eager' : 'lazy'}
+        loading="lazy"
         decoding="async"
         width="1200"
         height="800"

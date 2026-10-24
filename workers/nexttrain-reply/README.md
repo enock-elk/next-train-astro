@@ -51,6 +51,6 @@ Commit the `wrangler.jsonc` id change and push it to `main`. After that, GitHub 
 
 If their message or email makes the first name obvious, the draft starts `Dear Enock`. If only a surname is obvious, it starts `Dear Mr Kazembe`. If the name is not clear, it stays `Hi there,`. The email address itself is not sent to Gemini.
 
-A shared note (Instructions and images, then **Save shared note**) needs step 2. Pictures you attach are only for that one draft.
+A future-reply note (Co-Pilot settings, then **Save for all future replies**) needs step 2. It is stored in KV and sent with every Suggest. Guide this reply / this-reply-only notes are not saved. Pictures you attach are only for that one draft.
 
 If the latest message is over a week old, the draft includes a short late-reply line. WhatsApp opens with the quote line `> Metrorail Next Train | Response`. Email uses the subject `Metrorail Next Train | Feedback Response`.

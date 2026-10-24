@@ -139,7 +139,7 @@ function routeMapText() {
 
 function guideText() {
     return [
-        'Next Train is an unofficial commuter app at nexttrain.co.za. It is not PRASA and it does not run the trains.',
+        'Next Train is a commuter app at nexttrain.co.za, developed independently. It does not run the trains. When a reply needs that fact, keep it to one short sentence.',
         'Once opened online, schedules stay on the phone, so times can be checked offline or during loadshedding. Station lights and ticket offices can still be affected.',
         'It installs from the website: iPhone uses Safari, Share, Add to Home Screen. Android uses Install App in The Background. Android is also in Google Play testing.',
         'Supported corridors: Gauteng (Pretoria, Johannesburg, Germiston, Kempton Park, Mabopane), Western Cape (Cape Town, Bellville, Simon\'s Town), KwaZulu-Natal (Durban, Umlazi, KwaMashu, Crossmoor), Eastern Cape (East London).',

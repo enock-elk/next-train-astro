@@ -86,10 +86,13 @@ const named = buildSuggestPayload([
 ok(named.greeting === 'Dear Enock', 'the draft payload carries Dear Enock');
 ok(!JSON.stringify(named).includes('enockelk@gmail.com'), 'the email address stays out of the draft payload');
 ok(liaisonRules('KZN').includes('more than 7 days'), 'a week-old message gets a late-reply line');
-ok(liaisonRules('GP').includes('unless they asked'), 'independence is only mentioned when they ask');
+ok(liaisonRules('GP').includes('not able to assist with this one'), 'ops issues get a short independence line');
+ok(liaisonRules('GP').includes('not directly linked to PRASA'), 'ops issues may use the soft PRASA line');
 ok(liaisonRules('GP').includes('Do not write "I want to gently mention"'), 'the draft does not open with a disclaimer');
+ok(liaisonRules('GP').includes('Do not stack both'), 'independence lines stay to one sentence');
 ok(liaisonRules('GP').includes('ADMIN ALERT'), 'a quoted notice is an admin alert');
 ok(liaisonRules('GP').includes('Only Next Train can post an alert'), 'only admin posts alerts');
+ok(liaisonRules('GP').includes('thank them for taking part'), 'poll and call-to-action replies get thanks');
 ok(liaisonRules('GP').includes('Do not thank them for sharing'), 'a reply is not treated as the commuter posting the alert');
 ok(!liaisonRules('GP').includes('independent unofficial'), 'the system prompt does not hand the model the old disclaimer');
 const quoted = buildSuggestPayload([

@@ -76,6 +76,9 @@ assert(!css.includes('color-mix(in srgb, var(--nt-text) 58%, transparent)'), 'da
 assert(css.includes('color-mix(in srgb, var(--nt-surface) 96%, var(--nt-text))'), 'dark modal header stays with the card');
 assert(/#bottom-nav\.bottom-nav-bar \{[\s\S]*?border-radius: 0;/.test(css), 'bottom nav is rectangular');
 assert(css.includes('#current-day'), 'day label letter-spacing rule present');
+assert(/html\[data-colour-pack="earthy"\] button#current-day:not\(\.nt-day-quiet\) span[\s\S]{0,220}margin-left:\s*0\.12rem/.test(css), 'Earthy schedule pill keeps space after the weekday name');
+assert(/html\[data-colour-pack="earthy"\] button#current-day:not\(\.nt-day-quiet\) span[\s\S]{0,280}var\(--nt-accent\)/.test(css), 'Earthy schedule pill uses accent wash, not Classic blue');
+assert(/html\[data-colour-pack="classic"\] button#current-day:not\(\.nt-day-quiet\) span[\s\S]{0,220}margin-left:\s*0\.12rem/.test(css), 'Classic schedule pill is unchanged');
 
 ['midnight', 'contrast', 'signal', 'earthy'].forEach((pack) => {
     const block = css.split(`html[data-colour-pack="${pack}"]`)[1] || '';

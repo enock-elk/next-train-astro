@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_10.24.3': [
+        'Earthy day line matches Classic: weekday name, then a spaced schedule capsule in taupe wash (Classic blue pill unchanged). Suggest reply uses a short independence line only for PRASA or operations asks they cannot fix, and thanks poll or call-for-response replies. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_10.24.2': [
         'Co-Pilot is full screen with a scrollable header, contact chips, and a settings sheet for future-reply notes, this-reply notes, and Suggest images. Guide this reply sits below Suggest and hides Suggest while open so the two are harder to mis-tap. The maintenance strip marquees when the phone is too narrow for the full line. GPS network lines take the colour from each route\'s colorClass hex. Signed-in Account keeps Sign out and Reset this App inside the name/photo accordion, side by side (stacked under 360px), hidden until that header is opened. The home bottom bar is 10% shorter (3.6rem, 2.925rem on short screens) with equal tab columns. No commuter What\'s New. forceShow stays false.',
     ],

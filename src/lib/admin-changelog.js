@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_10.24.1': [
+        'GPS network lines take the colour from each route\'s colorClass hex, so they cannot all fall back to grey. Signed-in Account keeps Sign out and Reset this App inside the name/photo accordion, side by side (stacked under 360px), hidden until that header is opened. The home bottom bar is 10% shorter (3.6rem, 2.925rem on short screens) and the active tab grows with --nt-nav-active-grow while idle tabs share the rest. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_10.19.2': [
         'The bottom bar is 4rem again, with the larger icon and label from before the shorten. Very short screens stay at 3.25rem. The bar stays a rectangle. No commuter What\'s New. forceShow stays false.',
     ],

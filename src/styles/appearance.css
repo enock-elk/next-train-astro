@@ -52,7 +52,10 @@
   --nt-app-h: 100svh;
   --nt-shell-h: 100svh;
   --nt-shell-top: 0px;
-  --nt-nav-h: 4rem;
+  /* 10% shorter than the prior 4rem bar; active tab grows a little more than idle tabs. */
+  --nt-nav-h: 3.6rem;
+  --nt-nav-active-grow: 1.38;
+  --nt-nav-idle-grow: 1;
   --nt-chrome-nav-active: color-mix(in srgb, #fff 10%, var(--nt-chrome-nav));
 
   --nt-blue-50: 239 246 255;
@@ -427,29 +430,28 @@ html, body, #nt-shell {
   margin-left: 0;
   margin-right: 0;
   margin-bottom: 0;
-  min-height: var(--nt-nav-h, 4rem);
+  min-height: var(--nt-nav-h, 3.6rem);
   overflow: hidden;
   background-clip: padding-box;
 }
 
 #bottom-nav-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  display: flex;
+  align-items: stretch;
+  justify-content: stretch;
   gap: 0;
+  width: 100%;
   max-width: 28rem;
   margin: 0 auto;
 }
 html[data-admin-authed="1"] #bottom-nav-grid {
-  grid-template-columns: repeat(5, minmax(0, 1fr));
   max-width: 32rem;
 }
 html[data-pilot-map="1"][data-pilot-community="1"] #bottom-nav-grid {
-  grid-template-columns: repeat(5, minmax(0, 1fr));
   max-width: 32rem;
 }
 html[data-pilot-map="1"]:not([data-pilot-community="1"]) #bottom-nav-grid,
 html[data-pilot-community="1"]:not([data-pilot-map="1"]) #bottom-nav-grid {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
   max-width: 30rem;
 }
 html[data-pilot-map="1"] #bottom-nav-map,
@@ -474,18 +476,22 @@ html[data-pilot-community="1"] #bottom-nav-community {
 
 #bottom-nav .bottom-nav-item {
   position: relative;
-  min-height: var(--nt-nav-h, 4rem) !important;
-  padding-top: 0.4rem !important;
-  padding-bottom: 0.3rem !important;
+  flex: var(--nt-nav-idle-grow, 1) 1 0;
+  min-width: 0;
+  min-height: var(--nt-nav-h, 3.6rem) !important;
+  padding-top: 0.36rem !important;
+  padding-bottom: 0.27rem !important;
   background: transparent !important;
   border-radius: 0 !important;
   margin: 0 !important;
   box-shadow: none !important;
+  transition: flex-grow 180ms ease;
 }
 #bottom-nav .bottom-nav-item:not(.is-active) {
   color: color-mix(in srgb, var(--nt-chrome-fg) 45%, transparent) !important;
 }
 #bottom-nav .bottom-nav-item.is-active {
+  flex-grow: var(--nt-nav-active-grow, 1.38);
   color: var(--nt-chrome-fg) !important;
   font-weight: 700;
   background: transparent !important;
@@ -529,7 +535,7 @@ html.dark #bottom-nav .bottom-nav-item.is-active {
 }
 
 @media (max-height: 620px) {
-  :root { --nt-nav-h: 3.25rem; }
+  :root { --nt-nav-h: 2.925rem; }
   #bottom-nav.bottom-nav-bar {
     margin-bottom: 0;
   }

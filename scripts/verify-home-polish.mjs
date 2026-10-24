@@ -491,6 +491,9 @@ assert(ROUTES['ec-berlin'].colorClass === 'text-[#f5821f]', 'Berlin uses the ora
         const swatch = lineSwatchClass(route.colorClass, 'bg');
         assert(swatch === `bg-[#${hex[1]}]`, `${route.id} route stripe uses ${swatch}`);
     });
+    assert(mapApp.includes('function routeLineColor(colorClass)'), 'GPS lines resolve colour from the route class');
+    assert(mapApp.includes('color: routeLineColor(route.colorClass)'), 'drawn GPS lines use routeLineColor');
+    assert(mapApp.includes('/#([0-9a-fA-F]{6})\\b/i'), 'GPS colour falls back to the hex inside colorClass');
     assert(mapApp.includes("color: '#00a650'"), 'Maitland to Mutual uses the Northern green line');
 }
 assert(!hubModals.includes('#messages-thread-form {\n    flex-shrink: 0;\n    background: transparent;\n    border-top: 0;\n    padding-bottom: calc(var(--nt-nav-h'), 'Hub composer does not reserve a bar-sized gap');
@@ -505,11 +508,17 @@ assert(
     hubModals.indexOf('id="account-modal-display-name"') < hubModals.indexOf('id="account-profile-panel"')
     && hubModals.indexOf('id="account-profile-panel"') < hubModals.indexOf('id="account-points-btn"')
     && hubModals.indexOf('id="account-points-btn"') < hubModals.indexOf('id="account-passenger-type-btn"')
-    && hubModals.indexOf('id="account-passenger-type-btn"') < hubModals.indexOf('id="account-signout-btn"')
-    && hubModals.indexOf('id="account-signout-btn"') < hubModals.indexOf('id="account-delete-btn"')
+    && hubModals.indexOf('id="account-passenger-type-btn"') < hubModals.indexOf('id="account-delete-btn"')
     && hubModals.indexOf('id="account-delete-btn"') < hubModals.indexOf('id="account-settings-host"'),
-    'signed-in Account order is identity, profile edit, points and passenger tiles, then Sign out and settings',
+    'signed-in Account order is identity, profile edit, points and passenger tiles, then Delete and settings',
 );
+assert(
+    hubModals.indexOf('id="account-profile-panel"') < hubModals.indexOf('id="account-signout-btn"')
+    && hubModals.indexOf('id="account-signout-btn"') < hubModals.indexOf('id="account-reset-phone-btn"')
+    && hubModals.indexOf('id="account-reset-phone-btn"') < hubModals.indexOf('id="account-points-btn"'),
+    'Sign out and Reset this App sit in the profile accordion above the quick tiles',
+);
+assert(hubModals.includes('id="account-danger-actions"') && hubModals.includes('min-[360px]:grid-cols-2'), 'Sign out and Reset sit side by side and stack on small screens');
 assert(hubModals.includes('?from=account'), 'Account legal links return with from=account');
 assert(hubModals.includes('account-points-panel'), 'points details live inside Account');
 assert(
@@ -520,9 +529,10 @@ assert(
 assert(
     hubModals.indexOf('id="account-profile-panel"') < hubModals.indexOf('id="account-edit-display-name"')
     && hubModals.indexOf('id="account-edit-display-name"') < hubModals.indexOf('id="account-photo-alerts"')
-    && hubModals.indexOf('id="account-photo-alerts"') < hubModals.indexOf('id="account-save-display-name"')
-    && hubModals.indexOf('id="account-save-display-name"') < hubModals.indexOf('id="account-signout-btn"'),
-    'profile edit holds the name field, photo switch, and Save before Sign out',
+    && hubModals.indexOf('id="account-photo-alerts"') < hubModals.indexOf('id="account-signout-btn"')
+    && hubModals.indexOf('id="account-signout-btn"') < hubModals.indexOf('id="account-reset-phone-btn"')
+    && hubModals.indexOf('id="account-reset-phone-btn"') < hubModals.indexOf('id="account-save-display-name"'),
+    'profile edit holds the name field, photo switch, Sign out, Reset this App, then Save',
 );
 assert(!accountJs.includes("insertAdjacentElement('afterend'"), 'points panel stays in the tall sheet');
 assert(accountJs.includes("openSmoothModal('profile-modal')"), 'passenger type opens the profile modal on the account back stack');
@@ -706,7 +716,7 @@ assert(hubModals.includes('id="account-session-actions"'), 'delete account stays
 assert(
     hubModals.indexOf('id="account-signout-btn"') < hubModals.indexOf('id="account-delete-btn"')
     && hubModals.indexOf('id="account-delete-btn"') < hubModals.indexOf('id="account-settings-host"'),
-    'Sign out and Delete account sit in the profile accordion, above settings',
+    'Sign out sits in the profile accordion; Delete account stays above settings',
 );
 assert(!/id="account-signout-btn"[^>]*text-center/.test(hubModals), 'Sign out is not a centered bottom bar');
 assert(

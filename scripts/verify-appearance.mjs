@@ -61,10 +61,8 @@ assert(css.includes('.nt-board-footer.mt-auto'), 'board footer padding stays on 
 assert(/#bottom-nav\.bottom-nav-bar \{[\s\S]*?box-shadow: none/.test(css), 'bottom nav does not float on a drop shadow');
 assert(/#bottom-nav\.bottom-nav-bar \{[\s\S]*?background-color: var\(--nt-chrome-nav\)/.test(css), 'bottom nav is one step darker than the header');
 assert(css.includes('--nt-nav-h: 3.6rem'), 'bottom nav is 10% shorter than the prior 4rem bar');
-assert(css.includes('--nt-nav-active-grow: 1.38'), 'active tab grows more than idle tabs');
-assert(css.includes('--nt-nav-idle-grow: 1'), 'idle tabs share the remaining nav width');
-assert(/#bottom-nav-grid \{\s*display: flex/.test(css), 'bottom nav uses flex so tab count can change');
-assert(/#bottom-nav \.bottom-nav-item\.is-active \{[\s\S]*?flex-grow: var\(--nt-nav-active-grow/.test(css), 'active tab uses the active grow token');
+assert(!css.includes('--nt-nav-active-grow'), 'bottom nav tabs do not grow the active column');
+assert(/#bottom-nav-grid \{\s*display: grid/.test(css), 'bottom nav uses equal grid columns');
 assert(css.includes('color-mix(in srgb, var(--nt-chrome-fg) 20%, transparent)'), 'active tab icon sits on a soft pill');
 assert(css.includes('color-mix(in srgb, var(--nt-chrome-fg) 45%, transparent)'), 'inactive tabs are clearly dimmer than the active label');
 assert(!css.includes('color-mix(in srgb, var(--nt-chrome-fg) 70%, transparent)'), 'inactive tabs are not 70% white');
@@ -135,7 +133,8 @@ assert(!header.includes('header-day-label'), 'Header day line is not a second bo
 assert(header.includes('fitHeaderDayLabel') || logic.includes('fitHeaderDayLabel'), 'day line fit helper is present');
 
 assert(css.includes('#bottom-nav-grid'), 'bottom nav uses #bottom-nav-grid');
-assert(css.includes('html[data-admin-authed="1"] #bottom-nav-grid'), 'admin auth widens the bottom nav for extra tabs');
+assert(css.includes('html[data-admin-authed="1"] #bottom-nav-grid'), 'admin auth expands bottom nav to 5 columns');
+assert(css.includes('grid-template-columns: repeat(5, minmax(0, 1fr))'), 'admin/pilot bottom nav uses five equal columns');
 assert(css.includes('--nt-nav-h: 2.925rem'), 'short screens keep a 10% shorter compact nav');
 
 const indexPage = readFileSync(new URL('../src/pages/index.astro', import.meta.url), 'utf8');

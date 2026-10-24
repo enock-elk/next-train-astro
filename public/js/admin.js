@@ -12761,7 +12761,7 @@ const Admin = {
 
     copilotSettingsMarkup: () => `
                 <div id="admin-copilot-settings" class="fixed inset-0 bg-black/80 z-[210] hidden flex p-0 backdrop-blur-sm" aria-hidden="true">
-                    <div class="bg-white dark:bg-gray-800 shadow-2xl w-full min-h-0 overflow-hidden flex flex-col px-3 sm:px-4 pt-[max(0.75rem,env(safe-area-inset-top))] pb-[max(0.75rem,env(safe-area-inset-bottom))] border-0 rounded-none">
+                    <div class="bg-white dark:bg-gray-800 shadow-2xl w-full h-full min-h-0 overflow-hidden flex flex-col px-3 sm:px-4 pt-[max(0.75rem,env(safe-area-inset-top))] pb-[max(0.75rem,env(safe-area-inset-bottom))] border-0 rounded-none">
                         <div class="flex items-center justify-between gap-3 shrink-0 mb-3">
                             <h3 class="text-lg font-black text-gray-900 dark:text-white tracking-tight flex items-center gap-2">${Admin.icon('settings', 'w-5 h-5 text-sky-500')} Co-Pilot settings</h3>
                             <button type="button" id="admin-copilot-settings-close" class="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500 focus:outline-none" aria-label="Close settings">${Admin.icon('x', 'w-5 h-5')}</button>
@@ -13541,8 +13541,8 @@ const Admin = {
             modal.id = 'admin-reply-modal';
             modal.className = 'fixed inset-0 bg-black/70 z-[200] hidden flex p-0 backdrop-blur-sm';
             modal.innerHTML = `
-                <div class="bg-white dark:bg-gray-800 shadow-2xl w-full min-h-0 overflow-hidden flex flex-col px-3 sm:px-4 pt-[max(0.75rem,env(safe-area-inset-top))] pb-[max(0.75rem,env(safe-area-inset-bottom))] border-0 rounded-none">
-                    <div id="admin-reply-scroll" class="flex-1 min-h-0 overflow-y-auto custom-scrollbar">
+                <div class="bg-white dark:bg-gray-800 shadow-2xl w-full h-full min-h-0 overflow-hidden flex flex-col px-3 sm:px-4 pt-[max(0.75rem,env(safe-area-inset-top))] pb-[max(0.75rem,env(safe-area-inset-bottom))] border-0 rounded-none">
+                    <div id="admin-reply-scroll" class="flex-1 min-h-0 overflow-y-auto overscroll-contain custom-scrollbar">
                         <div id="admin-reply-header" class="pb-2">
                             <div class="flex items-start justify-between gap-2">
                                 <h3 id="admin-reply-title" class="text-xl font-black text-gray-900 dark:text-white mb-0.5 tracking-tight flex items-center gap-2 min-w-0"><span class="text-sky-500 shrink-0">${Admin.icon('message', 'w-5 h-5')}</span> <span id="admin-reply-title-text">Next Train Co-Pilot</span></h3>
@@ -13559,10 +13559,10 @@ const Admin = {
                             <div contenteditable="true" id="admin-reply-text" class="nt-rich-body w-full min-h-[12rem] overflow-visible p-3 pb-4 bg-gray-50 dark:bg-gray-900 border border-t-0 border-gray-300 dark:border-gray-600 rounded-b-lg text-sm text-gray-900 dark:text-white focus:outline-none empty:before:content-[attr(placeholder)] empty:before:text-gray-400" placeholder="Type your response..."></div>
                         </div>
                         ${Admin.replySuggestMarkup()}
-                    </div>
-                    <div class="grid grid-cols-2 gap-2 mt-3 shrink-0 pt-1 border-t border-gray-100 dark:border-gray-700">
-                        <button id="reply-cancel" class="bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 font-bold py-3.5 px-3 rounded-2xl transition-colors focus:outline-none text-base">Cancel</button>
-                        <button id="reply-send" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 px-3 rounded-2xl shadow-sm transition-colors focus:outline-none text-base">Send Reply</button>
+                        <div class="grid grid-cols-2 gap-2 mt-3 pt-3 pb-1 border-t border-gray-100 dark:border-gray-700">
+                            <button id="reply-cancel" class="bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 font-bold py-3.5 px-3 rounded-2xl transition-colors focus:outline-none text-base">Cancel</button>
+                            <button id="reply-send" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 px-3 rounded-2xl shadow-sm transition-colors focus:outline-none text-base">Send Reply</button>
+                        </div>
                     </div>
                 </div>
             `;
@@ -13574,7 +13574,14 @@ const Admin = {
             modal.className = 'fixed inset-0 bg-black/70 z-[200] hidden flex p-0 backdrop-blur-sm';
             const panel = modal.firstElementChild;
             if (panel) {
-                panel.className = 'bg-white dark:bg-gray-800 shadow-2xl w-full min-h-0 overflow-hidden flex flex-col px-3 sm:px-4 pt-[max(0.75rem,env(safe-area-inset-top))] pb-[max(0.75rem,env(safe-area-inset-bottom))] border-0 rounded-none';
+                panel.className = 'bg-white dark:bg-gray-800 shadow-2xl w-full h-full min-h-0 overflow-hidden flex flex-col px-3 sm:px-4 pt-[max(0.75rem,env(safe-area-inset-top))] pb-[max(0.75rem,env(safe-area-inset-bottom))] border-0 rounded-none';
+            }
+            const scroll = document.getElementById('admin-reply-scroll');
+            const sendRow = document.getElementById('reply-cancel')?.parentElement;
+            if (scroll && sendRow && sendRow.parentElement !== scroll) {
+                scroll.appendChild(sendRow);
+                sendRow.classList.remove('shrink-0');
+                sendRow.classList.add('pb-1');
             }
             if (!document.getElementById('admin-copilot-settings')) {
                 document.body.insertAdjacentHTML('beforeend', Admin.copilotSettingsMarkup());
@@ -13745,8 +13752,15 @@ const Admin = {
         const guideOpen = document.getElementById('admin-reply-guide-open');
         if (guideOpen) {
             guideOpen.onclick = () => {
-                guideBox?.classList.toggle('hidden');
+                const opening = !!guideBox?.classList.contains('hidden');
+                guideBox?.classList.toggle('hidden', !opening);
                 Admin.syncReplyGuide();
+                if (opening) {
+                    requestAnimationFrame(() => {
+                        try { guideBox?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); } catch (_) {}
+                        try { guideInput?.focus(); } catch (_) {}
+                    });
+                }
             };
         }
         const guideGo = document.getElementById('admin-reply-guide-go');

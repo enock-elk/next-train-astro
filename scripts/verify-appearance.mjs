@@ -190,6 +190,8 @@ assert(!/max-width:\s*639px[\s\S]{0,180}max-width:\s*none/.test(layout), 'phone 
 assert(css.includes('#app-header .seo-open-app'), 'SEO header Open link uses chrome foreground');
 assert(css.includes('.nt-maint-wrench'), 'maintenance strip has a wrench icon');
 assert(css.includes('.nt-maint-label'), 'maintenance strip has a label');
+assert(css.includes('nt-maint-slide'), 'long maintenance copy can marquee');
+assert(css.includes('nt-maint-is-marquee'), 'maintenance marquee is opt-in per overflow');
 assert(!css.includes('repeating-linear-gradient'), 'maintenance strip is not hazard tape');
 assert(!css.includes('#app-header.nt-maint-active #app-title'), 'maintenance bar does not restyle the title overlay');
 

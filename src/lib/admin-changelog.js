@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_10.24.1': [
+        'Co-Pilot is full screen with a scrollable header, contact chips, and a settings sheet for future-reply notes, this-reply notes, and Suggest images. Guide this reply sits below Suggest and hides Suggest while open so the two are harder to mis-tap. The maintenance strip marquees when the phone is too narrow for the full line. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_10.19.2': [
         'The bottom bar is 4rem again, with the larger icon and label from before the shorten. Very short screens stay at 3.25rem. The bar stays a rectangle. No commuter What\'s New. forceShow stays false.',
     ],

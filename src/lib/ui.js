@@ -2564,6 +2564,25 @@ export function isMaintenanceVisibleToUser(maintData) {
     return !!pickMaintenanceBanner(maintData);
 }
 
+/** Scroll long maintenance copy as a marquee; keep short copy still. */
+export function syncMaintenanceMarquee(banner) {
+    if (!banner || typeof window === 'undefined') return;
+    const marquee = banner.querySelector('.nt-maint-marquee');
+    const track = banner.querySelector('.nt-maint-track');
+    const label = banner.querySelector('.nt-maint-label');
+    if (!marquee || !track || !label) return;
+    const reduceMotion = !!window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
+    const overflow = label.scrollWidth > (marquee.clientWidth + 2);
+    banner.classList.toggle('nt-maint-is-marquee', overflow && !reduceMotion);
+    if (!overflow || reduceMotion) {
+        track.style.animationDuration = '';
+        return;
+    }
+    const travel = Math.max(label.scrollWidth, 80);
+    const seconds = Math.min(48, Math.max(10, travel / 28));
+    track.style.animationDuration = `${seconds}s`;
+}
+
 export async function checkMaintenanceStatus() {
     // Maintenance is an online ops signal. Never show it while offline / Lie-Fi / captive.
     if (typeof navigator === 'undefined' || !navigator.onLine) {
@@ -2600,7 +2619,7 @@ export async function checkMaintenanceStatus() {
                 banner.className = 'nt-maint-strip';
                 banner.setAttribute('role', 'status');
                 const label = escapeHTML(String(customMessage).toUpperCase());
-                banner.innerHTML = `<span class="nt-maint-inner"><svg class="nt-maint-wrench" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg><span class="nt-maint-label">${label}</span></span>`;
+                banner.innerHTML = `<span class="nt-maint-inner"><svg class="nt-maint-wrench" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg><span class="nt-maint-marquee"><span class="nt-maint-track"><span class="nt-maint-label">${label}</span><span class="nt-maint-label" aria-hidden="true">${label}</span></span></span></span>`;
                 const header = document.getElementById('app-header');
                 const mainAppNode = document.getElementById('main-content');
                 header?.classList.remove('nt-maint-active');
@@ -2613,6 +2632,9 @@ export async function checkMaintenanceStatus() {
                 } else if (!banner.parentNode) {
                     document.body.prepend(banner);
                 }
+                requestAnimationFrame(() => {
+                    try { syncMaintenanceMarquee(banner); } catch { /* ignore */ }
+                });
             };
 
             if (!existingBanner) {
@@ -2641,10 +2663,15 @@ export function bindMaintenanceBanner() {
     window.isMaintenanceVisibleToUser = isMaintenanceVisibleToUser;
     window.listMaintenanceItems = listMaintenanceItems;
     window.pickMaintenanceBanner = pickMaintenanceBanner;
+    window.syncMaintenanceMarquee = syncMaintenanceMarquee;
 
     checkMaintenanceStatus();
     window.addEventListener('online', () => { checkMaintenanceStatus(); });
     window.addEventListener('offline', () => { clearMaintenanceBanner(); });
+    window.addEventListener('resize', () => {
+        const banner = document.getElementById('maintenance-banner');
+        if (banner) syncMaintenanceMarquee(banner);
+    }, { passive: true });
     setInterval(() => { checkMaintenanceStatus(); }, 5 * 60 * 1000);
 
     // Re-evaluate when the user switches region/route (scoped banners)

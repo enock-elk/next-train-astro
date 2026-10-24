@@ -2,7 +2,13 @@
 import { withBase } from '../lib/config.js';
 import ZoomControls from './ZoomControls.astro';
 
-const { region = 'GP', regionLabel = '' } = Astro.props;
+const {
+  region = 'GP',
+  regionLabel = '',
+  figureId = '',
+  loading = 'lazy',
+  caption = '',
+} = Astro.props;
 const REGION_MAP_IMAGES = {
   GP: 'images/network-map.png',
   WC: 'images/network-map_wc.png',
@@ -12,20 +18,36 @@ const REGION_MAP_IMAGES = {
 const mapImageSrc = withBase(REGION_MAP_IMAGES[region] || REGION_MAP_IMAGES.GP);
 const mapHref = withBase(`map.html?region=${encodeURIComponent(region)}`);
 const label = regionLabel || region;
+const figCaption = caption
+  || `Static network map for ${label}. Tap the map to enlarge. GPS Network Map opens the live map with regions and lines.`;
+const modalTitle = `${label} network map`;
 ---
 
 <section class="mt-8" id="seo-network-map">
   <h2 class="text-sm font-black uppercase tracking-widest text-slate-500 mb-3">
     {label} network map
   </h2>
-  <figure class="rounded-xl overflow-hidden border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/60">
-    <div class="relative overflow-hidden" data-nt-zoom-frame>
+  <figure
+    id={figureId || undefined}
+    class="rounded-xl overflow-hidden border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/60"
+  >
+    <div
+      class="relative overflow-hidden cursor-zoom-in"
+      data-nt-zoom-frame
+      data-seo-map-open
+      data-seo-map-src={mapImageSrc}
+      data-seo-map-alt={`${label} Metrorail network map`}
+      data-seo-map-title={modalTitle}
+      role="button"
+      tabindex="0"
+      aria-label={`Enlarge ${label} network map`}
+    >
       <img
         src={mapImageSrc}
         alt={`${label} Metrorail network map`}
         data-nt-zoom-target
-        class="w-full h-auto object-cover bg-slate-100 dark:bg-slate-900 aspect-[3/2] origin-center"
-        loading="lazy"
+        class="w-full h-auto object-cover bg-slate-100 dark:bg-slate-900 aspect-[3/2] origin-center pointer-events-none"
+        loading={loading === 'eager' ? 'eager' : 'lazy'}
         decoding="async"
         width="1200"
         height="800"
@@ -33,13 +55,61 @@ const label = regionLabel || region;
       <ZoomControls />
     </div>
     <figcaption class="px-4 py-3 text-sm text-slate-600 dark:text-slate-300">
-      Static network map for {label}. Use the button below for the full map.
+      {figCaption}
     </figcaption>
   </figure>
   <a
     href={mapHref}
     class="mt-3 flex w-full items-center justify-center rounded-xl border border-blue-600 text-blue-700 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-950/40 font-bold py-3.5 transition-colors"
   >
-    Interactive map · {region}
+    GPS Network Map · {region}
   </a>
 </section>
+
+{/* One lightbox per page; route/corridor/region each mount SeoNetworkMap once. */}
+<div
+  id="seo-map-lightbox"
+  class="fixed inset-0 bg-black/90 z-[115] hidden flex-col items-stretch justify-center p-0 backdrop-blur-md"
+  role="dialog"
+  aria-modal="true"
+  aria-hidden="true"
+  aria-labelledby="seo-map-lightbox-title"
+>
+  <div class="bg-white dark:bg-gray-900 w-full h-full flex flex-col overflow-hidden">
+    <div class="p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center bg-gray-100 dark:bg-gray-800 z-20 shrink-0">
+      <h3 id="seo-map-lightbox-title" class="text-lg font-bold text-gray-900 dark:text-white">Network Map</h3>
+      <button
+        type="button"
+        data-seo-map-close
+        class="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition focus:outline-none"
+        aria-label="Close Map"
+      >
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+      </button>
+    </div>
+    <div id="seo-map-lightbox-stage" class="relative flex-1 min-h-0 overflow-hidden bg-gray-900 flex items-center justify-center">
+      <img
+        id="seo-map-lightbox-img"
+        alt="Metrorail network map"
+        draggable="false"
+        decoding="async"
+        class="max-w-full max-h-full w-full h-full object-contain select-none origin-center"
+      />
+      <ZoomControls />
+    </div>
+    <div class="p-4 border-t border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-800 z-20 shrink-0">
+      <button
+        type="button"
+        data-seo-map-close
+        class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg shadow-md transition-colors focus:outline-none"
+      >
+        Close Map
+      </button>
+    </div>
+  </div>
+</div>
+
+<script>
+  import { bindSeoNetworkMapTriggers } from '../lib/seo-map-lightbox.js';
+  bindSeoNetworkMapTriggers();
+</script>

@@ -1,8 +1,8 @@
 {
   "branch": "map-gold",
-  "frozenAt": "e1b3a66e3f90f6433cf5f5de25e017850bd2247a",
+  "frozenAt": "ce33ec140c3d024de6f00b966e422d19b452673c",
   "version": "V9_09.20.11",
-  "note": "Gold snapshot after GPS routeLineColor (hex from colorClass). Baked tracks and advert handling unchanged. Diff origin/map-gold for map-app.js only. Fast-forward map-gold after this lands on main. Never force-push map-gold.",
+  "note": "Gold snapshot of map-app routeLineColor at ce33ec1. Baked tracks and advert handling unchanged. Fast-forward map-gold to this main after merge. Never force-push map-gold.",
   "files": {
     "public/tracks/rail-tracks-EC.geojson": {
       "md5": "43409bfd05405205e596f0d03345ab18",

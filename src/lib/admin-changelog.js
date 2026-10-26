@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_10.27.7': [
+        'Image schedules batch 5: GP weekday grids/departures for Saulsville, De Wildt, Lenz, Mabopane, Belle Ombre, Leralla, Naledi, Germiston, Kwesine, Randfontein, Kempton, Hercules–Koedoespoort. Keep grid beside departures; keep Lenz 14 Oct connections and 26 Oct grid with Saturday sheets. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_10.27.6': [
         'Image schedules batch 4: first GP folder (Naledi, Germiston, Leralla, Kempton, Mabopane, Irene, Pienaarspoort, Saulsville, Belle Ombre, De Wildt, Kwesine, Lenz Saturday notices) plus WC Central weekday in/out (08 Jun 2026). Tag grid vs departures and keep both formats; keep older Leralla 2025-08-02 departures beside 2026-08-22. No commuter What\'s New. forceShow stays false.',
     ],

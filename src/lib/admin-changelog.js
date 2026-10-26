@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_10.26.15': [
+        'Account: Welcome to Next Train / Welcome back headers, invalid-credentials screen with Create account, premium verify card, and Welcome back toast. Pinned routes sync to the account immediately (pin, unpin, Welcome pick). Feedback, Messages, community, fares, trip plans, and delays write account activity breadcrumbs. Feedback Filter has Done; outside click no longer closes Dev Hub. Check for Updates still keeps pins; Reset this App still clears route and region. Force schedule type titles still paint the day chip (e.g. LG Election Day). No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_10.26.14': [
         'Schedule waterfall is CLOUDFLARE→FIREBASE→GITHUB (edge first for RTDB cost), with 5s/7s/8s timeouts and an 18s hard budget so Clarity never sits on Loading stations for minutes. Per-host timeout is TimeoutError, not AbortError, so GitHub still runs after a blocked edge. Soft network retries do not trip Lie-Fi mid-waterfall. Bundled same-origin dump is a last resort; finally always reveals the shell and repopulates stations when a list exists. Builds on the TUKS Lie-Fi / Black Box logging fix. No commuter What\'s New. forceShow stays false.',
     ],

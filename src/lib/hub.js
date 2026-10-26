@@ -1168,6 +1168,7 @@ async function submitFeedback(opts = {}) {
 
         sent = true;
         showToast('Feedback sent! Thank you.', 'success');
+        import('./account.js').then((m) => m.recordAccountActivity?.('feedback', { type: type || 'general' })).catch(() => {});
         closeSmoothModal('feedback-modal');
         clearFeedbackReplyMode();
         feedbackReturnModalId = null;
@@ -1892,6 +1893,7 @@ export async function openMessagesThread(replyToAcknowledge = latestPendingAdmin
         openAccountProfile();
         return;
     }
+    import('./account.js').then((m) => m.recordAccountActivity?.('messages_open')).catch(() => {});
     triggerHaptic();
     closeAppHub(true);
     document.getElementById('developer-reply-banner')?.classList.add('hidden');
@@ -1924,6 +1926,7 @@ export async function openMessagesThread(replyToAcknowledge = latestPendingAdmin
             rememberAcknowledgedInboxReplies(unread, deviceId);
             markInboxRead(deviceId, unread).catch(() => {});
             syncInboxBadges(0);
+            import('./account.js').then((m) => m.recordAccountActivity?.('admin_reply_read', { count: unread.length })).catch(() => {});
         }
     } catch {
         renderMessagesThread(readLocalInbox());

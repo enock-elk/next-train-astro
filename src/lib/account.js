@@ -272,6 +272,68 @@ export async function pushSignedInPrefs(partial = {}) {
     }
 }
 
+/** Push pins + ops as soon as a signed-in commuter changes their default route. */
+export async function syncAccountPinnedRoutesNow() {
+    const user = window.firebaseAuth?.currentUser;
+    if (!user || user.isAnonymous) return;
+    await Promise.all([
+        pushSignedInPrefs({ pinnedRoutes: readPinnedRoutes() }),
+        pushSignedInOps({ force: true }),
+    ]);
+}
+
+/**
+ * Lightweight activity breadcrumb on the account node (no GPS).
+ * Used for feedback, fares, delays, community, planner telemetry.
+ */
+export async function recordAccountActivity(kind, extra = {}) {
+    const user = window.firebaseAuth?.currentUser;
+    if (!user || user.isAnonymous || !window.firebaseDb || !kind) return false;
+    try {
+        const { allowRtdbWrite, recordRtdbWrite } = await import('./rtdb-rate.js');
+        const gate = allowRtdbWrite('accountActivity');
+        if (!gate.ok) return false;
+        recordRtdbWrite('accountActivity');
+    } catch { /* local throttle only */ }
+    const now = Date.now();
+    const row = {
+        kind: String(kind).slice(0, 40),
+        at: now,
+        region: $userRegion.get() || null,
+        routeId: $currentRouteId.get() || null,
+        appVersion: APP_VERSION,
+        ...extra,
+    };
+    delete row.lat;
+    delete row.lon;
+    delete row.latitude;
+    delete row.longitude;
+    try {
+        await window.firebaseDbPush(
+            window.firebaseDbRef(window.firebaseDb, `users/${user.uid}/activity`),
+            row,
+        );
+        await pushSignedInOps({ force: true, now });
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+function welcomeBackToastName(user) {
+    const raw = String(user?.displayName || $account.get()?.displayName || '').trim();
+    if (raw) return raw.split(/\s+/)[0].slice(0, 24);
+    const email = String(user?.email || '').trim();
+    if (email.includes('@')) return email.split('@')[0].slice(0, 24);
+    return '';
+}
+
+export function toastWelcomeBack(user = window.firebaseAuth?.currentUser) {
+    if (typeof window.showToast !== 'function') return;
+    const name = welcomeBackToastName(user);
+    window.showToast(name ? `Welcome back, ${name}` : 'Welcome back', 'success', 3200);
+}
+
 function cleanPhotoUrl(value) {
     const url = String(value || '').trim();
     if (!url || url === 'null' || url === 'undefined') return '';
@@ -732,17 +794,22 @@ export function showAccountGuestScreen(screen) {
     if (typeof document === 'undefined') return;
     const guest = document.getElementById('account-guest');
     if (!guest) return;
-    const name = screen === 'signin' || screen === 'reset' ? screen : 'create';
+    const name = screen === 'signin' || screen === 'reset' || screen === 'invalid'
+        ? screen
+        : 'create';
     guest.setAttribute('data-account-screen', name);
     guest.querySelectorAll('[data-account-only]').forEach((el) => {
         const list = (el.getAttribute('data-account-only') || '').split(/\s+/).filter(Boolean);
         el.classList.toggle('hidden', !list.includes(name));
     });
-    document.getElementById('account-signin-create-hint')?.classList.add('hidden');
     const title = document.getElementById('account-screen-title');
     const signedOpen = document.getElementById('account-signed-in') && !document.getElementById('account-signed-in').classList.contains('hidden');
     if (title && !signedOpen) {
-        title.textContent = name === 'create' ? 'Create account' : name === 'reset' ? 'Reset your password' : '';
+        title.textContent = name === 'create' || name === 'invalid'
+            ? 'Welcome to Next Train'
+            : name === 'reset'
+                ? 'Reset your password'
+                : 'Welcome back';
     }
 }
 
@@ -1027,11 +1094,14 @@ export function syncAccountSettingsUi(state = $account.get()) {
         if (signed) screenTitle.textContent = '';
         else {
             const screen = guestBlock?.getAttribute('data-account-screen') || 'create';
-            screenTitle.textContent = screen === 'create' ? 'Create account' : screen === 'reset' ? 'Reset your password' : '';
+            screenTitle.textContent = screen === 'create' || screen === 'invalid'
+                ? 'Welcome to Next Train'
+                : screen === 'reset'
+                    ? 'Reset your password'
+                    : 'Welcome back';
         }
     }
     document.getElementById('account-prefs-label')?.classList.toggle('hidden', !signed);
-    document.getElementById('account-signin-create-hint')?.classList.add('hidden');
     const deleteWrap = document.getElementById('account-delete-wrap');
     const isOperator = signed && isAdminEmail(state.email);
     if (deleteWrap) {
@@ -1457,24 +1527,59 @@ export function bindAccountUi() {
         });
         syncAuthProviderUi(getAuthProviders(), _accountUiBusy);
         if (busy) {
-            const err = document.getElementById('account-error');
-            if (err) err.textContent = '';
+            const wrap = document.getElementById('account-error');
+            const text = document.getElementById('account-error-text');
+            if (text) text.textContent = '';
+            wrap?.classList.add('hidden');
         }
     };
+    const clearErr = () => {
+        const wrap = document.getElementById('account-error');
+        const text = document.getElementById('account-error-text');
+        if (text) text.textContent = '';
+        wrap?.classList.add('hidden');
+    };
     const showErr = (msg) => {
-        const err = document.getElementById('account-error');
-        if (err) {
-            err.textContent = msg || 'Something went wrong.';
-            try { err.scrollIntoView({ block: 'nearest' }); } catch { /* ignore */ }
+        const wrap = document.getElementById('account-error');
+        const text = document.getElementById('account-error-text');
+        if (text) text.textContent = msg || 'Something went wrong.';
+        wrap?.classList.remove('hidden');
+        try { wrap?.scrollIntoView({ block: 'nearest' }); } catch { /* ignore */ }
+    };
+    const afterSignedIn = (user) => {
+        clearErr();
+        toastWelcomeBack(user || window.firebaseAuth?.currentUser);
+        paintAccountPoints();
+    };
+    const runEmailSignIn = async () => {
+        const email = document.getElementById('account-email')?.value;
+        const password = document.getElementById('account-password')?.value;
+        if (!email || !password) {
+            showErr('Enter email and password.');
+            return;
+        }
+        setBusy(true);
+        try {
+            const user = await signInWithEmail(email, password);
+            afterSignedIn(user);
+        } catch (e) {
+            const code = e?.code || '';
+            if (['auth/user-not-found', 'auth/wrong-password', 'auth/invalid-credential'].includes(code)) {
+                showAccountGuestScreen('invalid');
+                showErr('Those details did not match. Try again, or create an account.');
+            } else {
+                showErr(friendlyAuthError(e));
+            }
+        } finally {
+            setBusy(false);
         }
     };
 
     document.getElementById('account-google-btn')?.addEventListener('click', async () => {
         setBusy(true);
         try {
-            await signInWithGoogle();
-            if (typeof window.showToast === 'function') window.showToast('Signed in', 'success');
-            paintAccountPoints();
+            const user = await signInWithGoogle();
+            afterSignedIn(user);
         } catch (e) {
             showErr(e?.code === 'auth/popup-closed-by-user' ? 'Sign-in cancelled.' : friendlyAuthError(e) || 'Google sign-in failed.');
         } finally {
@@ -1485,9 +1590,8 @@ export function bindAccountUi() {
     document.getElementById('account-facebook-btn')?.addEventListener('click', async () => {
         setBusy(true);
         try {
-            await signInWithFacebook();
-            if (typeof window.showToast === 'function') window.showToast('Signed in', 'success');
-            paintAccountPoints();
+            const user = await signInWithFacebook();
+            afterSignedIn(user);
         } catch (e) {
             showErr(e?.code === 'auth/popup-closed-by-user' ? 'Sign-in cancelled.' : friendlyAuthError(e));
         } finally {
@@ -1495,36 +1599,27 @@ export function bindAccountUi() {
         }
     });
 
-    document.getElementById('account-email-signin-btn')?.addEventListener('click', async () => {
-        const email = document.getElementById('account-email')?.value;
-        const password = document.getElementById('account-password')?.value;
-        if (!email || !password) {
-            showErr('Enter email and password.');
-            return;
-        }
-        setBusy(true);
-        try {
-            await signInWithEmail(email, password);
-            if (typeof window.showToast === 'function') window.showToast('Signed in', 'success');
-            paintAccountPoints();
-        } catch (e) {
-            showErr(friendlyAuthError(e));
-            const hint = document.getElementById('account-signin-create-hint');
-            if (hint && ['auth/user-not-found', 'auth/wrong-password', 'auth/invalid-credential'].includes(e?.code || '')) {
-                hint.classList.remove('hidden');
-            }
-        } finally {
-            setBusy(false);
-        }
+    document.getElementById('account-email-signin-btn')?.addEventListener('click', () => {
+        runEmailSignIn();
+    });
+    document.getElementById('account-invalid-retry-btn')?.addEventListener('click', () => {
+        runEmailSignIn();
+    });
+    document.getElementById('account-invalid-create-btn')?.addEventListener('click', () => {
+        clearErr();
+        showAccountGuestScreen('create');
     });
 
     document.getElementById('account-forgot-btn')?.addEventListener('click', () => {
+        clearErr();
         showAccountGuestScreen('reset');
     });
     document.getElementById('account-goto-create')?.addEventListener('click', () => {
+        clearErr();
         showAccountGuestScreen('create');
     });
     document.getElementById('account-goto-signin')?.addEventListener('click', () => {
+        clearErr();
         showAccountGuestScreen('signin');
     });
     document.getElementById('account-reset-send-btn')?.addEventListener('click', async () => {
@@ -1788,6 +1883,9 @@ if (typeof window !== 'undefined') {
     window.updateAccountDisplayName = updateAccountDisplayName;
     window.formatAccountDisplayName = formatAccountDisplayName;
     window.pushSignedInPrefs = pushSignedInPrefs;
+    window.syncAccountPinnedRoutesNow = syncAccountPinnedRoutesNow;
+    window.recordAccountActivity = recordAccountActivity;
+    window.toastWelcomeBack = toastWelcomeBack;
     window.pickCanonicalChatDeviceId = pickCanonicalChatDeviceId;
     window.$account = $account;
 }

@@ -9422,7 +9422,10 @@ const Admin = {
                                 </div>
                             </div>`;
                         }).join('')}
-                        <button type="button" id="fb-filter-clear" class="w-full mt-1 px-2 py-2 rounded-lg text-[10px] font-bold uppercase tracking-wide text-violet-700 dark:text-violet-300 hover:bg-violet-50 dark:hover:bg-violet-950/40">Clear filters</button>
+                        <div class="flex gap-2 mt-1">
+                            <button type="button" id="fb-filter-clear" class="flex-1 px-2 py-2 rounded-lg text-[10px] font-bold uppercase tracking-wide text-violet-700 dark:text-violet-300 hover:bg-violet-50 dark:hover:bg-violet-950/40">Clear filters</button>
+                            <button type="button" id="fb-filter-done" class="flex-1 px-2 py-2 rounded-lg text-[10px] font-bold uppercase tracking-wide text-white bg-violet-600 hover:bg-violet-500">Done</button>
+                        </div>
                     </div>
                 </div>
                 
@@ -9495,6 +9498,11 @@ const Admin = {
             paintFilterBtn();
             Admin.renderFeedbackList();
         });
+        document.getElementById('fb-filter-done')?.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            filterMenu?.classList.add('hidden');
+        });
         if (filterBtn && filterMenu) {
             filterBtn.addEventListener('click', (e) => {
                 e.preventDefault();
@@ -9502,10 +9510,15 @@ const Admin = {
                 syncFilterRadios();
                 filterMenu.classList.toggle('hidden');
             });
+            // stopPropagation so backdrop dismiss on #dev-modal does not close Dev Hub
+            // when the operator only meant to dismiss this filter popover.
+            filterMenu.addEventListener('click', (e) => e.stopPropagation());
             document.addEventListener('click', (e) => {
                 if (e.target.closest?.('#fb-filter-btn') || e.target.closest?.('#fb-filter-menu')) return;
+                if (filterMenu.classList.contains('hidden')) return;
                 filterMenu.classList.add('hidden');
-            });
+                e.stopPropagation();
+            }, true);
         }
         syncFilterRadios();
         paintFilterBtn();

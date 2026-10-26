@@ -313,6 +313,9 @@ export async function flushTripPlanQueue(force = false) {
             } catch (idxErr) {
                 console.warn('🛡️ Guardian: trip_plan index write failed', idxErr);
             }
+            import('./account.js').then((m) => m.recordAccountActivity?.('trip_plan', {
+                count: batch.length,
+            })).catch(() => {});
             // Success — reset flushed portion; keep any trips enqueued during the request
             const latest = readTripQueue();
             // Prefer remainder + anything appended after we snapshotted `queue`
@@ -531,6 +534,10 @@ export async function submitFareVote(input) {
     try {
         const voteId = await putFareVote(payload);
         markFareVoteSent(key);
+        import('./account.js').then((m) => m.recordAccountActivity?.('fare_vote', {
+            origin: payload.origin,
+            destination: payload.destination,
+        })).catch(() => {});
         return { ok: true, voteId };
     } catch (e) {
         console.warn('🛡️ Guardian: fare_votes write failed', e);

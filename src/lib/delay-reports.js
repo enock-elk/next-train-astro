@@ -772,6 +772,7 @@ export async function submitDelayValidation({ routeId, trainId, scheduledTime, a
             },
         });
         showToast('Thanks - that helps others', 'success');
+        import('./account.js').then((m) => m.recordAccountActivity?.('delay_confirm', { routeId, trainId })).catch(() => {});
         import('./push-notify.js').then((m) => m.maybeOfferCorridorAlerts?.()).catch(() => {});
         return { ok: true };
     } catch (e) {
@@ -848,6 +849,7 @@ export async function submitQuickDelayReport({
                     },
                 });
             }).catch(() => {});
+            import('./account.js').then((m) => m.recordAccountActivity?.('delay_report', { routeId, trainId })).catch(() => {});
         }
         return { ok: true };
     } catch (e) {
@@ -1105,6 +1107,7 @@ async function submitTrainReportPayload({ status, lateBucket, note }) {
                     },
                 });
             }).catch(() => {});
+            import('./account.js').then((m) => m.recordAccountActivity?.('delay_report', { routeId, trainId })).catch(() => {});
         }
         return true;
     } catch (e) {

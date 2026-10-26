@@ -137,6 +137,12 @@ export async function pushSignedInOps({ force = false, now = Date.now() } = {}) 
     const user = window.firebaseAuth?.currentUser;
     if (!user || user.isAnonymous || !window.firebaseDb) return false;
     if (!force && now - lastOpsWriteAt < ACCOUNT_OPS_THROTTLE_MS) return false;
+    try {
+        const { allowRtdbWrite, recordRtdbWrite } = await import('./rtdb-rate.js');
+        const gate = allowRtdbWrite('accountOps');
+        if (!gate.ok) return false;
+        recordRtdbWrite('accountOps');
+    } catch { /* proceed with local throttle only */ }
     lastOpsWriteAt = now;
     const patch = accountOpsFields(now);
     if ('lat' in patch || 'lon' in patch || 'latitude' in patch || 'longitude' in patch) return false;
@@ -546,9 +552,16 @@ export async function initAccount() {
     });
 }
 
+async function guardAuthAttempt(kind = 'signIn') {
+    const { rtdbWriteGuard } = await import('./rtdb-rate.js');
+    const message = rtdbWriteGuard(kind === 'signUp' ? 'signUp' : 'signIn');
+    if (message) throw new Error(message);
+}
+
 export async function signInWithGoogle() {
     const ok = await waitForFirebase();
     if (!ok) throw new Error('Cloud sign-in unavailable offline.');
+    await guardAuthAttempt('signIn');
     const provider = new window.firebaseGoogleProvider();
     provider.setCustomParameters({ prompt: 'select_account' });
     const cred = await window.firebaseSignInWithPopup(window.firebaseAuth, provider);
@@ -562,6 +575,7 @@ export async function signInWithFacebook() {
     if (typeof window.firebaseFacebookProvider !== 'function') {
         throw new Error('Facebook sign-in is not available yet.');
     }
+    await guardAuthAttempt('signIn');
     const provider = new window.firebaseFacebookProvider();
     const cred = await window.firebaseSignInWithPopup(window.firebaseAuth, provider);
     await ensureUserProfile(cred.user);
@@ -648,6 +662,7 @@ export async function requestAccountDeletion() {
 export async function signInWithEmail(email, password) {
     const ok = await waitForFirebase();
     if (!ok) throw new Error('Cloud sign-in unavailable offline.');
+    await guardAuthAttempt('signIn');
     const cred = await window.firebaseSignIn(window.firebaseAuth, email.trim(), password);
     if (cred.user?.isAnonymous) throw new Error('Unexpected anonymous session.');
     await ensureUserProfile(cred.user);
@@ -657,6 +672,7 @@ export async function signInWithEmail(email, password) {
 export async function signUpWithEmail(email, password, displayName) {
     const ok = await waitForFirebase();
     if (!ok) throw new Error('Cloud sign-in unavailable offline.');
+    await guardAuthAttempt('signUp');
     if (password.length < 6) {
         throw new Error('Password must be at least 6 characters.');
     }

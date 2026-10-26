@@ -4217,6 +4217,7 @@ export function initPlanner() {
 
             const from = resolveStationFromInput(fromInputSearch);
             const to = resolveStationFromInput(toInputSearch);
+            const masterList = getMasterStationList();
 
             if (from && fromInputSearch) {
                 fromInputSearch.value = plannerStationDisplayName(from);
@@ -4244,6 +4245,13 @@ export function initPlanner() {
 
             if (!from || !to) {
                 if (typeof showToast === 'function') showToast("Please select valid stations from the list.", "error");
+                return;
+            }
+            // Stale To/From from another province must not search (Johannesburg ↔ Wellington while on GP).
+            if (masterList?.length && (!masterListHasStation(from, masterList) || !masterListHasStation(to, masterList))) {
+                if (typeof showToast === 'function') {
+                    showToast('Those stations are not on this region network. Switch region or pick stations from the list.', 'error');
+                }
                 return;
             }
             if (samePlannerStation(from, to)) {

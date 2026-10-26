@@ -100,6 +100,15 @@ async function ensurePushAuth() {
 
 async function persistToken(token, { enabled = true, registrationType = 'token' } = {}) {
     if (!token) return;
+    try {
+        const { allowRtdbWrite, recordRtdbWrite } = await import('./rtdb-rate.js');
+        const gate = allowRtdbWrite('push');
+        if (!gate.ok) {
+            console.warn('🛡️ Guardian: push subscription rate-limited', gate.reason);
+            return;
+        }
+        recordRtdbWrite('push');
+    } catch { /* still try to persist */ }
     safeStorage.setItem(TOKEN_CACHE_KEY, token);
     safeStorage.setItem(REGISTRATION_TYPE_CACHE_KEY, registrationType);
     const deviceId = getDeviceId();

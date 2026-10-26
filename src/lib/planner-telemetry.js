@@ -18,6 +18,7 @@ import { DYNAMIC_BASE_URL, APP_VERSION, FARE_CONFIG } from './config.js';
 import { safeStorage, normalizeStationName } from './utils.js';
 import { $deviceId, $userRegion } from '../store.js';
 import { getBoardStationContext } from './auto-locate.js';
+import { allowRtdbWrite, recordRtdbWrite } from './rtdb-rate.js';
 
 /** Optional signed-in Firebase uid (null for guests / anonymous). */
 function authUid() {
@@ -111,6 +112,11 @@ export async function logRoutingFail({ origin, destination, reason, dayType, tim
     };
 
     const failId = uid();
+    const gate = allowRtdbWrite('telemetry');
+    if (!gate.ok) {
+        console.warn('🛡️ Guardian: routing_fails rate-limited', gate.reason);
+        return;
+    }
     try {
         const q = await authQuery();
         const res = await fetch(`${DYNAMIC_BASE_URL}sys_logs/routing_fails/${failId}.json${q}`, {
@@ -119,7 +125,9 @@ export async function logRoutingFail({ origin, destination, reason, dayType, tim
         });
         if (!res.ok) {
             console.warn('🛡️ Guardian: routing_fails write failed', res.status);
+            return;
         }
+        recordRtdbWrite('telemetry');
     } catch (e) {
         console.warn('🛡️ Guardian: routing_fails write error', e);
     }

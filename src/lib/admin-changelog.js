@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_10.26.7': [
+        'Feedback filters support Has and Missing (e.g. no WhatsApp and no email), and Inbox/Archive counts follow the filtered list. WhatsApp/email outreach keeps an Opened chip, stays re-clickable, and adds Resolve on that sheet. Johannesburg to Wellington-style cross-region planner fails report Cross-region instead of No Physical Link. Station SEO map lightbox drops the title bar; Reviews sit at the bottom of station landings (pending RTDB approval). Client RTDB and sign-in writes share rate limits. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_10.26.6': [
         'Station SEO phase 1 adds WC/KZN/EC route termini and hubs (Cape Town, Bellville, Durban, East London, and the other corridor ends) onto the allowlist, SSG, and sitemap. Mid-corridor stops in those regions wait for phases 2-4. Plan documented in seo-station-allowlist.js and AGENTS.md. No commuter What\'s New. forceShow stays false.',
     ],

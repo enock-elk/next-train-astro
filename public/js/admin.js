@@ -9409,11 +9409,20 @@ const Admin = {
                     <button id="fb-refresh-btn" onclick="event.stopPropagation()" class="flex-1 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-800 border border-blue-200 dark:border-blue-800 rounded-lg px-3 py-2.5 text-xs font-bold transition-colors shadow-sm focus:outline-none flex items-center justify-center gap-1.5">
                         ${Admin.icon('refresh', 'w-3.5 h-3.5')} Refresh
                     </button>
-                    <div id="fb-filter-menu" class="hidden absolute left-0 top-full mt-1 z-50 w-max min-w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-xl p-2 space-y-1">
-                        <label class="flex items-center gap-2 px-2 py-2 rounded-lg text-xs font-bold text-gray-800 dark:text-gray-100 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 whitespace-nowrap"><input type="checkbox" data-fb-filter="email" class="rounded border-gray-300 text-violet-600 focus:ring-violet-500"> Email</label>
-                        <label class="flex items-center gap-2 px-2 py-2 rounded-lg text-xs font-bold text-gray-800 dark:text-gray-100 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 whitespace-nowrap"><input type="checkbox" data-fb-filter="whatsapp" class="rounded border-gray-300 text-violet-600 focus:ring-violet-500"> WhatsApp number</label>
-                        <label class="flex items-center gap-2 px-2 py-2 rounded-lg text-xs font-bold text-gray-800 dark:text-gray-100 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 whitespace-nowrap"><input type="checkbox" data-fb-filter="attachments" class="rounded border-gray-300 text-violet-600 focus:ring-violet-500"> Attachments</label>
-                        <label class="flex items-center gap-2 px-2 py-2 rounded-lg text-xs font-bold text-gray-800 dark:text-gray-100 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 whitespace-nowrap"><input type="checkbox" data-fb-filter="trips" class="rounded border-gray-300 text-violet-600 focus:ring-violet-500"> Trip plans</label>
+                    <div id="fb-filter-menu" class="hidden absolute left-0 top-full mt-1 z-50 w-max min-w-[16rem] rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-xl p-2 space-y-2">
+                        <p class="px-2 pt-1 text-[10px] font-bold uppercase tracking-wide text-gray-500 dark:text-gray-400">Show threads that</p>
+                        ${['email', 'whatsapp', 'attachments', 'trips'].map((key) => {
+                            const labels = { email: 'Email', whatsapp: 'WhatsApp number', attachments: 'Attachments', trips: 'Trip plans' };
+                            return `<div class="px-2 py-1.5 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800" data-fb-filter-row="${key}">
+                                <div class="text-[11px] font-bold text-gray-800 dark:text-gray-100 mb-1">${labels[key]}</div>
+                                <div class="flex flex-wrap gap-1">
+                                    <label class="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-bold text-gray-700 dark:text-gray-200 cursor-pointer border border-transparent has-[:checked]:border-violet-400 has-[:checked]:bg-violet-50 dark:has-[:checked]:bg-violet-950/40"><input type="radio" name="fb-filter-${key}" data-fb-filter="${key}" data-fb-filter-mode="any" class="text-violet-600 focus:ring-violet-500"> Any</label>
+                                    <label class="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-bold text-gray-700 dark:text-gray-200 cursor-pointer border border-transparent has-[:checked]:border-violet-400 has-[:checked]:bg-violet-50 dark:has-[:checked]:bg-violet-950/40"><input type="radio" name="fb-filter-${key}" data-fb-filter="${key}" data-fb-filter-mode="has" class="text-violet-600 focus:ring-violet-500"> Has</label>
+                                    <label class="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-bold text-gray-700 dark:text-gray-200 cursor-pointer border border-transparent has-[:checked]:border-violet-400 has-[:checked]:bg-violet-50 dark:has-[:checked]:bg-violet-950/40"><input type="radio" name="fb-filter-${key}" data-fb-filter="${key}" data-fb-filter-mode="missing" class="text-violet-600 focus:ring-violet-500"> Missing</label>
+                                </div>
+                            </div>`;
+                        }).join('')}
+                        <button type="button" id="fb-filter-clear" class="w-full mt-1 px-2 py-2 rounded-lg text-[10px] font-bold uppercase tracking-wide text-violet-700 dark:text-violet-300 hover:bg-violet-50 dark:hover:bg-violet-950/40">Clear filters</button>
                     </div>
                 </div>
                 
@@ -9455,23 +9464,42 @@ const Admin = {
         const filterMenu = document.getElementById('fb-filter-menu');
         const paintFilterBtn = () => {
             if (!filterBtn) return;
-            const on = Object.values(Admin.feedbackInboxFilters || {}).some(Boolean);
+            const on = Admin.feedbackFiltersActive();
             filterBtn.classList.toggle('ring-2', on);
             filterBtn.classList.toggle('ring-violet-400', on);
         };
-        filterMenu?.querySelectorAll('[data-fb-filter]').forEach((box) => {
-            const key = box.getAttribute('data-fb-filter');
-            box.checked = !!Admin.feedbackInboxFilters?.[key];
+        const syncFilterRadios = () => {
+            filterMenu?.querySelectorAll('[data-fb-filter][data-fb-filter-mode]').forEach((box) => {
+                const key = box.getAttribute('data-fb-filter');
+                const mode = box.getAttribute('data-fb-filter-mode') || 'any';
+                const current = Admin.feedbackInboxFilters?.[key] || 'any';
+                box.checked = current === mode;
+            });
+        };
+        filterMenu?.querySelectorAll('[data-fb-filter][data-fb-filter-mode]').forEach((box) => {
             box.addEventListener('change', () => {
-                Admin.feedbackInboxFilters[key] = !!box.checked;
+                if (!box.checked) return;
+                const key = box.getAttribute('data-fb-filter');
+                const mode = box.getAttribute('data-fb-filter-mode') || 'any';
+                if (!Admin.feedbackInboxFilters) Admin.feedbackInboxFilters = { email: 'any', whatsapp: 'any', attachments: 'any', trips: 'any' };
+                Admin.feedbackInboxFilters[key] = mode;
                 paintFilterBtn();
                 Admin.renderFeedbackList();
             });
+        });
+        document.getElementById('fb-filter-clear')?.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            Admin.feedbackInboxFilters = { email: 'any', whatsapp: 'any', attachments: 'any', trips: 'any' };
+            syncFilterRadios();
+            paintFilterBtn();
+            Admin.renderFeedbackList();
         });
         if (filterBtn && filterMenu) {
             filterBtn.addEventListener('click', (e) => {
                 e.preventDefault();
                 e.stopPropagation();
+                syncFilterRadios();
                 filterMenu.classList.toggle('hidden');
             });
             document.addEventListener('click', (e) => {
@@ -9479,6 +9507,7 @@ const Admin = {
                 filterMenu.classList.add('hidden');
             });
         }
+        syncFilterRadios();
         paintFilterBtn();
 
         // Dual-Tab Switcher Logic
@@ -9538,20 +9567,12 @@ const Admin = {
                 groups[did].push(item);
             });
 
-            // GUARDIAN UX FIX: Dynamic Tab Counters
-            let totalInbox = 0;
-            let totalArchive = 0;
-            Object.keys(groups).forEach(did => {
-                if (groups[did].some(i => !i.isFromAdmin && i.status !== 'resolved')) totalInbox++;
-                else totalArchive++;
-            });
-            if (tabInbox) tabInbox.innerHTML = `Inbox (${totalInbox})`;
-            if (tabArchive) tabArchive.innerHTML = `Archive (${totalArchive})`;
-
-            // 2. Filter groups based on Tab and Search String
+            // 2. Filter groups based on Tab, Search, and Has/Missing filters
             const displayGroups = [];
             const searchInputEl = document.getElementById('fb-search-input');
             const searchQuery = searchInputEl ? searchInputEl.value.toLowerCase().trim() : "";
+            let totalInbox = 0;
+            let totalArchive = 0;
 
             Object.keys(groups).forEach(did => {
                 const groupItems = groups[did];
@@ -9569,14 +9590,21 @@ const Admin = {
                     matchesSearch = alias.includes(searchQuery) || didLower.includes(searchQuery) || hasMatchingMsg;
                 }
 
-                if (matchesSearch && Admin.feedbackThreadMatchesFilters(did, groupItems)) {
-                    if (isInbox && isThreadActive) displayGroups.push({ did, items: groupItems });
-                    if (!isInbox && !isThreadActive) displayGroups.push({ did, items: groupItems });
-                }
+                if (!matchesSearch || !Admin.feedbackThreadMatchesFilters(did, groupItems)) return;
+
+                if (isThreadActive) totalInbox++;
+                else totalArchive++;
+
+                if (isInbox && isThreadActive) displayGroups.push({ did, items: groupItems });
+                if (!isInbox && !isThreadActive) displayGroups.push({ did, items: groupItems });
             });
 
+            // Dynamic tab counts = threads visible after search + filters
+            if (tabInbox) tabInbox.innerHTML = `Inbox (${totalInbox})`;
+            if (tabArchive) tabArchive.innerHTML = `Archive (${totalArchive})`;
+
             if (displayGroups.length === 0) {
-                const filtersOn = Object.values(Admin.feedbackInboxFilters || {}).some(Boolean);
+                const filtersOn = Admin.feedbackFiltersActive() || !!searchQuery;
                 const emptyCopy = filtersOn
                     ? 'No threads match these filters.'
                     : (isInbox ? 'Inbox is completely clean.' : 'No archived threads yet.');
@@ -9722,11 +9750,16 @@ const Admin = {
                         const link = isNum ? (Admin.outreachHref('whatsapp', ph, replyHtml) || `https://wa.me/${ph}`) : '#';
                         const target = isNum ? `target="_blank"` : '';
                         const aClass = isNum ? 'text-emerald-700 dark:text-emerald-300 hover:underline' : 'text-gray-500 dark:text-gray-400';
+                        const opened = isNum && Admin.wasOutreachClicked(did, 'whatsapp', ph);
+                        const openedChip = opened
+                            ? '<span class="text-[9px] font-bold uppercase tracking-wide text-emerald-800 dark:text-emerald-200 bg-emerald-100 dark:bg-emerald-900/50 px-1.5 py-0.5 rounded-full shrink-0">Opened</span>'
+                            : '';
                         
                         contactHtml += `
-                            <div class="flex items-center min-w-0 max-w-full bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800/50 rounded px-2 py-1 shadow-sm">
-                                <a href="${link}" ${target} onclick="event.stopPropagation()" class="text-[10px] ${aClass} font-mono tracking-tight break-all whitespace-normal inline-flex items-center gap-1 min-w-0">${Admin.icon(isNum ? 'message' : 'phone', 'w-3 h-3 shrink-0')} ${ph}</a>
-                                <button onclick="event.stopPropagation(); navigator.clipboard.writeText('${ph}'); if(typeof showToast === 'function') showToast('Copied!', 'success', 1000);" class="ml-1.5 text-gray-400 hover:text-emerald-500 transition-colors focus:outline-none inline-flex shrink-0" title="Copy">${Admin.icon('copy', 'w-3 h-3')}</button>
+                            <div class="flex items-center min-w-0 max-w-full bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800/50 rounded px-2 py-1 shadow-sm gap-1">
+                                <a href="${link}" ${target} onclick="event.stopPropagation(); if(${isNum ? 'true' : 'false'}){ Admin.markOutreachClicked('${String(did).replace(/'/g, "\\'")}', 'whatsapp', '${ph}'); }" class="text-[10px] ${aClass} font-mono tracking-tight break-all whitespace-normal inline-flex items-center gap-1 min-w-0">${Admin.icon(isNum ? 'message' : 'phone', 'w-3 h-3 shrink-0')} ${ph}</a>
+                                ${openedChip}
+                                <button onclick="event.stopPropagation(); navigator.clipboard.writeText('${ph}'); if(typeof showToast === 'function') showToast('Copied!', 'success', 1000);" class="ml-auto text-gray-400 hover:text-emerald-500 transition-colors focus:outline-none inline-flex shrink-0" title="Copy">${Admin.icon('copy', 'w-3 h-3')}</button>
                             </div>`;
                     });
                     contactHtml += '</div>';
@@ -12541,7 +12574,16 @@ const Admin = {
     },
 
     // --- GROWTH SPRINT PHASE 8: ADMIN REPLY INBOX PROTOCOL ---
-    feedbackInboxFilters: { email: false, whatsapp: false, attachments: false, trips: false },
+    /** Per-facet mode: 'any' | 'has' | 'missing'. */
+    feedbackInboxFilters: { email: 'any', whatsapp: 'any', attachments: 'any', trips: 'any' },
+
+    feedbackFiltersActive: () => {
+        const filters = Admin.feedbackInboxFilters || {};
+        return ['email', 'whatsapp', 'attachments', 'trips'].some((key) => {
+            const mode = filters[key];
+            return mode === 'has' || mode === 'missing' || mode === true;
+        });
+    },
 
     feedbackThreadContactSets: (groupItems) => {
         const emails = new Set();
@@ -12561,12 +12603,26 @@ const Admin = {
 
     feedbackThreadMatchesFilters: (did, groupItems) => {
         const filters = Admin.feedbackInboxFilters || {};
-        if (!filters.email && !filters.whatsapp && !filters.attachments && !filters.trips) return true;
+        const modeOf = (key) => {
+            const raw = filters[key];
+            if (raw === true) return 'has';
+            if (raw === false || raw == null || raw === '') return 'any';
+            return String(raw);
+        };
+        if (!Admin.feedbackFiltersActive()) return true;
         const { emails, phones } = Admin.feedbackThreadContactSets(groupItems);
-        if (filters.email && !emails.size) return false;
-        if (filters.whatsapp && !phones.size) return false;
-        if (filters.attachments && !(groupItems || []).some((item) => Admin.feedbackItemHasAttachments(item))) return false;
-        if (filters.trips && !Admin.feedbackDeviceHasTripPlans(did)) return false;
+        const hasAttach = (groupItems || []).some((item) => Admin.feedbackItemHasAttachments(item));
+        const hasTrips = Admin.feedbackDeviceHasTripPlans(did);
+        const checks = [
+            [modeOf('email'), emails.size > 0],
+            [modeOf('whatsapp'), phones.size > 0],
+            [modeOf('attachments'), hasAttach],
+            [modeOf('trips'), hasTrips],
+        ];
+        for (const [mode, present] of checks) {
+            if (mode === 'has' && !present) return false;
+            if (mode === 'missing' && present) return false;
+        }
         return true;
     },
 
@@ -12714,29 +12770,63 @@ const Admin = {
         }
     },
 
-    showOutreachModal: ({ emails = [], phones = [], commuterName = 'this commuter', message = '', deviceId = '', feedbackId = '' } = {}) => {
+    outreachClickKey: (deviceId, channel, address) => {
+        const did = String(deviceId || '').trim() || 'anon';
+        const ch = String(channel || '').trim() || 'wa';
+        const addr = String(address || '').replace(/\D+/g, '') || String(address || '').trim().toLowerCase();
+        return `nt_outreach_clicked_${did}_${ch}_${addr}`;
+    },
+
+    markOutreachClicked: (deviceId, channel, address) => {
+        try { localStorage.setItem(Admin.outreachClickKey(deviceId, channel, address), String(Date.now())); } catch { /* ignore */ }
+    },
+
+    wasOutreachClicked: (deviceId, channel, address) => {
+        try { return !!localStorage.getItem(Admin.outreachClickKey(deviceId, channel, address)); } catch { return false; }
+    },
+
+    unresolvedFeedbackIdsForDevice: (deviceId) => {
+        const did = String(deviceId || '').trim();
+        if (!did) return '';
+        return (Admin.cachedFeedbackData || [])
+            .filter((i) => !i.isFromAdmin && i.status !== 'resolved' && String(i.device_id || i.deviceId || '') === did)
+            .map((i) => i.id)
+            .filter(Boolean)
+            .join(',');
+    },
+
+    showOutreachModal: ({ emails = [], phones = [], commuterName = 'this commuter', message = '', deviceId = '', feedbackId = '', unresolvedIds = '' } = {}) => {
         if (!emails.length && !phones.length) return;
         document.getElementById('admin-outreach-modal')?.remove();
         const modal = document.createElement('div');
         modal.id = 'admin-outreach-modal';
         modal.className = 'fixed inset-0 bg-black/80 z-[220] flex items-center justify-center p-4 backdrop-blur-sm';
         const safeName = String(commuterName).replace(/</g, '&lt;');
+        const resolveIds = unresolvedIds || Admin.unresolvedFeedbackIdsForDevice(deviceId) || String(feedbackId || '');
         const waButtons = phones.map((ph) => {
             const safe = String(ph).replace(/[^0-9]/g, '');
             const href = Admin.outreachHref('whatsapp', safe, message);
             if (!safe || !href) return '';
-            return `<a href="${href}" target="_blank" rel="noopener noreferrer" class="w-full inline-flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 px-3 rounded-lg text-sm">${Admin.icon('message', 'w-4 h-4')} WhatsApp ${safe}</a>`;
+            const opened = Admin.wasOutreachClicked(deviceId, 'whatsapp', safe);
+            const openedChip = opened
+                ? '<span data-outreach-opened class="ml-auto text-[10px] font-bold uppercase tracking-wide bg-white/20 text-white px-2 py-0.5 rounded-full">Opened</span>'
+                : '<span data-outreach-opened class="ml-auto hidden text-[10px] font-bold uppercase tracking-wide bg-white/20 text-white px-2 py-0.5 rounded-full">Opened</span>';
+            return `<a href="${href}" target="_blank" rel="noopener noreferrer" data-outreach-channel="whatsapp" data-outreach-address="${safe}" class="w-full inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 px-3 rounded-lg text-sm">${Admin.icon('message', 'w-4 h-4')} WhatsApp ${safe}${openedChip}</a>`;
         }).join('');
         const mailButtons = emails.map((em) => {
             const label = String(em).replace(/</g, '&lt;');
             const href = Admin.outreachHref('email', em, message);
             if (!href) return '';
-            return `<a href="${href}" target="_blank" rel="noopener noreferrer" class="w-full inline-flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-3 rounded-lg text-sm">${Admin.icon('mail', 'w-4 h-4')} Email ${label}</a>`;
+            const opened = Admin.wasOutreachClicked(deviceId, 'email', em);
+            const openedChip = opened
+                ? '<span data-outreach-opened class="ml-auto text-[10px] font-bold uppercase tracking-wide bg-white/20 text-white px-2 py-0.5 rounded-full">Opened</span>'
+                : '<span data-outreach-opened class="ml-auto hidden text-[10px] font-bold uppercase tracking-wide bg-white/20 text-white px-2 py-0.5 rounded-full">Opened</span>';
+            return `<a href="${href}" target="_blank" rel="noopener noreferrer" data-outreach-channel="email" data-outreach-address="${label}" class="w-full inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-3 rounded-lg text-sm">${Admin.icon('mail', 'w-4 h-4')} Email ${label}${openedChip}</a>`;
         }).join('');
         modal.innerHTML = `
             <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md p-5 border border-gray-200 dark:border-gray-700" role="dialog" aria-labelledby="outreach-title">
                 <h3 id="outreach-title" class="text-lg font-black text-gray-900 dark:text-white mb-1">Also reach ${safeName}?</h3>
-                <p class="text-xs text-gray-500 dark:text-gray-400 mb-4 leading-relaxed">The in-app reply is sent and the thread is archived. WhatsApp and email open in a new tab so this admin screen stays on the current list.</p>
+                <p class="text-xs text-gray-500 dark:text-gray-400 mb-4 leading-relaxed">The in-app reply is sent. Open WhatsApp or email in a new tab, then Resolve when you are done so the thread moves to Archive.</p>
                 <div class="space-y-2 mb-3">${waButtons}${mailButtons}</div>
                 <div class="mb-3">
                     <p class="text-[10px] font-bold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-1.5">Later</p>
@@ -12746,7 +12836,10 @@ const Admin = {
                     </div>
                     <p class="text-[10px] text-gray-500 dark:text-gray-400 mt-1.5 leading-relaxed">Saves this reply on the roadmap. Open that card to send the WhatsApp or email.</p>
                 </div>
-                <button type="button" id="outreach-dismiss" class="w-full bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 font-bold py-2.5 rounded-lg text-sm">Not now</button>
+                <div class="grid grid-cols-2 gap-2">
+                    <button type="button" id="outreach-dismiss" class="bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 font-bold py-2.5 rounded-lg text-sm">Not now</button>
+                    <button type="button" id="outreach-resolve" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2.5 rounded-lg text-sm"${resolveIds ? '' : ' disabled'}>Resolve</button>
+                </div>
             </div>
         `;
         document.body.appendChild(modal);
@@ -12756,9 +12849,26 @@ const Admin = {
             const ok = await Admin.saveOutreachLater({ status, emails, phones, message, commuterName, deviceId, feedbackId });
             if (!ok && btn) btn.disabled = false;
         };
+        modal.querySelectorAll('[data-outreach-channel]').forEach((link) => {
+            link.addEventListener('click', () => {
+                const channel = link.getAttribute('data-outreach-channel') || '';
+                const address = link.getAttribute('data-outreach-address') || '';
+                Admin.markOutreachClicked(deviceId, channel, address);
+                const chip = link.querySelector('[data-outreach-opened]');
+                if (chip) chip.classList.remove('hidden');
+            });
+        });
         document.getElementById('outreach-dismiss').onclick = close;
         document.getElementById('outreach-later-backlog').onclick = (e) => saveLater('backlog', e.currentTarget);
         document.getElementById('outreach-later-progress').onclick = (e) => saveLater('progress', e.currentTarget);
+        document.getElementById('outreach-resolve').onclick = async (e) => {
+            const btn = e.currentTarget;
+            if (!resolveIds) { close(); return; }
+            btn.disabled = true;
+            await Admin.resolveFeedback(resolveIds, true);
+            if (typeof showToast === 'function') showToast('Thread resolved and archived!', 'success');
+            close();
+        };
         modal.addEventListener('click', (e) => { if (e.target === modal) close(); });
     },
 
@@ -14003,18 +14113,13 @@ const Admin = {
                     });
                 }
 
-                // Collect contacts before archive refresh replaces the cache
+                // Collect contacts + unresolved ids before any archive refresh replaces the cache
                 const contacts = Admin.collectFeedbackContacts(replyDeviceId);
                 const commuterName = (Admin.cachedAliases && Admin.cachedAliases[replyDeviceId]) || 'this commuter';
+                const unresolvedIds = Admin.unresolvedFeedbackIdsForDevice(replyDeviceId) || String(replyFeedbackId || '');
 
-                if (replyFeedbackId) {
-                    await Admin.resolveFeedback(replyFeedbackId, true);
-                } else if (typeof Admin.fetchFeedback === 'function') {
-                    Admin.fetchFeedback();
-                } 
-                
                 if (typeof showToast === 'function') {
-                    showToast(replyFeedbackId ? 'Reply sent & archived!' : 'Message sent to their inbox.', 'success');
+                    showToast(replyFeedbackId ? 'Reply sent.' : 'Message sent to their inbox.', 'success');
                 }
                 cleanup();
                 if (contacts.emails.length || contacts.phones.length) {
@@ -14024,7 +14129,13 @@ const Admin = {
                         message: text,
                         deviceId: replyDeviceId,
                         feedbackId: replyFeedbackId,
+                        unresolvedIds,
                     });
+                } else if (unresolvedIds) {
+                    await Admin.resolveFeedback(unresolvedIds, true);
+                    if (typeof showToast === 'function') showToast('Reply sent & archived!', 'success');
+                } else if (typeof Admin.fetchFeedback === 'function') {
+                    Admin.fetchFeedback();
                 }
             } catch (e) {
                 if (typeof showToast === 'function') showToast(editingKey ? 'Failed to save reply.' : 'Failed to send reply.', 'error');

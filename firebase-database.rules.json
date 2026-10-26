@@ -425,6 +425,16 @@
         ".read": "auth != null && ((data.exists() && auth.uid === data.child('uid').val()) || auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')",
         ".write": "(auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')) || (auth != null && auth.token.firebase.sign_in_provider != 'anonymous' && (!data.exists() || data.child('uid').val() === auth.uid) && newData.child('uid').val() === auth.uid)"
       }
+    },
+
+    "station_reviews": {
+      "$slug": {
+        "$reviewId": {
+          ".read": "data.child('status').val() === 'approved' || (auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com'))",
+          ".write": "!data.exists() || (auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com'))",
+          ".validate": "!newData.exists() || (newData.hasChildren(['stationSlug', 'rating', 'text', 'status', 'createdAt']) && newData.child('stationSlug').isString() && newData.child('stationSlug').val() === $slug && newData.child('stationSlug').val().length > 0 && newData.child('stationSlug').val().length < 80 && newData.child('rating').isNumber() && newData.child('rating').val() >= 1 && newData.child('rating').val() <= 5 && newData.child('text').isString() && newData.child('text').val().length >= 12 && newData.child('text').val().length <= 1200 && (newData.child('status').val() === 'pending' || newData.child('status').val() === 'approved' || newData.child('status').val() === 'rejected') && newData.child('createdAt').isNumber() && (!newData.hasChild('displayName') || newData.child('displayName').val() == null || (newData.child('displayName').isString() && newData.child('displayName').val().length <= 80)) && (!newData.hasChild('contact') || newData.child('contact').val() == null || (newData.child('contact').isString() && newData.child('contact').val().length <= 120)))"
+        }
+      }
     }
   }
 }

@@ -2099,6 +2099,9 @@ export async function submitRideCheckIn({
     }
 
     try {
+        const { allowRtdbWrite, recordRtdbWrite } = await import('./rtdb-rate.js');
+        const gate = allowRtdbWrite('ridePing');
+        if (!gate.ok) return { ok: false, rateLimited: true, message: 'Please wait a moment before updating your share.' };
         const token = await ensureAuthToken();
         if (!token) throw new Error('Sign-in required to share (anonymous is fine).');
         const authParam = `?auth=${encodeURIComponent(token)}`;
@@ -2111,6 +2114,7 @@ export async function submitRideCheckIn({
             }
         );
         if (!res.ok) throw new Error(permissionMessage(res.status));
+        recordRtdbWrite('ridePing');
         safeStorage.setItem(ACTIVE_KEY, JSON.stringify({
             routeId, station: st, trainId: trainId || null, destination: destination || null,
             at: now, lastPingAt: now, lastRealPingAt: liveFix ? now : (Number(previous?.lastRealPingAt) || now), startedAt: previous?.startedAt || now, expiresAt: payload.expiresAt,

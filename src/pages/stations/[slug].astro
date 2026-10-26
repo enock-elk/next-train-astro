@@ -3,6 +3,7 @@ import ContentLayout from '../../layouts/ContentLayout.astro';
 import SeoPageHeader from '../../components/SeoPageHeader.astro';
 import SeoStationDepartures from '../../components/SeoStationDepartures.astro';
 import SeoStationMap from '../../components/SeoStationMap.astro';
+import SeoStationReviews from '../../components/SeoStationReviews.astro';
 import { withBase } from '../../lib/config.js';
 import { listSeoRegions, regionName, seoIntroParagraphs, slugifyStation } from '../../lib/seo-routes.js';
 import { isStationIndexable } from '../../lib/seo-station-allowlist.js';
@@ -283,5 +284,7 @@ const lineLinks = corridors.map((c) => ({
         <p class="text-sm text-slate-500">No published timetable rows for this station in the current dump.</p>
       )}
     </div>
+
+    <SeoStationReviews station={station} />
   </main>
 </ContentLayout>

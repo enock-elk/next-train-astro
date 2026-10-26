@@ -1129,14 +1129,49 @@ export function filterDominatedTrips(trips) {
     return optimalTrips;
 }
 
+/** Regions that publish a timed stop matching this station name (via ROUTES ends + index). */
+function regionsForStationName(normName, index) {
+    const regions = new Set();
+    if (!normName) return regions;
+    const indexed = index?.[normName];
+    if (indexed?.routes) {
+        for (const r of indexed.routes) {
+            if (ROUTES[r]?.region) regions.add(ROUTES[r].region);
+        }
+    }
+    for (const route of Object.values(ROUTES)) {
+        if (!route?.isActive || !route.region) continue;
+        const a = normalizeStationName(String(route.destA || '').replace(/\s+STATION$/i, ''));
+        const b = normalizeStationName(String(route.destB || '').replace(/\s+STATION$/i, ''));
+        if (a === normName || b === normName) regions.add(route.region);
+    }
+    return regions;
+}
+
 export function runHeuristicFailureProbe(origin, dest, dayType = null) {
     const normOrigin = normalizeStationName(origin);
     const normDest = normalizeStationName(dest);
     const index = $globalStationIndex.get();
     const disr = $globalDisruptions.get();
     const fullDatabase = $fullDatabase.get();
-    
+    const currentRegion = (typeof $userRegion?.get === 'function' ? $userRegion.get() : null) || 'GP';
+
+    // Missing from this region's index: if either end is a known corridor end in
+    // another province (Johannesburg ↔ Wellington while pinned to GP), say cross-region
+    // instead of "no physical link".
     if (!index || !index[normOrigin] || !index[normDest]) {
+        const regO = regionsForStationName(normOrigin, index);
+        const regD = regionsForStationName(normDest, index);
+        const oElsewhere = [...regO].some((r) => r !== currentRegion);
+        const dElsewhere = [...regD].some((r) => r !== currentRegion);
+        const oHere = regO.has(currentRegion) || !!index?.[normOrigin];
+        const dHere = regD.has(currentRegion) || !!index?.[normDest];
+        if ((oHere && dElsewhere) || (dHere && oElsewhere) || (oElsewhere && dElsewhere && [...regO].some((r) => !regD.has(r)))) {
+            return 'ERR_CROSS_REGION';
+        }
+        if ((oElsewhere && !dHere) || (dElsewhere && !oHere)) {
+            return 'ERR_CROSS_REGION';
+        }
         return 'ERR_DISCONNECTED_GRAPH';
     }
 

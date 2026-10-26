@@ -701,6 +701,12 @@ assert(
     assert(!overlay.dataset.ntFeedbackGallery, 'closing the preview drops the feedback gallery');
 }
 
+assert(admin.includes("data-fb-filter-mode=\"missing\""), 'feedback filter supports Missing mode');
+assert(admin.includes('feedbackFiltersActive'), 'feedback filter tracks Has/Missing as active');
+assert(admin.includes('id="outreach-resolve"'), 'outreach sheet has Resolve after WhatsApp');
+assert(admin.includes('markOutreachClicked'), 'outreach marks WhatsApp/email opens');
+assert(admin.includes('data-outreach-opened'), 'outreach shows an Opened chip');
+
 if (failed) {
     console.error(`\nverify-admin-panels failed: ${failed} check(s)`);
     process.exit(1);

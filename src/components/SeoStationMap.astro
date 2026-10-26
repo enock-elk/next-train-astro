@@ -15,7 +15,6 @@ const name = station?.name || 'Station';
 const previewSrc = withBase(buildStationMapPath(station, { embed: true }));
 const fullSrc = withBase(buildStationMapPath(station, { embed: false }));
 const label = regionLabel || station?.region || '';
-const title = `${name} on the GPS map`;
 ---
 
 <section class="seo-station-map" id="seo-station-map" data-seo-station-map>
@@ -63,23 +62,20 @@ const title = `${name} on the GPS map`;
   role="dialog"
   aria-modal="true"
   aria-hidden="true"
-  aria-labelledby="seo-station-map-lightbox-title"
+  aria-label={`${name} GPS map`}
   data-seo-station-map-lightbox
   data-map-src={fullSrc}
 >
   <div class="bg-white dark:bg-gray-900 w-full h-full flex flex-col overflow-hidden">
-    <div class="p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center bg-gray-100 dark:bg-gray-800 z-20 shrink-0">
-      <h3 id="seo-station-map-lightbox-title" class="text-lg font-bold text-gray-900 dark:text-white">{title}</h3>
+    <div class="relative flex-1 min-h-0 overflow-hidden bg-gray-200 dark:bg-gray-950">
       <button
         type="button"
         data-seo-station-map-close
-        class="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition focus:outline-none"
+        class="absolute top-3 right-3 z-30 p-2 rounded-full bg-white/90 dark:bg-gray-900/90 shadow-md hover:bg-white dark:hover:bg-gray-800 text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white transition focus:outline-none"
         aria-label="Close Map"
       >
         <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
       </button>
-    </div>
-    <div class="relative flex-1 min-h-0 overflow-hidden bg-gray-200 dark:bg-gray-950">
       <iframe
         id="seo-station-map-frame"
         title={`${name} GPS network map`}

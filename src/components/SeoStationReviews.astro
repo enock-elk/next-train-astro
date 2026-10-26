@@ -1,0 +1,270 @@
+---
+/**
+ * Station SEO reviews block (bottom of the landing).
+ * Shows approved reviews from RTDB and a form that submits pending reviews
+ * for operator approval within about 24 hours.
+ */
+import { DYNAMIC_BASE_URL } from '../lib/config.js';
+
+const { station } = Astro.props;
+const name = station?.name || 'This station';
+const slug = station?.slug || '';
+const amenityQuestions = [
+  { id: 'clean', label: 'Usually clean' },
+  { id: 'safe', label: 'Feels safe in daytime' },
+  { id: 'lit', label: 'Well lit after dark' },
+  { id: 'staff', label: 'Staff or security present' },
+  { id: 'shelter', label: 'Shelter from rain / sun' },
+  { id: 'accessible', label: 'Easy access (ramps / lifts)' },
+];
+---
+
+<section
+  class="seo-station-reviews max-w-6xl mx-auto px-4 pt-4 pb-16"
+  id="seo-station-reviews"
+  data-seo-station-reviews
+  data-station-slug={slug}
+  data-station-name={name}
+  data-rtdb-base={DYNAMIC_BASE_URL}
+>
+  <div class="border-t border-slate-200 dark:border-slate-800 pt-10">
+    <h2 class="text-lg font-bold text-slate-900 dark:text-white">Reviews</h2>
+    <p class="mt-1 text-sm text-slate-600 dark:text-slate-300">
+      Commuter notes about {name}. We read every review and aim to approve or decline within 24 hours.
+      Contact details stay private so we can reply if we do not publish the note.
+    </p>
+
+    <div id="seo-reviews-list" class="mt-6 space-y-4" aria-live="polite">
+      <p class="text-sm text-slate-500 dark:text-slate-400" data-seo-reviews-empty>
+        No published reviews yet. Be the first to share how this station is for you.
+      </p>
+    </div>
+
+    <form id="seo-review-form" class="mt-8 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/80 p-5 space-y-4" novalidate>
+      <h3 class="text-base font-bold text-slate-900 dark:text-white">Leave a review</h3>
+      <div>
+        <label class="block text-xs font-bold uppercase tracking-wide text-slate-500 mb-2" for="seo-review-rating">Rating</label>
+        <div class="flex flex-wrap gap-2" id="seo-review-rating" role="radiogroup" aria-label="Star rating">
+          {[1, 2, 3, 4, 5].map((n) => (
+            <button
+              type="button"
+              data-seo-star={n}
+              class="w-10 h-10 rounded-full border border-slate-200 dark:border-slate-700 text-slate-400 hover:text-amber-500 hover:border-amber-400 text-lg font-bold focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+              aria-label={`${n} star${n === 1 ? '' : 's'}`}
+            >★</button>
+          ))}
+        </div>
+        <input type="hidden" name="rating" id="seo-review-rating-value" value="" />
+      </div>
+      <div>
+        <label class="block text-xs font-bold uppercase tracking-wide text-slate-500 mb-1" for="seo-review-text">Your review</label>
+        <textarea
+          id="seo-review-text"
+          name="text"
+          rows="4"
+          maxlength="1200"
+          required
+          class="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 px-3 py-2 text-sm text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 focus:outline-none"
+          placeholder={`What should other riders know about ${name}?`}
+        ></textarea>
+      </div>
+      <div>
+        <p class="text-xs font-bold uppercase tracking-wide text-slate-500 mb-2">If you know this station</p>
+        <div class="grid gap-2 sm:grid-cols-2">
+          {amenityQuestions.map((q) => (
+            <label class="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-200 cursor-pointer">
+              <input type="checkbox" name="amenity" value={q.id} class="rounded border-slate-300 text-blue-600 focus:ring-blue-500" />
+              {q.label}
+            </label>
+          ))}
+        </div>
+      </div>
+      <div class="grid gap-3 sm:grid-cols-2">
+        <div>
+          <label class="block text-xs font-bold uppercase tracking-wide text-slate-500 mb-1" for="seo-review-name">Display name (optional)</label>
+          <input id="seo-review-name" name="displayName" maxlength="80" class="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none" autocomplete="nickname" />
+        </div>
+        <div>
+          <label class="block text-xs font-bold uppercase tracking-wide text-slate-500 mb-1" for="seo-review-contact">Email or WhatsApp (private)</label>
+          <input id="seo-review-contact" name="contact" maxlength="120" class="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none" autocomplete="email" placeholder="So we can reply if we do not publish" />
+        </div>
+      </div>
+      <p id="seo-review-status" class="text-sm text-slate-500 dark:text-slate-400 hidden" role="status"></p>
+      <button
+        type="submit"
+        id="seo-review-submit"
+        class="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-5 rounded-xl text-sm shadow-sm transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+      >
+        Submit review
+      </button>
+    </form>
+  </div>
+</section>
+
+<script>
+  function bindSeoStationReviews() {
+    const root = document.querySelector('[data-seo-station-reviews]');
+    if (!root || root.dataset.bound === '1') return;
+    root.dataset.bound = '1';
+
+    const slug = root.getAttribute('data-station-slug') || '';
+    const stationName = root.getAttribute('data-station-name') || '';
+    const base = String(root.getAttribute('data-rtdb-base') || '').replace(/\/?$/, '/');
+    const listEl = document.getElementById('seo-reviews-list');
+    const emptyEl = listEl?.querySelector('[data-seo-reviews-empty]');
+    const form = document.getElementById('seo-review-form');
+    const statusEl = document.getElementById('seo-review-status');
+    const ratingInput = document.getElementById('seo-review-rating-value');
+    const submitBtn = document.getElementById('seo-review-submit');
+    let rating = 0;
+
+    const RATE_KEY = 'rtdbStationReviewRateV1';
+    const readRate = () => {
+      try { return JSON.parse(localStorage.getItem(RATE_KEY) || '{"global":[]}'); } catch { return { global: [] }; }
+    };
+    const writeRate = (data) => {
+      try { localStorage.setItem(RATE_KEY, JSON.stringify(data)); } catch { /* ignore */ }
+    };
+    const allowSubmit = () => {
+      const data = readRate();
+      const now = Date.now();
+      const windowMs = 60 * 60 * 1000;
+      data.global = (data.global || []).filter((t) => now - t < windowMs);
+      if (data.global.length >= 3) return { ok: false, message: 'Please wait before sending another review.' };
+      const last = data.global[data.global.length - 1];
+      if (last && now - last < 30_000) return { ok: false, message: 'Please wait a few seconds before sending again.' };
+      return { ok: true, data, now };
+    };
+    const recordSubmit = (data, now) => {
+      data.global.push(now);
+      writeRate(data);
+    };
+
+    const paintStars = () => {
+      root.querySelectorAll('[data-seo-star]').forEach((btn) => {
+        const n = Number(btn.getAttribute('data-seo-star') || 0);
+        const on = n <= rating;
+        btn.classList.toggle('text-amber-500', on);
+        btn.classList.toggle('border-amber-400', on);
+        btn.classList.toggle('text-slate-400', !on);
+        btn.setAttribute('aria-checked', on && n === rating ? 'true' : 'false');
+      });
+      if (ratingInput) ratingInput.value = rating ? String(rating) : '';
+    };
+
+    root.querySelectorAll('[data-seo-star]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        rating = Number(btn.getAttribute('data-seo-star') || 0);
+        paintStars();
+      });
+    });
+
+    const starRow = (n) => '★'.repeat(Math.max(0, Math.min(5, Number(n) || 0))) + '☆'.repeat(Math.max(0, 5 - Math.min(5, Number(n) || 0)));
+
+    const renderReviews = (rows) => {
+      if (!listEl) return;
+      listEl.querySelectorAll('[data-seo-review-card]').forEach((el) => el.remove());
+      if (!rows.length) {
+        if (emptyEl) emptyEl.classList.remove('hidden');
+        return;
+      }
+      if (emptyEl) emptyEl.classList.add('hidden');
+      const frag = document.createDocumentFragment();
+      rows.forEach((row) => {
+        const card = document.createElement('article');
+        card.setAttribute('data-seo-review-card', '1');
+        card.className = 'rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/80 p-4';
+        const who = String(row.displayName || 'Commuter').replace(/[<>&]/g, '');
+        const body = String(row.text || '').replace(/[<>&]/g, (m) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[m]));
+        const amenities = Array.isArray(row.amenities) ? row.amenities : [];
+        const amenityHtml = amenities.length
+          ? `<ul class="mt-2 flex flex-wrap gap-1.5">${amenities.map((a) => `<li class="text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">${String(a).replace(/[<>&]/g, '')}</li>`).join('')}</ul>`
+          : '';
+        card.innerHTML = `
+          <div class="flex items-center justify-between gap-2">
+            <p class="text-sm font-bold text-slate-900 dark:text-white">${who}</p>
+            <p class="text-amber-500 text-sm tracking-widest" aria-label="${Number(row.rating) || 0} out of 5 stars">${starRow(row.rating)}</p>
+          </div>
+          <p class="mt-2 text-sm text-slate-700 dark:text-slate-200 leading-relaxed whitespace-pre-wrap">${body}</p>
+          ${amenityHtml}
+        `;
+        frag.appendChild(card);
+      });
+      listEl.appendChild(frag);
+    };
+
+    const loadApproved = async () => {
+      if (!slug || !base) return;
+      try {
+        const res = await fetch(`${base}station_reviews/${encodeURIComponent(slug)}.json`, { cache: 'no-store' });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!data || typeof data !== 'object') return;
+        const rows = Object.values(data)
+          .filter((r) => r && r.status === 'approved' && r.text)
+          .sort((a, b) => (Number(b.approvedAt) || Number(b.createdAt) || 0) - (Number(a.approvedAt) || Number(a.createdAt) || 0));
+        renderReviews(rows);
+      } catch { /* offline / rules */ }
+    };
+
+    form?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      if (!slug || !base) return;
+      const text = String(document.getElementById('seo-review-text')?.value || '').trim();
+      const displayName = String(document.getElementById('seo-review-name')?.value || '').trim();
+      const contact = String(document.getElementById('seo-review-contact')?.value || '').trim();
+      const amenities = [...(form.querySelectorAll('input[name="amenity"]:checked') || [])].map((el) => el.value);
+      if (!rating || rating < 1 || rating > 5) {
+        if (statusEl) { statusEl.textContent = 'Please choose a star rating.'; statusEl.classList.remove('hidden'); }
+        return;
+      }
+      if (text.length < 12) {
+        if (statusEl) { statusEl.textContent = 'Please write a little more about the station.'; statusEl.classList.remove('hidden'); }
+        return;
+      }
+      const gate = allowSubmit();
+      if (!gate.ok) {
+        if (statusEl) { statusEl.textContent = gate.message; statusEl.classList.remove('hidden'); }
+        return;
+      }
+      if (submitBtn) submitBtn.disabled = true;
+      if (statusEl) { statusEl.textContent = 'Sending…'; statusEl.classList.remove('hidden'); }
+      const id = `rev_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+      const payload = {
+        stationSlug: slug,
+        stationName,
+        rating,
+        text: text.slice(0, 1200),
+        displayName: displayName.slice(0, 80) || null,
+        contact: contact.slice(0, 120) || null,
+        amenities,
+        status: 'pending',
+        createdAt: Date.now(),
+        source: 'seo_station',
+      };
+      try {
+        const res = await fetch(`${base}station_reviews/${encodeURIComponent(slug)}/${encodeURIComponent(id)}.json`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        recordSubmit(gate.data, gate.now);
+        form.reset();
+        rating = 0;
+        paintStars();
+        if (statusEl) {
+          statusEl.textContent = 'Thanks. We will review this within about 24 hours. Approved notes appear here.';
+        }
+      } catch {
+        if (statusEl) statusEl.textContent = 'Could not send right now. Check your connection and try again.';
+      } finally {
+        if (submitBtn) submitBtn.disabled = false;
+      }
+    });
+
+    loadApproved();
+  }
+
+  bindSeoStationReviews();
+</script>

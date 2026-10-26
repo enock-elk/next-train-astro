@@ -11,30 +11,49 @@ import {
   buildStationNeighbourHeadline,
   buildStationQuickFacts,
   getSeoStationBySlug,
+  listIndexableSeoStations,
   listSeoStations,
   neighboursForStationRoute,
   stationHasPublicPage,
 } from '../src/lib/seo-stations.js';
 import {
   isStationIndexable,
+  PHASE1_REGIONAL_HUBS,
   STATION_INDEX_ALLOWLIST,
 } from '../src/lib/seo-station-allowlist.js';
 
 const failures = [];
 const ok = (cond, msg) => { if (!cond) failures.push(msg); };
 
-const stations = listSeoStations({ regions: ['GP'] });
-ok(stations.length >= 80, `expected ≥80 GP timed stations, found ${stations.length}`);
-ok(stations.every((s) => s.status === 'active'), 'GP catalog entries are active timed stops');
-ok(stations.every((s) => s.region === 'GP'), 'phase-1 SSG list is Gauteng only');
-
-for (const slug of STATION_INDEX_ALLOWLIST) {
-  ok(stations.some((s) => s.slug === slug), `allowlist slug ${slug} exists in GP catalog`);
-}
+const gpStations = listSeoStations({ regions: ['GP'] });
+ok(gpStations.length >= 80, `expected ≥80 GP timed stations, found ${gpStations.length}`);
+ok(gpStations.every((s) => s.status === 'active'), 'GP catalog entries are active timed stops');
+ok(gpStations.every((s) => s.region === 'GP'), 'GP catalog filter stays Gauteng-only');
 ok(
-  stations.every((s) => isStationIndexable(s.slug)),
-  'every GP SSG station is on the phase-1 allowlist',
+  gpStations.every((s) => isStationIndexable(s.slug)),
+  'every GP timed station is on the phase-1 allowlist',
 );
+
+const indexable = listIndexableSeoStations();
+ok(indexable.length === STATION_INDEX_ALLOWLIST.size, 'SSG list size matches allowlist');
+ok(
+  indexable.every((s) => isStationIndexable(s.slug)),
+  'every SSG station is allowlisted',
+);
+
+const catalogBySlug = new Map(listSeoStations().map((s) => [s.slug, s]));
+for (const slug of STATION_INDEX_ALLOWLIST) {
+  ok(catalogBySlug.has(slug), `allowlist slug ${slug} exists in the multi-region catalog`);
+}
+
+ok(PHASE1_REGIONAL_HUBS.length >= 20, 'phase-1 regional hubs cover WC/KZN/EC termini');
+ok(PHASE1_REGIONAL_HUBS.includes('cape-town'), 'Cape Town is a phase-1 hub');
+ok(PHASE1_REGIONAL_HUBS.includes('bellville'), 'Bellville is a phase-1 hub');
+ok(PHASE1_REGIONAL_HUBS.includes('durban'), 'Durban is a phase-1 hub');
+ok(PHASE1_REGIONAL_HUBS.includes('east-london'), 'East London is a phase-1 hub');
+ok(stationHasPublicPage('cape-town'), 'Cape Town has a public page');
+ok(stationHasPublicPage('durban'), 'Durban has a public page');
+ok(!stationHasPublicPage('athlone'), 'Athlone (WC mid-corridor) waits for a later phase');
 
 const walker = getSeoStationBySlug('walker-street');
 ok(!!walker, 'Walker Street is in the catalog');
@@ -127,7 +146,8 @@ ok(/\/stations\(\\\.html\|\/\)/.test(astro) || astro.includes('/stations'), 'sta
 
 const sitemapGen = readFileSync(new URL('../scripts/generate-sitemap.mjs', import.meta.url), 'utf8');
 ok(sitemapGen.includes('stationUrls'), 'sitemap generator emits station URLs');
-ok(sitemapGen.includes('isStationIndexable'), 'sitemap only includes allowlisted stations');
+ok(sitemapGen.includes('listIndexableSeoStations'), 'sitemap uses allowlist-gated station list');
+ok(pageSrc.includes('listIndexableSeoStations'), 'station getStaticPaths uses allowlist-gated list');
 
 const fetchLive = readFileSync(new URL('../scripts/fetch-live-schedules-for-seo.mjs', import.meta.url), 'utf8');
 ok(fetchLive.includes('.seo-build-database.json'), 'live schedule fetch writes the SEO build dump');
@@ -141,12 +161,22 @@ const sitemapPath = new URL('../public/sitemap.xml', import.meta.url);
 if (existsSync(sitemapPath)) {
   const xml = readFileSync(sitemapPath, 'utf8');
   ok(xml.includes('/stations/walker-street.html'), 'checked-in sitemap lists Walker Street');
+  ok(xml.includes('/stations/cape-town.html'), 'checked-in sitemap lists Cape Town');
+  ok(xml.includes('/stations/durban.html'), 'checked-in sitemap lists Durban');
+  ok(xml.includes('/stations/east-london.html'), 'checked-in sitemap lists East London');
   ok(!xml.includes('/stations/wolseley'), 'sitemap does not list Wolseley');
+  ok(!xml.includes('/stations/athlone.html'), 'sitemap does not list Athlone yet');
 }
+
+const allowlistSrc = readFileSync(new URL('../src/lib/seo-station-allowlist.js', import.meta.url), 'utf8');
+ok(allowlistSrc.includes('Phased station SEO plan'), 'allowlist documents the phased SEO plan');
+ok(allowlistSrc.includes('Phase 2'), 'allowlist names phase 2 (remaining WC)');
 
 if (failures.length) {
   console.error('verify-station-seo FAILED:');
   for (const f of failures) console.error(' -', f);
   process.exit(1);
 }
-console.log(`verify-station-seo: ok (${stations.length} GP stations, ${STATION_INDEX_ALLOWLIST.size} allowlisted)`);
+console.log(
+  `verify-station-seo: ok (${gpStations.length} GP, ${PHASE1_REGIONAL_HUBS.length} regional hubs, ${STATION_INDEX_ALLOWLIST.size} allowlisted)`,
+);

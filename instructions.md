@@ -113,6 +113,7 @@ Run `npm run verify:clever-ads` before updating advert hashes. Then follow the s
 - Weekday/Sat/Sun sim must ignore leftover `#sim-date` unless the user picked a specific date.
 - Shared-corridor “To …” uses the warning **SVG**, not emoji.
 - Google Search favicon: first `<link rel="icon">` is the square **48×48 PNG** (`/icons/icon-48.png`). Do not put `favicon.ico` first with `sizes="any"` (that attribute is for SVG). Browser tab ≠ SERP chip; SERP lag after deploys is normal (days). Request indexing of `https://nexttrain.co.za/` in Search Console after production deploy.
+- **Station SEO is phased.** Allowlist + plan live in `src/lib/seo-station-allowlist.js`. Phase 1 = all GP timed stops **plus** WC/KZN/EC route termini/hubs only (`PHASE1_REGIONAL_HUBS`). Phase 2 = rest of WC, phase 3 = rest of KZN, phase 4 = rest of EC. SSG and sitemap use `listIndexableSeoStations()`; `stationHasPublicPage` stays allowlist-gated so mid-corridor WC/KZN/EC stops are not linked until their phase. Do not SSG every regional stop early. Expand with `npm run verify:station-seo` and `node scripts/print-regional-hub-slugs.mjs`.
 
 ## Versioning
 

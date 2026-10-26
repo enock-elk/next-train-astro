@@ -7,8 +7,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { APP_VERSION } from '../src/lib/config.js';
 import { listSeoRoutes, listSeoRegions, listSeoCorridors } from '../src/lib/seo-routes.js';
-import { listSeoStations } from '../src/lib/seo-stations.js';
-import { isStationIndexable } from '../src/lib/seo-station-allowlist.js';
+import { listIndexableSeoStations } from '../src/lib/seo-stations.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const ORIGIN = 'https://nexttrain.co.za';
@@ -57,13 +56,11 @@ const routeUrls = listSeoRoutes().map(({ seed }) => ({
   priority: '0.75',
 }));
 
-const stationUrls = listSeoStations({ regions: ['GP'] })
-  .filter((s) => isStationIndexable(s.slug))
-  .map((s) => ({
-    loc: `${ORIGIN}/stations/${s.slug}.html`,
-    changefreq: 'weekly',
-    priority: '0.72',
-  }));
+const stationUrls = listIndexableSeoStations().map((s) => ({
+  loc: `${ORIGIN}/stations/${s.slug}.html`,
+  changefreq: 'weekly',
+  priority: '0.72',
+}));
 
 const urls = [...core, ...regionUrls, ...corridorUrls, ...holidayUrls, ...routeUrls, ...stationUrls];
 const body = urls

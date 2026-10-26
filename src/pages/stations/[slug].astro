@@ -14,14 +14,15 @@ import {
   buildStationNeighbourHeadline,
   buildStationQuickFacts,
   getSeoStationBySlug,
-  listSeoStations,
+  listIndexableSeoStations,
   stationDocumentTitle,
   stationHasPublicPage,
   stationMetaDescription,
 } from '../../lib/seo-stations.js';
 
 export function getStaticPaths() {
-  return listSeoStations({ regions: ['GP'] }).map((station) => ({
+  // Phase 1: all GP + WC/KZN/EC termini/hubs (allowlist). See seo-station-allowlist.js.
+  return listIndexableSeoStations().map((station) => ({
     params: { slug: station.slug },
   }));
 }

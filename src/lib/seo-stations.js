@@ -265,10 +265,22 @@ export function listSeoStationCatalog(options = {}) {
   return list;
 }
 
-/** Phase-1 SSG list: Gauteng timed stations. */
+/**
+ * Timed-station catalog for the given regions.
+ * Defaults to all four Metrorail regions (GP, WC, KZN, EC).
+ * Prefer listIndexableSeoStations() for SSG / sitemap (allowlist-gated).
+ */
 export function listSeoStations(options = {}) {
-  const regions = options.regions || ['GP'];
+  const regions = options.regions || ['GP', 'WC', 'KZN', 'EC'];
   return listSeoStationCatalog({ regions });
+}
+
+/**
+ * Phase-aware public station pages: allowlisted slugs only.
+ * Phase 1 = all GP + WC/KZN/EC termini/hubs (see seo-station-allowlist.js).
+ */
+export function listIndexableSeoStations(options = {}) {
+  return listSeoStations(options).filter((s) => isStationIndexable(s.slug));
 }
 
 export function getSeoStationBySlug(slug, options = {}) {
@@ -277,8 +289,9 @@ export function getSeoStationBySlug(slug, options = {}) {
   return listSeoStations(options).find((s) => s.slug === want) || null;
 }
 
+/** True when a /stations/{slug}.html page is SSG'd and linkable. */
 export function stationHasPublicPage(slug) {
-  return !!getSeoStationBySlug(slug);
+  return isStationIndexable(slug) && !!getSeoStationBySlug(slug);
 }
 
 /**

@@ -2067,15 +2067,20 @@ export function nudgeHomeAutoNotices() {
 export function setImmersiveChrome(on) {
     if (typeof document === 'undefined') return;
     document.body.classList.toggle('nt-immersive', !!on);
-    const bottomNav = document.getElementById('bottom-nav');
-    if (!bottomNav) return;
     if (on) {
+        const bottomNav = document.getElementById('bottom-nav');
+        if (!bottomNav) return;
         bottomNav.classList.add('hidden');
         bottomNav.setAttribute('aria-hidden', 'true');
         return;
     }
-    bottomNav.classList.remove('hidden');
-    bottomNav.setAttribute('aria-hidden', 'false');
+    // Respect welcomeSeen / nt-onboarding — do not force-show during Welcome.
+    import('./prefs.js').then(({ applyNavChrome }) => applyNavChrome()).catch(() => {
+        const bottomNav = document.getElementById('bottom-nav');
+        if (!bottomNav) return;
+        bottomNav.classList.remove('hidden');
+        bottomNav.setAttribute('aria-hidden', 'false');
+    });
 }
 
 export function switchTab(tab, opts = null) {

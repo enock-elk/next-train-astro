@@ -254,8 +254,13 @@ import { withBase } from '../lib/config.js';
                     }
                 });
             });
-        } else if (returningAtBoot) {
-            maybeAutoLocateBoard().catch(() => {});
+        } else {
+            // Pin restore / SEO Open may mint welcomeSeen after Layout stamped
+            // nt-onboarding. Re-apply chrome so the bottom bar is not stuck hidden.
+            import('../lib/prefs.js').then(({ syncInAppChrome }) => syncInAppChrome()).catch(() => {});
+            if (returningAtBoot) {
+                maybeAutoLocateBoard().catch(() => {});
+            }
         }
     };
 

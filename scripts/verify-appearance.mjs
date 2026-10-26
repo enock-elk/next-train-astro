@@ -219,8 +219,16 @@ assert(!layout.includes("localStorage.setItem('theme', 'light')"), 'Layout boot 
 const welcome = readFileSync(new URL('../src/components/WelcomeModal.astro', import.meta.url), 'utf8');
 assert(welcome.includes('later in Options'), 'Welcome copy points at Options, not side menu');
 assert(welcome.includes('syncInAppChrome'), 'Welcome calls syncInAppChrome after a route pick');
+assert(welcome.includes('Re-apply chrome so the bottom bar is not stuck hidden'), 'Welcome skip path re-applies bottom-nav chrome');
 
 const plannerUi = readFileSync(new URL('../src/lib/planner-ui.js', import.meta.url), 'utf8');
+const gridHandoff = readFileSync(new URL('../src/lib/timetable-grid.js', import.meta.url), 'utf8');
+assert(gridHandoff.includes('syncInAppChrome'), 'route / SEO Open handoff re-shows the bottom bar');
+assert(plannerUi.includes('syncInAppChrome'), 'planner handoff re-shows the bottom bar');
+
+const utilsSrc = readFileSync(new URL('../src/lib/utils.js', import.meta.url), 'utf8');
+assert(utilsSrc.includes('syncInAppChrome'), 'pin restore refreshes bottom-nav chrome after welcomeSeen resurrection');
+
 assert(css.includes('height: 2rem') && css.includes('#planner-header-badge > div'), 'planner Back, day, and Share share the old 2rem box');
 assert(!/#planner-back-btn,[\s\S]{0,400}min-height: 2.5rem/.test(css), 'planner toolbar is not the taller 2.5rem lock');
 assert(!/#planner-back-btn,[\s\S]{0,360}font-size: calc\(0.8rem \* var\(--nt-ui-scale/.test(css), 'planner toolbar is not scaled down on phones');

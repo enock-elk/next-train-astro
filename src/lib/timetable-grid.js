@@ -406,6 +406,9 @@ export async function applyRouteDeepLink() {
         safeStorage.setItem('welcomeSeen', 'true');
     }
     try { document.getElementById('welcome-modal')?.classList.add('hidden'); } catch { /* ignore */ }
+    // Layout may have stamped nt-onboarding before welcomeSeen / pin restore.
+    // SEO Open and shared route links skip Welcome, so re-show the bottom bar here.
+    import('./prefs.js').then(({ syncInAppChrome }) => syncInAppChrome()).catch(() => {});
     // SEO cold launch seeds a pin only when none exists. Returning commuters keep their default.
     // Shared links pin only when none exists.
     if (seoHandoff) {

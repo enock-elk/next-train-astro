@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_10.27.1': [
+        'Via branch marks prefer structured schedule.via, then VARIANT, then legacy via/Monte/Vista cell prose. Admin Grid Column Order can save Via marks to all day sheets for a route. Force schedule type accepts multiple YYYY-MM-DD dates (empty dates keep while-Active behaviour). No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_10.26.18': [
         'Station SEO Leaflet full view drops the corner X so Network Lines / Show all lines stays tappable; Close Map remains. Full timetable header X restored. Grid scroll shade sits on the left edge of the time columns (at the sticky station width), not on the far-left of the station names. No commuter What\'s New. forceShow stays false.',
     ],

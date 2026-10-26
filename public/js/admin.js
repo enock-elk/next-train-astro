@@ -447,6 +447,27 @@ function ntAdminCommunitySeenPatch(adminUid, routeId, timestamp) {
     };
 }
 
+/** Flatten RTDB station_reviews/{slug}/{id} into newest-first rows for Community Monitor. */
+function ntAdminStationReviewRows(reviewsBySlug) {
+    const rows = [];
+    Object.entries(reviewsBySlug || {}).forEach(([slug, reviews]) => {
+        if (!reviews || typeof reviews !== 'object') return;
+        Object.entries(reviews).forEach(([id, value]) => {
+            if (!value || typeof value !== 'object') return;
+            rows.push({
+                ...value,
+                _key: id,
+                stationSlug: value.stationSlug || slug,
+            });
+        });
+    });
+    return rows.sort((a, b) => Number(b.createdAt || 0) - Number(a.createdAt || 0));
+}
+
+function ntAdminPendingStationReviewCount(rows) {
+    return (Array.isArray(rows) ? rows : []).filter((row) => String(row?.status || '') === 'pending').length;
+}
+
 const NT_ADMIN_WEEKDAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 function ntAdminParseTimeOfDay(hhmm) {
@@ -10992,23 +11013,48 @@ const Admin = {
                     ${Admin.tileIcon('shield', 'text-emerald-500 dark:text-emerald-400')}
                     <span>Community Monitor</span>
                 </span>
-                <span id="mq-unread-badge" class="admin-unread-badge hidden" aria-label="Unread community activity"></span>
+                <span id="mq-unread-badge" class="admin-unread-badge hidden" aria-label="Unread community activity and pending reviews"></span>
                 <svg id="mq-chevron" class="absolute right-3 w-4 h-4 transform transition-transform -rotate-90 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
             </div>
             <div id="mq-body" class="hidden mt-4 flex flex-col">
-                <p class="text-[10px] text-gray-500 dark:text-gray-400 mb-3 px-1 leading-snug">Routes are ordered by their latest published post, reply, or held item. Open a route to view its conversation and mark it seen for your operator account.</p>
-                <label class="px-1 mb-2">
-                    <span class="sr-only">Search community routes and messages</span>
-                    <input id="mq-search" type="search" placeholder="Search routes, messages, or user id" class="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 px-3 py-2.5 text-xs text-gray-900 dark:text-white"/>
-                </label>
-                <div class="flex gap-2 px-1 mb-3">
-                    <input id="mq-lookup" type="search" placeholder="Look up uid, device, or email" class="flex-1 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 px-3 py-2.5 text-xs text-gray-900 dark:text-white"/>
-                    <button type="button" id="mq-lookup-btn" class="shrink-0 bg-blue-600 hover:bg-blue-700 text-white rounded-xl px-3 py-2.5 text-[10px] font-black uppercase tracking-wider">Look up</button>
+                <div class="flex border-b border-gray-200 dark:border-gray-700 sticky top-0 bg-white dark:bg-gray-800 z-30 pt-1 mb-3 shrink-0">
+                    <button type="button" id="mq-tab-chats" class="flex-1 py-3 text-sm font-bold text-center border-b-2 border-blue-600 text-blue-600 dark:text-blue-400 transition-colors focus:outline-none relative">
+                        Group chats
+                        <span id="mq-tab-chats-badge" class="admin-unread-badge hidden ml-1 align-middle" aria-label="Unread group chat activity"></span>
+                    </button>
+                    <button type="button" id="mq-tab-reviews" class="flex-1 py-3 text-sm font-bold text-center border-b-2 border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 transition-colors focus:outline-none relative">
+                        Reviews
+                        <span id="mq-tab-reviews-badge" class="admin-unread-badge hidden ml-1 align-middle" aria-label="Pending station reviews"></span>
+                    </button>
                 </div>
-                <div class="grid-hidden-actions flex space-x-2 mb-3 px-1">
-                    <button type="button" id="mq-refresh-btn" class="flex-1 bg-slate-50 dark:bg-slate-900/40 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2.5 text-xs font-bold transition-colors shadow-sm focus:outline-none">Refresh</button>
+                <div id="mq-chats-pane" class="flex flex-col">
+                    <p class="text-[10px] text-gray-500 dark:text-gray-400 mb-3 px-1 leading-snug">Routes are ordered by their latest published post, reply, or held item. Open a route to view its conversation and mark it seen for your operator account.</p>
+                    <label class="px-1 mb-2">
+                        <span class="sr-only">Search community routes and messages</span>
+                        <input id="mq-search" type="search" placeholder="Search routes, messages, or user id" class="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 px-3 py-2.5 text-xs text-gray-900 dark:text-white"/>
+                    </label>
+                    <div class="flex gap-2 px-1 mb-3">
+                        <input id="mq-lookup" type="search" placeholder="Look up uid, device, or email" class="flex-1 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 px-3 py-2.5 text-xs text-gray-900 dark:text-white"/>
+                        <button type="button" id="mq-lookup-btn" class="shrink-0 bg-blue-600 hover:bg-blue-700 text-white rounded-xl px-3 py-2.5 text-[10px] font-black uppercase tracking-wider">Look up</button>
+                    </div>
+                    <div class="grid-hidden-actions flex space-x-2 mb-3 px-1">
+                        <button type="button" id="mq-refresh-btn" class="flex-1 bg-slate-50 dark:bg-slate-900/40 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2.5 text-xs font-bold transition-colors shadow-sm focus:outline-none">Refresh</button>
+                    </div>
+                    <div id="mq-list" class="space-y-2 max-h-[60vh] overflow-y-auto pr-1 custom-scrollbar"></div>
                 </div>
-                <div id="mq-list" class="space-y-2 max-h-[60vh] overflow-y-auto pr-1 custom-scrollbar"></div>
+                <div id="mq-reviews-pane" class="hidden flex flex-col">
+                    <p class="text-[10px] text-gray-500 dark:text-gray-400 mb-3 px-1 leading-snug">Station SEO reviews land here as pending. Approve to publish on the station page, or reject to keep them private. Contact stays operator-only.</p>
+                    <div class="flex gap-2 px-1 mb-3">
+                        <select id="mq-reviews-filter" class="flex-1 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 px-3 py-2.5 text-xs text-gray-900 dark:text-white">
+                            <option value="pending">Pending</option>
+                            <option value="approved">Approved</option>
+                            <option value="rejected">Rejected</option>
+                            <option value="all">All</option>
+                        </select>
+                        <button type="button" id="mq-reviews-refresh-btn" class="shrink-0 bg-slate-50 dark:bg-slate-900/40 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2.5 text-xs font-bold transition-colors shadow-sm focus:outline-none">Refresh</button>
+                    </div>
+                    <div id="mq-reviews-list" class="space-y-2 max-h-[60vh] overflow-y-auto pr-1 custom-scrollbar"></div>
+                </div>
             </div>
         `;
 
@@ -11016,6 +11062,76 @@ const Admin = {
         const body = document.getElementById('mq-body');
         const chevron = document.getElementById('mq-chevron');
         const refreshBtn = document.getElementById('mq-refresh-btn');
+        const reviewsRefreshBtn = document.getElementById('mq-reviews-refresh-btn');
+        const tabChats = document.getElementById('mq-tab-chats');
+        const tabReviews = document.getElementById('mq-tab-reviews');
+        const chatsPane = document.getElementById('mq-chats-pane');
+        const reviewsPane = document.getElementById('mq-reviews-pane');
+        Admin.currentCommunityMonitorTab = Admin.currentCommunityMonitorTab || 'chats';
+
+        const paintMqTab = (tab) => {
+            const active = 'border-blue-600 text-blue-600 dark:text-blue-400';
+            const idle = 'border-transparent text-gray-500 dark:text-gray-400';
+            const setBtn = (btn, on) => {
+                if (!btn) return;
+                btn.classList.toggle('border-blue-600', on);
+                btn.classList.toggle('text-blue-600', on);
+                btn.classList.toggle('dark:text-blue-400', on);
+                btn.classList.toggle('border-transparent', !on);
+                btn.classList.toggle('text-gray-500', !on);
+                btn.classList.toggle('dark:text-gray-400', !on);
+            };
+            setBtn(tabChats, tab === 'chats');
+            setBtn(tabReviews, tab === 'reviews');
+            // clear idle border classes that setBtn may not remove from active state leftovers
+            if (tabChats) {
+                if (tab === 'chats') tabChats.className = 'flex-1 py-3 text-sm font-bold text-center border-b-2 border-blue-600 text-blue-600 dark:text-blue-400 transition-colors focus:outline-none relative';
+                else tabChats.className = 'flex-1 py-3 text-sm font-bold text-center border-b-2 border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 transition-colors focus:outline-none relative';
+                const chatsBadge = document.getElementById('mq-tab-chats-badge');
+                if (chatsBadge) tabChats.appendChild(chatsBadge);
+            }
+            if (tabReviews) {
+                if (tab === 'reviews') tabReviews.className = 'flex-1 py-3 text-sm font-bold text-center border-b-2 border-blue-600 text-blue-600 dark:text-blue-400 transition-colors focus:outline-none relative';
+                else tabReviews.className = 'flex-1 py-3 text-sm font-bold text-center border-b-2 border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 transition-colors focus:outline-none relative';
+                const revBadge = document.getElementById('mq-tab-reviews-badge');
+                if (revBadge) tabReviews.appendChild(revBadge);
+            }
+            chatsPane?.classList.toggle('hidden', tab !== 'chats');
+            reviewsPane?.classList.toggle('hidden', tab !== 'reviews');
+        };
+
+        Admin.switchCommunityMonitorTab = (tab) => {
+            Admin.currentCommunityMonitorTab = tab === 'reviews' ? 'reviews' : 'chats';
+            paintMqTab(Admin.currentCommunityMonitorTab);
+            if (Admin.currentCommunityMonitorTab === 'reviews') Admin.fetchStationReviews?.();
+            else Admin.fetchModerationQueue?.();
+        };
+        tabChats?.addEventListener('click', () => Admin.switchCommunityMonitorTab('chats'));
+        tabReviews?.addEventListener('click', () => Admin.switchCommunityMonitorTab('reviews'));
+        paintMqTab(Admin.currentCommunityMonitorTab);
+
+        Admin.paintCommunityMonitorBadges = (chatUnread = 0, reviewPending = 0) => {
+            const chats = Math.max(0, Number(chatUnread) || 0);
+            const reviews = Math.max(0, Number(reviewPending) || 0);
+            const total = chats + reviews;
+            const tile = document.getElementById('mq-unread-badge');
+            if (tile) {
+                tile.textContent = typeof Admin.formatBadgeCount === 'function' ? Admin.formatBadgeCount(total) : (total > 99 ? '99+' : String(total));
+                tile.classList.toggle('hidden', total < 1);
+            }
+            const chatBadge = document.getElementById('mq-tab-chats-badge');
+            if (chatBadge) {
+                chatBadge.textContent = typeof Admin.formatBadgeCount === 'function' ? Admin.formatBadgeCount(chats) : (chats > 99 ? '99+' : String(chats));
+                chatBadge.classList.toggle('hidden', chats < 1);
+            }
+            const revBadge = document.getElementById('mq-tab-reviews-badge');
+            if (revBadge) {
+                revBadge.textContent = typeof Admin.formatBadgeCount === 'function' ? Admin.formatBadgeCount(reviews) : (reviews > 99 ? '99+' : String(reviews));
+                revBadge.classList.toggle('hidden', reviews < 1);
+            }
+            Admin._communityChatUnread = chats;
+            Admin._stationReviewPending = reviews;
+        };
 
         header.onclick = () => {
             if (Admin.isGridMode) return;
@@ -11026,10 +11142,13 @@ const Admin = {
             } else {
                 chevron.classList.remove('-rotate-90');
                 header.classList.add('mb-4');
-                Admin.fetchModerationQueue();
+                if (Admin.currentCommunityMonitorTab === 'reviews') Admin.fetchStationReviews();
+                else Admin.fetchModerationQueue();
             }
         };
         refreshBtn.onclick = () => Admin.fetchModerationQueue();
+        reviewsRefreshBtn.onclick = () => Admin.fetchStationReviews();
+        document.getElementById('mq-reviews-filter')?.addEventListener('change', () => Admin.renderStationReviews?.());
 
         const validateHeldCommunityPublish = (report) => {
             const publish = report?.publish;
@@ -19177,7 +19296,7 @@ const Admin = {
                 <svg id="grid-order-chevron" class="w-4 h-4 transform transition-transform -rotate-90 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
             </button>
             <div id="grid-order-body" class="hidden mt-4 space-y-3">
-                <p class="text-[10px] leading-snug text-gray-500 dark:text-gray-400">Choose a route, service day, and direction. Drag trains or use the move buttons, then save. Via marks the branch under that train number. Blank leaves the sheet note in charge.</p>
+                <p class="text-[10px] leading-snug text-gray-500 dark:text-gray-400">Choose a route, service day, and direction. Drag trains or use the move buttons, then save. Via is the structured branch mark (Monte Vista / Maitland) and overrides sheet notes for that train. Blank leaves the sheet <code class="font-mono">via</code> map, VARIANT row, or legacy cell prose in charge.</p>
                 <label class="block text-[10px] font-black uppercase tracking-wider text-gray-500">Route
                     <select id="grid-order-route" class="mt-1 w-full h-10 px-2 rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-xs text-gray-900 dark:text-white"></select>
                 </label>
@@ -19199,9 +19318,13 @@ const Admin = {
                 <button id="grid-order-load" type="button" class="w-full bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 font-bold py-2.5 rounded-lg text-xs focus:outline-none">Load order</button>
                 <div id="grid-order-meta" class="hidden rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 p-2 text-[10px] text-gray-500 dark:text-gray-400" aria-live="polite"></div>
                 <ol id="grid-order-list" class="space-y-1 max-h-[52vh] overflow-y-auto custom-scrollbar" aria-label="Train column order"></ol>
-                <div id="grid-order-actions" class="hidden grid grid-cols-2 gap-2">
-                    <button id="grid-order-reset" type="button" class="bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 font-bold py-2.5 rounded-lg text-xs focus:outline-none">Reset to fallback</button>
-                    <button id="grid-order-save" type="button" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 rounded-lg text-xs focus:outline-none">Save order</button>
+                <div id="grid-order-actions" class="hidden space-y-2">
+                    <div class="grid grid-cols-2 gap-2">
+                        <button id="grid-order-reset" type="button" class="bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 font-bold py-2.5 rounded-lg text-xs focus:outline-none">Reset to fallback</button>
+                        <button id="grid-order-save" type="button" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 rounded-lg text-xs focus:outline-none">Save order</button>
+                    </div>
+                    <button id="grid-order-via-all-days" type="button" class="w-full bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800 text-indigo-800 dark:text-indigo-200 font-bold py-2.5 rounded-lg text-xs focus:outline-none">Save via marks to all days</button>
+                    <p class="text-[9px] text-gray-500 dark:text-gray-400 leading-snug">Copies the Via choices above onto every weekday / Saturday / public-holiday sheet for this route (both directions). Column order on those sheets is left as-is.</p>
                 </div>
             </div>
         `;
@@ -19440,26 +19563,43 @@ const Admin = {
             markDirty();
         };
 
-        const writeRecord = async (record) => {
+        const writeRecordToSheet = async (sheetKey, record, { refreshCurrent = false } = {}) => {
             const route = ROUTES?.[routeEl.value];
             const token = await Admin.getAuthKey();
-            if (!token || !route || !currentSheetKey) throw new Error('Authentication required.');
+            if (!token || !route || !sheetKey) throw new Error('Authentication required.');
             const endpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : '';
             const response = await window.guardianFetch(
-                `${endpoint}config/grid_order/${encodeURIComponent(route.region)}/${encodeURIComponent(currentSheetKey)}.json?auth=${encodeURIComponent(token)}`,
+                `${endpoint}config/grid_order/${encodeURIComponent(route.region)}/${encodeURIComponent(sheetKey)}.json?auth=${encodeURIComponent(token)}`,
                 { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(record) },
                 10000
             );
             if (!response.ok) throw new Error(`RTDB write failed (${response.status})`);
-            currentRecord = record;
-            baseline = currentOrder.slice();
-            baselineVia = { ...currentVia };
-            Admin.gridOrderDirty = false;
-            markDirty();
-            describeRecord(record);
-            if (typeof window.fetchGridOrderConfig === 'function') {
-                window.fetchGridOrderConfig(route.region).catch(() => {});
+            if (refreshCurrent || sheetKey === currentSheetKey) {
+                currentRecord = record;
+                baseline = currentOrder.slice();
+                baselineVia = { ...currentVia };
+                Admin.gridOrderDirty = false;
+                markDirty();
+                describeRecord(record);
             }
+            return record;
+        };
+
+        const writeRecord = async (record) => {
+            const route = ROUTES?.[routeEl.value];
+            await writeRecordToSheet(currentSheetKey, record, { refreshCurrent: true });
+            if (typeof window.fetchGridOrderConfig === 'function') {
+                window.fetchGridOrderConfig(route?.region).catch(() => {});
+            }
+        };
+
+        const routeSheetKeys = (route) => {
+            const keys = route?.sheetKeys || {};
+            return [...new Set([
+                keys.weekday_to_a, keys.weekday_to_b,
+                keys.saturday_to_a, keys.saturday_to_b,
+                keys.pub_to_a, keys.pub_to_b,
+            ].filter(Boolean))];
         };
 
         panel.querySelector('#grid-order-load').onclick = load;
@@ -19472,6 +19612,81 @@ const Admin = {
             } catch (error) {
                 if (typeof showToast === 'function') showToast(error.message || 'Grid order save failed.', 'error');
             } finally {
+                markDirty();
+            }
+        };
+        panel.querySelector('#grid-order-via-all-days').onclick = async () => {
+            const route = ROUTES?.[routeEl.value];
+            const sheets = routeSheetKeys(route);
+            if (!sheets.length) {
+                if (typeof showToast === 'function') showToast('No sheets found for this route.', 'error');
+                return;
+            }
+            if (!window.confirm(`Save the current Via marks to all ${sheets.length} day/direction sheets for this route? Column order on other sheets stays as saved.`)) return;
+            const button = panel.querySelector('#grid-order-via-all-days');
+            button.disabled = true;
+            const endpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : '';
+            const viaPayload = { ...currentVia };
+            let saved = 0;
+            try {
+                for (const sheetKey of sheets) {
+                    let existing = null;
+                    try {
+                        const response = await window.guardianFetch(
+                            `${endpoint}config/grid_order/${encodeURIComponent(route.region)}/${encodeURIComponent(sheetKey)}.json?t=${Date.now()}`,
+                            { cache: 'no-store' },
+                            6000
+                        );
+                        existing = response.ok ? await response.json() : null;
+                    } catch { existing = null; }
+                    const build = window.buildGridOrderWriteRecord;
+                    const base = {
+                        via: viaPayload,
+                        updatedAt: Date.now(),
+                        updatedBy: Admin.currentUser?.email || 'unknown',
+                        source: 'admin',
+                    };
+                    let record;
+                    if (existing?.action === 'reset') {
+                        record = typeof build === 'function'
+                            ? build({ ...base, action: 'reset' })
+                            : { ...base, action: 'reset' };
+                    } else if (Array.isArray(existing?.order) && existing.order.length) {
+                        record = typeof build === 'function'
+                            ? build({ ...base, order: existing.order.slice() })
+                            : { ...base, order: existing.order.slice() };
+                    } else if (sheetKey === currentSheetKey && currentOrder.length) {
+                        record = typeof build === 'function'
+                            ? build({ ...base, order: currentOrder.slice() })
+                            : { ...base, order: currentOrder.slice() };
+                    } else {
+                        // Via-only write keeps fallback column order on sheets without a saved order.
+                        record = typeof build === 'function'
+                            ? build({ ...base, action: 'reset' })
+                            : { ...base, action: 'reset' };
+                    }
+                    if (!Object.keys(viaPayload).length && record.via) delete record.via;
+                    if (!Object.keys(viaPayload).length) {
+                        // Explicit clear: still write so other sheets drop via marks.
+                        if (typeof build === 'function') {
+                            record = build({
+                                ...base,
+                                via: {},
+                                ...(record.action === 'reset' ? { action: 'reset' } : { order: record.order }),
+                            });
+                        }
+                    }
+                    await writeRecordToSheet(sheetKey, record, { refreshCurrent: sheetKey === currentSheetKey });
+                    saved += 1;
+                }
+                if (typeof window.fetchGridOrderConfig === 'function') {
+                    window.fetchGridOrderConfig(route.region).catch(() => {});
+                }
+                if (typeof showToast === 'function') showToast(`Via marks saved on ${saved} sheets.`, 'success');
+            } catch (error) {
+                if (typeof showToast === 'function') showToast(error.message || 'Via multi-day save failed.', 'error');
+            } finally {
+                button.disabled = false;
                 markDirty();
             }
         };
@@ -23762,7 +23977,7 @@ const Admin = {
                         <svg id="sched-override-chevron" class="w-4 h-4 transform transition-transform -rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
                     </button>
                     <div id="sched-override-body" class="hidden p-4 space-y-3">
-                        <p class="text-[10px] text-blue-600 dark:text-blue-400 leading-snug">Override the live timetable per region. Commuters boot normally, then see your message and switch. A message is required whenever a region is Active.</p>
+                        <p class="text-[10px] text-blue-600 dark:text-blue-400 leading-snug">Override the live timetable per region. Commuters boot normally, then see your message and switch. A message is required whenever a region is Active. Optional dates limit the force to those calendar days only; leave dates empty to keep it on until you deactivate.</p>
                         <div id="sched-override-regions" class="space-y-3"></div>
                         <button type="button" id="sched-override-save" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded-lg text-xs uppercase tracking-wide focus:outline-none">Save schedule overrides</button>
                     </div>
@@ -24408,6 +24623,14 @@ const Admin = {
                     <select class="sched-override-day w-full h-9 px-2 rounded-md bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-[10px] text-gray-900 dark:text-white outline-none" data-region="${code}">
                         ${schedDayTypesForRegion(code).map((t) => `<option value="${t.value}">${t.label}</option>`).join('')}
                     </select>
+                    <div class="space-y-1">
+                        <div class="flex items-center justify-between gap-2">
+                            <span class="text-[9px] font-bold uppercase tracking-wide text-gray-500">Dates (optional)</span>
+                            <input type="date" class="sched-override-date-add h-8 px-1 rounded-md bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-[10px] text-gray-900 dark:text-white outline-none" data-region="${code}" aria-label="Add date for ${code}">
+                        </div>
+                        <textarea class="sched-override-dates w-full min-h-[44px] px-2 py-1.5 rounded-md bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-[10px] font-mono text-gray-900 dark:text-white outline-none resize-y" data-region="${code}" placeholder="Leave empty = while Active. Or list YYYY-MM-DD (comma or new line) for specific days only." maxlength="400"></textarea>
+                        <p class="text-[9px] text-blue-600/80 dark:text-blue-400/80 leading-snug">Pick a date above to append. Multiple dates force that schedule type only on those days.</p>
+                    </div>
                     <div class="flex items-center justify-between">
                         <span class="text-[9px] font-bold uppercase tracking-wide text-gray-500">Title</span>
                         ${Admin.writeAssistButtonHtml('sched-override-title-' + code)}
@@ -24420,6 +24643,21 @@ const Admin = {
                     <textarea id="sched-override-msg-${code}" class="sched-override-body w-full min-h-[56px] px-2 py-1.5 rounded-md bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-[10px] text-gray-900 dark:text-white outline-none resize-y" data-region="${code}" placeholder="Required when Active is on" maxlength="500"></textarea>
                 </div>
             `).join('');
+            schedOverrideRegions.querySelectorAll('.sched-override-date-add').forEach((input) => {
+                input.addEventListener('change', () => {
+                    const code = input.getAttribute('data-region');
+                    const day = String(input.value || '').trim();
+                    if (!code || !/^\d{4}-\d{2}-\d{2}$/.test(day)) return;
+                    const box = schedOverrideRegions.querySelector(`.sched-override-dates[data-region="${code}"]`);
+                    if (!box) return;
+                    const normalize = (typeof window.normalizeScheduleOverrideDates === 'function')
+                        ? window.normalizeScheduleOverrideDates
+                        : (raw) => String(raw || '').split(/[\s,;]+/).map((s) => s.trim()).filter((s) => /^\d{4}-\d{2}-\d{2}$/.test(s));
+                    const next = normalize(`${box.value}\n${day}`);
+                    box.value = next.join('\n');
+                    input.value = '';
+                });
+            });
         }
 
         if (nukeHeader) {
@@ -24630,10 +24868,16 @@ const Admin = {
                     if (resSched.ok) {
                         const schedCfg = await resSched.json();
                         const regionsCfg = schedCfg?.regions || {};
+                        const normalizeDates = (typeof window.normalizeScheduleOverrideDates === 'function')
+                            ? window.normalizeScheduleOverrideDates
+                            : (raw) => (Array.isArray(raw) ? raw : String(raw || '').split(/[\s,;]+/))
+                                .map((s) => String(s || '').trim().slice(0, 10))
+                                .filter((s) => /^\d{4}-\d{2}-\d{2}$/.test(s));
                         SCHED_OVERRIDE_REGIONS.forEach((code) => {
                             const r = regionsCfg[code] || {};
                             const activeEl = schedOverrideRegions?.querySelector(`.sched-override-active[data-region="${code}"]`);
                             const dayEl = schedOverrideRegions?.querySelector(`.sched-override-day[data-region="${code}"]`);
+                            const datesEl = schedOverrideRegions?.querySelector(`.sched-override-dates[data-region="${code}"]`);
                             const titleEl = schedOverrideRegions?.querySelector(`.sched-override-title[data-region="${code}"]`);
                             const bodyEl = schedOverrideRegions?.querySelector(`.sched-override-body[data-region="${code}"]`);
                             if (activeEl) activeEl.checked = !!r.active;
@@ -24642,6 +24886,7 @@ const Admin = {
                                 if (code !== 'WC' && dayVal === 'public_holiday') dayVal = 'saturday';
                                 dayEl.value = dayVal;
                             }
+                            if (datesEl) datesEl.value = normalizeDates(r.dates).join('\n');
                             if (titleEl) titleEl.value = r.title || '';
                             if (bodyEl) bodyEl.value = r.body || '';
                         });
@@ -24819,11 +25064,19 @@ const Admin = {
                     const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
                     const missingMessage = [];
                     const regions = {};
+                    const normalizeDates = (typeof window.normalizeScheduleOverrideDates === 'function')
+                        ? window.normalizeScheduleOverrideDates
+                        : (raw) => (Array.isArray(raw) ? raw : String(raw || '').split(/[\s,;]+/))
+                            .map((s) => String(s || '').trim().slice(0, 10))
+                            .filter((s) => /^\d{4}-\d{2}-\d{2}$/.test(s));
                     SCHED_OVERRIDE_REGIONS.forEach((code) => {
                         const active = !!schedOverrideRegions.querySelector(`.sched-override-active[data-region="${code}"]`)?.checked;
                         const body = (schedOverrideRegions.querySelector(`.sched-override-body[data-region="${code}"]`)?.value || '').trim();
                         if (active && !body) missingMessage.push(code);
-                        regions[code] = {
+                        const dates = normalizeDates(
+                            schedOverrideRegions.querySelector(`.sched-override-dates[data-region="${code}"]`)?.value || ''
+                        );
+                        const row = {
                             active,
                             dayType: schedOverrideRegions.querySelector(`.sched-override-day[data-region="${code}"]`)?.value
                                 || (code === 'WC' ? 'public_holiday' : 'saturday'),
@@ -24831,6 +25084,8 @@ const Admin = {
                             body,
                             updatedAt: Date.now(),
                         };
+                        if (dates.length) row.dates = dates;
+                        regions[code] = row;
                     });
                     if (missingMessage.length) {
                         const first = schedOverrideRegions.querySelector(`.sched-override-body[data-region="${missingMessage[0]}"]`);

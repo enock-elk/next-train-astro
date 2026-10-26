@@ -528,22 +528,40 @@ function tokensInOrder(tokens, words) {
 }
 
 /**
- * Train id → "Monte Vista" or "Maitland".
- * A VARIANT row wins over split prose. A real clock at Monte Vista or
- * Maitland does not mark the column: that station is already on the sheet.
+ * Train id → "Monte Vista" or "Maitland" from sheet structure.
+ *
+ * Priority inside the sheet:
+ * 1. Explicit `schedule.via` map (structured Firebase field)
+ * 2. VARIANT meta row
+ * 3. Legacy cell prose (`via`/`Monte`/`Vista`, `Via MV`) — kept for older dumps
+ *
+ * A real clock at Monte Vista or Maitland does not mark the column.
  */
 export function variantMapFromSchedule(schedule) {
     const map = {};
     const notes = {};
     const rows = schedule?.rows || [];
+
+    // 1) Structured sheet field: { "3201": "MONTE_VISTA", ... }
+    const sheetVia = schedule?.via;
+    if (sheetVia && typeof sheetVia === 'object' && !Array.isArray(sheetVia)) {
+        for (const [id, code] of Object.entries(sheetVia)) {
+            const label = variantViaLabel(code);
+            if (label) map[String(id)] = label;
+        }
+    }
+
+    // 2) VARIANT row (only fills trains not already set by schedule.via)
     for (const row of rows) {
         if (!isVariantStationName(row?.STATION)) continue;
         for (const [col, val] of Object.entries(row)) {
-            if (SHEET_META_COLS.has(col)) continue;
+            if (SHEET_META_COLS.has(col) || map[String(col)]) continue;
             const label = variantViaLabel(val);
             if (label) map[String(col)] = label;
         }
     }
+
+    // 3) Legacy prose in station cells (back-compat until dumps are cleaned)
     for (const row of rows) {
         if (isVariantStationName(row?.STATION)) continue;
         for (const [col, val] of Object.entries(row)) {
@@ -568,7 +586,10 @@ export function variantMapFromSchedule(schedule) {
     return map;
 }
 
-/** Sheet notes first. An admin code on the same sheet replaces the sheet note. */
+/**
+ * Sheet structure first (via map → VARIANT → prose). Admin `grid_order.via`
+ * replaces the sheet note for that train (operator force).
+ */
 export function mergeVariantLabels(schedule, adminVia) {
     const map = variantMapFromSchedule(schedule);
     if (!adminVia || typeof adminVia !== 'object' || Array.isArray(adminVia)) return map;

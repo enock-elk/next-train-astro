@@ -399,6 +399,26 @@ if (maitlandHtml.includes('max-width:4.5rem') || maitlandHtml.includes('<span st
     fail('via label must stay on one row above the number');
 }
 
+const structuredViaSheet = {
+    headers: ['STATION', '3201', '3203'],
+    stationColumnName: 'STATION',
+    via: { '3201': 'MONTE_VISTA' },
+    rows: [
+        { STATION: 'CAPE TOWN', '3201': '5:55:00', '3203': '6:05:00' },
+        { STATION: 'WOODSTOCK', '3201': 'via', '3203': '6:08:00' },
+        { STATION: 'SALT RIVER', '3201': 'Monte', '3203': '6:10:00' },
+        { STATION: 'KOEBERG RD', '3201': 'Vista', '3203': '6:12:00' },
+        { STATION: 'BELLVILLE', '3201': '6:40:00', '3203': '6:45:00' },
+    ],
+};
+const structuredViaHtml = Renderer._buildGridHTML(structuredViaSheet, 'structured-via-sheet', 'ct-strnd', 1, false, false, 'weekday');
+if (!structuredViaHtml.includes('>Monte Vista<') || !structuredViaHtml.includes('data-via-route="Monte Vista"')) {
+    fail('schedule.via map must label the column Monte Vista');
+}
+if (structuredViaHtml.includes('data-via-route="Monte Vista"') && !structuredViaHtml.includes('3201')) {
+    fail('structured via must stay on the mapped train id');
+}
+
 const proseSheet = {
     headers: ['STATION', '2301', '2501'],
     stationColumnName: 'STATION',

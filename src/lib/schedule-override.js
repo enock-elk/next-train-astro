@@ -2,6 +2,9 @@
  * Admin-forced schedule day-type per region (System Controls).
  * App boots with the normal calendar day type; when a remote override is active
  * and differs, commuters see a one-time modal then timetables switch.
+ *
+ * Optional `dates: ['YYYY-MM-DD', ...]` limits the force to those calendar days
+ * (local). Empty / missing dates means “while Active” (legacy behaviour).
  */
 import { DYNAMIC_BASE_URL } from './config.js';
 import { safeStorage } from './utils.js';
@@ -13,6 +16,7 @@ let loadedAt = 0;
 let loadPromise = null;
 const CACHE_TTL_MS = 60 * 1000;
 const PROMPT_UNLOCK_MS = 5 * 60 * 1000;
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 /** Region → forced dayType when commuter has acknowledged the override. */
 const appliedOverrides = {};
@@ -28,6 +32,43 @@ export function getAppliedScheduleOverride(region) {
 
 export function clearAppliedScheduleOverrides() {
     Object.keys(appliedOverrides).forEach((k) => { delete appliedOverrides[k]; });
+}
+
+/** Normalize operator date list to unique YYYY-MM-DD strings. */
+export function normalizeScheduleOverrideDates(raw) {
+    if (raw == null || raw === '') return [];
+    const parts = Array.isArray(raw)
+        ? raw
+        : String(raw).split(/[\s,;]+/);
+    const out = [];
+    const seen = new Set();
+    for (const part of parts) {
+        const day = String(part || '').trim().slice(0, 10);
+        if (!DATE_RE.test(day) || seen.has(day)) continue;
+        seen.add(day);
+        out.push(day);
+    }
+    out.sort();
+    return out;
+}
+
+/** Local calendar YYYY-MM-DD for override date checks. */
+export function localScheduleOverrideDateKey(date = new Date()) {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+}
+
+/**
+ * True when this region override should apply today.
+ * No dates list → always (while active). With dates → only those days.
+ */
+export function scheduleOverrideAppliesToday(entry, now = new Date()) {
+    if (!entry?.active || !entry?.dayType) return false;
+    const dates = normalizeScheduleOverrideDates(entry.dates);
+    if (!dates.length) return true;
+    return dates.includes(localScheduleOverrideDateKey(now));
 }
 
 export async function fetchScheduleOverride(force = false) {
@@ -67,7 +108,7 @@ function syncAppliedOverridesFromConfig() {
     }
     Object.keys(appliedOverrides).forEach((code) => {
         const r = regions[code];
-        if (!r?.active || !r.dayType) delete appliedOverrides[code];
+        if (!scheduleOverrideAppliesToday(r)) delete appliedOverrides[code];
         else if (appliedOverrides[code] !== r.dayType) delete appliedOverrides[code];
     });
 }
@@ -75,19 +116,20 @@ function syncAppliedOverridesFromConfig() {
 function regionOverrideEntry(region) {
     const code = region || $userRegion.get() || 'GP';
     const r = cachedConfig?.regions?.[code];
-    if (!r?.active || !r.dayType) return null;
-    return { code, ...r };
+    if (!scheduleOverrideAppliesToday(r)) return null;
+    return { code, ...r, dates: normalizeScheduleOverrideDates(r.dates) };
 }
 
 function seenKeyFor(entry, rev) {
     return `seen_sched_override_${entry.code}_${rev}`;
 }
 
-/** Stable revision so title/body edits re-prompt even if timestamps are missing. */
+/** Stable revision so title/body/date edits re-prompt even if timestamps are missing. */
 function revisionFor(entry) {
     const stamp = cachedConfig?.updatedAt || entry?.updatedAt;
     if (stamp) return String(stamp);
-    const s = `${entry?.dayType || ''}|${entry?.title || ''}|${entry?.body || ''}`;
+    const dates = normalizeScheduleOverrideDates(entry?.dates).join(',');
+    const s = `${entry?.dayType || ''}|${entry?.title || ''}|${entry?.body || ''}|${dates}`;
     let h = 0;
     for (let i = 0; i < s.length; i++) h = ((h << 5) - h) + s.charCodeAt(i);
     return `c${h}`;
@@ -213,4 +255,6 @@ export async function maybePromptScheduleOverride(baseDayType) {
 if (typeof window !== 'undefined') {
     window.fetchScheduleOverride = fetchScheduleOverride;
     window.maybePromptScheduleOverride = maybePromptScheduleOverride;
+    window.normalizeScheduleOverrideDates = normalizeScheduleOverrideDates;
+    window.scheduleOverrideAppliesToday = scheduleOverrideAppliesToday;
 }

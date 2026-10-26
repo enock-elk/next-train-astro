@@ -1,8 +1,8 @@
 {
   "branch": "map-gold",
-  "frozenAt": "e1b3a66e3f90f6433cf5f5de25e017850bd2247a",
+  "frozenAt": "ce33ec140c3d024de6f00b966e422d19b452673c",
   "version": "V9_09.20.11",
-  "note": "Gold snapshot of main e1b3a66. Map runtime on main had moved past the previous freeze: official line colours, station callouts without a slide, a route loading mark, Join this train, and a faster ping poll. Baked tracks and advert handling are unchanged. Fast-forward map-gold to this main. Never force-push map-gold.",
+  "note": "Gold snapshot of map-app routeLineColor at ce33ec1. Baked tracks and advert handling unchanged. Fast-forward map-gold to this main after merge. Never force-push map-gold.",
   "files": {
     "public/tracks/rail-tracks-EC.geojson": {
       "md5": "43409bfd05405205e596f0d03345ab18",
@@ -21,8 +21,8 @@
       "sha256": "090a5d7fc45cafb8c7b81dc583ae24978540f38278cab447953bc90c8821f01f"
     },
     "public/js/map-app.js": {
-      "md5": "25da9862acf5c0fb109cc09579bfd115",
-      "sha256": "34e33acc9feaf22af198a0e3013dc97364afc5257bb70d87bbc7d7c7b997b260"
+      "md5": "3c0aa3c16961a77bc760e0398facf857",
+      "sha256": "87f662bc7c9c258f6af9d56d58b2b2444d128c32c82a5bdd7156a20aed333749"
     },
     "src/pages/map.astro": {
       "md5": "561681619ddb9781ac6ba513ec54670e",

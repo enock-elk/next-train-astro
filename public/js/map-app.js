@@ -1549,6 +1549,18 @@
                 'text-yellow-600': '#ca8a04',
                 'text-red-500': '#ef4444'
             };
+            /** Prefer the route's own hex so GPS lines never fall back to grey when the class string drifts. */
+            function routeLineColor(colorClass) {
+                const key = String(colorClass || '').trim();
+                if (!key) return '#9ca3af';
+                if (colorMap[key]) return colorMap[key];
+                const hex = key.match(/#([0-9a-fA-F]{6})\b/i);
+                if (hex) return `#${hex[1]}`;
+                for (const [mapKey, value] of Object.entries(colorMap)) {
+                    if (key.includes(mapKey)) return value;
+                }
+                return '#9ca3af';
+            }
 
             const globalStations = {}; // { name: {lat, lon, origName, routes: Set()} } — active boarding stops only
             const geometryStations = {}; // coords for inactive / ghost stops used only in disruption paths
@@ -1858,7 +1870,7 @@
                      drawnRoutes.push({
                          routeId: route.id,
                          name: route.name.replace(/<->/g, '↔'),
-                         color: colorMap[route.colorClass] || '#9ca3af',
+                         color: routeLineColor(route.colorClass),
                          isActive: route.isActive,
                          region: route.region,
                          trainCount: sheetTrainKeys.size,

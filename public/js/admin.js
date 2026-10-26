@@ -1027,6 +1027,7 @@ const Admin = {
             columns: '<rect x="3" y="3" width="7" height="18" rx="1"/><rect x="14" y="3" width="7" height="18" rx="1"/><path d="M6.5 7h0M17.5 7h0"/>',
             circle: '<circle cx="12" cy="12" r="5" fill="currentColor" stroke="none"/>',
             bell: '<path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/>',
+            settings: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/>',
         };
         const body = paths[name];
         if (!body) return '';
@@ -12692,6 +12693,19 @@ const Admin = {
             card.style.overflow = 'hidden';
             card.style.borderRadius = '0';
         }
+        const settings = document.getElementById('admin-copilot-settings');
+        if (settings && !settings.classList.contains('hidden')) {
+            settings.style.top = `${top}px`;
+            settings.style.height = `${height}px`;
+            settings.style.left = '0';
+            settings.style.right = '0';
+            settings.style.width = '100%';
+            const sheet = settings.firstElementChild;
+            if (sheet) {
+                sheet.style.height = `${height}px`;
+                sheet.style.borderRadius = '0';
+            }
+        }
     },
 
     bindAdminReplyModalViewport: () => {
@@ -12705,7 +12719,8 @@ const Admin = {
 
     keepReplyCaretVisible: () => {
         const editor = document.getElementById('admin-reply-text');
-        if (!editor) return;
+        const scroller = document.getElementById('admin-reply-scroll') || editor;
+        if (!editor || !scroller) return;
         const sel = window.getSelection?.();
         if (!sel || sel.rangeCount < 1) return;
         const node = sel.anchorNode;
@@ -12714,44 +12729,86 @@ const Admin = {
         const rects = range.getClientRects();
         const rect = rects.length ? rects[rects.length - 1] : range.getBoundingClientRect();
         if (!rect || (!rect.height && !rect.width)) return;
-        const box = editor.getBoundingClientRect();
+        const box = scroller.getBoundingClientRect();
         const pad = 16;
-        if (rect.bottom > box.bottom - pad) editor.scrollTop += rect.bottom - (box.bottom - pad);
-        else if (rect.top < box.top + pad) editor.scrollTop -= (box.top + pad) - rect.top;
+        if (rect.bottom > box.bottom - pad) scroller.scrollTop += rect.bottom - (box.bottom - pad);
+        else if (rect.top < box.top + pad) scroller.scrollTop -= (box.top + pad) - rect.top;
     },
 
     replySuggestMarkup: () => `
-                    <div id="admin-reply-suggest" class="mt-3 shrink-0">
-                        <div id="admin-reply-guide" class="hidden">
-                            <button type="button" id="admin-reply-guide-open" class="text-[11px] font-normal text-gray-500 dark:text-gray-400 underline focus:outline-none">Guide this reply</button>
-                            <div id="admin-reply-guide-box" class="hidden mt-1 flex gap-2">
-                                <input id="admin-reply-guide-text" maxlength="500" class="flex-1 h-9 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-xs text-gray-900 dark:text-white px-2 focus:outline-none" placeholder="One note for this draft">
-                                <button type="button" id="admin-reply-guide-go" class="shrink-0 px-3 rounded-lg bg-gray-900 dark:bg-white dark:text-gray-900 text-white text-[11px] font-bold focus:outline-none">Regenerate</button>
-                            </div>
-                        </div>
-                        <div id="admin-reply-suggest-halt" class="hidden mb-2 rounded-2xl border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/40 text-amber-950 dark:text-amber-100 p-3">
+                    <div id="admin-reply-suggest" class="mt-3">
+                        <div id="admin-reply-suggest-halt" class="hidden mb-3 rounded-2xl border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/40 text-amber-950 dark:text-amber-100 p-3">
                             <div id="admin-reply-suggest-halt-text" class="text-sm leading-relaxed whitespace-pre-wrap"></div>
                             <label for="admin-reply-suggest-context" class="block text-[11px] font-bold mt-3 mb-1">Add the missing fact</label>
                             <textarea id="admin-reply-suggest-context" rows="4" maxlength="2000" class="w-full min-h-[5.5rem] rounded-xl border border-amber-300 dark:border-amber-700 bg-white dark:bg-gray-900 text-sm text-gray-900 dark:text-white p-2.5 focus:outline-none" placeholder="Type what the draft should use, then suggest again."></textarea>
                             <button type="button" id="reply-suggest-again" class="mt-3 w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-3 rounded-xl text-sm focus:outline-none">Suggest again</button>
                         </div>
-                        <button type="button" id="reply-suggest" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-3 rounded-xl shadow-sm transition-colors focus:outline-none text-sm">Suggest reply</button>
+                        <button type="button" id="reply-suggest" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3.5 px-3 rounded-xl shadow-sm transition-colors focus:outline-none text-sm">Suggest reply</button>
+                        <div id="admin-reply-guide" class="hidden mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
+                            <button type="button" id="admin-reply-guide-open" class="w-full min-h-[2.75rem] rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-sm font-bold text-gray-800 dark:text-gray-100 focus:outline-none">Guide this reply</button>
+                            <div id="admin-reply-guide-box" class="hidden mt-2 space-y-2">
+                                <p class="text-[11px] text-gray-500 dark:text-gray-400 leading-snug">This note steers only the next draft. It is not saved for other threads.</p>
+                                <input id="admin-reply-guide-text" maxlength="500" class="w-full h-11 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-sm text-gray-900 dark:text-white px-3 focus:outline-none" placeholder="One note for this draft">
+                                <button type="button" id="admin-reply-guide-go" class="w-full min-h-[2.75rem] rounded-xl bg-gray-900 dark:bg-white dark:text-gray-900 text-white text-sm font-bold focus:outline-none">Regenerate with this note</button>
+                            </div>
+                        </div>
                         <div id="admin-reply-suggest-status" class="hidden mt-2 rounded-lg border border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-950/40 p-2" aria-live="polite">
                             <p id="admin-reply-suggest-status-text" class="text-[11px] font-bold text-indigo-950 dark:text-indigo-100"></p>
                             <ul id="admin-reply-suggest-status-steps" class="mt-1 space-y-0.5 text-[11px] text-indigo-900 dark:text-indigo-100"></ul>
                         </div>
-                        <details class="mt-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-900/40">
-                            <summary class="cursor-pointer px-3 py-2 text-[11px] font-bold text-gray-600 dark:text-gray-300 select-none">Instructions and images</summary>
-                            <p id="admin-reply-suggest-done" class="hidden px-3 pb-2 text-[11px] text-gray-600 dark:text-gray-300 leading-relaxed"></p>
-                            <div class="px-3 pb-3">
-                                <textarea id="admin-reply-suggest-note" rows="3" maxlength="4000" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-xs text-gray-900 dark:text-white p-2 focus:outline-none" placeholder="Shared by both operators. Sent with the next draft. Does not let the draft invent a missing fact."></textarea>
-                                <div class="flex items-center gap-2 mt-2">
-                                    <button type="button" id="reply-suggest-save-note" class="shrink-0 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 font-bold py-1.5 px-2.5 rounded-lg text-[11px] focus:outline-none">Save shared note</button>
-                                    <input id="reply-suggest-images" type="file" accept="image/jpeg,image/png,image/webp,image/gif" multiple class="block w-full text-[11px] text-gray-600 dark:text-gray-300" />
-                                </div>
-                            </div>
-                        </details>
+                        <p id="admin-reply-suggest-done" class="hidden mt-2 text-[11px] text-gray-600 dark:text-gray-300 leading-relaxed"></p>
                     </div>`,
+
+    copilotSettingsMarkup: () => `
+                <div id="admin-copilot-settings" class="fixed inset-0 bg-black/80 z-[210] hidden flex p-0 backdrop-blur-sm" aria-hidden="true">
+                    <div class="bg-white dark:bg-gray-800 shadow-2xl w-full h-full min-h-0 overflow-hidden flex flex-col px-3 sm:px-4 pt-[max(0.75rem,env(safe-area-inset-top))] pb-[max(0.75rem,env(safe-area-inset-bottom))] border-0 rounded-none">
+                        <div class="flex items-center justify-between gap-3 shrink-0 mb-3">
+                            <h3 class="text-lg font-black text-gray-900 dark:text-white tracking-tight flex items-center gap-2">${Admin.icon('settings', 'w-5 h-5 text-sky-500')} Co-Pilot settings</h3>
+                            <button type="button" id="admin-copilot-settings-close" class="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500 focus:outline-none" aria-label="Close settings">${Admin.icon('x', 'w-5 h-5')}</button>
+                        </div>
+                        <div class="flex-1 min-h-0 overflow-y-auto space-y-5 custom-scrollbar">
+                            <section class="rounded-2xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 p-3">
+                                <h4 class="text-xs font-black uppercase tracking-widest text-gray-500 dark:text-gray-400">Future replies</h4>
+                                <p class="mt-1 text-[11px] text-gray-600 dark:text-gray-300 leading-relaxed">Saved online for both operators. Sent with every Suggest reply until you clear it.</p>
+                                <textarea id="admin-reply-suggest-note" rows="5" maxlength="4000" class="mt-2 w-full rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-sm text-gray-900 dark:text-white p-3 focus:outline-none" placeholder="Standing context for all future drafts. Does not invent a missing fact."></textarea>
+                                <div class="mt-2 flex flex-wrap gap-2">
+                                    <button type="button" id="reply-suggest-save-note" class="min-h-[2.5rem] px-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs focus:outline-none">Save for all future replies</button>
+                                    <button type="button" id="reply-suggest-clear-note" class="min-h-[2.5rem] px-3 rounded-xl border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 font-bold text-xs focus:outline-none">Clear saved note</button>
+                                </div>
+                                <p id="admin-reply-suggest-note-meta" class="mt-2 text-[10px] text-gray-500 dark:text-gray-400"></p>
+                            </section>
+                            <section class="rounded-2xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 p-3">
+                                <h4 class="text-xs font-black uppercase tracking-widest text-gray-500 dark:text-gray-400">This reply only</h4>
+                                <p class="mt-1 text-[11px] text-gray-600 dark:text-gray-300 leading-relaxed">Optional one-shot note for the next Suggest. Not saved online. Prefer Guide this reply on the main screen when regenerating a draft.</p>
+                                <textarea id="admin-reply-suggest-once" rows="3" maxlength="2000" class="mt-2 w-full rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-sm text-gray-900 dark:text-white p-3 focus:outline-none" placeholder="Extra context for this draft only"></textarea>
+                            </section>
+                            <section class="rounded-2xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 p-3">
+                                <h4 class="text-xs font-black uppercase tracking-widest text-gray-500 dark:text-gray-400">Images for next Suggest</h4>
+                                <p class="mt-1 text-[11px] text-gray-600 dark:text-gray-300 leading-relaxed">Attached once to the next Suggest reply. Not kept after you leave Co-Pilot.</p>
+                                <input id="reply-suggest-images" type="file" accept="image/jpeg,image/png,image/webp,image/gif" multiple class="mt-2 block w-full text-xs text-gray-600 dark:text-gray-300" />
+                            </section>
+                        </div>
+                    </div>
+                </div>`,
+
+    copilotContactChipsHtml: (deviceId) => {
+        const { emails, phones } = Admin.collectFeedbackContacts(deviceId);
+        if (!emails.length && !phones.length) {
+            return '<span class="text-[11px] text-gray-400 dark:text-gray-500">No email or WhatsApp on this thread</span>';
+        }
+        const chips = [];
+        emails.forEach((em) => {
+            const href = Admin.outreachHref('email', em, '') || `mailto:${String(em).replace(/"/g, '')}`;
+            const label = String(em).replace(/</g, '&lt;');
+            chips.push(`<a href="${href}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1.5 rounded-full border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 px-2.5 py-1.5 text-[11px] font-bold max-w-full min-w-0" title="${label}">${Admin.icon('mail', 'w-3.5 h-3.5 shrink-0')}<span class="truncate">${label}</span></a>`);
+        });
+        phones.forEach((ph) => {
+            const safe = String(ph).replace(/\D/g, '');
+            const href = Admin.outreachHref('whatsapp', safe, '') || `https://wa.me/${safe}`;
+            chips.push(`<a href="${href}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 px-2.5 py-1.5 text-[11px] font-bold" title="WhatsApp ${safe}">${Admin.icon('message', 'w-3.5 h-3.5 shrink-0')}<span>${safe}</span></a>`);
+        });
+        return `<div class="flex flex-wrap gap-2">${chips.join('')}</div>`;
+    },
 
     replyWorkerUrl: () => String(window.REPLY_WORKER_URL || 'https://nexttrain-reply.enock.workers.dev').replace(/\/$/, ''),
 
@@ -12776,12 +12833,22 @@ const Admin = {
         return images;
     },
 
+    paintReplySuggestNoteMeta: (note) => {
+        const meta = document.getElementById('admin-reply-suggest-note-meta');
+        if (!meta) return;
+        const text = String(note || '').trim();
+        meta.textContent = text
+            ? `Saved online. ${text.length} characters. Included with every Suggest reply.`
+            : 'No future-reply note is saved online yet.';
+    },
+
     loadReplySuggestNote: async (modal) => {
         const ta = document.getElementById('admin-reply-suggest-note');
         if (!ta || !modal) return;
         const gen = String(Date.now());
         modal.dataset.noteGen = gen;
         modal.dataset.noteReady = '0';
+        Admin.paintReplySuggestNoteMeta('');
         try {
             const secret = await Admin.getAuthKey();
             if (!secret) {
@@ -12798,20 +12865,23 @@ const Admin = {
             }
             const data = await res.json().catch(() => ({}));
             if (modal.dataset.noteGen !== gen) return;
-            if (document.activeElement !== ta) ta.value = String(data.note || '');
+            const note = String(data.note || '');
+            if (document.activeElement !== ta) ta.value = note;
+            Admin.paintReplySuggestNoteMeta(note);
             modal.dataset.noteReady = '1';
         } catch {
             if (modal.dataset.noteGen === gen) modal.dataset.noteReady = 'error';
         }
     },
 
-    saveReplySuggestNote: async () => {
+    saveReplySuggestNote: async ({ clear = false } = {}) => {
         const ta = document.getElementById('admin-reply-suggest-note');
         const btn = document.getElementById('reply-suggest-save-note');
+        const clearBtn = document.getElementById('reply-suggest-clear-note');
         const modal = document.getElementById('admin-reply-modal');
-        if (!ta) return;
-        const note = String(ta.value || '').trim();
-        if (!note) {
+        if (!ta && !clear) return;
+        const note = clear ? '' : String(ta?.value || '').trim();
+        if (!clear && !note) {
             if (typeof showToast === 'function') showToast('Type a note before saving. A blank note is not saved.', 'error');
             return;
         }
@@ -12824,6 +12894,7 @@ const Admin = {
             return;
         }
         if (btn) btn.disabled = true;
+        if (clearBtn) clearBtn.disabled = true;
         try {
             const secret = await Admin.getAuthKey();
             if (!secret) throw new Error('Sign in as an operator first.');
@@ -12833,15 +12904,20 @@ const Admin = {
                     Authorization: `Bearer ${secret}`,
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ note }),
+                body: JSON.stringify(clear ? { note: '', clear: true } : { note }),
             });
             const data = await res.json().catch(() => ({}));
             if (!res.ok) throw new Error(data.error || 'Could not save the shared note.');
-            if (typeof showToast === 'function') showToast('Shared note saved.', 'success');
+            if (clear && ta) ta.value = '';
+            Admin.paintReplySuggestNoteMeta(clear ? '' : note);
+            if (typeof showToast === 'function') {
+                showToast(clear ? 'Future-reply note cleared.' : 'Saved for all future replies.', 'success');
+            }
         } catch (err) {
             if (typeof showToast === 'function') showToast(err.message || 'Could not save the shared note.', 'error');
         } finally {
             if (btn) btn.disabled = false;
+            if (clearBtn) clearBtn.disabled = false;
         }
     },
 
@@ -12997,13 +13073,34 @@ const Admin = {
 
     syncReplyGuide: () => {
         const guide = document.getElementById('admin-reply-guide');
+        const guideBox = document.getElementById('admin-reply-guide-box');
         const editor = document.getElementById('admin-reply-text');
         const halt = document.getElementById('admin-reply-suggest-halt');
         const suggestBtn = document.getElementById('reply-suggest');
         const halted = !!(halt && !halt.classList.contains('hidden'));
-        if (suggestBtn) suggestBtn.classList.toggle('hidden', halted);
+        const guiding = !!(guideBox && !guideBox.classList.contains('hidden'));
+        if (suggestBtn) suggestBtn.classList.toggle('hidden', halted || guiding);
         if (!guide || !editor) return;
         guide.classList.toggle('hidden', halted || !Admin.draftHasText(editor.innerHTML));
+    },
+
+    openCopilotSettings: () => {
+        const settings = document.getElementById('admin-copilot-settings');
+        const modal = document.getElementById('admin-reply-modal');
+        if (!settings) return;
+        settings.classList.remove('hidden');
+        settings.classList.add('flex');
+        settings.setAttribute('aria-hidden', 'false');
+        Admin.syncAdminReplyModalViewport();
+        if (modal && !modal.classList.contains('hidden')) Admin.loadReplySuggestNote(modal);
+    },
+
+    closeCopilotSettings: () => {
+        const settings = document.getElementById('admin-copilot-settings');
+        if (!settings) return;
+        settings.classList.add('hidden');
+        settings.classList.remove('flex');
+        settings.setAttribute('aria-hidden', 'true');
     },
 
     quotedNoticesForSuggest: async (items) => {
@@ -13078,7 +13175,9 @@ const Admin = {
         }
         const items = (Admin.cachedFeedbackData || []).filter((item) => (item.device_id || item.deviceId) === deviceId);
         const alias = (Admin.cachedAliases && Admin.cachedAliases[deviceId]) || '';
-        const note = document.getElementById('admin-reply-suggest-note')?.value || '';
+        // Future context is loaded by the worker from KV (shared-note). This-reply
+        // context is the one-shot settings field and/or Guide this reply / halt box.
+        const note = document.getElementById('admin-reply-suggest-once')?.value || '';
         const guideText = document.getElementById('admin-reply-guide-box') && !document.getElementById('admin-reply-guide-box').classList.contains('hidden')
             ? (document.getElementById('admin-reply-guide-text')?.value || '')
             : '';
@@ -13432,81 +13531,67 @@ const Admin = {
             : `<span class="font-mono text-gray-800 dark:text-gray-100">${String(deviceId).replace(/</g, '&lt;')}</span>${Admin.userIdJoinHintHtml(deviceId)}`;
         
         let modal = document.getElementById('admin-reply-modal');
+        if (modal && !document.getElementById('admin-copilot-settings-btn')) {
+            document.getElementById('admin-copilot-settings')?.remove();
+            modal.remove();
+            modal = null;
+        }
         if (!modal) {
             modal = document.createElement('div');
             modal.id = 'admin-reply-modal';
             modal.className = 'fixed inset-0 bg-black/70 z-[200] hidden flex p-0 backdrop-blur-sm';
             modal.innerHTML = `
-                <div class="bg-white dark:bg-gray-800 shadow-2xl w-full min-h-0 overflow-hidden flex flex-col px-3 sm:px-4 pt-[max(0.75rem,env(safe-area-inset-top))] pb-[max(0.75rem,env(safe-area-inset-bottom))] border-0 rounded-none">
-                    <h3 id="admin-reply-title" class="text-xl font-black text-gray-900 dark:text-white mb-0.5 tracking-tight flex items-center gap-2 shrink-0"><span class="text-sky-500">${Admin.icon('message', 'w-5 h-5')}</span> <span id="admin-reply-title-text">Next Train Co-Pilot</span></h3>
-                    <p id="admin-reply-recipient" class="text-[11px] text-gray-600 dark:text-gray-300 mb-1 break-all leading-snug shrink-0"></p>
-                    <p id="admin-reply-hint" class="text-[10px] text-gray-500 dark:text-gray-400 mb-3 shrink-0">Message will be delivered to their personal inbox upon next app launch.</p>
-                    <div id="admin-reply-scroll" class="flex-1 min-h-0 overflow-hidden flex flex-col">
-                    <div class="flex flex-col min-h-0 flex-1">
-                    <div class="shrink-0 rounded-t-lg border border-gray-300 dark:border-gray-600 border-b-0">
-                            ${Admin.wysiwygToolbarHtml('admin-reply-text', { fileInputId: 'admin-reply-upload-file', fileLabelId: 'admin-reply-upload-label' })}
-                    </div>
-                        <div contenteditable="true" id="admin-reply-text" class="nt-rich-body w-full flex-1 min-h-0 overflow-y-auto p-3 pb-4 bg-gray-50 dark:bg-gray-900 border border-t-0 border-gray-300 dark:border-gray-600 rounded-b-lg text-sm text-gray-900 dark:text-white focus:outline-none empty:before:content-[attr(placeholder)] empty:before:text-gray-400 custom-scrollbar" placeholder="Type your response..."></div>
-                    </div>
-                    </div>
-
-                    ${Admin.replySuggestMarkup()}
-
-                    <div class="grid grid-cols-2 gap-2 mt-3 shrink-0">
-                        <button id="reply-cancel" class="bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 font-bold py-3.5 px-3 rounded-2xl transition-colors focus:outline-none text-base">Cancel</button>
-                        <button id="reply-send" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 px-3 rounded-2xl shadow-sm transition-colors focus:outline-none text-base">Send Reply</button>
+                <div class="bg-white dark:bg-gray-800 shadow-2xl w-full h-full min-h-0 overflow-hidden flex flex-col px-3 sm:px-4 pt-[max(0.75rem,env(safe-area-inset-top))] pb-[max(0.75rem,env(safe-area-inset-bottom))] border-0 rounded-none">
+                    <div id="admin-reply-scroll" class="flex-1 min-h-0 overflow-y-auto overscroll-contain custom-scrollbar">
+                        <div id="admin-reply-header" class="pb-2">
+                            <div class="flex items-start justify-between gap-2">
+                                <h3 id="admin-reply-title" class="text-xl font-black text-gray-900 dark:text-white mb-0.5 tracking-tight flex items-center gap-2 min-w-0"><span class="text-sky-500 shrink-0">${Admin.icon('message', 'w-5 h-5')}</span> <span id="admin-reply-title-text">Next Train Co-Pilot</span></h3>
+                                <button type="button" id="admin-copilot-settings-btn" class="shrink-0 p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-300 focus:outline-none" aria-label="Co-Pilot settings" title="Co-Pilot settings">${Admin.icon('settings', 'w-5 h-5')}</button>
+                            </div>
+                            <p id="admin-reply-recipient" class="text-[11px] text-gray-600 dark:text-gray-300 mb-2 break-all leading-snug"></p>
+                            <div id="admin-reply-contacts" class="mb-2"></div>
+                            <p id="admin-reply-hint" class="text-[10px] text-gray-500 dark:text-gray-400 mb-3">Message will be delivered to their personal inbox upon next app launch.</p>
+                        </div>
+                        <div class="flex flex-col min-h-[14rem]">
+                            <div class="shrink-0 rounded-t-lg border border-gray-300 dark:border-gray-600 border-b-0">
+                                ${Admin.wysiwygToolbarHtml('admin-reply-text', { fileInputId: 'admin-reply-upload-file', fileLabelId: 'admin-reply-upload-label' })}
+                            </div>
+                            <div contenteditable="true" id="admin-reply-text" class="nt-rich-body w-full min-h-[12rem] overflow-visible p-3 pb-4 bg-gray-50 dark:bg-gray-900 border border-t-0 border-gray-300 dark:border-gray-600 rounded-b-lg text-sm text-gray-900 dark:text-white focus:outline-none empty:before:content-[attr(placeholder)] empty:before:text-gray-400" placeholder="Type your response..."></div>
+                        </div>
+                        ${Admin.replySuggestMarkup()}
+                        <div class="grid grid-cols-2 gap-2 mt-3 pt-3 pb-1 border-t border-gray-100 dark:border-gray-700">
+                            <button id="reply-cancel" class="bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 font-bold py-3.5 px-3 rounded-2xl transition-colors focus:outline-none text-base">Cancel</button>
+                            <button id="reply-send" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 px-3 rounded-2xl shadow-sm transition-colors focus:outline-none text-base">Send Reply</button>
+                        </div>
                     </div>
                 </div>
             `;
             document.body.appendChild(modal);
+            if (!document.getElementById('admin-copilot-settings')) {
+                document.body.insertAdjacentHTML('beforeend', Admin.copilotSettingsMarkup());
+            }
         } else {
             modal.className = 'fixed inset-0 bg-black/70 z-[200] hidden flex p-0 backdrop-blur-sm';
             const panel = modal.firstElementChild;
             if (panel) {
-                panel.className = 'bg-white dark:bg-gray-800 shadow-2xl w-full min-h-0 overflow-hidden flex flex-col px-3 sm:px-4 pt-[max(0.75rem,env(safe-area-inset-top))] pb-[max(0.75rem,env(safe-area-inset-bottom))] border-0 rounded-none';
+                panel.className = 'bg-white dark:bg-gray-800 shadow-2xl w-full h-full min-h-0 overflow-hidden flex flex-col px-3 sm:px-4 pt-[max(0.75rem,env(safe-area-inset-top))] pb-[max(0.75rem,env(safe-area-inset-bottom))] border-0 rounded-none';
             }
-            const editor = document.getElementById('admin-reply-text');
-            if (editor) {
-                editor.classList.remove('min-h-[120px]', 'min-h-[240px]', 'max-h-[50dvh]', 'p-2.5', 'min-h-[12rem]');
-                editor.classList.add('nt-rich-body', 'flex-1', 'min-h-0', 'overflow-y-auto', 'p-3', 'pb-4', 'custom-scrollbar');
-                const bar = editor.previousElementSibling;
-                if (bar) {
-                    bar.classList.add('shrink-0');
-                    bar.classList.remove('overflow-hidden');
-                }
-                if (bar && !bar.querySelector('[data-nt-font-select]')) {
-                    bar.outerHTML = `<div class="shrink-0 rounded-t-lg border border-gray-300 dark:border-gray-600 border-b-0">${Admin.wysiwygToolbarHtml('admin-reply-text', { fileInputId: 'admin-reply-upload-file', fileLabelId: 'admin-reply-upload-label' })}</div>`;
-                }
-                editor.parentElement?.classList.remove('min-h-[12rem]', 'min-h-[14rem]', 'overflow-hidden');
-                editor.parentElement?.classList.add('min-h-0', 'flex-1');
-                const scroll = document.getElementById('admin-reply-scroll');
-                if (scroll) {
-                    scroll.classList.add('overflow-hidden', 'min-h-0');
-                    scroll.classList.remove('overflow-y-auto');
-                }
-            }
+            const scroll = document.getElementById('admin-reply-scroll');
             const sendRow = document.getElementById('reply-cancel')?.parentElement;
-            if (sendRow && !document.getElementById('admin-reply-suggest-context')) {
-                document.getElementById('admin-reply-suggest')?.remove();
-                sendRow.insertAdjacentHTML('beforebegin', Admin.replySuggestMarkup());
+            if (scroll && sendRow && sendRow.parentElement !== scroll) {
+                scroll.appendChild(sendRow);
+                sendRow.classList.remove('shrink-0');
+                sendRow.classList.add('pb-1');
             }
-            const parkedSuggest = document.getElementById('admin-reply-suggest');
-            if (sendRow && parkedSuggest && parkedSuggest.parentElement !== sendRow.parentElement) {
-                sendRow.before(parkedSuggest);
-            }
-            if (!document.getElementById('admin-reply-recipient')) {
-                const h3 = panel?.querySelector('h3');
-                if (h3) {
-                    const recip = document.createElement('p');
-                    recip.id = 'admin-reply-recipient';
-                    recip.className = 'text-[11px] text-gray-600 dark:text-gray-300 mb-1 break-all leading-snug shrink-0';
-                    h3.insertAdjacentElement('afterend', recip);
-                }
+            if (!document.getElementById('admin-copilot-settings')) {
+                document.body.insertAdjacentHTML('beforeend', Admin.copilotSettingsMarkup());
             }
         }
 
         const recipEl = document.getElementById('admin-reply-recipient');
         if (recipEl) recipEl.innerHTML = recipientHtml;
+        const contactsEl = document.getElementById('admin-reply-contacts');
+        if (contactsEl) contactsEl.innerHTML = Admin.copilotContactChipsHtml(deviceId);
 
         const editKey = String(editMsg?.id || editMsg?.key || '').trim();
         modal.dataset.editMsgKey = editKey;
@@ -13648,19 +13733,36 @@ const Admin = {
             });
         }
 
-        document.getElementById('reply-cancel').onclick = cleanup;
+        document.getElementById('reply-cancel').onclick = () => {
+            Admin.closeCopilotSettings();
+            cleanup();
+        };
         const suggestBtn = document.getElementById('reply-suggest');
         if (suggestBtn) suggestBtn.onclick = () => Admin.runSuggestReply();
         const suggestAgain = document.getElementById('reply-suggest-again');
         if (suggestAgain) suggestAgain.onclick = () => Admin.runSuggestReply();
         const contextBox = document.getElementById('admin-reply-suggest-context');
         if (contextBox) contextBox.value = '';
+        const onceNote = document.getElementById('admin-reply-suggest-once');
+        if (onceNote) onceNote.value = '';
         const guideBox = document.getElementById('admin-reply-guide-box');
         const guideInput = document.getElementById('admin-reply-guide-text');
         if (guideInput) guideInput.value = '';
         if (guideBox) guideBox.classList.add('hidden');
         const guideOpen = document.getElementById('admin-reply-guide-open');
-        if (guideOpen) guideOpen.onclick = () => guideBox?.classList.toggle('hidden');
+        if (guideOpen) {
+            guideOpen.onclick = () => {
+                const opening = !!guideBox?.classList.contains('hidden');
+                guideBox?.classList.toggle('hidden', !opening);
+                Admin.syncReplyGuide();
+                if (opening) {
+                    requestAnimationFrame(() => {
+                        try { guideBox?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); } catch (_) {}
+                        try { guideInput?.focus(); } catch (_) {}
+                    });
+                }
+            };
+        }
         const guideGo = document.getElementById('admin-reply-guide-go');
         if (guideGo) {
             guideGo.onclick = () => {
@@ -13671,8 +13773,22 @@ const Admin = {
         }
         Admin.syncReplyGuide();
         Admin.setSuggestProgress(null);
+        const settingsBtn = document.getElementById('admin-copilot-settings-btn');
+        if (settingsBtn) settingsBtn.onclick = () => Admin.openCopilotSettings();
+        const settingsClose = document.getElementById('admin-copilot-settings-close');
+        if (settingsClose) settingsClose.onclick = () => Admin.closeCopilotSettings();
+        const settingsSheet = document.getElementById('admin-copilot-settings');
+        if (settingsSheet && !settingsSheet.dataset.scrimBound) {
+            settingsSheet.dataset.scrimBound = '1';
+            settingsSheet.addEventListener('click', (event) => {
+                if (event.target === settingsSheet) Admin.closeCopilotSettings();
+            });
+        }
         const saveNoteBtn = document.getElementById('reply-suggest-save-note');
         if (saveNoteBtn) saveNoteBtn.onclick = () => Admin.saveReplySuggestNote();
+        const clearNoteBtn = document.getElementById('reply-suggest-clear-note');
+        if (clearNoteBtn) clearNoteBtn.onclick = () => Admin.saveReplySuggestNote({ clear: true });
+        Admin.closeCopilotSettings();
         if (!editKey) Admin.loadReplySuggestNote(modal);
         document.getElementById('reply-send').onclick = async () => {
             let text = document.getElementById('admin-reply-text').innerHTML.trim();

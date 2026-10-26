@@ -337,6 +337,21 @@ import { withBase } from '../lib/config.js';
                                 <label for="account-photo-alerts" class="toggle-label block overflow-hidden h-5 rounded-full bg-gray-300 cursor-pointer"></label>
                             </span>
                         </button>
+                        <div id="account-danger-actions" class="grid grid-cols-1 min-[360px]:grid-cols-2 gap-2 pt-1">
+                            <button type="button" id="account-signout-btn" data-account-action class="w-full py-2.5 rounded-xl text-[13px] font-normal text-[#ff3b30] bg-white dark:bg-[#2c2c2e] focus:outline-none active:bg-black/[0.03] dark:active:bg-white/[0.04]">
+                                Sign out
+                            </button>
+                            <button type="button" id="account-reset-phone-btn" class="w-full py-2.5 rounded-xl text-[13px] font-normal text-[#ff3b30] bg-white dark:bg-[#2c2c2e] focus:outline-none active:bg-black/[0.03] dark:active:bg-white/[0.04]">
+                                Reset this App
+                            </button>
+                        </div>
+                        <div id="account-signout-confirm" class="hidden rounded-xl bg-white dark:bg-[#2c2c2e] px-3 py-3 space-y-3">
+                            <p class="text-[13px] font-normal text-gray-600 dark:text-gray-300 leading-snug">Sign out of this account?</p>
+                            <div class="flex gap-2">
+                                <button type="button" id="account-signout-cancel-btn" class="flex-1 py-2 rounded-lg text-[13px] font-normal text-gray-700 dark:text-gray-200 bg-[#f6f6f6] dark:bg-[#1c1c1e] focus:outline-none">Cancel</button>
+                                <button type="button" id="account-signout-confirm-btn" class="flex-1 py-2 rounded-lg text-[13px] font-normal text-white bg-[#ff3b30] focus:outline-none">Sign out</button>
+                            </div>
+                        </div>
                         <button type="button" id="account-save-display-name" data-account-action class="w-full py-2.5 rounded-xl text-[13px] font-semibold text-white bg-blue-600 focus:outline-none">Save</button>
                     </div>
                 </div>
@@ -354,17 +369,7 @@ import { withBase } from '../lib/config.js';
                     </button>
                 </div>
                 <div class="rounded-2xl overflow-hidden bg-[#f3f3f3] dark:bg-[#1c1c1e]">
-                    <button type="button" id="account-signout-btn" data-account-action class="w-full flex items-center px-4 py-[13px] text-left focus:outline-none active:bg-black/[0.03] dark:active:bg-white/[0.04]">
-                        <span class="text-[15px] font-normal text-[#ff3b30]">Sign out</span>
-                    </button>
-                    <div id="account-signout-confirm" class="hidden px-4 py-3 space-y-3 border-t border-black/10 dark:border-white/10">
-                        <p class="text-[13px] font-normal text-gray-600 dark:text-gray-300 leading-snug">Sign out of this account?</p>
-                        <div class="flex gap-2">
-                            <button type="button" id="account-signout-cancel-btn" class="flex-1 py-2 rounded-lg text-[13px] font-normal text-gray-700 dark:text-gray-200 bg-white dark:bg-[#2c2c2e] focus:outline-none">Cancel</button>
-                            <button type="button" id="account-signout-confirm-btn" class="flex-1 py-2 rounded-lg text-[13px] font-normal text-white bg-[#ff3b30] focus:outline-none">Sign out</button>
-                        </div>
-                    </div>
-                    <div id="account-session-actions" class="border-t border-black/10 dark:border-white/10">
+                    <div id="account-session-actions">
                         <div id="account-delete-wrap">
                             <button type="button" id="account-delete-btn" class="w-full px-4 py-[13px] text-[15px] font-normal text-[#ff3b30] text-left focus:outline-none">
                                 Delete account
@@ -379,9 +384,6 @@ import { withBase } from '../lib/config.js';
                                 </div>
                             </div>
                         </div>
-                        <button type="button" id="account-reset-phone-btn" class="w-full px-4 py-[13px] text-[15px] font-normal text-[#ff3b30] text-left border-t border-black/10 dark:border-white/10 focus:outline-none">
-                            Reset this App
-                        </button>
                     </div>
                 </div>
             </div>

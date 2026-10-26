@@ -86,10 +86,13 @@ const named = buildSuggestPayload([
 ok(named.greeting === 'Dear Enock', 'the draft payload carries Dear Enock');
 ok(!JSON.stringify(named).includes('enockelk@gmail.com'), 'the email address stays out of the draft payload');
 ok(liaisonRules('KZN').includes('more than 7 days'), 'a week-old message gets a late-reply line');
-ok(liaisonRules('GP').includes('unless they asked'), 'independence is only mentioned when they ask');
+ok(liaisonRules('GP').includes('not able to assist with this one'), 'ops issues get a short independence line');
+ok(liaisonRules('GP').includes('not directly linked to PRASA'), 'ops issues may use the soft PRASA line');
 ok(liaisonRules('GP').includes('Do not write "I want to gently mention"'), 'the draft does not open with a disclaimer');
+ok(liaisonRules('GP').includes('Do not stack both'), 'independence lines stay to one sentence');
 ok(liaisonRules('GP').includes('ADMIN ALERT'), 'a quoted notice is an admin alert');
 ok(liaisonRules('GP').includes('Only Next Train can post an alert'), 'only admin posts alerts');
+ok(liaisonRules('GP').includes('thank them for taking part'), 'poll and call-to-action replies get thanks');
 ok(liaisonRules('GP').includes('Do not thank them for sharing'), 'a reply is not treated as the commuter posting the alert');
 ok(!liaisonRules('GP').includes('independent unofficial'), 'the system prompt does not hand the model the old disclaimer');
 const quoted = buildSuggestPayload([
@@ -280,7 +283,12 @@ ok(adminJs.includes('quotedNoticesForSuggest'), 'suggest reply loads the full qu
 ok(adminJs.includes('id="reply-suggest"'), 'reply composer has Suggest reply');
 ok(adminJs.includes('id="admin-reply-suggest-context"'), 'a halt can take the missing fact');
 ok(adminJs.includes('id="admin-reply-suggest-status"'), 'suggest shows progress while it writes');
-ok(adminJs.includes('id="admin-reply-suggest-done"'), 'a finished draft note sits inside the instructions accordion');
+ok(adminJs.includes('id="admin-reply-suggest-done"'), 'a finished draft note is shown after Suggest');
+ok(adminJs.includes('id="admin-copilot-settings"'), 'Co-Pilot settings is a full-screen sheet');
+ok(adminJs.includes('admin-reply-suggest-once'), 'this-reply-only context has its own field');
+ok(adminJs.includes('Save for all future replies'), 'future context save is labelled clearly');
+ok(adminJs.includes('copilotContactChipsHtml'), 'Co-Pilot shows contact chips under the header');
+ok(adminJs.includes('admin-reply-scroll'), 'Co-Pilot body scrolls so the header can move away');
 ok(adminJs.includes('Next Train Composer'), 'the write modal is Next Train Composer');
 ok(adminJs.includes('Next Train Co-Pilot'), 'the reply modal is Next Train Co-Pilot');
 ok(adminJs.includes('Using the whole field.'), 'Write uses the field without a selection');
@@ -346,6 +354,8 @@ ok(!worker.includes('feedback.json'), 'reply worker does not read the feedback t
 ok(worker.includes('gemini-3.5-flash-lite'), 'reply worker uses 3.5 Flash-Lite');
 ok(!worker.includes('gemini-2.5-flash-lite'), 'reply worker no longer calls 2.5 Flash-Lite');
 ok(worker.includes("pathname === '/edit'"), 'write assist has its own route');
+ok(worker.includes('clear'), 'shared note can be cleared online');
+ok(worker.includes('readSharedNote'), 'every suggest reloads the saved future note');
 const geminiConfig = buildGeminiRequest({
     payload: { thread: [{ from: 'commuter', text: 'Sunday train', at: 1 }], region: 'KZN' },
 }).generationConfig;
@@ -477,7 +487,7 @@ ok(draftDenied.status === 401, 'a saved draft stays behind the operator token');
 ok(adminJs.includes('persistReplyDraft'), 'closing Co-Pilot keeps the draft');
 ok(adminJs.includes('restoreReplyDraft'), 'opening Co-Pilot loads the saved draft');
 ok(adminJs.includes('card.style.height = `${height}px`'), 'Co-Pilot fills the screen');
-ok(adminJs.includes("suggestBtn.classList.toggle('hidden', halted)"), 'Suggest reply hides while Co-Pilot is halted');
+ok(adminJs.includes("suggestBtn.classList.toggle('hidden', halted || guiding)"), 'Suggest reply hides while Co-Pilot is halted or guiding');
 ok(adminJs.includes('id="outreach-later-backlog"') && adminJs.includes('id="outreach-later-progress"'), 'Later saves the reply under To do or In progress');
 ok(adminJs.includes('outreachMessage'), 'a later ticket keeps the reply for WhatsApp and email');
 ok(adminJs.includes('cm-bubble'), 'community monitor paints message bubbles');

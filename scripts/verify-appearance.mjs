@@ -60,7 +60,9 @@ assert(css.includes('#grid-trigger-container'), 'timetable CTA has extra canvas 
 assert(css.includes('.nt-board-footer.mt-auto'), 'board footer padding stays on nt-board-footer mt-auto');
 assert(/#bottom-nav\.bottom-nav-bar \{[\s\S]*?box-shadow: none/.test(css), 'bottom nav does not float on a drop shadow');
 assert(/#bottom-nav\.bottom-nav-bar \{[\s\S]*?background-color: var\(--nt-chrome-nav\)/.test(css), 'bottom nav is one step darker than the header');
-assert(css.includes('--nt-nav-h: 4rem'), 'bottom nav is about 64px tall');
+assert(css.includes('--nt-nav-h: 3.6rem'), 'bottom nav is 10% shorter than the prior 4rem bar');
+assert(!css.includes('--nt-nav-active-grow'), 'bottom nav tabs do not grow the active column');
+assert(/#bottom-nav-grid \{\s*display: grid/.test(css), 'bottom nav uses equal grid columns');
 assert(css.includes('color-mix(in srgb, var(--nt-chrome-fg) 20%, transparent)'), 'active tab icon sits on a soft pill');
 assert(css.includes('color-mix(in srgb, var(--nt-chrome-fg) 45%, transparent)'), 'inactive tabs are clearly dimmer than the active label');
 assert(!css.includes('color-mix(in srgb, var(--nt-chrome-fg) 70%, transparent)'), 'inactive tabs are not 70% white');
@@ -74,6 +76,9 @@ assert(!css.includes('color-mix(in srgb, var(--nt-text) 58%, transparent)'), 'da
 assert(css.includes('color-mix(in srgb, var(--nt-surface) 96%, var(--nt-text))'), 'dark modal header stays with the card');
 assert(/#bottom-nav\.bottom-nav-bar \{[\s\S]*?border-radius: 0;/.test(css), 'bottom nav is rectangular');
 assert(css.includes('#current-day'), 'day label letter-spacing rule present');
+assert(/html\[data-colour-pack="earthy"\] button#current-day:not\(\.nt-day-quiet\) span[\s\S]{0,220}margin-left:\s*0\.12rem/.test(css), 'Earthy schedule pill keeps space after the weekday name');
+assert(/html\[data-colour-pack="earthy"\] button#current-day:not\(\.nt-day-quiet\) span[\s\S]{0,280}var\(--nt-accent\)/.test(css), 'Earthy schedule pill uses accent wash, not Classic blue');
+assert(/html\[data-colour-pack="classic"\] button#current-day:not\(\.nt-day-quiet\) span[\s\S]{0,220}margin-left:\s*0\.12rem/.test(css), 'Classic schedule pill is unchanged');
 
 ['midnight', 'contrast', 'signal', 'earthy'].forEach((pack) => {
     const block = css.split(`html[data-colour-pack="${pack}"]`)[1] || '';
@@ -132,6 +137,8 @@ assert(header.includes('fitHeaderDayLabel') || logic.includes('fitHeaderDayLabel
 
 assert(css.includes('#bottom-nav-grid'), 'bottom nav uses #bottom-nav-grid');
 assert(css.includes('html[data-admin-authed="1"] #bottom-nav-grid'), 'admin auth expands bottom nav to 5 columns');
+assert(css.includes('grid-template-columns: repeat(5, minmax(0, 1fr))'), 'admin/pilot bottom nav uses five equal columns');
+assert(css.includes('--nt-nav-h: 2.925rem'), 'short screens keep a 10% shorter compact nav');
 
 const indexPage = readFileSync(new URL('../src/pages/index.astro', import.meta.url), 'utf8');
 assert(indexPage.includes('lucide lucide-route'), 'Plan tab uses Lucide route icon');
@@ -190,6 +197,8 @@ assert(!/max-width:\s*639px[\s\S]{0,180}max-width:\s*none/.test(layout), 'phone 
 assert(css.includes('#app-header .seo-open-app'), 'SEO header Open link uses chrome foreground');
 assert(css.includes('.nt-maint-wrench'), 'maintenance strip has a wrench icon');
 assert(css.includes('.nt-maint-label'), 'maintenance strip has a label');
+assert(css.includes('nt-maint-slide'), 'long maintenance copy can marquee');
+assert(css.includes('nt-maint-is-marquee'), 'maintenance marquee is opt-in per overflow');
 assert(!css.includes('repeating-linear-gradient'), 'maintenance strip is not hazard tape');
 assert(!css.includes('#app-header.nt-maint-active #app-title'), 'maintenance bar does not restyle the title overlay');
 

@@ -3123,6 +3123,10 @@ function bindBlurBackdropDismiss() {
                 return;
             }
         }
+        // Ticket Prices matches the timetable: haptic on open and on user close.
+        if (el.id === 'fare-modal') {
+            triggerHaptic();
+        }
         closeSmoothModal(el.id);
     });
 }

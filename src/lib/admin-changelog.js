@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_10.26.15': [
+        'About adds a Next Train Champions card under Built & Maintained (name + region; optional WhatsApp, channel, and Facebook links from community-champions.js). Ticket Prices matches the full timetable: haptic on open and on Close / X / backdrop dismiss. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_10.26.14': [
         'Schedule waterfall is CLOUDFLARE→FIREBASE→GITHUB (edge first for RTDB cost), with 5s/7s/8s timeouts and an 18s hard budget so Clarity never sits on Loading stations for minutes. Per-host timeout is TimeoutError, not AbortError, so GitHub still runs after a blocked edge. Soft network retries do not trip Lie-Fi mid-waterfall. Bundled same-origin dump is a last resort; finally always reveals the shell and repopulates stations when a list exists. Builds on the TUKS Lie-Fi / Black Box logging fix. No commuter What\'s New. forceShow stays false.',
     ],

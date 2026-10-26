@@ -450,6 +450,13 @@ assert(communityJs.includes('Please be kind and respectful.'), 'composer kindnes
 const hubModals = readFileSync(new URL('../src/components/HubModals.astro', import.meta.url), 'utf8');
 assert(hubModals.includes('#feedback-panel .feedback-thread-chat.nt-pack-wallpaper'), 'feedback wallpaper is scoped darker than bubbles');
 assert(hubModals.includes('background-color: #6f8070'), 'feedback wallpaper is darker than white bubbles');
+assert(hubModals.includes('id="about-champions"') && hubModals.includes('Next Train Champions'), 'About has Next Train Champions under admin credits');
+assert(hubModals.indexOf('Built & Maintained By') < hubModals.indexOf('id="about-champions"'), 'Champions sit below Built & Maintained');
+const championsJs = readFileSync(new URL('../src/lib/community-champions.js', import.meta.url), 'utf8');
+assert(championsJs.includes('whatsappChannel') && championsJs.includes('facebook') && championsJs.includes('COMMUNITY_CHAMPIONS'), 'champions data can load WhatsApp, channel, and Facebook');
+const liveBoardUi = readFileSync(new URL('../src/lib/live-board-ui.js', import.meta.url), 'utf8');
+assert(liveBoardUi.includes('export function closeFareModal') && liveBoardUi.includes("triggerHaptic();\n    closeSmoothModal('fare-modal')"), 'fare modal close haptics match the timetable');
+assert(hub.includes('paintAboutChampions') && hub.includes('listCommunityChampions'), 'About paints champions from the data module');
 const accountJs = readFileSync(new URL('../src/lib/account.js', import.meta.url), 'utf8');
 const delayReports = readFileSync(new URL('../src/lib/delay-reports.js', import.meta.url), 'utf8');
 const trainGhosts = readFileSync(new URL('../src/lib/train-ghosts.js', import.meta.url), 'utf8');

@@ -1239,6 +1239,18 @@ body.chrome-compact #app-header,
 }
 #app-header .header-meta {
   margin-top: clamp(0.08rem, 0.35dvh, 0.22rem);
+  /* Reserve the day chip row so fit/paint does not grow the header (CLS). */
+  min-height: 1.15rem;
+}
+/* Bell slot stays reserved when empty so alerts do not shove the brand (CLS). */
+#app-header #notice-bell.invisible {
+  visibility: hidden;
+  pointer-events: none;
+}
+/* Reserve the corridor row so the pill does not grow when a label appears. */
+#route-corridor-label {
+  display: block;
+  min-height: 0.75rem;
 }
 /* Bell stays the pre-18 Oct size: w-6 (1.5rem) inside p-2. The header
    centers that disc on the wordmark and the day line together. */

@@ -2242,8 +2242,13 @@ export async function checkServiceAlerts() {
             if (channel && !channel.classList.contains('hidden')) {
                 renderAlertsChannel(validNotices);
             }
-            if (!validNotices.length) bellBtn.classList.add('hidden');
-            else applyBellFromNotices(validNotices);
+            if (!validNotices.length) {
+                bellBtn.classList.add('invisible');
+                bellBtn.classList.remove('hidden');
+                bellBtn.setAttribute('aria-hidden', 'true');
+                bellBtn.setAttribute('tabindex', '-1');
+                if (dot) dot.classList.add('hidden');
+            } else applyBellFromNotices(validNotices);
             return validNotices;
         });
 

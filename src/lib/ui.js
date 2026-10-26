@@ -43,6 +43,20 @@ export function triggerHaptic() {
     } catch(e) {}
 }
 
+/** Let the next frame paint before heavy DOM work (INP). */
+export function yieldToPaint() {
+    const sched = typeof globalThis !== 'undefined' ? globalThis.scheduler : undefined;
+    if (sched && typeof sched.yield === 'function') return sched.yield();
+    if (typeof requestAnimationFrame === 'function') {
+        return new Promise((resolve) => {
+            requestAnimationFrame(() => {
+                requestAnimationFrame(() => resolve());
+            });
+        });
+    }
+    return Promise.resolve();
+}
+
 /**
  * Show/hide a password field. Bind after the input exists in the document
  * (admin login lives in a stamped <template>, so boot-time getElementById misses it).
@@ -2342,9 +2356,14 @@ export function hideOfflineToast() {
 /** Only paint offline chrome after the app is visible and still offline. */
 const OFFLINE_CHROME_HOLD_MS = 4000;
 const OFFLINE_CHROME_AUTO_HIDE_MS = 7000;
+/** After a show/dismiss, require this much sustained online before another paint. */
+const OFFLINE_CHROME_RESHOW_ONLINE_MS = 45_000;
+const OFFLINE_CHROME_CONFIRM_MS = 2000;
 let _offlineChromeTimer = null;
 let _offlineChromeHideTimer = null;
+let _offlineChromeReshowTimer = null;
 let _offlineChromeBound = false;
+let _offlineChromeConfirming = false;
 
 function offlineDock() {
     return typeof document !== 'undefined' ? document.getElementById('offline-wrapper') : null;
@@ -2359,6 +2378,63 @@ function clearOfflineChromeTimers() {
         clearTimeout(_offlineChromeHideTimer);
         _offlineChromeHideTimer = null;
     }
+}
+
+function cancelOfflineChromeReshow() {
+    if (_offlineChromeReshowTimer) {
+        clearTimeout(_offlineChromeReshowTimer);
+        _offlineChromeReshowTimer = null;
+    }
+}
+
+/** Clear the once-per-episode flag only after sustained online (not radio flaps). */
+function armOfflineChromeReshow() {
+    if (typeof window === 'undefined') return;
+    cancelOfflineChromeReshow();
+    _offlineChromeReshowTimer = setTimeout(() => {
+        _offlineChromeReshowTimer = null;
+        if (typeof navigator !== 'undefined' && navigator.onLine) {
+            window._hasShownOfflineToast = false;
+        }
+    }, OFFLINE_CHROME_RESHOW_ONLINE_MS);
+}
+
+/**
+ * navigator.onLine flaps on slow/flaky mobile radios. Confirm the browser still
+ * reports offline and that a short NetworkOnly probe cannot get through before
+ * painting "You are offline."
+ */
+async function confirmBrowserOffline() {
+    if (typeof document === 'undefined' || typeof navigator === 'undefined') return false;
+    if (document.visibilityState !== 'visible' || navigator.onLine) return false;
+    try {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), OFFLINE_CHROME_CONFIRM_MS);
+        const url = `https://nexttrain-cache.enock.workers.dev/config/maintenance.json?offlineChrome=${Date.now()}`;
+        await fetch(url, { signal: controller.signal, cache: 'no-store' });
+        clearTimeout(timer);
+        // Any response means a network path exists — do not spam the dock.
+        return false;
+    } catch {
+        /* aborted or failed */
+    }
+    return document.visibilityState === 'visible' && !navigator.onLine;
+}
+
+function paintOfflineChromeDock() {
+    const wrap = offlineDock();
+    if (wrap) wrap.classList.remove('hidden');
+    const oi = document.getElementById('offline-indicator');
+    if (oi) {
+        oi.style.removeProperty('display');
+        oi.dataset.struggleUi = '1';
+    }
+    if (typeof window !== 'undefined') window._hasShownOfflineToast = true;
+    if (_offlineChromeHideTimer) clearTimeout(_offlineChromeHideTimer);
+    _offlineChromeHideTimer = setTimeout(() => {
+        _offlineChromeHideTimer = null;
+        hideOfflineChrome({ dismissed: true });
+    }, OFFLINE_CHROME_AUTO_HIDE_MS);
 }
 
 export function hideOfflineChrome(opts = {}) {
@@ -2382,34 +2458,37 @@ export function scheduleOfflineChrome() {
         hideOfflineChrome();
         return;
     }
+    // A new offline episode while the reshow arm is pending keeps the dismiss.
+    cancelOfflineChromeReshow();
     if (typeof window !== 'undefined' && window._hasShownOfflineToast) return;
-    if (_offlineChromeTimer) return;
+    if (_offlineChromeTimer || _offlineChromeConfirming) return;
     _offlineChromeTimer = setTimeout(() => {
         _offlineChromeTimer = null;
         if (document.visibilityState !== 'visible' || navigator.onLine) return;
         if (window._hasShownOfflineToast) return;
-        const wrap = offlineDock();
-        if (wrap) wrap.classList.remove('hidden');
-        const oi = document.getElementById('offline-indicator');
-        if (oi) {
-            oi.style.removeProperty('display');
-            oi.dataset.struggleUi = '1';
-        }
-        if (_offlineChromeHideTimer) clearTimeout(_offlineChromeHideTimer);
-        _offlineChromeHideTimer = setTimeout(() => {
-            _offlineChromeHideTimer = null;
-            hideOfflineChrome({ dismissed: true });
-        }, OFFLINE_CHROME_AUTO_HIDE_MS);
+        _offlineChromeConfirming = true;
+        confirmBrowserOffline().then((reallyOffline) => {
+            _offlineChromeConfirming = false;
+            if (!reallyOffline) return;
+            if (document.visibilityState !== 'visible' || navigator.onLine) return;
+            if (window._hasShownOfflineToast) return;
+            paintOfflineChromeDock();
+        }).catch(() => {
+            _offlineChromeConfirming = false;
+        });
     }, OFFLINE_CHROME_HOLD_MS);
 }
 
 export function bindOfflineChrome() {
     if (_offlineChromeBound || typeof window === 'undefined') return;
     _offlineChromeBound = true;
-    window.addEventListener('offline', () => scheduleOfflineChrome());
+    window.addEventListener('offline', () => {
+        cancelOfflineChromeReshow();
+        scheduleOfflineChrome();
+    });
     window.addEventListener('online', () => {
-        window._hasShownOfflineToast = false;
         hideOfflineChrome();
+        armOfflineChromeReshow();
     });
     document.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'hidden') hideOfflineChrome();
@@ -3189,9 +3268,9 @@ if (typeof window !== 'undefined') {
     }).catch(() => {});
 
     bindOfflineChrome();
+    // Online/offline chrome is owned by bindOfflineChrome (hold + confirm + reshow arm).
+    // These listeners only clear maintenance and flush the offline tracker.
     window.addEventListener('online', () => {
-        window._hasShownOfflineToast = false;
-        hideOfflineChrome();
         OfflineTracker.flush();
         try { window.isLieFi = false; } catch { /* ignore */ }
         try { window.resetReachabilityProbe?.(); } catch { /* ignore */ }
@@ -3202,6 +3281,5 @@ if (typeof window !== 'undefined') {
     });
     window.addEventListener('offline', () => {
         clearMaintenanceBanner();
-        scheduleOfflineChrome();
     });
 }

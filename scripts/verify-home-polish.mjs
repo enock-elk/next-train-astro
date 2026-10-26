@@ -279,11 +279,15 @@ assert(logic.includes('window.__ntQuietBoardPaint = true'), 'minute tick sets qu
 const ui = readFileSync(new URL('../src/lib/ui.js', import.meta.url), 'utf8');
 assert(ui.includes('OFFLINE_CHROME_HOLD_MS = 4000'), 'offline chrome waits 4s');
 assert(ui.includes('OFFLINE_CHROME_AUTO_HIDE_MS = 7000'), 'offline dock auto-hides after 7s');
+assert(ui.includes('OFFLINE_CHROME_RESHOW_ONLINE_MS = 45_000'), 'offline chrome waits for sustained online before reshow');
+assert(ui.includes('confirmBrowserOffline'), 'offline chrome probes before painting');
 assert(ui.includes('document.visibilityState !== \'visible\''), 'offline chrome requires visible tab');
 assert(ui.includes("offlineDock()"), 'offline chrome toggles #offline-wrapper');
 assert(!ui.includes("oi.textContent = 'WORKING OFFLINE'"), 'offline dock keeps mockup copy');
 assert(ui.includes("scheduleOfflineChrome();"), 'already-offline boot schedules the dock');
 assert(ui.includes("hideOfflineChrome({ dismissed: true })"), 'Close / auto-hide marks the dock dismissed');
+assert(ui.includes('armOfflineChromeReshow'), 'online arms sustained reshow instead of clearing dismiss immediately');
+assert(ui.includes('cancelOfflineChromeReshow'), 'a new offline episode cancels a pending reshow arm');
 assert(ui.includes('PLANNER_INLINE_LISTS'), 'Travel Day scrim does not steal pointer events');
 assert(ui.includes('header.parentNode.insertBefore(banner, header)'), 'maintenance bar sits above #app-header inside the scroller');
 assert(ui.includes('nt-maint-wrench'), 'maintenance bar uses the wrench SVG');

@@ -5,7 +5,7 @@ import { ROUTES, HOLIDAY_NAMES } from './config.js';
 import { safeStorage, escapeHTML, routeArrowSvg, routePrimaryGridDirection, scheduleCacheSlot, normalizeScheduleSheetDay, schedulesBelongToRoute } from './utils.js';
 import { $currentRouteId, $userRegion, $schedules, $fullDatabase, $globalExclusions, $globalDisruptions, $opsOverlaysReady } from '../store.js';
 import { loadAllSchedules, ensureRoutePinnedForRegion, processRouteDataFromDBAsync } from './logic.js';
-import { showToast, triggerHaptic, openSmoothModal, closeSmoothModal, switchTab, toggleDropdownScrim } from './ui.js';
+import { showToast, triggerHaptic, openSmoothModal, closeSmoothModal, switchTab, toggleDropdownScrim, yieldToPaint } from './ui.js';
 import { simulateNextActiveService, routeHasSaturdayService, scheduleHasService, openTrainMarkSheet } from './live-board.js';
 import {
     buildRouteShareUrl,
@@ -68,6 +68,9 @@ let gridOpenIntent = null;
 let gridRouteIntentPrimed = false;
 /** One view_full_grid per open; day/dir switches must not re-count. */
 let gridViewEventOpen = false;
+let gridRenderGen = 0;
+
+const GRID_LOADING_HTML = '<div class="p-6 text-center text-sm text-gray-500 dark:text-gray-400 font-bold">Loading timetable…</div>';
 
 const GRID_INTENT_BLOCKING_MODALS = [
     'route-modal', 'fare-modal', 'alerts-channel', 'notice-modal', 'schedule-modal',
@@ -488,7 +491,8 @@ export async function applyRouteDeepLink() {
     return true;
 }
 
-export function renderFullScheduleGrid(direction = null, dayOverride = null, opts = {}) {
+export async function renderFullScheduleGrid(direction = null, dayOverride = null, opts = {}) {
+    const renderGen = ++gridRenderGen;
     if (!opts.silent) triggerHaptic();
     bindGridScheduleRouteRefresh();
     const routeId = $currentRouteId.get();
@@ -605,7 +609,8 @@ export function renderFullScheduleGrid(direction = null, dayOverride = null, opt
     }
 
     let modal = document.getElementById('full-schedule-modal');
-    const isFirstOpen = !gridViewEventOpen && (!modal || modal.classList.contains('hidden'));
+    const alreadyOpen = !!(modal && !modal.classList.contains('hidden'));
+    const isFirstOpen = !gridViewEventOpen && !alreadyOpen;
     if (isFirstOpen && typeof window.trackAnalyticsEvent === 'function') {
         gridViewEventOpen = true;
         window.trackAnalyticsEvent('view_full_grid', {
@@ -658,6 +663,25 @@ export function renderFullScheduleGrid(direction = null, dayOverride = null, opt
                 closeFullGridModal();
             });
         }
+    }
+
+    // Open first so the tap can paint (INP), then build the heavy grid HTML.
+    if (!alreadyOpen) {
+        const gridEl = document.getElementById('grid-container');
+        const sameBody = !!(lastGridBody
+            && lastGridBody.routeId === routeId
+            && lastGridBody.direction === direction
+            && lastGridBody.selectedDay === selectedDay);
+        if (gridEl && (!gridEl.innerHTML.trim() || !sameBody)) {
+            gridEl.innerHTML = GRID_LOADING_HTML;
+        }
+        openSmoothModal('full-schedule-modal');
+        if (typeof location !== 'undefined' && location.hash !== '#grid') {
+            try { history.pushState({ modal: 'grid' }, '', '#grid'); } catch { /* ignore */ }
+        }
+        await yieldToPaint();
+        if (renderGen !== gridRenderGen) return;
+        if (!modal || modal.classList.contains('hidden')) return;
     }
 
     const destName = window.Renderer._applyUIIntercepts(direction === 'A' ? route.destA : route.destB).toUpperCase();
@@ -829,10 +853,12 @@ export function renderFullScheduleGrid(direction = null, dayOverride = null, opt
     bindGridViaNotes();
     bindGridExclusionRefresh();
 
-    openSmoothModal('full-schedule-modal');
+    if (alreadyOpen && modal?.classList.contains('hidden')) {
+        openSmoothModal('full-schedule-modal');
+    }
     window.Renderer?.fitGridStatusTags?.(grid);
-    if (location.hash !== '#grid') {
-        history.pushState({ modal: 'grid' }, '', '#grid');
+    if (typeof location !== 'undefined' && location.hash !== '#grid') {
+        try { history.pushState({ modal: 'grid' }, '', '#grid'); } catch { /* ignore */ }
     }
     if (!$opsOverlaysReady.get()) {
         ensureOpsOverlaysReady().then(() => paintOpenGridBody());

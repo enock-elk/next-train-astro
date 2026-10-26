@@ -429,7 +429,10 @@ const faqLd = {
         }
         window.openAppHub?.();
     });
-    import('../lib/map-tab.js').then((m) => m.bindMapTabUi()).catch(() => {});
+    // Map tab wiring is idle-deferred — keeps home INP free of map-tab parse/bind.
+    const bootMapTab = () => import('../lib/map-tab.js').then((m) => m.bindMapTabUi()).catch(() => {});
+    if (typeof requestIdleCallback === 'function') requestIdleCallback(bootMapTab, { timeout: 3500 });
+    else setTimeout(bootMapTab, 1200);
 
     const hash = location.hash;
     if (hash === '#planner' || hash === '#planner-results') {

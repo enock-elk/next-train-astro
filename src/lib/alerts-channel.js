@@ -915,7 +915,12 @@ export function applyBellFromNotices(notices) {
     notices = scopedLiveNotices(notices);
 
     if (!notices || notices.length === 0) {
-        bellBtn.classList.add('hidden');
+        // Keep layout space (invisible, not display:none) so the bell does not CLS the brand.
+        bellBtn.classList.add('invisible');
+        bellBtn.classList.remove('hidden');
+        bellBtn.setAttribute('aria-hidden', 'true');
+        bellBtn.setAttribute('tabindex', '-1');
+        if (dot) dot.classList.add('hidden');
         return;
     }
 
@@ -937,7 +942,9 @@ export function applyBellFromNotices(notices) {
         dotClass += 'bg-blue-600';
     }
     bellBtn.className = bellClass;
-    bellBtn.classList.remove('hidden');
+    bellBtn.classList.remove('hidden', 'invisible');
+    bellBtn.removeAttribute('aria-hidden');
+    bellBtn.removeAttribute('tabindex');
     bellBtn.setAttribute('aria-label', 'Service alerts');
     const bellSvg = bellBtn.querySelector('svg');
     if (bellSvg) bellSvg.setAttribute('class', 'w-6 h-6');

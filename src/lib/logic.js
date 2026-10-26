@@ -1612,7 +1612,9 @@ export async function loadAllSchedules(force = false) {
         if (error.name === 'AbortError') return;
         console.error("Fetch Error:", error);
         const hasUsableData = !!$fullDatabase.get();
-        if (!usedCache && !hasUsableData && typeof document !== 'undefined') {
+        // Fetch errors on a slow-but-online radio must not flash the dock.
+        if (!usedCache && !hasUsableData && typeof document !== 'undefined'
+            && typeof navigator !== 'undefined' && !navigator.onLine) {
             try { scheduleOfflineChrome(); } catch { /* ignore */ }
         }
     } finally {

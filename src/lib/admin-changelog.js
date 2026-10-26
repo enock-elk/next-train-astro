@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_10.26.8': [
+        'Offline dock confirms with a short reachability probe after the 4s visible hold, and only re-arms after 45s of sustained online so flaky/slow radios do not spam You are offline. Select Route and full timetable open before heavy DOM (INP yield). Header bell and corridor label keep reserved space (CLS). Map tab bind is idle-deferred on home. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_10.26.7': [
         'Feedback filters support Has and Missing (e.g. no WhatsApp and no email), and Inbox/Archive counts follow the filtered list. WhatsApp/email outreach keeps an Opened chip, stays re-clickable, and adds Resolve on that sheet. Johannesburg to Wellington-style cross-region planner fails report Cross-region instead of No Physical Link. Station SEO map lightbox drops the title bar; Reviews sit at the bottom of station landings (pending RTDB approval). Client RTDB and sign-in writes share rate limits. No commuter What\'s New. forceShow stays false.',
     ],

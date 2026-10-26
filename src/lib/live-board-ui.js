@@ -6,7 +6,7 @@ import { ROUTES, FARE_CONFIG, fareMultiplierForListedTicket, getCorridorLabel } 
 import { normalizeStationName, timeToSeconds, safeStorage, escapeHTML, formatTimeDisplay, formatRouteLabelPlain, formatRouteLabelHtml, expandJhbLabel, applyFittedLabel, fitRouteNameNodes, fitJhbNodes, isRealTime, shortSharedSourceLabel, scheduleCacheSlot, warningTriangleSvg, schedulesBelongToRoute } from './utils.js';
 import { $currentRouteId, $userRegion, $userProfile, $fullDatabase, $schedules } from '../store.js';
 import { currentTime, loadAllSchedules, processRouteDataFromDBAsync } from './logic.js';
-import { showToast, triggerHaptic, openSmoothModal, closeSmoothModal } from './ui.js';
+import { showToast, triggerHaptic, openSmoothModal, closeSmoothModal, yieldToPaint } from './ui.js';
 import { applyPilotChrome } from './admin-chrome.js';
 import { trackAnalyticsEvent } from './analytics.js';
 import { bindAutoLocateTriggers, maybeAutoLocateBoard, noteBoardStationSource } from './auto-locate.js';
@@ -132,10 +132,14 @@ export function openRegionRoutePicker() {
         syncRegionDisplayDom(region);
     }).catch(() => {});
     openSmoothModal('route-modal');
-    if (typeof window !== 'undefined' && window.Renderer?.renderRouteMenu) {
-        window.Renderer.renderRouteMenu('route-list', getRoutesForCurrentRegion(), $currentRouteId.get());
-    }
     syncRouteModalCloseBtn();
+    yieldToPaint().then(() => {
+        const modal = document.getElementById('route-modal');
+        if (!modal || modal.classList.contains('hidden')) return;
+        if (typeof window !== 'undefined' && window.Renderer?.renderRouteMenu) {
+            window.Renderer.renderRouteMenu('route-list', getRoutesForCurrentRegion(), $currentRouteId.get());
+        }
+    }).catch(() => {});
 }
 
 export function _renderNextTrainList() {
@@ -648,12 +652,14 @@ export function updateNextTrainView() {
     const corridor = getCorridorLabel(route);
     if (corridorEl) {
         if (corridor) {
-            corridorEl.classList.remove('hidden');
+            corridorEl.classList.remove('invisible');
+            corridorEl.removeAttribute('aria-hidden');
             applyFittedLabel(corridorEl, corridor, expandJhbLabel(corridor), false);
             corridorEl.title = expandJhbLabel(corridor);
         } else {
             corridorEl.textContent = '';
-            corridorEl.classList.add('hidden');
+            corridorEl.classList.add('invisible');
+            corridorEl.setAttribute('aria-hidden', 'true');
         }
     }
 

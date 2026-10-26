@@ -583,6 +583,7 @@ export function pinRouteIfRegionHasNoDefault(routeId) {
     try {
         if (safeStorage.getItem(key)) return false;
         safeStorage.setItem(key, routeId);
+        import('./account.js').then((m) => m.syncAccountPinnedRoutesNow?.()).catch(() => {});
         return true;
     } catch {
         return false;
@@ -1054,6 +1055,7 @@ export function initLiveBoardUi() {
                 showToast('Route pinned!', 'success', 2000);
                 updatePinUI();
             }
+            import('./account.js').then((m) => m.syncAccountPinnedRoutesNow?.()).catch(() => {});
             import('./push-notify.js').then((m) => m.refreshPushSubscriptionAudience?.()).catch(() => {});
         });
     }

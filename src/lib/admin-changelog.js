@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_10.26.16': [
+        'Account: Welcome to Next Train / Welcome back headers, invalid-credentials screen with Create account, premium verify card, and Welcome back toast. Pinned routes sync to the account immediately (pin, unpin, Welcome pick). Feedback, Messages, community, fares, trip plans, and delays write account activity breadcrumbs. Feedback Filter has Done; outside click no longer closes Dev Hub. Check for Updates still keeps pins; Reset this App still clears route and region. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_10.26.15': [
         'About adds a Next Train Champions card under Built & Maintained (name + region). Admin System Controls loads and saves champions to config/community_champions; WhatsApp, channel, and Facebook icons only show when those fields are filled. Ticket Prices matches the full timetable: haptic on open and on Close / X / backdrop dismiss. Deploy firebase-database.rules.json for the new public-read config path. No commuter What\'s New. forceShow stays false.',
     ],

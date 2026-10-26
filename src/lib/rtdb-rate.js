@@ -10,6 +10,7 @@ export const RTDB_RATE = Object.freeze({
   ridePing: { key: 'rtdbRidePingRateV1', windowMs: 5 * 60 * 1000, max: 60, cooldownMs: 800 },
   push: { key: 'rtdbPushSubRateV1', windowMs: 30 * 60 * 1000, max: 12, cooldownMs: 5000 },
   accountOps: { key: 'rtdbAccountOpsRateV1', windowMs: 10 * 60 * 1000, max: 30, cooldownMs: 2000 },
+  accountActivity: { key: 'rtdbAccountActivityRateV1', windowMs: 10 * 60 * 1000, max: 40, cooldownMs: 1500 },
   stationReview: { key: 'rtdbStationReviewRateV1', windowMs: 60 * 60 * 1000, max: 3, cooldownMs: 30 * 1000 },
   signIn: { key: 'authSignInRateV1', windowMs: 15 * 60 * 1000, max: 12, cooldownMs: 2500 },
   signUp: { key: 'authSignUpRateV1', windowMs: 60 * 60 * 1000, max: 6, cooldownMs: 5000 },

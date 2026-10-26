@@ -110,6 +110,7 @@ import { withBase } from '../lib/config.js';
                     safeStorage.setItem('userRegion', region);
                     safeStorage.setItem('defaultRoute_' + region, route.id);
                     safeStorage.setItem('welcomeSeen', 'true');
+                    import('../lib/account.js').then((m) => m.syncAccountPinnedRoutesNow?.()).catch(() => {});
                     
                     // 2. Hydrate global reactive store states
                     $currentRouteId.set(route.id);

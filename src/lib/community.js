@@ -694,6 +694,7 @@ export async function submitCommunityPost(body, routeId = $currentRouteId.get())
         }
         recordRateHit();
         rememberBody(text);
+        import('./account.js').then((m) => m.recordAccountActivity?.('community_post', { routeId })).catch(() => {});
         return { ok: true, post: payload };
     } catch (e) {
         return { ok: false, message: safeCommunityWriteError(e?.message) };
@@ -807,6 +808,7 @@ export async function submitCommunityReply(postId, body, routeId = $currentRoute
         } catch { /* optional */ }
         recordRateHit();
         rememberBody(text);
+        import('./account.js').then((m) => m.recordAccountActivity?.('community_reply', { routeId, postId })).catch(() => {});
         return { ok: true, reply: payload };
     } catch (e) {
         return { ok: false, message: e?.message || 'Could not reply.' };

@@ -66,6 +66,7 @@ jobs:
           PUBLIC_FIREBASE_VAPID_KEY: ${{ secrets.PUBLIC_FIREBASE_VAPID_KEY }}
           PUBLIC_COMMUNITY_WORKER_URL: https://nexttrain-community.enock.workers.dev
           PUBLIC_CARTO_API_KEY: ${{ secrets.PUBLIC_CARTO_API_KEY }}
+          SEO_REQUIRE_LIVE: '1'
 
       - name: De-index the lab site
         run: |

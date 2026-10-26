@@ -92,6 +92,8 @@ jobs:
           # Public endpoint, intentionally committed so production cannot
           # silently fall back to direct RTDB writes when a secret is absent.
           PUBLIC_COMMUNITY_WORKER_URL: https://nexttrain-community.enock.workers.dev
+          # Station/route SEO SSG must bake the live RTDB (or CF cache) dump.
+          SEO_REQUIRE_LIVE: '1'
 
       - name: Verify URL parity
         run: npm run verify:urls

@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_10.26.2': [
+        'SEO SSG (station and route landings) pulls live regional timetable sheets at build time via scripts/fetch-live-schedules-for-seo.mjs (Cloudflare cache, then Firebase), writes public/data/.seo-build-database.json, and prefers that over the checked-in dump. Production and github.io builds set SEO_REQUIRE_LIVE=1. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_10.26.1': [
         'Gauteng station SEO landings at /stations/{slug}.html for every timed stop on active GP routes (88 pages). Each page lists lines, neighbouring stations, and weekday/Saturday departures in both directions with Direct and short-working badges. Indexing is gated by seo-station-allowlist.js (phase 1 = all GP). Route SEO station lists link through. Sitemap, SW denylist, and verify:station-seo cover the new URLs. Reviews and out-of-network stubs are deferred. No commuter What\'s New. forceShow stays false.',
     ],

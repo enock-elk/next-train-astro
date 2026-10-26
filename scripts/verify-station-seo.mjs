@@ -78,6 +78,14 @@ const sitemapGen = readFileSync(new URL('../scripts/generate-sitemap.mjs', impor
 ok(sitemapGen.includes('stationUrls'), 'sitemap generator emits station URLs');
 ok(sitemapGen.includes('isStationIndexable'), 'sitemap only includes allowlisted stations');
 
+const fetchLive = readFileSync(new URL('../scripts/fetch-live-schedules-for-seo.mjs', import.meta.url), 'utf8');
+ok(fetchLive.includes('.seo-build-database.json'), 'live schedule fetch writes the SEO build dump');
+ok(fetchLive.includes('schedules/gauteng.json'), 'live schedule fetch pulls Gauteng from RTDB/cache');
+const seoTimetable = readFileSync(new URL('../src/lib/seo-timetable.js', import.meta.url), 'utf8');
+ok(seoTimetable.includes('.seo-build-database.json'), 'loadScheduleDump prefers the live SEO build dump');
+const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
+ok(String(pkg.scripts?.prebuild || '').includes('fetch-live-schedules-for-seo'), 'prebuild fetches live schedules before SSG');
+
 const sitemapPath = new URL('../public/sitemap.xml', import.meta.url);
 if (existsSync(sitemapPath)) {
   const xml = readFileSync(sitemapPath, 'utf8');

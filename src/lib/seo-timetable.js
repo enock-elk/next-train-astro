@@ -26,12 +26,26 @@ let _gridOrderDump;
 
 function dumpCandidates() {
     const here = dirname(fileURLToPath(import.meta.url));
-    return [
-        // astro build cwd is the repo root; compiled modules live under dist/
-        join(process.cwd(), 'public/data/full-database.json'),
-        join(here, '../../public/data/full-database.json'),
-        join(here, '../../../public/data/full-database.json'),
+    const envPath = String(process.env.SEO_SCHEDULE_DUMP || '').trim();
+    const roots = [
+        process.cwd(),
+        join(here, '../..'),
+        join(here, '../../..'),
     ];
+    const out = [];
+    // Live fetch from prebuild (scripts/fetch-live-schedules-for-seo.mjs) wins over
+    // the checked-in GitHub dump so station/route SEO pages match RTDB on deploy.
+    if (envPath) out.push(envPath);
+    for (const root of roots) {
+        out.push(join(root, 'public/data/.seo-build-database.json'));
+        out.push(join(root, 'public/data/full-database.json'));
+    }
+    return out;
+}
+
+/** Clear the in-memory dump (tests / fetch-then-build in one process). */
+export function clearScheduleDumpCache() {
+    _dump = null;
 }
 
 export function loadScheduleDump() {
@@ -43,6 +57,9 @@ export function loadScheduleDump() {
     _dump = JSON.parse(readFileSync(path, 'utf8'));
     if (_dump?.westerncape) {
         _dump = { ..._dump, westerncape: flattenPublicHolidays(_dump.westerncape) };
+    }
+    if (String(path).includes('.seo-build-database.json')) {
+        console.log(`SEO timetable SSG: using live build dump (${_dump?._seoLiveFetchedAt || 'no timestamp'})`);
     }
     return _dump;
 }

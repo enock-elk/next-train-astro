@@ -838,8 +838,26 @@ html.dark .nt-grid-edge-fade {
 .nt-grid-frame.can-scroll-x .nt-grid-edge-fade {
   opacity: 1;
 }
-/* Scroll hint lives on the right edge of the sticky station column (times
-   hide under it). Do not shade the far-left of the station names. */
+/* Shade the left edge of the time columns (right of the sticky station
+   names). Do not put a fade on the far-left of the station column. */
+.nt-grid-edge-fade-times {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: var(--nt-station-col-w, 7.5rem);
+  width: 1.5rem;
+  pointer-events: none;
+  z-index: 25;
+  opacity: 0;
+  background: linear-gradient(to right, rgba(15, 23, 42, 0.22), rgba(15, 23, 42, 0));
+}
+html.dark .nt-grid-edge-fade-times {
+  background: linear-gradient(to right, rgba(0, 0, 0, 0.55), rgba(0, 0, 0, 0));
+}
+.nt-grid-frame.can-scroll-x .nt-grid-edge-fade-times {
+  opacity: 1;
+}
+/* Sticky station cells cast onto the times, not onto the station names. */
 #grid-container .nt-station-scroll-shade {
   box-shadow: 6px 0 10px -6px rgba(15, 23, 42, 0.35);
 }

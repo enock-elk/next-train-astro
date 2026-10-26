@@ -68,14 +68,7 @@ const label = regionLabel || station?.region || '';
 >
   <div class="bg-white dark:bg-gray-900 w-full h-full flex flex-col overflow-hidden">
     <div class="relative flex-1 min-h-0 overflow-hidden bg-gray-200 dark:bg-gray-950">
-      <button
-        type="button"
-        data-seo-station-map-close
-        class="absolute top-3 right-3 z-30 p-2 rounded-full bg-white/90 dark:bg-gray-900/90 shadow-md hover:bg-white dark:hover:bg-gray-800 text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white transition focus:outline-none"
-        aria-label="Close Map"
-      >
-        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-      </button>
+      {/* No corner X — it sat on the map's Network Lines / Show all lines control. Close Map is the dismiss. */}
       <iframe
         id="seo-station-map-frame"
         title={`${name} GPS network map`}

@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_10.26.18': [
+        'Station SEO Leaflet full view drops the corner X so Network Lines / Show all lines stays tappable; Close Map remains. Full timetable header X restored. Grid scroll shade sits on the left edge of the time columns (at the sticky station width), not on the far-left of the station names. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_10.26.17': [
         'Offline dock marks an episode before probes and keeps a 5 minute paint gap so flaky mobile radios cannot spam You are offline. Account create/sign-in keep Welcome in the hero only (empty top bar). In-app timetable shades the right edge of the station column toward the times, drops the left edge fade, and removes the header X (Close Timetable stays). Layout recovers bottom nav after Chrome Signed-in browser toasts leave a blank strip. No commuter What\'s New. forceShow stays false.',
     ],

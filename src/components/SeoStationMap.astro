@@ -125,7 +125,6 @@ const title = `${name} on the GPS map`;
     const lockScroll = () => document.body.classList.add('modal-active');
     const unlockScroll = () => {
       if (document.getElementById('alerts-channel')?.classList.contains('hidden') === false) return;
-      if (window._isLightboxMode) return;
       document.body.classList.remove('modal-active');
     };
 

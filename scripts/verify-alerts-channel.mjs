@@ -387,6 +387,8 @@ const now = 1_700_000_000_000;
     const bodyAt = js.indexOf('${bodyHtml}');
     assert(titleAt >= 0 && titleAt < mediaAt && mediaAt < previewAt && previewAt < bodyAt, 'alert card is title, image, link preview, then body');
     assert(hub.includes('${titleHtml}${mediaHtml}${linkPreviewMarkup(notice)}${formattedMsg}'), 'notice modal is title, image, link preview, then body');
+    assert(hub.includes('renderAlertVideoMarkup(layout.videoUrls)'), 'notice modal paints the video preview card');
+    assert(hub.includes('hydrateAlertPosterImages(content)'), 'notice modal binds Play video after paint');
     assert(js.includes('}, 400);') && !js.includes('}, 480)'), 'alert hold is 400ms');
     assert(linkPreviewMarkup({
         suppressLinkPreview: true,

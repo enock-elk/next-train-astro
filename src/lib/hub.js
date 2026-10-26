@@ -66,7 +66,17 @@ import {
     toggleAlertPinned,
     toggleAlertPollRawCounts,
 } from './alerts-channel.js';
-import { layoutAlertPost, hoistAlertImagesFromHtml, ALERT_PIN_SVG, isNoticePinned, alertCopyNeedsSeeMore, buildAlertSeeMoreMarkup, expandAlertSeeMore } from './alerts-feed.js';
+import {
+    layoutAlertPost,
+    hoistAlertImagesFromHtml,
+    ALERT_PIN_SVG,
+    isNoticePinned,
+    alertCopyNeedsSeeMore,
+    buildAlertSeeMoreMarkup,
+    expandAlertSeeMore,
+    renderAlertVideoMarkup,
+    sanitizeAlertVideoUrl,
+} from './alerts-feed.js';
 import {
     buildPollShellHtml,
     hydratePollResults,
@@ -2016,7 +2026,7 @@ export function renderServiceAlertModal(notice, options = {}) {
     }
 
     const posterUrls = layout.imageUrls;
-    let mediaHtml = '';
+    let posterHtml = '';
     if (posterUrls.length) {
         const cells = posterUrls.map((path) => {
             const href = resolveAlertImageSrc(path);
@@ -2027,13 +2037,13 @@ export function renderServiceAlertModal(notice, options = {}) {
             return `<button type="button" onclick='event.stopPropagation(); ${onclick}' class="relative block w-full min-h-[8rem] focus:outline-none cursor-zoom-in rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm bg-gray-100 dark:bg-gray-900"><img src="${src}" alt="" referrerpolicy="no-referrer" class="w-full h-auto max-h-56 min-h-[8rem] object-contain bg-gray-100 dark:bg-gray-900"></button>`;
         }).join('');
         const grid = posterUrls.length > 1 ? 'grid grid-cols-2 gap-2' : 'grid grid-cols-1';
-        mediaHtml = `<div class="${grid} mt-2 mb-1">${cells}</div>`;
+        posterHtml = `<div class="${grid} mt-2 mb-1">${cells}</div>`;
     }
+    const mediaHtml = `${posterHtml}${renderAlertVideoMarkup(layout.videoUrls)}`;
     content.innerHTML = `${titleHtml}${mediaHtml}${linkPreviewMarkup(notice)}${formattedMsg}`;
     ensureLightboxPlusBadges(content);
-    hydrateLinkPreviews(content, REPLY_WORKER_URL);
 
-    if (notice.ctaUrl && notice.ctaText) {
+    if (notice.ctaUrl && notice.ctaText && !sanitizeAlertVideoUrl(notice.ctaUrl)) {
         content.innerHTML += `
             <a href="${escapeHTML(notice.ctaUrl)}" target="_blank" rel="noopener" class="mt-4 flex items-center justify-center w-full bg-blue-50 dark:bg-blue-900/30 hover:bg-blue-100 dark:hover:bg-blue-800 text-blue-700 dark:text-blue-300 font-bold py-2.5 px-4 rounded-lg transition-colors text-xs uppercase tracking-wide border border-blue-200 dark:border-blue-800 shadow-sm focus:outline-none">
                 ${escapeHTML(notice.ctaText)}
@@ -2046,6 +2056,9 @@ export function renderServiceAlertModal(notice, options = {}) {
         const pollEl = content.querySelector('[data-poll-shell]');
         if (pollEl) hydratePollResults(pollEl);
     }
+
+    hydrateAlertPosterImages(content);
+    hydrateLinkPreviews(content, REPLY_WORKER_URL);
 
     if (timestamp) {
         if (options.timestampHtml) {

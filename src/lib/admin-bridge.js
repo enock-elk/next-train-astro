@@ -81,6 +81,7 @@ import {
     ATTACHMENT_MAX_FILES,
 } from './attachments.js';
 import { prepareRichHtml, sanitizeRichHtml, isSafeHref } from './rich-text.js';
+import { sanitizeAlertVideoUrl } from './alerts-feed.js';
 import {
     getGridOrderManifest,
     getRuntimeGridOrderRecord,
@@ -235,6 +236,7 @@ export function exposeAdminGlobals() {
     window.sniffAttachmentBytes = sniffAttachmentBytes;
     window.sanitizeAttachmentDisplayUrl = sanitizeAttachmentDisplayUrl;
     window.classifyAttachmentUrl = classifyAttachmentUrl;
+    window.sanitizeAlertVideoUrl = sanitizeAlertVideoUrl;
     window.isSafeLightboxOnclick = isSafeLightboxOnclick;
     window.lightboxOnclickJs = lightboxOnclickJs;
     window.attachmentPreviewHtml = attachmentPreviewHtml;

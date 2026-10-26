@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_10.27.2': [
+        'Alert Preview / Post modal paints YouTube, Vimeo, and file video the same way the Alerts feed does (still + Play video). Media → From the internet accepts those video links and loads the crawled link preview card. Preview Alert attaches the crawled card before the modal opens. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_10.27.1': [
         'Via branch marks prefer structured schedule.via, then VARIANT, then legacy via/Monte/Vista cell prose. Admin Grid Column Order can save Via marks to all day sheets for a route. Force schedule type accepts multiple YYYY-MM-DD dates (empty dates keep while-Active behaviour). No commuter What\'s New. forceShow stays false.',
     ],

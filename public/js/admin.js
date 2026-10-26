@@ -14452,9 +14452,9 @@ const Admin = {
         sheet.id = 'nt-media-source';
         sheet.className = 'fixed inset-0 z-[240] flex items-end sm:items-center justify-center bg-black/50 p-4';
         sheet.innerHTML = `
-            <div class="w-full max-w-sm rounded-2xl bg-white dark:bg-gray-800 p-4 shadow-xl" role="dialog" aria-modal="true" aria-label="Image source">
-                <p class="text-sm font-black text-gray-900 dark:text-white mb-1">Add an image</p>
-                <p class="text-xs text-gray-500 dark:text-gray-400 mb-3">A file from this device can be a photo or a PDF. An internet image must be the file itself.</p>
+            <div class="w-full max-w-sm rounded-2xl bg-white dark:bg-gray-800 p-4 shadow-xl" role="dialog" aria-modal="true" aria-label="Media source">
+                <p class="text-sm font-black text-gray-900 dark:text-white mb-1">Add media</p>
+                <p class="text-xs text-gray-500 dark:text-gray-400 mb-3">A file from this device can be a photo or a PDF. From the internet: an image file, or a YouTube / Vimeo / video file link (loads the crawled preview).</p>
                 <button type="button" data-media-choice="device" class="w-full mb-2 h-11 rounded-xl bg-blue-600 text-white text-sm font-bold">From this device</button>
                 <button type="button" data-media-choice="url" class="w-full mb-2 h-11 rounded-xl border border-gray-300 dark:border-gray-600 text-sm font-bold text-gray-800 dark:text-gray-100">From the internet</button>
                 <button type="button" data-media-choice="cancel" class="w-full h-10 text-sm font-bold text-gray-500">Cancel</button>
@@ -14481,11 +14481,54 @@ const Admin = {
         document.body.appendChild(sheet);
     },
 
-    insertInternetImage: (editorId) => {
-        const raw = window.prompt('Paste the image file link (https, ending in .jpg, .png, .gif, or .webp):', 'https://');
+    insertInternetVideoLink: async (editor, videoUrl) => {
+        if (!editor || !videoUrl) return false;
+        const esc = typeof escapeHTML === 'function' ? escapeHTML(videoUrl) : String(videoUrl);
+        const htmlToInsert = `<a href="${esc}" target="_blank" rel="noopener" class="text-blue-600 dark:text-blue-400 underline underline-offset-2">${esc}</a>`;
+        editor.focus();
+        if (Admin._savedRange) {
+            const sel = window.getSelection();
+            sel.removeAllRanges();
+            try { sel.addRange(Admin._savedRange); } catch { /* range left the editor */ }
+        }
+        const needsBreak = !!(editor.innerText || '').trim();
+        const chunk = needsBreak ? `<br>${htmlToInsert}` : htmlToInsert;
+        if (!document.execCommand('insertHTML', false, chunk)) editor.innerHTML += chunk;
+        Admin._savedRange = null;
+        try {
+            const preview = window.ntLinkPreview?.fetchLinkPreview
+                ? await window.ntLinkPreview.fetchLinkPreview(videoUrl, Admin.replyWorkerUrl())
+                : null;
+            if (preview?.url) Admin.paintComposerPreview(preview);
+            else Admin.scheduleAlertPreview();
+        } catch {
+            Admin.scheduleAlertPreview();
+        }
+        return true;
+    },
+
+    insertInternetImage: async (editorId) => {
+        const raw = window.prompt('Paste an image file link, or a YouTube / Vimeo / video file link (https):', 'https://');
         if (raw == null) return;
         const typed = String(raw).trim();
         if (!typed || typed === 'https://') return;
+        const editor = document.getElementById(editorId);
+        if (!editor) {
+            if (typeof showToast === 'function') showToast('Could not use that link.', 'error');
+            return;
+        }
+        const video = typeof window.sanitizeAlertVideoUrl === 'function'
+            ? window.sanitizeAlertVideoUrl(typed)
+            : '';
+        if (video) {
+            const ok = await Admin.insertInternetVideoLink(editor, video);
+            if (!ok) {
+                if (typeof showToast === 'function') showToast('Could not use that video link.', 'error');
+                return;
+            }
+            if (typeof showToast === 'function') showToast('Video link added. Preview loading.', 'success');
+            return;
+        }
         const safe = typeof window.sanitizeAttachmentDisplayUrl === 'function'
             ? window.sanitizeAttachmentDisplayUrl(typed)
             : '';
@@ -14494,12 +14537,11 @@ const Admin = {
             : '';
         if (!safe || kind !== 'image') {
             if (typeof showToast === 'function') {
-                showToast('Use a link to the image file. It needs to start with https and end in .jpg, .png, .gif, or .webp.', 'error', 4500);
+                showToast('Use an image file (.jpg, .png, .gif, .webp) or a YouTube / Vimeo / video file link.', 'error', 4500);
             }
             return;
         }
-        const editor = document.getElementById(editorId);
-        if (!editor || !Admin.placeComposerAttachment(editor, safe, false, Admin._savedRange)) {
+        if (!Admin.placeComposerAttachment(editor, safe, false, Admin._savedRange)) {
             if (typeof showToast === 'function') showToast('Could not use that image link.', 'error');
             return;
         }
@@ -14522,7 +14564,7 @@ const Admin = {
             `<button type="button" onmousedown="event.preventDefault();" ontouchstart="Admin.saveCursorRange()" onclick="Admin.formatAlertText('${tag}', '${id}')" class="px-1.5 py-1 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 rounded flex justify-center items-center focus:outline-none" title="${title}">${svg}</button>`;
         const sep = `<div class="w-px h-4 bg-gray-300 dark:bg-gray-600 my-auto mx-0.5 shrink-0"></div>`;
         const media = fileInputId
-            ? `<button type="button" id="${fileLabelId}" onmousedown="event.preventDefault(); Admin.saveCursorRange();" ontouchstart="Admin.saveCursorRange()" onclick="Admin.pickMediaSource('${fileInputId}', '${id}')" class="shrink-0 px-2 py-1 text-xs font-medium text-purple-600 dark:text-purple-400 hover:bg-gray-200 dark:hover:bg-gray-600 rounded flex items-center justify-center gap-1 focus:outline-none cursor-pointer whitespace-nowrap" title="Add an image from this device or from the internet">${Admin.icon('paperclip', 'w-3.5 h-3.5')} Media</button>
+            ? `<button type="button" id="${fileLabelId}" onmousedown="event.preventDefault(); Admin.saveCursorRange();" ontouchstart="Admin.saveCursorRange()" onclick="Admin.pickMediaSource('${fileInputId}', '${id}')" class="shrink-0 px-2 py-1 text-xs font-medium text-purple-600 dark:text-purple-400 hover:bg-gray-200 dark:hover:bg-gray-600 rounded flex items-center justify-center gap-1 focus:outline-none cursor-pointer whitespace-nowrap" title="Add an image, or a YouTube / Vimeo / video link from the internet">${Admin.icon('paperclip', 'w-3.5 h-3.5')} Media</button>
                             <input type="file" id="${fileInputId}" class="hidden" accept="image/*,.pdf">`
             : '';
         const alignL = '<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h10M4 18h16"></path></svg>';
@@ -17931,6 +17973,7 @@ const Admin = {
             const modal = document.getElementById('notice-modal');
             if (typeof window.renderServiceAlertModal === 'function' && modal) {
                 const restoreZ = Admin._elevateModalForAdmin(modal);
+                await Admin.attachLinkPreview(payload);
                 window.renderServiceAlertModal(payload, {
                     mode: 'preview',
                     onEdit: () => { try { restoreZ(); } catch { /* ignore */ } },

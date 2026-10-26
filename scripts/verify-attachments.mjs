@@ -150,6 +150,11 @@ function bytes(...vals) {
     assert(admin.includes('prepareSafeUpload'), 'admin upload sniffs via prepareSafeUpload');
     assert(admin.includes('pickMediaSource') && admin.includes('From this device') && admin.includes('From the internet'), 'Media asks for a device file or an internet image');
     assert(admin.includes('insertInternetImage'), 'an internet image is inserted without upload');
+    assert(admin.includes('insertInternetVideoLink') && admin.includes('sanitizeAlertVideoUrl'), 'Media from the internet accepts a YouTube or video link');
+    assert(admin.includes('insertInternetVideoLink:') || admin.includes('insertInternetVideoLink: async'), 'insertInternetVideoLink is a Media helper');
+    assert(admin.includes('await Admin.attachLinkPreview(payload)'), 'Preview Alert attaches the crawled card before the modal');
+    const bridge = readFileSync(join(ROOT, 'src/lib/admin-bridge.js'), 'utf8');
+    assert(bridge.includes('window.sanitizeAlertVideoUrl = sanitizeAlertVideoUrl'), 'admin can sanitize a Media video link');
     assert(admin.includes('data-nt-src') && admin.includes('referrerpolicy="no-referrer"'), 'composer image keeps its address and does not send a hotlink referrer');
     assert(!admin.includes('alt="Admin Attachment"'), 'composer image does not fall back to the attachment label');
     assert(admin.includes('stampComposerImages'), 'preview reads the live image address');

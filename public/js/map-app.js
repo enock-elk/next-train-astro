@@ -1480,8 +1480,35 @@
                 initLat = -32.95; initLon = 27.75; initZoom = 11;
             }
 
+            // SEO / deep-link station isolate: ?station= + optional lat/lon.
+            function readStationFocusQuery() {
+                try {
+                    const q = new URLSearchParams(location.search);
+                    const station = String(q.get('station') || '').trim();
+                    const lat = Number(q.get('lat'));
+                    const lon = Number(q.get('lon'));
+                    return {
+                        station,
+                        lat: Number.isFinite(lat) ? lat : null,
+                        lon: Number.isFinite(lon) ? lon : null,
+                    };
+                } catch (_) {
+                    return { station: '', lat: null, lon: null };
+                }
+            }
+            const stationFocusQuery = readStationFocusQuery();
+            const stationFocusZoom = 16;
+            if (stationFocusQuery.station) {
+                try { document.documentElement.classList.add('nt-map-station-focus'); } catch (_) {}
+            }
+
             // Guardian UX: Disabled Leaflet's rigid zoom control for horizontal bar layout
-            const map = L.map('map', { zoomControl: false }).setView([initLat, initLon], initZoom);
+            const mapStartLat = (stationFocusQuery.lat != null) ? stationFocusQuery.lat : initLat;
+            const mapStartLon = (stationFocusQuery.lon != null) ? stationFocusQuery.lon : initLon;
+            const mapStartZoom = (stationFocusQuery.lat != null && stationFocusQuery.lon != null)
+                ? stationFocusZoom
+                : initZoom;
+            const map = L.map('map', { zoomControl: false }).setView([mapStartLat, mapStartLon], mapStartZoom);
             map.on('click', function () {
                 try {
                     (window.parent || window).postMessage({ type: 'nt-map-close-tracking' }, '*');
@@ -2268,7 +2295,10 @@
                 else fitNetworkView();
             }
 
-            if (isMapTabEmbed()) {
+            // Map-tab embed follows the pinned corridor. Station SEO (?station=) must
+            // isolate that stop instead — skip corridor fitBounds so the preview
+            // does not open on the whole line.
+            if (isMapTabEmbed() && !stationFocusQuery.station) {
                 let pinned = '';
                 try { pinned = localStorage.getItem('defaultRoute_' + currentRegion) || ''; } catch (_) {}
                 applyEmbedCorridorFocus(pinned);
@@ -2355,17 +2385,12 @@
             });
             raiseStationMarkers();
 
-            // SEO / deep-link: ?station=Pretoria (or slug) centres the GPS map on that stop.
+            // SEO / deep-link: isolate the named stop at street-level zoom (pan to see the line).
             function focusStationFromQuery() {
-                let raw = '';
-                let latQ = NaN;
-                let lonQ = NaN;
-                try {
-                    const q = new URLSearchParams(location.search);
-                    raw = String(q.get('station') || '').trim();
-                    latQ = Number(q.get('lat'));
-                    lonQ = Number(q.get('lon'));
-                } catch (_) { return false; }
+                const raw = stationFocusQuery.station || '';
+                const latQ = stationFocusQuery.lat;
+                const lonQ = stationFocusQuery.lon;
+                if (!raw && latQ == null && lonQ == null) return false;
                 const normKey = (value) => String(value || '')
                     .replace(/ STATION$/i, '')
                     .replace(/[-_]+/g, ' ')
@@ -2383,17 +2408,31 @@
                 }
                 if (item?.marker && typeof item.marker.getLatLng === 'function') {
                     const ll = item.marker.getLatLng();
-                    try { map.setView(ll, 15, { animate: false }); } catch (_) {}
-                    try { item.marker.openPopup(); } catch (_) {}
+                    try { map.setView(ll, stationFocusZoom, { animate: false }); } catch (_) {}
+                    try {
+                        if (typeof item.marker.setRadius === 'function') item.marker.setRadius(7);
+                        if (typeof item.marker.setStyle === 'function') {
+                            item.marker.setStyle({ color: '#1d4ed8', weight: 3, fillColor: '#ffffff' });
+                        }
+                        item.marker.bringToFront?.();
+                    } catch (_) {}
                     return true;
                 }
-                if (Number.isFinite(latQ) && Number.isFinite(lonQ)) {
-                    try { map.setView([latQ, lonQ], 15, { animate: false }); } catch (_) {}
+                if (latQ != null && lonQ != null) {
+                    try { map.setView([latQ, lonQ], stationFocusZoom, { animate: false }); } catch (_) {}
                     return true;
                 }
                 return false;
             }
             focusStationFromQuery();
+            // Re-assert after layout — corridor paint / iframe size can nudge the view.
+            if (stationFocusQuery.station || (stationFocusQuery.lat != null && stationFocusQuery.lon != null)) {
+                requestAnimationFrame(() => {
+                    focusStationFromQuery();
+                    try { map.invalidateSize(false); } catch (_) {}
+                    focusStationFromQuery();
+                });
+            }
 
             // --- BUILD DYNAMIC LEGEND ---
             const legendContent = document.getElementById('legend-content');
@@ -4661,8 +4700,26 @@
 
             // --- DYNAMIC TEXT RESIZING & PROGRESSIVE DISCLOSURE ---
             function keepHubMarkerSize() {
+                const focusWant = String(stationFocusQuery.station || '')
+                    .replace(/ STATION$/i, '')
+                    .replace(/[-_]+/g, ' ')
+                    .replace(/\s+/g, ' ')
+                    .trim()
+                    .toUpperCase();
                 stationLayerItems.forEach((item) => {
                     if (!item.marker || typeof item.marker.setRadius !== 'function') return;
+                    const nameKey = String(item.name || '')
+                        .replace(/ STATION$/i, '')
+                        .replace(/[-_]+/g, ' ')
+                        .replace(/\s+/g, ' ')
+                        .trim()
+                        .toUpperCase();
+                    const focused = !!(focusWant && nameKey === focusWant);
+                    if (focused) {
+                        item.marker.setRadius(7);
+                        item.marker.setStyle({ color: '#1d4ed8', weight: 3, fillColor: '#ffffff' });
+                        return;
+                    }
                     const major = !!item.isMajor;
                     item.marker.setRadius(major ? 5 : 2.5);
                     item.marker.setStyle({

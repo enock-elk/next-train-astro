@@ -378,26 +378,54 @@ export function buildStationBoardAppPath(station) {
 }
 
 /**
- * One-line neighbour headline: "Pretoria - Irene / Kempton Park".
- * Far ends of every corridor through this stop, not immediate adjacents.
+ * Far corridor ends grouped by shared next stop.
+ * Slash only when the immediate next station is the same
+ * (Pretoria → Sportpark → Irene / Kempton Park).
+ * Different nexts stay separate with a middle dot.
+ */
+export function groupStationFarEndsByNext(station, corridors) {
+  const place = station?.name || '';
+  const placeKey = normalizeKey(place);
+  /** @type {Map<string, { ends: Map<string, string> }>} */
+  const groups = new Map();
+
+  const add = (nextLabel, farEnd) => {
+    if (!farEnd || normalizeKey(farEnd) === placeKey) return;
+    const nextKey = nextLabel
+      ? `next:${normalizeKey(nextLabel)}`
+      : `end:${normalizeKey(farEnd)}`;
+    let group = groups.get(nextKey);
+    if (!group) {
+      group = { ends: new Map() };
+      groups.set(nextKey, group);
+    }
+    const endKey = normalizeKey(farEnd);
+    if (!group.ends.has(endKey)) group.ends.set(endKey, farEnd);
+  };
+
+  for (const c of corridors || []) {
+    // Toward destB: next is neighbors.towardDest
+    add(c.neighbors?.towardDest || null, c.dest);
+    // Toward destA: next is neighbors.towardOrigin
+    add(c.neighbors?.towardOrigin || null, c.origin);
+  }
+
+  return [...groups.values()]
+    .map((g) => [...g.ends.values()].sort((a, b) => a.localeCompare(b)))
+    .filter((ends) => ends.length)
+    .sort((a, b) => a[0].localeCompare(b[0]));
+}
+
+/**
+ * One-line neighbour headline: "Pretoria - Irene / Kempton Park · Pienaarspoort".
+ * `/` only joins ends that share the same next station.
  */
 export function buildStationNeighbourHeadline(station, corridors) {
   const place = station?.name || '';
   if (!place) return '';
-  const ends = [];
-  const seen = new Set();
-  for (const c of corridors || []) {
-    for (const end of [c.origin, c.dest]) {
-      if (!end || normalizeKey(end) === normalizeKey(place)) continue;
-      const key = normalizeKey(end);
-      if (seen.has(key)) continue;
-      seen.add(key);
-      ends.push(end);
-    }
-  }
-  if (!ends.length) return '';
-  ends.sort((a, b) => a.localeCompare(b));
-  return `${place} - ${ends.join(' / ')}`;
+  const groups = groupStationFarEndsByNext(station, corridors);
+  if (!groups.length) return '';
+  return `${place} - ${groups.map((ends) => ends.join(' / ')).join(' · ')}`;
 }
 
 function earliestLatestWeekday(corridors) {
@@ -430,20 +458,12 @@ export function buildStationQuickFacts(station, corridors) {
     });
   }
 
-  const farEnds = [];
-  const seenEnds = new Set();
-  for (const c of corridors || []) {
-    for (const end of [c.origin, c.dest]) {
-      if (!end || normalizeKey(end) === normalizeKey(station?.name)) continue;
-      const key = normalizeKey(end);
-      if (seenEnds.has(key)) continue;
-      seenEnds.add(key);
-      farEnds.push(end);
-    }
-  }
-  if (farEnds.length) {
-    farEnds.sort((a, b) => a.localeCompare(b));
-    facts.push({ label: 'Serves', value: farEnds.join(' / ') });
+  const serveGroups = groupStationFarEndsByNext(station, corridors);
+  if (serveGroups.length) {
+    facts.push({
+      label: 'Serves',
+      value: serveGroups.map((ends) => ends.join(' / ')).join(' · '),
+    });
   }
 
   const { earliest, latest } = earliestLatestWeekday(corridors);

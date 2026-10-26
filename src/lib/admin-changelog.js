@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_10.26.4': [
+        'Station SEO neighbour headlines only slash-join corridor ends that share the same next stop (Pretoria - Irene / Kempton Park via Sportpark; other nexts stay middle-dot groups). The GPS preview isolates ?station= at street-level zoom instead of fitting the whole corridor, keeps pan/zoom along the line, and shows Loading map without the network sync copy. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_10.26.3': [
         'Station SEO landings drop Open live board for a Leaflet GPS map preview (map.html?station=) that expands into a full-view overlay matching the in-app Network Map sheet, not browser fullscreen. Neighbouring stations are one headline (Pretoria - Irene / Kempton Park) plus a per-corridor accordion of stop order. About this station and Quick facts are generated from the sheets. SEO Open in Next Train soft-pins only on cold launch so saved defaults stay put. No commuter What\'s New. forceShow stays false.',
     ],

@@ -4763,6 +4763,8 @@ export async function applyPlannerDeepLink() {
         safeStorage.setItem('welcomeSeen', 'true');
     }
     try { document.getElementById('welcome-modal')?.classList.add('hidden'); } catch { /* ignore */ }
+    // SEO / share planner handoffs skip Welcome — clear nt-onboarding so the bottom bar shows.
+    import('./prefs.js').then(({ syncInAppChrome }) => syncInAppChrome()).catch(() => {});
 
     // SPA boot pins a route before handleShortcutActions — without it loadAllSchedules returns early
     // and MASTER_STATION_LIST never fills → "Connection timeout".

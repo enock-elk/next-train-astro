@@ -1351,6 +1351,11 @@ export function restorePinnedSession() {
                 safeStorage.setItem('welcomeSeen', 'true');
                 console.log('🛡️ Guardian: Restored welcomeSeen from pinned route (iOS storage hop / ITP).');
             }
+            // Layout / hydratePrefs may have run while welcomeSeen was still missing
+            // (IDB pin not resurrected yet). Refresh bottom-nav chrome once the pin proves returning.
+            if (typeof document !== 'undefined') {
+                import('./prefs.js').then(({ syncInAppChrome }) => syncInAppChrome()).catch(() => {});
+            }
         }
         const region = inferRegionFromPins();
         if (region && !safeStorage.getItem('userRegion')) {

@@ -351,6 +351,7 @@ export async function applyPlannerShortcutDeepLink() {
     if (safeStorage.getItem('welcomeSeen') !== 'true') {
         safeStorage.setItem('welcomeSeen', 'true');
     }
+    import('./prefs.js').then(({ syncInAppChrome }) => syncInAppChrome()).catch(() => {});
     stripShareParamsFromUrl();
     if (typeof window.switchTab === 'function') window.switchTab('trip-planner');
     return true;
@@ -375,6 +376,7 @@ export async function applyShareTargetDeepLink() {
     if (safeStorage.getItem('welcomeSeen') !== 'true') {
         safeStorage.setItem('welcomeSeen', 'true');
     }
+    import('./prefs.js').then(({ syncInAppChrome }) => syncInAppChrome()).catch(() => {});
 
     stripShareParamsFromUrl();
     if (typeof window.switchTab === 'function') window.switchTab('trip-planner');
@@ -404,6 +406,7 @@ export async function applyLiveTrainDeepLink() {
         safeStorage.setItem('welcomeSeen', 'true');
     }
     try { document.getElementById('welcome-modal')?.classList.add('hidden'); } catch { /* ignore */ }
+    import('./prefs.js').then(({ syncInAppChrome }) => syncInAppChrome()).catch(() => {});
 
     const { ROUTES } = await import('./config.js');
     const { $currentRouteId, $userRegion } = await import('../store.js');
@@ -499,6 +502,7 @@ export async function applyMapDeepLink() {
     if (safeStorage.getItem('welcomeSeen') !== 'true') {
         safeStorage.setItem('welcomeSeen', 'true');
     }
+    import('./prefs.js').then(({ syncInAppChrome }) => syncInAppChrome()).catch(() => {});
 
     stripShareParamsFromUrl();
 

@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_10.26.11': [
+        'SEO Open in Next Train (and other share deep links) re-runs syncInAppChrome after minting welcomeSeen or restoring a pinned route, so html.nt-onboarding cannot leave the bottom nav stuck hidden for returning commuters. Welcome skip path and immersive chrome exit do the same. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_10.26.10': [
         'SEO route (and WC holiday) grids show Schedule effective from above each sheet and move Download above the timetable. Sheet meta comes from the same nest overlay as the times. No commuter What\'s New. forceShow stays false.',
     ],

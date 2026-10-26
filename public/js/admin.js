@@ -3338,11 +3338,11 @@ const Admin = {
                 Admin._pendingDeletionCount = delUnread;
             } catch { /* deletion badge is best-effort */ }
 
-            // 5. Community activity, per operator and per route.
+            // 5. Community activity (per operator / route) + pending station SEO reviews.
             const mqRes = await window.guardianFetch(`${dynamicEndpoint}community_activity.json?auth=${secret}`, {}, 6000);
+            let mqUnread = 0;
             if (mqRes.ok) {
                 const mqData = await mqRes.json();
-                let mqUnread = 0;
                 if (mqData && typeof mqData === 'object') {
                     Object.entries(mqData).forEach(([routeId, messages]) => {
                         const seenAt = Number(adminState.community_seen?.[routeId] || 0);
@@ -3363,11 +3363,23 @@ const Admin = {
                         if (routeId && Number(item?.timestamp || 0) > seenAt) mqUnread += 1;
                     });
                 }
-                totalUnread += mqUnread;
+            }
+            let reviewPending = 0;
+            try {
+                const revRes = await window.guardianFetch(`${dynamicEndpoint}station_reviews.json?auth=${secret}`, {}, 8000);
+                if (revRes.ok) {
+                    const revData = await revRes.json();
+                    reviewPending = ntAdminPendingStationReviewCount(ntAdminStationReviewRows(revData));
+                }
+            } catch { /* reviews badge is best-effort */ }
+            totalUnread += mqUnread + reviewPending;
+            if (typeof Admin.paintCommunityMonitorBadges === 'function') {
+                Admin.paintCommunityMonitorBadges(mqUnread, reviewPending);
+            } else {
                 const mqBadge = document.getElementById('mq-unread-badge');
                 if (mqBadge) {
-                    mqBadge.textContent = Admin.formatBadgeCount(mqUnread);
-                    mqBadge.classList.toggle('hidden', mqUnread === 0);
+                    mqBadge.textContent = Admin.formatBadgeCount(mqUnread + reviewPending);
+                    mqBadge.classList.toggle('hidden', (mqUnread + reviewPending) === 0);
                 }
             }
             
@@ -11388,12 +11400,9 @@ const Admin = {
                 const routesObj = (typeof ROUTES !== 'undefined' && ROUTES) || window.ROUTES || {};
                 const rows = ntAdminCommunityActivityRows(activityData, seenData, items, routesObj);
                 Admin._communityMonitorRows = rows;
-                const badge = document.getElementById('mq-unread-badge');
                 const totalUnread = rows.reduce((sum, row) => sum + row.unread, 0);
-                if (badge) {
-                    badge.textContent = totalUnread > 99 ? '99+' : String(totalUnread);
-                    badge.classList.toggle('hidden', totalUnread < 1);
-                }
+                Admin.paintCommunityMonitorBadges?.(totalUnread, Number(Admin._stationReviewPending || 0));
+                try { Admin.fetchStationReviews?.({ quiet: true }); } catch { /* optional */ }
 
                 const esc = (value) => ntAdminSecureEscape(String(value == null ? '' : value));
                 const formatWhen = (value) => value ? Admin.formatDate(Number(value)) : 'No activity yet';
@@ -11599,10 +11608,7 @@ const Admin = {
                     routeBadge.classList.add('hidden');
                     const remaining = Array.from(list.querySelectorAll('.community-route-unread:not(.hidden)'))
                         .reduce((sum, el) => sum + Number(el.textContent || 0), 0);
-                    if (badge) {
-                        badge.textContent = remaining > 99 ? '99+' : String(remaining);
-                        badge.classList.toggle('hidden', remaining < 1);
-                    }
+                    Admin.paintCommunityMonitorBadges?.(remaining, Number(Admin._stationReviewPending || 0));
                 };
 
                 list.querySelectorAll('.community-monitor-route').forEach((details) => {
@@ -11830,6 +11836,136 @@ const Admin = {
                 });
             } catch (e) {
                 list.innerHTML = `<p class="text-xs text-red-500 text-center py-4">Failed to load: ${e.message || e}</p>`;
+            }
+        };
+
+        Admin.renderStationReviews = () => {
+            const list = document.getElementById('mq-reviews-list');
+            if (!list) return;
+            const esc = (value) => ntAdminSecureEscape(String(value == null ? '' : value));
+            const filter = String(document.getElementById('mq-reviews-filter')?.value || 'pending');
+            const rows = (Admin._stationReviewRows || []).filter((row) =>
+                filter === 'all' ? true : String(row.status || '') === filter
+            );
+            if (!rows.length) {
+                list.innerHTML = `<p class="text-xs text-gray-400 text-center py-4">${filter === 'pending' ? 'No pending station reviews.' : 'No reviews in this filter.'}</p>`;
+                return;
+            }
+            const starRow = (n) => '★'.repeat(Math.max(0, Math.min(5, Number(n) || 0))) + '☆'.repeat(Math.max(0, 5 - Math.min(5, Number(n) || 0)));
+            list.innerHTML = rows.map((row) => {
+                const pending = String(row.status || '') === 'pending';
+                const status = String(row.status || 'pending');
+                const when = row.createdAt ? Admin.formatDate(Number(row.createdAt)) : '-';
+                const amenities = Array.isArray(row.amenities) ? row.amenities : [];
+                const amenityHtml = amenities.length
+                    ? `<p class="text-[10px] text-gray-500 dark:text-gray-400 mt-1">${esc(amenities.join(' · '))}</p>`
+                    : '';
+                const contact = row.contact
+                    ? `<p class="text-[10px] font-mono text-gray-500 dark:text-gray-400 mt-1 break-all">Contact (private): ${esc(row.contact)}</p>`
+                    : '';
+                const actions = pending ? `
+                    <div class="flex flex-wrap gap-3 mt-2">
+                        <button type="button" class="mq-review-approve text-[10px] font-bold text-emerald-700 dark:text-emerald-400 underline" data-slug="${esc(row.stationSlug)}" data-id="${esc(row._key)}">Approve</button>
+                        <button type="button" class="mq-review-reject text-[10px] font-bold text-rose-600 dark:text-rose-400 underline" data-slug="${esc(row.stationSlug)}" data-id="${esc(row._key)}">Reject</button>
+                    </div>` : `<p class="text-[10px] text-gray-400 mt-2 capitalize">${esc(status)}</p>`;
+                return `<div class="border ${pending ? 'border-amber-300 bg-amber-50/70 dark:bg-amber-950/20' : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800'} rounded-xl p-3 text-left" data-station-review="${esc(row.stationSlug)}/${esc(row._key)}">
+                    <div class="flex justify-between gap-2 mb-1">
+                        <p class="text-xs font-black text-gray-900 dark:text-white truncate">${esc(row.stationName || row.stationSlug || 'Station')}</p>
+                        <span class="text-[9px] font-mono text-gray-400 shrink-0">${esc(when)}</span>
+                    </div>
+                    <p class="text-amber-500 text-sm tracking-widest" aria-label="${Number(row.rating) || 0} out of 5">${esc(starRow(row.rating))}</p>
+                    <p class="text-[11px] text-gray-700 dark:text-gray-300 mt-1 whitespace-pre-wrap">${esc(row.text || '')}</p>
+                    <p class="text-[10px] text-gray-500 mt-1">${esc(row.displayName || 'Anonymous')} · ${esc(row.source || 'seo_station')}</p>
+                    ${contact}
+                    ${amenityHtml}
+                    ${actions}
+                </div>`;
+            }).join('');
+
+            list.querySelectorAll('.mq-review-approve').forEach((btn) => {
+                btn.onclick = async () => {
+                    btn.disabled = true;
+                    try {
+                        await Admin.setStationReviewStatus(btn.dataset.slug, btn.dataset.id, 'approved');
+                        if (typeof showToast === 'function') showToast('Review approved', 'success');
+                        Admin.fetchStationReviews();
+                    } catch (e) {
+                        if (typeof showToast === 'function') showToast(e?.message || 'Approve failed', 'error');
+                        btn.disabled = false;
+                    }
+                };
+            });
+            list.querySelectorAll('.mq-review-reject').forEach((btn) => {
+                btn.onclick = async () => {
+                    btn.disabled = true;
+                    try {
+                        await Admin.setStationReviewStatus(btn.dataset.slug, btn.dataset.id, 'rejected');
+                        if (typeof showToast === 'function') showToast('Review rejected', 'success');
+                        Admin.fetchStationReviews();
+                    } catch (e) {
+                        if (typeof showToast === 'function') showToast(e?.message || 'Reject failed', 'error');
+                        btn.disabled = false;
+                    }
+                };
+            });
+        };
+
+        Admin.setStationReviewStatus = async (slug, reviewId, status) => {
+            const secret = await Admin.getAuthKey();
+            if (!secret) throw new Error('Not signed in');
+            const safeSlug = String(slug || '');
+            const safeId = String(reviewId || '');
+            if (!safeSlug || !safeId || !['approved', 'rejected'].includes(status)) throw new Error('Invalid review');
+            const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
+            const authQ = `?auth=${encodeURIComponent(secret)}`;
+            const path = `${dynamicEndpoint}station_reviews/${encodeURIComponent(safeSlug)}/${encodeURIComponent(safeId)}`;
+            const getRes = await fetch(`${path}.json${authQ}`);
+            if (!getRes.ok) throw new Error(`Review read failed (${getRes.status})`);
+            const current = await getRes.json();
+            if (!current || typeof current !== 'object') throw new Error('Review missing');
+            const patch = {
+                ...current,
+                status,
+                stationSlug: current.stationSlug || safeSlug,
+            };
+            if (status === 'approved') {
+                patch.approvedAt = Date.now();
+                delete patch.rejectedAt;
+            } else {
+                patch.rejectedAt = Date.now();
+                delete patch.approvedAt;
+            }
+            const putRes = await fetch(`${path}.json${authQ}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(patch),
+            });
+            if (!putRes.ok) throw new Error(`Review update failed (${putRes.status})`);
+        };
+
+        Admin.fetchStationReviews = async (opts = {}) => {
+            const list = document.getElementById('mq-reviews-list');
+            if (!opts.quiet && list) list.innerHTML = '<p class="text-xs text-gray-400 text-center py-4">Loading reviews...</p>';
+            try {
+                const secret = await Admin.getAuthKey();
+                if (!secret || !Admin.currentUser?.uid) throw new Error('Not signed in');
+                const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
+                const authQ = `?auth=${encodeURIComponent(secret)}`;
+                const res = await window.guardianFetch(`${dynamicEndpoint}station_reviews.json${authQ}`, {}, 10000);
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                const data = await res.json() || {};
+                const rows = ntAdminStationReviewRows(data);
+                Admin._stationReviewRows = rows;
+                const pending = ntAdminPendingStationReviewCount(rows);
+                const chatUnread = Number(Admin._communityChatUnread
+                    || (Admin._communityMonitorRows || []).reduce((sum, row) => sum + Number(row.unread || 0), 0)
+                    || 0);
+                Admin.paintCommunityMonitorBadges?.(chatUnread, pending);
+                if (!opts.quiet || Admin.currentCommunityMonitorTab === 'reviews') Admin.renderStationReviews();
+            } catch (e) {
+                if (!opts.quiet && list) {
+                    list.innerHTML = `<p class="text-xs text-red-500 text-center py-4">Failed to load reviews: ${ntAdminSecureEscape(String(e.message || e))}</p>`;
+                }
             }
         };
     },

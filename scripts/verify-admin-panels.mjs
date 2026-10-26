@@ -213,6 +213,8 @@ assert(admin.includes('ls-stop-share') && admin.includes('Stop share'), 'live ca
 assert(admin.includes("source: 'admin_stop'"), 'admin stop writes source admin_stop');
 assert(admin.includes('trackingState: \'stopped\''), 'admin stop expires the ping as stopped');
 assert(admin.includes('cm-delete-message'), 'Community Monitor has Delete');
+assert(admin.includes('mq-tab-chats') && admin.includes('mq-tab-reviews'), 'Community Monitor is tabbed Group chats / Reviews');
+assert(admin.includes('fetchStationReviews') && admin.includes('mq-review-approve'), 'Community Monitor moderates station reviews');
 assert(admin.includes('deletePublishedCommunityMessage'), 'Delete removes the RTDB node and activity key');
 assert(admin.includes('publishDueScheduledAlerts optional'), 'scheduled worker publish is optional');
 assert(admin.includes('publish skipped'), 'scheduled publish failure is a note, not a blank Failed pane');

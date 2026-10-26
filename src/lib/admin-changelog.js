@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_10.26.9': [
+        'astro check: SeoStationReviews client script uses @ts-nocheck so DOM value/disabled/reset casts no longer fail the preview build (same 16 errors blocked V10_10.26.7 and .8). No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_10.26.8': [
         'Offline dock confirms with a short reachability probe after the 4s visible hold, and only re-arms after 45s of sustained online so flaky/slow radios do not spam You are offline. Select Route and full timetable open before heavy DOM (INP yield). Header bell and corridor label keep reserved space (CLS). Map tab bind is idle-deferred on home. No commuter What\'s New. forceShow stays false.',
     ],

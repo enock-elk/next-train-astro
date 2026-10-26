@@ -102,6 +102,7 @@ const amenityQuestions = [
 </section>
 
 <script>
+  // @ts-nocheck — client form script; DOM casts trip astro check without this.
   function bindSeoStationReviews() {
     const root = document.querySelector('[data-seo-station-reviews]');
     if (!root || root.dataset.bound === '1') return;

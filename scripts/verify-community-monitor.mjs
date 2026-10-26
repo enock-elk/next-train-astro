@@ -56,6 +56,13 @@ assert.deepEqual(helpers.seenPatch('operator1', 'routeA', 500), {
 assert.equal(helpers.path('routeA', activity.routeA.reply1), 'route_community/routeA/posts/post1/replies/reply1');
 
 assert.match(admin, />Community Monitor</);
+assert.match(admin, /id="mq-tab-chats"/, 'Community Monitor has Group chats tab');
+assert.match(admin, /id="mq-tab-reviews"/, 'Community Monitor has Reviews tab');
+assert.match(admin, /fetchStationReviews/, 'Community Monitor loads station reviews');
+assert.match(admin, /setStationReviewStatus/, 'Community Monitor can approve or reject reviews');
+assert.match(admin, /paintCommunityMonitorBadges/, 'Community Monitor paints chat + review badges');
+assert.match(admin, /station_reviews\.json/, 'Community Monitor and badge sync read station_reviews');
+assert.match(admin, /ntAdminPendingStationReviewCount/, 'pending station reviews feed the badge');
 assert.match(admin, /data-community-held=/, 'held cards have a distinct marker');
 assert.match(admin, /border-2 border-dashed border-amber-400/, 'held cards are visually distinct');
 assert.match(admin, /mq-approve-community/);
@@ -121,6 +128,9 @@ assert.match(rootRules.community_activity.$routeId.$messageId['.write'], /root\.
 assert.match(rootRules.community_activity.$routeId.$messageId['.write'], /newData\.child\('uid'\)\.val\(\) === auth\.uid/);
 assert.match(rootRules.admin_state.$adminUid['.write'], /auth\.uid === \$adminUid/);
 assert.match(rootRules.admin_state.$adminUid['.write'], /thandeka05nxumalo@gmail\.com/);
+assert.ok(rootRules.station_reviews, 'station reviews rules exist');
+assert.match(rootRules.station_reviews['.read'], /thandeka05nxumalo@gmail\.com/, 'operators can list all station reviews');
+assert.match(rootRules.station_reviews.$slug.$reviewId['.read'], /approved/, 'public can still read approved reviews');
 assert.equal(rootRules.route_community.$routeId.post_reactions['.read'], true, 'post_reactions parent is public-read so other users can load reactions');
 assert.equal(rootRules.route_community.$routeId.post_reactions.$postId['.read'], true);
 
@@ -167,4 +177,23 @@ assert.match(community, /isListedCommunityRoute/, 'the picker uses the community
 assert.doesNotMatch(community, /keep foreign route/, 'a deep link cannot add a room that is off');
 assert.match(community, /communityRoomAllowed/, 'opening a feed checks the room');
 
-console.log('Community Monitor verified: grouping, activity order, per-operator unread, seen paths, write hooks, held actions, and rules.');
+{
+    const helpers2 = {};
+    new Function(`${admin.slice(admin.indexOf('function ntAdminStationReviewRows'), admin.indexOf('const NT_ADMIN_WEEKDAY_LABELS'))}
+this.rows = ntAdminStationReviewRows;
+this.pending = ntAdminPendingStationReviewCount;
+`).call(helpers2);
+    const flat = helpers2.rows({
+        'loftus-versfeld-park': {
+            a: { status: 'pending', createdAt: 2, text: 'pending note here' },
+            b: { status: 'approved', createdAt: 1, text: 'approved note here' },
+        },
+        irene: {
+            c: { status: 'pending', createdAt: 3, text: 'newer pending' },
+        },
+    });
+    assert.equal(flat[0]._key, 'c', 'newest review first');
+    assert.equal(helpers2.pending(flat), 2, 'pending review count ignores approved');
+}
+
+console.log('Community Monitor verified: grouping, activity order, per-operator unread, seen paths, write hooks, held actions, reviews tab, badges, and rules.');

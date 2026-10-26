@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_10.27.2': [
+        'Community Monitor is tabbed: Group chats and Reviews. Station SEO reviews load as pending with Approve / Reject; the tile badge counts unread chat activity plus pending reviews, and each tab has its own badge. Operators can list station_reviews in RTDB. Deploy firebase-database.rules.json after this build. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_10.27.1': [
         'Via branch marks prefer structured schedule.via, then VARIANT, then legacy via/Monte/Vista cell prose. Admin Grid Column Order can save Via marks to all day sheets for a route. Force schedule type accepts multiple YYYY-MM-DD dates (empty dates keep while-Active behaviour). No commuter What\'s New. forceShow stays false.',
     ],

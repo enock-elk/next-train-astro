@@ -429,6 +429,7 @@
     },
 
     "station_reviews": {
+      ".read": "auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')",
       "$slug": {
         "$reviewId": {
           ".read": "data.child('status').val() === 'approved' || (auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com'))",

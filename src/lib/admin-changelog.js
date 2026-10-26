@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_10.26.10': [
+        'SEO route (and WC holiday) grids show Schedule effective from above each sheet and move Download above the timetable. Sheet meta comes from the same nest overlay as the times. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_10.26.9': [
         'astro check: SeoStationReviews client script uses @ts-nocheck so DOM value/disabled/reset casts no longer fail the preview build (same 16 errors blocked V10_10.26.7 and .8). No commuter What\'s New. forceShow stays false.',
     ],

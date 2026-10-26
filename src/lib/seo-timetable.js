@@ -83,6 +83,55 @@ function sheetFromNode(node, key) {
     return null;
 }
 
+function metaFromNode(node, key) {
+    if (!key || !node || typeof node !== 'object') return null;
+    const candidates = [
+        node[`${key}_meta`],
+        node.public_holidays?.[`${key}_meta`],
+        node[key]?.lastUpdated,
+        node.public_holidays?.[key]?.lastUpdated,
+    ];
+    for (const raw of candidates) {
+        if (raw == null || raw === '') continue;
+        if (typeof raw === 'string' || typeof raw === 'number') return String(raw);
+        if (typeof raw === 'object' && raw.lastUpdated) return String(raw.lastUpdated);
+    }
+    return null;
+}
+
+/** Match live-board formatEffectiveDate for SEO "Schedule effective from". */
+export function formatSeoEffectiveDate(rawDateStr) {
+    if (!rawDateStr || String(rawDateStr).toLowerCase().includes('undefined') || String(rawDateStr) === 'null') {
+        return '';
+    }
+    let cleanStr = String(rawDateStr).replace(/^last updated[:\s-]*/i, '').trim();
+    try {
+        if (cleanStr.includes(',')) cleanStr = cleanStr.split(',')[0].trim();
+        const d = new Date(cleanStr);
+        if (!Number.isNaN(d.getTime())) {
+            const months = [
+                'January', 'February', 'March', 'April', 'May', 'June',
+                'July', 'August', 'September', 'October', 'November', 'December',
+            ];
+            return `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;
+        }
+    } catch { /* keep cleanStr */ }
+    return cleanStr;
+}
+
+function lastUpdatedFromSheetRows(rows) {
+    if (!Array.isArray(rows) || !rows.length) return null;
+    const firstRow = rows[0];
+    if (!firstRow || typeof firstRow !== 'object') return null;
+    const values = Object.values(firstRow).map(String);
+    const dateValueIndex = values.findIndex((v) => /last updated/i.test(v));
+    if (dateValueIndex === -1) return null;
+    const val = values[dateValueIndex];
+    if (val.length > 15) return val;
+    if (values[dateValueIndex + 1]) return values[dateValueIndex + 1];
+    return null;
+}
+
 /**
  * Same overlay idea as live `unwrapDatabase`: region nest wins over a stale
  * top-level copy of the same sheet key (e.g. June root vs August `gauteng`).
@@ -95,6 +144,16 @@ export function getSheet(db, key) {
         if (hit) return hit;
     }
     return sheetFromNode(db, key);
+}
+
+/** Sheet `_meta` / lastUpdated with the same nest preference as getSheet. */
+export function getSheetMeta(db, key) {
+    if (!key || !db) return null;
+    for (const nest of REGION_NESTS) {
+        const hit = metaFromNode(db[nest], key);
+        if (hit) return hit;
+    }
+    return metaFromNode(db, key);
 }
 
 function manifestForSheet(db, key) {
@@ -270,6 +329,8 @@ export function extractSeoGrid(db, sheetKey, originName, options = {}) {
     const { first, last } = originClocks.first
         ? originClocks
         : firstLastFromTrainsFirstClock(keptRows, trainIds);
+    const rawEffective = getSheetMeta(db, sheetKey) || lastUpdatedFromSheetRows(rows) || '';
+    const effectiveFrom = formatSeoEffectiveDate(rawEffective);
     return {
         sheetKey,
         stations,
@@ -280,6 +341,8 @@ export function extractSeoGrid(db, sheetKey, originName, options = {}) {
         originStation,
         destStation,
         departures: departuresFromRow(originRow, trainIds),
+        lastUpdated: rawEffective || null,
+        effectiveFrom: effectiveFrom || null,
     };
 }
 

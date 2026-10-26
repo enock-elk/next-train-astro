@@ -440,11 +440,21 @@ if (!gridPathSa.includes('d=sa') || gridPathSa.includes('dir=')) {
   if (!routePage.includes('<SeoAppPreview routeId={route.id} href={liveBoardHref} />')) {
     fail('route landings must select app previews by route id');
   }
-  if (!routePage.includes('liveGridSaturdayA') || !routePage.includes('>Download</a>')) {
+  if (!routePage.includes('liveGridSaturdayA') || !routePage.includes('downloadHref={liveGridSaturdayA}')) {
     fail('route landings must put a Download control on each timetable');
+  }
+  if (!routePage.includes('downloadHref={liveGridWeekdayA}') || !routePage.includes('downloadHref={liveGridWeekdayB}')) {
+    fail('route landings must pass weekday Download hrefs into SeoTimetableGrid');
   }
   if (!routePage.includes('To Download this time table, Open Next Train online')) {
     fail('route landings must keep the existing download sentence');
+  }
+  const gridComponent = readFileSync(new URL('../src/components/SeoTimetableGrid.astro', import.meta.url), 'utf8');
+  if (!gridComponent.includes('Schedule effective from:') || !gridComponent.includes('seo-tt-toolbar')) {
+    fail('SeoTimetableGrid must show Schedule effective from above the sheet');
+  }
+  if (!gridComponent.includes('downloadHref') || gridComponent.indexOf('seo-tt-toolbar') > gridComponent.indexOf('seo-tt-wrap')) {
+    fail('SeoTimetableGrid must put Download above the timetable wrap');
   }
   if (!routePage.includes('<SeoNetworkMap')) {
     fail('route landings must show the static network map');
@@ -515,6 +525,9 @@ if (!gridPathSa.includes('d=sa') || gridPathSa.includes('dir=')) {
   const towardB = tt.weekday.b;
   if (!towardA) fail('pta-kempton weekday-A is null (first-row-only / ghost origin)');
   if (!towardB) fail('pta-kempton weekday-B is null');
+  if (!towardB.effectiveFrom || !/September|2026|2025|\d/.test(towardB.effectiveFrom)) {
+    fail('pta-kempton weekday-B must expose a Schedule effective from date');
+  }
 
   const dump = loadScheduleDump();
   const IGNORE = new Set(['STATION', 'COORDINATES', 'KM_MARK', 'row_index']);
@@ -903,6 +916,15 @@ if (existsSync(DIST)) {
     }
     if (!html.includes('>Download</a>')) {
       fail('Kempton route HTML missing a Download button');
+    }
+    if (!html.includes('Schedule effective from:')) {
+      fail('Kempton route HTML missing Schedule effective from above the grid');
+    }
+    const effIdx = html.indexOf('Schedule effective from:');
+    const dlIdx = html.indexOf('>Download</a>');
+    const tableIdx = html.indexOf('<table');
+    if (effIdx < 0 || dlIdx < 0 || tableIdx < 0 || !(effIdx < tableIdx && dlIdx < tableIdx)) {
+      fail('Kempton route HTML must put effective-from and Download above the timetable table');
     }
     if (!html.includes('GPS Network Map · GP')) {
       fail('Kempton route HTML missing the GPS Network Map link');

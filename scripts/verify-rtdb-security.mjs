@@ -36,6 +36,8 @@ assert.match(
 );
 assert.match(rules.delay_reports.$reportId['.validate'], /length <= 280/);
 assert.equal(rules.inbox.$deviceId['.read'], true, 'inbox stays readable without a new auth gate so Messages on older shells still load');
+assert.equal(rules.config.community_champions['.read'], true, 'community champions config is publicly readable for About');
+assert.match(rules.config['.write'], /thandeka05nxumalo@gmail\.com/, 'Thandeka can write config including champions');
 
 const env = {
     ALLOWED_ORIGINS: 'https://lab.nexttrain.co.za,https://nexttrain.co.za,https://enock-elk.github.io',

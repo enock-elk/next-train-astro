@@ -187,6 +187,8 @@ assert(admin.includes("'exp-map-enabled'") && admin.includes("'exp-community-ena
 
 assert(admin.includes('renderExpFeatureAccordions'), 'experimental features render as per-type accordions');
 assert(admin.includes("I'm on it / live share") && admin.includes('Delay reports') && admin.includes('Community realtime') && admin.includes('Push notifications'), 'System Controls lists remaining experimental feature types');
+assert(admin.includes('id="champions-header"') && admin.includes('Next Train Champions'), 'System Controls has Next Train Champions');
+assert(admin.includes('config/community_champions.json'), 'champions save to config/community_champions');
 assert(!/Trip price/.test(admin.split('grantableFeatures')[1] || admin), 'Trip price is not an experimental feature accordion');
 assert(admin.includes('exp-feat-${key}-header') || admin.includes('expFeatureControlIds'), 'each feature type has an accordion header');
 

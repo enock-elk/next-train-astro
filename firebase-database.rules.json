@@ -9,6 +9,7 @@
       "killswitch": { ".read": true },
       "special_event": { ".read": true },
       "schedule_override": { ".read": true },
+      "community_champions": { ".read": true },
       "features": { ".read": true },
       "feature_grants": { ".read": true },
       "planner_fares": {

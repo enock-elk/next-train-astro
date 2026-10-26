@@ -23755,6 +23755,22 @@ const Admin = {
                     </div>
                 </div>
 
+                <!-- Next Train Champions (About honour roll) -->
+                <div class="bg-amber-50 dark:bg-amber-900/20 rounded-xl border border-amber-200 dark:border-amber-800 overflow-hidden shadow-sm transition-all">
+                    <button type="button" id="champions-header" class="w-full px-3 py-3 bg-amber-100/50 dark:bg-amber-900/40 text-left text-[10px] font-black text-amber-900 dark:text-amber-300 uppercase tracking-widest flex items-center justify-between focus:outline-none transition-colors hover:bg-amber-200/50 dark:hover:bg-amber-900/60">
+                        <span class="flex items-center gap-2">
+                            <span class="text-amber-700 dark:text-amber-300">${Admin.icon('user', 'w-4 h-4')}</span> Next Train Champions
+                        </span>
+                        <svg id="champions-chevron" class="w-4 h-4 transform transition-transform -rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                    </button>
+                    <div id="champions-body" class="hidden p-4 space-y-3">
+                        <p class="text-[10px] text-amber-800 dark:text-amber-300 leading-snug">Shown on About under Built &amp; Maintained. Name and region always show. WhatsApp, channel, and Facebook icons only appear when those fields are filled.</p>
+                        <div id="champions-list" class="space-y-3"></div>
+                        <button type="button" id="champions-add" class="w-full border border-amber-300 dark:border-amber-700 text-amber-900 dark:text-amber-200 font-bold py-2 rounded-lg text-xs uppercase tracking-wide focus:outline-none hover:bg-amber-100/60 dark:hover:bg-amber-900/40">Add champion</button>
+                        <button type="button" id="champions-save" class="w-full bg-amber-600 hover:bg-amber-700 text-white font-bold py-2.5 rounded-lg text-xs uppercase tracking-wide focus:outline-none">Save champions</button>
+                    </div>
+                </div>
+
                 <!-- Passenger account authentication providers -->
                 <div class="bg-slate-50 dark:bg-slate-900/20 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden shadow-sm transition-all">
                     <button type="button" id="auth-providers-header" class="w-full px-3 py-3 bg-slate-100/60 dark:bg-slate-900/40 text-left text-[10px] font-black text-slate-800 dark:text-slate-300 uppercase tracking-widest flex items-center justify-between focus:outline-none transition-colors hover:bg-slate-200/60 dark:hover:bg-slate-900/60">
@@ -24172,6 +24188,13 @@ const Admin = {
         const schedOverrideRegions = document.getElementById('sched-override-regions');
         const schedOverrideSave = document.getElementById('sched-override-save');
         const SCHED_OVERRIDE_REGIONS = ['GP', 'WC', 'KZN', 'EC'];
+        const championsHeader = document.getElementById('champions-header');
+        const championsBody = document.getElementById('champions-body');
+        const championsChevron = document.getElementById('champions-chevron');
+        const championsList = document.getElementById('champions-list');
+        const championsAdd = document.getElementById('champions-add');
+        const championsSave = document.getElementById('champions-save');
+        let championsDraft = [];
         const authProvidersHeader = document.getElementById('auth-providers-header');
         const authProvidersBody = document.getElementById('auth-providers-body');
         const authProvidersChevron = document.getElementById('auth-providers-chevron');
@@ -24426,6 +24449,80 @@ const Admin = {
             };
         }
 
+        const paintChampionsForm = () => {
+            if (!championsList) return;
+            if (!championsDraft.length) {
+                championsList.innerHTML = '<p class="text-[10px] text-amber-800/80 dark:text-amber-300/80 text-center py-2">No champions yet. Add someone who helps keep Next Train up to date.</p>';
+                return;
+            }
+            championsList.innerHTML = championsDraft.map((row, index) => {
+                const id = String(row.id || `c_${index}`);
+                const region = String(row.region || 'GP');
+                return `<div class="champions-row bg-white/80 dark:bg-gray-900/50 rounded-lg border border-amber-100 dark:border-amber-900/40 p-3 space-y-2" data-champ-id="${id}">
+                    <div class="flex items-center justify-between gap-2">
+                        <span class="text-[9px] font-bold uppercase tracking-wide text-gray-500">Champion ${index + 1}</span>
+                        <button type="button" class="champions-remove text-[10px] font-bold uppercase tracking-wide text-red-600 dark:text-red-400 focus:outline-none" data-champ-id="${id}">Remove</button>
+                    </div>
+                    <input type="text" class="champions-name w-full h-9 px-2 rounded-md bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-[11px] text-gray-900 dark:text-white outline-none" data-champ-id="${id}" placeholder="Name" maxlength="80" value="${String(row.name || '').replace(/"/g, '&quot;')}">
+                    <select class="champions-region w-full h-9 px-2 rounded-md bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-[11px] text-gray-900 dark:text-white outline-none" data-champ-id="${id}">
+                        <option value="GP" ${region === 'GP' ? 'selected' : ''}>Gauteng</option>
+                        <option value="WC" ${region === 'WC' ? 'selected' : ''}>Western Cape</option>
+                        <option value="KZN" ${region === 'KZN' ? 'selected' : ''}>KwaZulu-Natal</option>
+                        <option value="EC" ${region === 'EC' ? 'selected' : ''}>Eastern Cape</option>
+                    </select>
+                    <input type="text" class="champions-whatsapp w-full h-9 px-2 rounded-md bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-[11px] text-gray-900 dark:text-white outline-none" data-champ-id="${id}" placeholder="WhatsApp number (optional)" maxlength="40" value="${String(row.whatsapp || '').replace(/"/g, '&quot;')}">
+                    <input type="url" class="champions-channel w-full h-9 px-2 rounded-md bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-[11px] text-gray-900 dark:text-white outline-none" data-champ-id="${id}" placeholder="WhatsApp channel URL (optional)" maxlength="240" value="${String(row.whatsappChannel || '').replace(/"/g, '&quot;')}">
+                    <input type="url" class="champions-facebook w-full h-9 px-2 rounded-md bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-[11px] text-gray-900 dark:text-white outline-none" data-champ-id="${id}" placeholder="Facebook profile URL (optional)" maxlength="240" value="${String(row.facebook || '').replace(/"/g, '&quot;')}">
+                </div>`;
+            }).join('');
+            championsList.querySelectorAll('.champions-remove').forEach((btn) => {
+                btn.addEventListener('click', () => {
+                    const id = btn.getAttribute('data-champ-id');
+                    championsDraft = championsDraft.filter((row) => String(row.id) !== id);
+                    paintChampionsForm();
+                });
+            });
+        };
+
+        const readChampionsForm = () => {
+            if (!championsList) return championsDraft;
+            return [...championsList.querySelectorAll('.champions-row')].map((el, index) => {
+                const id = el.getAttribute('data-champ-id') || `c_${index}`;
+                return {
+                    id,
+                    name: (el.querySelector('.champions-name')?.value || '').trim(),
+                    region: el.querySelector('.champions-region')?.value || 'GP',
+                    whatsapp: (el.querySelector('.champions-whatsapp')?.value || '').trim(),
+                    whatsappChannel: (el.querySelector('.champions-channel')?.value || '').trim(),
+                    facebook: (el.querySelector('.champions-facebook')?.value || '').trim(),
+                    order: index,
+                };
+            }).filter((row) => row.name);
+        };
+
+        if (championsHeader && championsBody) {
+            championsHeader.onclick = () => {
+                championsBody.classList.toggle('hidden');
+                if (championsBody.classList.contains('hidden')) championsChevron?.classList.add('-rotate-90');
+                else championsChevron?.classList.remove('-rotate-90');
+            };
+        }
+        if (championsAdd) {
+            championsAdd.onclick = () => {
+                championsDraft = readChampionsForm();
+                championsDraft.push({
+                    id: `c_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`,
+                    name: '',
+                    region: 'GP',
+                    whatsapp: '',
+                    whatsappChannel: '',
+                    facebook: '',
+                    order: championsDraft.length,
+                });
+                paintChampionsForm();
+            };
+        }
+
         if (header) {
             header.onclick = () => {
                 if (Admin.isGridMode) return;
@@ -24556,9 +24653,42 @@ const Admin = {
                     }
                 } catch (ape) { /* keep safe defaults */ }
 
+                try {
+                    const resChamp = await fetch(`${dynamicEndpoint}config/community_champions.json`);
+                    if (resChamp.ok) {
+                        const champCfg = await resChamp.json();
+                        const items = champCfg?.items;
+                        const list = Array.isArray(items)
+                            ? items
+                            : (items && typeof items === 'object'
+                                ? Object.keys(items).map((key) => ({ id: key, ...(items[key] || {}) }))
+                                : []);
+                        championsDraft = list
+                            .filter((row) => row && String(row.name || '').trim())
+                            .map((row, index) => ({
+                                id: String(row.id || `c_${index}`),
+                                name: String(row.name || '').trim(),
+                                region: ['GP', 'WC', 'KZN', 'EC'].includes(String(row.region || '').toUpperCase())
+                                    ? String(row.region).toUpperCase()
+                                    : 'GP',
+                                whatsapp: String(row.whatsapp || '').trim(),
+                                whatsappChannel: String(row.whatsappChannel || '').trim(),
+                                facebook: String(row.facebook || '').trim(),
+                                order: Number.isFinite(Number(row.order)) ? Number(row.order) : index,
+                            }))
+                            .sort((a, b) => (a.order - b.order) || a.name.localeCompare(b.name));
+                        paintChampionsForm();
+                    } else {
+                        paintChampionsForm();
+                    }
+                } catch (ce) {
+                    paintChampionsForm();
+                }
+
                 } catch(e) { /* status check is optional when offline */ }
         }
         checkStatus();
+        paintChampionsForm();
 
         if (banModeSave && banModeSelect) {
             banModeSave.onclick = async () => {
@@ -24710,6 +24840,53 @@ const Admin = {
                     if (typeof showToast === 'function') showToast('Schedule overrides saved', 'success');
                 } catch (e) {
                     if (typeof showToast === 'function') showToast('Failed to save schedule overrides.', 'error');
+                }
+            };
+        }
+
+        if (championsSave) {
+            championsSave.onclick = async () => {
+                try {
+                    const secret = await Admin.getAuthKey();
+                    if (!secret) {
+                        if (typeof showToast === 'function') showToast('Authentication required.', 'error');
+                        return;
+                    }
+                    const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
+                    const rows = readChampionsForm();
+                    championsDraft = rows;
+                    const items = {};
+                    rows.forEach((row, index) => {
+                        const id = String(row.id || `c_${index}`).slice(0, 40);
+                        items[id] = {
+                            id,
+                            name: String(row.name || '').trim().slice(0, 80),
+                            region: ['GP', 'WC', 'KZN', 'EC'].includes(String(row.region || '').toUpperCase())
+                                ? String(row.region).toUpperCase()
+                                : 'GP',
+                            whatsapp: String(row.whatsapp || '').trim().slice(0, 40),
+                            whatsappChannel: String(row.whatsappChannel || '').trim().slice(0, 240),
+                            facebook: String(row.facebook || '').trim().slice(0, 240),
+                            order: index,
+                        };
+                    });
+                    const payload = {
+                        updatedAt: Date.now(),
+                        updatedBy: Admin.currentUser?.email || 'Admin',
+                        items,
+                    };
+                    const res = await window.guardianFetch(`${dynamicEndpoint}config/community_champions.json?auth=${secret}`, {
+                        method: 'PUT',
+                        body: JSON.stringify(payload),
+                    }, 10000);
+                    if (!res.ok) throw new Error('Auth failed');
+                    paintChampionsForm();
+                    if (typeof window.fetchCommunityChampions === 'function') {
+                        try { await window.fetchCommunityChampions(true); } catch { /* ignore */ }
+                    }
+                    if (typeof showToast === 'function') showToast('Champions saved', 'success');
+                } catch (e) {
+                    if (typeof showToast === 'function') showToast('Failed to save champions.', 'error');
                 }
             };
         }

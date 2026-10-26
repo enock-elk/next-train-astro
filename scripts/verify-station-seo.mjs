@@ -5,7 +5,11 @@
 import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import {
+  buildStationAbout,
   buildStationCorridorTimetables,
+  buildStationMapPath,
+  buildStationNeighbourHeadline,
+  buildStationQuickFacts,
   getSeoStationBySlug,
   listSeoStations,
   neighboursForStationRoute,
@@ -66,6 +70,33 @@ const pageSrc = readFileSync(new URL('../src/pages/stations/[slug].astro', impor
 ok(pageSrc.includes('robots={indexable ? \'index, follow\' : \'noindex, follow\'}'), 'station page gates robots on allowlist');
 ok(pageSrc.includes('SeoStationDepartures'), 'station page renders departure lists');
 ok(pageSrc.includes('Neighbouring stations'), 'station page shows neighbours');
+ok(pageSrc.includes('SeoStationMap'), 'station page embeds Leaflet GPS map');
+ok(pageSrc.includes('About this station'), 'station page has About this station');
+ok(pageSrc.includes('Quick facts'), 'station page has Quick facts');
+ok(pageSrc.includes('<details'), 'neighbouring stations use an accordion');
+ok(!pageSrc.includes('Open live board'), 'station page no longer shows Open live board');
+
+const ptaHeadline = buildStationNeighbourHeadline(pretoria, ptaCards);
+ok(ptaHeadline.startsWith('Pretoria - '), 'Pretoria neighbour headline starts with Pretoria -');
+ok(ptaHeadline.includes('Irene') && ptaHeadline.includes('Kempton Park'), 'Pretoria headline lists Irene / Kempton Park ends');
+ok(ptaHeadline.includes(' / '), 'Pretoria headline joins far ends with slashes');
+ok(buildStationAbout(pretoria, ptaCards).includes('active Metrorail station'), 'about is descriptive prose');
+ok(buildStationAbout(pretoria, ptaCards).includes('Pretoria'), 'about mentions Pretoria');
+ok(buildStationQuickFacts(pretoria, ptaCards).length >= 4, 'Pretoria has several quick facts');
+ok(buildStationMapPath(pretoria).includes('station=Pretoria'), 'map path focuses station');
+ok(buildStationMapPath(pretoria, { embed: true }).includes('embed=1'), 'preview map uses embed');
+
+const mapApp = readFileSync(new URL('../public/js/map-app.js', import.meta.url), 'utf8');
+ok(mapApp.includes('focusStationFromQuery'), 'map-app focuses ?station= from the URL');
+
+const mapComp = readFileSync(new URL('../src/components/SeoStationMap.astro', import.meta.url), 'utf8');
+ok(mapComp.includes('seo-station-map-lightbox'), 'station map opens a full-view overlay');
+ok(mapComp.includes('Expand map'), 'station map has Expand map control');
+ok(!mapComp.includes('requestFullscreen'), 'station map must not use browser fullscreen');
+
+const gridHandoff = readFileSync(new URL('../src/lib/timetable-grid.js', import.meta.url), 'utf8');
+ok(gridHandoff.includes('SEO cold launch seeds a pin only when none exists'), 'SEO handoff soft-pins defaults');
+ok(gridHandoff.includes('if (!hasUsableDefault) safeStorage.setItem(defaultKey, link.routeId)'), 'SEO handoff keeps existing route pins');
 
 const routePage = readFileSync(new URL('../src/pages/routes/[slug].astro', import.meta.url), 'utf8');
 ok(routePage.includes('stationHasPublicPage'), 'route SEO pages link to station landings');

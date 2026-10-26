@@ -396,16 +396,19 @@ export async function applyRouteDeepLink() {
     const defaultKey = 'defaultRoute_' + route.region;
     const existingDefault = safeStorage.getItem(defaultKey);
     const hasUsableDefault = !!(existingDefault && ROUTES[existingDefault] && ROUTES[existingDefault].region === route.region);
+    let savedRegionBefore = null;
+    try { savedRegionBefore = safeStorage.getItem('userRegion'); } catch { /* ignore */ }
 
     if (!returning) {
         safeStorage.setItem('welcomeSeen', 'true');
     }
     try { document.getElementById('welcome-modal')?.classList.add('hidden'); } catch { /* ignore */ }
-    // SEO timetable download always pins that corridor. Shared links pin only when none exists.
+    // SEO cold launch seeds a pin only when none exists. Returning commuters keep their default.
+    // Shared links pin only when none exists.
     if (seoHandoff) {
         try {
-            safeStorage.setItem('userRegion', route.region);
-            safeStorage.setItem(defaultKey, link.routeId);
+            if (!savedRegionBefore) safeStorage.setItem('userRegion', route.region);
+            if (!hasUsableDefault) safeStorage.setItem(defaultKey, link.routeId);
         } catch { /* ignore */ }
     } else if (!hasUsableDefault) {
         safeStorage.setItem(defaultKey, link.routeId);
@@ -417,6 +420,10 @@ export async function applyRouteDeepLink() {
     $currentRouteId.set(link.routeId);
     ensureRoutePinnedForRegion(region);
     $currentRouteId.set(link.routeId);
+    // Cross-region SEO open may rewrite userRegion in storage; restore a returning pin.
+    if (seoHandoff && savedRegionBefore) {
+        try { safeStorage.setItem('userRegion', savedRegionBefore); } catch { /* ignore */ }
+    }
 
     // Strip share params — renderFullScheduleGrid will push #grid so Close/Back stays in-app
     stripShareParamsFromUrl();

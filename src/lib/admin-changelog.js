@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_10.26.3': [
+        'Station SEO landings drop Open live board for a Leaflet GPS map preview (map.html?station=) that expands into a full-view overlay matching the in-app Network Map sheet, not browser fullscreen. Neighbouring stations are one headline (Pretoria - Irene / Kempton Park) plus a per-corridor accordion of stop order. About this station and Quick facts are generated from the sheets. SEO Open in Next Train soft-pins only on cold launch so saved defaults stay put. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_10.26.2': [
         'SEO SSG (station and route landings) pulls live regional timetable sheets at build time via scripts/fetch-live-schedules-for-seo.mjs (Cloudflare cache, then Firebase), writes public/data/.seo-build-database.json, and prefers that over the checked-in dump. Production and github.io builds set SEO_REQUIRE_LIVE=1. No commuter What\'s New. forceShow stays false.',
     ],

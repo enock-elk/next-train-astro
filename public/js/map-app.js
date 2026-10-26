@@ -2355,6 +2355,46 @@
             });
             raiseStationMarkers();
 
+            // SEO / deep-link: ?station=Pretoria (or slug) centres the GPS map on that stop.
+            function focusStationFromQuery() {
+                let raw = '';
+                let latQ = NaN;
+                let lonQ = NaN;
+                try {
+                    const q = new URLSearchParams(location.search);
+                    raw = String(q.get('station') || '').trim();
+                    latQ = Number(q.get('lat'));
+                    lonQ = Number(q.get('lon'));
+                } catch (_) { return false; }
+                const normKey = (value) => String(value || '')
+                    .replace(/ STATION$/i, '')
+                    .replace(/[-_]+/g, ' ')
+                    .replace(/\s+/g, ' ')
+                    .trim()
+                    .toUpperCase();
+                const want = normKey(raw);
+                let item = null;
+                if (want) {
+                    item = stationLayerItems.find((s) => normKey(s.name) === want)
+                        || stationLayerItems.find((s) => {
+                            const n = normKey(s.name);
+                            return n === want || n.replace(/\s+/g, '') === want.replace(/\s+/g, '');
+                        });
+                }
+                if (item?.marker && typeof item.marker.getLatLng === 'function') {
+                    const ll = item.marker.getLatLng();
+                    try { map.setView(ll, 15, { animate: false }); } catch (_) {}
+                    try { item.marker.openPopup(); } catch (_) {}
+                    return true;
+                }
+                if (Number.isFinite(latQ) && Number.isFinite(lonQ)) {
+                    try { map.setView([latQ, lonQ], 15, { animate: false }); } catch (_) {}
+                    return true;
+                }
+                return false;
+            }
+            focusStationFromQuery();
+
             // --- BUILD DYNAMIC LEGEND ---
             const legendContent = document.getElementById('legend-content');
             if (legendContent) {

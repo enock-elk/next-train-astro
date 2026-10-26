@@ -316,6 +316,10 @@ export function buildStationCorridorTimetables(station) {
     }
 
     const neigh = station.corridorNeighbours.find((c) => c.routeId === routeId);
+    const orderKey = keys.weekday_to_b || keys.weekday_to_a || keys.saturday_to_b || keys.saturday_to_a;
+    const stopOrder = orderKey
+      ? orderedTimedStops(db, orderKey).map((s) => s.name)
+      : [];
 
     cards.push({
       routeId,
@@ -324,6 +328,7 @@ export function buildStationCorridorTimetables(station) {
       lineLabel: getCorridorLabel(route) || displayRouteName(route),
       origin,
       dest,
+      stopOrder,
       neighbors: {
         towardOrigin: neigh?.towardOrigin || null,
         towardDest: neigh?.towardDest || null,
@@ -370,6 +375,139 @@ export function buildStationBoardAppPath(station) {
   if (route?.region) params.set('r', route.region);
   params.set('src', 'seo');
   return `/?${params.toString()}`;
+}
+
+/**
+ * One-line neighbour headline: "Pretoria - Irene / Kempton Park".
+ * Far ends of every corridor through this stop, not immediate adjacents.
+ */
+export function buildStationNeighbourHeadline(station, corridors) {
+  const place = station?.name || '';
+  if (!place) return '';
+  const ends = [];
+  const seen = new Set();
+  for (const c of corridors || []) {
+    for (const end of [c.origin, c.dest]) {
+      if (!end || normalizeKey(end) === normalizeKey(place)) continue;
+      const key = normalizeKey(end);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      ends.push(end);
+    }
+  }
+  if (!ends.length) return '';
+  ends.sort((a, b) => a.localeCompare(b));
+  return `${place} - ${ends.join(' / ')}`;
+}
+
+function earliestLatestWeekday(corridors) {
+  let earliest = null;
+  let latest = null;
+  for (const c of corridors || []) {
+    for (const dir of [c.weekday?.towardA, c.weekday?.towardB]) {
+      for (const t of dir?.trains || []) {
+        const sec = Number(t.departureSec);
+        if (!Number.isFinite(sec)) continue;
+        if (!earliest || sec < earliest.sec) earliest = { sec, clock: t.departureTime };
+        if (!latest || sec > latest.sec) latest = { sec, clock: t.departureTime };
+      }
+    }
+  }
+  return { earliest, latest };
+}
+
+/** Quick facts drawn from the schedule dump and corridor cards. */
+export function buildStationQuickFacts(station, corridors) {
+  const facts = [];
+  const province = regionName(station?.region);
+  if (province) facts.push({ label: 'Region', value: province });
+
+  const lineNames = (corridors || []).map((c) => c.routeName).filter(Boolean);
+  if (lineNames.length) {
+    facts.push({
+      label: lineNames.length === 1 ? 'Line' : 'Lines',
+      value: lineNames.length === 1 ? lineNames[0] : `${lineNames.length} corridors`,
+    });
+  }
+
+  const farEnds = [];
+  const seenEnds = new Set();
+  for (const c of corridors || []) {
+    for (const end of [c.origin, c.dest]) {
+      if (!end || normalizeKey(end) === normalizeKey(station?.name)) continue;
+      const key = normalizeKey(end);
+      if (seenEnds.has(key)) continue;
+      seenEnds.add(key);
+      farEnds.push(end);
+    }
+  }
+  if (farEnds.length) {
+    farEnds.sort((a, b) => a.localeCompare(b));
+    facts.push({ label: 'Serves', value: farEnds.join(' / ') });
+  }
+
+  const { earliest, latest } = earliestLatestWeekday(corridors);
+  if (earliest?.clock) facts.push({ label: 'Weekday first', value: earliest.clock });
+  if (latest?.clock) facts.push({ label: 'Weekday last', value: latest.clock });
+
+  const isTerminus = (corridors || []).length > 0 && (corridors || []).every((c) => (
+    !c.neighbors?.towardOrigin || !c.neighbors?.towardDest
+  ));
+  if ((corridors || []).length) {
+    facts.push({ label: 'Role', value: isTerminus ? 'Terminus / hub' : 'Through station' });
+  }
+
+  if (station?.coords
+    && Number.isFinite(station.coords.lat)
+    && Number.isFinite(station.coords.lon)) {
+    facts.push({
+      label: 'GPS',
+      value: `${station.coords.lat.toFixed(4)}, ${station.coords.lon.toFixed(4)}`,
+    });
+  }
+
+  return facts;
+}
+
+/** Longer About copy for the station landing. */
+export function buildStationAbout(station, corridors) {
+  const place = station?.name || 'This station';
+  const province = regionName(station?.region) || 'South Africa';
+  const lineNames = (corridors || []).map((c) => c.routeName).filter(Boolean);
+  const headline = buildStationNeighbourHeadline(station, corridors);
+  const { earliest, latest } = earliestLatestWeekday(corridors);
+
+  let about = `${place} is an active Metrorail station in ${province}`;
+  if (lineNames.length === 1) {
+    about += ` on the ${lineNames[0]} corridor`;
+  } else if (lineNames.length > 1) {
+    about += `, where ${lineNames.length} published corridors meet`;
+  }
+  about += '.';
+
+  if (headline) {
+    about += ` From here the sheets run ${headline}.`;
+  }
+
+  if (earliest?.clock && latest?.clock) {
+    about += ` On weekdays the published departures from this stop span about ${earliest.clock} to ${latest.clock}.`;
+  }
+
+  about += ' The lists below follow the PRASA weekday and Saturday sheets. Open Next Train for the next live departure on this corridor.';
+  return about;
+}
+
+/** Leaflet GPS map URL focused on this station (full map UI when embed is false). */
+export function buildStationMapPath(station, { embed = false } = {}) {
+  const params = new URLSearchParams();
+  if (station?.region) params.set('region', station.region);
+  if (station?.name) params.set('station', station.name);
+  if (station?.coords?.lat != null && station?.coords?.lon != null) {
+    params.set('lat', String(station.coords.lat));
+    params.set('lon', String(station.coords.lon));
+  }
+  if (embed) params.set('embed', '1');
+  return `map.html?${params.toString()}`;
 }
 
 export function stationDocumentTitle(station) {

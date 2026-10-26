@@ -2363,12 +2363,15 @@ const OFFLINE_CHROME_HOLD_MS = 4000;
 const OFFLINE_CHROME_AUTO_HIDE_MS = 7000;
 /** After a show/dismiss, require this much sustained online before another paint. */
 const OFFLINE_CHROME_RESHOW_ONLINE_MS = 300_000;
+/** Hard floor between paints even if the episode flag was cleared early. */
+const OFFLINE_CHROME_MIN_PAINT_GAP_MS = 300_000;
 const OFFLINE_CHROME_CONFIRM_MS = 2000;
 let _offlineChromeTimer = null;
 let _offlineChromeHideTimer = null;
 let _offlineChromeReshowTimer = null;
 let _offlineChromeBound = false;
 let _offlineChromeConfirming = false;
+let _offlineChromeLastPaintAt = 0;
 
 function offlineDock() {
     return typeof document !== 'undefined' ? document.getElementById('offline-wrapper') : null;
@@ -2390,6 +2393,16 @@ function cancelOfflineChromeReshow() {
         clearTimeout(_offlineChromeReshowTimer);
         _offlineChromeReshowTimer = null;
     }
+}
+
+/** Mark this offline episode handled so flaps cannot re-queue the dock. */
+function markOfflineChromeEpisodeHandled() {
+    if (typeof window !== 'undefined') window._hasShownOfflineToast = true;
+}
+
+function offlineChromePaintGapOpen() {
+    if (!_offlineChromeLastPaintAt) return true;
+    return Date.now() - _offlineChromeLastPaintAt >= OFFLINE_CHROME_MIN_PAINT_GAP_MS;
 }
 
 /** Clear the once-per-episode flag only after sustained online (not radio flaps). */
@@ -2462,7 +2475,8 @@ function paintOfflineChromeDock() {
         oi.style.removeProperty('display');
         oi.dataset.struggleUi = '1';
     }
-    if (typeof window !== 'undefined') window._hasShownOfflineToast = true;
+    markOfflineChromeEpisodeHandled();
+    _offlineChromeLastPaintAt = Date.now();
     if (_offlineChromeHideTimer) clearTimeout(_offlineChromeHideTimer);
     _offlineChromeHideTimer = setTimeout(() => {
         _offlineChromeHideTimer = null;
@@ -2480,9 +2494,7 @@ export function hideOfflineChrome(opts = {}) {
         oi.style.removeProperty('display');
         delete oi.dataset.struggleUi;
     }
-    if (opts.dismissed && typeof window !== 'undefined') {
-        window._hasShownOfflineToast = true;
-    }
+    if (opts.dismissed) markOfflineChromeEpisodeHandled();
 }
 
 export function scheduleOfflineChrome() {
@@ -2494,17 +2506,22 @@ export function scheduleOfflineChrome() {
     // A new offline episode while the reshow arm is pending keeps the dismiss.
     cancelOfflineChromeReshow();
     if (typeof window !== 'undefined' && window._hasShownOfflineToast) return;
+    if (!offlineChromePaintGapOpen()) return;
     if (_offlineChromeTimer || _offlineChromeConfirming) return;
     _offlineChromeTimer = setTimeout(() => {
         _offlineChromeTimer = null;
         if (document.visibilityState !== 'visible' || navigator.onLine) return;
         if (window._hasShownOfflineToast) return;
+        if (!offlineChromePaintGapOpen()) return;
+        // Consume the episode before probes so radio flaps / failed confirms
+        // cannot re-queue "You are offline" every few seconds on mobile data.
+        markOfflineChromeEpisodeHandled();
         _offlineChromeConfirming = true;
         confirmBrowserOffline().then((reallyOffline) => {
             _offlineChromeConfirming = false;
             if (!reallyOffline) return;
             if (document.visibilityState !== 'visible' || navigator.onLine) return;
-            if (window._hasShownOfflineToast) return;
+            if (!offlineChromePaintGapOpen()) return;
             paintOfflineChromeDock();
         }).catch(() => {
             _offlineChromeConfirming = false;

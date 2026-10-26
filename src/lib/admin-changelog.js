@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_10.26.17': [
+        'Offline dock marks an episode before probes and keeps a 5 minute paint gap so flaky mobile radios cannot spam You are offline. Account create/sign-in keep Welcome in the hero only (empty top bar). In-app timetable shades the right edge of the station column toward the times, drops the left edge fade, and removes the header X (Close Timetable stays). Layout recovers bottom nav after Chrome Signed-in browser toasts leave a blank strip. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_10.26.16': [
         'Account: Welcome to Next Train / Welcome back headers, invalid-credentials screen with Create account, premium verify card, and Welcome back toast. Pinned routes sync to the account immediately (pin, unpin, Welcome pick). Feedback, Messages, community, fares, trip plans, and delays write account activity breadcrumbs. Feedback Filter has Done; outside click no longer closes Dev Hub. Check for Updates still keeps pins; Reset this App still clears route and region. No commuter What\'s New. forceShow stays false.',
     ],

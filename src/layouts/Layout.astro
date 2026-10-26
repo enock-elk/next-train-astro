@@ -316,22 +316,85 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
             apply();
           });
         }
+        // Chrome/Samsung "Signed in as…" (and similar) bottom browser toasts can
+        // shrink visualViewport, then leave a blank strip under #bottom-nav when
+        // they dismiss without a clean resize. Re-measure a few times and, if the
+        // nav still sits short of the layout bottom, force the shell back open.
+        var recoverTimers = [];
+        function clearRecoverTimers() {
+          while (recoverTimers.length) {
+            clearTimeout(recoverTimers.pop());
+          }
+        }
+        function navNeedsRecover() {
+          try {
+            var nav = document.getElementById('bottom-nav');
+            if (!nav || nav.classList.contains('hidden')) return false;
+            if (document.body && document.body.classList.contains('nt-immersive')) return false;
+            var rect = nav.getBoundingClientRect();
+            if (!rect || rect.height < 8) return false;
+            var layout = window.innerHeight || document.documentElement.clientHeight || 0;
+            var vv = window.visualViewport;
+            var visibleBottom = vv
+              ? Math.round((vv.offsetTop || 0) + (vv.height || 0))
+              : layout;
+            var floor = Math.max(layout, visibleBottom);
+            // More than ~6px of dead space under the bar → recover.
+            return floor - rect.bottom > 6;
+          } catch (e) {
+            return false;
+          }
+        }
+        function recoverAppViewport() {
+          clearRecoverTimers();
+          cachedEnv = -1;
+          // Forget a toast-shrunk "full" height so apply() can re-expand.
+          lastFullLayoutH = 0;
+          lastLayoutH = 0;
+          apply();
+          [50, 150, 350, 700, 1200].forEach(function (ms) {
+            recoverTimers.push(setTimeout(function () {
+              apply();
+              if (navNeedsRecover()) {
+                lastFullLayoutH = 0;
+                lastLayoutH = 0;
+                lastShellH = 0;
+                apply();
+              }
+            }, ms));
+          });
+        }
+        window.ntRecoverAppViewport = recoverAppViewport;
+        var lastVvHForToast = -1;
+        function onViewportPossiblyToasted() {
+          scheduleApply();
+          var vv = window.visualViewport;
+          var h = vv && vv.height ? Math.round(vv.height) : Math.round(window.innerHeight || 0);
+          if (lastVvHForToast > 0 && h > lastVvHForToast + 24) {
+            // Viewport grew (browser toast / URL bar dismissed) — recover nav.
+            recoverAppViewport();
+          } else if (navNeedsRecover()) {
+            recoverAppViewport();
+          }
+          lastVvHForToast = h;
+        }
         apply();
-        window.addEventListener('resize', scheduleApply, { passive: true });
+        window.addEventListener('resize', onViewportPossiblyToasted, { passive: true });
         window.addEventListener('orientationchange', function () {
           cachedEnv = -1;
-          setTimeout(apply, 80);
+          setTimeout(recoverAppViewport, 80);
         });
         document.addEventListener('focusin', apply, { passive: true });
-        document.addEventListener('focusout', function () { setTimeout(apply, 50); }, { passive: true });
+        document.addEventListener('focusout', function () { setTimeout(recoverAppViewport, 50); }, { passive: true });
         if (window.visualViewport) {
-          window.visualViewport.addEventListener('resize', scheduleApply, { passive: true });
+          window.visualViewport.addEventListener('resize', onViewportPossiblyToasted, { passive: true });
           window.visualViewport.addEventListener('scroll', scheduleApply, { passive: true });
         }
         document.addEventListener('visibilitychange', function () {
-          if (document.visibilityState === 'visible') apply();
+          if (document.visibilityState === 'visible') recoverAppViewport();
         });
-        window.addEventListener('pageshow', function () { apply(); });
+        window.addEventListener('pageshow', function () { recoverAppViewport(); });
+        window.addEventListener('focus', function () { setTimeout(recoverAppViewport, 30); }, { passive: true });
         if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', apply);
       })();
     </script>

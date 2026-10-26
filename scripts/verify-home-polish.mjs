@@ -280,6 +280,8 @@ const ui = readFileSync(new URL('../src/lib/ui.js', import.meta.url), 'utf8');
 assert(ui.includes('OFFLINE_CHROME_HOLD_MS = 4000'), 'offline chrome waits 4s');
 assert(ui.includes('OFFLINE_CHROME_AUTO_HIDE_MS = 7000'), 'offline dock auto-hides after 7s');
 assert(ui.includes('OFFLINE_CHROME_RESHOW_ONLINE_MS = 300_000'), 'offline chrome waits for 5 minutes sustained online before reshow');
+assert(ui.includes('OFFLINE_CHROME_MIN_PAINT_GAP_MS = 300_000'), 'offline chrome enforces a 5 minute paint gap');
+assert(ui.includes('markOfflineChromeEpisodeHandled'), 'offline chrome marks an episode before probes so flaps cannot re-queue');
 assert(ui.includes('confirmBrowserOffline'), 'offline chrome probes before painting');
 assert(ui.includes('probeReachabilityUrl'), 'offline chrome probes more than one public host');
 assert(ui.includes('cdn.jsdelivr.net'), 'offline confirm falls back to the GitHub dump CDN');
@@ -467,6 +469,7 @@ const delayReports = readFileSync(new URL('../src/lib/delay-reports.js', import.
 const trainGhosts = readFileSync(new URL('../src/lib/train-ghosts.js', import.meta.url), 'utf8');
 assert(hubModals.includes('Create a free account to keep your name and pins with you.'), 'account guest create copy mentions pins');
 assert(hubModals.includes('Welcome to Next Train') && hubModals.includes('Welcome back'), 'account guest headers are Welcome to Next Train / Welcome back');
+assert(accountJs.includes("if (title && !signedOpen) title.textContent = ''") || accountJs.includes('title.textContent = \'\''), 'account top bar does not repeat Welcome / Welcome back');
 assert(hubModals.includes('Sign in to continue on this phone.'), 'account guest sign-in copy is short');
 assert(hubModals.includes('id="account-invalid-create-btn"') && hubModals.includes('data-account-only="invalid"'), 'invalid credentials screen nudges Create account');
 assert(hubModals.includes('id="account-error-text"'), 'auth errors use a card, not a bare red line');

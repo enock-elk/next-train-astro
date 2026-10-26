@@ -551,6 +551,8 @@ assert(!delayReports.includes('Verify delay'), 'board cards do not show Verify d
 assert(layout.includes('html.nt-in-app body.nav-bottom:not(.nt-immersive) #bottom-nav.bottom-nav-bar'), 'in-app bottom nav floats over the board');
 assert(layout.includes('html.nt-in-app body.nav-bottom:not(.nt-immersive) #app-scroll'), 'scroll canvas shows around the floating pill');
 assert(layout.includes('window.ntFitAppViewport'), 'Layout exposes ntFitAppViewport for PWA/TWA inset');
+assert(layout.includes('window.ntRecoverAppViewport'), 'Layout recovers bottom nav after browser Signed-in toasts');
+assert(layout.includes('navNeedsRecover'), 'Layout detects blank space under the bottom nav');
 assert(layout.includes('--nt-sys-bottom'), 'Layout still measures --nt-sys-bottom for the pill offset');
 assert(!layout.includes('pinBottomNav'), 'bottom nav has no synthetic geometry pin');
 assert(!layout.includes('--nt-nav-lift'), 'bottom nav has no synthetic lift token');

@@ -1118,7 +1118,7 @@ export const Renderer = {
             <table class="w-full ${fontSizeClass} text-left border-collapse ${tableClass}">
                 <thead class="text-[10px] uppercase ${theadClass} sticky top-0 z-20 shadow-sm">
                     <tr>
-                        <th class="nt-station-col sticky left-0 z-30 ${stickyHeaderClass} ${paddingClass} border-b border-r font-bold ${stationHeadWidth} shadow-lg text-left pl-3">${stationHeadLabel}</th>
+                        <th class="nt-station-col sticky left-0 z-30 ${stickyHeaderClass} ${paddingClass} border-b border-r font-bold ${stationHeadWidth} ${isExport ? '' : 'nt-station-scroll-shade'} text-left pl-3">${stationHeadLabel}</th>
                         ${sortedCols.map((h, i) => {
                             const isHighlight = i === activeColIndex;
                             const viaLabel = variantByTrain[h] || '';
@@ -1241,7 +1241,7 @@ export const Renderer = {
 
             html += `
                 <tr class="${rowClass.trim()}"${isSelectedRow ? ' id="grid-selected-row"' : ''}${disrRowAttrs}>
-                    <td class="sticky left-0 z-10 ${currentStickyCellClass} ${paddingClass} border-r font-bold ${stationCellWidth} shadow-lg border-b text-left pl-3">${isExport ? cleanStation : `<div class="w-max max-w-[140px] truncate">${cleanStation}</div>`}</td>
+                    <td class="sticky left-0 z-10 ${currentStickyCellClass} ${paddingClass} border-r font-bold ${stationCellWidth} ${isExport ? '' : 'nt-station-scroll-shade'} border-b text-left pl-3">${isExport ? cleanStation : `<div class="w-max max-w-[140px] truncate">${cleanStation}</div>`}</td>
                     ${sortedCols.map((col, i) => {
                         let val = row[col] || "-";
                         const expressSkip = isExpressSkip(val);
@@ -1359,7 +1359,7 @@ export const Renderer = {
                 ? 'nt-station-col bg-gray-200 dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white'
                 : 'nt-station-col bg-gray-100 dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-white';
             return `<tr class="${rowClass}">
-                <td class="sticky left-0 z-10 ${stationBg} py-2.5 px-3 pl-3 border-r border-b font-bold text-xs w-0 shadow-lg text-left"><div class="w-max max-w-[140px] truncate">${escapeHTML(name)}</div></td>
+                <td class="sticky left-0 z-10 ${stationBg} py-2.5 px-3 pl-3 border-r border-b font-bold text-xs w-0 nt-station-scroll-shade text-left"><div class="w-max max-w-[140px] truncate">${escapeHTML(name)}</div></td>
             </tr>`;
         }).join('');
 
@@ -1379,7 +1379,7 @@ export const Renderer = {
                 <table class="w-full text-xs text-left border-collapse bg-white dark:bg-gray-900">
                     <thead class="text-[10px] uppercase bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-200 sticky top-0 z-20 shadow-sm">
                         <tr>
-                            <th class="nt-station-col sticky left-0 z-30 bg-gray-200 dark:bg-gray-700 border-gray-300 dark:border-gray-600 py-2.5 px-3 pl-3 border-b border-r font-bold w-0 shadow-lg text-left"><div class="w-max max-w-[140px] truncate">Station</div></th>
+                            <th class="nt-station-col sticky left-0 z-30 bg-gray-200 dark:bg-gray-700 border-gray-300 dark:border-gray-600 py-2.5 px-3 pl-3 border-b border-r font-bold w-0 nt-station-scroll-shade text-left"><div class="w-max max-w-[140px] truncate">Station</div></th>
                         </tr>
                     </thead>
                     <tbody class="divide-y border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900">

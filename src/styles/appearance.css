@@ -838,22 +838,13 @@ html.dark .nt-grid-edge-fade {
 .nt-grid-frame.can-scroll-x .nt-grid-edge-fade {
   opacity: 1;
 }
-.nt-grid-edge-fade-left {
-  position: absolute;
-  top: 0;
-  left: 0;
-  bottom: 0;
-  width: 1.5rem;
-  pointer-events: none;
-  z-index: 20;
-  opacity: 0;
-  background: linear-gradient(to left, rgba(15, 23, 42, 0), rgba(15, 23, 42, 0.18));
+/* Scroll hint lives on the right edge of the sticky station column (times
+   hide under it). Do not shade the far-left of the station names. */
+#grid-container .nt-station-scroll-shade {
+  box-shadow: 6px 0 10px -6px rgba(15, 23, 42, 0.35);
 }
-html.dark .nt-grid-edge-fade-left {
-  background: linear-gradient(to left, rgba(0, 0, 0, 0), rgba(0, 0, 0, 0.5));
-}
-.nt-grid-frame.can-scroll-x-start .nt-grid-edge-fade-left {
-  opacity: 1;
+html.dark #grid-container .nt-station-scroll-shade {
+  box-shadow: 6px 0 12px -5px rgba(0, 0, 0, 0.65);
 }
 /* Same edge darkening as the timetable, turned on its side. It sits just
    above the bottom bar and only while #app-scroll still has more below. */

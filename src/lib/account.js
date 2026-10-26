@@ -804,13 +804,8 @@ export function showAccountGuestScreen(screen) {
     });
     const title = document.getElementById('account-screen-title');
     const signedOpen = document.getElementById('account-signed-in') && !document.getElementById('account-signed-in').classList.contains('hidden');
-    if (title && !signedOpen) {
-        title.textContent = name === 'create' || name === 'invalid'
-            ? 'Welcome to Next Train'
-            : name === 'reset'
-                ? 'Reset your password'
-                : 'Welcome back';
-    }
+    // Hero copy already carries Welcome / Welcome back / Reset — keep the top bar empty.
+    if (title && !signedOpen) title.textContent = '';
 }
 
 /** Open sign-in when an action needs an account. Resolves false if they close it. */
@@ -1090,17 +1085,8 @@ export function syncAccountSettingsUi(state = $account.get()) {
     if (signedBlock) signedBlock.classList.toggle('hidden', !signed);
     if (guestBlock) guestBlock.classList.toggle('hidden', signed || state.status === 'loading');
     const screenTitle = document.getElementById('account-screen-title');
-    if (screenTitle) {
-        if (signed) screenTitle.textContent = '';
-        else {
-            const screen = guestBlock?.getAttribute('data-account-screen') || 'create';
-            screenTitle.textContent = screen === 'create' || screen === 'invalid'
-                ? 'Welcome to Next Train'
-                : screen === 'reset'
-                    ? 'Reset your password'
-                    : 'Welcome back';
-        }
-    }
+    // Guest heroes already show Welcome / Welcome back / Reset; do not repeat in the top bar.
+    if (screenTitle) screenTitle.textContent = '';
     document.getElementById('account-prefs-label')?.classList.toggle('hidden', !signed);
     const deleteWrap = document.getElementById('account-delete-wrap');
     const isOperator = signed && isAdminEmail(state.email);

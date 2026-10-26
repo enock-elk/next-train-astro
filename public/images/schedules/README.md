@@ -25,7 +25,7 @@ public/images/schedules/
 | `region` | `wc`, `gp`, `kzn`, `ec` |
 | `corridor` | `southern`, `northern`, `central`, `cape-flats`, `monte-vista`, `stellenbosch`, `berea-kwamashu`, `crossmoor`, `pinetown`, … |
 | `day` | `weekday`, `saturday`, `sunday`, `weekend`, `public-holiday` |
-| `direction` | `inbound` (toward Cape Town / Durban / main hub), `outbound` (away) |
+| `direction` | `inbound` (toward Cape Town / Durban / main hub), `outbound` (away), `combined` (both directions on one public-holiday poster) |
 | `effective` | `YYYY-MM-DD` when the sheet says “Effective from …”; `YYYY-MM` when only a month is printed; omit when the sheet has no date |
 | `part` | Optional. Booklet page (`p32`), or `early` / `later` when one service is split across posters |
 
@@ -33,7 +33,9 @@ Examples:
 
 - `wc/wc-southern-weekday-inbound-2026-02-02.jpg`
 - `wc/wc-stellenbosch-weekday-outbound-2026-10-12-early.jpg`
+- `wc/wc-northern-public-holiday-2026.jpg` (combined in+out on one poster)
 - `kzn/kzn-berea-kwamashu-weekday-outbound-2026-10-05-p32.jpg`
+- `kzn/kzn-umlazi-weekday-outbound-2026-10-05-p52.jpg`
 
 ## Adding more sheets
 

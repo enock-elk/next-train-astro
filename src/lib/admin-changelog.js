@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_10.27.5': [
+        'Image schedules batch 3: KZN Umlazi weekday p52/53/58/59 and Saturday p64/65, Berea/kwaMashu Saturday inbound p42, plus WC Cape Flats / Northern / Central / Southern public-holiday 2026 combined posters. Skipped exact byte duplicates of already-filed Berea pages. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_10.27.4': [
         'Image schedules: WC Northern weekend (Oct 2025), Stellenbosch weekday early/later posters (eff. 12 Oct 2026), and KZN Berea/kwaMashu, Crossmoor, Pinetown weekday + Saturday booklet pages (keep multi-page detail variants). Prefer newer effective dates; do not drop companion pages. No commuter What\'s New. forceShow stays false.',
     ],

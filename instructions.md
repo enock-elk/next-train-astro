@@ -99,6 +99,10 @@ This build’s CleverAds path is **gold** (`src/lib/clever-ads.js`, `src/lib/cle
 
 Run `npm run verify:clever-ads` before updating advert hashes. Then follow the same fast-forward as Map gold.
 
+## Image schedules
+
+Printed PRASA / Metrorail timetable JPGs that back the in-app dump live in `public/images/schedules/` (`manifest.json` + region folders). Naming: `{region}-{corridor}-{day}-{direction}[-{effective}].jpg` under `wc/` / `gp/` / `kzn/` / `ec/`. When the owner sends more sheets, rename, file, update the manifest, and push `main`. Do not overwrite an older effective date in place. Do not copy sheets into `public/images/alerts/` (allowlist already accepts `/images/schedules/...` for a future Alerts picker). Full rules: `public/images/schedules/README.md`. Run `npm run verify:schedule-images`.
+
 ## Alerts
 
 - Channel: WhatsApp-style feed, last 10 + Show earlier, union scoping, critical pin, hold-to-react, tap counts for the breakdown sheet.

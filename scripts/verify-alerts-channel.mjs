@@ -120,6 +120,8 @@ const now = 1_700_000_000_000;
     assert(sanitizeAlertImageUrl('/images/alerts/fare.png') === '/images/alerts/fare.png', 'same-origin poster path');
     assert(sanitizeAlertImageUrl('/images/alerts/fare.png?x=1') === '/images/alerts/fare.png', 'query stripped');
     assert(sanitizeAlertImageUrl('/images/network-map.png') === null, 'non-alerts folder blocked');
+    assert(sanitizeAlertImageUrl('/images/schedules/wc/wc-southern-weekday-inbound-2026-02-02.jpg') === '/images/schedules/wc/wc-southern-weekday-inbound-2026-02-02.jpg', 'schedule sheet path allowed');
+    assert(sanitizeAlertImageUrl('/images/schedules/../alerts/x.png') === null, 'schedule traversal blocked');
     assert(sanitizeAlertImageUrl('/images/alerts/../icons/x.png') === null, 'traversal blocked');
     assert(sanitizeAlertImageUrl('https://evil.example/images/alerts/x.png') === '/images/alerts/x.png', 'host stripped, path kept if alerts');
     assert(sanitizeAlertImageUrl('https://evil.example/etc/passwd') === null, 'foreign path blocked');

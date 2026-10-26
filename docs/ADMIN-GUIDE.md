@@ -50,7 +50,7 @@ Typical daily path:
 1. **Audience** — chips for Entire Network / regions; route checkboxes under the dropdown. Multi-select. Deselecting a region updates the Channel poster line immediately (stale fetches are ignored).
 2. **Severity** — Info (General) / Warning (Delays) / Critical (Suspended); **Sign-off Name**.
 3. **Message** — WYSIWYG body.
-4. **Channel poster** — catalog under `public/images/alerts/` (**Add a poster…**). Posting does **not** upload images to Storage; Preview and Post use the same catalog path. Live-count line under the poster reflects current targets.
+4. **Channel poster** — catalog under `public/images/alerts/` (**Add a poster…**). Posting does **not** upload images to Storage; Preview and Post use the same catalog path. Live-count line under the poster reflects current targets. Printed timetable sheets are archived under `public/images/schedules/` (not yet in the poster picker; path is allowlisted for a future Alerts post).
 5. **Options** — Force Popup Alert; **Pin to bottom of feed**; Interactive Poll Mode.
 6. **Poll** (optional) — question, Option A/B, **+ Add third option**, poll close, Show results / Allow multiple / Show raw counts; **Live Poll Results** + **Refresh**.
 7. **When** — Now / Later / Weekly / Monthly + Expiry.

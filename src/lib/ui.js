@@ -2362,7 +2362,7 @@ export function hideOfflineToast() {
 const OFFLINE_CHROME_HOLD_MS = 4000;
 const OFFLINE_CHROME_AUTO_HIDE_MS = 7000;
 /** After a show/dismiss, require this much sustained online before another paint. */
-const OFFLINE_CHROME_RESHOW_ONLINE_MS = 45_000;
+const OFFLINE_CHROME_RESHOW_ONLINE_MS = 300_000;
 const OFFLINE_CHROME_CONFIRM_MS = 2000;
 let _offlineChromeTimer = null;
 let _offlineChromeHideTimer = null;
@@ -2405,25 +2405,53 @@ function armOfflineChromeReshow() {
 }
 
 /**
- * navigator.onLine flaps on slow/flaky mobile radios. Confirm the browser still
- * reports offline and that a short NetworkOnly probe cannot get through before
- * painting "You are offline."
+ * Any HTTP response (including 403/5xx) means a path to the public internet
+ * exists. Campus firewalls often blackhole workers.dev while GitHub / Firebase
+ * still answer — do not paint "You are offline" in that case.
+ */
+async function probeReachabilityUrl(url, timeoutMs = OFFLINE_CHROME_CONFIRM_MS) {
+    try {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), timeoutMs);
+        await fetch(url, { signal: controller.signal, cache: 'no-store' });
+        clearTimeout(timer);
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+/**
+ * navigator.onLine flaps on slow/flaky mobile radios and captive campus Wi‑Fi.
+ * Confirm the tab is still marked offline and that several public endpoints
+ * cannot get through before painting "You are offline."
  */
 async function confirmBrowserOffline() {
     if (typeof document === 'undefined' || typeof navigator === 'undefined') return false;
     if (document.visibilityState !== 'visible' || navigator.onLine) return false;
-    try {
-        const controller = new AbortController();
-        const timer = setTimeout(() => controller.abort(), OFFLINE_CHROME_CONFIRM_MS);
-        const url = `https://nexttrain-cache.enock.workers.dev/config/maintenance.json?offlineChrome=${Date.now()}`;
-        await fetch(url, { signal: controller.signal, cache: 'no-store' });
-        clearTimeout(timer);
-        // Any response means a network path exists — do not spam the dock.
-        return false;
-    } catch {
-        /* aborted or failed */
+    const stamp = Date.now();
+    const probes = [
+        `https://nexttrain-cache.enock.workers.dev/config/maintenance.json?offlineChrome=${stamp}`,
+        `https://metrorail-next-train-default-rtdb.firebaseio.com/.json?shallow=true&offlineChrome=${stamp}`,
+        `https://cdn.jsdelivr.net/gh/enock-elk/next-train-astro@main/public/app-version.json?offlineChrome=${stamp}`,
+    ];
+    try { console.log('NT OfflineChrome: confirm start (OS offline, visible tab)'); } catch { /* ignore */ }
+    for (const url of probes) {
+        if (document.visibilityState !== 'visible' || navigator.onLine) return false;
+        let host = url;
+        try { host = new URL(url).hostname; } catch { /* ignore */ }
+        const ok = await probeReachabilityUrl(url);
+        if (ok) {
+            try { console.log(`NT OfflineChrome: ${host} answered — not painting offline dock`); } catch { /* ignore */ }
+            return false;
+        }
+        try { console.warn(`NT OfflineChrome: ${host} failed`); } catch { /* ignore */ }
     }
-    return document.visibilityState === 'visible' && !navigator.onLine;
+    const really = document.visibilityState === 'visible' && !navigator.onLine;
+    try {
+        console.warn(`NT OfflineChrome: all probes failed → paint=${really}`);
+    } catch { /* ignore */ }
+    return really;
 }
 
 function paintOfflineChromeDock() {

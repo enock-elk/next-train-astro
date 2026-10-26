@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_10.26.13': [
+        'Campus / restricted Wi-Fi (e.g. TUKS): a non-OK JSON response from nexttrain-cache is no longer captive Lie-Fi, so Firebase and the GitHub dump still run. navigator.onLine false no longer hard-throws guardianFetch or skips the waterfall before probing. Reachability and the offline dock confirm workers.dev, then Firebase, then jsDelivr. Offline dock only re-arms after 5 minutes sustained online. Black Box logs each waterfall step under NT Waterfall: (probe, preflight, FIREBASE→CLOUDFLARE→GITHUB try/fail/success). No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_10.26.12': [
         'Map gold catch-up: GOLD.json hashes now match the station SEO map isolate and routeLineColor runtime already on main (map-app.js, map.astro). Tracks and CleverAds hashes unchanged. verify:map-lines, verify:map-hops, and verify:clever-ads passed before the lock update. Fast-forward map-gold after this lands. No commuter What\'s New. forceShow stays false.',
     ],

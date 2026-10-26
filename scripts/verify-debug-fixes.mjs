@@ -258,6 +258,10 @@ assert(shouldOpenRoutePicker({ swapGen: 1, currentGen: 2, currentRouteId: null }
     assert(ui.includes('confirmBrowserOffline'), 'offline chrome confirms before paint');
     assert(ui.includes('OFFLINE_CHROME_RESHOW_ONLINE_MS'), 'offline chrome arms a sustained-online reshow');
     assert(ui.includes('armOfflineChromeReshow'), 'online does not instantly clear the offline dismiss flag');
+    assert(ui.includes('probeReachabilityUrl'), 'offline chrome confirms against multiple hosts');
+    const logicJs = readFileSync(new URL('../src/lib/logic.js', import.meta.url), 'utf8');
+    assert(logicJs.includes("res.ok && ct.includes('text/html')"), 'workers.dev HTTP errors are not Lie-Fi');
+    assert(!/if \(!res\.ok\) \{\s*isLieFi = true/m.test(logicJs), 'non-OK probe must not set isLieFi');
     const gridJs = readFileSync(new URL('../src/lib/timetable-grid.js', import.meta.url), 'utf8');
     assert(gridJs.includes('await yieldToPaint()'), 'full timetable yields after opening the modal');
     assert(gridJs.includes('Loading timetable'), 'full timetable shows a short placeholder on first open');

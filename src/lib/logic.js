@@ -466,38 +466,91 @@ export function engageConnectionStruggleUi(reason = 'offline') {
  * cannot fake success.
  * @returns {Promise<'ok'|'offline'|'captive'|'timeout'>}
  */
+/** Stable blackbox prefix (ASCII, under the 240-char line cap). */
+function waterfallLog(msg) {
+    try { console.log(`NT Waterfall: ${msg}`); } catch { /* ignore */ }
+}
+
+function waterfallWarn(msg) {
+    try { console.warn(`NT Waterfall: ${msg}`); } catch { /* ignore */ }
+}
+
+function shortHost(url) {
+    try { return new URL(url).hostname; } catch { return String(url || '').slice(0, 40); }
+}
+
+/** Public hosts used when navigator.onLine lies (campus Wi‑Fi / captive radios). */
+function reachabilityFallbackUrls(stamp = Date.now()) {
+    return [
+        `https://nexttrain-cache.enock.workers.dev/config/maintenance.json?probe=${stamp}`,
+        `https://metrorail-next-train-default-rtdb.firebaseio.com/.json?shallow=true&probe=${stamp}`,
+        `https://cdn.jsdelivr.net/gh/enock-elk/next-train-astro@main/public/app-version.json?probe=${stamp}`,
+    ];
+}
+
+async function fetchReachabilityProbe(url, timeoutMs) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+        const res = await fetch(url, { signal: controller.signal, cache: 'no-store' });
+        return res;
+    } finally {
+        clearTimeout(timer);
+    }
+}
+
 export async function probeReachability(timeoutMs = 3500) {
     if (typeof window === 'undefined' || typeof navigator === 'undefined') return 'ok';
+    const urls = reachabilityFallbackUrls();
+    waterfallLog(`probe start onLine=${navigator.onLine} isLieFi=${!!isLieFi} timeoutMs=${timeoutMs}`);
+    // OS offline flag lies on some campus Wi‑Fi while GitHub / Firebase still answer.
     if (!navigator.onLine) {
+        for (const url of urls) {
+            const host = shortHost(url);
+            waterfallLog(`OS offline — probing ${host}`);
+            try {
+                const res = await fetchReachabilityProbe(url, Math.min(timeoutMs, 2500));
+                waterfallLog(`OS offline but ${host} answered HTTP ${res.status} — treat as weak, continue waterfall`);
+                engageConnectionStruggleUi('weak');
+                return 'timeout';
+            } catch (err) {
+                waterfallWarn(`OS offline — ${host} failed: ${err?.name || err?.message || 'error'}`);
+            }
+        }
+        waterfallWarn('probe result=offline (OS offline and all fallback hosts failed)');
         engageConnectionStruggleUi('offline');
         return 'offline';
     }
     try {
-        const controller = new AbortController();
-        const timer = setTimeout(() => controller.abort(), timeoutMs);
-        const url = `https://nexttrain-cache.enock.workers.dev/config/maintenance.json?probe=${Date.now()}`;
-        const res = await fetch(url, { signal: controller.signal, cache: 'no-store' });
-        clearTimeout(timer);
+        const primary = urls[0];
+        waterfallLog(`probing primary ${shortHost(primary)}`);
+        const res = await fetchReachabilityProbe(primary, timeoutMs);
         const ct = res.headers.get('content-type') || '';
-        if (ct.includes('text/html')) {
+        // Captive portals intercept with an HTML login page. A JSON 403/5xx from
+        // the edge (campus firewall, missing Origin, worker blip) is NOT captive —
+        // treating it as Lie-Fi used to halt Firebase and the GitHub dump too.
+        if (res.ok && ct.includes('text/html')) {
+            waterfallWarn(`probe result=captive (HTML ${res.status} from ${shortHost(primary)})`);
             isLieFi = true; // halt network sync immediately — do not wait for 30s banner paint
             engageConnectionStruggleUi('liefi');
             try { window.triggerNetworkStruggleModal?.('captive'); } catch { /* ignore */ }
             return 'captive';
         }
         if (!res.ok) {
-            isLieFi = true;
-            engageConnectionStruggleUi('liefi');
-            return 'captive';
+            waterfallWarn(`probe result=timeout (edge HTTP ${res.status} — not Lie-Fi; waterfall may still try Firebase/GitHub)`);
+            engageConnectionStruggleUi('weak');
+            return 'timeout';
         }
         isLieFi = false;
         clearStruggleClock();
         if (navigator.onLine) {
             try { hideOfflineChrome(); } catch { /* ignore */ }
         }
+        waterfallLog(`probe result=ok (edge HTTP ${res.status})`);
         return 'ok';
     } catch (err) {
         // Slow / blackhole — warn but allow schedule waterfall to keep trying
+        waterfallWarn(`probe result=timeout (edge error: ${err?.name || err?.message || 'error'})`);
         engageConnectionStruggleUi('weak');
         return 'timeout';
     }
@@ -506,9 +559,11 @@ export async function probeReachability(timeoutMs = 3500) {
 /** @returns {Promise<'ok'|'offline'|'captive'|'timeout'>} */
 export async function ensureReachabilityProbed() {
     if (_reachabilityProbed) {
-        if (typeof navigator !== 'undefined' && !navigator.onLine) return 'offline';
-        if (isLieFi) return 'captive';
-        return 'ok';
+        let cached = 'ok';
+        if (typeof navigator !== 'undefined' && !navigator.onLine) cached = 'offline';
+        else if (isLieFi) cached = 'captive';
+        waterfallLog(`reachability cached → ${cached} (onLine=${typeof navigator !== 'undefined' ? navigator.onLine : '?'} isLieFi=${!!isLieFi})`);
+        return cached;
     }
     _reachabilityProbed = true;
     return probeReachability();
@@ -643,9 +698,11 @@ if (typeof window !== 'undefined') {
 
 // --- GUARDIAN FETCH WRAPPER ---
 export async function guardianFetch(url, options = {}, timeoutMs = 8000) {
+    // Do not hard-throw on navigator.onLine === false. Campus Wi‑Fi often lies
+    // while GitHub / Firebase still answer; let the request fail on its own.
     if (typeof window !== 'undefined' && typeof navigator !== 'undefined' && !navigator.onLine) {
+        waterfallLog(`guardianFetch while OS offline → ${shortHost(url)} (still attempting)`);
         engageConnectionStruggleUi('offline');
-        throw new Error("OS reports offline state.");
     }
     
     const controller = new AbortController();
@@ -1396,8 +1453,12 @@ export async function loadAllSchedules(force = false) {
 
 
         // 2. BACKGROUND NETWORK SYNC (LIE-FI PROTECTED)
-        if (typeof window !== 'undefined' && typeof navigator !== 'undefined' && (!navigator.onLine || (isLieFi && !force))) {
-            console.log("🛡️ Guardian: Offline/Lie-Fi detected. Halting background network sync.");
+        // Captive Lie-Fi still hard-stops. A false navigator.onLine=false must not
+        // skip the waterfall — probeReachability + guardianFetch decide that.
+        waterfallLog(`sync start region=${$userRegion.get()} route=${requestedRouteId} force=${!!force} usedCache=${!!usedCache} onLine=${typeof navigator !== 'undefined' ? navigator.onLine : '?'} isLieFi=${!!isLieFi}`);
+        if (typeof window !== 'undefined' && isLieFi && !force) {
+            waterfallWarn('halt: Lie-Fi hard-stop (background sync skipped)');
+            console.log("🛡️ Guardian: Lie-Fi detected. Halting background network sync.");
             // Ensure shell is visible even when cache miss — never leave browser-looking spinner up
             if (typeof window.revealAppShell === 'function') window.revealAppShell();
             if (usedCache || $fullDatabase.get()) markSchedulesCoreReady();
@@ -1427,12 +1488,15 @@ export async function loadAllSchedules(force = false) {
 
         // Reachability / captive pre-flight — do not trust navigator.onLine alone
         const reach = await ensureReachabilityProbed();
+        waterfallLog(`preflight reach=${reach}`);
         if (reach === 'offline' || reach === 'captive') {
+            waterfallWarn(`halt: skipping schedule waterfall (reach=${reach})`);
             console.warn("🛡️ Guardian: No usable internet (offline / captive). Skipping network waterfall.");
             try { $opsOverlaysReady.set(true); } catch { /* ignore */ }
             return;
         }
         // 'timeout' / weak: still attempt waterfall — schedules may load slowly
+        waterfallLog(`preflight ok to continue (reach=${reach}) — overlays then FIREBASE→CLOUDFLARE→GITHUB`);
 
         await fetchGridOrderConfig($userRegion.get(), fetchSignal);
         if (fetchSignal.aborted || $currentRouteId.get() !== requestedRouteId) return;
@@ -1553,9 +1617,15 @@ export async function loadAllSchedules(force = false) {
             let newDatabase = null;
             let fetchSuccess = false;
             let sourcesToTry = ['FIREBASE', 'CLOUDFLARE', 'GITHUB'];
+            let wonSource = '';
+
+            waterfallLog(`schedule download start sources=${sourcesToTry.join('→')} region=${$userRegion.get()}`);
 
             for (const sourceKey of sourcesToTry) {
-                if (fetchSignal.aborted || $currentRouteId.get() !== requestedRouteId) return;
+                if (fetchSignal.aborted || $currentRouteId.get() !== requestedRouteId) {
+                    waterfallWarn(`schedule download aborted before ${sourceKey}`);
+                    return;
+                }
 
                 let regionDbUrl = "";
                 if (PIPELINE_SOURCES[sourceKey]) {
@@ -1568,19 +1638,29 @@ export async function loadAllSchedules(force = false) {
 
                 try {
                     const timeoutMs = sourceKey === 'CLOUDFLARE' ? 8000 : 12000;
+                    waterfallLog(`try ${sourceKey} host=${shortHost(regionDbUrl)} timeoutMs=${timeoutMs}`);
                     const response = await guardianFetch(regionDbUrl, { signal: fetchSignal }, timeoutMs);
-                    if (fetchSignal.aborted || $currentRouteId.get() !== requestedRouteId) return; 
+                    if (fetchSignal.aborted || $currentRouteId.get() !== requestedRouteId) {
+                        waterfallWarn(`aborted after ${sourceKey} response`);
+                        return;
+                    }
                     if (!response.ok) throw new Error(`HTTP ${response.status}`);
                     newDatabase = await response.json();
                     if (!newDatabase) throw new Error("Empty database payload");
                     fetchSuccess = true;
+                    wonSource = sourceKey;
+                    waterfallLog(`success ${sourceKey} HTTP ${response.status}`);
                     break; 
                 } catch (e) {
-                    if (e.name === 'AbortError') throw e; 
+                    if (e.name === 'AbortError') throw e;
+                    waterfallWarn(`fail ${sourceKey}: ${e?.message || e?.name || 'error'} — trying next`);
                 }
             }
 
-            if (!fetchSuccess || !newDatabase) throw new Error("All data pipeline endpoints failed");
+            if (!fetchSuccess || !newDatabase) {
+                waterfallWarn('all sources failed (FIREBASE→CLOUDFLARE→GITHUB)');
+                throw new Error("All data pipeline endpoints failed");
+            }
 
             const newStr = JSON.stringify(newDatabase);
             const oldStr = cachedDB ? JSON.stringify(cachedDB.data) : "";
@@ -1603,13 +1683,19 @@ export async function loadAllSchedules(force = false) {
                     $masterStationList.set(mList);
                     if (typeof window !== 'undefined') window.MASTER_STATION_LIST = mList;
 
-                    await saveToLocalCache(cacheKey, newDatabase, fetchSignal); 
+                    await saveToLocalCache(cacheKey, newDatabase, fetchSignal);
+                    waterfallLog(`applied ${wonSource} payload and saved local cache`);
                 } catch(e) { throw e; }
+            } else {
+                waterfallLog(`applied ${wonSource} but payload unchanged vs cache`);
             }
             rememberRouteRevision(downloadedDB, true);
+        } else {
+            waterfallLog('schedule download skipped (smart sync: cache already current)');
         }
     } catch (error) {
         if (error.name === 'AbortError') return;
+        waterfallWarn(`sync error: ${error?.message || error?.name || 'error'}`);
         console.error("Fetch Error:", error);
         const hasUsableData = !!$fullDatabase.get();
         // Fetch errors on a slow-but-online radio must not flash the dock.

@@ -231,6 +231,8 @@ export function paintHeaderDayLabel(opts = {}) {
     const satClosed = usesSaturdayScheduleSheet(dayType, region) && noSatOnRoute;
 
     const noService = dayType === 'sunday' || satClosed;
+    const overrideNote = appliedScheduleOverrideNote(region);
+    const overrideDayName = String(overrideNote?.title || '').trim();
     let displayType = dayType === 'sunday' ? 'No service'
         : (dayType === 'public_holiday' ? 'Public Holiday Schedule'
         : (dayType === 'saturday' ? 'Saturday Schedule' : 'Weekday Schedule'));
@@ -241,10 +243,14 @@ export function paintHeaderDayLabel(opts = {}) {
                 ? `${HOLIDAY_NAMES[dateKey]} · Public Holiday`
                 : `${HOLIDAY_NAMES[dateKey]} Schedule`);
     }
+    // Forced schedule title becomes the day name chip (e.g. Election Day).
+    if (overrideDayName && !noService) {
+        displayType = overrideDayName;
+    }
     if (satClosed && dayType !== 'sunday') {
         displayType = (dateKey && HOLIDAY_NAMES[dateKey])
             ? `${HOLIDAY_NAMES[dateKey]} · No service`
-            : 'No service';
+            : (overrideDayName ? `${overrideDayName} · No service` : 'No service');
     }
     const typeClass = noService
         ? 'font-semibold text-red-600 dark:text-red-400'
@@ -260,7 +266,7 @@ export function paintHeaderDayLabel(opts = {}) {
         holidayName,
         holidayType,
         satClosed,
-        override: appliedScheduleOverrideNote(region),
+        override: overrideNote,
     });
     fitHeaderDayLabel();
     bindHeaderDayFit();

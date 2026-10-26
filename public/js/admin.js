@@ -3295,6 +3295,28 @@ const Admin = {
                 }
             }
 
+            // 5b. Account deletion requests (User Trust tile)
+            try {
+                const delRes = await window.guardianFetch(`${dynamicEndpoint}account_deletions.json?auth=${secret}`, {}, 6000);
+                let delUnread = 0;
+                if (delRes.ok) {
+                    const delData = await delRes.json();
+                    if (delData && typeof delData === 'object') {
+                        Object.values(delData).forEach((row) => {
+                            if (!row || row.status === 'done' || row.deletionResolvedAt) return;
+                            if (Number(row.requestedAt || row.deletionRequestedAt) > 0) delUnread += 1;
+                        });
+                    }
+                }
+                totalUnread += delUnread;
+                const utBadge = document.getElementById('ut-unread-badge');
+                if (utBadge) {
+                    utBadge.textContent = Admin.formatBadgeCount(delUnread);
+                    utBadge.classList.toggle('hidden', delUnread === 0);
+                }
+                Admin._pendingDeletionCount = delUnread;
+            } catch { /* deletion badge is best-effort */ }
+
             // 5. Community activity, per operator and per route.
             const mqRes = await window.guardianFetch(`${dynamicEndpoint}community_activity.json?auth=${secret}`, {}, 6000);
             if (mqRes.ok) {
@@ -7890,6 +7912,48 @@ const Admin = {
             await Admin.fetchDeadEnds();
         };
 
+        Admin.reclassifyPlannerFare = async (vote, patchIn = {}) => {
+            const secret = await Admin.getAuthKey();
+            if (!secret) throw new Error('Not signed in');
+            const item = vote && typeof vote === 'object' ? vote : {};
+            const id = String(item.id || '').trim();
+            if (!id) throw new Error('Missing fare vote');
+            const ticketType = String(patchIn.ticketType || item.ticketType || 'single').toLowerCase();
+            const allowedTypes = new Set(['single', 'return', 'weekly_mon_fri', 'weekly_mon_sat', 'monthly']);
+            if (!allowedTypes.has(ticketType)) throw new Error('Unknown ticket type');
+            const isOffPeak = patchIn.isOffPeak != null ? !!patchIn.isOffPeak : !!item.isOffPeak;
+            let agree = patchIn.agree != null ? !!patchIn.agree : !!item.agree;
+            // Reclassifying a mistaken Single correction to another ticket type means the
+            // board Single quote was fine — count it as correct unless admin overrides.
+            if (patchIn.agree == null
+                && item.agree === false
+                && String(item.ticketType || 'single').toLowerCase() === 'single'
+                && ticketType !== 'single') {
+                agree = true;
+            }
+            const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
+            const patch = {
+                ticketType,
+                isOffPeak,
+                agree,
+                reclassifiedAt: Date.now(),
+                reclassifiedBy: Admin.currentUser?.email || Admin.currentUser?.uid || 'Admin',
+            };
+            const res = await fetch(`${dynamicEndpoint}sys_logs/fare_votes/${encodeURIComponent(id)}.json?auth=${secret}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(patch),
+            });
+            if (!res.ok) throw new Error(`Reclassify failed (${res.status})`);
+            if (Admin._cachedFareVotes && Admin._cachedFareVotes[id]) {
+                Admin._cachedFareVotes[id] = { ...Admin._cachedFareVotes[id], ...patch };
+            }
+            if (typeof showToast === 'function') {
+                showToast(agree ? 'Classification saved · quote marked correct' : 'Classification saved', 'success');
+            }
+            await Admin.fetchDeadEnds();
+        };
+
         Admin.refutePlannerFare = async (vote) => {
             const secret = await Admin.getAuthKey();
             if (!secret) throw new Error('Not signed in');
@@ -8204,6 +8268,29 @@ const Admin = {
                         const typeWarn = item.agree === false && ticketTypeKey !== 'single'
                             ? `<p class="mt-1 text-[10px] leading-snug text-amber-800 dark:text-amber-200 bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-800 rounded-md px-2 py-1">Collect-only for now. Do not Approve weekly/monthly into Single live fares. Peak/off-peak on this card is the board they viewed, not the ticket period.</p>`
                             : '';
+                        const reclassHtml = item.review !== 'refuted' ? `
+                            <div class="de-fare-reclass mt-2 pt-2 border-t border-gray-100 dark:border-gray-800 space-y-1.5" onclick="event.stopPropagation()">
+                                <p class="text-[9px] font-black uppercase tracking-wider text-gray-400">Reclassify correction</p>
+                                <div class="flex flex-wrap gap-1.5 items-center">
+                                    <select class="de-fare-type h-8 px-1.5 rounded-md bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-[10px] text-gray-900 dark:text-white outline-none">
+                                        <option value="single" ${ticketTypeKey === 'single' ? 'selected' : ''}>Single</option>
+                                        <option value="return" ${ticketTypeKey === 'return' ? 'selected' : ''}>Return</option>
+                                        <option value="weekly_mon_fri" ${ticketTypeKey === 'weekly_mon_fri' ? 'selected' : ''}>Weekly Mon-Fri</option>
+                                        <option value="weekly_mon_sat" ${ticketTypeKey === 'weekly_mon_sat' ? 'selected' : ''}>Weekly Mon-Sat</option>
+                                        <option value="monthly" ${ticketTypeKey === 'monthly' ? 'selected' : ''}>Monthly</option>
+                                    </select>
+                                    <select class="de-fare-peak h-8 px-1.5 rounded-md bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-[10px] text-gray-900 dark:text-white outline-none">
+                                        <option value="peak" ${item.isOffPeak ? '' : 'selected'}>Peak</option>
+                                        <option value="off" ${item.isOffPeak ? 'selected' : ''}>Off-peak</option>
+                                    </select>
+                                    <label class="inline-flex items-center gap-1 text-[10px] text-gray-600 dark:text-gray-300">
+                                        <input type="checkbox" class="de-fare-agree rounded border-gray-300 text-emerald-600 focus:ring-emerald-500" ${item.agree ? 'checked' : ''}>
+                                        Quote correct
+                                    </label>
+                                    <button type="button" class="de-fare-reclass-save text-[9px] font-black uppercase tracking-wider text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-900/30 border border-indigo-200 dark:border-indigo-800 px-2.5 py-1.5 rounded focus:outline-none">Save</button>
+                                </div>
+                            </div>
+                        ` : '';
                         card.innerHTML = `
                             <div class="de-fare-card-btn p-3 flex items-start justify-between gap-2">
                                 <div class="min-w-0 flex-1">
@@ -8221,6 +8308,7 @@ const Admin = {
                                     ${peakHint}
                                     ${typeWarn}
                                     ${ticketHtml}
+                                    ${reclassHtml}
                                 </div>
                                 ${(canApprove && !isLive) || canRefute ? `<div class="shrink-0 flex flex-col gap-1.5">
                                     ${canApprove && !isLive ? `<button type="button" class="de-fare-approve text-emerald-700 dark:text-emerald-400 hover:text-white hover:bg-emerald-600 text-[9px] font-black bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 px-3 py-1.5 rounded transition-colors focus:outline-none uppercase tracking-widest shadow-sm">Approve ${secureEscape(reported)}</button>` : ''}
@@ -8247,8 +8335,24 @@ const Admin = {
                                 if (typeof showToast === 'function') showToast(e.message || 'Refute failed', 'error');
                             }
                         });
+                        card.querySelector('.de-fare-reclass-save')?.addEventListener('click', async (ev) => {
+                            ev.stopPropagation();
+                            try {
+                                const typeEl = card.querySelector('.de-fare-type');
+                                const peakEl = card.querySelector('.de-fare-peak');
+                                const agreeEl = card.querySelector('.de-fare-agree');
+                                await Admin.reclassifyPlannerFare(item, {
+                                    ticketType: typeEl?.value || 'single',
+                                    isOffPeak: peakEl?.value === 'off',
+                                    agree: !!agreeEl?.checked,
+                                });
+                            } catch (e) {
+                                console.error('Reclassify planner fare failed', e);
+                                if (typeof showToast === 'function') showToast(e.message || 'Reclassify failed', 'error');
+                            }
+                        });
                         card.addEventListener('click', (ev) => {
-                            if (ev.target.closest('.de-fare-approve, .de-fare-refute, .de-fare-ticket, [data-alert-lightbox], a, button.de-fare-approve')) return;
+                            if (ev.target.closest('.de-fare-approve, .de-fare-refute, .de-fare-reclass, .de-fare-ticket, [data-alert-lightbox], a, button.de-fare-approve')) return;
                             const panel = card.querySelector('.de-fare-contributors');
                             if (!panel) return;
                             const open = panel.classList.toggle('hidden') === false;
@@ -8598,7 +8702,21 @@ const Admin = {
             const esc = Admin.secureDeEscape;
             panel.innerHTML = `
                 <p class="text-[9px] font-black uppercase tracking-wider text-gray-400 pt-2 mb-1">Hit history${hits.length > cap ? ` (latest ${cap} of ${hits.length})` : ''}</p>
-                ${slice.map((h) => Admin.stackedContributorRowHtml(h.userId, `${Admin.formatDate(h.timestamp)} · dep ${esc(h.depTime || '-')}`)).join('') || '<p class="text-[10px] text-gray-400 italic">No hit details.</p>'}
+                ${slice.map((h) => {
+                    const ver = String(h.appVersion || '').split(' - ')[0].trim();
+                    const station = String(h.station || '').trim();
+                    const auto = h.stationAutoLocated === true || h.stationAutoLocated === '1' || h.stationAutoLocated === 1;
+                    const verBtn = /^V\d+_/i.test(ver)
+                        ? ` · <button type="button" class="fb-version-chip font-mono underline decoration-dotted underline-offset-2 focus:outline-none" data-admin-changelog="${esc(ver)}" data-cl-route="" data-cl-station="${esc(station)}" data-cl-auto="${auto ? '1' : '0'}">${esc(ver)}</button>`
+                        : (ver ? ` · ${esc(ver)}` : '');
+                    const stationBit = station
+                        ? ` · ${esc(station)}${auto ? ' (auto)' : ' (manual)'}`
+                        : '';
+                    return Admin.stackedContributorRowHtml(
+                        h.userId,
+                        `${Admin.formatDate(h.timestamp)} · dep ${esc(h.depTime || '-')}${stationBit}${verBtn}`,
+                    );
+                }).join('') || '<p class="text-[10px] text-gray-400 italic">No hit details.</p>'}
             `;
         };
 
@@ -9091,7 +9209,7 @@ const Admin = {
                     return;
                 }
                 rows.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
-                const headers = ['timestamp', 'region', 'userId', 'authUid', 'dayType', 'origin', 'destination', 'depTime', 'arrTime', 'transfers', 'appVersion', 'batchId'];
+                const headers = ['timestamp', 'region', 'userId', 'authUid', 'dayType', 'origin', 'destination', 'depTime', 'arrTime', 'transfers', 'appVersion', 'station', 'stationAutoLocated', 'batchId'];
                 if (format === 'csv') {
                     const esc = (v) => {
                         const s = String(v ?? '');
@@ -9126,7 +9244,7 @@ const Admin = {
                 }
                 entries.sort((a, b) => (Number(b.at) || 0) - (Number(a.at) || 0));
                 const photos = Admin._cachedFareTicketPhotos || {};
-                const headers = ['at', 'origin', 'destination', 'quotedPrice', 'reportedPrice', 'agree', 'ticketType', 'quotedTicketType', 'isOffPeak', 'dayType', 'depTime', 'profile', 'km', 'crowKm', 'smoothKm', 'abKm', 'zone', 'region', 'deviceId', 'authUid', 'appVersion', 'routeIds', 'ticketUrl', 'id'];
+                const headers = ['at', 'origin', 'destination', 'quotedPrice', 'reportedPrice', 'agree', 'ticketType', 'quotedTicketType', 'isOffPeak', 'dayType', 'depTime', 'profile', 'km', 'crowKm', 'smoothKm', 'abKm', 'zone', 'region', 'deviceId', 'authUid', 'appVersion', 'station', 'stationAutoLocated', 'routeIds', 'ticketUrl', 'id'];
                 const cell = (r, h) => {
                     if (h === 'at') return Admin.formatDate(r.at);
                     if (h === 'routeIds') return Array.isArray(r.routeIds) ? r.routeIds.join('|') : (r.routeIds || '');
@@ -9170,7 +9288,7 @@ const Admin = {
                 return;
             }
             entries.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
-            const headers = ['timestamp', 'region', 'userId', 'deviceId', 'dayType', 'origin', 'destination', 'reason', 'timeOfDay', 'appVersion', 'id'];
+            const headers = ['timestamp', 'region', 'userId', 'deviceId', 'dayType', 'origin', 'destination', 'reason', 'timeOfDay', 'appVersion', 'station', 'stationAutoLocated', 'id'];
             if (format === 'csv') {
                 const esc = (v) => {
                     const s = String(v ?? '');
@@ -9673,7 +9791,10 @@ const Admin = {
                 if (clBtn && listContainer.contains(clBtn)) {
                     e.preventDefault();
                     e.stopPropagation();
-                    Admin.openAdminChangelogLookup(clBtn.getAttribute('data-admin-changelog'));
+                    Admin.openAdminChangelogLookup(
+                        clBtn.getAttribute('data-admin-changelog'),
+                        Admin.changelogContextFromEl(clBtn),
+                    );
                     return;
                 }
 
@@ -11809,6 +11930,12 @@ const Admin = {
             } catch { /* profile flags stay on the queue list */ }
         }
         const rows = [...pending.values()].sort((a, b) => b.requestedAt - a.requestedAt);
+        const utBadge = document.getElementById('ut-unread-badge');
+        if (utBadge) {
+            utBadge.textContent = Admin.formatBadgeCount(rows.length);
+            utBadge.classList.toggle('hidden', rows.length === 0);
+        }
+        Admin._pendingDeletionCount = rows.length;
         if (!rows.length) {
             list.innerHTML = '<p class="text-xs text-gray-400 text-center py-3">No open deletion requests.</p>';
             return;
@@ -11818,36 +11945,54 @@ const Admin = {
                 <p class="text-sm font-black text-gray-900 dark:text-white break-words">${esc(row.displayName || row.email || row.uid)}</p>
                 <p class="text-[11px] text-gray-500 break-all">${esc(row.email || 'No email')}</p>
                 <p class="font-mono text-[10px] text-gray-400 break-all mt-0.5">${esc(row.uid)}</p>
+                ${row.deviceId ? `<p class="font-mono text-[10px] text-gray-400 break-all">device ${esc(row.deviceId)}</p>` : ''}
                 <p class="text-[10px] text-gray-400 mt-1">${esc(Admin.formatDate(row.requestedAt))}</p>
-                <button type="button" data-ad-done="${esc(row.uid)}" class="mt-2 text-[10px] font-black uppercase tracking-wider text-white bg-gray-800 hover:bg-gray-900 px-3 py-1.5 rounded-lg">Mark done</button>
+                <button type="button" data-ad-delete="${esc(row.uid)}" data-ad-device="${esc(row.deviceId || '')}" class="mt-2 text-[10px] font-black uppercase tracking-wider text-white bg-rose-700 hover:bg-rose-800 px-3 py-1.5 rounded-lg">Delete data</button>
             </div>
         `).join('');
-        list.querySelectorAll('[data-ad-done]').forEach((btn) => {
-            btn.addEventListener('click', () => Admin.resolveAccountDeletion(btn.getAttribute('data-ad-done')));
+        list.querySelectorAll('[data-ad-delete]').forEach((btn) => {
+            btn.addEventListener('click', () => Admin.purgeAccountDeletion(
+                btn.getAttribute('data-ad-delete'),
+                btn.getAttribute('data-ad-device') || '',
+            ));
         });
     },
 
-    resolveAccountDeletion: async (uid) => {
+    purgeAccountDeletion: async (uid, deviceId = '') => {
         const id = String(uid || '').trim();
         if (!id) return;
         const secret = await Admin.getAuthKey();
         if (!secret) return;
         const base = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
-        const now = Date.now();
-        try {
-            await fetch(`${base}users/${encodeURIComponent(id)}/deletionResolvedAt.json?auth=${encodeURIComponent(secret)}`, {
-                method: 'PUT',
-                body: JSON.stringify(now),
-            });
-            await fetch(`${base}account_deletions/${encodeURIComponent(id)}/status.json?auth=${encodeURIComponent(secret)}`, {
-                method: 'PUT',
-                body: JSON.stringify('done'),
-            });
-            if (typeof showToast === 'function') showToast('Deletion request marked done', 'success');
-            Admin.fetchAccountDeletions();
-        } catch (e) {
-            if (typeof showToast === 'function') showToast('Could not update that request', 'error');
+        const auth = `?auth=${encodeURIComponent(secret)}`;
+        const did = String(deviceId || '').trim();
+        if (typeof window.confirm === 'function'
+            && !window.confirm(`Delete database data for ${id}? This cannot be undone.`)) {
+            return;
         }
+        try {
+            const jobs = [
+                fetch(`${base}users/${encodeURIComponent(id)}.json${auth}`, { method: 'DELETE' }),
+                fetch(`${base}account_deletions/${encodeURIComponent(id)}.json${auth}`, { method: 'DELETE' }),
+            ];
+            if (did) {
+                jobs.push(fetch(`${base}devices/${encodeURIComponent(did)}.json${auth}`, { method: 'DELETE' }));
+            }
+            const results = await Promise.all(jobs);
+            if (results.some((res) => !res.ok)) throw new Error('delete failed');
+            if (typeof showToast === 'function') {
+                showToast('User data deleted from the database', 'success');
+            }
+            Admin.fetchAccountDeletions();
+            if (typeof Admin.syncAllBadges === 'function') Admin.syncAllBadges();
+        } catch (e) {
+            if (typeof showToast === 'function') showToast('Could not delete that account data', 'error');
+        }
+    },
+
+    resolveAccountDeletion: async (uid) => {
+        // Kept for older deep-links; prefer purgeAccountDeletion.
+        return Admin.purgeAccountDeletion(uid);
     },
 
     // --- PHASE 7: USER TRUST / SHADOW-BAN LOOKUP ---
@@ -11873,6 +12018,7 @@ const Admin = {
                     ${Admin.tileIcon('user', 'text-indigo-500 dark:text-indigo-400')}
                     <span>User Trust &amp; Bans</span>
                 </span>
+                <span id="ut-unread-badge" class="admin-unread-badge hidden" aria-label="Pending deletion requests"></span>
                 <svg id="ut-chevron" class="absolute right-3 w-4 h-4 transform transition-transform -rotate-90 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
             </div>
             <div id="ut-body" class="hidden mt-4 flex flex-col text-left">
@@ -11900,7 +12046,7 @@ const Admin = {
                 </div>
                 <div id="ut-pane-deletions" role="tabpanel" class="ut-pane hidden">
                     <div class="flex items-center justify-between gap-2 mb-2 px-1">
-                        <p class="text-[11px] text-gray-500 dark:text-gray-400 leading-snug">Requests sent from Account. Mark done after the account is removed.</p>
+                        <p class="text-[11px] text-gray-500 dark:text-gray-400 leading-snug">Requests sent from Account. Delete data removes the profile from the database.</p>
                         <button type="button" id="ad-refresh-btn" class="shrink-0 text-[10px] font-bold text-blue-600 dark:text-blue-400 px-2 py-1 rounded-lg bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800">Refresh</button>
                     </div>
                     <div id="ad-list" class="space-y-2 max-h-[320px] overflow-y-auto px-1 custom-scrollbar"><p class="text-xs text-gray-400 text-center py-3">Open this tab to load requests.</p></div>
@@ -20821,11 +20967,16 @@ const Admin = {
 
                         const verLabel = safeAppVersion.split(' - ')[0];
                         const commuterRouteLabel = Admin.inboxRouteLabel(item.routeId) || threadRouteLabel;
+                        const stationLabel = String(item.station || '').trim();
+                        const stationAuto = item.stationAutoLocated === true || item.stationAutoLocated === '1' || item.stationAutoLocated === 1;
                         const commuterRouteHtml = commuterRouteLabel
                             ? `<div class="inbox-bubble-route-row">${secureEscape(commuterRouteLabel)}</div>`
                             : '';
+                        const clRouteAttr = secureEscape(commuterRouteLabel || '');
+                        const clStationAttr = secureEscape(stationLabel);
+                        const clAutoAttr = stationAuto ? '1' : '0';
                         const commuterVerBtn = /^V\d+_/i.test(verLabel)
-                            ? `<button type="button" class="fb-version-chip relative z-[2] font-mono font-medium opacity-80 ml-2 shrink-0 underline decoration-dotted underline-offset-2 hover:opacity-100 focus:outline-none" data-admin-changelog="${verLabel}" onclick="event.preventDefault();event.stopPropagation();if(window.Admin&amp;&amp;Admin.openAdminChangelogLookup)Admin.openAdminChangelogLookup(this.getAttribute('data-admin-changelog')||this.textContent);">${verLabel}</button>`
+                            ? `<button type="button" class="fb-version-chip relative z-[2] font-mono font-medium opacity-80 ml-2 shrink-0 underline decoration-dotted underline-offset-2 hover:opacity-100 focus:outline-none" data-admin-changelog="${verLabel}" data-cl-route="${clRouteAttr}" data-cl-station="${clStationAttr}" data-cl-auto="${clAutoAttr}" onclick="event.preventDefault();event.stopPropagation();if(window.Admin&amp;&amp;Admin.openAdminChangelogLookup)Admin.openAdminChangelogLookup(this.getAttribute('data-admin-changelog')||this.textContent,window.Admin.changelogContextFromEl(this));">${verLabel}</button>`
                             : `<span class="font-mono font-medium opacity-60 ml-2 shrink-0">${verLabel}</span>`;
                         const integratedHeaderHtml = `
                             <div class="inbox-bubble-name-row">
@@ -20889,7 +21040,7 @@ const Admin = {
             e.stopPropagation();
             if (typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation();
             const key = btn.getAttribute('data-admin-changelog') || btn.textContent;
-            Admin.openAdminChangelogLookup(key);
+            Admin.openAdminChangelogLookup(key, Admin.changelogContextFromEl(btn));
         };
         document.addEventListener('click', openFromEvent, true);
         document.addEventListener('pointerup', openFromEvent, true);
@@ -21153,7 +21304,7 @@ const Admin = {
         else modal.classList.remove('hidden');
     },
 
-    openAdminChangelogLookup: (version) => {
+    openAdminChangelogLookup: (version, context = null) => {
         const now = Date.now();
         if (window.__ntAdminChangelogOpenAt && (now - window.__ntAdminChangelogOpenAt) < 450) return;
         window.__ntAdminChangelogOpenAt = now;
@@ -21163,6 +21314,7 @@ const Admin = {
         const notes = (typeof window.lookupAdminChangelog === 'function')
             ? window.lookupAdminChangelog(key)
             : ((window.ADMIN_CHANGELOG && window.ADMIN_CHANGELOG[key]) || null);
+        const ctx = (context && typeof context === 'object') ? context : {};
         let modal = document.getElementById('admin-changelog-modal');
         if (!modal) {
             modal = document.createElement('div');
@@ -21171,7 +21323,8 @@ const Admin = {
             modal.style.zIndex = '260';
             modal.innerHTML = `
                 <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-sm p-5 border border-gray-200 dark:border-gray-700 transform transition-transform scale-95 flex flex-col overflow-hidden max-h-[min(85dvh,var(--nt-vv-h,85dvh))]">
-                    <h3 id="admin-changelog-title" class="text-base font-black text-gray-900 dark:text-white mb-2 shrink-0"></h3>
+                    <h3 id="admin-changelog-title" class="text-base font-black text-gray-900 dark:text-white mb-1 shrink-0"></h3>
+                    <p id="admin-changelog-meta" class="hidden text-[11px] text-gray-500 dark:text-gray-400 leading-snug mb-2 shrink-0"></p>
                     <div id="admin-changelog-notes" class="text-sm text-gray-700 dark:text-gray-300 space-y-1.5 mb-4 min-h-0 flex-1 overflow-y-auto custom-scrollbar overscroll-contain"></div>
                     <button type="button" id="admin-changelog-close" class="w-full bg-slate-700 hover:bg-slate-800 text-white font-bold py-2.5 rounded-xl shrink-0">Close</button>
                 </div>`;
@@ -21196,8 +21349,25 @@ const Admin = {
         modal.style.overscrollBehavior = 'none';
         modal.style.touchAction = 'none';
         const title = modal.querySelector('#admin-changelog-title');
+        const meta = modal.querySelector('#admin-changelog-meta');
         const body = modal.querySelector('#admin-changelog-notes');
         if (title) title.textContent = key || 'Unknown version';
+        if (meta) {
+            const routeLabel = String(ctx.routeLabel || ctx.route || '').trim();
+            const station = String(ctx.station || '').trim();
+            const autoFlag = ctx.stationAutoLocated === true || ctx.stationAutoLocated === '1' || ctx.stationAutoLocated === 1;
+            const bits = [];
+            if (routeLabel) bits.push(routeLabel);
+            if (station) bits.push(station);
+            if (station || routeLabel) bits.push(autoFlag ? 'Auto-locate' : 'Manual station');
+            if (bits.length) {
+                meta.textContent = bits.join(' · ');
+                meta.classList.remove('hidden');
+            } else {
+                meta.textContent = '';
+                meta.classList.add('hidden');
+            }
+        }
         if (body) {
             if (!notes || !notes.length) {
                 body.textContent = 'No notes for this build.';
@@ -21213,6 +21383,19 @@ const Admin = {
         } else {
             modal.classList.remove('hidden');
         }
+    },
+
+    changelogContextFromEl: (el) => {
+        if (!el) return null;
+        const routeLabel = el.getAttribute('data-cl-route') || '';
+        const station = el.getAttribute('data-cl-station') || '';
+        const auto = el.getAttribute('data-cl-auto');
+        if (!routeLabel && !station && auto == null) return null;
+        return {
+            routeLabel,
+            station,
+            stationAutoLocated: auto === '1',
+        };
     },
 
     openScheduleQaDeltaModal: (finding) => {
@@ -24082,7 +24265,7 @@ const Admin = {
                         <span class="text-[9px] font-bold uppercase tracking-wide text-gray-500">Title</span>
                         ${Admin.writeAssistButtonHtml('sched-override-title-' + code)}
                     </div>
-                    <input type="text" id="sched-override-title-${code}" class="sched-override-title w-full h-9 px-2 rounded-md bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-[10px] text-gray-900 dark:text-white outline-none" data-region="${code}" placeholder="Popup title (e.g. Public holiday today)" maxlength="120">
+                    <input type="text" id="sched-override-title-${code}" class="sched-override-title w-full h-9 px-2 rounded-md bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-[10px] text-gray-900 dark:text-white outline-none" data-region="${code}" placeholder="Day name on the chip (e.g. Election Day)" maxlength="120">
                     <div class="flex items-center justify-between">
                         <span class="text-[9px] font-bold uppercase tracking-wide text-gray-500">Message (required if active)</span>
                         ${Admin.writeAssistButtonHtml('sched-override-msg-' + code)}

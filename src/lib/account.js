@@ -716,10 +716,10 @@ export function showAccountGuestScreen(screen) {
     if (typeof document === 'undefined') return;
     const guest = document.getElementById('account-guest');
     if (!guest) return;
-    const name = screen === 'create' || screen === 'reset' ? screen : 'signin';
+    const name = screen === 'signin' || screen === 'reset' ? screen : 'create';
     guest.setAttribute('data-account-screen', name);
     guest.querySelectorAll('[data-account-only]').forEach((el) => {
-        const list = (el.getAttribute('data-account-only') || '').split(/\s+/);
+        const list = (el.getAttribute('data-account-only') || '').split(/\s+/).filter(Boolean);
         el.classList.toggle('hidden', !list.includes(name));
     });
     document.getElementById('account-signin-create-hint')?.classList.add('hidden');
@@ -734,6 +734,7 @@ export function showAccountGuestScreen(screen) {
 export function requestAccountSignIn() {
     if ($account.get()?.status === 'signed-in') return Promise.resolve(true);
     openAccountModal();
+    showAccountGuestScreen('signin');
     return waitForSignedIn(120000);
 }
 
@@ -747,7 +748,7 @@ export function openAccountModal() {
         modal.style.removeProperty('--nt-feedback-vv-height');
     }
     const signedOpen = document.getElementById('account-signed-in') && !document.getElementById('account-signed-in').classList.contains('hidden');
-    if (!signedOpen) showAccountGuestScreen('signin');
+    if (!signedOpen) showAccountGuestScreen('create');
     if (typeof window.openSmoothModal === 'function') {
         window.openSmoothModal('account-modal');
     }
@@ -1009,7 +1010,7 @@ export function syncAccountSettingsUi(state = $account.get()) {
     if (screenTitle) {
         if (signed) screenTitle.textContent = '';
         else {
-            const screen = guestBlock?.getAttribute('data-account-screen') || 'signin';
+            const screen = guestBlock?.getAttribute('data-account-screen') || 'create';
             screenTitle.textContent = screen === 'create' ? 'Create account' : screen === 'reset' ? 'Reset your password' : '';
         }
     }
@@ -1404,14 +1405,33 @@ export function bindAccountUi() {
 
     document.getElementById('account-modal-close')?.addEventListener('click', () => {
         const guest = document.getElementById('account-guest');
-        const screen = guest?.getAttribute('data-account-screen') || 'signin';
+        const screen = guest?.getAttribute('data-account-screen') || 'create';
         const guestOpen = guest && !guest.classList.contains('hidden');
-        if (guestOpen && screen !== 'signin') {
-            showAccountGuestScreen('signin');
+        if (guestOpen && screen !== 'create') {
+            showAccountGuestScreen('create');
             return;
         }
         closeAccountModal();
     });
+
+    const bindAccountScrollFade = () => {
+        const scroller = document.querySelector('[data-account-scroll]');
+        const fade = document.getElementById('account-scroll-fade');
+        if (!scroller || !fade || scroller.dataset.fadeBound === '1') return;
+        scroller.dataset.fadeBound = '1';
+        const sync = () => {
+            const more = scroller.scrollHeight - scroller.clientHeight - scroller.scrollTop > 8;
+            fade.classList.toggle('opacity-0', !more);
+            fade.classList.toggle('opacity-100', more);
+        };
+        scroller.addEventListener('scroll', sync, { passive: true });
+        window.addEventListener('resize', sync, { passive: true });
+        sync();
+        try {
+            new ResizeObserver(sync).observe(scroller);
+        } catch { /* ignore */ }
+    };
+    bindAccountScrollFade();
 
     const setBusy = (busy) => {
         _accountUiBusy = !!busy;

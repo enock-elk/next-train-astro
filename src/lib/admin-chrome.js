@@ -7,7 +7,7 @@
 import { safeStorage } from './utils.js';
 import { $currentRouteId, $userRegion } from '../store.js';
 import { $account } from './account.js';
-import { FEATURE_KEYS, fetchFeatures, getGrantedFeatures, isFeatureEnabled, isFeatureGranted, isListedAccountsRoute, isRideCheckInPinned } from './features.js';
+import { FEATURE_KEYS, fetchFeatures, getGrantedFeatures, isFeatureEnabled, isFeatureGranted, isListedAccountsRoute, isListedCommunityRoute, isRideCheckInPinned } from './features.js';
 import { isLiveTrainFollowActive } from './live-train-follow.js';
 
 function isSignedInAccount() {
@@ -61,8 +61,18 @@ export function canAccessPilotSurface(surface, routeId = '') {
     if (surface === 'account' && isFeatureGranted(FEATURE_KEYS.ACCOUNTS)) return true;
     const hit = (key) => experimentalFeatureMatches(key, routeId);
     if (surface === 'map') return hit(FEATURE_KEYS.MAP_TAB);
-    if (surface === 'community') return hit(FEATURE_KEYS.COMMUNITY_TAB);
+    // Community tab only when the board route (or an explicit route) has an open room.
+    // Do not inherit from another region's pin or a region-wide flag while the
+    // board is on a corridor that is not listed.
+    if (surface === 'community') return communityOnForVisitor(routeId);
     if (surface === 'account') return accountsOnForVisitor(routeId);
+    return false;
+}
+
+/** Community tab follows the listed room for the current board route only. */
+function communityOnForVisitor(routeId = '') {
+    const id = String(routeId || $currentRouteId.get() || '').trim();
+    if (id) return isListedCommunityRoute(id);
     return false;
 }
 

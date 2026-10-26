@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_10.26.5': [
+        'Station SEO drops Expand map (tap the preview), splits lead copy into paragraphs, and says departure & more. Account opens on Create with Welcome, logo, Google first, less copy, and a bottom scroll fade; Delete account sits with Sign out and Reset. Community tab only when the board route has an open room. Feedback and planner telemetries send the selected station plus auto-locate, shown under the version modal. User Trust deletions Delete data from RTDB and badge the tile. Fare corrections can be reclassified (ticket type / peak) which updates agree and accuracy. Force schedule titles paint on the day chip (Election Day). No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_10.26.4': [
         'Station SEO neighbour headlines only slash-join corridor ends that share the same next stop (Pretoria - Irene / Kempton Park via Sportpark; other nexts stay middle-dot groups). The GPS preview isolates ?station= at street-level zoom instead of fitting the whole corridor, keeps pan/zoom along the line, and shows Loading map without the network sync copy. No commuter What\'s New. forceShow stays false.',
     ],

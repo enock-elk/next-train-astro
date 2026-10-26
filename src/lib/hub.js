@@ -97,6 +97,7 @@ import {
     unstickStaleServiceWorker,
 } from './app-update.js';
 import { setupMapLogic } from './map-viewer.js';
+import { getBoardStationContext } from './auto-locate.js';
 import { applyShadowBanCloak, checkContentSafety, queueAutoModeration, checkRateLimit, recordRateHit, startRateLimitCountdown } from './trust.js';
 import {
     sniffAttachmentFile,
@@ -1059,6 +1060,7 @@ async function submitFeedback(opts = {}) {
                         // Held messages are text-only for v1 (attachments not uploaded on hold).
                         attachmentsHeld: hasFile,
                         quotedText: String(document.getElementById('feedback-reply-context')?.dataset.quotedText || '').trim() || null,
+                        ...getBoardStationContext(),
                         ...chatScopeFields(),
                     },
                 },
@@ -1140,6 +1142,7 @@ async function submitFeedback(opts = {}) {
             deviceId: $deviceId.get() || safeStorage.getItem('next_train_device_id') || 'unknown',
             isPWA: isStandalone,
             quotedText: String(document.getElementById('feedback-reply-context')?.dataset.quotedText || '').trim() || null,
+            ...getBoardStationContext(),
             ...chatScopeFields(),
         };
 

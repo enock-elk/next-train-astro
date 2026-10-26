@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_10.27.4': [
+        'Image schedules: WC Northern weekend (Oct 2025), Stellenbosch weekday early/later posters (eff. 12 Oct 2026), and KZN Berea/kwaMashu, Crossmoor, Pinetown weekday + Saturday booklet pages (keep multi-page detail variants). Prefer newer effective dates; do not drop companion pages. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_10.27.3': [
         'Image schedule archive started under public/images/schedules/ (WC Southern, Northern, Central Saturday, Cape Flats, Monte Vista sheets + manifest). Paths are allowlisted for a future Alerts poster picker; do not copy into alerts/. No commuter What\'s New. forceShow stays false.',
     ],

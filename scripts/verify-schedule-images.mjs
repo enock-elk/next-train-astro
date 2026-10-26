@@ -15,7 +15,10 @@ const assert = (cond, msg) => { if (!cond) failures.push(msg); };
 const manifestPath = join(ROOT, 'public/images/schedules/manifest.json');
 assert(existsSync(manifestPath), 'schedules manifest exists');
 const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
-assert(Array.isArray(manifest.sheets) && manifest.sheets.length >= 10, `manifest lists ${manifest.sheets?.length || 0} sheets`);
+assert(Array.isArray(manifest.sheets) && manifest.sheets.length >= 20, `manifest lists ${manifest.sheets?.length || 0} sheets`);
+assert(manifest.sheets.some((s) => s.region === 'KZN'), 'KZN sheets are filed');
+assert(manifest.sheets.some((s) => String(s.file || '').includes('-p32')), 'KZN multi-page parts are kept');
+assert(manifest.sheets.some((s) => s.effective === '2026-10-12'), 'Stellenbosch 12 Oct 2026 sheets are filed');
 
 const ids = new Set();
 for (const sheet of manifest.sheets || []) {
@@ -40,6 +43,7 @@ assert(sanitizeAlertImageUrl('/images/schedules/wc/../alerts/x.jpg') === null, '
 
 const readme = readFileSync(join(ROOT, 'public/images/schedules/README.md'), 'utf8');
 assert(readme.includes('{region}-{corridor}-{day}-{direction}'), 'README documents naming');
+assert(readme.includes('keep both') || readme.includes('Keep both'), 'README keeps multi-page / detail variants');
 assert(readme.includes('Do not copy schedule JPGs into `alerts/`'), 'README keeps schedules out of alerts copies');
 
 const agents = readFileSync(join(ROOT, 'AGENTS.md'), 'utf8');

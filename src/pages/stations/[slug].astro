@@ -1,0 +1,215 @@
+---
+import ContentLayout from '../../layouts/ContentLayout.astro';
+import SeoPageHeader from '../../components/SeoPageHeader.astro';
+import SeoStationDepartures from '../../components/SeoStationDepartures.astro';
+import { withBase } from '../../lib/config.js';
+import { listSeoRegions, regionName } from '../../lib/seo-routes.js';
+import { isStationIndexable } from '../../lib/seo-station-allowlist.js';
+import {
+  buildStationBoardAppPath,
+  buildStationCorridorTimetables,
+  buildStationJsonLd,
+  getSeoStationBySlug,
+  listSeoStations,
+  stationDocumentTitle,
+  stationMetaDescription,
+} from '../../lib/seo-stations.js';
+
+export function getStaticPaths() {
+  return listSeoStations({ regions: ['GP'] }).map((station) => ({
+    params: { slug: station.slug },
+  }));
+}
+
+const { slug } = Astro.params;
+const station = getSeoStationBySlug(slug);
+if (!station) {
+  return Astro.redirect('/routes.html');
+}
+
+const corridors = buildStationCorridorTimetables(station);
+const indexable = isStationIndexable(station.slug);
+const province = regionName(station.region);
+const regionEntry = listSeoRegions().find((r) => r.region === station.region);
+const title = stationDocumentTitle(station);
+const description = stationMetaDescription(station, corridors);
+const canonicalPath = `/stations/${station.slug}.html`;
+const pageUrl = `https://nexttrain.co.za${canonicalPath}`;
+const liveBoardHref = withBase(buildStationBoardAppPath(station));
+const routesIndexHref = withBase('routes.html');
+const regionHref = regionEntry ? withBase(`regions/${regionEntry.slug}.html`) : routesIndexHref;
+
+const jsonLd = buildStationJsonLd({
+  station,
+  corridors,
+  pageUrl,
+  description,
+});
+
+const lineLinks = corridors.map((c) => ({
+  href: c.routeSlug ? withBase(`routes/${c.routeSlug}.html`) : routesIndexHref,
+  label: c.routeName,
+  lineLabel: c.lineLabel,
+}));
+---
+
+<ContentLayout
+  title={title}
+  description={description}
+  canonicalPath={canonicalPath}
+  themeColor="#1d4ed8"
+  forceLight={true}
+  robots={indexable ? 'index, follow' : 'noindex, follow'}
+  seoPageType="station"
+  seoSlug={station.slug}
+  seoRegion={station.region}
+  seoRouteId={station.routeIds[0] || ''}
+>
+  <script type="application/ld+json" slot="head" set:html={JSON.stringify(jsonLd)} />
+  <SeoPageHeader region={station.region} regionLabel={province} ctaHref={liveBoardHref} />
+
+  <main class="min-h-screen bg-slate-50 text-slate-800 dark:bg-slate-950 dark:text-slate-100">
+    <div class="max-w-2xl mx-auto px-4 pt-6 sm:pt-8">
+      <p class="text-xs font-bold uppercase tracking-widest text-blue-600 dark:text-blue-400 mb-3">
+        <a href={routesIndexHref} class="hover:underline">Metrorail routes</a>
+        <span class="text-slate-400 dark:text-slate-500"> / </span>
+        <a href={regionHref} class="hover:underline">{province}</a>
+        <span class="text-slate-400 dark:text-slate-500"> / </span>
+        <span class="text-slate-500 dark:text-slate-400">Stations</span>
+      </p>
+
+      <div class="flex flex-wrap items-center gap-2">
+        <h1 class="text-2xl sm:text-3xl font-black tracking-tight text-slate-900 dark:text-white leading-tight">
+          {station.name} station
+        </h1>
+        <span class="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-200">
+          Active
+        </span>
+      </div>
+
+      <p class="mt-3 text-base text-slate-600 dark:text-slate-300 leading-relaxed">
+        Weekday and Saturday Metrorail departures from {station.name} in {province}.
+        Open Next Train for the next live departure on this corridor.
+      </p>
+
+      <a
+        href={liveBoardHref}
+        class="mt-4 inline-flex items-center justify-center rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold px-4 py-2.5 text-sm transition-colors"
+      >
+        Open live board
+      </a>
+    </div>
+
+    {lineLinks.length > 0 && (
+      <div class="max-w-2xl mx-auto px-4 pt-8">
+        <h2 class="text-lg font-bold text-slate-900 dark:text-white">Lines through this station</h2>
+        <ul class="mt-3 space-y-2">
+          {lineLinks.map((line) => (
+            <li>
+              <a href={line.href} class="text-blue-700 dark:text-blue-300 font-semibold hover:underline">
+                {line.label}
+              </a>
+              {line.lineLabel && line.lineLabel !== line.label && (
+                <span class="text-sm text-slate-500 dark:text-slate-400"> · {line.lineLabel}</span>
+              )}
+            </li>
+          ))}
+        </ul>
+      </div>
+    )}
+
+    {corridors.some((c) => c.neighbors.towardOrigin || c.neighbors.towardDest) && (
+      <div class="max-w-2xl mx-auto px-4 pt-8">
+        <h2 class="text-lg font-bold text-slate-900 dark:text-white">Neighbouring stations</h2>
+        <ul class="mt-3 space-y-3 text-sm text-slate-700 dark:text-slate-200">
+          {corridors.map((c) => {
+            if (!c.neighbors.towardOrigin && !c.neighbors.towardDest) return null;
+            const originHref = c.neighbors.towardOriginSlug
+              ? withBase(`stations/${c.neighbors.towardOriginSlug}.html`)
+              : null;
+            const destHref = c.neighbors.towardDestSlug
+              ? withBase(`stations/${c.neighbors.towardDestSlug}.html`)
+              : null;
+            return (
+              <li class="rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900/60 px-3 py-2.5">
+                <p class="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1">{c.routeName}</p>
+                <p>
+                  {c.neighbors.towardOrigin ? (
+                    originHref ? (
+                      <a href={originHref} class="text-blue-700 dark:text-blue-300 font-semibold hover:underline">
+                        {c.neighbors.towardOrigin}
+                      </a>
+                    ) : c.neighbors.towardOrigin
+                  ) : (
+                    <span class="text-slate-400">Terminus</span>
+                  )}
+                  <span class="text-slate-400 mx-1.5">·</span>
+                  <span class="font-semibold text-slate-900 dark:text-white">{station.name}</span>
+                  <span class="text-slate-400 mx-1.5">·</span>
+                  {c.neighbors.towardDest ? (
+                    destHref ? (
+                      <a href={destHref} class="text-blue-700 dark:text-blue-300 font-semibold hover:underline">
+                        {c.neighbors.towardDest}
+                      </a>
+                    ) : c.neighbors.towardDest
+                  ) : (
+                    <span class="text-slate-400">Terminus</span>
+                  )}
+                </p>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+    )}
+
+    <div class="max-w-2xl mx-auto px-4 pt-8 pb-10 space-y-10">
+      <h2 class="text-lg font-bold text-slate-900 dark:text-white">Station timetable</h2>
+      <p class="text-sm text-slate-600 dark:text-slate-300 -mt-6">
+        Full weekday lists in each direction. Short workings show the train&apos;s last stop on this sheet.
+      </p>
+
+      {corridors.map((card) => (
+        <section class="space-y-4">
+          {corridors.length > 1 && (
+            <h3 class="text-base font-bold text-slate-900 dark:text-white">
+              {card.routeSlug ? (
+                <a href={withBase(`routes/${card.routeSlug}.html`)} class="hover:underline">
+                  {card.routeName}
+                </a>
+              ) : card.routeName}
+            </h3>
+          )}
+          <div class="space-y-4">
+            {card.weekday.towardA.trains.length > 0 && (
+              <SeoStationDepartures title={card.weekday.towardA.title} trains={card.weekday.towardA.trains} />
+            )}
+            {card.weekday.towardB.trains.length > 0 && (
+              <SeoStationDepartures title={card.weekday.towardB.title} trains={card.weekday.towardB.trains} />
+            )}
+          </div>
+
+          {card.hasSaturday && (
+            <details class="rounded-2xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900/80 p-4">
+              <summary class="cursor-pointer text-sm font-bold text-slate-900 dark:text-white">
+                Saturday timetable · {card.routeName}
+              </summary>
+              <div class="mt-4 space-y-4">
+                {card.saturday.towardA.trains.length > 0 && (
+                  <SeoStationDepartures title={card.saturday.towardA.title} trains={card.saturday.towardA.trains} />
+                )}
+                {card.saturday.towardB.trains.length > 0 && (
+                  <SeoStationDepartures title={card.saturday.towardB.title} trains={card.saturday.towardB.trains} />
+                )}
+              </div>
+            </details>
+          )}
+        </section>
+      ))}
+
+      {!corridors.length && (
+        <p class="text-sm text-slate-500">No published timetable rows for this station in the current dump.</p>
+      )}
+    </div>
+  </main>
+</ContentLayout>

@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_10.26.1': [
+        'Gauteng station SEO landings at /stations/{slug}.html for every timed stop on active GP routes (88 pages). Each page lists lines, neighbouring stations, and weekday/Saturday departures in both directions with Direct and short-working badges. Indexing is gated by seo-station-allowlist.js (phase 1 = all GP). Route SEO station lists link through. Sitemap, SW denylist, and verify:station-seo cover the new URLs. Reviews and out-of-network stubs are deferred. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_10.24.3': [
         'Earthy day line matches Classic: weekday name, then a spaced schedule capsule in taupe wash (Classic blue pill unchanged). Suggest reply uses a short independence line only for PRASA or operations asks they cannot fix, and thanks poll or call-for-response replies. No commuter What\'s New. forceShow stays false.',
     ],

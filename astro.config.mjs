@@ -73,6 +73,7 @@ export default defineConfig({
           'routes/**',
           'regions/**',
           'corridors/**',
+          'stations/**',
         ],
         navigateFallback: 'index.html',
         navigateFallbackDenylist: [
@@ -87,6 +88,7 @@ export default defineConfig({
           /\/routes(\.html|\/)/,
           /\/corridors\//,
           /\/regions\//,
+          /\/stations(\.html|\/)/,
           /guide\.html/,
           /\/map(?:\.html)?(?:$|[/?#])/,
           /map\.html/,

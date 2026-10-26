@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_10.26.12': [
+        'Map gold catch-up: GOLD.json hashes now match the station SEO map isolate and routeLineColor runtime already on main (map-app.js, map.astro). Tracks and CleverAds hashes unchanged. verify:map-lines, verify:map-hops, and verify:clever-ads passed before the lock update. Fast-forward map-gold after this lands. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_10.26.11': [
         'SEO Open in Next Train (and other share deep links) re-runs syncInAppChrome after minting welcomeSeen or restoring a pinned route, so html.nt-onboarding cannot leave the bottom nav stuck hidden for returning commuters. Welcome skip path and immersive chrome exit do the same. No commuter What\'s New. forceShow stays false.',
     ],

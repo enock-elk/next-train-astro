@@ -1,8 +1,8 @@
 {
   "branch": "map-gold",
-  "frozenAt": "ce33ec140c3d024de6f00b966e422d19b452673c",
+  "frozenAt": "ca2658d97192d9edf25a9ae61362139e65ac7d23",
   "version": "V9_09.20.11",
-  "note": "Gold snapshot of map-app routeLineColor at ce33ec1. Baked tracks and advert handling unchanged. Fast-forward map-gold to this main after merge. Never force-push map-gold.",
+  "note": "Gold snapshot of station SEO map isolate (?station= focus + quiet loader) and routeLineColor at ca2658d97192d9edf25a9ae61362139e65ac7d23. Baked tracks and advert handling unchanged. Fast-forward map-gold to this main. Never force-push map-gold.",
   "files": {
     "public/tracks/rail-tracks-EC.geojson": {
       "md5": "43409bfd05405205e596f0d03345ab18",
@@ -21,12 +21,12 @@
       "sha256": "090a5d7fc45cafb8c7b81dc583ae24978540f38278cab447953bc90c8821f01f"
     },
     "public/js/map-app.js": {
-      "md5": "3c0aa3c16961a77bc760e0398facf857",
-      "sha256": "87f662bc7c9c258f6af9d56d58b2b2444d128c32c82a5bdd7156a20aed333749"
+      "md5": "ac2e191509c73c136ef8b690dbaa7304",
+      "sha256": "325d4cedb1ca4b928ef1bda57db9419c65439a26e80bc5feb5fa23e1b2258a26"
     },
     "src/pages/map.astro": {
-      "md5": "561681619ddb9781ac6ba513ec54670e",
-      "sha256": "e024ea5463448149c56a4a0821758a0dac8fe58bd91fc182fbe7bb2affe4ea47"
+      "md5": "d82ebf12bce75b821f22635a0d1d6feb",
+      "sha256": "2c8f4012b918bfd2ff65e763a26d3ddb232d64a134f6b1ade4f610fd95c1e94f"
     },
     "src/components/MapView.astro": {
       "md5": "444c75381d8a8049d0051aeccf559118",

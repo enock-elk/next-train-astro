@@ -101,7 +101,7 @@ Run `npm run verify:clever-ads` before updating advert hashes. Then follow the s
 
 ## Image schedules
 
-Printed PRASA / Metrorail timetable JPGs that back the in-app dump live in `public/images/schedules/` (`manifest.json` + region folders). Naming: `{region}-{corridor}-{day}-{direction}[-{effective}][-{part}].jpg` under `wc/` / `gp/` / `kzn/` / `ec/`. When the owner sends more sheets, rename, file, update the manifest, and push `main`. Prefer newer effective dates; keep the old dated file. For KZN booklet pages (or any pair where one sheet shows more trains/detail), keep both (`p{N}` or `early`/`later`). Do not copy sheets into `public/images/alerts/` (allowlist already accepts `/images/schedules/...` for a future Alerts picker). Full rules: `public/images/schedules/README.md`. Run `npm run verify:schedule-images`.
+Printed PRASA / Metrorail timetable JPGs that back the in-app dump live in `public/images/schedules/` (`manifest.json` + region folders). Naming: `{region}-{corridor}-{day}-{direction}[-{effective}][-{part}].jpg` under `wc/` / `gp/` / `kzn/` / `ec/`. When the owner sends more sheets, rename, file, update the manifest, and push `main`. Prefer newer effective dates; keep the old dated file. For KZN booklet pages (or any pair where one sheet shows more trains/detail), keep both (`p{N}` or `early`/`later`). **Grid vs departure notices:** when a full station grid and a departure-only list both exist for the same corridor/day, keep both (`part` `grid` / `departures`); never replace one with the other. Do not copy sheets into `public/images/alerts/` (allowlist already accepts `/images/schedules/...` for a future Alerts picker). Full rules: `public/images/schedules/README.md`. Run `npm run verify:schedule-images`.
 
 ## Alerts
 

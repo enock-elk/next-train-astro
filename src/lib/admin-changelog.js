@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_10.27.6': [
+        'Image schedules batch 4: first GP folder (Naledi, Germiston, Leralla, Kempton, Mabopane, Irene, Pienaarspoort, Saulsville, Belle Ombre, De Wildt, Kwesine, Lenz Saturday notices) plus WC Central weekday in/out (08 Jun 2026). Tag grid vs departures and keep both formats; keep older Leralla 2025-08-02 departures beside 2026-08-22. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_10.27.5': [
         'Image schedules batch 3: KZN Umlazi weekday p52/53/58/59 and Saturday p64/65, Berea/kwaMashu Saturday inbound p42, plus WC Cape Flats / Northern / Central / Southern public-holiday 2026 combined posters. Skipped exact byte duplicates of already-filed Berea pages. No commuter What\'s New. forceShow stays false.',
     ],

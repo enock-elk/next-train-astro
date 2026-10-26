@@ -17,8 +17,13 @@ assert(existsSync(manifestPath), 'schedules manifest exists');
 const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
 assert(Array.isArray(manifest.sheets) && manifest.sheets.length >= 20, `manifest lists ${manifest.sheets?.length || 0} sheets`);
 assert(manifest.sheets.some((s) => s.region === 'KZN'), 'KZN sheets are filed');
+assert(manifest.sheets.some((s) => s.region === 'GP'), 'GP sheets are filed');
 assert(manifest.sheets.some((s) => String(s.file || '').includes('-p32')), 'KZN multi-page parts are kept');
 assert(manifest.sheets.some((s) => s.effective === '2026-10-12'), 'Stellenbosch 12 Oct 2026 sheets are filed');
+assert(
+    manifest.sheets.some((s) => s.part === 'grid') && manifest.sheets.some((s) => s.part === 'departures'),
+    'grid and departures format variants are both filed'
+);
 
 const ids = new Set();
 for (const sheet of manifest.sheets || []) {
@@ -44,12 +49,15 @@ assert(sanitizeAlertImageUrl('/images/schedules/wc/../alerts/x.jpg') === null, '
 const readme = readFileSync(join(ROOT, 'public/images/schedules/README.md'), 'utf8');
 assert(readme.includes('{region}-{corridor}-{day}-{direction}'), 'README documents naming');
 assert(readme.includes('keep both') || readme.includes('Keep both'), 'README keeps multi-page / detail variants');
+assert(readme.includes('Grid vs departure') || readme.includes('grid vs departure'), 'README keeps grid and departures variants');
 assert(readme.includes('Do not copy schedule JPGs into `alerts/`'), 'README keeps schedules out of alerts copies');
 
 const agents = readFileSync(join(ROOT, 'AGENTS.md'), 'utf8');
 const instructions = readFileSync(join(ROOT, 'instructions.md'), 'utf8');
 assert(agents.includes('public/images/schedules/'), 'AGENTS documents image schedules');
+assert(agents.includes('Grid vs departure') || agents.includes('grid vs departure'), 'AGENTS keeps grid and departures variants');
 assert(instructions.includes('public/images/schedules/'), 'instructions.md stays in sync with AGENTS');
+assert(instructions.includes('Grid vs departure') || instructions.includes('grid vs departure'), 'instructions keeps grid and departures variants');
 
 if (failures.length) {
     console.error('verify-schedule-images failed:');

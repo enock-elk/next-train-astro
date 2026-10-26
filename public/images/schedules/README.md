@@ -23,11 +23,11 @@ public/images/schedules/
 | Part | Values |
 | --- | --- |
 | `region` | `wc`, `gp`, `kzn`, `ec` |
-| `corridor` | `southern`, `northern`, `central`, `cape-flats`, `monte-vista`, `stellenbosch`, `berea-kwamashu`, `crossmoor`, `pinetown`, … |
-| `day` | `weekday`, `saturday`, `sunday`, `weekend`, `public-holiday` |
-| `direction` | `inbound` (toward Cape Town / Durban / main hub), `outbound` (away), `combined` (both directions on one public-holiday poster) |
+| `corridor` | `southern`, `northern`, `central`, `cape-flats`, `monte-vista`, `stellenbosch`, `berea-kwamashu`, `crossmoor`, `pinetown`, `naledi`, `leralla`, `lenz`, … |
+| `day` | `weekday`, `saturday`, `sunday`, `weekend`, `public-holiday` (GP “Saturday & Public Holidays” notices use `saturday` and say so in notes) |
+| `direction` | `inbound` (toward Cape Town / Durban / Pretoria / Johannesburg hub), `outbound` (away), `combined` (both directions on one poster or notice) |
 | `effective` | `YYYY-MM-DD` when the sheet says “Effective from …”; `YYYY-MM` when only a month is printed; omit when the sheet has no date |
-| `part` | Optional. Booklet page (`p32`), or `early` / `later` when one service is split across posters |
+| `part` | Optional. Booklet page (`p32`); `early` / `later` when one service is split across posters; **`grid`** (full station×train table) or **`departures`** (train number + origin departure list only) |
 
 Examples:
 
@@ -36,6 +36,8 @@ Examples:
 - `wc/wc-northern-public-holiday-2026.jpg` (combined in+out on one poster)
 - `kzn/kzn-berea-kwamashu-weekday-outbound-2026-10-05-p32.jpg`
 - `kzn/kzn-umlazi-weekday-outbound-2026-10-05-p52.jpg`
+- `gp/gp-naledi-saturday-combined-2026-09-12-grid.jpg`
+- `gp/gp-leralla-saturday-combined-2026-08-22-departures.jpg`
 
 ## Adding more sheets
 
@@ -44,7 +46,8 @@ Examples:
 3. Commit and push `main` so GitHub Pages / the dump host get the files.
 4. **Effective dates:** if a newer sheet arrives for the same corridor / day / direction, keep the old file and add the new dated name. Prefer the newest effective date when comparing to the live dump.
 5. **KZN (and multi-page books):** when two pages cover the same route and day but different train columns, platforms, or detail, **keep both** (use `p{N}` or `early`/`later`). Do not drop a page because another “looks the same.”
-6. Exact byte duplicates of an already-filed sheet can be skipped (note in the commit).
+6. **Grid vs departure notices:** GP (and any region) often ships a full station grid and a separate departure-only list for the same corridor / day. **Keep both.** Never replace a `grid` with a `departures` sheet or the reverse; tag `part` as `grid` or `departures`.
+7. Exact byte duplicates of an already-filed sheet can be skipped (note in the commit).
 
 ## Alerts (later)
 

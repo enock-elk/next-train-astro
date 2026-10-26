@@ -17,6 +17,7 @@
 import { DYNAMIC_BASE_URL, APP_VERSION, FARE_CONFIG } from './config.js';
 import { safeStorage, normalizeStationName } from './utils.js';
 import { $deviceId, $userRegion } from '../store.js';
+import { getBoardStationContext } from './auto-locate.js';
 
 /** Optional signed-in Firebase uid (null for guests / anonymous). */
 function authUid() {
@@ -92,6 +93,7 @@ export async function logRoutingFail({ origin, destination, reason, dayType, tim
     lastFailAt = now;
 
     const did = deviceId();
+    const stationCtx = getBoardStationContext();
     const payload = {
         origin,
         destination,
@@ -104,6 +106,8 @@ export async function logRoutingFail({ origin, destination, reason, dayType, tim
         authUid: authUid(),
         region: $userRegion.get() || null,
         appVersion: APP_VERSION,
+        station: stationCtx.station,
+        stationAutoLocated: stationCtx.stationAutoLocated,
     };
 
     const failId = uid();
@@ -208,6 +212,7 @@ async function upsertTripPlanIndexes(userId, region, trips, q) {
 export function enqueueSuccessfulTripPlan(entry) {
     const queue = readTripQueue();
     const did = deviceId();
+    const stationCtx = getBoardStationContext();
     queue.push({
         ...entry,
         timestamp: Date.now(),
@@ -217,6 +222,10 @@ export function enqueueSuccessfulTripPlan(entry) {
         region: entry.region || $userRegion.get() || null,
         dayType: entry.dayType || null,
         appVersion: APP_VERSION,
+        station: entry.station != null ? entry.station : stationCtx.station,
+        stationAutoLocated: entry.stationAutoLocated != null
+            ? !!entry.stationAutoLocated
+            : stationCtx.stationAutoLocated,
     });
     writeTripQueue(queue.slice(-TRIP_QUEUE_HARD_CAP));
 
@@ -457,6 +466,13 @@ export function buildFareVotePayload({
         authUid: uidOverride !== undefined ? uidOverride : authUid(),
         appVersion: clipStr(appVersion || APP_VERSION, 32),
         at: Number(at) || Date.now(),
+        ...(() => {
+            const stationCtx = getBoardStationContext();
+            return {
+                station: clipStr(stationCtx.station, 79) || null,
+                stationAutoLocated: !!stationCtx.stationAutoLocated,
+            };
+        })(),
     };
 }
 

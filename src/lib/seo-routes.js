@@ -9,6 +9,14 @@ import { ROUTES, REGIONS, CORRIDOR_META, REGION_SEO, HOLIDAY_NAMES, SPECIAL_DATE
 
 /** @typedef {{ slug: string, routeId: string, blurb: string, operatingNote: string, serves?: string, nearby?: string, insight?: string }} SeoRouteSeed */
 
+/** Split SEO lead copy into short paragraphs for scanning (sentence boundaries). */
+export function seoIntroParagraphs(text) {
+    const raw = String(text || '').replace(/\s+/g, ' ').trim();
+    if (!raw) return [];
+    const parts = raw.match(/[^.!?]+[.!?]+(?:\s+|$)|[^.!?]+$/g) || [raw];
+    return parts.map((part) => part.trim()).filter(Boolean);
+}
+
 /** Sheet / dump names → commuter-facing labels on SEO pages. */
 const STATION_DISPLAY_ALIASES = {
     JOHANNESBURG: 'Johannesburg',

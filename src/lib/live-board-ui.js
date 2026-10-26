@@ -9,7 +9,7 @@ import { currentTime, loadAllSchedules, processRouteDataFromDBAsync } from './lo
 import { showToast, triggerHaptic, openSmoothModal, closeSmoothModal } from './ui.js';
 import { applyPilotChrome } from './admin-chrome.js';
 import { trackAnalyticsEvent } from './analytics.js';
-import { bindAutoLocateTriggers, maybeAutoLocateBoard } from './auto-locate.js';
+import { bindAutoLocateTriggers, maybeAutoLocateBoard, noteBoardStationSource } from './auto-locate.js';
 import {
     simulateNextActiveService,
     getAllStations,
@@ -1083,6 +1083,7 @@ export function initLiveBoardUi() {
                     delete searchInput.dataset.resolvedValue;
                 }
             }
+            noteBoardStationSource('manual');
             // Board paint waits until this tap has drawn. Planner mirror and analytics follow.
             scheduleBoardRefresh();
             const station = stationSelect.value || '';

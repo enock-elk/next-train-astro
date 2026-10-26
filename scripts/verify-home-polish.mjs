@@ -425,8 +425,8 @@ assert(hubModals.includes('background-color: #6f8070'), 'feedback wallpaper is d
 const accountJs = readFileSync(new URL('../src/lib/account.js', import.meta.url), 'utf8');
 const delayReports = readFileSync(new URL('../src/lib/delay-reports.js', import.meta.url), 'utf8');
 const trainGhosts = readFileSync(new URL('../src/lib/train-ghosts.js', import.meta.url), 'utf8');
-assert(hubModals.includes('completely free, and you can cancel anytime'), 'account guest copy is free and cancellable');
-assert(hubModals.includes('Sign in is optional. An account keeps your name and points with you.'), 'account guest copy is commuter-facing');
+assert(hubModals.includes('Create a free account to keep your name with you.'), 'account guest create copy is short');
+assert(hubModals.includes('>Welcome<') && hubModals.includes('Sign in to continue.'), 'account guest Welcome / sign-in copy is short');
 assert(!/route rooms|delay reports|trip sharing/i.test(hubModals.slice(hubModals.indexOf('id="account-modal"'), hubModals.indexOf('id="nt-admin-chrome-template"'))), 'Account panel does not pitch hidden features');
 assert(!hubModals.includes('Schedules and trip planning work fully as a guest'), 'account no longer uses schedule/trip-planning pitch');
 assert(hubModals.includes('Show my photo next to my name'), 'photo opt-in is commuter-facing');
@@ -455,9 +455,11 @@ assert(!hubModals.includes('id="account-identity-host"'), 'Passenger Type is no 
 assert(!hubModals.includes('id="account-notify-block"'), 'Account no longer has a duplicate Notifications accordion');
 assert(/id="account-modal-close"[\s\S]{0,500}M15 19l-7-7 7-7/.test(hubModals), 'Account close is the back chevron');
 assert(!/id="account-modal-close"[\s\S]{0,300}>\s*Back\s*</.test(hubModals), 'Account close is not labelled Back');
-assert(hubModals.includes('Welcome back') && hubModals.includes("What's your email?") && hubModals.includes('Reset your password'), 'account guest screens use the sign-in, create, and reset layout');
+assert(hubModals.includes('>Welcome<') && !hubModals.includes('Welcome back') && hubModals.includes('Create with email') && hubModals.includes('Reset your password'), 'account guest screens use Welcome, create-first, and reset');
 assert(hubModals.includes('id="account-reset-send-btn"') && hubModals.includes('id="account-goto-create"'), 'reset and create are their own steps');
-assert(hubModals.includes('data-account-screen="signin"'), 'account opens on the sign-in screen');
+assert(hubModals.includes('data-account-screen="create"'), 'account opens on the create account screen');
+assert(hubModals.indexOf('id="account-google-btn"') < hubModals.indexOf('id="account-email-signup-btn"'), 'Google sits above email create');
+assert(hubModals.includes('id="account-scroll-fade"'), 'account sheet shows a bottom scroll fade');
 assert(!/id="account-modal-close"[^>]*>\s*Done\s*</.test(hubModals), 'Account close is not labelled Done');
 assert(!/<h3[^>]*>Account<\/h3>/.test(hubModals), 'Account overlay has no large Account title');
 assert(hubModals.includes('placeholder="Email or WhatsApp for a reply"'), 'Hub contact placeholder is the shorter line');
@@ -508,11 +510,11 @@ assert(hubModals.includes('id="account-delete-type"'), 'delete confirm requires 
 assert(hubModals.includes('id="account-badge-how-sheet"') && hubModals.includes('id="account-badge-how-close"'), 'badge how-to sheet exists');
 assert(
     hubModals.indexOf('id="account-modal-display-name"') < hubModals.indexOf('id="account-profile-panel"')
-    && hubModals.indexOf('id="account-profile-panel"') < hubModals.indexOf('id="account-points-btn"')
+    && hubModals.indexOf('id="account-profile-panel"') < hubModals.indexOf('id="account-delete-btn"')
+    && hubModals.indexOf('id="account-delete-btn"') < hubModals.indexOf('id="account-points-btn"')
     && hubModals.indexOf('id="account-points-btn"') < hubModals.indexOf('id="account-passenger-type-btn"')
-    && hubModals.indexOf('id="account-passenger-type-btn"') < hubModals.indexOf('id="account-delete-btn"')
-    && hubModals.indexOf('id="account-delete-btn"') < hubModals.indexOf('id="account-settings-host"'),
-    'signed-in Account order is identity, profile edit, points and passenger tiles, then Delete and settings',
+    && hubModals.indexOf('id="account-passenger-type-btn"') < hubModals.indexOf('id="account-settings-host"'),
+    'signed-in Account order is identity, profile with Delete tucked in, then points and passenger tiles',
 );
 assert(
     hubModals.indexOf('id="account-profile-panel"') < hubModals.indexOf('id="account-signout-btn"')
@@ -533,8 +535,9 @@ assert(
     && hubModals.indexOf('id="account-edit-display-name"') < hubModals.indexOf('id="account-photo-alerts"')
     && hubModals.indexOf('id="account-photo-alerts"') < hubModals.indexOf('id="account-signout-btn"')
     && hubModals.indexOf('id="account-signout-btn"') < hubModals.indexOf('id="account-reset-phone-btn"')
-    && hubModals.indexOf('id="account-reset-phone-btn"') < hubModals.indexOf('id="account-save-display-name"'),
-    'profile edit holds the name field, photo switch, Sign out, Reset this App, then Save',
+    && hubModals.indexOf('id="account-reset-phone-btn"') < hubModals.indexOf('id="account-delete-btn"')
+    && hubModals.indexOf('id="account-delete-btn"') < hubModals.indexOf('id="account-save-display-name"'),
+    'profile edit holds the name field, photo switch, Sign out, Reset, Delete, then Save',
 );
 assert(!accountJs.includes("insertAdjacentElement('afterend'"), 'points panel stays in the tall sheet');
 assert(accountJs.includes("openSmoothModal('profile-modal')"), 'passenger type opens the profile modal on the account back stack');
@@ -717,6 +720,7 @@ assert(hubModals.includes('id="account-session-actions"'), 'delete account stays
 }
 assert(
     hubModals.indexOf('id="account-signout-btn"') < hubModals.indexOf('id="account-delete-btn"')
+    && hubModals.indexOf('id="account-reset-phone-btn"') < hubModals.indexOf('id="account-delete-btn"')
     && hubModals.indexOf('id="account-delete-btn"') < hubModals.indexOf('id="account-settings-host"'),
     'Sign out sits in the profile accordion; Delete account stays above settings',
 );

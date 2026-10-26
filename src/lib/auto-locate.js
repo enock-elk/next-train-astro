@@ -18,6 +18,32 @@ export const AUTO_LOCATE_RETRY_MS = 4_000;
 export const AUTO_LOCATE_MAX_FAILS = 3;
 export const GEO_GRANTED_KEY = 'nt_geo_granted';
 
+/** How the live-board station was last chosen: geo auto-locate or a manual pick. */
+let boardStationSource = 'manual';
+
+export function noteBoardStationSource(source) {
+    boardStationSource = source === 'auto' ? 'auto' : 'manual';
+}
+
+export function getBoardStationSource() {
+    return boardStationSource === 'auto' ? 'auto' : 'manual';
+}
+
+/** Station + auto-locate flag for feedback / planner telemetry. */
+export function getBoardStationContext() {
+    let station = '';
+    try {
+        const raw = typeof document !== 'undefined'
+            ? (document.getElementById('station-select')?.value || '')
+            : '';
+        station = String(raw).replace(/ STATION/gi, '').trim();
+    } catch { /* ignore */ }
+    return {
+        station: station || null,
+        stationAutoLocated: boardStationSource === 'auto',
+    };
+}
+
 let lastAutoLocateAt = 0;
 let lastAutoLocateFailAt = 0;
 let autoLocateFailCount = 0;
@@ -35,6 +61,7 @@ export function noteAutoLocateApplied() {
     lastAutoLocateAt = Date.now();
     lastAutoLocateFailAt = 0;
     autoLocateFailCount = 0;
+    noteBoardStationSource('auto');
     if (autoLocateRetryTimer) {
         clearTimeout(autoLocateRetryTimer);
         autoLocateRetryTimer = 0;

@@ -106,8 +106,13 @@ ok(mapPage.includes('data-map-loading-extra'), 'station-focus loader can hide ex
 
 const mapComp = readFileSync(new URL('../src/components/SeoStationMap.astro', import.meta.url), 'utf8');
 ok(mapComp.includes('seo-station-map-lightbox'), 'station map opens a full-view overlay');
-ok(mapComp.includes('Expand map'), 'station map has Expand map control');
+ok(!mapComp.includes('Expand map'), 'station map drops the redundant Expand map control');
+ok(mapComp.includes('data-seo-station-map-open'), 'station map still opens from the preview tap');
 ok(!mapComp.includes('requestFullscreen'), 'station map must not use browser fullscreen');
+
+const stationPage = readFileSync(new URL('../src/pages/stations/[slug].astro', import.meta.url), 'utf8');
+ok(stationPage.includes('seoIntroParagraphs'), 'station SEO intro is split into paragraphs');
+ok(stationPage.includes('next live departure & more'), 'station SEO intro mentions departure and more');
 
 const gridHandoff = readFileSync(new URL('../src/lib/timetable-grid.js', import.meta.url), 'utf8');
 ok(gridHandoff.includes('SEO cold launch seeds a pin only when none exists'), 'SEO handoff soft-pins defaults');

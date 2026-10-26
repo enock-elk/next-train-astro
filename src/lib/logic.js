@@ -697,24 +697,37 @@ if (typeof window !== 'undefined') {
 }
 
 // --- GUARDIAN FETCH WRAPPER ---
+/**
+ * @param {string} url
+ * @param {RequestInit & { ntSoftNetwork?: boolean }} [options]
+ *   ntSoftNetwork: schedule waterfall retries — do not trip Lie-Fi on a single
+ *   timeout (Clarity: one blocked host used to strand "Loading stations...").
+ * @param {number} [timeoutMs]
+ */
 export async function guardianFetch(url, options = {}, timeoutMs = 8000) {
     // Do not hard-throw on navigator.onLine === false. Campus Wi‑Fi often lies
     // while GitHub / Firebase still answer; let the request fail on its own.
+    const softNetwork = !!options.ntSoftNetwork;
+    const { ntSoftNetwork: _softFlag, ...fetchOptions } = options;
     if (typeof window !== 'undefined' && typeof navigator !== 'undefined' && !navigator.onLine) {
         waterfallLog(`guardianFetch while OS offline → ${shortHost(url)} (still attempting)`);
         engageConnectionStruggleUi('offline');
     }
     
     const controller = new AbortController();
-    const id = setTimeout(() => controller.abort(), timeoutMs);
+    let timedOut = false;
+    const id = setTimeout(() => {
+        timedOut = true;
+        controller.abort();
+    }, timeoutMs);
     
-    if (options.signal) {
-        if (options.signal.aborted) controller.abort();
-        else options.signal.addEventListener('abort', () => controller.abort());
+    if (fetchOptions.signal) {
+        if (fetchOptions.signal.aborted) controller.abort();
+        else fetchOptions.signal.addEventListener('abort', () => controller.abort());
     }
     
     try {
-        const response = await fetch(url, { ...options, signal: controller.signal });
+        const response = await fetch(url, { ...fetchOptions, signal: controller.signal });
         clearTimeout(id);
 
         // Captive portals often return HTTP 200 with HTML login pages
@@ -742,16 +755,53 @@ export async function guardianFetch(url, options = {}, timeoutMs = 8000) {
         return response;
     } catch (error) {
         clearTimeout(id);
-        if (options.signal && options.signal.aborted) {
+        if (fetchOptions.signal && fetchOptions.signal.aborted) {
             isLieFi = false; 
             throw error;
         }
 
         if (error.message === 'Captive Portal Detected') throw error;
 
+        // Per-attempt timeout must NOT surface as AbortError — callers that
+        // treat AbortError as "cancel the whole waterfall" would skip GitHub.
+        if (timedOut) {
+            const timeoutErr = new Error(`Timeout after ${timeoutMs}ms`);
+            timeoutErr.name = 'TimeoutError';
+            if (!softNetwork) {
+                _networkStruggleCount++;
+                noteStruggleAttempt();
+                if (typeof navigator !== 'undefined' && navigator.onLine) {
+                    console.warn(`🛡️ Guardian: Request to ${url} timed out while OS reports online.`);
+                    const failThreshold = (typeof window !== 'undefined' && !window._appStabilized) ? 1 : 3;
+                    if (_networkStruggleCount >= failThreshold) {
+                        const hasRamCache = !!$fullDatabase.get();
+                        const hasDiskCache = !!safeStorage.getItem(`full_db_${$userRegion.get() || 'GP'}`);
+                        _networkStruggleCount = 0;
+                        engageConnectionStruggleUi('liefi');
+                        if (!hasRamCache && !hasDiskCache && typeof window !== 'undefined' && typeof window.triggerNetworkStruggleModal === 'function' && struggleElapsedOk() && isActiveForegroundSession()) {
+                            window.triggerNetworkStruggleModal();
+                        }
+                    } else if (struggleElapsedOk() && isActiveForegroundSession()) {
+                        const now = Date.now();
+                        if (now - _lastSlowNetworkToastTime > 120_000) {
+                            _lastSlowNetworkToastTime = now;
+                            showToast("Connection is very slow. Still trying...", "warning", 3500, '', { cooldownMs: 120_000 });
+                        }
+                    }
+                } else {
+                    engageConnectionStruggleUi('offline');
+                }
+            }
+            throw timeoutErr;
+        }
+
         if (error.name === 'AbortError' || (error.message && (error.message.includes('fetch') || error.message.includes('Network') || error.message.includes('Failed to fetch')))) {
             _networkStruggleCount++;
             noteStruggleAttempt();
+            // Soft schedule retries: count noise, but do not hard-stop as Lie-Fi.
+            if (softNetwork) {
+                throw error;
+            }
             // First boot: trip Lie-Fi after 1 failure. Mid-session: need 3 (avoid flapping).
             const failThreshold = (typeof window !== 'undefined' && !window._appStabilized) ? 1 : 3;
             // OS may still report online for Wi‑Fi/mobile without a usable internet path
@@ -1496,7 +1546,7 @@ export async function loadAllSchedules(force = false) {
             return;
         }
         // 'timeout' / weak: still attempt waterfall — schedules may load slowly
-        waterfallLog(`preflight ok to continue (reach=${reach}) — overlays then FIREBASE→CLOUDFLARE→GITHUB`);
+        waterfallLog(`preflight ok to continue (reach=${reach}) — overlays then CLOUDFLARE→FIREBASE→GITHUB`);
 
         await fetchGridOrderConfig($userRegion.get(), fetchSignal);
         if (fetchSignal.aborted || $currentRouteId.get() !== requestedRouteId) return;
@@ -1616,15 +1666,27 @@ export async function loadAllSchedules(force = false) {
         if (needsDownload) {
             let newDatabase = null;
             let fetchSuccess = false;
-            let sourcesToTry = ['FIREBASE', 'CLOUDFLARE', 'GITHUB'];
+            // Edge first (RTDB cost + speed), origin next, GitHub dump last (campus firewalls).
+            const sourcesToTry = ['CLOUDFLARE', 'FIREBASE', 'GITHUB'];
+            const SOURCE_TIMEOUT_MS = { CLOUDFLARE: 5000, FIREBASE: 7000, GITHUB: 8000 };
+            /** Hard ceiling so a blackhole radio cannot sit on Loading stations for minutes. */
+            const WATERFALL_BUDGET_MS = 18_000;
             let wonSource = '';
+            const downloadStartedAt = Date.now();
 
-            waterfallLog(`schedule download start sources=${sourcesToTry.join('→')} region=${$userRegion.get()}`);
+            waterfallLog(`schedule download start sources=${sourcesToTry.join('→')} region=${$userRegion.get()} budgetMs=${WATERFALL_BUDGET_MS}`);
 
             for (const sourceKey of sourcesToTry) {
                 if (fetchSignal.aborted || $currentRouteId.get() !== requestedRouteId) {
                     waterfallWarn(`schedule download aborted before ${sourceKey}`);
                     return;
+                }
+
+                const elapsed = Date.now() - downloadStartedAt;
+                const budgetLeft = WATERFALL_BUDGET_MS - elapsed;
+                if (budgetLeft < 1200) {
+                    waterfallWarn(`budget exhausted (${elapsed}ms) — skipping ${sourceKey} and later sources`);
+                    break;
                 }
 
                 let regionDbUrl = "";
@@ -1637,9 +1699,14 @@ export async function loadAllSchedules(force = false) {
                 regionDbUrl += `${separator}t=${Date.now()}`;
 
                 try {
-                    const timeoutMs = sourceKey === 'CLOUDFLARE' ? 8000 : 12000;
-                    waterfallLog(`try ${sourceKey} host=${shortHost(regionDbUrl)} timeoutMs=${timeoutMs}`);
-                    const response = await guardianFetch(regionDbUrl, { signal: fetchSignal }, timeoutMs);
+                    const preferred = SOURCE_TIMEOUT_MS[sourceKey] || 7000;
+                    const timeoutMs = Math.max(1200, Math.min(preferred, budgetLeft));
+                    waterfallLog(`try ${sourceKey} host=${shortHost(regionDbUrl)} timeoutMs=${timeoutMs} budgetLeftMs=${budgetLeft}`);
+                    const response = await guardianFetch(
+                        regionDbUrl,
+                        { signal: fetchSignal, ntSoftNetwork: true },
+                        timeoutMs,
+                    );
                     if (fetchSignal.aborted || $currentRouteId.get() !== requestedRouteId) {
                         waterfallWarn(`aborted after ${sourceKey} response`);
                         return;
@@ -1649,16 +1716,37 @@ export async function loadAllSchedules(force = false) {
                     if (!newDatabase) throw new Error("Empty database payload");
                     fetchSuccess = true;
                     wonSource = sourceKey;
-                    waterfallLog(`success ${sourceKey} HTTP ${response.status}`);
+                    waterfallLog(`success ${sourceKey} HTTP ${response.status} in ${Date.now() - downloadStartedAt}ms`);
                     break; 
                 } catch (e) {
-                    if (e.name === 'AbortError') throw e;
+                    // Only cancel the whole waterfall on route/user abort — never on
+                    // per-host timeout (old bug: AbortError skipped GitHub entirely).
+                    if (e.name === 'AbortError' && fetchSignal.aborted) throw e;
                     waterfallWarn(`fail ${sourceKey}: ${e?.message || e?.name || 'error'} — trying next`);
                 }
             }
 
             if (!fetchSuccess || !newDatabase) {
-                waterfallWarn('all sources failed (FIREBASE→CLOUDFLARE→GITHUB)');
+                // Last resort: same-origin dump already tried at boot, but retry if
+                // eager cache missed and every remote host failed (slow phones / TUKS).
+                if (!$fullDatabase.get()) {
+                    waterfallWarn('all remotes failed — retrying bundled same-origin dump');
+                    try {
+                        const bundledDump = await loadBundledScheduleDump(fetchSignal);
+                        if (bundledDump) {
+                            newDatabase = bundledDump;
+                            fetchSuccess = true;
+                            wonSource = 'BUNDLED';
+                            waterfallLog('success BUNDLED same-origin dump');
+                        }
+                    } catch (bundleErr) {
+                        waterfallWarn(`bundled dump failed: ${bundleErr?.message || bundleErr?.name || 'error'}`);
+                    }
+                }
+            }
+
+            if (!fetchSuccess || !newDatabase) {
+                waterfallWarn('all sources failed (CLOUDFLARE→FIREBASE→GITHUB→BUNDLED)');
                 throw new Error("All data pipeline endpoints failed");
             }
 
@@ -1683,7 +1771,11 @@ export async function loadAllSchedules(force = false) {
                     $masterStationList.set(mList);
                     if (typeof window !== 'undefined') window.MASTER_STATION_LIST = mList;
 
-                    await saveToLocalCache(cacheKey, newDatabase, fetchSignal);
+                    if (wonSource !== 'BUNDLED') {
+                        await saveToLocalCache(cacheKey, newDatabase, fetchSignal);
+                    } else {
+                        try { await saveToLocalCache(cacheKey, newDatabase, fetchSignal); } catch { /* ignore */ }
+                    }
                     waterfallLog(`applied ${wonSource} payload and saved local cache`);
                 } catch(e) { throw e; }
             } else {
@@ -1716,10 +1808,21 @@ export async function loadAllSchedules(force = false) {
         const mainContent = typeof document !== 'undefined' ? document.getElementById('main-content') : null;
         if ($currentRouteId.get() && mainContent) mainContent.style.display = '';
 
+        // Never leave the board on "Loading stations..." after the sync attempt.
+        // IndexedDB/bundled already painted when available; this covers cold fails too.
+        if (typeof window !== 'undefined') {
+            try { window.revealAppShell?.(true); } catch { /* ignore */ }
+        }
+
         const welcomeModal = typeof document !== 'undefined' ? document.getElementById('welcome-modal') : null;
         const isWelcomeActive = welcomeModal && !welcomeModal.classList.contains('hidden');
         if (typeof window !== 'undefined' && $currentRouteId.get() && !isWelcomeActive) {
             markSchedulesCoreReady();
+            try {
+                if ($masterStationList.get()?.length && typeof window.populateStationList === 'function') {
+                    window.populateStationList();
+                }
+            } catch { /* ignore */ }
             const baseType = window.__ntPreOverrideDayType || window.currentDayType || currentDayType;
             maybePromptScheduleOverride(baseType).catch(() => { /* ignore */ });
             // Home-board auto notices (alerts / holidays) wait for stabilize + route.

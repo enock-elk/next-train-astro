@@ -302,6 +302,16 @@ assert(logic.includes('try ${sourceKey}'), 'waterfall logs each source attempt')
 assert(logic.includes('fail ${sourceKey}'), 'waterfall logs each source failure');
 assert(logic.includes('success ${sourceKey}'), 'waterfall logs the winning source');
 assert(ui.includes('NT OfflineChrome:'), 'offline dock confirm logs each probe host');
+assert(logic.includes("sourcesToTry = ['CLOUDFLARE', 'FIREBASE', 'GITHUB']"), 'waterfall prefers Cloudflare before Firebase');
+assert(logic.includes('WATERFALL_BUDGET_MS = 18_000'), 'waterfall has an 18s hard budget');
+assert(logic.includes('CLOUDFLARE: 5000'), 'Cloudflare schedule timeout is 5s');
+assert(logic.includes('FIREBASE: 7000'), 'Firebase schedule timeout is 7s');
+assert(logic.includes('GITHUB: 8000'), 'GitHub schedule timeout is 8s');
+assert(logic.includes('ntSoftNetwork: true'), 'schedule waterfall uses soft network retries');
+assert(logic.includes("timeoutErr.name = 'TimeoutError'"), 'per-host timeout is not AbortError');
+assert(logic.includes("e.name === 'AbortError' && fetchSignal.aborted"), 'only route abort cancels the waterfall');
+assert(logic.includes("wonSource = 'BUNDLED'"), 'bundled dump is a last-resort schedule source');
+assert(logic.includes('revealAppShell?.(true)'), 'sync finally force-reveals the shell');
 assert(ui.includes('PLANNER_INLINE_LISTS'), 'Travel Day scrim does not steal pointer events');
 assert(ui.includes('header.parentNode.insertBefore(banner, header)'), 'maintenance bar sits above #app-header inside the scroller');
 assert(ui.includes('nt-maint-wrench'), 'maintenance bar uses the wrench SVG');

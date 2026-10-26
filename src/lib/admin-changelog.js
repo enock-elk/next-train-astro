@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_10.26.14': [
+        'Schedule waterfall is CLOUDFLARE→FIREBASE→GITHUB (edge first for RTDB cost), with 5s/7s/8s timeouts and an 18s hard budget so Clarity never sits on Loading stations for minutes. Per-host timeout is TimeoutError, not AbortError, so GitHub still runs after a blocked edge. Soft network retries do not trip Lie-Fi mid-waterfall. Bundled same-origin dump is a last resort; finally always reveals the shell and repopulates stations when a list exists. Builds on the TUKS Lie-Fi / Black Box logging fix. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_10.26.13': [
         'Campus / restricted Wi-Fi (e.g. TUKS): a non-OK JSON response from nexttrain-cache is no longer captive Lie-Fi, so Firebase and the GitHub dump still run. navigator.onLine false no longer hard-throws guardianFetch or skips the waterfall before probing. Reachability and the offline dock confirm workers.dev, then Firebase, then jsDelivr. Offline dock only re-arms after 5 minutes sustained online. Black Box logs each waterfall step under NT Waterfall: (probe, preflight, FIREBASE→CLOUDFLARE→GITHUB try/fail/success). No commuter What\'s New. forceShow stays false.',
     ],

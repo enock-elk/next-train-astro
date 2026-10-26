@@ -262,6 +262,9 @@ assert(shouldOpenRoutePicker({ swapGen: 1, currentGen: 2, currentRouteId: null }
     const logicJs = readFileSync(new URL('../src/lib/logic.js', import.meta.url), 'utf8');
     assert(logicJs.includes("res.ok && ct.includes('text/html')"), 'workers.dev HTTP errors are not Lie-Fi');
     assert(!/if \(!res\.ok\) \{\s*isLieFi = true/m.test(logicJs), 'non-OK probe must not set isLieFi');
+    assert(logicJs.includes("sourcesToTry = ['CLOUDFLARE', 'FIREBASE', 'GITHUB']"), 'waterfall is Cloudflare then Firebase then GitHub');
+    assert(logicJs.includes('WATERFALL_BUDGET_MS = 18_000'), 'waterfall budget caps Loading stations risk');
+    assert(logicJs.includes("e.name === 'AbortError' && fetchSignal.aborted"), 'timeout must not abort the whole waterfall');
     const gridJs = readFileSync(new URL('../src/lib/timetable-grid.js', import.meta.url), 'utf8');
     assert(gridJs.includes('await yieldToPaint()'), 'full timetable yields after opening the modal');
     assert(gridJs.includes('Loading timetable'), 'full timetable shows a short placeholder on first open');

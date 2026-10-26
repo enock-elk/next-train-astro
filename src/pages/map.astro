@@ -29,6 +29,8 @@ const regionSeoSlugs = Object.fromEntries(
         var bg = dark ? '#111827' : '#f3f4f6';
         document.documentElement.style.backgroundColor = bg;
         document.documentElement.style.colorScheme = dark ? 'dark' : 'light';
+        var q = new URLSearchParams(location.search);
+        if (q.get('station')) document.documentElement.classList.add('nt-map-station-focus');
       } catch (e) {}
     })();
   </script>
@@ -252,6 +254,9 @@ const regionSeoSlugs = Object.fromEntries(
         z-index: 50; transition: opacity 0.5s ease;
       }
       html.dark #map-placeholder { background-color: #111827; }
+      /* Station SEO isolate: quiet loader — no network copy. */
+      html.nt-map-station-focus #map-placeholder [data-map-loading-extra] { display: none !important; }
+      html.nt-map-station-focus #map-placeholder h3 { font-size: 1rem; margin-bottom: 0.75rem; }
       .gps-pulse {
         width: 16px; height: 16px; background: #3b82f6; border-radius: 50%;
         box-shadow: 0 0 0 rgba(59, 130, 246, 0.4); animation: pulse 2s infinite; border: 3px solid white;
@@ -741,17 +746,26 @@ const regionSeoSlugs = Object.fromEntries(
 
   <div id="map-placeholder" data-nosnippet aria-hidden="true">
     <div class="text-center p-6">
-      <div class="w-16 h-16 bg-blue-100 dark:bg-blue-900/50 rounded-full flex items-center justify-center mx-auto mb-4 shadow-inner">
+      <div class="w-16 h-16 bg-blue-100 dark:bg-blue-900/50 rounded-full flex items-center justify-center mx-auto mb-4 shadow-inner" data-map-loading-extra>
         <svg class="w-8 h-8 text-blue-600 dark:text-blue-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="19" r="3"></circle><path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15"></path><circle cx="18" cy="5" r="3"></circle></svg>
       </div>
-      <h3 class="text-xl font-black text-gray-900 dark:text-white mb-2 tracking-tight">Loading network…</h3>
+      <h3 id="map-loading-title" class="text-xl font-black text-gray-900 dark:text-white mb-2 tracking-tight">Loading network…</h3>
       <svg class="animate-spin h-6 w-6 text-blue-600 dark:text-blue-400 mx-auto mt-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
         <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
         <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
       </svg>
-      <p class="text-xs text-gray-500 dark:text-gray-400 mt-4 font-mono">Syncing regional data and live status…</p>
+      <p class="text-xs text-gray-500 dark:text-gray-400 mt-4 font-mono" data-map-loading-extra>Syncing regional data and live status…</p>
     </div>
   </div>
+  <script is:inline>
+    (function () {
+      try {
+        if (!document.documentElement.classList.contains('nt-map-station-focus')) return;
+        var title = document.getElementById('map-loading-title');
+        if (title) title.textContent = 'Loading map';
+      } catch (e) {}
+    })();
+  </script>
 
   <div id="empty-map-warning" data-nosnippet aria-hidden="true" class="hidden absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-[1000] bg-white dark:bg-gray-800 p-6 rounded-xl shadow-2xl text-center border border-gray-200 dark:border-gray-700 max-w-[80%] w-full sm:max-w-sm">
     <span class="text-4xl mb-3 block">🗺️</span>

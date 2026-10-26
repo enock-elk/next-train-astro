@@ -78,8 +78,16 @@ ok(!pageSrc.includes('Open live board'), 'station page no longer shows Open live
 
 const ptaHeadline = buildStationNeighbourHeadline(pretoria, ptaCards);
 ok(ptaHeadline.startsWith('Pretoria - '), 'Pretoria neighbour headline starts with Pretoria -');
-ok(ptaHeadline.includes('Irene') && ptaHeadline.includes('Kempton Park'), 'Pretoria headline lists Irene / Kempton Park ends');
-ok(ptaHeadline.includes(' / '), 'Pretoria headline joins far ends with slashes');
+ok(/Irene\s*\/\s*Kempton Park|Kempton Park\s*\/\s*Irene/.test(ptaHeadline), 'Irene / Kempton Park share Sportpark so they slash-join');
+ok(ptaHeadline.includes(' · '), 'different next-station groups stay separated with a middle dot');
+ok(!/^Pretoria - [^·]+$/.test(ptaHeadline) || ptaHeadline.includes('Irene'), 'Pretoria hub is not one flat slash list of every end');
+{
+  const walker = getSeoStationBySlug('walker-street');
+  const walkerCards = buildStationCorridorTimetables(walker);
+  const walkerHeadline = buildStationNeighbourHeadline(walker, walkerCards);
+  ok(walkerHeadline.includes('Pretoria') && walkerHeadline.includes('Pienaarspoort'), 'Walker Street headline names both corridor ends');
+  ok(!/Pretoria\s*\/\s*Pienaarspoort|Pienaarspoort\s*\/\s*Pretoria/.test(walkerHeadline), 'Walker Street does not slash-join ends with different next stations');
+}
 ok(buildStationAbout(pretoria, ptaCards).includes('active Metrorail station'), 'about is descriptive prose');
 ok(buildStationAbout(pretoria, ptaCards).includes('Pretoria'), 'about mentions Pretoria');
 ok(buildStationQuickFacts(pretoria, ptaCards).length >= 4, 'Pretoria has several quick facts');
@@ -88,6 +96,13 @@ ok(buildStationMapPath(pretoria, { embed: true }).includes('embed=1'), 'preview 
 
 const mapApp = readFileSync(new URL('../public/js/map-app.js', import.meta.url), 'utf8');
 ok(mapApp.includes('focusStationFromQuery'), 'map-app focuses ?station= from the URL');
+ok(mapApp.includes('nt-map-station-focus'), 'map-app marks station-focus mode');
+ok(mapApp.includes('!stationFocusQuery.station'), 'station focus skips embed corridor fitBounds');
+ok(mapApp.includes('stationFocusZoom'), 'station focus uses a street-level zoom');
+
+const mapPage = readFileSync(new URL('../src/pages/map.astro', import.meta.url), 'utf8');
+ok(mapPage.includes("Loading map"), 'station-focus loader says Loading map');
+ok(mapPage.includes('data-map-loading-extra'), 'station-focus loader can hide extra network copy');
 
 const mapComp = readFileSync(new URL('../src/components/SeoStationMap.astro', import.meta.url), 'utf8');
 ok(mapComp.includes('seo-station-map-lightbox'), 'station map opens a full-view overlay');

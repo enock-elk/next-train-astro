@@ -107,6 +107,32 @@
       "notes": "Cape Town to Retreat / Heathfield. Train nos 0501–0543."
     },
     {
+      "id": "wc-cape-flats-weekend-outbound-2025-10",
+      "file": "wc/wc-cape-flats-weekend-outbound-2025-10.jpg",
+      "region": "WC",
+      "corridorId": "WC_FLATS",
+      "corridorLabel": "Cape Flats Line",
+      "day": "weekend",
+      "direction": "outbound",
+      "label": "Cape Flats Line weekend outbound",
+      "effective": "2025-10",
+      "routeIds": ["ct-flats"],
+      "notes": "Cape Town to Retreat. Train nos 0501–0515. Sheet titled October 2025."
+    },
+    {
+      "id": "wc-cape-flats-weekend-inbound-2025-10",
+      "file": "wc/wc-cape-flats-weekend-inbound-2025-10.jpg",
+      "region": "WC",
+      "corridorId": "WC_FLATS",
+      "corridorLabel": "Cape Flats Line",
+      "day": "weekend",
+      "direction": "inbound",
+      "label": "Cape Flats Line weekend inbound",
+      "effective": "2025-10",
+      "routeIds": ["ct-flats"],
+      "notes": "Retreat to Cape Town. Train nos 0500–0514. Sheet titled October 2025."
+    },
+    {
       "id": "wc-monte-vista-weekday-outbound-2025-10",
       "file": "wc/wc-monte-vista-weekday-outbound-2025-10.jpg",
       "region": "WC",
@@ -572,6 +598,32 @@
       "notes": "Bellville / Chris Hani / Kapteinsklip into Cape Town. Eff. 08 June 2026."
     },
     {
+      "id": "wc-central-weekday-outbound-2026-03-02",
+      "file": "wc/wc-central-weekday-outbound-2026-03-02.jpg",
+      "region": "WC",
+      "corridorId": "WC_CENTRAL",
+      "corridorLabel": "Central Line",
+      "day": "weekday",
+      "direction": "outbound",
+      "label": "Central Line weekday outbound",
+      "effective": "2026-03-02",
+      "routeIds": ["ct-chrishani", "ct-kapteinsklip", "ct-nolu"],
+      "notes": "Cape Town out to Kapteinsklip, Chris Hani, and Bellville via Lavistown. Eff. 02 March 2026. Keep beside newer 08 June 2026 sheet."
+    },
+    {
+      "id": "wc-central-weekday-inbound-2026-03-02",
+      "file": "wc/wc-central-weekday-inbound-2026-03-02.jpg",
+      "region": "WC",
+      "corridorId": "WC_CENTRAL",
+      "corridorLabel": "Central Line",
+      "day": "weekday",
+      "direction": "inbound",
+      "label": "Central Line weekday inbound",
+      "effective": "2026-03-02",
+      "routeIds": ["ct-chrishani", "ct-kapteinsklip", "ct-nolu"],
+      "notes": "Bellville / Chris Hani / Kapteinsklip into Cape Town. Eff. 02 March 2026. Keep beside newer 08 June 2026 sheet."
+    },
+    {
       "id": "gp-naledi-saturday-combined-2026-09-12-grid",
       "file": "gp/gp-naledi-saturday-combined-2026-09-12-grid.jpg",
       "region": "GP",
@@ -705,6 +757,21 @@
       "effective": null,
       "routeIds": ["pta-pien"],
       "notes": "Official Saturday full station grid, both directions. Greenview / Eersterus / Queenswood have no times."
+    },
+    {
+      "id": "gp-pienaars-weekday-combined-2025-08-21-grid",
+      "file": "gp/gp-pienaars-weekday-combined-2025-08-21-grid.jpg",
+      "region": "GP",
+      "corridorId": "EAST_LINE",
+      "corridorLabel": "Pretoria <-> Pienaarspoort",
+      "day": "weekday",
+      "direction": "combined",
+      "part": "grid",
+      "format": "grid",
+      "label": "Pienaarspoort–Pretoria weekday amended grid",
+      "effective": "2025-08-21",
+      "routeIds": ["pta-pien"],
+      "notes": "Amended weekday notice effective Thursday 21 August 2025 until further notice. Both directions. Highlights trains 1107 and 1110 (Mamelodi Gardens–Koedoespoort). Contacts on sheet: Pretoria 011-013-0306, Johannesburg 011-013-0191."
     },
     {
       "id": "gp-saulsville-saturday-combined-2025-08-16-grid",

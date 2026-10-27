@@ -61,6 +61,14 @@ ok(contactBlockForRegion('KZN').includes('031 813 0456'), 'KZN contact block lis
 ok(contactBlockForRegion('KZN').includes(PRASA_SURVEY_URL), 'KZN contact block still offers the survey');
 ok(!contactBlockForRegion('KZN').includes('011 013 0306'), 'KZN contact block has no Pretoria number');
 ok(liaisonRules('KZN').includes('031 813 0456') || contactBlockForRegion('KZN').includes('031 813 0456'), 'KZN desk number is available to the draft');
+ok(guide.includes('031 813 0456'), 'guide lists KZN Customer Service desk');
+ok(guide.includes('043 700 2030'), 'guide lists PRASA EC East London');
+ok(guide.includes('ntombikayise.katsio@prasa.com'), 'guide lists PRASA EC email');
+ok(contactBlockForRegion('EC').includes('043 700 2030'), 'EC contact block lists PRASA EC');
+ok(contactBlockForRegion('EC').includes('ntombikayise.katsio@prasa.com'), 'EC contact block lists the email');
+ok(contactBlockForRegion('EC').includes('PRASA EC'), 'EC contact block names Facebook PRASA EC');
+ok(!contactBlockForRegion('EC').includes('011 013 0306'), 'EC contact block has no Pretoria number');
+ok(!contactBlockForRegion('WC').includes('043 700 2030'), 'WC contact block has no EC number');
 ok(liaisonRules('KZN').includes('halt'), 'liaison rules tell the model to halt');
 ok(liaisonRules('KZN').includes('Thank you for using Next Train'), 'drafts close with the standard line');
 ok(liaisonRules('KZN').includes('two blank lines'), 'greeting leaves two blank lines');

@@ -31,8 +31,17 @@ export const KZN_OFFICES = [
     { office: 'Customer Service desk', phones: ['031 813 0456'] },
 ];
 
+/** Eastern Cape from the PRASA EC Facebook page (Station Street, East London). */
+export const EC_OFFICES = [
+    { office: 'PRASA EC East London', phones: ['043 700 2030'] },
+];
+
+export const EC_EMAIL = 'ntombikayise.katsio@prasa.com';
+export const EC_FACEBOOK = 'PRASA EC';
+
 const GAUTENG_PHONE_DIGITS = GAUTENG_OFFICES.flatMap((office) => office.phones.map(phoneDigits));
 const KZN_PHONE_DIGITS = KZN_OFFICES.flatMap((office) => office.phones.map(phoneDigits));
+const EC_PHONE_DIGITS = EC_OFFICES.flatMap((office) => office.phones.map(phoneDigits));
 
 const IMAGE_MIME = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
 
@@ -600,9 +609,20 @@ export function contactBlockForRegion(region) {
             `If a desk number is not enough, the PRASA Customer Experience Survey is ${PRASA_SURVEY_URL}`,
         ].join('\n');
     }
-    if (code === 'WC' || code === 'EC') {
+    if (code === 'EC') {
+        const lines = EC_OFFICES.map((office) => `${office.office}: ${office.phones.join(' / ')}`);
         return [
-            `This thread is ${code}. Do not give a Johannesburg, Pretoria, Germiston, or KZN phone number.`,
+            'This thread is Eastern Cape. If they need PRASA EC or Metrorail Eastern Cape, use only these contacts. Remind them to ask for a reference number.',
+            ...lines,
+            `Email: ${EC_EMAIL}`,
+            `Facebook: ${EC_FACEBOOK}`,
+            'Do not give a Johannesburg, Pretoria, Germiston, Western Cape, or KZN phone number.',
+            `If a desk number is not enough, the PRASA Customer Experience Survey is ${PRASA_SURVEY_URL}`,
+        ].join('\n');
+    }
+    if (code === 'WC') {
+        return [
+            'This thread is WC. Do not give a Johannesburg, Pretoria, Germiston, KZN, or Eastern Cape phone number.',
             `Other regions use the PRASA Customer Experience Survey: ${PRASA_SURVEY_URL}`,
         ].join('\n');
     }
@@ -869,6 +889,14 @@ export function guardDraft(reply, region) {
         return {
             ok: false,
             reason: `Draft used a KZN customer desk number for ${code}.`,
+            questions: ['Which contact should this reply give them?'],
+        };
+    }
+    const usedEc = EC_PHONE_DIGITS.some((phone) => phone && digits.includes(phone));
+    if (usedEc && code && code !== 'EC') {
+        return {
+            ok: false,
+            reason: `Draft used a PRASA EC number for ${code}.`,
             questions: ['Which contact should this reply give them?'],
         };
     }

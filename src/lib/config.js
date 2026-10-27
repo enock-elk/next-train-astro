@@ -14,7 +14,7 @@
  * Changelog / What’s New is optional: skip both, or write only "no release notes."
  * Always add ADMIN_CHANGELOG[APP_VERSION] (System Health Build notes).
  */
-export const APP_VERSION = "V10_10.27.10";
+export const APP_VERSION = "V10_10.27.11";
 
 /** Public support channels (About modal, lifeboat help.html, Safe Mode). */
 export const SUPPORT_EMAIL = 'admin@nexttrain.co.za';
@@ -192,7 +192,7 @@ export const REGION_SEO = {
     GP: { slug: 'gauteng', title: 'Metrorail Gauteng', blurb: 'Pretoria, Johannesburg and Germiston corridor timetables for Metrorail Gauteng.' },
     WC: { slug: 'western-cape', title: 'Western Cape Metrorail', blurb: 'Cape Town Central, Northern, Southern, Cape Flats and Malmesbury line schedules.' },
     KZN: { slug: 'kwazulu-natal', title: 'KwaZulu-Natal Metrorail', blurb: 'Durban, Umlazi, Bridge City, Crossmoor and inland KZN Metrorail corridor pages.' },
-    EC: { slug: 'eastern-cape', title: 'Eastern Cape Metrorail', blurb: 'East London and Berlin corridor schedules for Eastern Cape Metrorail.' },
+    EC: { slug: 'eastern-cape', title: 'Eastern Cape Metrorail', blurb: 'East London to Berlin weekday schedules on the older yellow Metrorail trains. No Saturday or Sunday service.' },
 };
 export const MAX_RADIUS_KM = 6;
 

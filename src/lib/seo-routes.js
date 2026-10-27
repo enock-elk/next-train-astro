@@ -126,6 +126,11 @@ const SEO_OVERRIDES = {
         blurb: 'Durban to Crossmoor Metrorail timetable for the yellow inland line via Rossburgh, Havenside, Bayview, Westcliff and Chatsglen.',
         operatingNote: 'Open the interactive board for upcoming trains, fares, and the full timetable grid. Saturday sheets currently carry the published Crossmoor times.',
     },
+    'ec-berlin': {
+        slug: 'east-london-to-berlin',
+        blurb: 'East London to Berlin Metrorail weekday schedule on the older yellow trains. No Saturday or Sunday service.',
+        operatingNote: 'Weekday trains only. There is no Saturday or Sunday service on East London to Berlin. Eastern Cape still uses older yellow and grey sets; other regions already run many blue People\'s Train EMUs. For operational issues contact PRASA EC on 043 700 2030 or Facebook PRASA EC.',
+    },
 };
 
 /**
@@ -305,6 +310,8 @@ export const SEO_INSIGHTS = {
         'Pretoria to Irene is the inner stretch of this Pretoria to Kempton Park line, not a separate railway. A sinkhole opened near Centurion in early 2026. It has been patched and normal service has resumed, but Centurion sits on dolomite, rock that dissolves when water reaches it, so the ground there stays sinkhole-prone. Trains 0618 and 0619 do not run on Mondays or Fridays. They run Tuesday to Thursday so the Blue Train and Rovos Rail can pass safely.',
     'pta-irene':
         'This Pretoria to Irene timetable is the inner stretch of the Pretoria to Kempton Park line, not a separate railway. Centurion on this stretch saw a sinkhole in early 2026. The patch is in and trains are running again, but the station sits on dolomite, so the area remains sinkhole-prone.',
+    'ec-berlin':
+        'Eastern Cape is still on the older yellow and grey Metrorail trains, often hauled by Class 35 diesel locomotives from the early 1980s, while Gauteng, Western Cape and KwaZulu-Natal already run many of the newer blue People\'s Train sets. PRASA EC has been restoring East London stations after theft and vandalism (about seven refurbished, including Wilsonia), with security on stations and on board. There is no Saturday service on East London to Berlin. For operational issues contact PRASA EC on 043 700 2030 or Facebook PRASA EC.',
 };
 
 /**
@@ -381,8 +388,8 @@ export const CORRIDOR_PAGE_COPY = {
     'eastern-cape-central': {
         title: 'East London to Berlin Train Schedule | Next Train',
         h1: 'East London to Berlin train schedule',
-        description: 'East London to Berlin Metrorail train schedule. Weekday times on the route page. No Sunday service.',
-        lead: 'East London to Berlin. The weekday sheet is on the route page. There is no Sunday service.',
+        description: 'East London to Berlin Metrorail train schedule on the older yellow trains. Weekday times on the route page. No Saturday or Sunday service.',
+        lead: 'East London to Berlin still runs on the older yellow and grey Metrorail sets. The weekday sheet is on the route page. There is no Saturday or Sunday service. PRASA EC has been restoring East London stations, including Wilsonia, after theft and vandalism.',
     },
 };
 
@@ -390,6 +397,8 @@ export const CORRIDOR_PAGE_COPY = {
 export const CORRIDOR_INSIGHTS = {
     'gauteng-pretoria-jhb-line':
         "There is no single Pretoria to Johannesburg Metrorail train. You change twice: a Johannesburg-side train into Germiston, the Germiston to Kempton Park working on the Leralla line, then a Pretoria-line train from Kempton Park. Next Train's trip planner builds that three-train journey from the published sheets, so you do not have to stitch the boards by hand.",
+    'eastern-cape-central':
+        'Eastern Cape is the last Metrorail region still mainly on yellow trains while other provinces roll out the blue People\'s Train. Follow PRASA EC on Facebook for East London corridor updates, or call 043 700 2030.',
 };
 
 /**

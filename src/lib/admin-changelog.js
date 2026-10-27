@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_10.27.11': [
+        'Image schedules: Cape Flats weekend in/out (Oct 2025), Central weekday in/out (02 Mar 2026 kept beside Jun 2026), Pretoria–Pienaarspoort weekday amended grid (21 Aug 2025). Skipped same-date Southern weekday, Northern weekend, and undated Central Saturday re-exports. Guide and Co-Pilot gain PRASA EC 043 700 2030 (plus email/Facebook) and KZN 031 813 0456 on the guide. EC SEO notes yellow trains vs blue People\'s Train and station restoration. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_10.27.10': [
         'Station SEO reviews: Community Monitor Reviews tab finally loads station_reviews (methods were missing), operators can Approve/Reject, approved rows mirror to station_reviews_public without contact, and RTDB rules let admins list while anonymous creates stay pending. Co-Pilot Guide this reply is a full-screen modal with a multi-line note plus photo/PDF attachments for that draft. Suggest voice follows archived Enock replies more closely; KZN drafts may use Customer Service desk 031 813 0456. Toasts prefer one row with tighter icon/dismiss padding and nearly full phone width. Deploy firebase-database.rules.json or pending reviews stay invisible. No commuter What\'s New beyond the map note already shipped. forceShow stays false.',
     ],

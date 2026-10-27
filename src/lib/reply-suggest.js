@@ -19,14 +19,20 @@ export const SUGGEST_THREAD_LIMIT = 40;
 
 export const PRASA_SURVEY_URL = 'https://docs.google.com/forms/d/e/1FAIpQLSeGSJmZlpg8dq2Dvupm9xyHcFJudGsegZ2uyhS3UEq3O9fGkA/viewform';
 
-/** Gauteng offices from the public guide. Other regions use the survey only. */
+/** Gauteng offices from the public guide. */
 export const GAUTENG_OFFICES = [
     { office: 'Johannesburg', phones: ['011 013 0191', '011 013 0192'] },
     { office: 'Pretoria', phones: ['011 013 0306'] },
     { office: 'Germiston', phones: ['011 085 7118'] },
 ];
 
+/** KZN Metrorail customer desk from PRASA Train Alert posters. */
+export const KZN_OFFICES = [
+    { office: 'Customer Service desk', phones: ['031 813 0456'] },
+];
+
 const GAUTENG_PHONE_DIGITS = GAUTENG_OFFICES.flatMap((office) => office.phones.map(phoneDigits));
+const KZN_PHONE_DIGITS = KZN_OFFICES.flatMap((office) => office.phones.map(phoneDigits));
 
 const IMAGE_MIME = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
 
@@ -585,9 +591,18 @@ export function contactBlockForRegion(region) {
             'Gauteng commuter Facebook group: https://www.facebook.com/share/g/1JKTk4Rn6e/ (Metrorail - Gauteng Train Updates)',
         ].join('\n');
     }
-    if (code === 'WC' || code === 'KZN' || code === 'EC') {
+    if (code === 'KZN') {
+        const lines = KZN_OFFICES.map((office) => `${office.office}: ${office.phones.join(' / ')}`);
         return [
-            `This thread is ${code}. Do not give a Johannesburg, Pretoria, or Germiston phone number.`,
+            'This thread is KwaZulu-Natal. If they need PRASA or Metrorail KZN, use only these contacts. Remind them to ask for a reference number.',
+            ...lines,
+            'Do not give a Johannesburg, Pretoria, Germiston, or Western Cape phone number.',
+            `If a desk number is not enough, the PRASA Customer Experience Survey is ${PRASA_SURVEY_URL}`,
+        ].join('\n');
+    }
+    if (code === 'WC' || code === 'EC') {
+        return [
+            `This thread is ${code}. Do not give a Johannesburg, Pretoria, Germiston, or KZN phone number.`,
             `Other regions use the PRASA Customer Experience Survey: ${PRASA_SURVEY_URL}`,
         ].join('\n');
     }
@@ -616,10 +631,12 @@ export function knowledgeBase() {
 export function liaisonRules(region) {
     return [
         'You are Melmoth, the communications assistant for Metrorail Next Train (nexttrain.co.za). You draft replies in Enock\'s voice, as the person who looks after the app.',
+        'Match Enock\'s archived style: warm, direct, short paragraphs, no corporate filler. Prefer "Thanks for letting me know" / "Thank you for pointing out" over stiff phrases.',
         'You are not a PRASA employee. Do not write a long independence speech. Do not write "I want to gently mention". Do not open with a disclaimer.',
-        'When they ask Next Train to fix something only PRASA or Metrorail can fix (a broken train, a cancelled service, a closed ticket office, infrastructure, staffing, or other operations), one short calm sentence is enough, then the useful part. Prefer: "Since Next Train is an independent app we developed, we are unfortunately not able to assist with this one." Or: "We are not directly linked to PRASA." Do not stack both. Do not paste the legal Terms wording.',
+        'When they ask Next Train to fix something only PRASA or Metrorail can fix (a broken train, a cancelled service, a closed ticket office, infrastructure, staffing, or other operations), one short calm sentence is enough, then the useful part. Prefer: "Since Next Train is an independent app we developed, we are unfortunately not able to assist with this one." Or: "We are not directly linked to PRASA." Or: "Next Train is an independent app and I do not work for PRASA." Do not stack both. Do not paste the legal Terms wording.',
         'Do not use that independence line for agreement, thanks, a poll reply, a call-for-responses reply, a comment on a notice, an app bug, a schedule question Next Train can answer, or a feature request. Those do not need a speech about the app.',
-        'Give a PRASA number only when they want PRASA to change something: a fare, a timetable, a closed office, or a broken train. One calm sentence. The contact block is the only source for that number.',
+        'Give a PRASA number only when they want PRASA to change something: a fare, a timetable, a closed office, or a broken train. One calm sentence. The contact block is the only source for that number. Remind them to ask for a reference number.',
+        'When a fare on Next Train does not match what the station charged, thank them, ask for a clear photo of the ticket if they have not sent one, and say you will check and update. Do not invent the correct price.',
         'Each thread line is labeled ADMIN or COMMUTER. ADMIN is Next Train. COMMUTER is the person you are replying to. Do not swap those speakers.',
         'Only Next Train can post an alert, an advisory, or an incident notice. A commuter cannot post one. They can only reply to one.',
         'An ADMIN ALERT line is a notice Next Train already posted. The COMMUTER line after it is their reply to that notice. Use the whole alert so you know what they are answering. Thank them for the reply. If the alert is a poll, a call for responses, or a call to action, thank them for taking part or for replying. Do not thank them for sharing, posting, or announcing the alert. Do not write as if they told you the news in the alert.',
@@ -645,6 +662,7 @@ export function liaisonRules(region) {
         'Do not use em dashes in the reply. No citation markers.',
         'Emoji are rare. One is enough, and only when it fits the thread.',
         'Photos and PDFs already in the thread follow this message. Read them. A ticket photo or a notice PDF can answer a fare or a date.',
+        'Operator images or PDFs attached for this draft also follow. Prefer facts from those files when they answer the question.',
         'Context for this draft is a fact the operator has confirmed. Use it. Do not halt again for a question that context answers. Do not add facts past what it says.',
         'The shared operator note does not let you invent a fact that is still missing.',
         '',
@@ -747,13 +765,15 @@ export function normalizeSuggestImages(images) {
     const list = Array.isArray(images) ? images : [];
     const kept = [];
     for (const image of list) {
-        if (kept.length >= SUGGEST_MAX_IMAGES) break;
+        if (kept.length >= SUGGEST_MAX_FILES) break;
         const mimeType = String(image?.mimeType || '').toLowerCase();
         const data = String(image?.data || '').replace(/\s/g, '');
-        if (!IMAGE_MIME.has(mimeType) || !data) continue;
+        const isPdf = mimeType === 'application/pdf';
+        if ((!IMAGE_MIME.has(mimeType) && !isPdf) || !data) continue;
         const bytes = Math.floor((data.length * 3) / 4);
-        if (bytes > SUGGEST_MAX_IMAGE_BYTES) {
-            throw new Error('Each image must be under 1.5 MB.');
+        const maxBytes = isPdf ? SUGGEST_MAX_FILE_BYTES : SUGGEST_MAX_IMAGE_BYTES;
+        if (bytes > maxBytes) {
+            throw new Error(isPdf ? 'Each PDF must be under 4 MB.' : 'Each image must be under 1.5 MB.');
         }
         kept.push({ mimeType, data });
     }
@@ -779,7 +799,8 @@ export function buildGeminiRequest({ payload, sharedNote, images, threadFiles, f
     const missed = Number(filesMissed) || 0;
     if (missed > 0) parts.push({ text: `${missed} thread file(s) could not be loaded.` });
     for (const image of normalizeSuggestImages(images)) {
-        parts.push({ text: 'Operator image for this draft.' });
+        const what = image.mimeType === 'application/pdf' ? 'PDF' : 'image';
+        parts.push({ text: `Operator ${what} for this draft.` });
         parts.push({ inlineData: { mimeType: image.mimeType, data: image.data } });
     }
     return {
@@ -840,6 +861,14 @@ export function guardDraft(reply, region) {
         return {
             ok: false,
             reason: `Draft used a Gauteng office number for ${where}.`,
+            questions: ['Which contact should this reply give them?'],
+        };
+    }
+    const usedKzn = KZN_PHONE_DIGITS.some((phone) => phone && digits.includes(phone));
+    if (usedKzn && code && code !== 'KZN') {
+        return {
+            ok: false,
+            reason: `Draft used a KZN customer desk number for ${code}.`,
             questions: ['Which contact should this reply give them?'],
         };
     }

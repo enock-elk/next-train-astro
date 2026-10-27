@@ -178,6 +178,8 @@ assert(hub.includes('paintContactField'), 'hub paints contact validity on input 
     assert(ui.includes('armModalPopLock()'), 'overlays fade then pop history');
     assert(ui.includes('Close the top overlay first'), 'Account Back closes Account before Options');
     assert(ui.includes('line-clamp-2'), 'toasts wrap at most two lines');
+    assert(ui.includes('preferOneLine'), 'short toasts try to stay on one row');
+    assert(ui.includes('calc(100vw - 0.75rem)'), 'toasts use nearly the full phone width');
 }
 
 const layout = readFileSync(new URL('../src/layouts/Layout.astro', import.meta.url), 'utf8');

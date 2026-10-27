@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_10.27.10': [
+        'Station SEO reviews: Community Monitor Reviews tab finally loads station_reviews (methods were missing), operators can Approve/Reject, approved rows mirror to station_reviews_public without contact, and RTDB rules let admins list while anonymous creates stay pending. Co-Pilot Guide this reply is a full-screen modal with a multi-line note plus photo/PDF attachments for that draft. Suggest voice follows archived Enock replies more closely; KZN drafts may use Customer Service desk 031 813 0456. Toasts prefer one row with tighter icon/dismiss padding and nearly full phone width. Deploy firebase-database.rules.json or pending reviews stay invisible. No commuter What\'s New beyond the map note already shipped. forceShow stays false.',
+    ],
     'V10_10.27.9': [
         'Network map: absent ?lat=/?lon= no longer becomes Number(null)===0, which opened Leaflet at 0,0 in the Gulf of Guinea and then re-centred there after the corridor fit. Missing coords stay null so the view starts on the commuter region. Sidenav Network Map and planner Open Network Map pass ?region= from userRegion. Commuter What\'s New notes the map opens on your region. forceShow stays false.',
     ],

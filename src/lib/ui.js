@@ -920,40 +920,58 @@ export function showToast(message, type = 'info', duration = 2500, actionHTML = 
         iconHTML = `<svg class="w-4 h-4 text-yellow-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>`;
     }
 
-    const widthClass = fitLine
-        ? 'w-max max-w-[min(92vw,40rem)]'
-        : 'w-[min(22rem,calc(100vw-1.5rem))] max-w-[calc(100vw-1.5rem)]';
-    toastEl.className = `flex ${errorToast && !center ? 'items-start' : 'items-center'} justify-center gap-2 px-3 py-2 rounded-2xl shadow-2xl backdrop-blur-md border ${bgClass} ${borderClass} ${textClass} ${widthClass}`;
+    // Prefer one row: grow with the copy, keep icons tight, use almost the full phone width.
+    const preferOneLine = fitLine || (!actionHTML && plainToast.length > 0 && plainToast.length <= 64);
+    const widthClass = preferOneLine
+        ? 'w-max max-w-[calc(100vw-0.75rem)]'
+        : 'w-[min(24rem,calc(100vw-0.75rem))] max-w-[calc(100vw-0.75rem)]';
+    toastEl.className = `flex items-center justify-center gap-1.5 pl-2 pr-1.5 py-1.5 rounded-2xl shadow-2xl backdrop-blur-md border ${bgClass} ${borderClass} ${textClass} ${widthClass}`;
     // #toast sets width and max-width as an id rule. Inline wins so this line can stay one line.
-    if (fitLine) {
+    if (preferOneLine) {
         toastEl.style.width = 'max-content';
-        toastEl.style.maxWidth = 'min(92vw, 40rem)';
+        toastEl.style.maxWidth = 'calc(100vw - 0.75rem)';
         toastEl.style.textAlign = 'center';
     } else {
         toastEl.style.width = '';
-        toastEl.style.maxWidth = '';
+        toastEl.style.maxWidth = 'calc(100vw - 0.75rem)';
         toastEl.style.textAlign = '';
     }
 
     const dismissHTML = dismissible
-        ? `<button type="button" class="nt-toast-dismiss shrink-0 p-1 rounded-full hover:bg-white/10 focus:outline-none" aria-label="Dismiss"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg></button>`
+        ? `<button type="button" class="nt-toast-dismiss shrink-0 -mr-0.5 p-0.5 rounded-full hover:bg-white/10 focus:outline-none" aria-label="Dismiss"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg></button>`
         : '';
 
-    const copyClass = fitLine
-        ? 'text-xs font-semibold tracking-wide leading-snug text-center'
-        : `text-xs font-semibold tracking-wide leading-snug whitespace-normal break-words ${errorToast ? 'text-left max-h-40 overflow-y-auto' : 'text-center line-clamp-2'}`;
-    const rowClass = fitLine
-        ? 'flex items-center justify-center gap-1.5 max-w-full text-center'
-        : 'flex items-center justify-center gap-1.5 min-w-0 flex-1 text-center';
+    const oneLineCopy = preferOneLine
+        ? 'text-[11px] sm:text-xs font-semibold leading-snug tracking-normal text-center whitespace-nowrap'
+        : `text-[11px] sm:text-xs font-semibold leading-snug tracking-normal whitespace-normal break-words ${errorToast ? 'text-left max-h-40 overflow-y-auto' : 'text-center line-clamp-2'}`;
+    const rowClass = preferOneLine
+        ? 'flex items-center justify-center gap-1 min-w-0 max-w-full text-center'
+        : 'flex items-center justify-center gap-1 min-w-0 flex-1 text-center';
+    // Icon sits flush left; shrink-0 keeps the glyph from eating text width.
+    const leadingIcon = iconHTML
+        ? iconHTML.replace('flex-shrink-0', 'flex-shrink-0 -ml-0.5')
+        : '';
 
     toastEl.innerHTML = `
         <div class="${rowClass}">
-            ${iconHTML}
-            <span class="${copyClass}">${message}</span>
+            ${leadingIcon}
+            <span class="${oneLineCopy}">${message}</span>
         </div>
-        ${actionHTML ? `<div class="pl-2 border-l border-white/20 shrink-0">${actionHTML}</div>` : ''}
+        ${actionHTML ? `<div class="pl-1.5 border-l border-white/20 shrink-0">${actionHTML}</div>` : ''}
         ${dismissHTML}
     `;
+    // If nowrap overflows the phone, allow a second line instead of clipping.
+    if (preferOneLine && !fitLine) {
+        requestAnimationFrame(() => {
+            const span = toastEl.querySelector('span');
+            if (!span || !toastEl.classList.contains('show')) return;
+            if (span.scrollWidth <= span.clientWidth + 1) return;
+            span.classList.remove('whitespace-nowrap');
+            span.classList.add('whitespace-normal', 'break-words', 'line-clamp-2', 'text-left');
+            toastEl.classList.remove('w-max');
+            toastEl.style.width = '';
+        });
+    }
 
     toastEl.querySelector('.nt-toast-dismiss')?.addEventListener('click', (e) => {
         e.preventDefault();

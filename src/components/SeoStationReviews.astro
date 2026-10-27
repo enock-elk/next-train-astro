@@ -197,7 +197,8 @@ const amenityQuestions = [
     const loadApproved = async () => {
       if (!slug || !base) return;
       try {
-        const res = await fetch(`${base}station_reviews/${encodeURIComponent(slug)}.json`, { cache: 'no-store' });
+        // Public mirror only — pending reviews (and contact) stay under station_reviews/.
+        const res = await fetch(`${base}station_reviews_public/${encodeURIComponent(slug)}.json`, { cache: 'no-store' });
         if (!res.ok) return;
         const data = await res.json();
         if (!data || typeof data !== 'object') return;

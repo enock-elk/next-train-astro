@@ -143,7 +143,7 @@ function guideText() {
         'Once opened online, schedules stay on the phone, so times can be checked offline or during loadshedding. Station lights and ticket offices can still be affected.',
         'It installs from the website: iPhone uses Safari, Share, Add to Home Screen. Android uses Install App in The Background. Android is also in Google Play testing.',
         'Supported corridors: Gauteng (Pretoria, Johannesburg, Germiston, Kempton Park, Mabopane), Western Cape (Cape Town, Bellville, Simon\'s Town), KwaZulu-Natal (Durban, Umlazi, KwaMashu, Crossmoor), Eastern Cape (East London).',
-        'A wrong time is reported with the in-app Feedback button. App support email is admin@nexttrain.co.za. Broken trains, closed ticket offices, and infrastructure go to PRASA, and the commuter should ask for a reference number.',
+        'A wrong time is reported with the in-app Feedback button. App support email is admin@nexttrain.co.za. Broken trains, closed ticket offices, and infrastructure go to PRASA, and the commuter should ask for a reference number. Metrorail KZN Customer Service desk: 031 813 0456.',
         'The True Day Simulator applies the 2026 holiday and route rules. The commuter does not have to guess the day type.',
     ].join('\n');
 }

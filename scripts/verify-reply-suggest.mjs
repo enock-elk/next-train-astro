@@ -57,8 +57,10 @@ for (const office of GAUTENG_OFFICES) {
     }
 }
 ok(guide.includes(PRASA_SURVEY_URL), 'guide lists the PRASA survey');
-ok(contactBlockForRegion('KZN').includes(PRASA_SURVEY_URL), 'KZN contact block uses the survey');
+ok(contactBlockForRegion('KZN').includes('031 813 0456'), 'KZN contact block lists the customer service desk');
+ok(contactBlockForRegion('KZN').includes(PRASA_SURVEY_URL), 'KZN contact block still offers the survey');
 ok(!contactBlockForRegion('KZN').includes('011 013 0306'), 'KZN contact block has no Pretoria number');
+ok(liaisonRules('KZN').includes('031 813 0456') || contactBlockForRegion('KZN').includes('031 813 0456'), 'KZN desk number is available to the draft');
 ok(liaisonRules('KZN').includes('halt'), 'liaison rules tell the model to halt');
 ok(liaisonRules('KZN').includes('Thank you for using Next Train'), 'drafts close with the standard line');
 ok(liaisonRules('KZN').includes('two blank lines'), 'greeting leaves two blank lines');
@@ -285,6 +287,14 @@ ok(adminJs.includes('id="admin-reply-suggest-context"'), 'a halt can take the mi
 ok(adminJs.includes('id="admin-reply-suggest-status"'), 'suggest shows progress while it writes');
 ok(adminJs.includes('id="admin-reply-suggest-done"'), 'a finished draft note is shown after Suggest');
 ok(adminJs.includes('id="admin-copilot-settings"'), 'Co-Pilot settings is a full-screen sheet');
+ok(adminJs.includes('id="admin-reply-guide-modal"'), 'Guide this reply opens a dedicated modal');
+ok(adminJs.includes('id="admin-reply-guide-text"') && adminJs.includes('textarea id="admin-reply-guide-text"'), 'Guide this reply uses a multi-line textarea');
+ok(adminJs.includes('id="admin-reply-guide-files"'), 'Guide this reply accepts attachments');
+ok(adminJs.includes('allowPdf: true'), 'Guide attachments may include PDFs');
+ok(adminJs.includes('Admin.fetchStationReviews'), 'Community Monitor loads station reviews');
+ok(adminJs.includes('Admin.renderStationReviews'), 'Community Monitor renders station reviews');
+ok(adminJs.includes('Admin.setStationReviewStatus'), 'operators can approve or reject station reviews');
+ok(adminJs.includes('station_reviews_public'), 'approved reviews mirror to the public path');
 ok(adminJs.includes('admin-reply-suggest-once'), 'this-reply-only context has its own field');
 ok(adminJs.includes('Save for all future replies'), 'future context save is labelled clearly');
 ok(adminJs.includes('copilotContactChipsHtml'), 'Co-Pilot shows contact chips under the header');
@@ -297,9 +307,10 @@ ok(adminJs.includes('A blank note is not saved.'), 'a blank shared note is refus
 ok(adminJs.includes('shrink-0 rounded-t-lg'), 'the reply formatting bar does not shrink away');
 ok(adminJs.includes('whatsappMarkupToHtml'), 'service alerts convert WhatsApp paste marks');
 ok(adminJs.includes('Admin.suggestReplyForThread'), 'thread options can suggest a reply');
-const suggestStart = adminJs.indexOf('runSuggestReply: async () => {');
+const suggestStart = adminJs.indexOf('runSuggestReply: async (');
 const suggestEnd = adminJs.indexOf('openReplyModal:', suggestStart);
 const suggestBody = adminJs.slice(suggestStart, suggestEnd);
+ok(suggestStart >= 0 && suggestEnd > suggestStart, 'runSuggestReply body is located for checks');
 ok(suggestBody.includes('composerHtmlFromResult'), 'suggest fills the composer from the helper');
 const sent = outreachPlainText('Hi there<br><br><span style="color: #9ca3af; font-style: italic;">- Enock</span>');
 ok(sent === 'Hi there\n\n- Enock', 'outreach text keeps the same reply and sign-off');

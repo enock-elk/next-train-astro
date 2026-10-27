@@ -137,6 +137,13 @@ const stationPage = readFileSync(new URL('../src/pages/stations/[slug].astro', i
 ok(stationPage.includes('seoIntroParagraphs'), 'station SEO intro is split into paragraphs');
 ok(stationPage.includes('next live departure & more'), 'station SEO intro mentions departure and more');
 ok(stationPage.includes('SeoStationReviews'), 'station page mounts reviews at the bottom');
+const reviewsComp = readFileSync(new URL('../src/components/SeoStationReviews.astro', import.meta.url), 'utf8');
+ok(reviewsComp.includes('station_reviews_public/'), 'SEO reviews list the public approved mirror');
+ok(reviewsComp.includes("status: 'pending'"), 'SEO form still submits pending reviews');
+ok(reviewsComp.includes('station_reviews/'), 'SEO form still writes into station_reviews');
+const rules = readFileSync(new URL('../firebase-database.rules.json', import.meta.url), 'utf8');
+ok(rules.includes('"station_reviews_public"'), 'RTDB rules expose station_reviews_public');
+ok(rules.includes("!data.exists() && newData.child('status').val() === 'pending'"), 'anonymous creates stay pending');
 
 const gridHandoff = readFileSync(new URL('../src/lib/timetable-grid.js', import.meta.url), 'utf8');
 ok(gridHandoff.includes('SEO cold launch seeds a pin only when none exists'), 'SEO handoff soft-pins defaults');

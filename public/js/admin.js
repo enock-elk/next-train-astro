@@ -11151,6 +11151,153 @@ const Admin = {
         reviewsRefreshBtn.onclick = () => Admin.fetchStationReviews();
         document.getElementById('mq-reviews-filter')?.addEventListener('change', () => Admin.renderStationReviews?.());
 
+        Admin.stationReviewPublicPayload = (row) => {
+            const amenities = Array.isArray(row?.amenities)
+                ? row.amenities.map((a) => String(a || '').trim()).filter(Boolean).slice(0, 12)
+                : [];
+            return {
+                stationSlug: String(row?.stationSlug || '').trim(),
+                stationName: String(row?.stationName || '').trim() || null,
+                rating: Number(row?.rating) || 0,
+                text: String(row?.text || '').trim().slice(0, 1200),
+                displayName: row?.displayName == null ? null : String(row.displayName).slice(0, 80),
+                amenities,
+                status: 'approved',
+                createdAt: Number(row?.createdAt) || Date.now(),
+                approvedAt: Number(row?.approvedAt) || Date.now(),
+                source: String(row?.source || 'seo_station').slice(0, 40),
+            };
+        };
+
+        Admin.renderStationReviews = () => {
+            const list = document.getElementById('mq-reviews-list');
+            if (!list) return;
+            const filter = String(document.getElementById('mq-reviews-filter')?.value || 'pending');
+            const rows = Array.isArray(Admin._stationReviewRows) ? Admin._stationReviewRows : [];
+            const shown = rows.filter((row) => filter === 'all' || String(row?.status || '') === filter);
+            const esc = (value) => ntAdminSecureEscape(String(value == null ? '' : value));
+            if (!shown.length) {
+                list.innerHTML = `<p class="text-xs text-gray-400 text-center py-4">${filter === 'pending' ? 'No pending station reviews.' : 'No reviews in this filter.'}</p>`;
+                return;
+            }
+            list.innerHTML = shown.map((row) => {
+                const id = esc(row._key || '');
+                const slug = esc(row.stationSlug || '');
+                const when = row.createdAt ? Admin.formatDate(Number(row.createdAt)) : '-';
+                const stars = '★'.repeat(Math.max(0, Math.min(5, Number(row.rating) || 0)))
+                    + '☆'.repeat(Math.max(0, 5 - Math.max(0, Math.min(5, Number(row.rating) || 0))));
+                const amenities = Array.isArray(row.amenities) && row.amenities.length
+                    ? `<p class="text-[10px] text-gray-500 dark:text-gray-400 mt-1">${esc(row.amenities.join(' · '))}</p>`
+                    : '';
+                const contact = row.contact
+                    ? `<p class="text-[10px] font-mono text-gray-500 dark:text-gray-400 mt-1 break-all">Contact: ${esc(row.contact)}</p>`
+                    : '';
+                const status = String(row.status || 'pending');
+                const pending = status === 'pending';
+                const actions = pending
+                    ? `<div class="flex flex-wrap gap-2 mt-2">
+                            <button type="button" class="mq-review-approve text-[10px] font-bold text-emerald-700 dark:text-emerald-400 underline" data-slug="${slug}" data-id="${id}">Approve</button>
+                            <button type="button" class="mq-review-reject text-[10px] font-bold text-gray-600 dark:text-gray-300 underline" data-slug="${slug}" data-id="${id}">Reject</button>
+                       </div>`
+                    : `<span class="text-[10px] text-gray-400 mt-2 inline-block">${esc(status)}</span>`;
+                return `<div class="border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-800 p-3 text-left" data-review-id="${id}">
+                    <div class="flex justify-between gap-2 mb-1">
+                        <p class="text-xs font-black text-gray-900 dark:text-white truncate">${esc(row.stationName || row.stationSlug || 'Station')}</p>
+                        <span class="text-[9px] font-mono text-gray-400 shrink-0">${esc(when)}</span>
+                    </div>
+                    <p class="text-[11px] text-amber-600 dark:text-amber-300 tracking-widest" aria-label="${Number(row.rating) || 0} of 5">${esc(stars)}</p>
+                    <p class="text-[11px] text-gray-700 dark:text-gray-300 mt-1 whitespace-pre-wrap">${esc(row.text || '')}</p>
+                    ${row.displayName ? `<p class="text-[10px] text-gray-500 mt-1">From ${esc(row.displayName)}</p>` : ''}
+                    ${contact}
+                    ${amenities}
+                    ${actions}
+                </div>`;
+            }).join('');
+            list.querySelectorAll('.mq-review-approve').forEach((btn) => {
+                btn.addEventListener('click', () => Admin.setStationReviewStatus(btn.getAttribute('data-slug'), btn.getAttribute('data-id'), 'approved'));
+            });
+            list.querySelectorAll('.mq-review-reject').forEach((btn) => {
+                btn.addEventListener('click', () => Admin.setStationReviewStatus(btn.getAttribute('data-slug'), btn.getAttribute('data-id'), 'rejected'));
+            });
+        };
+
+        Admin.fetchStationReviews = async ({ silent = false } = {}) => {
+            const list = document.getElementById('mq-reviews-list');
+            if (!silent && list) list.innerHTML = '<p class="text-xs text-gray-400 text-center py-4">Loading...</p>';
+            try {
+                const secret = await Admin.getAuthKey();
+                if (!secret) throw new Error('Not signed in');
+                const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
+                const res = await window.guardianFetch(`${dynamicEndpoint}station_reviews.json?auth=${encodeURIComponent(secret)}`, {}, 10000);
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                const data = await res.json();
+                const rows = ntAdminStationReviewRows(data);
+                Admin._stationReviewRows = rows;
+                const pending = ntAdminPendingStationReviewCount(rows);
+                Admin.paintCommunityMonitorBadges(Admin._communityChatUnread || 0, pending);
+                if (!silent || Admin.currentCommunityMonitorTab === 'reviews') Admin.renderStationReviews();
+            } catch (err) {
+                Admin._stationReviewRows = Admin._stationReviewRows || [];
+                if (!silent && list) {
+                    list.innerHTML = `<p class="text-xs text-rose-500 text-center py-4">${ntAdminSecureEscape(err.message || 'Could not load reviews')}</p>`;
+                }
+            }
+        };
+
+        Admin.setStationReviewStatus = async (slug, reviewId, status) => {
+            const code = String(status || '').trim();
+            const stationSlug = String(slug || '').trim();
+            const id = String(reviewId || '').trim();
+            if (!stationSlug || !id || !['approved', 'rejected', 'pending'].includes(code)) return;
+            try {
+                const secret = await Admin.getAuthKey();
+                if (!secret || !Admin.currentUser?.uid) throw new Error('Not signed in');
+                const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
+                const authQ = `?auth=${encodeURIComponent(secret)}`;
+                const path = `${dynamicEndpoint}station_reviews/${encodeURIComponent(stationSlug)}/${encodeURIComponent(id)}.json${authQ}`;
+                const getRes = await window.guardianFetch(path, {}, 8000);
+                if (!getRes.ok) throw new Error(`Could not load review (${getRes.status})`);
+                const existing = await getRes.json();
+                if (!existing || typeof existing !== 'object') throw new Error('Review missing');
+                const now = Date.now();
+                const next = {
+                    ...existing,
+                    stationSlug: existing.stationSlug || stationSlug,
+                    status: code,
+                    moderatedAt: now,
+                    moderatedBy: Admin.currentUser.email || '',
+                };
+                if (code === 'approved') {
+                    next.approvedAt = now;
+                    next.approvedBy = Admin.currentUser.email || '';
+                }
+                const putRes = await window.guardianFetch(path, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(next),
+                }, 8000);
+                if (!putRes.ok) throw new Error(`Could not save review (${putRes.status})`);
+                const publicPath = `${dynamicEndpoint}station_reviews_public/${encodeURIComponent(stationSlug)}/${encodeURIComponent(id)}.json${authQ}`;
+                if (code === 'approved') {
+                    const pub = Admin.stationReviewPublicPayload(next);
+                    const pubRes = await window.guardianFetch(publicPath, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(pub),
+                    }, 8000);
+                    if (!pubRes.ok) throw new Error(`Published copy failed (${pubRes.status})`);
+                } else {
+                    await window.guardianFetch(publicPath, { method: 'DELETE' }, 8000).catch(() => null);
+                }
+                if (typeof showToast === 'function') {
+                    showToast(code === 'approved' ? 'Review approved.' : 'Review rejected.', 'success');
+                }
+                await Admin.fetchStationReviews();
+            } catch (err) {
+                if (typeof showToast === 'function') showToast(err.message || 'Could not update review.', 'error');
+            }
+        };
+
         const validateHeldCommunityPublish = (report) => {
             const publish = report?.publish;
             const payload = publish?.payload;
@@ -11389,12 +11536,10 @@ const Admin = {
                 const routesObj = (typeof ROUTES !== 'undefined' && ROUTES) || window.ROUTES || {};
                 const rows = ntAdminCommunityActivityRows(activityData, seenData, items, routesObj);
                 Admin._communityMonitorRows = rows;
-                const badge = document.getElementById('mq-unread-badge');
                 const totalUnread = rows.reduce((sum, row) => sum + row.unread, 0);
-                if (badge) {
-                    badge.textContent = totalUnread > 99 ? '99+' : String(totalUnread);
-                    badge.classList.toggle('hidden', totalUnread < 1);
-                }
+                Admin._communityChatUnread = totalUnread;
+                Admin.paintCommunityMonitorBadges(totalUnread, Admin._stationReviewPending || 0);
+                Admin.fetchStationReviews?.({ silent: true });
 
                 const esc = (value) => ntAdminSecureEscape(String(value == null ? '' : value));
                 const formatWhen = (value) => value ? Admin.formatDate(Number(value)) : 'No activity yet';
@@ -13135,11 +13280,6 @@ const Admin = {
                         <button type="button" id="reply-suggest" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3.5 px-3 rounded-xl shadow-sm transition-colors focus:outline-none text-sm">Suggest reply</button>
                         <div id="admin-reply-guide" class="hidden mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
                             <button type="button" id="admin-reply-guide-open" class="w-full min-h-[2.75rem] rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-sm font-bold text-gray-800 dark:text-gray-100 focus:outline-none">Guide this reply</button>
-                            <div id="admin-reply-guide-box" class="hidden mt-2 space-y-2">
-                                <p class="text-[11px] text-gray-500 dark:text-gray-400 leading-snug">This note steers only the next draft. It is not saved for other threads.</p>
-                                <input id="admin-reply-guide-text" maxlength="500" class="w-full h-11 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-sm text-gray-900 dark:text-white px-3 focus:outline-none" placeholder="One note for this draft">
-                                <button type="button" id="admin-reply-guide-go" class="w-full min-h-[2.75rem] rounded-xl bg-gray-900 dark:bg-white dark:text-gray-900 text-white text-sm font-bold focus:outline-none">Regenerate with this note</button>
-                            </div>
                         </div>
                         <div id="admin-reply-suggest-status" class="hidden mt-2 rounded-lg border border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-950/40 p-2" aria-live="polite">
                             <p id="admin-reply-suggest-status-text" class="text-[11px] font-bold text-indigo-950 dark:text-indigo-100"></p>
@@ -13147,6 +13287,33 @@ const Admin = {
                         </div>
                         <p id="admin-reply-suggest-done" class="hidden mt-2 text-[11px] text-gray-600 dark:text-gray-300 leading-relaxed"></p>
                     </div>`,
+
+    replyGuideModalMarkup: () => `
+                <div id="admin-reply-guide-modal" class="fixed inset-0 bg-black/80 z-[220] hidden flex p-0 backdrop-blur-sm" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="admin-reply-guide-title">
+                    <div class="bg-white dark:bg-gray-800 shadow-2xl w-full h-full min-h-0 overflow-hidden flex flex-col px-3 sm:px-4 pt-[max(0.75rem,env(safe-area-inset-top))] pb-[max(0.75rem,env(safe-area-inset-bottom))] border-0 rounded-none">
+                        <div class="flex items-center justify-between gap-3 shrink-0 mb-3">
+                            <h3 id="admin-reply-guide-title" class="text-lg font-black text-gray-900 dark:text-white tracking-tight">Guide this reply</h3>
+                            <button type="button" id="admin-reply-guide-close" class="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500 focus:outline-none" aria-label="Close">${Admin.icon('x', 'w-5 h-5')}</button>
+                        </div>
+                        <div class="flex-1 min-h-0 overflow-y-auto space-y-4 custom-scrollbar">
+                            <p class="text-[11px] text-gray-500 dark:text-gray-400 leading-snug">This note and any attachments steer only the next draft. They are not saved for other threads.</p>
+                            <div>
+                                <label for="admin-reply-guide-text" class="block text-[11px] font-bold uppercase tracking-widest text-gray-500 dark:text-gray-400 mb-1.5">Guidance</label>
+                                <textarea id="admin-reply-guide-text" rows="8" maxlength="2000" class="w-full min-h-[10rem] rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-sm text-gray-900 dark:text-white p-3 focus:outline-none leading-relaxed" placeholder="What should this draft say or correct? Use as many lines as you need."></textarea>
+                            </div>
+                            <div>
+                                <label for="admin-reply-guide-files" class="block text-[11px] font-bold uppercase tracking-widest text-gray-500 dark:text-gray-400 mb-1.5">Attachments for this draft</label>
+                                <p class="text-[11px] text-gray-500 dark:text-gray-400 leading-snug mb-2">Photos or PDFs the AI should read with your note (ticket photos, notices, screenshots).</p>
+                                <input id="admin-reply-guide-files" type="file" accept="image/jpeg,image/png,image/webp,image/gif,application/pdf" multiple class="block w-full text-xs text-gray-600 dark:text-gray-300" />
+                                <p id="admin-reply-guide-files-meta" class="mt-2 text-[10px] text-gray-500 dark:text-gray-400"></p>
+                            </div>
+                        </div>
+                        <div class="shrink-0 pt-3 grid grid-cols-2 gap-2">
+                            <button type="button" id="admin-reply-guide-cancel" class="min-h-[2.75rem] rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-sm font-bold text-gray-800 dark:text-gray-100 focus:outline-none">Cancel</button>
+                            <button type="button" id="admin-reply-guide-go" class="min-h-[2.75rem] rounded-xl bg-gray-900 dark:bg-white dark:text-gray-900 text-white text-sm font-bold focus:outline-none">Regenerate</button>
+                        </div>
+                    </div>
+                </div>`,
 
     copilotSettingsMarkup: () => `
                 <div id="admin-copilot-settings" class="fixed inset-0 bg-black/80 z-[210] hidden flex p-0 backdrop-blur-sm" aria-hidden="true">
@@ -13201,18 +13368,29 @@ const Admin = {
 
     replyWorkerUrl: () => String(window.REPLY_WORKER_URL || 'https://nexttrain-reply.enock.workers.dev').replace(/\/$/, ''),
 
-    readSuggestImages: async (fileList) => {
+    readSuggestImages: async (fileList, opts = {}) => {
+        const allowPdf = opts.allowPdf === true;
         const maxImages = window.ntReplySuggest?.SUGGEST_MAX_IMAGES || 3;
-        const maxBytes = window.ntReplySuggest?.SUGGEST_MAX_IMAGE_BYTES || 1500000;
-        const files = Array.from(fileList || []).slice(0, maxImages);
+        const maxFiles = window.ntReplySuggest?.SUGGEST_MAX_FILES || 4;
+        const maxImageBytes = window.ntReplySuggest?.SUGGEST_MAX_IMAGE_BYTES || 1500000;
+        const maxFileBytes = window.ntReplySuggest?.SUGGEST_MAX_FILE_BYTES || 4000000;
+        const limit = allowPdf ? maxFiles : maxImages;
+        const files = Array.from(fileList || []).slice(0, limit);
         const images = [];
         for (const file of files) {
-            if (!file || !String(file.type || '').startsWith('image/')) continue;
-            if (file.size > maxBytes) throw new Error('Each image must be under 1.5 MB.');
+            if (!file) continue;
+            const mime = String(file.type || '').toLowerCase();
+            const isImage = mime.startsWith('image/');
+            const isPdf = mime === 'application/pdf';
+            if (!isImage && !(allowPdf && isPdf)) continue;
+            const maxBytes = isPdf ? maxFileBytes : maxImageBytes;
+            if (file.size > maxBytes) {
+                throw new Error(isPdf ? 'Each PDF must be under 4 MB.' : 'Each image must be under 1.5 MB.');
+            }
             const dataUrl = await new Promise((resolve, reject) => {
                 const reader = new FileReader();
                 reader.onload = () => resolve(String(reader.result || ''));
-                reader.onerror = () => reject(new Error('Could not read that image.'));
+                reader.onerror = () => reject(new Error(isPdf ? 'Could not read that PDF.' : 'Could not read that image.'));
                 reader.readAsDataURL(file);
             });
             const match = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
@@ -13462,15 +13640,70 @@ const Admin = {
 
     syncReplyGuide: () => {
         const guide = document.getElementById('admin-reply-guide');
-        const guideBox = document.getElementById('admin-reply-guide-box');
+        const guideModal = document.getElementById('admin-reply-guide-modal');
         const editor = document.getElementById('admin-reply-text');
         const halt = document.getElementById('admin-reply-suggest-halt');
         const suggestBtn = document.getElementById('reply-suggest');
         const halted = !!(halt && !halt.classList.contains('hidden'));
-        const guiding = !!(guideBox && !guideBox.classList.contains('hidden'));
+        const guiding = !!(guideModal && !guideModal.classList.contains('hidden'));
         if (suggestBtn) suggestBtn.classList.toggle('hidden', halted || guiding);
         if (!guide || !editor) return;
         guide.classList.toggle('hidden', halted || !Admin.draftHasText(editor.innerHTML));
+    },
+
+    openReplyGuideModal: () => {
+        let modal = document.getElementById('admin-reply-guide-modal');
+        if (!modal) {
+            document.body.insertAdjacentHTML('beforeend', Admin.replyGuideModalMarkup());
+            modal = document.getElementById('admin-reply-guide-modal');
+            Admin.bindReplyGuideModal();
+        }
+        modal?.classList.remove('hidden');
+        modal?.classList.add('flex');
+        modal?.setAttribute('aria-hidden', 'false');
+        Admin.syncReplyGuide();
+        requestAnimationFrame(() => {
+            try { document.getElementById('admin-reply-guide-text')?.focus(); } catch (_) {}
+        });
+    },
+
+    closeReplyGuideModal: () => {
+        const modal = document.getElementById('admin-reply-guide-modal');
+        if (!modal) return;
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+        modal.setAttribute('aria-hidden', 'true');
+        Admin.syncReplyGuide();
+    },
+
+    bindReplyGuideModal: () => {
+        const modal = document.getElementById('admin-reply-guide-modal');
+        if (!modal || modal.dataset.bound === '1') return;
+        modal.dataset.bound = '1';
+        const close = () => Admin.closeReplyGuideModal();
+        document.getElementById('admin-reply-guide-close')?.addEventListener('click', close);
+        document.getElementById('admin-reply-guide-cancel')?.addEventListener('click', close);
+        modal.addEventListener('click', (event) => {
+            if (event.target === modal) close();
+        });
+        const files = document.getElementById('admin-reply-guide-files');
+        const meta = document.getElementById('admin-reply-guide-files-meta');
+        files?.addEventListener('change', () => {
+            if (!meta) return;
+            const list = Array.from(files.files || []);
+            if (!list.length) {
+                meta.textContent = '';
+                return;
+            }
+            meta.textContent = list.map((f) => f.name).slice(0, 4).join(' · ');
+        });
+        document.getElementById('admin-reply-guide-go')?.addEventListener('click', async () => {
+            const text = document.getElementById('admin-reply-guide-text')?.value || '';
+            const contextBox = document.getElementById('admin-reply-suggest-context');
+            if (contextBox) contextBox.value = text;
+            Admin.closeReplyGuideModal();
+            await Admin.runSuggestReply({ fromGuide: true });
+        });
     },
 
     openCopilotSettings: () => {
@@ -13551,7 +13784,7 @@ const Admin = {
         return out;
     },
 
-    runSuggestReply: async () => {
+    runSuggestReply: async (opts = {}) => {
         const modal = document.getElementById('admin-reply-modal');
         const btn = document.getElementById('reply-suggest');
         if (!modal || modal.classList.contains('hidden')) return;
@@ -13567,7 +13800,7 @@ const Admin = {
         // Future context is loaded by the worker from KV (shared-note). This-reply
         // context is the one-shot settings field and/or Guide this reply / halt box.
         const note = document.getElementById('admin-reply-suggest-once')?.value || '';
-        const guideText = document.getElementById('admin-reply-guide-box') && !document.getElementById('admin-reply-guide-box').classList.contains('hidden')
+        const guideText = opts.fromGuide
             ? (document.getElementById('admin-reply-guide-text')?.value || '')
             : '';
         const contextEl = document.getElementById('admin-reply-suggest-context');
@@ -13641,7 +13874,12 @@ const Admin = {
         try {
             const secret = await Admin.getAuthKey();
             if (!secret) throw new Error('Sign in as an operator first.');
-            const images = await Admin.readSuggestImages(document.getElementById('reply-suggest-images')?.files);
+            const settingsImages = await Admin.readSuggestImages(document.getElementById('reply-suggest-images')?.files);
+            const guideImages = opts.fromGuide
+                ? await Admin.readSuggestImages(document.getElementById('admin-reply-guide-files')?.files, { allowPdf: true })
+                : [];
+            const maxImages = window.ntReplySuggest?.SUGGEST_MAX_IMAGES || 3;
+            const images = [...guideImages, ...settingsImages].slice(0, Math.max(maxImages, guideImages.length ? 4 : maxImages));
             const res = await fetch(`${Admin.replyWorkerUrl()}/suggest`, {
                 method: 'POST',
                 headers: {
@@ -14124,6 +14362,7 @@ const Admin = {
 
         document.getElementById('reply-cancel').onclick = () => {
             Admin.closeCopilotSettings();
+            Admin.closeReplyGuideModal();
             cleanup();
         };
         const suggestBtn = document.getElementById('reply-suggest');
@@ -14134,32 +14373,19 @@ const Admin = {
         if (contextBox) contextBox.value = '';
         const onceNote = document.getElementById('admin-reply-suggest-once');
         if (onceNote) onceNote.value = '';
-        const guideBox = document.getElementById('admin-reply-guide-box');
+        if (!document.getElementById('admin-reply-guide-modal')) {
+            document.body.insertAdjacentHTML('beforeend', Admin.replyGuideModalMarkup());
+        }
+        Admin.bindReplyGuideModal();
         const guideInput = document.getElementById('admin-reply-guide-text');
+        const guideFiles = document.getElementById('admin-reply-guide-files');
+        const guideMeta = document.getElementById('admin-reply-guide-files-meta');
         if (guideInput) guideInput.value = '';
-        if (guideBox) guideBox.classList.add('hidden');
+        if (guideFiles) guideFiles.value = '';
+        if (guideMeta) guideMeta.textContent = '';
+        Admin.closeReplyGuideModal();
         const guideOpen = document.getElementById('admin-reply-guide-open');
-        if (guideOpen) {
-            guideOpen.onclick = () => {
-                const opening = !!guideBox?.classList.contains('hidden');
-                guideBox?.classList.toggle('hidden', !opening);
-                Admin.syncReplyGuide();
-                if (opening) {
-                    requestAnimationFrame(() => {
-                        try { guideBox?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); } catch (_) {}
-                        try { guideInput?.focus(); } catch (_) {}
-                    });
-                }
-            };
-        }
-        const guideGo = document.getElementById('admin-reply-guide-go');
-        if (guideGo) {
-            guideGo.onclick = () => {
-                const text = guideInput?.value || '';
-                if (contextBox) contextBox.value = text;
-                Admin.runSuggestReply();
-            };
-        }
+        if (guideOpen) guideOpen.onclick = () => Admin.openReplyGuideModal();
         Admin.syncReplyGuide();
         Admin.setSuggestProgress(null);
         const settingsBtn = document.getElementById('admin-copilot-settings-btn');

@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_10.27.12': [
+        'Agent docs: docs/AGENT-ORIENTATION.md is the cold-start map (folders, deploy, workers, verifiers, pitfalls index). AGENTS.md / instructions.md link it and add a short codebase map plus schedule-intake, regional contacts, and EC fleet notes. docs/README.md indexes the docs folder. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_10.27.11': [
         'Image schedules: Cape Flats weekend in/out (Oct 2025), Central weekday in/out (02 Mar 2026 kept beside Jun 2026), Pretoria–Pienaarspoort weekday amended grid (21 Aug 2025). Skipped same-date Southern weekday, Northern weekend, and undated Central Saturday re-exports. Guide and Co-Pilot gain PRASA EC 043 700 2030 (plus email/Facebook) and KZN 031 813 0456 on the guide. EC SEO notes yellow trains vs blue People\'s Train and station restoration. No commuter What\'s New. forceShow stays false.',
     ],

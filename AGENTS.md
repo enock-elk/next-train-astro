@@ -2,6 +2,8 @@
 
 Cursor Cloud Agents load this file automatically. `instructions.md` is the same prompt under the name people usually search for. Keep the two files in sync.
 
+**New to this repo?** Read [`docs/AGENT-ORIENTATION.md`](docs/AGENT-ORIENTATION.md) first for the product map, folder layout, deploy/workers overview, verify cheat-sheet, and links into topic docs. This file is the **hard rules and pitfalls** — follow it on every change.
+
 This is a **commuter PWA**. Prefer small, reversible changes. Do not “clean up” core behaviour you do not fully understand.
 
 **No unsolicited changes.** Only change what was asked. Do not rewrite adjacent copy, layout, or behaviour. Do not “improve” strings, presence labels, or UI that was not in the request.
@@ -11,6 +13,23 @@ This is a **commuter PWA**. Prefer small, reversible changes. Do not “clean up
 **Grid exports are light mode only.** The downloaded timetable (html2canvas export in `src/lib/renderer.js`) is always the light sheet: white and light blue (`#eff6ff`) rows, with light grey right and bottom edges (`#e5e7eb`). Do not paint it from the commuter's dark, Classic, or Earthy pack. Dark pack tokens must not leak into the PNG.
 
 **Do not edit timetable extracts unless the owner asks.** Time-cell backgrounds, zebra rows, borders, footer, and the data-source line are locked. Do not restyle extract cells, margins, or colours while doing other work. The in-app grid is a separate surface.
+
+## Codebase map (short)
+
+| Path | What |
+| --- | --- |
+| `docs/AGENT-ORIENTATION.md` | Full orientation for a new agent (start here if cold) |
+| `src/pages/`, `src/components/`, `src/layouts/` | Astro app shell, SEO landings, guide, map |
+| `src/lib/` | Client logic (board, planner, alerts, community, SEO, Co-Pilot) |
+| `src/lib/_extract/` | Dormant SPA scrape leftovers — do not re-assemble without `FORCE_ASSEMBLE=1` |
+| `public/js/admin.js`, `public/js/map-app.js` | Admin / Dev Hub; network map runtime (gold) |
+| `public/data/` | Schedule dump fallback |
+| `public/tracks/` + `GOLD.json` | Baked rail geometry (map gold) |
+| `public/images/schedules/` | Printed timetable JPG catalogue |
+| `workers/` | Cloudflare Workers (cache, community, reply, edge, telemetry) |
+| `scripts/verify-*.mjs` | Gate scripts — run those that match your change |
+| `firebase-database.rules.json` | RTDB rules (deploy with `npm run firebase:rules`, not via app push) |
+| `docs/` | ADMIN-GUIDE, USER-GUIDE, FCM, Facebook auth, phase notes |
 
 ## Product and repos
 
@@ -101,7 +120,68 @@ Run `npm run verify:clever-ads` before updating advert hashes. Then follow the s
 
 ## Image schedules
 
-Printed PRASA / Metrorail timetable JPGs that back the in-app dump live in `public/images/schedules/` (`manifest.json` + region folders). Naming: `{region}-{corridor}-{day}-{direction}[-{effective}][-{part}].jpg` under `wc/` / `gp/` / `kzn/` / `ec/`. When the owner sends more sheets, rename, file, update the manifest, and push `main`. Prefer newer effective dates; keep the old dated file. For KZN booklet pages (or any pair where one sheet shows more trains/detail), keep both (`p{N}` or `early`/`later`). **Grid vs departure notices:** when a full station grid and a departure-only list both exist for the same corridor/day, keep both (`part` `grid` / `departures`); never replace one with the other. Do not copy sheets into `public/images/alerts/` (allowlist already accepts `/images/schedules/...` for a future Alerts picker). Full rules: `public/images/schedules/README.md`. Run `npm run verify:schedule-images`.
+Printed PRASA / Metrorail timetable JPGs that back the in-app schedule dump live in `public/images/schedules/` (`manifest.json` + region folders `wc/` `gp/` `kzn/` `ec/`). Full naming and intake rules: `public/images/schedules/README.md`. **Grid vs departure notices:** keep both (`part` `grid` / `departures`); never replace one with the other. Run `npm run verify:schedule-images` after any catalogue change.
+
+**These pictures are not the live board.** Live times still come Firebase → Cloudflare → GitHub dump. Filing a JPG only updates the human-readable archive (and future Alerts picker paths). Updating `public/data/full-database.json` is a separate dump task.
+
+Naming: `{region}-{corridor}-{day}-{direction}[-{effective}][-{part}].jpg`.
+
+### When the owner attaches schedule images
+
+1. **Identify** each JPG (title bar, corridor, day, direction, effective date). Facebook screenshots and contact posters are **not** timetable sheets; put those facts in guide / Co-Pilot / SEO (below), not under `schedules/`.
+2. **Hash-compare** against every file already under `public/images/schedules/`. Exact byte duplicates → skip (note in the commit).
+3. **Same corridor / day / direction already filed:**
+   - Newer effective date → add the new dated file; **keep** the older dated file.
+   - Same effective date (or both undated) and clearly the same poster (re-export / WhatsApp recompress / lower resolution) → **skip**. Prefer the higher-resolution copy only if you are replacing an undated file the owner asked to refresh.
+   - Same corridor / day with **grid** vs **departures**, or KZN booklet pages with different columns → **keep both** (`part` `grid` / `departures` / `p{N}` / `early`/`later`).
+4. Copy into the region folder with the naming rule, add one object to `manifest.json` `sheets`, push `main`.
+5. **Do not rewrite the whole `manifest.json`.** Insert the new objects surgically (preserve existing formatting). A full `json.dumps` reformat makes reviews noisy and hides real diffs.
+6. Do not copy schedule JPGs into `public/images/alerts/`.
+
+### Day / direction pitfalls
+
+- WC **Northern** and **Cape Flats** weekend posters are often titled `WEEKEND` → use `day: "weekend"`. WC **Central Saturday** posters use `day: "saturday"`. Do not invent a Saturday sheet when only a weekend poster exists, or the reverse.
+- `direction: "combined"` is for one poster that shows both directions (many GP notices, public-holiday posters). Combined covers inbound and outbound for gap checks.
+- Inbound = toward the hub (Cape Town / Durban / Pretoria / Johannesburg). Outbound = away.
+- Expected empty Saturday placeholders (not catalogue bugs): `herc-koed`, `ec-berlin` (`SATURDAY_PLACEHOLDER_ROUTES`).
+
+### Known image-catalogue gaps (refresh when sheets arrive)
+
+Still missing printed sheets as of the Oct 2026 catalogue batch (live Firebase may still have times):
+
+| Region | Gap |
+| --- | --- |
+| WC | Southern Line Saturday / weekend inbound and outbound |
+| WC | Cape Town ↔ Malmesbury (all days) |
+| EC | East London ↔ Berlin weekday inbound and outbound (folder `ec/` still empty of JPGs) |
+| KZN | Durban ↔ Cato Ridge; Durban ↔ Winklespruit (weekday + Saturday booklet pages) |
+| GP | Pretoria ↔ Irene weekday grid (Saturday departures exist; Irene is the inner Kempton stretch) |
+
+Recent keeps that look like “dupes” but are intentional: Central weekday **02 Mar 2026** kept beside **08 Jun 2026**; Cape Flats **weekend** Oct 2025 beside weekday Jun 2026; Pienaarspoort weekday amended grid **21 Aug 2025** beside Saturday grid.
+
+## Regional contacts (guide + Co-Pilot)
+
+Commuter-facing numbers live in `src/pages/guide.astro` (How do I contact Metrorail…). Co-Pilot / suggest-a-reply uses the same facts from `src/lib/reply-suggest.js` (`GAUTENG_OFFICES`, `KZN_OFFICES`, `EC_OFFICES`, plus `EC_EMAIL` / `EC_FACEBOOK`). Soft knowledge prose is in `src/lib/reply-knowledge.js`. `guardDraft` must not let a Gauteng / KZN / EC phone appear on the wrong region thread. `npm run verify:reply-suggest` asserts guide + contact blocks stay aligned.
+
+| Region | Contact | Notes |
+| --- | --- | --- |
+| GP | Johannesburg 011 013 0191 / 0192; Pretoria 011 013 0306; Germiston 011 085 7118 | Also Gauteng Train Updates Facebook group on the guide |
+| KZN | Customer Service desk **031 813 0456** | From PRASA Train Alert posters |
+| EC | PRASA EC East London **043 700 2030**; email `ntombikayise.katsio@prasa.com`; Facebook **PRASA EC**; Station building, Station Street, East London, 5200 | From the PRASA EC Facebook page |
+| WC | No regional desk number filed yet | Guide / Co-Pilot point at the PRASA Customer Experience Survey |
+
+When the owner sends a new flyer or Facebook contact screenshot, update **guide + `reply-suggest.js` + verify**, not only the AI knowledge string.
+
+## Eastern Cape SEO and fleet facts
+
+EC has one active corridor: `ec-berlin` (East London ↔ Berlin). Copy lives in `src/lib/seo-routes.js` (`SEO_OVERRIDES` / `SEO_INSIGHTS` / `CORRIDOR_PAGE_COPY` / `CORRIDOR_INSIGHTS`) and `REGION_SEO.EC` in `src/lib/config.js`.
+
+Facts to keep consistent (from PRASA EC public posts / comments; refresh if the fleet changes):
+
+- Eastern Cape still runs **older yellow and grey** Metrorail sets, often hauled by **Class 35** diesel locomotives (early 1980s). Gauteng, Western Cape, and KZN already run many of the newer **blue People’s Train** EMUs.
+- PRASA EC has been restoring East London stations after theft and vandalism (about seven refurbished, including **Wilsonia**), with security on stations and on board.
+- **No Saturday and no Sunday** service on East London ↔ Berlin (`SATURDAY_PLACEHOLDER_ROUTES`).
+- Do not invent an East London ↔ Mthatha or Gqeberha ↔ Kariega timetable in the app unless the owner adds those routes.
 
 ## Alerts
 

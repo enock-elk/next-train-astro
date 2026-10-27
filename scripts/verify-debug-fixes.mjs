@@ -270,7 +270,12 @@ assert(shouldOpenRoutePicker({ swapGen: 1, currentGen: 2, currentRouteId: null }
     assert(appearanceCss.includes('.nt-grid-edge-fade-times'), 'times-edge fade CSS exists');
     assert(appearanceCss.includes('--nt-station-col-w'), 'times-edge fade sits at the station column width');
     assert(appearanceCss.includes('nt-station-scroll-shade'), 'station column shades toward the times');
+    assert(appearanceCss.includes('can-scroll-x-start'), 'left times shade only after horizontal scroll');
+    assert(appearanceCss.includes('.nt-grid-frame.can-scroll-x-start .nt-grid-edge-fade-times'), 'left fade gated on can-scroll-x-start');
+    assert(appearanceCss.includes('.nt-grid-frame.can-scroll-x-start #grid-container .nt-station-scroll-shade'), 'station box-shadow gated on scroll');
     assert(!appearanceCss.includes('.nt-grid-edge-fade-left'), 'far-left station fade CSS is gone');
+    assert(gridShell.includes('can-scroll-x-start'), 'grid sync toggles can-scroll-x-start from scrollLeft');
+    assert(gridShell.includes('atStart'), 'grid sync detects scroll start before shading left');
     const rendererJs = readFileSync(new URL('../src/lib/renderer.js', import.meta.url), 'utf8');
     assert(rendererJs.includes('nt-station-scroll-shade'), 'in-app grid station cells use the right-edge scroll shade');
     const seoStationMap = readFileSync(new URL('../src/components/SeoStationMap.astro', import.meta.url), 'utf8');
@@ -282,6 +287,8 @@ assert(shouldOpenRoutePicker({ swapGen: 1, currentGen: 2, currentRouteId: null }
     assert(logicJs.includes("sourcesToTry = ['CLOUDFLARE', 'FIREBASE', 'GITHUB']"), 'waterfall is Cloudflare then Firebase then GitHub');
     assert(logicJs.includes('WATERFALL_BUDGET_MS = 18_000'), 'waterfall budget caps Loading stations risk');
     assert(logicJs.includes("e.name === 'AbortError' && fetchSignal.aborted"), 'timeout must not abort the whole waterfall');
+    assert(logicJs.includes('session summary paintedFrom='), 'waterfall logs a per-session paintedFrom/networkWon summary');
+    assert(logicJs.includes('painted from local cache'), 'waterfall logs when IndexedDB cache paints the board');
     const gridJs = readFileSync(new URL('../src/lib/timetable-grid.js', import.meta.url), 'utf8');
     assert(gridJs.includes('await yieldToPaint()'), 'full timetable yields after opening the modal');
     assert(gridJs.includes('Loading timetable'), 'full timetable shows a short placeholder on first open');

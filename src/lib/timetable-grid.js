@@ -30,11 +30,15 @@ function syncGridEdgeFade() {
     const grid = document.getElementById('grid-container');
     const frame = grid?.closest('.nt-grid-frame');
     if (!grid || !frame) return;
+    // Shades only signal content outside the viewport: right when more trains
+    // are off-screen to the right; left (station→times) only after a horizontal
+    // scroll so the first visible train is never shaded at scrollLeft 0.
     const overflow = grid.scrollWidth - grid.clientWidth > 8;
-    const atEnd = grid.scrollLeft + grid.clientWidth >= grid.scrollWidth - 8;
+    const scrollLeft = grid.scrollLeft;
+    const atStart = scrollLeft <= 4;
+    const atEnd = scrollLeft + grid.clientWidth >= grid.scrollWidth - 8;
     frame.classList.toggle('can-scroll-x', overflow && !atEnd);
-    // Far-left page fade shaded station names — keep shade on the times' left edge.
-    frame.classList.remove('can-scroll-x-start');
+    frame.classList.toggle('can-scroll-x-start', overflow && !atStart);
     const stationCol = grid.querySelector('.nt-station-col, th.sticky.left-0, td.sticky.left-0');
     const stationW = stationCol ? Math.round(stationCol.getBoundingClientRect().width) : 0;
     if (stationW > 0) frame.style.setProperty('--nt-station-col-w', `${stationW}px`);

@@ -826,43 +826,47 @@ html[data-colour-pack="earthy"] #pinned-section .text-blue-300 {
   top: 0;
   right: 0;
   bottom: 0;
-  width: 1.5rem;
+  width: 0.75rem;
   pointer-events: none;
   z-index: 20;
   opacity: 0;
-  background: linear-gradient(to right, rgba(15, 23, 42, 0), rgba(15, 23, 42, 0.18));
+  background: linear-gradient(to right, rgba(15, 23, 42, 0), rgba(15, 23, 42, 0.14));
 }
 html.dark .nt-grid-edge-fade {
-  background: linear-gradient(to right, rgba(0, 0, 0, 0), rgba(0, 0, 0, 0.5));
+  background: linear-gradient(to right, rgba(0, 0, 0, 0), rgba(0, 0, 0, 0.4));
 }
+/* Right fade: more train columns off-screen to the right. */
 .nt-grid-frame.can-scroll-x .nt-grid-edge-fade {
   opacity: 1;
 }
-/* Shade the left edge of the time columns (right of the sticky station
-   names). Do not put a fade on the far-left of the station column. */
+/* Left fade at the sticky station / times join. Only while scrolled right
+   (can-scroll-x-start) so the first train column is never shaded at rest. */
 .nt-grid-edge-fade-times {
   position: absolute;
   top: 0;
   bottom: 0;
   left: var(--nt-station-col-w, 7.5rem);
-  width: 1.5rem;
+  width: 0.75rem;
   pointer-events: none;
   z-index: 25;
   opacity: 0;
-  background: linear-gradient(to right, rgba(15, 23, 42, 0.22), rgba(15, 23, 42, 0));
+  background: linear-gradient(to right, rgba(15, 23, 42, 0.14), rgba(15, 23, 42, 0));
 }
 html.dark .nt-grid-edge-fade-times {
-  background: linear-gradient(to right, rgba(0, 0, 0, 0.55), rgba(0, 0, 0, 0));
+  background: linear-gradient(to right, rgba(0, 0, 0, 0.4), rgba(0, 0, 0, 0));
 }
-.nt-grid-frame.can-scroll-x .nt-grid-edge-fade-times {
+.nt-grid-frame.can-scroll-x-start .nt-grid-edge-fade-times {
   opacity: 1;
 }
-/* Sticky station cells cast onto the times, not onto the station names. */
+/* Sticky station cells cast onto the times only after a horizontal scroll. */
 #grid-container .nt-station-scroll-shade {
-  box-shadow: 6px 0 10px -6px rgba(15, 23, 42, 0.35);
+  box-shadow: none;
 }
-html.dark #grid-container .nt-station-scroll-shade {
-  box-shadow: 6px 0 12px -5px rgba(0, 0, 0, 0.65);
+.nt-grid-frame.can-scroll-x-start #grid-container .nt-station-scroll-shade {
+  box-shadow: 4px 0 8px -6px rgba(15, 23, 42, 0.28);
+}
+html.dark .nt-grid-frame.can-scroll-x-start #grid-container .nt-station-scroll-shade {
+  box-shadow: 4px 0 10px -6px rgba(0, 0, 0, 0.5);
 }
 /* Same edge darkening as the timetable, turned on its side. It sits just
    above the bottom bar and only while #app-scroll still has more below. */

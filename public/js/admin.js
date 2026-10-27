@@ -3378,7 +3378,8 @@ const Admin = {
             }
         } catch(e) {
             const badgeMsg = String((e && e.message) || e || '');
-            if (!/abort|offline|failed to fetch/i.test(badgeMsg)) {
+            // Soft network / TimeoutError on optional badge poll must not look like a login failure.
+            if (!/abort|offline|failed to fetch|timeout/i.test(badgeMsg)) {
                 console.warn("Guardian: Badge sync failed", e);
             }
         }
@@ -4257,7 +4258,7 @@ const Admin = {
             }
         } catch(e) {
             const telMsg = String((e && e.message) || e || '');
-            if (!/abort|offline|failed to fetch/i.test(telMsg)) {
+            if (!/abort|offline|failed to fetch|timeout/i.test(telMsg)) {
                 console.warn("Telemetry Fetch Failed:", e.message);
             }
             
@@ -16305,7 +16306,8 @@ const Admin = {
                 })
                 .catch((err) => {
                     const pubMsg = String((err && err.message) || err || '');
-                    if (/abort|offline|failed to fetch|authentication required/i.test(pubMsg)) return;
+                    // Background publisher is best-effort; timeouts are not an auth failure.
+                    if (/abort|offline|failed to fetch|authentication required|timeout/i.test(pubMsg)) return;
                     console.warn('armScheduledAlertPublisher optional', err);
                 });
         };

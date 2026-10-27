@@ -1396,7 +1396,11 @@ function markSchedulesCoreReady() {
 export async function loadAllSchedules(force = false) {
     if (typeof window !== 'undefined' && window._suppressReloads && !force) return;
 
-    let usedCache = false; 
+    let usedCache = false;
+    /** What painted the board first this session (cache / bundled / none). */
+    let paintedFrom = 'none';
+    /** Which network host won the background waterfall (or none / skipped). */
+    let networkWon = '';
     const currentGen = regionSwapGeneration; 
     
     if (scheduleAbortController) scheduleAbortController.abort();
@@ -1472,6 +1476,8 @@ export async function loadAllSchedules(force = false) {
                 if (typeof window !== 'undefined') window.MASTER_STATION_LIST = mList;
                 
                 usedCache = true;
+                paintedFrom = 'cache';
+                waterfallLog(`painted from local cache key=${cacheKey}`);
                 // Boot UX: drop "Loading schedules…" as soon as IndexedDB paints —
                 // do not hold the shell for the background network waterfall.
                 markSchedulesCoreReady();
@@ -1493,11 +1499,15 @@ export async function loadAllSchedules(force = false) {
                     $masterStationList.set(mList);
                     if (typeof window !== 'undefined') window.MASTER_STATION_LIST = mList;
                     usedCache = true;
+                    paintedFrom = 'bundled';
+                    waterfallLog('painted from bundled same-origin dump');
                     markSchedulesCoreReady();
                     try { await saveToLocalCache(cacheKey, bundledDump, fetchSignal); } catch { /* ignore */ }
                 } catch (err) {
                     console.error("🛡️ Guardian: Bundled schedule dump parse failed.", err);
                 }
+            } else {
+                waterfallLog('no local cache and no bundled dump — waiting on network waterfall');
             }
         }
 
@@ -1505,7 +1515,7 @@ export async function loadAllSchedules(force = false) {
         // 2. BACKGROUND NETWORK SYNC (LIE-FI PROTECTED)
         // Captive Lie-Fi still hard-stops. A false navigator.onLine=false must not
         // skip the waterfall — probeReachability + guardianFetch decide that.
-        waterfallLog(`sync start region=${$userRegion.get()} route=${requestedRouteId} force=${!!force} usedCache=${!!usedCache} onLine=${typeof navigator !== 'undefined' ? navigator.onLine : '?'} isLieFi=${!!isLieFi}`);
+        waterfallLog(`sync start region=${$userRegion.get()} route=${requestedRouteId} force=${!!force} paintedFrom=${paintedFrom} onLine=${typeof navigator !== 'undefined' ? navigator.onLine : '?'} isLieFi=${!!isLieFi}`);
         if (typeof window !== 'undefined' && isLieFi && !force) {
             waterfallWarn('halt: Lie-Fi hard-stop (background sync skipped)');
             console.log("🛡️ Guardian: Lie-Fi detected. Halting background network sync.");
@@ -1776,13 +1786,16 @@ export async function loadAllSchedules(force = false) {
                     } else {
                         try { await saveToLocalCache(cacheKey, newDatabase, fetchSignal); } catch { /* ignore */ }
                     }
+                    networkWon = wonSource;
                     waterfallLog(`applied ${wonSource} payload and saved local cache`);
                 } catch(e) { throw e; }
             } else {
+                networkWon = wonSource;
                 waterfallLog(`applied ${wonSource} but payload unchanged vs cache`);
             }
             rememberRouteRevision(downloadedDB, true);
         } else {
+            networkWon = 'skipped-cache-current';
             waterfallLog('schedule download skipped (smart sync: cache already current)');
         }
     } catch (error) {
@@ -1797,6 +1810,10 @@ export async function loadAllSchedules(force = false) {
         }
     } finally {
         if (fetchSignal && fetchSignal.aborted) return;
+        waterfallLog(
+            `session summary paintedFrom=${paintedFrom} networkWon=${networkWon || 'none'} `
+            + `tried=CLOUDFLARE→FIREBASE→GITHUB region=${$userRegion.get()} route=${requestedRouteId}`
+        );
 
         const forceReloadBtn = typeof document !== 'undefined' ? document.getElementById('force-reload-btn') : null;
         if (forceReloadBtn) {

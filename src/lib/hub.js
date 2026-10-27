@@ -2852,8 +2852,18 @@ export function initHub() {
         } catch { /* ignore */ }
     };
 
+    // In-app Network Map follows the region the commuter already picked.
+    function networkMapSheetUrl() {
+        let region = 'GP';
+        try {
+            const saved = safeStorage.getItem('userRegion');
+            if (saved === 'GP' || saved === 'WC' || saved === 'KZN' || saved === 'EC') region = saved;
+        } catch { /* keep GP */ }
+        return withBase(`/map.html?region=${encodeURIComponent(region)}`);
+    }
+
     // Map-tab embed calls this for the Full screen control — never from map.html boot.
-    window.__ntOpenNetworkMapSheet = () => openInAppSheet(withBase('/map.html'), 'Network Map');
+    window.__ntOpenNetworkMapSheet = () => openInAppSheet(networkMapSheetUrl(), 'Network Map');
     window.__ntFullscreenMapTab = () => {
         if (typeof window.fullscreenMapTab === 'function') {
             window.fullscreenMapTab();
@@ -2882,7 +2892,7 @@ export function initHub() {
         closeAppHub(true);
         setTimeout(() => {
             trackAnalyticsEvent('open_interactive_map', { location: 'sidenav' });
-            openInAppSheet(withBase('/map.html'), 'Network Map');
+            openInAppSheet(networkMapSheetUrl(), 'Network Map');
         }, 120);
     });
 

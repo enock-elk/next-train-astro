@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_10.27.9': [
+        'Network map: absent ?lat=/?lon= no longer becomes Number(null)===0, which opened Leaflet at 0,0 in the Gulf of Guinea and then re-centred there after the corridor fit. Missing coords stay null so the view starts on the commuter region. Sidenav Network Map and planner Open Network Map pass ?region= from userRegion. Commuter What\'s New notes the map opens on your region. forceShow stays false.',
+    ],
     'V10_10.27.8': [
         'Full timetable shades only when content is off-screen: left station→times shade after horizontal scroll (first train column no longer shaded at rest); right shade while more columns remain. Soften both fades. NT Waterfall logs paintedFrom (cache/bundled) and a session summary (CLOUDFLARE→FIREBASE→GITHUB). Admin optional badge/telemetry/scheduled-alert timeouts stay quiet so they do not look like a failed login. No commuter What\'s New. forceShow stays false.',
     ],

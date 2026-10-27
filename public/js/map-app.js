@@ -1485,8 +1485,13 @@
                 try {
                     const q = new URLSearchParams(location.search);
                     const station = String(q.get('station') || '').trim();
-                    const lat = Number(q.get('lat'));
-                    const lon = Number(q.get('lon'));
+                    // Number(null) and Number('') are 0, which is finite. A map
+                    // opened without ?lat=&lon= was therefore centred on the
+                    // Gulf of Guinea instead of the commuter's region.
+                    const latParam = q.get('lat');
+                    const lonParam = q.get('lon');
+                    const lat = latParam == null || String(latParam).trim() === '' ? NaN : Number(latParam);
+                    const lon = lonParam == null || String(lonParam).trim() === '' ? NaN : Number(lonParam);
                     return {
                         station,
                         lat: Number.isFinite(lat) ? lat : null,

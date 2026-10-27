@@ -118,6 +118,8 @@ ok(mapApp.includes('focusStationFromQuery'), 'map-app focuses ?station= from the
 ok(mapApp.includes('nt-map-station-focus'), 'map-app marks station-focus mode');
 ok(mapApp.includes('!stationFocusQuery.station'), 'station focus skips embed corridor fitBounds');
 ok(mapApp.includes('stationFocusZoom'), 'station focus uses a street-level zoom');
+ok(!mapApp.includes("Number(q.get('lat'))"), 'missing lat query is not coerced to 0');
+ok(mapApp.includes('Gulf of Guinea'), 'map-app records why absent lat/lon must stay null');
 
 const mapPage = readFileSync(new URL('../src/pages/map.astro', import.meta.url), 'utf8');
 ok(mapPage.includes("Loading map"), 'station-focus loader says Loading map');

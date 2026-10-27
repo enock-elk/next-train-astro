@@ -1,5 +1,9 @@
 # Changelog
 
+## V10_10.27.9
+
+- The network map opens on your region.
+
 ## V10_10.26.16 — no release notes
 
 ## V10_10.26.15 — no release notes

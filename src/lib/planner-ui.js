@@ -3072,10 +3072,6 @@ export const PlannerRenderer = {
     applyUIIntercepts: (stationName) => {
         if (!stationName) return "";
         let name = stationName.replace(' STATION', '').toLowerCase().replace(/\b\w/g, l => l.toUpperCase());
-        const upper = name.toUpperCase();
-        if (upper === 'ELANDSFONTEIN' || upper === 'RHODESFIELD') {
-            return 'Kempton Park';
-        }
         return name;
     },
 

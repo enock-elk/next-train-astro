@@ -1405,7 +1405,6 @@ export const Renderer = {
         if (!stationName) return '';
         let name = stationName.replace(/ STATION/gi, '').trim();
         const upperName = name.toUpperCase();
-        if (upperName === 'ELANDSFONTEIN' || upperName === 'RHODESFIELD') return 'Kempton Park';
         if (upperName === 'DURBAN YARD') return 'Durban';
         return Renderer._toTitleCase(name);
     },

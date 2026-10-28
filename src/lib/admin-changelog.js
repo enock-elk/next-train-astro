@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_10.28.1': [
+        'Full train sheet and planner stop lists keep Rhodesfield and Elandsfontein as their own names. Trains that end there still count as Kempton Park for upcoming-train matching and the KEMP tag (displaysAsKemptonPark / commuterEndKey unchanged). No other timetable paint. forceShow stays false.',
+    ],
     'V10_10.27.12': [
         'Agent docs: docs/AGENT-ORIENTATION.md is the cold-start map (folders, deploy, workers, verifiers, pitfalls index). AGENTS.md / instructions.md link it and add a short codebase map plus schedule-intake, regional contacts, and EC fleet notes. docs/README.md indexes the docs folder. No commuter What\'s New. forceShow stays false.',
     ],

@@ -302,6 +302,11 @@ assert(logic.includes('Do not hard-throw on navigator.onLine'), 'guardianFetch d
 assert(logic.includes('isLieFi && !force'), 'only Lie-Fi hard-stops the schedule waterfall');
 assert(!logic.includes("OS reports offline state."), 'guardianFetch no longer throws the OS-offline Error');
 assert(logic.includes('NT Waterfall:'), 'waterfall steps log under NT Waterfall for Black Box');
+assert(logic.includes('window.ntTrace'), 'waterfall uses ntTrace so drop_console cannot strip it');
+const blackBox = readFileSync(new URL('../src/components/BlackBoxCapture.astro', import.meta.url), 'utf8');
+assert(blackBox.includes('window.ntTrace'), 'black box exposes ntTrace');
+assert(blackBox.includes('fail: 7 * 24 * HOUR'), 'black box keeps failures longer than noise');
+assert(readFileSync(new URL('../astro.config.mjs', import.meta.url), 'utf8').includes('drop_console: true'), 'production still drops bundled console calls');
 assert(logic.includes('try ${sourceKey}'), 'waterfall logs each source attempt');
 assert(logic.includes('fail ${sourceKey}'), 'waterfall logs each source failure');
 assert(logic.includes('success ${sourceKey}'), 'waterfall logs the winning source');

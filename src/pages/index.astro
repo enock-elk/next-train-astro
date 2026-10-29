@@ -176,7 +176,9 @@ const faqLd = {
           overlay.style.display = 'none';
           try { document.documentElement.classList.add('nt-shell-ready'); } catch (e) {}
           try { sessionStorage.setItem('nt_shell_warm', '1'); } catch (e) {}
-          console.warn('NT Waterfall: splash escape after 8000ms — modules had not revealed the shell');
+          var splashLine = 'NT Waterfall: splash escape after 8000ms, modules had not revealed the shell';
+          if (window.ntTrace) window.ntTrace('warn', splashLine);
+          else console.warn(splashLine);
         } catch (e) {}
       }, 8000);
     </script>

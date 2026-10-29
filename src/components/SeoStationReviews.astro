@@ -30,8 +30,7 @@ const amenityQuestions = [
   <div class="border-t border-slate-200 dark:border-slate-800 pt-10">
     <h2 class="text-lg font-bold text-slate-900 dark:text-white">Reviews</h2>
     <p class="mt-1 text-sm text-slate-600 dark:text-slate-300">
-      Commuter notes about {name}. We read every review and aim to approve or decline within 24 hours.
-      Contact details stay private so we can reply if we do not publish the note.
+      Commuter notes about {name}.
     </p>
 
     <div id="seo-reviews-list" class="mt-6 space-y-4" aria-live="polite">
@@ -86,10 +85,17 @@ const amenityQuestions = [
         </div>
         <div>
           <label class="block text-xs font-bold uppercase tracking-wide text-slate-500 mb-1" for="seo-review-contact">Email or WhatsApp (private)</label>
-          <input id="seo-review-contact" name="contact" maxlength="120" class="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none" autocomplete="email" placeholder="So we can reply if we do not publish" />
+          <input id="seo-review-contact" name="contact" maxlength="120" class="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none" autocomplete="email" placeholder="Optional, stays private" />
         </div>
       </div>
       <p id="seo-review-status" class="text-sm text-slate-500 dark:text-slate-400 hidden" role="status"></p>
+      <div id="seo-review-thanks" class="hidden fixed inset-0 z-[80] flex items-end sm:items-center justify-center bg-slate-900/40 p-4" role="dialog" aria-modal="true" aria-labelledby="seo-review-thanks-title">
+        <div class="w-full max-w-md rounded-2xl bg-white dark:bg-slate-900 p-5 shadow-xl border border-slate-200 dark:border-slate-800">
+          <h3 id="seo-review-thanks-title" class="text-base font-bold text-slate-900 dark:text-white">Review sent</h3>
+          <p class="mt-2 text-sm text-slate-600 dark:text-slate-300">Thanks. We read every review and aim to approve or decline within 24 hours. Approved notes show on this page. Your contact stays private.</p>
+          <button type="button" id="seo-review-thanks-ok" class="mt-4 w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded-xl text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">OK</button>
+        </div>
+      </div>
       <button
         type="submit"
         id="seo-review-submit"
@@ -115,6 +121,10 @@ const amenityQuestions = [
     const emptyEl = listEl?.querySelector('[data-seo-reviews-empty]');
     const form = document.getElementById('seo-review-form');
     const statusEl = document.getElementById('seo-review-status');
+    const thanksEl = document.getElementById('seo-review-thanks');
+    document.getElementById('seo-review-thanks-ok')?.addEventListener('click', () => {
+      thanksEl?.classList.add('hidden');
+    });
     const ratingInput = document.getElementById('seo-review-rating-value');
     const submitBtn = document.getElementById('seo-review-submit');
     let rating = 0;
@@ -199,7 +209,10 @@ const amenityQuestions = [
       try {
         // Public mirror only — pending reviews (and contact) stay under station_reviews/.
         const res = await fetch(`${base}station_reviews_public/${encodeURIComponent(slug)}.json`, { cache: 'no-store' });
-        if (!res.ok) return;
+        if (!res.ok) {
+          try { window.ntTrace?.('warn', `NT Waterfall: station reviews public HTTP ${res.status} slug=${slug}`); } catch { /* ignore */ }
+          return;
+        }
         const data = await res.json();
         if (!data || typeof data !== 'object') return;
         const rows = Object.values(data)
@@ -255,11 +268,11 @@ const amenityQuestions = [
         form.reset();
         rating = 0;
         paintStars();
-        if (statusEl) {
-          statusEl.textContent = 'Thanks. We will review this within about 24 hours. Approved notes appear here.';
-        }
-      } catch {
+        if (statusEl) statusEl.classList.add('hidden');
+        thanksEl?.classList.remove('hidden');
+      } catch (e) {
         if (statusEl) statusEl.textContent = 'Could not send right now. Check your connection and try again.';
+        try { window.ntTrace?.('warn', `NT Waterfall: station review send failed slug=${slug} ${e && e.message ? e.message : 'error'}`); } catch { /* ignore */ }
       } finally {
         if (submitBtn) submitBtn.disabled = false;
       }

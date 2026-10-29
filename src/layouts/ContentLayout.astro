@@ -9,6 +9,7 @@ import RecoveryLifeline from '../components/RecoveryLifeline.astro';
 import SeoAlerts from '../components/SeoAlerts.astro';
 import ShellFallbackStyles from '../components/ShellFallbackStyles.astro';
 import StuckUpdateGuard from '../components/StuckUpdateGuard.astro';
+import BlackBoxCapture from '../components/BlackBoxCapture.astro';
 import { MANIFEST_FILENAME, normalizeBase, withBase } from '../lib/config.js';
 
 interface Props {
@@ -136,6 +137,7 @@ const resolvedHtmlClass = [forceDark ? 'dark' : '', htmlClass].filter(Boolean).j
     <link rel="icon" href={withBase('favicon.ico')} sizes="16x16 32x32 48x48" />
     <link rel="apple-touch-icon" href={withBase('icons/icon-192.png')} />
     {import.meta.env.PROD && <link rel="manifest" href={withBase(MANIFEST_FILENAME)} />}
+    <BlackBoxCapture />
     <script is:inline>
       (function () {
         function atPolyfill(n) {

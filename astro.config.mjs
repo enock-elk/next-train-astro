@@ -353,6 +353,8 @@ export default defineConfig({
       minify: 'terser',
       terserOptions: {
         compress: {
+          // Strips console.* from bundled modules. About black box and the
+          // schedule waterfall must use window.ntTrace (BlackBoxCapture.astro).
           drop_console: true,
           drop_debugger: true,
         },

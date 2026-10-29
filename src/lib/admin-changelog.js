@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_10.29.3': [
+        'About black box missed the schedule waterfall because production terser drop_console removes console.* from bundled modules. admin.js is not bundled, so only those lines survived. Waterfall now uses window.ntTrace. Noise (tracker id, admin sign-in) expires in 6 hours. Failures stay 7 days. Station review form no longer says a note waits for approval until after it is sent, then a popup says so. Live RTDB allows anonymous pending writes, but station_reviews_public is not publicly readable, so the repo rules are not what is deployed. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_10.29.2': [
         'Deploy production was failing at Verify map gold before the build. public/js/map-app.js had the empty lat/lon centre fix (85a7058) and GOLD.json still hashed the older file. Tracks and ads were unchanged. GOLD.json now hashes that map-app.js and frozenAt is 1a909c8. map-gold fast-forwards to this lockfile commit. Agents must run verify:map-gold before every app update. No commuter What\'s New. forceShow stays false.',
     ],

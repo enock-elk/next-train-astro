@@ -41,6 +41,8 @@ This is a **commuter PWA**. Prefer small, reversible changes. Do not “clean up
 
 Work from **`main`**. The owner ships by pushing `main` and running the production deploy workflow. Do not leave them a pile of draft PRs they must merge unless they ask. Do not force-push. Do not amend published commits unless they ask.
 
+Production builds set terser `drop_console: true`. `console.log`, `console.warn`, and `console.error` inside bundled modules are removed, so they never reach DevTools or the About black box. `public/js/admin.js` is not bundled, which is why that box can fill with admin lines and still miss the schedule waterfall. Diagnostic lines go through `window.ntTrace` in `BlackBoxCapture.astro`. Do not point the waterfall back at `console.log`.
+
 Before any app update the owner will deploy, run `npm run verify:map-gold` even when the edit is not a map edit. Deploy production runs that check before the build and fails the job if a gold file hash does not match `GOLD.json`. On 29 Oct 2026 that was only `public/js/map-app.js` (empty `lat`/`lon` must stay null, not `Number(null) === 0`). Tracks and ads still matched. Diff `origin/map-gold`. If the diff is the intended improvement, follow **To update gold** and fast-forward `map-gold`. Do not edit hashes only to make the check pass. Also run `npm run verify:schedule`, `npm run verify:update-fouc`, and `npm run verify:safe-nuke` before that push.
 
 ## Do not break

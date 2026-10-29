@@ -5,6 +5,7 @@ import AppFonts from '../components/AppFonts.astro';
 import RecoveryLifeline from '../components/RecoveryLifeline.astro';
 import ShellFallbackStyles from '../components/ShellFallbackStyles.astro';
 import StuckUpdateGuard from '../components/StuckUpdateGuard.astro';
+import BlackBoxCapture from '../components/BlackBoxCapture.astro';
 import { APP_VERSION, MANIFEST_FILENAME, normalizeBase, withBase } from '../lib/config.js';
 
 const {
@@ -552,54 +553,7 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
         try { window.dispatchEvent(new Event('pwa-install-ready')); } catch (_) {}
       });
     </script>
-    <!-- Black Box: capture console into localStorage before app modules boot -->
-    <script is:inline>
-      (function () {
-        var MAX_LOGS = 500;
-        var MAX_LINE = 240;
-        var MAX_ERROR_LINE = 800;
-        var LOG_KEY = 'nt_blackbox_logs';
-        function skipLog(type, msg) {
-          if (type === 'ERROR') return false;
-          if (msg.indexOf('CLVR:') === 0) return true;
-          var low = msg.toLowerCase();
-          var optional = low.indexOf('telemetry fetch failed') !== -1
-            || low.indexOf('badge sync failed') !== -1
-            || low.indexOf('armscheduledalertpublisher') !== -1
-            || low.indexOf('publishduescheduledalerts') !== -1
-            || low.indexOf('failed to check system status') !== -1;
-          if (!optional) return false;
-          if (low.indexOf('failed to check system status') !== -1) return true;
-          return low.indexOf('abort') !== -1
-            || low.indexOf('offline') !== -1
-            || low.indexOf('failed to fetch') !== -1
-            || low.indexOf('authentication required') !== -1;
-        }
-        function saveLog(type, args) {
-          try {
-            var msg = Array.prototype.map.call(args, function (a) {
-              if (a instanceof Error) return a.message + ' ' + (a.stack || '');
-              return typeof a === 'object' ? JSON.stringify(a) : String(a);
-            }).join(' ');
-            var cap = type === 'ERROR' ? MAX_ERROR_LINE : MAX_LINE;
-            if (msg.indexOf('NT Waterfall:') !== -1 && cap < 480) cap = 480;
-            if (msg.length > cap) msg = msg.slice(0, cap);
-            if (skipLog(type, msg)) return;
-            var logs = [];
-            try { logs = JSON.parse(localStorage.getItem(LOG_KEY) || '[]'); } catch (e) {}
-            logs.push({ t: Date.now(), type: type, msg: msg });
-            var cutoff = Date.now() - (72 * 60 * 60 * 1000);
-            logs = logs.filter(function (l) { return l.t > cutoff; });
-            if (logs.length > MAX_LOGS) logs = logs.slice(logs.length - MAX_LOGS);
-            localStorage.setItem(LOG_KEY, JSON.stringify(logs));
-          } catch (e) { /* quota / recursion guard */ }
-        }
-        var origLog = console.log, origWarn = console.warn, origError = console.error;
-        console.log = function () { saveLog('LOG', arguments); return origLog.apply(console, arguments); };
-        console.warn = function () { saveLog('WARN', arguments); return origWarn.apply(console, arguments); };
-        console.error = function () { saveLog('ERROR', arguments); return origError.apply(console, arguments); };
-      })();
-    </script>
+    <BlackBoxCapture />
     <script is:inline define:vars={{ base, cartoKey }}>
       window.__NT_BASE__ = base;
       window.__NT_CARTO_KEY = cartoKey || '';

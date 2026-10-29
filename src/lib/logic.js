@@ -467,12 +467,25 @@ export function engageConnectionStruggleUi(reason = 'offline') {
  * @returns {Promise<'ok'|'offline'|'captive'|'timeout'>}
  */
 /** Stable blackbox prefix (ASCII, under the 240-char line cap). */
+function traceLine(level, line) {
+    try {
+        if (typeof window !== 'undefined' && typeof window.ntTrace === 'function') {
+            window.ntTrace(level, line);
+            return;
+        }
+        if (level === 'warn') console.warn(line);
+        else if (level === 'error') console.error(line);
+        else console.log(line);
+    } catch { /* ignore */ }
+}
+
+/** Survives production drop_console. The inline ntTrace writes DevTools and the black box. */
 function waterfallLog(msg) {
-    try { console.log(`NT Waterfall: ${msg}`); } catch { /* ignore */ }
+    traceLine('log', `NT Waterfall: ${msg}`);
 }
 
 function waterfallWarn(msg) {
-    try { console.warn(`NT Waterfall: ${msg}`); } catch { /* ignore */ }
+    traceLine('warn', `NT Waterfall: ${msg}`);
 }
 
 function shortHost(url) {
@@ -1484,7 +1497,11 @@ function markSchedulesCoreReady() {
 
 // --- GUARDIAN PHASE B: EAGER RENDERING PROTOCOL ---
 export async function loadAllSchedules(force = false) {
-    if (typeof window !== 'undefined' && window._suppressReloads && !force) return;
+    const scheduleStartedAt = Date.now();
+    if (typeof window !== 'undefined' && window._suppressReloads && !force) {
+        waterfallLog('schedule load skipped suppressReloads');
+        return;
+    }
 
     let usedCache = false;
     /** What painted the board first this session (cache / bundled / none). */
@@ -1502,9 +1519,15 @@ export async function loadAllSchedules(force = false) {
     const requestedRouteId = $currentRouteId.get();
     
     try {
-        if (!requestedRouteId) return; 
+        if (!requestedRouteId) {
+            waterfallLog('schedule load skipped no route');
+            return;
+        }
         const currentRoute = ROUTES[requestedRouteId];
-        if (!currentRoute) return;
+        if (!currentRoute) {
+            waterfallLog(`schedule load skipped unknown route=${requestedRouteId}`);
+            return;
+        }
         const rememberRouteRevision = (database, notify = false) => {
             if ($currentRouteId.get() !== requestedRouteId) return;
             const changed = recordRouteScheduleRevision({
@@ -1533,7 +1556,10 @@ export async function loadAllSchedules(force = false) {
             return flattenPublicHolidays(mergedDb);
         };
 
-        if (!currentRoute.isActive) return;
+        if (!currentRoute.isActive) {
+            waterfallLog(`schedule load skipped inactive route=${requestedRouteId}`);
+            return;
+        }
 
         // Last-good corridor bans before any board/grid paint (offline + slow overlay fetch).
         try {
@@ -1931,11 +1957,15 @@ export async function loadAllSchedules(force = false) {
             try { scheduleOfflineChrome(); } catch { /* ignore */ }
         }
     } finally {
+        const scheduleMs = Date.now() - scheduleStartedAt;
         waterfallLog(
             `session summary paintedFrom=${paintedFrom} tier=${cacheTier} networkWon=${networkWon || 'none'} `
             + `chain=${sourceChain} tried=CLOUDFLARE>FIREBASE>GITHUB region=${$userRegion.get()} route=${requestedRouteId} `
-            + `aborted=${fetchSignal && fetchSignal.aborted ? 'yes' : 'no'}`
+            + `aborted=${fetchSignal && fetchSignal.aborted ? 'yes' : 'no'} ms=${scheduleMs}`
         );
+        if (scheduleMs >= 8000) {
+            waterfallWarn(`slow schedule load ${scheduleMs}ms paintedFrom=${paintedFrom} chain=${sourceChain}`);
+        }
         if (fetchSignal && fetchSignal.aborted) return;
 
         const forceReloadBtn = typeof document !== 'undefined' ? document.getElementById('force-reload-btn') : null;

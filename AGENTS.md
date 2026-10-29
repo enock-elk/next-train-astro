@@ -41,6 +41,8 @@ This is a **commuter PWA**. Prefer small, reversible changes. Do not “clean up
 
 Work from **`main`**. The owner ships by pushing `main` and running the production deploy workflow. Do not leave them a pile of draft PRs they must merge unless they ask. Do not force-push. Do not amend published commits unless they ask.
 
+Before any app update the owner will deploy, run `npm run verify:map-gold` even when the edit is not a map edit. Deploy production runs that check before the build and fails the job if a gold file hash does not match `GOLD.json`. On 29 Oct 2026 that was only `public/js/map-app.js` (empty `lat`/`lon` must stay null, not `Number(null) === 0`). Tracks and ads still matched. Diff `origin/map-gold`. If the diff is the intended improvement, follow **To update gold** and fast-forward `map-gold`. Do not edit hashes only to make the check pass. Also run `npm run verify:schedule`, `npm run verify:update-fouc`, and `npm run verify:safe-nuke` before that push.
+
 ## Do not break
 
 - **No sixth bottom-nav tab.** Tabs are Home, Trip Planner, Community, More. Alerts is the **bell overlay** (`#alerts-channel`, z-115), not a tab.
@@ -93,6 +95,7 @@ The baked GeoJSON in `public/tracks/` plus map runtime (`public/js/map-app.js`, 
 
 ### Must
 
+- Run `npm run verify:map-gold` before every app update, not only when you touched a map. A gold file that landed on main without a new `GOLD.json` fails Deploy production
 - Diff listed gold files against `origin/map-gold` before touching bake or paint
 - Keep KZN exactly as it ships (the Duff’s Road fork is the reference shape)
 - If you change GP, WC, or EC tracks, prove **all four** regions: `npm run verify:map-lines`, `npm run verify:map-hops`, then `npm run verify:map-gold` after updating hashes

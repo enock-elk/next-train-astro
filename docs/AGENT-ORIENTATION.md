@@ -191,6 +191,7 @@ Pick verifiers that match your change (`package.json` `verify:*` scripts). Examp
 | Alerts channel / reactions | `verify:alerts` |
 | Schedule dump / pipeline URLs | `verify:schedule`, `verify:urls` |
 | Image catalogue | `verify:schedule-images` |
+| Any app update the owner will deploy | `verify:map-gold` first (Deploy production fails the job before the build), then `verify:schedule`, `verify:update-fouc`, `verify:safe-nuke` |
 | Map tracks / paint | `verify:map-lines`, `verify:map-hops`, `verify:map-gold` |
 | Ads | `verify:clever-ads` |
 | FOUC / SW / retention | `verify:update-fouc` |
@@ -227,6 +228,7 @@ Details and absolute bans live in `AGENTS.md`. Skim these before large edits:
 - **FOUC / serif shell** → asset retention, not “fix the CSS”. Read FOUC section + `ShellFallbackStyles` / `StuckUpdateGuard` / `RecoveryLifeline` headers.
 - **Map opens over the ocean** → missing lat/lon must stay `null`, not `Number(null) === 0`.
 - **Map geometry** → never whole-region Overpass refresh; never smooth KZN; never silence `verify:map-gold` by editing hashes only.
+- **Deploy production fails at Verify map gold** → a listed file differs from `GOLD.json`. Diff `origin/map-gold`. Freeze a proven improvement (update hashes and `frozenAt`, fast-forward `map-gold`). Do not hash-bump an unproved edit. Run `verify:map-gold` before every app push, even when the edit is not a map.
 - **Ads** → overlay from bottom; no reserved blank gap; advert gold.
 - **Exclusions** → `DEFAULT_EXCLUSIONS` stays `{}`; bans in RTDB.
 - **Saturday empty routes** → `herc-koed`, `ec-berlin` are expected empty.

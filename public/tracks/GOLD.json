@@ -1,8 +1,8 @@
 {
   "branch": "map-gold",
-  "frozenAt": "ca2658d97192d9edf25a9ae61362139e65ac7d23",
+  "frozenAt": "1a909c81b8987a2a07031707f5e19ed664137def",
   "version": "V9_09.20.11",
-  "note": "Gold snapshot of station SEO map isolate (?station= focus + quiet loader) and routeLineColor at ca2658d97192d9edf25a9ae61362139e65ac7d23. Baked tracks and advert handling unchanged. Fast-forward map-gold to this main. Never force-push map-gold.",
+  "note": "Gold snapshot at main 1a909c81b8987a2a07031707f5e19ed664137def. map-app.js keeps empty lat/lon as null so a map opened without coordinates starts on the commuter region (85a7058), not 0,0. Baked tracks and advert handling unchanged from ca2658d. Fast-forward map-gold to the commit that records this lockfile. Never force-push map-gold.",
   "files": {
     "public/tracks/rail-tracks-EC.geojson": {
       "md5": "43409bfd05405205e596f0d03345ab18",
@@ -21,8 +21,8 @@
       "sha256": "090a5d7fc45cafb8c7b81dc583ae24978540f38278cab447953bc90c8821f01f"
     },
     "public/js/map-app.js": {
-      "md5": "ac2e191509c73c136ef8b690dbaa7304",
-      "sha256": "325d4cedb1ca4b928ef1bda57db9419c65439a26e80bc5feb5fa23e1b2258a26"
+      "md5": "590f84a4b8d15ba41e9d98fa0a4e49d4",
+      "sha256": "2036b35e382b3cb4c64f151dd2f69e5ab2e0867210b5320e7bc4779d96c0f6e5"
     },
     "src/pages/map.astro": {
       "md5": "d82ebf12bce75b821f22635a0d1d6feb",

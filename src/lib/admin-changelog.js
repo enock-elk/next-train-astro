@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_10.29.2': [
+        'Deploy production was failing at Verify map gold before the build. public/js/map-app.js had the empty lat/lon centre fix (85a7058) and GOLD.json still hashed the older file. Tracks and ads were unchanged. GOLD.json now hashes that map-app.js and frozenAt is 1a909c8. map-gold fast-forwards to this lockfile commit. Agents must run verify:map-gold before every app update. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_10.29.1': [
         'Boot no longer waits forever on a stuck IndexedDB open: 1.2s timeout, then localStorage, then the same-origin full-database.json (SW CacheFirst cache schedule-dump, not shared with other JSON). An inline 8s splash escape reveals the shell if hashed modules never run. SEO Open in Next Train does not rewrite a saved userRegion or wipe other regions\' memory timetable entries; region swap keeps those entries too. NT Waterfall logs cache tier, each guardianFetch, and the CLOUDFLARE>FIREBASE>GITHUB chain into the console and the About black box. Schedule dump updated (Gauteng 26 Oct 2026, KZN 6 Oct 2026). Commuter What\'s New: opens from the saved timetable. forceShow stays false.',
     ],

@@ -1,5 +1,7 @@
 # Changelog
 
+## V10_10.29.2 — no release notes
+
 ## V10_10.29.1
 
 - The board opens from the timetable saved on this phone when the connection is slow.

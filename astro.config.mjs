@@ -153,14 +153,35 @@ export default defineConfig({
             handler: 'NetworkOnly',
           },
           {
-            // Host dump for cache-miss boots. Not precached (too large for the
-            // atomic install). Stale-while-revalidate so IndexedDB can fill later.
+            // The timetable dump must answer from Cache Storage even when the
+            // radio hangs. Its own cache so other JSON cannot LRU-evict it.
+            // Not precached (too large for the atomic install).
+            urlPattern: ({ url }) => /\/data\/full-database\.json$/i.test(url.pathname)
+              || /\/full-database\.json$/i.test(url.pathname),
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'schedule-dump',
+              expiration: { maxEntries: 2, maxAgeSeconds: 60 * 60 * 24 * 30 },
+              cacheableResponse: { statuses: [0, 200] },
+              plugins: [{
+                cacheWillUpdate: async ({ response }) => {
+                  if (!response || response.status !== 200) return null;
+                  const ct = response.headers.get('content-type') || '';
+                  if (ct.includes('text/html')) return null;
+                  return response;
+                },
+              }],
+            },
+          },
+          {
+            // Other same-origin JSON (not the timetable dump). Separate bucket
+            // so a handful of small files cannot evict full-database.json.
             urlPattern: ({ url }) =>
               url.pathname.includes('/data/') && url.pathname.endsWith('.json'),
             handler: 'StaleWhileRevalidate',
             options: {
-              cacheName: 'schedule-dump',
-              expiration: { maxEntries: 4, maxAgeSeconds: 60 * 60 * 24 * 30 },
+              cacheName: 'data-json',
+              expiration: { maxEntries: 12, maxAgeSeconds: 60 * 60 * 24 * 7 },
               cacheableResponse: { statuses: [0, 200] },
               plugins: [{
                 cacheWillUpdate: async ({ response }) => {

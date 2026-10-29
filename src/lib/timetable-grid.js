@@ -433,7 +433,9 @@ export async function applyRouteDeepLink() {
     // (or any other default) before schedules load.
     const region = ['GP', 'WC', 'KZN', 'EC'].includes(link.region) ? link.region : route.region;
     $currentRouteId.set(link.routeId);
-    ensureRoutePinnedForRegion(region);
+    // A returning commuter opening an SEO page must not overwrite their saved
+    // region. The linked route still paints; their home timetable cache stays.
+    ensureRoutePinnedForRegion(region, { persistRegion: !(seoHandoff && savedRegionBefore) });
     $currentRouteId.set(link.routeId);
     // Cross-region SEO open may rewrite userRegion in storage; restore a returning pin.
     if (seoHandoff && savedRegionBefore) {

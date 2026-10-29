@@ -582,6 +582,7 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
               return typeof a === 'object' ? JSON.stringify(a) : String(a);
             }).join(' ');
             var cap = type === 'ERROR' ? MAX_ERROR_LINE : MAX_LINE;
+            if (msg.indexOf('NT Waterfall:') !== -1 && cap < 480) cap = 480;
             if (msg.length > cap) msg = msg.slice(0, cap);
             if (skipLog(type, msg)) return;
             var logs = [];

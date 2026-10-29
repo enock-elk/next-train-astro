@@ -479,6 +479,16 @@ function shortHost(url) {
     try { return new URL(url).hostname; } catch { return String(url || '').slice(0, 40); }
 }
 
+/** Host + path for blackbox lines. Query strings stay off the log. */
+function netLabel(url) {
+    try {
+        const u = new URL(url, 'https://nexttrain.local');
+        return `${u.hostname}${u.pathname}`.replace(/\.json$/i, '').slice(0, 96);
+    } catch {
+        return String(url || '').split('?')[0].slice(0, 96);
+    }
+}
+
 /** Public hosts used when navigator.onLine lies (campus Wi‑Fi / captive radios). */
 function reachabilityFallbackUrls(stamp = Date.now()) {
     return [
@@ -709,8 +719,12 @@ export async function guardianFetch(url, options = {}, timeoutMs = 8000) {
     // while GitHub / Firebase still answer; let the request fail on its own.
     const softNetwork = !!options.ntSoftNetwork;
     const { ntSoftNetwork: _softFlag, ...fetchOptions } = options;
+    const startedAt = Date.now();
+    const label = netLabel(url);
+    const onLine = typeof navigator !== 'undefined' ? navigator.onLine : '?';
+    waterfallLog(`net start ${label} timeoutMs=${timeoutMs} onLine=${onLine}`);
     if (typeof window !== 'undefined' && typeof navigator !== 'undefined' && !navigator.onLine) {
-        waterfallLog(`guardianFetch while OS offline → ${shortHost(url)} (still attempting)`);
+        waterfallLog(`net OS offline ${label} (still attempting)`);
         engageConnectionStruggleUi('offline');
     }
     
@@ -733,6 +747,7 @@ export async function guardianFetch(url, options = {}, timeoutMs = 8000) {
         // Captive portals often return HTTP 200 with HTML login pages
         const contentType = response.headers.get('content-type') || '';
         if (contentType.includes('text/html')) {
+            waterfallWarn(`net fail ${label} captive HTML HTTP ${response.status} in ${Date.now() - startedAt}ms`);
             _networkStruggleCount = 0;
             isLieFi = true;
             engageConnectionStruggleUi('liefi');
@@ -743,6 +758,7 @@ export async function guardianFetch(url, options = {}, timeoutMs = 8000) {
         isLieFi = false;
         _networkStruggleCount = 0;
         clearStruggleClock();
+        waterfallLog(`net ok ${label} HTTP ${response.status} in ${Date.now() - startedAt}ms`);
         
         if (typeof document !== 'undefined') {
             try { hideOfflineChrome(); } catch { /* ignore */ }
@@ -756,11 +772,16 @@ export async function guardianFetch(url, options = {}, timeoutMs = 8000) {
     } catch (error) {
         clearTimeout(id);
         if (fetchOptions.signal && fetchOptions.signal.aborted) {
-            isLieFi = false; 
+            isLieFi = false;
+            waterfallWarn(`net abort ${label} in ${Date.now() - startedAt}ms`);
             throw error;
         }
 
         if (error.message === 'Captive Portal Detected') throw error;
+
+        waterfallWarn(
+            `net fail ${label} ${timedOut ? `timeout ${timeoutMs}ms` : (error?.message || error?.name || 'error')} in ${Date.now() - startedAt}ms`
+        );
 
         // Per-attempt timeout must NOT surface as AbortError — callers that
         // treat AbortError as "cancel the whole waterfall" would skip GitHub.
@@ -969,7 +990,7 @@ const DB_NAME = 'NextTrainDB';
 const STORE_NAME = 'SchedulesStore';
 const DB_VERSION = 1;
 
-export function initDB(retryCount = 0) {
+export function initDB() {
     return new Promise((resolve, reject) => {
         if (typeof window === 'undefined' || !window.indexedDB) {
             reject(new Error("IndexedDB not supported"));
@@ -977,13 +998,10 @@ export function initDB(retryCount = 0) {
         }
         try {
             const request = indexedDB.open(DB_NAME, DB_VERSION);
-            request.onerror = (e) => {
-                if (retryCount === 0) {
-                    const deleteReq = indexedDB.deleteDatabase(DB_NAME);
-                    deleteReq.onsuccess = () => initDB(1).then(resolve).catch(reject);
-                    deleteReq.onerror = () => reject(new Error("Fatal IDB Deletion Failure"));
-                } else reject(e.target.error || new Error("IDB Open Error"));
-            };
+            // Never deleteDatabase here. A blocked or one-off open error used to
+            // wipe the only offline timetable, then hang the splash on the delete.
+            request.onerror = (e) => reject(e.target.error || new Error("IDB Open Error"));
+            request.onblocked = () => reject(new Error("IDB open blocked"));
             request.onsuccess = (e) => resolve(e.target.result);
             request.onupgradeneeded = (e) => {
                 const db = e.target.result;
@@ -993,22 +1011,49 @@ export function initDB(retryCount = 0) {
     });
 }
 
+/** Low-end Android can leave indexedDB.open pending forever. */
+const IDB_CACHE_TIMEOUT_MS = 1200;
+/** Which store satisfied the latest loadFromLocalCache call. */
+let lastLocalCacheTier = 'none';
+
+function withTimeout(promise, ms, label) {
+    return new Promise((resolve, reject) => {
+        const timer = setTimeout(() => {
+            const err = new Error(`${label} timed out after ${ms}ms`);
+            err.name = 'TimeoutError';
+            reject(err);
+        }, ms);
+        Promise.resolve(promise).then(
+            (value) => { clearTimeout(timer); resolve(value); },
+            (err) => { clearTimeout(timer); reject(err); },
+        );
+    });
+}
+
 export async function saveToLocalCache(key, data, signal = null) {
     if (signal && signal.aborted) return false;
     const cacheEntry = { timestamp: Date.now(), data: data };
     memoryFallbackCache[key] = cacheEntry;
 
     try {
-        const db = await initDB();
+        const db = await withTimeout(initDB(), IDB_CACHE_TIMEOUT_MS, 'idb-open');
         if (signal && signal.aborted) return false;
         return new Promise((resolve, reject) => {
             const tx = db.transaction(STORE_NAME, 'readwrite');
             tx.objectStore(STORE_NAME).put(cacheEntry, key);
-            tx.oncomplete = () => resolve(true);
+            tx.oncomplete = () => {
+                waterfallLog(`cache write idb key=${key}`);
+                resolve(true);
+            };
             tx.onerror = () => reject(tx.error);
         });
     } catch (e) {
-        try { safeStorage.setItem(key, JSON.stringify(cacheEntry)); } catch(ex) {}
+        try {
+            safeStorage.setItem(key, JSON.stringify(cacheEntry));
+            waterfallWarn(`cache write localStorage key=${key} (idb unavailable)`);
+        } catch (ex) {
+            waterfallWarn(`cache write failed key=${key}`);
+        }
         return false;
     }
 }
@@ -1026,32 +1071,56 @@ function readLocalStorageCache(key) {
 }
 
 export async function loadFromLocalCache(key, signal = null) {
-    if (signal && signal.aborted) return null;
-    if (memoryFallbackCache[key]) return memoryFallbackCache[key];
+    if (signal && signal.aborted) {
+        lastLocalCacheTier = 'aborted';
+        return null;
+    }
+    if (memoryFallbackCache[key]) {
+        lastLocalCacheTier = 'memory';
+        waterfallLog(`cache hit memory key=${key}`);
+        return memoryFallbackCache[key];
+    }
 
+    waterfallLog(`cache lookup key=${key} memory=miss`);
     try {
-        const db = await initDB();
-        if (signal && signal.aborted) return null;
-        
-        const fromIdb = await new Promise((resolve, reject) => {
+        const db = await withTimeout(initDB(), IDB_CACHE_TIMEOUT_MS, 'idb-open');
+        if (signal && signal.aborted) {
+            lastLocalCacheTier = 'aborted';
+            return null;
+        }
+
+        const fromIdb = await withTimeout(new Promise((resolve, reject) => {
             const tx = db.transaction(STORE_NAME, 'readonly');
             const request = tx.objectStore(STORE_NAME).get(key);
             request.onsuccess = () => {
                 if (signal && signal.aborted) return resolve(null);
                 if (request.result) {
-                    memoryFallbackCache[key] = request.result; 
+                    memoryFallbackCache[key] = request.result;
                     resolve(request.result);
                 } else resolve(null);
-            }
+            };
             request.onerror = () => reject(request.error);
-        });
-        // IDB open success with a missing key used to skip localStorage entirely —
-        // that broke offline relaunch when only the localStorage fallback was written.
-        if (fromIdb) return fromIdb;
-        return readLocalStorageCache(key);
+        }), IDB_CACHE_TIMEOUT_MS, 'idb-read');
+        if (fromIdb) {
+            lastLocalCacheTier = 'idb';
+            waterfallLog(`cache hit idb key=${key}`);
+            return fromIdb;
+        }
+        waterfallLog(`cache miss idb key=${key}`);
     } catch (e) {
-        return readLocalStorageCache(key);
+        waterfallWarn(`cache idb unavailable key=${key} reason=${e?.message || e?.name || 'error'}`);
     }
+    // IDB open success with a missing key used to skip localStorage entirely —
+    // that broke offline relaunch when only the localStorage fallback was written.
+    const fromLs = readLocalStorageCache(key);
+    if (fromLs) {
+        lastLocalCacheTier = 'localStorage';
+        waterfallLog(`cache hit localStorage key=${key}`);
+        return fromLs;
+    }
+    lastLocalCacheTier = 'miss';
+    waterfallLog(`cache miss key=${key} (memory, idb, localStorage)`);
+    return null;
 }
 
 // --- PARSERS & HELPERS ---
@@ -1357,17 +1426,38 @@ async function loadBundledScheduleDump(signal = null) {
         try { signal.addEventListener('abort', onAbort, { once: true }); } catch { /* ignore */ }
     }
     const timer = setTimeout(onAbort, 4000);
+    const startedAt = Date.now();
+    waterfallLog('bundled dump try data/full-database.json cache=force-cache timeoutMs=4000');
     try {
         const res = await fetch(url, {
             signal: ctrl?.signal,
             cache: 'force-cache',
             headers: { Accept: 'application/json' },
         });
-        if (!res || !res.ok) return null;
+        if (!res || !res.ok) {
+            waterfallWarn(`bundled dump miss HTTP ${res ? res.status : 'none'} in ${Date.now() - startedAt}ms`);
+            return null;
+        }
         const ct = res.headers.get('content-type') || '';
-        if (ct.includes('text/html')) return null;
-        return await res.json();
-    } catch {
+        if (ct.includes('text/html')) {
+            waterfallWarn('bundled dump miss HTML (captive or missing file)');
+            return null;
+        }
+        let via = 'unknown';
+        try {
+            const name = res.url || url;
+            const entries = typeof performance !== 'undefined' && performance.getEntriesByName
+                ? performance.getEntriesByName(name)
+                : [];
+            const timing = entries && entries.length ? entries[entries.length - 1] : null;
+            if (timing && timing.transferSize === 0 && timing.decodedBodySize > 0) via = 'cache';
+            else if (timing && timing.transferSize > 0) via = 'network';
+        } catch { /* ignore */ }
+        const body = await res.json();
+        waterfallLog(`bundled dump hit HTTP ${res.status} via=${via} in ${Date.now() - startedAt}ms`);
+        return body;
+    } catch (err) {
+        waterfallWarn(`bundled dump fail ${err?.name === 'AbortError' ? 'timeout 4000ms' : (err?.message || err?.name || 'error')} in ${Date.now() - startedAt}ms`);
         return null;
     } finally {
         clearTimeout(timer);
@@ -1401,6 +1491,9 @@ export async function loadAllSchedules(force = false) {
     let paintedFrom = 'none';
     /** Which network host won the background waterfall (or none / skipped). */
     let networkWon = '';
+    /** Per-host outcome so the black box shows the chain, not only the winner. */
+    let sourceChain = 'not-started';
+    let cacheTier = 'none';
     const currentGen = regionSwapGeneration; 
     
     if (scheduleAbortController) scheduleAbortController.abort();
@@ -1455,6 +1548,7 @@ export async function loadAllSchedules(force = false) {
         // reached IndexedDB, so the board stayed on "Loading stations…".
         const cacheKey = `full_db_${$userRegion.get()}`;
         const cachedDB = await loadFromLocalCache(cacheKey, fetchSignal);
+        cacheTier = lastLocalCacheTier;
 
         if (fetchSignal.aborted || $currentRouteId.get() !== requestedRouteId) return;
 
@@ -1477,7 +1571,7 @@ export async function loadAllSchedules(force = false) {
                 
                 usedCache = true;
                 paintedFrom = 'cache';
-                waterfallLog(`painted from local cache key=${cacheKey}`);
+                waterfallLog(`painted from local cache key=${cacheKey} tier=${cacheTier}`);
                 // Boot UX: drop "Loading schedules…" as soon as IndexedDB paints —
                 // do not hold the shell for the background network waterfall.
                 markSchedulesCoreReady();
@@ -1517,6 +1611,8 @@ export async function loadAllSchedules(force = false) {
         // skip the waterfall — probeReachability + guardianFetch decide that.
         waterfallLog(`sync start region=${$userRegion.get()} route=${requestedRouteId} force=${!!force} paintedFrom=${paintedFrom} onLine=${typeof navigator !== 'undefined' ? navigator.onLine : '?'} isLieFi=${!!isLieFi}`);
         if (typeof window !== 'undefined' && isLieFi && !force) {
+            networkWon = 'halt-lie-fi';
+            sourceChain = 'halt-lie-fi';
             waterfallWarn('halt: Lie-Fi hard-stop (background sync skipped)');
             console.log("🛡️ Guardian: Lie-Fi detected. Halting background network sync.");
             // Ensure shell is visible even when cache miss — never leave browser-looking spinner up
@@ -1550,6 +1646,8 @@ export async function loadAllSchedules(force = false) {
         const reach = await ensureReachabilityProbed();
         waterfallLog(`preflight reach=${reach}`);
         if (reach === 'offline' || reach === 'captive') {
+            networkWon = `halt-${reach}`;
+            sourceChain = `halt-${reach}`;
             waterfallWarn(`halt: skipping schedule waterfall (reach=${reach})`);
             console.warn("🛡️ Guardian: No usable internet (offline / captive). Skipping network waterfall.");
             try { $opsOverlaysReady.set(true); } catch { /* ignore */ }
@@ -1682,12 +1780,15 @@ export async function loadAllSchedules(force = false) {
             /** Hard ceiling so a blackhole radio cannot sit on Loading stations for minutes. */
             const WATERFALL_BUDGET_MS = 18_000;
             let wonSource = '';
+            const sourceOutcomes = [];
             const downloadStartedAt = Date.now();
 
             waterfallLog(`schedule download start sources=${sourcesToTry.join('→')} region=${$userRegion.get()} budgetMs=${WATERFALL_BUDGET_MS}`);
 
             for (const sourceKey of sourcesToTry) {
                 if (fetchSignal.aborted || $currentRouteId.get() !== requestedRouteId) {
+                    sourceOutcomes.push(`${sourceKey}:aborted`);
+                    sourceChain = sourceOutcomes.join('>');
                     waterfallWarn(`schedule download aborted before ${sourceKey}`);
                     return;
                 }
@@ -1695,6 +1796,7 @@ export async function loadAllSchedules(force = false) {
                 const elapsed = Date.now() - downloadStartedAt;
                 const budgetLeft = WATERFALL_BUDGET_MS - elapsed;
                 if (budgetLeft < 1200) {
+                    sourceOutcomes.push(`${sourceKey}:skipped-budget`);
                     waterfallWarn(`budget exhausted (${elapsed}ms) — skipping ${sourceKey} and later sources`);
                     break;
                 }
@@ -1718,6 +1820,8 @@ export async function loadAllSchedules(force = false) {
                         timeoutMs,
                     );
                     if (fetchSignal.aborted || $currentRouteId.get() !== requestedRouteId) {
+                        sourceOutcomes.push(`${sourceKey}:aborted`);
+                        sourceChain = sourceOutcomes.join('>');
                         waterfallWarn(`aborted after ${sourceKey} response`);
                         return;
                     }
@@ -1726,15 +1830,22 @@ export async function loadAllSchedules(force = false) {
                     if (!newDatabase) throw new Error("Empty database payload");
                     fetchSuccess = true;
                     wonSource = sourceKey;
+                    sourceOutcomes.push(`${sourceKey}:ok`);
                     waterfallLog(`success ${sourceKey} HTTP ${response.status} in ${Date.now() - downloadStartedAt}ms`);
                     break; 
                 } catch (e) {
                     // Only cancel the whole waterfall on route/user abort — never on
                     // per-host timeout (old bug: AbortError skipped GitHub entirely).
-                    if (e.name === 'AbortError' && fetchSignal.aborted) throw e;
+                    if (e.name === 'AbortError' && fetchSignal.aborted) {
+                        sourceOutcomes.push(`${sourceKey}:aborted`);
+                        sourceChain = sourceOutcomes.join('>');
+                        throw e;
+                    }
+                    sourceOutcomes.push(`${sourceKey}:fail`);
                     waterfallWarn(`fail ${sourceKey}: ${e?.message || e?.name || 'error'} — trying next`);
                 }
             }
+            sourceChain = sourceOutcomes.join('>') || 'none';
 
             if (!fetchSuccess || !newDatabase) {
                 // Last resort: same-origin dump already tried at boot, but retry if
@@ -1747,6 +1858,7 @@ export async function loadAllSchedules(force = false) {
                             newDatabase = bundledDump;
                             fetchSuccess = true;
                             wonSource = 'BUNDLED';
+                            sourceChain = `${sourceChain}>BUNDLED:ok`;
                             waterfallLog('success BUNDLED same-origin dump');
                         }
                     } catch (bundleErr) {
@@ -1756,10 +1868,18 @@ export async function loadAllSchedules(force = false) {
             }
 
             if (!fetchSuccess || !newDatabase) {
-                waterfallWarn('all sources failed (CLOUDFLARE→FIREBASE→GITHUB→BUNDLED)');
-                throw new Error("All data pipeline endpoints failed");
+                if ($fullDatabase.get()) {
+                    networkWon = 'kept-painted';
+                    sourceChain = `${sourceChain}>kept-painted`;
+                    waterfallWarn('all remotes failed — keeping the timetable already painted');
+                } else {
+                    sourceChain = `${sourceChain}>BUNDLED:fail`;
+                    waterfallWarn('all sources failed (CLOUDFLARE→FIREBASE→GITHUB→BUNDLED)');
+                    throw new Error("All data pipeline endpoints failed");
+                }
             }
 
+            if (fetchSuccess && newDatabase) {
             const newStr = JSON.stringify(newDatabase);
             const oldStr = cachedDB ? JSON.stringify(cachedDB.data) : "";
             const downloadedDB = unwrapDatabase(newDatabase, $userRegion.get());
@@ -1794,8 +1914,10 @@ export async function loadAllSchedules(force = false) {
                 waterfallLog(`applied ${wonSource} but payload unchanged vs cache`);
             }
             rememberRouteRevision(downloadedDB, true);
+            }
         } else {
             networkWon = 'skipped-cache-current';
+            sourceChain = 'skipped-cache-current';
             waterfallLog('schedule download skipped (smart sync: cache already current)');
         }
     } catch (error) {
@@ -1809,11 +1931,12 @@ export async function loadAllSchedules(force = false) {
             try { scheduleOfflineChrome(); } catch { /* ignore */ }
         }
     } finally {
-        if (fetchSignal && fetchSignal.aborted) return;
         waterfallLog(
-            `session summary paintedFrom=${paintedFrom} networkWon=${networkWon || 'none'} `
-            + `tried=CLOUDFLARE→FIREBASE→GITHUB region=${$userRegion.get()} route=${requestedRouteId}`
+            `session summary paintedFrom=${paintedFrom} tier=${cacheTier} networkWon=${networkWon || 'none'} `
+            + `chain=${sourceChain} tried=CLOUDFLARE>FIREBASE>GITHUB region=${$userRegion.get()} route=${requestedRouteId} `
+            + `aborted=${fetchSignal && fetchSignal.aborted ? 'yes' : 'no'}`
         );
+        if (fetchSignal && fetchSignal.aborted) return;
 
         const forceReloadBtn = typeof document !== 'undefined' ? document.getElementById('force-reload-btn') : null;
         if (forceReloadBtn) {
@@ -1853,18 +1976,25 @@ export async function loadAllSchedules(force = false) {
  * Prefer the user-pinned default; otherwise browse the first active route
  * without writing it as a pin.
  */
-export function ensureRoutePinnedForRegion(region) {
+export function ensureRoutePinnedForRegion(region, options = {}) {
     const target = ['GP', 'WC', 'KZN', 'EC'].includes(region) ? region : ($userRegion.get() || 'GP');
     const current = $userRegion.get() || 'GP';
+    const persistRegion = options.persistRegion !== false;
 
     if (current !== target) {
         console.log(`🛡️ Guardian: Deeplink soft region pin ${current} → ${target}`);
         regionSwapGeneration++;
         $userRegion.set(target);
         syncRegionDisplayDom(target);
-        try { safeStorage.setItem('userRegion', target); } catch { /* ignore */ }
+        if (persistRegion) {
+            try { safeStorage.setItem('userRegion', target); } catch { /* ignore */ }
+        } else {
+            waterfallLog(`seo handoff browses ${target} and keeps saved userRegion`);
+        }
         try { window.syncCrmRegionAnalytics?.(target); } catch { /* ignore */ }
-        memoryFallbackCache = {};
+        // Drop the active sheet only. Other regions' memory timetable entries stay
+        // so a wedged IndexedDB can still paint the commuter's home region.
+        waterfallLog(`region view ${current} → ${target} kept memory keys=${Object.keys(memoryFallbackCache).join(',') || 'none'}`);
         $fullDatabase.set(null);
         $schedules.set({});
         $globalStationIndex.set({});
@@ -1910,7 +2040,7 @@ export function executeRegionSwap(newRegion, isFromWelcomeScreen = false) {
     syncRegionDisplayDom(newRegion);
     try { window.syncCrmRegionAnalytics?.(newRegion); } catch { /* ignore */ }
 
-    memoryFallbackCache = {}; 
+    waterfallLog(`region swap to ${newRegion} kept memory keys=${Object.keys(memoryFallbackCache).join(',') || 'none'}`);
     $fullDatabase.set(null); 
     $schedules.set({});
     $globalStationIndex.set({}); 

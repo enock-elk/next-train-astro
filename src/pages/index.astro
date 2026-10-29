@@ -159,6 +159,27 @@ const faqLd = {
             data-nt-help-escape="1"
         >App stuck? Get help</a>
     </div>
+    <script is:inline>
+      /* Module boot hides this at ~700ms. If those modules never run (hung
+         download on a low-end Android PWA), the OS splash stays up because
+         window.load never fires. This timer does not wait on /_astro/. */
+      setTimeout(function () {
+        try {
+          if (window.__ntHoldBootCover) return;
+          var overlay = document.getElementById('loading-overlay');
+          if (!overlay) return;
+          var shown = overlay.style.display !== 'none';
+          try { shown = shown && window.getComputedStyle(overlay).display !== 'none'; } catch (e) {}
+          if (!shown) return;
+          var main = document.getElementById('main-content');
+          if (main) main.style.visibility = '';
+          overlay.style.display = 'none';
+          try { document.documentElement.classList.add('nt-shell-ready'); } catch (e) {}
+          try { sessionStorage.setItem('nt_shell_warm', '1'); } catch (e) {}
+          console.warn('NT Waterfall: splash escape after 8000ms — modules had not revealed the shell');
+        } catch (e) {}
+      }, 8000);
+    </script>
 
     <!-- MAIN APP — viewport frame; header + views scroll; bottom nav stays put -->
     <main id="main-content" class="app-shell w-full max-w-md mx-auto bg-white dark:bg-gray-800 rounded-lg shadow-2xl overflow-hidden relative flex flex-col border border-gray-200 dark:border-gray-700" style="visibility: hidden;">

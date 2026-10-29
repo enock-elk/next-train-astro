@@ -1,5 +1,9 @@
 # Changelog
 
+## V10_10.29.1
+
+- The board opens from the timetable saved on this phone when the connection is slow.
+
 ## V10_10.28.1
 
 - A full train sheet names Rhodesfield and Elandsfontein, instead of listing them as Kempton Park.

@@ -166,14 +166,14 @@ Recent keeps that look like “dupes” but are intentional: Central weekday **0
 
 ## Regional contacts (guide + Co-Pilot)
 
-Commuter-facing numbers live in `src/pages/guide.astro` (How do I contact Metrorail…). Co-Pilot / suggest-a-reply uses the same facts from `src/lib/reply-suggest.js` (`GAUTENG_OFFICES`, `KZN_OFFICES`, `EC_OFFICES`, plus `EC_EMAIL` / `EC_FACEBOOK`). Soft knowledge prose is in `src/lib/reply-knowledge.js`. `guardDraft` must not let a Gauteng / KZN / EC phone appear on the wrong region thread. `npm run verify:reply-suggest` asserts guide + contact blocks stay aligned.
+Commuter-facing numbers live in `src/pages/guide.astro` (How do I contact Metrorail…). Co-Pilot / suggest-a-reply uses the same facts from `src/lib/reply-suggest.js` (`GAUTENG_OFFICES`, `KZN_OFFICES`, `EC_OFFICES`, `WC_OFFICES`, plus `EC_EMAIL` / `EC_FACEBOOK` and `WC_EXTRA_CONTACTS` for emergency / ops when needed). Soft knowledge prose is in `src/lib/reply-knowledge.js`. Prefer regional desk numbers in drafts; the PRASA survey is an extra for complex cases only. `guardDraft` must not let a Gauteng / KZN / EC / WC phone appear on the wrong region thread. `npm run verify:reply-suggest` asserts guide + contact blocks stay aligned.
 
 | Region | Contact | Notes |
 | --- | --- | --- |
 | GP | Johannesburg 011 013 0191 / 0192; Pretoria 011 013 0306; Germiston 011 085 7118 | Also Gauteng Train Updates Facebook group on the guide |
 | KZN | Customer Service desk **031 813 0456** | From PRASA Train Alert posters |
 | EC | PRASA EC East London **043 700 2030**; email `ntombikayise.katsio@prasa.com`; Facebook **PRASA EC**; Station building, Station Street, East London, 5200 | From the PRASA EC Facebook page |
-| WC | No regional desk number filed yet | Guide / Co-Pilot point at the PRASA Customer Experience Survey |
+| WC | Transport Information Centre **0800 65 64 63**; Metrorail **021 449 6181** | Guide lists those two. Co-Pilot also has emergencies, station ops, rail tourism, protection, claims, and railway police in `WC_EXTRA_CONTACTS` |
 
 When the owner sends a new flyer or Facebook contact screenshot, update **guide + `reply-suggest.js` + verify**, not only the AI knowledge string.
 

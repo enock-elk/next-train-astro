@@ -523,10 +523,10 @@ export function buildStationAbout(station, corridors) {
   }
 
   if (earliest?.clock && latest?.clock) {
-    about += ` On weekdays the published departures from this stop span about ${earliest.clock} to ${latest.clock}.`;
+    about += ` On weekdays the published departures from this stop run from about ${earliest.clock} to ${latest.clock}.`;
   }
 
-  about += ' The lists below follow the PRASA weekday and Saturday sheets. Open Next Train for the next live departure on this corridor.';
+  about += ' The station timetable below follows the PRASA weekday and Saturday sheets. Open Next Train for the next live departure on this corridor.';
   return about;
 }
 
@@ -551,15 +551,22 @@ export function stationDocumentTitle(station) {
 
 export function stationMetaDescription(station, corridors) {
   const place = station?.name || 'This station';
+  const province = regionName(station?.region) || 'South Africa';
   const lines = (corridors || []).map((c) => c.routeName).filter(Boolean);
-  const lineBit = lines.length
-    ? ` Lines: ${lines.slice(0, 3).join(', ')}${lines.length > 3 ? ', and more' : ''}.`
-    : '';
+  const lineBit = lines.length === 1
+    ? ` on the ${lines[0]} corridor`
+    : lines.length > 1
+      ? ` on ${lines.slice(0, 2).join(' and ')}${lines.length > 2 ? ', and more' : ''}`
+      : '';
   const neigh = corridors?.[0]?.neighbors;
   const neighBit = neigh?.towardOrigin && neigh?.towardDest
     ? ` Between ${neigh.towardOrigin} and ${neigh.towardDest}.`
     : '';
-  return `${place} Metrorail station timetable for weekdays and Saturdays.${lineBit}${neighBit} Open Next Train for the next departure.`;
+  const { earliest, latest } = earliestLatestWeekday(corridors);
+  const hoursBit = earliest?.clock && latest?.clock
+    ? ` Weekday departures run from about ${earliest.clock} to ${latest.clock}.`
+    : '';
+  return `${place} is an active Metrorail station in ${province}${lineBit}. Get the full station timetable for weekdays and Saturdays.${neighBit}${hoursBit} Open Next Train for the next live departure.`;
 }
 
 export function buildStationJsonLd({ station, corridors, pageUrl, description }) {

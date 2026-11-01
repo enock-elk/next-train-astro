@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_11.01.2': [
+        'Guide and Co-Pilot: Western Cape gets Transport Information Centre 0800 65 64 63 and Metrorail 021 449 6181. KZN/EC/WC drafts prefer those desk numbers; the PRASA survey is only an extra for complex cases. Co-Pilot also knows WC emergencies, station ops, rail tourism, protection, claims, and railway police. Station SEO meta descriptions invite the full station timetable and drop awkward span about wording. No gold map or advert files touched. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_11.01.1': [
         'Station SEO phases 1–4 released: every timed stop on active routes is allowlisted and sitemap\'d (279 pages), same Pretoria-style station template for WC/KZN/EC. Upcoming modal and station SEO departure pills say To {terminus} instead of Direct (green styling kept; Direct Train {id} titles untouched). Board/planner fares and fare votes round to nearest R0.50 (R14×0.6→R8.5, R12×0.6→R7). Admin feedback changelog meta and inbox route row show the station name when captured; getBoardStationContext also reads the search field. Co-Pilot skips the PRASA disclaimer on praise cues like their service is good, prefers Thanks for your message asking about, and puts poll thank-you on its own top body line. forceShow stays false.',
     ],

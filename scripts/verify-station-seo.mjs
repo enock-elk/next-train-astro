@@ -15,6 +15,7 @@ import {
   listSeoStations,
   neighboursForStationRoute,
   stationHasPublicPage,
+  stationMetaDescription,
 } from '../src/lib/seo-stations.js';
 import {
   isStationIndexable,
@@ -115,6 +116,19 @@ ok(!/^Pretoria - [^·]+$/.test(ptaHeadline) || ptaHeadline.includes('Irene'), 'P
 }
 ok(buildStationAbout(pretoria, ptaCards).includes('active Metrorail station'), 'about is descriptive prose');
 ok(buildStationAbout(pretoria, ptaCards).includes('Pretoria'), 'about mentions Pretoria');
+ok(buildStationAbout(pretoria, ptaCards).includes('station timetable'), 'about mentions the station timetable');
+ok(!buildStationAbout(pretoria, ptaCards).includes('span about'), 'about does not use awkward span about phrasing');
+{
+  const mamelodi = getSeoStationBySlug('mamelodi-gardens');
+  const mamCards = buildStationCorridorTimetables(mamelodi);
+  const meta = stationMetaDescription(mamelodi, mamCards);
+  ok(meta.includes('Get the full station timetable'), 'station meta invites the station timetable');
+  ok(meta.includes('active Metrorail station'), 'station meta names an active station');
+  ok(meta.includes('Gauteng'), 'Mamelodi Gardens meta keeps the province');
+  ok(meta.includes('Pienaarspoort') || meta.includes('Pretoria'), 'Mamelodi Gardens meta names the corridor');
+  ok(meta.length >= 140, `station meta is longer than a thin SERP line (${meta.length})`);
+  ok(!meta.includes('span about'), 'station meta does not use awkward span about phrasing');
+}
 ok(buildStationQuickFacts(pretoria, ptaCards).length >= 4, 'Pretoria has several quick facts');
 ok(buildStationMapPath(pretoria).includes('station=Pretoria'), 'map path focuses station');
 ok(buildStationMapPath(pretoria, { embed: true }).includes('embed=1'), 'preview map uses embed');

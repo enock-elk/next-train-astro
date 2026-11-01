@@ -58,17 +58,30 @@ for (const office of GAUTENG_OFFICES) {
 }
 ok(guide.includes(PRASA_SURVEY_URL), 'guide lists the PRASA survey');
 ok(contactBlockForRegion('KZN').includes('031 813 0456'), 'KZN contact block lists the customer service desk');
-ok(contactBlockForRegion('KZN').includes(PRASA_SURVEY_URL), 'KZN contact block still offers the survey');
+ok(contactBlockForRegion('KZN').includes('give the desk number first'), 'KZN prefers the desk number over the survey');
+ok(contactBlockForRegion('KZN').includes(PRASA_SURVEY_URL), 'KZN contact block still offers the survey as an extra');
+ok(contactBlockForRegion('KZN').includes('only an extra for complex cases'), 'KZN survey is for complex cases only');
 ok(!contactBlockForRegion('KZN').includes('011 013 0306'), 'KZN contact block has no Pretoria number');
 ok(liaisonRules('KZN').includes('031 813 0456') || contactBlockForRegion('KZN').includes('031 813 0456'), 'KZN desk number is available to the draft');
+ok(liaisonRules('KZN').includes('Do not default to the PRASA Customer Experience Survey'), 'drafts prefer regional numbers over the survey');
 ok(guide.includes('031 813 0456'), 'guide lists KZN Customer Service desk');
 ok(guide.includes('043 700 2030'), 'guide lists PRASA EC East London');
 ok(guide.includes('ntombikayise.katsio@prasa.com'), 'guide lists PRASA EC email');
+ok(guide.includes('0800 65 64 63'), 'guide lists WC Transport Information Centre');
+ok(guide.includes('021 449 6181'), 'guide lists WC Metrorail desk');
 ok(contactBlockForRegion('EC').includes('043 700 2030'), 'EC contact block lists PRASA EC');
 ok(contactBlockForRegion('EC').includes('ntombikayise.katsio@prasa.com'), 'EC contact block lists the email');
 ok(contactBlockForRegion('EC').includes('PRASA EC'), 'EC contact block names Facebook PRASA EC');
+ok(contactBlockForRegion('EC').includes('give the East London desk number first'), 'EC prefers the desk number over the survey');
 ok(!contactBlockForRegion('EC').includes('011 013 0306'), 'EC contact block has no Pretoria number');
+ok(contactBlockForRegion('WC').includes('0800 65 64 63'), 'WC contact block lists the TIC number');
+ok(contactBlockForRegion('WC').includes('021 449 6181'), 'WC contact block lists Metrorail WC');
+ok(contactBlockForRegion('WC').includes('021 818 7234'), 'WC contact block has emergency numbers for when needed');
+ok(contactBlockForRegion('WC').includes('021 449 4240'), 'WC contact block has station operations for when needed');
+ok(contactBlockForRegion('WC').includes('give a desk number first'), 'WC prefers desk numbers over the survey');
+ok(contactBlockForRegion('WC').includes(PRASA_SURVEY_URL), 'WC contact block still offers the survey as an extra');
 ok(!contactBlockForRegion('WC').includes('043 700 2030'), 'WC contact block has no EC number');
+ok(!contactBlockForRegion('WC').includes('011 013 0306'), 'WC contact block has no Pretoria number');
 ok(liaisonRules('KZN').includes('halt'), 'liaison rules tell the model to halt');
 ok(liaisonRules('KZN').includes('Thank you for using Next Train'), 'drafts close with the standard line');
 ok(liaisonRules('KZN').includes('two blank lines'), 'greeting leaves two blank lines');
@@ -270,6 +283,22 @@ const halted = applyDraftGuard({
 ok(halted.action === 'halt', 'a Gauteng number on a KZN draft becomes a halt');
 ok(composerHtmlFromResult(halted) === null, 'halt JSON never becomes composer HTML');
 ok(haltPanelText(halted).includes('Gauteng'), 'halt text explains the blocked number');
+
+const wcOk = applyDraftGuard({
+    action: 'draft',
+    reply: 'Please call the Transport Information Centre on 0800 65 64 63.',
+}, 'WC');
+ok(wcOk.action === 'draft', 'Western Cape may use the TIC number');
+const wcOnKzn = applyDraftGuard({
+    action: 'draft',
+    reply: 'Please call Metrorail on 021 449 6181.',
+}, 'KZN');
+ok(wcOnKzn.action === 'halt', 'a Western Cape number on a KZN draft becomes a halt');
+const kznOnWc = applyDraftGuard({
+    action: 'draft',
+    reply: 'Please call the KZN desk on 031 813 0456.',
+}, 'WC');
+ok(kznOnWc.action === 'halt', 'a KZN number on a WC draft becomes a halt');
 
 const scriptDraft = parseSuggestResult({ action: 'draft', reply: '<script>alert(1)</script>' });
 const html = composerHtmlFromResult(scriptDraft);

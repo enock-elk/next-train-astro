@@ -39,9 +39,43 @@ export const EC_OFFICES = [
 export const EC_EMAIL = 'ntombikayise.katsio@prasa.com';
 export const EC_FACEBOOK = 'PRASA EC';
 
+/**
+ * Western Cape primary desks (guide + default Co-Pilot).
+ * TIC is City of Cape Town; Metrorail line is the regional desk.
+ */
+export const WC_OFFICES = [
+    { office: 'Transport Information Centre', phones: ['0800 65 64 63'] },
+    { office: 'Metrorail Western Cape', phones: ['021 449 6181'] },
+];
+
+export const WC_TIC_EMAIL = 'transport.info@capetown.gov.za';
+export const WC_SOCIAL_EMAIL = 'socialmediawc@prasa.com';
+export const WC_RAIL_TOURISM_EMAIL = 'railtourism@metrorail.co.za';
+
+/**
+ * Extra WC numbers for Co-Pilot when the case needs them (emergency, station ops,
+ * tourism, safety). Not the default guide list.
+ */
+export const WC_EXTRA_CONTACTS = [
+    { label: 'Emergencies', phones: ['021 818 7234', '021 818 7235'], note: 'also Metrorail W/Cape on X' },
+    { label: 'Station Operations', phones: ['021 449 4240', '021 507 2245'] },
+    { label: 'Rail Tourism', phones: ['021 449 2504'], email: WC_RAIL_TOURISM_EMAIL },
+    { label: 'Protection services', phones: ['021 449 4336'] },
+    { label: 'Claims office', phones: ['021 449 2041', '021 449 3645'] },
+    { label: 'Railway Police Stock Road', phones: ['021 370 1005'] },
+    { label: 'Railway Police Cape Town', phones: ['021 443 4325'] },
+    { label: 'Railway Police Bellville', phones: ['021 941 6800'] },
+    { label: 'Railway Police Retreat', phones: ['021 710 5129'] },
+    { label: 'Railway Police 24-hour operational room', phones: ['021 443 4309', '021 443 4310'] },
+];
+
 const GAUTENG_PHONE_DIGITS = GAUTENG_OFFICES.flatMap((office) => office.phones.map(phoneDigits));
 const KZN_PHONE_DIGITS = KZN_OFFICES.flatMap((office) => office.phones.map(phoneDigits));
 const EC_PHONE_DIGITS = EC_OFFICES.flatMap((office) => office.phones.map(phoneDigits));
+const WC_PHONE_DIGITS = [
+    ...WC_OFFICES.flatMap((office) => office.phones.map(phoneDigits)),
+    ...WC_EXTRA_CONTACTS.flatMap((row) => (row.phones || []).map(phoneDigits)),
+];
 
 const IMAGE_MIME = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
 
@@ -594,42 +628,57 @@ export function contactBlockForRegion(region) {
     if (code === 'GP') {
         const lines = GAUTENG_OFFICES.map((office) => `${office.office}: ${office.phones.join(' / ')}`);
         return [
-            'This thread is Gauteng. If they need PRASA, use only these offices, and only the office that matches the places they named. Remind them to ask for a reference number.',
+            'This thread is Gauteng. If they need PRASA, give a desk number first, like every other region. Use only these offices, and only the office that matches the places they named. Remind them to ask for a reference number.',
             ...lines,
             'If you cannot tell which Gauteng office fits, halt and ask. Do not guess.',
+            `The PRASA Customer Experience Survey is only an extra for complex cases: ${PRASA_SURVEY_URL}`,
             'Gauteng commuter Facebook group: https://www.facebook.com/share/g/1JKTk4Rn6e/ (Metrorail - Gauteng Train Updates)',
         ].join('\n');
     }
     if (code === 'KZN') {
         const lines = KZN_OFFICES.map((office) => `${office.office}: ${office.phones.join(' / ')}`);
         return [
-            'This thread is KwaZulu-Natal. If they need PRASA or Metrorail KZN, use only these contacts. Remind them to ask for a reference number.',
+            'This thread is KwaZulu-Natal. If they need PRASA or Metrorail KZN, give the desk number first. Do not default to the survey. Remind them to ask for a reference number.',
             ...lines,
             'Do not give a Johannesburg, Pretoria, Germiston, or Western Cape phone number.',
-            `If a desk number is not enough, the PRASA Customer Experience Survey is ${PRASA_SURVEY_URL}`,
+            `The PRASA Customer Experience Survey is only an extra for complex cases: ${PRASA_SURVEY_URL}`,
         ].join('\n');
     }
     if (code === 'EC') {
         const lines = EC_OFFICES.map((office) => `${office.office}: ${office.phones.join(' / ')}`);
         return [
-            'This thread is Eastern Cape. If they need PRASA EC or Metrorail Eastern Cape, use only these contacts. Remind them to ask for a reference number.',
+            'This thread is Eastern Cape. If they need PRASA EC or Metrorail Eastern Cape, give the East London desk number first. Do not default to the survey. Remind them to ask for a reference number.',
             ...lines,
             `Email: ${EC_EMAIL}`,
             `Facebook: ${EC_FACEBOOK}`,
             'Do not give a Johannesburg, Pretoria, Germiston, Western Cape, or KZN phone number.',
-            `If a desk number is not enough, the PRASA Customer Experience Survey is ${PRASA_SURVEY_URL}`,
+            `The PRASA Customer Experience Survey is only an extra for complex cases: ${PRASA_SURVEY_URL}`,
         ].join('\n');
     }
     if (code === 'WC') {
+        const primary = WC_OFFICES.map((office) => `${office.office}: ${office.phones.join(' / ')}`);
+        const extras = WC_EXTRA_CONTACTS.map((row) => {
+            const phones = (row.phones || []).join(' / ');
+            const email = row.email ? ` (${row.email})` : '';
+            const note = row.note ? ` (${row.note})` : '';
+            return `${row.label}: ${phones}${email}${note}`;
+        });
         return [
-            'This thread is WC. Do not give a Johannesburg, Pretoria, Germiston, KZN, or Eastern Cape phone number.',
-            `Other regions use the PRASA Customer Experience Survey: ${PRASA_SURVEY_URL}`,
+            'This thread is Western Cape. If they need PRASA or Metrorail WC, give a desk number first, like Gauteng. Do not default to the survey. Remind them to ask for a reference number.',
+            ...primary,
+            `TIC email: ${WC_TIC_EMAIL}`,
+            `Social / media email: ${WC_SOCIAL_EMAIL}`,
+            'Do not give a Johannesburg, Pretoria, Germiston, KZN, or Eastern Cape phone number.',
+            `The PRASA Customer Experience Survey is only an extra for complex cases: ${PRASA_SURVEY_URL}`,
+            'Additional Western Cape contacts when the case needs them (emergency, station ops, tourism, safety). Do not dump the whole list unless relevant:',
+            ...extras,
         ].join('\n');
     }
     return [
         'Region is unknown. Do not include any phone number.',
         'If they need PRASA, halt and ask which region they ride in.',
-        `The survey, when a region outside Gauteng is confirmed, is ${PRASA_SURVEY_URL}`,
+        'Once the region is known, give that region\'s desk number from the contact block. The survey is only an extra for complex cases.',
+        `Survey: ${PRASA_SURVEY_URL}`,
     ].join('\n');
 }
 
@@ -656,7 +705,7 @@ export function liaisonRules(region) {
         'When they ask Next Train to fix something only PRASA or Metrorail can fix (a broken train, a cancelled service, a closed ticket office, infrastructure, staffing, or other operations), one short calm sentence is enough, then the useful part. Prefer: "Since Next Train is an independent app we developed, we are unfortunately not able to assist with this one." Or: "We are not directly linked to PRASA." Or: "Next Train is an independent app and I do not work for PRASA." Do not stack both. Do not paste the legal Terms wording.',
         'Do not use that independence line for agreement, thanks, praise, a poll reply, a call-for-responses reply, a comment on a notice, an app bug, a schedule question Next Train can answer, or a feature request. Those do not need a speech about the app.',
         'When they praise the trains or say cues like "their service is good", "PRASA train service is world class", or "thanks team PRASA", they already know Next Train is not PRASA. Skip the independence disclaimer. Thank them, credit PRASA briefly if it fits, and close.',
-        'Give a PRASA number only when they want PRASA to change something: a fare, a timetable, a closed office, or a broken train. One calm sentence. The contact block is the only source for that number. Remind them to ask for a reference number.',
+        'Give a PRASA or Metrorail desk number when they want PRASA to change something: a fare, a timetable, a closed office, or a broken train. Prefer the regional phone from the contact block for that thread (Gauteng, KZN, Eastern Cape, or Western Cape), the same way Gauteng already does. Do not default to the PRASA Customer Experience Survey when a desk number exists. The survey is only an extra for complex cases. One calm sentence with the number. Remind them to ask for a reference number.',
         'When a fare on Next Train does not match what the station charged, thank them, ask for a clear photo of the ticket if they have not sent one, and say you will check and update. Do not invent the correct price.',
         'Each thread line is labeled ADMIN or COMMUTER. ADMIN is Next Train. COMMUTER is the person you are replying to. Do not swap those speakers.',
         'Only Next Train can post an alert, an advisory, or an incident notice. A commuter cannot post one. They can only reply to one.',
@@ -899,6 +948,14 @@ export function guardDraft(reply, region) {
         return {
             ok: false,
             reason: `Draft used a PRASA EC number for ${code}.`,
+            questions: ['Which contact should this reply give them?'],
+        };
+    }
+    const usedWc = WC_PHONE_DIGITS.some((phone) => phone && digits.includes(phone));
+    if (usedWc && code && code !== 'WC') {
+        return {
+            ok: false,
+            reason: `Draft used a Western Cape contact number for ${code}.`,
             questions: ['Which contact should this reply give them?'],
         };
     }

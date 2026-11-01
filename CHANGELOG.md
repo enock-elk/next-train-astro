@@ -1,5 +1,10 @@
 # Changelog
 
+## V10_11.01.2 — no release notes
+
+- Guide and Co-Pilot: Western Cape TIC 0800 65 64 63 and Metrorail 021 449 6181; regional desk numbers preferred over the survey.
+- Station SEO meta descriptions invite the full station timetable.
+
 ## V10_11.01.1
 
 - Upcoming trains that reach the end of the line say To that terminus (green pill) instead of Direct. Short workings stay To {last stop}. Journey sheet titles still say Direct Train {id}.

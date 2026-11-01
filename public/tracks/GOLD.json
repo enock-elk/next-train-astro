@@ -1,6 +1,6 @@
 {
   "branch": "map-gold",
-  "frozenAt": "ee9b46cc7bb3c82d7d47a4a744a12730a694fa21",
+  "frozenAt": "e73b0cd9fb0d3a4283798b73b735fbc5b0e3b608",
   "version": "V9_09.20.11",
   "note": "Gold snapshot: map.astro loading icon matches the Map tab pin SVG. Tracks, map-app, MapView, rail-tracks, map-tab, and advert handling otherwise unchanged. Fast-forward map-gold to the commit that records this lockfile. Never force-push map-gold.",
   "files": {

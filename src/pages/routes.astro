@@ -12,10 +12,12 @@ import {
 } from '../lib/seo-routes.js';
 import SeoCrossLinks from '../components/SeoCrossLinks.astro';
 import JhbFit from '../components/JhbFit.astro';
+import { buildBreadcrumbList, clipMetaDescription } from '../lib/seo-meta.js';
 
 const title = 'Metrorail Route Schedules | Metrorail Next Train';
-const description =
-  'View and download PRASA Metrorail train timetables for Pretoria, Johannesburg, Cape Town, Durban and East London. Free, works offline. Ticket prices and next train in Next Train.';
+const description = clipMetaDescription(
+  'PRASA Metrorail train times and schedules for Pretoria, Johannesburg, Cape Town, Durban and East London. Weekdays and Saturdays.',
+);
 const pages = listSeoRoutes();
 const regions = listSeoRegions();
 const byRegion = pages.reduce((acc, item) => {
@@ -25,6 +27,22 @@ const byRegion = pages.reduce((acc, item) => {
   return acc;
 }, {});
 const regionOrder = ['GP', 'WC', 'KZN', 'EC'];
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@graph': [
+    {
+      '@type': 'CollectionPage',
+      name: title,
+      description,
+      url: 'https://nexttrain.co.za/routes.html',
+      isPartOf: { '@type': 'WebSite', name: 'Metrorail Next Train', url: 'https://nexttrain.co.za/' },
+    },
+    buildBreadcrumbList([
+      { name: 'Next Train', url: 'https://nexttrain.co.za/' },
+      { name: 'Routes', url: 'https://nexttrain.co.za/routes.html' },
+    ]),
+  ],
+};
 ---
 
 <ContentLayout
@@ -36,12 +54,17 @@ const regionOrder = ['GP', 'WC', 'KZN', 'EC'];
   seoPageType="routes_index"
   seoSlug="routes"
 >
+  <script type="application/ld+json" slot="head" set:html={JSON.stringify(jsonLd)} />
   <SeoPageHeader ctaLabel="Open Next Train" />
   <main class="min-h-screen bg-slate-50 text-slate-800 dark:bg-slate-950 dark:text-slate-100">
     <div class="max-w-2xl mx-auto px-4 py-6 sm:py-10">
-      <p class="text-xs font-bold uppercase tracking-widest text-blue-600 dark:text-blue-400 mb-3">
-        <a href={withBase('/')} class="hover:underline">Next Train</a>
-      </p>
+      <nav class="text-xs font-bold uppercase tracking-widest text-blue-600 dark:text-blue-400 mb-3" aria-label="Breadcrumb">
+        <ol class="flex flex-wrap items-center gap-x-1">
+          <li><a href={withBase('/')} class="hover:underline">Next Train</a></li>
+          <li class="text-slate-400 dark:text-slate-500" aria-hidden="true">/</li>
+          <li class="text-slate-500 dark:text-slate-400" aria-current="page">Routes</li>
+        </ol>
+      </nav>
       <h1 class="text-3xl sm:text-4xl font-black tracking-tight text-slate-900 dark:text-white">
         Metrorail route timetables
       </h1>

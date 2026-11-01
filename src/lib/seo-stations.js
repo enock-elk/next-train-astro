@@ -21,6 +21,7 @@ import {
   loadScheduleDump,
 } from './seo-timetable.js';
 import { isStationIndexable } from './seo-station-allowlist.js';
+import { buildBreadcrumbList, clipMetaDescription } from './seo-meta.js';
 
 const IGNORE_KEYS = new Set(['STATION', 'COORDINATES', 'KM_MARK', 'row_index']);
 
@@ -564,35 +565,30 @@ export function stationMetaDescription(station, corridors) {
     : '';
   const { earliest, latest } = earliestLatestWeekday(corridors);
   const hoursBit = earliest?.clock && latest?.clock
-    ? ` Weekday departures run from about ${earliest.clock} to ${latest.clock}.`
+    ? ` Weekday departures about ${earliest.clock}-${latest.clock}.`
     : '';
-  return `${place} is an active Metrorail station in ${province}${lineBit}. Get the full station timetable for weekdays and Saturdays.${neighBit}${hoursBit} Open Next Train for the next live departure.`;
+  // Keep the timetable invite; drop neighbour/hours first if over the SERP budget.
+  const core = `${place} is an active Metrorail station in ${province}${lineBit}. Get the full station timetable for weekdays and Saturdays.`;
+  const withHours = `${core}${hoursBit}`;
+  if (withHours.length <= 160) return withHours;
+  if (core.length <= 160) return core;
+  return clipMetaDescription(core);
 }
 
 export function buildStationJsonLd({ station, corridors, pageUrl, description }) {
   const region = regionName(station.region);
   const regionEntry = listSeoRegions().find((r) => r.region === station.region);
-  const breadcrumbs = {
-    '@type': 'BreadcrumbList',
-    itemListElement: [
-      { '@type': 'ListItem', position: 1, name: 'Next Train', item: 'https://nexttrain.co.za/' },
-      { '@type': 'ListItem', position: 2, name: 'Routes', item: 'https://nexttrain.co.za/routes.html' },
-      ...(regionEntry
-        ? [{
-          '@type': 'ListItem',
-          position: 3,
-          name: region,
-          item: `https://nexttrain.co.za/regions/${regionEntry.slug}.html`,
-        }]
-        : []),
-      {
-        '@type': 'ListItem',
-        position: regionEntry ? 4 : 3,
-        name: `${station.name} station`,
-        item: pageUrl,
-      },
-    ],
-  };
+  const crumbs = [
+    { name: 'Next Train', url: 'https://nexttrain.co.za/' },
+    { name: 'Routes', url: 'https://nexttrain.co.za/routes.html' },
+  ];
+  if (regionEntry) {
+    crumbs.push({
+      name: region,
+      url: `https://nexttrain.co.za/regions/${regionEntry.slug}.html`,
+    });
+  }
+  crumbs.push({ name: `${station.name} station`, url: pageUrl });
 
   const trainStation = {
     '@type': 'TrainStation',
@@ -612,7 +608,7 @@ export function buildStationJsonLd({ station, corridors, pageUrl, description })
 
   return {
     '@context': 'https://schema.org',
-    '@graph': [trainStation, breadcrumbs],
+    '@graph': [trainStation, buildBreadcrumbList(crumbs)],
   };
 }
 

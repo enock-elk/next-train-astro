@@ -16,6 +16,7 @@ import SeoCrossLinks from '../../components/SeoCrossLinks.astro';
 import SeoAppPreview from '../../components/SeoAppPreview.astro';
 import SeoNetworkMap from '../../components/SeoNetworkMap.astro';
 import JhbFit from '../../components/JhbFit.astro';
+import { buildBreadcrumbList, clipMetaDescription } from '../../lib/seo-meta.js';
 
 export function getStaticPaths() {
   return listSeoCorridors().map((c) => ({ params: { slug: c.slug } }));
@@ -28,10 +29,11 @@ if (!entry) return Astro.redirect('/routes.html');
 const province = regionName(entry.region);
 const pageCopy = CORRIDOR_PAGE_COPY[entry.slug] || null;
 const title = pageCopy?.title || `Metrorail ${entry.label} Train Times | Next Train`;
-const description = pageCopy?.description
-  || `View and download ${entry.label} PRASA Metrorail train timetables. ${entry.blurb} Works offline in Next Train, with ticket prices and the next train.`;
+const description = clipMetaDescription(pageCopy?.description
+  || `View and download ${entry.label} PRASA Metrorail train times and schedules.`);
 const heading = pageCopy?.h1 || `${entry.label} schedules`;
 const canonicalPath = `/corridors/${entry.slug}.html`;
+const pageUrl = `https://nexttrain.co.za${canonicalPath}`;
 const routesIndexHref = withBase('routes.html');
 const regionEntry = listSeoRegions().find((r) => r.region === entry.region);
 const regionHref = regionEntry ? withBase(`regions/${regionEntry.slug}.html`) : routesIndexHref;
@@ -44,11 +46,24 @@ const corridorInsight = CORRIDOR_INSIGHTS[entry.slug] || '';
 
 const jsonLd = {
   '@context': 'https://schema.org',
-  '@type': 'CollectionPage',
-  name: title,
-  description,
-  about: entry.label,
-  isPartOf: { '@type': 'WebSite', name: 'Metrorail Next Train', url: 'https://nexttrain.co.za/' },
+  '@graph': [
+    {
+      '@type': 'CollectionPage',
+      name: title,
+      description,
+      url: pageUrl,
+      about: entry.label,
+      isPartOf: { '@type': 'WebSite', name: 'Metrorail Next Train', url: 'https://nexttrain.co.za/' },
+    },
+    buildBreadcrumbList([
+      { name: 'Next Train', url: 'https://nexttrain.co.za/' },
+      { name: 'Routes', url: 'https://nexttrain.co.za/routes.html' },
+      ...(regionEntry
+        ? [{ name: province, url: `https://nexttrain.co.za/regions/${regionEntry.slug}.html` }]
+        : []),
+      { name: entry.label, url: pageUrl },
+    ]),
+  ],
 };
 ---
 
@@ -74,13 +89,15 @@ const jsonLd = {
 
   <main class="min-h-screen bg-slate-50 text-slate-800 dark:bg-slate-950 dark:text-slate-100">
     <div class="max-w-2xl mx-auto px-4 py-6 sm:py-10">
-      <p class="text-xs font-bold uppercase tracking-widest text-blue-600 dark:text-blue-400 mb-3">
-        <a href={routesIndexHref} class="hover:underline">Metrorail routes</a>
-        <span class="text-slate-400 dark:text-slate-500"> / </span>
-        <a href={regionHref} class="hover:underline">{province}</a>
-        <span class="text-slate-400 dark:text-slate-500"> / </span>
-        <JhbFit text={entry.label} inline />
-      </p>
+      <nav class="text-xs font-bold uppercase tracking-widest text-blue-600 dark:text-blue-400 mb-3" aria-label="Breadcrumb">
+        <ol class="flex flex-wrap items-center gap-x-1">
+          <li><a href={routesIndexHref} class="hover:underline">Metrorail routes</a></li>
+          <li class="text-slate-400 dark:text-slate-500" aria-hidden="true">/</li>
+          <li><a href={regionHref} class="hover:underline">{province}</a></li>
+          <li class="text-slate-400 dark:text-slate-500" aria-hidden="true">/</li>
+          <li class="text-slate-500 dark:text-slate-400" aria-current="page"><JhbFit text={entry.label} inline /></li>
+        </ol>
+      </nav>
 
       <h1 class="text-2xl sm:text-3xl font-black tracking-tight text-slate-900 dark:text-white leading-tight">
         <JhbFit text={heading} />

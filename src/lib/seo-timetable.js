@@ -9,6 +9,7 @@ import { FARE_CONFIG, ROUTES } from './config.js';
 import { getGridOrderManifest, orderGridTrainIds } from './grid-order.js';
 import { isRealTime, isExpressSkip, isVariantStationName, timeToSeconds, flattenPublicHolidays } from './utils.js';
 import { displayRouteName, gridStationLabel, stationLabel, wcRoutesWithHolidaySheets } from './seo-routes.js';
+import { buildBreadcrumbList, clipMetaDescription } from './seo-meta.js';
 import {
   extractStationChain,
   measureStationChain,
@@ -469,6 +470,9 @@ export function buildRouteJsonLd({
     dest,
     operatingNote,
     timetable,
+    regionLabel = '',
+    regionUrl = '',
+    routesIndexUrl = 'https://nexttrain.co.za/routes.html',
 }) {
     const wdA = timetable?.weekday?.a;
     const wdB = timetable?.weekday?.b;
@@ -522,6 +526,15 @@ export function buildRouteJsonLd({
         });
     }
 
+    const crumbs = [
+        { name: 'Next Train', url: 'https://nexttrain.co.za/' },
+        { name: 'Routes', url: routesIndexUrl || 'https://nexttrain.co.za/routes.html' },
+    ];
+    if (regionLabel && regionUrl) {
+        crumbs.push({ name: regionLabel, url: regionUrl });
+    }
+    crumbs.push({ name: `${origin} to ${dest}`, url: pageUrl });
+
     return {
         '@context': 'https://schema.org',
         '@graph': [
@@ -537,6 +550,7 @@ export function buildRouteJsonLd({
                     url: 'https://nexttrain.co.za/',
                 },
             },
+            buildBreadcrumbList(crumbs),
             {
                 '@type': 'FAQPage',
                 mainEntity: faqs,
@@ -594,19 +608,18 @@ export function routeDocumentTitle(origin, dest) {
     return `${origin} to ${dest} ${SEO_SCHEDULE_YEAR} Metrorail Train Times | Next Train`;
 }
 
+/**
+ * Route landing meta — stay inside Google's ~160-character SERP window.
+ * Train IDs, fares, and long nearby lists stay on the page body, not in meta.
+ */
 export function routeMetaDescription(origin, dest, province, opts = {}) {
     const pair = `${origin} to ${dest}`;
-    const trains = (opts.trainIds || []).map((id) => String(id || '').trim()).filter(Boolean).slice(0, 4);
-    const trainBit = trains.length ? ` Trains include ${trains.join(', ')}.` : '';
-    const fareBit = (opts.maxSingle && !opts.inferredZone)
-        ? ` Adult single ${opts.maxSingle}.`
-        : '';
+    const provinceBit = province ? ` in ${province}` : '';
     let satBit = ' No Sunday service.';
     if (opts.hasSaturday === true) satBit = ' Saturday schedule on this page. No Sunday service.';
     else if (opts.hasSaturday === false) satBit = ' No Saturday or Sunday service.';
-    const nearby = opts.nearby ? ` ${String(opts.nearby).trim()}` : '';
-    const provinceBit = province ? ` ${province}.` : '';
-    return `${pair} ${SEO_SCHEDULE_YEAR} Metrorail (PRASA) train schedule.${provinceBit}${satBit}${fareBit}${trainBit} View and download the timetable. Works offline in Next Train, with ticket prices, next train, and trip planner.${nearby}`;
+    const raw = `${pair} ${SEO_SCHEDULE_YEAR} Metrorail (PRASA) train times and schedule${provinceBit}.${satBit}`;
+    return clipMetaDescription(raw);
 }
 
 function getDumpValue(db, key) {

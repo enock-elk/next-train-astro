@@ -16,13 +16,12 @@ import { APP_VERSION, withBase } from '../lib/config.js';
 
 /** SPA-parity homepage SEO (full brand). Short "Next Train" remains PWA homescreen only. */
 const pageTitle = 'Metrorail Next Train | 2026 PRASA Train Times and Schedules';
+/** Lead with the brand promise; weave "today" later. Keep within ~160 SERP chars. */
 const pageDescription =
-  'Train schedule today. PRASA Metrorail timetables and schedules for Gauteng (Pretoria, Johannesburg), Cape Town, Durban and East London. View and download weekday and Saturday sheets for today. No Sunday service. Works offline in Next Train, with ticket prices.';
+  'Get PRASA Metrorail timetables and schedules for Gauteng (Pretoria, Johannesburg), Cape Town, Durban and East London. Train times for today and Saturdays.';
 const ogTitle = 'Metrorail Next Train | 2026 PRASA Train Times';
-const ogDescription =
-  'Train schedule today. PRASA Metrorail timetables and schedules for Gauteng (Pretoria, Johannesburg), Cape Town, Durban and East London. View and download weekday and Saturday sheets for today. No Sunday service.';
-const twitterDescription =
-  'Train schedule today. PRASA Metrorail timetables and schedules for Gauteng (Pretoria, Johannesburg), Cape Town, Durban and East London. View and download weekday and Saturday sheets for today. No Sunday service.';
+const ogDescription = pageDescription;
+const twitterDescription = pageDescription;
 
 const softwareAppLd = {
   '@context': 'https://schema.org',

@@ -1,5 +1,10 @@
 # Changelog
 
+## V10_11.01.3 — no release notes
+
+- Homepage meta leads with Get PRASA Metrorail timetables… and stays within SERP length.
+- Route SEO metas capped ~160 chars; breadcrumb JSON-LD nests item.name for Search Console.
+
 ## V10_11.01.2 — no release notes
 
 - Guide and Co-Pilot: Western Cape TIC 0800 65 64 63 and Metrorail 021 449 6181; regional desk numbers preferred over the survey.

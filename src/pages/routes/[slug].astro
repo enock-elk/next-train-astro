@@ -106,6 +106,9 @@ const jsonLd = buildRouteJsonLd({
   dest,
   operatingNote: seed.operatingNote,
   timetable,
+  regionLabel: province,
+  regionUrl: regionEntry ? `https://nexttrain.co.za/regions/${regionEntry.slug}.html` : '',
+  routesIndexUrl: 'https://nexttrain.co.za/routes.html',
 });
 
 const related = [
@@ -139,17 +142,25 @@ const related = [
 
   <main class="min-h-screen bg-slate-50 text-slate-800 dark:bg-slate-950 dark:text-slate-100">
     <div class="max-w-2xl mx-auto px-4 pt-6 sm:pt-8">
-      <p class="text-xs font-bold uppercase tracking-widest text-blue-600 dark:text-blue-400 mb-3">
-        <a href={routesIndexHref} class="hover:underline">Metrorail routes</a>
-        <span class="text-slate-400 dark:text-slate-500"> / </span>
-        <a href={regionHref} class="hover:underline">{province}</a>
-        {lineLabel && (
-          <>
-            <span class="text-slate-400 dark:text-slate-500"> / </span>
-            {corridorHref ? <a href={corridorHref} class="hover:underline"><JhbFit text={lineLabel} inline /></a> : <JhbFit text={lineLabel} inline />}
-          </>
-        )}
-      </p>
+      <nav class="text-xs font-bold uppercase tracking-widest text-blue-600 dark:text-blue-400 mb-3" aria-label="Breadcrumb">
+        <ol class="flex flex-wrap items-center gap-x-1">
+          <li><a href={routesIndexHref} class="hover:underline">Metrorail routes</a></li>
+          <li class="text-slate-400 dark:text-slate-500" aria-hidden="true">/</li>
+          <li><a href={regionHref} class="hover:underline">{province}</a></li>
+          {lineLabel && (
+            <>
+              <li class="text-slate-400 dark:text-slate-500" aria-hidden="true">/</li>
+              <li>
+                {corridorHref
+                  ? <a href={corridorHref} class="hover:underline"><JhbFit text={lineLabel} inline /></a>
+                  : <JhbFit text={lineLabel} inline />}
+              </li>
+            </>
+          )}
+          <li class="text-slate-400 dark:text-slate-500" aria-hidden="true">/</li>
+          <li class="text-slate-500 dark:text-slate-400" aria-current="page">{heading}</li>
+        </ol>
+      </nav>
 
       <h1 class="text-2xl sm:text-3xl font-black tracking-tight text-slate-900 dark:text-white leading-tight">
         {heading}

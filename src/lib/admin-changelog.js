@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_11.01.3': [
+        'Homepage and OG meta lead with Get PRASA Metrorail timetables… (no Train schedule today opener) and stay within 160 SERP chars. Route/region/station/corridor metas clipped to ~160 with train times keywords for low-CTR queries (Cape Town train times, train schedule today woven later). BreadcrumbList JSON-LD on routes, regions, corridors, stations, and routes index nests item.name to fix Search Console Item name N/A. HTML crumbs use nav/ol. robots.txt keeps /cdn-cgi/ disallowed and documents GSC Removals plus auth.nexttrain.co.za soft 404 (Firebase Auth host, not this app). No gold map files touched. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_11.01.2': [
         'Guide and Co-Pilot: Western Cape gets Transport Information Centre 0800 65 64 63 and Metrorail 021 449 6181. KZN/EC/WC drafts prefer those desk numbers; the PRASA survey is only an extra for complex cases. Co-Pilot also knows WC emergencies, station ops, rail tourism, protection, claims, and railway police. Station SEO meta descriptions invite the full station timetable and drop awkward span about wording. No gold map or advert files touched. No commuter What\'s New. forceShow stays false.',
     ],

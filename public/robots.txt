@@ -16,6 +16,12 @@ Disallow: /status
 Disallow: /marketing.html
 Disallow: /marketing
 Disallow: /index.html
+
+# Cloudflare system paths (email obfuscation, challenges). Keep blocked.
+# If GSC reports "Indexed, though blocked by robots.txt" for
+# /cdn-cgi/l/email-protection, use Removals in Search Console — that host
+# path is not a Next Train page. Prefer disabling CF Email Address Obfuscation
+# so those URLs are not linked from HTML in the first place.
 Disallow: /cdn-cgi/
 
 # Block parameterised route/region deep links. These are functional URLs the
@@ -28,3 +34,7 @@ Disallow: /*?region=
 # Point to the Sitemap
 
 Sitemap: https://nexttrain.co.za/sitemap.xml
+
+# Note: auth.nexttrain.co.za is the Firebase Auth domain (not this host).
+# Soft 404s for https://auth.nexttrain.co.za/ are fixed on that Auth/Hosting
+# property (return 404/410 or noindex), not via this robots.txt.

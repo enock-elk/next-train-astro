@@ -7,6 +7,7 @@ import { join } from 'node:path';
 import {
   buildStationAbout,
   buildStationCorridorTimetables,
+  buildStationJsonLd,
   buildStationMapPath,
   buildStationNeighbourHeadline,
   buildStationQuickFacts,
@@ -126,8 +127,22 @@ ok(!buildStationAbout(pretoria, ptaCards).includes('span about'), 'about does no
   ok(meta.includes('active Metrorail station'), 'station meta names an active station');
   ok(meta.includes('Gauteng'), 'Mamelodi Gardens meta keeps the province');
   ok(meta.includes('Pienaarspoort') || meta.includes('Pretoria'), 'Mamelodi Gardens meta names the corridor');
-  ok(meta.length >= 140, `station meta is longer than a thin SERP line (${meta.length})`);
+  ok(meta.length <= 160, `station meta stays within 160 chars (${meta.length})`);
+  ok(meta.length >= 100, `station meta is not a thin SERP line (${meta.length})`);
   ok(!meta.includes('span about'), 'station meta does not use awkward span about phrasing');
+  ok(!/ weekdays and$/i.test(meta), 'station meta is not clipped mid-phrase');
+  const ld = buildStationJsonLd({
+    station: mamelodi,
+    corridors: mamCards,
+    pageUrl: 'https://nexttrain.co.za/stations/mamelodi-gardens.html',
+    description: meta,
+  });
+  const crumbs = ld['@graph']?.find((node) => node['@type'] === 'BreadcrumbList');
+  ok(!!crumbs, 'station JSON-LD includes BreadcrumbList');
+  const last = crumbs?.itemListElement?.[crumbs.itemListElement.length - 1];
+  ok(last?.name === 'Mamelodi Gardens station', 'breadcrumb ListItem.name is the station');
+  ok(last?.item?.name === 'Mamelodi Gardens station', 'breadcrumb item.name fixes Search Console Item name N/A');
+  ok(typeof last?.item === 'object' && last?.item?.['@id'], 'breadcrumb item is a nested WebPage with @id');
 }
 ok(buildStationQuickFacts(pretoria, ptaCards).length >= 4, 'Pretoria has several quick facts');
 ok(buildStationMapPath(pretoria).includes('station=Pretoria'), 'map path focuses station');

@@ -12,6 +12,7 @@ import {
 import SeoCrossLinks from '../../components/SeoCrossLinks.astro';
 import SeoNetworkMap from '../../components/SeoNetworkMap.astro';
 import JhbFit from '../../components/JhbFit.astro';
+import { buildBreadcrumbList, clipMetaDescription } from '../../lib/seo-meta.js';
 
 export function getStaticPaths() {
   return listSeoRegions().map((r) => ({ params: { slug: r.slug } }));
@@ -25,50 +26,61 @@ const REGION_PAGE_COPY = {
   GP: {
     title: 'Pretoria and Johannesburg Train Schedule | Next Train',
     h1: 'Pretoria and Johannesburg train schedule',
-    description: 'Metrorail Gauteng timetables for Pretoria and Johannesburg, including Mabopane, Pienaarspoort, Kempton Park, Naledi and Germiston. View and download weekday and Saturday sheets for today. No Sunday service.',
+    description: 'Gauteng Metrorail train times and schedules for Pretoria and Johannesburg, Mabopane, Pienaarspoort, Naledi and Germiston. Weekdays and Saturdays.',
     lead: 'Weekday and Saturday times for Pretoria and Johannesburg. The routes people open most are Mabopane, Pienaarspoort, Kempton Park, Naledi and Germiston. There is no Sunday service.',
     featured: ['pretoria-to-mabopane', 'pretoria-to-pienaarspoort', 'pretoria-to-kempton-park', 'johannesburg-to-naledi', 'johannesburg-to-germiston'],
   },
   WC: {
-    title: 'Cape Town Train Schedule | Next Train',
-    h1: 'Cape Town train schedule',
-    description: "Cape Town Metrorail train schedule for Strand, Bellville, Chris Hani, Wellington and Simon's Town. Weekdays and Saturdays. Public holidays when PRASA announces them. No regular Sunday service.",
+    title: 'Cape Town Train Times and Schedule | Next Train',
+    h1: 'Cape Town train times and schedule',
+    description: "Cape Town train times and Metrorail schedule for Bellville, Strand, Simon's Town and Cape Flats. Weekdays and Saturdays. No Sunday service.",
     lead: "Cape Town train times for the Northern, Central, Southern, Cape Flats and Malmesbury lines. Strand, Bellville, Chris Hani and Simon's Town each have their own page. Weekdays and Saturdays. No regular Sunday service.",
     featured: ['cape-town-to-strand', 'cape-town-to-bellville', 'cape-town-to-chris-hani', 'cape-town-to-wellington', 'cape-town-to-simons-town'],
   },
   KZN: {
-    title: 'Durban Train Schedule | Next Train',
-    h1: 'Durban train schedule',
-    description: 'Durban Metrorail train schedule for Pinetown, Umlazi, Winklespruit and Cato Ridge. Weekdays and Saturdays. No Sunday service.',
+    title: 'Durban Train Times and Schedule | Next Train',
+    h1: 'Durban train times and schedule',
+    description: 'Durban Metrorail train times and schedule for Pinetown, Umlazi, Winklespruit and Cato Ridge. Weekdays and Saturdays. No Sunday service.',
     lead: 'Durban train times for the north, south and inland lines, including Pinetown, Umlazi, Winklespruit and Cato Ridge. Weekdays and Saturdays. There is no Sunday service.',
     featured: ['durban-to-pinetown', 'durban-to-umlazi', 'durban-to-winklespruit', 'durban-to-cato-ridge'],
   },
   EC: {
     title: 'East London Train Schedule | Next Train',
     h1: 'East London train schedule',
-    description: 'East London Metrorail train schedule, including Berlin. Weekday times on the route page. No Sunday service.',
+    description: 'East London Metrorail train times and schedule, including Berlin. Weekday times on the route page. No Sunday service.',
     lead: 'East London to Berlin. The weekday sheet is on the route page. There is no Sunday service.',
     featured: ['east-london-to-berlin'],
   },
 };
 const pageCopy = REGION_PAGE_COPY[entry.region] || null;
 const title = pageCopy?.title || `Metrorail ${entry.regionLabel} Train Times | Next Train`;
-const description = pageCopy?.description
-  || `View and download ${entry.title} PRASA Metrorail train timetables. ${entry.blurb} Works offline in Next Train, with ticket prices and the next train.`;
+const description = clipMetaDescription(pageCopy?.description
+  || `View and download ${entry.title} PRASA Metrorail train times and schedules.`);
 const featuredRoutes = (pageCopy?.featured || [])
   .map((slug) => entry.routes.find(({ seed }) => seed.slug === slug))
   .filter(Boolean);
 const canonicalPath = `/regions/${entry.slug}.html`;
+const pageUrl = `https://nexttrain.co.za${canonicalPath}`;
 const routesIndexHref = withBase('routes.html');
 const guideHref = withBase('guide.html');
 const appHref = withBase(`/?region=${encodeURIComponent(entry.region)}`);
 
 const jsonLd = {
   '@context': 'https://schema.org',
-  '@type': 'CollectionPage',
-  name: title,
-  description,
-  isPartOf: { '@type': 'WebSite', name: 'Metrorail Next Train', url: 'https://nexttrain.co.za/' },
+  '@graph': [
+    {
+      '@type': 'CollectionPage',
+      name: title,
+      description,
+      url: pageUrl,
+      isPartOf: { '@type': 'WebSite', name: 'Metrorail Next Train', url: 'https://nexttrain.co.za/' },
+    },
+    buildBreadcrumbList([
+      { name: 'Next Train', url: 'https://nexttrain.co.za/' },
+      { name: 'Routes', url: 'https://nexttrain.co.za/routes.html' },
+      { name: entry.regionLabel, url: pageUrl },
+    ]),
+  ],
 };
 ---
 
@@ -88,11 +100,13 @@ const jsonLd = {
 
   <main class="min-h-screen bg-slate-50 text-slate-800 dark:bg-slate-950 dark:text-slate-100">
     <div class="max-w-2xl mx-auto px-4 py-6 sm:py-10">
-      <p class="text-xs font-bold uppercase tracking-widest text-blue-600 dark:text-blue-400 mb-3">
-        <a href={routesIndexHref} class="hover:underline">Metrorail routes</a>
-        <span class="text-slate-400 dark:text-slate-500"> / </span>
-        {entry.regionLabel}
-      </p>
+      <nav class="text-xs font-bold uppercase tracking-widest text-blue-600 dark:text-blue-400 mb-3" aria-label="Breadcrumb">
+        <ol class="flex flex-wrap items-center gap-x-1">
+          <li><a href={routesIndexHref} class="hover:underline">Metrorail routes</a></li>
+          <li class="text-slate-400 dark:text-slate-500" aria-hidden="true">/</li>
+          <li class="text-slate-500 dark:text-slate-400" aria-current="page">{entry.regionLabel}</li>
+        </ol>
+      </nav>
 
       <h1 class="text-2xl sm:text-3xl font-black tracking-tight text-slate-900 dark:text-white leading-tight">
         {pageCopy?.h1 || entry.title}

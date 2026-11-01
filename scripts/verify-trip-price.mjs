@@ -82,10 +82,13 @@ assert(singleRouteIdFromList([{ id: 'pta-saul' }, { id: 'pta-jhb' }]) === null, 
     assert(sat && sat.isOffPeak === false, `Saturday 11:00 must be peak, got ${JSON.stringify(sat)}`);
     const wk = computeZoneFareForTrip('Z2', { dayType: 'weekday', depTime: '11:00' });
     assert(wk && wk.isOffPeak === true, `weekday 11:00 must be off-peak, got ${JSON.stringify(wk)}`);
-    assert(wk.price === 7 && wk.priceLabel === '7', `Z2 weekday off-peak floors R7.50 to R7, got ${JSON.stringify(wk)}`);
+    assert(wk.price === 7 && wk.priceLabel === '7', `Z2 weekday off-peak rounds R7.2 to nearest R0.5 as R7, got ${JSON.stringify(wk)}`);
     assert(wk.rawPrice > wk.price, 'fare sheet can reveal the unrounded calculated price');
     const peak = computeZoneFareForTrip('Z2', { dayType: 'weekday', depTime: '07:30' });
     assert(peak && peak.isOffPeak === false, `weekday 07:30 must be peak, got ${JSON.stringify(peak)}`);
+    const z3Off = computeZoneFareForTrip('Z3', { dayType: 'weekday', depTime: '11:00' });
+    assert(z3Off && z3Off.isOffPeak === true && z3Off.price === 8.5 && z3Off.priceLabel === '8.5',
+        `Z3 weekday off-peak rounds R8.4 to R8.5, got ${JSON.stringify(z3Off)}`);
 }
 
 assert(FARE_CONFIG.profiles.Scholar.alwaysDiscount === true, 'Scholar is the always-on discount profile');
@@ -148,7 +151,8 @@ assert(!ui.includes("String(fare.depTime).slice(0, 5)"), 'do not slice HH:MM:SS 
 assert(compactTime('5:10:00') === '5:10', '5:10:00 compactTime is 5:10');
 assert(compactTime('05:10') === '05:10', 'HH:MM compactTime stays HH:MM');
 assert(ui.includes('openPassengerTypePicker'), 'Adult opens the passenger profile picker');
-assert(ui.includes('roundBoardFare'), 'planner uses the board whole-rand floor');
+assert(ui.includes('roundBoardFare'), 'planner uses the board nearest-R0.5 round');
+assert(ui.includes('Math.round(finalPrice * 2) / 2'), 'board fare rounds to nearest R0.5');
 assert(ui.includes('w-full flex items-center justify-between'), 'Trip fare is one full-width row');
 assert(ui.includes('planner-departed-next'), 'departed trips still offer Show Next Train');
 assert(ui.includes('plannerTrainColumnTerminus'), 'train names use that train column last stop');

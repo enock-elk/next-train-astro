@@ -396,12 +396,11 @@ export function computeZoneFareForTrip(zoneCode, trip = {}) {
     };
 }
 
-/** Same as the Next Train fare button: half-rand ceil, then drop to a whole rand (R7.50 → R7). */
+/** Same as the Next Train fare button: nearest R0.50 (R8.4 → R8.5, R7.2 → R7). */
 function roundBoardFare(raw) {
     let finalPrice = Number(raw);
     if (!Number.isFinite(finalPrice)) return 0;
-    finalPrice = Math.ceil(finalPrice * 2) / 2;
-    return Math.floor(finalPrice);
+    return Math.round(finalPrice * 2) / 2;
 }
 
 function formatBoardFareLabel(raw) {

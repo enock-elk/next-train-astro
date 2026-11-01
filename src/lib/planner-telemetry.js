@@ -334,12 +334,11 @@ export async function flushTripPlanQueue(force = false) {
     }
 }
 
-/** Same floor as the board fare button: half-rand ceil, then whole rand (R7.50 → 7). */
+/** Same as the board fare button: nearest R0.50 (R8.4 → 8.5, R7.2 → 7). */
 export function roundFareVoteRand(raw) {
     let n = Number(raw);
     if (!Number.isFinite(n)) return 0;
-    n = Math.ceil(n * 2) / 2;
-    return Math.floor(n);
+    return Math.round(n * 2) / 2;
 }
 
 export const FARE_VOTE_QUEUE_KEY = 'nt_fare_vote_queue_v1';

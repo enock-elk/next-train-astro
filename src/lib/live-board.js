@@ -1068,8 +1068,8 @@ export function getRouteFare(sheetKey) {
 
     const multiplier = fareMultiplierForProfile(getUserProfile(), useOffPeakRate);
     let finalPrice = basePrice * multiplier;
-    finalPrice = Math.ceil(finalPrice * 2) / 2;
-    finalPrice = Math.floor(finalPrice);
+    // Nearest R0.50 (R14×0.6=8.4 → 8.5; R12×0.6=7.2 → 7).
+    finalPrice = Math.round(finalPrice * 2) / 2;
 
     // GUARDIAN FIX: Mutually exclusive Promo vs OffPeak flags to prevent UI collisions
     if (getUserProfile() === "Adult") {

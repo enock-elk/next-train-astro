@@ -21579,8 +21579,11 @@ const Admin = {
                         const commuterRouteLabel = Admin.inboxRouteLabel(item.routeId) || threadRouteLabel;
                         const stationLabel = String(item.station || '').trim();
                         const stationAuto = item.stationAutoLocated === true || item.stationAutoLocated === '1' || item.stationAutoLocated === 1;
-                        const commuterRouteHtml = commuterRouteLabel
-                            ? `<div class="inbox-bubble-route-row">${secureEscape(commuterRouteLabel)}</div>`
+                        const routeStationBits = [];
+                        if (commuterRouteLabel) routeStationBits.push(commuterRouteLabel);
+                        if (stationLabel) routeStationBits.push(stationLabel);
+                        const commuterRouteHtml = routeStationBits.length
+                            ? `<div class="inbox-bubble-route-row">${secureEscape(routeStationBits.join(' · '))}</div>`
                             : '';
                         const clRouteAttr = secureEscape(commuterRouteLabel || '');
                         const clStationAttr = secureEscape(stationLabel);
@@ -21968,8 +21971,12 @@ const Admin = {
             const autoFlag = ctx.stationAutoLocated === true || ctx.stationAutoLocated === '1' || ctx.stationAutoLocated === 1;
             const bits = [];
             if (routeLabel) bits.push(routeLabel);
-            if (station) bits.push(station);
-            if (station || routeLabel) bits.push(autoFlag ? 'Auto-locate' : 'Manual station');
+            if (station) {
+                bits.push(station);
+                bits.push(autoFlag ? 'Auto-locate' : 'Manual');
+            } else if (routeLabel) {
+                bits.push(autoFlag ? 'Auto-locate' : 'Manual station');
+            }
             if (bits.length) {
                 meta.textContent = bits.join(' · ');
                 meta.classList.remove('hidden');

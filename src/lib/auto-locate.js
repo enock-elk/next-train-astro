@@ -33,10 +33,16 @@ export function getBoardStationSource() {
 export function getBoardStationContext() {
     let station = '';
     try {
-        const raw = typeof document !== 'undefined'
-            ? (document.getElementById('station-select')?.value || '')
-            : '';
-        station = String(raw).replace(/ STATION/gi, '').trim();
+        if (typeof document !== 'undefined') {
+            const select = document.getElementById('station-select');
+            const search = document.getElementById('station-search-input');
+            // Prefer the hidden select, then the resolved search value, then typed text.
+            const raw = select?.value
+                || search?.dataset?.resolvedValue
+                || search?.value
+                || '';
+            station = String(raw).replace(/ STATION/gi, '').trim();
+        }
     } catch { /* ignore */ }
     return {
         station: station || null,

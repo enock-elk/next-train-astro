@@ -853,9 +853,15 @@ export function openScheduleModal(destination, dayOverride = null) {
         } else if (sharedTag) {
             rightPillHTML = sharedTag;
         } else if (type === 'Direct') {
-            rightPillHTML = isShortTrip
-                ? `<span class="text-[10px] font-bold text-orange-700 bg-orange-100 dark:text-orange-300 dark:bg-orange-900 px-2 py-0.5 rounded-full uppercase whitespace-nowrap">To ${escapeHTML(shortDestName)}</span>`
-                : '<span class="text-[10px] font-bold text-green-700 bg-green-100 dark:text-green-300 dark:bg-green-900 px-2 py-0.5 rounded-full uppercase">Direct</span>';
+            const terminusLabel = isShortTrip
+                ? shortDestName
+                : toTitleCase(String(destination || j.actualDestination || '').replace(/ STATION/gi, ''));
+            const terminusPillClass = isShortTrip
+                ? 'text-[10px] font-bold text-orange-700 bg-orange-100 dark:text-orange-300 dark:bg-orange-900 px-2 py-0.5 rounded-full uppercase whitespace-nowrap'
+                : 'text-[10px] font-bold text-green-700 bg-green-100 dark:text-green-300 dark:bg-green-900 px-2 py-0.5 rounded-full uppercase whitespace-nowrap';
+            rightPillHTML = terminusLabel
+                ? `<span class="${terminusPillClass}">To ${escapeHTML(terminusLabel)}</span>`
+                : `<span class="${terminusPillClass}">To terminus</span>`;
         } else {
             let transferLabel = '';
             if (j.train1?.headboardDestination) {

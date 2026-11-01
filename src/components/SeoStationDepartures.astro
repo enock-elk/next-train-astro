@@ -1,7 +1,7 @@
 ---
 /**
  * Static full-day departure list for a station direction.
- * Mirrors the upcoming-trains modal: time, train id, Direct / To {short} badge.
+ * Mirrors the upcoming-trains modal: time, train id, To {terminus} / To {short} badge.
  */
 interface Props {
   title: string;
@@ -32,8 +32,8 @@ const { title, trains, emptyLabel = 'No trains on this sheet.' } = Astro.props;
             <p class="text-xs text-slate-500 dark:text-slate-400">Train {t.trainId}</p>
           </div>
           {t.badge === 'direct' ? (
-            <span class="text-[10px] font-bold text-green-700 bg-green-100 dark:text-green-300 dark:bg-green-900 px-2 py-0.5 rounded-full uppercase whitespace-nowrap">
-              Direct
+            <span class="text-[10px] font-bold text-green-700 bg-green-100 dark:text-green-300 dark:bg-green-900 px-2 py-0.5 rounded-full uppercase whitespace-nowrap text-right">
+              {t.badgeLabel}
             </span>
           ) : (
             <span class="text-[10px] font-bold text-orange-700 bg-orange-100 dark:text-orange-300 dark:bg-orange-900 px-2 py-0.5 rounded-full uppercase whitespace-nowrap text-right">

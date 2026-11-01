@@ -3,7 +3,7 @@
  * Thin controller bridging DOM ↔ live-board.js engine ↔ Renderer
  */
 import { ROUTES, FARE_CONFIG, fareMultiplierForListedTicket, getCorridorLabel } from './config.js';
-import { normalizeStationName, timeToSeconds, safeStorage, escapeHTML, formatTimeDisplay, formatRouteLabelPlain, formatRouteLabelHtml, expandJhbLabel, applyFittedLabel, fitRouteNameNodes, fitJhbNodes, isRealTime, shortSharedSourceLabel, scheduleCacheSlot, warningTriangleSvg, schedulesBelongToRoute } from './utils.js';
+import { normalizeStationName, timeToSeconds, safeStorage, escapeHTML, formatTimeDisplay, formatRouteLabelPlain, formatRouteLabelHtml, expandJhbLabel, applyFittedLabel, fitRouteNameNodes, fitJhbNodes, isRealTime, shortSharedSourceLabel, warningTriangleSvg, schedulesBelongToRoute } from './utils.js';
 import { $currentRouteId, $userRegion, $userProfile, $fullDatabase, $schedules } from '../store.js';
 import { currentTime, loadAllSchedules, processRouteDataFromDBAsync } from './logic.js';
 import { showToast, triggerHaptic, openSmoothModal, closeSmoothModal, yieldToPaint } from './ui.js';
@@ -28,8 +28,7 @@ import {
     updateLastUpdatedText,
     attachLiveBoardGlobals,
     startSmartRefresh,
-    findNextJourneyToDestA,
-    findNextJourneyToDestB,
+    buildMergedJourneysForDay,
     commuterEndKey,
     currentScheduleData,
     routeHasSaturdayService
@@ -616,6 +615,20 @@ export function selectProfile(profileType) {
     safeStorage.setItem('userProfile', profileType);
     closeSmoothModal('profile-modal');
     scheduleBoardRefresh();
+    // Keep the open Ticket Prices sheet and homepage fare chip in sync with the
+    // session passenger type (scholar / pensioner / adult multipliers).
+    try {
+        const detailed = getDetailedFare(null);
+        if (detailed?.prices) {
+            const fareModal = document.getElementById('fare-modal');
+            if (fareModal && !fareModal.classList.contains('hidden')) {
+                openFareModal(detailed);
+            }
+            updateFareDisplay(null);
+        } else {
+            updateFareDisplay(null);
+        }
+    } catch { /* ignore */ }
     showToast(`Profile set to ${profileType}`, 'success', 1500);
     if (typeof window.pushSignedInPrefs === 'function') {
         window.pushSignedInPrefs({ passengerType: profileType });
@@ -725,7 +738,6 @@ export function openScheduleModal(destination, dayOverride = null) {
         : new Date().getDay();
 
     if (dayOverride) {
-        let sheetKey = null;
         const simResult = typeof window.simulateNextActiveService === 'function'
             ? window.simulateNextActiveService(selectedStation, destination)
             : null;
@@ -744,31 +756,27 @@ export function openScheduleModal(destination, dayOverride = null) {
             titleSuffix = ' (Public Holiday)';
         }
 
-        const ab = normalizeStationName(destination) === normalizeStationName(route.destA) ? 'a' : 'b';
-        if (dayOverride === 'weekday' || dayOverride === 'sunday') {
-            sheetKey = `weekday_to_${ab}`;
-        } else if (dayOverride === 'saturday' || dayOverride === 'public_holiday') {
-            sheetKey = scheduleCacheSlot(dayOverride, route.region, ab);
-        }
-
-        const schedule = ($schedules.get() || {})[sheetKey];
-        if (schedule && selectedStation) {
-            journeys = normalizeStationName(destination) === normalizeStationName(route.destA)
-                ? findNextJourneyToDestA(selectedStation, '00:00:00', schedule, route, targetDayIdx).allJourneys
-                : findNextJourneyToDestB(selectedStation, '00:00:00', schedule, route, targetDayIdx).allJourneys;
+        // Same shared-corridor merge as See upcoming trains (From De Wildt, etc.).
+        if (selectedStation) {
+            journeys = buildMergedJourneysForDay({
+                route,
+                selectedStation,
+                destination,
+                dayType: dayOverride === 'sunday' ? 'weekday' : dayOverride,
+                dayIdx: targetDayIdx,
+            });
         }
     } else {
         journeys = currentScheduleData?.[destination] || [];
         if ((!journeys || journeys.length === 0) && selectedStation) {
             const dayType = (typeof window !== 'undefined' && window.currentDayType) || 'weekday';
-            const ab = normalizeStationName(destination) === normalizeStationName(route.destA) ? 'a' : 'b';
-            const sheetKey = scheduleCacheSlot(dayType, route.region, ab);
-            const schedule = ($schedules.get() || {})[sheetKey];
-            if (schedule) {
-                journeys = normalizeStationName(destination) === normalizeStationName(route.destA)
-                    ? findNextJourneyToDestA(selectedStation, '00:00:00', schedule, route, targetDayIdx).allJourneys
-                    : findNextJourneyToDestB(selectedStation, '00:00:00', schedule, route, targetDayIdx).allJourneys;
-            }
+            journeys = buildMergedJourneysForDay({
+                route,
+                selectedStation,
+                destination,
+                dayType,
+                dayIdx: targetDayIdx,
+            });
         }
     }
 

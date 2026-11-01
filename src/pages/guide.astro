@@ -30,7 +30,7 @@ const fareRows = [
 });
 
 const holidayFaqText =
-    "Metrorail generally does not operate train services on Sundays. Public holidays are not always the same as Saturday. In Gauteng, KZN, and Eastern Cape, some holidays follow a Saturday/holiday timetable; others (such as Christmas Day or National Women's Day in 2026) have no service. Western Cape public holidays may use a Public Holiday sheet or the Saturday timetable. PRASA announces which. Check Next Train: https://nexttrain.co.za/regions/western-cape-public-holidays.html. A few routes, including Hercules / Koedoespoort and Eastern Cape, also have no Saturday service. December is different again: most regions use a dedicated scaled-down festive timetable, not the usual weekday, Saturday, or public holiday sheet. That timetable typically starts in the week of the early 20s of December and runs through the first week of January. Next Train does not have the 21 December 2026 to 1 January 2027 sheets yet, and will update the schedules when PRASA releases them. Next Train's True Day Simulator applies the correct 2026 holiday and route rules automatically.";
+    "Metrorail generally does not operate train services on Sundays. Public holidays are not always the same as Saturday. In Gauteng, KZN, and Eastern Cape, some holidays follow a Saturday/holiday timetable; others (such as Christmas Day or National Women's Day in 2026) have no service. Western Cape public holidays may use a Public Holiday sheet or the Saturday timetable. PRASA announces which. Check Next Train: https://nexttrain.co.za/regions/western-cape-public-holidays.html. A few routes, including Hercules / Koedoespoort and Eastern Cape, also have no Saturday service. December is different again: most regions use a dedicated scaled-down festive timetable, not the usual weekday, Saturday, or public holiday sheet. That timetable typically starts in the week of the early 20s of December and runs through the first week of January. Next Train does not have the 21 December 2026 to 1 January 2027 sheets yet, and will update the schedules when PRASA releases them. The home board and Trip Planner apply the correct 2026 holiday and route rules for the day you are viewing, including Pick a date in the planner.";
 
 const monthlyTicketFaqText =
     "A monthly ticket bought during the month, for example on the 5th, is valid only for that calendar month. It does not last for the next 30 days. Monthly tickets for the current month stay on sale until about the 10th of that month.";
@@ -111,11 +111,20 @@ const faqJsonLd = {
       "name": "How do I download the Metrorail Next Train app?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "Next Train installs from nexttrain.co.za. On iPhone, open the site in Safari, tap Share, then Add to Home Screen. On Android, open the site in Chrome and tap Install App in The Background in the main menu. Android is also in Google Play testing."
+        "text": "Next Train installs from nexttrain.co.za. On iPhone, open the site in Safari, tap Share, then Add to Home Screen. On Android, open the site in Chrome and use Install Next Train when it appears. Android is also in Google Play testing."
       }
     }
   ]
 };
+
+const iconWave = `<svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M7 11c.5-2 1.5-3 3-3s2.5 1 3 3 1.5 3 3 3 2.5-1 3-3M4 14c.4 2.2 2.2 4 5 4h1c2.5 0 4-1.2 5-3"/><circle cx="9" cy="7" r="2.2"/><circle cx="15.5" cy="7.5" r="1.8"/></svg>`;
+const iconRoute = `<svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="19" r="2.5"/><path stroke-linecap="round" d="M8.5 19H15a3 3 0 000-6H9a3 3 0 010-6h6.5"/><circle cx="18" cy="5" r="2.5"/></svg>`;
+const iconBook = `<svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M4 5.5A2.5 2.5 0 016.5 3H20v16.5H6.5A2.5 2.5 0 004 17V5.5z"/><path stroke-linecap="round" d="M8 7h8M8 11h6"/></svg>`;
+const iconClock = `<svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path stroke-linecap="round" stroke-linejoin="round" d="M12 7.5V12l3 2"/></svg>`;
+const iconPhone = `<svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="2.5" width="10" height="19" rx="2"/><path stroke-linecap="round" d="M11 18.5h2"/></svg>`;
+const iconFaq = `<svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path stroke-linecap="round" d="M9.8 9.6a2.4 2.4 0 114.2 1.6c-.7.7-1.5 1.1-1.5 2.3"/><circle cx="12" cy="16.8" r="0.8" fill="currentColor" stroke="none"/></svg>`;
+const iconSupport = `<svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M4 13v-1a8 8 0 0116 0v1"/><path stroke-linecap="round" stroke-linejoin="round" d="M4 13a2 2 0 002 2h1v-5H6a2 2 0 00-2 2zm16 0a2 2 0 01-2 2h-1v-5h1a2 2 0 012 2z"/><path stroke-linecap="round" d="M18 17v1a3 3 0 01-3 3h-2"/></svg>`;
+const iconTrain = `<svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="3" width="12" height="14" rx="2"/><path stroke-linecap="round" d="M6 12h12M9.5 16.5L8 20m6.5-3.5L16 20"/><circle cx="9" cy="8.5" r="1"/><circle cx="15" cy="8.5" r="1"/></svg>`;
 ---
 
 <ContentLayout
@@ -172,14 +181,62 @@ const faqJsonLd = {
     .guide-ui-pill {
       display: inline-block;
       font-weight: 800;
-      letter-spacing: 0.04em;
+      letter-spacing: 0.03em;
       text-transform: uppercase;
-      font-size: inherit;
-      line-height: inherit;
-      padding: 0.1em 0.45em;
-      border-radius: 0.35rem;
+      font-size: 0.85em;
+      line-height: 1.25;
+      padding: 0.05em 0.38em;
+      border-radius: 0.3rem;
       vertical-align: baseline;
     }
+    .guide-section-icon {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 2.25rem;
+      height: 2.25rem;
+      margin-right: 0.75rem;
+      flex-shrink: 0;
+      border-radius: 0.65rem;
+      background: #eff6ff;
+      color: #2563eb;
+    }
+    .dark .guide-section-icon {
+      background: rgba(30, 58, 138, 0.45);
+      color: #93c5fd;
+    }
+    .guide-section-icon svg {
+      width: 1.15rem;
+      height: 1.15rem;
+    }
+    .guide-inline-icon {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 1.1em;
+      height: 1.1em;
+      margin-right: 0.35em;
+      vertical-align: -0.15em;
+      color: currentColor;
+    }
+    .guide-inline-icon svg {
+      width: 100%;
+      height: 100%;
+    }
+    .guide-sev {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4em;
+    }
+    .guide-sev-dot {
+      width: 0.65em;
+      height: 0.65em;
+      border-radius: 9999px;
+      flex-shrink: 0;
+    }
+    .guide-sev-info .guide-sev-dot { background: #3b82f6; }
+    .guide-sev-warn .guide-sev-dot { background: #eab308; }
+    .guide-sev-crit .guide-sev-dot { background: #ef4444; }
     .guide-ui-pill-direct {
       color: #1d4ed8;
       background: #dbeafe;
@@ -322,7 +379,7 @@ const faqJsonLd = {
             <!-- Section 1: Introduction -->
             <section class="bg-white dark:bg-gray-800 rounded-2xl p-6 sm:p-8 shadow-sm border border-gray-200 dark:border-gray-700">
                 <div class="flex items-center mb-4">
-                    <span class="text-3xl mr-3">👋🏾</span>
+                    <span class="guide-section-icon" set:html={iconWave} />
                     <h2 class="text-xl font-black text-gray-900 dark:text-white">Built by Commuters, for Commuters</h2>
                 </div>
                 <div class="prose-custom text-sm sm:text-base text-gray-600 dark:text-gray-300">
@@ -335,7 +392,7 @@ const faqJsonLd = {
                         <li><strong>KwaZulu-Natal:</strong> Durban Yard, Umlazi, Bridge City / KwaMashu, and Crossmoor.</li>
                         <li><strong>Eastern Cape:</strong> East London and Berlin.</li>
                     </ul>
-                    <p>The app tells you where the train <em>should</em> be based on the schedule. Next Train also posts major service disruptions inside the app. Because we rely on crowdsourced data alongside official PRASA releases to keep these timetables accurate, we need your help to spot errors! Commuters can send a delay note, and some testers can share a trip location.</p>
+                    <p>The home board shows the next departure each way from your station, estimated fare for your passenger type, and a full timetable you can download. Shared corridors also list trains from neighbouring routes (for example From De Wildt while you are on Pretoria to Mabopane). Because we rely on crowdsourced data alongside official PRASA releases to keep these timetables accurate, we need your help to spot errors. Commuters can send a delay note, and some testers can share a trip location. Use Feedback in Options when something looks wrong.</p>
                 </div>
                 <SeoFeaturedRoutes />
             </section>
@@ -343,26 +400,50 @@ const faqJsonLd = {
             <!-- Section 2: How Routing Works & GPS Map -->
             <section class="bg-white dark:bg-gray-800 rounded-2xl p-6 sm:p-8 shadow-sm border border-gray-200 dark:border-gray-700">
                 <div class="flex items-center mb-4">
-                    <span class="text-3xl mr-3">🧠</span>
-                    <h2 class="text-xl font-black text-gray-900 dark:text-white">Routing & Network Map</h2>
+                    <span class="guide-section-icon" set:html={iconRoute} />
+                    <h2 class="text-xl font-black text-gray-900 dark:text-white">Home board, Map &amp; Locate</h2>
                 </div>
                 <div class="prose-custom text-sm sm:text-base text-gray-600 dark:text-gray-300">
-                    <h3 class="font-bold text-gray-900 dark:text-white mt-4 mb-2">1. Directional Naming (e.g., "Train to Kempton Park")</h3>
-                    <p>When the app says <em>"Next train to Kempton Park,"</em> it is indicating the <strong>direction</strong> the train is heading, based on its final destination. If you are traveling from Pretoria to Centurion, you will board the "Train to Kempton Park" because Centurion is a stop along that specific corridor.</p>
+                    <h3 class="font-bold text-gray-900 dark:text-white mt-4 mb-2">1. Directional naming (for example Next train to Kempton Park)</h3>
+                    <p>When the board says <em>Next train to Kempton Park</em>, it is naming the <strong>direction</strong> toward that terminus. If you travel from Pretoria to Centurion, you board that train because Centurion sits on the Pretoria to Kempton Park corridor. Upcoming lists use green <strong>To …</strong> pills for the terminus, and purple <strong>From …</strong> pills when a neighbouring corridor also serves your station.</p>
 
-                    <h3 class="font-bold text-gray-900 dark:text-white mt-6 mb-2">2. Interactive Map & Finding "Train Times Near Me"</h3>
-                    <p>Unsure of your route? You can view the physical train route paths using our built-in <strong>Interactive Network Map</strong>. If you are lost, simply tap the GPS target icon (Locate Me) on the dashboard to automatically find the nearest station to you across all active routes.</p>
+                    <h3 class="font-bold text-gray-900 dark:text-white mt-6 mb-2">2. Network Map and Locate Me</h3>
+                    <p>Open the <strong>Network Map</strong> from Options (or Map when it is available on your build) to see baked rail geometry for your region. On the home board, tap the blue crosshair next to the station picker to find the nearest station across active routes.</p>
 
-                    <h3 class="font-bold text-gray-900 dark:text-white mt-6 mb-2">3. Why are some trains hidden? (Smart Filtering)</h3>
-                    <p>Our routing engine is designed to find you the fastest path home. We use a mathematical filter (Pareto dominance) to drop inferior train options from your results.</p>
-                    <p><strong>Example:</strong> If Train A requires two transfers and takes 3 hours, but Train B leaves slightly later, is direct, and gets you there in 1 hour, the engine will hide Train A. It assumes you would rather wait on the platform for a faster ride.</p>
+                    <h3 class="font-bold text-gray-900 dark:text-white mt-6 mb-2">3. See upcoming trains and Check Tomorrow Schedule</h3>
+                    <p>Tap a next-train card to open <strong>See upcoming trains</strong> for the rest of today, including shared-corridor trains. When there is no service today, <strong>Check Tomorrow Schedule</strong> opens the same style of list for the next running day, still including trains from other routes on that corridor.</p>
+
+                    <h3 class="font-bold text-gray-900 dark:text-white mt-6 mb-2">4. Why Trip Planner hides some options</h3>
+                    <p>The Trip Planner keeps the strongest options and drops slower ones (Pareto filtering). If Train A needs two transfers and takes three hours, but Train B leaves a little later, is direct, and arrives in one hour, Train A is hidden so you are not offered a worse ride.</p>
+                </div>
+            </section>
+
+            <!-- Section 2b: Trip Planner -->
+            <section class="bg-white dark:bg-gray-800 rounded-2xl p-6 sm:p-8 shadow-sm border border-gray-200 dark:border-gray-700">
+                <div class="flex items-center mb-4">
+                    <span class="guide-section-icon" set:html={iconRoute} />
+                    <h2 class="text-xl font-black text-gray-900 dark:text-white">Trip Planner</h2>
+                </div>
+                <div class="prose-custom text-sm sm:text-base text-gray-600 dark:text-gray-300">
+                    <p>Open <strong>Trip Planner</strong> from the bottom navigation. Pick an origin and a destination (any timed stops in the same region). Results show departure, arrival, duration, and whether the trip is direct or needs a transfer.</p>
+                    <h3 class="font-bold text-gray-900 dark:text-white mt-6 mb-2">Pick a travel day</h3>
+                    <p>Use the day control on the planner to switch Weekday or Saturday, or open <strong>Pick a date</strong> and <strong>Set travel day</strong> for a specific calendar day. Public holidays and routes with no Saturday service follow the same rules as the home board, so Sunday and no-service days stay clear.</p>
+                    <h3 class="font-bold text-gray-900 dark:text-white mt-6 mb-2">Reading a result</h3>
+                    <ul class="list-disc pl-5 space-y-1 mb-4">
+                        <li><span class="guide-ui-pill guide-ui-pill-direct">Direct Trip</span> stays on one train to your destination.</li>
+                        <li><span class="guide-ui-pill guide-ui-pill-transfer">Transfer Trip</span> changes trains at a hub (for example Germiston or Koedoespoort).</li>
+                        <li>Two or more changes are labelled Bridge Trip on the card.</li>
+                        <li>Fare on the card uses your current <strong>Passenger Type</strong> from Options (Adult, Scholar, Pensioner, Military Veteran), including off-peak when it applies.</li>
+                    </ul>
+                    <h3 class="font-bold text-gray-900 dark:text-white mt-6 mb-2">If nothing connects</h3>
+                    <p>When the planner cannot link your stops, you will see <strong>No Physical Connection</strong>. If you know a real transfer inside the province, use <strong>Report Missing Route</strong> so we can teach the graph that hub.</p>
                 </div>
             </section>
 
             <!-- Section 3: Step-by-Step Tutorials & Glossary -->
             <section class="bg-white dark:bg-gray-800 rounded-2xl p-6 sm:p-8 shadow-sm border border-gray-200 dark:border-gray-700">
                 <div class="flex items-center mb-4">
-                    <span class="text-3xl mr-3">🛠️</span>
+                    <span class="guide-section-icon" set:html={iconBook} />
                     <h2 class="text-xl font-black text-gray-900 dark:text-white">Quick Tutorials & Glossary</h2>
                 </div>
                 <div class="prose-custom text-sm sm:text-base text-gray-600 dark:text-gray-300">
@@ -389,13 +470,13 @@ const faqJsonLd = {
                             <span class="block mt-2">A direct trip means you stay on the same train until your destination. A transfer trip means the Trip Planner found a connection: you alight at a hub (like Koedoespoort or Germiston) and board a different line. Two or more connections are labelled Bridge Trip. The label on the trip card uses these same colours.</span>
                         </li>
                         <li class="bg-gray-50 dark:bg-gray-900 p-3 rounded-lg border border-gray-100 dark:border-gray-700">
-                            <strong class="block mb-2">Service Alerts:</strong>
+                            <strong class="block mb-2">Service notices:</strong>
                             <ul class="list-none pl-0 space-y-2 mb-2">
-                                <li>🔵 <strong>Info</strong> is for sharing general PRASA updates or general information that commuters might want to know about.</li>
-                                <li>🟡 <strong>Warning</strong> is for sharing possible delays or interruption of service.</li>
-                                <li>🔴 <strong>Critical</strong> is for sharing serious updates, like a sink hole, train cancellation and more.</li>
+                                <li class="guide-sev guide-sev-info"><span class="guide-sev-dot" aria-hidden="true"></span><span><strong>Info</strong> covers general PRASA updates and useful background for the corridor.</span></li>
+                                <li class="guide-sev guide-sev-warn"><span class="guide-sev-dot" aria-hidden="true"></span><span><strong>Warning</strong> covers possible delays or interruptions.</span></li>
+                                <li class="guide-sev guide-sev-crit"><span class="guide-sev-dot" aria-hidden="true"></span><span><strong>Critical</strong> covers serious updates such as a sinkhole, cancellation, or line severance.</span></li>
                             </ul>
-                            <span class="block">Always check the app for active banners.</span>
+                            <span class="block">When notices are available for your route or region, open them from the bell on the home header.</span>
                         </li>
                         <li class="bg-gray-50 dark:bg-gray-900 p-3 rounded-lg border border-gray-100 dark:border-gray-700">
                             <span class="guide-ui-pill guide-ui-pill-muted">No Svc</span>
@@ -416,7 +497,7 @@ const faqJsonLd = {
             <!-- Section 4: Extended Layovers -->
             <section class="bg-white dark:bg-gray-800 rounded-2xl p-6 sm:p-8 shadow-sm border border-gray-200 dark:border-gray-700">
                 <div class="flex items-center mb-4">
-                    <span class="text-3xl mr-3">⏱️</span>
+                    <span class="guide-section-icon" set:html={iconClock} />
                     <h2 class="text-xl font-black text-gray-900 dark:text-white">Transfers & Extended Layovers</h2>
                 </div>
                 <div class="prose-custom text-sm sm:text-base text-gray-600 dark:text-gray-300">
@@ -428,21 +509,21 @@ const faqJsonLd = {
             <!-- Section 4: Installation Guide -->
             <section class="bg-white dark:bg-gray-800 rounded-2xl p-6 sm:p-8 shadow-sm border border-gray-200 dark:border-gray-700">
                 <div class="flex items-center mb-4">
-                    <span class="text-3xl mr-3">📱</span>
+                    <span class="guide-section-icon" set:html={iconPhone} />
                     <h2 class="text-xl font-black text-gray-900 dark:text-white">How to Install Next Train</h2>
                 </div>
                 <div class="prose-custom text-sm sm:text-base text-gray-600 dark:text-gray-300">
-                    <p>Next Train is currently a lightweight "Web App" that installs directly from your browser, saving your storage space!</p>
+                    <p>Next Train is a lightweight web app you install from the browser, so it stays small on your phone.</p>
                     
                     <h3 class="font-bold text-gray-900 dark:text-white mt-6 mb-2">For iPhone (iOS) Users</h3>
-                    <p>Open the app in <strong>Safari</strong>. Tap the <strong>Share</strong> button at the bottom of the screen (the square with an arrow pointing up), scroll down, and tap <strong>"Add to Home Screen"</strong>.</p>
+                    <p>Open <strong>nexttrain.co.za</strong> in <strong>Safari</strong>. Tap <strong>Share</strong> (the square with an arrow), then <strong>Add to Home Screen</strong>.</p>
                     
                     <h3 class="font-bold text-gray-900 dark:text-white mt-6 mb-2">For Android Users</h3>
-                    <p>If you are using a supported browser like Chrome, a green <strong>"Install App in The Background"</strong> button will appear at the bottom of the main menu. Simply tap it! If you don't see the button, your current browser might not support web installations.</p>
+                    <p>In Chrome, look for the green <strong>Install Next Train</strong> control (it may show the download size, for example 1 MB). Tap it to install. If you do not see it, your browser may not support web installs yet. Android is also in Google Play testing.</p>
 
                     <div class="mt-5 p-4 bg-blue-50 dark:bg-blue-900/20 border-l-4 border-blue-500 rounded-r-lg">
                         <p class="font-bold text-blue-800 dark:text-blue-300 mb-1">Install on your phone</p>
-                        <p class="text-blue-700 dark:text-blue-200 opacity-90 mb-0">Next Train installs from this website: Add to Home Screen on iPhone, or the in-app install control on Android. Android is also in Google Play testing.</p>
+                        <p class="text-blue-700 dark:text-blue-200 opacity-90 mb-0">Next Train installs from this website: Add to Home Screen on iPhone, or Install Next Train on Android. Schedules then work offline after the first load.</p>
                     </div>
 
                 </div>
@@ -451,7 +532,7 @@ const faqJsonLd = {
             <!-- Section 6: FAQ Accordions -->
             <section class="bg-white dark:bg-gray-800 rounded-2xl p-6 sm:p-8 shadow-sm border border-gray-200 dark:border-gray-700">
                 <div class="flex items-center mb-6">
-                    <span class="text-3xl mr-3">❓</span>
+                    <span class="guide-section-icon" set:html={iconFaq} />
                     <h2 class="text-xl font-black text-gray-900 dark:text-white">Frequently Asked Questions</h2>
                 </div>
                 
@@ -468,7 +549,7 @@ const faqJsonLd = {
                             <h4 class="font-bold text-gray-900 dark:text-white mt-3 mb-2">Off-Peak & Special Discounts</h4>
                             <ul class="list-disc pl-5 space-y-1 mb-4">
                                 <li><strong>Off-Peak Travel:</strong> Adults receive up to <strong>40% off</strong> on <strong>weekdays only</strong>, for trains departing strictly between 09:30 AM and 14:30 PM. No off-peak discount on weekends or public holidays.</li>
-                                <li><strong>Special Profiles:</strong> Scholars in uniform get <strong>50% off single and return</strong> tickets. A scholar weekly or monthly pass is the same price as the adult pass. Pensioners and Military Veterans receive a flat <strong>50% discount</strong>. You can change your passenger type in the App Hub (side menu).</li>
+                                <li><strong>Special Profiles:</strong> Scholars in uniform get <strong>50% off single and return</strong> tickets. A scholar weekly or monthly pass is the same price as the adult pass. Pensioners and Military Veterans receive a flat <strong>50% discount</strong>. Change <strong>Passenger Type</strong> under Options (or Account when you are signed in). The home Estimated Fare and Ticket Prices sheet update for that session.</li>
                             </ul>
 
                             <div class="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm mt-3 mb-2">
@@ -512,7 +593,7 @@ const faqJsonLd = {
                             <p class="mt-2"><strong>Public holidays are not always the same as Saturday.</strong> In Gauteng, KZN, and Eastern Cape, some holidays follow a Saturday/holiday timetable; others (such as Christmas Day or National Women's Day in 2026) have <strong>no service</strong>.</p>
                             <p class="mt-2"><strong>Western Cape can use either sheet.</strong> Some holidays follow a dedicated <strong>Public Holiday</strong> timetable; others use the Saturday timetable when PRASA announces it. Check Next Train on the day. See the <a href={withBase(WC_PUBLIC_HOLIDAYS_PATH)} class="text-blue-600 dark:text-blue-400 underline">Western Cape public holiday timetable</a>.</p>
                             <p class="mt-2">A few routes, including Hercules / Koedoespoort and Eastern Cape, also have <strong>no Saturday service</strong> even when other lines are running.</p>
-                            <p class="mt-2">You don't need to guess: the app's <strong>True Day Simulator</strong> applies the correct 2026 holiday and route rules automatically.</p>
+                            <p class="mt-2">You do not need to guess: the home board and Trip Planner apply the correct 2026 holiday and route rules for the day you are viewing, including <strong>Pick a date</strong> in the planner.</p>
                         </div>
                     </details>
 
@@ -534,7 +615,7 @@ const faqJsonLd = {
                             <svg class="w-5 h-5 text-gray-400 transform transition-transform group-open:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
                         </summary>
                         <div class="p-4 pt-1 border-t border-gray-200 dark:border-gray-700 text-sm text-gray-600 dark:text-gray-300 leading-relaxed">
-                            <p>Next Train installs from <strong>nexttrain.co.za</strong>. On iPhone, open the site in Safari, tap Share, then <strong>Add to Home Screen</strong>. On Android, open the site in Chrome and tap <strong>Install App in The Background</strong> in the main menu. Android is also in Google Play testing.</p>
+                            <p>Next Train installs from <strong>nexttrain.co.za</strong>. On iPhone, open the site in Safari, tap Share, then <strong>Add to Home Screen</strong>. On Android, open the site in Chrome and tap <strong>Install Next Train</strong> when it appears. Android is also in Google Play testing.</p>
                         </div>
                     </details>
 
@@ -579,17 +660,23 @@ const faqJsonLd = {
                             
                             <!-- Part A: App Support -->
                             <div class="mb-5">
-                                <h4 class="font-bold text-blue-600 dark:text-blue-400 mb-2">📱 Next Train App Support</h4>
+                                <h4 class="font-bold text-blue-600 dark:text-blue-400 mb-2 flex items-center gap-2">
+                                    <span class="guide-inline-icon" set:html={iconSupport} />
+                                    Next Train App Support
+                                </h4>
                                 <p class="mb-2">If you have found a bug, want to report a missing schedule, or have a feature suggestion, you are talking to the right place! We cannot fix broken trains, but we <em>can</em> fix the app.</p>
                                 <ul class="list-disc pl-5 space-y-1">
-                                    <li><strong>In-App:</strong> Tap the "Feedback" button in the menu. This is the fastest way, as it automatically sends us your app version and region for easier debugging.</li>
+                                    <li><strong>In-App:</strong> Open <strong>Options</strong>, then <strong>Feedback</strong>. That path includes your app version and region for faster debugging.</li>
                                     <li><strong>Email:</strong> Reach the developer team directly at <a href="mailto:admin@nexttrain.co.za" class="text-blue-600 dark:text-blue-400 underline font-medium">admin@nexttrain.co.za</a>.</li>
                                 </ul>
                             </div>
 
                             <!-- Part B: Operational Support -->
                             <div class="pt-4 border-t border-gray-200 dark:border-gray-700">
-                                <h4 class="font-bold text-gray-900 dark:text-white mb-2">🚂 PRASA / Metrorail Operational Support</h4>
+                                <h4 class="font-bold text-gray-900 dark:text-white mb-2 flex items-center gap-2">
+                                    <span class="guide-inline-icon" set:html={iconTrain} />
+                                    PRASA / Metrorail Operational Support
+                                </h4>
                                 <p class="mb-2">If your train is delayed, the station ticket office is closed, or infrastructure is broken, you must contact PRASA directly. <strong>Always ask the agent for a reference number</strong> so you can follow up on your complaint.</p>
                                 
                                 <div class="bg-white dark:bg-gray-900 p-3 rounded-lg border border-gray-200 dark:border-gray-700 mb-3 shadow-sm">
@@ -626,7 +713,7 @@ const faqJsonLd = {
                                 </div>
                                 
                                 <p><strong>Complex cases:</strong> You can also use the <a href="https://docs.google.com/forms/d/e/1FAIpQLSeGSJmZlpg8dq2Dvupm9xyHcFJudGsegZ2uyhS3UEq3O9fGkA/viewform" target="_blank" class="text-blue-600 dark:text-blue-400 underline font-medium">PRASA Customer Experience Survey</a> when a desk number is not enough.</p>
-                                <p class="mt-2"><strong>Community Hub:</strong> Join the <a href="https://www.facebook.com/share/g/1JKTk4Rn6e/" target="_blank" class="text-blue-600 dark:text-blue-400 hover:underline font-medium">Metrorail – Gauteng Train Updates Facebook Group</a> to connect with other commuters and share live info.</p>
+                                <p class="mt-2"><strong>Community Hub:</strong> Join the <a href="https://www.facebook.com/share/g/1JKTk4Rn6e/" target="_blank" class="text-blue-600 dark:text-blue-400 hover:underline font-medium">Metrorail Commuters SA - Train Updates &amp; Enquiries</a> Facebook group to connect with other commuters and share live info.</p>
                             </div>
 
                         </div>

@@ -4,11 +4,20 @@
 import { withBase } from '../lib/config.js';
 ---
 
+<style>
+  /* Half the default Tailwind ping cadence (1s → 2s). */
+  @keyframes nt-welcome-ping {
+    75%, 100% { transform: scale(2); opacity: 0; }
+  }
+  .nt-welcome-ping {
+    animation: nt-welcome-ping 2s cubic-bezier(0, 0, 0.2, 1) infinite;
+  }
+</style>
 <div id="welcome-modal" class="fixed inset-0 bg-gray-100 dark:bg-gray-900 z-[100] hidden overflow-y-auto overscroll-contain transition-opacity duration-300">
     <div class="w-full max-w-sm mx-auto flex flex-col items-center animate-fade-in-up px-6 pt-6 sm:pt-8 pb-8 min-h-full">
         <!-- Animated branded logo -->
         <div class="relative w-16 h-16 sm:w-20 sm:h-20 mb-3 sm:mb-4">
-            <div class="absolute inset-0 bg-blue-500 rounded-full opacity-20 animate-ping"></div>
+            <div class="absolute inset-0 bg-blue-500 rounded-full opacity-20 nt-welcome-ping"></div>
             <div class="relative bg-white dark:bg-gray-800 p-3 sm:p-4 rounded-full shadow-xl ring-4 ring-blue-50 dark:ring-gray-700 flex items-center justify-center">
                 <img src={withBase('icons/loading-logo-splash.webp')} class="w-full h-full object-contain" alt="Logo" width="64" height="64" onerror="this.style.display='none'" />
             </div>

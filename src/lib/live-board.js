@@ -1535,6 +1535,119 @@ export function findNextTrains(opts) {
     return { pendingShared: !includeShared && sharedRoutes.length > 0 };
 }
 
+/** Shared corridors that also serve this station (same rules as the live board merge). */
+export function listSharedRoutesForStation(routeId, selectedStation) {
+    const currentRoute = ROUTES[routeId];
+    if (!currentRoute || !selectedStation) return [];
+    const region = currentRoute.region || getCurrentRegion();
+    const shared = [];
+    Object.values(ROUTES).forEach((r) => {
+        if (r.region === region && r.id !== routeId && r.isActive && r.corridorId === currentRoute.corridorId) {
+            shared.push(r.id);
+        }
+    });
+    const stationData = getFullDatabase() && getGlobalStationIndex()[normalizeStationName(selectedStation)];
+    stationData?.routes?.forEach((rId) => {
+        if (rId !== routeId && ROUTES[rId]?.isActive && !shared.includes(rId)) shared.push(rId);
+    });
+    return shared.filter((rId) => getSharedStationCount(routeId, rId) > 1);
+}
+
+/**
+ * Full-day journeys toward a terminus, including shared-corridor trains
+ * (From De Wildt / From Saulsville, etc.). Used by See upcoming trains and
+ * Check Tomorrow Schedule so both lists stay in sync.
+ */
+export function buildMergedJourneysForDay({
+    route,
+    selectedStation,
+    destination,
+    dayType,
+    dayIdx,
+}) {
+    if (!route || !selectedStation || !destination) return [];
+    const towardA = normalizeStationName(destination) === normalizeStationName(route.destA);
+    const ab = towardA ? 'a' : 'b';
+    const region = route.region || getCurrentRegion();
+    const sheetKey = routeSheetKeyForDay(route, dayType, ab)
+        || (dayType === 'weekday' || dayType === 'sunday'
+            ? `weekday_to_${ab}`
+            : scheduleCacheSlot(dayType, region, ab));
+    const schedule = getSchedules()[scheduleCacheSlot(dayType, region, ab)]
+        || parseJSONSchedule(getFullDatabase()?.[sheetKey], getFullDatabase()?.[`${sheetKey}_meta`]);
+    if (!schedule) return [];
+
+    const finder = towardA ? findNextJourneyToDestA : findNextJourneyToDestB;
+    const { allJourneys: currentJourneys } = finder(selectedStation, '00:00:00', schedule, route, dayIdx);
+    let mergedJourneys = currentJourneys.map((j) => ({ ...j, sourceRoute: route.name, sheetKey }));
+    const targetStations = getTargetStations(schedule, selectedStation);
+    const sharedIds = listSharedRoutesForStation(route.id, selectedStation);
+
+    sharedIds.forEach((rId) => {
+        const otherRoute = ROUTES[rId];
+        if (!otherRoute) return;
+        if (towardA && normalizeStationName(otherRoute.destA) !== normalizeStationName(route.destA)) return;
+
+        const key = routeSheetKeyForDay(otherRoute, dayType, towardA ? 'a' : 'b');
+        const otherRows = getFullDatabase()?.[key];
+        const otherMeta = getFullDatabase()?.[`${key}_meta`];
+        const otherSchedule = parseJSONSchedule(otherRows, otherMeta);
+        if (!otherSchedule) return;
+
+        const { allJourneys: otherJourneys } = finder(selectedStation, '00:00:00', otherSchedule, otherRoute, dayIdx);
+        const uniqueOther = otherJourneys.filter((j) => {
+            const tNum = j.train || j.train1?.train;
+            return hasForwardOverlap(tNum, otherSchedule, selectedStation, targetStations);
+        });
+
+        if (towardA) {
+            uniqueOther.forEach((j) => {
+                const tNum = j.train || j.train1?.train;
+                const sharedJ = {
+                    ...j,
+                    sourceRoute: otherRoute.name,
+                    isShared: true,
+                    isDivergent: false,
+                    sheetKey: key,
+                };
+                mergedJourneys = mergedJourneys.filter((mj) => (mj.train || mj.train1?.train) !== tNum);
+                mergedJourneys.push(sharedJ);
+            });
+            return;
+        }
+
+        const daySheets = [schedule, otherSchedule].filter((sheet) => sheet?.rows?.length);
+        uniqueOther.forEach((j) => {
+            const tNum = j.train || j.train1?.train;
+            const terminus = realTrainTerminus(tNum, daySheets);
+            const tag = sharedDestTag(route.destB, otherRoute.destB, terminus || otherRoute.destB);
+            const native = mergedJourneys.find((mj) => (mj.train || mj.train1?.train) === tNum);
+            const termNorm = normalizeStationName(terminus);
+            const nativeEnd = normalizeStationName(native?.actualDestination);
+            const otherEnd = normalizeStationName(j.actualDestination);
+            const keepNative = !!(native && termNorm && nativeEnd === termNorm && otherEnd !== termNorm);
+            const chosen = keepNative ? native : j;
+            const chosenEnd = normalizeStationName(chosen.actualDestination);
+            const sharedJ = {
+                ...chosen,
+                actualDestination: termNorm && chosenEnd !== termNorm ? terminus : chosen.actualDestination,
+                sourceRoute: otherRoute.name,
+                sheetKey: keepNative ? (chosen.sheetKey || sheetKey) : key,
+                ...tag,
+            };
+            mergedJourneys = mergedJourneys.filter((mj) => (mj.train || mj.train1?.train) !== tNum);
+            mergedJourneys.push(sharedJ);
+        });
+    });
+
+    mergedJourneys.sort((a, b) => {
+        const timeA = timeToSeconds(a.departureTime || a.train1?.departureTime);
+        const timeB = timeToSeconds(b.departureTime || b.train1?.departureTime);
+        return timeA - timeB;
+    });
+    return mergedJourneys.filter(journeyHasRealDeparture);
+}
+
 export function findNextJourneyToDestA(fromStation, timeNow, schedule, routeConfig, targetDayIdx = getCurrentDayIndex()) {
     const { allJourneys: allDirectJourneys } = findNextDirectTrain(fromStation, schedule, routeConfig.destA, targetDayIdx, routeConfig.id);
     let allTransferJourneys = [];

@@ -2,7 +2,7 @@
   "branch": "map-gold",
   "frozenAt": "1a909c81b8987a2a07031707f5e19ed664137def",
   "version": "V9_09.20.11",
-  "note": "Gold snapshot at main 1a909c81b8987a2a07031707f5e19ed664137def. map-app.js keeps empty lat/lon as null so a map opened without coordinates starts on the commuter region (85a7058), not 0,0. Baked tracks and advert handling unchanged from ca2658d. Fast-forward map-gold to the commit that records this lockfile. Never force-push map-gold.",
+  "note": "Gold snapshot: map.astro loading icon matches the Map tab pin SVG. Tracks, map-app, MapView, rail-tracks, map-tab, and advert handling otherwise unchanged. Fast-forward map-gold to the commit that records this lockfile. Never force-push map-gold.",
   "files": {
     "public/tracks/rail-tracks-EC.geojson": {
       "md5": "43409bfd05405205e596f0d03345ab18",
@@ -25,8 +25,8 @@
       "sha256": "2036b35e382b3cb4c64f151dd2f69e5ab2e0867210b5320e7bc4779d96c0f6e5"
     },
     "src/pages/map.astro": {
-      "md5": "d82ebf12bce75b821f22635a0d1d6feb",
-      "sha256": "2c8f4012b918bfd2ff65e763a26d3ddb232d64a134f6b1ade4f610fd95c1e94f"
+      "md5": "f02b01877f1468b541262a300c53bfae",
+      "sha256": "6462bc38ee2e62cc31a8aca8bf3cad93782ccda40658efbad9de8cd0d96c9b3b"
     },
     "src/components/MapView.astro": {
       "md5": "444c75381d8a8049d0051aeccf559118",

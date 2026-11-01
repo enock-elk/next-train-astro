@@ -13214,7 +13214,8 @@ const Admin = {
         modal.style.bottom = 'auto';
         modal.style.alignItems = 'stretch';
         modal.style.justifyContent = 'flex-start';
-        Admin.keepReplyCaretVisible();
+        // Do not auto-scroll the reply pane on viewport sync — that was
+        // yanking the Co-Pilot header back after the admin scrolled it away.
         const card = modal.firstElementChild;
         if (card) {
             card.style.position = 'absolute';
@@ -13265,8 +13266,9 @@ const Admin = {
         if (!rect || (!rect.height && !rect.width)) return;
         const box = scroller.getBoundingClientRect();
         const pad = 16;
+        // Only scroll down when the caret sits under the fold / keyboard.
+        // Never scroll up — that pulled the Co-Pilot header back into view.
         if (rect.bottom > box.bottom - pad) scroller.scrollTop += rect.bottom - (box.bottom - pad);
-        else if (rect.top < box.top + pad) scroller.scrollTop -= (box.top + pad) - rect.top;
     },
 
     replySuggestMarkup: () => `
@@ -14249,6 +14251,17 @@ const Admin = {
                 editorEl.addEventListener('input', () => {
                     editorEl.dataset.draftTouched = '1';
                     Admin.keepReplyCaretVisible();
+                });
+                editorEl.addEventListener('focus', () => {
+                    const scroller = document.getElementById('admin-reply-scroll');
+                    if (!scroller) return;
+                    const top = scroller.scrollTop;
+                    // Mobile browsers scroll the focused field into view and
+                    // drag the Co-Pilot header back; keep the user's scroll.
+                    requestAnimationFrame(() => {
+                        scroller.scrollTop = top;
+                        requestAnimationFrame(() => { scroller.scrollTop = top; });
+                    });
                 });
             }
             if (!modal.dataset.caretBound) {

@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_11.01.1': [
+        'Station SEO phases 1–4 released: every timed stop on active routes is allowlisted and sitemap\'d (279 pages), same Pretoria-style station template for WC/KZN/EC. Upcoming modal and station SEO departure pills say To {terminus} instead of Direct (green styling kept; Direct Train {id} titles untouched). Board/planner fares and fare votes round to nearest R0.50 (R14×0.6→R8.5, R12×0.6→R7). Admin feedback changelog meta and inbox route row show the station name when captured; getBoardStationContext also reads the search field. Co-Pilot skips the PRASA disclaimer on praise cues like their service is good, prefers Thanks for your message asking about, and puts poll thank-you on its own top body line. forceShow stays false.',
+    ],
     'V10_10.29.3': [
         'About black box missed the schedule waterfall because production terser drop_console removes console.* from bundled modules. admin.js is not bundled, so only those lines survived. Waterfall now uses window.ntTrace. Noise (tracker id, admin sign-in) expires in 6 hours. Failures stay 7 days. Station review form no longer says a note waits for approval until after it is sent, then a popup says so. Live RTDB allows anonymous pending writes, but station_reviews_public is not publicly readable, so the repo rules are not what is deployed. No commuter What\'s New. forceShow stays false.',
     ],

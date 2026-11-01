@@ -1,5 +1,13 @@
 # Changelog
 
+## V10_11.01.1
+
+- Upcoming trains that reach the end of the line say To that terminus (green pill) instead of Direct. Short workings stay To {last stop}. Journey sheet titles still say Direct Train {id}.
+- Trip fares and fare votes round to the nearest R0.50.
+- All timed station SEO pages are indexable (full GP/WC/KZN/EC allowlist and sitemap).
+- Admin feedback shows the board station name with the route when captured.
+- Co-Pilot: skip independence line on praise cues; thank for your message asking about; poll thank-you on its own top line.
+
 ## V10_10.29.3 — no release notes
 
 ## V10_10.29.2 — no release notes

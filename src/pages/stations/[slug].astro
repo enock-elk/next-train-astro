@@ -22,7 +22,7 @@ import {
 } from '../../lib/seo-stations.js';
 
 export function getStaticPaths() {
-  // Phase 1: all GP + WC/KZN/EC termini/hubs (allowlist). See seo-station-allowlist.js.
+  // All timed stops on active routes (phases 1–4). See seo-station-allowlist.js.
   return listIndexableSeoStations().map((station) => ({
     params: { slug: station.slug },
   }));

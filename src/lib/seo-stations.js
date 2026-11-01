@@ -103,8 +103,8 @@ function orderedTimedStops(db, sheetKey) {
 
 /**
  * Departures from `stationName` on one sheet, toward the sheet terminus.
- * Badge: Direct when the train's last timed stop matches the sheet end;
- * otherwise To {short working}.
+ * Badge: green To {terminus} when the train's last timed stop matches the
+ * sheet end; otherwise orange To {short working}.
  */
 export function departuresOnSheet(db, sheetKey, stationName, boardDestLabel) {
   const stops = orderedTimedStops(db, sheetKey);
@@ -152,7 +152,7 @@ export function departuresOnSheet(db, sheetKey, stationName, boardDestLabel) {
       departureSec: dep.departureSec,
       actualDestination: dep.actualDestination,
       badge,
-      badgeLabel: isDirect ? 'Direct' : `To ${dep.actualDestination}`,
+      badgeLabel: `To ${dep.actualDestination}`,
     });
   }
 
@@ -277,7 +277,7 @@ export function listSeoStations(options = {}) {
 
 /**
  * Phase-aware public station pages: allowlisted slugs only.
- * Phase 1 = all GP + WC/KZN/EC termini/hubs (see seo-station-allowlist.js).
+ * Phases 1–4 = every timed stop on an active route (see seo-station-allowlist.js).
  */
 export function listIndexableSeoStations(options = {}) {
   return listSeoStations(options).filter((s) => isStationIndexable(s.slug));

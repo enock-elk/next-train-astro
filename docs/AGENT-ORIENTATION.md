@@ -64,7 +64,7 @@ firebase-database.rules.json  # RTDB security rules (deploy separately: npm run 
 | Alerts | `alerts-feed.js`, `alerts-channel.js`, `alert-poll.js` | Bell overlay feed, reactions, expiry, scoping |
 | Community / rides | `community.js`, `ride-pings.js`, `rider-marks.js` | Route chat, presence, “I’m on it” (feature-flagged) |
 | Admin / Co-Pilot | `admin-bridge.js`, `reply-suggest.js`, `reply-knowledge.js`, `operator-brief.js` | Dev Hub, suggest-a-reply, inbox |
-| SEO | `seo-routes.js`, `seo-station-allowlist.js`, `seo-timetable.js` | SSG landings, phased station pages |
+| SEO | `seo-routes.js`, `seo-station-allowlist.js`, `seo-timetable.js` | SSG landings, station pages (full catalog allowlisted) |
 | Ads | `clever-ads.js`, `clever-ad-lifecycle.js` | CleverAds overlay (advert gold) |
 | Shell / update | `app-update.js`, `recovery.js` | SW update, stuck update / lifeline behaviour |
 
@@ -139,7 +139,7 @@ Each folder has its own README for deploy (`wrangler`, secrets). Reply worker se
 ## SEO and content sites
 
 - Route / region / corridor landings: `src/pages/routes|regions|corridors/`, copy in `seo-routes.js`.
-- Station pages: phased allowlist `seo-station-allowlist.js` — do not SSG every WC/KZN/EC mid-corridor stop early.
+- Station pages: allowlist in `seo-station-allowlist.js` covers every timed stop on active routes (phases 1–4 released). Keep `listIndexableSeoStations` / `stationHasPublicPage` allowlist-gated.
 - Build pulls live sheets when possible: `scripts/fetch-live-schedules-for-seo.mjs` (`SEO_REQUIRE_LIVE=1` on production builds).
 - Guide / legal / status: `guide.astro`, `privacy.astro`, `terms.astro`, `status.astro`.
 - Map page uses **ContentLayout**, not the app `Layout` — both must expose CARTO helper / shell fallbacks as required by FOUC rules.

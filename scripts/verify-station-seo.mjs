@@ -53,7 +53,13 @@ ok(PHASE1_REGIONAL_HUBS.includes('durban'), 'Durban is a phase-1 hub');
 ok(PHASE1_REGIONAL_HUBS.includes('east-london'), 'East London is a phase-1 hub');
 ok(stationHasPublicPage('cape-town'), 'Cape Town has a public page');
 ok(stationHasPublicPage('durban'), 'Durban has a public page');
-ok(!stationHasPublicPage('athlone'), 'Athlone (WC mid-corridor) waits for a later phase');
+ok(stationHasPublicPage('athlone'), 'Athlone (WC mid-corridor) is indexable');
+ok(stationHasPublicPage('amanzimtoti'), 'Amanzimtoti (KZN mid-corridor) is indexable');
+ok(stationHasPublicPage('mdantsane'), 'Mdantsane (EC mid-corridor) is indexable');
+ok(
+  listSeoStations().every((s) => isStationIndexable(s.slug)),
+  'every timed catalog station is on the allowlist',
+);
 
 const walker = getSeoStationBySlug('walker-street');
 ok(!!walker, 'Walker Street is in the catalog');
@@ -176,13 +182,26 @@ if (existsSync(sitemapPath)) {
   ok(xml.includes('/stations/cape-town.html'), 'checked-in sitemap lists Cape Town');
   ok(xml.includes('/stations/durban.html'), 'checked-in sitemap lists Durban');
   ok(xml.includes('/stations/east-london.html'), 'checked-in sitemap lists East London');
+  ok(xml.includes('/stations/athlone.html'), 'checked-in sitemap lists Athlone');
+  ok(xml.includes('/stations/amanzimtoti.html'), 'checked-in sitemap lists Amanzimtoti');
   ok(!xml.includes('/stations/wolseley'), 'sitemap does not list Wolseley');
-  ok(!xml.includes('/stations/athlone.html'), 'sitemap does not list Athlone yet');
 }
 
 const allowlistSrc = readFileSync(new URL('../src/lib/seo-station-allowlist.js', import.meta.url), 'utf8');
-ok(allowlistSrc.includes('Phased station SEO plan'), 'allowlist documents the phased SEO plan');
-ok(allowlistSrc.includes('Phase 2'), 'allowlist names phase 2 (remaining WC)');
+ok(allowlistSrc.includes('Station SEO plan'), 'allowlist documents the station SEO plan');
+ok(allowlistSrc.includes('Phases 1–4 are released') || allowlistSrc.includes('Phases 1-4 are released'), 'allowlist records full catalog release');
+ok(allowlistSrc.includes('Phase 2'), 'allowlist still names historical phase 2');
+
+{
+  const depSrc = readFileSync(new URL('../src/components/SeoStationDepartures.astro', import.meta.url), 'utf8');
+  ok(depSrc.includes('{t.badgeLabel}'), 'station departures render badgeLabel');
+  ok(!depSrc.includes('>\n              Direct\n            <'), 'station departures no longer hardcode Direct');
+  const seoStationsSrc = readFileSync(new URL('../src/lib/seo-stations.js', import.meta.url), 'utf8');
+  ok(seoStationsSrc.includes('badgeLabel: `To ${dep.actualDestination}`'), 'direct trains use To {terminus} badgeLabel');
+  const liveUi = readFileSync(new URL('../src/lib/live-board-ui.js', import.meta.url), 'utf8');
+  ok(liveUi.includes('To ${escapeHTML(terminusLabel)}'), 'upcoming modal labels the terminus');
+  ok(!liveUi.includes('>Direct</span>'), 'upcoming modal no longer paints a Direct pill');
+}
 
 if (failures.length) {
   console.error('verify-station-seo FAILED:');

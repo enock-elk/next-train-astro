@@ -6,34 +6,28 @@
  * SSG only emits allowlisted slugs (see listIndexableSeoStations).
  *
  * ---------------------------------------------------------------------------
- * Phased station SEO plan (for future agents)
+ * Station SEO plan (for future agents)
  * ---------------------------------------------------------------------------
  *
- * Phase 1 (current):
- *   - All active Gauteng timed stops (full GP catalog).
- *   - WC / KZN / EC: route termini and major hubs only (PHASE1_REGIONAL_HUBS).
- *   - Do not SSG or index the rest of WC/KZN/EC yet.
+ * Phases 1–4 are released: every timed stop on an active route is indexable
+ * (GP + full WC + full KZN + full EC). Same station page template for all
+ * regions (Pretoria / Gauteng layout).
  *
- * Phase 2:
- *   - Remaining Western Cape timed stops (full WC catalog onto the allowlist).
+ * Historical phase markers (kept for docs):
+ *   Phase 1: All GP + WC/KZN/EC termini/hubs (PHASE1_REGIONAL_HUBS).
+ *   Phase 2: Remaining Western Cape.
+ *   Phase 3: Remaining KwaZulu-Natal.
+ *   Phase 4: Remaining Eastern Cape.
  *
- * Phase 3:
- *   - Remaining KwaZulu-Natal timed stops.
- *
- * Phase 4:
- *   - Remaining Eastern Cape timed stops.
- *
- * Rules when expanding a phase:
- *   1. Add slugs to STATION_INDEX_ALLOWLIST (keep PHASE1_REGIONAL_HUBS as the
- *      historical phase-1 set, or fold them into a per-region note).
- *   2. Keep getStaticPaths / sitemap on listIndexableSeoStations() — do not
- *      switch back to a GP-only region filter.
- *   3. stationHasPublicPage must stay allowlist-gated so route pages do not
- *      link to stations that are not SSG'd yet.
+ * Rules when changing the allowlist:
+ *   1. Add or remove slugs in STATION_INDEX_ALLOWLIST only from listSeoStations()
+ *      (do not invent slugs).
+ *   2. Keep getStaticPaths / sitemap on listIndexableSeoStations().
+ *   3. stationHasPublicPage stays allowlist-gated.
  *   4. Run npm run verify:station-seo and regenerate the sitemap
  *      (npm run sitemap / prebuild).
- *   5. GP candidates: node scripts/print-gp-station-slugs.mjs
- *      Regional hub candidates: node scripts/print-regional-hub-slugs.mjs
+ *   5. Candidates: node scripts/print-gp-station-slugs.mjs
+ *      and node scripts/print-regional-hub-slugs.mjs
  *
  * Do not invent station slugs. Resolve names through slugifyStation against
  * the live SEO schedule dump / listSeoStationCatalog.
@@ -41,11 +35,9 @@
 
 /**
  * Phase-1 non-GP termini and hubs (active route destA / destB ends).
- * Kept as an explicit list so later phases can add mid-corridor stops
- * without re-deriving what shipped in phase 1.
+ * Historical phase-1 set — full WC/KZN/EC catalogs are now also allowlisted.
  */
 export const PHASE1_REGIONAL_HUBS = Object.freeze([
-  // Western Cape — corridor ends / hubs
   'bellville',
   'cape-town',
   'chris-hani',
@@ -60,7 +52,6 @@ export const PHASE1_REGIONAL_HUBS = Object.freeze([
   'simons-town',
   'strand',
   'wellington',
-  // KwaZulu-Natal — corridor ends / hubs
   'berea-road',
   'bridge-city',
   'cato-ridge',
@@ -69,16 +60,12 @@ export const PHASE1_REGIONAL_HUBS = Object.freeze([
   'pinetown',
   'umlazi',
   'winklespruit',
-  // Eastern Cape — corridor ends
   'berlin',
   'east-london',
 ]);
 
-/**
- * Full GP timed-stop allowlist (phase 1). Regenerate candidates with
- * `node scripts/print-gp-station-slugs.mjs` after schedule changes.
- */
-const PHASE1_GP_STATIONS = [
+/** Full GP timed-stop catalog. */
+const GP_STATIONS = [
   'akasiaboom',
   'atteridgeville',
   'belle-ombre',
@@ -169,16 +156,221 @@ const PHASE1_GP_STATIONS = [
   'wolmerton',
 ];
 
+/** Full Western Cape timed-stop catalog. */
+const WC_STATIONS = [
+  'abbotsdale',
+  'akasia-park',
+  'athlone',
+  'avondale',
+  'belhar',
+  'bellville',
+  'blackheath',
+  'bonteheuwel',
+  'brackenfell',
+  'cape-town',
+  'century-city',
+  'chris-hani',
+  'claremont',
+  'crawford',
+  'dal-josafat',
+  'de-grendel',
+  'dieprivier',
+  'du-toit',
+  'eerste-river',
+  'eikenfontein',
+  'elsies-river',
+  'esplanade',
+  'false-bay',
+  'faure',
+  'firgrove',
+  'fisantkraal',
+  'fish-hoek',
+  'glencairn',
+  'goodwood',
+  'harfield-road',
+  'hazendal',
+  'heathfield',
+  'heideveld',
+  'huguenot',
+  'kalbaskraal',
+  'kalk-bay',
+  'kapteinsklip',
+  'kenilworth',
+  'kentemade',
+  'khayelitsha',
+  'klapmuts',
+  'klipheuwel',
+  'koeberg-rd',
+  'kraaifontein',
+  'kuils-river',
+  'kuyasa',
+  'lakeside',
+  'langa',
+  'lansdowne',
+  'lavistown',
+  'lentegeur',
+  'lynedoch',
+  'maitland',
+  'malmesbury',
+  'mandalay',
+  'mbekweni',
+  'mellish',
+  'meltonrose',
+  'mikpunt',
+  'mitchells-plain',
+  'monte-vista',
+  'mowbray',
+  'muizenberg',
+  'muldersvlei',
+  'mutual',
+  'ndabeni',
+  'netreg',
+  'newlands',
+  'nolungile',
+  'nonkqubela',
+  'nyanga',
+  'observatory',
+  'oosterzee',
+  'ottery',
+  'paarl',
+  'parow',
+  'pentech',
+  'philippi',
+  'pinelands',
+  'plumstead',
+  'retreat',
+  'rondebosch',
+  'rosebank',
+  'salt-river',
+  'sarepta',
+  'simons-town',
+  'somerset-west',
+  'southfield',
+  'st-james',
+  'steenberg',
+  'stellenbosch',
+  'steurhof',
+  'stikland',
+  'stock-road',
+  'strand',
+  'sunny-cove',
+  'thornton',
+  'tygerberg',
+  'unibell',
+  'van-der-stel',
+  'vasco',
+  'vlottenburg',
+  'wellington',
+  'wetton',
+  'wintervogel',
+  'wittebome',
+  'woltemade',
+  'woodstock',
+  'wynberg',
+  'ysterplaat',
+];
+
+/** Full KwaZulu-Natal timed-stop catalog. */
+const KZN_STATIONS = [
+  'amanzimtoti',
+  'avoca',
+  'bayview',
+  'bellair',
+  'berea-road',
+  'briardene',
+  'bridge-city',
+  'burlington',
+  'cato-ridge',
+  'cavendish',
+  'chatsglen',
+  'clairwood',
+  'cliffdale',
+  'congella',
+  'crossmoor',
+  'dalbridge',
+  'dassenhoek',
+  'delville-wood',
+  'doonside',
+  'duffs-road',
+  'durban',
+  'escombe',
+  'georgedale',
+  'glen-park',
+  'greenwood-park',
+  'hammarsdale',
+  'havenside',
+  'hillary',
+  'isipingo',
+  'klaarwater',
+  'kwamashu',
+  'kwamnyandu',
+  'kwandengezi',
+  'kwatandaza',
+  'lindokuhle',
+  'malvern',
+  'mariannhill',
+  'merebank',
+  'montclair',
+  'moseley',
+  'moses-mabhida',
+  'mount-vernon',
+  'northdene',
+  'nshongweni',
+  'pahla',
+  'pelgrim',
+  'pinetown',
+  'red-hill',
+  'reunion',
+  'rossburgh',
+  'sea-view',
+  'shallcross',
+  'situndu-hills',
+  'tembalihle',
+  'thornwood',
+  'umbilo',
+  'umbogintwini',
+  'umgeni',
+  'umlazi',
+  'warner-beach',
+  'westcliff',
+  'winklespruit',
+  'zwelethu',
+];
+
+/** Full Eastern Cape timed-stop catalog. */
+const EC_STATIONS = [
+  'arnoldton',
+  'berlin',
+  'cambridge',
+  'chiselhurst',
+  'dawn',
+  'east-london',
+  'egerton',
+  'fort-jackson',
+  'highgate',
+  'horseshoe',
+  'lonetree',
+  'mdantsane',
+  'mount-ruth',
+  'mtsotso',
+  'panmure',
+  'southernwood',
+  'vincent',
+  'wilsonia',
+];
+
 export const STATION_INDEX_ALLOWLIST = new Set([
-  ...PHASE1_GP_STATIONS,
-  ...PHASE1_REGIONAL_HUBS,
+  ...GP_STATIONS,
+  ...WC_STATIONS,
+  ...KZN_STATIONS,
+  ...EC_STATIONS,
 ]);
 
 export function isStationIndexable(slug) {
   return STATION_INDEX_ALLOWLIST.has(String(slug || '').trim());
 }
 
-/** True when slug is a phase-1 non-GP hub (not a full-region rollout yet). */
+/** True when slug is a phase-1 non-GP hub (historical phase-1 set). */
 export function isPhase1RegionalHub(slug) {
   const want = String(slug || '').trim();
   return PHASE1_REGIONAL_HUBS.includes(want);

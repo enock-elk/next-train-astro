@@ -144,23 +144,62 @@ export function scopedLiveNotices(list = cachedLiveNotices, region = $userRegion
     return (Array.isArray(list) ? list : []).filter((n) => keys.has(n._sourceKey));
 }
 
-async function fetchBucket(key) {
+/** Last notices_meta stamp we already hydrated per scope key. */
+const noticesMetaStamp = Object.create(null);
+/** Last parsed bucket kept when meta says nothing changed. */
+const noticesBucketCache = Object.create(null);
+let unionNoticesInFlight = null;
+let unionNoticesInFlightKey = '';
+
+async function fetchBucket(key, { force = false } = {}) {
     try {
+        if (!force) {
+            try {
+                const metaRes = await fetch(
+                    `${DYNAMIC_BASE_URL}notices_meta/${encodeURIComponent(key)}.json?t=${Date.now()}`,
+                    { cache: 'no-store' }
+                );
+                if (metaRes.ok) {
+                    const meta = await metaRes.json();
+                    const stamp = meta && typeof meta === 'object'
+                        ? `${meta.latestId || ''}|${meta.latestAt || 0}|${meta.liveCount || 0}|${meta.latestCriticalAt || 0}`
+                        : '';
+                    if (stamp && stamp === noticesMetaStamp[key] && Array.isArray(noticesBucketCache[key])) {
+                        return noticesBucketCache[key];
+                    }
+                    if (stamp) noticesMetaStamp[key] = stamp;
+                }
+            } catch { /* meta is optional; fall through to full bucket */ }
+        }
         const res = await fetch(`${DYNAMIC_BASE_URL}notices/${encodeURIComponent(key)}.json?t=${Date.now()}`);
-        if (!res.ok) return [];
+        if (!res.ok) return noticesBucketCache[key] || [];
         const ct = res.headers.get('content-type') || '';
         if (ct.includes('text/html')) throw new Error('Captive Portal Detected');
-        return parseNoticeBucket(await res.json(), key);
+        const parsed = parseNoticeBucket(await res.json(), key);
+        noticesBucketCache[key] = parsed;
+        return parsed;
     } catch (e) {
         if (e?.message === 'Captive Portal Detected') throw e;
-        return [];
+        return noticesBucketCache[key] || [];
     }
 }
 
-export async function fetchUnionNotices(region, routeId) {
+export async function fetchUnionNotices(region, routeId, { force = false } = {}) {
     const keys = scopeKeyOverride ? [...scopeKeyOverride] : noticeScopeKeys(region, routeId);
-    const buckets = await Promise.all(keys.map(fetchBucket));
-    return mergeUnionNotices(buckets);
+    const flightKey = `${keys.join(',')}|${force ? 1 : 0}`;
+    if (unionNoticesInFlight && unionNoticesInFlightKey === flightKey) {
+        return unionNoticesInFlight;
+    }
+    unionNoticesInFlightKey = flightKey;
+    unionNoticesInFlight = Promise.all(keys.map((key) => fetchBucket(key, { force })))
+        .then((buckets) => mergeUnionNotices(buckets))
+        .finally(() => {
+            if (unionNoticesInFlightKey === flightKey) {
+                unionNoticesInFlight = null;
+                unionNoticesInFlightKey = '';
+            }
+        });
+    return unionNoticesInFlight;
 }
 
 function formatPosted(notice) {
@@ -906,6 +945,10 @@ export function openAlertsChannel(opts = {}) {
     requestAnimationFrame(() => requestAnimationFrame(align));
     setTimeout(align, 280);
     bindAlertsChannelOnce();
+    // Opening Alerts always revalidates notices (idle poll may be 2–3 min).
+    if (typeof window !== 'undefined' && typeof window.checkServiceAlerts === 'function') {
+        try { window.checkServiceAlerts({ force: true }); } catch { /* ignore */ }
+    }
 }
 
 export function applyBellFromNotices(notices) {

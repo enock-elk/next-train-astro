@@ -2238,8 +2238,16 @@ if (typeof window !== 'undefined') {
 }
 
 let alertsCheckGen = 0;
+let alertsCheckInFlight = null;
+let alertsCheckInFlightKey = '';
 
-export async function checkServiceAlerts() {
+function alertsUiOpen() {
+    const channel = document.getElementById('alerts-channel');
+    return !!(channel && !channel.classList.contains('hidden'));
+}
+
+export async function checkServiceAlerts(opts = {}) {
+    const force = opts?.force === true;
     const bellBtn = document.getElementById('notice-bell');
     const dot = document.getElementById('notice-dot');
     const modal = document.getElementById('notice-modal');
@@ -2248,11 +2256,16 @@ export async function checkServiceAlerts() {
     const deviceId = $deviceId.get() || safeStorage.getItem('next_train_device_id');
     const routeId = $currentRouteId.get();
     const region = $userRegion.get() || 'GP';
+    const flightKey = `${region}|${routeId || ''}|${deviceId || ''}|${force ? 1 : 0}`;
+    if (alertsCheckInFlight && alertsCheckInFlightKey === flightKey) {
+        return alertsCheckInFlight;
+    }
     const gen = ++alertsCheckGen;
-
+    alertsCheckInFlightKey = flightKey;
+    alertsCheckInFlight = (async () => {
     try {
         // Notices first so a route swap does not wait on the inbox round-trip.
-        const noticesPromise = fetchUnionNotices(region, routeId).then((validNotices) => {
+        const noticesPromise = fetchUnionNotices(region, routeId, { force }).then((validNotices) => {
             if (gen !== alertsCheckGen) return null;
             setCachedLiveNotices(validNotices);
             const channel = document.getElementById('alerts-channel');
@@ -2372,6 +2385,13 @@ export async function checkServiceAlerts() {
     } catch (e) {
         console.warn('Service alerts check failed', e);
     }
+    })().finally(() => {
+        if (alertsCheckInFlightKey === flightKey) {
+            alertsCheckInFlight = null;
+            alertsCheckInFlightKey = '';
+        }
+    });
+    return alertsCheckInFlight;
 }
 
 export function initHub() {
@@ -3249,17 +3269,24 @@ export function initHub() {
 
     // Admin password eye is bound after stampAdminChrome (login lives in a <template>).
 
-    // Poll notices soon after boot, then often while the app is open (refresh was
-    // previously the only reliable way to see a just-published alert).
-    setTimeout(() => checkServiceAlerts(), 600);
+    // Poll notices soon after boot. Idle poll is slow while Alerts is closed;
+    // opening the channel / visibility / route change still refresh immediately.
+    const ALERTS_IDLE_POLL_MS = 150 * 1000;
+    const ALERTS_OPEN_POLL_MS = 45 * 1000;
+    setTimeout(() => checkServiceAlerts({ force: true }), 600);
     setInterval(() => {
         if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
-        checkServiceAlerts();
-    }, 45 * 1000);
+        checkServiceAlerts({ force: alertsUiOpen() });
+    }, ALERTS_IDLE_POLL_MS);
+    setInterval(() => {
+        if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+        if (!alertsUiOpen()) return;
+        checkServiceAlerts({ force: true });
+    }, ALERTS_OPEN_POLL_MS);
     if (!window.__ntAlertVisibilityBound) {
         window.__ntAlertVisibilityBound = true;
         document.addEventListener('visibilitychange', () => {
-            if (document.visibilityState === 'visible') checkServiceAlerts();
+            if (document.visibilityState === 'visible') checkServiceAlerts({ force: true });
         });
         const paintAlertsForCurrentRoute = () => {
             const scoped = scopedLiveNotices();
@@ -3269,7 +3296,7 @@ export function initHub() {
                 renderAlertsChannel(scoped, { resetVisible: true });
             }
             applyBellFromNotices(scoped);
-            checkServiceAlerts();
+            checkServiceAlerts({ force: true });
         };
         $currentRouteId.subscribe(paintAlertsForCurrentRoute);
         $userRegion.subscribe(paintAlertsForCurrentRoute);

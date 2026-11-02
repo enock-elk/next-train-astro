@@ -694,8 +694,10 @@ assert(hubModals.includes('id="nt-admin-publish-train"'), 'admin nearby sheet ca
     assert(gpsFreshness.includes('RIDE_GPS_STALE_MS = RIDE_INTERPOLATION_MAX_MS'), 'GPS stale window matches the 18 second interpolation cap');
     assert(ridePings.includes('RIDE_SHARE_IDLE_MS = 10 * 60 * 1000'), 'share stops after 10 minutes idle');
     assert(ridePings.includes('RIDE_GPS_STALE_MS'), 'GPS stale window is exported');
-    assert(ridePings.includes('ONBOARD_FAST_PING_MS = 3 * 1000'), 'a moving train publishes every 3 seconds');
-    assert(ridePings.includes('ONBOARD_STATIONARY_PING_MS = 3 * 1000'), 'a parked train still publishes every 3 seconds');
+    assert(ridePings.includes('ONBOARD_FAST_PING_MS = 5 * 1000'), 'a moving train publishes every 5 seconds');
+    assert(ridePings.includes('ONBOARD_STATIONARY_PING_MS = 8 * 1000'), 'a parked train publishes every 8 seconds');
+    assert(ridePings.includes('armRidePingOnDisconnect'), 'sharer arms onDisconnect cleanup');
+    assert(ridePings.includes('STATIONARY_AUTO_STOP_MS'), 'prolonged stationary sharing auto-stops');
     assert(ridePings.includes('startBackgroundTicker(') && ridePings.includes('ONBOARD_LOOP_TICK_MS'), 'onboard loop ticks from a Web Worker so background throttling cannot starve it');
     assert(ridePings.includes('SHARE_PROMPT_TIMEOUT_MS = 90 * 1000'), 'unanswered share prompts stop the share after 90 seconds');
     assert(ridePings.includes("title: 'Is the train moving?'") && ridePings.includes("id: 'stuck'") && ridePings.includes("id: 'cancelled'"), 'a parked sharer can mark the train stuck or cancelled');
@@ -734,7 +736,8 @@ assert(hubModals.includes('id="nt-admin-publish-train"'), 'admin nearby sheet ca
     assert(mapTab.includes('isMapTabFullscreen()'), 'map fullscreen can exit when already full');
     assert(mapView.includes('allow="geolocation; fullscreen"'), 'map iframe allows fullscreen');
     assert(mapPage.includes('data-map-fs-icon="minimize"'), 'fullscreen control becomes minimize');
-    assert(mapTab.includes('PINGS_POLL_WITH_LISTENER_MS'), 'map REST poll backs off when the listener is live');
+    assert(mapTab.includes('PINGS_POLL_MS = 8 * 1000'), 'map REST poll is slower when the listener is down');
+    assert(mapTab.includes('allowRest'), 'map skips REST while the ride_pings listener is live');
     assert(mapView.includes('Stop sharing'), 'tracking card can stop sharing');
     assert(ridePings.includes('Stop the other share'), 'second device is offered a stop');
     assert(ridePings.includes('appendRideShareLog'), 'share start/stop writes a log');

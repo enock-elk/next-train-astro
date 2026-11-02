@@ -264,7 +264,7 @@ assert(
     'trusted high-accuracy locate wins over the map pin'
 );
 assert(RIDE_GPS_STALE_MS === 18000 && RIDE_INTERPOLATION_MAX_MS === 18000, 'grey pause and interpolation share an 18 second window');
-assert(ONBOARD_FAST_PING_MS === 3000 && ONBOARD_MOVING_PING_MS === 3000 && ONBOARD_STATIONARY_PING_MS === 3000, 'onboard bands publish every 3 seconds');
+assert(ONBOARD_FAST_PING_MS === 5000 && ONBOARD_MOVING_PING_MS === 6000 && ONBOARD_STATIONARY_PING_MS === 8000, 'onboard bands publish on the slower RTDB cadence');
 assert(SHARE_EAGER_GPS_MS === 3000 && SHARE_GPS_MISS_LIMIT === 6, 'GPS is tried every 3 seconds and pauses after 6 misses');
 assert(SHARE_EAGER_GPS_MS * SHARE_GPS_MISS_LIMIT === RIDE_GPS_STALE_MS, 'six 3 second misses are the 18 second pause');
 assert(RIDE_SHARE_IDLE_MS === 10 * 60 * 1000, 'share stops after 10 minutes idle');
@@ -279,9 +279,10 @@ assert(RIDE_SHARE_MAX_MS === 4 * 60 * 60 * 1000, 'a share cannot record longer t
 }
 assert(STANDARD_TRAIN_LENGTH_M === 250, 'same-train average stays inside one train length');
 assert(ONBOARD_STATIONARY_PING_MS * 2 < RIDE_GPS_STALE_MS, 'a parked heartbeat can miss once and still beat the 18s grey window');
-assert(adaptiveOnboardPingMs(12) === ONBOARD_FAST_PING_MS, 'fast train broadcasts every 3 seconds');
-assert(adaptiveOnboardPingMs(2) === ONBOARD_MOVING_PING_MS, 'slow movement still broadcasts every 3 seconds');
-assert(adaptiveOnboardPingMs(0) === ONBOARD_STATIONARY_PING_MS, 'a parked share still broadcasts every 3 seconds');
+assert(adaptiveOnboardPingMs(12) === ONBOARD_FAST_PING_MS, 'fast train broadcasts on the fast band');
+assert(adaptiveOnboardPingMs(2) === ONBOARD_MOVING_PING_MS, 'slow movement broadcasts on the moving band');
+assert(adaptiveOnboardPingMs(0) === ONBOARD_STATIONARY_PING_MS, 'a parked share broadcasts on the stationary band');
+assert(adaptiveOnboardPingMs(0, 'paused') === 20000, 'a paused share writes even slower');
 assert(SHARE_PROMPT_TIMEOUT_MS === 90000, 'share prompts time out after 90 seconds');
 assert(OFFTRACK_PROMPT_MS === 15000, 'off-track still-on-this-train prompt waits 15 seconds before asking again');
 assert(REVERSE_SUSTAIN_MS === 20000, 'backward progress must persist 20 seconds before the share pauses');
@@ -799,7 +800,8 @@ assert(mapPageSource.includes('transition: none !important'), 'the sharing stati
 assert(mapViewSource.includes('id="map-tracking-join"'), 'a receiver can join the train from the tracking card');
 assert(mapTabSource.includes('map-tracking-join') && mapTabSource.includes("source: 'map_join'"), 'Join this train starts a share on that train');
 assert(mapTabSource.includes('tickTrackingShareReadout'), 'the sharing card clock updates every second');
-assert(mapTabSource.includes('PINGS_POLL_MS = 3 * 1000'), 'receivers poll ride pings every 3 seconds');
+assert(mapTabSource.includes('PINGS_POLL_MS = 8 * 1000'), 'receivers REST-poll ride pings every 8 seconds when the listener is down');
+assert(mapTabSource.includes('allowRest'), 'map skips REST while the ride_pings listener is live');
 assert(geoWatchSource.includes('attemptShareGpsFix'), 'a share asks for a GPS fix on its own cadence');
 assert(geoWatchSource.includes('timeout: 2800'), 'each GPS try times out inside the 3 second cadence');
 assert(ridePingsSource.includes('SHARE_GPS_MISS_LIMIT'), 'the share pauses after six missed GPS tries');

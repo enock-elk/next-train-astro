@@ -210,6 +210,8 @@ ok(ui.includes('Admin.onBriefPopState'), 'back reaches the brief before Dev Mode
 const badge = readFileSync(join(ROOT, 'src/lib/operator-badge.js'), 'utf8');
 ok(badge.includes('isAdminEmail') && badge.includes('clearAppBadge'), 'only an operator email can badge the icon');
 ok(badge.includes('feedback.json'), 'the icon reads commuter messages');
+ok(badge.includes('orderBy') && badge.includes('limitToLast'), 'the icon queries unread feedback, not the full tree');
+ok(badge.includes('fb_last_checked'), 'the icon still respects last-checked');
 const account = readFileSync(join(ROOT, 'src/lib/account.js'), 'utf8');
 ok(account.includes('operator-badge.js'), 'the icon updates without opening Dev Mode');
 const worker = readFileSync(join(ROOT, 'workers/nexttrain-reply/worker.js'), 'utf8');

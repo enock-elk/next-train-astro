@@ -129,7 +129,7 @@ const ui = readFileSync(new URL('../src/lib/ui.js', import.meta.url), 'utf8');
 assert(logic.includes('killswitchCheckPromise'), 'concurrent killswitch calls share one in-flight check');
 assert(logic.includes("safeStorage.setItem(KILLSWITCH_PENDING_KEY"), 'killswitch writes pending marker before cleanup');
 assert(logic.indexOf('safeStorage.setItem(KILLSWITCH_APPLIED_KEY') > logic.indexOf("performHardCacheClear('system_killswitch')"), 'killswitch marks applied only after cleanup');
-assert(logic.includes("setInterval(() => poke({ visibleOnly: true }), 15_000)"), 'visible online sessions check NUKE every 15s');
+assert(logic.includes("setInterval(() => poke({ visibleOnly: true }), 60_000)"), 'visible online sessions check NUKE every 60s');
 assert(hub.indexOf('probeReachability(3500)') < hub.indexOf("if ('caches' in window)"), 'killswitch preflights before Cache Storage changes');
 assert(hub.includes("performHardCacheClear('check_updates', {"), 'manual Check for Updates still goes through the update path');
 assert(hub.includes("policy.systemKillswitch || source === 'check_updates'"), 'Check for Updates still preflights');

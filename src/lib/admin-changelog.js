@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_11.02.1': [
+        'RTDB cost: operator badge and Dev Hub badges use timestamp queries / shallow keys (not full feedback/crash/community trees). Killswitch 60s while visible. Alerts share one in-flight check, prefer notices_meta before bucket GETs, idle poll 150s (45s while Alerts open). Browser notices_scheduled publisher disarmed; GitHub Actions hourly backup only (Worker cron remains primary). Exclusions/disruptions stamp-gated 3 min; loadAllSchedules shares one in-flight promise. Live share writes 5/6/8s (20s paused), onDisconnect cleanup, no root ride_pings.json, Map skips REST while onValue live. Dev Hub telemetry 45s. Co-Pilot: known regions omit survey URL; guardDraft halts survey-only ops drafts without desk digits; similar-reply bias; easterncape normalize; WC desks in soft knowledge; header scroll preserved across visualViewport/focus; single outer scroller. map-tab gold hash updated. Deploy firebase-database.rules.json (feedback/crashes/routing_fails .indexOn). Redeploy nexttrain-reply (and community if needed). No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_11.01.4': [
         'Map loading uses the Map tab pin SVG. Welcome pulse is half as frequent. Guide refreshed for current board, Trip Planner (Pick a date), Passenger Type, Install Next Train wording, SVG section icons, Direct/Transfer pills sized to body text, and the Metrorail Commuters SA Facebook group name. Co-Pilot reply no longer yanking the header back on keyboard focus. Check Tomorrow Schedule merges shared-corridor trains like See upcoming trains. Changing Passenger Type refreshes the home fare chip and open Ticket Prices sheet. No gold map files touched. No commuter What\'s New. forceShow stays false.',
     ],

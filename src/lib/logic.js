@@ -344,6 +344,15 @@ export let isLieFi = false;
 export let _networkStruggleCount = 0;
 let _lastSlowNetworkToastTime = 0;
 let _reachabilityProbed = false;
+/** Share one in-flight schedule load so board+planner do not abort-restart each other. */
+let loadAllSchedulesInFlight = null;
+let loadAllSchedulesInFlightKey = '';
+/** Client-side overlay stamps — skip re-downloading exclusions/disruptions when fresh. */
+const OVERLAY_TTL_MS = 3 * 60 * 1000;
+let exclusionsOverlayAt = 0;
+let exclusionsOverlayBucket = '';
+let disruptionsOverlayAt = 0;
+let disruptionsOverlayBucket = '';
 
 /** Banner/toast only after this much of the current visible session. */
 const STRUGGLE_UI_MIN_MS = 15_000;
@@ -945,8 +954,8 @@ export function bindKillswitchWatch() {
         if (document.visibilityState === 'visible') poke();
     });
     poke();
-    setInterval(() => poke({ visibleOnly: true }), 15_000);
-    console.log('🛡️ Guardian: NUKE listener armed (every 15s while visible, and on focus/online).');
+    setInterval(() => poke({ visibleOnly: true }), 60_000);
+    console.log('🛡️ Guardian: NUKE listener armed (every 60s while visible, and on focus/online).');
 }
 
 /** Remote special-event route activation without a deploy. */
@@ -1496,7 +1505,7 @@ function markSchedulesCoreReady() {
 }
 
 // --- GUARDIAN PHASE B: EAGER RENDERING PROTOCOL ---
-export async function loadAllSchedules(force = false) {
+async function loadAllSchedulesInner(force = false) {
     const scheduleStartedAt = Date.now();
     if (typeof window !== 'undefined' && window._suppressReloads && !force) {
         waterfallLog('schedule load skipped suppressReloads');
@@ -1694,55 +1703,71 @@ export async function loadAllSchedules(force = false) {
         await fetchScheduleOverride(force);
         if (fetchSignal.aborted || $currentRouteId.get() !== requestedRouteId) return;
 
-        // Ops overlays (ghost trains / disruption badges)
+        // Ops overlays (ghost trains / disruption badges) — stamp-gated client TTL.
         const edgeCacheBucket = Math.floor(Date.now() / 300000);
-        try {
-            const exclResp = await guardianFetch(`${DYNAMIC_BASE_URL}exclusions.json?t=${edgeCacheBucket}`, { signal: fetchSignal }, 4000);
-            if (exclResp.ok) {
-                const exclData = await exclResp.json();
-                if (exclData) {
-                    const nextExclusions = pruneExclusionsTree(exclData);
-                    $globalExclusions.set(nextExclusions);
-                    writeCachedExclusions(nextExclusions);
-                }
-            }
-        } catch (e) {
-            console.warn('Exclusions fetch failed, using defaults.');
+        const overlayNow = Date.now();
+        const exclFresh = !force
+            && exclusionsOverlayBucket === String(edgeCacheBucket)
+            && (overlayNow - exclusionsOverlayAt) < OVERLAY_TTL_MS
+            && Object.keys($globalExclusions.get() || {}).length > 0;
+        const disrFresh = !force
+            && disruptionsOverlayBucket === String(edgeCacheBucket)
+            && (overlayNow - disruptionsOverlayAt) < OVERLAY_TTL_MS
+            && $opsOverlaysReady.get();
+        if (!exclFresh) {
             try {
-                if (!Object.keys($globalExclusions.get() || {}).length && DEFAULT_EXCLUSIONS) {
-                    $globalExclusions.set({ ...DEFAULT_EXCLUSIONS });
+                const exclResp = await guardianFetch(`${DYNAMIC_BASE_URL}exclusions.json?t=${edgeCacheBucket}`, { signal: fetchSignal }, 4000);
+                if (exclResp.ok) {
+                    const exclData = await exclResp.json();
+                    if (exclData) {
+                        const nextExclusions = pruneExclusionsTree(exclData);
+                        $globalExclusions.set(nextExclusions);
+                        writeCachedExclusions(nextExclusions);
+                        exclusionsOverlayAt = Date.now();
+                        exclusionsOverlayBucket = String(edgeCacheBucket);
+                    }
                 }
-            } catch { /* ignore */ }
+            } catch (e) {
+                console.warn('Exclusions fetch failed, using defaults.');
+                try {
+                    if (!Object.keys($globalExclusions.get() || {}).length && DEFAULT_EXCLUSIONS) {
+                        $globalExclusions.set({ ...DEFAULT_EXCLUSIONS });
+                    }
+                } catch { /* ignore */ }
+            }
         }
 
-        try {
-            const disrResp = await guardianFetch(`${DYNAMIC_BASE_URL}disruptions.json?t=${edgeCacheBucket}`, { signal: fetchSignal }, 4000);
-            if (disrResp.ok) {
-                const disrData = await disrResp.json();
-                if (disrData) {
-                    const now = Date.now();
-                    const nextDisruptions = {};
-                    Object.keys(disrData).forEach((routeKey) => {
-                        const routeObj = disrData[routeKey];
-                        if (routeObj && typeof routeObj === 'object') {
-                            Object.values(routeObj).forEach((d) => {
-                                if (d && d.routeId && (!d.expiresAt || d.expiresAt > now)) {
-                                    if (!nextDisruptions[d.routeId]) nextDisruptions[d.routeId] = [];
-                                    nextDisruptions[d.routeId].push(d);
-                                }
-                            });
-                        }
-                    });
-                    $globalDisruptions.set(nextDisruptions);
+        if (!disrFresh) {
+            try {
+                const disrResp = await guardianFetch(`${DYNAMIC_BASE_URL}disruptions.json?t=${edgeCacheBucket}`, { signal: fetchSignal }, 4000);
+                if (disrResp.ok) {
+                    const disrData = await disrResp.json();
+                    if (disrData) {
+                        const now = Date.now();
+                        const nextDisruptions = {};
+                        Object.keys(disrData).forEach((routeKey) => {
+                            const routeObj = disrData[routeKey];
+                            if (routeObj && typeof routeObj === 'object') {
+                                Object.values(routeObj).forEach((d) => {
+                                    if (d && d.routeId && (!d.expiresAt || d.expiresAt > now)) {
+                                        if (!nextDisruptions[d.routeId]) nextDisruptions[d.routeId] = [];
+                                        nextDisruptions[d.routeId].push(d);
+                                    }
+                                });
+                            }
+                        });
+                        $globalDisruptions.set(nextDisruptions);
+                        disruptionsOverlayAt = Date.now();
+                        disruptionsOverlayBucket = String(edgeCacheBucket);
+                    }
                 }
+            } catch (e) {
+                console.warn('Disruptions fetch failed.');
             }
-        } catch (e) {
-            console.warn('Disruptions fetch failed.');
-        } finally {
-            // Planner must know overlays finished loading (even empty/failed) so it
-            // does not publish sinkhole-blind itineraries, then "magically" gain alerts later.
-            try { $opsOverlaysReady.set(true); } catch { /* ignore */ }
         }
+        // Planner must know overlays finished loading (even empty/failed) so it
+        // does not publish sinkhole-blind itineraries, then "magically" gain alerts later.
+        try { $opsOverlaysReady.set(true); } catch { /* ignore */ }
 
         // GUARDIAN SMART SYNC: ping lastUpdated only — skip the multi-MB payload
         // when the cached regional DB is already current (critical on metered 3G).
@@ -1999,6 +2024,25 @@ export async function loadAllSchedules(force = false) {
             nudgeHomeAutoNotices();
         }
     }
+}
+
+/** Public entry: share one in-flight load per route unless force=true. */
+export async function loadAllSchedules(force = false) {
+    const routeId = $currentRouteId.get() || '';
+    const key = `${regionSwapGeneration}|${routeId}|${force ? 1 : 0}`;
+    if (!force && loadAllSchedulesInFlight && loadAllSchedulesInFlightKey === key) {
+        return loadAllSchedulesInFlight;
+    }
+    // A forced refresh supersedes a soft in-flight load.
+    loadAllSchedulesInFlightKey = key;
+    const run = loadAllSchedulesInner(force).finally(() => {
+        if (loadAllSchedulesInFlightKey === key) {
+            loadAllSchedulesInFlight = null;
+            loadAllSchedulesInFlightKey = '';
+        }
+    });
+    loadAllSchedulesInFlight = run;
+    return run;
 }
 
 /**

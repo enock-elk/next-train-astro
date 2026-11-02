@@ -51,10 +51,28 @@ jobs:
               raise SystemExit(f"dump missing region objects: {missing}")
           print("dump ok")
           PY
-          if [ -z "$TOKEN" ]; then
+          if [ -z "${TOKEN:-}" ]; then
             echo "::error::Missing secret METRORAIL_APP_DEPLOY_TOKEN"
             exit 1
           fi
+          CODE="$(curl -sS -o /tmp/nt-deploy-token.json -w '%{http_code}' \
+            -H "Authorization: Bearer ${TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${{ env.TARGET_REPO }}")"
+          if [ "$CODE" != "200" ]; then
+            echo "::error::METRORAIL_APP_DEPLOY_TOKEN was rejected by GitHub (HTTP ${CODE}) for ${{ env.TARGET_REPO }}."
+            echo "Rotate the PAT (Contents: Read and Write on ${{ env.TARGET_REPO }}) and update that repository secret."
+            head -c 400 /tmp/nt-deploy-token.json || true
+            echo
+            exit 1
+          fi
+          PUSH="$(python3 -c 'import json; print(json.load(open("/tmp/nt-deploy-token.json")).get("permissions",{}).get("push"))')"
+          if [ "$PUSH" != "True" ] && [ "$PUSH" != "true" ]; then
+            echo "::error::METRORAIL_APP_DEPLOY_TOKEN lacks Contents write on ${{ env.TARGET_REPO }} (push=${PUSH})."
+            exit 1
+          fi
+          echo "Deploy token can push to ${{ env.TARGET_REPO }}."
 
       - name: Checkout live host (metrorail-app)
         uses: actions/checkout@v4

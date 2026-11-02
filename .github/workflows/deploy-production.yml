@@ -56,12 +56,37 @@ jobs:
         if: ${{ !inputs.dry_run }}
         env:
           TOKEN: ${{ secrets.METRORAIL_APP_DEPLOY_TOKEN }}
+          TARGET_REPO: ${{ env.TARGET_REPO }}
         run: |
-          if [ -z "$TOKEN" ]; then
+          set -euo pipefail
+          if [ -z "${TOKEN:-}" ]; then
             echo "::error::Missing secret METRORAIL_APP_DEPLOY_TOKEN on this repository."
-            echo "Create a PAT with Contents write on ${{ env.TARGET_REPO }} and add it as that secret."
+            echo "Create a fine-grained PAT with Contents: Read and Write on ${TARGET_REPO}, then set that secret."
             exit 1
           fi
+          # A present-but-expired PAT still sets Authorization, so checkout of the
+          # public host fails with "could not read Username … terminal prompts disabled"
+          # instead of a clear 401. Probe the API before spending a full build.
+          CODE="$(curl -sS -o /tmp/nt-deploy-token.json -w '%{http_code}' \
+            -H "Authorization: Bearer ${TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${TARGET_REPO}")"
+          if [ "$CODE" != "200" ]; then
+            echo "::error::METRORAIL_APP_DEPLOY_TOKEN was rejected by GitHub (HTTP ${CODE}) for ${TARGET_REPO}."
+            echo "The secret is set, but the PAT is expired, revoked, or cannot see that repo."
+            echo "Rotate the PAT (Contents: Read and Write on ${TARGET_REPO}) and update the repository secret. Do not mint a second parallel secret name."
+            head -c 400 /tmp/nt-deploy-token.json || true
+            echo
+            exit 1
+          fi
+          PUSH="$(python3 -c 'import json; print(json.load(open("/tmp/nt-deploy-token.json")).get("permissions",{}).get("push"))')"
+          if [ "$PUSH" != "True" ] && [ "$PUSH" != "true" ]; then
+            echo "::error::METRORAIL_APP_DEPLOY_TOKEN can read ${TARGET_REPO} but lacks Contents write (push=${PUSH})."
+            echo "Edit the fine-grained PAT: Repository permissions → Contents → Read and write. Then re-run Deploy production."
+            exit 1
+          fi
+          echo "Deploy token can push to ${TARGET_REPO}."
 
   build:
     needs: guard

@@ -1,6 +1,6 @@
 {
   "branch": "map-gold",
-  "frozenAt": "149c67bd0b73a723d58fe900c65000b9893d0e11",
+  "frozenAt": "210cefe5634f6ba85e6167f26478e745ccf16d0d",
   "version": "V9_09.20.11",
   "note": "Gold snapshot: map-tab skips REST ride_pings poll while onValue is live (RTDB cost). Tracks, map-app, MapView, rail-tracks, map.astro, and advert handling otherwise unchanged. Fast-forward map-gold to the commit that records this lockfile. Never force-push map-gold.",
   "files": {

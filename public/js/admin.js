@@ -3216,6 +3216,28 @@ const Admin = {
     },
 
     // --- GUARDIAN PHASE 11 & 12: MASTER NOTIFICATION ENGINE (SEEN PROTOCOL) ---
+    /** Tiny RTDB query for badge counts — never download a full admin tree. */
+    _badgeQueryUrl: (path, secret, { startAt = 0, limit = 40, orderBy = 'timestamp' } = {}) => {
+        const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
+        const params = new URLSearchParams();
+        params.set('auth', secret);
+        params.set('orderBy', `"${orderBy}"`);
+        params.set('startAt', String(Math.max(0, Number(startAt) || 0)));
+        params.set('limitToLast', String(limit));
+        return `${dynamicEndpoint}${path}?${params.toString()}`;
+    },
+
+    _countBadgeRows: (data, lastChecked, filterFn = null) => {
+        let unread = 0;
+        if (!data || typeof data !== 'object') return 0;
+        Object.values(data).forEach((item) => {
+            if (!item) return;
+            if (filterFn && !filterFn(item)) return;
+            if (Number(item.timestamp || 0) > lastChecked) unread += 1;
+        });
+        return unread;
+    },
+
     syncAllBadges: async () => {
         if (Admin._badgeSyncInFlight) return;
         Admin._badgeSyncInFlight = true;
@@ -3234,19 +3256,11 @@ const Admin = {
                 if (stateRes.ok) adminState = (await stateRes.json()) || adminState;
             } catch(e){}
 
-            // 1. Fetch Feedback
-            const fbRes = await window.guardianFetch(`${dynamicEndpoint}feedback.json?auth=${secret}`, {}, 6000);
+            const localFbChecked = parseInt(typeof safeStorage !== 'undefined' ? (safeStorage.getItem('fb_last_checked') || '0') : '0');
+            const fbLastChecked = Math.max(localFbChecked, parseInt(adminState.fb_last_checked || '0'));
+            const fbRes = await window.guardianFetch(Admin._badgeQueryUrl('feedback.json', secret, { startAt: fbLastChecked + 1 }), {}, 6000);
             if (fbRes.ok) {
-                const fbData = await fbRes.json();
-                let fbUnread = 0;
-                // GUARDIAN PHASE 12: Sync local offline state with Firebase cross-device state (Whichever is newest wins)
-                const localFbChecked = parseInt(typeof safeStorage !== 'undefined' ? (safeStorage.getItem('fb_last_checked') || '0') : '0');
-                const lastChecked = Math.max(localFbChecked, parseInt(adminState.fb_last_checked || '0'));
-                
-                if (fbData && typeof fbData === 'object') {
-                    Object.values(fbData).forEach(i => { if (i.timestamp > lastChecked) fbUnread++; });
-                }
-
+                const fbUnread = Admin._countBadgeRows(await fbRes.json(), fbLastChecked);
                 messageUnread = fbUnread;
                 totalUnread += fbUnread;
                 const fbBadge = document.getElementById('fb-unread-badge');
@@ -3256,18 +3270,11 @@ const Admin = {
                 }
             }
 
-            // 2. Fetch Crashes
-            const crRes = await window.guardianFetch(`${dynamicEndpoint}sys_logs/crashes.json?auth=${secret}`, {}, 6000);
+            const localCrChecked = parseInt(typeof safeStorage !== 'undefined' ? (safeStorage.getItem('crash_last_checked') || '0') : '0');
+            const crLastChecked = Math.max(localCrChecked, parseInt(adminState.crash_last_checked || '0'));
+            const crRes = await window.guardianFetch(Admin._badgeQueryUrl('sys_logs/crashes.json', secret, { startAt: crLastChecked + 1 }), {}, 6000);
             if (crRes.ok) {
-                const crData = await crRes.json();
-                let crUnread = 0;
-                const localCrChecked = parseInt(typeof safeStorage !== 'undefined' ? (safeStorage.getItem('crash_last_checked') || '0') : '0');
-                const lastChecked = Math.max(localCrChecked, parseInt(adminState.crash_last_checked || '0'));
-                
-                if (crData && typeof crData === 'object') {
-                    Object.values(crData).forEach(i => { if (i.timestamp > lastChecked) crUnread++; });
-                }
-                
+                const crUnread = Admin._countBadgeRows(await crRes.json(), crLastChecked);
                 totalUnread += crUnread;
                 const crBadge = document.getElementById('crash-unread-badge');
                 if (crBadge) {
@@ -3276,18 +3283,11 @@ const Admin = {
                 }
             }
 
-            // 3. Fetch Dead Ends
-            const deRes = await window.guardianFetch(`${dynamicEndpoint}sys_logs/routing_fails.json?auth=${secret}`, {}, 6000);
+            const localDeChecked = parseInt(typeof safeStorage !== 'undefined' ? (safeStorage.getItem('de_last_checked') || '0') : '0');
+            const deLastChecked = Math.max(localDeChecked, parseInt(adminState.de_last_checked || '0'));
+            const deRes = await window.guardianFetch(Admin._badgeQueryUrl('sys_logs/routing_fails.json', secret, { startAt: deLastChecked + 1 }), {}, 6000);
             if (deRes.ok) {
-                const deData = await deRes.json();
-                const localDeChecked = parseInt(typeof safeStorage !== 'undefined' ? (safeStorage.getItem('de_last_checked') || '0') : '0');
-                const lastChecked = Math.max(localDeChecked, parseInt(adminState.de_last_checked || '0'));
-                let deUnread = 0;
-                
-                if (deData && typeof deData === 'object') {
-                    Object.values(deData).forEach(i => { if (i.timestamp > lastChecked) deUnread++; });
-                }
-                
+                const deUnread = Admin._countBadgeRows(await deRes.json(), deLastChecked);
                 totalUnread += deUnread;
                 const deBadge = document.getElementById('de-unread-badge');
                 if (deBadge) {
@@ -3296,39 +3296,30 @@ const Admin = {
                 }
             }
 
-            // 4. Delay reports (Phase 5)
-            const drRes = await window.guardianFetch(`${dynamicEndpoint}delay_reports.json?auth=${secret}`, {}, 6000);
-            if (drRes.ok) {
-                const drData = await drRes.json();
-                let drUnread = 0;
-                const localDrChecked = parseInt(typeof safeStorage !== 'undefined' ? (safeStorage.getItem('dr_last_checked') || '0') : '0');
-                const lastChecked = Math.max(localDrChecked, parseInt(adminState.dr_last_checked || '0'));
-                if (drData && typeof drData === 'object') {
-                    Object.values(drData).forEach((i) => {
-                        if (i && i.status !== 'closed' && (i.timestamp || 0) > lastChecked) drUnread++;
-                    });
-                }
+            // Delay / deletions / community badges: shallow presence only.
+            // Full trees load when that admin panel opens — never on the home poll.
+            try {
+                const [drShallow, delShallow, mqShallow, heldShallow] = await Promise.all([
+                    window.guardianFetch(`${dynamicEndpoint}delay_reports.json?auth=${secret}&shallow=true`, {}, 6000),
+                    window.guardianFetch(`${dynamicEndpoint}account_deletions.json?auth=${secret}&shallow=true`, {}, 6000),
+                    window.guardianFetch(`${dynamicEndpoint}community_activity.json?auth=${secret}&shallow=true`, {}, 6000),
+                    window.guardianFetch(`${dynamicEndpoint}moderation_queue.json?auth=${secret}&shallow=true`, {}, 6000),
+                ]);
+                const shallowCount = (res) => {
+                    if (!res || !res.ok) return 0;
+                    return res.json().then((data) => (
+                        data && typeof data === 'object' ? Math.min(Object.keys(data).length, 40) : 0
+                    )).catch(() => 0);
+                };
+                const drUnread = await shallowCount(drShallow);
                 totalUnread += drUnread;
                 const drBadge = document.getElementById('dr-unread-badge');
                 if (drBadge) {
                     drBadge.textContent = Admin.formatBadgeCount(drUnread);
                     drBadge.classList.toggle('hidden', drUnread === 0);
                 }
-            }
 
-            // 5b. Account deletion requests (User Trust tile)
-            try {
-                const delRes = await window.guardianFetch(`${dynamicEndpoint}account_deletions.json?auth=${secret}`, {}, 6000);
-                let delUnread = 0;
-                if (delRes.ok) {
-                    const delData = await delRes.json();
-                    if (delData && typeof delData === 'object') {
-                        Object.values(delData).forEach((row) => {
-                            if (!row || row.status === 'done' || row.deletionResolvedAt) return;
-                            if (Number(row.requestedAt || row.deletionRequestedAt) > 0) delUnread += 1;
-                        });
-                    }
-                }
+                const delUnread = await shallowCount(delShallow);
                 totalUnread += delUnread;
                 const utBadge = document.getElementById('ut-unread-badge');
                 if (utBadge) {
@@ -3336,40 +3327,24 @@ const Admin = {
                     utBadge.classList.toggle('hidden', delUnread === 0);
                 }
                 Admin._pendingDeletionCount = delUnread;
-            } catch { /* deletion badge is best-effort */ }
 
-            // 5. Community activity, per operator and per route.
-            const mqRes = await window.guardianFetch(`${dynamicEndpoint}community_activity.json?auth=${secret}`, {}, 6000);
-            if (mqRes.ok) {
-                const mqData = await mqRes.json();
                 let mqUnread = 0;
-                if (mqData && typeof mqData === 'object') {
-                    Object.entries(mqData).forEach(([routeId, messages]) => {
-                        const seenAt = Number(adminState.community_seen?.[routeId] || 0);
-                        Object.values(messages || {}).forEach((item) => {
-                            if (Number(item?.timestamp || 0) > seenAt) mqUnread += 1;
+                if (mqShallow.ok) {
+                    const routes = await mqShallow.json().catch(() => null);
+                    if (routes && typeof routes === 'object') {
+                        Object.keys(routes).forEach((routeId) => {
+                            if (!Number(adminState.community_seen?.[routeId] || 0)) mqUnread += 1;
                         });
-                    });
+                    }
                 }
-                const heldRes = await window.guardianFetch(`${dynamicEndpoint}moderation_queue.json?auth=${secret}`, {}, 6000);
-                if (heldRes.ok) {
-                    const heldData = await heldRes.json();
-                    Object.values(heldData || {}).forEach((item) => {
-                        const kind = item?.publish?.kind;
-                        if (!['community_post', 'community_reply'].includes(kind)) return;
-                        if (['closed', 'resolved', 'approved', 'rejected'].includes(String(item?.status || 'open'))) return;
-                        const routeId = String(item?.routeId || item?.publish?.routeId || '');
-                        const seenAt = Number(adminState.community_seen?.[routeId] || 0);
-                        if (routeId && Number(item?.timestamp || 0) > seenAt) mqUnread += 1;
-                    });
-                }
+                mqUnread += await shallowCount(heldShallow);
                 totalUnread += mqUnread;
                 const mqBadge = document.getElementById('mq-unread-badge');
                 if (mqBadge) {
                     mqBadge.textContent = Admin.formatBadgeCount(mqUnread);
                     mqBadge.classList.toggle('hidden', mqUnread === 0);
                 }
-            }
+            } catch { /* optional badge trees are best-effort */ }
             
             // Home-screen badge is unread commuter messages. Tiles above keep their own counts.
             if (messageUnread != null && 'setAppBadge' in navigator) {
@@ -3653,7 +3628,7 @@ const Admin = {
 
         if (telPanel.dataset.adminLoaded === "true") {
             if (Admin.isAllowlistedAdmin(Admin.currentUser) && !Admin.telemetryInterval) {
-                Admin.telemetryInterval = setInterval(Admin.refreshTelemetry, 10000);
+                Admin.telemetryInterval = setInterval(Admin.refreshTelemetry, 45000);
             }
             Admin.refreshTelemetry();
             return;
@@ -3669,7 +3644,7 @@ const Admin = {
         Admin.refreshTelemetry();
         if (Admin.telemetryInterval) clearInterval(Admin.telemetryInterval);
         if (Admin.isAllowlistedAdmin(Admin.currentUser)) {
-            Admin.telemetryInterval = setInterval(Admin.refreshTelemetry, 10000);
+            Admin.telemetryInterval = setInterval(Admin.refreshTelemetry, 45000);
         }
     },
 
@@ -13203,6 +13178,8 @@ const Admin = {
     syncAdminReplyModalViewport: () => {
         const modal = document.getElementById('admin-reply-modal');
         if (!modal || modal.classList.contains('hidden')) return;
+        const scroller = document.getElementById('admin-reply-scroll');
+        const preserveTop = scroller ? scroller.scrollTop : 0;
         const vv = window.visualViewport;
         const height = Math.max(240, Math.round(vv?.height || window.innerHeight || 0));
         const top = Math.max(0, Math.round(vv?.offsetTop || 0));
@@ -13214,8 +13191,8 @@ const Admin = {
         modal.style.bottom = 'auto';
         modal.style.alignItems = 'stretch';
         modal.style.justifyContent = 'flex-start';
-        // Do not auto-scroll the reply pane on viewport sync — that was
-        // yanking the Co-Pilot header back after the admin scrolled it away.
+        // Preserve scroll across visualViewport resize/scroll — keyboard focus
+        // must not yank the Co-Pilot header back after the admin scrolled it away.
         const card = modal.firstElementChild;
         if (card) {
             card.style.position = 'absolute';
@@ -13241,6 +13218,11 @@ const Admin = {
                 sheet.style.borderRadius = '0';
             }
         }
+        if (scroller) {
+            const stash = Number.isFinite(Admin._replyScrollStash) ? Admin._replyScrollStash : preserveTop;
+            scroller.scrollTop = stash;
+            Admin._replyScrollStash = stash;
+        }
     },
 
     bindAdminReplyModalViewport: () => {
@@ -13250,6 +13232,39 @@ const Admin = {
         window.addEventListener('resize', update, { passive: true });
         window.visualViewport?.addEventListener('resize', update, { passive: true });
         window.visualViewport?.addEventListener('scroll', update, { passive: true });
+    },
+
+    /** Keep outer pane scroll while the editor is focused and the keyboard settles. */
+    holdReplyScrollWhileFocused: (scroller, top) => {
+        if (!scroller) return;
+        Admin._replyScrollStash = top;
+        scroller.scrollTop = top;
+        if (Admin._replyScrollHoldTimer) clearTimeout(Admin._replyScrollHoldTimer);
+        const started = Date.now();
+        const tick = () => {
+            if (document.activeElement?.id !== 'admin-reply-text') {
+                Admin._replyScrollHoldTimer = 0;
+                return;
+            }
+            scroller.scrollTop = Admin._replyScrollStash;
+            if (Date.now() - started < 450) {
+                Admin._replyScrollHoldTimer = setTimeout(tick, 50);
+            } else {
+                Admin._replyScrollHoldTimer = 0;
+            }
+        };
+        Admin._replyScrollHoldTimer = setTimeout(tick, 50);
+    },
+
+    /** Programmatic focus must not scroll the Co-Pilot header back into view. */
+    focusEditorSafely: (editor) => {
+        if (!editor) return;
+        try {
+            if (editor.id === 'admin-reply-text') editor.focus({ preventScroll: true });
+            else editor.focus();
+        } catch {
+            try { editor.focus(); } catch { /* ignore */ }
+        }
     },
 
     keepReplyCaretVisible: () => {
@@ -14255,14 +14270,35 @@ const Admin = {
                 editorEl.addEventListener('focus', () => {
                     const scroller = document.getElementById('admin-reply-scroll');
                     if (!scroller) return;
-                    const top = scroller.scrollTop;
+                    const top = Number.isFinite(Admin._replyScrollStash)
+                        ? Admin._replyScrollStash
+                        : scroller.scrollTop;
                     // Mobile browsers scroll the focused field into view and
                     // drag the Co-Pilot header back; keep the user's scroll.
+                    Admin.holdReplyScrollWhileFocused(scroller, top);
                     requestAnimationFrame(() => {
                         scroller.scrollTop = top;
                         requestAnimationFrame(() => { scroller.scrollTop = top; });
                     });
                 });
+                editorEl.addEventListener('blur', () => {
+                    if (Admin._replyScrollHoldTimer) {
+                        clearTimeout(Admin._replyScrollHoldTimer);
+                        Admin._replyScrollHoldTimer = 0;
+                    }
+                });
+            }
+            const scrollPane = document.getElementById('admin-reply-scroll');
+            if (scrollPane && !scrollPane.dataset.scrollStashBound) {
+                scrollPane.dataset.scrollStashBound = '1';
+                scrollPane.addEventListener('scroll', () => {
+                    if (document.activeElement?.id === 'admin-reply-text' && Admin._replyScrollHoldTimer) {
+                        // User scrolled during the hold window — adopt their position.
+                        Admin._replyScrollStash = scrollPane.scrollTop;
+                    } else {
+                        Admin._replyScrollStash = scrollPane.scrollTop;
+                    }
+                }, { passive: true });
             }
             if (!modal.dataset.caretBound) {
                 modal.dataset.caretBound = '1';
@@ -14308,7 +14344,7 @@ const Admin = {
                 const editor = document.getElementById('admin-reply-text');
                 // GUARDIAN UX FIX: Retrieve pre-upload cursor position locked via mousedown
                 const savedRange = Admin._savedRange;
-                if (editor) editor.focus();
+                if (editor) Admin.focusEditorSafely(editor);
 
                 if (this.files && this.files.length > 0) {
                     const file = this.files[0];
@@ -14725,7 +14761,7 @@ const Admin = {
         if (!editor || !videoUrl) return false;
         const esc = typeof escapeHTML === 'function' ? escapeHTML(videoUrl) : String(videoUrl);
         const htmlToInsert = `<a href="${esc}" target="_blank" rel="noopener" class="text-blue-600 dark:text-blue-400 underline underline-offset-2">${esc}</a>`;
-        editor.focus();
+        Admin.focusEditorSafely(editor);
         if (Admin._savedRange) {
             const sel = window.getSelection();
             sel.removeAllRanges();
@@ -14893,7 +14929,7 @@ const Admin = {
             el.classList.remove('nt-font-default', 'nt-font-verdana', 'nt-font-times');
             el.classList.add(spec.cls);
         };
-        editor.focus();
+        Admin.focusEditorSafely(editor);
         if (Admin._savedRange) {
             const sel = window.getSelection();
             sel.removeAllRanges();
@@ -14907,7 +14943,7 @@ const Admin = {
         if (!sel || sel.rangeCount === 0) return;
         const range = sel.getRangeAt(0);
 
-        const wrapCollapsed = () => {
+        const wrapCollapsed = () => { /* kept for callers */
             let node = sel.anchorNode;
             if (node && node.nodeType === 3) node = node.parentElement;
             let fontEl = node;
@@ -15034,7 +15070,7 @@ const Admin = {
         if (!isPdf && editor.id === 'alert-msg' && Admin.addComposerImage(editor, url)) return true;
         const htmlToInsert = Admin.inlineAttachmentHtml(url, isPdf);
         if (!htmlToInsert) return false;
-        editor.focus();
+        Admin.focusEditorSafely(editor);
         if (savedRange) {
             const sel = window.getSelection();
             sel.removeAllRanges();
@@ -15373,7 +15409,7 @@ const Admin = {
             document.head.appendChild(style);
         }
 
-        editor.focus();
+        Admin.focusEditorSafely(editor);
         
         // GUARDIAN UX FIX: Restore mobile cursor selection before formatting
         if (Admin._savedRange) {
@@ -16527,37 +16563,14 @@ const Admin = {
         });
     },
 
+    /**
+     * Browser publisher is retired as a background poller.
+     * Cloudflare Worker cron is the sole producer; Refresh still publishes on demand.
+     * Keep the arm hook so older call sites no-op safely.
+     */
     armScheduledAlertPublisher: () => {
-        const tick = () => {
-            if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
-            Promise.resolve(typeof Admin.getAuthKey === 'function' ? Admin.getAuthKey() : null)
-                .then((secret) => {
-                    if (!secret) return null;
-                    return Admin.publishDueScheduledAlerts(secret)
-                        .then((due) => {
-                            if (due && Number(due.published) > 0) return null;
-                            return Admin.fetchScheduledAlerts().then((items) => {
-                                const stillDue = (items || []).filter((job) => job && job.enabled !== false && Number(job.nextRunAt || 0) <= Date.now());
-                                if (!stillDue.length) return null;
-                                return Admin.publishDueScheduledAlertsDirect(secret, stillDue);
-                            });
-                        });
-                })
-                .catch((err) => {
-                    const pubMsg = String((err && err.message) || err || '');
-                    // Background publisher is best-effort; timeouts are not an auth failure.
-                    if (/abort|offline|failed to fetch|authentication required|timeout/i.test(pubMsg)) return;
-                    console.warn('armScheduledAlertPublisher optional', err);
-                });
-        };
-        if (!window.__ntSchedAlertArmed) {
-            window.__ntSchedAlertArmed = true;
-            setInterval(tick, 60_000);
-            document.addEventListener('visibilitychange', () => {
-                if (document.visibilityState === 'visible') tick();
-            });
-        }
-        setTimeout(tick, 400);
+        window.__ntSchedAlertArmed = true;
+        // No setInterval — Worker cron + manual Refresh own notices_scheduled.
     },
 
     refreshScheduledAlerts: async () => {

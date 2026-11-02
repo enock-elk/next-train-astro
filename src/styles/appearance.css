@@ -1404,7 +1404,8 @@ html.dark .nt-brief-fact dd {
   word-break: break-word;
 }
 #admin-reply-modal #admin-reply-text {
-  overflow-y: auto;
+  /* Single scroller is #admin-reply-scroll — do not nest overflow here. */
+  overflow-y: visible;
   scroll-padding-bottom: 1.25rem;
 }
 #alert-msg {

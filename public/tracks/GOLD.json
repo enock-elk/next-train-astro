@@ -2,7 +2,7 @@
   "branch": "map-gold",
   "frozenAt": "149c67bd0b73a723d58fe900c65000b9893d0e11",
   "version": "V9_09.20.11",
-  "note": "Gold snapshot: map.astro loading icon matches the Map tab pin SVG. Tracks, map-app, MapView, rail-tracks, map-tab, and advert handling otherwise unchanged. Fast-forward map-gold to the commit that records this lockfile. Never force-push map-gold.",
+  "note": "Gold snapshot: map-tab skips REST ride_pings poll while onValue is live (RTDB cost). Tracks, map-app, MapView, rail-tracks, map.astro, and advert handling otherwise unchanged. Fast-forward map-gold to the commit that records this lockfile. Never force-push map-gold.",
   "files": {
     "public/tracks/rail-tracks-EC.geojson": {
       "md5": "43409bfd05405205e596f0d03345ab18",
@@ -37,8 +37,8 @@
       "sha256": "e7385a8e07415f0862e983a5ffca225fc23e68c22f550ee13bc84ffdb52cf3dc"
     },
     "src/lib/map-tab.js": {
-      "md5": "0f49766c7c086c372ec12242aef7f55a",
-      "sha256": "e59779b4869caaac24f0f6538cc338a32ca2126ce2cc170425e7e8930c6fd01c"
+      "md5": "9309abc38744b43a482d745aa1c5a565",
+      "sha256": "69ec6907cdfe36eb5330ce15d3ddcd95e9aedb8b095b1b9de6f5803f7e8b3eae"
     },
     "src/lib/clever-ads.js": {
       "md5": "4d78da253d60d3ba285de6c41d697cad",

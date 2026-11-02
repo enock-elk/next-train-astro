@@ -92,12 +92,12 @@ export function phoneDigits(value) {
 }
 
 export function normalizeSuggestRegion(value) {
-    const s = String(value || '').trim().toLowerCase();
+    const s = String(value || '').trim().toLowerCase().replace(/[\s_-]+/g, '');
     if (!s) return '';
     if (s === 'gp' || s.includes('gauteng')) return 'GP';
-    if (s === 'wc' || s.includes('western')) return 'WC';
-    if (s === 'kzn' || s.includes('kwazulu') || s.includes('natal')) return 'KZN';
-    if (s === 'ec' || s.includes('eastern cape')) return 'EC';
+    if (s === 'wc' || s.includes('westerncape') || s.includes('western')) return 'WC';
+    if (s === 'kzn' || s.includes('kwazulunatal') || s.includes('kwazulu') || s.includes('natal')) return 'KZN';
+    if (s === 'ec' || s.includes('easterncape') || s.includes('eastern')) return 'EC';
     return '';
 }
 
@@ -276,6 +276,16 @@ export function pickSimilarReplies(allItems, threadItems, options = {}) {
         let score = shared;
         if (currentRoute && routeId && routeId === currentRoute) score += 4;
         if (currentRegion && region && region === currentRegion) score += 2;
+        const adminPlain = plainThreadText(admin.text || admin.message || '');
+        const adminDigits = phoneDigits(adminPlain);
+        const hasSurvey = adminPlain.includes(PRASA_SURVEY_URL)
+            || /customer experience survey|docs\.google\.com\/forms/i.test(adminPlain);
+        const hasDesk = deskDigitsForRegion(currentRegion || region).some((phone) => phone && adminDigits.includes(phone));
+        // Prefer past replies that already gave a desk number; demote survey-only when desks exist.
+        if (currentRegion && deskDigitsForRegion(currentRegion).length) {
+            if (hasDesk) score += 3;
+            else if (hasSurvey) score -= 4;
+        }
         if (shared < 1) continue;
         ranked.push({
             deviceId: did,
@@ -623,6 +633,14 @@ function sanitizeGreeting(value) {
     return '';
 }
 
+function deskDigitsForRegion(code) {
+    if (code === 'GP') return GAUTENG_PHONE_DIGITS;
+    if (code === 'KZN') return KZN_PHONE_DIGITS;
+    if (code === 'EC') return EC_PHONE_DIGITS;
+    if (code === 'WC') return WC_PHONE_DIGITS;
+    return [];
+}
+
 export function contactBlockForRegion(region) {
     const code = normalizeSuggestRegion(region);
     if (code === 'GP') {
@@ -631,7 +649,7 @@ export function contactBlockForRegion(region) {
             'This thread is Gauteng. If they need PRASA, give a desk number first, like every other region. Use only these offices, and only the office that matches the places they named. Remind them to ask for a reference number.',
             ...lines,
             'If you cannot tell which Gauteng office fits, halt and ask. Do not guess.',
-            `The PRASA Customer Experience Survey is only an extra for complex cases: ${PRASA_SURVEY_URL}`,
+            'The PRASA Customer Experience Survey is only an extra for complex cases. Do not put the survey URL in the draft unless the operator note or Context for this draft asks for it.',
             'Gauteng commuter Facebook group: https://www.facebook.com/share/g/1JKTk4Rn6e/ (Metrorail - Gauteng Train Updates)',
         ].join('\n');
     }
@@ -641,7 +659,7 @@ export function contactBlockForRegion(region) {
             'This thread is KwaZulu-Natal. If they need PRASA or Metrorail KZN, give the desk number first. Do not default to the survey. Remind them to ask for a reference number.',
             ...lines,
             'Do not give a Johannesburg, Pretoria, Germiston, or Western Cape phone number.',
-            `The PRASA Customer Experience Survey is only an extra for complex cases: ${PRASA_SURVEY_URL}`,
+            'The PRASA Customer Experience Survey is only an extra for complex cases. Do not put the survey URL in the draft unless the operator note or Context for this draft asks for it.',
         ].join('\n');
     }
     if (code === 'EC') {
@@ -652,7 +670,7 @@ export function contactBlockForRegion(region) {
             `Email: ${EC_EMAIL}`,
             `Facebook: ${EC_FACEBOOK}`,
             'Do not give a Johannesburg, Pretoria, Germiston, Western Cape, or KZN phone number.',
-            `The PRASA Customer Experience Survey is only an extra for complex cases: ${PRASA_SURVEY_URL}`,
+            'The PRASA Customer Experience Survey is only an extra for complex cases. Do not put the survey URL in the draft unless the operator note or Context for this draft asks for it.',
         ].join('\n');
     }
     if (code === 'WC') {
@@ -669,7 +687,7 @@ export function contactBlockForRegion(region) {
             `TIC email: ${WC_TIC_EMAIL}`,
             `Social / media email: ${WC_SOCIAL_EMAIL}`,
             'Do not give a Johannesburg, Pretoria, Germiston, KZN, or Eastern Cape phone number.',
-            `The PRASA Customer Experience Survey is only an extra for complex cases: ${PRASA_SURVEY_URL}`,
+            'The PRASA Customer Experience Survey is only an extra for complex cases. Do not put the survey URL in the draft unless the operator note or Context for this draft asks for it.',
             'Additional Western Cape contacts when the case needs them (emergency, station ops, tourism, safety). Do not dump the whole list unless relevant:',
             ...extras,
         ].join('\n');
@@ -925,7 +943,8 @@ export function parseSuggestResult(raw) {
 
 export function guardDraft(reply, region) {
     const code = normalizeSuggestRegion(region);
-    const digits = phoneDigits(reply);
+    const text = String(reply || '');
+    const digits = phoneDigits(text);
     const usedGauteng = GAUTENG_PHONE_DIGITS.some((phone) => phone && digits.includes(phone));
     if (usedGauteng && code !== 'GP') {
         const where = code || 'an unknown region';
@@ -958,6 +977,19 @@ export function guardDraft(reply, region) {
             reason: `Draft used a Western Cape contact number for ${code}.`,
             questions: ['Which contact should this reply give them?'],
         };
+    }
+    const desks = deskDigitsForRegion(code);
+    if (desks.length) {
+        const mentionsContact = /contact|call|phone|desk|office|prasa|metrorail|customer (?:service|experience)|survey|report (?:this|it)|lodge/i.test(text);
+        const hasSurvey = text.includes(PRASA_SURVEY_URL) || /customer experience survey|docs\.google\.com\/forms/i.test(text);
+        const hasDesk = desks.some((phone) => phone && digits.includes(phone));
+        if ((mentionsContact || hasSurvey) && !hasDesk) {
+            return {
+                ok: false,
+                reason: `Draft points them at PRASA or the survey without the ${code} desk number.`,
+                questions: [`Include the ${code} desk number from the contact block.`],
+            };
+        }
     }
     return { ok: true };
 }

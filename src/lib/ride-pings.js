@@ -137,12 +137,17 @@ const CONSENSUS_MIN_BAND = 0.2;
 const ACTIVE_KEY = 'ridePingActiveV1';
 const SHARE_SESSION_KEY = 'nt_ride_share_session';
 /**
- * Publish cadence. Sharing publishes every 3s, moving or parked, so a receiver
- * is not waiting on a 4s or 6s band. The grey pause is six missed fixes (18s).
+ * Publish cadence (RTDB writes). Kept inside the map-gold 18s grey window so a
+ * parked heartbeat can miss once (8s × 2 = 16s < 18s) without greying early.
+ * Moving stays modest; paused shares write even less often.
  */
-export const ONBOARD_FAST_PING_MS = 3 * 1000;
-export const ONBOARD_MOVING_PING_MS = 3 * 1000;
-export const ONBOARD_STATIONARY_PING_MS = 3 * 1000;
+export const ONBOARD_FAST_PING_MS = 5 * 1000;
+export const ONBOARD_MOVING_PING_MS = 6 * 1000;
+export const ONBOARD_STATIONARY_PING_MS = 8 * 1000;
+/** Paused / stuck shares: slow RTDB writes; receivers already show paused chrome. */
+export const ONBOARD_PAUSED_PING_MS = 20 * 1000;
+/** Stop a share that stays near 0 km/h this long (wall clock). */
+export const STATIONARY_AUTO_STOP_MS = 45 * 60 * 1000;
 /** Loop tick: the fastest band, so a due broadcast is never late by more than one tick. */
 const ONBOARD_LOOP_TICK_MS = ONBOARD_FAST_PING_MS;
 /** Ask for a new GPS sample this often while the last one is older than this. */
@@ -675,7 +680,8 @@ export async function projectTrainTrackerFix({
     };
 }
 
-export function adaptiveOnboardPingMs(speedMps) {
+export function adaptiveOnboardPingMs(speedMps, trackingState = '') {
+    if (String(trackingState || '') === TRACKING_STATE.PAUSED) return ONBOARD_PAUSED_PING_MS;
     const speed = Number(speedMps);
     if (!Number.isFinite(speed) || speed < 1.5) return ONBOARD_STATIONARY_PING_MS;
     return speed >= 3 ? ONBOARD_FAST_PING_MS : ONBOARD_MOVING_PING_MS;
@@ -758,6 +764,54 @@ let idleStopInFlight = false;
 let lastIdleAttempt = 0;
 let shareWatchTimer = 0;
 let shareIdleBound = false;
+
+let ridePingDisconnectPath = '';
+let ridePingDisconnectCancel = null;
+
+/** Arm RTDB onDisconnect so a killed tab clears ride_pings/{route}/{device}. */
+async function armRidePingOnDisconnect(routeId, deviceId) {
+    if (!routeId || !deviceId || typeof window === 'undefined') return;
+    if (!window.firebaseDb || !window.firebaseDbRef || !window.firebaseDbOnDisconnect) return;
+    const path = `ride_pings/${routeId}/${deviceId}`;
+    if (ridePingDisconnectPath === path && ridePingDisconnectCancel) return;
+    await cancelRidePingOnDisconnect();
+    try {
+        const ref = window.firebaseDbRef(window.firebaseDb, path);
+        const od = window.firebaseDbOnDisconnect(ref);
+        await od.remove();
+        ridePingDisconnectPath = path;
+        ridePingDisconnectCancel = od;
+    } catch { /* onDisconnect is best-effort */ }
+}
+
+async function cancelRidePingOnDisconnect() {
+    const od = ridePingDisconnectCancel;
+    ridePingDisconnectCancel = null;
+    ridePingDisconnectPath = '';
+    if (!od || typeof od.cancel !== 'function') return;
+    try { await od.cancel(); } catch { /* ignore */ }
+}
+
+/** Prolonged 0 km/h share → auto-stop (max duration still caps via RIDE_SHARE_MAX_MS). */
+async function maybeAutoStopStationaryShare(active, pos) {
+    if (!active?.trainId) return false;
+    const speed = Number(pos?.speedMps);
+    const now = Date.now();
+    let since = Number(active.stationarySince || 0) || 0;
+    if (Number.isFinite(speed) && speed >= 1.5) {
+        if (since) persistActiveSharePatch({ stationarySince: 0 });
+        return false;
+    }
+    if (!since) {
+        since = now;
+        persistActiveSharePatch({ stationarySince: since });
+        active.stationarySince = since;
+        return false;
+    }
+    if (now - since < STATIONARY_AUTO_STOP_MS) return false;
+    await stopRideShare({ reason: 'stationary_timeout', quiet: true });
+    return true;
+}
 
 function startShareIdleWatch() {
     if (typeof document !== 'undefined' && !shareIdleBound) {
@@ -1698,7 +1752,7 @@ function pingMatchesAccount(p, uid, emailLc) {
     return false;
 }
 
-async function findConflictingShare({ deviceId, uid, email }) {
+async function findConflictingShare({ deviceId, uid, email, routeId = '' }) {
     if (!uid && !email) return null;
     const emailLc = email ? String(email).toLowerCase() : '';
     const now = Date.now();
@@ -1711,27 +1765,22 @@ async function findConflictingShare({ deviceId, uid, email }) {
         const hit = activePings(list).find(matches);
         if (hit) return hit;
     }
+    // Never GET root ride_pings.json. Check the current corridor and any prior
+    // share route from local storage only (shallow list of candidate routes).
+    const candidates = new Set();
+    if (routeId) candidates.add(String(routeId));
     try {
-        const token = await ensureAuthToken();
-        const urls = [`${DYNAMIC_BASE_URL}ride_pings.json`];
-        if (token) urls.unshift(`${urls[0]}?auth=${encodeURIComponent(token)}`);
-        let data = null;
-        for (const url of urls) {
-            const res = await fetch(url, { cache: 'no-store' });
-            if (res.ok) {
-                data = await res.json();
-                break;
-            }
-            if (res.status !== 401 && res.status !== 403) break;
-        }
-        if (!data || typeof data !== 'object') return null;
-        for (const nodes of Object.values(data)) {
-            if (!nodes || typeof nodes !== 'object') continue;
-            const list = Array.isArray(nodes) ? nodes : Object.values(nodes);
-            const found = list.find(matches);
-            if (found) return found;
-        }
+        const prev = peekStoredShare();
+        if (prev?.routeId) candidates.add(String(prev.routeId));
     } catch { /* ignore */ }
+    for (const rid of candidates) {
+        if (!rid || routeCache[rid]) continue;
+        try {
+            const list = await fetchRouteRidePings(rid);
+            const found = activePings(list).find(matches);
+            if (found) return found;
+        } catch { /* ignore */ }
+    }
     return null;
 }
 
@@ -1974,7 +2023,7 @@ export async function submitRideCheckIn({
     const uid = acct.status === 'signed-in' ? acct.uid : null;
     const email = acct.status === 'signed-in' ? (acct.email || null) : null;
     if (source !== 'onboard_ping' && source !== 'stop' && source !== 'onboard_off_path') {
-        const clash = await findConflictingShare({ deviceId, uid, email });
+        const clash = await findConflictingShare({ deviceId, uid, email, routeId });
         if (clash) {
             const trainBit = clash.trainId ? ` Train ${clash.trainId}` : '';
             const { promptOnTrainSheet } = await import('./map-tab.js');
@@ -2115,6 +2164,11 @@ export async function submitRideCheckIn({
         );
         if (!res.ok) throw new Error(permissionMessage(res.status));
         recordRtdbWrite('ridePing');
+        if (source !== 'stop') {
+            armRidePingOnDisconnect(routeId, deviceId).catch(() => {});
+        } else {
+            cancelRidePingOnDisconnect().catch(() => {});
+        }
         safeStorage.setItem(ACTIVE_KEY, JSON.stringify({
             routeId, station: st, trainId: trainId || null, destination: destination || null,
             at: now, lastPingAt: now, lastRealPingAt: liveFix ? now : (Number(previous?.lastRealPingAt) || now), startedAt: previous?.startedAt || now, expiresAt: payload.expiresAt,
@@ -2198,6 +2252,7 @@ export async function stopRideShare({ quiet = false, reason = '', waitForOnboard
     const deviceId = getDeviceId();
     if (!routeId || !deviceId) return { ok: false };
     stopOnboardPingLoop();
+    await cancelRidePingOnDisconnect().catch(() => {});
     if (waitForOnboard) await onboardProjectionChain.catch(() => {});
     const station = active?.station || document.getElementById('station-select')?.value || 'Unknown';
     const now = Date.now();
@@ -2666,9 +2721,10 @@ async function processOnboardFix(pos, { forceBroadcast = false, generation = onb
         }
         if (generation !== onboardGeneration) return;
         const due = forceBroadcast || autoPaused
-            || Date.now() - onboardLastBroadcastAt >= adaptiveOnboardPingMs(pos.speedMps);
+            || Date.now() - onboardLastBroadcastAt >= adaptiveOnboardPingMs(pos.speedMps, active.trackingState);
         if (!due) return;
         if (generation !== onboardGeneration) return;
+        if (await maybeAutoStopStationaryShare(active, pos)) return;
         const result = await submitRideCheckIn({
             routeId: active.routeId,
             station: near?.stationName || active.station,
@@ -2841,7 +2897,8 @@ async function processOnboardFix(pos, { forceBroadcast = false, generation = onb
         t: Number(pos.t || Date.now()),
     };
     const local = cacheLocalProjectedFix(active, pos, projection, near, observation);
-    const interval = adaptiveOnboardPingMs(pos.speedMps);
+    if (await maybeAutoStopStationaryShare(active, pos)) return;
+    const interval = adaptiveOnboardPingMs(pos.speedMps, active.trackingState);
     if (!navigator.onLine || (!forceBroadcast && !autoPaused && !resumeAfterPrompt && Date.now() - onboardLastBroadcastAt < interval)) return;
     if (generation !== onboardGeneration) return;
     const result = await submitRideCheckIn({
@@ -3135,7 +3192,7 @@ async function onboardLoopTick() {
         await queueOnboardPause('staleGps', onboardLatestFix);
         return;
     }
-    const due = Date.now() - onboardLastBroadcastAt >= adaptiveOnboardPingMs(onboardLatestFix?.speedMps)
+    const due = Date.now() - onboardLastBroadcastAt >= adaptiveOnboardPingMs(onboardLatestFix?.speedMps, current.trackingState)
         || current.trackingState === TRACKING_STATE.PAUSED;
     if (due && onboardLatestFix) queueOnboardFix(onboardLatestFix, { forceBroadcast: true });
 }

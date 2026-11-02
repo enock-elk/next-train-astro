@@ -153,6 +153,7 @@
 
     "feedback": {
       ".read": "auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')",
+      ".indexOn": ["timestamp"],
       "$feedbackId": {
         ".write": "auth != null && (!data.exists() || auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')",
         ".validate": "!newData.exists() || (newData.hasChildren(['timestamp', 'deviceId']) && newData.child('timestamp').isNumber() && newData.child('deviceId').isString() && newData.child('deviceId').val().length > 0 && newData.child('deviceId').val().length < 120 && (!newData.hasChild('text') || (newData.child('text').isString() && newData.child('text').val().length <= 4000)))"
@@ -182,6 +183,7 @@
       ".read": "auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')",
       "crashes": {
         ".write": "auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')",
+        ".indexOn": ["timestamp"],
         "$crashId": {
           ".write": "auth != null && !data.exists()",
           ".validate": "newData.hasChild('timestamp') && newData.child('timestamp').isNumber() && (!newData.hasChild('error') || (newData.child('error').isString() && newData.child('error').val().length < 8000)) && (!newData.hasChild('deviceId') || (newData.child('deviceId').isString() && newData.child('deviceId').val().length < 120))"
@@ -196,6 +198,7 @@
       },
       "routing_fails": {
         ".write": "auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')",
+        ".indexOn": ["timestamp"],
         "$deadEndId": {
           ".write": "auth != null && !data.exists()",
           ".validate": "newData.hasChildren(['timestamp', 'deviceId']) && newData.child('timestamp').isNumber() && newData.child('deviceId').isString() && newData.child('deviceId').val().length > 0 && newData.child('deviceId').val().length < 120"

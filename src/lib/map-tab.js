@@ -77,12 +77,11 @@ const MOVE_MIN_M = 20;
 const HIGHWAY_KMH = 90;
 
 /**
- * Others' pins: REST is a backup when the route listener is down. 20s keeps a
- * listener-less receiver inside two glide windows (sharers publish every 3-6s,
- * receivers glide for 15s). Live updates come from the route listener.
+ * Others' pins: REST is a backup when the route listener is down.
+ * Never poll REST while onValue is live — the listener owns the cache.
  */
-const PINGS_POLL_MS = 3 * 1000;
-const PINGS_POLL_WITH_LISTENER_MS = 5 * 1000;
+const PINGS_POLL_MS = 8 * 1000;
+const PINGS_POLL_WITH_LISTENER_MS = 0;
 let pingsTimer = 0;
 let lastMapPingSig = '';
 let trackingCardMode = 'expanded';
@@ -2468,13 +2467,14 @@ export async function contributeForTrain(candidate) {
 }
 
 /** Push corridor riders onto the embedded map. Prefer the live listener cache. */
-export async function syncRidePingsToMap(routeId = $currentRouteId.get()) {
+export async function syncRidePingsToMap(routeId = $currentRouteId.get(), { allowRest = true } = {}) {
     if (!routeId) return;
     try {
         const ride = await import('./ride-pings.js');
         const mine = getDeviceId();
         let pings = ride.getCachedRidePings?.(routeId) || [];
-        if (!ride.hasRidePingsListener?.(routeId) || !pings.length) {
+        const listening = !!ride.hasRidePingsListener?.(routeId);
+        if (allowRest && !listening) {
             pings = await ride.fetchRouteRidePings(routeId);
             // Votes ride along with the REST backup when the listener is down.
             await ride.fetchRouteRideVotes?.(routeId);
@@ -2585,17 +2585,22 @@ function startPingsPolling() {
     stopPingsPolling();
     const schedule = async () => {
         let ms = PINGS_POLL_MS;
+        let allowRest = true;
         try {
             const ride = await import('./ride-pings.js');
             const id = $currentRouteId.get();
-            if (ride.hasRidePingsListener?.(id)) ms = PINGS_POLL_WITH_LISTENER_MS;
+            if (ride.hasRidePingsListener?.(id)) {
+                // Listener owns updates; paint from cache only, no REST.
+                allowRest = false;
+                ms = 15 * 1000;
+            }
         } catch { /* keep REST interval */ }
         pingsTimer = setTimeout(async () => {
             if (document.getElementById('view-map')?.classList.contains('active')) {
-                await syncRidePingsToMap();
+                await syncRidePingsToMap($currentRouteId.get(), { allowRest });
             }
             if (pingsTimer) schedule();
-        }, ms);
+        }, ms || PINGS_POLL_MS);
     };
     schedule();
 }

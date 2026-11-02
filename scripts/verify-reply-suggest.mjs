@@ -27,6 +27,7 @@ import {
     suggestDraftMessageId,
     emailOutreachText,
     mailtoReplyUrl,
+    normalizeSuggestRegion,
     outreachPlainText,
     parseSuggestResult,
     PRASA_SURVEY_URL,
@@ -59,7 +60,7 @@ for (const office of GAUTENG_OFFICES) {
 ok(guide.includes(PRASA_SURVEY_URL), 'guide lists the PRASA survey');
 ok(contactBlockForRegion('KZN').includes('031 813 0456'), 'KZN contact block lists the customer service desk');
 ok(contactBlockForRegion('KZN').includes('give the desk number first'), 'KZN prefers the desk number over the survey');
-ok(contactBlockForRegion('KZN').includes(PRASA_SURVEY_URL), 'KZN contact block still offers the survey as an extra');
+ok(!contactBlockForRegion('KZN').includes(PRASA_SURVEY_URL), 'KZN contact block omits the live survey URL');
 ok(contactBlockForRegion('KZN').includes('only an extra for complex cases'), 'KZN survey is for complex cases only');
 ok(!contactBlockForRegion('KZN').includes('011 013 0306'), 'KZN contact block has no Pretoria number');
 ok(liaisonRules('KZN').includes('031 813 0456') || contactBlockForRegion('KZN').includes('031 813 0456'), 'KZN desk number is available to the draft');
@@ -79,7 +80,7 @@ ok(contactBlockForRegion('WC').includes('021 449 6181'), 'WC contact block lists
 ok(contactBlockForRegion('WC').includes('021 818 7234'), 'WC contact block has emergency numbers for when needed');
 ok(contactBlockForRegion('WC').includes('021 449 4240'), 'WC contact block has station operations for when needed');
 ok(contactBlockForRegion('WC').includes('give a desk number first'), 'WC prefers desk numbers over the survey');
-ok(contactBlockForRegion('WC').includes(PRASA_SURVEY_URL), 'WC contact block still offers the survey as an extra');
+ok(!contactBlockForRegion('WC').includes(PRASA_SURVEY_URL), 'WC contact block omits the live survey URL');
 ok(!contactBlockForRegion('WC').includes('043 700 2030'), 'WC contact block has no EC number');
 ok(!contactBlockForRegion('WC').includes('011 013 0306'), 'WC contact block has no Pretoria number');
 ok(liaisonRules('KZN').includes('halt'), 'liaison rules tell the model to halt');
@@ -315,9 +316,24 @@ const gemini = buildGeminiRequest({
     sharedNote: 'Be warm.',
     images: [{ mimeType: 'image/png', data: 'aaaa' }],
 });
-ok(gemini.systemInstruction.parts[0].text.includes(PRASA_SURVEY_URL), 'Gemini request carries the survey');
+ok(!gemini.systemInstruction.parts[0].text.includes(PRASA_SURVEY_URL), 'known-region Gemini request omits the survey URL');
+ok(gemini.systemInstruction.parts[0].text.includes('only an extra for complex cases'), 'known-region Gemini still mentions survey as complex-case prose');
+ok(contactBlockForRegion('').includes(PRASA_SURVEY_URL), 'unknown region still carries the survey URL');
 ok(!JSON.stringify(gemini).includes('rider@example.com'), 'Gemini request has no commuter email');
 ok(gemini.contents[0].parts.some((part) => part.inlineData?.mimeType === 'image/png'), 'images ride along as inline data');
+
+const surveyOnly = applyDraftGuard({
+    action: 'draft',
+    reply: `Please complete the PRASA Customer Experience Survey: ${PRASA_SURVEY_URL}`,
+}, 'KZN');
+ok(surveyOnly.action === 'halt', 'a survey-only KZN ops draft becomes a halt');
+const deskOk = applyDraftGuard({
+    action: 'draft',
+    reply: 'Please call the Customer Service desk on 031 813 0456 and ask for a reference number.',
+}, 'KZN');
+ok(deskOk.action === 'draft', 'a KZN desk-number ops draft is allowed');
+ok(normalizeSuggestRegion('easterncape') === 'EC', 'easterncape normalizes to EC');
+ok(normalizeSuggestRegion('Eastern Cape') === 'EC', 'Eastern Cape normalizes to EC');
 
 const adminJs = readFileSync(join(ROOT, 'public/js/admin.js'), 'utf8');
 ok(!adminJs.includes('Sent while signed out'), 'the inbox does not label Sent while signed out');

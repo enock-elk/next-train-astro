@@ -125,6 +125,7 @@ const getCurrentDayType = () => typeof window !== 'undefined' && window.currentD
 const getCurrentDayIndex = () => typeof window !== 'undefined' && window.currentDayIndex !== undefined ? window.currentDayIndex : 1;
 const getCurrentTime = () => typeof window !== 'undefined' && window.currentTime ? window.currentTime : "12:00:00";
 const isTrainExcluded = (train, route, day, surface = 'in_app') => typeof window !== 'undefined' && window.isTrainExcluded ? window.isTrainExcluded(train, route, day, surface) : false;
+const isTrainProvisional = (train, route, day, schedule, surface = 'grid') => typeof window !== 'undefined' && window.isTrainProvisional ? window.isTrainProvisional(train, route, day, schedule, surface) : false;
 /** Ban/special still applies live; export tags honour showOnExport (default true). */
 const exclusionShowsOnExport = (train, route, day) => {
     if (typeof window === 'undefined') return false;
@@ -1123,6 +1124,7 @@ export const Renderer = {
                             const isHighlight = i === activeColIndex;
                             const viaLabel = variantByTrain[h] || '';
                             const exclusionType = isTrainExcluded(h, routeId, dayIdx, isExport ? 'export' : 'grid');
+                            const provisional = !isExport && isTrainProvisional(h, routeId, dayIdx, schedule, 'grid');
                             const paintExclusion = !!exclusionType && (!isExport || exclusionShowsOnExport(h, routeId, dayIdx));
                             
                             let bgClass = '';
@@ -1188,7 +1190,8 @@ export const Renderer = {
                                 ? ` data-via-open="1" data-via-train="${escapeHTML(String(h || ''))}" data-via-route="${escapeHTML(viaLabel)}" tabindex="0" role="button" aria-label="Train ${escapeHTML(String(h))} goes via the ${escapeHTML(viaLabel)} route"`
                                 : '';
                             const wrapClass = (isExport && paintExclusion && exclusionType !== 'special') ? 'whitespace-normal' : 'whitespace-nowrap';
-                            return `<th class="${paddingClass} border-b border-r ${borderClass} ${wrapClass} text-center ${bgClass} ${minWidthClass}" ${isHighlight ? 'id="grid-active-col"' : ''} ${!isExport ? `data-nt-live-host="${escapeHTML(String(h || ''))}"` : ''}${exclHeadAttrs}${kempHeadAttrs}${viaHeadAttrs}>${headerContent}</th>`;
+                            const provisionalAttrs = provisional ? ' data-provisional="1"' : '';
+                            return `<th class="${paddingClass} border-b border-r ${borderClass} ${wrapClass} text-center ${bgClass} ${minWidthClass}" ${isHighlight ? 'id="grid-active-col"' : ''} ${!isExport ? `data-nt-live-host="${escapeHTML(String(h || ''))}"` : ''}${provisionalAttrs}${exclHeadAttrs}${kempHeadAttrs}${viaHeadAttrs}>${headerContent}</th>`;
                         }).join('')}
                         ${showRightAnchor ? `<th class="right-anchor-header ${paddingClass} border-b border-l font-bold min-w-[50px] text-center">STN</th>` : ''}
                     </tr>

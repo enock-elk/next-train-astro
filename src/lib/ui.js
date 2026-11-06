@@ -2488,22 +2488,43 @@ async function confirmBrowserOffline() {
     if (document.visibilityState !== 'visible' || navigator.onLine) return false;
     const stamp = Date.now();
     const probes = [
+        `https://cache.nexttrain.co.za/config/maintenance.json?offlineChrome=${stamp}`,
         `https://nexttrain-cache.enock.workers.dev/config/maintenance.json?offlineChrome=${stamp}`,
         `https://metrorail-next-train-default-rtdb.firebaseio.com/.json?shallow=true&offlineChrome=${stamp}`,
         `https://cdn.jsdelivr.net/gh/enock-elk/next-train-astro@main/public/app-version.json?offlineChrome=${stamp}`,
     ];
     try { console.log('NT OfflineChrome: confirm start (OS offline, visible tab)'); } catch { /* ignore */ }
-    for (const url of probes) {
-        if (document.visibilityState !== 'visible' || navigator.onLine) return false;
-        let host = url;
-        try { host = new URL(url).hostname; } catch { /* ignore */ }
-        const ok = await probeReachabilityUrl(url);
-        if (ok) {
-            try { console.log(`NT OfflineChrome: ${host} answered — not painting offline dock`); } catch { /* ignore */ }
-            return false;
+    const answered = await new Promise((resolve) => {
+        let pending = probes.length;
+        let settled = false;
+        const finish = (value) => {
+            if (settled) return;
+            settled = true;
+            resolve(value);
+        };
+        for (const url of probes) {
+            let host = url;
+            try { host = new URL(url).hostname; } catch { /* ignore */ }
+            probeReachabilityUrl(url).then((ok) => {
+                pending -= 1;
+                if (document.visibilityState !== 'visible' || navigator.onLine) {
+                    finish(false);
+                    return;
+                }
+                if (ok) {
+                    try { console.log(`NT OfflineChrome: ${host} answered — not painting offline dock`); } catch { /* ignore */ }
+                    finish(false);
+                    return;
+                }
+                try { console.warn(`NT OfflineChrome: ${host} failed`); } catch { /* ignore */ }
+                if (pending === 0) finish(true);
+            }).catch(() => {
+                pending -= 1;
+                if (pending === 0) finish(true);
+            });
         }
-        try { console.warn(`NT OfflineChrome: ${host} failed`); } catch { /* ignore */ }
-    }
+    });
+    if (!answered) return false;
     const really = document.visibilityState === 'visible' && !navigator.onLine;
     try {
         console.warn(`NT OfflineChrome: all probes failed → paint=${really}`);

@@ -14,7 +14,8 @@ import {
 
 import { 
     ROUTES, SPECIAL_DATES, HOLIDAY_NAMES, SATURDAY_PLACEHOLDER_ROUTES, PIPELINE_SOURCES, FIREBASE_BASE_URL, 
-    DYNAMIC_BASE_URL, REGIONS, REFRESH_CONFIG, FARE_CONFIG, DEFAULT_EXCLUSIONS, withBase 
+    DYNAMIC_BASE_URL, REGIONS, REFRESH_CONFIG, FARE_CONFIG, DEFAULT_EXCLUSIONS, withBase,
+    CACHE_EDGE_URL, CACHE_WORKER_DEV_URL,
 } from './config.js';
 
 import { 
@@ -344,6 +345,10 @@ export let isLieFi = false;
 export let _networkStruggleCount = 0;
 let _lastSlowNetworkToastTime = 0;
 let _reachabilityProbed = false;
+/** Usable cache-worker origin after the last probe. Empty means skip CLOUDFLARE. */
+let preferredCacheBaseUrl = '';
+/** A dead workers.dev host must not stall the schedule read. */
+const CACHE_EDGE_PROBE_MS = 1200;
 /** Share one in-flight schedule load so board+planner do not abort-restart each other. */
 let loadAllSchedulesInFlight = null;
 let loadAllSchedulesInFlightKey = '';
@@ -514,10 +519,19 @@ function netLabel(url) {
 /** Public hosts used when navigator.onLine lies (campus Wi‑Fi / captive radios). */
 function reachabilityFallbackUrls(stamp = Date.now()) {
     return [
-        `https://nexttrain-cache.enock.workers.dev/config/maintenance.json?probe=${stamp}`,
-        `https://metrorail-next-train-default-rtdb.firebaseio.com/.json?shallow=true&probe=${stamp}`,
+        `${CACHE_EDGE_URL}config/maintenance.json?probe=${stamp}`,
+        `${CACHE_WORKER_DEV_URL}config/maintenance.json?probe=${stamp}`,
+        `${FIREBASE_BASE_URL}.json?shallow=true&probe=${stamp}`,
         `https://cdn.jsdelivr.net/gh/enock-elk/next-train-astro@main/public/app-version.json?probe=${stamp}`,
     ];
+}
+
+function isCacheProbeUrl(url) {
+    return url.includes('cache.nexttrain.co.za') || url.includes('.workers.dev');
+}
+
+function isPublicProbeUrl(url) {
+    return url.includes('firebaseio.com') || url.includes('jsdelivr.net');
 }
 
 async function fetchReachabilityProbe(url, timeoutMs) {
@@ -531,61 +545,130 @@ async function fetchReachabilityProbe(url, timeoutMs) {
     }
 }
 
+async function settleReachabilityProbe(url, timeoutMs) {
+    try {
+        const res = await fetchReachabilityProbe(url, timeoutMs);
+        const ct = res.headers.get('content-type') || '';
+        const html = res.ok && ct.includes('text/html');
+        return { url, res, html, answered: true, httpOk: res.ok && !html };
+    } catch (err) {
+        return { url, res: null, html: false, answered: false, httpOk: false, err };
+    }
+}
+
+/**
+ * Campus Wi-Fi often blackholes *.workers.dev. Firebase or jsDelivr answering
+ * is enough to continue. cache.nexttrain.co.za wins over workers.dev when both
+ * return JSON. A host that never answers is not used for the schedule read.
+ */
+function classifyReachability(results, onLine) {
+    let sawHtml = false;
+    let sawJson = false;
+    let publicAnswered = false;
+    let customOk = false;
+    let workersOk = false;
+    for (const result of results) {
+        if (!result?.answered) continue;
+        if (result.html) sawHtml = true;
+        if (result.httpOk) sawJson = true;
+        if (isPublicProbeUrl(result.url) && !result.html) publicAnswered = true;
+        if (result.httpOk && result.url.includes('cache.nexttrain.co.za')) customOk = true;
+        if (result.httpOk && result.url.includes('.workers.dev')) workersOk = true;
+    }
+    preferredCacheBaseUrl = customOk ? CACHE_EDGE_URL : (workersOk ? CACHE_WORKER_DEV_URL : '');
+    if (sawHtml && !sawJson && !publicAnswered) return 'captive';
+    if (preferredCacheBaseUrl) return 'ok';
+    if (publicAnswered || sawJson) return 'timeout';
+    if (!onLine) return 'offline';
+    return 'timeout';
+}
+
 export async function probeReachability(timeoutMs = 3500) {
     if (typeof window === 'undefined' || typeof navigator === 'undefined') return 'ok';
-    const urls = reachabilityFallbackUrls();
-    waterfallLog(`probe start onLine=${navigator.onLine} isLieFi=${!!isLieFi} timeoutMs=${timeoutMs}`);
-    // OS offline flag lies on some campus Wi‑Fi while GitHub / Firebase still answer.
-    if (!navigator.onLine) {
-        for (const url of urls) {
-            const host = shortHost(url);
-            waterfallLog(`OS offline — probing ${host}`);
-            try {
-                const res = await fetchReachabilityProbe(url, Math.min(timeoutMs, 2500));
-                waterfallLog(`OS offline but ${host} answered HTTP ${res.status} — treat as weak, continue waterfall`);
-                engageConnectionStruggleUi('weak');
-                return 'timeout';
-            } catch (err) {
-                waterfallWarn(`OS offline — ${host} failed: ${err?.name || err?.message || 'error'}`);
-            }
-        }
+    preferredCacheBaseUrl = '';
+    const onLine = navigator.onLine;
+    const stamp = Date.now();
+    const urls = reachabilityFallbackUrls(stamp);
+    const cacheTimeout = Math.min(timeoutMs, CACHE_EDGE_PROBE_MS);
+    const publicTimeout = Math.min(timeoutMs, 2500);
+    waterfallLog(`probe start onLine=${onLine} isLieFi=${!!isLieFi} timeoutMs=${timeoutMs} parallel=1`);
+    if (!onLine) waterfallLog('OS offline — probing cache, Firebase, and jsDelivr together');
+
+    const probes = urls.map((url) => settleReachabilityProbe(
+        url,
+        isCacheProbeUrl(url) ? cacheTimeout : publicTimeout,
+    ));
+    const results = await new Promise((resolve) => {
+        const settled = [];
+        let pending = probes.length;
+        let finished = false;
+        const finish = () => {
+            if (finished) return;
+            finished = true;
+            resolve(settled.filter(Boolean));
+        };
+        probes.forEach((probe, index) => {
+            probe.then((result) => {
+                settled[index] = result;
+                pending -= 1;
+                const host = shortHost(result.url);
+                if (result.answered) {
+                    waterfallLog(`probe ${host} HTTP ${result.res.status} html=${result.html}`);
+                } else if (!onLine) {
+                    waterfallWarn(`OS offline — ${host} failed: ${result.err?.name || result.err?.message || 'error'}`);
+                } else {
+                    waterfallWarn(`probe ${host} failed: ${result.err?.name || result.err?.message || 'error'}`);
+                }
+                const cachesDone = urls.every((url, i) => !isCacheProbeUrl(url) || settled[i]);
+                const cacheUsable = settled.some((row) => row?.httpOk && isCacheProbeUrl(row.url));
+                const publicHit = settled.some((row) => row?.answered && isPublicProbeUrl(row.url));
+                // Cache probes are capped at 1.2s. A fast Firebase reply does not
+                // skip a cache host that is still within that window.
+                if (pending === 0 || (cachesDone && (cacheUsable || publicHit))) finish();
+            }).catch(() => {
+                pending -= 1;
+                if (pending === 0) finish();
+            });
+        });
+    });
+
+    const status = classifyReachability(results, onLine);
+    if (status === 'captive') {
+        const htmlHit = results.find((result) => result?.html);
+        waterfallWarn(`probe result=captive (HTML ${htmlHit?.res?.status || 200} from ${shortHost(htmlHit?.url || '')})`);
+        isLieFi = true;
+        engageConnectionStruggleUi('liefi');
+        try { window.triggerNetworkStruggleModal?.('captive'); } catch { /* ignore */ }
+        return 'captive';
+    }
+    if (status === 'offline') {
         waterfallWarn('probe result=offline (OS offline and all fallback hosts failed)');
         engageConnectionStruggleUi('offline');
         return 'offline';
     }
-    try {
-        const primary = urls[0];
-        waterfallLog(`probing primary ${shortHost(primary)}`);
-        const res = await fetchReachabilityProbe(primary, timeoutMs);
-        const ct = res.headers.get('content-type') || '';
-        // Captive portals intercept with an HTML login page. A JSON 403/5xx from
-        // the edge (campus firewall, missing Origin, worker blip) is NOT captive —
-        // treating it as Lie-Fi used to halt Firebase and the GitHub dump too.
-        if (res.ok && ct.includes('text/html')) {
-            waterfallWarn(`probe result=captive (HTML ${res.status} from ${shortHost(primary)})`);
-            isLieFi = true; // halt network sync immediately — do not wait for 30s banner paint
-            engageConnectionStruggleUi('liefi');
-            try { window.triggerNetworkStruggleModal?.('captive'); } catch { /* ignore */ }
-            return 'captive';
+    if (status === 'timeout') {
+        const edge = results.find((result) => result?.answered && isCacheProbeUrl(result.url) && !result.httpOk);
+        if (edge) {
+            waterfallWarn(`probe result=timeout (edge HTTP ${edge.res.status} — not Lie-Fi; waterfall may still try Firebase/GitHub)`);
+        } else {
+            waterfallWarn('probe result=timeout (cache edge did not answer — Firebase and GitHub still run)');
         }
-        if (!res.ok) {
-            waterfallWarn(`probe result=timeout (edge HTTP ${res.status} — not Lie-Fi; waterfall may still try Firebase/GitHub)`);
-            engageConnectionStruggleUi('weak');
-            return 'timeout';
-        }
-        isLieFi = false;
-        clearStruggleClock();
-        if (navigator.onLine) {
-            try { hideOfflineChrome(); } catch { /* ignore */ }
-        }
-        waterfallLog(`probe result=ok (edge HTTP ${res.status})`);
-        return 'ok';
-    } catch (err) {
-        // Slow / blackhole — warn but allow schedule waterfall to keep trying
-        waterfallWarn(`probe result=timeout (edge error: ${err?.name || err?.message || 'error'})`);
         engageConnectionStruggleUi('weak');
+        if (!onLine) {
+            const answered = results.find((result) => result?.answered);
+            if (answered) {
+                waterfallLog(`OS offline but ${shortHost(answered.url)} answered HTTP ${answered.res.status} — treat as weak, continue waterfall`);
+            }
+        }
         return 'timeout';
     }
+    isLieFi = false;
+    clearStruggleClock();
+    if (onLine) {
+        try { hideOfflineChrome(); } catch { /* ignore */ }
+    }
+    waterfallLog(`probe result=ok cache=${shortHost(preferredCacheBaseUrl || CACHE_WORKER_DEV_URL)}`);
+    return 'ok';
 }
 
 /** @returns {Promise<'ok'|'offline'|'captive'|'timeout'>} */
@@ -604,6 +687,7 @@ export async function ensureReachabilityProbed() {
 export function resetReachabilityProbe() {
     _reachabilityProbed = false;
     isLieFi = false;
+    preferredCacheBaseUrl = '';
 }
 
 export function syncRegionDisplayDom(region) {
@@ -1828,15 +1912,21 @@ async function loadAllSchedulesInner(force = false) {
             // Edge first (RTDB cost + speed), origin next, GitHub dump last (campus firewalls).
             const sourcesToTry = ['CLOUDFLARE', 'FIREBASE', 'GITHUB'];
             const SOURCE_TIMEOUT_MS = { CLOUDFLARE: 5000, FIREBASE: 7000, GITHUB: 8000 };
+            const scheduleSources = preferredCacheBaseUrl
+                ? sourcesToTry
+                : sourcesToTry.filter((key) => key !== 'CLOUDFLARE');
+            if (!preferredCacheBaseUrl) {
+                waterfallWarn('cache edge did not answer — skipping CLOUDFLARE, Firebase next');
+            }
             /** Hard ceiling so a blackhole radio cannot sit on Loading stations for minutes. */
             const WATERFALL_BUDGET_MS = 18_000;
             let wonSource = '';
             const sourceOutcomes = [];
             const downloadStartedAt = Date.now();
 
-            waterfallLog(`schedule download start sources=${sourcesToTry.join('→')} region=${$userRegion.get()} budgetMs=${WATERFALL_BUDGET_MS}`);
+            waterfallLog(`schedule download start sources=${scheduleSources.join('→')} region=${$userRegion.get()} budgetMs=${WATERFALL_BUDGET_MS} cache=${shortHost(preferredCacheBaseUrl || 'skipped')}`);
 
-            for (const sourceKey of sourcesToTry) {
+            for (const sourceKey of scheduleSources) {
                 if (fetchSignal.aborted || $currentRouteId.get() !== requestedRouteId) {
                     sourceOutcomes.push(`${sourceKey}:aborted`);
                     sourceChain = sourceOutcomes.join('>');
@@ -1856,7 +1946,10 @@ async function loadAllSchedulesInner(force = false) {
                 if (PIPELINE_SOURCES[sourceKey]) {
                     const sourceConfig = PIPELINE_SOURCES[sourceKey];
                     const nodePath = sourceConfig.useRootNode ? REGIONS[$userRegion.get()].rootNode : REGIONS[$userRegion.get()].dbNode;
-                    regionDbUrl = sourceConfig.url + nodePath;
+                    const base = sourceKey === 'CLOUDFLARE' && preferredCacheBaseUrl
+                        ? preferredCacheBaseUrl
+                        : sourceConfig.url;
+                    regionDbUrl = base + nodePath;
                 }
                 const separator = regionDbUrl.includes('?') ? '&' : '?';
                 regionDbUrl += `${separator}t=${Date.now()}`;

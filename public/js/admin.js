@@ -5968,7 +5968,7 @@ const Admin = {
                             
                             // Standard Exclusions
                             if (!item.expiresAt || item.expiresAt > now) {
-                                const typeStr = item.type === 'special' ? 'Marked Special' : 'Banned';
+                                const typeStr = item.type === 'special' ? 'Marked Special' : (item.type === 'provisional' ? 'Not guaranteed' : 'Banned');
                                 activeItems.push({ type: 'Exception', label: `Train #${tNum} ${typeStr}`, expiresAt: item.expiresAt, id: tNum, panelId: 'exclusion-panel', routeId: rId });
                             }
                         });
@@ -5988,7 +5988,7 @@ const Admin = {
                     if (item.expiresAt && item.expiresAt <= now) return;
                     const already = activeItems.some((it) => it.type === 'Exception' && it.routeId === rId && it.id === tNum);
                     if (already) return;
-                    const typeStr = item.type === 'special' ? 'Marked Special' : 'Banned';
+                    const typeStr = item.type === 'special' ? 'Marked Special' : (item.type === 'provisional' ? 'Not guaranteed' : 'Banned');
                     activeItems.push({
                         type: 'Exception',
                         label: `Train #${tNum} ${typeStr} (app default)`,
@@ -20269,6 +20269,10 @@ const Admin = {
                         <input type="radio" name="excl-type" value="special" class="form-radio h-3 w-3 text-green-600 bg-white border-gray-300 focus:ring-0">
                         <span class="text-[10px] font-bold text-green-700 dark:text-green-300 ml-1.5 uppercase tracking-wide">Mark Special</span>
                     </label>
+                    <label class="flex-1 flex items-center justify-center p-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg cursor-pointer transition-colors">
+                        <input type="radio" name="excl-type" value="provisional" class="form-radio h-3 w-3 text-amber-600 bg-white border-gray-300 focus:ring-0">
+                        <span class="text-[10px] font-bold text-amber-800 dark:text-amber-300 ml-1.5 uppercase tracking-wide">Not guaranteed</span>
+                    </label>
                 </div>
 
                 <input id="excl-reason" type="text" placeholder="Reason (e.g. Testing, Easter)" class="w-full h-10 px-3 bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg text-xs text-gray-900 dark:text-white outline-none">
@@ -20860,7 +20864,7 @@ const Admin = {
             daysContainer.querySelectorAll('input[type="checkbox"]').forEach((cb) => {
                 cb.checked = Array.isArray(item.days) && item.days.includes(parseInt(cb.value, 10));
             });
-            const type = item.type === 'special' ? 'special' : 'banned';
+            const type = item.type === 'special' ? 'special' : (item.type === 'provisional' ? 'provisional' : 'banned');
             document.querySelectorAll('input[name="excl-type"]').forEach((r) => {
                 r.checked = r.value === type;
             });
@@ -20947,6 +20951,7 @@ const Admin = {
                     const dayLabels = (item.days || []).map(d => days[d]).join('');
                     
                     const isSpecial = item.type === 'special';
+                    const isProvisional = item.type === 'provisional';
                     
                     let expiryHtml = '';
                     let rowOpacityClass = '';
@@ -20965,9 +20970,11 @@ const Admin = {
                         }
                     }
 
-                    const badgeHtml = isSpecial 
+                    const badgeHtml = isSpecial
                         ? '<span class="bg-green-100 text-green-700 px-1 rounded text-[9px] font-black tracking-widest mr-1">SPL</span>'
-                        : '<span class="bg-red-100 text-red-700 px-1 rounded text-[9px] font-black tracking-widest mr-1">BAN</span>';
+                        : (isProvisional
+                            ? '<span class="bg-amber-100 text-amber-800 px-1 rounded text-[9px] font-black tracking-widest mr-1">MAY</span>'
+                            : '<span class="bg-red-100 text-red-700 px-1 rounded text-[9px] font-black tracking-widest mr-1">BAN</span>');
                     const surfaceLabel = item.surface === 'in_app'
                         ? 'IN APP'
                         : (item.surface === 'grid' ? 'GRID' : 'BOTH');
@@ -20980,7 +20987,7 @@ const Admin = {
                     row.innerHTML = `
                         <div>
                             ${badgeHtml}
-                            <span class="font-bold ${isSpecial ? 'text-green-600' : 'text-red-600'}">#${trainNum}</span>
+                            <span class="font-bold ${isSpecial ? 'text-green-600' : (isProvisional ? 'text-amber-700' : 'text-red-600')}">#${trainNum}</span>
                             <span class="text-gray-400 mx-1">|</span>
                             <span class="text-gray-700 dark:text-gray-300 font-mono tracking-widest">[${dayLabels}]</span>
                             <span class="ml-1 rounded bg-blue-50 dark:bg-blue-900/30 px-1 py-0.5 text-[8px] font-black tracking-wide text-blue-600 dark:text-blue-300">${surfaceLabel}</span>

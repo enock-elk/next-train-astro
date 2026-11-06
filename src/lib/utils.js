@@ -500,6 +500,42 @@ export function adminViaCode(code) {
     return '';
 }
 
+/**
+ * A train that might not run. Printed as 50%, PROVISIONAL, or NOT_GUARANTEED.
+ * A clock, EXPRESS, and via words are not this mark.
+ */
+export function isProvisionalToken(val) {
+    const raw = String(val || '').trim().toUpperCase();
+    if (!raw || raw === '-' || raw === '—' || raw === '–') return false;
+    if (isRealTime(raw) || isExpressSkip(raw)) return false;
+    if (raw === '50%' || raw === 'PROVISIONAL' || raw === 'NOT_GUARANTEED' || raw === 'NOT GUARANTEED') return true;
+    const key = raw.replace(/[%_\s-]+/g, '_').replace(/^_+|_+$/g, '');
+    return key === 'PROVISIONAL' || key === '50' || key === 'NOT_GUARANTEED';
+}
+
+/**
+ * Train id → true when the sheet says the working is not guaranteed.
+ * Structured `schedule.provisional` wins, then a VARIANT cell, then any cell token.
+ */
+export function provisionalMapFromSchedule(schedule) {
+    const map = {};
+    const sheet = schedule?.provisional;
+    if (sheet && typeof sheet === 'object' && !Array.isArray(sheet)) {
+        for (const [id, code] of Object.entries(sheet)) {
+            if (code === true || isProvisionalToken(code)) map[String(id)] = true;
+        }
+    }
+    const rows = schedule?.rows || [];
+    for (const row of rows) {
+        if (!row || typeof row !== 'object') continue;
+        for (const [col, val] of Object.entries(row)) {
+            if (SHEET_META_COLS.has(col) || map[String(col)]) continue;
+            if (isProvisionalToken(val)) map[String(col)] = true;
+        }
+    }
+    return map;
+}
+
 /** Known branch codes. Display label, or empty when the code is not a branch. */
 export function variantViaLabel(code) {
     const key = canonicalViaCode(code);

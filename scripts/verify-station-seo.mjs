@@ -37,11 +37,24 @@ ok(
 );
 
 const indexable = listIndexableSeoStations();
-ok(indexable.length === STATION_INDEX_ALLOWLIST.size, 'SSG list size matches allowlist');
+const ghosts = indexable.filter((s) => s.listedWithoutTimes);
+ok(indexable.length === STATION_INDEX_ALLOWLIST.size + ghosts.length, 'SSG list is the allowlist plus qualified ghost stops');
 ok(
-  indexable.every((s) => isStationIndexable(s.slug)),
-  'every SSG station is allowlisted',
+  indexable.filter((s) => !s.listedWithoutTimes).every((s) => isStationIndexable(s.slug)),
+  'every timed SSG station is allowlisted',
 );
+ok(ghosts.length > 0, 'at least one qualified ghost station is indexable');
+ok(ghosts.every((s) => !String(s.name).includes('=')), 'formula sheet cells are not indexable stations');
+ok(ghosts.every((s) => (s.corridorNeighbours || []).length > 0), 'every ghost station names a corridor neighbour');
+{
+  const sample = ghosts[0];
+  const sampleCards = buildStationCorridorTimetables(sample);
+  const sampleAbout = buildStationAbout(sample, sampleCards);
+  ok(sampleCards.length > 0, 'a ghost station builds a corridor card');
+  ok(sampleAbout.includes(sampleCards[0]?.routeName || '___missing___'), 'ghost about names the corridor');
+  ok(sampleAbout.includes('no published departures yet'), 'ghost about says there are no published departures yet');
+  ok(!sampleCards.some((c) => (c.weekday?.towardA?.trains?.length || 0) + (c.weekday?.towardB?.trains?.length || 0) > 0), 'ghost cards do not invent departure clocks');
+}
 
 const catalogBySlug = new Map(listSeoStations().map((s) => [s.slug, s]));
 for (const slug of STATION_INDEX_ALLOWLIST) {
@@ -169,6 +182,7 @@ ok(!mapComp.includes('seo-station-map-lightbox-title'), 'station map lightbox dr
 ok(mapComp.includes('data-seo-station-map-close'), 'station map lightbox still has a close control');
 
 const stationPage = readFileSync(new URL('../src/pages/stations/[slug].astro', import.meta.url), 'utf8');
+ok(stationPage.includes('no published departures yet'), 'station page can say a listed stop has no published departures yet');
 ok(stationPage.includes('seoIntroParagraphs'), 'station SEO intro is split into paragraphs');
 ok(stationPage.includes('next live departure & more'), 'station SEO intro mentions departure and more');
 ok(stationPage.includes('SeoStationReviews'), 'station page mounts reviews at the bottom');
@@ -213,7 +227,9 @@ if (existsSync(sitemapPath)) {
   ok(xml.includes('/stations/east-london.html'), 'checked-in sitemap lists East London');
   ok(xml.includes('/stations/athlone.html'), 'checked-in sitemap lists Athlone');
   ok(xml.includes('/stations/amanzimtoti.html'), 'checked-in sitemap lists Amanzimtoti');
+  ok(xml.includes('/stations/birchleigh.html'), 'checked-in sitemap lists Birchleigh, a sheet stop without times');
   ok(!xml.includes('/stations/wolseley'), 'sitemap does not list Wolseley');
+  ok(!xml.includes('=sort'), 'sitemap does not list a formula cell');
 }
 
 const allowlistSrc = readFileSync(new URL('../src/lib/seo-station-allowlist.js', import.meta.url), 'utf8');

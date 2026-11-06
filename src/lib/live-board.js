@@ -16,7 +16,7 @@ import {
     getDistanceFromLatLonInKm, escapeHTML, formatAppDate, usesWeekdayScheduleSheet, usesSaturdayScheduleSheet,
     usesPublicHolidayScheduleSheet, resolveOperatingDayType, scheduleCacheSlot, routeSheetKeyForDay,
     simUsesSpecificDate, exclusionAppliesToSurface, resolveStationLatLon, weekdaySheetsForRoute,
-    schedulesBelongToRoute
+    schedulesBelongToRoute, provisionalMapFromSchedule
 } from './utils.js';
 import {
     parseJSONSchedule, currentTime, currentDayType, currentDayIndex,
@@ -550,6 +550,7 @@ export function trainSheetOperatingLabel(dayType, routeId, trainId, now = Date.n
     if (!exclusionAppliesToSurface(rule, 'in_app')) return 'Weekdays';
     const type = rule.type || 'banned';
     if (type === 'special') return 'Special';
+    if (type === 'provisional') return 'Weekdays';
     const days = Array.isArray(rule.days) ? rule.days.map((d) => Number(d)) : [];
     if (!days.length || weekdayPatternBanApplies(days)) return 'Weekdays';
     const banned = new Set(days);
@@ -602,7 +603,7 @@ export function isWeekdayPatternExcluded(trainNumber, routeId, surface = 'in_app
     const rule = getTrainExclusionRule(trainNumber, routeId, 1, now, { ignoreDays: true });
     if (!exclusionAppliesToSurface(rule, surface)) return false;
     const type = rule.type || 'banned';
-    if (type === 'special') return false;
+    if (type === 'special' || type === 'provisional') return false;
     if (!weekdayPatternBanApplies(rule.days)) return false;
     return type;
 }
@@ -613,7 +614,30 @@ export { exclusionAppliesToSurface };
 // GUARDIAN HELPER V4.60.70: Ghost Train Logic
 export function isTrainExcluded(trainNumber, routeId, dayIdx, surface = 'in_app') {
     const rule = getTrainExclusionRule(trainNumber, routeId, dayIdx);
-    return exclusionAppliesToSurface(rule, surface) ? (rule.type || 'banned') : false;
+    if (!exclusionAppliesToSurface(rule, surface)) return false;
+    const type = rule.type || 'banned';
+    if (type === 'provisional') return false;
+    return type;
+}
+
+const provisionalBySchedule = new WeakMap();
+
+function provisionalIdsForSchedule(schedule) {
+    if (!schedule || typeof schedule !== 'object') return null;
+    if (provisionalBySchedule.has(schedule)) return provisionalBySchedule.get(schedule);
+    const map = provisionalMapFromSchedule(schedule);
+    provisionalBySchedule.set(schedule, map);
+    return map;
+}
+
+/** Admin exclusion type `provisional`, or a 50% / PROVISIONAL / NOT_GUARANTEED sheet cell. */
+export function isTrainProvisional(trainNumber, routeId, dayIdx, schedule, surface = 'in_app') {
+    const id = String(trainNumber || '').trim();
+    if (!id) return false;
+    const rule = getTrainExclusionRule(trainNumber, routeId, dayIdx);
+    const fromAdmin = !!(rule && rule.type === 'provisional' && exclusionAppliesToSurface(rule, surface));
+    const fromSheet = !!(provisionalIdsForSchedule(schedule)?.[id]);
+    return fromAdmin || fromSheet;
 }
 
 const ADVISORY_WARN_PATH = 'M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z';
@@ -1711,6 +1735,7 @@ export function findNextDirectTrain(fromStation, schedule, destinationStation, t
     for (const train of trainHeaders) {
         if (!train || train === "") continue;
         const exclusionType = isTrainExcluded(train, routeId, targetDayIdx);
+        const provisional = isTrainProvisional(train, routeId, targetDayIdx, schedule);
 
         const fromRow = schedule.rows.find(row => {
             const val = row[stationCol];
@@ -1747,6 +1772,7 @@ export function findNextDirectTrain(fromStation, schedule, destinationStation, t
                     arrivalTime: actualArrivalTime,
                     actualDestination: actualLastStop,
                     ...(exclusionType ? { exclusionType, isExcluded: true } : {}),
+                    ...(provisional ? { provisional: true } : {}),
                 });
             }
         }
@@ -1773,6 +1799,7 @@ export function findTransfers(fromStation, schedule, terminalStation, finalDesti
     for (const train1 of trainHeaders) {
         if (!train1 || train1 === "") continue;
         const train1Exclusion = isTrainExcluded(train1, routeId, targetDayIdx);
+        const train1Provisional = isTrainProvisional(train1, routeId, targetDayIdx, schedule);
         if (train1Exclusion && train1Exclusion !== 'special') continue;
 
         const departureTime = fromRow[train1]; 
@@ -1800,7 +1827,8 @@ export function findTransfers(fromStation, schedule, terminalStation, finalDesti
                         departureTime: departureTime, 
                         arrivalAtTransfer: terminationTime, 
                         terminationStation: terminalStation,
-                        headboardDestination: realHeadboardDest
+                        headboardDestination: realHeadboardDest,
+                        ...(train1Provisional ? { provisional: true } : {}),
                     }, 
                     connection: connectionData.earliest, 
                     nextFullJourney: connectionData.fullJourney 
@@ -1827,6 +1855,7 @@ export function findConnections(arrivalTimeAtTransfer, schedule, connectionStati
         if (!train || train === "") continue;
         if (train === incomingTrainName) continue; 
         const connExclusion = isTrainExcluded(train, routeId, targetDayIdx);
+        const connProvisional = isTrainProvisional(train, routeId, targetDayIdx, schedule);
         if (connExclusion && connExclusion !== 'special') continue;
 
         const connectionTime = connRow[train];
@@ -1852,7 +1881,8 @@ export function findConnections(arrivalTimeAtTransfer, schedule, connectionStati
                 departureTime: connectionTime, 
                 arrivalTime: actualArrivalTime, 
                 actualDestination: actualLastStop, 
-                connectionStation: connectionStation 
+                connectionStation: connectionStation,
+                ...(connProvisional ? { provisional: true } : {}),
             });
         }
     }
@@ -2138,6 +2168,7 @@ export function attachLiveBoardGlobals() {
     window.disruptionShowsCancelledOnMap = disruptionShowsCancelledOnMap;
     window.routeGeometryStations = routeGeometryStations;
     window.isTrainExcluded = isTrainExcluded;
+    window.isTrainProvisional = isTrainProvisional;
     window.getTrainExclusionRule = getTrainExclusionRule;
     window.openTrainExclusionSheet = openTrainExclusionSheet;
     window.openTrainMarkSheet = openTrainMarkSheet;

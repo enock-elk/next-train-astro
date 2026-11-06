@@ -30,6 +30,17 @@ function isMetaStation(name) {
   if (!s) return true;
   if (/^Last Updated/i.test(s)) return true;
   if (s.toUpperCase() === 'STATION') return true;
+  if (s.toUpperCase() === 'VARIANT') return true;
+  return false;
+}
+
+/** Sheet formulas and header leftovers are not stations. */
+export function isJunkStationName(name) {
+  const s = String(name || '').trim();
+  if (isMetaStation(s)) return true;
+  if (/[=<>]/.test(s)) return true;
+  if (!/[A-Za-z]{3,}/.test(s)) return true;
+  if (/-[A-Za-z]$/.test(s)) return true;
   return false;
 }
 
@@ -95,9 +106,32 @@ function orderedTimedStops(db, sheetKey) {
   for (const row of rows) {
     const name = stationNameFromRow(row);
     const key = normalizeKey(name);
-    if (!key || seen.has(key)) continue;
+    if (!key || seen.has(key) || isJunkStationName(name)) continue;
     seen.add(key);
     out.push({ name, row });
+  }
+  return out;
+}
+
+/** Timed and untimed names in sheet order. A later clock marks the stop timed. */
+function orderedNamedStops(db, sheetKey) {
+  const rows = dataRowsFromSheet(getSheet(db, sheetKey) || []);
+  const out = [];
+  const index = new Map();
+  for (const row of rows) {
+    const name = stationNameFromRow(row);
+    if (isJunkStationName(name)) continue;
+    const key = normalizeKey(name);
+    if (!key) continue;
+    const timed = rowHasClock(row);
+    const existing = index.get(key);
+    if (existing) {
+      if (timed) existing.timed = true;
+      continue;
+    }
+    const entry = { name, row, timed };
+    index.set(key, entry);
+    out.push(entry);
   }
   return out;
 }
@@ -259,10 +293,80 @@ export function listSeoStationCatalog(options = {}) {
       routeIds: [...e.routeIds].sort(),
       corridorNeighbours: e.corridorNeighbours || [],
       indexable: isStationIndexable(e.slug),
+      listedWithoutTimes: false,
     }))
     .sort((a, b) => a.name.localeCompare(b.name));
 
-  _catalogCache = { key: cacheKey, list };
+  const timedSlugs = new Set(list.map((s) => s.slug));
+  /** @type {Map<string, object>} */
+  const ghostBySlug = new Map();
+  for (const route of activeRoutes(regions)) {
+    const origin = stationLabel(route.destA);
+    const dest = stationLabel(route.destB);
+    const keys = route.sheetKeys || {};
+    const sheetKeys = [...new Set([
+      keys.weekday_to_a,
+      keys.weekday_to_b,
+      keys.saturday_to_a,
+      keys.saturday_to_b,
+    ].filter(Boolean))];
+    for (const sheetKey of sheetKeys) {
+      const stops = orderedNamedStops(db, sheetKey);
+      stops.forEach((stop, i) => {
+        if (stop.timed) return;
+        const slug = slugifyStation(stop.name);
+        if (!slug || timedSlugs.has(slug)) return;
+        const towardA = i > 0 ? stops[i - 1].name : null;
+        const towardB = i < stops.length - 1 ? stops[i + 1].name : null;
+        if (!towardA && !towardB) return;
+        let entry = ghostBySlug.get(slug);
+        if (!entry) {
+          entry = {
+            slug,
+            name: stop.name,
+            status: 'listed',
+            listedWithoutTimes: true,
+            region: route.region,
+            regions: new Set([route.region]),
+            routeIds: new Set(),
+            coords: parseCoords(stop.row),
+            corridorNeighbours: [],
+            indexable: true,
+          };
+          ghostBySlug.set(slug, entry);
+        }
+        entry.routeIds.add(route.id);
+        entry.regions.add(route.region);
+        if (!entry.coords) entry.coords = parseCoords(stop.row);
+        if (route.region === 'GP') entry.region = 'GP';
+        const existing = entry.corridorNeighbours.find((c) => c.routeId === route.id);
+        const payload = {
+          routeId: route.id,
+          routeSlug: routeSeedSlug(route.id),
+          routeName: displayRouteName(route),
+          lineLabel: getCorridorLabel(route) || displayRouteName(route),
+          origin,
+          dest,
+          towardOrigin: towardA,
+          towardDest: towardB,
+          towardOriginSlug: towardA ? slugifyStation(towardA) : null,
+          towardDestSlug: towardB ? slugifyStation(towardB) : null,
+        };
+        if (existing) Object.assign(existing, payload);
+        else entry.corridorNeighbours.push(payload);
+      });
+    }
+  }
+
+  const ghosts = [...ghostBySlug.values()]
+    .map((e) => ({
+      ...e,
+      regions: [...e.regions],
+      routeIds: [...e.routeIds].sort(),
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  _catalogCache = { key: cacheKey, list, ghosts };
   return list;
 }
 
@@ -277,22 +381,40 @@ export function listSeoStations(options = {}) {
 }
 
 /**
- * Phase-aware public station pages: allowlisted slugs only.
- * Phases 1–4 = every timed stop on an active route (see seo-station-allowlist.js).
+ * Untimed sheet stops that sit between neighbours. They are not pasted into
+ * the allowlist: a later dump that adds clocks turns the same slug into a
+ * timed page, and a new in-between name appears on the next build.
+ */
+export function listSeoGhostStations(options = {}) {
+  const regions = options.regions || ['GP', 'WC', 'KZN', 'EC'];
+  listSeoStationCatalog({ regions });
+  const cacheKey = regions.slice().sort().join(',');
+  return _catalogCache?.key === cacheKey ? (_catalogCache.ghosts || []) : [];
+}
+
+/**
+ * Public station pages: allowlisted timed stops, plus qualified ghost stops.
  */
 export function listIndexableSeoStations(options = {}) {
-  return listSeoStations(options).filter((s) => isStationIndexable(s.slug));
+  const timed = listSeoStations(options).filter((s) => isStationIndexable(s.slug));
+  const ghosts = listSeoGhostStations(options);
+  return [...timed, ...ghosts].sort((a, b) => a.name.localeCompare(b.name));
 }
 
 export function getSeoStationBySlug(slug, options = {}) {
   const want = String(slug || '').trim();
   if (!want) return null;
-  return listSeoStations(options).find((s) => s.slug === want) || null;
+  return listSeoStations(options).find((s) => s.slug === want)
+    || listSeoGhostStations(options).find((s) => s.slug === want)
+    || null;
 }
 
 /** True when a /stations/{slug}.html page is SSG'd and linkable. */
 export function stationHasPublicPage(slug) {
-  return isStationIndexable(slug) && !!getSeoStationBySlug(slug);
+  const station = getSeoStationBySlug(slug);
+  if (!station) return false;
+  if (station.listedWithoutTimes) return true;
+  return isStationIndexable(slug);
 }
 
 /**
@@ -324,16 +446,19 @@ export function buildStationCorridorTimetables(station) {
       ? departuresOnSheet(db, keys.saturday_to_b, name, dest)
       : [];
 
+    const listed = !!station.listedWithoutTimes;
     if (!weekdayTowardA.length && !weekdayTowardB.length
-      && !saturdayTowardA.length && !saturdayTowardB.length) {
+      && !saturdayTowardA.length && !saturdayTowardB.length
+      && !listed) {
       continue;
     }
 
     const neigh = station.corridorNeighbours.find((c) => c.routeId === routeId);
     const orderKey = keys.weekday_to_b || keys.weekday_to_a || keys.saturday_to_b || keys.saturday_to_a;
     const stopOrder = orderKey
-      ? orderedTimedStops(db, orderKey).map((s) => s.name)
+      ? (listed ? orderedNamedStops(db, orderKey) : orderedTimedStops(db, orderKey)).map((s) => s.name)
       : [];
+    if (listed && !stopOrder.some((n) => normalizeKey(n) === normalizeKey(name))) continue;
 
     cards.push({
       routeId,
@@ -463,6 +588,9 @@ export function buildStationQuickFacts(station, corridors) {
   const facts = [];
   const province = regionName(station?.region);
   if (province) facts.push({ label: 'Region', value: province });
+  if (station?.listedWithoutTimes) {
+    facts.push({ label: 'Times', value: 'No published departures yet' });
+  }
 
   const lineNames = (corridors || []).map((c) => c.routeName).filter(Boolean);
   if (lineNames.length) {
@@ -505,6 +633,25 @@ export function buildStationQuickFacts(station, corridors) {
 
 /** Longer About copy for the station landing. */
 export function buildStationAbout(station, corridors) {
+  if (station?.listedWithoutTimes) {
+    const place = station?.name || 'This stop';
+    const province = regionName(station?.region) || 'South Africa';
+    const lineNames = (corridors || []).map((c) => c.routeName).filter(Boolean);
+    let about = `${place} is listed on the Metrorail sheet in ${province}`;
+    if (lineNames.length === 1) about += ` on the ${lineNames[0]} corridor`;
+    else if (lineNames.length > 1) about += `, on ${lineNames.length} published corridors`;
+    about += '.';
+    const placements = [];
+    for (const c of corridors || []) {
+      const left = c.neighbors?.towardOrigin;
+      const right = c.neighbors?.towardDest;
+      if (left && right) placements.push(`between ${left} and ${right} on ${c.routeName}`);
+      else if (left || right) placements.push(`next to ${left || right} on ${c.routeName}`);
+    }
+    if (placements.length) about += ` On the current sheets it sits ${placements.join('; ')}.`;
+    about += ' This stop is on the sheet but has no published departures yet. Neighbouring stations that do have times are linked below. When a later timetable adds clocks for this stop, they will appear on this page.';
+    return about;
+  }
   const place = station?.name || 'This station';
   const province = regionName(station?.region) || 'South Africa';
   const lineNames = (corridors || []).map((c) => c.routeName).filter(Boolean);
@@ -551,6 +698,18 @@ export function stationDocumentTitle(station) {
 }
 
 export function stationMetaDescription(station, corridors) {
+  if (station?.listedWithoutTimes) {
+    const place = station?.name || 'This stop';
+    const province = regionName(station?.region) || 'South Africa';
+    const line = (corridors || []).map((c) => c.routeName).find(Boolean) || 'its Metrorail corridor';
+    const neigh = corridors?.[0]?.neighbors;
+    const between = neigh?.towardOrigin && neigh?.towardDest
+      ? ` Between ${neigh.towardOrigin} and ${neigh.towardDest}.`
+      : '';
+    return clipMetaDescription(
+      `${place} is listed on the ${line} sheet in ${province}.${between} No published departures yet.`,
+    );
+  }
   const place = station?.name || 'This station';
   const province = regionName(station?.region) || 'South Africa';
   const lines = (corridors || []).map((c) => c.routeName).filter(Boolean);

@@ -49,6 +49,10 @@ const neighbourHeadline = buildStationNeighbourHeadline(station, corridors);
 const aboutText = buildStationAbout(station, corridors);
 const quickFacts = buildStationQuickFacts(station, corridors);
 const accordionCorridors = corridors.filter((c) => (c.stopOrder || []).length > 0);
+const listedWithoutTimes = !!station.listedWithoutTimes;
+const introCopy = listedWithoutTimes
+  ? `${station.name} is on the sheet in ${province} but has no published departures yet. The corridor and the stops on either side are below. Open Next Train for the next live departure on a station that does have times.`
+  : `Weekday and Saturday Metrorail departures from ${station.name} in ${province}. Use the GPS map for this stop, then open Next Train for the next live departure & more.`;
 
 const jsonLd = buildStationJsonLd({
   station,
@@ -98,7 +102,7 @@ const lineLinks = corridors.map((c) => ({
               {station.name} station
             </h1>
             <span class="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-200">
-              Active
+              {listedWithoutTimes ? 'On the sheet' : 'Active'}
             </span>
           </div>
 
@@ -109,9 +113,7 @@ const lineLinks = corridors.map((c) => ({
           )}
 
           <div class="mt-3 text-base text-slate-600 dark:text-slate-300 leading-relaxed space-y-3">
-            {seoIntroParagraphs(
-              `Weekday and Saturday Metrorail departures from ${station.name} in ${province}. Use the GPS map for this stop, then open Next Train for the next live departure & more.`,
-            ).map((para) => (
+            {seoIntroParagraphs(introCopy).map((para) => (
               <p>{para}</p>
             ))}
           </div>
@@ -177,7 +179,9 @@ const lineLinks = corridors.map((c) => ({
           </p>
         )}
         <p class="mt-1 text-sm text-slate-600 dark:text-slate-300">
-          Expand a corridor to see every timed stop in boarding order.
+          {listedWithoutTimes
+            ? 'This stop is on the sheet but has no published departures yet. The stops on either side are in boarding order.'
+            : 'Expand a corridor to see every timed stop in boarding order.'}
         </p>
         <div class="mt-4 space-y-3">
           {accordionCorridors.map((c) => {
@@ -240,11 +244,13 @@ const lineLinks = corridors.map((c) => ({
       <div>
         <h2 class="text-lg font-bold text-slate-900 dark:text-white">Station timetable</h2>
         <p class="mt-1 text-sm text-slate-600 dark:text-slate-300">
-          Full weekday lists in each direction. Short workings show the train&apos;s last stop on this sheet.
+          {listedWithoutTimes
+            ? 'This stop is on the sheet but has no published departures yet.'
+            : 'Full weekday lists in each direction. Short workings show the train\'s last stop on this sheet.'}
         </p>
       </div>
 
-      {corridors.map((card) => (
+      {!listedWithoutTimes && corridors.map((card) => (
         <section class="space-y-4">
           {corridors.length > 1 && (
             <h3 class="text-base font-bold text-slate-900 dark:text-white">

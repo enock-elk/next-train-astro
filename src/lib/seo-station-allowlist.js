@@ -13,6 +13,10 @@
  * (GP + full WC + full KZN + full EC). Same station page template for all
  * regions (Pretoria / Gauteng layout).
  *
+ * Qualified untimed sheet stops (a name between neighbours, not a formula)
+ * are indexable without being pasted into this set. A later dump that adds
+ * clocks keeps the same slug and the page gains departures.
+ *
  * Historical phase markers (kept for docs):
  *   Phase 1: All GP + WC/KZN/EC termini/hubs (PHASE1_REGIONAL_HUBS).
  *   Phase 2: Remaining Western Cape.

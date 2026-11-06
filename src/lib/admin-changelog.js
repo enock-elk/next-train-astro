@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_11.06.6': [
+        'Campus Wi-Fi: the schedule probe checks cache.nexttrain.co.za, workers.dev, Firebase, and jsDelivr together. A cache host that does not answer within 1.2s is skipped and Firebase is next. Route cache.nexttrain.co.za at the existing nexttrain-cache worker when you can. Qualified untimed sheet stops get the same station page, with the corridor and a no-times line, and they join the sitemap. A later dump that adds clocks keeps the slug. Admin exclusions can mark a train provisional (not a ban). A sheet cell 50%, PROVISIONAL, or NOT_GUARANTEED sets the same flag. Nothing is painted yet. Monte Vista stays on the sheet. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_11.06.5': [
         'Forced schedule: after the commuter accepts it, the device stores the day type and paints it on the next visit before the network. While a force is showing, the app rechecks config/schedule_override at most every 10 minutes, and a schedule reload does not add another read. Welcome, sign-in, and reset password hide the passenger type and appearance block. Modal close no longer vibrates. Back on the reaction counts sheet closes that sheet. User Trust gains an Accounts tab from account_directory (created accounts only). Deploy firebase-database.rules.json. No commuter What\'s New. forceShow stays false.',
     ],

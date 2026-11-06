@@ -291,7 +291,7 @@ assert(overrideSrc.includes('ntSchedForce') && overrideSrc.includes('hydrateLoca
 assert(overrideSrc.includes('RECHECK_ACTIVE_MS = 10 * 60 * 1000'), 'a showing force is rechecked about every 10 minutes');
 assert(!overrideSrc.includes('schedule_override.json?t='), 'the force check does not cache-bust every read');
 
-const { variantMapFromSchedule } = await import('../src/lib/utils.js');
+const { variantMapFromSchedule, provisionalMapFromSchedule, isProvisionalToken } = await import('../src/lib/utils.js');
 const viaPriority = variantMapFromSchedule({
   via: { '3201': 'MAITLAND' },
   rows: [
@@ -303,5 +303,26 @@ const viaPriority = variantMapFromSchedule({
 });
 assert.equal(viaPriority['3201'], 'Maitland', 'schedule.via beats VARIANT and prose');
 assert.equal(viaPriority['3203'], 'Monte Vista', 'VARIANT still labels trains missing from schedule.via');
+assert.equal(isProvisionalToken('50%'), true, '50% is a not-guaranteed sheet token');
+assert.equal(isProvisionalToken('PROVISIONAL'), true, 'PROVISIONAL is a not-guaranteed sheet token');
+assert.equal(isProvisionalToken('NOT_GUARANTEED'), true, 'NOT_GUARANTEED is a not-guaranteed sheet token');
+assert.equal(isProvisionalToken('03:50'), false, 'a clock is not a provisional token');
+assert.equal(isProvisionalToken('Monte Vista'), false, 'Monte Vista stays a via mark');
+const provisionalSheet = provisionalMapFromSchedule({
+  provisional: { '4437': true },
+  rows: [
+    { STATION: 'Dewildt', '4436': '50%', '4400': '03:50' },
+    { STATION: 'VARIANT', '4438': 'PROVISIONAL', '4402': '04:27' },
+  ],
+});
+assert.equal(provisionalSheet['4436'], true, 'a 50% cell marks that train');
+assert.equal(provisionalSheet['4438'], true, 'a PROVISIONAL variant cell marks that train');
+assert.equal(provisionalSheet['4437'], true, 'schedule.provisional marks that train');
+assert.equal(provisionalSheet['4400'], undefined, 'a timed column is not provisional');
+assert.equal(provisionalSheet['4402'], undefined, 'a timed variant neighbour is not provisional');
+const liveBoardSrc = read('src/lib/live-board.js');
+assert(liveBoardSrc.includes("type === 'provisional'") && liveBoardSrc.includes('provisional: true'), 'a provisional exclusion is stored on the train and is not a ban');
+const adminSrc = read('public/js/admin.js');
+assert(adminSrc.includes('value="provisional"'), 'admin can mark a train not guaranteed');
 
 console.log('✓ dynamic grid order resolver, fixtures, rules, admin, and integrations OK');

@@ -62,7 +62,7 @@ export function liveMapTrainBan(trainId, routeId, opts = {}) {
         if (!days.some((d) => Number(d) === idx)) return false;
     }
     const type = rule.type || 'banned';
-    if (type === 'special') return false;
+    if (type === 'special' || type === 'provisional') return false;
     return type;
 }
 

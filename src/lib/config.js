@@ -14,7 +14,7 @@
  * Changelog / What’s New is optional: skip both, or write only "no release notes."
  * Always add ADMIN_CHANGELOG[APP_VERSION] (System Health Build notes).
  */
-export const APP_VERSION = "V10_11.06.5";
+export const APP_VERSION = "V10_11.06.6";
 
 /** Public support channels (About modal, lifeboat help.html, Safe Mode). */
 export const SUPPORT_EMAIL = 'admin@nexttrain.co.za';
@@ -71,9 +71,19 @@ export const FORCE_UPDATE_REQUIRED = true;
 /** GitHub fallback dump — this repo's `public/data/` via jsDelivr (not the old SPA tree). */
 export const GITHUB_SCHEDULE_CDN = "https://cdn.jsdelivr.net/gh/enock-elk/next-train-astro@main/public/data/";
 
+/**
+ * Cache worker on our own zone. Campus networks often drop *.workers.dev
+ * while nexttrain.co.za, Firebase, and jsDelivr still answer. The hostname
+ * is unused until a proxied DNS record routes it at the existing
+ * nexttrain-cache worker. The app skips it quickly until then.
+ */
+export const CACHE_EDGE_URL = 'https://cache.nexttrain.co.za/';
+/** Same cache worker on the public workers.dev host. Fallback only. */
+export const CACHE_WORKER_DEV_URL = 'https://nexttrain-cache.enock.workers.dev/';
+
 export const PIPELINE_SOURCES = {
     'CLOUDFLARE': {
-        url: "https://nexttrain-cache.enock.workers.dev/",
+        url: CACHE_WORKER_DEV_URL,
         useRootNode: false
     },
     'GITHUB': {

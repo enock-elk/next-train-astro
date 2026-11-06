@@ -13245,8 +13245,11 @@ const Admin = {
     syncAdminReplyModalViewport: () => {
         const modal = document.getElementById('admin-reply-modal');
         if (!modal || modal.classList.contains('hidden')) return;
+        // The browser scrolls the focused field up and the Co-Pilot header
+        // leaves with it. Do not pin the sheet to visualViewport.offsetTop
+        // or write scrollTop back. That is what pulled the header into view.
+        if (document.activeElement?.id === 'admin-reply-text') return;
         const scroller = document.getElementById('admin-reply-scroll');
-        const preserveTop = scroller ? scroller.scrollTop : 0;
         const vv = window.visualViewport;
         const height = Math.max(240, Math.round(vv?.height || window.innerHeight || 0));
         const top = Math.max(0, Math.round(vv?.offsetTop || 0));
@@ -13258,8 +13261,6 @@ const Admin = {
         modal.style.bottom = 'auto';
         modal.style.alignItems = 'stretch';
         modal.style.justifyContent = 'flex-start';
-        // Preserve scroll across visualViewport resize/scroll — keyboard focus
-        // must not yank the Co-Pilot header back after the admin scrolled it away.
         const card = modal.firstElementChild;
         if (card) {
             card.style.position = 'absolute';
@@ -13285,11 +13286,7 @@ const Admin = {
                 sheet.style.borderRadius = '0';
             }
         }
-        if (scroller) {
-            const stash = Number.isFinite(Admin._replyScrollStash) ? Admin._replyScrollStash : preserveTop;
-            scroller.scrollTop = stash;
-            Admin._replyScrollStash = stash;
-        }
+        if (scroller) Admin._replyScrollStash = scroller.scrollTop;
     },
 
     bindAdminReplyModalViewport: () => {
@@ -13301,27 +13298,8 @@ const Admin = {
         window.visualViewport?.addEventListener('scroll', update, { passive: true });
     },
 
-    /** Keep outer pane scroll while the editor is focused and the keyboard settles. */
-    holdReplyScrollWhileFocused: (scroller, top) => {
-        if (!scroller) return;
-        Admin._replyScrollStash = top;
-        scroller.scrollTop = top;
-        if (Admin._replyScrollHoldTimer) clearTimeout(Admin._replyScrollHoldTimer);
-        const started = Date.now();
-        const tick = () => {
-            if (document.activeElement?.id !== 'admin-reply-text') {
-                Admin._replyScrollHoldTimer = 0;
-                return;
-            }
-            scroller.scrollTop = Admin._replyScrollStash;
-            if (Date.now() - started < 450) {
-                Admin._replyScrollHoldTimer = setTimeout(tick, 50);
-            } else {
-                Admin._replyScrollHoldTimer = 0;
-            }
-        };
-        Admin._replyScrollHoldTimer = setTimeout(tick, 50);
-    },
+    /** Focus must not rewind the scroller. The browser scroll is the one we keep. */
+    holdReplyScrollWhileFocused: () => {},
 
     /** Programmatic focus must not scroll the Co-Pilot header back into view. */
     focusEditorSafely: (editor) => {
@@ -14335,36 +14313,17 @@ const Admin = {
                     Admin.keepReplyCaretVisible();
                 });
                 editorEl.addEventListener('focus', () => {
-                    const scroller = document.getElementById('admin-reply-scroll');
-                    if (!scroller) return;
-                    const top = Number.isFinite(Admin._replyScrollStash)
-                        ? Admin._replyScrollStash
-                        : scroller.scrollTop;
-                    // Mobile browsers scroll the focused field into view and
-                    // drag the Co-Pilot header back; keep the user's scroll.
-                    Admin.holdReplyScrollWhileFocused(scroller, top);
-                    requestAnimationFrame(() => {
-                        scroller.scrollTop = top;
-                        requestAnimationFrame(() => { scroller.scrollTop = top; });
-                    });
-                });
-                editorEl.addEventListener('blur', () => {
-                    if (Admin._replyScrollHoldTimer) {
-                        clearTimeout(Admin._replyScrollHoldTimer);
-                        Admin._replyScrollHoldTimer = 0;
-                    }
+                    // Drop a viewport pin from the same frame. Do not touch
+                    // scrollTop. The browser scroll takes the header away.
+                    const sheet = document.getElementById('admin-reply-modal');
+                    if (sheet) sheet.style.top = '0px';
                 });
             }
             const scrollPane = document.getElementById('admin-reply-scroll');
             if (scrollPane && !scrollPane.dataset.scrollStashBound) {
                 scrollPane.dataset.scrollStashBound = '1';
                 scrollPane.addEventListener('scroll', () => {
-                    if (document.activeElement?.id === 'admin-reply-text' && Admin._replyScrollHoldTimer) {
-                        // User scrolled during the hold window — adopt their position.
-                        Admin._replyScrollStash = scrollPane.scrollTop;
-                    } else {
-                        Admin._replyScrollStash = scrollPane.scrollTop;
-                    }
+                    Admin._replyScrollStash = scrollPane.scrollTop;
                 }, { passive: true });
             }
             if (!modal.dataset.caretBound) {

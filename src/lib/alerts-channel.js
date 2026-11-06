@@ -550,11 +550,26 @@ function openAlertReactionPicker(notice, anchorEl) {
     const anchorY = Number.isFinite(pressY) ? pressY : rect.top;
     const left = Math.max(8, Math.min(window.innerWidth - pillW - 8, midX - (pillW / 2)));
     const pickerH = sheet.offsetHeight || (admin ? 148 : 58);
-    let top = anchorY - pickerH;
-    if (top < 8) top = Math.min(window.innerHeight - (pickerH + 8), anchorY + 16);
+    // Keep the pill and Delete off the finger. A menu under the press
+    // gets selected with the alert text and the phone shows Copy / Share.
+    const gap = 36;
+    let top = anchorY - pickerH - gap;
+    if (top < 8) top = Math.min(window.innerHeight - pickerH - 8, anchorY + gap);
     sheet.style.left = `${left}px`;
     sheet.style.top = `${top}px`;
+    clearAlertTextSelection();
     triggerHaptic();
+}
+
+function clearAlertTextSelection() {
+    try {
+        const sel = window.getSelection?.();
+        if (!sel || sel.isCollapsed || sel.rangeCount < 1) return;
+        const node = sel.anchorNode;
+        const el = node && node.nodeType === 1 ? node : node?.parentElement;
+        if (!el?.closest?.('.nt-alert-card, #alerts-reaction-picker, #alerts-channel')) return;
+        sel.removeAllRanges();
+    } catch { /* ignore */ }
 }
 
 async function deleteAlertForEveryone(notice) {
@@ -1296,8 +1311,10 @@ function bindAlertsChannelOnce() {
             const id = card.getAttribute('data-alert-id');
             const src = card.getAttribute('data-alert-src');
             const notice = cachedLiveNotices.find((n) => String(n.id) === String(id) && String(n._sourceKey) === String(src));
+            clearAlertTextSelection();
             if (notice) openAlertReactionPicker(notice, card);
             card.classList.remove('is-pressing');
+            [40, 120, 280, 500].forEach((ms) => setTimeout(clearAlertTextSelection, ms));
         }, 400);
     };
 
@@ -1318,10 +1335,19 @@ function bindAlertsChannelOnce() {
     });
     root.addEventListener('pointerup', clearLong);
     root.addEventListener('pointercancel', clearLong);
+    root.addEventListener('selectstart', (e) => {
+        if (!e.target.closest?.('.nt-alert-card')) return;
+        e.preventDefault();
+    });
+    document.addEventListener('selectstart', (e) => {
+        if (!e.target.closest?.('#alerts-reaction-picker')) return;
+        e.preventDefault();
+    });
     root.addEventListener('contextmenu', (e) => {
         const card = e.target.closest?.('.nt-alert-card');
         if (!card || ignoreLongPressTarget(e.target)) return;
         e.preventDefault();
+        clearAlertTextSelection();
         const id = card.getAttribute('data-alert-id');
         const src = card.getAttribute('data-alert-src');
         const notice = cachedLiveNotices.find((n) => String(n.id) === String(id) && String(n._sourceKey) === String(src));

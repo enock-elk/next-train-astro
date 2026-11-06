@@ -245,7 +245,8 @@ assert(shouldOpenRoutePicker({ swapGen: 1, currentGen: 2, currentRouteId: null }
     assert(!admin.includes('data-fb-edit-btn'), 'admin replies have no visible Edit control');
     assert(admin.includes('p-3 bg-white dark:bg-gray-800 border-b border-transparent'), 'collapsed feedback headers are white');
     assert(admin.includes('syncAdminReplyModalViewport'), 'admin reply modal pins to visualViewport');
-    assert(admin.includes('_replyScrollStash') && admin.includes('holdReplyScrollWhileFocused'), 'Co-Pilot preserves scroll across visualViewport and focus');
+    assert(admin.includes('Do not pin the sheet to visualViewport.offsetTop'), 'Co-Pilot focus does not pull the header back into view');
+    assert(!/addEventListener\('focus', \(\) => \{[\s\S]{0,400}holdReplyScrollWhileFocused/.test(admin), 'Co-Pilot focus does not rewind scroll');
     assert(admin.includes('focusEditorSafely') && admin.includes('preventScroll: true'), 'Co-Pilot programmatic focus uses preventScroll');
     assert(appearance.includes('Single scroller is #admin-reply-scroll') || /#admin-reply-modal #admin-reply-text[\s\S]{0,120}overflow-y:\s*visible/.test(appearance), 'Co-Pilot editor is not a nested scroller');
     const hyphenHtml = 'Sinkhole update<br><br><span style="color: #9ca3af; font-style: italic;">- Enock</span>';

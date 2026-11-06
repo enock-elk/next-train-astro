@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_11.06.3': [
+        'Co-Pilot: focusing the reply field no longer pins the sheet to the visual viewport or rewinds scroll, so the browser can move the Next Train Co-Pilot header away. Alert hold no longer leaves the phone selection bar (Copy, Select all, Share) over the reaction pill. Delete for everyone sits clear of the finger. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_11.06.2': [
         'SEO station map: Back inside the map frame closes the sheet, so Close Map does not stay over the schedule page. Co-Pilot writes the KZN, EC, and WC desk into a PRASA handoff instead of halting to ask for a number the contact block already has. A bare independence line does not count as a handoff. Poll replies get "Thank you for replying to our poll." on its own line under the greeting. "Thank you for asking about" becomes "Thank you for your message where you\'re asking about". Feedback Hub resets the iOS viewport pan after the keyboard closes so Back stays reachable, and the header sticks while the sheet scrolls. Redeploy nexttrain-reply. No commuter What\'s New. forceShow stays false.',
     ],

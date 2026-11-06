@@ -258,6 +258,7 @@ const {
   normalizeScheduleOverrideDates,
   scheduleOverrideAppliesToday,
   localScheduleOverrideDateKey,
+  localForceRowApplies,
 } = await import('../src/lib/schedule-override.js');
 assert.deepEqual(
   normalizeScheduleOverrideDates('2026-10-27, 2026-10-28\n2026-10-27'),
@@ -286,6 +287,26 @@ assert.equal(
   'dated override applies on a listed day'
 );
 assert.match(localScheduleOverrideDateKey(new Date('2026-10-27T23:30:00')), /^\d{4}-\d{2}-\d{2}$/);
+assert.equal(
+  localScheduleOverrideDateKey(new Date('2026-11-06T22:30:00Z')),
+  '2026-11-07',
+  'just after midnight SAST is the next Johannesburg day'
+);
+assert.equal(
+  localForceRowApplies({ dayType: 'saturday', dates: ['2026-11-06'] }, new Date('2026-11-06T22:30:00Z')),
+  false,
+  'a dated force is dropped offline once that Johannesburg day is over'
+);
+assert.equal(
+  localForceRowApplies({ dayType: 'saturday', dates: ['2026-11-06'] }, new Date('2026-11-06T18:00:00Z')),
+  true,
+  'a dated force still applies on that Johannesburg day without a network check'
+);
+assert.equal(
+  localForceRowApplies({ dayType: 'saturday', dates: [] }, new Date('2026-11-07T00:10:00+02:00')),
+  true,
+  'a while-Active force stays until an online check sees it turned off'
+);
 const overrideSrc = readFileSync(new URL('../src/lib/schedule-override.js', import.meta.url), 'utf8');
 assert(overrideSrc.includes('ntSchedForce') && overrideSrc.includes('hydrateLocalForces'), 'an accepted force is stored on this device');
 assert(overrideSrc.includes('RECHECK_ACTIVE_MS = 10 * 60 * 1000'), 'a showing force is rechecked about every 10 minutes');

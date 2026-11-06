@@ -1305,9 +1305,10 @@ html.dark .nt-brief-meaning-body {
 }
 .nt-brief-fact {
   display: grid;
-  grid-template-columns: 7.25rem 1fr;
+  grid-template-columns: minmax(5.5rem, 7.25rem) minmax(0, 1fr);
   gap: 0.65rem;
   align-items: baseline;
+  min-width: 0;
 }
 .nt-brief-fact dt {
   margin: 0;
@@ -1322,10 +1323,18 @@ html.dark .nt-brief-fact dt {
 }
 .nt-brief-fact dd {
   margin: 0;
+  min-width: 0;
   font-size: 0.95rem;
   font-weight: 600;
   line-height: 1.35;
   color: #0f172a;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+[data-brief-card] p,
+.nt-brief-meaning-body {
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 html.dark .nt-brief-fact dd {
   color: #f8fafc;

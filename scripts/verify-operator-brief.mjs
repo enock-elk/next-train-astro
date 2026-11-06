@@ -215,6 +215,10 @@ ok(admin.includes("Admin.replyWorkerUrl()}/brief`"), 'Explain and the note call 
 ok(!admin.includes('npx wrangler deploy'), 'the brief does not tell the operator to deploy');
 ok(admin.includes('localBriefNote'), 'a missing writer falls back to the cards');
 ok(admin.includes('localCrashReading'), 'a missing writer still reads the crash line');
+ok(admin.includes('EXPLAIN_CRASH_MS = 15000'), 'Explain this crash stops waiting');
+ok(admin.includes("button.textContent = 'Reading…'"), 'Explain this crash shows that it is working');
+ok(admin.includes('accountsFromUsers'), 'accounts falls back to the user list when the directory is refused');
+ok(admin.includes('overflow-x-hidden'), 'the brief overlay cannot grow past the screen');
 ok(admin.includes('onBriefPopState'), 'back closes the brief before Dev Mode');
 ok(admin.includes('messageUnread'), 'the home-screen badge counts messages');
 ok(!admin.includes('setAppBadge(totalUnread)'), 'crashes and fails do not set the home-screen badge');

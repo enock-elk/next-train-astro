@@ -10,6 +10,7 @@ import { $account } from './account.js';
 import { bootFirebase } from './firebase-boot.js';
 import { FEATURE_KEYS, isFeatureEnabled, fetchFeatures, isLabEnvironment } from './features.js';
 import { NOTIFY_PREF_KEY, getNotifyPref, getNotifyCategories, syncNotifyUi } from './prefs.js';
+import { noticeToastCopy } from './notice-toast.js';
 
 const SUB_ROUTES_KEY = 'notifyRouteIds';
 const TOKEN_CACHE_KEY = 'fcmTokenCache';
@@ -361,13 +362,18 @@ function noticeBody(raw) {
 /**
  * In-app toast + optional system notification. Never used for raw presence pings.
  */
-export function alertLiveEvent({ title, body, dedupeKey, toast = true, system = true } = {}) {
+export function alertLiveEvent({ title, body, dedupeKey, toast = true, system = true, onClick = null } = {}) {
     if (dedupeKey && safeStorage.getItem(dedupeKey) === '1') return false;
     if (dedupeKey) safeStorage.setItem(dedupeKey, '1');
     const headline = title || 'Next Train';
     const text = noticeBody(body);
     if (toast && typeof window !== 'undefined' && typeof window.showToast === 'function') {
-        window.showToast(text ? `${headline}: ${text}` : headline, 'info', 5000);
+        const message = text || headline;
+        window.showToast(message, 'info', 6000, '', {
+            dismissible: true,
+            onClick: typeof onClick === 'function' ? onClick : null,
+            actionLabel: typeof onClick === 'function' ? 'View' : '',
+        });
     }
     if (system && typeof Notification !== 'undefined' && Notification.permission === 'granted') {
         try {
@@ -382,12 +388,23 @@ export function maybeNotifyOfficialNotice(notice, { toast = true } = {}) {
     if (!getNotifyCategories().incidents) return false;
     const id = notice.id || notice.timestamp || notice.message || notice.text || 'x';
     const key = `notified_notice_${notice._sourceKey || 'x'}_${id}`;
+    const line = noticeToastCopy(notice);
+    const noticeId = notice.id || null;
     return alertLiveEvent({
-        title: notice.severity === 'critical' ? 'Service alert' : 'Corridor notice',
-        body: notice.message || notice.text || '',
+        title: line,
+        body: '',
         dedupeKey: key,
         toast,
         system: true,
+        onClick: () => {
+            if (typeof window.openAlertsChannel !== 'function') return;
+            window.openAlertsChannel({
+                highlightId: noticeId,
+                resetVisible: true,
+                focusTop: !!noticeId,
+                aboveModals: true,
+            });
+        },
     });
 }
 

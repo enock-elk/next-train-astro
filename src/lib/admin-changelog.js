@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_11.06.4': [
+        'Lab builds (PUBLIC_LAB_MODE, lab.nexttrain host, or the lab branch) ship no sitemap and stamp noindex, nofollow on every page, plus an X-Robots-Tag. A lab build fails if a sitemap file or an indexable page remains. Notice toasts use the notice title, never "Corridor notice" plus a raw link. View opens that alert above the sheet you have open. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_11.06.3': [
         'Co-Pilot: focusing the reply field no longer pins the sheet to the visual viewport or rewinds scroll, so the browser can move the Next Train Co-Pilot header away. Alert hold no longer leaves the phone selection bar (Copy, Select all, Share) over the reaction pill. Delete for everyone sits clear of the finger. No commuter What\'s New. forceShow stays false.',
     ],

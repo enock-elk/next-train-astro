@@ -1041,6 +1041,65 @@ function maybeForceShowChangelog() {
     openChangelog();
 }
 
+function feedbackPhoneLabel() {
+    const ua = typeof navigator === 'undefined' ? '' : String(navigator.userAgent || '');
+    const model = ua.match(/Android[^;)]*;\s*([^;)]+)/i);
+    if (model && model[1] && !/linux|android|build/i.test(model[1])) return model[1].trim().slice(0, 60);
+    if (/iPhone/i.test(ua)) return 'iPhone';
+    if (/iPad/i.test(ua)) return 'iPad';
+    if (/Samsung|SM-[A-Z0-9]/i.test(ua)) return 'Samsung';
+    if (/Android/i.test(ua)) return 'Android';
+    if (/Windows/i.test(ua)) return 'Windows';
+    if (/Mac OS/i.test(ua)) return 'Mac';
+    return 'Unknown phone';
+}
+
+function feedbackSignalBand(conn) {
+    if (!conn) return 'unknown';
+    const kind = String(conn.effectiveType || '');
+    const rtt = Number(conn.rtt);
+    const down = Number(conn.downlink);
+    const slow = kind === 'slow-2g' || kind === '2g'
+        || (Number.isFinite(rtt) && rtt >= 800)
+        || (Number.isFinite(down) && down > 0 && down < 0.5);
+    if (slow) return 'weak';
+    const strong = kind === '4g'
+        && (!Number.isFinite(rtt) || rtt < 200)
+        && (!Number.isFinite(down) || down >= 2);
+    if (strong) return 'excellent';
+    return 'good';
+}
+
+function feedbackNetworkKind(conn) {
+    const type = String(conn?.type || '');
+    if (type === 'wifi') return 'wifi';
+    if (type === 'cellular') return 'mobile';
+    if (type === 'ethernet') return 'ethernet';
+    if (type === 'none' || (typeof navigator !== 'undefined' && navigator.onLine === false)) return 'offline';
+    return type || 'unknown';
+}
+
+/** Phone, radio, and signal for the feedback card. Kept small so the message still fits the rules. */
+export function feedbackDiagnostics() {
+    const conn = typeof navigator !== 'undefined' ? navigator.connection || navigator.mozConnection || navigator.webkitConnection : null;
+    const standalone = typeof window !== 'undefined'
+        && (window.matchMedia?.('(display-mode: standalone)')?.matches || !!navigator.standalone);
+    return {
+        phone: feedbackPhoneLabel(),
+        network: feedbackNetworkKind(conn),
+        captive: isLieFi === true,
+        online: typeof navigator === 'undefined' ? true : navigator.onLine !== false,
+        signal: feedbackSignalBand(conn),
+        effectiveType: conn ? String(conn.effectiveType || '') : '',
+        rtt: conn && Number.isFinite(Number(conn.rtt)) ? Number(conn.rtt) : null,
+        downlink: conn && Number.isFinite(Number(conn.downlink)) ? Number(conn.downlink) : null,
+        saveData: !!(conn && conn.saveData),
+        standalone: !!standalone,
+        viewport: typeof window === 'undefined' ? '' : `${window.innerWidth || 0}x${window.innerHeight || 0}`,
+        language: typeof navigator === 'undefined' ? '' : String(navigator.language || ''),
+    };
+}
+
 async function submitFeedback(opts = {}) {
     let sent = false;
     const type = document.getElementById('feedback-type')?.value;
@@ -1101,6 +1160,7 @@ async function submitFeedback(opts = {}) {
                         // Held messages are text-only for v1 (attachments not uploaded on hold).
                         attachmentsHeld: hasFile,
                         quotedText: String(document.getElementById('feedback-reply-context')?.dataset.quotedText || '').trim() || null,
+                        diagnostics: feedbackDiagnostics(),
                         ...getBoardStationContext(),
                         ...chatScopeFields(),
                     },
@@ -1183,6 +1243,7 @@ async function submitFeedback(opts = {}) {
             deviceId: $deviceId.get() || safeStorage.getItem('next_train_device_id') || 'unknown',
             isPWA: isStandalone,
             quotedText: String(document.getElementById('feedback-reply-context')?.dataset.quotedText || '').trim() || null,
+            diagnostics: feedbackDiagnostics(),
             ...getBoardStationContext(),
             ...chatScopeFields(),
         };
@@ -3124,6 +3185,7 @@ export function initHub() {
                         isPWA: isStandalone,
                         attachmentsHeld: hasFile,
                         quotedText: String(document.getElementById('feedback-reply-context')?.dataset.quotedText || '').trim() || null,
+                        diagnostics: feedbackDiagnostics(),
                         ...chatScopeFields(),
                     },
                 },
@@ -3169,6 +3231,7 @@ export function initHub() {
                 userAgent: navigator.userAgent,
                 deviceId: getThreadDeviceId() || 'unknown',
                 isPWA: window.matchMedia('(display-mode: standalone)').matches || !!window.navigator.standalone,
+                diagnostics: feedbackDiagnostics(),
                 ...chatScopeFields(),
             };
             const authParam = authToken ? `?auth=${authToken}` : '';

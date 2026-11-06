@@ -162,6 +162,9 @@ assert(!update.includes('enock-elk.github.io/next-train-astro/app-version.json')
 assert(update.includes('reloadToApplyUpdate'), 'updates reload the same URL');
 assert(!update.includes("path + '?v=' + Date.now()"), 'forced update does not invent a numeric ?v= hop');
 assert(update.includes("NEW APP VERSION found"), 'console logs when a new app version is found');
+assert(update.includes('NT Version:') && update.includes('window.ntTrace'), 'version found, installed, and replaced lines reach the black box');
+assert(update.includes('replacing ${APP_VERSION} with ${target}'), 'a trace names the shell being replaced');
+assert(hub.includes('feedbackDiagnostics'), 'feedback carries phone, network, and signal');
 assert(update.includes('NOT downloaded'), 'console logs when the incoming version did not download');
 assert(update.includes('Restarting now to implement'), 'console logs when restart will implement the new version');
 assert(hub.includes('☢️ GUARDIAN NUKE'), 'Check for Updates / NUKE path logs NUKE');

@@ -80,6 +80,19 @@ export function reloadToApplyUpdate(reason = 'force_update') {
     window.location.reload();
 }
 
+/** Survives production drop_console. The black box keeps which shell found, installed, and replaced a version. */
+function versionTrace(level, msg) {
+    const line = `NT Version: ${msg}`;
+    try {
+        if (typeof window !== 'undefined' && typeof window.ntTrace === 'function') {
+            window.ntTrace(level === 'warn' ? 'warn' : 'log', line);
+            return;
+        }
+    } catch { /* ignore */ }
+    if (level === 'warn') console.warn(line);
+    else console.log(line);
+}
+
 const FORCE_RELOAD_CAP_KEY = 'nt_force_update_cap';
 const MAX_FORCE_RELOADS_PER_VERSION = 3;
 const MAX_UNSTICKS_PER_VERSION = 1;
@@ -465,6 +478,7 @@ export async function handleUpdateClick(newVersion, options = {}) {
         || (!!originVersion && isAppVersionNewer(target, originVersion) && !originNewer);
 
     if (newer) {
+        versionTrace('log', `found ${target} while running ${APP_VERSION}`);
         console.log(`🛡️ Guardian: NEW APP VERSION found: ${target} (running ${APP_VERSION}). Not downloaded yet.`);
     } else {
         console.log(`🛡️ Guardian: Update check — running ${APP_VERSION}, published ${target}.`);
@@ -482,6 +496,7 @@ export async function handleUpdateClick(newVersion, options = {}) {
         return false;
     }
     const downloaded = isIncomingWorkerDownloaded(installed);
+    if (downloaded) versionTrace('log', `installed ${target} (${installed.reason}), running was ${APP_VERSION}`);
     console.log(`🛡️ Guardian: Incoming version ${target} ${downloaded ? 'downloaded' : 'checked'} (${installed.reason}).`);
 
     if (installed.reason === 'already_current') {
@@ -547,6 +562,7 @@ export async function handleUpdateClick(newVersion, options = {}) {
     }
 
     writeForceCap({ version: target, reloads: cap.reloads + 1, unsticks: cap.unsticks });
+    versionTrace('log', `replacing ${APP_VERSION} with ${target}`);
     console.log(`🛡️ Guardian: Incoming version ${target} is active. Restarting now to implement it (running was ${APP_VERSION}).`);
     reloadToApplyUpdate('version_enforce');
     return true;
@@ -600,6 +616,7 @@ async function probeNetworkAndForceUpdate() {
         return;
     }
     const dumpAhead = isDumpAheadOfOrigin(report, APP_VERSION);
+    versionTrace('log', `found ${target} while running ${APP_VERSION}`);
     console.log(`🛡️ Guardian: NEW APP VERSION found: ${target} (running ${APP_VERSION}). Not downloaded yet.${dumpAhead ? ' Dump is ahead of the host — will download if the origin worker actually updates; no toast until then.' : ' Force-update will download, then toast and restart to implement it.'}`);
     scheduleForcedUpdate(target, { originVersion: report.originVersion, dumpAhead });
 }
@@ -653,7 +670,10 @@ export function enforceAppVersion() {
     const storedVersion = safeStorage.getItem('app_installed_version');
 
     if (storedVersion && storedVersion !== currentVersion) {
+        versionTrace('log', `this shell is ${currentVersion}, replaced ${storedVersion}`);
         console.log(`[Guardian] Running shell is ${currentVersion} (was stored ${storedVersion}). Recording this shell — not looping on stored vs running.`);
+    } else {
+        versionTrace('log', `this shell is ${currentVersion}`);
     }
     safeStorage.setItem('app_installed_version', currentVersion);
 

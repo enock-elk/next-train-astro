@@ -5052,7 +5052,7 @@ const Admin = {
         if (!overlay) {
             overlay = document.createElement('div');
             overlay.id = 'operator-brief-overlay';
-            overlay.className = 'fixed inset-0 z-[150] hidden overflow-y-auto';
+            overlay.className = 'fixed inset-0 z-[150] hidden overflow-y-auto overflow-x-hidden max-w-full';
             document.body.appendChild(overlay);
         }
         return overlay;
@@ -5172,7 +5172,7 @@ const Admin = {
         if (note) note.textContent = text || '';
     },
 
-    askBriefWriter: async (kind, body) => {
+    askBriefWriter: async (kind, body, signal) => {
         const secret = await Admin.getAuthKey();
         if (!secret) throw new Error('Sign in as an operator first.');
         const res = await fetch(`${Admin.replyWorkerUrl()}/brief`, {
@@ -5182,6 +5182,7 @@ const Admin = {
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify(body),
+            signal,
         });
         const data = await res.json().catch(() => ({}));
         if (res.status === 404) {
@@ -5518,22 +5519,41 @@ const Admin = {
     },
 
     explainBriefCrash: async (id, button) => {
+        const EXPLAIN_CRASH_MS = 15000;
         const row = (Admin._briefCrashes && Admin._briefCrashes[id]) || {};
         const note = button?.parentElement?.querySelector('.operator-brief-crash-note');
+        const idleLabel = 'Explain this crash';
         if (note) {
             note.classList.remove('hidden');
+            note.classList.add('animate-pulse');
             note.textContent = 'Reading this crash.';
         }
-        if (button) button.disabled = true;
+        if (button) {
+            button.disabled = true;
+            button.setAttribute('aria-busy', 'true');
+            button.textContent = 'Reading…';
+        }
+        const ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+        const timer = setTimeout(() => { try { ctrl?.abort(); } catch { /* ignore */ } }, EXPLAIN_CRASH_MS);
+        let preview = row.preview || '';
+        let stack = row.stack || row.raw || '';
+        const localReading = () => {
+            const read = window.ntOperatorBrief?.localCrashReading;
+            if (typeof read !== 'function') return 'A reading is not available for this log yet. The line above is the crash.';
+            return read({
+                error: row.error || '',
+                preview: preview || row.preview || '',
+                stack: stack || row.stack || row.raw || '',
+                appVersion: row.appVersion || row.version || '',
+            });
+        };
         try {
-            let preview = row.preview || '';
-            let stack = row.stack || row.raw || '';
-            const blobPath = row.blobPath || (id ? `sys_logs/blackbox/${id}` : '');
+            const blobPath = row.blobPath || (id && String(id).startsWith('bb_') ? `sys_logs/blackbox/${id}` : '');
             if (!stack && blobPath) {
                 const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
                 const secret = await Admin.getAuthKey();
                 const auth = secret ? `?auth=${encodeURIComponent(secret)}` : '';
-                const res = await fetch(`${dynamicEndpoint}${blobPath}.json${auth}`).catch(() => null);
+                const res = await fetch(`${dynamicEndpoint}${blobPath}.json${auth}`, { signal: ctrl?.signal });
                 if (res && res.ok) {
                     const blob = await res.json().catch(() => ({}));
                     const logs = Array.isArray(blob?.logs) ? blob.logs.slice(-30) : [];
@@ -5550,22 +5570,24 @@ const Admin = {
                     appVersion: row.appVersion || '',
                     routeId: row.routeId || '',
                 },
-            });
+            }, ctrl?.signal);
             if (note) note.textContent = text || 'The reading came back empty.';
-        } catch {
-            const read = window.ntOperatorBrief?.localCrashReading;
+        } catch (err) {
+            const timedOut = err?.name === 'AbortError';
+            const local = localReading();
             if (note) {
-                note.textContent = typeof read === 'function'
-                    ? read({
-                        error: row.error || '',
-                        preview: preview || row.preview || '',
-                        stack: stack || row.stack || row.raw || '',
-                        appVersion: row.appVersion || row.version || '',
-                    })
-                    : 'A reading is not available for this log yet. The line above is the crash.';
+                note.textContent = timedOut && /not available/i.test(local)
+                    ? 'The reading took too long. The line above is the crash.'
+                    : local;
             }
         } finally {
-            if (button) button.disabled = false;
+            clearTimeout(timer);
+            if (note) note.classList.remove('animate-pulse');
+            if (button) {
+                button.disabled = false;
+                button.removeAttribute('aria-busy');
+                button.textContent = idleLabel;
+            }
         }
     },
 
@@ -12516,14 +12538,49 @@ const Admin = {
             const list = document.getElementById('ut-accounts-list');
             if (!list) return;
             list.innerHTML = '<p class="text-xs text-gray-400 text-center py-3 animate-pulse">Loading accounts...</p>';
+            const accountsFromUsers = (users) => {
+                const out = {};
+                Object.entries(users || {}).forEach(([uid, row]) => {
+                    if (!row || typeof row !== 'object' || String(uid).startsWith('_')) return;
+                    const email = String(row.email || '').trim();
+                    const displayName = String(row.displayName || '').trim();
+                    if (!email && !displayName) return;
+                    if (String(row.provider || '') === 'anonymous') return;
+                    out[uid] = {
+                        displayName,
+                        email,
+                        createdAt: Number(row.createdAt) || Number(row.updatedAt) || 0,
+                        provider: row.provider || (email ? 'password' : ''),
+                    };
+                });
+                return out;
+            };
             try {
                 const secret = await Admin.getAuthKey();
                 if (!secret) throw new Error('not signed in - open Admin while logged in as an admin account');
                 const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
                 const auth = `auth=${encodeURIComponent(secret)}`;
-                const res = await fetch(`${dynamicEndpoint}account_directory.json?orderBy="createdAt"&limitToLast=50&${auth}`);
-                if (!res.ok) throw new Error(`accounts HTTP ${res.status}`);
-                const data = await res.json() || {};
+                const readJson = async (url) => {
+                    const res = await fetch(url);
+                    if (!res.ok) {
+                        const err = new Error(`accounts HTTP ${res.status}`);
+                        err.status = res.status;
+                        throw err;
+                    }
+                    return (await res.json()) || {};
+                };
+                let data;
+                try {
+                    data = await readJson(`${dynamicEndpoint}account_directory.json?orderBy=%22createdAt%22&limitToLast=50&${auth}`);
+                } catch (err) {
+                    if (err.status !== 401 && err.status !== 400) throw err;
+                    try {
+                        data = await readJson(`${dynamicEndpoint}account_directory.json?${auth}`);
+                    } catch (err2) {
+                        if (err2.status !== 401 && err2.status !== 400) throw err2;
+                        data = accountsFromUsers(await readJson(`${dynamicEndpoint}users.json?${auth}`));
+                    }
+                }
                 const rows = Object.entries(data)
                     .filter(([, row]) => row && typeof row === 'object')
                     .map(([uid, row]) => ({ uid, ...row }))
@@ -21711,6 +21768,17 @@ const Admin = {
                         const commuterRouteHtml = routeStationBits.length
                             ? `<div class="inbox-bubble-route-row">${secureEscape(routeStationBits.join(' · '))}</div>`
                             : '';
+                        const diag = item.diagnostics && typeof item.diagnostics === 'object' ? item.diagnostics : null;
+                        const diagNet = diag?.network === 'mobile' ? 'Mobile' : (diag?.network === 'wifi' ? 'Wi-Fi' : (diag?.network === 'ethernet' ? 'Ethernet' : (diag?.network === 'offline' ? 'Offline' : (diag?.network && diag.network !== 'unknown' ? String(diag.network) : ''))));
+                        const diagBits = diag ? [
+                            diag.phone || '',
+                            diagNet ? `${diagNet}${diag.captive ? ', captive' : ''}` : (diag.captive ? 'Captive' : ''),
+                            diag.signal && diag.signal !== 'unknown' ? String(diag.signal) : '',
+                            diag.viewport || '',
+                        ].filter(Boolean) : [];
+                        const diagHtml = diagBits.length
+                            ? `<div class="text-[10px] leading-snug text-gray-400 break-words mt-0.5">${secureEscape(diagBits.join(' · '))}</div>`
+                            : '';
                         const clRouteAttr = secureEscape(commuterRouteLabel || '');
                         const clStationAttr = secureEscape(stationLabel);
                         const clAutoAttr = stationAuto ? '1' : '0';
@@ -21723,6 +21791,7 @@ const Admin = {
                                 ${commuterVerBtn}
                             </div>
                             ${commuterRouteHtml}
+                            ${diagHtml}
                         `;
 
                         const inboxReactId = item.inboxMsgId || '';

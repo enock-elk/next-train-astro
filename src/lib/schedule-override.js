@@ -56,8 +56,18 @@ export function normalizeScheduleOverrideDates(raw) {
     return out;
 }
 
-/** Local calendar YYYY-MM-DD for override date checks. */
+/** Johannesburg calendar YYYY-MM-DD. A phone set to UTC still ends the force at midnight SAST. */
 export function localScheduleOverrideDateKey(date = new Date()) {
+    try {
+        const fmt = new Intl.DateTimeFormat('en-CA', {
+            timeZone: 'Africa/Johannesburg',
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+        });
+        const key = fmt.format(date);
+        if (DATE_RE.test(key)) return key;
+    } catch { /* fall through */ }
     const y = date.getFullYear();
     const m = String(date.getMonth() + 1).padStart(2, '0');
     const d = String(date.getDate()).padStart(2, '0');
@@ -92,25 +102,41 @@ function writeLocalForces(map) {
     } catch { /* ignore */ }
 }
 
-function localRowApplies(row, now = new Date()) {
+/** True when this saved force is still inside its dates. No dates means “until turned off”. */
+export function localForceRowApplies(row, now = new Date()) {
     if (!row?.dayType) return false;
     return scheduleOverrideAppliesToday({ active: true, dayType: row.dayType, dates: row.dates }, now);
 }
 
-/** Paint the last acknowledged force before the network answers. */
-function hydrateLocalForces() {
+function localRowApplies(row, now = new Date()) {
+    return localForceRowApplies(row, now);
+}
+
+/** Drop a saved force whose dates are over. This does not need the network. */
+function pruneExpiredLocalForces(now = new Date()) {
     const map = readLocalForces();
     let changed = false;
     Object.keys(map).forEach((code) => {
-        if (!localRowApplies(map[code])) {
-            delete map[code];
-            delete appliedOverrides[code];
-            changed = true;
-            return;
-        }
-        appliedOverrides[code] = map[code].dayType;
+        if (localRowApplies(map[code], now)) return;
+        delete map[code];
+        delete appliedOverrides[code];
+        changed = true;
+    });
+    Object.keys(appliedOverrides).forEach((code) => {
+        if (localRowApplies(map[code], now)) return;
+        delete appliedOverrides[code];
+        changed = true;
     });
     if (changed) writeLocalForces(map);
+    return map;
+}
+
+/** Paint the last acknowledged force before the network answers. */
+function hydrateLocalForces() {
+    const map = pruneExpiredLocalForces();
+    Object.keys(map).forEach((code) => {
+        if (localRowApplies(map[code])) appliedOverrides[code] = map[code].dayType;
+    });
 }
 
 function rememberLocalForce(code, entry, rev) {
@@ -249,6 +275,7 @@ export function appliedScheduleOverrideNote(region) {
  * Apply admin override to a calendar-derived day type (after holiday resolution).
  */
 export function resolveDayTypeWithOverride(baseDayType, region) {
+    pruneExpiredLocalForces();
     const code = region || $userRegion.get() || 'GP';
     const entry = regionOverrideEntry(region);
     if (!entry) {
@@ -350,6 +377,7 @@ hydrateLocalForces();
 if (typeof window !== 'undefined') {
     document.addEventListener('visibilitychange', () => {
         if (document.visibilityState !== 'visible') return;
+        pruneExpiredLocalForces();
         if (!Object.keys(appliedOverrides).length) return;
         fetchScheduleOverride(false);
     });

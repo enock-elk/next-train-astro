@@ -971,7 +971,7 @@ export function briefReportHtml(model) {
             : '';
         const facts = briefFacts(card.facts);
         return `
-        <article data-brief-card data-brief-index="${index}" class="relative rounded-3xl border ${toneClass(card.tone)} bg-white/95 dark:bg-gray-900/80 px-4 pt-3 pb-12 shadow-sm text-left w-full cursor-pointer">
+        <article data-brief-card data-brief-index="${index}" class="relative min-w-0 max-w-full overflow-hidden break-words rounded-3xl border ${toneClass(card.tone)} bg-white/95 dark:bg-gray-900/80 px-4 pt-3 pb-12 shadow-sm text-left w-full cursor-pointer">
             <p class="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">${esc(card.kicker)}</p>
             <h3 class="mt-1 text-base font-semibold text-slate-900 dark:text-white leading-snug">${esc(card.title)}</h3>
             ${facts || briefParagraphs(card.body)}
@@ -987,8 +987,8 @@ export function briefReportHtml(model) {
             <p class="operator-brief-crash-note mt-2 hidden text-sm text-slate-700 dark:text-slate-200 leading-relaxed whitespace-pre-wrap"></p>
         </div>`).join('');
     return `
-        <div class="min-h-full px-4 pt-6 pb-10" data-brief-sky="${esc(sky.name)}" style="background: ${sky.background};">
-            <div class="max-w-lg mx-auto">
+        <div class="min-h-full w-full min-w-0 overflow-x-hidden px-4 pt-6 pb-10" data-brief-sky="${esc(sky.name)}" style="background: ${sky.background};">
+            <div class="max-w-lg w-full min-w-0 mx-auto">
                 <div class="flex items-start justify-between gap-3 px-1 py-2" style="color: ${sky.ink};">
                     <div>
                         <p class="text-[11px] font-bold uppercase tracking-[0.18em]" style="color: ${sky.muted}">${esc(model?.greeting || 'Brief')}</p>

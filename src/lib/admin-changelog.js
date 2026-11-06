@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_11.07.1': [
+        'A saved timetable force with dates is dropped on the device once that Johannesburg day is over, including when the phone is offline. A while-Active force stays until an online check sees it turned off. Version found, installed, and replaced lines go through the black box with the version numbers. Feedback stores the phone, Wi-Fi or mobile, captive, and weak, good, or excellent signal, and the thread shows that line. Explain this crash shows Reading and stops after 15 seconds. A long URL in the brief wraps inside the card. Accounts falls back to the user list when the directory read is refused. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_11.06.7': [
         'Email outreach puts paragraph breaks in as br tags, because Zoho Mail compose turns mailto newlines into one wall of text. Explain this crash uses the database key for that log, and when the written note is down it still reads the error, the preview, and the stack. No commuter What\'s New. forceShow stays false.',
     ],

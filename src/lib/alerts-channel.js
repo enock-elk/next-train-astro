@@ -926,6 +926,7 @@ function revealForceOpenNotice(list, noticeId) {
 
 export function closeAlertsChannel() {
     const el = document.getElementById('alerts-channel');
+    el?.style.removeProperty('z-index');
     hideAlertReactionPicker();
     hideAlertReactionBreakdown();
     if (!el || el.classList.contains('hidden')) {
@@ -950,6 +951,11 @@ export function openAlertsChannel(opts = {}) {
     if (typeof window !== 'undefined') {
         window.__ntAlertsOpen = true;
         window.__ntAlertsParkHome = false;
+    }
+    const channelEl = document.getElementById('alerts-channel');
+    if (channelEl) {
+        if (opts.aboveModals) channelEl.style.zIndex = '260';
+        else channelEl.style.removeProperty('z-index');
     }
     openSmoothModal('alerts-channel', 'top-right');
     const align = () => {

@@ -921,7 +921,8 @@ export function showToast(message, type = 'info', duration = 2500, actionHTML = 
     }
 
     // Prefer one row: grow with the copy, keep icons tight, use almost the full phone width.
-    const preferOneLine = fitLine || (!actionHTML && plainToast.length > 0 && plainToast.length <= 64);
+    const actionLabel = String(options.actionLabel || '').replace(/[<>&"]/g, '').trim();
+    const preferOneLine = fitLine || (!actionHTML && !actionLabel && plainToast.length > 0 && plainToast.length <= 64);
     const widthClass = preferOneLine
         ? 'w-max max-w-[calc(100vw-0.75rem)]'
         : 'w-[min(24rem,calc(100vw-0.75rem))] max-w-[calc(100vw-0.75rem)]';
@@ -973,12 +974,31 @@ export function showToast(message, type = 'info', duration = 2500, actionHTML = 
         });
     }
 
+    if (actionLabel) {
+        const action = document.createElement('button');
+        action.type = 'button';
+        action.className = 'nt-toast-action shrink-0 ml-1 px-2 py-1 rounded-lg bg-white/15 text-[11px] font-bold focus:outline-none';
+        action.textContent = actionLabel;
+        const dismissBtn = toastEl.querySelector('.nt-toast-dismiss');
+        if (dismissBtn) toastEl.insertBefore(action, dismissBtn);
+        else toastEl.appendChild(action);
+    }
     toastEl.querySelector('.nt-toast-dismiss')?.addEventListener('click', (e) => {
         e.preventDefault();
         e.stopPropagation();
         toastEl.classList.remove('show');
         if (toastTimeout) clearTimeout(toastTimeout);
     });
+    const clickable = typeof options.onClick === 'function';
+    toastEl.style.cursor = clickable ? 'pointer' : '';
+    toastEl.onclick = clickable
+        ? (e) => {
+            if (e.target.closest?.('.nt-toast-dismiss')) return;
+            toastEl.classList.remove('show');
+            if (toastTimeout) clearTimeout(toastTimeout);
+            options.onClick();
+        }
+        : null;
     
     // Prevent pull-to-refresh ghost triggers
     toastEl.ontouchmove = (e) => e.stopPropagation();

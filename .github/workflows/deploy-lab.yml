@@ -68,29 +68,8 @@ jobs:
           PUBLIC_CARTO_API_KEY: ${{ secrets.PUBLIC_CARTO_API_KEY }}
           SEO_REQUIRE_LIVE: '1'
 
-      - name: De-index the lab site
-        run: |
-          printf 'User-agent: *\nDisallow: /\n' > dist/robots.txt
-          rm -f dist/sitemap.xml
-          node -e "
-            const fs = require('fs');
-            const path = require('path');
-            const tag = '<meta name=\"robots\" content=\"noindex, nofollow\">';
-            const labBadge = '<meta name=\"nt-channel\" content=\"lab\">';
-            function walk(dir) {
-              for (const name of fs.readdirSync(dir)) {
-                const p = path.join(dir, name);
-                if (fs.statSync(p).isDirectory()) walk(p);
-                else if (name.endsWith('.html')) {
-                  let html = fs.readFileSync(p, 'utf8');
-                  html = html.replace(/<meta name=\"robots\"[^>]*>/g, '');
-                  html = html.replace('<head>', '<head>' + tag + labBadge);
-                  fs.writeFileSync(p, html);
-                }
-              }
-            }
-            walk('dist');
-          "
+      - name: Assert lab is noindex and has no sitemap
+        run: node scripts/verify-lab-seo.mjs --check dist
 
       - name: Write lab deploy stamp
         run: |

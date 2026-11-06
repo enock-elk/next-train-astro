@@ -404,6 +404,7 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
     <title>{title}</title>
     <meta name="description" content={description} />
     <meta name="robots" content={robots} />
+    {labModeBoot && <meta name="googlebot" content="noindex, nofollow" />}
     {labModeBoot && <meta name="nt-channel" content="lab" />}
     <meta name="application-name" content="Metrorail Next Train" />
     <meta name="apple-mobile-web-app-title" content="Next Train" />

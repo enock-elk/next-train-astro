@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_11.06.1': [
+        'Dev Hub unread badges: Delay Reports count rows newer than dr_last_checked. Community Monitor counts community_activity rows newer than community_seen (capped route fan-out) plus moderation_queue rows newer than mq_last_checked that are still open. User Trust counts account_deletions with status pending. A 400 leaves the last dot instead of counting every key. Deploy firebase-database.rules.json (moderation_queue .indexOn timestamp, account_deletions .indexOn status). No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_11.02.1': [
         'RTDB cost: operator badge and Dev Hub badges use timestamp queries / shallow keys (not full feedback/crash/community trees). Killswitch 60s while visible. Alerts share one in-flight check, prefer notices_meta before bucket GETs, idle poll 150s (45s while Alerts open). Browser notices_scheduled publisher disarmed; GitHub Actions hourly backup only (Worker cron remains primary). Exclusions/disruptions stamp-gated 3 min; loadAllSchedules shares one in-flight promise. Live share writes 5/6/8s (20s paused), onDisconnect cleanup, no root ride_pings.json, Map skips REST while onValue live. Dev Hub telemetry 45s. Co-Pilot: known regions omit survey URL; guardDraft halts survey-only ops drafts without desk digits; similar-reply bias; easterncape normalize; WC desks in soft knowledge; header scroll preserved across visualViewport/focus; single outer scroller. map-tab gold hash updated. Deploy firebase-database.rules.json (feedback/crashes/routing_fails .indexOn). Redeploy nexttrain-reply (and community if needed). No commuter What\'s New. forceShow stays false.',
     ],

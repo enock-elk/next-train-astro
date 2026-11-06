@@ -3217,12 +3217,16 @@ const Admin = {
 
     // --- GUARDIAN PHASE 11 & 12: MASTER NOTIFICATION ENGINE (SEEN PROTOCOL) ---
     /** Tiny RTDB query for badge counts — never download a full admin tree. */
-    _badgeQueryUrl: (path, secret, { startAt = 0, limit = 40, orderBy = 'timestamp' } = {}) => {
+    _badgeQueryUrl: (path, secret, { startAt = 0, limit = 40, orderBy = 'timestamp', equalTo = null } = {}) => {
         const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
         const params = new URLSearchParams();
         params.set('auth', secret);
         params.set('orderBy', `"${orderBy}"`);
-        params.set('startAt', String(Math.max(0, Number(startAt) || 0)));
+        if (equalTo != null) {
+            params.set('equalTo', typeof equalTo === 'number' ? String(equalTo) : `"${String(equalTo)}"`);
+        } else {
+            params.set('startAt', String(Math.max(0, Number(startAt) || 0)));
+        }
         params.set('limitToLast', String(limit));
         return `${dynamicEndpoint}${path}?${params.toString()}`;
     },
@@ -3296,53 +3300,107 @@ const Admin = {
                 }
             }
 
-            // Delay / deletions / community badges: shallow presence only.
-            // Full trees load when that admin panel opens — never on the home poll.
+            // Delay / deletions / community: indexed windows, not every key.
+            // A 400 (index not deployed yet) leaves the last dot. Never count the whole tree.
+            const readBadge = async (res) => {
+                if (!res || !res.ok) return null;
+                try {
+                    const data = await res.json();
+                    if (data == null) return {};
+                    return typeof data === 'object' ? data : null;
+                } catch {
+                    return null;
+                }
+            };
+            const paintCount = (id, count) => {
+                const el = document.getElementById(id);
+                if (!el) return;
+                el.textContent = Admin.formatBadgeCount(count);
+                el.classList.toggle('hidden', count === 0);
+            };
+            const stampOf = (storageKey, stateKey) => {
+                const local = parseInt(typeof safeStorage !== 'undefined' ? (safeStorage.getItem(storageKey) || '0') : '0', 10) || 0;
+                return Math.max(local, parseInt(adminState[stateKey] || '0', 10) || 0);
+            };
+            const CLOSED_QUEUE = ['closed', 'resolved', 'approved', 'rejected'];
+            const COMMUNITY_ROUTE_CAP = 24;
+
             try {
-                const [drShallow, delShallow, mqShallow, heldShallow] = await Promise.all([
-                    window.guardianFetch(`${dynamicEndpoint}delay_reports.json?auth=${secret}&shallow=true`, {}, 6000),
-                    window.guardianFetch(`${dynamicEndpoint}account_deletions.json?auth=${secret}&shallow=true`, {}, 6000),
-                    window.guardianFetch(`${dynamicEndpoint}community_activity.json?auth=${secret}&shallow=true`, {}, 6000),
-                    window.guardianFetch(`${dynamicEndpoint}moderation_queue.json?auth=${secret}&shallow=true`, {}, 6000),
-                ]);
-                const shallowCount = (res) => {
-                    if (!res || !res.ok) return 0;
-                    return res.json().then((data) => (
-                        data && typeof data === 'object' ? Math.min(Object.keys(data).length, 40) : 0
-                    )).catch(() => 0);
-                };
-                const drUnread = await shallowCount(drShallow);
-                totalUnread += drUnread;
-                const drBadge = document.getElementById('dr-unread-badge');
-                if (drBadge) {
-                    drBadge.textContent = Admin.formatBadgeCount(drUnread);
-                    drBadge.classList.toggle('hidden', drUnread === 0);
+                const drLast = stampOf('dr_last_checked', 'dr_last_checked');
+                const drData = await readBadge(await window.guardianFetch(
+                    Admin._badgeQueryUrl('delay_reports.json', secret, { startAt: drLast + 1 }),
+                    {},
+                    6000,
+                ));
+                if (drData) {
+                    const drUnread = Admin._countBadgeRows(drData, drLast);
+                    totalUnread += drUnread;
+                    paintCount('dr-unread-badge', drUnread);
                 }
 
-                const delUnread = await shallowCount(delShallow);
-                totalUnread += delUnread;
-                const utBadge = document.getElementById('ut-unread-badge');
-                if (utBadge) {
-                    utBadge.textContent = Admin.formatBadgeCount(delUnread);
-                    utBadge.classList.toggle('hidden', delUnread === 0);
+                const delData = await readBadge(await window.guardianFetch(
+                    Admin._badgeQueryUrl('account_deletions.json', secret, { orderBy: 'status', equalTo: 'pending', limit: 40 }),
+                    {},
+                    6000,
+                ));
+                if (delData) {
+                    const delUnread = Math.min(
+                        Object.values(delData).filter((row) => row && row.status === 'pending').length,
+                        40,
+                    );
+                    totalUnread += delUnread;
+                    paintCount('ut-unread-badge', delUnread);
+                    Admin._pendingDeletionCount = delUnread;
                 }
-                Admin._pendingDeletionCount = delUnread;
 
-                let mqUnread = 0;
-                if (mqShallow.ok) {
-                    const routes = await mqShallow.json().catch(() => null);
-                    if (routes && typeof routes === 'object') {
-                        Object.keys(routes).forEach((routeId) => {
-                            if (!Number(adminState.community_seen?.[routeId] || 0)) mqUnread += 1;
+                const activityKeys = await readBadge(await window.guardianFetch(
+                    `${dynamicEndpoint}community_activity.json?auth=${secret}&shallow=true`,
+                    {},
+                    6000,
+                ));
+                const mqLast = stampOf('mq_last_checked', 'mq_last_checked');
+                const mqData = await readBadge(await window.guardianFetch(
+                    Admin._badgeQueryUrl('moderation_queue.json', secret, { startAt: mqLast + 1 }),
+                    {},
+                    6000,
+                ));
+                if (activityKeys && mqData) {
+                    const routeIds = Object.keys(activityKeys);
+                    routeIds.sort((a, b) => {
+                        const aSeen = Number(adminState.community_seen?.[a] || 0);
+                        const bSeen = Number(adminState.community_seen?.[b] || 0);
+                        if (aSeen === 0 && bSeen !== 0) return -1;
+                        if (bSeen === 0 && aSeen !== 0) return 1;
+                        return a.localeCompare(b);
+                    });
+                    const queried = routeIds.slice(0, COMMUNITY_ROUTE_CAP);
+                    const skipped = routeIds.slice(COMMUNITY_ROUTE_CAP);
+                    const routeResults = await Promise.all(queried.map(async (routeId) => {
+                        const seenAt = Number(adminState.community_seen?.[routeId] || 0);
+                        const data = await readBadge(await window.guardianFetch(
+                            Admin._badgeQueryUrl(
+                                `community_activity/${encodeURIComponent(routeId)}.json`,
+                                secret,
+                                { startAt: seenAt + 1, limit: 20 },
+                            ),
+                            {},
+                            6000,
+                        ));
+                        return data ? Admin._countBadgeRows(data, seenAt) : null;
+                    }));
+                    if (routeResults.every((n) => n != null)) {
+                        let chatUnread = routeResults.reduce((sum, n) => sum + n, 0);
+                        skipped.forEach((routeId) => {
+                            if (!Number(adminState.community_seen?.[routeId] || 0)) chatUnread += 1;
                         });
+                        const heldUnread = Admin._countBadgeRows(mqData, mqLast, (item) => (
+                            !CLOSED_QUEUE.includes(String(item?.status || 'open'))
+                        ));
+                        const reviewPending = Math.max(0, Number(Admin._stationReviewPending) || 0);
+                        const mqUnread = chatUnread + heldUnread + reviewPending;
+                        totalUnread += mqUnread;
+                        paintCount('mq-unread-badge', mqUnread);
                     }
-                }
-                mqUnread += await shallowCount(heldShallow);
-                totalUnread += mqUnread;
-                const mqBadge = document.getElementById('mq-unread-badge');
-                if (mqBadge) {
-                    mqBadge.textContent = Admin.formatBadgeCount(mqUnread);
-                    mqBadge.classList.toggle('hidden', mqUnread === 0);
                 }
             } catch { /* optional badge trees are best-effort */ }
             
@@ -11513,6 +11571,15 @@ const Admin = {
                 Admin._communityMonitorRows = rows;
                 const totalUnread = rows.reduce((sum, row) => sum + row.unread, 0);
                 Admin._communityChatUnread = totalUnread;
+                const mqSeenAt = Date.now();
+                if (typeof safeStorage !== 'undefined') safeStorage.setItem('mq_last_checked', String(mqSeenAt));
+                try {
+                    await fetch(`${dynamicEndpoint}admin_state/${encodeURIComponent(Admin.currentUser.uid)}/mq_last_checked.json${authQ}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(mqSeenAt),
+                    });
+                } catch (e) { /* optional */ }
                 Admin.paintCommunityMonitorBadges(totalUnread, Admin._stationReviewPending || 0);
                 Admin.fetchStationReviews?.({ silent: true });
 

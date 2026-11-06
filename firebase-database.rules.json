@@ -387,6 +387,7 @@
     "moderation_queue": {
       ".read": "auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')",
       ".write": "auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')",
+      ".indexOn": ["timestamp"],
       "$reportId": {
         ".write": "(!data.exists() && auth != null) || (auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com'))",
         ".validate": "!newData.exists() || (newData.hasChildren(['reportId', 'timestamp', 'status']) && newData.child('timestamp').isNumber() && (newData.child('status').val() === 'open' || auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com'))"
@@ -395,6 +396,7 @@
 
     "account_deletions": {
       ".read": "auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')",
+      ".indexOn": ["status"],
       "$uid": {
         ".read": "auth != null && (auth.uid === $uid || auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')",
         ".write": "(auth != null && auth.uid === $uid && auth.token.firebase.sign_in_provider != 'anonymous' && newData.child('uid').val() === auth.uid && newData.child('status').val() === 'pending') || (auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com'))",

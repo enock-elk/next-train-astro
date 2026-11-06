@@ -38,6 +38,9 @@ assert.match(
     /newData\.val\(\) === data\.val\(\) \+ 1/,
 );
 assert.match(rules.delay_reports.$reportId['.validate'], /length <= 280/);
+assert.deepEqual(rules.delay_reports['.indexOn'], ['routeId', 'timestamp', 'trainKey'], 'delay-report badge can orderBy timestamp');
+assert.deepEqual(rules.moderation_queue['.indexOn'], ['timestamp'], 'community queue badge can orderBy timestamp');
+assert.deepEqual(rules.account_deletions['.indexOn'], ['status'], 'deletion badge can orderBy status');
 assert.equal(rules.inbox.$deviceId['.read'], true, 'inbox stays readable without a new auth gate so Messages on older shells still load');
 assert.equal(rules.config.community_champions['.read'], true, 'community champions config is publicly readable for About');
 assert.match(rules.config['.write'], /thandeka05nxumalo@gmail\.com/, 'Thandeka can write config including champions');

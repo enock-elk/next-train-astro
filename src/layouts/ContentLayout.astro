@@ -113,6 +113,7 @@ const resolvedHtmlClass = [forceDark ? 'dark' : '', htmlClass].filter(Boolean).j
     <title>{title}</title>
     <meta name="description" content={description} />
     <meta name="robots" content={robotsContent} />
+    {labNoIndex && <meta name="googlebot" content="noindex, nofollow" />}
     {labNoIndex && <meta name="nt-channel" content="lab" />}
     <link rel="canonical" href={canonical} />
     <meta name="theme-color" content={themeColor} />

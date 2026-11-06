@@ -8,15 +8,14 @@ import { fileURLToPath } from 'node:url';
 import { APP_VERSION } from '../src/lib/config.js';
 import { listSeoRoutes, listSeoRegions, listSeoCorridors } from '../src/lib/seo-routes.js';
 import { listIndexableSeoStations } from '../src/lib/seo-stations.js';
+import { isLabSeoBuild } from './lab-host.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const ORIGIN = 'https://nexttrain.co.za';
 const today = new Date().toISOString().slice(0, 10);
-const labBuild = process.env.PUBLIC_LAB_MODE === 'true'
-  || String(process.env.PUBLIC_SITE_URL || '').includes('lab.nexttrain');
 
-if (labBuild) {
-  console.log('sitemap.xml: skipped (lab host is noindex and must not publish a sitemap)');
+if (isLabSeoBuild()) {
+  console.log('sitemap.xml: skipped (lab is noindex and must not publish a sitemap)');
   process.exit(0);
 }
 

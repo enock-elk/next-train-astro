@@ -467,6 +467,12 @@ export function bindHistoryBackNavigation() {
             return;
         }
 
+        const reactionSheet = document.getElementById('alerts-reaction-breakdown');
+        if (reactionSheet && !reactionSheet.classList.contains('hidden') && typeof window.__ntHideAlertReactionBreakdown === 'function') {
+            window.__ntHideAlertReactionBreakdown(true);
+            return;
+        }
+
         // Alerts channel parks the home board (same as sidenav #sheet). Closing
         // it must not switchTab / remount Next Train.
         const alertsEl = document.getElementById('alerts-channel');
@@ -3177,10 +3183,6 @@ function bindBlurBackdropDismiss() {
                 btn.click();
                 return;
             }
-        }
-        // Ticket Prices matches the timetable: haptic on open and on user close.
-        if (el.id === 'fare-modal') {
-            triggerHaptic();
         }
         closeSmoothModal(el.id);
     });

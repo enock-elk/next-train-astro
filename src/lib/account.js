@@ -514,6 +514,22 @@ export async function ensureUserProfile(user, opts = {}) {
             );
         }
 
+        try {
+            const provider = user.providerData?.[0]?.providerId || (user.email ? 'password' : '');
+            await window.firebaseDbUpdate(
+                window.firebaseDbRef(window.firebaseDb, `account_directory/${user.uid}`),
+                {
+                    displayName: displayName || null,
+                    email: user.email || existing?.email || null,
+                    createdAt: existing?.createdAt || now,
+                    provider: String(provider || '').slice(0, 40) || null,
+                    updatedAt: now,
+                }
+            );
+        } catch (dirErr) {
+            console.warn('Account directory deferred', dirErr?.message || dirErr);
+        }
+
         await syncAccountRecentTrips(existing?.recentTrips);
 
         publishUser(user, {
@@ -554,6 +570,12 @@ export async function updateAccountDisplayName(raw) {
         };
         if (photoURL) profileRow.photoURL = photoURL;
         await window.firebaseDbUpdate(window.firebaseDbRef(window.firebaseDb, `users/${user.uid}`), profileRow);
+        try {
+            await window.firebaseDbUpdate(window.firebaseDbRef(window.firebaseDb, `account_directory/${user.uid}`), {
+                displayName,
+                updatedAt: Date.now(),
+            });
+        } catch { /* directory is optional until rules are deployed */ }
     }
     publishUser(user, { displayName, displayNameCustom: !!custom, photoURL });
     window.dispatchEvent(new CustomEvent('accountchange', { detail: $account.get() }));
@@ -806,6 +828,8 @@ export function showAccountGuestScreen(screen) {
     const signedOpen = document.getElementById('account-signed-in') && !document.getElementById('account-signed-in').classList.contains('hidden');
     // Hero copy already carries Welcome / Welcome back / Reset — keep the top bar empty.
     if (title && !signedOpen) title.textContent = '';
+    document.getElementById('account-settings-host')?.classList.toggle('hidden', !signedOpen);
+    document.getElementById('account-prefs-label')?.classList.toggle('hidden', !signedOpen);
 }
 
 /** Open sign-in when an action needs an account. Resolves false if they close it. */
@@ -1088,6 +1112,7 @@ export function syncAccountSettingsUi(state = $account.get()) {
     // Guest heroes already show Welcome / Welcome back / Reset; do not repeat in the top bar.
     if (screenTitle) screenTitle.textContent = '';
     document.getElementById('account-prefs-label')?.classList.toggle('hidden', !signed);
+    document.getElementById('account-settings-host')?.classList.toggle('hidden', !signed);
     const deleteWrap = document.getElementById('account-delete-wrap');
     const isOperator = signed && isAdminEmail(state.email);
     if (deleteWrap) {

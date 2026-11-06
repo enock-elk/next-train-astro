@@ -712,6 +712,9 @@ const now = 1_700_000_000_000;
     assert(channelJs.includes('alignAlertCardTop') && channelJs.includes('focusTop'), 'force open puts the alert top in view');
     assert(channelJs.includes('nt-alert-force-flash'), 'force open highlight is a brief flash');
     assert(hubJs.includes('focusTop: true'), 'auto open asks for the top of the alert');
+    assert(channelJs.includes('reactionBreakdownPushed') && channelJs.includes("__ntHideAlertReactionBreakdown"), 'back closes the reaction counts sheet before the alerts page');
+    const uiJs = readFileSync(new URL('../src/lib/ui.js', import.meta.url), 'utf8');
+    assert(uiJs.includes('__ntHideAlertReactionBreakdown'), 'history back asks the reaction sheet to close');
     const pollJs = readFileSync(new URL('../src/lib/alert-poll.js', import.meta.url), 'utf8');
     assert(pollJs.includes("data-poll-closed") && pollJs.includes('if (!voted && !closed) return'), 'closed results load without a local vote');
 }

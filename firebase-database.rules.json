@@ -404,6 +404,16 @@
       }
     },
 
+    "account_directory": {
+      ".read": "auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')",
+      ".indexOn": ["createdAt"],
+      "$uid": {
+        ".read": "auth != null && (auth.uid === $uid || auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')",
+        ".write": "auth != null && auth.token.firebase.sign_in_provider != 'anonymous' && (auth.uid === $uid || auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')",
+        ".validate": "!newData.exists() || (newData.hasChild('createdAt') && newData.child('createdAt').isNumber() && (!newData.hasChild('displayName') || newData.child('displayName').val() == null || (newData.child('displayName').isString() && newData.child('displayName').val().length <= 80)) && (!newData.hasChild('email') || newData.child('email').val() == null || (newData.child('email').isString() && newData.child('email').val().length <= 160)) && (!newData.hasChild('provider') || newData.child('provider').val() == null || (newData.child('provider').isString() && newData.child('provider').val().length <= 40)) && (!newData.hasChild('updatedAt') || newData.child('updatedAt').isNumber()))"
+      }
+    },
+
     "users": {
       ".read": "auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')",
       ".indexOn": ["deletionRequestedAt"],

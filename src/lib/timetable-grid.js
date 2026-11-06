@@ -660,7 +660,6 @@ export async function renderFullScheduleGrid(direction = null, dayOverride = nul
             </div>`;
         document.body.appendChild(modal);
         const closeGrid = () => {
-            triggerHaptic();
             closeFullGridModal();
         };
         document.getElementById('close-full-grid-btn')?.addEventListener('click', closeGrid);
@@ -673,7 +672,6 @@ export async function renderFullScheduleGrid(direction = null, dayOverride = nul
             footer.innerHTML = '<button type="button" id="close-timetable-footer-btn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-4 rounded-lg shadow-md transition-colors text-sm focus:outline-none">Close Timetable</button>';
             shell.appendChild(footer);
             document.getElementById('close-timetable-footer-btn')?.addEventListener('click', () => {
-                triggerHaptic();
                 closeFullGridModal();
             });
         }

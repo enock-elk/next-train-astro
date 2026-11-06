@@ -12375,9 +12375,10 @@ const Admin = {
                 <svg id="ut-chevron" class="absolute right-3 w-4 h-4 transform transition-transform -rotate-90 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
             </div>
             <div id="ut-body" class="hidden mt-4 flex flex-col text-left">
-                <p class="text-[10px] text-gray-500 dark:text-gray-400 mb-3 px-1 leading-snug">Bans, lookup, and deletion requests are in this panel.</p>
+                <p class="text-[10px] text-gray-500 dark:text-gray-400 mb-3 px-1 leading-snug">Bans, accounts, lookup, and deletion requests are in this panel.</p>
                 <div class="flex gap-1 p-1 mb-3 rounded-xl bg-gray-100 dark:bg-gray-900/80 border border-gray-200 dark:border-gray-700" role="tablist" aria-label="User trust sections">
-                    <button type="button" id="ut-tab-bans" role="tab" aria-selected="true" class="ut-tab flex-1 text-[10px] font-black uppercase tracking-wider py-2 rounded-lg bg-white dark:bg-gray-800 text-indigo-600 dark:text-indigo-400 shadow-sm border border-indigo-200 dark:border-indigo-800">Active bans</button>
+                    <button type="button" id="ut-tab-bans" role="tab" aria-selected="true" class="ut-tab flex-1 text-[10px] font-black uppercase tracking-wider py-2 rounded-lg bg-white dark:bg-gray-800 text-indigo-600 dark:text-indigo-400 shadow-sm border border-indigo-200 dark:border-indigo-800">Bans</button>
+                    <button type="button" id="ut-tab-accounts" role="tab" aria-selected="false" class="ut-tab flex-1 text-[10px] font-black uppercase tracking-wider py-2 rounded-lg text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200">Accounts</button>
                     <button type="button" id="ut-tab-lookup" role="tab" aria-selected="false" class="ut-tab flex-1 text-[10px] font-black uppercase tracking-wider py-2 rounded-lg text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200">Lookup</button>
                     <button type="button" id="ut-tab-deletions" role="tab" aria-selected="false" class="ut-tab flex-1 text-[10px] font-black uppercase tracking-wider py-2 rounded-lg text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200">Deletions</button>
                 </div>
@@ -12388,6 +12389,15 @@ const Admin = {
                     </div>
                     <div id="ut-bans-list" class="space-y-2 max-h-[320px] overflow-y-auto px-1 custom-scrollbar">
                         <p class="text-xs text-gray-400 text-center py-3">Open panel to load bans...</p>
+                    </div>
+                </div>
+                <div id="ut-pane-accounts" role="tabpanel" class="ut-pane hidden">
+                    <div class="flex items-center justify-between gap-2 mb-2 px-1">
+                        <p class="text-[11px] text-gray-500 dark:text-gray-400 leading-snug">People who created an account. This list does not include guests.</p>
+                        <button type="button" id="ut-accounts-refresh" class="shrink-0 text-[10px] font-bold text-blue-600 dark:text-blue-400 px-2 py-1 rounded-lg bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800">Refresh</button>
+                    </div>
+                    <div id="ut-accounts-list" class="space-y-2 max-h-[320px] overflow-y-auto px-1 custom-scrollbar">
+                        <p class="text-xs text-gray-400 text-center py-3">Open this tab to load accounts.</p>
                     </div>
                 </div>
                 <div id="ut-pane-lookup" role="tabpanel" class="ut-pane hidden">
@@ -12412,6 +12422,7 @@ const Admin = {
         const chevron = document.getElementById('ut-chevron');
         const utTabs = [
             { id: 'bans', btn: document.getElementById('ut-tab-bans'), pane: document.getElementById('ut-pane-bans') },
+            { id: 'accounts', btn: document.getElementById('ut-tab-accounts'), pane: document.getElementById('ut-pane-accounts') },
             { id: 'lookup', btn: document.getElementById('ut-tab-lookup'), pane: document.getElementById('ut-pane-lookup') },
             { id: 'deletions', btn: document.getElementById('ut-tab-deletions'), pane: document.getElementById('ut-pane-deletions') },
         ];
@@ -12437,6 +12448,7 @@ const Admin = {
                 tab.pane?.classList.toggle('hidden', !on);
             });
             if (active === 'bans') Admin.fetchActiveBans();
+            if (active === 'accounts') Admin.fetchAccountDirectory();
             if (active === 'deletions') Admin.fetchAccountDeletions();
         };
         utTabs.forEach((tab) => tab.btn?.addEventListener('click', () => setUtTab(tab.id)));
@@ -12474,6 +12486,7 @@ const Admin = {
 
         document.getElementById('ut-lookup-btn').onclick = () => Admin.lookupUserTrust();
         document.getElementById('ut-bans-refresh')?.addEventListener('click', () => Admin.fetchActiveBans());
+        document.getElementById('ut-accounts-refresh')?.addEventListener('click', () => Admin.fetchAccountDirectory());
         document.getElementById('ad-refresh-btn')?.addEventListener('click', () => Admin.fetchAccountDeletions());
         document.getElementById('ut-uid-input')?.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') Admin.lookupUserTrust();
@@ -12492,6 +12505,55 @@ const Admin = {
                     { id: 'lost', label: '404 / End of the Line' },
                 ];
             return modes.find((m) => m.id === id)?.label || id;
+        };
+
+        Admin.fetchAccountDirectory = async () => {
+            const list = document.getElementById('ut-accounts-list');
+            if (!list) return;
+            list.innerHTML = '<p class="text-xs text-gray-400 text-center py-3 animate-pulse">Loading accounts...</p>';
+            try {
+                const secret = await Admin.getAuthKey();
+                if (!secret) throw new Error('not signed in - open Admin while logged in as an admin account');
+                const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
+                const auth = `auth=${encodeURIComponent(secret)}`;
+                const res = await fetch(`${dynamicEndpoint}account_directory.json?orderBy="createdAt"&limitToLast=50&${auth}`);
+                if (!res.ok) throw new Error(`accounts HTTP ${res.status}`);
+                const data = await res.json() || {};
+                const rows = Object.entries(data)
+                    .filter(([, row]) => row && typeof row === 'object')
+                    .map(([uid, row]) => ({ uid, ...row }))
+                    .sort((a, b) => (Number(b.createdAt) || 0) - (Number(a.createdAt) || 0));
+                if (!rows.length) {
+                    list.innerHTML = '<p class="text-xs text-gray-400 text-center py-4">No accounts yet. Someone appears here after they create an account and open Next Train.</p>';
+                    return;
+                }
+                const esc = (value) => (typeof escapeHTML === 'function' ? escapeHTML(String(value || '')) : String(value || '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])));
+                const providerLabel = (id) => {
+                    const key = String(id || '');
+                    if (key === 'google.com') return 'Google';
+                    if (key === 'facebook.com') return 'Facebook';
+                    if (key === 'password') return 'Email';
+                    return key || 'Account';
+                };
+                list.innerHTML = '';
+                rows.forEach((row) => {
+                    const btn = document.createElement('button');
+                    btn.type = 'button';
+                    btn.className = 'w-full text-left rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 px-3 py-2 focus:outline-none';
+                    const when = Number(row.createdAt) > 0 && typeof Admin.formatDate === 'function' ? Admin.formatDate(Number(row.createdAt)) : '';
+                    btn.innerHTML = `<span class="block text-xs font-bold text-gray-900 dark:text-white truncate">${esc(row.displayName || 'Passenger')}</span><span class="block text-[11px] text-gray-500 dark:text-gray-400 truncate">${esc(row.email || 'No email')}</span><span class="block text-[10px] text-gray-400 mt-0.5">${esc(providerLabel(row.provider))}${when ? ` · Joined ${esc(when)}` : ''}</span>`;
+                    btn.addEventListener('click', () => Admin.openUserTrustLookup?.({ uid: row.uid, email: row.email || '' }));
+                    list.appendChild(btn);
+                });
+                if (rows.length >= 50) {
+                    const more = document.createElement('p');
+                    more.className = 'text-[10px] text-gray-400 text-center py-2';
+                    more.textContent = 'Showing the latest 50. Use Lookup for anyone else.';
+                    list.appendChild(more);
+                }
+            } catch (e) {
+                list.innerHTML = `<p class="text-xs text-red-500 text-center py-3">${(typeof escapeHTML === 'function' ? escapeHTML(e?.message || 'Could not load accounts') : 'Could not load accounts')}</p>`;
+            }
         };
 
         Admin.fetchActiveBans = async () => {

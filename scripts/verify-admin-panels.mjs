@@ -187,6 +187,8 @@ assert(admin.includes("'exp-map-enabled'") && admin.includes("'exp-community-ena
 
 assert(admin.includes('renderExpFeatureAccordions'), 'experimental features render as per-type accordions');
 assert(admin.includes("I'm on it / live share") && admin.includes('Delay reports') && admin.includes('Community realtime') && admin.includes('Push notifications'), 'System Controls lists remaining experimental feature types');
+assert(admin.includes('id="champions-header"') && admin.includes('Next Train Champions'), 'System Controls has Next Train Champions');
+assert(admin.includes('config/community_champions.json'), 'champions save to config/community_champions');
 assert(!/Trip price/.test(admin.split('grantableFeatures')[1] || admin), 'Trip price is not an experimental feature accordion');
 assert(admin.includes('exp-feat-${key}-header') || admin.includes('expFeatureControlIds'), 'each feature type has an accordion header');
 
@@ -225,6 +227,7 @@ assert(helpers.ntAdminDevPanelIdFromHash('#dev-feedback-panel') === 'feedback-pa
 assert(helpers.ntAdminDevPanelIdFromHash('#dev') === '', 'grid hash is not a panel');
 assert(helpers.ntAdminDevPanelIdFromHash('#roadmap-ticket') === '', 'ticket overlay hash is not a panel');
 assert(helpers.ntAdminCanonicalPanelId('alert-panel--inapp') === 'alert-panel', 'in-app hub hash still mounts Service Alerts');
+assert(helpers.ntAdminCanonicalPanelId('account-deletions-panel') === 'user-trust-panel', 'deletion requests open inside User Trust');
 assert(helpers.ntAdminCanonicalPanelId('feedback-panel') === 'feedback-panel', 'other panel ids stay unchanged');
 assert(helpers.ntAdminDrillPanelTitle('push-notifications-panel') === 'Notifications', 'FCM drill title is Notifications, not the panel id');
 assert(helpers.ntAdminDrillPanelTitle('alert-panel--inapp') === 'In-app alerts', 'in-app drill title is In-app alerts');
@@ -699,6 +702,12 @@ assert(
     assert(overlay.querySelectorAll('[data-fb-preview-step]').length === 0, 'closing the preview removes the feedback controls');
     assert(!overlay.dataset.ntFeedbackGallery, 'closing the preview drops the feedback gallery');
 }
+
+assert(admin.includes("data-fb-filter-mode=\"missing\""), 'feedback filter supports Missing mode');
+assert(admin.includes('feedbackFiltersActive'), 'feedback filter tracks Has/Missing as active');
+assert(admin.includes('id="outreach-resolve"'), 'outreach sheet has Resolve after WhatsApp');
+assert(admin.includes('markOutreachClicked'), 'outreach marks WhatsApp/email opens');
+assert(admin.includes('data-outreach-opened'), 'outreach shows an Opened chip');
 
 if (failed) {
     console.error(`\nverify-admin-panels failed: ${failed} check(s)`);

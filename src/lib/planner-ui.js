@@ -11,7 +11,7 @@ import {
     $isSimMode, $userRegion, $currentRouteId, $globalStationIndex, 
     $globalDisruptions, $opsOverlaysReady, $masterStationList, $ghostStationList, $userProfile, $fullDatabase, $simTime
 } from '../store.js';
-import { ROUTES, FARE_CONFIG, fareMultiplierForProfile, withBase, SPECIAL_DATES, HOLIDAY_NAMES } from './config.js';
+import { ROUTES, FARE_CONFIG, fareMultiplierForProfile, fareMultiplierForListedTicket, withBase, SPECIAL_DATES, HOLIDAY_NAMES } from './config.js';
 import { resolveHolidayDayType } from './holiday-approvals.js';
 import { smoothPathFromStops, nearestPathIndex, loadRegionBundle } from './rail-tracks.js';
 import { applyForksToStops, fetchTrackForks } from './map-overrides.js';
@@ -23,7 +23,8 @@ import {
     resolveStationLatLon, weekdaySheetsForRoute
 } from './utils.js';
 import { planUnifiedTrip, extractTrainSheetStops } from './planner-core.js';
-import { trainSheetOperatingLabel } from './live-board.js';
+import { noticeQuotePlain } from './feedback-quote.js';
+import { describeTrainSheetDayNote, paintAdvisoryFrame, trainSheetOperatingLabel } from './live-board.js';
 import { saturdayNoServiceCopy, buildSaturdayAdvisoryCopy, stationDisplayName } from './saturday-service.js';
 import { buildPlannerShareUrl, buildRouteShareUrl, parsePlannerDeepLink, stripShareParamsFromUrl, compactTime, isSeoAppHandoff } from './share-links.js';
 import { consumeShareDeeplinkSnapshot, peekShareDeeplinkSnapshot, armSlowDeeplinkToast, lockShareBoot } from './deeplink.js';
@@ -395,12 +396,11 @@ export function computeZoneFareForTrip(zoneCode, trip = {}) {
     };
 }
 
-/** Same as the Next Train fare button: half-rand ceil, then drop to a whole rand (R7.50 → R7). */
+/** Same as the Next Train fare button: nearest R0.50 (R8.4 → R8.5, R7.2 → R7). */
 function roundBoardFare(raw) {
     let finalPrice = Number(raw);
     if (!Number.isFinite(finalPrice)) return 0;
-    finalPrice = Math.ceil(finalPrice * 2) / 2;
-    return Math.floor(finalPrice);
+    return Math.round(finalPrice * 2) / 2;
 }
 
 function formatBoardFareLabel(raw) {
@@ -416,20 +416,19 @@ function formatRawFareLabel(raw) {
 }
 
 /** Board-style ticket rows under the trip's Single price (peak table, profile multiplier). */
-function plannerTicketRowsHtml(zone, fare) {
+export function plannerTicketRowsHtml(zone, fare) {
     const single = `
             <div class="flex justify-between gap-3 pt-2 border-t border-gray-100 dark:border-gray-800"><dt class="text-gray-500 dark:text-gray-400">Fare - Single Trip</dt><dd><button type="button" id="planner-fare-raw-toggle" class="font-black text-gray-900 dark:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 rounded" aria-pressed="false" title="Show calculated price">R${escapeHTML(fare.priceLabel)}</button></dd></div>`;
     const prices = zone && FARE_CONFIG.zones_detailed?.[zone];
     if (!prices) return single;
     const profileName = fare.profile || 'Adult';
-    const peakMult = fareMultiplierForProfile(profileName, false);
-    const money = (base) => formatBoardFareLabel(Number(base) * peakMult);
-    const row = (label, extra, base) => {
+    const money = (base, kind) => formatBoardFareLabel(Number(base) * fareMultiplierForListedTicket(profileName, kind));
+    const row = (label, extra, base, kind) => {
         if (base == null || !Number.isFinite(Number(base))) return '';
         return `
-            <div class="flex justify-between gap-3"><dt class="text-gray-500 dark:text-gray-400">${label}${extra || ''}</dt><dd class="font-black text-gray-900 dark:text-white">R${escapeHTML(money(base))}</dd></div>`;
+            <div class="flex justify-between gap-3"><dt class="text-gray-500 dark:text-gray-400">${label}${extra || ''}</dt><dd class="font-black text-gray-900 dark:text-white">R${escapeHTML(money(base, kind))}</dd></div>`;
     };
-    return `${single}${row('Return Trip', '', prices.return)}${row('Weekly', ' <span class="opacity-70 font-normal">(Mon-Fri)</span>', prices.weekly_mon_fri)}${row('Weekly', ' <span class="opacity-70 font-normal">(Mon-Sat)</span>', prices.weekly_mon_sat)}${row('Monthly Pass', '', prices.monthly)}`;
+    return `${single}${row('Return Trip', '', prices.return, 'return')}${row('Weekly', ' <span class="opacity-70 font-normal">(Mon-Fri)</span>', prices.weekly_mon_fri, 'pass')}${row('Weekly', ' <span class="opacity-70 font-normal">(Mon-Sat)</span>', prices.weekly_mon_sat, 'pass')}${row('Monthly Pass', '', prices.monthly, 'pass')}`;
 }
 
 function plannerMoneySvg(className = 'w-3.5 h-3.5') {
@@ -684,6 +683,18 @@ function bindPlannerFareVote(trip, detail) {
     const ticketTypeEl = document.getElementById('planner-fare-vote-type');
     const sendBtn = document.getElementById('planner-fare-vote-send');
     let voting = false;
+    const yesClass = 'inline-flex items-center justify-center gap-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-3 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400';
+    const quietClass = 'inline-flex items-center justify-center gap-1.5 rounded-xl bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-100 font-bold py-2.5 px-3 text-sm border border-gray-200 dark:border-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400';
+    const paintFareChoice = (chosen) => {
+        if (yesBtn) {
+            yesBtn.className = chosen === 'yes' ? yesClass : quietClass;
+            yesBtn.setAttribute('aria-pressed', chosen === 'yes' ? 'true' : 'false');
+        }
+        if (noBtn) {
+            noBtn.className = chosen === 'no' ? yesClass : quietClass;
+            noBtn.setAttribute('aria-pressed', chosen === 'no' ? 'true' : 'false');
+        }
+    };
     const sendVote = async (extra) => {
         let km = detail?.km;
         let crowKm = detail?.crowKm;
@@ -712,6 +723,7 @@ function bindPlannerFareVote(trip, detail) {
     noBtn?.addEventListener('click', (ev) => {
         ev.preventDefault();
         ev.stopPropagation();
+        paintFareChoice('no');
         correct?.classList.remove('hidden');
         ticketTypeEl?.focus();
     });
@@ -759,6 +771,7 @@ function fillPlannerFareBreakdown(trip, { km, crowKm, zone, fare } = {}) {
     const peakLabel = fare.alwaysDiscount
         ? '50% all day'
         : (fare.isOffPeak ? 'Off-peak' : 'Peak');
+    const peakWhen = [dayLabel, depLabel ? `@ ${depLabel}` : ''].filter(Boolean).join(' ');
     const peakTitle = fare.alwaysDiscount ? 'Discount' : 'Peak / off-peak';
     const kmLabel = km != null ? `${km} km` : 'Unavailable';
     const crowLabel = crowKm != null ? `${crowKm} km` : 'Unavailable';
@@ -807,7 +820,7 @@ function fillPlannerFareBreakdown(trip, { km, crowKm, zone, fare } = {}) {
             <div class="flex justify-between gap-3"><dt class="text-gray-500 dark:text-gray-400">Distance</dt><dd class="font-bold">${escapeHTML(kmLabel)}</dd></div>
             <div data-admin-authed-only hidden inert aria-hidden="true" class="flex justify-between gap-3"><dt class="text-gray-500 dark:text-gray-400">Straight-line</dt><dd class="font-bold">${escapeHTML(crowLabel)}</dd></div>
             <div data-admin-authed-only hidden inert aria-hidden="true" class="flex justify-between gap-3"><dt class="text-gray-500 dark:text-gray-400">Zone</dt><dd class="font-bold">${escapeHTML(zone || '-')}${band ? ` <span class="font-medium text-gray-500 dark:text-gray-400">(${escapeHTML(band)})</span>` : ''}</dd></div>
-            <div class="flex justify-between gap-3"><dt class="text-gray-500 dark:text-gray-400">${escapeHTML(peakTitle)}</dt><dd class="font-bold">${escapeHTML(peakLabel)} <span class="font-medium text-gray-500 dark:text-gray-400">${escapeHTML(dayLabel)}${depLabel ? ` ${escapeHTML(depLabel)}` : ''}</span></dd></div>
+            <div class="flex justify-between gap-3"><dt class="text-gray-500 dark:text-gray-400">${escapeHTML(peakTitle)}</dt><dd class="text-right font-normal"><span class="font-bold">${escapeHTML(peakLabel)}</span>${peakWhen ? ` (${escapeHTML(peakWhen)})` : ''}</dd></div>
             <div class="flex justify-between gap-3 items-center"><dt class="text-gray-500 dark:text-gray-400">Profile</dt><dd><button type="button" id="planner-fare-profile-btn" class="font-bold text-blue-600 dark:text-blue-400 underline decoration-dotted underline-offset-2 hover:text-blue-700 dark:hover:text-blue-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 rounded px-1">${profileLabel}</button></dd></div>
             ${plannerTicketRowsHtml(zone, fare)}
         </dl>
@@ -1056,6 +1069,7 @@ let lastPlannerPreferredTime = null;
 /** Signature of disruptions used for the currently shown planner result. */
 let lastPlannerDisruptionSig = '';
 let plannerDisrListenBound = false;
+let plannerSearchGen = 0;
 
 function disruptionSignature(disr = $globalDisruptions.get()) {
     try {
@@ -1264,40 +1278,52 @@ function buildPlannerNotice({
     return `<div class="${shellClass}">${inner}</div>`;
 }
 
-/** Shrink notice body lines so they stay on one row when the viewport allows. */
+/** Shrink notice body lines so they stay on one row when the card allows. */
 function fitPlannerNoticeCopy(root) {
     const scope = root && typeof root.querySelectorAll === 'function' ? root : document;
-    const nodes = scope.querySelectorAll('.planner-notice-copy p, .planner-notice-copy');
+    const nodes = scope.querySelectorAll('.planner-notice-copy p');
     nodes.forEach((el) => {
-        if (el.classList?.contains('planner-notice-copy') && el.querySelector('p')) return;
+        const shell = el.closest('.planner-notice');
+        const aside = shell?.querySelector('.planner-notice-aside');
+        const bar = shell?.querySelector('.planner-notice-bar');
+        const shellW = shell?.clientWidth || 0;
+        const limit = shellW - (aside?.offsetWidth || 0) - (bar?.offsetWidth || 0) - 28;
         el.style.fontSize = '';
         el.style.whiteSpace = '';
+        // A zero-width first frame used to lock nowrap and clip the departed banner.
+        if (limit < 40) {
+            el.style.whiteSpace = 'normal';
+            return;
+        }
         const maxPx = 14;
         const minPx = 10;
         el.style.whiteSpace = 'nowrap';
         el.style.fontSize = `${maxPx}px`;
-        const fits = () => el.scrollWidth <= el.clientWidth + 0.5;
-        if (fits()) {
-            el.style.whiteSpace = 'nowrap';
-            return;
-        }
+        const fits = () => el.scrollWidth <= limit + 0.5;
+        if (fits()) return;
         let best = minPx;
+        let found = false;
         for (let size = maxPx; size >= minPx; size -= 0.25) {
             el.style.fontSize = `${size}px`;
             if (fits()) {
                 best = size;
+                found = true;
                 break;
             }
         }
         el.style.fontSize = `${best}px`;
-        if (!fits()) el.style.whiteSpace = 'normal';
+        if (!found) el.style.whiteSpace = 'normal';
     });
 }
 
 function scheduleFitPlannerNotices(root) {
     const run = () => fitPlannerNoticeCopy(root);
-    if (typeof requestAnimationFrame === 'function') requestAnimationFrame(run);
-    else run();
+    if (typeof requestAnimationFrame === 'function') {
+        requestAnimationFrame(() => {
+            run();
+            requestAnimationFrame(run);
+        });
+    } else run();
 }
 
 if (typeof window !== 'undefined' && !window.__ntPlannerNoticeFitBound) {
@@ -2050,7 +2076,7 @@ export function restorePlannerResultsView() {
     return false;
 }
 
-function bindAdvisoryReplyButton({ snippet, rawMsg, alertId = '', location = 'planner_disruption_reply' }) {
+function bindAdvisoryReplyButton({ snippet, rawMsg, alertId = '', location = 'planner_disruption_reply', quotedText = '' }) {
     const card = document.getElementById('disruption-modal-card');
     const replyBtn = document.getElementById('disruption-modal-reply-btn')
         || Array.from(card?.querySelectorAll('button') || []).find((b) => b.textContent.includes('Reply'));
@@ -2064,6 +2090,7 @@ function bindAdvisoryReplyButton({ snippet, rawMsg, alertId = '', location = 'pl
             rawMsg: rawMsg || snippet,
             alertId,
             alertKind: 'disruption',
+            quotedText,
         });
         if (typeof closeSmoothModal === 'function') closeSmoothModal('disruption-modal');
         setTimeout(() => {
@@ -2082,6 +2109,7 @@ function paintSaturdayBetweenLine(line) {
 
 export function openSaturdayServiceModal(routeId = 'herc-koed') {
     if (typeof triggerHaptic === 'function') triggerHaptic();
+    paintAdvisoryFrame('critical');
     const payload = {
         ...(currentPlannerErrorPayload || {}),
         routeId: routeId || currentPlannerErrorPayload?.routeId || 'herc-koed',
@@ -2165,6 +2193,7 @@ export function openDisruptionModal(id) {
         bodyEl.innerHTML = prepareRichHtml(raw);
     }
     
+    paintAdvisoryFrame(targetDisruption.tier === 'CRITICAL' ? 'critical' : 'caution');
     if (badgeEl) {
         if (targetDisruption.tier === 'CRITICAL') {
             badgeEl.className = "w-full text-center text-[10px] font-black uppercase tracking-widest text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 py-2.5 rounded-lg border border-red-200 dark:border-red-800/50";
@@ -2196,6 +2225,7 @@ export function openDisruptionModal(id) {
         rawMsg,
         alertId: targetDisruption.id || '',
         location: 'planner_disruption_reply',
+        quotedText: noticeQuotePlain(targetDisruption),
     });
     
     if (typeof openSmoothModal === 'function') openSmoothModal('disruption-modal');
@@ -2351,7 +2381,7 @@ export async function openTripMapRenderer(routeData) {
                 document.head.appendChild(script);
             });
         } catch (e) {
-            showToast('Failed to load map engine.', 'error');
+            showToast('Could not open the map.', 'error');
             window._isMapInitializing = false;
             return;
         }
@@ -2852,20 +2882,30 @@ function plannerSheetDayLabel(dayType, routeId, trainId) {
 
 const _plannerTrainTerminusCache = new Map();
 
-/** Last real-timed stop on that train's own column. Never corridor destB. */
-function plannerTrainColumnTerminus(routeId, trainId) {
+function plannerTrainSheetFacts(routeId, trainId) {
     const id = String(trainId || '').trim();
     const route = String(routeId || '').trim();
-    if (!id || !route) return '';
+    const empty = { terminus: '', viaLabel: '' };
+    if (!id || !route) return empty;
     const dayType = selectedPlannerDay || getCurrentDayType();
     const key = `${route}|${id}|${dayType}`;
     if (_plannerTrainTerminusCache.has(key)) return _plannerTrainTerminusCache.get(key);
     const sheet = extractTrainSheetStops(route, id, dayType);
-    const terminus = sheet?.terminus
-        ? PlannerRenderer.applyUIIntercepts(sheet.terminus)
-        : '';
-    _plannerTrainTerminusCache.set(key, terminus);
-    return terminus;
+    const facts = {
+        terminus: sheet?.terminus ? PlannerRenderer.applyUIIntercepts(sheet.terminus) : '',
+        viaLabel: sheet?.viaLabel || '',
+    };
+    _plannerTrainTerminusCache.set(key, facts);
+    return facts;
+}
+
+/** Last real stop, or the further Irene/Kempton terminus on the same day. */
+function plannerTrainColumnTerminus(routeId, trainId) {
+    return plannerTrainSheetFacts(routeId, trainId).terminus;
+}
+
+function plannerTrainViaLabel(routeId, trainId) {
+    return plannerTrainSheetFacts(routeId, trainId).viaLabel;
 }
 
 function plannerTrainHeadboardLabel(routeId, trainId) {
@@ -2878,13 +2918,20 @@ function plannerTrainHeadboardLabel(routeId, trainId) {
 
 function plannerTrainNameButton(routeId, dest, trainId, extraClass = '') {
     const fromColumn = plannerTrainColumnTerminus(routeId, trainId);
+    const via = plannerTrainViaLabel(routeId, trainId);
     const destSafe = escapeHTML(fromColumn || String(dest || '').replace(/ STATION/gi, ''));
     const trainSafe = escapeHTML(String(trainId || ''));
     const routeSafe = escapeHTML(String(routeId || ''));
     const routeJs = String(routeId || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
     const trainJs = String(trainId || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
     const label = destSafe ? `${destSafe} Train ${trainSafe}` : `Train ${trainSafe}`;
-    return `<button type="button" class="planner-train-name-btn inline-flex items-center gap-0.5 underline underline-offset-2 decoration-1 decoration-blue-400/60 font-medium hover:decoration-blue-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 rounded-sm ${extraClass}" data-route-id="${routeSafe}" data-train-id="${trainSafe}" onclick="event.stopPropagation(); if(typeof window.openPlannerTrainSheet==='function') window.openPlannerTrainSheet('${routeJs}','${trainJs}')">${label}</button>`;
+    const viaHtml = via
+        ? `<span class="block max-w-full break-words text-[10px] font-bold leading-tight normal-case tracking-normal">Via ${escapeHTML(via)}</span>`
+        : '';
+    const stack = via ? 'flex-col items-start text-left' : 'items-center';
+    const nameLine = via ? 'break-words underline underline-offset-2 decoration-1 decoration-blue-400/60' : 'break-words';
+    const btnLine = via ? '' : 'underline underline-offset-2 decoration-1 decoration-blue-400/60';
+    return `<button type="button" class="planner-train-name-btn inline-flex ${stack} gap-0.5 max-w-full min-w-0 ${btnLine} font-medium hover:decoration-blue-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 rounded-sm ${extraClass}" data-route-id="${routeSafe}" data-train-id="${trainSafe}" onclick="event.stopPropagation(); if(typeof window.openPlannerTrainSheet==='function') window.openPlannerTrainSheet('${routeJs}','${trainJs}')"><span class="${nameLine}">${label}</span>${viaHtml}</button>`;
 }
 
 export function openPlannerTrainSheet(routeId, trainId) {
@@ -2895,15 +2942,19 @@ export function openPlannerTrainSheet(routeId, trainId) {
         if (typeof showToast === 'function') showToast('Full timetable for this train is not available.', 'error');
         return;
     }
-    const origin = stationDisplayName(sheet.origin);
-    const terminus = stationDisplayName(sheet.terminus);
+    const origin = PlannerRenderer.applyUIIntercepts(sheet.origin);
+    const terminus = PlannerRenderer.applyUIIntercepts(sheet.terminus);
+    const via = sheet.viaLabel || '';
     const titleEl = document.getElementById('planner-train-sheet-title');
     const dirEl = document.getElementById('planner-train-sheet-direction');
     const dayEl = document.getElementById('planner-train-sheet-day');
     const fareEl = document.getElementById('planner-train-sheet-fare');
     const listEl = document.getElementById('planner-train-sheet-stops');
     if (titleEl) titleEl.textContent = `${terminus} Train ${sheet.trainId}`;
-    if (dirEl) dirEl.textContent = `${origin} → ${terminus}`;
+    if (dirEl) {
+        dirEl.style.whiteSpace = 'pre-line';
+        dirEl.textContent = via ? `${origin} → ${terminus}\nVia ${via}` : `${origin} → ${terminus}`;
+    }
     const liveEl = document.getElementById('planner-train-sheet-live');
     if (liveEl) {
         liveEl.classList.add('hidden');
@@ -2923,7 +2974,28 @@ export function openPlannerTrainSheet(routeId, trainId) {
             liveEl.classList.remove('hidden');
         }).catch(() => {});
     }
-    if (dayEl) dayEl.textContent = plannerSheetDayLabel(sheet.dayType, sheet.route?.id, sheet.trainId);
+    if (dayEl) {
+        dayEl.textContent = plannerSheetDayLabel(sheet.dayType, sheet.route?.id, sheet.trainId);
+        const note = describeTrainSheetDayNote(sheet.dayType, sheet.route?.id, sheet.trainId);
+        dayEl.onclick = (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            const kicker = document.getElementById('schedule-day-kicker');
+            const titleEl = document.getElementById('schedule-day-title');
+            const bodyEl = document.getElementById('schedule-day-body');
+            if (kicker) kicker.textContent = 'This train';
+            if (titleEl) titleEl.textContent = note.title || 'Schedule';
+            if (bodyEl) bodyEl.textContent = note.body || '';
+            const ok = document.getElementById('schedule-day-ok');
+            if (ok && ok.getAttribute('data-day-ok') !== '1') {
+                ok.setAttribute('data-day-ok', '1');
+                ok.addEventListener('click', () => {
+                    if (typeof closeSmoothModal === 'function') closeSmoothModal('schedule-day-modal');
+                });
+            }
+            if (typeof openSmoothModal === 'function') openSmoothModal('schedule-day-modal');
+        };
+    }
     const zone = resolvePlannerRouteZone(sheet.route.id);
     const detailed = zone && FARE_CONFIG.zones_detailed?.[zone];
     if (fareEl) {
@@ -2938,8 +3010,8 @@ export function openPlannerTrainSheet(routeId, trainId) {
     if (listEl) {
         listEl.innerHTML = sheet.stops.map((stop, i) => {
             const isEnd = i === 0 || i === sheet.stops.length - 1;
-            const name = escapeHTML(stationDisplayName(stop.station));
-            const time = escapeHTML(formatTimeDisplay(stop.time));
+            const name = escapeHTML(PlannerRenderer.applyUIIntercepts(stop.station));
+            const time = escapeHTML(stop.express ? 'EXPR' : formatTimeDisplay(stop.time));
             const weight = isEnd ? 'font-black text-slate-900 dark:text-white' : 'font-semibold text-slate-700 dark:text-slate-200';
             const role = i === 0 ? 'Origin' : (i === sheet.stops.length - 1 ? 'Terminus' : '');
             return `
@@ -2999,10 +3071,6 @@ export const PlannerRenderer = {
     applyUIIntercepts: (stationName) => {
         if (!stationName) return "";
         let name = stationName.replace(' STATION', '').toLowerCase().replace(/\b\w/g, l => l.toUpperCase());
-        const upper = name.toUpperCase();
-        if (upper === 'ELANDSFONTEIN' || upper === 'RHODESFIELD') {
-            return 'Kempton Park';
-        }
         return name;
     },
 
@@ -3427,19 +3495,17 @@ export const PlannerRenderer = {
                           </div>`;
         } else if (isDeparted) {
             stateBadge = `
-                <div class="flex flex-col items-start mt-1 sm:mt-0 pr-2 min-w-0">
-                    <div class="text-[11px] font-bold text-gray-500 dark:text-gray-400 mb-1.5 uppercase tracking-wide">
-                        ${countdown}
-                    </div>
-                    <button type="button" onclick="if(typeof window._plannerCurrentTripIndex !== 'undefined' && typeof window._selectCustomTrip === 'function') window._selectCustomTrip(window._plannerCurrentTripIndex + 1);" class="planner-departed-next bg-blue-50 hover:bg-blue-100 dark:bg-blue-900/30 dark:hover:bg-blue-900/50 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800 font-bold py-1.5 px-3 rounded-lg shadow-sm transition-colors focus:outline-none flex justify-center items-center text-[9px] uppercase tracking-wider whitespace-nowrap">
+                <div class="flex flex-col items-start min-w-0">
+                    <p class="text-[11px] font-bold text-gray-500 dark:text-gray-400">Departed:</p>
+                    <button type="button" onclick="if(typeof window._plannerCurrentTripIndex !== 'undefined' && typeof window._selectCustomTrip === 'function') window._selectCustomTrip(window._plannerCurrentTripIndex + 1);" class="planner-departed-next mt-1 bg-blue-200 hover:bg-blue-300 dark:bg-blue-800/70 dark:hover:bg-blue-800 text-blue-800 dark:text-blue-100 border border-blue-300 dark:border-blue-600 font-bold py-1.5 px-3 rounded-lg shadow-sm transition-colors focus:outline-none flex justify-center items-center text-[9px] uppercase tracking-wider whitespace-nowrap">
                         Show Next Train <svg class="w-3 h-3 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 5l7 7-7 7M5 5l7 7-7 7"></path></svg>
                     </button>
                 </div>
             `;
         } else {
-             stateBadge = `<div class="flex items-center text-xs font-bold text-blue-600 dark:text-blue-400">
-                            <svg class="w-4 h-4 mr-1 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                            <span>${countdown}</span>
+             stateBadge = `<div class="flex flex-col items-start min-w-0">
+                            <p class="text-[11px] font-bold text-gray-500 dark:text-gray-400">Departs:</p>
+                            <p class="text-sm font-black text-blue-600 dark:text-blue-400 mt-0.5">${countdown}</p>
                           </div>`;
         }
 
@@ -3470,19 +3536,14 @@ export const PlannerRenderer = {
                         ${stateBadge}
                      </div>
                      <div class="flex flex-col items-end text-right shrink-0 pl-2">
-                        <div class="flex items-center text-xs font-bold text-gray-500 dark:text-gray-400 whitespace-nowrap">
-                            <svg class="w-3.5 h-3.5 mr-1 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 3h14M5 21h14M7 3v2.5c0 .8.4 1.6 1.1 2.1L12 10.5l3.9-2.9c.7-.5 1.1-1.3 1.1-2.1V3M7 21v-2.5c0-.8.4-1.6 1.1-2.1l3.9-2.9 3.9 2.9c.7.5 1.1 1.3 1.1 2.1V21"/></svg>
-                            ${duration}
-                        </div>
-                        <div class="text-[9px] text-gray-400 uppercase tracking-widest mt-0.5">Total Time</div>
+                        <p class="text-[11px] font-bold text-gray-500 dark:text-gray-400">Total Time:</p>
+                        <p class="text-sm font-black text-gray-700 dark:text-gray-200 mt-0.5 whitespace-nowrap">${duration}</p>
                      </div>
                 </div>
-                ${canShowTripPrice(step) ? `<div class="flex justify-center mt-3">
-                     <button type="button" data-nt-trip-fare="1" class="planner-trip-fare inline-flex flex-col items-center justify-center min-w-[7.5rem] px-4 py-2 rounded-xl bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400">
-                        <span class="text-[9px] font-black uppercase tracking-widest text-blue-700 dark:text-blue-300">Trip fare</span>
-                        <span class="inline-flex items-center gap-1 text-base font-black text-gray-900 dark:text-white tabular-nums leading-none mt-0.5">${plannerMoneySvg('w-4 h-4 text-gray-900 dark:text-white')}<span data-nt-trip-fare-price>R-</span></span>
-                     </button>
-                </div>` : ''}
+                ${canShowTripPrice(step) ? `<button type="button" data-nt-trip-fare="1" class="planner-trip-fare mt-3 w-full flex items-center justify-between gap-3 px-3 py-2 rounded-xl bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400">
+                        <span class="inline-flex items-center gap-1.5 text-[11px] font-bold text-blue-700 dark:text-blue-300">${plannerMoneySvg('w-4 h-4 text-blue-700 dark:text-blue-300')}Trip Fare</span>
+                        <span class="inline-flex items-center gap-1 text-base font-black text-gray-900 dark:text-white tabular-nums leading-none"><span data-nt-trip-fare-price>R-</span></span>
+                     </button>` : ''}
             </div>
         `;
     },
@@ -3812,8 +3873,8 @@ export const PlannerRenderer = {
                 const h = Math.floor(diff / 3600);
                 const m = Math.floor((diff % 3600) / 60);
                 // Use &lt; so innerHTML never treats "< 1" as a broken tag (garbled/CJK glyphs)
-                countdown = h > 0 ? `Departs in ${PlannerRenderer.formatDuration(Math.floor(diff / 60))}` : (m === 0 ? "Departs in &lt; 1 min" : `Departs in ${m} min`);
-            } else { countdown = "Departed"; isDeparted = true; }
+                countdown = h > 0 ? PlannerRenderer.formatDuration(Math.floor(diff / 60)) : (m === 0 ? '&lt; 1 min' : `${m} min`);
+            } else { countdown = ''; isDeparted = true; }
         }
         
         const durSec = arrSec - depSec;
@@ -3888,7 +3949,7 @@ export function initPlanner() {
                 const sig = disruptionSignature();
                 if (sig === lastPlannerDisruptionSig) return;
                 console.log('🛡️ Guardian: Disruptions updated — replanning active trip.');
-                executeTripPlan(plannerOrigin, plannerDest, lastPlannerPreferredTime);
+                executeTripPlan(plannerOrigin, plannerDest, lastPlannerPreferredTime, { quiet: true });
             } catch (e) {
                 console.warn('🛡️ Guardian: Disruption replan failed', e);
             }
@@ -4151,6 +4212,7 @@ export function initPlanner() {
 
             const from = resolveStationFromInput(fromInputSearch);
             const to = resolveStationFromInput(toInputSearch);
+            const masterList = getMasterStationList();
 
             if (from && fromInputSearch) {
                 fromInputSearch.value = plannerStationDisplayName(from);
@@ -4178,6 +4240,13 @@ export function initPlanner() {
 
             if (!from || !to) {
                 if (typeof showToast === 'function') showToast("Please select valid stations from the list.", "error");
+                return;
+            }
+            // Stale To/From from another province must not search (Johannesburg ↔ Wellington while on GP).
+            if (masterList?.length && (!masterListHasStation(from, masterList) || !masterListHasStation(to, masterList))) {
+                if (typeof showToast === 'function') {
+                    showToast('Those stations are not on this region network. Switch region or pick stations from the list.', 'error');
+                }
                 return;
             }
             if (samePlannerStation(from, to)) {
@@ -4283,6 +4352,48 @@ function persistMergedPlannerHistory(list) {
     safeStorage.setItem(PLANNER_HISTORY_MERGED_KEY, JSON.stringify(cap));
 }
 
+/** Recent trips stored on the signed-in account. Display cap stays 5 per region. */
+export function accountPlannerHistoryPayload() {
+    return unionPlannerHistory().slice(0, 20).map((item) => ({
+        from: String(item.from || '').slice(0, 80),
+        to: String(item.to || '').slice(0, 80),
+        fullFrom: String(item.fullFrom || item.from || '').slice(0, 120),
+        fullTo: String(item.fullTo || item.to || '').slice(0, 120),
+        at: Number(item.at) || 0,
+        region: PLANNER_HISTORY_REGIONS.includes(item.region) ? item.region : null,
+    }));
+}
+
+export function mergeAccountPlannerHistory(remoteList) {
+    const incoming = Array.isArray(remoteList)
+        ? remoteList
+        : (remoteList && typeof remoteList === 'object' ? Object.values(remoteList) : []);
+    if (!incoming.length) return;
+    const byRegion = {};
+    PLANNER_HISTORY_REGIONS.forEach((region) => {
+        byRegion[region] = readPlannerHistoryArray(`plannerHistory_${region}`);
+    });
+    incoming.forEach((raw) => {
+        const item = normalizePlannerHistoryItem(raw, raw?.region || 'GP');
+        if (!item) return;
+        const region = PLANNER_HISTORY_REGIONS.includes(item.region) ? item.region : 'GP';
+        const list = byRegion[region];
+        const key = plannerHistoryDedupeKey(item);
+        const idx = list.findIndex((row) => plannerHistoryDedupeKey(row) === key);
+        if (idx === -1) list.push(item);
+        else if ((Number(item.at) || 0) > (Number(list[idx].at) || 0)) list[idx] = item;
+    });
+    PLANNER_HISTORY_REGIONS.forEach((region) => {
+        const rows = byRegion[region]
+            .slice()
+            .sort((a, b) => (Number(b.at) || 0) - (Number(a.at) || 0))
+            .slice(0, PLANNER_HISTORY_DISPLAY_CAP);
+        safeStorage.setItem(`plannerHistory_${region}`, JSON.stringify(rows));
+    });
+    persistMergedPlannerHistory(unionPlannerHistory());
+    try { renderPlannerHistory(); } catch { /* planner view may not be open */ }
+}
+
 /** Persist every successful Plan Trip for the on-device Recent Trips list (max 5). */
 export function savePlannerHistory(from, to, opts = {}) {
     if (!from || !to || typeof from !== 'string' || typeof to !== 'string') return;
@@ -4312,6 +4423,7 @@ export function savePlannerHistory(from, to, opts = {}) {
     safeStorage.setItem(historyKey, JSON.stringify(history));
     persistMergedPlannerHistory(unionPlannerHistory());
     renderPlannerHistory();
+    import('./account.js').then((m) => m.pushAccountRecentTrips?.()).catch(() => {});
 }
 
 export function renderPlannerHistory() {
@@ -4646,6 +4758,8 @@ export async function applyPlannerDeepLink() {
         safeStorage.setItem('welcomeSeen', 'true');
     }
     try { document.getElementById('welcome-modal')?.classList.add('hidden'); } catch { /* ignore */ }
+    // SEO / share planner handoffs skip Welcome — clear nt-onboarding so the bottom bar shows.
+    import('./prefs.js').then(({ syncInAppChrome }) => syncInAppChrome()).catch(() => {});
 
     // SPA boot pins a route before handleShortcutActions — without it loadAllSchedules returns early
     // and MASTER_STATION_LIST never fills → "Connection timeout".
@@ -4818,7 +4932,8 @@ function samePlannerStation(a, b) {
 }
 
 // --- ORCHESTRATION ---
-export function executeTripPlan(origin, dest, preferredTime = null) {
+export function executeTripPlan(origin, dest, preferredTime = null, opts = {}) {
+    const quiet = opts?.quiet === true;
     const fromCanon = canonicalPlannerStation(origin);
     const toCanon = canonicalPlannerStation(dest);
     if (fromCanon) origin = fromCanon;
@@ -4832,7 +4947,8 @@ export function executeTripPlan(origin, dest, preferredTime = null) {
     plannerDest = dest;
     try { savePlannerHistory(origin, dest); } catch { /* ignore */ }
     const resultsContainer = document.getElementById('planner-results-list');
-    if (resultsContainer) {
+    const searchGen = ++plannerSearchGen;
+    if (resultsContainer && !quiet) {
         resultsContainer.innerHTML = `
         <div class="min-h-[400px] flex flex-col justify-center items-center text-center p-4">
             <svg class="w-10 h-10 animate-spin mx-auto text-blue-500 mb-4" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
@@ -4842,36 +4958,36 @@ export function executeTripPlan(origin, dest, preferredTime = null) {
     }
     // Keep loading header as centred "Your Journey" (not the day/share toolbar)
     const headerTitle = document.querySelector('#planner-results-section h4');
-    if (headerTitle) {
+    if (headerTitle && !quiet) {
         headerTitle.className = 'text-lg font-bold text-gray-900 dark:text-white text-center justify-self-center px-1 m-0';
         headerTitle.textContent = 'Your Journey';
     }
     const shareSlot = document.querySelector('#planner-results-section .planner-share-slot');
-    if (shareSlot) {
+    if (shareSlot && !quiet) {
         shareSlot.className = 'planner-share-slot justify-self-end min-h-[32px] flex items-center justify-end';
         shareSlot.innerHTML = '';
     }
 
-    let isSearching = true;
+    let isSearching = !quiet;
     const updateSpinnerText = (text) => {
         const el = document.getElementById('planner-spinner-text');
         if (el && isSearching) el.textContent = text;
     };
-    const spinnerTimers = [
+    const spinnerTimers = quiet ? [] : [
         setTimeout(() => updateSpinnerText("Evaluating alternative corridors..."), 3500),
         setTimeout(() => updateSpinnerText("Line Severance detected. Rerouting..."), 7000),
         setTimeout(() => updateSpinnerText("Calculating partial journeys..."), 10500)
     ];
     
     const inputSecEl = document.getElementById('planner-input-section');
-    if (inputSecEl) inputSecEl.classList.add('hidden');
+    if (inputSecEl && !quiet) inputSecEl.classList.add('hidden');
     
     const resultsSecEl = document.getElementById('planner-results-section');
     if (resultsSecEl) resultsSecEl.classList.remove('hidden');
     
-    plannerExpandedState.clear();
+    if (!quiet) plannerExpandedState.clear();
 
-    if (typeof location !== 'undefined' && location.hash !== '#planner-results') {
+    if (!quiet && typeof location !== 'undefined' && location.hash !== '#planner-results') {
         history.pushState({ view: 'planner-results' }, '', '#planner-results');
     }
 
@@ -4899,11 +5015,8 @@ export function executeTripPlan(origin, dest, preferredTime = null) {
             return;
         }
 
-        // Avoid publishing a full through-trip before the sinkhole overlay arrives.
-        updateSpinnerText('Checking live line alerts...');
-        await ensureOpsOverlaysReady(2800);
-
         spinnerTimers.forEach(t => clearTimeout(t));
+        if (searchGen !== plannerSearchGen) return;
         isSearching = false;
         if (typeof planUnifiedTrip === 'function') {
             const extContext = {};
@@ -4923,6 +5036,7 @@ export function executeTripPlan(origin, dest, preferredTime = null) {
                 plannerResponse = { status: 'NO_PATH', trips: [], errorPayload: null };
             }
         }
+        if (searchGen !== plannerSearchGen) return;
 
         lastPlannerDisruptionSig = disruptionSignature();
         currentTripOptions = plannerResponse.trips || [];
@@ -5768,6 +5882,55 @@ export function updatePlannerHeader(dayLabel, showShare = true) {
     }
 }
 
+/** Scaled-down festive sheet PRASA has not released. Inclusive. */
+const FESTIVE_SCHEDULE_START = '2026-12-21';
+const FESTIVE_SCHEDULE_END = '2027-01-01';
+
+function isoFromDate(date) {
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
+function shiftIsoDate(iso, days) {
+    if (!iso || !/^\d{4}-\d{2}-\d{2}$/.test(iso)) return '';
+    const [y, m, d] = iso.split('-').map(Number);
+    const dt = new Date(y, m - 1, d);
+    dt.setDate(dt.getDate() + (Number(days) || 0));
+    return isoFromDate(dt);
+}
+
+function isoInFestiveWindow(iso) {
+    return !!iso && iso >= FESTIVE_SCHEDULE_START && iso <= FESTIVE_SCHEDULE_END;
+}
+
+/** Calendar day the commuter asked for. A bare Weekday/Saturday pick is not a date. */
+function plannerQueryIsoDate() {
+    if (selectedPlannerDate && /^\d{4}-\d{2}-\d{2}$/.test(selectedPlannerDate)) return selectedPlannerDate;
+    if (selectedPlannerDay && selectedPlannerDay !== getCurrentDayType()) return '';
+    try {
+        if ($isSimMode.get() && simUsesSpecificDate()) {
+            const dateInput = typeof document !== 'undefined' ? document.getElementById('sim-date') : null;
+            if (dateInput instanceof HTMLInputElement && /^\d{4}-\d{2}-\d{2}$/.test(dateInput.value)) {
+                return dateInput.value;
+            }
+        }
+    } catch { /* ignore */ }
+    if ($isSimMode.get()) return '';
+    return isoFromDate(new Date());
+}
+
+function buildFestiveScheduleNotice(trip) {
+    const query = plannerQueryIsoDate();
+    const presented = query ? shiftIsoDate(query, Number(trip?.dayOffset) || 0) : '';
+    if (!isoInFestiveWindow(query) && !isoInFestiveWindow(presented)) return '';
+    return buildPlannerNotice({
+        tone: 'schedule',
+        title: 'Festive schedule not confirmed',
+        bodyHtml: `<p class="text-sm font-semibold text-gray-900 dark:text-gray-100 leading-snug">This is not the confirmed festive timetable.</p>
+            <p>A scaled-down schedule usually runs from 21 December 2026 to 1 January 2027. Next Train will update these times when that sheet is released. The trip below still uses the schedule on file.</p>`,
+        icon: 'calendar',
+    });
+}
+
 export function renderTripResult(container, trips, selectedIndex = 0, isPartial = false) {
     const selectedTrip = trips[selectedIndex];
     if (!selectedTrip) return; 
@@ -5776,8 +5939,8 @@ export function renderTripResult(container, trips, selectedIndex = 0, isPartial 
     
     updatePlannerHeader(dayLabel, true);
 
-    // Advisories attach in one stack: holiday → line severed → expect delays → long layover
-    const leading = [buildHolidayNoticeHtml(selectedTrip)].filter(Boolean);
+    // Advisories attach in one stack: festive → holiday → line severed → expect delays → long layover
+    const leading = [buildFestiveScheduleNotice(selectedTrip), buildHolidayNoticeHtml(selectedTrip)].filter(Boolean);
     container.innerHTML = PlannerRenderer.buildCard(selectedTrip, false, trips, selectedIndex, leading)
         + '<div id="planner-crowd-delay-slot"></div>';
     injectPlannerCrowdDelay(selectedTrip);
@@ -5797,6 +5960,7 @@ export function renderAllDepartedResult(container, trips, selectedIndex = 0) {
     const safeD = dest.replace(/'/g, "\\'");
 
     // Notice only — CTA must stay a sibling outside the notice card chrome.
+    const festiveNotice = buildFestiveScheduleNotice(selectedTrip);
     const departedNotice = buildPlannerNotice({
         tone: 'schedule',
         title: 'All Trains Departed',
@@ -5815,7 +5979,7 @@ export function renderAllDepartedResult(container, trips, selectedIndex = 0) {
 
     container.innerHTML = `
         ${nextDayCta}
-        ${PlannerRenderer.buildCard(selectedTrip, false, trips, selectedIndex, [buildHolidayNoticeHtml(selectedTrip), departedNotice])}
+        ${PlannerRenderer.buildCard(selectedTrip, false, trips, selectedIndex, [festiveNotice, buildHolidayNoticeHtml(selectedTrip), departedNotice])}
         <div id="planner-crowd-delay-slot"></div>
     `;
     injectPlannerCrowdDelay(selectedTrip);
@@ -5827,6 +5991,7 @@ export function renderNextDayResult(container, trips, selectedIndex = 0) {
     const selectedTrip = trips[selectedIndex];
     if (!selectedTrip) return;
 
+    const festiveNotice = buildFestiveScheduleNotice(selectedTrip);
     syncPlannerDayControls(presentedPlannerDayType(selectedTrip));
     const dayLabel = getPlanningDayLabel();
     updatePlannerHeader(dayLabel, true);
@@ -5845,7 +6010,7 @@ export function renderNextDayResult(container, trips, selectedIndex = 0) {
     });
 
     container.innerHTML = `
-        ${stackPlannerNotices(buildHolidayNoticeHtml(selectedTrip), scheduleNotice)}
+        ${stackPlannerNotices(festiveNotice, buildHolidayNoticeHtml(selectedTrip), scheduleNotice)}
         ${PlannerRenderer.buildCard(selectedTrip, true, trips, selectedIndex)}
         <div id="planner-crowd-delay-slot"></div>
     `;
@@ -5862,6 +6027,7 @@ export function renderSundayRolloverResult(container, trips, selectedIndex = 0) 
     const selectedTrip = trips[selectedIndex];
     if (!selectedTrip) return;
 
+    const festiveNotice = buildFestiveScheduleNotice(selectedTrip);
     syncPlannerDayControls(presentedPlannerDayType(selectedTrip));
     const dayLabel = getPlanningDayLabel();
     updatePlannerHeader(dayLabel, true);
@@ -5888,7 +6054,7 @@ export function renderSundayRolloverResult(container, trips, selectedIndex = 0) 
     });
 
     container.innerHTML = `
-        ${sundayNotice}
+        ${stackPlannerNotices(festiveNotice, sundayNotice)}
         ${PlannerRenderer.buildCard(selectedTrip, true, trips, selectedIndex)}
         <div id="planner-crowd-delay-slot"></div>
     `;
@@ -5900,6 +6066,7 @@ export function renderImpossibleTodayResult(container, trips, selectedIndex = 0)
     const selectedTrip = trips[selectedIndex];
     if (!selectedTrip) return;
 
+    const festiveNotice = buildFestiveScheduleNotice(selectedTrip);
     syncPlannerDayControls(presentedPlannerDayType(selectedTrip));
     const dayLabel = getPlanningDayLabel();
     updatePlannerHeader(dayLabel, true);
@@ -5918,7 +6085,7 @@ export function renderImpossibleTodayResult(container, trips, selectedIndex = 0)
     });
 
     container.innerHTML = `
-        ${stackPlannerNotices(buildHolidayNoticeHtml(selectedTrip, { absorbSunday: true }), unavailableNotice)}
+        ${stackPlannerNotices(festiveNotice, buildHolidayNoticeHtml(selectedTrip, { absorbSunday: true }), unavailableNotice)}
         ${PlannerRenderer.buildCard(selectedTrip, true, trips, selectedIndex)}
         <div id="planner-crowd-delay-slot"></div>
     `;

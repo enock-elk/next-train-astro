@@ -52,6 +52,8 @@
   --nt-app-h: 100svh;
   --nt-shell-h: 100svh;
   --nt-shell-top: 0px;
+  /* 10% shorter than the prior 4rem bar. Tab columns stay equal. */
+  --nt-nav-h: 3.6rem;
   --nt-chrome-nav-active: color-mix(in srgb, #fff 10%, var(--nt-chrome-nav));
 
   --nt-blue-50: 239 246 255;
@@ -417,15 +419,16 @@ html, body, #nt-shell {
 
 #bottom-nav.bottom-nav-bar {
   background-color: var(--nt-chrome-nav) !important;
-  border: 1px solid var(--nt-chrome-nav-border) !important;
-  border-top: 1px solid var(--nt-chrome-nav-border) !important;
-  box-shadow: 0 6px 18px color-mix(in srgb, #000 18%, transparent);
+  border: none !important;
+  border-top: 1px solid color-mix(in srgb, var(--nt-chrome-fg) 15%, transparent) !important;
+  box-shadow: none;
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
-  border-radius: 999px;
-  margin-left: 0.75rem;
-  margin-right: 0.75rem;
-  margin-bottom: 0.5rem;
+  border-radius: 0;
+  margin-left: 0;
+  margin-right: 0;
+  margin-bottom: 0;
+  min-height: var(--nt-nav-h, 3.6rem);
   overflow: hidden;
   background-clip: padding-box;
 }
@@ -450,61 +453,93 @@ html[data-pilot-community="1"]:not([data-pilot-map="1"]) #bottom-nav-grid {
   grid-template-columns: repeat(4, minmax(0, 1fr));
   max-width: 30rem;
 }
-
-#bottom-nav .bottom-nav-item:not(.is-active) {
-  color: var(--nt-chrome-muted) !important;
+html[data-pilot-map="1"] #bottom-nav-map,
+html[data-pilot-community="1"] #bottom-nav-community {
+  display: flex !important;
 }
 
+@media (hover: hover) and (pointer: fine) {
+  #map-container,
+  #alert-image-lightbox-stage {
+    cursor: zoom-in;
+  }
+  #map-container.is-zoomed,
+  #alert-image-lightbox-stage.is-zoomed {
+    cursor: grab;
+  }
+  #map-container.is-zoomed:active,
+  #alert-image-lightbox-stage.is-zoomed:active {
+    cursor: grabbing;
+  }
+}
+
+#bottom-nav .bottom-nav-item {
+  position: relative;
+  min-height: var(--nt-nav-h, 3.6rem) !important;
+  padding-top: 0.36rem !important;
+  padding-bottom: 0.27rem !important;
+  background: transparent !important;
+  border-radius: 0 !important;
+  margin: 0 !important;
+  box-shadow: none !important;
+}
+#bottom-nav .bottom-nav-item:not(.is-active) {
+  color: color-mix(in srgb, var(--nt-chrome-fg) 45%, transparent) !important;
+}
 #bottom-nav .bottom-nav-item.is-active {
   color: var(--nt-chrome-fg) !important;
-  font-weight: 600;
-  background: var(--nt-chrome-nav-active);
+  font-weight: 700;
+  background: transparent !important;
+}
+#bottom-nav .nt-nav-glyph {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2.85rem;
+  height: 1.95rem;
+  margin-bottom: 0.12rem;
+  padding: 0 0.4rem;
   border-radius: 999px;
-  margin: 0.16rem 0.1rem;
+  background: transparent;
+}
+#bottom-nav .bottom-nav-item.is-active .nt-nav-glyph {
+  background: color-mix(in srgb, var(--nt-chrome-fg) 20%, transparent);
+}
+#bottom-nav .bottom-nav-item svg {
+  width: 1.625rem !important;
+  height: 1.625rem !important;
+  margin-bottom: 0 !important;
+}
+#bottom-nav .nt-nav-icon-fill { display: none; }
+#bottom-nav .bottom-nav-item.is-active .nt-nav-icon-line { display: none; }
+#bottom-nav .bottom-nav-item.is-active .nt-nav-icon-fill { display: block; }
+#bottom-nav .nt-nav-label {
+  font-size: 12.5px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0 !important;
+  line-height: 1.1 !important;
+}
+#bottom-nav .bottom-nav-item.is-active .nt-nav-label {
+  font-weight: 700 !important;
+  color: var(--nt-chrome-fg) !important;
 }
 
 html.dark #bottom-nav .bottom-nav-item.is-active {
-  background: var(--nt-chrome-nav-active);
+  background: transparent !important;
   box-shadow: none;
 }
 
-@media (max-height: 740px) {
-  #bottom-nav.bottom-nav-bar {
-    margin-bottom: 0.35rem;
-  }
-  #bottom-nav .bottom-nav-item {
-    min-height: 2.45rem !important;
-    padding-top: 0.2rem !important;
-    padding-bottom: 0.15rem !important;
-  }
-  #bottom-nav .bottom-nav-item svg {
-    width: 1.1rem !important;
-    height: 1.1rem !important;
-  }
-  #bottom-nav .bottom-nav-item > svg,
-  #bottom-nav .bottom-nav-item > .inline-flex {
-    margin-bottom: 0.05rem !important;
-  }
-  #bottom-nav .bottom-nav-item > span {
-    font-size: 8px !important;
-  }
-  #bottom-nav .bottom-nav-item.is-active {
-    margin: 0.08rem 0.08rem;
-  }
-}
-
 @media (max-height: 620px) {
+  :root { --nt-nav-h: 2.925rem; }
   #bottom-nav.bottom-nav-bar {
-    margin-bottom: 0.25rem;
-  }
-  #bottom-nav .bottom-nav-item {
-    min-height: 2.15rem !important;
-    padding-top: 0.12rem !important;
-    padding-bottom: 0.08rem !important;
+    margin-bottom: 0;
   }
   #bottom-nav .bottom-nav-item svg {
-    width: 1rem !important;
-    height: 1rem !important;
+    width: 1.25rem !important;
+    height: 1.25rem !important;
+  }
+  #bottom-nav .nt-nav-label {
+    font-size: 11px !important;
   }
 }
 
@@ -514,6 +549,46 @@ html.dark #bottom-nav .bottom-nav-item.is-active {
 
 #current-day {
   letter-spacing: 0.01em;
+}
+
+button#current-day {
+  appearance: none;
+  -webkit-appearance: none;
+  display: inline-flex;
+  align-items: center;
+  margin: 0.15rem 0 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+  text-align: left;
+  cursor: pointer;
+  max-width: 100%;
+  line-height: 1.15;
+}
+/* The day button stays clickable, with no outer oval. The schedule words
+   keep their own capsule. Sunday / closed Saturday: amber dot, calm text. */
+button#current-day.nt-day-quiet {
+  border: 0;
+  background: none;
+  box-shadow: none;
+  color: color-mix(in srgb, var(--nt-chrome-fg) 90%, transparent) !important;
+}
+button#current-day:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--nt-chrome-fg) 75%, transparent);
+  outline-offset: 2px;
+}
+
+/* Line colour on the route card. Yellow on white is about 2:1, so a slight
+   dark edge gives the letters a boundary. Dark cards keep that same hue,
+   mixed toward white so olive and the other map colours clear the navy. */
+#route-subtitle-text {
+  text-shadow: 0 1px 0 rgba(15, 23, 42, 0.32);
+}
+html.dark #route-subtitle-text {
+  color: color-mix(in srgb, var(--nt-line, currentColor) 46%, #f8fafc);
+  text-shadow: 0 1px 0 rgba(15, 23, 42, 0.55);
 }
 
 /* Brand-left header: solid pack primary */
@@ -556,29 +631,74 @@ html[data-colour-pack="contrast"] .bottom-nav-item.is-active {
   font-weight: 900;
 }
 
-/* Pack-tinted CTAs — rounded, inset, drop shadow; extra canvas gap above nav */
+/* Pack-tinted CTAs. A large soft shadow reads as a blurred bottom edge,
+   especially on Earthy's pale fill. A solid fill and a 1px edge stay crisp
+   in Classic and Earthy. */
 #locate-btn,
 #planner-locate-btn,
-#view-full-timetable-btn,
-#planner-search-btn {
+#planner-search-btn,
+#close-timetable-footer-btn,
+#close-help-btn-2,
+#close-modal-btn-2,
+#fare-modal-close-btn,
+#schedule-day-ok,
+#schedule-override-ok,
+#changelog-got-it,
+#community-presence-info-close,
+#planner-train-sheet-close {
   background-color: var(--nt-primary) !important;
-  border-color: color-mix(in srgb, var(--nt-primary) 70%, #000) !important;
+  border: 1px solid color-mix(in srgb, var(--nt-primary) 70%, #000) !important;
   color: var(--nt-primary-fg) !important;
+  box-shadow: none !important;
+  filter: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
 }
 #locate-btn:hover,
 #planner-locate-btn:hover,
-#view-full-timetable-btn:hover,
 #planner-search-btn:hover {
   background-color: var(--nt-primary-hover) !important;
 }
 #view-full-timetable-btn {
   text-align: center;
-  width: calc(100% - 0.5rem);
-  margin-inline: auto;
-  box-shadow: 0 0 0 4px color-mix(in srgb, var(--nt-primary) 18%, transparent), 0 10px 22px color-mix(in srgb, var(--nt-primary) 32%, transparent);
+  width: 100%;
+  margin-inline: 0;
+  background-color: color-mix(in srgb, var(--nt-primary) 12%, #fff) !important;
+  color: var(--nt-primary) !important;
+  border: 1px solid color-mix(in srgb, var(--nt-primary) 35%, #fff) !important;
+  box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
 }
-html[data-colour-pack="earthy"] #view-full-timetable-btn {
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--nt-primary) 10%, transparent), 0 4px 12px color-mix(in srgb, var(--nt-primary) 16%, transparent);
+#view-full-timetable-btn:hover {
+  background-color: color-mix(in srgb, var(--nt-primary) 20%, #fff) !important;
+  color: var(--nt-primary) !important;
+}
+/* Dark packs: mix against the card, not white, or Classic paints a white button. */
+html.dark #view-full-timetable-btn {
+  background-color: color-mix(in srgb, var(--nt-primary) 22%, var(--nt-surface)) !important;
+  color: var(--nt-text) !important;
+  border-color: color-mix(in srgb, var(--nt-primary) 42%, var(--nt-border)) !important;
+}
+html.dark #view-full-timetable-btn:hover {
+  background-color: color-mix(in srgb, var(--nt-primary) 34%, var(--nt-surface)) !important;
+  color: var(--nt-text) !important;
+}
+html[data-colour-pack="earthy"]:not(.dark) #view-full-timetable-btn {
+  background-color: #e7e1d4 !important;
+  color: #2a261f !important;
+  border-color: #cfc6b4 !important;
+}
+html[data-colour-pack="earthy"]:not(.dark) #view-full-timetable-btn:hover {
+  background-color: #ddd6c6 !important;
+  color: #2a261f !important;
+}
+html[data-colour-pack="earthy"].dark #view-full-timetable-btn {
+  background-color: #3a342c !important;
+  color: #f5f1e9 !important;
+  border-color: #6a6458 !important;
+}
+html[data-colour-pack="earthy"].dark #view-full-timetable-btn:hover {
+  background-color: #4a4338 !important;
+  color: #f5f1e9 !important;
 }
 
 /* Pale --nt-blue-600 is the paper CTA wash. Labels (Zone, Saturday,
@@ -599,6 +719,52 @@ html[data-colour-pack="earthy"]:not(.dark) .nt-fare-zone-chip {
   background-color: #e7e1d4 !important;
   color: #2a261f !important;
   border: 1px solid #cfc6b4 !important;
+}
+/* Earthy light filled buttons share the fare Zone badge: cream fill, ink, hairline. */
+html[data-colour-pack="earthy"]:not(.dark) :is(
+  #locate-btn,
+  #planner-locate-btn,
+  #planner-search-btn,
+  #close-timetable-footer-btn,
+  #close-help-btn-2,
+  #close-modal-btn-2,
+  #fare-modal-close-btn,
+  #schedule-day-ok,
+  #schedule-override-ok,
+  #changelog-got-it,
+  #community-presence-info-close,
+  #planner-train-sheet-close,
+  #alerts-channel-footer-close,
+  #close-map-btn-2,
+  #close-legal-btn-2,
+  #account-badge-how-close,
+  #account-contrib-close
+) {
+  background-color: #e7e1d4 !important;
+  color: #2a261f !important;
+  border: 1px solid #cfc6b4 !important;
+  box-shadow: none !important;
+}
+html[data-colour-pack="earthy"]:not(.dark) :is(
+  #locate-btn,
+  #planner-locate-btn,
+  #planner-search-btn
+):hover {
+  background-color: #ddd6c6 !important;
+  color: #2a261f !important;
+}
+#profile-modal button[data-passenger].is-selected {
+  box-shadow: inset 0 0 0 2px #2563eb;
+  background-color: #dbeafe !important;
+}
+html.dark #profile-modal button[data-passenger].is-selected {
+  box-shadow: inset 0 0 0 2px #93c5fd;
+  background-color: #1e3a5f !important;
+}
+html[data-colour-pack="earthy"]:not(.dark) #profile-modal button[data-passenger].is-selected {
+  box-shadow: inset 0 0 0 2px #cfc6b4;
+  background-color: #e7e1d4 !important;
+  color: #2a261f !important;
 }
 html[data-colour-pack="earthy"].dark .nt-fare-zone-chip {
   background-color: #efeae0 !important;
@@ -647,6 +813,144 @@ html[data-colour-pack="earthy"] #pinned-section .text-blue-400,
 html[data-colour-pack="earthy"] #pinned-section .text-blue-300 {
   color: inherit !important;
 }
+#grid-container {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, #94a3b8 55%, transparent) transparent;
+}
+#grid-container::-webkit-scrollbar {
+  width: 6px;
+  height: 0;
+}
+.nt-grid-edge-fade {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 0.75rem;
+  pointer-events: none;
+  z-index: 20;
+  opacity: 0;
+  background: linear-gradient(to right, rgba(15, 23, 42, 0), rgba(15, 23, 42, 0.14));
+}
+html.dark .nt-grid-edge-fade {
+  background: linear-gradient(to right, rgba(0, 0, 0, 0), rgba(0, 0, 0, 0.4));
+}
+/* Right fade: more train columns off-screen to the right. */
+.nt-grid-frame.can-scroll-x .nt-grid-edge-fade {
+  opacity: 1;
+}
+/* Left fade at the sticky station / times join. Only while scrolled right
+   (can-scroll-x-start) so the first train column is never shaded at rest. */
+.nt-grid-edge-fade-times {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: var(--nt-station-col-w, 7.5rem);
+  width: 0.75rem;
+  pointer-events: none;
+  z-index: 25;
+  opacity: 0;
+  background: linear-gradient(to right, rgba(15, 23, 42, 0.14), rgba(15, 23, 42, 0));
+}
+html.dark .nt-grid-edge-fade-times {
+  background: linear-gradient(to right, rgba(0, 0, 0, 0.4), rgba(0, 0, 0, 0));
+}
+.nt-grid-frame.can-scroll-x-start .nt-grid-edge-fade-times {
+  opacity: 1;
+}
+/* Sticky station cells cast onto the times only after a horizontal scroll. */
+#grid-container .nt-station-scroll-shade {
+  box-shadow: none;
+}
+.nt-grid-frame.can-scroll-x-start #grid-container .nt-station-scroll-shade {
+  box-shadow: 4px 0 8px -6px rgba(15, 23, 42, 0.28);
+}
+html.dark .nt-grid-frame.can-scroll-x-start #grid-container .nt-station-scroll-shade {
+  box-shadow: 4px 0 10px -6px rgba(0, 0, 0, 0.5);
+}
+/* Same edge darkening as the timetable, turned on its side. It sits just
+   above the bottom bar and only while #app-scroll still has more below. */
+.nt-scroll-hint {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: var(--nt-nav-h, 4rem);
+  height: 1.75rem;
+  pointer-events: none;
+  z-index: 40;
+  opacity: 0;
+  background: linear-gradient(to bottom, rgba(15, 23, 42, 0), rgba(15, 23, 42, 0.18));
+}
+html.nt-standalone.nt-in-app body.nav-bottom:not(.nt-immersive) .nt-scroll-hint {
+  bottom: calc(var(--nt-nav-h, 4rem) + var(--nt-sys-bottom, env(safe-area-inset-bottom, 0px)));
+}
+html.dark .nt-scroll-hint {
+  background: linear-gradient(to bottom, rgba(0, 0, 0, 0), rgba(0, 0, 0, 0.5));
+}
+body.nav-bottom .nt-scroll-hint.is-on {
+  opacity: 1;
+}
+.nt-scroll-hint-top {
+  bottom: auto;
+  top: 0;
+  background: linear-gradient(to top, rgba(15, 23, 42, 0), rgba(15, 23, 42, 0.18));
+}
+html.dark .nt-scroll-hint-top {
+  background: linear-gradient(to top, rgba(0, 0, 0, 0), rgba(0, 0, 0, 0.5));
+}
+html.nt-standalone.nt-in-app body.nav-bottom:not(.nt-immersive) .nt-scroll-hint-top {
+  top: 0;
+  bottom: auto;
+}
+/* Same fade inside a sheet, only while that sheet still has more below. */
+.nt-sheet-shade {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2.25rem;
+  pointer-events: none;
+  z-index: 5;
+  opacity: 0;
+  background: linear-gradient(to bottom, rgba(15, 23, 42, 0), rgba(15, 23, 42, 0.2));
+}
+html.dark .nt-sheet-shade {
+  background: linear-gradient(to bottom, rgba(0, 0, 0, 0), rgba(0, 0, 0, 0.55));
+}
+.nt-sheet-shade.is-on {
+  opacity: 1;
+}
+.nt-sheet-shade-top {
+  bottom: auto;
+  top: 0;
+  background: linear-gradient(to top, rgba(15, 23, 42, 0), rgba(15, 23, 42, 0.2));
+}
+html.dark .nt-sheet-shade-top {
+  background: linear-gradient(to top, rgba(0, 0, 0, 0), rgba(0, 0, 0, 0.55));
+}
+html.nt-keyboard .nt-scroll-hint {
+  opacity: 0;
+}
+
+#alert-image-lightbox-dock {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 170;
+  touch-action: manipulation;
+}
+html.nt-keyboard #alert-image-lightbox-dock {
+  bottom: var(--nt-kb-h, 0px);
+}
+#alert-image-lightbox-dock.is-composing #alert-image-lightbox-quote,
+#alert-image-lightbox-dock.is-composing #alert-image-lightbox-send {
+  display: flex !important;
+}
+#alert-image-lightbox-dock.is-composing #alert-image-lightbox-react {
+  display: none !important;
+}
+
 html[data-colour-pack="earthy"]:not(.dark) #grid-container .nt-station-col.bg-blue-100 {
   background-color: #e7e1d4 !important;
   color: #2a261f !important;
@@ -858,11 +1162,27 @@ html.dark .nt-offline-strip {
   justify-content: center;
   gap: 0.4rem;
   max-width: 100%;
+  width: 100%;
+  min-width: 0;
 }
 .nt-maint-wrench {
   width: 0.9rem;
   height: 0.9rem;
   flex-shrink: 0;
+}
+.nt-maint-marquee {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+  mask-image: linear-gradient(90deg, transparent 0, #000 0.75rem, #000 calc(100% - 0.75rem), transparent 100%);
+  -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 0.75rem, #000 calc(100% - 0.75rem), transparent 100%);
+}
+.nt-maint-track {
+  display: inline-flex;
+  align-items: center;
+  gap: 2.5rem;
+  width: max-content;
+  will-change: transform;
 }
 .nt-maint-label {
   min-width: 0;
@@ -871,15 +1191,144 @@ html.dark .nt-offline-strip {
   letter-spacing: 0.14em;
   text-transform: uppercase;
   line-height: 1.2;
-  overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* Short copy stays centred and still. Long copy scrolls as a seamless marquee. */
+.nt-maint-strip:not(.nt-maint-is-marquee) .nt-maint-marquee {
+  display: flex;
+  justify-content: center;
+  mask-image: none;
+  -webkit-mask-image: none;
+}
+.nt-maint-strip:not(.nt-maint-is-marquee) .nt-maint-track {
+  gap: 0;
+}
+.nt-maint-strip:not(.nt-maint-is-marquee) .nt-maint-label + .nt-maint-label {
+  display: none;
+}
+.nt-maint-strip.nt-maint-is-marquee .nt-maint-track {
+  animation-name: nt-maint-slide;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+@keyframes nt-maint-slide {
+  to { transform: translateX(-50%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .nt-maint-strip.nt-maint-is-marquee .nt-maint-track {
+    animation: none;
+  }
+  .nt-maint-strip.nt-maint-is-marquee .nt-maint-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+  }
+  .nt-maint-strip.nt-maint-is-marquee .nt-maint-label + .nt-maint-label {
+    display: none;
+  }
+}
 
-/* Keep header chrome (menu / bell) below app modals */
+/* Keep header chrome (menu / bell) below app modals.
+   The blue bar tracks screen height so a short phone does not lose the board
+   to a fixed wordmark. */
 #app-header {
   position: relative;
   z-index: 10;
+  padding-top: clamp(0.2rem, 0.7dvh, 0.5rem) !important;
+  padding-bottom: clamp(0.16rem, 0.55dvh, 0.4rem) !important;
+}
+#app-title.header-title {
+  font-size: clamp(1.35rem, 4.15dvh, 2.35rem) !important;
+  line-height: 0.92;
+}
+body.chrome-compact #app-title.header-title,
+.chrome-compact #app-title.header-title {
+  font-size: clamp(1.25rem, 3.7dvh, 2rem) !important;
+}
+body.chrome-compact #app-header,
+.chrome-compact #app-header {
+  padding-top: clamp(0.16rem, 0.55dvh, 0.4rem) !important;
+  padding-bottom: clamp(0.12rem, 0.45dvh, 0.32rem) !important;
+}
+#app-header .header-meta {
+  margin-top: clamp(0.08rem, 0.35dvh, 0.22rem);
+  /* Reserve the day chip row so fit/paint does not grow the header (CLS). */
+  min-height: 1.15rem;
+}
+/* Bell slot stays reserved when empty so alerts do not shove the brand (CLS). */
+#app-header #notice-bell.invisible {
+  visibility: hidden;
+  pointer-events: none;
+}
+/* Reserve the corridor row so the pill does not grow when a label appears. */
+#route-corridor-label {
+  display: block;
+  min-height: 0.75rem;
+}
+/* Bell stays the pre-18 Oct size: w-6 (1.5rem) inside p-2. The header
+   centers that disc on the wordmark and the day line together. */
+
+/* The alerts bell stays the same icon. The header stays a flat colour. */
+
+.nt-brief-meaning {
+  background: rgba(255, 255, 255, 0.97);
+  color: #0f172a;
+}
+html.dark .nt-brief-meaning {
+  background: rgba(15, 23, 42, 0.94);
+  color: #f8fafc;
+}
+.nt-brief-meaning-kicker {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #334155;
+}
+html.dark .nt-brief-meaning-kicker {
+  color: #e2e8f0;
+}
+.nt-brief-meaning-body {
+  margin-top: 0.55rem;
+  font-size: 0.95rem;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  color: #0f172a;
+}
+html.dark .nt-brief-meaning-body {
+  color: #f8fafc;
+}
+.nt-brief-facts {
+  display: grid;
+  gap: 0.45rem;
+  margin: 0.75rem 0 0;
+}
+.nt-brief-fact {
+  display: grid;
+  grid-template-columns: 7.25rem 1fr;
+  gap: 0.65rem;
+  align-items: baseline;
+}
+.nt-brief-fact dt {
+  margin: 0;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #475569;
+}
+html.dark .nt-brief-fact dt {
+  color: #cbd5e1;
+}
+.nt-brief-fact dd {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+  line-height: 1.35;
+  color: #0f172a;
+}
+html.dark .nt-brief-fact dd {
+  color: #f8fafc;
 }
 
 /* Toggle switches (settings + admin maint / alert toggles). Must be global —
@@ -954,8 +1403,63 @@ html.dark .nt-offline-strip {
   overflow-wrap: anywhere;
   word-break: break-word;
 }
+#admin-reply-modal #admin-reply-text {
+  /* Single scroller is #admin-reply-scroll — do not nest overflow here. */
+  overflow-y: visible;
+  scroll-padding-bottom: 1.25rem;
+}
 #alert-msg {
   white-space: pre-wrap;
+}
+[data-nt-title-slot] [data-nt-title] {
+  min-height: 2.4rem;
+  padding: 0.55rem 0.65rem 0.4rem;
+  font-size: 1rem;
+  font-weight: 800;
+  line-height: 1.3;
+  outline: none;
+}
+[data-nt-title][data-placeholder]:empty:before {
+  content: attr(data-placeholder);
+  color: #9ca3af;
+  font-weight: 700;
+}
+.nt-composer-media,
+.nt-composer-preview {
+  position: relative;
+}
+.nt-composer-x {
+  position: absolute;
+  top: 0.4rem;
+  right: 0.4rem;
+  z-index: 2;
+  width: 1.75rem;
+  height: 1.75rem;
+  border: 0;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(15, 23, 42, 0.72);
+  color: #fff;
+  cursor: pointer;
+}
+.nt-composer-preview .nt-link-preview {
+  margin: 0;
+}
+#alert-msg img,
+#admin-reply-text img,
+#disr-msg img {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  height: auto;
+  min-height: 4rem;
+  white-space: normal;
+  object-fit: contain;
+  background: #f3f4f6;
+  border-radius: 12px;
+  margin: 8px 0;
 }
 @keyframes nt-alert-force-flash {
   0% { box-shadow: 0 0 0 3px color-mix(in srgb, var(--nt-primary, #2563eb) 72%, white); }
@@ -1086,6 +1590,26 @@ html.dark .dark\:bg-gray-950\/40 {
   background-color: var(--nt-canvas) !important;
 }
 
+/* Floating sheets sit on a dimmed page that is the same navy as their
+   header and footer, so the card edge disappears. A quiet stroke plus a
+   dark outer line shows the rim without a white halo. Light packs are
+   not in this rule. Full-screen sheets use rounded-none. */
+html.dark [id$="-modal"].fixed > div[class*="rounded-xl"],
+html.dark [id$="-modal"].fixed > div[class*="rounded-2xl"],
+html.dark [id$="-modal"].fixed > div[class*="rounded-3xl"],
+html.dark [id$="-modal"].fixed > div[class*="rounded-lg"] {
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--nt-text) 22%, transparent),
+    0 0 0 3px rgba(0, 0, 0, 0.72),
+    0 18px 40px rgba(0, 0, 0, 0.45) !important;
+}
+html.dark #help-modal > div > .rounded-t-xl,
+html.dark #help-modal > div > .rounded-b-xl,
+html.dark #schedule-modal > #modal-content > .rounded-t-xl,
+html.dark #schedule-modal > #modal-content > .rounded-b-xl {
+  background-color: color-mix(in srgb, var(--nt-surface) 96%, var(--nt-text)) !important;
+}
+
 .border-gray-100,
 .border-gray-200,
 .border-gray-200\/80,
@@ -1182,15 +1706,11 @@ body.nav-bottom:not(.nt-immersive) #sidenav {
 #alerts-channel header,
 #alerts-channel header #alerts-channel-title,
 #alerts-channel header p,
-#alerts-channel header #alerts-channel-back,
-#alerts-channel header #alerts-channel-close {
+#alerts-channel header #alerts-channel-back {
   color: var(--nt-chrome-fg) !important;
 }
 #alerts-channel header p {
   opacity: 0.82;
-}
-#alerts-channel-close {
-  background-color: color-mix(in srgb, var(--nt-chrome-fg) 18%, transparent) !important;
 }
 #alerts-channel-footer {
   background-color: color-mix(in srgb, var(--nt-surface) 92%, transparent) !important;
@@ -1201,12 +1721,36 @@ body.nav-bottom:not(.nt-immersive) #sidenav {
   color: var(--nt-primary-fg) !important;
   border-color: transparent !important;
 }
-#close-timetable-footer-btn,
-#close-help-btn-2,
-#fare-modal-close-btn {
-  background-color: var(--nt-primary) !important;
-  color: var(--nt-primary-fg) !important;
-  border-color: transparent !important;
+html[data-colour-pack="earthy"]:not(.dark) #alerts-channel-footer-close,
+html[data-colour-pack="earthy"]:not(.dark) #commuter-peek-lookup,
+html[data-colour-pack="earthy"]:not(.dark) #commuter-peek-close {
+  background-color: #e7e1d4 !important;
+  color: #2a261f !important;
+  border: 1px solid #cfc6b4 !important;
+  box-shadow: none !important;
+}
+html[data-colour-pack="earthy"]:not(.dark) #commuter-peek-lookup:hover,
+html[data-colour-pack="earthy"]:not(.dark) #commuter-peek-close:hover {
+  background-color: #ddd6c6 !important;
+  color: #2a261f !important;
+}
+html[data-colour-pack="earthy"] .nt-train-sheet-head {
+  background: linear-gradient(to bottom right, #1d4ed8 0%, #2563eb 58%, #efe6d4 100%) !important;
+  color: #ffffff;
+}
+html[data-colour-pack="earthy"] .nt-train-sheet-head #planner-train-sheet-day {
+  background: #efe6d4 !important;
+  color: #1e3a5f !important;
+}
+html[data-colour-pack="earthy"]:not(.dark) .nt-alert-reply {
+  background-color: #e7e1d4 !important;
+  color: #2a261f !important;
+  border: 1px solid #cfc6b4 !important;
+}
+html[data-colour-pack="earthy"].dark .nt-alert-reply {
+  background-color: #efeae0 !important;
+  color: #2a261f !important;
+  border-color: #efeae0 !important;
 }
 html.dark #fare-modal > div,
 html.dark #fare-modal > div > .rounded-t-2xl,
@@ -1221,10 +1765,176 @@ html.dark #planner-train-sheet-fare {
   background-color: #ffffff !important;
   color: #1e3a8a !important;
 }
+html[data-colour-pack="earthy"] #planner-train-sheet-fare,
+html.dark[data-colour-pack="earthy"] #planner-train-sheet-fare {
+  background-color: #efe6d4 !important;
+  color: #1e3a8a !important;
+}
+.nt-link-preview {
+  display: flex;
+  flex-direction: column;
+  margin-top: 0.65rem;
+  border-radius: 0.75rem;
+  overflow: hidden;
+  text-decoration: none;
+  background: #f0f2f5;
+  border-left: 4px solid #25d366;
+  color: #111b21;
+}
+html.dark .nt-link-preview {
+  background: #1f2c34;
+  color: #e9edef;
+}
+.nt-link-preview-media {
+  width: 100%;
+  aspect-ratio: 1.91 / 1;
+  object-fit: cover;
+  background: #e9edef;
+  display: block;
+}
+.nt-link-preview-copy {
+  padding: 0.55rem 0.75rem 0.65rem;
+  text-align: left;
+}
+.nt-link-preview-title {
+  font-weight: 700;
+  font-size: 0.92rem;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+.nt-link-preview-desc {
+  margin-top: 0.15rem;
+  font-size: 0.78rem;
+  line-height: 1.35;
+  color: #667781;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+html.dark .nt-link-preview-desc { color: #aebac1; }
+.nt-link-preview-site {
+  margin-top: 0.35rem;
+  font-size: 0.68rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #8696a0;
+}
+.nt-link-preview-line {
+  height: 0.72rem;
+  border-radius: 0.3rem;
+  margin-top: 0.4rem;
+}
+.nt-link-preview-line-short { width: 55%; }
+.nt-link-preview-shimmer {
+  background: linear-gradient(90deg, #e4e6eb 0%, #f7f8fa 45%, #e4e6eb 100%);
+  background-size: 200% 100%;
+  animation: nt-link-shimmer 1.1s ease-in-out infinite;
+}
+html.dark .nt-link-preview-shimmer {
+  background: linear-gradient(90deg, #2a3942 0%, #3b4a54 45%, #2a3942 100%);
+  background-size: 200% 100%;
+}
+@keyframes nt-link-shimmer {
+  0% { background-position: 100% 0; }
+  100% { background-position: -100% 0; }
+}
+.cm-chat {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.45rem;
+  text-align: left;
+  max-height: min(70dvh, 36rem);
+  overflow-y: auto;
+  padding-top: 0.25rem;
+}
+.cm-row {
+  display: flex;
+  justify-content: flex-start;
+  width: 100%;
+}
+.cm-row-reply { padding-left: 1.25rem; }
+.cm-bubble {
+  max-width: 85%;
+  text-align: left;
+  background: #ffffff;
+  color: #111827;
+  border: 1px solid rgba(229, 231, 235, 0.95);
+  border-radius: 0.75rem 0.75rem 0.75rem 0.2rem;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+  overflow: hidden;
+}
+html.dark .cm-bubble {
+  background: #1f2937;
+  color: #f3f4f6;
+  border-color: #374151;
+}
+.cm-bubble.is-hidden { opacity: 0.5; box-shadow: inset 0 0 0 1px #f87171; }
+.cm-bubble-name {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.3rem 0.65rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  background: rgba(0, 0, 0, 0.05);
+}
+html.dark .cm-bubble-name { background: rgba(255, 255, 255, 0.07); }
+.cm-bubble-time {
+  font-family: ui-monospace, monospace;
+  font-size: 0.62rem;
+  font-weight: 500;
+  color: #9ca3af;
+  white-space: nowrap;
+}
+.cm-bubble-body { padding: 0.4rem 0.65rem 0.5rem; text-align: left; }
+.cm-bubble-text {
+  margin: 0;
+  text-align: left;
+  font-size: 0.8rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.cm-quote {
+  border-left: 2px solid #22c55e;
+  background: rgba(0, 0, 0, 0.04);
+  border-radius: 0 0.4rem 0.4rem 0;
+  padding: 0.25rem 0.4rem;
+  margin-bottom: 0.35rem;
+  font-size: 0.68rem;
+  color: #6b7280;
+  text-align: left;
+}
+.cm-bubble-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.4rem;
+}
+.cm-bubble-actions button {
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-decoration: underline;
+  background: none;
+  border: 0;
+  padding: 0;
+  color: #b45309;
+}
+.cm-bubble-actions .cm-delete-message,
+.cm-bubble-actions .cm-shadow-ban { color: #dc2626; }
+.cm-empty { text-align: left; color: #9ca3af; padding: 0.5rem 0; }
 .nt-alert-card {
   background-color: var(--nt-surface) !important;
   border-color: var(--nt-border);
   box-shadow: 0 1px 2px color-mix(in srgb, #000 22%, transparent), 0 10px 28px color-mix(in srgb, #000 16%, transparent);
+}
+#alerts-reaction-picker,
+#alerts-reaction-picker * {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
 }
 .nt-alert-admin-menu {
   width: min(17rem, calc(100vw - 1.5rem));
@@ -1266,6 +1976,10 @@ html.dark #planner-train-sheet-fare {
   min-height: 0;
   padding-top: 0.4rem;
   padding-bottom: 0.4rem;
+  /* The card stays overflow:visible so a reaction can hang off the bottom.
+     That also lets this strip paint square over the rounded top. Match the card. */
+  border-top-left-radius: 0.85rem;
+  border-top-right-radius: 0.85rem;
 }
 .nt-alert-signoff {
   letter-spacing: 0.02em;
@@ -1287,6 +2001,14 @@ html.dark #planner-train-sheet-fare {
   color: var(--nt-primary);
   border-color: color-mix(in srgb, var(--nt-primary) 26%, var(--nt-border));
 }
+html[data-colour-pack="earthy"]:not(.dark) .nt-alert-strip.nt-alert-strip-info .nt-alert-signoff,
+html[data-colour-pack="earthy"]:not(.dark) .nt-alert-strip.nt-alert-strip-info .nt-alert-chip {
+  color: #2a261f !important;
+}
+html[data-colour-pack="earthy"]:not(.dark) .nt-alert-strip.nt-alert-strip-info .nt-alert-chip {
+  background-color: #e7e1d4 !important;
+  border-color: #cfc6b4 !important;
+}
 .nt-alert-strip.nt-alert-strip-warning {
   background-color: #f59e0b !important;
   color: #111827;
@@ -1304,15 +2026,15 @@ html.dark #planner-train-sheet-fare {
   background-color: color-mix(in srgb, #fff 16%, transparent);
 }
 .nt-alert-reply {
-  background-color: var(--nt-primary) !important;
-  color: var(--nt-primary-fg) !important;
-  border: 1px solid transparent !important;
-  box-shadow: 0 1px 2px color-mix(in srgb, #000 12%, transparent);
+  background-color: color-mix(in srgb, var(--nt-primary) 10%, var(--nt-surface)) !important;
+  color: var(--nt-primary) !important;
+  border: 1px solid color-mix(in srgb, var(--nt-primary) 45%, var(--nt-border)) !important;
+  box-shadow: none;
 }
 .nt-alert-reply:hover {
-  background-color: color-mix(in srgb, var(--nt-primary) 86%, #000) !important;
-  color: var(--nt-primary-fg) !important;
-  border-color: transparent !important;
+  background-color: color-mix(in srgb, var(--nt-primary) 18%, var(--nt-surface)) !important;
+  color: var(--nt-primary) !important;
+  border-color: color-mix(in srgb, var(--nt-primary) 55%, var(--nt-border)) !important;
 }
 .nt-alert-source {
   display: inline;
@@ -1583,10 +2305,18 @@ a.nt-alert-source:focus-visible {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 0.2rem;
   opacity: 0.95;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  line-height: 1;
 }
 .nt-alert-pin-icon {
   display: block;
+}
+.nt-alert-pin-label {
+  line-height: 1;
 }
 
 #alerts-channel .nt-alert-card-footer {
@@ -1616,7 +2346,16 @@ a.nt-alert-source:focus-visible {
   color: var(--nt-text-faint);
 }
 #alerts-channel .nt-alert-scope {
+  display: inline-flex;
+  align-items: center;
+  margin-right: 8px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--nt-border) 80%, var(--nt-text-faint));
+  background: color-mix(in srgb, var(--nt-surface) 70%, transparent);
   font-size: 10px;
+  font-weight: 700;
+  line-height: 1.3;
   color: var(--nt-text-faint);
 }
 #alerts-channel .nt-alert-action-row {
@@ -1628,6 +2367,15 @@ a.nt-alert-source:focus-visible {
 }
 #alerts-channel .nt-alert-action-row .nt-alert-react-summary {
   margin-top: 0;
+}
+#alerts-channel .nt-alert-card {
+  overflow: visible;
+}
+#alerts-channel .nt-alert-react-hang {
+  position: relative;
+  z-index: 2;
+  transform: none;
+  box-shadow: 0 1px 2px color-mix(in srgb, #000 18%, transparent);
 }
 #alerts-channel .nt-alert-action-meta {
   display: inline-flex;
@@ -1664,6 +2412,7 @@ html[data-colour-pack="signal"] #notice-bell.nt-bell-info,
 html[data-colour-pack="earthy"] #notice-bell.nt-bell-info {
   box-shadow: 0 0 0 1.5px color-mix(in srgb, #000 26%, transparent), 0 1px 3px color-mix(in srgb, #000 14%, transparent);
 }
+
 
 .nt-planner-map-btn {
   background-color: color-mix(in srgb, var(--nt-text) 10%, var(--nt-surface, #fff)) !important;
@@ -1778,49 +2527,137 @@ html[data-colour-pack="classic"] #current-day span:not(.text-red-600):not(.dark\
 html:not([data-colour-pack]) #current-day span:not(.text-red-600):not(.dark\:text-red-400) {
   color: var(--nt-chrome-muted) !important;
 }
-/* Same No Service red in light and dark. Classic light used red-600
-   (#dc2626) that fought the blue header; match dark red-400 (#f87171). */
-#current-day span.text-red-600,
-html.dark #current-day span.text-red-600,
-html.dark #current-day span.dark\:text-red-400 {
+/* Weekday and Saturday sit in a quiet capsule inside the day control.
+   Sunday / closed Saturday use .nt-day-quiet: no nested red pill. */
+html[data-colour-pack="classic"] button#current-day:not(.nt-day-quiet) span:not(.text-red-600):not(.dark\:text-red-400),
+html:not([data-colour-pack]) button#current-day:not(.nt-day-quiet) span:not(.text-red-600):not(.dark\:text-red-400) {
+  color: var(--nt-chrome-fg) !important;
+  margin-left: 0.12rem;
+  padding: 0.05rem 0.42rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--nt-chrome-fg) 16%, transparent);
+}
+/* Earthy: same day + schedule capsule as Classic, taupe wash on cream/charcoal. */
+html[data-colour-pack="earthy"] #current-day {
+  color: var(--nt-chrome-muted) !important;
+}
+html[data-colour-pack="earthy"] #current-day span:not(.text-red-600):not(.dark\:text-red-400) {
+  color: var(--nt-chrome-muted) !important;
+}
+html[data-colour-pack="earthy"] button#current-day:not(.nt-day-quiet) span:not(.text-red-600):not(.dark\:text-red-400) {
+  color: var(--nt-chrome-fg) !important;
+  margin-left: 0.12rem;
+  padding: 0.05rem 0.42rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--nt-accent) 28%, transparent);
+}
+html[data-colour-pack="earthy"].dark button#current-day:not(.nt-day-quiet) span:not(.text-red-600):not(.dark\:text-red-400) {
+  background: color-mix(in srgb, var(--nt-chrome-fg) 18%, transparent);
+}
+button#current-day.nt-day-quiet span.text-red-600,
+html.dark button#current-day.nt-day-quiet span.text-red-600,
+html.dark button#current-day.nt-day-quiet span.dark\:text-red-400 {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  margin-left: 0.35rem;
+  padding: 0;
+  border-radius: 0;
+  background: none;
+  color: color-mix(in srgb, var(--nt-chrome-fg) 90%, transparent) !important;
+  letter-spacing: 0.01em;
+  font-weight: 600 !important;
+  box-shadow: none;
+}
+button#current-day.nt-day-quiet span.text-red-600::before,
+html.dark button#current-day.nt-day-quiet span.text-red-600::before,
+html.dark button#current-day.nt-day-quiet span.dark\:text-red-400::before {
+  content: "";
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #fbbf24;
+  flex-shrink: 0;
+}
+p#current-day span.text-red-600,
+html.dark p#current-day span.text-red-600,
+html.dark p#current-day span.dark\:text-red-400 {
   color: #f87171 !important;
 }
 
 html[data-colour-pack="classic"] #bottom-nav .bottom-nav-item:not(.is-active),
 html:not([data-colour-pack]) #bottom-nav .bottom-nav-item:not(.is-active) {
-  color: var(--nt-chrome-muted) !important;
+  color: color-mix(in srgb, var(--nt-chrome-fg) 45%, transparent) !important;
 }
 html[data-colour-pack="classic"] #bottom-nav .bottom-nav-item.is-active,
 html:not([data-colour-pack]) #bottom-nav .bottom-nav-item.is-active,
 html[data-colour-pack="classic"] .bottom-nav-item.is-active {
   color: var(--nt-chrome-fg) !important;
-  font-weight: 600;
-  background: var(--nt-chrome-nav-active);
-  border-radius: 999px;
-  margin: 0.16rem 0.1rem;
+  font-weight: 700;
+  background: transparent !important;
+  border-radius: 0;
+  margin: 0;
 }
 html.dark[data-colour-pack="classic"] #bottom-nav .bottom-nav-item.is-active,
 html.dark:not([data-colour-pack]) #bottom-nav .bottom-nav-item.is-active {
-  background: var(--nt-chrome-nav-active);
+  background: transparent !important;
   box-shadow: none;
-  border-radius: 999px;
-  margin: 0.16rem 0.1rem;
+  border-radius: 0;
+  margin: 0;
 }
 
 /* Non-fullscreen cards/sheets sit above the bottom nav, not under it.
    Full-screen overlays (About, Welcome, map lightbox, timetable grid) skip this.
 
-   Feedback Hub and Account must skip it too. They are full-screen sheets, and
-   this pair (4.5rem of padding plus a card capped at
+   Feedback Hub, Account, and Co-Pilot must skip it too. They are full-screen
+   sheets, and this pair (4.5rem of padding plus a card capped at
    --nt-app-h - 5.5rem) is what left a blank slab below their content. The Hub
    slab closed after a keyboard cycle only because the IME hid the URL bar,
-   which grows --nt-app-h enough for the cap to clear the sheet. */
-[id$="-modal"].fixed:not(.full-screen):not(#welcome-modal):not(#blackbox-modal):not(#messages-thread-modal):not(#account-modal),
+   which grows --nt-app-h enough for the cap to clear the sheet.
+   The full train sheet, Trip Planner Tips, and the upcoming list also skip it.
+   Their lists are taller than the card, and the reserved band was empty space
+   under a scrim that already covers the nav. A safe-area inset still keeps
+   Close above the home indicator. */
+#planner-train-sheet-modal,
+#help-modal,
+#schedule-modal {
+  padding-bottom: max(0.5rem, env(safe-area-inset-bottom, 0px));
+}
+/* Centered info cards (What's New, Today's schedule, and the same type) sit
+   in the middle of the scrim. The bottom-nav clearance left a blank slab
+   under the card. Bottom sheets and tall lists keep the clearance below. */
+#changelog-modal,
+#schedule-day-modal,
+#schedule-override-modal,
+#holiday-notice-modal,
+#community-presence-info-modal,
+#notice-modal,
+#profile-modal,
+#cache-clear-modal,
+#phone-reset-modal,
+#phone-reset-network-modal,
+#exit-modal,
+#redirect-modal,
+#region-confirm-modal,
+#network-struggle-modal {
+  padding-bottom: max(0.75rem, env(safe-area-inset-bottom, 0px));
+}
+#changelog-modal > div,
+#schedule-day-modal > div,
+#schedule-override-modal > div,
+#holiday-notice-modal > div,
+#community-presence-info-modal > div,
+#notice-modal > div,
+#profile-modal > div {
+  max-height: min(85dvh, calc(var(--nt-app-h, 100dvh) - 1.5rem - var(--nt-sys-bottom, env(safe-area-inset-bottom, 0px)))) !important;
+}
+[id$="-modal"].fixed:not(.full-screen):not(#welcome-modal):not(#blackbox-modal):not(#messages-thread-modal):not(#account-modal):not(#admin-reply-modal):not(#planner-train-sheet-modal):not(#help-modal):not(#schedule-modal):not(#changelog-modal):not(#schedule-day-modal):not(#schedule-override-modal):not(#holiday-notice-modal):not(#community-presence-info-modal):not(#notice-modal):not(#profile-modal):not(#cache-clear-modal):not(#phone-reset-modal):not(#phone-reset-network-modal):not(#exit-modal):not(#redirect-modal):not(#region-confirm-modal):not(#network-struggle-modal),
 #nt-on-train-sheet {
   padding-bottom: calc(4.5rem + var(--nt-sys-bottom, env(safe-area-inset-bottom, 0px)));
   box-sizing: border-box;
 }
-[id$="-modal"].fixed:not(.full-screen):not(#welcome-modal):not(#blackbox-modal):not(#messages-thread-modal):not(#account-modal) > div,
+[id$="-modal"].fixed:not(.full-screen):not(#welcome-modal):not(#blackbox-modal):not(#messages-thread-modal):not(#account-modal):not(#admin-reply-modal):not(#planner-train-sheet-modal):not(#help-modal):not(#schedule-modal):not(#changelog-modal):not(#schedule-day-modal):not(#schedule-override-modal):not(#holiday-notice-modal):not(#community-presence-info-modal):not(#notice-modal):not(#profile-modal):not(#cache-clear-modal):not(#phone-reset-modal):not(#phone-reset-network-modal):not(#exit-modal):not(#redirect-modal):not(#region-confirm-modal):not(#network-struggle-modal) > div,
 #nt-on-train-sheet > div {
   max-height: calc(var(--nt-app-h, 100dvh) - 5.5rem - var(--nt-sys-bottom, env(safe-area-inset-bottom, 0px))) !important;
 }

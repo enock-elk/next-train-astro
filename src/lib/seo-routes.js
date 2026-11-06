@@ -9,6 +9,14 @@ import { ROUTES, REGIONS, CORRIDOR_META, REGION_SEO, HOLIDAY_NAMES, SPECIAL_DATE
 
 /** @typedef {{ slug: string, routeId: string, blurb: string, operatingNote: string, serves?: string, nearby?: string, insight?: string }} SeoRouteSeed */
 
+/** Split SEO lead copy into short paragraphs for scanning (sentence boundaries). */
+export function seoIntroParagraphs(text) {
+    const raw = String(text || '').replace(/\s+/g, ' ').trim();
+    if (!raw) return [];
+    const parts = raw.match(/[^.!?]+[.!?]+(?:\s+|$)|[^.!?]+$/g) || [raw];
+    return parts.map((part) => part.trim()).filter(Boolean);
+}
+
 /** Sheet / dump names → commuter-facing labels on SEO pages. */
 const STATION_DISPLAY_ALIASES = {
     JOHANNESBURG: 'Johannesburg',
@@ -117,6 +125,11 @@ const SEO_OVERRIDES = {
         slug: 'durban-to-crossmoor',
         blurb: 'Durban to Crossmoor Metrorail timetable for the yellow inland line via Rossburgh, Havenside, Bayview, Westcliff and Chatsglen.',
         operatingNote: 'Open the interactive board for upcoming trains, fares, and the full timetable grid. Saturday sheets currently carry the published Crossmoor times.',
+    },
+    'ec-berlin': {
+        slug: 'east-london-to-berlin',
+        blurb: 'East London to Berlin Metrorail weekday schedule on the older yellow trains. No Saturday or Sunday service.',
+        operatingNote: 'Weekday trains only. There is no Saturday or Sunday service on East London to Berlin. Eastern Cape still uses older yellow and grey sets; other regions already run many blue People\'s Train EMUs. For operational issues contact PRASA EC on 043 700 2030 or Facebook PRASA EC.',
     },
 };
 
@@ -297,12 +310,95 @@ export const SEO_INSIGHTS = {
         'Pretoria to Irene is the inner stretch of this Pretoria to Kempton Park line, not a separate railway. A sinkhole opened near Centurion in early 2026. It has been patched and normal service has resumed, but Centurion sits on dolomite, rock that dissolves when water reaches it, so the ground there stays sinkhole-prone. Trains 0618 and 0619 do not run on Mondays or Fridays. They run Tuesday to Thursday so the Blue Train and Rovos Rail can pass safely.',
     'pta-irene':
         'This Pretoria to Irene timetable is the inner stretch of the Pretoria to Kempton Park line, not a separate railway. Centurion on this stretch saw a sinkhole in early 2026. The patch is in and trains are running again, but the station sits on dolomite, so the area remains sinkhole-prone.',
+    'ec-berlin':
+        'Eastern Cape is still on the older yellow and grey Metrorail trains, often hauled by Class 35 diesel locomotives from the early 1980s, while Gauteng, Western Cape and KwaZulu-Natal already run many of the newer blue People\'s Train sets. PRASA EC has been restoring East London stations after theft and vandalism (about seven refurbished, including Wilsonia), with security on stations and on board. There is no Saturday service on East London to Berlin. For operational issues contact PRASA EC on 043 700 2030 or Facebook PRASA EC.',
+};
+
+/**
+ * Search titles and a first paragraph for corridor landings.
+ * Names the cities and termini people type, not only the internal line name.
+ */
+export const CORRIDOR_PAGE_COPY = {
+    'gauteng-northern-corridor': {
+        title: 'Pretoria to Mabopane Train Schedule | Next Train',
+        h1: 'Pretoria to Mabopane train schedule',
+        description: 'Pretoria to Mabopane, De Wildt, Saulsville and Pienaarspoort Metrorail train schedule. Weekdays and Saturdays. No Sunday service. Ticket prices on each route.',
+        lead: 'This is the Pretoria timetable for Mabopane, De Wildt, Saulsville, Belle Ombre and Pienaarspoort. Weekday trains run. Saturday sheets are on the route pages. There is no Sunday service.',
+    },
+    'gauteng-pretoria-jhb-line': {
+        title: 'Pretoria to Johannesburg Train Schedule | Next Train',
+        h1: 'Pretoria to Johannesburg train schedule',
+        description: 'Pretoria, Kempton Park, Germiston and Johannesburg Metrorail train schedule. Weekdays and Saturdays. No Sunday service. There is no single through train.',
+        lead: 'Pretoria to Johannesburg is more than one train. The pages here cover Kempton Park, Irene, Germiston, Leralla and Kwesine. Weekdays and Saturdays. No Sunday service.',
+    },
+    'gauteng-jhb-west-line': {
+        title: 'Johannesburg to Naledi Train Schedule | Next Train',
+        h1: 'Johannesburg to Naledi train schedule',
+        description: 'Johannesburg to Naledi, Randfontein and Midway Metrorail train schedule. Weekdays and Saturdays. No Sunday service. Open a route for the full sheet and ticket prices.',
+        lead: 'Johannesburg west and south: Naledi, Randfontein and Midway / Lenz. Weekday trains run. Saturday sheets are on the route pages. There is no Sunday service.',
+    },
+    'western-cape-northern-line': {
+        title: 'Cape Town to Strand, Bellville and Wellington | Next Train',
+        h1: 'Cape Town to Strand, Bellville and Wellington',
+        description: 'Cape Town train schedule for Bellville, Strand, Wellington and Kraaifontein. Weekdays, Saturday where listed, and public holidays when PRASA announces them. No regular Sunday service.',
+        lead: 'Cape Town to Bellville, Kraaifontein, Strand and Wellington, plus Bellville to Mutual. Simon\'s Town is on the Southern Line. Weekday sheets are on each route. Saturday is listed where a sheet exists. Public holidays have their own page. There is no regular Sunday service.',
+    },
+    'western-cape-central-line': {
+        title: 'Cape Town Central Line Train Schedule | Next Train',
+        h1: 'Cape Town Central Line train schedule',
+        description: 'Cape Town train schedule for Chris Hani, Kapteinsklip and Nolungile. Weekdays and Saturdays. Public holidays when PRASA announces them. No regular Sunday service.',
+        lead: 'Cape Town Central Line times for Chris Hani, Kapteinsklip and Nolungile. Weekdays and Saturdays. Public holidays use the holiday page when PRASA announces the day. No regular Sunday service.',
+    },
+    'western-cape-southern-line': {
+        title: 'Cape Town to Simon\'s Town Train Schedule | Next Train',
+        h1: 'Cape Town to Simon\'s Town train schedule',
+        description: 'Cape Town to Simon\'s Town Metrorail train schedule. Weekdays and Saturdays. Public holidays when PRASA announces them. No regular Sunday service.',
+        lead: 'Cape Town Southern Line to Simon\'s Town. Weekday and Saturday times are on the route page. Public holidays have their own page. There is no regular Sunday service.',
+    },
+    'western-cape-cape-flats-line': {
+        title: 'Cape Town to Retreat Train Schedule | Next Train',
+        h1: 'Cape Town Cape Flats train schedule',
+        description: 'Cape Town to Retreat Metrorail train schedule on the Cape Flats line. Weekdays and Saturdays. No regular Sunday service.',
+        lead: 'Cape Town to Retreat on the Cape Flats line. Weekday and Saturday times are on the route page. There is no regular Sunday service.',
+    },
+    'western-cape-malmesbury-line': {
+        title: 'Cape Town to Malmesbury Train Schedule | Next Train',
+        h1: 'Cape Town to Malmesbury train schedule',
+        description: 'Cape Town to Malmesbury Metrorail train schedule. Weekdays and Saturdays where listed. No regular Sunday service.',
+        lead: 'Cape Town to Malmesbury. Weekday times are on the route page, with Saturday where a sheet exists. There is no regular Sunday service.',
+    },
+    'kwazulu-natal-north': {
+        title: 'Durban North Train Schedule | Next Train',
+        h1: 'Durban north train schedule',
+        description: 'Durban north Metrorail train schedule, including Bridge City. Weekdays and Saturdays. No Sunday service.',
+        lead: 'Durban north, including Bridge City. Weekday and Saturday sheets are on the route pages. There is no Sunday service.',
+    },
+    'kwazulu-natal-south': {
+        title: 'Durban to Umlazi Train Schedule | Next Train',
+        h1: 'Durban south train schedule',
+        description: 'Durban to Umlazi and Winklespruit Metrorail train schedule. Weekdays and Saturdays. No Sunday service.',
+        lead: 'Durban south: Umlazi, Winklespruit and the stations between. Weekdays and Saturdays. There is no Sunday service.',
+    },
+    'kwazulu-natal-inland': {
+        title: 'Durban to Pinetown Train Schedule | Next Train',
+        h1: 'Durban to Pinetown train schedule',
+        description: 'Durban to Pinetown, Cato Ridge and Crossmoor Metrorail train schedule. Weekdays and Saturdays. No Sunday service.',
+        lead: 'Durban inland: Pinetown, Cato Ridge and Crossmoor. Weekday and Saturday sheets are on the route pages. There is no Sunday service.',
+    },
+    'eastern-cape-central': {
+        title: 'East London to Berlin Train Schedule | Next Train',
+        h1: 'East London to Berlin train schedule',
+        description: 'East London to Berlin Metrorail train schedule on the older yellow trains. Weekday times on the route page. No Saturday or Sunday service.',
+        lead: 'East London to Berlin still runs on the older yellow and grey Metrorail sets. The weekday sheet is on the route page. There is no Saturday or Sunday service. PRASA EC has been restoring East London stations, including Wilsonia, after theft and vandalism.',
+    },
 };
 
 /** Extra copy on parent corridor landings. Does not replace the generated blurb. */
 export const CORRIDOR_INSIGHTS = {
     'gauteng-pretoria-jhb-line':
         "There is no single Pretoria to Johannesburg Metrorail train. You change twice: a Johannesburg-side train into Germiston, the Germiston to Kempton Park working on the Leralla line, then a Pretoria-line train from Kempton Park. Next Train's trip planner builds that three-train journey from the published sheets, so you do not have to stitch the boards by hand.",
+    'eastern-cape-central':
+        'Eastern Cape is the last Metrorail region still mainly on yellow trains while other provinces roll out the blue People\'s Train. Follow PRASA EC on Facebook for East London corridor updates, or call 043 700 2030.',
 };
 
 /**

@@ -346,6 +346,7 @@ function ntAdminDevPanelIdFromHash(hash) {
 function ntAdminCanonicalPanelId(panelId) {
     const id = String(panelId || '');
     if (id === 'alert-panel--inapp') return 'alert-panel';
+    if (id === 'account-deletions-panel') return 'user-trust-panel';
     return id;
 }
 
@@ -444,6 +445,27 @@ function ntAdminCommunitySeenPatch(adminUid, routeId, timestamp) {
     return {
         [`admin_state/${adminUid}/community_seen/${routeId}`]: Number(timestamp || Date.now()),
     };
+}
+
+/** Flatten RTDB station_reviews/{slug}/{id} into newest-first rows for Community Monitor. */
+function ntAdminStationReviewRows(reviewsBySlug) {
+    const rows = [];
+    Object.entries(reviewsBySlug || {}).forEach(([slug, reviews]) => {
+        if (!reviews || typeof reviews !== 'object') return;
+        Object.entries(reviews).forEach(([id, value]) => {
+            if (!value || typeof value !== 'object') return;
+            rows.push({
+                ...value,
+                _key: id,
+                stationSlug: value.stationSlug || slug,
+            });
+        });
+    });
+    return rows.sort((a, b) => Number(b.createdAt || 0) - Number(a.createdAt || 0));
+}
+
+function ntAdminPendingStationReviewCount(rows) {
+    return (Array.isArray(rows) ? rows : []).filter((row) => String(row?.status || '') === 'pending').length;
 }
 
 const NT_ADMIN_WEEKDAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -1026,6 +1048,7 @@ const Admin = {
             columns: '<rect x="3" y="3" width="7" height="18" rx="1"/><rect x="14" y="3" width="7" height="18" rx="1"/><path d="M6.5 7h0M17.5 7h0"/>',
             circle: '<circle cx="12" cy="12" r="5" fill="currentColor" stroke="none"/>',
             bell: '<path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/>',
+            settings: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/>',
         };
         const body = paths[name];
         if (!body) return '';
@@ -1950,11 +1973,35 @@ const Admin = {
         if (isPdf) {
             return `&nbsp;<a href="${href}" target="_blank" rel="noopener noreferrer" class="text-blue-500 dark:text-blue-400 underline font-bold px-1 inline-flex items-center gap-1">${Admin.icon('file', 'w-3.5 h-3.5')} View Attached PDF</a>&nbsp;`;
         }
-        const js = typeof window.lightboxOnclickJs === 'function'
-            ? window.lightboxOnclickJs(safe, 'window.openLightbox')
-            : '';
-        if (!js) return '';
-        return `<br><button type="button" onclick='${js}' class="relative block w-full focus:outline-none my-2 cursor-zoom-in rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm active:scale-[0.98] transition-transform"><img src="${href}" class="w-full h-auto object-cover hover:opacity-90 transition-opacity" alt="Admin Attachment"><span class="nt-zoom-plus absolute bottom-1.5 right-1.5 w-5 h-5 rounded-full bg-black/40 text-white text-xs font-bold leading-none flex items-center justify-center border border-white/20 pointer-events-none select-none shadow-sm" aria-hidden="true">+</span></button><br>`;
+        return `<br><img src="${href}" data-nt-src="${href}" alt="" referrerpolicy="no-referrer" draggable="false" class="nt-composer-image" style="display:block;width:100%;max-width:100%;height:auto;min-height:4rem;white-space:normal;object-fit:contain;background:#f3f4f6;border-radius:12px;margin:8px 0"><br>`;
+    },
+
+    /** Contenteditable drops a picture that sits inside a button. Stamp the live image so the preview can still read it. */
+    stampComposerImages: (editor) => {
+        if (!editor?.querySelectorAll) return;
+        editor.querySelectorAll('img').forEach((img) => {
+            const src = img.getAttribute('data-nt-src') || img.getAttribute('src') || '';
+            if (!src) return;
+            if (img.getAttribute('src') !== src) img.setAttribute('src', src);
+            if (img.getAttribute('data-nt-src') !== src) img.setAttribute('data-nt-src', src);
+            img.referrerPolicy = 'no-referrer';
+            img.setAttribute('alt', '');
+            img.draggable = false;
+        });
+    },
+
+    ensureComposerImageOpen: () => {
+        if (Admin._composerImageOpenBound) return;
+        Admin._composerImageOpenBound = true;
+        document.addEventListener('click', (event) => {
+            const img = event.target?.closest?.('#alert-msg img, #admin-reply-text img, #disr-msg img, [data-nt-media-slot] img');
+            if (!img) return;
+            const src = img.getAttribute('data-nt-src') || img.getAttribute('src') || '';
+            if (!src || typeof window.openLightbox !== 'function') return;
+            event.preventDefault();
+            event.stopPropagation();
+            window.openLightbox(src);
+        });
     },
 
     wrapLightboxImgHtml: function(srcUrl, borderClass) {
@@ -2047,6 +2094,7 @@ const Admin = {
             return;
         }
         child.style.display = '';
+        if (child.id === 'operator-brief-slot') child.style.gridColumn = '1 / -1';
         if (child.dataset.originalClasses) {
             child.className = child.dataset.originalClasses;
         }
@@ -2477,6 +2525,7 @@ const Admin = {
         } catch { /* ignore */ }
         Admin.bindFeedbackPreviewChrome(overlay);
         Admin.paintFeedbackPreviewChrome(overlay);
+        try { window.dispatchEvent(new CustomEvent('nt-alert-lightbox', { detail: null })); } catch { /* ignore */ }
         return !overlay.classList.contains('hidden');
     },
 
@@ -2645,7 +2694,13 @@ const Admin = {
             if (ticketData && typeof ticketData === 'object') Admin._cachedFareTicketPhotos = ticketData;
             else ticketStatus = 'unavailable';
         }
-        const ids = Admin.commuterIdSet(did, deviceNode?.uid, userNode && looksDevice ? null : did);
+        let accountNode = userNode && typeof userNode === 'object' ? userNode : null;
+        const linkedUid = String(deviceNode?.uid || '').trim();
+        if (linkedUid && linkedUid !== did) {
+            const linked = await fetchJson(`users/${encodeURIComponent(linkedUid)}.json`);
+            if (linked && typeof linked === 'object') accountNode = linked;
+        }
+        const ids = Admin.commuterIdSet(did, linkedUid || deviceNode?.uid, userNode && looksDevice ? null : did);
         const feedbackItems = (Admin.cachedFeedbackData || []).filter((i) => {
             const fbDid = String(i?.deviceId || i?.device_id || '').trim();
             return ids.has(fbDid) || fbDid === did;
@@ -2713,6 +2768,30 @@ const Admin = {
         const crashLine = crashKnown
             ? (crashCount ? `Crashes: ${crashCount}` : 'Crashes: none')
             : 'Crashes: unavailable';
+        const versionOf = (row) => String(row?.appVersion || '').split(' - ')[0].trim();
+        const timeOf = (row) => Number(row?.timestamp || row?.at || row?.time || 0) || 0;
+        const activity = [];
+        const pushActivity = (ms, label, version) => {
+            const t = Number(ms) || 0;
+            if (t > 0) activity.push({ ms: t, label, appVersion: String(version || '').trim() });
+        };
+        if (accountNode) pushActivity(accountNode.lastSeenAt, 'App open', versionOf(accountNode));
+        pushActivity(tripLast, 'Trip plan', '');
+        if (latestFeedback) pushActivity(latestFeedback.timestamp, 'Feedback', versionOf(latestFeedback));
+        const latestFare = fareVotes.reduce((best, row) => (timeOf(row) > timeOf(best) ? row : best), null);
+        if (latestFare) pushActivity(timeOf(latestFare), 'Fare vote', versionOf(latestFare));
+        const latestFail = fails.reduce((best, row) => (timeOf(row) > timeOf(best) ? row : best), null);
+        if (latestFail) pushActivity(timeOf(latestFail), 'Routing fail', versionOf(latestFail));
+        if (crashKnown) {
+            const crashRows = (Admin.cachedCrashData || []).filter((c) => {
+                const cDid = String(c?.deviceId || c?.device_id || '').trim();
+                return ids.has(cDid) || cDid === did;
+            });
+            const latestCrash = crashRows.reduce((best, row) => (timeOf(row) > timeOf(best) ? row : best), null);
+            if (latestCrash) pushActivity(timeOf(latestCrash), 'Crash report', versionOf(latestCrash));
+        }
+        activity.sort((a, b) => b.ms - a.ms);
+        const lastActivity = activity[0] || null;
         return {
             id: did,
             alias: Admin.commuterAlias(did),
@@ -2733,6 +2812,12 @@ const Admin = {
             failLine: interactionLine('Routing fails', failStatus, fails.length, ''),
             ticketLine,
             crashLine,
+            fareCount: fareStatus === 'unavailable' ? null : fareVotes.length,
+            fareDetail,
+            failCount: failStatus === 'unavailable' ? null : fails.length,
+            ticketCount: ticketStatus === 'unavailable' && !ticketCount ? null : ticketCount,
+            crashKnown,
+            lastActivity,
         };
     },
 
@@ -2772,36 +2857,60 @@ const Admin = {
             const esc = Admin.commuterEsc;
             const heading = peek.alias || peek.displayName || did;
             const joinedLabel = peek.joinedMs ? Admin.formatDate(peek.joinedMs) : 'unknown';
-            const contactBits = [
-                ...(peek.contacts.emails || []).map((em) => esc(em)),
-                ...(peek.contacts.phones || []).map((ph) => esc(ph)),
-            ];
+            const emails = peek.contacts.emails || [];
+            const phones = peek.contacts.phones || [];
+            const contactParts = [];
+            if (emails.length) {
+                contactParts.push(`<span class="block text-[9px] font-black uppercase tracking-wider text-gray-400">Email</span>${emails.map((em) => esc(em)).join('<br>')}`);
+            }
+            if (phones.length) {
+                contactParts.push(`<span class="block text-[9px] font-black uppercase tracking-wider text-gray-400${emails.length ? ' mt-1' : ''}">Phone</span>${phones.map((ph) => esc(ph)).join('<br>')}`);
+            }
             const routeLabel = Admin.inboxRouteLabel(peek.defaultRoute) || peek.defaultRoute;
+            const tile = (label, value, absent, actionId) => {
+                const tag = actionId ? 'button' : 'div';
+                const type = actionId ? ' type="button"' : '';
+                const idAttr = actionId ? ` id="${actionId}"` : '';
+                return `
+                <${tag}${type}${idAttr} class="rounded-xl border px-2 py-2 text-left ${absent ? 'opacity-55 border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-900' : 'border-blue-100 dark:border-blue-900 bg-blue-50/70 dark:bg-blue-950/20'}${actionId ? ' cursor-pointer hover:border-blue-300 dark:hover:border-blue-700 focus:outline-none' : ''}">
+                    <p class="text-[9px] font-black uppercase tracking-widest ${absent ? 'text-gray-400' : 'text-blue-700 dark:text-blue-300'}">${esc(label)}</p>
+                    <p class="mt-1 text-[11px] font-bold leading-snug break-words ${absent ? 'text-gray-400' : 'text-gray-900 dark:text-white'}">${value}</p>
+                </${tag}>`;
+            };
+            const countLabel = (count, noun) => {
+                if (count == null) return 'unavailable';
+                if (!count) return 'none';
+                return `${count} ${noun}`;
+            };
             body.innerHTML = `
                 <p class="font-black text-sm text-gray-900 dark:text-white break-words">${esc(heading)}</p>
-                ${peek.alias ? `<p>Alias: <b>${esc(peek.alias)}</b></p>` : '<p class="text-gray-400">No feedback alias.</p>'}
-                <p class="font-mono text-[10px] text-gray-400 break-all">${esc(did)}</p>
-                <p>Joined: <b>${esc(joinedLabel)}</b></p>
-                ${peek.email ? `<p>Email: <b>${esc(peek.email)}</b></p>` : ''}
-                ${peek.linkedUid ? `<p>Account: <span class="font-mono break-all">${esc(peek.linkedUid)}</span></p>` : ''}
-                <p>Trip plans: <b>${peek.tripLast ? 'yes' : 'none'}</b>${peek.tripRegion ? ` · ${esc(peek.tripRegion)}` : ''}${peek.tripLast ? ` · last ${esc(Admin.formatDate(peek.tripLast))}` : ''}</p>
-                <p>Feedback: <b>${peek.hasChat ? (peek.feedbackCount ? `${peek.feedbackCount} messages` : 'open thread') : 'none'}</b>${peek.latestFeedbackAt ? ` · last ${esc(Admin.formatDate(peek.latestFeedbackAt))}` : ''}</p>
-                ${contactBits.length ? `<p>Contacts: <b>${contactBits.join(', ')}</b></p>` : ''}
-                ${routeLabel ? `<p>Default route: <b>${esc(routeLabel)}</b></p>` : ''}
-                <p>${esc(peek.fareLine)}</p>
-                <p>${esc(peek.failLine)}</p>
-                <p>${esc(peek.ticketLine)}</p>
-                <p>${esc(peek.crashLine)}</p>
+                ${peek.alias ? `<p class="text-[11px]">Alias: <b>${esc(peek.alias)}</b></p>` : '<p class="text-[11px] text-gray-400">No feedback alias.</p>'}
+                ${peek.lastActivity
+                    ? `<p class="text-[11px]">Last activity: <b>${esc(Admin.formatDate(peek.lastActivity.ms))}</b> · ${esc(peek.lastActivity.label)}${peek.lastActivity.appVersion ? ` · ${esc(peek.lastActivity.appVersion)}` : ''}</p>`
+                    : '<p class="text-[11px] text-gray-400">No activity on file.</p>'}
+                ${peek.email ? `<p class="text-[11px]">Email: <b>${esc(peek.email)}</b></p>` : ''}
+                <div class="grid grid-cols-2 gap-2 pt-1">
+                    ${tile('Joined', esc(joinedLabel), joinedLabel === 'unknown')}
+                    ${tile('Trip plans', peek.tripLast ? esc(`yes${peek.tripRegion ? ` · ${peek.tripRegion}` : ''}`) : 'none', !peek.tripLast, peek.tripLast ? 'commuter-peek-trips' : '')}
+                    ${tile('Feedback', peek.hasChat ? esc(peek.feedbackCount ? `${peek.feedbackCount} messages` : 'open thread') : 'none', !peek.hasChat, 'commuter-peek-feedback')}
+                    ${tile('Contacts', contactParts.length ? contactParts.join('') : 'none', !contactParts.length)}
+                    ${tile('Route', routeLabel ? esc(routeLabel) : 'none', !routeLabel)}
+                    ${tile('Fares', peek.fareCount == null ? 'unavailable' : (peek.fareCount ? esc(`${peek.fareCount}${peek.fareDetail ? ` · ${peek.fareDetail}` : ''}`) : 'none'), !peek.fareCount)}
+                    ${tile('Routing fails', esc(countLabel(peek.failCount, peek.failCount === 1 ? 'fail' : 'fails')), !peek.failCount)}
+                    ${tile('Ticket photos', esc(countLabel(peek.ticketCount, peek.ticketCount === 1 ? 'photo' : 'photos')), !peek.ticketCount)}
+                    ${tile('Crashes', esc(peek.crashKnown ? countLabel(peek.crashCount, peek.crashCount === 1 ? 'crash' : 'crashes') : 'unavailable'), !(peek.crashKnown && peek.crashCount))}
+                </div>
             `;
-            if (peek.hasChat) {
-                const actions = document.createElement('div');
-                actions.className = 'flex flex-wrap gap-2 pt-2';
-                actions.innerHTML = `<button type="button" id="commuter-peek-chat" class="text-[10px] font-black uppercase tracking-wider text-white bg-blue-600 hover:bg-blue-700 px-3 py-1.5 rounded-lg">Open chat</button>`;
-                body.appendChild(actions);
-                document.getElementById('commuter-peek-chat').onclick = () => {
+            document.getElementById('commuter-peek-feedback')?.addEventListener('click', () => {
+                close();
+                if (peek.hasChat) Admin.openFeedbackForDevice(did, peek.latestFeedbackId);
+                else Admin.startFeedbackChat(did, '');
+            });
+            if (peek.tripLast) {
+                document.getElementById('commuter-peek-trips')?.addEventListener('click', () => {
                     close();
-                    Admin.openFeedbackForDevice(did, peek.latestFeedbackId);
-                };
+                    Admin.openFeedbackTripPlans(did);
+                });
             }
         } catch (e) {
             if (body.isConnected) body.innerHTML = `<p class="text-red-500">Could not load this sheet: ${Admin.commuterEsc(e.message || e)}</p>`;
@@ -3107,11 +3216,41 @@ const Admin = {
     },
 
     // --- GUARDIAN PHASE 11 & 12: MASTER NOTIFICATION ENGINE (SEEN PROTOCOL) ---
+    /** Tiny RTDB query for badge counts — never download a full admin tree. */
+    _badgeQueryUrl: (path, secret, { startAt = 0, limit = 40, orderBy = 'timestamp', equalTo = null } = {}) => {
+        const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
+        const params = new URLSearchParams();
+        params.set('auth', secret);
+        params.set('orderBy', `"${orderBy}"`);
+        if (equalTo != null) {
+            params.set('equalTo', typeof equalTo === 'number' ? String(equalTo) : `"${String(equalTo)}"`);
+        } else {
+            params.set('startAt', String(Math.max(0, Number(startAt) || 0)));
+        }
+        params.set('limitToLast', String(limit));
+        return `${dynamicEndpoint}${path}?${params.toString()}`;
+    },
+
+    _countBadgeRows: (data, lastChecked, filterFn = null) => {
+        let unread = 0;
+        if (!data || typeof data !== 'object') return 0;
+        Object.values(data).forEach((item) => {
+            if (!item) return;
+            if (filterFn && !filterFn(item)) return;
+            if (Number(item.timestamp || 0) > lastChecked) unread += 1;
+        });
+        return unread;
+    },
+
     syncAllBadges: async () => {
+        if (Admin._badgeSyncInFlight) return;
+        Admin._badgeSyncInFlight = true;
+        try {
         const secret = await Admin.getAuthKey();
         if (!secret) return;
         const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
-        let totalUnread = 0; // GUARDIAN PHASE 11: Accumulator for PWA Badge
+        let totalUnread = 0; // GUARDIAN PHASE 11: Accumulator for in-panel tiles
+        let messageUnread = null; // Home-screen badge is new commuter messages only
 
         try {
             // Fetch Universal Cross-Device Admin State
@@ -3121,19 +3260,12 @@ const Admin = {
                 if (stateRes.ok) adminState = (await stateRes.json()) || adminState;
             } catch(e){}
 
-            // 1. Fetch Feedback
-            const fbRes = await window.guardianFetch(`${dynamicEndpoint}feedback.json?auth=${secret}`, {}, 6000);
+            const localFbChecked = parseInt(typeof safeStorage !== 'undefined' ? (safeStorage.getItem('fb_last_checked') || '0') : '0');
+            const fbLastChecked = Math.max(localFbChecked, parseInt(adminState.fb_last_checked || '0'));
+            const fbRes = await window.guardianFetch(Admin._badgeQueryUrl('feedback.json', secret, { startAt: fbLastChecked + 1 }), {}, 6000);
             if (fbRes.ok) {
-                const fbData = await fbRes.json();
-                let fbUnread = 0;
-                // GUARDIAN PHASE 12: Sync local offline state with Firebase cross-device state (Whichever is newest wins)
-                const localFbChecked = parseInt(typeof safeStorage !== 'undefined' ? (safeStorage.getItem('fb_last_checked') || '0') : '0');
-                const lastChecked = Math.max(localFbChecked, parseInt(adminState.fb_last_checked || '0'));
-                
-                if (fbData && typeof fbData === 'object') {
-                    Object.values(fbData).forEach(i => { if (i.timestamp > lastChecked) fbUnread++; });
-                }
-                
+                const fbUnread = Admin._countBadgeRows(await fbRes.json(), fbLastChecked);
+                messageUnread = fbUnread;
                 totalUnread += fbUnread;
                 const fbBadge = document.getElementById('fb-unread-badge');
                 if (fbBadge) {
@@ -3142,18 +3274,11 @@ const Admin = {
                 }
             }
 
-            // 2. Fetch Crashes
-            const crRes = await window.guardianFetch(`${dynamicEndpoint}sys_logs/crashes.json?auth=${secret}`, {}, 6000);
+            const localCrChecked = parseInt(typeof safeStorage !== 'undefined' ? (safeStorage.getItem('crash_last_checked') || '0') : '0');
+            const crLastChecked = Math.max(localCrChecked, parseInt(adminState.crash_last_checked || '0'));
+            const crRes = await window.guardianFetch(Admin._badgeQueryUrl('sys_logs/crashes.json', secret, { startAt: crLastChecked + 1 }), {}, 6000);
             if (crRes.ok) {
-                const crData = await crRes.json();
-                let crUnread = 0;
-                const localCrChecked = parseInt(typeof safeStorage !== 'undefined' ? (safeStorage.getItem('crash_last_checked') || '0') : '0');
-                const lastChecked = Math.max(localCrChecked, parseInt(adminState.crash_last_checked || '0'));
-                
-                if (crData && typeof crData === 'object') {
-                    Object.values(crData).forEach(i => { if (i.timestamp > lastChecked) crUnread++; });
-                }
-                
+                const crUnread = Admin._countBadgeRows(await crRes.json(), crLastChecked);
                 totalUnread += crUnread;
                 const crBadge = document.getElementById('crash-unread-badge');
                 if (crBadge) {
@@ -3162,18 +3287,11 @@ const Admin = {
                 }
             }
 
-            // 3. Fetch Dead Ends
-            const deRes = await window.guardianFetch(`${dynamicEndpoint}sys_logs/routing_fails.json?auth=${secret}`, {}, 6000);
+            const localDeChecked = parseInt(typeof safeStorage !== 'undefined' ? (safeStorage.getItem('de_last_checked') || '0') : '0');
+            const deLastChecked = Math.max(localDeChecked, parseInt(adminState.de_last_checked || '0'));
+            const deRes = await window.guardianFetch(Admin._badgeQueryUrl('sys_logs/routing_fails.json', secret, { startAt: deLastChecked + 1 }), {}, 6000);
             if (deRes.ok) {
-                const deData = await deRes.json();
-                const localDeChecked = parseInt(typeof safeStorage !== 'undefined' ? (safeStorage.getItem('de_last_checked') || '0') : '0');
-                const lastChecked = Math.max(localDeChecked, parseInt(adminState.de_last_checked || '0'));
-                let deUnread = 0;
-                
-                if (deData && typeof deData === 'object') {
-                    Object.values(deData).forEach(i => { if (i.timestamp > lastChecked) deUnread++; });
-                }
-                
+                const deUnread = Admin._countBadgeRows(await deRes.json(), deLastChecked);
                 totalUnread += deUnread;
                 const deBadge = document.getElementById('de-unread-badge');
                 if (deBadge) {
@@ -3182,66 +3300,124 @@ const Admin = {
                 }
             }
 
-            // 4. Delay reports (Phase 5)
-            const drRes = await window.guardianFetch(`${dynamicEndpoint}delay_reports.json?auth=${secret}`, {}, 6000);
-            if (drRes.ok) {
-                const drData = await drRes.json();
-                let drUnread = 0;
-                const localDrChecked = parseInt(typeof safeStorage !== 'undefined' ? (safeStorage.getItem('dr_last_checked') || '0') : '0');
-                const lastChecked = Math.max(localDrChecked, parseInt(adminState.dr_last_checked || '0'));
-                if (drData && typeof drData === 'object') {
-                    Object.values(drData).forEach((i) => {
-                        if (i && i.status !== 'closed' && (i.timestamp || 0) > lastChecked) drUnread++;
-                    });
+            // Delay / deletions / community: indexed windows, not every key.
+            // A 400 (index not deployed yet) leaves the last dot. Never count the whole tree.
+            const readBadge = async (res) => {
+                if (!res || !res.ok) return null;
+                try {
+                    const data = await res.json();
+                    if (data == null) return {};
+                    return typeof data === 'object' ? data : null;
+                } catch {
+                    return null;
                 }
-                totalUnread += drUnread;
-                const drBadge = document.getElementById('dr-unread-badge');
-                if (drBadge) {
-                    drBadge.textContent = Admin.formatBadgeCount(drUnread);
-                    drBadge.classList.toggle('hidden', drUnread === 0);
-                }
-            }
+            };
+            const paintCount = (id, count) => {
+                const el = document.getElementById(id);
+                if (!el) return;
+                el.textContent = Admin.formatBadgeCount(count);
+                el.classList.toggle('hidden', count === 0);
+            };
+            const stampOf = (storageKey, stateKey) => {
+                const local = parseInt(typeof safeStorage !== 'undefined' ? (safeStorage.getItem(storageKey) || '0') : '0', 10) || 0;
+                return Math.max(local, parseInt(adminState[stateKey] || '0', 10) || 0);
+            };
+            const CLOSED_QUEUE = ['closed', 'resolved', 'approved', 'rejected'];
+            const COMMUNITY_ROUTE_CAP = 24;
 
-            // 5. Community activity, per operator and per route.
-            const mqRes = await window.guardianFetch(`${dynamicEndpoint}community_activity.json?auth=${secret}`, {}, 6000);
-            if (mqRes.ok) {
-                const mqData = await mqRes.json();
-                let mqUnread = 0;
-                if (mqData && typeof mqData === 'object') {
-                    Object.entries(mqData).forEach(([routeId, messages]) => {
+            try {
+                const drLast = stampOf('dr_last_checked', 'dr_last_checked');
+                const drData = await readBadge(await window.guardianFetch(
+                    Admin._badgeQueryUrl('delay_reports.json', secret, { startAt: drLast + 1 }),
+                    {},
+                    6000,
+                ));
+                if (drData) {
+                    const drUnread = Admin._countBadgeRows(drData, drLast);
+                    totalUnread += drUnread;
+                    paintCount('dr-unread-badge', drUnread);
+                }
+
+                const delData = await readBadge(await window.guardianFetch(
+                    Admin._badgeQueryUrl('account_deletions.json', secret, { orderBy: 'status', equalTo: 'pending', limit: 40 }),
+                    {},
+                    6000,
+                ));
+                if (delData) {
+                    const delUnread = Math.min(
+                        Object.values(delData).filter((row) => row && row.status === 'pending').length,
+                        40,
+                    );
+                    totalUnread += delUnread;
+                    paintCount('ut-unread-badge', delUnread);
+                    Admin._pendingDeletionCount = delUnread;
+                }
+
+                const activityKeys = await readBadge(await window.guardianFetch(
+                    `${dynamicEndpoint}community_activity.json?auth=${secret}&shallow=true`,
+                    {},
+                    6000,
+                ));
+                const mqLast = stampOf('mq_last_checked', 'mq_last_checked');
+                const mqData = await readBadge(await window.guardianFetch(
+                    Admin._badgeQueryUrl('moderation_queue.json', secret, { startAt: mqLast + 1 }),
+                    {},
+                    6000,
+                ));
+                if (activityKeys && mqData) {
+                    const routeIds = Object.keys(activityKeys);
+                    routeIds.sort((a, b) => {
+                        const aSeen = Number(adminState.community_seen?.[a] || 0);
+                        const bSeen = Number(adminState.community_seen?.[b] || 0);
+                        if (aSeen === 0 && bSeen !== 0) return -1;
+                        if (bSeen === 0 && aSeen !== 0) return 1;
+                        return a.localeCompare(b);
+                    });
+                    const queried = routeIds.slice(0, COMMUNITY_ROUTE_CAP);
+                    const skipped = routeIds.slice(COMMUNITY_ROUTE_CAP);
+                    const routeResults = await Promise.all(queried.map(async (routeId) => {
                         const seenAt = Number(adminState.community_seen?.[routeId] || 0);
-                        Object.values(messages || {}).forEach((item) => {
-                            if (Number(item?.timestamp || 0) > seenAt) mqUnread += 1;
+                        const data = await readBadge(await window.guardianFetch(
+                            Admin._badgeQueryUrl(
+                                `community_activity/${encodeURIComponent(routeId)}.json`,
+                                secret,
+                                { startAt: seenAt + 1, limit: 20 },
+                            ),
+                            {},
+                            6000,
+                        ));
+                        return data ? Admin._countBadgeRows(data, seenAt) : null;
+                    }));
+                    if (routeResults.every((n) => n != null)) {
+                        let chatUnread = routeResults.reduce((sum, n) => sum + n, 0);
+                        skipped.forEach((routeId) => {
+                            if (!Number(adminState.community_seen?.[routeId] || 0)) chatUnread += 1;
                         });
-                    });
+                        const heldUnread = Admin._countBadgeRows(mqData, mqLast, (item) => (
+                            !CLOSED_QUEUE.includes(String(item?.status || 'open'))
+                        ));
+                        const reviewPending = Math.max(0, Number(Admin._stationReviewPending) || 0);
+                        const mqUnread = chatUnread + heldUnread + reviewPending;
+                        totalUnread += mqUnread;
+                        paintCount('mq-unread-badge', mqUnread);
+                    }
                 }
-                const heldRes = await window.guardianFetch(`${dynamicEndpoint}moderation_queue.json?auth=${secret}`, {}, 6000);
-                if (heldRes.ok) {
-                    const heldData = await heldRes.json();
-                    Object.values(heldData || {}).forEach((item) => {
-                        const kind = item?.publish?.kind;
-                        if (!['community_post', 'community_reply'].includes(kind)) return;
-                        if (['closed', 'resolved', 'approved', 'rejected'].includes(String(item?.status || 'open'))) return;
-                        const routeId = String(item?.routeId || item?.publish?.routeId || '');
-                        const seenAt = Number(adminState.community_seen?.[routeId] || 0);
-                        if (routeId && Number(item?.timestamp || 0) > seenAt) mqUnread += 1;
-                    });
-                }
-                totalUnread += mqUnread;
-                const mqBadge = document.getElementById('mq-unread-badge');
-                if (mqBadge) {
-                    mqBadge.textContent = Admin.formatBadgeCount(mqUnread);
-                    mqBadge.classList.toggle('hidden', mqUnread === 0);
-                }
-            }
+            } catch { /* optional badge trees are best-effort */ }
             
-            // GUARDIAN 2.4.1: Native PWA App Icon Badging
-            if ('setAppBadge' in navigator) {
-                if (totalUnread > 0) navigator.setAppBadge(totalUnread);
+            // Home-screen badge is unread commuter messages. Tiles above keep their own counts.
+            if (messageUnread != null && 'setAppBadge' in navigator) {
+                if (messageUnread > 0) navigator.setAppBadge(messageUnread);
                 else navigator.clearAppBadge();
             }
         } catch(e) {
-            console.warn("Guardian: Badge sync failed", e);
+            const badgeMsg = String((e && e.message) || e || '');
+            // Soft network / TimeoutError on optional badge poll must not look like a login failure.
+            if (!/abort|offline|failed to fetch|timeout/i.test(badgeMsg)) {
+                console.warn("Guardian: Badge sync failed", e);
+            }
+        }
+        } finally {
+            Admin._badgeSyncInFlight = false;
         }
     },
 
@@ -3510,7 +3686,7 @@ const Admin = {
 
         if (telPanel.dataset.adminLoaded === "true") {
             if (Admin.isAllowlistedAdmin(Admin.currentUser) && !Admin.telemetryInterval) {
-                Admin.telemetryInterval = setInterval(Admin.refreshTelemetry, 10000);
+                Admin.telemetryInterval = setInterval(Admin.refreshTelemetry, 45000);
             }
             Admin.refreshTelemetry();
             return;
@@ -3526,7 +3702,7 @@ const Admin = {
         Admin.refreshTelemetry();
         if (Admin.telemetryInterval) clearInterval(Admin.telemetryInterval);
         if (Admin.isAllowlistedAdmin(Admin.currentUser)) {
-            Admin.telemetryInterval = setInterval(Admin.refreshTelemetry, 10000);
+            Admin.telemetryInterval = setInterval(Admin.refreshTelemetry, 45000);
         }
     },
 
@@ -4114,7 +4290,10 @@ const Admin = {
                 throw new Error("Worker returned status: " + res.status);
             }
         } catch(e) {
-            console.warn("Telemetry Fetch Failed:", e.message);
+            const telMsg = String((e && e.message) || e || '');
+            if (!/abort|offline|failed to fetch|timeout/i.test(telMsg)) {
+                console.warn("Telemetry Fetch Failed:", e.message);
+            }
             
             if(stat5m && stat5m.textContent === '--') stat5m.textContent = "Wait";
             if(stat30m && stat30m.textContent === '--') stat30m.textContent = "Wait";
@@ -4191,7 +4370,7 @@ const Admin = {
             </div>`,
 
     exportTelemetry: async () => {
-        if (typeof showToast === 'function') showToast("Generating Snapshot...", "info", 2000);
+        if (typeof showToast === 'function') showToast('Preparing the image...', 'info', 2000);
         
         if (typeof html2canvas === 'undefined') {
             try {
@@ -4203,7 +4382,7 @@ const Admin = {
                     document.head.appendChild(script);
                 });
             } catch(e) {
-                if (typeof showToast === 'function') showToast("Failed to load snapshot engine.", "error");
+                if (typeof showToast === 'function') showToast('Could not prepare the image.', 'error');
                 return;
             }
         }
@@ -4353,7 +4532,7 @@ const Admin = {
 
     // GROWTH SPRINT PHASE 6: Dynamic 7-Day Chart Snapshot Engine (SVG Clone Method)
     exportTrendGraph: async () => {
-        if (typeof showToast === 'function') showToast("Generating Chart Snapshot...", "info", 2000);
+        if (typeof showToast === 'function') showToast('Preparing the chart image...', 'info', 2000);
         
         if (typeof html2canvas === 'undefined') {
             try {
@@ -4365,7 +4544,7 @@ const Admin = {
                     document.head.appendChild(script);
                 });
             } catch(e) {
-                if (typeof showToast === 'function') showToast("Failed to load snapshot engine.", "error");
+                if (typeof showToast === 'function') showToast('Could not prepare the image.', 'error');
                 return;
             }
         }
@@ -4744,8 +4923,10 @@ const Admin = {
                 }
             } catch (e) { console.error('[Admin] alert rebuild failed:', e); }
             Admin.ensureGlobalStateMonitorTile();
+            Admin.ensureOperatorBriefSlot();
             Admin.initGridView(); // Ensure grid is bound if re-opened
             Admin.fetchActionRequired();
+            if (typeof Admin.armScheduledAlertPublisher === 'function') Admin.armScheduledAlertPublisher();
             return;
         }
         Admin._modulesRendered = true;
@@ -4779,6 +4960,7 @@ const Admin = {
         runAdminSetup('rideShare', () => Admin.setupRideShareManager());
         runAdminSetup('moderation', () => Admin.setupModerationQueueManager());
         runAdminSetup('userTrust', () => Admin.setupUserTrustManager());
+        runAdminSetup('accountDeletions', () => Admin.setupAccountDeletionsManager());
         runAdminSetup('deadEnds', () => Admin.setupDeadEndsManager());
         runAdminSetup('crashes', () => Admin.setupCrashReportsManager());
         runAdminSetup('serviceAlerts', () => Admin.setupServiceAlertsManager());
@@ -4795,6 +4977,7 @@ const Admin = {
 
         // Stub Global State Monitor before grid packs tiles (fetch fills body async)
         Admin.ensureGlobalStateMonitorTile();
+        Admin.ensureOperatorBriefSlot();
 
         // GROWTH SPRINT PHASE 5: Transform Dev Hub into native Grid / Drill-Down Dashboard
         Admin.initGridView();
@@ -4831,6 +5014,564 @@ const Admin = {
     },
 
 
+    ensureOperatorBriefSlot: () => {
+        const adminContainer = document.getElementById('admin-modules-container');
+        const api = window.ntOperatorBrief;
+        if (!adminContainer || !api?.briefLauncherHtml) return;
+        let slot = document.getElementById('operator-brief-slot');
+        if (!slot) {
+            slot = document.createElement('div');
+            slot.id = 'operator-brief-slot';
+            slot.className = 'mb-4';
+        }
+        slot.style.gridColumn = '1 / -1';
+        if (adminContainer.firstElementChild !== slot) {
+            adminContainer.insertBefore(slot, adminContainer.firstChild);
+        }
+        const hidden = api.briefDismissed(typeof safeStorage !== 'undefined' ? safeStorage : null);
+        slot.innerHTML = api.briefLauncherHtml({
+            hidden,
+            clock: api.johannesburgClock(Date.now()),
+        });
+        slot.querySelector('#operator-brief-open')?.addEventListener('click', () => Admin.openOperatorBrief());
+        slot.querySelector('#operator-brief-dismiss')?.addEventListener('click', (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            api.dismissBrief(typeof safeStorage !== 'undefined' ? safeStorage : null);
+            Admin.ensureOperatorBriefSlot();
+        });
+        slot.querySelector('#operator-brief-restore')?.addEventListener('click', () => {
+            api.restoreBrief(typeof safeStorage !== 'undefined' ? safeStorage : null);
+            Admin.ensureOperatorBriefSlot();
+            Admin.openOperatorBrief();
+        });
+    },
+
+    ensureBriefOverlay: () => {
+        let overlay = document.getElementById('operator-brief-overlay');
+        if (!overlay) {
+            overlay = document.createElement('div');
+            overlay.id = 'operator-brief-overlay';
+            overlay.className = 'fixed inset-0 z-[150] hidden overflow-y-auto';
+            document.body.appendChild(overlay);
+        }
+        return overlay;
+    },
+
+    fetchBriefNode: async (path, limit) => {
+        const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
+        const secret = await Admin.getAuthKey();
+        const auth = secret ? `&auth=${encodeURIComponent(secret)}` : '';
+        const limited = `${dynamicEndpoint}${path}.json?orderBy=%22%24key%22&limitToLast=${limit}${auth}`;
+        let res = await fetch(limited).catch(() => null);
+        if (!res || !res.ok) {
+            const plainAuth = secret ? `?auth=${encodeURIComponent(secret)}` : '';
+            res = await fetch(`${dynamicEndpoint}${path}.json${plainAuth}`).catch(() => null);
+        }
+        if (!res || !res.ok) return {};
+        const data = await res.json().catch(() => ({}));
+        return data && typeof data === 'object' ? data : {};
+    },
+
+    liveBriefDisruptions: (data) => {
+        const now = Date.now();
+        const out = [];
+        if (!data || typeof data !== 'object') return out;
+        Object.entries(data).forEach(([rId, routeNode]) => {
+            if (!routeNode || typeof routeNode !== 'object') return;
+            const route = (typeof ROUTES !== 'undefined' && ROUTES[rId]) || null;
+            const routeName = route
+                ? (Admin.formatRouteLabelPlain ? Admin.formatRouteLabelPlain(route.name) : String(route.name || rId))
+                : rId;
+            Object.values(routeNode).forEach((item) => {
+                if (!item || typeof item !== 'object') return;
+                if (item.expiresAt && Number(item.expiresAt) < now) return;
+                const stretch = Array.isArray(item.stations) && item.stations.length
+                    ? item.stations.join(' - ').replace(/ STATION/g, '')
+                    : 'the whole route';
+                out.push({
+                    region: route?.region || '',
+                    route: routeName,
+                    stretch,
+                    tier: item.tier === 'CRITICAL' ? 'CRITICAL' : '',
+                });
+            });
+        });
+        return out.slice(0, 8);
+    },
+
+    gatherOperatorBrief: async () => {
+        const api = window.ntOperatorBrief;
+        const dynamicBase = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
+        const [trips, pairs, users, fails, fares, crashes, featuresRes, sheetRes, disruptions] = await Promise.all([
+            Admin.fetchBriefNode('sys_logs/trip_plans', 40).catch(() => ({})),
+            (async () => {
+                const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
+                const secret = await Admin.getAuthKey();
+                const auth = secret ? `?auth=${encodeURIComponent(secret)}` : '';
+                const res = await fetch(`${dynamicEndpoint}sys_logs/trip_plan_pairs.json${auth}`).catch(() => null);
+                if (!res || !res.ok) return {};
+                const data = await res.json().catch(() => ({}));
+                return data && typeof data === 'object' ? data : {};
+            })(),
+            (async () => {
+                const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
+                const secret = await Admin.getAuthKey();
+                const auth = secret ? `&auth=${encodeURIComponent(secret)}` : '';
+                const res = await fetch(`${dynamicEndpoint}sys_logs/trip_plan_users.json?shallow=true${auth}`).catch(() => null);
+                if (!res || !res.ok) return 0;
+                const data = await res.json().catch(() => ({}));
+                return data && typeof data === 'object' ? Object.keys(data).length : 0;
+            })(),
+            Admin.fetchBriefNode('sys_logs/routing_fails', 80).catch(() => ({})),
+            Admin.fetchBriefNode('sys_logs/fare_votes', 80).catch(() => ({})),
+            Admin.fetchBriefNode('sys_logs/crashes', 20).catch(() => ({})),
+            fetch(`${dynamicBase}config/features.json`).catch(() => null),
+            fetch(`${dynamicBase}config/schedule_override.json`).catch(() => null),
+            (async () => {
+                const secret = await Admin.getAuthKey();
+                const auth = secret ? `?auth=${encodeURIComponent(secret)}` : '';
+                const res = await fetch(`${dynamicBase}disruptions.json${auth}`).catch(() => null);
+                if (!res || !res.ok) return [];
+                const data = await res.json().catch(() => null);
+                return Admin.liveBriefDisruptions(data);
+            })(),
+        ]);
+        const tripRows = [];
+        Object.values(trips || {}).forEach((batch) => {
+            const flushed = Number(batch?.flushedAt || 0);
+            (batch?.trips || []).forEach((trip) => {
+                const stamped = Number(trip?.timestamp || trip?.at || 0);
+                tripRows.push(stamped ? trip : { ...trip, timestamp: flushed || undefined });
+            });
+        });
+        const crashRows = Object.entries(crashes || {}).map(([id, row]) => ({ id, ...(row || {}) }));
+        Admin._briefCrashes = Object.fromEntries(crashRows.map((row) => [row.id, row]));
+        let features = {};
+        let scheduleOverride = {};
+        try { if (featuresRes && featuresRes.ok) features = await featuresRes.json(); } catch { /* optional */ }
+        try { if (sheetRes && sheetRes.ok) scheduleOverride = await sheetRes.json(); } catch { /* optional */ }
+        return api.buildOperatorBrief({
+            now: Date.now(),
+            appVersion: typeof APP_VERSION !== 'undefined' ? APP_VERSION : '',
+            trips: tripRows,
+            pairs,
+            usersEver: users,
+            fails,
+            fares,
+            crashes: crashRows,
+            features,
+            scheduleOverride,
+            expiring: Admin._gsmItems || [],
+            disruptions,
+        });
+    },
+
+    paintBriefNote: (text) => {
+        const note = document.getElementById('operator-brief-note');
+        if (note) note.textContent = text || '';
+    },
+
+    askBriefWriter: async (kind, body) => {
+        const secret = await Admin.getAuthKey();
+        if (!secret) throw new Error('Sign in as an operator first.');
+        const res = await fetch(`${Admin.replyWorkerUrl()}/brief`, {
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${secret}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(body),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (res.status === 404) {
+            const missing = new Error('The written note is not available.');
+            missing.localBrief = true;
+            throw missing;
+        }
+        if (!res.ok) throw new Error(data.error || 'Could not write the brief.');
+        return String(data.text || '');
+    },
+
+    openBriefAlert: (index) => {
+        const card = (Admin._briefCards || [])[index];
+        const api = window.ntOperatorBrief;
+        if (!card || !api?.alertDraftFromBriefCard) return;
+        const draft = api.alertDraftFromBriefCard(card);
+        let sheet = document.getElementById('operator-brief-alert-sheet');
+        if (!sheet) {
+            sheet = document.createElement('div');
+            sheet.id = 'operator-brief-alert-sheet';
+            sheet.className = 'fixed inset-0 z-[320] hidden bg-black/50 flex items-end justify-center';
+            sheet.innerHTML = `
+                <form id="operator-brief-alert-form" class="w-full max-w-lg rounded-t-3xl bg-white dark:bg-gray-900 px-4 pt-4 pb-6 shadow-2xl">
+                    <p class="text-[10px] font-bold uppercase tracking-[0.16em] text-rose-600">Add to alerts</p>
+                    <h3 id="operator-brief-alert-title" class="mt-1 text-base font-semibold text-slate-900 dark:text-white"></h3>
+                    <div id="operator-brief-alert-preview" class="mt-2 max-h-40 overflow-y-auto text-sm text-slate-700 dark:text-slate-200 leading-relaxed"></div>
+                    <label class="block mt-3 text-[11px] font-bold text-slate-500" for="operator-brief-alert-target">Who sees it</label>
+                    <select id="operator-brief-alert-target" class="mt-1 w-full h-10 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-gray-950 text-sm px-2"></select>
+                    <label class="block mt-3 text-[11px] font-bold text-slate-500" for="operator-brief-alert-severity">Severity</label>
+                    <select id="operator-brief-alert-severity" class="mt-1 w-full h-10 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-gray-950 text-sm px-2">
+                        <option value="info">Info</option>
+                        <option value="warning">Warning</option>
+                        <option value="critical">Critical</option>
+                    </select>
+                    <label class="block mt-3 text-[11px] font-bold text-slate-500" for="operator-brief-alert-expiry">Expires</label>
+                    <input id="operator-brief-alert-expiry" type="datetime-local" class="mt-1 w-full h-10 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-gray-950 text-sm px-2">
+                    <div class="mt-4 flex gap-2">
+                        <button type="button" id="operator-brief-alert-cancel" class="flex-1 py-2 rounded-lg bg-slate-100 dark:bg-gray-800 text-sm font-bold">Cancel</button>
+                        <button type="submit" class="flex-1 py-2 rounded-lg bg-rose-600 text-white text-sm font-bold">Post alert</button>
+                    </div>
+                </form>`;
+            document.body.appendChild(sheet);
+            sheet.querySelector('#operator-brief-alert-cancel').onclick = () => Admin.closeBriefAlert();
+            sheet.addEventListener('click', (event) => {
+                if (event.target === sheet) Admin.closeBriefAlert();
+            });
+            sheet.querySelector('#operator-brief-alert-form').addEventListener('submit', (event) => {
+                event.preventDefault();
+                Admin.postBriefAlert();
+            });
+        }
+        Admin._briefAlertDraft = draft;
+        const title = sheet.querySelector('#operator-brief-alert-title');
+        const preview = sheet.querySelector('#operator-brief-alert-preview');
+        const target = sheet.querySelector('#operator-brief-alert-target');
+        const severity = sheet.querySelector('#operator-brief-alert-severity');
+        const expiry = sheet.querySelector('#operator-brief-alert-expiry');
+        if (title) title.textContent = draft.title || 'Alert';
+        if (preview) preview.innerHTML = draft.message || '';
+        if (target) {
+            const chips = Admin.ALERT_SCOPE_CHIPS || [];
+            target.innerHTML = chips.map((chip) => `<option value="${chip.value}">${chip.label}</option>`).join('');
+            if (draft.target && !chips.some((chip) => chip.value === draft.target)) {
+                target.insertAdjacentHTML('beforeend', `<option value="${draft.target}">${Admin.alertTargetLabel(draft.target)}</option>`);
+            }
+            target.value = draft.target || 'all';
+        }
+        if (severity) severity.value = draft.severity || 'info';
+        if (expiry) expiry.value = Admin.endOfTodayLocalValue();
+        sheet.classList.remove('hidden');
+        Admin.rememberBriefLayer('#brief-alert');
+    },
+
+    rememberBriefLayer: (hash) => {
+        try {
+            if ((location.hash || '') === hash) return;
+            history.pushState({ brief: hash }, '', hash);
+        } catch { /* ignore */ }
+    },
+
+    onBriefPopState: () => {
+        const sheet = document.getElementById('operator-brief-alert-sheet');
+        if (sheet && !sheet.classList.contains('hidden')) {
+            sheet.classList.add('hidden');
+            return true;
+        }
+        const overlay = document.getElementById('operator-brief-overlay');
+        if (overlay && !overlay.classList.contains('hidden')) {
+            overlay.classList.add('hidden');
+            return true;
+        }
+        return false;
+    },
+
+    closeBriefAlert: () => {
+        if ((location.hash || '') === '#brief-alert') {
+            history.back();
+            return;
+        }
+        document.getElementById('operator-brief-alert-sheet')?.classList.add('hidden');
+    },
+
+    closeOperatorBrief: () => {
+        const hash = location.hash || '';
+        if (hash === '#brief' || hash === '#brief-alert') {
+            history.back();
+            return;
+        }
+        document.getElementById('operator-brief-overlay')?.classList.add('hidden');
+        document.getElementById('operator-brief-card-menu')?.classList.add('hidden');
+    },
+
+    postBriefAlert: async () => {
+        const draft = Admin._briefAlertDraft;
+        const sheet = document.getElementById('operator-brief-alert-sheet');
+        if (!draft?.message) return;
+        const target = document.getElementById('operator-brief-alert-target')?.value || draft.target || 'all';
+        const severity = document.getElementById('operator-brief-alert-severity')?.value || 'info';
+        const expiryRaw = document.getElementById('operator-brief-alert-expiry')?.value || '';
+        const expiresAt = expiryRaw ? new Date(expiryRaw).getTime() : NaN;
+        if (!Number.isFinite(expiresAt) || expiresAt <= Date.now()) {
+            if (typeof showToast === 'function') showToast('Pick an expiry that is still ahead.', 'error');
+            return;
+        }
+        const secret = await Admin.getAuthKey();
+        if (!secret) {
+            if (typeof showToast === 'function') showToast('Sign in as an operator first.', 'error');
+            return;
+        }
+        const signoff = 'Next Train Ops';
+        const message = /<span[^>]*>.*?<\/span>\s*$/i.test(draft.message)
+            ? draft.message
+            : `${draft.message}<br><br><span class="opacity-75 text-[10px] uppercase font-bold tracking-wider">- ${signoff}</span>`;
+        const nowTs = Date.now();
+        const payload = {
+            id: String(nowTs),
+            title: draft.title || '',
+            message,
+            authorName: signoff,
+            forcePopup: false,
+            pinned: false,
+            pinnedAt: null,
+            expiresAt,
+            severity,
+            imageUrls: [],
+            imageUrl: null,
+            ctaUrl: null,
+            ctaText: null,
+            sourceName: null,
+            sourceUrl: null,
+            postedAt: nowTs,
+            poll: { active: false },
+        };
+        try {
+            await Admin.publishNoticeToTarget(target, payload, secret);
+            Admin.closeBriefAlert();
+            if (typeof showToast === 'function') showToast(`Alert posted to ${Admin.alertTargetLabel(target)}.`, 'success');
+            if (typeof checkServiceAlerts === 'function') checkServiceAlerts();
+        } catch (err) {
+            if (typeof showToast === 'function') showToast(err?.message || 'Could not post that alert.', 'error');
+        }
+    },
+
+    briefCardPlainText: (card) => {
+        if (!card) return '';
+        const lines = [];
+        card.querySelectorAll('p, h3, dt, dd').forEach((el) => {
+            if (el.closest('button')) return;
+            const text = String(el.textContent || '').replace(/\s+/g, ' ').trim();
+            if (text) lines.push(text);
+        });
+        return lines.join('\n');
+    },
+
+    copyBriefText: async (text) => {
+        const value = String(text || '');
+        if (!value) return false;
+        try {
+            if (navigator.clipboard?.writeText) {
+                await navigator.clipboard.writeText(value);
+                return true;
+            }
+        } catch { /* fall through */ }
+        try {
+            const area = document.createElement('textarea');
+            area.value = value;
+            area.setAttribute('readonly', '');
+            area.style.position = 'fixed';
+            area.style.left = '-9999px';
+            document.body.appendChild(area);
+            area.select();
+            const copied = document.execCommand('copy');
+            area.remove();
+            return !!copied;
+        } catch {
+            return false;
+        }
+    },
+
+    openBriefCardMenu: (card, x, y) => {
+        const text = Admin.briefCardPlainText(card);
+        if (!text) return;
+        Admin._briefCopyText = text;
+        let menu = document.getElementById('operator-brief-card-menu');
+        if (!menu) {
+            menu = document.createElement('div');
+            menu.id = 'operator-brief-card-menu';
+            menu.className = 'fixed z-[400] hidden';
+            document.body.appendChild(menu);
+            menu.addEventListener('click', async (event) => {
+                const copy = event.target.closest?.('[data-brief-copy]');
+                if (!copy) return;
+                event.preventDefault();
+                event.stopPropagation();
+                const value = Admin._briefCopyText || '';
+                menu.classList.add('hidden');
+                const copied = await Admin.copyBriefText(value);
+                if (typeof showToast === 'function') {
+                    showToast(copied ? 'Copied' : 'Could not copy that card.', copied ? 'success' : 'error');
+                }
+            });
+            document.addEventListener('pointerdown', (event) => {
+                if (!menu || menu.classList.contains('hidden') || menu.contains(event.target)) return;
+                menu.classList.add('hidden');
+            }, true);
+        }
+        menu.innerHTML = '<div class="min-w-[9.5rem] rounded-2xl bg-white dark:bg-gray-900 text-slate-900 dark:text-white shadow-2xl border border-slate-200 dark:border-slate-700 overflow-hidden"><button type="button" data-brief-copy class="block w-full text-left px-4 py-3 text-sm font-semibold focus:outline-none">Copy</button></div>';
+        menu.classList.remove('hidden');
+        const width = 160;
+        const height = 52;
+        const pad = 8;
+        const left = Math.max(pad, Math.min((Number(x) || 0) - 20, window.innerWidth - width - pad));
+        const top = Math.max(pad, Math.min((Number(y) || 0) - height - 6, window.innerHeight - height - pad));
+        menu.style.left = `${left}px`;
+        menu.style.top = `${top}px`;
+    },
+
+    bindBriefCardHold: (overlay) => {
+        if (!overlay || overlay.dataset.briefHoldBound === '1') return;
+        overlay.dataset.briefHoldBound = '1';
+        let holdTimer = null;
+        let holdCard = null;
+        let holdFired = false;
+        let holdX = 0;
+        let holdY = 0;
+        const clearHold = () => {
+            if (holdTimer) clearTimeout(holdTimer);
+            holdTimer = null;
+            holdCard = null;
+        };
+        overlay.addEventListener('pointerdown', (event) => {
+            if (event.pointerType === 'mouse' && event.button !== 0) return;
+            if (event.target.closest?.('button, summary, a, input, select, #operator-brief-card-menu')) return;
+            const card = event.target.closest?.('[data-brief-card]');
+            if (!card || !overlay.contains(card)) return;
+            holdFired = false;
+            holdCard = card;
+            holdX = event.clientX;
+            holdY = event.clientY;
+            clearTimeout(holdTimer);
+            holdTimer = setTimeout(() => {
+                holdFired = true;
+                holdTimer = null;
+                if (holdCard) Admin.openBriefCardMenu(holdCard, holdX, holdY);
+                holdCard = null;
+            }, 400);
+        });
+        overlay.addEventListener('pointermove', (event) => {
+            if (!holdCard) return;
+            if (Math.hypot(event.clientX - holdX, event.clientY - holdY) > 10) clearHold();
+        });
+        overlay.addEventListener('pointerup', clearHold);
+        overlay.addEventListener('pointercancel', clearHold);
+        overlay.addEventListener('contextmenu', (event) => {
+            const card = event.target.closest?.('[data-brief-card]');
+            if (!card || event.target.closest?.('button, summary, a, input, select')) return;
+            event.preventDefault();
+            clearHold();
+            Admin.openBriefCardMenu(card, event.clientX, event.clientY);
+        });
+        overlay.addEventListener('click', (event) => {
+            if (!holdFired) return;
+            event.preventDefault();
+            event.stopPropagation();
+            if (typeof event.stopImmediatePropagation === 'function') event.stopImmediatePropagation();
+            holdFired = false;
+        }, true);
+    },
+
+    openOperatorBrief: async () => {
+        const api = window.ntOperatorBrief;
+        if (!api?.buildOperatorBrief || !api.briefReportHtml) {
+            if (typeof showToast === 'function') showToast('The brief is not loaded.', 'error');
+            return;
+        }
+        const overlay = Admin.ensureBriefOverlay();
+        const sky = api.briefSky?.(api.johannesburgClock?.(Date.now())?.hour) || { background: '#e5f5ff', ink: '#0b2744', muted: '#0b2744' };
+        overlay.classList.remove('hidden');
+        Admin.rememberBriefLayer('#brief');
+        overlay.innerHTML = `<div class="min-h-full px-4 pt-8" style="background: ${sky.background}; color: ${sky.ink};"><div class="max-w-lg mx-auto px-1 py-4"><p class="text-[11px] font-bold uppercase tracking-[0.18em]" style="color: ${sky.muted}">Brief</p><p id="operator-brief-note" class="mt-2 text-lg font-semibold">Reading plans, failures, fares, crashes, and what is about to expire.</p><button type="button" id="operator-brief-close" class="mt-4 text-sm font-bold underline focus:outline-none">Close</button></div></div>`;
+        overlay.querySelector('#operator-brief-close')?.addEventListener('click', () => Admin.closeOperatorBrief());
+        try {
+            const model = await Admin.gatherOperatorBrief();
+            Admin._briefCards = model.cards || [];
+            overlay.innerHTML = api.briefReportHtml(model);
+            overlay.querySelector('#operator-brief-close')?.addEventListener('click', () => Admin.closeOperatorBrief());
+            Admin.bindBriefCardHold(overlay);
+            overlay.addEventListener('click', (event) => {
+                if (event.target.closest('button, summary, a, input, select')) return;
+                const card = event.target.closest('[data-brief-card]');
+                if (!card) return;
+                card.querySelector('[data-brief-detail]')?.classList.toggle('hidden');
+            });
+            overlay.querySelectorAll('.operator-brief-alert').forEach((button) => {
+                button.addEventListener('click', (event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    Admin.openBriefAlert(Number(button.getAttribute('data-brief-index')));
+                });
+            });
+            overlay.querySelectorAll('.operator-brief-crash').forEach((button) => {
+                button.addEventListener('click', () => Admin.explainBriefCrash(button.getAttribute('data-crash-id') || '', button));
+            });
+            try {
+                const text = await Admin.askBriefWriter('report', { kind: 'report', digest: model.digest });
+                Admin.paintBriefNote(text || api.localBriefNote?.(model) || 'The cards below are the brief.');
+            } catch {
+                Admin.paintBriefNote(api.localBriefNote?.(model) || 'The cards below are the brief.');
+            }
+        } catch (err) {
+            Admin.paintBriefNote(err?.message || 'Could not read the logs.');
+            if (typeof showToast === 'function') showToast(err?.message || 'Could not open the brief.', 'error');
+        }
+    },
+
+    explainBriefCrash: async (id, button) => {
+        const row = (Admin._briefCrashes && Admin._briefCrashes[id]) || {};
+        const note = button?.parentElement?.querySelector('.operator-brief-crash-note');
+        if (note) {
+            note.classList.remove('hidden');
+            note.textContent = 'Reading this crash.';
+        }
+        if (button) button.disabled = true;
+        try {
+            let preview = row.preview || '';
+            let stack = row.stack || row.raw || '';
+            const blobPath = row.blobPath || (id ? `sys_logs/blackbox/${id}` : '');
+            if (!stack && blobPath) {
+                const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
+                const secret = await Admin.getAuthKey();
+                const auth = secret ? `?auth=${encodeURIComponent(secret)}` : '';
+                const res = await fetch(`${dynamicEndpoint}${blobPath}.json${auth}`).catch(() => null);
+                if (res && res.ok) {
+                    const blob = await res.json().catch(() => ({}));
+                    const logs = Array.isArray(blob?.logs) ? blob.logs.slice(-30) : [];
+                    stack = logs.map((line) => (typeof line === 'string' ? line : JSON.stringify(line))).join('\n');
+                }
+            }
+            const scrub = window.ntOperatorBrief?.scrubOperatorText || ((value) => String(value || ''));
+            const text = await Admin.askBriefWriter('crash', {
+                kind: 'crash',
+                crash: {
+                    error: scrub(row.error || '', 400),
+                    preview: scrub(preview, 1200),
+                    stack: scrub(stack, 1500),
+                    appVersion: row.appVersion || '',
+                    routeId: row.routeId || '',
+                },
+            });
+            if (note) note.textContent = text || 'The reading came back empty.';
+        } catch {
+            const read = window.ntOperatorBrief?.localCrashReading;
+            if (note) {
+                note.textContent = typeof read === 'function'
+                    ? read({ error: row.error || row.preview || '', appVersion: row.appVersion || '' })
+                    : 'A reading is not available for this log yet. The line above is the crash.';
+            }
+        } finally {
+            if (button) button.disabled = false;
+        }
+    },
+
+    placeBelowBrief: (node) => {
+        const adminContainer = document.getElementById('admin-modules-container');
+        if (!adminContainer || !node) return;
+        const brief = document.getElementById('operator-brief-slot');
+        const before = (brief && brief.parentElement === adminContainer) ? brief.nextSibling : adminContainer.firstChild;
+        if (node !== before) adminContainer.insertBefore(node, before);
+    },
+
     ensureGlobalStateMonitorTile: () => {
         const adminContainer = document.getElementById('admin-modules-container');
         if (!adminContainer) return null;
@@ -4838,7 +5579,7 @@ const Admin = {
         if (!actionBanner) {
             actionBanner = document.createElement('div');
             actionBanner.id = 'action-required-panel';
-            adminContainer.insertBefore(actionBanner, adminContainer.firstChild);
+            Admin.placeBelowBrief(actionBanner);
         }
         // Match other tiles: visible overflow so grid titles/icons are never clipped
         actionBanner.className = "bg-white dark:bg-gray-800 rounded-xl shadow-md border border-gray-200 dark:border-gray-700 p-4 mb-4 relative overflow-visible transition-all duration-300";
@@ -4859,9 +5600,7 @@ const Admin = {
                 </div>
             `;
         }
-        if (adminContainer.firstElementChild !== actionBanner) {
-            adminContainer.insertBefore(actionBanner, adminContainer.firstChild);
-        }
+        Admin.placeBelowBrief(actionBanner);
         return actionBanner;
     },
 
@@ -4948,6 +5687,22 @@ const Admin = {
         return '';
     },
 
+    gsmNoticeImageSrc: (raw) => {
+        const value = String(raw || '').trim();
+        if (!value) return '';
+        const safe = typeof window.sanitizeAttachmentDisplayUrl === 'function'
+            ? window.sanitizeAttachmentDisplayUrl(value)
+            : '';
+        return safe || '';
+    },
+
+    gsmNoticeImageHtml: (raw) => {
+        const src = Admin.gsmNoticeImageSrc(raw);
+        if (!src) return '';
+        const esc = String(src).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+        return `<div class="w-full mb-2 rounded-lg overflow-hidden border border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-900"><img src="${esc}" alt="" class="w-full max-h-32 object-contain" onerror="this.parentElement.remove()"></div>`;
+    },
+
     gsmItemCardHtml: (item, now) => {
         const isPermanent = !item.expiresAt;
         const hrsLeft = isPermanent ? null : Math.max(0, Math.floor((item.expiresAt - now) / (1000 * 60 * 60)));
@@ -4973,8 +5728,8 @@ const Admin = {
                 <span class="text-sm font-black text-slate-900 dark:text-white leading-tight break-words w-full mb-2">
                     ${item.label}
                 </span>
-                ${item.imageUrl ? `<div class="w-full mb-2 rounded-lg overflow-hidden border border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-900"><img src="${String(item.imageUrl).replace(/"/g, '&quot;')}" alt="" class="w-full h-24 object-cover"></div>` : ''}
-                ${item.preview ? `<p class="text-[11px] text-gray-600 dark:text-gray-300 leading-snug break-words w-full mb-2">${String(item.preview).replace(/</g, '&lt;')}</p>` : ''}
+                ${Admin.gsmNoticeImageHtml(item.imageUrl)}
+                ${item.preview ? `<p class="text-[11px] text-gray-600 dark:text-gray-300 leading-snug break-words whitespace-pre-line w-full mb-2">${String(item.preview).replace(/</g, '&lt;')}</p>` : ''}
                 <div class="flex gap-2 pt-2.5 border-t border-gray-100 dark:border-gray-700 mt-auto w-full">
                     <button onclick="event.stopPropagation(); Admin.resolveActionRequired('${safeType}', '${safeId}', '${safeRoute}')" class="flex-1 bg-white dark:bg-gray-800 hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 dark:text-red-400 border border-slate-200 dark:border-slate-600 text-xs font-bold py-1.5 rounded-lg shadow-sm transition-colors focus:outline-none flex items-center justify-center">
                         <svg class="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg> Resolve
@@ -5085,9 +5840,7 @@ const Admin = {
             actionBanner.querySelector('#action-header-btn')?.style.setProperty('display', 'none', 'important');
             document.getElementById('action-body')?.classList.remove('hidden');
         }
-        if (adminContainer && adminContainer.firstElementChild !== actionBanner) {
-            adminContainer.insertBefore(actionBanner, adminContainer.firstChild);
-        }
+        Admin.placeBelowBrief(actionBanner);
     },
 
     fetchActionRequired: async () => {
@@ -5126,9 +5879,7 @@ const Admin = {
         } else if (actionBody) {
             actionBody.innerHTML = `<div class="animate-pulse text-xs text-center text-gray-500 py-3">Scanning for expiring entities...</div>`;
         }
-        if (adminContainer && adminContainer.firstElementChild !== actionBanner) {
-            adminContainer.insertBefore(actionBanner, adminContainer.firstChild);
-        }
+        Admin.placeBelowBrief(actionBanner);
 
         try {
             const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
@@ -5153,8 +5904,17 @@ const Admin = {
                                 if (!item.expiresAt || item.expiresAt > now) {
                                     const sev = item.severity === 'critical' ? 'Critical' : (item.severity === 'warning' ? 'Warning' : 'Info');
                                     const title = String(item.title || '').trim();
-                                    const rawBody = String(item.message || item.text || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
-                                    const img = (Array.isArray(item.imageUrls) && item.imageUrls[0]) || item.imageUrl || '';
+                                    const msgHtml = String(item.message || item.text || '');
+                                    const rawBody = msgHtml
+                                        .replace(/<br\s*\/?>/gi, '\n')
+                                        .replace(/<\/(p|div|h[1-4]|li)>/gi, '\n')
+                                        .replace(/<[^>]+>/g, ' ')
+                                        .replace(/[ \t]+\n/g, '\n')
+                                        .replace(/\n{3,}/g, '\n\n')
+                                        .replace(/[ \t]{2,}/g, ' ')
+                                        .trim();
+                                    const imgTag = msgHtml.match(/<img\b[^>]*\bsrc=["']([^"']+)["']/i);
+                                    const img = (Array.isArray(item.imageUrls) && item.imageUrls[0]) || item.imageUrl || (imgTag && imgTag[1]) || '';
                                     activeItems.push({
                                         type: 'Alert',
                                         label: title || rawBody.slice(0, 72) || `${sev} channel post`,
@@ -5675,6 +6435,9 @@ const Admin = {
             }
         }
 
+        if (requestedId === 'account-deletions-panel' && typeof Admin.setUtTab === 'function') {
+            Admin.setUtTab('deletions');
+        }
         if (panelId === 'action-required-panel') {
             const banner = document.getElementById('action-required-panel');
             if (banner && typeof Admin.renderGlobalStateMonitor === 'function') {
@@ -5708,7 +6471,7 @@ const Admin = {
         if (panelId === 'delay-reports-panel' && typeof Admin.fetchDelayReports === 'function') Admin.fetchDelayReports();
         if (panelId === 'live-share-panel' && typeof Admin.fetchRideShareLog === 'function') Admin.fetchRideShareLog();
         if (panelId === 'moderation-queue-panel' && typeof Admin.fetchModerationQueue === 'function') Admin.fetchModerationQueue();
-        if (panelId === 'user-trust-panel' && typeof Admin.fetchActiveBans === 'function') Admin.fetchActiveBans();
+        if (panelId === 'user-trust-panel' && requestedId !== 'account-deletions-panel' && typeof Admin.fetchActiveBans === 'function') Admin.fetchActiveBans();
         if (panelId === 'deadends-panel' && typeof Admin.fetchDeadEnds === 'function') {
             Admin._deSortMode = Admin._deSortMode || 'recent';
             const sortBtn = document.getElementById('de-sort-btn');
@@ -6615,11 +7378,10 @@ const Admin = {
         const container = document.getElementById('admin-modules-container');
         if (!container) return;
 
-        // Ensure Telemetry is neatly packed inside the wrapper so it grids perfectly
+        // Pack Live Telemetry into the grid under the brief. Inserting it at the
+        // first child put the tile, and its sync time, on the row above the brief.
         const telPanel = document.getElementById('telemetry-panel');
-        if (telPanel && telPanel.parentNode !== container) {
-            container.insertBefore(telPanel, container.firstElementChild);
-        }
+        if (telPanel) Admin.placeBelowBrief(telPanel);
 
         // Re-open path: grid toggle already exists — still re-engage so tiles stay tappable.
         Admin.ensureGridViewEngaged();
@@ -6654,6 +7416,11 @@ const Admin = {
                     .admin-grid-view > div[data-admin-shell="empty"],
                     .admin-grid-view > [data-admin-subview="true"] { display: none !important; height: 0 !important; margin: 0 !important; padding: 0 !important; border: 0 !important; overflow: hidden !important; pointer-events: none !important; }
                     .admin-grid-view > div:not(.hidden):not(:empty):not([data-admin-shell="empty"]):not([data-admin-subview="true"]) { margin-bottom: 0 !important; cursor: pointer; transition: transform 0.2s, box-shadow 0.2s; height: 110px; display: flex; flex-direction: column; justify-content: center; position: relative; overflow: visible !important; }
+                    .admin-grid-view > #operator-brief-slot { height: auto !important; grid-column: 1 / -1; cursor: default; display: block !important; justify-content: flex-start; overflow: visible !important; }
+                    .admin-grid-view > #operator-brief-slot:hover { transform: none; box-shadow: none; border-color: transparent; }
+                    .admin-grid-view > #telemetry-panel { overflow: hidden !important; }
+                    .admin-grid-view > #telemetry-panel [id$="-header-btn"] { overflow: hidden; }
+                    .admin-grid-view > #telemetry-panel #telemetry-last-sync { display: none !important; }
                     .admin-grid-view > div:not(.hidden):not(:empty):not([data-admin-shell="empty"]):not([data-admin-subview="true"]):hover { transform: scale(1.02); box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); border-color: #3b82f6; }
                     .admin-grid-view > div [id$="-body"] { display: none !important; }
                     .admin-grid-view > div [id$="-header-btn"] { flex-direction: column; justify-content: center; height: 100%; align-items: center; text-align: center; margin-bottom: 0 !important; position: relative; overflow: visible; }
@@ -6834,7 +7601,7 @@ const Admin = {
                 }
                 
                 const card = e.target.closest('.admin-grid-view > div');
-                if (!card) return;
+                if (!card || card.id === 'operator-brief-slot') return;
                 
                 // Trigger Drill Down (push a history entry so Back can return to the grid)
                 Admin._drillStack = [card.id];
@@ -7200,6 +7967,48 @@ const Admin = {
             await Admin.fetchDeadEnds();
         };
 
+        Admin.reclassifyPlannerFare = async (vote, patchIn = {}) => {
+            const secret = await Admin.getAuthKey();
+            if (!secret) throw new Error('Not signed in');
+            const item = vote && typeof vote === 'object' ? vote : {};
+            const id = String(item.id || '').trim();
+            if (!id) throw new Error('Missing fare vote');
+            const ticketType = String(patchIn.ticketType || item.ticketType || 'single').toLowerCase();
+            const allowedTypes = new Set(['single', 'return', 'weekly_mon_fri', 'weekly_mon_sat', 'monthly']);
+            if (!allowedTypes.has(ticketType)) throw new Error('Unknown ticket type');
+            const isOffPeak = patchIn.isOffPeak != null ? !!patchIn.isOffPeak : !!item.isOffPeak;
+            let agree = patchIn.agree != null ? !!patchIn.agree : !!item.agree;
+            // Reclassifying a mistaken Single correction to another ticket type means the
+            // board Single quote was fine — count it as correct unless admin overrides.
+            if (patchIn.agree == null
+                && item.agree === false
+                && String(item.ticketType || 'single').toLowerCase() === 'single'
+                && ticketType !== 'single') {
+                agree = true;
+            }
+            const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
+            const patch = {
+                ticketType,
+                isOffPeak,
+                agree,
+                reclassifiedAt: Date.now(),
+                reclassifiedBy: Admin.currentUser?.email || Admin.currentUser?.uid || 'Admin',
+            };
+            const res = await fetch(`${dynamicEndpoint}sys_logs/fare_votes/${encodeURIComponent(id)}.json?auth=${secret}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(patch),
+            });
+            if (!res.ok) throw new Error(`Reclassify failed (${res.status})`);
+            if (Admin._cachedFareVotes && Admin._cachedFareVotes[id]) {
+                Admin._cachedFareVotes[id] = { ...Admin._cachedFareVotes[id], ...patch };
+            }
+            if (typeof showToast === 'function') {
+                showToast(agree ? 'Classification saved · quote marked correct' : 'Classification saved', 'success');
+            }
+            await Admin.fetchDeadEnds();
+        };
+
         Admin.refutePlannerFare = async (vote) => {
             const secret = await Admin.getAuthKey();
             if (!secret) throw new Error('Not signed in');
@@ -7416,6 +8225,17 @@ const Admin = {
                         });
                     };
                     listDiv.innerHTML = '';
+                    const fareChecks = Object.values(Admin._cachedFareVotes || {}).filter((row) => typeof row?.agree === 'boolean');
+                    const fareMatches = fareChecks.filter((row) => row.agree === true).length;
+                    const fareAccuracy = document.createElement('div');
+                    fareAccuracy.className = 'mb-2 px-3 py-2.5 rounded-xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700';
+                    if (!fareChecks.length) {
+                        fareAccuracy.innerHTML = '<p class="text-[11px] font-bold text-gray-500 dark:text-gray-400">No fare checks yet.</p>';
+                    } else {
+                        const pct = Math.round((fareMatches / fareChecks.length) * 100);
+                        fareAccuracy.innerHTML = `<p class="text-[10px] font-black uppercase tracking-widest text-gray-400">Fare quote accuracy</p><p class="text-lg font-black text-gray-900 dark:text-white tabular-nums">${pct}%</p><p class="text-[11px] text-gray-500 dark:text-gray-400">${fareMatches} of ${fareChecks.length} checks said the quote was right.</p>`;
+                    }
+                    listDiv.appendChild(fareAccuracy);
                     Admin.paintConfirmedCorridorFares(listDiv, liveRouteFares);
                     const fareDeviceFilter = String(Admin._deFareDeviceFilter || '').trim();
                     if (fareDeviceFilter) {
@@ -7503,6 +8323,29 @@ const Admin = {
                         const typeWarn = item.agree === false && ticketTypeKey !== 'single'
                             ? `<p class="mt-1 text-[10px] leading-snug text-amber-800 dark:text-amber-200 bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-800 rounded-md px-2 py-1">Collect-only for now. Do not Approve weekly/monthly into Single live fares. Peak/off-peak on this card is the board they viewed, not the ticket period.</p>`
                             : '';
+                        const reclassHtml = item.review !== 'refuted' ? `
+                            <div class="de-fare-reclass mt-2 pt-2 border-t border-gray-100 dark:border-gray-800 space-y-1.5" onclick="event.stopPropagation()">
+                                <p class="text-[9px] font-black uppercase tracking-wider text-gray-400">Reclassify correction</p>
+                                <div class="flex flex-wrap gap-1.5 items-center">
+                                    <select class="de-fare-type h-8 px-1.5 rounded-md bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-[10px] text-gray-900 dark:text-white outline-none">
+                                        <option value="single" ${ticketTypeKey === 'single' ? 'selected' : ''}>Single</option>
+                                        <option value="return" ${ticketTypeKey === 'return' ? 'selected' : ''}>Return</option>
+                                        <option value="weekly_mon_fri" ${ticketTypeKey === 'weekly_mon_fri' ? 'selected' : ''}>Weekly Mon-Fri</option>
+                                        <option value="weekly_mon_sat" ${ticketTypeKey === 'weekly_mon_sat' ? 'selected' : ''}>Weekly Mon-Sat</option>
+                                        <option value="monthly" ${ticketTypeKey === 'monthly' ? 'selected' : ''}>Monthly</option>
+                                    </select>
+                                    <select class="de-fare-peak h-8 px-1.5 rounded-md bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-[10px] text-gray-900 dark:text-white outline-none">
+                                        <option value="peak" ${item.isOffPeak ? '' : 'selected'}>Peak</option>
+                                        <option value="off" ${item.isOffPeak ? 'selected' : ''}>Off-peak</option>
+                                    </select>
+                                    <label class="inline-flex items-center gap-1 text-[10px] text-gray-600 dark:text-gray-300">
+                                        <input type="checkbox" class="de-fare-agree rounded border-gray-300 text-emerald-600 focus:ring-emerald-500" ${item.agree ? 'checked' : ''}>
+                                        Quote correct
+                                    </label>
+                                    <button type="button" class="de-fare-reclass-save text-[9px] font-black uppercase tracking-wider text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-900/30 border border-indigo-200 dark:border-indigo-800 px-2.5 py-1.5 rounded focus:outline-none">Save</button>
+                                </div>
+                            </div>
+                        ` : '';
                         card.innerHTML = `
                             <div class="de-fare-card-btn p-3 flex items-start justify-between gap-2">
                                 <div class="min-w-0 flex-1">
@@ -7520,6 +8363,7 @@ const Admin = {
                                     ${peakHint}
                                     ${typeWarn}
                                     ${ticketHtml}
+                                    ${reclassHtml}
                                 </div>
                                 ${(canApprove && !isLive) || canRefute ? `<div class="shrink-0 flex flex-col gap-1.5">
                                     ${canApprove && !isLive ? `<button type="button" class="de-fare-approve text-emerald-700 dark:text-emerald-400 hover:text-white hover:bg-emerald-600 text-[9px] font-black bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 px-3 py-1.5 rounded transition-colors focus:outline-none uppercase tracking-widest shadow-sm">Approve ${secureEscape(reported)}</button>` : ''}
@@ -7546,8 +8390,24 @@ const Admin = {
                                 if (typeof showToast === 'function') showToast(e.message || 'Refute failed', 'error');
                             }
                         });
+                        card.querySelector('.de-fare-reclass-save')?.addEventListener('click', async (ev) => {
+                            ev.stopPropagation();
+                            try {
+                                const typeEl = card.querySelector('.de-fare-type');
+                                const peakEl = card.querySelector('.de-fare-peak');
+                                const agreeEl = card.querySelector('.de-fare-agree');
+                                await Admin.reclassifyPlannerFare(item, {
+                                    ticketType: typeEl?.value || 'single',
+                                    isOffPeak: peakEl?.value === 'off',
+                                    agree: !!agreeEl?.checked,
+                                });
+                            } catch (e) {
+                                console.error('Reclassify planner fare failed', e);
+                                if (typeof showToast === 'function') showToast(e.message || 'Reclassify failed', 'error');
+                            }
+                        });
                         card.addEventListener('click', (ev) => {
-                            if (ev.target.closest('.de-fare-approve, .de-fare-refute, .de-fare-ticket, [data-alert-lightbox], a, button.de-fare-approve')) return;
+                            if (ev.target.closest('.de-fare-approve, .de-fare-refute, .de-fare-reclass, .de-fare-ticket, [data-alert-lightbox], a, button.de-fare-approve')) return;
                             const panel = card.querySelector('.de-fare-contributors');
                             if (!panel) return;
                             const open = panel.classList.toggle('hidden') === false;
@@ -7897,7 +8757,21 @@ const Admin = {
             const esc = Admin.secureDeEscape;
             panel.innerHTML = `
                 <p class="text-[9px] font-black uppercase tracking-wider text-gray-400 pt-2 mb-1">Hit history${hits.length > cap ? ` (latest ${cap} of ${hits.length})` : ''}</p>
-                ${slice.map((h) => Admin.stackedContributorRowHtml(h.userId, `${Admin.formatDate(h.timestamp)} · dep ${esc(h.depTime || '-')}`)).join('') || '<p class="text-[10px] text-gray-400 italic">No hit details.</p>'}
+                ${slice.map((h) => {
+                    const ver = String(h.appVersion || '').split(' - ')[0].trim();
+                    const station = String(h.station || '').trim();
+                    const auto = h.stationAutoLocated === true || h.stationAutoLocated === '1' || h.stationAutoLocated === 1;
+                    const verBtn = /^V\d+_/i.test(ver)
+                        ? ` · <button type="button" class="fb-version-chip font-mono underline decoration-dotted underline-offset-2 focus:outline-none" data-admin-changelog="${esc(ver)}" data-cl-route="" data-cl-station="${esc(station)}" data-cl-auto="${auto ? '1' : '0'}">${esc(ver)}</button>`
+                        : (ver ? ` · ${esc(ver)}` : '');
+                    const stationBit = station
+                        ? ` · ${esc(station)}${auto ? ' (auto)' : ' (manual)'}`
+                        : '';
+                    return Admin.stackedContributorRowHtml(
+                        h.userId,
+                        `${Admin.formatDate(h.timestamp)} · dep ${esc(h.depTime || '-')}${stationBit}${verBtn}`,
+                    );
+                }).join('') || '<p class="text-[10px] text-gray-400 italic">No hit details.</p>'}
             `;
         };
 
@@ -8296,7 +9170,7 @@ const Admin = {
                 const data = Admin._cachedTripPlans;
                 if (Admin._deActiveTab !== 'trips') return;
                 if (!data) {
-                    listDiv.innerHTML = '<div class="text-xs text-gray-500 italic text-center py-4">No batched trip plans yet.<br><span class="text-[9px]">Clients flush every 10 successful plans.</span></div>';
+                    listDiv.innerHTML = '<div class="text-xs text-gray-500 italic text-center py-4">No batched trip plans yet.<br><span class="text-[9px]">Clients flush every 5 successful plans.</span></div>';
                     return;
                 }
 
@@ -8390,7 +9264,7 @@ const Admin = {
                     return;
                 }
                 rows.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
-                const headers = ['timestamp', 'region', 'userId', 'authUid', 'dayType', 'origin', 'destination', 'depTime', 'arrTime', 'transfers', 'appVersion', 'batchId'];
+                const headers = ['timestamp', 'region', 'userId', 'authUid', 'dayType', 'origin', 'destination', 'depTime', 'arrTime', 'transfers', 'appVersion', 'station', 'stationAutoLocated', 'batchId'];
                 if (format === 'csv') {
                     const esc = (v) => {
                         const s = String(v ?? '');
@@ -8425,7 +9299,7 @@ const Admin = {
                 }
                 entries.sort((a, b) => (Number(b.at) || 0) - (Number(a.at) || 0));
                 const photos = Admin._cachedFareTicketPhotos || {};
-                const headers = ['at', 'origin', 'destination', 'quotedPrice', 'reportedPrice', 'agree', 'ticketType', 'quotedTicketType', 'isOffPeak', 'dayType', 'depTime', 'profile', 'km', 'crowKm', 'smoothKm', 'abKm', 'zone', 'region', 'deviceId', 'authUid', 'appVersion', 'routeIds', 'ticketUrl', 'id'];
+                const headers = ['at', 'origin', 'destination', 'quotedPrice', 'reportedPrice', 'agree', 'ticketType', 'quotedTicketType', 'isOffPeak', 'dayType', 'depTime', 'profile', 'km', 'crowKm', 'smoothKm', 'abKm', 'zone', 'region', 'deviceId', 'authUid', 'appVersion', 'station', 'stationAutoLocated', 'routeIds', 'ticketUrl', 'id'];
                 const cell = (r, h) => {
                     if (h === 'at') return Admin.formatDate(r.at);
                     if (h === 'routeIds') return Array.isArray(r.routeIds) ? r.routeIds.join('|') : (r.routeIds || '');
@@ -8469,7 +9343,7 @@ const Admin = {
                 return;
             }
             entries.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
-            const headers = ['timestamp', 'region', 'userId', 'deviceId', 'dayType', 'origin', 'destination', 'reason', 'timeOfDay', 'appVersion', 'id'];
+            const headers = ['timestamp', 'region', 'userId', 'deviceId', 'dayType', 'origin', 'destination', 'reason', 'timeOfDay', 'appVersion', 'station', 'stationAutoLocated', 'id'];
             if (format === 'csv') {
                 const esc = (v) => {
                     const s = String(v ?? '');
@@ -8590,11 +9464,23 @@ const Admin = {
                     <button id="fb-refresh-btn" onclick="event.stopPropagation()" class="flex-1 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-800 border border-blue-200 dark:border-blue-800 rounded-lg px-3 py-2.5 text-xs font-bold transition-colors shadow-sm focus:outline-none flex items-center justify-center gap-1.5">
                         ${Admin.icon('refresh', 'w-3.5 h-3.5')} Refresh
                     </button>
-                    <div id="fb-filter-menu" class="hidden absolute left-0 top-full mt-1 z-50 w-max min-w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-xl p-2 space-y-1">
-                        <label class="flex items-center gap-2 px-2 py-2 rounded-lg text-xs font-bold text-gray-800 dark:text-gray-100 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 whitespace-nowrap"><input type="checkbox" data-fb-filter="email" class="rounded border-gray-300 text-violet-600 focus:ring-violet-500"> Email</label>
-                        <label class="flex items-center gap-2 px-2 py-2 rounded-lg text-xs font-bold text-gray-800 dark:text-gray-100 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 whitespace-nowrap"><input type="checkbox" data-fb-filter="whatsapp" class="rounded border-gray-300 text-violet-600 focus:ring-violet-500"> WhatsApp number</label>
-                        <label class="flex items-center gap-2 px-2 py-2 rounded-lg text-xs font-bold text-gray-800 dark:text-gray-100 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 whitespace-nowrap"><input type="checkbox" data-fb-filter="attachments" class="rounded border-gray-300 text-violet-600 focus:ring-violet-500"> Attachments</label>
-                        <label class="flex items-center gap-2 px-2 py-2 rounded-lg text-xs font-bold text-gray-800 dark:text-gray-100 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 whitespace-nowrap"><input type="checkbox" data-fb-filter="trips" class="rounded border-gray-300 text-violet-600 focus:ring-violet-500"> Trip plans</label>
+                    <div id="fb-filter-menu" class="hidden absolute left-0 top-full mt-1 z-50 w-max min-w-[16rem] rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-xl p-2 space-y-2">
+                        <p class="px-2 pt-1 text-[10px] font-bold uppercase tracking-wide text-gray-500 dark:text-gray-400">Show threads that</p>
+                        ${['email', 'whatsapp', 'attachments', 'trips'].map((key) => {
+                            const labels = { email: 'Email', whatsapp: 'WhatsApp number', attachments: 'Attachments', trips: 'Trip plans' };
+                            return `<div class="px-2 py-1.5 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800" data-fb-filter-row="${key}">
+                                <div class="text-[11px] font-bold text-gray-800 dark:text-gray-100 mb-1">${labels[key]}</div>
+                                <div class="flex flex-wrap gap-1">
+                                    <label class="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-bold text-gray-700 dark:text-gray-200 cursor-pointer border border-transparent has-[:checked]:border-violet-400 has-[:checked]:bg-violet-50 dark:has-[:checked]:bg-violet-950/40"><input type="radio" name="fb-filter-${key}" data-fb-filter="${key}" data-fb-filter-mode="any" class="text-violet-600 focus:ring-violet-500"> Any</label>
+                                    <label class="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-bold text-gray-700 dark:text-gray-200 cursor-pointer border border-transparent has-[:checked]:border-violet-400 has-[:checked]:bg-violet-50 dark:has-[:checked]:bg-violet-950/40"><input type="radio" name="fb-filter-${key}" data-fb-filter="${key}" data-fb-filter-mode="has" class="text-violet-600 focus:ring-violet-500"> Has</label>
+                                    <label class="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-bold text-gray-700 dark:text-gray-200 cursor-pointer border border-transparent has-[:checked]:border-violet-400 has-[:checked]:bg-violet-50 dark:has-[:checked]:bg-violet-950/40"><input type="radio" name="fb-filter-${key}" data-fb-filter="${key}" data-fb-filter-mode="missing" class="text-violet-600 focus:ring-violet-500"> Missing</label>
+                                </div>
+                            </div>`;
+                        }).join('')}
+                        <div class="flex gap-2 mt-1">
+                            <button type="button" id="fb-filter-clear" class="flex-1 px-2 py-2 rounded-lg text-[10px] font-bold uppercase tracking-wide text-violet-700 dark:text-violet-300 hover:bg-violet-50 dark:hover:bg-violet-950/40">Clear filters</button>
+                            <button type="button" id="fb-filter-done" class="flex-1 px-2 py-2 rounded-lg text-[10px] font-bold uppercase tracking-wide text-white bg-violet-600 hover:bg-violet-500">Done</button>
+                        </div>
                     </div>
                 </div>
                 
@@ -8636,30 +9522,60 @@ const Admin = {
         const filterMenu = document.getElementById('fb-filter-menu');
         const paintFilterBtn = () => {
             if (!filterBtn) return;
-            const on = Object.values(Admin.feedbackInboxFilters || {}).some(Boolean);
+            const on = Admin.feedbackFiltersActive();
             filterBtn.classList.toggle('ring-2', on);
             filterBtn.classList.toggle('ring-violet-400', on);
         };
-        filterMenu?.querySelectorAll('[data-fb-filter]').forEach((box) => {
-            const key = box.getAttribute('data-fb-filter');
-            box.checked = !!Admin.feedbackInboxFilters?.[key];
+        const syncFilterRadios = () => {
+            filterMenu?.querySelectorAll('[data-fb-filter][data-fb-filter-mode]').forEach((box) => {
+                const key = box.getAttribute('data-fb-filter');
+                const mode = box.getAttribute('data-fb-filter-mode') || 'any';
+                const current = Admin.feedbackInboxFilters?.[key] || 'any';
+                box.checked = current === mode;
+            });
+        };
+        filterMenu?.querySelectorAll('[data-fb-filter][data-fb-filter-mode]').forEach((box) => {
             box.addEventListener('change', () => {
-                Admin.feedbackInboxFilters[key] = !!box.checked;
+                if (!box.checked) return;
+                const key = box.getAttribute('data-fb-filter');
+                const mode = box.getAttribute('data-fb-filter-mode') || 'any';
+                if (!Admin.feedbackInboxFilters) Admin.feedbackInboxFilters = { email: 'any', whatsapp: 'any', attachments: 'any', trips: 'any' };
+                Admin.feedbackInboxFilters[key] = mode;
                 paintFilterBtn();
                 Admin.renderFeedbackList();
             });
+        });
+        document.getElementById('fb-filter-clear')?.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            Admin.feedbackInboxFilters = { email: 'any', whatsapp: 'any', attachments: 'any', trips: 'any' };
+            syncFilterRadios();
+            paintFilterBtn();
+            Admin.renderFeedbackList();
+        });
+        document.getElementById('fb-filter-done')?.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            filterMenu?.classList.add('hidden');
         });
         if (filterBtn && filterMenu) {
             filterBtn.addEventListener('click', (e) => {
                 e.preventDefault();
                 e.stopPropagation();
+                syncFilterRadios();
                 filterMenu.classList.toggle('hidden');
             });
+            // stopPropagation so backdrop dismiss on #dev-modal does not close Dev Hub
+            // when the operator only meant to dismiss this filter popover.
+            filterMenu.addEventListener('click', (e) => e.stopPropagation());
             document.addEventListener('click', (e) => {
                 if (e.target.closest?.('#fb-filter-btn') || e.target.closest?.('#fb-filter-menu')) return;
+                if (filterMenu.classList.contains('hidden')) return;
                 filterMenu.classList.add('hidden');
-            });
+                e.stopPropagation();
+            }, true);
         }
+        syncFilterRadios();
         paintFilterBtn();
 
         // Dual-Tab Switcher Logic
@@ -8719,20 +9635,12 @@ const Admin = {
                 groups[did].push(item);
             });
 
-            // GUARDIAN UX FIX: Dynamic Tab Counters
-            let totalInbox = 0;
-            let totalArchive = 0;
-            Object.keys(groups).forEach(did => {
-                if (groups[did].some(i => !i.isFromAdmin && i.status !== 'resolved')) totalInbox++;
-                else totalArchive++;
-            });
-            if (tabInbox) tabInbox.innerHTML = `Inbox (${totalInbox})`;
-            if (tabArchive) tabArchive.innerHTML = `Archive (${totalArchive})`;
-
-            // 2. Filter groups based on Tab and Search String
+            // 2. Filter groups based on Tab, Search, and Has/Missing filters
             const displayGroups = [];
             const searchInputEl = document.getElementById('fb-search-input');
             const searchQuery = searchInputEl ? searchInputEl.value.toLowerCase().trim() : "";
+            let totalInbox = 0;
+            let totalArchive = 0;
 
             Object.keys(groups).forEach(did => {
                 const groupItems = groups[did];
@@ -8750,14 +9658,21 @@ const Admin = {
                     matchesSearch = alias.includes(searchQuery) || didLower.includes(searchQuery) || hasMatchingMsg;
                 }
 
-                if (matchesSearch && Admin.feedbackThreadMatchesFilters(did, groupItems)) {
-                    if (isInbox && isThreadActive) displayGroups.push({ did, items: groupItems });
-                    if (!isInbox && !isThreadActive) displayGroups.push({ did, items: groupItems });
-                }
+                if (!matchesSearch || !Admin.feedbackThreadMatchesFilters(did, groupItems)) return;
+
+                if (isThreadActive) totalInbox++;
+                else totalArchive++;
+
+                if (isInbox && isThreadActive) displayGroups.push({ did, items: groupItems });
+                if (!isInbox && !isThreadActive) displayGroups.push({ did, items: groupItems });
             });
 
+            // Dynamic tab counts = threads visible after search + filters
+            if (tabInbox) tabInbox.innerHTML = `Inbox (${totalInbox})`;
+            if (tabArchive) tabArchive.innerHTML = `Archive (${totalArchive})`;
+
             if (displayGroups.length === 0) {
-                const filtersOn = Object.values(Admin.feedbackInboxFilters || {}).some(Boolean);
+                const filtersOn = Admin.feedbackFiltersActive() || !!searchQuery;
                 const emptyCopy = filtersOn
                     ? 'No threads match these filters.'
                     : (isInbox ? 'Inbox is completely clean.' : 'No archived threads yet.');
@@ -8880,26 +9795,39 @@ const Admin = {
                     sourceTab: Admin.currentFeedbackTab === 'archive' ? 'archive' : 'inbox',
                 });
 
+                let replyHtml = '';
+                for (let ri = groupItems.length - 1; ri >= 0; ri--) {
+                    if (!groupItems[ri]?.isFromAdmin) continue;
+                    replyHtml = groupItems[ri].text || groupItems[ri].message || '';
+                    break;
+                }
+
                 let contactHtml = '';
                 if (allEmails.size > 0 || allPhones.size > 0) {
                     contactHtml = '<div class="flex flex-wrap gap-1.5 min-w-0">';
                     allEmails.forEach(em => {
+                        const mailHref = Admin.outreachHref('email', em, replyHtml) || `mailto:${String(em).replace(/"/g, '')}`;
                         contactHtml += `
                             <div class="flex items-center min-w-0 max-w-full bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded px-1.5 py-0.5">
-                                <a href="mailto:${em}" onclick="event.stopPropagation()" class="text-[10px] text-blue-500 hover:underline font-mono tracking-tight lowercase break-all whitespace-normal inline-flex items-center gap-1 min-w-0">${Admin.icon('mail', 'w-3 h-3 shrink-0')} ${em}</a>
+                                <a href="${mailHref}" onclick="event.stopPropagation()" class="text-[10px] text-blue-500 hover:underline font-mono tracking-tight lowercase break-all whitespace-normal inline-flex items-center gap-1 min-w-0">${Admin.icon('mail', 'w-3 h-3 shrink-0')} ${em}</a>
                                 <button onclick="event.stopPropagation(); navigator.clipboard.writeText('${em}'); if(typeof showToast === 'function') showToast('Copied!', 'success', 1000);" class="ml-1.5 text-gray-400 hover:text-blue-500 transition-colors focus:outline-none inline-flex shrink-0" title="Copy">${Admin.icon('copy', 'w-3 h-3')}</button>
                             </div>`;
                     });
                     allPhones.forEach(ph => {
                         const isNum = /^\d+$/.test(ph);
-                        const link = isNum ? `https://wa.me/${ph}` : '#';
+                        const link = isNum ? (Admin.outreachHref('whatsapp', ph, replyHtml) || `https://wa.me/${ph}`) : '#';
                         const target = isNum ? `target="_blank"` : '';
                         const aClass = isNum ? 'text-emerald-700 dark:text-emerald-300 hover:underline' : 'text-gray-500 dark:text-gray-400';
+                        const opened = isNum && Admin.wasOutreachClicked(did, 'whatsapp', ph);
+                        const openedChip = opened
+                            ? '<span class="text-[9px] font-bold uppercase tracking-wide text-emerald-800 dark:text-emerald-200 bg-emerald-100 dark:bg-emerald-900/50 px-1.5 py-0.5 rounded-full shrink-0">Opened</span>'
+                            : '';
                         
                         contactHtml += `
-                            <div class="flex items-center min-w-0 max-w-full bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800/50 rounded px-2 py-1 shadow-sm">
-                                <a href="${link}" ${target} onclick="event.stopPropagation()" class="text-[10px] ${aClass} font-mono tracking-tight break-all whitespace-normal inline-flex items-center gap-1 min-w-0">${Admin.icon(isNum ? 'message' : 'phone', 'w-3 h-3 shrink-0')} ${ph}</a>
-                                <button onclick="event.stopPropagation(); navigator.clipboard.writeText('${ph}'); if(typeof showToast === 'function') showToast('Copied!', 'success', 1000);" class="ml-1.5 text-gray-400 hover:text-emerald-500 transition-colors focus:outline-none inline-flex shrink-0" title="Copy">${Admin.icon('copy', 'w-3 h-3')}</button>
+                            <div class="flex items-center min-w-0 max-w-full bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800/50 rounded px-2 py-1 shadow-sm gap-1">
+                                <a href="${link}" ${target} onclick="event.stopPropagation(); if(${isNum ? 'true' : 'false'}){ Admin.markOutreachClicked('${String(did).replace(/'/g, "\\'")}', 'whatsapp', '${ph}'); }" class="text-[10px] ${aClass} font-mono tracking-tight break-all whitespace-normal inline-flex items-center gap-1 min-w-0">${Admin.icon(isNum ? 'message' : 'phone', 'w-3 h-3 shrink-0')} ${ph}</a>
+                                ${openedChip}
+                                <button onclick="event.stopPropagation(); navigator.clipboard.writeText('${ph}'); if(typeof showToast === 'function') showToast('Copied!', 'success', 1000);" class="ml-auto text-gray-400 hover:text-emerald-500 transition-colors focus:outline-none inline-flex shrink-0" title="Copy">${Admin.icon('copy', 'w-3 h-3')}</button>
                             </div>`;
                     });
                     contactHtml += '</div>';
@@ -8964,7 +9892,10 @@ const Admin = {
                 if (clBtn && listContainer.contains(clBtn)) {
                     e.preventDefault();
                     e.stopPropagation();
-                    Admin.openAdminChangelogLookup(clBtn.getAttribute('data-admin-changelog'));
+                    Admin.openAdminChangelogLookup(
+                        clBtn.getAttribute('data-admin-changelog'),
+                        Admin.changelogContextFromEl(clBtn),
+                    );
                     return;
                 }
 
@@ -10116,23 +11047,48 @@ const Admin = {
                     ${Admin.tileIcon('shield', 'text-emerald-500 dark:text-emerald-400')}
                     <span>Community Monitor</span>
                 </span>
-                <span id="mq-unread-badge" class="admin-unread-badge hidden" aria-label="Unread community activity"></span>
+                <span id="mq-unread-badge" class="admin-unread-badge hidden" aria-label="Unread community activity and pending reviews"></span>
                 <svg id="mq-chevron" class="absolute right-3 w-4 h-4 transform transition-transform -rotate-90 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
             </div>
             <div id="mq-body" class="hidden mt-4 flex flex-col">
-                <p class="text-[10px] text-gray-500 dark:text-gray-400 mb-3 px-1 leading-snug">Routes are ordered by their latest published post, reply, or held item. Open a route to view its conversation and mark it seen for your operator account.</p>
-                <label class="px-1 mb-2">
-                    <span class="sr-only">Search community routes and messages</span>
-                    <input id="mq-search" type="search" placeholder="Search routes, messages, or user id" class="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 px-3 py-2.5 text-xs text-gray-900 dark:text-white"/>
-                </label>
-                <div class="flex gap-2 px-1 mb-3">
-                    <input id="mq-lookup" type="search" placeholder="Look up uid, device, or email" class="flex-1 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 px-3 py-2.5 text-xs text-gray-900 dark:text-white"/>
-                    <button type="button" id="mq-lookup-btn" class="shrink-0 bg-blue-600 hover:bg-blue-700 text-white rounded-xl px-3 py-2.5 text-[10px] font-black uppercase tracking-wider">Look up</button>
+                <div class="flex border-b border-gray-200 dark:border-gray-700 sticky top-0 bg-white dark:bg-gray-800 z-30 pt-1 mb-3 shrink-0">
+                    <button type="button" id="mq-tab-chats" class="flex-1 py-3 text-sm font-bold text-center border-b-2 border-blue-600 text-blue-600 dark:text-blue-400 transition-colors focus:outline-none relative">
+                        Group chats
+                        <span id="mq-tab-chats-badge" class="admin-unread-badge hidden ml-1 align-middle" aria-label="Unread group chat activity"></span>
+                    </button>
+                    <button type="button" id="mq-tab-reviews" class="flex-1 py-3 text-sm font-bold text-center border-b-2 border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 transition-colors focus:outline-none relative">
+                        Reviews
+                        <span id="mq-tab-reviews-badge" class="admin-unread-badge hidden ml-1 align-middle" aria-label="Pending station reviews"></span>
+                    </button>
                 </div>
-                <div class="grid-hidden-actions flex space-x-2 mb-3 px-1">
-                    <button type="button" id="mq-refresh-btn" class="flex-1 bg-slate-50 dark:bg-slate-900/40 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2.5 text-xs font-bold transition-colors shadow-sm focus:outline-none">Refresh</button>
+                <div id="mq-chats-pane" class="flex flex-col">
+                    <p class="text-[10px] text-gray-500 dark:text-gray-400 mb-3 px-1 leading-snug">Routes are ordered by their latest published post, reply, or held item. Open a route to view its conversation and mark it seen for your operator account.</p>
+                    <label class="px-1 mb-2">
+                        <span class="sr-only">Search community routes and messages</span>
+                        <input id="mq-search" type="search" placeholder="Search routes, messages, or user id" class="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 px-3 py-2.5 text-xs text-gray-900 dark:text-white"/>
+                    </label>
+                    <div class="flex gap-2 px-1 mb-3">
+                        <input id="mq-lookup" type="search" placeholder="Look up uid, device, or email" class="flex-1 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 px-3 py-2.5 text-xs text-gray-900 dark:text-white"/>
+                        <button type="button" id="mq-lookup-btn" class="shrink-0 bg-blue-600 hover:bg-blue-700 text-white rounded-xl px-3 py-2.5 text-[10px] font-black uppercase tracking-wider">Look up</button>
+                    </div>
+                    <div class="grid-hidden-actions flex space-x-2 mb-3 px-1">
+                        <button type="button" id="mq-refresh-btn" class="flex-1 bg-slate-50 dark:bg-slate-900/40 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2.5 text-xs font-bold transition-colors shadow-sm focus:outline-none">Refresh</button>
+                    </div>
+                    <div id="mq-list" class="space-y-2 max-h-[60vh] overflow-y-auto pr-1 custom-scrollbar"></div>
                 </div>
-                <div id="mq-list" class="space-y-2 max-h-[60vh] overflow-y-auto pr-1 custom-scrollbar"></div>
+                <div id="mq-reviews-pane" class="hidden flex flex-col">
+                    <p class="text-[10px] text-gray-500 dark:text-gray-400 mb-3 px-1 leading-snug">Station SEO reviews land here as pending. Approve to publish on the station page, or reject to keep them private. Contact stays operator-only.</p>
+                    <div class="flex gap-2 px-1 mb-3">
+                        <select id="mq-reviews-filter" class="flex-1 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 px-3 py-2.5 text-xs text-gray-900 dark:text-white">
+                            <option value="pending">Pending</option>
+                            <option value="approved">Approved</option>
+                            <option value="rejected">Rejected</option>
+                            <option value="all">All</option>
+                        </select>
+                        <button type="button" id="mq-reviews-refresh-btn" class="shrink-0 bg-slate-50 dark:bg-slate-900/40 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2.5 text-xs font-bold transition-colors shadow-sm focus:outline-none">Refresh</button>
+                    </div>
+                    <div id="mq-reviews-list" class="space-y-2 max-h-[60vh] overflow-y-auto pr-1 custom-scrollbar"></div>
+                </div>
             </div>
         `;
 
@@ -10140,6 +11096,76 @@ const Admin = {
         const body = document.getElementById('mq-body');
         const chevron = document.getElementById('mq-chevron');
         const refreshBtn = document.getElementById('mq-refresh-btn');
+        const reviewsRefreshBtn = document.getElementById('mq-reviews-refresh-btn');
+        const tabChats = document.getElementById('mq-tab-chats');
+        const tabReviews = document.getElementById('mq-tab-reviews');
+        const chatsPane = document.getElementById('mq-chats-pane');
+        const reviewsPane = document.getElementById('mq-reviews-pane');
+        Admin.currentCommunityMonitorTab = Admin.currentCommunityMonitorTab || 'chats';
+
+        const paintMqTab = (tab) => {
+            const active = 'border-blue-600 text-blue-600 dark:text-blue-400';
+            const idle = 'border-transparent text-gray-500 dark:text-gray-400';
+            const setBtn = (btn, on) => {
+                if (!btn) return;
+                btn.classList.toggle('border-blue-600', on);
+                btn.classList.toggle('text-blue-600', on);
+                btn.classList.toggle('dark:text-blue-400', on);
+                btn.classList.toggle('border-transparent', !on);
+                btn.classList.toggle('text-gray-500', !on);
+                btn.classList.toggle('dark:text-gray-400', !on);
+            };
+            setBtn(tabChats, tab === 'chats');
+            setBtn(tabReviews, tab === 'reviews');
+            // clear idle border classes that setBtn may not remove from active state leftovers
+            if (tabChats) {
+                if (tab === 'chats') tabChats.className = 'flex-1 py-3 text-sm font-bold text-center border-b-2 border-blue-600 text-blue-600 dark:text-blue-400 transition-colors focus:outline-none relative';
+                else tabChats.className = 'flex-1 py-3 text-sm font-bold text-center border-b-2 border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 transition-colors focus:outline-none relative';
+                const chatsBadge = document.getElementById('mq-tab-chats-badge');
+                if (chatsBadge) tabChats.appendChild(chatsBadge);
+            }
+            if (tabReviews) {
+                if (tab === 'reviews') tabReviews.className = 'flex-1 py-3 text-sm font-bold text-center border-b-2 border-blue-600 text-blue-600 dark:text-blue-400 transition-colors focus:outline-none relative';
+                else tabReviews.className = 'flex-1 py-3 text-sm font-bold text-center border-b-2 border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 transition-colors focus:outline-none relative';
+                const revBadge = document.getElementById('mq-tab-reviews-badge');
+                if (revBadge) tabReviews.appendChild(revBadge);
+            }
+            chatsPane?.classList.toggle('hidden', tab !== 'chats');
+            reviewsPane?.classList.toggle('hidden', tab !== 'reviews');
+        };
+
+        Admin.switchCommunityMonitorTab = (tab) => {
+            Admin.currentCommunityMonitorTab = tab === 'reviews' ? 'reviews' : 'chats';
+            paintMqTab(Admin.currentCommunityMonitorTab);
+            if (Admin.currentCommunityMonitorTab === 'reviews') Admin.fetchStationReviews?.();
+            else Admin.fetchModerationQueue?.();
+        };
+        tabChats?.addEventListener('click', () => Admin.switchCommunityMonitorTab('chats'));
+        tabReviews?.addEventListener('click', () => Admin.switchCommunityMonitorTab('reviews'));
+        paintMqTab(Admin.currentCommunityMonitorTab);
+
+        Admin.paintCommunityMonitorBadges = (chatUnread = 0, reviewPending = 0) => {
+            const chats = Math.max(0, Number(chatUnread) || 0);
+            const reviews = Math.max(0, Number(reviewPending) || 0);
+            const total = chats + reviews;
+            const tile = document.getElementById('mq-unread-badge');
+            if (tile) {
+                tile.textContent = typeof Admin.formatBadgeCount === 'function' ? Admin.formatBadgeCount(total) : (total > 99 ? '99+' : String(total));
+                tile.classList.toggle('hidden', total < 1);
+            }
+            const chatBadge = document.getElementById('mq-tab-chats-badge');
+            if (chatBadge) {
+                chatBadge.textContent = typeof Admin.formatBadgeCount === 'function' ? Admin.formatBadgeCount(chats) : (chats > 99 ? '99+' : String(chats));
+                chatBadge.classList.toggle('hidden', chats < 1);
+            }
+            const revBadge = document.getElementById('mq-tab-reviews-badge');
+            if (revBadge) {
+                revBadge.textContent = typeof Admin.formatBadgeCount === 'function' ? Admin.formatBadgeCount(reviews) : (reviews > 99 ? '99+' : String(reviews));
+                revBadge.classList.toggle('hidden', reviews < 1);
+            }
+            Admin._communityChatUnread = chats;
+            Admin._stationReviewPending = reviews;
+        };
 
         header.onclick = () => {
             if (Admin.isGridMode) return;
@@ -10150,10 +11176,160 @@ const Admin = {
             } else {
                 chevron.classList.remove('-rotate-90');
                 header.classList.add('mb-4');
-                Admin.fetchModerationQueue();
+                if (Admin.currentCommunityMonitorTab === 'reviews') Admin.fetchStationReviews();
+                else Admin.fetchModerationQueue();
             }
         };
         refreshBtn.onclick = () => Admin.fetchModerationQueue();
+        reviewsRefreshBtn.onclick = () => Admin.fetchStationReviews();
+        document.getElementById('mq-reviews-filter')?.addEventListener('change', () => Admin.renderStationReviews?.());
+
+        Admin.stationReviewPublicPayload = (row) => {
+            const amenities = Array.isArray(row?.amenities)
+                ? row.amenities.map((a) => String(a || '').trim()).filter(Boolean).slice(0, 12)
+                : [];
+            return {
+                stationSlug: String(row?.stationSlug || '').trim(),
+                stationName: String(row?.stationName || '').trim() || null,
+                rating: Number(row?.rating) || 0,
+                text: String(row?.text || '').trim().slice(0, 1200),
+                displayName: row?.displayName == null ? null : String(row.displayName).slice(0, 80),
+                amenities,
+                status: 'approved',
+                createdAt: Number(row?.createdAt) || Date.now(),
+                approvedAt: Number(row?.approvedAt) || Date.now(),
+                source: String(row?.source || 'seo_station').slice(0, 40),
+            };
+        };
+
+        Admin.renderStationReviews = () => {
+            const list = document.getElementById('mq-reviews-list');
+            if (!list) return;
+            const filter = String(document.getElementById('mq-reviews-filter')?.value || 'pending');
+            const rows = Array.isArray(Admin._stationReviewRows) ? Admin._stationReviewRows : [];
+            const shown = rows.filter((row) => filter === 'all' || String(row?.status || '') === filter);
+            const esc = (value) => ntAdminSecureEscape(String(value == null ? '' : value));
+            if (!shown.length) {
+                list.innerHTML = `<p class="text-xs text-gray-400 text-center py-4">${filter === 'pending' ? 'No pending station reviews.' : 'No reviews in this filter.'}</p>`;
+                return;
+            }
+            list.innerHTML = shown.map((row) => {
+                const id = esc(row._key || '');
+                const slug = esc(row.stationSlug || '');
+                const when = row.createdAt ? Admin.formatDate(Number(row.createdAt)) : '-';
+                const stars = '★'.repeat(Math.max(0, Math.min(5, Number(row.rating) || 0)))
+                    + '☆'.repeat(Math.max(0, 5 - Math.max(0, Math.min(5, Number(row.rating) || 0))));
+                const amenities = Array.isArray(row.amenities) && row.amenities.length
+                    ? `<p class="text-[10px] text-gray-500 dark:text-gray-400 mt-1">${esc(row.amenities.join(' · '))}</p>`
+                    : '';
+                const contact = row.contact
+                    ? `<p class="text-[10px] font-mono text-gray-500 dark:text-gray-400 mt-1 break-all">Contact: ${esc(row.contact)}</p>`
+                    : '';
+                const status = String(row.status || 'pending');
+                const pending = status === 'pending';
+                const actions = pending
+                    ? `<div class="flex flex-wrap gap-2 mt-2">
+                            <button type="button" class="mq-review-approve text-[10px] font-bold text-emerald-700 dark:text-emerald-400 underline" data-slug="${slug}" data-id="${id}">Approve</button>
+                            <button type="button" class="mq-review-reject text-[10px] font-bold text-gray-600 dark:text-gray-300 underline" data-slug="${slug}" data-id="${id}">Reject</button>
+                       </div>`
+                    : `<span class="text-[10px] text-gray-400 mt-2 inline-block">${esc(status)}</span>`;
+                return `<div class="border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-800 p-3 text-left" data-review-id="${id}">
+                    <div class="flex justify-between gap-2 mb-1">
+                        <p class="text-xs font-black text-gray-900 dark:text-white truncate">${esc(row.stationName || row.stationSlug || 'Station')}</p>
+                        <span class="text-[9px] font-mono text-gray-400 shrink-0">${esc(when)}</span>
+                    </div>
+                    <p class="text-[11px] text-amber-600 dark:text-amber-300 tracking-widest" aria-label="${Number(row.rating) || 0} of 5">${esc(stars)}</p>
+                    <p class="text-[11px] text-gray-700 dark:text-gray-300 mt-1 whitespace-pre-wrap">${esc(row.text || '')}</p>
+                    ${row.displayName ? `<p class="text-[10px] text-gray-500 mt-1">From ${esc(row.displayName)}</p>` : ''}
+                    ${contact}
+                    ${amenities}
+                    ${actions}
+                </div>`;
+            }).join('');
+            list.querySelectorAll('.mq-review-approve').forEach((btn) => {
+                btn.addEventListener('click', () => Admin.setStationReviewStatus(btn.getAttribute('data-slug'), btn.getAttribute('data-id'), 'approved'));
+            });
+            list.querySelectorAll('.mq-review-reject').forEach((btn) => {
+                btn.addEventListener('click', () => Admin.setStationReviewStatus(btn.getAttribute('data-slug'), btn.getAttribute('data-id'), 'rejected'));
+            });
+        };
+
+        Admin.fetchStationReviews = async ({ silent = false } = {}) => {
+            const list = document.getElementById('mq-reviews-list');
+            if (!silent && list) list.innerHTML = '<p class="text-xs text-gray-400 text-center py-4">Loading...</p>';
+            try {
+                const secret = await Admin.getAuthKey();
+                if (!secret) throw new Error('Not signed in');
+                const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
+                const res = await window.guardianFetch(`${dynamicEndpoint}station_reviews.json?auth=${encodeURIComponent(secret)}`, {}, 10000);
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                const data = await res.json();
+                const rows = ntAdminStationReviewRows(data);
+                Admin._stationReviewRows = rows;
+                const pending = ntAdminPendingStationReviewCount(rows);
+                Admin.paintCommunityMonitorBadges(Admin._communityChatUnread || 0, pending);
+                if (!silent || Admin.currentCommunityMonitorTab === 'reviews') Admin.renderStationReviews();
+            } catch (err) {
+                Admin._stationReviewRows = Admin._stationReviewRows || [];
+                if (!silent && list) {
+                    list.innerHTML = `<p class="text-xs text-rose-500 text-center py-4">${ntAdminSecureEscape(err.message || 'Could not load reviews')}</p>`;
+                }
+            }
+        };
+
+        Admin.setStationReviewStatus = async (slug, reviewId, status) => {
+            const code = String(status || '').trim();
+            const stationSlug = String(slug || '').trim();
+            const id = String(reviewId || '').trim();
+            if (!stationSlug || !id || !['approved', 'rejected', 'pending'].includes(code)) return;
+            try {
+                const secret = await Admin.getAuthKey();
+                if (!secret || !Admin.currentUser?.uid) throw new Error('Not signed in');
+                const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
+                const authQ = `?auth=${encodeURIComponent(secret)}`;
+                const path = `${dynamicEndpoint}station_reviews/${encodeURIComponent(stationSlug)}/${encodeURIComponent(id)}.json${authQ}`;
+                const getRes = await window.guardianFetch(path, {}, 8000);
+                if (!getRes.ok) throw new Error(`Could not load review (${getRes.status})`);
+                const existing = await getRes.json();
+                if (!existing || typeof existing !== 'object') throw new Error('Review missing');
+                const now = Date.now();
+                const next = {
+                    ...existing,
+                    stationSlug: existing.stationSlug || stationSlug,
+                    status: code,
+                    moderatedAt: now,
+                    moderatedBy: Admin.currentUser.email || '',
+                };
+                if (code === 'approved') {
+                    next.approvedAt = now;
+                    next.approvedBy = Admin.currentUser.email || '';
+                }
+                const putRes = await window.guardianFetch(path, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(next),
+                }, 8000);
+                if (!putRes.ok) throw new Error(`Could not save review (${putRes.status})`);
+                const publicPath = `${dynamicEndpoint}station_reviews_public/${encodeURIComponent(stationSlug)}/${encodeURIComponent(id)}.json${authQ}`;
+                if (code === 'approved') {
+                    const pub = Admin.stationReviewPublicPayload(next);
+                    const pubRes = await window.guardianFetch(publicPath, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(pub),
+                    }, 8000);
+                    if (!pubRes.ok) throw new Error(`Published copy failed (${pubRes.status})`);
+                } else {
+                    await window.guardianFetch(publicPath, { method: 'DELETE' }, 8000).catch(() => null);
+                }
+                if (typeof showToast === 'function') {
+                    showToast(code === 'approved' ? 'Review approved.' : 'Review rejected.', 'success');
+                }
+                await Admin.fetchStationReviews();
+            } catch (err) {
+                if (typeof showToast === 'function') showToast(err.message || 'Could not update review.', 'error');
+            }
+        };
 
         const validateHeldCommunityPublish = (report) => {
             const publish = report?.publish;
@@ -10393,12 +11569,19 @@ const Admin = {
                 const routesObj = (typeof ROUTES !== 'undefined' && ROUTES) || window.ROUTES || {};
                 const rows = ntAdminCommunityActivityRows(activityData, seenData, items, routesObj);
                 Admin._communityMonitorRows = rows;
-                const badge = document.getElementById('mq-unread-badge');
                 const totalUnread = rows.reduce((sum, row) => sum + row.unread, 0);
-                if (badge) {
-                    badge.textContent = totalUnread > 99 ? '99+' : String(totalUnread);
-                    badge.classList.toggle('hidden', totalUnread < 1);
-                }
+                Admin._communityChatUnread = totalUnread;
+                const mqSeenAt = Date.now();
+                if (typeof safeStorage !== 'undefined') safeStorage.setItem('mq_last_checked', String(mqSeenAt));
+                try {
+                    await fetch(`${dynamicEndpoint}admin_state/${encodeURIComponent(Admin.currentUser.uid)}/mq_last_checked.json${authQ}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(mqSeenAt),
+                    });
+                } catch (e) { /* optional */ }
+                Admin.paintCommunityMonitorBadges(totalUnread, Admin._stationReviewPending || 0);
+                Admin.fetchStationReviews?.({ silent: true });
 
                 const esc = (value) => ntAdminSecureEscape(String(value == null ? '' : value));
                 const formatWhen = (value) => value ? Admin.formatDate(Number(value)) : 'No activity yet';
@@ -10480,7 +11663,7 @@ const Admin = {
                         </summary>
                         <div class="community-monitor-route-body border-t border-gray-100 dark:border-gray-700 p-3 space-y-2">
                             ${row.held.map(renderHeld).join('')}
-                            <div class="community-route-conversation text-xs text-gray-400 text-center py-3">Open to load conversation.</div>
+                            <div class="community-route-conversation cm-chat text-left">Open to load conversation.</div>
                         </div>
                     </details>
                 `).join('');
@@ -10494,19 +11677,23 @@ const Admin = {
                     const quoteUid = message.replyTo?.uid || message.replyTo?.deviceId || '';
                     const quoteHint = quoteUid && typeof Admin.userIdJoinHintHtml === 'function' ? Admin.userIdJoinHintHtml(quoteUid) : '';
                     const quote = message.replyTo?.body
-                        ? `<div class="border-l-2 border-emerald-500 bg-gray-50 dark:bg-gray-900 rounded-r-lg px-2 py-1 mb-2 text-[10px] text-gray-500"><b>${esc(message.replyTo.displayName || 'Passenger')}</b>${quoteHint}<br>${esc(message.replyTo.body)}</div>`
+                        ? `<div class="cm-quote"><b>${esc(message.replyTo.displayName || 'Passenger')}</b>${quoteHint}<br>${esc(message.replyTo.body)}</div>`
                         : '';
                     const postId = message.postId || '';
-                    return `<div class="${isReply ? 'ml-6 bg-gray-50 dark:bg-gray-900/60' : 'bg-emerald-50/50 dark:bg-emerald-950/10'} border border-gray-200 dark:border-gray-700 rounded-xl p-3 ${message.hidden ? 'opacity-50 ring-1 ring-red-400' : ''}" data-community-message data-community-post="${esc(postId)}" ${isReply ? `data-community-reply="${esc(message.replyId || '')}"` : ''}>
-                        <div class="flex items-center justify-between gap-2 mb-1">
-                            <span class="text-[11px] font-black text-gray-900 dark:text-white">${esc(message.displayName || 'Passenger')} ${authorHint} ${category}</span>
-                            <span class="text-[9px] font-mono text-gray-400">${esc(formatWhen(message.timestamp))}</span>
-                        </div>
-                        ${quote}<p class="text-[12px] leading-relaxed text-gray-800 dark:text-gray-200 whitespace-pre-wrap">${esc(message.body || '')}</p>
-                        <div class="flex flex-wrap gap-2 mt-2">
-                            <button type="button" class="cm-hide-message text-[10px] font-bold text-amber-700 dark:text-amber-400 underline" data-route="${esc(routeId)}" data-post="${esc(postId)}" ${isReply ? `data-reply="${esc(message.replyId || '')}"` : ''}>Hide</button>
-                            <button type="button" class="cm-delete-message text-[10px] font-bold text-red-600 dark:text-red-400 underline" data-route="${esc(routeId)}" data-post="${esc(postId)}" ${isReply ? `data-reply="${esc(message.replyId || '')}"` : ''}>Delete</button>
-                            ${message.uid ? `<button type="button" class="cm-shadow-ban text-[10px] font-bold text-red-600 dark:text-red-400 underline" data-uid="${esc(message.uid)}">Shadow ban</button>` : ''}
+                    return `<div class="cm-row ${isReply ? 'cm-row-reply' : ''}" data-community-message data-community-post="${esc(postId)}" ${isReply ? `data-community-reply="${esc(message.replyId || '')}"` : ''}>
+                        <div class="cm-bubble ${message.hidden ? 'is-hidden' : ''}">
+                            <div class="cm-bubble-name">
+                                <span>${esc(message.displayName || 'Passenger')} ${authorHint} ${category}</span>
+                                <span class="cm-bubble-time">${esc(formatWhen(message.timestamp))}</span>
+                            </div>
+                            <div class="cm-bubble-body">
+                                ${quote}<p class="cm-bubble-text">${esc(message.body || '')}</p>
+                                <div class="cm-bubble-actions">
+                                    <button type="button" class="cm-hide-message" data-route="${esc(routeId)}" data-post="${esc(postId)}" ${isReply ? `data-reply="${esc(message.replyId || '')}"` : ''}>Hide</button>
+                                    <button type="button" class="cm-delete-message" data-route="${esc(routeId)}" data-post="${esc(postId)}" ${isReply ? `data-reply="${esc(message.replyId || '')}"` : ''}>Delete</button>
+                                    ${message.uid ? `<button type="button" class="cm-shadow-ban" data-uid="${esc(message.uid)}">Shadow ban</button>` : ''}
+                                </div>
+                            </div>
                         </div>
                     </div>`;
                 };
@@ -10579,7 +11766,8 @@ const Admin = {
                             postId: post.postId,
                         })).sort((a, b) => Number(a.timestamp || 0) - Number(b.timestamp || 0));
                         return `${renderMessage(post, routeId)}${replies.map((reply) => renderMessage(reply, routeId, true)).join('')}`;
-                    }).join('') : '<p class="py-3">No published messages on this route.</p>';
+                    }).join('') : '<p class="cm-empty">No published messages on this route.</p>';
+                    target.scrollTop = target.scrollHeight;
                     details.dataset.loaded = 'true';
                     details.dataset.communitySearch += ` ${esc(posts.map((post) => [post.body, ...Object.values(post.replies || {}).map((reply) => reply.body)].join(' ')).join(' ').toLowerCase())}`;
                 };
@@ -11038,6 +12226,128 @@ const Admin = {
         if (typeof showToast === 'function') showToast(`Verified - trust score: ${score + 1}`, 'success');
     },
 
+    setupAccountDeletionsManager: () => {
+        document.getElementById('account-deletions-panel')?.remove();
+    },
+
+    fetchAccountDeletions: async () => {
+        const list = document.getElementById('ad-list');
+        if (!list) return;
+        const secret = await Admin.getAuthKey();
+        if (!secret) return;
+        list.innerHTML = '<p class="text-xs text-gray-400 text-center py-3">Loading...</p>';
+        const base = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
+        const esc = (str) => Admin.commuterEsc(str);
+        const pending = new Map();
+        const absorb = (uid, row) => {
+            if (!row || row.status === 'done' || row.deletionResolvedAt) return;
+            const requestedAt = Number(row.requestedAt || row.deletionRequestedAt) || 0;
+            if (!requestedAt) return;
+            pending.set(uid, {
+                uid,
+                email: row.email || row.deletionRequestedEmail || '',
+                displayName: row.displayName || '',
+                deviceId: row.deviceId || '',
+                requestedAt,
+            });
+        };
+        try {
+            const queueRes = await fetch(`${base}account_deletions.json?auth=${encodeURIComponent(secret)}`);
+            if (queueRes.ok) {
+                const queue = await queueRes.json();
+                if (queue && typeof queue === 'object') {
+                    Object.entries(queue).forEach(([uid, row]) => absorb(uid, row));
+                }
+            }
+        } catch { /* fall through to the profile flags */ }
+        let usersLoaded = false;
+        try {
+            const usersRes = await fetch(`${base}users.json?orderBy=${encodeURIComponent('"deletionRequestedAt"')}&startAt=1&auth=${encodeURIComponent(secret)}`);
+            if (usersRes.ok) {
+                const users = await usersRes.json();
+                if (users && typeof users === 'object') {
+                    Object.entries(users).forEach(([uid, row]) => absorb(uid, row));
+                }
+                usersLoaded = true;
+            }
+        } catch { /* index may not be live until rules deploy */ }
+        if (!usersLoaded) {
+            try {
+                const usersRes = await fetch(`${base}users.json?auth=${encodeURIComponent(secret)}`);
+                if (usersRes.ok) {
+                    const users = await usersRes.json();
+                    if (users && typeof users === 'object') {
+                        Object.entries(users).forEach(([uid, row]) => absorb(uid, row));
+                    }
+                }
+            } catch { /* profile flags stay on the queue list */ }
+        }
+        const rows = [...pending.values()].sort((a, b) => b.requestedAt - a.requestedAt);
+        const utBadge = document.getElementById('ut-unread-badge');
+        if (utBadge) {
+            utBadge.textContent = Admin.formatBadgeCount(rows.length);
+            utBadge.classList.toggle('hidden', rows.length === 0);
+        }
+        Admin._pendingDeletionCount = rows.length;
+        if (!rows.length) {
+            list.innerHTML = '<p class="text-xs text-gray-400 text-center py-3">No open deletion requests.</p>';
+            return;
+        }
+        list.innerHTML = rows.map((row) => `
+            <div class="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2.5">
+                <p class="text-sm font-black text-gray-900 dark:text-white break-words">${esc(row.displayName || row.email || row.uid)}</p>
+                <p class="text-[11px] text-gray-500 break-all">${esc(row.email || 'No email')}</p>
+                <p class="font-mono text-[10px] text-gray-400 break-all mt-0.5">${esc(row.uid)}</p>
+                ${row.deviceId ? `<p class="font-mono text-[10px] text-gray-400 break-all">device ${esc(row.deviceId)}</p>` : ''}
+                <p class="text-[10px] text-gray-400 mt-1">${esc(Admin.formatDate(row.requestedAt))}</p>
+                <button type="button" data-ad-delete="${esc(row.uid)}" data-ad-device="${esc(row.deviceId || '')}" class="mt-2 text-[10px] font-black uppercase tracking-wider text-white bg-rose-700 hover:bg-rose-800 px-3 py-1.5 rounded-lg">Delete data</button>
+            </div>
+        `).join('');
+        list.querySelectorAll('[data-ad-delete]').forEach((btn) => {
+            btn.addEventListener('click', () => Admin.purgeAccountDeletion(
+                btn.getAttribute('data-ad-delete'),
+                btn.getAttribute('data-ad-device') || '',
+            ));
+        });
+    },
+
+    purgeAccountDeletion: async (uid, deviceId = '') => {
+        const id = String(uid || '').trim();
+        if (!id) return;
+        const secret = await Admin.getAuthKey();
+        if (!secret) return;
+        const base = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
+        const auth = `?auth=${encodeURIComponent(secret)}`;
+        const did = String(deviceId || '').trim();
+        if (typeof window.confirm === 'function'
+            && !window.confirm(`Delete database data for ${id}? This cannot be undone.`)) {
+            return;
+        }
+        try {
+            const jobs = [
+                fetch(`${base}users/${encodeURIComponent(id)}.json${auth}`, { method: 'DELETE' }),
+                fetch(`${base}account_deletions/${encodeURIComponent(id)}.json${auth}`, { method: 'DELETE' }),
+            ];
+            if (did) {
+                jobs.push(fetch(`${base}devices/${encodeURIComponent(did)}.json${auth}`, { method: 'DELETE' }));
+            }
+            const results = await Promise.all(jobs);
+            if (results.some((res) => !res.ok)) throw new Error('delete failed');
+            if (typeof showToast === 'function') {
+                showToast('User data deleted from the database', 'success');
+            }
+            Admin.fetchAccountDeletions();
+            if (typeof Admin.syncAllBadges === 'function') Admin.syncAllBadges();
+        } catch (e) {
+            if (typeof showToast === 'function') showToast('Could not delete that account data', 'error');
+        }
+    },
+
+    resolveAccountDeletion: async (uid) => {
+        // Kept for older deep-links; prefer purgeAccountDeletion.
+        return Admin.purgeAccountDeletion(uid);
+    },
+
     // --- PHASE 7: USER TRUST / SHADOW-BAN LOOKUP ---
     setupUserTrustManager: () => {
         const alertPanel = document.getElementById('alert-panel');
@@ -11061,13 +12371,15 @@ const Admin = {
                     ${Admin.tileIcon('user', 'text-indigo-500 dark:text-indigo-400')}
                     <span>User Trust &amp; Bans</span>
                 </span>
+                <span id="ut-unread-badge" class="admin-unread-badge hidden" aria-label="Pending deletion requests"></span>
                 <svg id="ut-chevron" class="absolute right-3 w-4 h-4 transform transition-transform -rotate-90 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
             </div>
             <div id="ut-body" class="hidden mt-4 flex flex-col text-left">
-                <p class="text-[10px] text-gray-500 dark:text-gray-400 mb-3 px-1 leading-snug">Ban list and lookup stay separate - switch tabs below.</p>
+                <p class="text-[10px] text-gray-500 dark:text-gray-400 mb-3 px-1 leading-snug">Bans, lookup, and deletion requests are in this panel.</p>
                 <div class="flex gap-1 p-1 mb-3 rounded-xl bg-gray-100 dark:bg-gray-900/80 border border-gray-200 dark:border-gray-700" role="tablist" aria-label="User trust sections">
                     <button type="button" id="ut-tab-bans" role="tab" aria-selected="true" class="ut-tab flex-1 text-[10px] font-black uppercase tracking-wider py-2 rounded-lg bg-white dark:bg-gray-800 text-indigo-600 dark:text-indigo-400 shadow-sm border border-indigo-200 dark:border-indigo-800">Active bans</button>
                     <button type="button" id="ut-tab-lookup" role="tab" aria-selected="false" class="ut-tab flex-1 text-[10px] font-black uppercase tracking-wider py-2 rounded-lg text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200">Lookup</button>
+                    <button type="button" id="ut-tab-deletions" role="tab" aria-selected="false" class="ut-tab flex-1 text-[10px] font-black uppercase tracking-wider py-2 rounded-lg text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200">Deletions</button>
                 </div>
                 <div id="ut-pane-bans" role="tabpanel" class="ut-pane">
                     <div class="flex items-center justify-between gap-2 mb-2 px-1">
@@ -11085,44 +12397,49 @@ const Admin = {
                     </div>
                     <div id="ut-result" class="px-1 text-xs text-gray-500">Enter a UID to inspect.</div>
                 </div>
+                <div id="ut-pane-deletions" role="tabpanel" class="ut-pane hidden">
+                    <div class="flex items-center justify-between gap-2 mb-2 px-1">
+                        <p class="text-[11px] text-gray-500 dark:text-gray-400 leading-snug">Requests sent from Account. Delete data removes the profile from the database.</p>
+                        <button type="button" id="ad-refresh-btn" class="shrink-0 text-[10px] font-bold text-blue-600 dark:text-blue-400 px-2 py-1 rounded-lg bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800">Refresh</button>
+                    </div>
+                    <div id="ad-list" class="space-y-2 max-h-[320px] overflow-y-auto px-1 custom-scrollbar"><p class="text-xs text-gray-400 text-center py-3">Open this tab to load requests.</p></div>
+                </div>
             </div>
         `;
 
         const header = document.getElementById('ut-header-btn');
         const body = document.getElementById('ut-body');
         const chevron = document.getElementById('ut-chevron');
-        const tabBans = document.getElementById('ut-tab-bans');
-        const tabLookup = document.getElementById('ut-tab-lookup');
-        const paneBans = document.getElementById('ut-pane-bans');
-        const paneLookup = document.getElementById('ut-pane-lookup');
-        const setUtTab = (which) => {
-            const bans = which === 'bans';
-            tabBans?.setAttribute('aria-selected', bans ? 'true' : 'false');
-            tabLookup?.setAttribute('aria-selected', bans ? 'false' : 'true');
-            tabBans?.classList.toggle('bg-white', bans);
-            tabBans?.classList.toggle('dark:bg-gray-800', bans);
-            tabBans?.classList.toggle('text-indigo-600', bans);
-            tabBans?.classList.toggle('dark:text-indigo-400', bans);
-            tabBans?.classList.toggle('shadow-sm', bans);
-            tabBans?.classList.toggle('border', bans);
-            tabBans?.classList.toggle('border-indigo-200', bans);
-            tabBans?.classList.toggle('dark:border-indigo-800', bans);
-            tabBans?.classList.toggle('text-gray-500', !bans);
-            tabLookup?.classList.toggle('bg-white', !bans);
-            tabLookup?.classList.toggle('dark:bg-gray-800', !bans);
-            tabLookup?.classList.toggle('text-indigo-600', !bans);
-            tabLookup?.classList.toggle('dark:text-indigo-400', !bans);
-            tabLookup?.classList.toggle('shadow-sm', !bans);
-            tabLookup?.classList.toggle('border', !bans);
-            tabLookup?.classList.toggle('border-indigo-200', !bans);
-            tabLookup?.classList.toggle('dark:border-indigo-800', !bans);
-            tabLookup?.classList.toggle('text-gray-500', bans);
-            paneBans?.classList.toggle('hidden', !bans);
-            paneLookup?.classList.toggle('hidden', bans);
-            if (bans) Admin.fetchActiveBans();
+        const utTabs = [
+            { id: 'bans', btn: document.getElementById('ut-tab-bans'), pane: document.getElementById('ut-pane-bans') },
+            { id: 'lookup', btn: document.getElementById('ut-tab-lookup'), pane: document.getElementById('ut-pane-lookup') },
+            { id: 'deletions', btn: document.getElementById('ut-tab-deletions'), pane: document.getElementById('ut-pane-deletions') },
+        ];
+        const paintUtTab = (btn, on) => {
+            if (!btn) return;
+            btn.setAttribute('aria-selected', on ? 'true' : 'false');
+            btn.classList.toggle('bg-white', on);
+            btn.classList.toggle('dark:bg-gray-800', on);
+            btn.classList.toggle('text-indigo-600', on);
+            btn.classList.toggle('dark:text-indigo-400', on);
+            btn.classList.toggle('shadow-sm', on);
+            btn.classList.toggle('border', on);
+            btn.classList.toggle('border-indigo-200', on);
+            btn.classList.toggle('dark:border-indigo-800', on);
+            btn.classList.toggle('text-gray-500', !on);
+            btn.classList.toggle('dark:text-gray-400', !on);
         };
-        tabBans?.addEventListener('click', () => setUtTab('bans'));
-        tabLookup?.addEventListener('click', () => setUtTab('lookup'));
+        const setUtTab = (which) => {
+            const active = utTabs.some((tab) => tab.id === which) ? which : 'bans';
+            utTabs.forEach((tab) => {
+                const on = tab.id === active;
+                paintUtTab(tab.btn, on);
+                tab.pane?.classList.toggle('hidden', !on);
+            });
+            if (active === 'bans') Admin.fetchActiveBans();
+            if (active === 'deletions') Admin.fetchAccountDeletions();
+        };
+        utTabs.forEach((tab) => tab.btn?.addEventListener('click', () => setUtTab(tab.id)));
         Admin.setUtTab = setUtTab;
         Admin.openUserTrustLookup = ({ uid, email } = {}) => {
             const needle = String(uid || email || '').trim();
@@ -11157,6 +12474,7 @@ const Admin = {
 
         document.getElementById('ut-lookup-btn').onclick = () => Admin.lookupUserTrust();
         document.getElementById('ut-bans-refresh')?.addEventListener('click', () => Admin.fetchActiveBans());
+        document.getElementById('ad-refresh-btn')?.addEventListener('click', () => Admin.fetchAccountDeletions());
         document.getElementById('ut-uid-input')?.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') Admin.lookupUserTrust();
         });
@@ -11576,7 +12894,16 @@ const Admin = {
     },
 
     // --- GROWTH SPRINT PHASE 8: ADMIN REPLY INBOX PROTOCOL ---
-    feedbackInboxFilters: { email: false, whatsapp: false, attachments: false, trips: false },
+    /** Per-facet mode: 'any' | 'has' | 'missing'. */
+    feedbackInboxFilters: { email: 'any', whatsapp: 'any', attachments: 'any', trips: 'any' },
+
+    feedbackFiltersActive: () => {
+        const filters = Admin.feedbackInboxFilters || {};
+        return ['email', 'whatsapp', 'attachments', 'trips'].some((key) => {
+            const mode = filters[key];
+            return mode === 'has' || mode === 'missing' || mode === true;
+        });
+    },
 
     feedbackThreadContactSets: (groupItems) => {
         const emails = new Set();
@@ -11596,12 +12923,26 @@ const Admin = {
 
     feedbackThreadMatchesFilters: (did, groupItems) => {
         const filters = Admin.feedbackInboxFilters || {};
-        if (!filters.email && !filters.whatsapp && !filters.attachments && !filters.trips) return true;
+        const modeOf = (key) => {
+            const raw = filters[key];
+            if (raw === true) return 'has';
+            if (raw === false || raw == null || raw === '') return 'any';
+            return String(raw);
+        };
+        if (!Admin.feedbackFiltersActive()) return true;
         const { emails, phones } = Admin.feedbackThreadContactSets(groupItems);
-        if (filters.email && !emails.size) return false;
-        if (filters.whatsapp && !phones.size) return false;
-        if (filters.attachments && !(groupItems || []).some((item) => Admin.feedbackItemHasAttachments(item))) return false;
-        if (filters.trips && !Admin.feedbackDeviceHasTripPlans(did)) return false;
+        const hasAttach = (groupItems || []).some((item) => Admin.feedbackItemHasAttachments(item));
+        const hasTrips = Admin.feedbackDeviceHasTripPlans(did);
+        const checks = [
+            [modeOf('email'), emails.size > 0],
+            [modeOf('whatsapp'), phones.size > 0],
+            [modeOf('attachments'), hasAttach],
+            [modeOf('trips'), hasTrips],
+        ];
+        for (const [mode, present] of checks) {
+            if (mode === 'has' && !present) return false;
+            if (mode === 'missing' && present) return false;
+        }
         return true;
     },
 
@@ -11651,34 +12992,203 @@ const Admin = {
         return { emails: [...emails], phones: [...phones] };
     },
 
-    showOutreachModal: ({ emails = [], phones = [], commuterName = 'this commuter' } = {}) => {
+    outreachHref: (kind, address, message) => {
+        const api = window.ntReplySuggest || {};
+        let raw = '';
+        if (kind === 'whatsapp') {
+            const digits = String(address || '').replace(/\D/g, '');
+            raw = api.whatsappReplyUrl
+                ? api.whatsappReplyUrl(address, message)
+                : (digits ? `https://wa.me/${digits}` : '');
+        } else {
+            const addr = String(address || '').trim();
+            raw = api.mailtoReplyUrl
+                ? api.mailtoReplyUrl(address, message)
+                : (addr.includes('@') ? `mailto:${addr}` : '');
+        }
+        if (!raw) return '';
+        return api.htmlAttrUrl ? api.htmlAttrUrl(raw) : String(raw).replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+    },
+
+    outreachList: (value) => {
+        if (Array.isArray(value)) return value.map((item) => String(item || '').trim()).filter(Boolean);
+        if (value && typeof value === 'object') return Object.values(value).map((item) => String(item || '').trim()).filter(Boolean);
+        return [];
+    },
+
+    roadmapOutreachButtons: (ticket, { compact = false } = {}) => {
+        const emails = Admin.outreachList(ticket?.outreachEmails);
+        const phones = Admin.outreachList(ticket?.outreachPhones);
+        const message = ticket?.outreachMessage || '';
+        if (!emails.length && !phones.length) return '';
+        const wa = phones.map((ph) => {
+            const safe = String(ph).replace(/[^0-9]/g, '');
+            const href = Admin.outreachHref('whatsapp', safe, message);
+            if (!safe || !href) return '';
+            const cls = compact
+                ? 'inline-flex items-center gap-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-1 px-2 rounded-lg text-[10px]'
+                : 'w-full inline-flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 px-3 rounded-lg text-sm';
+            return `<a href="${href}" target="_blank" rel="noopener noreferrer" class="${cls}">${Admin.icon('message', 'w-3.5 h-3.5')} WhatsApp ${safe}</a>`;
+        }).join('');
+        const mail = emails.map((em) => {
+            const label = String(em).replace(/</g, '&lt;');
+            const href = Admin.outreachHref('email', em, message);
+            if (!href) return '';
+            const cls = compact
+                ? 'inline-flex items-center gap-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-1 px-2 rounded-lg text-[10px]'
+                : 'w-full inline-flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-3 rounded-lg text-sm';
+            return `<a href="${href}" target="_blank" rel="noopener noreferrer" class="${cls}">${Admin.icon('mail', 'w-3.5 h-3.5')} Email ${label}</a>`;
+        }).join('');
+        if (!wa && !mail) return '';
+        const wrap = compact ? 'flex flex-wrap gap-1.5' : 'mt-3 space-y-2';
+        return `<div class="${wrap}" data-roadmap-outreach="1">${wa}${mail}</div>`;
+    },
+
+    saveOutreachLater: async ({ status = 'backlog', emails = [], phones = [], message = '', commuterName = 'commuter', deviceId = '', feedbackId = '' } = {}) => {
+        const secret = await Admin.getAuthKey();
+        if (!secret) {
+            if (typeof showToast === 'function') showToast('Sign in as an operator first.', 'error');
+            return false;
+        }
+        const column = status === 'progress' ? 'progress' : 'backlog';
+        const who = String(commuterName || 'commuter').replace(/\s+/g, ' ').trim() || 'commuter';
+        const plain = window.ntReplySuggest?.outreachPlainText
+            ? window.ntReplySuggest.outreachPlainText(message)
+            : String(message || '').replace(/<[^>]+>/g, ' ').trim();
+        const payload = {
+            title: `Reply to ${who}`.slice(0, 120),
+            description: plain || 'Reply later',
+            type: 'feature',
+            severity: 'low',
+            source: feedbackId ? `Feedback ${feedbackId}` : (deviceId ? `Feedback device ${deviceId}` : 'Feedback'),
+            status: column,
+            timestamp: Date.now(),
+            updatedAt: Date.now(),
+            sourceKind: 'feedback',
+            sourceId: String(feedbackId || ''),
+            deviceId: String(deviceId || ''),
+            sourceTab: 'archive',
+            outreachEmails: emails,
+            outreachPhones: phones,
+            outreachMessage: String(message || ''),
+        };
+        try {
+            const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
+            const res = await fetch(`${dynamicEndpoint}roadmap/${Date.now()}.json?auth=${secret}`, {
+                method: 'PUT',
+                body: JSON.stringify(payload),
+            });
+            if (!res.ok) throw new Error('Failed to save');
+            document.getElementById('admin-outreach-modal')?.remove();
+            if (typeof showToast === 'function') {
+                showToast(column === 'progress' ? 'Saved under In progress.' : 'Saved under To do.', 'success');
+            }
+            return true;
+        } catch {
+            if (typeof showToast === 'function') showToast('Could not save that reply for later.', 'error');
+            return false;
+        }
+    },
+
+    outreachClickKey: (deviceId, channel, address) => {
+        const did = String(deviceId || '').trim() || 'anon';
+        const ch = String(channel || '').trim() || 'wa';
+        const addr = String(address || '').replace(/\D+/g, '') || String(address || '').trim().toLowerCase();
+        return `nt_outreach_clicked_${did}_${ch}_${addr}`;
+    },
+
+    markOutreachClicked: (deviceId, channel, address) => {
+        try { localStorage.setItem(Admin.outreachClickKey(deviceId, channel, address), String(Date.now())); } catch { /* ignore */ }
+    },
+
+    wasOutreachClicked: (deviceId, channel, address) => {
+        try { return !!localStorage.getItem(Admin.outreachClickKey(deviceId, channel, address)); } catch { return false; }
+    },
+
+    unresolvedFeedbackIdsForDevice: (deviceId) => {
+        const did = String(deviceId || '').trim();
+        if (!did) return '';
+        return (Admin.cachedFeedbackData || [])
+            .filter((i) => !i.isFromAdmin && i.status !== 'resolved' && String(i.device_id || i.deviceId || '') === did)
+            .map((i) => i.id)
+            .filter(Boolean)
+            .join(',');
+    },
+
+    showOutreachModal: ({ emails = [], phones = [], commuterName = 'this commuter', message = '', deviceId = '', feedbackId = '', unresolvedIds = '' } = {}) => {
         if (!emails.length && !phones.length) return;
         document.getElementById('admin-outreach-modal')?.remove();
         const modal = document.createElement('div');
         modal.id = 'admin-outreach-modal';
         modal.className = 'fixed inset-0 bg-black/80 z-[220] flex items-center justify-center p-4 backdrop-blur-sm';
         const safeName = String(commuterName).replace(/</g, '&lt;');
+        const resolveIds = unresolvedIds || Admin.unresolvedFeedbackIdsForDevice(deviceId) || String(feedbackId || '');
         const waButtons = phones.map((ph) => {
             const safe = String(ph).replace(/[^0-9]/g, '');
-            if (!safe) return '';
-            return `<a href="https://wa.me/${safe}" target="_blank" rel="noopener noreferrer" class="w-full inline-flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 px-3 rounded-lg text-sm">${Admin.icon('message', 'w-4 h-4')} WhatsApp ${safe}</a>`;
+            const href = Admin.outreachHref('whatsapp', safe, message);
+            if (!safe || !href) return '';
+            const opened = Admin.wasOutreachClicked(deviceId, 'whatsapp', safe);
+            const openedChip = opened
+                ? '<span data-outreach-opened class="ml-auto text-[10px] font-bold uppercase tracking-wide bg-white/20 text-white px-2 py-0.5 rounded-full">Opened</span>'
+                : '<span data-outreach-opened class="ml-auto hidden text-[10px] font-bold uppercase tracking-wide bg-white/20 text-white px-2 py-0.5 rounded-full">Opened</span>';
+            return `<a href="${href}" target="_blank" rel="noopener noreferrer" data-outreach-channel="whatsapp" data-outreach-address="${safe}" class="w-full inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 px-3 rounded-lg text-sm">${Admin.icon('message', 'w-4 h-4')} WhatsApp ${safe}${openedChip}</a>`;
         }).join('');
         const mailButtons = emails.map((em) => {
-            const safeHref = String(em).replace(/"/g, '').replace(/</g, '');
             const label = String(em).replace(/</g, '&lt;');
-            return `<a href="mailto:${safeHref}" target="_blank" rel="noopener noreferrer" class="w-full inline-flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-3 rounded-lg text-sm">${Admin.icon('mail', 'w-4 h-4')} Email ${label}</a>`;
+            const href = Admin.outreachHref('email', em, message);
+            if (!href) return '';
+            const opened = Admin.wasOutreachClicked(deviceId, 'email', em);
+            const openedChip = opened
+                ? '<span data-outreach-opened class="ml-auto text-[10px] font-bold uppercase tracking-wide bg-white/20 text-white px-2 py-0.5 rounded-full">Opened</span>'
+                : '<span data-outreach-opened class="ml-auto hidden text-[10px] font-bold uppercase tracking-wide bg-white/20 text-white px-2 py-0.5 rounded-full">Opened</span>';
+            return `<a href="${href}" target="_blank" rel="noopener noreferrer" data-outreach-channel="email" data-outreach-address="${label}" class="w-full inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-3 rounded-lg text-sm">${Admin.icon('mail', 'w-4 h-4')} Email ${label}${openedChip}</a>`;
         }).join('');
         modal.innerHTML = `
             <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md p-5 border border-gray-200 dark:border-gray-700" role="dialog" aria-labelledby="outreach-title">
                 <h3 id="outreach-title" class="text-lg font-black text-gray-900 dark:text-white mb-1">Also reach ${safeName}?</h3>
-                <p class="text-xs text-gray-500 dark:text-gray-400 mb-4 leading-relaxed">The in-app reply is sent and the thread is archived. WhatsApp and email open in a new tab so this admin screen stays on the current list.</p>
+                <p class="text-xs text-gray-500 dark:text-gray-400 mb-4 leading-relaxed">The in-app reply is sent. Open WhatsApp or email in a new tab, then Resolve when you are done so the thread moves to Archive.</p>
                 <div class="space-y-2 mb-3">${waButtons}${mailButtons}</div>
-                <button type="button" id="outreach-dismiss" class="w-full bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 font-bold py-2.5 rounded-lg text-sm">Not now</button>
+                <div class="mb-3">
+                    <p class="text-[10px] font-bold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-1.5">Later</p>
+                    <div class="grid grid-cols-2 gap-2">
+                        <button type="button" id="outreach-later-backlog" class="bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-100 font-bold py-2.5 rounded-lg text-sm">To do</button>
+                        <button type="button" id="outreach-later-progress" class="bg-indigo-50 dark:bg-indigo-900/40 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 text-indigo-800 dark:text-indigo-100 font-bold py-2.5 rounded-lg text-sm border border-indigo-200 dark:border-indigo-800">In progress</button>
+                    </div>
+                    <p class="text-[10px] text-gray-500 dark:text-gray-400 mt-1.5 leading-relaxed">Saves this reply on the roadmap. Open that card to send the WhatsApp or email.</p>
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                    <button type="button" id="outreach-dismiss" class="bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 font-bold py-2.5 rounded-lg text-sm">Not now</button>
+                    <button type="button" id="outreach-resolve" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2.5 rounded-lg text-sm"${resolveIds ? '' : ' disabled'}>Resolve</button>
+                </div>
             </div>
         `;
         document.body.appendChild(modal);
         const close = () => modal.remove();
+        const saveLater = async (status, btn) => {
+            if (btn) btn.disabled = true;
+            const ok = await Admin.saveOutreachLater({ status, emails, phones, message, commuterName, deviceId, feedbackId });
+            if (!ok && btn) btn.disabled = false;
+        };
+        modal.querySelectorAll('[data-outreach-channel]').forEach((link) => {
+            link.addEventListener('click', () => {
+                const channel = link.getAttribute('data-outreach-channel') || '';
+                const address = link.getAttribute('data-outreach-address') || '';
+                Admin.markOutreachClicked(deviceId, channel, address);
+                const chip = link.querySelector('[data-outreach-opened]');
+                if (chip) chip.classList.remove('hidden');
+            });
+        });
         document.getElementById('outreach-dismiss').onclick = close;
+        document.getElementById('outreach-later-backlog').onclick = (e) => saveLater('backlog', e.currentTarget);
+        document.getElementById('outreach-later-progress').onclick = (e) => saveLater('progress', e.currentTarget);
+        document.getElementById('outreach-resolve').onclick = async (e) => {
+            const btn = e.currentTarget;
+            if (!resolveIds) { close(); return; }
+            btn.disabled = true;
+            await Admin.resolveFeedback(resolveIds, true);
+            if (typeof showToast === 'function') showToast('Thread resolved and archived!', 'success');
+            close();
+        };
         modal.addEventListener('click', (e) => { if (e.target === modal) close(); });
     },
 
@@ -11735,19 +13245,48 @@ const Admin = {
     syncAdminReplyModalViewport: () => {
         const modal = document.getElementById('admin-reply-modal');
         if (!modal || modal.classList.contains('hidden')) return;
+        // The browser scrolls the focused field up and the Co-Pilot header
+        // leaves with it. Do not pin the sheet to visualViewport.offsetTop
+        // or write scrollTop back. That is what pulled the header into view.
+        if (document.activeElement?.id === 'admin-reply-text') return;
+        const scroller = document.getElementById('admin-reply-scroll');
         const vv = window.visualViewport;
         const height = Math.max(240, Math.round(vv?.height || window.innerHeight || 0));
         const top = Math.max(0, Math.round(vv?.offsetTop || 0));
         modal.style.top = `${top}px`;
         modal.style.height = `${height}px`;
+        modal.style.left = '0';
+        modal.style.right = '0';
+        modal.style.width = '100%';
         modal.style.bottom = 'auto';
-        modal.style.alignItems = 'center';
-        modal.style.justifyContent = 'center';
+        modal.style.alignItems = 'stretch';
+        modal.style.justifyContent = 'flex-start';
         const card = modal.firstElementChild;
         if (card) {
-            card.style.maxHeight = `${Math.max(240, height - 32)}px`;
-            card.style.height = '';
+            card.style.position = 'absolute';
+            card.style.inset = '0';
+            card.style.maxHeight = 'none';
+            card.style.height = `${height}px`;
+            card.style.width = '100%';
+            card.style.marginTop = '0';
+            card.style.marginBottom = '0';
+            card.style.overflow = 'hidden';
+            card.style.borderRadius = '0';
         }
+        const settings = document.getElementById('admin-copilot-settings');
+        if (settings && !settings.classList.contains('hidden')) {
+            settings.style.top = `${top}px`;
+            settings.style.height = `${height}px`;
+            settings.style.left = '0';
+            settings.style.right = '0';
+            settings.style.width = '100%';
+            const sheet = settings.firstElementChild;
+            if (sheet) {
+                sheet.style.height = `${height}px`;
+                sheet.style.borderRadius = '0';
+            }
+        }
+        if (scroller) Admin._replyScrollStash = scroller.scrollTop;
     },
 
     bindAdminReplyModalViewport: () => {
@@ -11757,6 +13296,916 @@ const Admin = {
         window.addEventListener('resize', update, { passive: true });
         window.visualViewport?.addEventListener('resize', update, { passive: true });
         window.visualViewport?.addEventListener('scroll', update, { passive: true });
+    },
+
+    /** Focus must not rewind the scroller. The browser scroll is the one we keep. */
+    holdReplyScrollWhileFocused: () => {},
+
+    /** Programmatic focus must not scroll the Co-Pilot header back into view. */
+    focusEditorSafely: (editor) => {
+        if (!editor) return;
+        try {
+            if (editor.id === 'admin-reply-text') editor.focus({ preventScroll: true });
+            else editor.focus();
+        } catch {
+            try { editor.focus(); } catch { /* ignore */ }
+        }
+    },
+
+    keepReplyCaretVisible: () => {
+        const editor = document.getElementById('admin-reply-text');
+        const scroller = document.getElementById('admin-reply-scroll') || editor;
+        if (!editor || !scroller) return;
+        const sel = window.getSelection?.();
+        if (!sel || sel.rangeCount < 1) return;
+        const node = sel.anchorNode;
+        if (!node || !editor.contains(node)) return;
+        const range = sel.getRangeAt(0);
+        const rects = range.getClientRects();
+        const rect = rects.length ? rects[rects.length - 1] : range.getBoundingClientRect();
+        if (!rect || (!rect.height && !rect.width)) return;
+        const box = scroller.getBoundingClientRect();
+        const pad = 16;
+        // Only scroll down when the caret sits under the fold / keyboard.
+        // Never scroll up — that pulled the Co-Pilot header back into view.
+        if (rect.bottom > box.bottom - pad) scroller.scrollTop += rect.bottom - (box.bottom - pad);
+    },
+
+    replySuggestMarkup: () => `
+                    <div id="admin-reply-suggest" class="mt-3">
+                        <div id="admin-reply-suggest-halt" class="hidden mb-3 rounded-2xl border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/40 text-amber-950 dark:text-amber-100 p-3">
+                            <div id="admin-reply-suggest-halt-text" class="text-sm leading-relaxed whitespace-pre-wrap"></div>
+                            <label for="admin-reply-suggest-context" class="block text-[11px] font-bold mt-3 mb-1">Add the missing fact</label>
+                            <textarea id="admin-reply-suggest-context" rows="4" maxlength="2000" class="w-full min-h-[5.5rem] rounded-xl border border-amber-300 dark:border-amber-700 bg-white dark:bg-gray-900 text-sm text-gray-900 dark:text-white p-2.5 focus:outline-none" placeholder="Type what the draft should use, then suggest again."></textarea>
+                            <button type="button" id="reply-suggest-again" class="mt-3 w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-3 rounded-xl text-sm focus:outline-none">Suggest again</button>
+                        </div>
+                        <button type="button" id="reply-suggest" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3.5 px-3 rounded-xl shadow-sm transition-colors focus:outline-none text-sm">Suggest reply</button>
+                        <div id="admin-reply-guide" class="hidden mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
+                            <button type="button" id="admin-reply-guide-open" class="w-full min-h-[2.75rem] rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-sm font-bold text-gray-800 dark:text-gray-100 focus:outline-none">Guide this reply</button>
+                        </div>
+                        <div id="admin-reply-suggest-status" class="hidden mt-2 rounded-lg border border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-950/40 p-2" aria-live="polite">
+                            <p id="admin-reply-suggest-status-text" class="text-[11px] font-bold text-indigo-950 dark:text-indigo-100"></p>
+                            <ul id="admin-reply-suggest-status-steps" class="mt-1 space-y-0.5 text-[11px] text-indigo-900 dark:text-indigo-100"></ul>
+                        </div>
+                        <p id="admin-reply-suggest-done" class="hidden mt-2 text-[11px] text-gray-600 dark:text-gray-300 leading-relaxed"></p>
+                    </div>`,
+
+    replyGuideModalMarkup: () => `
+                <div id="admin-reply-guide-modal" class="fixed inset-0 bg-black/80 z-[220] hidden flex p-0 backdrop-blur-sm" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="admin-reply-guide-title">
+                    <div class="bg-white dark:bg-gray-800 shadow-2xl w-full h-full min-h-0 overflow-hidden flex flex-col px-3 sm:px-4 pt-[max(0.75rem,env(safe-area-inset-top))] pb-[max(0.75rem,env(safe-area-inset-bottom))] border-0 rounded-none">
+                        <div class="flex items-center justify-between gap-3 shrink-0 mb-3">
+                            <h3 id="admin-reply-guide-title" class="text-lg font-black text-gray-900 dark:text-white tracking-tight">Guide this reply</h3>
+                            <button type="button" id="admin-reply-guide-close" class="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500 focus:outline-none" aria-label="Close">${Admin.icon('x', 'w-5 h-5')}</button>
+                        </div>
+                        <div class="flex-1 min-h-0 overflow-y-auto space-y-4 custom-scrollbar">
+                            <p class="text-[11px] text-gray-500 dark:text-gray-400 leading-snug">This note and any attachments steer only the next draft. They are not saved for other threads.</p>
+                            <div>
+                                <label for="admin-reply-guide-text" class="block text-[11px] font-bold uppercase tracking-widest text-gray-500 dark:text-gray-400 mb-1.5">Guidance</label>
+                                <textarea id="admin-reply-guide-text" rows="8" maxlength="2000" class="w-full min-h-[10rem] rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-sm text-gray-900 dark:text-white p-3 focus:outline-none leading-relaxed" placeholder="What should this draft say or correct? Use as many lines as you need."></textarea>
+                            </div>
+                            <div>
+                                <label for="admin-reply-guide-files" class="block text-[11px] font-bold uppercase tracking-widest text-gray-500 dark:text-gray-400 mb-1.5">Attachments for this draft</label>
+                                <p class="text-[11px] text-gray-500 dark:text-gray-400 leading-snug mb-2">Photos or PDFs the AI should read with your note (ticket photos, notices, screenshots).</p>
+                                <input id="admin-reply-guide-files" type="file" accept="image/jpeg,image/png,image/webp,image/gif,application/pdf" multiple class="block w-full text-xs text-gray-600 dark:text-gray-300" />
+                                <p id="admin-reply-guide-files-meta" class="mt-2 text-[10px] text-gray-500 dark:text-gray-400"></p>
+                            </div>
+                        </div>
+                        <div class="shrink-0 pt-3 grid grid-cols-2 gap-2">
+                            <button type="button" id="admin-reply-guide-cancel" class="min-h-[2.75rem] rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-sm font-bold text-gray-800 dark:text-gray-100 focus:outline-none">Cancel</button>
+                            <button type="button" id="admin-reply-guide-go" class="min-h-[2.75rem] rounded-xl bg-gray-900 dark:bg-white dark:text-gray-900 text-white text-sm font-bold focus:outline-none">Regenerate</button>
+                        </div>
+                    </div>
+                </div>`,
+
+    copilotSettingsMarkup: () => `
+                <div id="admin-copilot-settings" class="fixed inset-0 bg-black/80 z-[210] hidden flex p-0 backdrop-blur-sm" aria-hidden="true">
+                    <div class="bg-white dark:bg-gray-800 shadow-2xl w-full h-full min-h-0 overflow-hidden flex flex-col px-3 sm:px-4 pt-[max(0.75rem,env(safe-area-inset-top))] pb-[max(0.75rem,env(safe-area-inset-bottom))] border-0 rounded-none">
+                        <div class="flex items-center justify-between gap-3 shrink-0 mb-3">
+                            <h3 class="text-lg font-black text-gray-900 dark:text-white tracking-tight flex items-center gap-2">${Admin.icon('settings', 'w-5 h-5 text-sky-500')} Co-Pilot settings</h3>
+                            <button type="button" id="admin-copilot-settings-close" class="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500 focus:outline-none" aria-label="Close settings">${Admin.icon('x', 'w-5 h-5')}</button>
+                        </div>
+                        <div class="flex-1 min-h-0 overflow-y-auto space-y-5 custom-scrollbar">
+                            <section class="rounded-2xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 p-3">
+                                <h4 class="text-xs font-black uppercase tracking-widest text-gray-500 dark:text-gray-400">Future replies</h4>
+                                <p class="mt-1 text-[11px] text-gray-600 dark:text-gray-300 leading-relaxed">Saved online for both operators. Sent with every Suggest reply until you clear it.</p>
+                                <textarea id="admin-reply-suggest-note" rows="5" maxlength="4000" class="mt-2 w-full rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-sm text-gray-900 dark:text-white p-3 focus:outline-none" placeholder="Standing context for all future drafts. Does not invent a missing fact."></textarea>
+                                <div class="mt-2 flex flex-wrap gap-2">
+                                    <button type="button" id="reply-suggest-save-note" class="min-h-[2.5rem] px-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs focus:outline-none">Save for all future replies</button>
+                                    <button type="button" id="reply-suggest-clear-note" class="min-h-[2.5rem] px-3 rounded-xl border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 font-bold text-xs focus:outline-none">Clear saved note</button>
+                                </div>
+                                <p id="admin-reply-suggest-note-meta" class="mt-2 text-[10px] text-gray-500 dark:text-gray-400"></p>
+                            </section>
+                            <section class="rounded-2xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 p-3">
+                                <h4 class="text-xs font-black uppercase tracking-widest text-gray-500 dark:text-gray-400">This reply only</h4>
+                                <p class="mt-1 text-[11px] text-gray-600 dark:text-gray-300 leading-relaxed">Optional one-shot note for the next Suggest. Not saved online. Prefer Guide this reply on the main screen when regenerating a draft.</p>
+                                <textarea id="admin-reply-suggest-once" rows="3" maxlength="2000" class="mt-2 w-full rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-sm text-gray-900 dark:text-white p-3 focus:outline-none" placeholder="Extra context for this draft only"></textarea>
+                            </section>
+                            <section class="rounded-2xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 p-3">
+                                <h4 class="text-xs font-black uppercase tracking-widest text-gray-500 dark:text-gray-400">Images for next Suggest</h4>
+                                <p class="mt-1 text-[11px] text-gray-600 dark:text-gray-300 leading-relaxed">Attached once to the next Suggest reply. Not kept after you leave Co-Pilot.</p>
+                                <input id="reply-suggest-images" type="file" accept="image/jpeg,image/png,image/webp,image/gif" multiple class="mt-2 block w-full text-xs text-gray-600 dark:text-gray-300" />
+                            </section>
+                        </div>
+                    </div>
+                </div>`,
+
+    copilotContactChipsHtml: (deviceId) => {
+        const { emails, phones } = Admin.collectFeedbackContacts(deviceId);
+        if (!emails.length && !phones.length) {
+            return '<span class="text-[11px] text-gray-400 dark:text-gray-500">No email or WhatsApp on this thread</span>';
+        }
+        const chips = [];
+        emails.forEach((em) => {
+            const href = Admin.outreachHref('email', em, '') || `mailto:${String(em).replace(/"/g, '')}`;
+            const label = String(em).replace(/</g, '&lt;');
+            chips.push(`<a href="${href}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1.5 rounded-full border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 px-2.5 py-1.5 text-[11px] font-bold max-w-full min-w-0" title="${label}">${Admin.icon('mail', 'w-3.5 h-3.5 shrink-0')}<span class="truncate">${label}</span></a>`);
+        });
+        phones.forEach((ph) => {
+            const safe = String(ph).replace(/\D/g, '');
+            const href = Admin.outreachHref('whatsapp', safe, '') || `https://wa.me/${safe}`;
+            chips.push(`<a href="${href}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 px-2.5 py-1.5 text-[11px] font-bold" title="WhatsApp ${safe}">${Admin.icon('message', 'w-3.5 h-3.5 shrink-0')}<span>${safe}</span></a>`);
+        });
+        return `<div class="flex flex-wrap gap-2">${chips.join('')}</div>`;
+    },
+
+    replyWorkerUrl: () => String(window.REPLY_WORKER_URL || 'https://nexttrain-reply.enock.workers.dev').replace(/\/$/, ''),
+
+    readSuggestImages: async (fileList, opts = {}) => {
+        const allowPdf = opts.allowPdf === true;
+        const maxImages = window.ntReplySuggest?.SUGGEST_MAX_IMAGES || 3;
+        const maxFiles = window.ntReplySuggest?.SUGGEST_MAX_FILES || 4;
+        const maxImageBytes = window.ntReplySuggest?.SUGGEST_MAX_IMAGE_BYTES || 1500000;
+        const maxFileBytes = window.ntReplySuggest?.SUGGEST_MAX_FILE_BYTES || 4000000;
+        const limit = allowPdf ? maxFiles : maxImages;
+        const files = Array.from(fileList || []).slice(0, limit);
+        const images = [];
+        for (const file of files) {
+            if (!file) continue;
+            const mime = String(file.type || '').toLowerCase();
+            const isImage = mime.startsWith('image/');
+            const isPdf = mime === 'application/pdf';
+            if (!isImage && !(allowPdf && isPdf)) continue;
+            const maxBytes = isPdf ? maxFileBytes : maxImageBytes;
+            if (file.size > maxBytes) {
+                throw new Error(isPdf ? 'Each PDF must be under 4 MB.' : 'Each image must be under 1.5 MB.');
+            }
+            const dataUrl = await new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(String(reader.result || ''));
+                reader.onerror = () => reject(new Error(isPdf ? 'Could not read that PDF.' : 'Could not read that image.'));
+                reader.readAsDataURL(file);
+            });
+            const match = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
+            if (!match) continue;
+            images.push({ mimeType: match[1], data: match[2] });
+        }
+        return images;
+    },
+
+    paintReplySuggestNoteMeta: (note) => {
+        const meta = document.getElementById('admin-reply-suggest-note-meta');
+        if (!meta) return;
+        const text = String(note || '').trim();
+        meta.textContent = text
+            ? `Saved online. ${text.length} characters. Included with every Suggest reply.`
+            : 'No future-reply note is saved online yet.';
+    },
+
+    loadReplySuggestNote: async (modal) => {
+        const ta = document.getElementById('admin-reply-suggest-note');
+        if (!ta || !modal) return;
+        const gen = String(Date.now());
+        modal.dataset.noteGen = gen;
+        modal.dataset.noteReady = '0';
+        Admin.paintReplySuggestNoteMeta('');
+        try {
+            const secret = await Admin.getAuthKey();
+            if (!secret) {
+                modal.dataset.noteReady = '1';
+                return;
+            }
+            const res = await fetch(`${Admin.replyWorkerUrl()}/context`, {
+                headers: { Authorization: `Bearer ${secret}` },
+            });
+            if (modal.dataset.noteGen !== gen) return;
+            if (!res.ok) {
+                modal.dataset.noteReady = 'error';
+                return;
+            }
+            const data = await res.json().catch(() => ({}));
+            if (modal.dataset.noteGen !== gen) return;
+            const note = String(data.note || '');
+            if (document.activeElement !== ta) ta.value = note;
+            Admin.paintReplySuggestNoteMeta(note);
+            modal.dataset.noteReady = '1';
+        } catch {
+            if (modal.dataset.noteGen === gen) modal.dataset.noteReady = 'error';
+        }
+    },
+
+    saveReplySuggestNote: async ({ clear = false } = {}) => {
+        const ta = document.getElementById('admin-reply-suggest-note');
+        const btn = document.getElementById('reply-suggest-save-note');
+        const clearBtn = document.getElementById('reply-suggest-clear-note');
+        const modal = document.getElementById('admin-reply-modal');
+        if (!ta && !clear) return;
+        const note = clear ? '' : String(ta?.value || '').trim();
+        if (!clear && !note) {
+            if (typeof showToast === 'function') showToast('Type a note before saving. A blank note is not saved.', 'error');
+            return;
+        }
+        if (modal && modal.dataset.noteReady === 'error') {
+            if (typeof showToast === 'function') showToast('Could not load the saved note, so it was not replaced.', 'error');
+            return;
+        }
+        if (modal && modal.dataset.noteReady !== '1') {
+            if (typeof showToast === 'function') showToast('The saved note is still loading.', 'error');
+            return;
+        }
+        if (btn) btn.disabled = true;
+        if (clearBtn) clearBtn.disabled = true;
+        try {
+            const secret = await Admin.getAuthKey();
+            if (!secret) throw new Error('Sign in as an operator first.');
+            const res = await fetch(`${Admin.replyWorkerUrl()}/context`, {
+                method: 'PUT',
+                headers: {
+                    Authorization: `Bearer ${secret}`,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(clear ? { note: '', clear: true } : { note }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(data.error || 'Could not save the shared note.');
+            if (clear && ta) ta.value = '';
+            Admin.paintReplySuggestNoteMeta(clear ? '' : note);
+            if (typeof showToast === 'function') {
+                showToast(clear ? 'Future-reply note cleared.' : 'Saved for all future replies.', 'success');
+            }
+        } catch (err) {
+            if (typeof showToast === 'function') showToast(err.message || 'Could not save the shared note.', 'error');
+        } finally {
+            if (btn) btn.disabled = false;
+            if (clearBtn) clearBtn.disabled = false;
+        }
+    },
+
+    replyDraftStorageKey: 'nt_reply_drafts_v1',
+
+    readLocalReplyDraft: (messageId) => {
+        const id = String(messageId || '').trim();
+        if (!id) return null;
+        try {
+            const all = JSON.parse(localStorage.getItem(Admin.replyDraftStorageKey) || '{}');
+            const row = all[id];
+            if (!row?.html) return null;
+            return { html: String(row.html), at: Number(row.at) || 0 };
+        } catch {
+            return null;
+        }
+    },
+
+    writeLocalReplyDraft: (messageId, html, at = Date.now()) => {
+        const id = String(messageId || '').trim();
+        const body = String(html || '');
+        if (!id || !Admin.draftHasText(body)) return;
+        try {
+            const all = JSON.parse(localStorage.getItem(Admin.replyDraftStorageKey) || '{}');
+            all[id] = { html: body.slice(0, 20000), at: Number(at) || Date.now() };
+            const keys = Object.keys(all);
+            if (keys.length > 40) {
+                keys.sort((a, b) => Number(all[a]?.at || 0) - Number(all[b]?.at || 0));
+                keys.slice(0, keys.length - 40).forEach((key) => { delete all[key]; });
+            }
+            localStorage.setItem(Admin.replyDraftStorageKey, JSON.stringify(all));
+        } catch { /* the worker copy can still exist */ }
+    },
+
+    draftHasText: (html) => String(html || '').replace(/<[^>]+>/g, '').replace(/&nbsp;/gi, ' ').trim().length > 0,
+
+    draftMessageIdForDevice: (deviceId) => {
+        const items = (Admin.cachedFeedbackData || []).filter((item) => (item.device_id || item.deviceId) === deviceId);
+        return window.ntReplySuggest?.suggestDraftMessageId?.(items) || '';
+    },
+
+    restoreReplyDraft: async (messageId) => {
+        const id = String(messageId || '').trim();
+        const gen = `${Date.now()}-${Math.random()}`;
+        Admin._draftGen = gen;
+        const local = Admin.readLocalReplyDraft(id);
+        const editor = document.getElementById('admin-reply-text');
+        const editing = String(document.getElementById('admin-reply-modal')?.dataset.editMsgKey || '').trim();
+        if (editor && local?.html && !editing) editor.innerHTML = local.html;
+        let remote = null;
+        try {
+            const secret = await Admin.getAuthKey();
+            if (secret && id) {
+                const res = await fetch(`${Admin.replyWorkerUrl()}/draft?id=${encodeURIComponent(id)}`, {
+                    headers: { Authorization: `Bearer ${secret}` },
+                });
+                if (res.ok) remote = await res.json();
+            }
+        } catch { remote = null; }
+        if (Admin._draftGen !== gen) return local?.html || '';
+        const box = document.getElementById('admin-reply-text');
+        const remoteHtml = String(remote?.html || '');
+        const remoteAt = Number(remote?.at) || 0;
+        if (box && remoteHtml && !editing && !box.dataset.draftTouched && remoteAt >= Number(local?.at || 0)) {
+            box.innerHTML = remoteHtml;
+            Admin.writeLocalReplyDraft(id, remoteHtml, remoteAt);
+        }
+        Admin.syncReplyGuide();
+        return box?.innerHTML || local?.html || '';
+    },
+
+    persistReplyDraft: async () => {
+        const modal = document.getElementById('admin-reply-modal');
+        const id = String(modal?.dataset.draftMessageId || '').trim();
+        const html = document.getElementById('admin-reply-text')?.innerHTML || '';
+        if (!id || !Admin.draftHasText(html)) return;
+        const at = Date.now();
+        Admin.writeLocalReplyDraft(id, html, at);
+        try {
+            const secret = await Admin.getAuthKey();
+            if (!secret) return;
+            await fetch(`${Admin.replyWorkerUrl()}/draft`, {
+                method: 'PUT',
+                headers: {
+                    Authorization: `Bearer ${secret}`,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ id, html }),
+            });
+        } catch { /* this phone still has the draft */ }
+    },
+
+    suggestReplyForThread: async (did) => {
+        const deviceId = String(did || '').trim();
+        if (!deviceId || deviceId === 'Anonymous / Legacy') {
+            if (typeof showToast === 'function') showToast('This thread has no device to reply to.', 'error');
+            return;
+        }
+        const items = (Admin.cachedFeedbackData || [])
+            .filter((item) => (item.device_id || item.deviceId) === deviceId)
+            .sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+        const commuter = items.filter((item) => !item.isFromAdmin);
+        const feedbackId = commuter.length ? (commuter[commuter.length - 1].id || '') : '';
+        Admin.openReplyModal(feedbackId, deviceId);
+        const modal = document.getElementById('admin-reply-modal');
+        const html = modal?._draftRestore ? await modal._draftRestore : '';
+        if (!Admin.draftHasText(html)) Admin.runSuggestReply();
+    },
+
+    _suggestTicker: null,
+
+    setSuggestProgress: (state) => {
+        const box = document.getElementById('admin-reply-suggest-status');
+        const title = document.getElementById('admin-reply-suggest-status-text');
+        const list = document.getElementById('admin-reply-suggest-status-steps');
+        if (!box || !title || !list) return;
+        if (!state) {
+            box.classList.add('hidden');
+            title.textContent = '';
+            list.replaceChildren();
+            return;
+        }
+        box.classList.remove('hidden');
+        title.textContent = state.title || '';
+        list.replaceChildren();
+        (state.steps || []).forEach((step) => {
+            const li = document.createElement('li');
+            const mark = step.state === 'done' ? 'Done' : (step.state === 'active' ? 'Now' : 'Next');
+            li.textContent = `${mark}. ${step.label || ''}`;
+            list.appendChild(li);
+        });
+    },
+
+    showSuggestHalt: (result) => {
+        const panel = document.getElementById('admin-reply-suggest-halt');
+        const textEl = document.getElementById('admin-reply-suggest-halt-text');
+        const text = window.ntReplySuggest?.haltPanelText(result) || '';
+        if (!panel) {
+            if (text && typeof showToast === 'function') showToast(text, 'warning', 5000);
+            return;
+        }
+        if (!text) {
+            if (textEl) textEl.textContent = '';
+            panel.classList.add('hidden');
+            Admin.syncReplyGuide();
+            return;
+        }
+        if (textEl) textEl.textContent = text;
+        else panel.textContent = text;
+        panel.classList.remove('hidden');
+        Admin.syncReplyGuide();
+    },
+
+    syncReplyGuide: () => {
+        const guide = document.getElementById('admin-reply-guide');
+        const guideModal = document.getElementById('admin-reply-guide-modal');
+        const editor = document.getElementById('admin-reply-text');
+        const halt = document.getElementById('admin-reply-suggest-halt');
+        const suggestBtn = document.getElementById('reply-suggest');
+        const halted = !!(halt && !halt.classList.contains('hidden'));
+        const guiding = !!(guideModal && !guideModal.classList.contains('hidden'));
+        if (suggestBtn) suggestBtn.classList.toggle('hidden', halted || guiding);
+        if (!guide || !editor) return;
+        guide.classList.toggle('hidden', halted || !Admin.draftHasText(editor.innerHTML));
+    },
+
+    openReplyGuideModal: () => {
+        let modal = document.getElementById('admin-reply-guide-modal');
+        if (!modal) {
+            document.body.insertAdjacentHTML('beforeend', Admin.replyGuideModalMarkup());
+            modal = document.getElementById('admin-reply-guide-modal');
+            Admin.bindReplyGuideModal();
+        }
+        modal?.classList.remove('hidden');
+        modal?.classList.add('flex');
+        modal?.setAttribute('aria-hidden', 'false');
+        Admin.syncReplyGuide();
+        requestAnimationFrame(() => {
+            try { document.getElementById('admin-reply-guide-text')?.focus(); } catch (_) {}
+        });
+    },
+
+    closeReplyGuideModal: () => {
+        const modal = document.getElementById('admin-reply-guide-modal');
+        if (!modal) return;
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+        modal.setAttribute('aria-hidden', 'true');
+        Admin.syncReplyGuide();
+    },
+
+    bindReplyGuideModal: () => {
+        const modal = document.getElementById('admin-reply-guide-modal');
+        if (!modal || modal.dataset.bound === '1') return;
+        modal.dataset.bound = '1';
+        const close = () => Admin.closeReplyGuideModal();
+        document.getElementById('admin-reply-guide-close')?.addEventListener('click', close);
+        document.getElementById('admin-reply-guide-cancel')?.addEventListener('click', close);
+        modal.addEventListener('click', (event) => {
+            if (event.target === modal) close();
+        });
+        const files = document.getElementById('admin-reply-guide-files');
+        const meta = document.getElementById('admin-reply-guide-files-meta');
+        files?.addEventListener('change', () => {
+            if (!meta) return;
+            const list = Array.from(files.files || []);
+            if (!list.length) {
+                meta.textContent = '';
+                return;
+            }
+            meta.textContent = list.map((f) => f.name).slice(0, 4).join(' · ');
+        });
+        document.getElementById('admin-reply-guide-go')?.addEventListener('click', async () => {
+            const text = document.getElementById('admin-reply-guide-text')?.value || '';
+            const contextBox = document.getElementById('admin-reply-suggest-context');
+            if (contextBox) contextBox.value = text;
+            Admin.closeReplyGuideModal();
+            await Admin.runSuggestReply({ fromGuide: true });
+        });
+    },
+
+    openCopilotSettings: () => {
+        const settings = document.getElementById('admin-copilot-settings');
+        const modal = document.getElementById('admin-reply-modal');
+        if (!settings) return;
+        settings.classList.remove('hidden');
+        settings.classList.add('flex');
+        settings.setAttribute('aria-hidden', 'false');
+        Admin.syncAdminReplyModalViewport();
+        if (modal && !modal.classList.contains('hidden')) Admin.loadReplySuggestNote(modal);
+    },
+
+    closeCopilotSettings: () => {
+        const settings = document.getElementById('admin-copilot-settings');
+        if (!settings) return;
+        settings.classList.add('hidden');
+        settings.classList.remove('flex');
+        settings.setAttribute('aria-hidden', 'true');
+    },
+
+    quotedNoticesForSuggest: async (items) => {
+        const parse = typeof parseFeedbackAlertQuote === 'function' ? parseFeedbackAlertQuote : null;
+        const plain = window.ntReplySuggest?.noticeQuotePlain;
+        if (!parse || typeof plain !== 'function') return {};
+        const ids = [];
+        for (const item of items || []) {
+            const parsed = parse(item?.text || item?.message || '');
+            if (parsed?.alertId) ids.push(parsed.alertId);
+        }
+        const unique = [...new Set(ids)];
+        if (!unique.length) return {};
+        const records = new Map();
+        const consider = (node, extra) => {
+            if (!node || typeof node !== 'object') return;
+            const id = String(node.id || node._key || extra?.id || '').trim();
+            if (!id || !unique.includes(id) || records.has(id)) return;
+            records.set(id, { ...node, ...extra, id });
+        };
+        (Admin._cachedActiveAlerts || []).forEach((node) => consider(node));
+        const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined'
+            ? DYNAMIC_BASE_URL
+            : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
+        const pull = async (path) => {
+            if (records.size >= unique.length) return;
+            try {
+                const res = await window.guardianFetch(`${dynamicEndpoint}${path}.json?t=${Date.now()}`, {}, 12000);
+                if (!res?.ok) return;
+                const data = await res.json();
+                if (!data || typeof data !== 'object') return;
+                if (path === 'notices' || path === 'disruptions') {
+                    Object.values(data).forEach((node) => {
+                        if (typeof Admin.listNoticesInTarget === 'function') {
+                            Admin.listNoticesInTarget(node).forEach((row) => consider(row));
+                        }
+                        consider(node);
+                    });
+                } else {
+                    Object.entries(data).forEach(([key, node]) => consider(node, { id: node?.id || key }));
+                }
+            } catch { /* the short quote still reaches the draft */ }
+        };
+        await pull('notices');
+        if (records.size < unique.length) await pull('notices_archive');
+        if (records.size < unique.length) await pull('disruptions');
+        const out = {};
+        let secret = '';
+        try { secret = await Admin.getAuthKey(); } catch { secret = ''; }
+        for (const [id, notice] of records) {
+            let row = notice;
+            if (row.poll && (row.poll.question || row.poll.optionA || row.poll.optionB)) {
+                const tallies = await Admin.fetchPollResultsSnapshot(id, secret);
+                if (tallies) row = { ...row, pollResults: tallies };
+            }
+            const text = plain(row);
+            if (text) out[id] = text;
+        }
+        return out;
+    },
+
+    runSuggestReply: async (opts = {}) => {
+        const modal = document.getElementById('admin-reply-modal');
+        const btn = document.getElementById('reply-suggest');
+        if (!modal || modal.classList.contains('hidden')) return;
+        if (String(modal.dataset.editMsgKey || '').trim()) return;
+        const deviceId = modal.dataset.replyDeviceId || '';
+        const api = window.ntReplySuggest;
+        if (!api?.buildSuggestPayload || !api.composerHtmlFromResult) {
+            if (typeof showToast === 'function') showToast('Suggest reply is not loaded.', 'error');
+            return;
+        }
+        const items = (Admin.cachedFeedbackData || []).filter((item) => (item.device_id || item.deviceId) === deviceId);
+        const alias = (Admin.cachedAliases && Admin.cachedAliases[deviceId]) || '';
+        // Future context is loaded by the worker from KV (shared-note). This-reply
+        // context is the one-shot settings field and/or Guide this reply / halt box.
+        const note = document.getElementById('admin-reply-suggest-once')?.value || '';
+        const guideText = opts.fromGuide
+            ? (document.getElementById('admin-reply-guide-text')?.value || '')
+            : '';
+        const contextEl = document.getElementById('admin-reply-suggest-context');
+        if (guideText && contextEl) contextEl.value = guideText;
+        const draftContext = guideText || contextEl?.value || '';
+        const quotedNotices = await Admin.quotedNoticesForSuggest(items);
+        const payload = api.buildSuggestPayload(items, {
+            deviceId,
+            alias,
+            note,
+            draftContext,
+            quotedNotices,
+            allItems: Admin.cachedFeedbackData || [],
+            routeRegionOf: (routeId) => (typeof ROUTES !== 'undefined' && ROUTES[routeId]?.region) || '',
+        });
+        if (!payload.thread.length) {
+            Admin.showSuggestHalt({ action: 'halt', reason: 'This thread has no message to answer.', questions: [] });
+            return;
+        }
+        const again = document.getElementById('reply-suggest-again');
+        const unanswered = typeof api.unansweredCommuterMessages === 'function'
+            ? api.unansweredCommuterMessages(payload.thread)
+            : [];
+        const fileCount = Array.isArray(payload.files) ? payload.files.length : 0;
+        const started = Date.now();
+        const paintProgress = (seconds) => {
+            const waiting = seconds == null ? 'Sending the prompt' : `Waiting for the draft, ${seconds}s`;
+            Admin.setSuggestProgress({
+                title: seconds == null ? 'Preparing the draft' : `Writing the draft, ${seconds}s`,
+                steps: [
+                    { state: 'done', label: `Read the whole thread, ${payload.thread.length} messages` },
+                    {
+                        state: 'done',
+                        label: unanswered.length > 1
+                            ? `${unanswered.length} messages still need a reply in this same draft`
+                            : 'Checked which messages still need a reply',
+                    },
+                    {
+                        state: fileCount ? 'active' : 'done',
+                        label: fileCount
+                            ? `Reading ${fileCount} photo or PDF from the chat`
+                            : 'No photos or PDFs on this thread',
+                    },
+                    { state: 'active', label: waiting },
+                ],
+            });
+            if (btn) btn.textContent = seconds == null ? 'Suggesting...' : `Writing draft, ${seconds}s`;
+        };
+        const setSuggestBusy = (busy) => {
+            if (btn) btn.disabled = busy;
+            if (again) {
+                again.disabled = busy;
+                again.textContent = busy ? 'Suggesting...' : 'Suggest again';
+            }
+            if (!busy && btn) btn.textContent = 'Suggest reply';
+        };
+        if (Admin._suggestTicker) {
+            clearInterval(Admin._suggestTicker);
+            Admin._suggestTicker = null;
+        }
+        const doneNote = document.getElementById('admin-reply-suggest-done');
+        if (doneNote) {
+            doneNote.textContent = '';
+            doneNote.classList.add('hidden');
+        }
+        setSuggestBusy(true);
+        paintProgress(null);
+        Admin._suggestTicker = setInterval(() => {
+            paintProgress(Math.max(1, Math.round((Date.now() - started) / 1000)));
+        }, 1000);
+        try {
+            const secret = await Admin.getAuthKey();
+            if (!secret) throw new Error('Sign in as an operator first.');
+            const settingsImages = await Admin.readSuggestImages(document.getElementById('reply-suggest-images')?.files);
+            const guideImages = opts.fromGuide
+                ? await Admin.readSuggestImages(document.getElementById('admin-reply-guide-files')?.files, { allowPdf: true })
+                : [];
+            const maxImages = window.ntReplySuggest?.SUGGEST_MAX_IMAGES || 3;
+            const images = [...guideImages, ...settingsImages].slice(0, Math.max(maxImages, guideImages.length ? 4 : maxImages));
+            const res = await fetch(`${Admin.replyWorkerUrl()}/suggest`, {
+                method: 'POST',
+                headers: {
+                    Authorization: `Bearer ${secret}`,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ ...payload, images }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(data.error || 'Could not draft a reply.');
+            const guarded = api.applyDraftGuard(data, payload.region, payload.thread);
+            const html = api.composerHtmlFromResult(guarded);
+            if (!html) {
+                Admin.showSuggestHalt(guarded);
+                Admin.setSuggestProgress({
+                    title: 'Needs a fact before it can draft',
+                    steps: [{ state: 'active', label: 'Add the missing fact below, then suggest again.' }],
+                });
+                return;
+            }
+            const editor = document.getElementById('admin-reply-text');
+            if (editor) {
+                editor.innerHTML = html;
+                delete editor.dataset.draftTouched;
+            }
+            Admin.persistReplyDraft();
+            Admin.showSuggestHalt(null);
+            Admin.setSuggestProgress(null);
+            const ready = document.getElementById('admin-reply-suggest-done');
+            if (ready) {
+                ready.textContent = `Draft ready. Used ${payload.thread.length} messages. The draft is in the box. Edit it, then send.`;
+                ready.classList.remove('hidden');
+            }
+            Admin.syncReplyGuide();
+            if (typeof showToast === 'function') showToast('Draft ready. Edit it, then send.', 'success');
+        } catch (err) {
+            const message = err.message || 'Could not draft a reply.';
+            Admin.setSuggestProgress({
+                title: 'Could not finish',
+                steps: [{ state: 'active', label: message }],
+            });
+            if (typeof showToast === 'function') showToast(message, 'error');
+        } finally {
+            if (Admin._suggestTicker) {
+                clearInterval(Admin._suggestTicker);
+                Admin._suggestTicker = null;
+            }
+            setSuggestBusy(false);
+        }
+    },
+
+    _writeTarget: null,
+
+    writeAssistRead: (el) => {
+        if (!el) return '';
+        if (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT') return String(el.value || '');
+        return String(el.innerText || el.textContent || '').replace(/\u00a0/g, ' ');
+    },
+
+    writeAssistShow: (el, text, formatted) => {
+        if (!el) return;
+        const plain = String(text || '').replace(/\r\n/g, '\n');
+        if (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT') {
+            el.value = plain;
+            return;
+        }
+        if (formatted) {
+            const asHtml = window.ntTextAssist?.assistHtmlFromText;
+            const html = typeof asHtml === 'function' ? asHtml(plain) : '';
+            if (html) {
+                el.innerHTML = html;
+                el.dataset.writeFormatted = '1';
+                return;
+            }
+        }
+        el.textContent = plain;
+        delete el.dataset.writeFormatted;
+    },
+
+    ensureWriteModal: () => {
+        let modal = document.getElementById('admin-write-modal');
+        if (modal && modal.dataset.writeRev === 'composer-v3') return modal;
+        if (modal) modal.remove();
+        modal = document.createElement('div');
+        modal.id = 'admin-write-modal';
+        modal.dataset.writeRev = 'composer-v3';
+        modal.className = 'fixed inset-0 z-[280] hidden bg-white dark:bg-gray-900';
+        modal.innerHTML = `
+            <style>
+                #admin-write-text { white-space: pre-wrap; }
+                #admin-write-text[data-write-formatted="1"] { white-space: normal; }
+                #admin-write-text p { margin: 0 0 0.85rem; }
+                #admin-write-text p:last-child { margin: 0; }
+                #admin-write-text strong { font-weight: 800; letter-spacing: -0.01em; }
+                #admin-write-text ul { margin: 0.2rem 0 0.85rem; padding-left: 1.15rem; list-style: disc; }
+                #admin-write-text li { margin: 0.15rem 0; }
+            </style>
+            <div class="flex flex-col h-[100dvh] w-full min-h-0" role="dialog" aria-labelledby="admin-write-title">
+                <div class="flex items-center justify-between gap-3 px-4 pt-[max(0.75rem,env(safe-area-inset-top))] pb-2 shrink-0 border-b border-gray-200 dark:border-gray-800">
+                    <h3 id="admin-write-title" class="text-lg font-black text-gray-900 dark:text-white">Next Train Composer</h3>
+                    <button type="button" id="admin-write-close" class="p-2 rounded-full text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 focus:outline-none" aria-label="Close">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                    </button>
+                </div>
+                <p class="text-[11px] text-gray-500 dark:text-gray-400 px-4 py-2 shrink-0">Uses the whole field. Replace puts it back. Nothing is posted until you save or send.</p>
+                <div id="admin-write-text" contenteditable="true" role="textbox" aria-multiline="true" class="mx-4 mb-2 min-h-0 flex-1 overflow-y-auto rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-950 text-[15px] leading-relaxed text-gray-900 dark:text-white p-4 focus:outline-none"></div>
+                <div id="admin-write-actions" class="px-4 flex flex-wrap gap-1 shrink-0"></div>
+                <p id="admin-write-status" class="min-h-[1.1rem] text-[11px] text-gray-500 dark:text-gray-400 px-4 mt-2 shrink-0"></p>
+                <div class="grid grid-cols-2 gap-2 px-4 pt-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] shrink-0">
+                    <button type="button" id="admin-write-copy" class="bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 font-bold py-2 rounded-lg text-sm focus:outline-none">Copy</button>
+                    <button type="button" id="admin-write-replace" class="bg-violet-600 hover:bg-violet-700 text-white font-bold py-2 rounded-lg text-sm focus:outline-none">Replace</button>
+                </div>
+            </div>`;
+        document.body.appendChild(modal);
+        modal.querySelector('#admin-write-close').onclick = () => Admin.closeWriteAssist();
+        modal.addEventListener('click', (event) => {
+            if (event.target === modal) Admin.closeWriteAssist();
+        });
+        modal.querySelector('#admin-write-copy').onclick = async () => {
+            const text = Admin.writeAssistRead(document.getElementById('admin-write-text'));
+            if (!text.trim()) return;
+            try {
+                await navigator.clipboard.writeText(text);
+                if (typeof showToast === 'function') showToast('Copied', 'success');
+            } catch {
+                if (typeof showToast === 'function') showToast('Copy failed', 'error');
+            }
+        };
+        modal.querySelector('#admin-write-replace').onclick = () => Admin.applyWriteAssist();
+        const actions = modal.querySelector('#admin-write-actions');
+        const list = window.ntTextAssist?.TEXT_ASSIST_ACTIONS || [];
+        actions.innerHTML = list.map((action) =>
+            `<button type="button" data-write-action="${action.id}" class="h-7 px-2 rounded-md text-[11px] font-semibold leading-none bg-violet-50 dark:bg-violet-950/40 text-violet-800 dark:text-violet-100 border border-violet-200/80 dark:border-violet-800 focus:outline-none">${action.label}</button>`
+        ).join('');
+        actions.addEventListener('click', (event) => {
+            const button = event.target.closest('[data-write-action]');
+            if (!button) return;
+            Admin.runWriteAssist(button.getAttribute('data-write-action'), button);
+        });
+        return modal;
+    },
+
+    readWriteField: (el) => {
+        if (!el) return { text: '', full: true };
+        const editable = el.getAttribute && el.getAttribute('contenteditable') === 'true';
+        if (!editable) {
+            const value = String(el.value || '');
+            return { text: value, full: true, start: 0, end: value.length };
+        }
+        return { text: el.innerText || el.textContent || '', full: true };
+    },
+
+    openWriteAssist: (targetId) => {
+        const el = document.getElementById(targetId);
+        if (!el) return;
+        if (el.id === 'alert-msg') Admin.hoistEditorImages(el);
+        const read = Admin.readWriteField(el);
+        const text = String(read.text || '').trim();
+        if (!text) {
+            if (typeof showToast === 'function') showToast('Type something in the field first.', 'error');
+            return;
+        }
+        if (!window.ntTextAssist?.TEXT_ASSIST_ACTIONS) {
+            if (typeof showToast === 'function') showToast('Next Train Composer is not loaded.', 'error');
+            return;
+        }
+        Admin._writeTarget = { id: targetId, full: true, start: 0, end: String(read.text || '').length };
+        const modal = Admin.ensureWriteModal();
+        const box = document.getElementById('admin-write-text');
+        Admin.writeAssistShow(box, read.text, false);
+        const status = document.getElementById('admin-write-status');
+        if (status) status.textContent = 'Using the whole field.';
+        modal.classList.remove('hidden');
+    },
+
+    closeWriteAssist: () => {
+        document.getElementById('admin-write-modal')?.classList.add('hidden');
+        Admin._writeTarget = null;
+    },
+
+    runWriteAssist: async (action, button) => {
+        const box = document.getElementById('admin-write-text');
+        const status = document.getElementById('admin-write-status');
+        const text = Admin.writeAssistRead(box);
+        if (!text.trim()) {
+            if (typeof showToast === 'function') showToast('Type something in the field first.', 'error');
+            return;
+        }
+        const buttons = document.querySelectorAll('#admin-write-actions button');
+        buttons.forEach((node) => { node.disabled = true; });
+        if (button) button.textContent = 'Working...';
+        if (status) status.textContent = '';
+        try {
+            const secret = await Admin.getAuthKey();
+            if (!secret) throw new Error('Sign in as an operator first.');
+            const res = await fetch(`${Admin.replyWorkerUrl()}/edit`, {
+                method: 'POST',
+                headers: {
+                    Authorization: `Bearer ${secret}`,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ text, action }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(data.error || 'Could not rewrite that text.');
+            if (!data.text) throw new Error('The writer returned nothing.');
+            const comfort = window.ntTextAssist?.comfortAssistText;
+            const next = typeof comfort === 'function' ? comfort(data.text) : data.text;
+            Admin.writeAssistShow(box, next, true);
+            if (status) status.textContent = 'Review it, then Replace.';
+        } catch (err) {
+            if (typeof showToast === 'function') showToast(err.message || 'Could not rewrite that text.', 'error');
+        } finally {
+            buttons.forEach((node) => { node.disabled = false; });
+            const label = (window.ntTextAssist?.TEXT_ASSIST_ACTIONS || []).find((item) => item.id === action);
+            if (button && label) button.textContent = label.label;
+        }
+    },
+
+    applyWriteAssist: () => {
+        const target = Admin._writeTarget;
+        const text = Admin.writeAssistRead(document.getElementById('admin-write-text'));
+        const el = target && document.getElementById(target.id);
+        if (!el) {
+            if (typeof showToast === 'function') showToast('That field is no longer open.', 'error');
+            return;
+        }
+        const max = Number(el.getAttribute('maxlength')) || 0;
+        let next = text.replace(/\r\n/g, '\n');
+        let clipped = false;
+        const editable = el.getAttribute('contenteditable') === 'true';
+        if (!editable && !target.full && Number.isFinite(target.start) && Number.isFinite(target.end)) {
+            const value = String(el.value || '');
+            next = value.slice(0, target.start) + next + value.slice(target.end);
+        }
+        if (max && next.length > max) {
+            next = next.slice(0, max);
+            clipped = true;
+        }
+        if (editable) {
+            const parked = [];
+            if (el.id === 'alert-msg') Admin.hoistEditorImages(el);
+            else {
+                el.querySelectorAll('img').forEach((img) => {
+                    parked.push(img.outerHTML);
+                    img.remove();
+                });
+            }
+            const asHtml = window.ntTextAssist?.assistHtmlFromText;
+            const html = typeof asHtml === 'function' ? asHtml(next) : '';
+            if (html) el.innerHTML = html;
+            else el.textContent = next;
+            if (parked.length) {
+                el.insertAdjacentHTML('beforeend', parked.join(''));
+                Admin.stampComposerImages(el);
+            }
+        } else {
+            el.value = next;
+            el.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+        Admin.closeWriteAssist();
+        if (typeof showToast === 'function') {
+            showToast(clipped ? `Replaced. Cut to ${max} characters.` : 'Replaced in the field.', 'success');
+        }
     },
 
     openReplyModal: (feedbackId, deviceId, editMsg) => {
@@ -11771,58 +14220,67 @@ const Admin = {
             : `<span class="font-mono text-gray-800 dark:text-gray-100">${String(deviceId).replace(/</g, '&lt;')}</span>${Admin.userIdJoinHintHtml(deviceId)}`;
         
         let modal = document.getElementById('admin-reply-modal');
+        if (modal && !document.getElementById('admin-copilot-settings-btn')) {
+            document.getElementById('admin-copilot-settings')?.remove();
+            modal.remove();
+            modal = null;
+        }
         if (!modal) {
             modal = document.createElement('div');
             modal.id = 'admin-reply-modal';
-            modal.className = 'fixed inset-0 bg-black/80 z-[200] hidden flex items-center justify-center p-4 backdrop-blur-sm transition-opacity duration-300';
+            modal.className = 'fixed inset-0 bg-black/70 z-[200] hidden flex p-0 backdrop-blur-sm';
             modal.innerHTML = `
-                <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-lg max-h-[90dvh] flex flex-col p-4 transform transition-all scale-95 border border-gray-200 dark:border-gray-700">
-                    <h3 id="admin-reply-title" class="text-lg font-black text-gray-900 dark:text-white mb-0.5 tracking-tight flex items-center gap-2 shrink-0"><span class="text-sky-500">${Admin.icon('message', 'w-5 h-5')}</span> <span id="admin-reply-title-text">Reply to Commuter</span></h3>
-                    <p id="admin-reply-recipient" class="text-[11px] text-gray-600 dark:text-gray-300 mb-1 break-all leading-snug shrink-0"></p>
-                    <p id="admin-reply-hint" class="text-[10px] text-gray-500 dark:text-gray-400 mb-3 shrink-0">Message will be delivered to their personal inbox upon next app launch.</p>
-                    
-                    <div class="flex flex-col min-h-0 flex-1">
-                    <div class="rounded-t-lg overflow-hidden border border-gray-300 dark:border-gray-600 border-b-0">
-                            ${Admin.wysiwygToolbarHtml('admin-reply-text', { fileInputId: 'admin-reply-upload-file', fileLabelId: 'admin-reply-upload-label' })}
-                    </div>
-                        <div contenteditable="true" id="admin-reply-text" class="nt-rich-body w-full min-h-[240px] max-h-[50dvh] overflow-y-auto p-3 bg-gray-50 dark:bg-gray-900 border border-t-0 border-gray-300 dark:border-gray-600 rounded-b-lg text-sm text-gray-900 dark:text-white focus:outline-none empty:before:content-[attr(placeholder)] empty:before:text-gray-400 custom-scrollbar" placeholder="Type your response..."></div>
-                    </div>
-
-                    <div class="flex space-x-2 mt-3 shrink-0">
-                        <button id="reply-cancel" class="flex-1 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 font-bold py-2.5 px-3 rounded-lg transition-colors focus:outline-none text-sm">Cancel</button>
-                        <button id="reply-send" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-3 rounded-lg shadow-sm transition-colors focus:outline-none text-sm">Send Reply</button>
+                <div class="bg-white dark:bg-gray-800 shadow-2xl w-full h-full min-h-0 overflow-hidden flex flex-col px-3 sm:px-4 pt-[max(0.75rem,env(safe-area-inset-top))] pb-[max(0.75rem,env(safe-area-inset-bottom))] border-0 rounded-none">
+                    <div id="admin-reply-scroll" class="flex-1 min-h-0 overflow-y-auto overscroll-contain custom-scrollbar">
+                        <div id="admin-reply-header" class="pb-2">
+                            <div class="flex items-start justify-between gap-2">
+                                <h3 id="admin-reply-title" class="text-xl font-black text-gray-900 dark:text-white mb-0.5 tracking-tight flex items-center gap-2 min-w-0"><span class="text-sky-500 shrink-0">${Admin.icon('message', 'w-5 h-5')}</span> <span id="admin-reply-title-text">Next Train Co-Pilot</span></h3>
+                                <button type="button" id="admin-copilot-settings-btn" class="shrink-0 p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-300 focus:outline-none" aria-label="Co-Pilot settings" title="Co-Pilot settings">${Admin.icon('settings', 'w-5 h-5')}</button>
+                            </div>
+                            <p id="admin-reply-recipient" class="text-[11px] text-gray-600 dark:text-gray-300 mb-2 break-all leading-snug"></p>
+                            <div id="admin-reply-contacts" class="mb-2"></div>
+                            <p id="admin-reply-hint" class="text-[10px] text-gray-500 dark:text-gray-400 mb-3">Message will be delivered to their personal inbox upon next app launch.</p>
+                        </div>
+                        <div class="flex flex-col min-h-[14rem]">
+                            <div class="shrink-0 rounded-t-lg border border-gray-300 dark:border-gray-600 border-b-0">
+                                ${Admin.wysiwygToolbarHtml('admin-reply-text', { fileInputId: 'admin-reply-upload-file', fileLabelId: 'admin-reply-upload-label' })}
+                            </div>
+                            <div contenteditable="true" id="admin-reply-text" class="nt-rich-body w-full min-h-[12rem] overflow-visible p-3 pb-4 bg-gray-50 dark:bg-gray-900 border border-t-0 border-gray-300 dark:border-gray-600 rounded-b-lg text-sm text-gray-900 dark:text-white focus:outline-none empty:before:content-[attr(placeholder)] empty:before:text-gray-400" placeholder="Type your response..."></div>
+                        </div>
+                        ${Admin.replySuggestMarkup()}
+                        <div class="grid grid-cols-2 gap-2 mt-3 pt-3 pb-1 border-t border-gray-100 dark:border-gray-700">
+                            <button id="reply-cancel" class="bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 font-bold py-3.5 px-3 rounded-2xl transition-colors focus:outline-none text-base">Cancel</button>
+                            <button id="reply-send" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 px-3 rounded-2xl shadow-sm transition-colors focus:outline-none text-base">Send Reply</button>
+                        </div>
                     </div>
                 </div>
             `;
             document.body.appendChild(modal);
+            if (!document.getElementById('admin-copilot-settings')) {
+                document.body.insertAdjacentHTML('beforeend', Admin.copilotSettingsMarkup());
+            }
         } else {
-            // Upgrade short modal from earlier session in this page load
+            modal.className = 'fixed inset-0 bg-black/70 z-[200] hidden flex p-0 backdrop-blur-sm';
             const panel = modal.firstElementChild;
             if (panel) {
-                panel.className = 'bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-lg max-h-[90dvh] flex flex-col p-4 transform transition-all scale-95 border border-gray-200 dark:border-gray-700';
+                panel.className = 'bg-white dark:bg-gray-800 shadow-2xl w-full h-full min-h-0 overflow-hidden flex flex-col px-3 sm:px-4 pt-[max(0.75rem,env(safe-area-inset-top))] pb-[max(0.75rem,env(safe-area-inset-bottom))] border-0 rounded-none';
             }
-            const editor = document.getElementById('admin-reply-text');
-            if (editor) {
-                editor.classList.remove('min-h-[120px]', 'p-2.5');
-                editor.classList.add('nt-rich-body', 'min-h-[240px]', 'max-h-[50dvh]', 'overflow-y-auto', 'p-3', 'custom-scrollbar');
-                const bar = editor.previousElementSibling;
-                if (bar && !bar.querySelector('[data-nt-font-select]')) {
-                    bar.outerHTML = `<div class="rounded-t-lg overflow-hidden border border-gray-300 dark:border-gray-600 border-b-0">${Admin.wysiwygToolbarHtml('admin-reply-text', { fileInputId: 'admin-reply-upload-file', fileLabelId: 'admin-reply-upload-label' })}</div>`;
-                }
+            const scroll = document.getElementById('admin-reply-scroll');
+            const sendRow = document.getElementById('reply-cancel')?.parentElement;
+            if (scroll && sendRow && sendRow.parentElement !== scroll) {
+                scroll.appendChild(sendRow);
+                sendRow.classList.remove('shrink-0');
+                sendRow.classList.add('pb-1');
             }
-            if (!document.getElementById('admin-reply-recipient')) {
-                const h3 = panel?.querySelector('h3');
-                if (h3) {
-                    const recip = document.createElement('p');
-                    recip.id = 'admin-reply-recipient';
-                    recip.className = 'text-[11px] text-gray-600 dark:text-gray-300 mb-1 break-all leading-snug shrink-0';
-                    h3.insertAdjacentElement('afterend', recip);
-                }
+            if (!document.getElementById('admin-copilot-settings')) {
+                document.body.insertAdjacentHTML('beforeend', Admin.copilotSettingsMarkup());
             }
         }
 
         const recipEl = document.getElementById('admin-reply-recipient');
         if (recipEl) recipEl.innerHTML = recipientHtml;
+        const contactsEl = document.getElementById('admin-reply-contacts');
+        if (contactsEl) contactsEl.innerHTML = Admin.copilotContactChipsHtml(deviceId);
 
         const editKey = String(editMsg?.id || editMsg?.key || '').trim();
         modal.dataset.editMsgKey = editKey;
@@ -11832,17 +14290,62 @@ const Admin = {
         const titleText = document.getElementById('admin-reply-title-text');
         const hintEl = document.getElementById('admin-reply-hint');
         const sendBtn = document.getElementById('reply-send');
-        if (titleText) titleText.textContent = editKey ? 'Edit reply' : 'Reply to Commuter';
+        if (titleText) titleText.textContent = editKey ? 'Edit reply' : 'Next Train Co-Pilot';
         if (hintEl) {
             hintEl.textContent = editKey
                 ? 'Saves over this reply. Does not post a new message or archive the thread.'
                 : 'Message will be delivered to their personal inbox upon next app launch.';
         }
         if (sendBtn) sendBtn.textContent = editKey ? 'Save' : 'Send Reply';
+        const suggestBox = document.getElementById('admin-reply-suggest');
+        if (suggestBox) suggestBox.classList.toggle('hidden', !!editKey);
+        Admin.showSuggestHalt(null);
 
+        const draftId = editKey ? '' : Admin.draftMessageIdForDevice(deviceId);
+        modal.dataset.draftMessageId = draftId;
         const editorEl = document.getElementById('admin-reply-text');
-        if (editorEl) editorEl.innerHTML = editKey ? String(editMsg.text || editMsg.message || '') : '';
+        if (editorEl) {
+            delete editorEl.dataset.draftTouched;
+            if (!editorEl.dataset.draftInputBound) {
+                editorEl.dataset.draftInputBound = '1';
+                editorEl.addEventListener('input', () => {
+                    editorEl.dataset.draftTouched = '1';
+                    Admin.keepReplyCaretVisible();
+                });
+                editorEl.addEventListener('focus', () => {
+                    // Drop a viewport pin from the same frame. Do not touch
+                    // scrollTop. The browser scroll takes the header away.
+                    const sheet = document.getElementById('admin-reply-modal');
+                    if (sheet) sheet.style.top = '0px';
+                });
+            }
+            const scrollPane = document.getElementById('admin-reply-scroll');
+            if (scrollPane && !scrollPane.dataset.scrollStashBound) {
+                scrollPane.dataset.scrollStashBound = '1';
+                scrollPane.addEventListener('scroll', () => {
+                    Admin._replyScrollStash = scrollPane.scrollTop;
+                }, { passive: true });
+            }
+            if (!modal.dataset.caretBound) {
+                modal.dataset.caretBound = '1';
+                document.addEventListener('selectionchange', () => {
+                    if (modal.classList.contains('hidden')) return;
+                    Admin.keepReplyCaretVisible();
+                });
+            }
+            const kept = !editKey ? Admin.readLocalReplyDraft(draftId) : null;
+            editorEl.innerHTML = editKey ? String(editMsg.text || editMsg.message || '') : (kept?.html || '');
+        }
+        modal._draftRestore = editKey ? Promise.resolve('') : Admin.restoreReplyDraft(draftId);
+        if (!modal.dataset.scrimBound) {
+            modal.dataset.scrimBound = '1';
+            modal.addEventListener('click', (event) => {
+                if (event.target !== modal) return;
+                document.getElementById('reply-cancel')?.click();
+            });
+        }
         modal.classList.remove('hidden');
+        if (typeof lockBackgroundScroll === 'function') lockBackgroundScroll();
         void modal.offsetWidth; // Trigger reflow
         modal.firstElementChild.classList.remove('scale-95');
         modal.firstElementChild.classList.add('scale-100');
@@ -11850,9 +14353,14 @@ const Admin = {
         Admin.syncAdminReplyModalViewport();
 
         const cleanup = () => {
+            Admin.persistReplyDraft();
             modal.classList.add('hidden');
             modal.firstElementChild.classList.remove('scale-100');
             modal.firstElementChild.classList.add('scale-95');
+            const stillOpen = document.querySelector('div[id$="-modal"].fixed:not(.hidden), #alerts-channel:not(.hidden)');
+            if (!stillOpen && !document.body.classList.contains('sidenav-open') && typeof unlockBackgroundScroll === 'function') {
+                unlockBackgroundScroll();
+            }
         };
 
         // GUARDIAN PHASE 3: Inline WYSIWYG File Uploader (Admin Inbox Reply)
@@ -11862,7 +14370,7 @@ const Admin = {
                 const editor = document.getElementById('admin-reply-text');
                 // GUARDIAN UX FIX: Retrieve pre-upload cursor position locked via mousedown
                 const savedRange = Admin._savedRange;
-                if (editor) editor.focus();
+                if (editor) Admin.focusEditorSafely(editor);
 
                 if (this.files && this.files.length > 0) {
                     const file = this.files[0];
@@ -11907,24 +14415,10 @@ const Admin = {
                                 if (labelEl) labelEl.innerHTML = originalLabel;
                                 try {
                                     const url = await window.firebaseGetDownloadURL(uploadTask.snapshot.ref);
-                                    
-                                    const htmlToInsert = Admin.inlineAttachmentHtml(url, isPdf);
-                                    if (!htmlToInsert) {
+                                    if (!editor || !Admin.placeComposerAttachment(editor, url, isPdf, savedRange)) {
                                         if (typeof showToast === 'function') showToast("Failed to insert attachment link", "error");
                                         this.value = '';
                                         return;
-                                    }
-                                    
-                                    if (editor) {
-                                        editor.focus();
-                                        if (savedRange) {
-                                            const sel = window.getSelection();
-                                            sel.removeAllRanges();
-                                            sel.addRange(savedRange);
-                                        }
-                                        if (!document.execCommand('insertHTML', false, htmlToInsert)) {
-                                            editor.innerHTML += htmlToInsert;
-                                        }
                                     }
                                     if (typeof showToast === 'function') showToast("Attachment inserted!", "success");
                                 } catch(e) {
@@ -11941,7 +14435,51 @@ const Admin = {
             });
         }
 
-        document.getElementById('reply-cancel').onclick = cleanup;
+        document.getElementById('reply-cancel').onclick = () => {
+            Admin.closeCopilotSettings();
+            Admin.closeReplyGuideModal();
+            cleanup();
+        };
+        const suggestBtn = document.getElementById('reply-suggest');
+        if (suggestBtn) suggestBtn.onclick = () => Admin.runSuggestReply();
+        const suggestAgain = document.getElementById('reply-suggest-again');
+        if (suggestAgain) suggestAgain.onclick = () => Admin.runSuggestReply();
+        const contextBox = document.getElementById('admin-reply-suggest-context');
+        if (contextBox) contextBox.value = '';
+        const onceNote = document.getElementById('admin-reply-suggest-once');
+        if (onceNote) onceNote.value = '';
+        if (!document.getElementById('admin-reply-guide-modal')) {
+            document.body.insertAdjacentHTML('beforeend', Admin.replyGuideModalMarkup());
+        }
+        Admin.bindReplyGuideModal();
+        const guideInput = document.getElementById('admin-reply-guide-text');
+        const guideFiles = document.getElementById('admin-reply-guide-files');
+        const guideMeta = document.getElementById('admin-reply-guide-files-meta');
+        if (guideInput) guideInput.value = '';
+        if (guideFiles) guideFiles.value = '';
+        if (guideMeta) guideMeta.textContent = '';
+        Admin.closeReplyGuideModal();
+        const guideOpen = document.getElementById('admin-reply-guide-open');
+        if (guideOpen) guideOpen.onclick = () => Admin.openReplyGuideModal();
+        Admin.syncReplyGuide();
+        Admin.setSuggestProgress(null);
+        const settingsBtn = document.getElementById('admin-copilot-settings-btn');
+        if (settingsBtn) settingsBtn.onclick = () => Admin.openCopilotSettings();
+        const settingsClose = document.getElementById('admin-copilot-settings-close');
+        if (settingsClose) settingsClose.onclick = () => Admin.closeCopilotSettings();
+        const settingsSheet = document.getElementById('admin-copilot-settings');
+        if (settingsSheet && !settingsSheet.dataset.scrimBound) {
+            settingsSheet.dataset.scrimBound = '1';
+            settingsSheet.addEventListener('click', (event) => {
+                if (event.target === settingsSheet) Admin.closeCopilotSettings();
+            });
+        }
+        const saveNoteBtn = document.getElementById('reply-suggest-save-note');
+        if (saveNoteBtn) saveNoteBtn.onclick = () => Admin.saveReplySuggestNote();
+        const clearNoteBtn = document.getElementById('reply-suggest-clear-note');
+        if (clearNoteBtn) clearNoteBtn.onclick = () => Admin.saveReplySuggestNote({ clear: true });
+        Admin.closeCopilotSettings();
+        if (!editKey) Admin.loadReplySuggestNote(modal);
         document.getElementById('reply-send').onclick = async () => {
             let text = document.getElementById('admin-reply-text').innerHTML.trim();
             if (!text || text === '<br>') {
@@ -12009,22 +14547,29 @@ const Admin = {
                     });
                 }
 
-                // Collect contacts before archive refresh replaces the cache
+                // Collect contacts + unresolved ids before any archive refresh replaces the cache
                 const contacts = Admin.collectFeedbackContacts(replyDeviceId);
                 const commuterName = (Admin.cachedAliases && Admin.cachedAliases[replyDeviceId]) || 'this commuter';
+                const unresolvedIds = Admin.unresolvedFeedbackIdsForDevice(replyDeviceId) || String(replyFeedbackId || '');
 
-                if (replyFeedbackId) {
-                    await Admin.resolveFeedback(replyFeedbackId, true);
-                } else if (typeof Admin.fetchFeedback === 'function') {
-                    Admin.fetchFeedback();
-                } 
-                
                 if (typeof showToast === 'function') {
-                    showToast(replyFeedbackId ? 'Reply sent & archived!' : 'Message sent to their inbox.', 'success');
+                    showToast(replyFeedbackId ? 'Reply sent.' : 'Message sent to their inbox.', 'success');
                 }
                 cleanup();
                 if (contacts.emails.length || contacts.phones.length) {
-                    Admin.showOutreachModal({ ...contacts, commuterName });
+                    Admin.showOutreachModal({
+                        ...contacts,
+                        commuterName,
+                        message: text,
+                        deviceId: replyDeviceId,
+                        feedbackId: replyFeedbackId,
+                        unresolvedIds,
+                    });
+                } else if (unresolvedIds) {
+                    await Admin.resolveFeedback(unresolvedIds, true);
+                    if (typeof showToast === 'function') showToast('Reply sent & archived!', 'success');
+                } else if (typeof Admin.fetchFeedback === 'function') {
+                    Admin.fetchFeedback();
                 }
             } catch (e) {
                 if (typeof showToast === 'function') showToast(editingKey ? 'Failed to save reply.' : 'Failed to send reply.', 'error');
@@ -12135,7 +14680,7 @@ const Admin = {
         openSmoothModal('admin-context-modal');
 
         const showPreview = async (foundData) => {
-            if (foundData.poll && foundData.poll.active && !foundData.pollResults && foundData.id) {
+            if (foundData.poll && foundData.id && (foundData.poll.active || foundData.poll.question)) {
                 const liveTallies = await Admin.fetchPollResultsSnapshot(foundData.id, secret);
                 if (liveTallies) foundData = { ...foundData, pollResults: liveTallies };
             }
@@ -12194,6 +14739,123 @@ const Admin = {
         }
     },
 
+    writeAssistButtonHtml: (targetId) => {
+        const id = String(targetId || '').replace(/[^a-z0-9_-]/gi, '');
+        if (!id) return '';
+        return `<button type="button" onmousedown="event.preventDefault();" ontouchstart="Admin.saveCursorRange()" onclick="Admin.openWriteAssist('${id}')" class="shrink-0 px-2 py-1 text-xs font-bold text-violet-700 dark:text-violet-300 hover:bg-violet-100 dark:hover:bg-gray-600 rounded focus:outline-none whitespace-nowrap" title="Grammar, summarise, tone">Write</button>`;
+    },
+
+    openMediaSourceSheet: (fileInputId, editorId) => {
+        const existing = document.getElementById('nt-media-source');
+        if (existing) existing.remove();
+        const inputId = String(fileInputId || '').replace(/[^a-z0-9_-]/gi, '');
+        const editId = String(editorId || '').replace(/[^a-z0-9_-]/gi, '');
+        const sheet = document.createElement('div');
+        sheet.id = 'nt-media-source';
+        sheet.className = 'fixed inset-0 z-[240] flex items-end sm:items-center justify-center bg-black/50 p-4';
+        sheet.innerHTML = `
+            <div class="w-full max-w-sm rounded-2xl bg-white dark:bg-gray-800 p-4 shadow-xl" role="dialog" aria-modal="true" aria-label="Media source">
+                <p class="text-sm font-black text-gray-900 dark:text-white mb-1">Add media</p>
+                <p class="text-xs text-gray-500 dark:text-gray-400 mb-3">A file from this device can be a photo or a PDF. From the internet: an image file, or a YouTube / Vimeo / video file link (loads the crawled preview).</p>
+                <button type="button" data-media-choice="device" class="w-full mb-2 h-11 rounded-xl bg-blue-600 text-white text-sm font-bold">From this device</button>
+                <button type="button" data-media-choice="url" class="w-full mb-2 h-11 rounded-xl border border-gray-300 dark:border-gray-600 text-sm font-bold text-gray-800 dark:text-gray-100">From the internet</button>
+                <button type="button" data-media-choice="cancel" class="w-full h-10 text-sm font-bold text-gray-500">Cancel</button>
+            </div>`;
+        const close = () => sheet.remove();
+        sheet.addEventListener('click', (event) => {
+            const choice = event.target?.closest?.('[data-media-choice]')?.getAttribute('data-media-choice');
+            if (!choice) {
+                if (event.target === sheet) close();
+                return;
+            }
+            if (choice === 'device') {
+                close();
+                document.getElementById(inputId)?.click();
+                return;
+            }
+            if (choice === 'url') {
+                close();
+                Admin.insertInternetImage(editId);
+                return;
+            }
+            close();
+        });
+        document.body.appendChild(sheet);
+    },
+
+    insertInternetVideoLink: async (editor, videoUrl) => {
+        if (!editor || !videoUrl) return false;
+        const esc = typeof escapeHTML === 'function' ? escapeHTML(videoUrl) : String(videoUrl);
+        const htmlToInsert = `<a href="${esc}" target="_blank" rel="noopener" class="text-blue-600 dark:text-blue-400 underline underline-offset-2">${esc}</a>`;
+        Admin.focusEditorSafely(editor);
+        if (Admin._savedRange) {
+            const sel = window.getSelection();
+            sel.removeAllRanges();
+            try { sel.addRange(Admin._savedRange); } catch { /* range left the editor */ }
+        }
+        const needsBreak = !!(editor.innerText || '').trim();
+        const chunk = needsBreak ? `<br>${htmlToInsert}` : htmlToInsert;
+        if (!document.execCommand('insertHTML', false, chunk)) editor.innerHTML += chunk;
+        Admin._savedRange = null;
+        try {
+            const preview = window.ntLinkPreview?.fetchLinkPreview
+                ? await window.ntLinkPreview.fetchLinkPreview(videoUrl, Admin.replyWorkerUrl())
+                : null;
+            if (preview?.url) Admin.paintComposerPreview(preview);
+            else Admin.scheduleAlertPreview();
+        } catch {
+            Admin.scheduleAlertPreview();
+        }
+        return true;
+    },
+
+    insertInternetImage: async (editorId) => {
+        const raw = window.prompt('Paste an image file link, or a YouTube / Vimeo / video file link (https):', 'https://');
+        if (raw == null) return;
+        const typed = String(raw).trim();
+        if (!typed || typed === 'https://') return;
+        const editor = document.getElementById(editorId);
+        if (!editor) {
+            if (typeof showToast === 'function') showToast('Could not use that link.', 'error');
+            return;
+        }
+        const video = typeof window.sanitizeAlertVideoUrl === 'function'
+            ? window.sanitizeAlertVideoUrl(typed)
+            : '';
+        if (video) {
+            const ok = await Admin.insertInternetVideoLink(editor, video);
+            if (!ok) {
+                if (typeof showToast === 'function') showToast('Could not use that video link.', 'error');
+                return;
+            }
+            if (typeof showToast === 'function') showToast('Video link added. Preview loading.', 'success');
+            return;
+        }
+        const safe = typeof window.sanitizeAttachmentDisplayUrl === 'function'
+            ? window.sanitizeAttachmentDisplayUrl(typed)
+            : '';
+        const kind = safe && typeof window.classifyAttachmentUrl === 'function'
+            ? window.classifyAttachmentUrl(safe)
+            : '';
+        if (!safe || kind !== 'image') {
+            if (typeof showToast === 'function') {
+                showToast('Use an image file (.jpg, .png, .gif, .webp) or a YouTube / Vimeo / video file link.', 'error', 4500);
+            }
+            return;
+        }
+        if (!Admin.placeComposerAttachment(editor, safe, false, Admin._savedRange)) {
+            if (typeof showToast === 'function') showToast('Could not use that image link.', 'error');
+            return;
+        }
+        Admin._savedRange = null;
+        if (typeof showToast === 'function') showToast('Image inserted.', 'success');
+    },
+
+    pickMediaSource: (fileInputId, editorId) => {
+        Admin.saveCursorRange();
+        Admin.openMediaSourceSheet(fileInputId, editorId);
+    },
+
     wysiwygToolbarHtml: (editorId, opts = {}) => {
         const id = String(editorId || 'alert-msg').replace(/[^a-z0-9_-]/gi, '');
         const fileInputId = opts.fileInputId ? String(opts.fileInputId).replace(/[^a-z0-9_-]/gi, '') : '';
@@ -12204,7 +14866,7 @@ const Admin = {
             `<button type="button" onmousedown="event.preventDefault();" ontouchstart="Admin.saveCursorRange()" onclick="Admin.formatAlertText('${tag}', '${id}')" class="px-1.5 py-1 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 rounded flex justify-center items-center focus:outline-none" title="${title}">${svg}</button>`;
         const sep = `<div class="w-px h-4 bg-gray-300 dark:bg-gray-600 my-auto mx-0.5 shrink-0"></div>`;
         const media = fileInputId
-            ? `<label for="${fileInputId}" id="${fileLabelId}" onmousedown="Admin.saveCursorRange()" ontouchstart="Admin.saveCursorRange()" onclick="Admin.saveCursorRange()" class="shrink-0 px-2 py-1 text-xs font-medium text-purple-600 dark:text-purple-400 hover:bg-gray-200 dark:hover:bg-gray-600 rounded flex items-center justify-center gap-1 focus:outline-none cursor-pointer whitespace-nowrap" title="Upload Image or PDF">${Admin.icon('paperclip', 'w-3.5 h-3.5')} Media</label>
+            ? `<button type="button" id="${fileLabelId}" onmousedown="event.preventDefault(); Admin.saveCursorRange();" ontouchstart="Admin.saveCursorRange()" onclick="Admin.pickMediaSource('${fileInputId}', '${id}')" class="shrink-0 px-2 py-1 text-xs font-medium text-purple-600 dark:text-purple-400 hover:bg-gray-200 dark:hover:bg-gray-600 rounded flex items-center justify-center gap-1 focus:outline-none cursor-pointer whitespace-nowrap" title="Add an image, or a YouTube / Vimeo / video link from the internet">${Admin.icon('paperclip', 'w-3.5 h-3.5')} Media</button>
                             <input type="file" id="${fileInputId}" class="hidden" accept="image/*,.pdf">`
             : '';
         const alignL = '<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h10M4 18h16"></path></svg>';
@@ -12243,6 +14905,7 @@ const Admin = {
                             ${btn('smaller', 'Decrease Size', 'A-')}
                             ${btn('larger', 'Increase Size', 'A+')}
                             </div>
+                            ${Admin.writeAssistButtonHtml(id)}
                             <button type="button" onmousedown="event.preventDefault();" ontouchstart="Admin.saveCursorRange()" onclick="Admin.formatAlertText('link', '${id}')" class="shrink-0 px-2 py-1 text-xs font-medium text-blue-600 dark:text-blue-400 hover:bg-gray-200 dark:hover:bg-gray-600 rounded flex items-center justify-center gap-1 focus:outline-none whitespace-nowrap" title="Add Custom Link">URL ${Admin.icon('globe', 'w-3.5 h-3.5')}</button>
                         </div>
                     </div>`;
@@ -12292,7 +14955,7 @@ const Admin = {
             el.classList.remove('nt-font-default', 'nt-font-verdana', 'nt-font-times');
             el.classList.add(spec.cls);
         };
-        editor.focus();
+        Admin.focusEditorSafely(editor);
         if (Admin._savedRange) {
             const sel = window.getSelection();
             sel.removeAllRanges();
@@ -12306,7 +14969,7 @@ const Admin = {
         if (!sel || sel.rangeCount === 0) return;
         const range = sel.getRangeAt(0);
 
-        const wrapCollapsed = () => {
+        const wrapCollapsed = () => { /* kept for callers */
             let node = sel.anchorNode;
             if (node && node.nodeType === 3) node = node.parentElement;
             let fontEl = node;
@@ -12346,6 +15009,398 @@ const Admin = {
         });
     },
 
+    composerXButton: (kind) => {
+        const label = kind === 'preview' ? 'Remove link preview' : 'Remove image';
+        return `<button type="button" class="nt-composer-x" data-nt-composer-x="${kind}" aria-label="${label}"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg></button>`;
+    },
+
+    slotBeforeEditor: (editor, attr, className) => {
+        if (!editor?.parentElement) return null;
+        const parent = editor.parentElement;
+        let slot = parent.querySelector(`:scope > [${attr}]`);
+        if (slot) return slot;
+        slot = document.createElement('div');
+        slot.setAttribute(attr, '');
+        slot.className = className;
+        parent.insertBefore(slot, editor);
+        return slot;
+    },
+
+    titleSlotFor: (editor) => Admin.slotBeforeEditor(editor, 'data-nt-title-slot', 'hidden border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900'),
+
+    mediaSlotFor: (editor) => Admin.slotBeforeEditor(editor, 'data-nt-media-slot', 'hidden px-2.5 pt-2 space-y-2'),
+
+    previewSlotFor: (editor) => {
+        if (!editor || editor.id !== 'alert-msg') return null;
+        return Admin.slotBeforeEditor(editor, 'data-nt-preview-slot', 'hidden px-2.5 pt-2');
+    },
+
+    revealComposerTitle: (editor) => {
+        const slot = Admin.titleSlotFor(editor);
+        if (!slot) return;
+        if (!slot.querySelector('[data-nt-title]')) {
+            slot.innerHTML = '<div data-nt-title contenteditable="true" role="textbox" data-placeholder="Title" class="text-gray-900 dark:text-white"></div>';
+        }
+        const titleEl = slot.querySelector('[data-nt-title]');
+        const sel = window.getSelection();
+        if (sel && sel.rangeCount && !sel.isCollapsed && editor.contains(sel.anchorNode)) {
+            const picked = sel.toString().replace(/\s+/g, ' ').trim();
+            if (picked) {
+                titleEl.textContent = picked;
+                sel.deleteFromDocument();
+                const first = editor.firstChild;
+                if (first && first.nodeType === 3) first.nodeValue = first.nodeValue.replace(/^\s+/, '');
+            }
+        }
+        slot.classList.remove('hidden');
+        if (titleEl) Admin.linkifyEditable(titleEl);
+        titleEl?.focus();
+        Admin.bindAlertComposeFields();
+    },
+
+    addComposerImage: (editor, url) => {
+        const safe = typeof window.sanitizeAttachmentDisplayUrl === 'function'
+            ? window.sanitizeAttachmentDisplayUrl(url)
+            : String(url || '').trim();
+        const slot = Admin.mediaSlotFor(editor);
+        if (!safe || !slot) return false;
+        const esc = typeof escapeHTML === 'function' ? escapeHTML(safe) : safe;
+        if ([...slot.querySelectorAll('img')].some((img) => (img.getAttribute('data-nt-src') || img.getAttribute('src')) === safe)) {
+            slot.classList.remove('hidden');
+            return true;
+        }
+        if (slot.querySelectorAll('img').length >= 4) {
+            if (typeof showToast === 'function') showToast('Maximum 4 images.', 'warning');
+            return false;
+        }
+        const fig = document.createElement('figure');
+        fig.className = 'nt-composer-media';
+        fig.innerHTML = `<img src="${esc}" data-nt-src="${esc}" alt="" referrerpolicy="no-referrer" draggable="false" class="nt-composer-image">${Admin.composerXButton('image')}`;
+        slot.appendChild(fig);
+        slot.classList.remove('hidden');
+        Admin.ensureComposerImageOpen();
+        return true;
+    },
+
+    hoistEditorImages: (editor) => {
+        if (!editor?.querySelectorAll) return;
+        editor.querySelectorAll('img').forEach((img) => {
+            const src = img.getAttribute('data-nt-src') || img.getAttribute('src') || '';
+            img.remove();
+            if (src) Admin.addComposerImage(editor, src);
+        });
+    },
+
+    placeComposerAttachment: (editor, url, isPdf, savedRange) => {
+        if (!editor) return false;
+        if (!isPdf && editor.id === 'alert-msg' && Admin.addComposerImage(editor, url)) return true;
+        const htmlToInsert = Admin.inlineAttachmentHtml(url, isPdf);
+        if (!htmlToInsert) return false;
+        Admin.focusEditorSafely(editor);
+        if (savedRange) {
+            const sel = window.getSelection();
+            sel.removeAllRanges();
+            try { sel.addRange(savedRange); } catch { /* range left the editor */ }
+        }
+        if (!document.execCommand('insertHTML', false, htmlToInsert)) editor.innerHTML += htmlToInsert;
+        Admin.stampComposerImages(editor);
+        Admin.ensureComposerImageOpen();
+        return true;
+    },
+
+    linkifyEditable: (root) => {
+        if (!root || typeof window.splitContactTokens !== 'function') return;
+        const sel = window.getSelection();
+        const caretNode = sel && sel.rangeCount && root.contains(sel.anchorNode) && sel.anchorNode.nodeType === 3
+            ? sel.anchorNode
+            : null;
+        const caretOff = caretNode ? sel.anchorOffset : -1;
+        const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+        const nodes = [];
+        let node = walker.nextNode();
+        while (node) {
+            nodes.push(node);
+            node = walker.nextNode();
+        }
+        nodes.forEach((textNode) => {
+            if (!textNode.parentNode || textNode.parentElement?.closest?.('a, button')) return;
+            const value = textNode.nodeValue || '';
+            const tokens = window.splitContactTokens(value);
+            if (!tokens.some((t) => t.type !== 'text')) return;
+            const frag = document.createDocumentFragment();
+            let consumed = 0;
+            let parked = null;
+            tokens.forEach((t, index) => {
+                const stillTyping = textNode === caretNode
+                    && t.type === 'url'
+                    && index === tokens.length - 1
+                    && caretOff >= consumed
+                    && caretOff <= consumed + t.value.length
+                    && !/\s$/.test(value);
+                if (t.type === 'text' || stillTyping) {
+                    const tn = document.createTextNode(t.value);
+                    frag.appendChild(tn);
+                    if (textNode === caretNode && caretOff >= consumed && caretOff <= consumed + t.value.length) {
+                        parked = { node: tn, off: Math.max(0, caretOff - consumed) };
+                    }
+                } else {
+                    const a = document.createElement('a');
+                    a.setAttribute('href', t.href);
+                    a.setAttribute('target', '_blank');
+                    a.setAttribute('rel', 'noopener');
+                    a.className = 'text-blue-600 dark:text-blue-400 underline underline-offset-2';
+                    a.textContent = t.value;
+                    frag.appendChild(a);
+                }
+                consumed += t.value.length;
+            });
+            textNode.parentNode.replaceChild(frag, textNode);
+            if (parked && sel) {
+                const range = document.createRange();
+                const off = Math.min(parked.off, parked.node.nodeValue.length);
+                range.setStart(parked.node, off);
+                range.collapse(true);
+                sel.removeAllRanges();
+                sel.addRange(range);
+            }
+        });
+    },
+
+    paintComposerPreview: (preview) => {
+        const editor = document.getElementById('alert-msg');
+        const slot = Admin.previewSlotFor(editor);
+        if (!slot || !preview?.url) return;
+        const esc = typeof escapeHTML === 'function' ? escapeHTML : (v) => String(v || '');
+        const image = preview.image
+            ? `<img class="nt-link-preview-media" alt="" src="${esc(preview.image)}" referrerpolicy="no-referrer">`
+            : '';
+        slot.dataset.cleared = '';
+        slot.dataset.previewUrl = preview.url;
+        slot.dataset.previewJson = JSON.stringify(preview);
+        slot.classList.remove('hidden');
+        slot.innerHTML = `<div class="nt-composer-preview"><a class="nt-link-preview" href="${esc(preview.url)}" target="_blank" rel="noopener noreferrer">${image}<div class="nt-link-preview-copy"><div class="nt-link-preview-title">${esc(preview.title || preview.url)}</div><div class="nt-link-preview-site">${esc(preview.site || '')}</div></div></a>${Admin.composerXButton('preview')}</div>`;
+    },
+
+    scheduleAlertPreview: () => {
+        clearTimeout(Admin._previewTimer);
+        Admin._previewTimer = setTimeout(() => Admin.refreshAlertLinkPreview(), 280);
+    },
+
+    refreshAlertLinkPreview: async () => {
+        const editor = document.getElementById('alert-msg');
+        const slot = Admin.previewSlotFor(editor);
+        if (!editor || !slot || !window.ntLinkPreview?.fetchLinkPreview) return;
+        const titleEl = editor.parentElement?.querySelector('[data-nt-title]');
+        const text = `${titleEl?.innerText || ''} ${editor.innerText || ''}`;
+        const anchors = [
+            ...(titleEl?.querySelectorAll('a[href]') || []),
+            ...editor.querySelectorAll('a[href]'),
+        ];
+        const fromAnchor = anchors
+            .map((a) => a.getAttribute('href') || '')
+            .find((href) => /^https?:\/\//i.test(href));
+        const found = text.match(/https?:\/\/[^\s<>"']+/i) || text.match(/\bwww\.[^\s<>"']+/i);
+        let url = fromAnchor || (found ? found[0].replace(/[.,;:!?)]+$/, '') : '');
+        if (/^www\./i.test(url)) url = `https://${url}`;
+        if (!url) {
+            if (slot.dataset.cleared !== '1') {
+                slot.innerHTML = '';
+                slot.classList.add('hidden');
+                delete slot.dataset.previewJson;
+            }
+            return;
+        }
+        if (slot.dataset.cleared === '1' && slot.dataset.clearedUrl === url) return;
+        if (slot.dataset.previewUrl === url && slot.querySelector('.nt-link-preview')) return;
+        try {
+            const preview = await window.ntLinkPreview.fetchLinkPreview(url, Admin.replyWorkerUrl());
+            if (!preview?.url) return;
+            if (slot.dataset.cleared === '1' && slot.dataset.clearedUrl === preview.url) return;
+            Admin.paintComposerPreview(preview);
+        } catch { /* the words stay a link even when the card cannot load */ }
+    },
+
+    readAlertCompose: () => {
+        const editor = document.getElementById('alert-msg');
+        const empty = { title: '', message: '', suppressLinkPreview: false, linkPreview: null, hasImage: false };
+        if (!editor) return empty;
+        Admin.linkifyEditable(editor);
+        const titleEl = editor.parentElement?.querySelector('[data-nt-title]');
+        if (titleEl) Admin.linkifyEditable(titleEl);
+        Admin.hoistEditorImages(editor);
+        const title = String(titleEl?.innerText || '').replace(/\s+/g, ' ').trim();
+        const slot = Admin.mediaSlotFor(editor);
+        const imgs = [...(slot?.querySelectorAll('img') || [])];
+        const esc = typeof escapeHTML === 'function' ? escapeHTML : (v) => String(v || '');
+        const imgHtml = imgs.map((img) => {
+            const src = img.getAttribute('data-nt-src') || img.getAttribute('src') || '';
+            const safe = esc(src);
+            return safe ? `<img src="${safe}" data-nt-src="${safe}" alt="">` : '';
+        }).join('');
+        const body = String(editor.innerHTML || '').trim();
+        const previewSlot = document.getElementById('alert-preview-slot') || editor.parentElement?.querySelector('[data-nt-preview-slot]');
+        let linkPreview = null;
+        try { linkPreview = previewSlot?.dataset.previewJson ? JSON.parse(previewSlot.dataset.previewJson) : null; } catch { linkPreview = null; }
+        const suppressLinkPreview = previewSlot?.dataset.cleared === '1';
+        const clearedUrl = previewSlot?.dataset.clearedUrl || '';
+        const keptPreview = suppressLinkPreview
+            ? (linkPreview || (clearedUrl ? { url: clearedUrl } : null))
+            : linkPreview;
+        return {
+            title,
+            message: `${imgHtml}${body}`.trim(),
+            suppressLinkPreview,
+            linkPreview: keptPreview,
+            hasImage: imgs.length > 0,
+        };
+    },
+
+    loadAlertCompose: (item) => {
+        const editor = document.getElementById('alert-msg');
+        if (!editor || !item) return;
+        Admin.titleSlotFor(editor);
+        Admin.mediaSlotFor(editor);
+        Admin.previewSlotFor(editor);
+        const media = editor.parentElement?.querySelector('[data-nt-media-slot]');
+        if (media) {
+            media.innerHTML = '';
+            media.classList.add('hidden');
+        }
+        const holder = document.createElement('div');
+        holder.innerHTML = Admin.repairMojibake(item.message || '');
+        let title = String(item.title || '').trim();
+        const first = holder.firstElementChild;
+        if (first && /^H[1-4]$/i.test(first.tagName)) {
+            const extracted = (first.textContent || '').replace(/\s+/g, ' ').trim();
+            if (!title) title = extracted;
+            if (extracted && (!item.title || title === extracted)) first.remove();
+        }
+        holder.querySelectorAll('img').forEach((img) => {
+            const src = img.getAttribute('data-nt-src') || img.getAttribute('src') || '';
+            img.remove();
+            if (src) Admin.addComposerImage(editor, src);
+        });
+        editor.innerHTML = holder.innerHTML.trim();
+        const titleSlot = editor.parentElement?.querySelector('[data-nt-title-slot]');
+        const titleEl = titleSlot?.querySelector('[data-nt-title]');
+        if (titleEl) {
+            titleEl.textContent = title;
+            if (title) Admin.linkifyEditable(titleEl);
+        }
+        titleSlot?.classList.toggle('hidden', !title);
+        const previewSlot = editor.parentElement?.querySelector('[data-nt-preview-slot]');
+        if (previewSlot) {
+            previewSlot.innerHTML = '';
+            previewSlot.classList.add('hidden');
+            delete previewSlot.dataset.previewJson;
+            if (item.suppressLinkPreview) {
+                previewSlot.dataset.cleared = '1';
+                previewSlot.dataset.clearedUrl = item.linkPreview?.url || '';
+            } else {
+                previewSlot.dataset.cleared = '';
+                previewSlot.dataset.clearedUrl = '';
+                if (item.linkPreview?.url) Admin.paintComposerPreview(item.linkPreview);
+                else Admin.scheduleAlertPreview();
+            }
+        }
+    },
+
+    bindComposerChrome: () => {
+        if (Admin._composerChromeBound) return;
+        Admin._composerChromeBound = true;
+        document.addEventListener('click', (event) => {
+            const x = event.target?.closest?.('[data-nt-composer-x]');
+            if (!x) return;
+            event.preventDefault();
+            event.stopPropagation();
+            if (x.getAttribute('data-nt-composer-x') === 'preview') {
+                const slot = x.closest('[data-nt-preview-slot]');
+                if (!slot) return;
+                slot.dataset.cleared = '1';
+                slot.dataset.clearedUrl = slot.dataset.previewUrl || '';
+                slot.innerHTML = '';
+                delete slot.dataset.previewJson;
+                slot.classList.add('hidden');
+                return;
+            }
+            const fig = x.closest('.nt-composer-media');
+            const slot = fig?.parentElement;
+            fig?.remove();
+            if (slot && !slot.querySelector('img')) slot.classList.add('hidden');
+        });
+    },
+
+    bindAlertComposeFields: () => {
+        const editor = document.getElementById('alert-msg');
+        if (!editor) return;
+        const onEdit = (event) => {
+            const root = event?.currentTarget;
+            if (!root) return;
+            const text = root.innerText || '';
+            if (event.type !== 'input' || /\s$/.test(text)) Admin.linkifyEditable(root);
+            const body = document.getElementById('alert-msg');
+            if (body) Admin.hoistEditorImages(body);
+            Admin.scheduleAlertPreview();
+        };
+        const bind = (el) => {
+            if (!el || el.dataset.ntLinkBound === '1') return;
+            el.dataset.ntLinkBound = '1';
+            el.addEventListener('keydown', () => {
+                if (el.id === 'alert-msg') Admin.hoistEditorImages(el);
+            });
+            el.addEventListener('input', onEdit);
+            el.addEventListener('blur', (event) => {
+                onEdit(event);
+                if (!(el.innerText || '').trim()) el.innerHTML = '';
+            });
+            el.addEventListener('paste', () => setTimeout(() => onEdit({ currentTarget: el, type: 'paste' }), 0));
+        };
+        bind(editor);
+        bind(editor.parentElement?.querySelector('[data-nt-title]'));
+    },
+
+    draftAlertNotice: (signoff) => {
+        const composed = Admin.readAlertCompose();
+        let message = String(composed.message || '').trim();
+        const hasText = Admin.alertComposeHasBody(message);
+        message = (hasText || composed.hasImage) ? Admin.repairMojibake(message) : '';
+        const name = String(signoff || '').trim() || 'Next Train Ops';
+        if (hasText && !/<span[^>]*>.*?<\/span>\s*$/i.test(message)) {
+            message += `<br><br><span class="opacity-75 text-[10px] uppercase font-bold tracking-wider">- ${name}</span>`;
+        }
+        return {
+            title: composed.title || null,
+            message,
+            suppressLinkPreview: !!composed.suppressLinkPreview,
+            linkPreview: composed.linkPreview || null,
+            hasContent: hasText || !!composed.title || composed.hasImage,
+        };
+    },
+
+    clearAlertComposeSlots: () => {
+        const editor = document.getElementById('alert-msg');
+        if (editor) editor.innerHTML = '';
+        const parent = editor?.parentElement;
+        const titleSlot = parent?.querySelector('[data-nt-title-slot]');
+        const titleEl = titleSlot?.querySelector('[data-nt-title]');
+        if (titleEl) titleEl.innerHTML = '';
+        titleSlot?.classList.add('hidden');
+        const media = parent?.querySelector('[data-nt-media-slot]');
+        if (media) {
+            media.innerHTML = '';
+            media.classList.add('hidden');
+        }
+        const preview = parent?.querySelector('[data-nt-preview-slot]');
+        if (preview) {
+            preview.innerHTML = '';
+            preview.classList.add('hidden');
+            preview.dataset.cleared = '';
+            preview.dataset.clearedUrl = '';
+            delete preview.dataset.previewJson;
+            delete preview.dataset.previewUrl;
+        }
+    },
+
 // RICH TEXT FORMATTING HELPER ---
     formatAlertText: (tag, targetId = 'alert-msg') => {
         const editor = document.getElementById(targetId);
@@ -12380,7 +15435,7 @@ const Admin = {
             document.head.appendChild(style);
         }
 
-        editor.focus();
+        Admin.focusEditorSafely(editor);
         
         // GUARDIAN UX FIX: Restore mobile cursor selection before formatting
         if (Admin._savedRange) {
@@ -12397,19 +15452,24 @@ const Admin = {
         } else if (tag === 'underline') {
             document.execCommand('underline', false, null);
         } else if (tag === 'title') {
-            let block = 'h3';
-            const sel = window.getSelection();
-            if (sel.rangeCount > 0) {
-                let node = sel.anchorNode;
-                while (node && node !== editor) {
-                    if (node.nodeType === 1 && /^H[1-4]$/.test(node.tagName)) {
-                        block = 'p';
-                        break;
+            if (editor.id === 'alert-msg') {
+                Admin.revealComposerTitle(editor);
+                Admin.bindAlertComposeFields();
+            } else {
+                let block = 'h3';
+                const sel = window.getSelection();
+                if (sel.rangeCount > 0) {
+                    let node = sel.anchorNode;
+                    while (node && node !== editor) {
+                        if (node.nodeType === 1 && /^H[1-4]$/.test(node.tagName)) {
+                            block = 'p';
+                            break;
+                        }
+                        node = node.parentNode;
                     }
-                    node = node.parentNode;
                 }
+                document.execCommand('formatBlock', false, block);
             }
-            document.execCommand('formatBlock', false, block);
         } else if (tag === 'fontDefault' || tag === 'fontVerdana' || tag === 'fontTimes') {
             Admin.applyWysiwygFont(editor, tag);
         } else if (tag === 'larger' || tag === 'smaller') {
@@ -12417,39 +15477,53 @@ const Admin = {
             // We manually traverse the DOM to find the exact font size tag applied to the cursor.
             let currentSize = 3; // Default to Normal
             const sel = window.getSelection();
-            
+            let foundFont = false;
+
             if (sel.rangeCount > 0) {
                 let node = sel.anchorNode;
-                while (node && node !== editor) {
+                const host = node && (node.nodeType === 1 ? node : node.parentElement);
+                const root = host?.closest?.('[contenteditable="true"]') || editor;
+                while (node && node !== root && node !== document.documentElement) {
                     if (node.nodeType === 1 && node.tagName.toLowerCase() === 'font' && node.hasAttribute('size')) {
                         const sizeAttr = parseInt(node.getAttribute('size'), 10);
                         if (!isNaN(sizeAttr)) {
                             currentSize = sizeAttr;
+                            foundFont = true;
                             break;
                         }
                     }
                     node = node.parentNode;
                 }
+                if (!foundFont && typeof window.fontStepFromPixels === 'function' && host && root) {
+                    const px = parseFloat(window.getComputedStyle(host).fontSize);
+                    const base = parseFloat(window.getComputedStyle(root).fontSize) || 12;
+                    if (px) currentSize = window.fontStepFromPixels(px, base);
+                }
             }
 
-            // Map any chaotic legacy sizes into 2 → 3 → 4 → 5
+            // One step from the size under the cursor: small, normal, medium, large.
             if (currentSize <= 2) currentSize = 2;
             else if (currentSize === 3) currentSize = 3;
             else if (currentSize === 4) currentSize = 4;
-            else currentSize = 5;
+            else if (currentSize >= 5) currentSize = 5;
+            else currentSize = 3;
 
-            let newSize = 3;
+            let newSize = currentSize;
             if (tag === 'larger') {
-                if (currentSize === 2) newSize = 3;
+                if (typeof window.nextRichFontSize === 'function') newSize = window.nextRichFontSize(currentSize, 'larger');
+                else if (currentSize === 2) newSize = 3;
                 else if (currentSize === 3) newSize = 4;
+                else if (currentSize === 4) newSize = 5;
                 else newSize = 5;
             } else if (tag === 'smaller') {
-                if (currentSize === 5) newSize = 4;
+                if (typeof window.nextRichFontSize === 'function') newSize = window.nextRichFontSize(currentSize, 'smaller');
+                else if (currentSize === 5) newSize = 4;
                 else if (currentSize === 4) newSize = 3;
                 else newSize = 2;
             }
 
-            document.execCommand('fontSize', false, newSize.toString());
+            try { document.execCommand('styleWithCSS', false, false); } catch { /* keep real font tags */ }
+            document.execCommand('fontSize', false, String(newSize));
         } else if (tag === 'justifyLeft') {
             document.execCommand('justifyLeft', false, null);
         } else if (tag === 'justifyCenter') {
@@ -12473,12 +15547,20 @@ const Admin = {
     /** Tally votes from polls/{id} payload ? { A, B, C, total }. */
     tallyPollVotes: (pollData) => {
         let A = 0, B = 0, C = 0;
+        const keysOf = (vote) => {
+            const raw = vote.optionKeys || vote.optionKey;
+            const list = Array.isArray(raw) ? raw : String(raw || '').split(/[,|]/);
+            return list.map((key) => String(key || '').trim().toUpperCase()).filter((key) => key === 'A' || key === 'B' || key === 'C');
+        };
         if (pollData && typeof pollData === 'object') {
-            Object.values(pollData).forEach((vote) => {
+            Object.entries(pollData).forEach(([key, vote]) => {
                 if (!vote || typeof vote !== 'object') return;
-                if (vote.optionKey === 'A') A++;
-                else if (vote.optionKey === 'B') B++;
-                else if (vote.optionKey === 'C') C++;
+                if (key === '_meta' || String(key).startsWith('_')) return;
+                keysOf(vote).forEach((letter) => {
+                    if (letter === 'A') A += 1;
+                    else if (letter === 'B') B += 1;
+                    else if (letter === 'C') C += 1;
+                });
             });
         }
         return { A, B, C, total: A + B + C };
@@ -12929,10 +16011,24 @@ const Admin = {
         }
     },
 
+    attachLinkPreview: async (payload) => {
+        if (!payload || payload.suppressLinkPreview || payload.linkPreview?.url) return payload;
+        const api = window.ntLinkPreview;
+        if (!api?.firstHttpUrl || !api.fetchLinkPreview) return payload;
+        const url = api.firstHttpUrl(payload);
+        if (!url) return payload;
+        try {
+            const preview = await api.fetchLinkPreview(url, Admin.replyWorkerUrl());
+            if (preview?.url) payload.linkPreview = preview;
+        } catch { /* the alert still posts; the feed can load the card itself */ }
+        return payload;
+    },
+
     publishNoticeToTarget: async (target, payload, secret) => {
         const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
         const id = String(payload.id || Date.now());
         payload.id = id;
+        await Admin.attachLinkPreview(payload);
         const fetchRes = await window.guardianFetch(`${dynamicEndpoint}notices/${target}.json`, {}, 6000);
         const existing = fetchRes.ok ? await fetchRes.json() : null;
         const listed = Admin.listNoticesInTarget(existing);
@@ -13416,10 +16512,16 @@ const Admin = {
             const plain = (() => {
                 try {
                     const d = document.createElement('div');
-                    d.innerHTML = job.notice?.message || '';
-                    return (d.textContent || '').trim().slice(0, 100) || '(empty)';
+                    d.innerHTML = String(job.notice?.message || '')
+                        .replace(/<br\s*\/?>/gi, '\n')
+                        .replace(/<\/(p|div|h[1-4]|li)>/gi, '\n');
+                    return (d.textContent || '').replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').replace(/[ \t]{2,}/g, ' ').trim().slice(0, 220) || '(empty)';
                 } catch { return '(empty)'; }
             })();
+            const schedImg = (Array.isArray(job.notice?.imageUrls) && job.notice.imageUrls[0])
+                || job.notice?.imageUrl
+                || ((job.notice?.message || '').match(/<img\b[^>]*\bsrc=["']([^"']+)["']/i) || [])[1]
+                || '';
             const freqKey = job.frequency === 'weekly' && job.weekdays && job.weekdays.length
                 ? 'Weekly'
                 : (job.frequency === 'monthly' ? 'Monthly' : (job.frequency === 'once' ? 'Later' : String(job.frequency || 'once')));
@@ -13439,7 +16541,8 @@ const Admin = {
                         ${paused ? '<span class="px-1.5 py-0.5 rounded text-[9px] font-black uppercase bg-amber-100 text-amber-700">Paused</span>' : ''}
                     </div>
                     ${summary ? `<p class="text-[10px] text-indigo-700 dark:text-indigo-300 font-medium mb-1">${summary}</p>` : ''}
-                    <p class="text-xs text-gray-800 dark:text-gray-200 leading-snug line-clamp-2 mb-1">${escapeHTML(plain)}</p>
+                    ${Admin.gsmNoticeImageHtml(schedImg)}
+                    <p class="text-xs text-gray-800 dark:text-gray-200 leading-snug line-clamp-4 whitespace-pre-line mb-1">${escapeHTML(plain)}</p>
                     <p class="text-[9px] font-mono text-gray-400 mb-2">Next ${escapeHTML(nextStr)} - Last ${escapeHTML(lastStr)}</p>
                     <div class="grid grid-cols-3 gap-2">
                         <button type="button" class="alert-sched-edit min-h-[44px] px-2 rounded-lg bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-[11px] font-black uppercase tracking-wider border border-blue-200 dark:border-blue-800 focus:outline-none" data-sched-id="${idSafe}">Edit</button>
@@ -13486,28 +16589,14 @@ const Admin = {
         });
     },
 
+    /**
+     * Browser publisher is retired as a background poller.
+     * Cloudflare Worker cron is the sole producer; Refresh still publishes on demand.
+     * Keep the arm hook so older call sites no-op safely.
+     */
     armScheduledAlertPublisher: () => {
-        if (window.__ntSchedAlertArmed) return;
         window.__ntSchedAlertArmed = true;
-        const tick = () => {
-            Admin.publishDueScheduledAlerts()
-                .then((due) => {
-                    if (due && Number(due.published) > 0) return null;
-                    return Admin.fetchScheduledAlerts().then((items) => {
-                        const stillDue = (items || []).filter((job) => job && job.enabled !== false && Number(job.nextRunAt || 0) <= Date.now());
-                        if (!stillDue.length) return null;
-                        return Admin.publishDueScheduledAlertsDirect(null, stillDue);
-                    });
-                })
-                .catch((err) => {
-                    console.warn('armScheduledAlertPublisher optional', err);
-                });
-        };
-        setTimeout(tick, 4000);
-        setInterval(tick, 60_000);
-        document.addEventListener('visibilitychange', () => {
-            if (document.visibilityState === 'visible') tick();
-        });
+        // No setInterval — Worker cron + manual Refresh own notices_scheduled.
     },
 
     refreshScheduledAlerts: async () => {
@@ -13687,6 +16776,11 @@ const Admin = {
                     <label class="block text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Message</label>
                     <div class="border border-gray-300 dark:border-gray-600 rounded-lg overflow-hidden min-w-0 max-w-full focus-within:ring-2 focus-within:ring-blue-500">
                         ${Admin.wysiwygToolbarHtml('alert-msg', { fileInputId: 'alert-upload-file', fileLabelId: 'alert-upload-label' })}
+                        <div data-nt-title-slot class="hidden border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
+                            <div data-nt-title contenteditable="true" role="textbox" data-placeholder="Title" class="text-gray-900 dark:text-white"></div>
+                        </div>
+                        <div data-nt-media-slot class="hidden px-2.5 pt-2 space-y-2"></div>
+                        <div data-nt-preview-slot id="alert-preview-slot" class="hidden px-2.5 pt-2"></div>
                         <div contenteditable="true" id="alert-msg" class="nt-rich-body w-full max-w-full min-w-0 overflow-x-hidden min-h-[120px] p-2.5 bg-gray-50 dark:bg-gray-900 border-0 text-gray-900 dark:text-white text-xs focus:ring-0 outline-none whitespace-pre-wrap empty:before:content-[attr(placeholder)] empty:before:text-gray-400" placeholder="e.g. Delays of 45min due to cable theft..."></div>
                         <div id="alert-poster-preview" class="px-2.5 pb-2.5 empty:hidden"></div>
                     </div>
@@ -14046,6 +17140,8 @@ const Admin = {
         alertPanel.classList.remove('hidden');
         alertPanel.dataset.adminLoaded = ALERT_PANEL_REV;
         if (typeof window.injectRichTextStyles === 'function') window.injectRichTextStyles();
+        Admin.bindComposerChrome();
+        Admin.bindAlertComposeFields();
 
         // --- Logic Wiring ---
         const header = document.getElementById('alert-header-btn');
@@ -14471,11 +17567,10 @@ const Admin = {
         syncAlertWhenMode('now');
 
         document.getElementById('alert-schedule-save-btn')?.addEventListener('click', async () => {
-            let msg = (alertMsg?.innerHTML || '').trim();
+            const draft = Admin.draftAlertNotice(signoffInput?.value || '');
             const targets = Admin.getSelectedAlertTargets();
-            const hasBody = Admin.alertComposeHasBody(msg);
             const posters = Admin.getSelectedAlertPosters();
-            if (composeNeedsContentToast(hasBody, posters)) return;
+            if (composeNeedsContentToast(draft.hasContent, posters)) return;
             if (!composePollFieldsOk()) return;
             if (!targets.length) { if (typeof showToast === 'function') showToast('Pick a target audience.', 'error'); return; }
             const meta = readComposeScheduleMeta();
@@ -14485,10 +17580,6 @@ const Admin = {
             if (!secret) { if (typeof showToast === 'function') showToast('Authentication required.', 'error'); return; }
 
             const signoff = (signoffInput?.value || '').trim() || 'Next Train Ops';
-            msg = hasBody ? Admin.repairMojibake(msg) : '';
-            if (hasBody && !/<span[^>]*>.*?<\/span>\s*$/i.test(msg)) {
-                msg += `<br><br><span class="opacity-75 text-[10px] uppercase font-bold tracking-wider">- ${signoff}</span>`;
-            }
             const schedId = Admin._editingSchedId || `sched_${Date.now()}`;
             const alertExpiresAt = Number(meta.nextRunAt || 0) + Number(meta.expiresInMs || 0);
             const pollClosesAt = readPollClosesAt(alertExpiresAt);
@@ -14509,7 +17600,10 @@ const Admin = {
                 monthDay: meta.monthDay,
                 untilAt: meta.untilAt,
                 notice: {
-                    message: msg,
+                    title: draft.title,
+                    message: draft.message,
+                    suppressLinkPreview: draft.suppressLinkPreview,
+                    linkPreview: draft.linkPreview,
                     authorName: signoff,
                     forcePopup: !!(forcePopupToggle && forcePopupToggle.checked),
                     pinned: !!(pinToggle && pinToggle.checked),
@@ -14557,7 +17651,7 @@ const Admin = {
             let cleanedMsg = Admin.repairMojibake(item.message || '');
             cleanedMsg = cleanedMsg.replace(/(<br\s*\/?>\s*){1,2}<span[^>]*>.*?<\/span>\s*$/i, '');
             cleanedMsg = cleanedMsg.replace(/<span[^>]*>.*?<\/span>\s*$/i, '');
-            if (alertMsg) alertMsg.innerHTML = cleanedMsg.trim();
+            Admin.loadAlertCompose({ ...item, message: cleanedMsg.trim() });
 
             if (item.expiresAt && dateInput) {
                 const floor = mode === 'review' ? item.expiresAt : Math.max(item.expiresAt, Date.now() + 2 * 3600 * 1000);
@@ -14741,11 +17835,16 @@ const Admin = {
         }
 
         // GUARDIAN WYSIWYG FIX: Strip formatting on paste to prevent CSS corruption
-        if (alertMsg) {
+        if (alertMsg && !alertMsg.dataset.ntPasteBound) {
+            alertMsg.dataset.ntPasteBound = '1';
             alertMsg.addEventListener('paste', (e) => {
                 e.preventDefault();
                 const text = (e.originalEvent || e).clipboardData.getData('text/plain');
-                document.execCommand('insertText', false, text);
+                const marked = typeof window.whatsappMarkupToHtml === 'function'
+                    ? window.whatsappMarkupToHtml(text)
+                    : '';
+                if (marked) document.execCommand('insertHTML', false, marked);
+                else document.execCommand('insertText', false, text);
             });
         }
 
@@ -14846,27 +17945,12 @@ const Admin = {
                                 if (labelEl) labelEl.innerHTML = originalLabel;
                                 try {
                                     const url = await window.firebaseGetDownloadURL(uploadTask.snapshot.ref);
-                                    
-                                    const htmlToInsert = Admin.inlineAttachmentHtml(url, isPdf);
-                                    if (!htmlToInsert) {
+                                    if (!editor || !Admin.placeComposerAttachment(editor, url, isPdf, savedRange)) {
                                         if (typeof showToast === 'function') showToast("Failed to insert attachment link", "error");
                                         this.value = '';
                                         return;
                                     }
-                                    
-                                    if (editor) {
-                                        editor.focus();
-                                        if (savedRange) {
-                                            const sel = window.getSelection();
-                                            sel.removeAllRanges();
-                                            sel.addRange(savedRange);
-                                        }
-                                        // Use native execCommand for undo-stack support, fallback to manual append if strict sandboxed
-                                        if (!document.execCommand('insertHTML', false, htmlToInsert)) {
-                                            editor.innerHTML += htmlToInsert;
-                                        }
-                                        Admin._savedRange = null; // Clear lock
-                                    }
+                                    Admin._savedRange = null;
                                     if (typeof showToast === 'function') showToast("Attachment inserted!", "success");
                                 } catch(e) {
                                     if (typeof showToast === 'function') showToast("Failed to insert attachment link", "error");
@@ -15070,27 +18154,21 @@ const Admin = {
         if (dateInput) dateInput.value = Admin.endOfTodayLocalValue();
 
         sendBtn.onclick = async () => {
-            let msg = alertMsg.innerHTML.trim();
+            const signoff = signoffInput.value.trim() || "Next Train Ops";
+            const draft = Admin.draftAlertNotice(signoff);
             const targets = Admin.getSelectedAlertTargets();
             const severity = severitySelect.value;
             
-            const signoff = signoffInput.value.trim() || "Next Train Ops";
             const isForcePopup = forcePopupToggle.checked;
             const isPinned = !!(pinToggle && pinToggle.checked);
             
             const secret = await Admin.getAuthKey();
             
-            const hasBody = Admin.alertComposeHasBody(msg);
             const posters = Admin.getSelectedAlertPosters();
-            if (composeNeedsContentToast(hasBody, posters)) return;
+            if (composeNeedsContentToast(draft.hasContent, posters)) return;
             if (!composePollFieldsOk()) return;
             if (!targets.length) { if (typeof showToast === 'function') showToast("Pick at least one route or region.", "error"); return; }
             if (!secret) { if (typeof showToast === 'function') showToast("Authentication required! Sign in again.", "error"); return; }
-
-            msg = hasBody ? Admin.repairMojibake(msg) : '';
-            if (hasBody && !/<span[^>]*>.*?<\/span>\s*$/i.test(msg)) {
-                msg += `<br><br><span class="opacity-75 text-[10px] uppercase font-bold tracking-wider">- ${signoff}</span>`;
-            }
 
             let expiresAtVal = dateInput && dateInput.value ? new Date(dateInput.value).getTime() : new Date(Admin.endOfTodayLocalValue()).getTime();
 
@@ -15099,7 +18177,10 @@ const Admin = {
             const nowTs = Date.now();
             const payload = {
                 id: existingAlertId || nowTs.toString(),
-                message: msg,
+                title: draft.title,
+                message: draft.message,
+                suppressLinkPreview: draft.suppressLinkPreview,
+                linkPreview: draft.linkPreview,
                 authorName: signoff,
                 forcePopup: isForcePopup,
                 pinned: isPinned,
@@ -15143,7 +18224,7 @@ const Admin = {
                     const returnToActive = !!Admin._alertEditFromActive && isUpdate;
                     Admin._alertEditFromActive = false;
                     Admin.setSelectedAlertPosters([]);
-                    if (alertMsg) alertMsg.innerHTML = '';
+                    Admin.clearAlertComposeSlots();
                     if (sourceNameInput) sourceNameInput.value = '';
                     if (sourceUrlInput) sourceUrlInput.value = '';
                     renderSavedSourceDropdown('');
@@ -15172,6 +18253,7 @@ const Admin = {
             const modal = document.getElementById('notice-modal');
             if (typeof window.renderServiceAlertModal === 'function' && modal) {
                 const restoreZ = Admin._elevateModalForAdmin(modal);
+                await Admin.attachLinkPreview(payload);
                 window.renderServiceAlertModal(payload, {
                     mode: 'preview',
                     onEdit: () => { try { restoreZ(); } catch { /* ignore */ } },
@@ -15216,7 +18298,7 @@ const Admin = {
                 if (typeof showToast === 'function') showToast("Cleared & Archived!", "info");
 
                 existingAlertId = null;
-                alertMsg.innerHTML = "";
+                Admin.clearAlertComposeSlots();
                 signoffInput.value = "Next Train Ops";
                 if (sourceNameInput) sourceNameInput.value = '';
                 if (sourceUrlInput) sourceUrlInput.value = '';
@@ -16071,24 +19153,12 @@ const Admin = {
                                 if (labelEl) labelEl.innerHTML = originalLabel;
                                 try {
                                     const url = await window.firebaseGetDownloadURL(uploadTask.snapshot.ref);
-                                    const htmlToInsert = Admin.inlineAttachmentHtml(url, isPdf);
-                                    if (!htmlToInsert) {
+                                    if (!editor || !Admin.placeComposerAttachment(editor, url, isPdf, savedRange)) {
                                         if (typeof showToast === 'function') showToast("Failed to insert attachment link", "error");
                                         this.value = '';
                                         return;
                                     }
-                                    if (editor) {
-                                        editor.focus();
-                                        if (savedRange) {
-                                            const sel = window.getSelection();
-                                            sel.removeAllRanges();
-                                            sel.addRange(savedRange);
-                                        }
-                                        if (!document.execCommand('insertHTML', false, htmlToInsert)) {
-                                            editor.innerHTML += htmlToInsert;
-                                        }
-                                        Admin._savedRange = null;
-                                    }
+                                    Admin._savedRange = null;
                                     if (typeof showToast === 'function') showToast("Attachment inserted!", "success");
                                 } catch (e) {
                                     if (typeof showToast === 'function') showToast("Failed to insert attachment link", "error");
@@ -16549,7 +19619,7 @@ const Admin = {
                 <svg id="grid-order-chevron" class="w-4 h-4 transform transition-transform -rotate-90 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
             </button>
             <div id="grid-order-body" class="hidden mt-4 space-y-3">
-                <p class="text-[10px] leading-snug text-gray-500 dark:text-gray-400">Choose a route, service day, and direction. Drag trains or use the accessible move buttons, then save the explicit array to RTDB.</p>
+                <p class="text-[10px] leading-snug text-gray-500 dark:text-gray-400">Choose a route, service day, and direction. Drag trains or use the move buttons, then save. Via is the structured branch mark (Monte Vista / Maitland) and overrides sheet notes for that train. Blank leaves the sheet <code class="font-mono">via</code> map, VARIANT row, or legacy cell prose in charge.</p>
                 <label class="block text-[10px] font-black uppercase tracking-wider text-gray-500">Route
                     <select id="grid-order-route" class="mt-1 w-full h-10 px-2 rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-xs text-gray-900 dark:text-white"></select>
                 </label>
@@ -16571,9 +19641,13 @@ const Admin = {
                 <button id="grid-order-load" type="button" class="w-full bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 font-bold py-2.5 rounded-lg text-xs focus:outline-none">Load order</button>
                 <div id="grid-order-meta" class="hidden rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 p-2 text-[10px] text-gray-500 dark:text-gray-400" aria-live="polite"></div>
                 <ol id="grid-order-list" class="space-y-1 max-h-[52vh] overflow-y-auto custom-scrollbar" aria-label="Train column order"></ol>
-                <div id="grid-order-actions" class="hidden grid grid-cols-2 gap-2">
-                    <button id="grid-order-reset" type="button" class="bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 font-bold py-2.5 rounded-lg text-xs focus:outline-none">Reset to fallback</button>
-                    <button id="grid-order-save" type="button" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 rounded-lg text-xs focus:outline-none">Save order</button>
+                <div id="grid-order-actions" class="hidden space-y-2">
+                    <div class="grid grid-cols-2 gap-2">
+                        <button id="grid-order-reset" type="button" class="bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 font-bold py-2.5 rounded-lg text-xs focus:outline-none">Reset to fallback</button>
+                        <button id="grid-order-save" type="button" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 rounded-lg text-xs focus:outline-none">Save order</button>
+                    </div>
+                    <button id="grid-order-via-all-days" type="button" class="w-full bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800 text-indigo-800 dark:text-indigo-200 font-bold py-2.5 rounded-lg text-xs focus:outline-none">Save via marks to all days</button>
+                    <p class="text-[9px] text-gray-500 dark:text-gray-400 leading-snug">Copies the Via choices above onto every weekday / Saturday / public-holiday sheet for this route (both directions). Column order on those sheets is left as-is.</p>
                 </div>
             </div>
         `;
@@ -16587,6 +19661,8 @@ const Admin = {
         const actionsEl = panel.querySelector('#grid-order-actions');
         let currentOrder = [];
         let baseline = [];
+        let currentVia = {};
+        let baselineVia = {};
         let currentSheetKey = '';
         let currentRecord = null;
         let draggedIndex = -1;
@@ -16639,10 +19715,33 @@ const Admin = {
             return [...found];
         };
 
+        const viaSnapshot = (map) => JSON.stringify(Object.keys(map || {}).sort().map((id) => [id, map[id]]));
+
         const markDirty = () => {
-            Admin.gridOrderDirty = JSON.stringify(currentOrder) !== JSON.stringify(baseline);
+            Admin.gridOrderDirty = JSON.stringify(currentOrder) !== JSON.stringify(baseline)
+                || viaSnapshot(currentVia) !== viaSnapshot(baselineVia);
             panel.querySelector('#grid-order-save').disabled = !Admin.gridOrderDirty;
             panel.querySelector('#grid-order-save').classList.toggle('opacity-50', !Admin.gridOrderDirty);
+        };
+
+        const writeBody = (action) => {
+            const build = window.buildGridOrderWriteRecord;
+            const base = {
+                via: currentVia,
+                updatedAt: Date.now(),
+                updatedBy: Admin.currentUser?.email || 'unknown',
+                source: 'admin',
+            };
+            if (typeof build === 'function') {
+                return action === 'reset'
+                    ? build({ ...base, action: 'reset' })
+                    : build({ ...base, order: currentOrder.slice() });
+            }
+            const record = { ...base };
+            if (action === 'reset') record.action = 'reset';
+            else record.order = currentOrder.slice();
+            if (!Object.keys(currentVia).length) delete record.via;
+            return record;
         };
 
         const move = (from, to) => {
@@ -16655,14 +19754,38 @@ const Admin = {
         };
 
         const paintList = () => {
-            listEl.innerHTML = currentOrder.map((id, index) => `
-                <li draggable="true" data-grid-order-row="${index}" class="flex items-center gap-2 p-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
-                    <button type="button" data-grid-order-index="${index}" class="cursor-grab touch-none text-gray-400 px-1 focus:outline-none" aria-label="Drag train ${id}">⋮⋮</button>
-                    <span class="font-mono font-bold text-xs text-gray-800 dark:text-gray-100 flex-1">${ntAdminSecureEscape(id)}</span>
-                    <button type="button" data-grid-order-up="${index}" class="px-2 py-1 rounded bg-gray-100 dark:bg-gray-700 text-xs disabled:opacity-30" aria-label="Move train ${id} up" ${index === 0 ? 'disabled' : ''}>↑</button>
-                    <button type="button" data-grid-order-down="${index}" class="px-2 py-1 rounded bg-gray-100 dark:bg-gray-700 text-xs disabled:opacity-30" aria-label="Move train ${id} down" ${index === currentOrder.length - 1 ? 'disabled' : ''}>↓</button>
-                </li>
-            `).join('');
+            listEl.innerHTML = currentOrder.map((id, index) => {
+                const via = currentVia[id] || '';
+                return `
+                <li draggable="true" data-grid-order-row="${index}" class="flex flex-col gap-1.5 p-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+                    <div class="flex items-center gap-2">
+                        <button type="button" data-grid-order-index="${index}" class="cursor-grab touch-none text-gray-400 px-1 focus:outline-none" aria-label="Drag train ${id}">⋮⋮</button>
+                        <span class="font-mono font-bold text-xs text-gray-800 dark:text-gray-100 flex-1">${ntAdminSecureEscape(id)}</span>
+                        <button type="button" data-grid-order-up="${index}" class="min-h-10 min-w-10 px-2 py-1 rounded bg-gray-100 dark:bg-gray-700 text-xs disabled:opacity-30" aria-label="Move train ${id} up" ${index === 0 ? 'disabled' : ''}>↑</button>
+                        <button type="button" data-grid-order-down="${index}" class="min-h-10 min-w-10 px-2 py-1 rounded bg-gray-100 dark:bg-gray-700 text-xs disabled:opacity-30" aria-label="Move train ${id} down" ${index === currentOrder.length - 1 ? 'disabled' : ''}>↓</button>
+                    </div>
+                    <label class="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                        <span class="shrink-0 w-8">Via</span>
+                        <select data-grid-via="${ntAdminSecureEscape(id)}" class="min-w-0 flex-1 h-10 px-2 rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-xs font-semibold normal-case text-gray-900 dark:text-white" aria-label="Via branch for train ${ntAdminSecureEscape(id)}">
+                            <option value="" ${via ? '' : 'selected'}>None</option>
+                            <option value="MONTE_VISTA" ${via === 'MONTE_VISTA' ? 'selected' : ''}>Monte Vista</option>
+                            <option value="MAITLAND" ${via === 'MAITLAND' ? 'selected' : ''}>Maitland</option>
+                        </select>
+                    </label>
+                </li>`;
+            }).join('');
+            listEl.querySelectorAll('[data-grid-via]').forEach((select) => {
+                const stopDrag = (event) => event.stopPropagation();
+                select.addEventListener('mousedown', stopDrag);
+                select.addEventListener('touchstart', stopDrag, { passive: true });
+                select.addEventListener('change', () => {
+                    const trainId = select.getAttribute('data-grid-via');
+                    if (!trainId) return;
+                    if (select.value === 'MONTE_VISTA' || select.value === 'MAITLAND') currentVia[trainId] = select.value;
+                    else delete currentVia[trainId];
+                    markDirty();
+                });
+            });
             listEl.querySelectorAll('[data-grid-order-up]').forEach((button) => {
                 button.onclick = () => move(Number(button.dataset.gridOrderUp), Number(button.dataset.gridOrderUp) - 1);
             });
@@ -16707,6 +19830,8 @@ const Admin = {
                 metaEl.textContent = `Could not load ${route?.region || ''} schedule dump.`;
                 currentOrder = [];
                 baseline = [];
+                currentVia = {};
+                baselineVia = {};
                 paintList();
                 actionsEl.classList.add('hidden');
                 Admin.gridOrderDirty = false;
@@ -16716,6 +19841,8 @@ const Admin = {
             if (!currentSheetKey || !ids.length) {
                 currentOrder = [];
                 baseline = [];
+                currentVia = {};
+                baselineVia = {};
                 paintList();
                 actionsEl.classList.add('hidden');
                 metaEl.classList.remove('hidden');
@@ -16743,6 +19870,10 @@ const Admin = {
                 manifestOrder,
             });
             baseline = currentOrder.slice();
+            currentVia = typeof window.viaCodesFromGridOrderRecord === 'function'
+                ? window.viaCodesFromGridOrderRecord(currentRecord)
+                : {};
+            baselineVia = { ...currentVia };
             loadedSelection = {
                 route: routeEl.value,
                 day: dayEl.value,
@@ -16755,25 +19886,43 @@ const Admin = {
             markDirty();
         };
 
-        const writeRecord = async (record) => {
+        const writeRecordToSheet = async (sheetKey, record, { refreshCurrent = false } = {}) => {
             const route = ROUTES?.[routeEl.value];
             const token = await Admin.getAuthKey();
-            if (!token || !route || !currentSheetKey) throw new Error('Authentication required.');
+            if (!token || !route || !sheetKey) throw new Error('Authentication required.');
             const endpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : '';
             const response = await window.guardianFetch(
-                `${endpoint}config/grid_order/${encodeURIComponent(route.region)}/${encodeURIComponent(currentSheetKey)}.json?auth=${encodeURIComponent(token)}`,
+                `${endpoint}config/grid_order/${encodeURIComponent(route.region)}/${encodeURIComponent(sheetKey)}.json?auth=${encodeURIComponent(token)}`,
                 { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(record) },
                 10000
             );
             if (!response.ok) throw new Error(`RTDB write failed (${response.status})`);
-            currentRecord = record;
-            baseline = currentOrder.slice();
-            Admin.gridOrderDirty = false;
-            markDirty();
-            describeRecord(record);
-            if (typeof window.fetchGridOrderConfig === 'function') {
-                window.fetchGridOrderConfig(route.region).catch(() => {});
+            if (refreshCurrent || sheetKey === currentSheetKey) {
+                currentRecord = record;
+                baseline = currentOrder.slice();
+                baselineVia = { ...currentVia };
+                Admin.gridOrderDirty = false;
+                markDirty();
+                describeRecord(record);
             }
+            return record;
+        };
+
+        const writeRecord = async (record) => {
+            const route = ROUTES?.[routeEl.value];
+            await writeRecordToSheet(currentSheetKey, record, { refreshCurrent: true });
+            if (typeof window.fetchGridOrderConfig === 'function') {
+                window.fetchGridOrderConfig(route?.region).catch(() => {});
+            }
+        };
+
+        const routeSheetKeys = (route) => {
+            const keys = route?.sheetKeys || {};
+            return [...new Set([
+                keys.weekday_to_a, keys.weekday_to_b,
+                keys.saturday_to_a, keys.saturday_to_b,
+                keys.pub_to_a, keys.pub_to_b,
+            ].filter(Boolean))];
         };
 
         panel.querySelector('#grid-order-load').onclick = load;
@@ -16781,16 +19930,86 @@ const Admin = {
             const button = panel.querySelector('#grid-order-save');
             button.disabled = true;
             try {
-                await writeRecord({
-                    order: currentOrder.slice(),
-                    updatedAt: Date.now(),
-                    updatedBy: Admin.currentUser?.email || 'unknown',
-                    source: 'admin',
-                });
+                await writeRecord(writeBody());
                 if (typeof showToast === 'function') showToast('Grid order saved.', 'success');
             } catch (error) {
                 if (typeof showToast === 'function') showToast(error.message || 'Grid order save failed.', 'error');
             } finally {
+                markDirty();
+            }
+        };
+        panel.querySelector('#grid-order-via-all-days').onclick = async () => {
+            const route = ROUTES?.[routeEl.value];
+            const sheets = routeSheetKeys(route);
+            if (!sheets.length) {
+                if (typeof showToast === 'function') showToast('No sheets found for this route.', 'error');
+                return;
+            }
+            if (!window.confirm(`Save the current Via marks to all ${sheets.length} day/direction sheets for this route? Column order on other sheets stays as saved.`)) return;
+            const button = panel.querySelector('#grid-order-via-all-days');
+            button.disabled = true;
+            const endpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : '';
+            const viaPayload = { ...currentVia };
+            let saved = 0;
+            try {
+                for (const sheetKey of sheets) {
+                    let existing = null;
+                    try {
+                        const response = await window.guardianFetch(
+                            `${endpoint}config/grid_order/${encodeURIComponent(route.region)}/${encodeURIComponent(sheetKey)}.json?t=${Date.now()}`,
+                            { cache: 'no-store' },
+                            6000
+                        );
+                        existing = response.ok ? await response.json() : null;
+                    } catch { existing = null; }
+                    const build = window.buildGridOrderWriteRecord;
+                    const base = {
+                        via: viaPayload,
+                        updatedAt: Date.now(),
+                        updatedBy: Admin.currentUser?.email || 'unknown',
+                        source: 'admin',
+                    };
+                    let record;
+                    if (existing?.action === 'reset') {
+                        record = typeof build === 'function'
+                            ? build({ ...base, action: 'reset' })
+                            : { ...base, action: 'reset' };
+                    } else if (Array.isArray(existing?.order) && existing.order.length) {
+                        record = typeof build === 'function'
+                            ? build({ ...base, order: existing.order.slice() })
+                            : { ...base, order: existing.order.slice() };
+                    } else if (sheetKey === currentSheetKey && currentOrder.length) {
+                        record = typeof build === 'function'
+                            ? build({ ...base, order: currentOrder.slice() })
+                            : { ...base, order: currentOrder.slice() };
+                    } else {
+                        // Via-only write keeps fallback column order on sheets without a saved order.
+                        record = typeof build === 'function'
+                            ? build({ ...base, action: 'reset' })
+                            : { ...base, action: 'reset' };
+                    }
+                    if (!Object.keys(viaPayload).length && record.via) delete record.via;
+                    if (!Object.keys(viaPayload).length) {
+                        // Explicit clear: still write so other sheets drop via marks.
+                        if (typeof build === 'function') {
+                            record = build({
+                                ...base,
+                                via: {},
+                                ...(record.action === 'reset' ? { action: 'reset' } : { order: record.order }),
+                            });
+                        }
+                    }
+                    await writeRecordToSheet(sheetKey, record, { refreshCurrent: sheetKey === currentSheetKey });
+                    saved += 1;
+                }
+                if (typeof window.fetchGridOrderConfig === 'function') {
+                    window.fetchGridOrderConfig(route.region).catch(() => {});
+                }
+                if (typeof showToast === 'function') showToast(`Via marks saved on ${saved} sheets.`, 'success');
+            } catch (error) {
+                if (typeof showToast === 'function') showToast(error.message || 'Via multi-day save failed.', 'error');
+            } finally {
+                button.disabled = false;
                 markDirty();
             }
         };
@@ -16809,12 +20028,7 @@ const Admin = {
             paintList();
             markDirty();
             try {
-                await writeRecord({
-                    action: 'reset',
-                    updatedAt: Date.now(),
-                    updatedBy: Admin.currentUser?.email || 'unknown',
-                    source: 'admin',
-                });
+                await writeRecord(writeBody('reset'));
                 if (typeof showToast === 'function') showToast('Grid order reset to fallback.', 'success');
             } catch (error) {
                 if (typeof showToast === 'function') showToast(error.message || 'Grid order reset failed.', 'error');
@@ -16887,9 +20101,12 @@ const Admin = {
                 <details class="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg border border-blue-200 dark:border-blue-800 space-y-2">
                     <summary class="text-[10px] font-black uppercase tracking-wider text-blue-800 dark:text-blue-300 cursor-pointer">2. Timetable grid banner</summary>
                     <p class="text-[10px] text-blue-700 dark:text-blue-400 leading-snug">Route-wide banner inside the full timetable grid. Separate from the NO SVC / SPL train tag below.</p>
-                    <label class="block text-[10px] font-bold text-blue-800 dark:text-blue-300 uppercase mb-1">Banner text</label>
+                    <div class="flex items-center justify-between mb-1">
+                        <label class="text-[10px] font-bold text-blue-800 dark:text-blue-300 uppercase" for="excl-grid-notice">Banner text</label>
+                        ${Admin.writeAssistButtonHtml('excl-grid-notice')}
+                    </div>
                     <div class="flex space-x-2">
-                        <input type="text" id="excl-grid-notice" class="w-full h-10 px-3 bg-white dark:bg-gray-800 border border-blue-200 dark:border-blue-700 rounded-lg text-xs text-gray-900 dark:text-white outline-none" placeholder="e.g. Trains 9116 & 9118 cancelled due to maintenance...">
+                        <input type="text" id="excl-grid-notice" class="flex-1 min-w-0 h-10 px-3 bg-white dark:bg-gray-800 border border-blue-200 dark:border-blue-700 rounded-lg text-xs text-gray-900 dark:text-white outline-none" placeholder="e.g. Trains 9116 & 9118 cancelled due to maintenance...">
                         <button id="excl-save-notice-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-3 rounded-lg shadow-sm transition-colors text-xs whitespace-nowrap focus:outline-none">Save</button>
                     </div>
                     <div>
@@ -18039,6 +21256,7 @@ const Admin = {
                                     <svg class="w-3 h-3 opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
                                 </button>
                                 <div data-fb-more-menu class="hidden absolute right-0 top-full mt-1 z-[40] w-56 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 shadow-xl py-1 text-left">
+                                    ${did !== 'Anonymous / Legacy' ? `<button type="button" onclick="event.stopPropagation(); Admin.suggestReplyForThread('${safeDidAttr}')" class="w-full px-3 py-2 text-left text-[11px] font-bold text-indigo-700 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 focus:outline-none flex items-center gap-2">${Admin.icon('reply', 'w-3.5 h-3.5')} Suggest reply</button>` : ''}
                                     <button type="button" onclick="event.stopPropagation(); Admin.exportThreadForAI('${safeDidAttr}')" class="w-full px-3 py-2 text-left text-[11px] font-bold text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-900/30 focus:outline-none flex items-center gap-2">${Admin.icon('download', 'w-3.5 h-3.5')} Export</button>
                                     <button type="button" data-escalate="${escalateAttr}" onclick="event.stopPropagation(); Admin.escalateFromEl(this)" class="w-full px-3 py-2 text-left text-[11px] font-bold text-orange-600 dark:text-orange-400 hover:bg-orange-50 dark:hover:bg-orange-900/30 focus:outline-none flex items-center gap-2">${Admin.icon('alert', 'w-3.5 h-3.5')} Escalate</button>
                                     ${did !== 'Anonymous / Legacy' ? `<button type="button" onclick="event.stopPropagation(); Admin.openFeedbackBetaGrant('${safeDidAttr}')" class="w-full px-3 py-2 text-left text-[11px] font-bold text-violet-700 dark:text-violet-300 hover:bg-violet-50 dark:hover:bg-violet-900/30 focus:outline-none flex items-center gap-2">${Admin.icon('star', 'w-3.5 h-3.5')} Add to beta</button>` : ''}
@@ -18411,14 +21629,19 @@ const Admin = {
 
                         const verLabel = safeAppVersion.split(' - ')[0];
                         const commuterRouteLabel = Admin.inboxRouteLabel(item.routeId) || threadRouteLabel;
-                        const commuterRouteHtml = commuterRouteLabel
-                            ? `<div class="inbox-bubble-route-row">${secureEscape(commuterRouteLabel)}</div>`
+                        const stationLabel = String(item.station || '').trim();
+                        const stationAuto = item.stationAutoLocated === true || item.stationAutoLocated === '1' || item.stationAutoLocated === 1;
+                        const routeStationBits = [];
+                        if (commuterRouteLabel) routeStationBits.push(commuterRouteLabel);
+                        if (stationLabel) routeStationBits.push(stationLabel);
+                        const commuterRouteHtml = routeStationBits.length
+                            ? `<div class="inbox-bubble-route-row">${secureEscape(routeStationBits.join(' · '))}</div>`
                             : '';
-                        const signedOutHtml = (item.sentSignedOut || item.chatScope === 'guest')
-                            ? `<div class="text-[10px] font-semibold text-amber-700 dark:text-amber-300 mt-0.5">Sent while signed out</div>`
-                            : '';
+                        const clRouteAttr = secureEscape(commuterRouteLabel || '');
+                        const clStationAttr = secureEscape(stationLabel);
+                        const clAutoAttr = stationAuto ? '1' : '0';
                         const commuterVerBtn = /^V\d+_/i.test(verLabel)
-                            ? `<button type="button" class="fb-version-chip relative z-[2] font-mono font-medium opacity-80 ml-2 shrink-0 underline decoration-dotted underline-offset-2 hover:opacity-100 focus:outline-none" data-admin-changelog="${verLabel}" onclick="event.preventDefault();event.stopPropagation();if(window.Admin&amp;&amp;Admin.openAdminChangelogLookup)Admin.openAdminChangelogLookup(this.getAttribute('data-admin-changelog')||this.textContent);">${verLabel}</button>`
+                            ? `<button type="button" class="fb-version-chip relative z-[2] font-mono font-medium opacity-80 ml-2 shrink-0 underline decoration-dotted underline-offset-2 hover:opacity-100 focus:outline-none" data-admin-changelog="${verLabel}" data-cl-route="${clRouteAttr}" data-cl-station="${clStationAttr}" data-cl-auto="${clAutoAttr}" onclick="event.preventDefault();event.stopPropagation();if(window.Admin&amp;&amp;Admin.openAdminChangelogLookup)Admin.openAdminChangelogLookup(this.getAttribute('data-admin-changelog')||this.textContent,window.Admin.changelogContextFromEl(this));">${verLabel}</button>`
                             : `<span class="font-mono font-medium opacity-60 ml-2 shrink-0">${verLabel}</span>`;
                         const integratedHeaderHtml = `
                             <div class="inbox-bubble-name-row">
@@ -18426,7 +21649,6 @@ const Admin = {
                                 ${commuterVerBtn}
                             </div>
                             ${commuterRouteHtml}
-                            ${signedOutHtml}
                         `;
 
                         const inboxReactId = item.inboxMsgId || '';
@@ -18483,7 +21705,7 @@ const Admin = {
             e.stopPropagation();
             if (typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation();
             const key = btn.getAttribute('data-admin-changelog') || btn.textContent;
-            Admin.openAdminChangelogLookup(key);
+            Admin.openAdminChangelogLookup(key, Admin.changelogContextFromEl(btn));
         };
         document.addEventListener('click', openFromEvent, true);
         document.addEventListener('pointerup', openFromEvent, true);
@@ -18500,6 +21722,7 @@ const Admin = {
             { key: 'delayReportsUi', label: 'Delay reports' },
             { key: 'communityRealtime', label: 'Community realtime' },
             { key: 'pushNotify', label: 'Push notifications' },
+            { key: 'accounts', label: 'Accounts' },
         ];
     },
 
@@ -18746,7 +21969,7 @@ const Admin = {
         else modal.classList.remove('hidden');
     },
 
-    openAdminChangelogLookup: (version) => {
+    openAdminChangelogLookup: (version, context = null) => {
         const now = Date.now();
         if (window.__ntAdminChangelogOpenAt && (now - window.__ntAdminChangelogOpenAt) < 450) return;
         window.__ntAdminChangelogOpenAt = now;
@@ -18756,6 +21979,7 @@ const Admin = {
         const notes = (typeof window.lookupAdminChangelog === 'function')
             ? window.lookupAdminChangelog(key)
             : ((window.ADMIN_CHANGELOG && window.ADMIN_CHANGELOG[key]) || null);
+        const ctx = (context && typeof context === 'object') ? context : {};
         let modal = document.getElementById('admin-changelog-modal');
         if (!modal) {
             modal = document.createElement('div');
@@ -18764,7 +21988,8 @@ const Admin = {
             modal.style.zIndex = '260';
             modal.innerHTML = `
                 <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-sm p-5 border border-gray-200 dark:border-gray-700 transform transition-transform scale-95 flex flex-col overflow-hidden max-h-[min(85dvh,var(--nt-vv-h,85dvh))]">
-                    <h3 id="admin-changelog-title" class="text-base font-black text-gray-900 dark:text-white mb-2 shrink-0"></h3>
+                    <h3 id="admin-changelog-title" class="text-base font-black text-gray-900 dark:text-white mb-1 shrink-0"></h3>
+                    <p id="admin-changelog-meta" class="hidden text-[11px] text-gray-500 dark:text-gray-400 leading-snug mb-2 shrink-0"></p>
                     <div id="admin-changelog-notes" class="text-sm text-gray-700 dark:text-gray-300 space-y-1.5 mb-4 min-h-0 flex-1 overflow-y-auto custom-scrollbar overscroll-contain"></div>
                     <button type="button" id="admin-changelog-close" class="w-full bg-slate-700 hover:bg-slate-800 text-white font-bold py-2.5 rounded-xl shrink-0">Close</button>
                 </div>`;
@@ -18789,8 +22014,29 @@ const Admin = {
         modal.style.overscrollBehavior = 'none';
         modal.style.touchAction = 'none';
         const title = modal.querySelector('#admin-changelog-title');
+        const meta = modal.querySelector('#admin-changelog-meta');
         const body = modal.querySelector('#admin-changelog-notes');
         if (title) title.textContent = key || 'Unknown version';
+        if (meta) {
+            const routeLabel = String(ctx.routeLabel || ctx.route || '').trim();
+            const station = String(ctx.station || '').trim();
+            const autoFlag = ctx.stationAutoLocated === true || ctx.stationAutoLocated === '1' || ctx.stationAutoLocated === 1;
+            const bits = [];
+            if (routeLabel) bits.push(routeLabel);
+            if (station) {
+                bits.push(station);
+                bits.push(autoFlag ? 'Auto-locate' : 'Manual');
+            } else if (routeLabel) {
+                bits.push(autoFlag ? 'Auto-locate' : 'Manual station');
+            }
+            if (bits.length) {
+                meta.textContent = bits.join(' · ');
+                meta.classList.remove('hidden');
+            } else {
+                meta.textContent = '';
+                meta.classList.add('hidden');
+            }
+        }
         if (body) {
             if (!notes || !notes.length) {
                 body.textContent = 'No notes for this build.';
@@ -18806,6 +22052,19 @@ const Admin = {
         } else {
             modal.classList.remove('hidden');
         }
+    },
+
+    changelogContextFromEl: (el) => {
+        if (!el) return null;
+        const routeLabel = el.getAttribute('data-cl-route') || '';
+        const station = el.getAttribute('data-cl-station') || '';
+        const auto = el.getAttribute('data-cl-auto');
+        if (!routeLabel && !station && auto == null) return null;
+        return {
+            routeLabel,
+            station,
+            stationAutoLocated: auto === '1',
+        };
     },
 
     openScheduleQaDeltaModal: (finding) => {
@@ -18952,13 +22211,19 @@ const Admin = {
                     <input id="push-notifications-user" class="w-full h-10 px-3 rounded-lg bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-xs text-gray-900 dark:text-white" placeholder="Signed-in Account uid" autocomplete="off">
                 </div>
                 <div>
-                    <label class="block text-[9px] font-black uppercase tracking-wider text-gray-500 mb-1" for="push-notifications-title">Title</label>
+                    <div class="flex items-center justify-between mb-1">
+                        <label class="text-[9px] font-black uppercase tracking-wider text-gray-500" for="push-notifications-title">Title</label>
+                        ${Admin.writeAssistButtonHtml('push-notifications-title')}
+                    </div>
                     <input id="push-notifications-title" maxlength="80" class="w-full h-10 px-3 rounded-lg bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-xs text-gray-900 dark:text-white" placeholder="Next Train service update">
                 </div>
                 <div>
                     <div class="flex items-center justify-between mb-1">
                         <label class="text-[9px] font-black uppercase tracking-wider text-gray-500" for="push-notifications-message">Message</label>
-                        <span id="push-notifications-count" class="text-[9px] text-gray-400">0 / 180</span>
+                        <span class="inline-flex items-center gap-2">
+                            ${Admin.writeAssistButtonHtml('push-notifications-message')}
+                            <span id="push-notifications-count" class="text-[9px] text-gray-400">0 / 180</span>
+                        </span>
                     </div>
                     <textarea id="push-notifications-message" maxlength="180" rows="3" class="w-full px-3 py-2 rounded-lg bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-xs text-gray-900 dark:text-white resize-none" placeholder="What commuters need to know"></textarea>
                 </div>
@@ -21042,9 +24307,25 @@ const Admin = {
                         <svg id="sched-override-chevron" class="w-4 h-4 transform transition-transform -rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
                     </button>
                     <div id="sched-override-body" class="hidden p-4 space-y-3">
-                        <p class="text-[10px] text-blue-600 dark:text-blue-400 leading-snug">Override the live timetable per region. Commuters boot normally, then see your message and switch.</p>
+                        <p class="text-[10px] text-blue-600 dark:text-blue-400 leading-snug">Override the live timetable per region. Commuters boot normally, then see your message and switch. A message is required whenever a region is Active. Optional dates limit the force to those calendar days only; leave dates empty to keep it on until you deactivate.</p>
                         <div id="sched-override-regions" class="space-y-3"></div>
                         <button type="button" id="sched-override-save" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded-lg text-xs uppercase tracking-wide focus:outline-none">Save schedule overrides</button>
+                    </div>
+                </div>
+
+                <!-- Next Train Champions (About honour roll) -->
+                <div class="bg-amber-50 dark:bg-amber-900/20 rounded-xl border border-amber-200 dark:border-amber-800 overflow-hidden shadow-sm transition-all">
+                    <button type="button" id="champions-header" class="w-full px-3 py-3 bg-amber-100/50 dark:bg-amber-900/40 text-left text-[10px] font-black text-amber-900 dark:text-amber-300 uppercase tracking-widest flex items-center justify-between focus:outline-none transition-colors hover:bg-amber-200/50 dark:hover:bg-amber-900/60">
+                        <span class="flex items-center gap-2">
+                            <span class="text-amber-700 dark:text-amber-300">${Admin.icon('user', 'w-4 h-4')}</span> Next Train Champions
+                        </span>
+                        <svg id="champions-chevron" class="w-4 h-4 transform transition-transform -rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                    </button>
+                    <div id="champions-body" class="hidden p-4 space-y-3">
+                        <p class="text-[10px] text-amber-800 dark:text-amber-300 leading-snug">Shown on About under Built &amp; Maintained. Name and region always show. WhatsApp, channel, and Facebook icons only appear when those fields are filled.</p>
+                        <div id="champions-list" class="space-y-3"></div>
+                        <button type="button" id="champions-add" class="w-full border border-amber-300 dark:border-amber-700 text-amber-900 dark:text-amber-200 font-bold py-2 rounded-lg text-xs uppercase tracking-wide focus:outline-none hover:bg-amber-100/60 dark:hover:bg-amber-900/40">Add champion</button>
+                        <button type="button" id="champions-save" class="w-full bg-amber-600 hover:bg-amber-700 text-white font-bold py-2.5 rounded-lg text-xs uppercase tracking-wide focus:outline-none">Save champions</button>
                     </div>
                 </div>
 
@@ -21465,6 +24746,13 @@ const Admin = {
         const schedOverrideRegions = document.getElementById('sched-override-regions');
         const schedOverrideSave = document.getElementById('sched-override-save');
         const SCHED_OVERRIDE_REGIONS = ['GP', 'WC', 'KZN', 'EC'];
+        const championsHeader = document.getElementById('champions-header');
+        const championsBody = document.getElementById('champions-body');
+        const championsChevron = document.getElementById('champions-chevron');
+        const championsList = document.getElementById('champions-list');
+        const championsAdd = document.getElementById('champions-add');
+        const championsSave = document.getElementById('champions-save');
+        let championsDraft = [];
         const authProvidersHeader = document.getElementById('auth-providers-header');
         const authProvidersBody = document.getElementById('auth-providers-body');
         const authProvidersChevron = document.getElementById('auth-providers-chevron');
@@ -21665,10 +24953,41 @@ const Admin = {
                     <select class="sched-override-day w-full h-9 px-2 rounded-md bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-[10px] text-gray-900 dark:text-white outline-none" data-region="${code}">
                         ${schedDayTypesForRegion(code).map((t) => `<option value="${t.value}">${t.label}</option>`).join('')}
                     </select>
-                    <input type="text" class="sched-override-title w-full h-9 px-2 rounded-md bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-[10px] text-gray-900 dark:text-white outline-none" data-region="${code}" placeholder="Popup title (e.g. Public holiday today)" maxlength="120">
-                    <textarea class="sched-override-body w-full min-h-[56px] px-2 py-1.5 rounded-md bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-[10px] text-gray-900 dark:text-white outline-none resize-y" data-region="${code}" placeholder="Popup message explaining the situation" maxlength="500"></textarea>
+                    <div class="space-y-1">
+                        <div class="flex items-center justify-between gap-2">
+                            <span class="text-[9px] font-bold uppercase tracking-wide text-gray-500">Dates (optional)</span>
+                            <input type="date" class="sched-override-date-add h-8 px-1 rounded-md bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-[10px] text-gray-900 dark:text-white outline-none" data-region="${code}" aria-label="Add date for ${code}">
+                        </div>
+                        <textarea class="sched-override-dates w-full min-h-[44px] px-2 py-1.5 rounded-md bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-[10px] font-mono text-gray-900 dark:text-white outline-none resize-y" data-region="${code}" placeholder="Leave empty = while Active. Or list YYYY-MM-DD (comma or new line) for specific days only." maxlength="400"></textarea>
+                        <p class="text-[9px] text-blue-600/80 dark:text-blue-400/80 leading-snug">Pick a date above to append. Multiple dates force that schedule type only on those days.</p>
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <span class="text-[9px] font-bold uppercase tracking-wide text-gray-500">Title</span>
+                        ${Admin.writeAssistButtonHtml('sched-override-title-' + code)}
+                    </div>
+                    <input type="text" id="sched-override-title-${code}" class="sched-override-title w-full h-9 px-2 rounded-md bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-[10px] text-gray-900 dark:text-white outline-none" data-region="${code}" placeholder="Day name on the chip (e.g. Election Day)" maxlength="120">
+                    <div class="flex items-center justify-between">
+                        <span class="text-[9px] font-bold uppercase tracking-wide text-gray-500">Message (required if active)</span>
+                        ${Admin.writeAssistButtonHtml('sched-override-msg-' + code)}
+                    </div>
+                    <textarea id="sched-override-msg-${code}" class="sched-override-body w-full min-h-[56px] px-2 py-1.5 rounded-md bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-[10px] text-gray-900 dark:text-white outline-none resize-y" data-region="${code}" placeholder="Required when Active is on" maxlength="500"></textarea>
                 </div>
             `).join('');
+            schedOverrideRegions.querySelectorAll('.sched-override-date-add').forEach((input) => {
+                input.addEventListener('change', () => {
+                    const code = input.getAttribute('data-region');
+                    const day = String(input.value || '').trim();
+                    if (!code || !/^\d{4}-\d{2}-\d{2}$/.test(day)) return;
+                    const box = schedOverrideRegions.querySelector(`.sched-override-dates[data-region="${code}"]`);
+                    if (!box) return;
+                    const normalize = (typeof window.normalizeScheduleOverrideDates === 'function')
+                        ? window.normalizeScheduleOverrideDates
+                        : (raw) => String(raw || '').split(/[\s,;]+/).map((s) => s.trim()).filter((s) => /^\d{4}-\d{2}-\d{2}$/.test(s));
+                    const next = normalize(`${box.value}\n${day}`);
+                    box.value = next.join('\n');
+                    input.value = '';
+                });
+            });
         }
 
         if (nukeHeader) {
@@ -21708,6 +25027,80 @@ const Admin = {
                 schedOverrideBody.classList.toggle('hidden');
                 if (schedOverrideBody.classList.contains('hidden')) schedOverrideChevron?.classList.add('-rotate-90');
                 else schedOverrideChevron?.classList.remove('-rotate-90');
+            };
+        }
+
+        const paintChampionsForm = () => {
+            if (!championsList) return;
+            if (!championsDraft.length) {
+                championsList.innerHTML = '<p class="text-[10px] text-amber-800/80 dark:text-amber-300/80 text-center py-2">No champions yet. Add someone who helps keep Next Train up to date.</p>';
+                return;
+            }
+            championsList.innerHTML = championsDraft.map((row, index) => {
+                const id = String(row.id || `c_${index}`);
+                const region = String(row.region || 'GP');
+                return `<div class="champions-row bg-white/80 dark:bg-gray-900/50 rounded-lg border border-amber-100 dark:border-amber-900/40 p-3 space-y-2" data-champ-id="${id}">
+                    <div class="flex items-center justify-between gap-2">
+                        <span class="text-[9px] font-bold uppercase tracking-wide text-gray-500">Champion ${index + 1}</span>
+                        <button type="button" class="champions-remove text-[10px] font-bold uppercase tracking-wide text-red-600 dark:text-red-400 focus:outline-none" data-champ-id="${id}">Remove</button>
+                    </div>
+                    <input type="text" class="champions-name w-full h-9 px-2 rounded-md bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-[11px] text-gray-900 dark:text-white outline-none" data-champ-id="${id}" placeholder="Name" maxlength="80" value="${String(row.name || '').replace(/"/g, '&quot;')}">
+                    <select class="champions-region w-full h-9 px-2 rounded-md bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-[11px] text-gray-900 dark:text-white outline-none" data-champ-id="${id}">
+                        <option value="GP" ${region === 'GP' ? 'selected' : ''}>Gauteng</option>
+                        <option value="WC" ${region === 'WC' ? 'selected' : ''}>Western Cape</option>
+                        <option value="KZN" ${region === 'KZN' ? 'selected' : ''}>KwaZulu-Natal</option>
+                        <option value="EC" ${region === 'EC' ? 'selected' : ''}>Eastern Cape</option>
+                    </select>
+                    <input type="text" class="champions-whatsapp w-full h-9 px-2 rounded-md bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-[11px] text-gray-900 dark:text-white outline-none" data-champ-id="${id}" placeholder="WhatsApp number (optional)" maxlength="40" value="${String(row.whatsapp || '').replace(/"/g, '&quot;')}">
+                    <input type="url" class="champions-channel w-full h-9 px-2 rounded-md bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-[11px] text-gray-900 dark:text-white outline-none" data-champ-id="${id}" placeholder="WhatsApp channel URL (optional)" maxlength="240" value="${String(row.whatsappChannel || '').replace(/"/g, '&quot;')}">
+                    <input type="url" class="champions-facebook w-full h-9 px-2 rounded-md bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-[11px] text-gray-900 dark:text-white outline-none" data-champ-id="${id}" placeholder="Facebook profile URL (optional)" maxlength="240" value="${String(row.facebook || '').replace(/"/g, '&quot;')}">
+                </div>`;
+            }).join('');
+            championsList.querySelectorAll('.champions-remove').forEach((btn) => {
+                btn.addEventListener('click', () => {
+                    const id = btn.getAttribute('data-champ-id');
+                    championsDraft = championsDraft.filter((row) => String(row.id) !== id);
+                    paintChampionsForm();
+                });
+            });
+        };
+
+        const readChampionsForm = () => {
+            if (!championsList) return championsDraft;
+            return [...championsList.querySelectorAll('.champions-row')].map((el, index) => {
+                const id = el.getAttribute('data-champ-id') || `c_${index}`;
+                return {
+                    id,
+                    name: (el.querySelector('.champions-name')?.value || '').trim(),
+                    region: el.querySelector('.champions-region')?.value || 'GP',
+                    whatsapp: (el.querySelector('.champions-whatsapp')?.value || '').trim(),
+                    whatsappChannel: (el.querySelector('.champions-channel')?.value || '').trim(),
+                    facebook: (el.querySelector('.champions-facebook')?.value || '').trim(),
+                    order: index,
+                };
+            }).filter((row) => row.name);
+        };
+
+        if (championsHeader && championsBody) {
+            championsHeader.onclick = () => {
+                championsBody.classList.toggle('hidden');
+                if (championsBody.classList.contains('hidden')) championsChevron?.classList.add('-rotate-90');
+                else championsChevron?.classList.remove('-rotate-90');
+            };
+        }
+        if (championsAdd) {
+            championsAdd.onclick = () => {
+                championsDraft = readChampionsForm();
+                championsDraft.push({
+                    id: `c_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`,
+                    name: '',
+                    region: 'GP',
+                    whatsapp: '',
+                    whatsappChannel: '',
+                    facebook: '',
+                    order: championsDraft.length,
+                });
+                paintChampionsForm();
             };
         }
 
@@ -21805,10 +25198,16 @@ const Admin = {
                     if (resSched.ok) {
                         const schedCfg = await resSched.json();
                         const regionsCfg = schedCfg?.regions || {};
+                        const normalizeDates = (typeof window.normalizeScheduleOverrideDates === 'function')
+                            ? window.normalizeScheduleOverrideDates
+                            : (raw) => (Array.isArray(raw) ? raw : String(raw || '').split(/[\s,;]+/))
+                                .map((s) => String(s || '').trim().slice(0, 10))
+                                .filter((s) => /^\d{4}-\d{2}-\d{2}$/.test(s));
                         SCHED_OVERRIDE_REGIONS.forEach((code) => {
                             const r = regionsCfg[code] || {};
                             const activeEl = schedOverrideRegions?.querySelector(`.sched-override-active[data-region="${code}"]`);
                             const dayEl = schedOverrideRegions?.querySelector(`.sched-override-day[data-region="${code}"]`);
+                            const datesEl = schedOverrideRegions?.querySelector(`.sched-override-dates[data-region="${code}"]`);
                             const titleEl = schedOverrideRegions?.querySelector(`.sched-override-title[data-region="${code}"]`);
                             const bodyEl = schedOverrideRegions?.querySelector(`.sched-override-body[data-region="${code}"]`);
                             if (activeEl) activeEl.checked = !!r.active;
@@ -21817,6 +25216,7 @@ const Admin = {
                                 if (code !== 'WC' && dayVal === 'public_holiday') dayVal = 'saturday';
                                 dayEl.value = dayVal;
                             }
+                            if (datesEl) datesEl.value = normalizeDates(r.dates).join('\n');
                             if (titleEl) titleEl.value = r.title || '';
                             if (bodyEl) bodyEl.value = r.body || '';
                         });
@@ -21841,9 +25241,42 @@ const Admin = {
                     }
                 } catch (ape) { /* keep safe defaults */ }
 
-                } catch(e) { console.warn("Failed to check system status"); }
+                try {
+                    const resChamp = await fetch(`${dynamicEndpoint}config/community_champions.json`);
+                    if (resChamp.ok) {
+                        const champCfg = await resChamp.json();
+                        const items = champCfg?.items;
+                        const list = Array.isArray(items)
+                            ? items
+                            : (items && typeof items === 'object'
+                                ? Object.keys(items).map((key) => ({ id: key, ...(items[key] || {}) }))
+                                : []);
+                        championsDraft = list
+                            .filter((row) => row && String(row.name || '').trim())
+                            .map((row, index) => ({
+                                id: String(row.id || `c_${index}`),
+                                name: String(row.name || '').trim(),
+                                region: ['GP', 'WC', 'KZN', 'EC'].includes(String(row.region || '').toUpperCase())
+                                    ? String(row.region).toUpperCase()
+                                    : 'GP',
+                                whatsapp: String(row.whatsapp || '').trim(),
+                                whatsappChannel: String(row.whatsappChannel || '').trim(),
+                                facebook: String(row.facebook || '').trim(),
+                                order: Number.isFinite(Number(row.order)) ? Number(row.order) : index,
+                            }))
+                            .sort((a, b) => (a.order - b.order) || a.name.localeCompare(b.name));
+                        paintChampionsForm();
+                    } else {
+                        paintChampionsForm();
+                    }
+                } catch (ce) {
+                    paintChampionsForm();
+                }
+
+                } catch(e) { /* status check is optional when offline */ }
         }
         checkStatus();
+        paintChampionsForm();
 
         if (banModeSave && banModeSelect) {
             banModeSave.onclick = async () => {
@@ -21959,17 +25392,39 @@ const Admin = {
                         return;
                     }
                     const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
+                    const missingMessage = [];
                     const regions = {};
+                    const normalizeDates = (typeof window.normalizeScheduleOverrideDates === 'function')
+                        ? window.normalizeScheduleOverrideDates
+                        : (raw) => (Array.isArray(raw) ? raw : String(raw || '').split(/[\s,;]+/))
+                            .map((s) => String(s || '').trim().slice(0, 10))
+                            .filter((s) => /^\d{4}-\d{2}-\d{2}$/.test(s));
                     SCHED_OVERRIDE_REGIONS.forEach((code) => {
-                        regions[code] = {
-                            active: !!schedOverrideRegions.querySelector(`.sched-override-active[data-region="${code}"]`)?.checked,
+                        const active = !!schedOverrideRegions.querySelector(`.sched-override-active[data-region="${code}"]`)?.checked;
+                        const body = (schedOverrideRegions.querySelector(`.sched-override-body[data-region="${code}"]`)?.value || '').trim();
+                        if (active && !body) missingMessage.push(code);
+                        const dates = normalizeDates(
+                            schedOverrideRegions.querySelector(`.sched-override-dates[data-region="${code}"]`)?.value || ''
+                        );
+                        const row = {
+                            active,
                             dayType: schedOverrideRegions.querySelector(`.sched-override-day[data-region="${code}"]`)?.value
                                 || (code === 'WC' ? 'public_holiday' : 'saturday'),
                             title: (schedOverrideRegions.querySelector(`.sched-override-title[data-region="${code}"]`)?.value || '').trim(),
-                            body: (schedOverrideRegions.querySelector(`.sched-override-body[data-region="${code}"]`)?.value || '').trim(),
+                            body,
                             updatedAt: Date.now(),
                         };
+                        if (dates.length) row.dates = dates;
+                        regions[code] = row;
                     });
+                    if (missingMessage.length) {
+                        const first = schedOverrideRegions.querySelector(`.sched-override-body[data-region="${missingMessage[0]}"]`);
+                        first?.focus();
+                        if (typeof showToast === 'function') {
+                            showToast(`Add a message for ${missingMessage.join(', ')} before forcing that schedule.`, 'error');
+                        }
+                        return;
+                    }
                     const payload = {
                         updatedAt: Date.now(),
                         updatedBy: Admin.currentUser?.email || 'Admin',
@@ -21983,6 +25438,53 @@ const Admin = {
                     if (typeof showToast === 'function') showToast('Schedule overrides saved', 'success');
                 } catch (e) {
                     if (typeof showToast === 'function') showToast('Failed to save schedule overrides.', 'error');
+                }
+            };
+        }
+
+        if (championsSave) {
+            championsSave.onclick = async () => {
+                try {
+                    const secret = await Admin.getAuthKey();
+                    if (!secret) {
+                        if (typeof showToast === 'function') showToast('Authentication required.', 'error');
+                        return;
+                    }
+                    const dynamicEndpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
+                    const rows = readChampionsForm();
+                    championsDraft = rows;
+                    const items = {};
+                    rows.forEach((row, index) => {
+                        const id = String(row.id || `c_${index}`).slice(0, 40);
+                        items[id] = {
+                            id,
+                            name: String(row.name || '').trim().slice(0, 80),
+                            region: ['GP', 'WC', 'KZN', 'EC'].includes(String(row.region || '').toUpperCase())
+                                ? String(row.region).toUpperCase()
+                                : 'GP',
+                            whatsapp: String(row.whatsapp || '').trim().slice(0, 40),
+                            whatsappChannel: String(row.whatsappChannel || '').trim().slice(0, 240),
+                            facebook: String(row.facebook || '').trim().slice(0, 240),
+                            order: index,
+                        };
+                    });
+                    const payload = {
+                        updatedAt: Date.now(),
+                        updatedBy: Admin.currentUser?.email || 'Admin',
+                        items,
+                    };
+                    const res = await window.guardianFetch(`${dynamicEndpoint}config/community_champions.json?auth=${secret}`, {
+                        method: 'PUT',
+                        body: JSON.stringify(payload),
+                    }, 10000);
+                    if (!res.ok) throw new Error('Auth failed');
+                    paintChampionsForm();
+                    if (typeof window.fetchCommunityChampions === 'function') {
+                        try { await window.fetchCommunityChampions(true); } catch { /* ignore */ }
+                    }
+                    if (typeof showToast === 'function') showToast('Champions saved', 'success');
+                } catch (e) {
+                    if (typeof showToast === 'function') showToast('Failed to save champions.', 'error');
                 }
             };
         }
@@ -22607,6 +26109,7 @@ const Admin = {
                 const sourceBtn = srcMeta.canOpen
                     ? `<button type="button" class="text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded ${sStyles.bg} ${sStyles.text} hover:underline focus:outline-none" onclick="event.stopPropagation(); Admin.openRoadmapOriginal('${safeTicketId}')">${safeHTML(sStyles.label)}</button>`
                     : `<span class="text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded ${sStyles.bg} ${sStyles.text}">${safeHTML(sStyles.label)}</span>`;
+                const outreachHtml = Admin.roadmapOutreachButtons(ticket, { compact: true });
 
                 const cardHtml = `
                     <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 border-l-4 ${pStyles.stripe} p-3 rounded-xl shadow-sm hover:shadow-md hover:border-blue-400 dark:hover:border-blue-500 transition-all cursor-pointer group flex flex-col gap-2 text-left overflow-hidden" onclick="Admin.openViewModal('${safeTicketId}')">
@@ -22621,6 +26124,7 @@ const Admin = {
                             <h4 class="font-bold text-slate-900 dark:text-slate-100 text-sm leading-snug break-words text-left min-w-0 flex-1">${safeTitle}</h4>
                         </div>
                         <p class="text-[11px] text-slate-600 dark:text-slate-300 text-left break-words whitespace-normal leading-relaxed line-clamp-3">${shortDesc}</p>
+                        ${outreachHtml ? `<div onclick="event.stopPropagation()">${outreachHtml}</div>` : ''}
                         <div class="flex items-center justify-between gap-2 pt-2 border-t border-slate-100 dark:border-slate-700">
                             <span class="text-[9px] text-slate-400 font-medium">${dateStr.split(',')[0]}</span>
                             <div class="flex items-center gap-0.5 shrink-0">
@@ -22786,6 +26290,7 @@ const Admin = {
             const originalBtn = srcMeta.canOpen
                 ? `<button type="button" id="roadmap-open-original" class="mt-3 w-full text-left px-3 py-2.5 rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200 text-xs font-bold hover:bg-blue-100 dark:hover:bg-blue-900/50 focus:outline-none">Open original ${safeHTML(srcMeta.label)}</button>`
                 : '';
+            const outreachHtml = Admin.roadmapOutreachButtons(ticket, { compact: false });
 
             modal.innerHTML = `
                 <div class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-2xl flex flex-col max-h-[90vh] transform transition-all scale-95 border border-gray-200 dark:border-gray-700">
@@ -22819,6 +26324,7 @@ const Admin = {
                     <div class="p-4 sm:p-6 overflow-y-auto flex-1 bg-white dark:bg-gray-800 custom-scrollbar text-left">
                         <h4 class="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2 text-left">Description</h4>
                         <div id="roadmap-ticket-desc" class="text-left text-sm leading-relaxed text-slate-800 dark:text-slate-100 bg-slate-50 dark:bg-slate-900 p-3 rounded-lg border border-slate-200 dark:border-slate-700 whitespace-pre-wrap break-words">${safeDesc}</div>
+                        ${outreachHtml}
                         ${originalBtn}
                     </div>
                 </div>
@@ -22996,6 +26502,9 @@ const Admin = {
                     sourceId: ticket.sourceId || inferred.sourceId || '',
                     deviceId: ticket.deviceId || inferred.deviceId || '',
                     sourceTab: ticket.sourceTab || inferred.tab || '',
+                    outreachEmails: Admin.outreachList(ticket.outreachEmails),
+                    outreachPhones: Admin.outreachList(ticket.outreachPhones),
+                    outreachMessage: String(ticket.outreachMessage || ''),
                 };
 
                 const targetId = ticketId || Date.now().toString();

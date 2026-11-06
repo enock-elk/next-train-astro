@@ -20,6 +20,9 @@ import {
     updateProfile,
     sendEmailVerification,
     sendPasswordResetEmail,
+    applyActionCode,
+    confirmPasswordReset,
+    verifyPasswordResetCode,
 } from 'firebase/auth';
 import { getStorage, ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import {
@@ -93,6 +96,9 @@ export async function bootFirebase() {
         window.firebaseUpdateProfile = updateProfile;
         window.firebaseSendEmailVerification = sendEmailVerification;
         window.firebaseSendPasswordResetEmail = sendPasswordResetEmail;
+        window.firebaseApplyActionCode = applyActionCode;
+        window.firebaseConfirmPasswordReset = confirmPasswordReset;
+        window.firebaseVerifyPasswordResetCode = verifyPasswordResetCode;
 
         window.firebaseStorage = getStorage(app);
         window.firebaseStorageRef = ref;

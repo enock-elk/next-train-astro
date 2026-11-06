@@ -1480,8 +1480,40 @@
                 initLat = -32.95; initLon = 27.75; initZoom = 11;
             }
 
+            // SEO / deep-link station isolate: ?station= + optional lat/lon.
+            function readStationFocusQuery() {
+                try {
+                    const q = new URLSearchParams(location.search);
+                    const station = String(q.get('station') || '').trim();
+                    // Number(null) and Number('') are 0, which is finite. A map
+                    // opened without ?lat=&lon= was therefore centred on the
+                    // Gulf of Guinea instead of the commuter's region.
+                    const latParam = q.get('lat');
+                    const lonParam = q.get('lon');
+                    const lat = latParam == null || String(latParam).trim() === '' ? NaN : Number(latParam);
+                    const lon = lonParam == null || String(lonParam).trim() === '' ? NaN : Number(lonParam);
+                    return {
+                        station,
+                        lat: Number.isFinite(lat) ? lat : null,
+                        lon: Number.isFinite(lon) ? lon : null,
+                    };
+                } catch (_) {
+                    return { station: '', lat: null, lon: null };
+                }
+            }
+            const stationFocusQuery = readStationFocusQuery();
+            const stationFocusZoom = 16;
+            if (stationFocusQuery.station) {
+                try { document.documentElement.classList.add('nt-map-station-focus'); } catch (_) {}
+            }
+
             // Guardian UX: Disabled Leaflet's rigid zoom control for horizontal bar layout
-            const map = L.map('map', { zoomControl: false }).setView([initLat, initLon], initZoom);
+            const mapStartLat = (stationFocusQuery.lat != null) ? stationFocusQuery.lat : initLat;
+            const mapStartLon = (stationFocusQuery.lon != null) ? stationFocusQuery.lon : initLon;
+            const mapStartZoom = (stationFocusQuery.lat != null && stationFocusQuery.lon != null)
+                ? stationFocusZoom
+                : initZoom;
+            const map = L.map('map', { zoomControl: false }).setView([mapStartLat, mapStartLon], mapStartZoom);
             map.on('click', function () {
                 try {
                     (window.parent || window).postMessage({ type: 'nt-map-close-tracking' }, '*');
@@ -1519,16 +1551,48 @@
 
             // --- DYNAMIC ROUTE & STATION EXTRACTOR ---
             const colorMap = {
+                'text-[#937e3b]': '#937e3b',
+                'text-[#ec008c]': '#ec008c',
+                'text-[#f58220]': '#f58220',
+                'text-[#f5821f]': '#f5821f',
+                'text-[#00b9f1]': '#00b9f1',
+                'text-[#0071bb]': '#0071bb',
+                'text-[#ed262e]': '#ed262e',
+                'text-[#ee1a24]': '#ee1a24',
+                'text-[#ee2f33]': '#ee2f33',
+                'text-[#036630]': '#036630',
+                'text-[#00a651]': '#00a651',
+                'text-[#00a650]': '#00a650',
+                'text-[#a9cf41]': '#a9cf41',
+                'text-[#a6ce38]': '#a6ce38',
+                'text-[#8f5644]': '#8f5644',
+                'text-[#00b9f3]': '#00b9f3',
+                'text-[#2d88c7]': '#2d88c7',
+                'text-[#fad561]': '#fad561',
+                'text-[#0abcf2]': '#0abcf2',
+                'text-[#6f2729]': '#6f2729',
+                'text-yellow-500': '#eab308',
                 'text-green-500': '#22c55e',
-                'text-lime-500': '#84cc16', 
+                'text-lime-500': '#84cc16',
                 'text-orange-500': '#f97316',
                 'text-purple-500': '#a855f7',
                 'text-indigo-500': '#6366f1',
                 'text-blue-500': '#3b82f6',
-                'text-yellow-600': '#ca8a04', 
-                'text-yellow-500': '#eab308',
+                'text-yellow-600': '#ca8a04',
                 'text-red-500': '#ef4444'
             };
+            /** Prefer the route's own hex so GPS lines never fall back to grey when the class string drifts. */
+            function routeLineColor(colorClass) {
+                const key = String(colorClass || '').trim();
+                if (!key) return '#9ca3af';
+                if (colorMap[key]) return colorMap[key];
+                const hex = key.match(/#([0-9a-fA-F]{6})\b/i);
+                if (hex) return `#${hex[1]}`;
+                for (const [mapKey, value] of Object.entries(colorMap)) {
+                    if (key.includes(mapKey)) return value;
+                }
+                return '#9ca3af';
+            }
 
             const globalStations = {}; // { name: {lat, lon, origName, routes: Set()} } — active boarding stops only
             const geometryStations = {}; // coords for inactive / ghost stops used only in disruption paths
@@ -1838,7 +1902,7 @@
                      drawnRoutes.push({
                          routeId: route.id,
                          name: route.name.replace(/<->/g, '↔'),
-                         color: colorMap[route.colorClass] || '#9ca3af',
+                         color: routeLineColor(route.colorClass),
                          isActive: route.isActive,
                          region: route.region,
                          trainCount: sheetTrainKeys.size,
@@ -1859,7 +1923,7 @@
                     drawnRoutes.push({
                         routeId: 'wc-maitland-mutual',
                         name: 'Maitland ↔ Mutual',
-                        color: '#22c55e',
+                        color: '#00a650',
                         isActive: true,
                         coords: [mai, mut],
                         validStops: [
@@ -2236,7 +2300,10 @@
                 else fitNetworkView();
             }
 
-            if (isMapTabEmbed()) {
+            // Map-tab embed follows the pinned corridor. Station SEO (?station=) must
+            // isolate that stop instead — skip corridor fitBounds so the preview
+            // does not open on the whole line.
+            if (isMapTabEmbed() && !stationFocusQuery.station) {
                 let pinned = '';
                 try { pinned = localStorage.getItem('defaultRoute_' + currentRegion) || ''; } catch (_) {}
                 applyEmbedCorridorFocus(pinned);
@@ -2322,6 +2389,55 @@
                 stationLayerItems.push({ name, routes: data.routes, marker, labelClass, isMajor });
             });
             raiseStationMarkers();
+
+            // SEO / deep-link: isolate the named stop at street-level zoom (pan to see the line).
+            function focusStationFromQuery() {
+                const raw = stationFocusQuery.station || '';
+                const latQ = stationFocusQuery.lat;
+                const lonQ = stationFocusQuery.lon;
+                if (!raw && latQ == null && lonQ == null) return false;
+                const normKey = (value) => String(value || '')
+                    .replace(/ STATION$/i, '')
+                    .replace(/[-_]+/g, ' ')
+                    .replace(/\s+/g, ' ')
+                    .trim()
+                    .toUpperCase();
+                const want = normKey(raw);
+                let item = null;
+                if (want) {
+                    item = stationLayerItems.find((s) => normKey(s.name) === want)
+                        || stationLayerItems.find((s) => {
+                            const n = normKey(s.name);
+                            return n === want || n.replace(/\s+/g, '') === want.replace(/\s+/g, '');
+                        });
+                }
+                if (item?.marker && typeof item.marker.getLatLng === 'function') {
+                    const ll = item.marker.getLatLng();
+                    try { map.setView(ll, stationFocusZoom, { animate: false }); } catch (_) {}
+                    try {
+                        if (typeof item.marker.setRadius === 'function') item.marker.setRadius(7);
+                        if (typeof item.marker.setStyle === 'function') {
+                            item.marker.setStyle({ color: '#1d4ed8', weight: 3, fillColor: '#ffffff' });
+                        }
+                        item.marker.bringToFront?.();
+                    } catch (_) {}
+                    return true;
+                }
+                if (latQ != null && lonQ != null) {
+                    try { map.setView([latQ, lonQ], stationFocusZoom, { animate: false }); } catch (_) {}
+                    return true;
+                }
+                return false;
+            }
+            focusStationFromQuery();
+            // Re-assert after layout — corridor paint / iframe size can nudge the view.
+            if (stationFocusQuery.station || (stationFocusQuery.lat != null && stationFocusQuery.lon != null)) {
+                requestAnimationFrame(() => {
+                    focusStationFromQuery();
+                    try { map.invalidateSize(false); } catch (_) {}
+                    focusStationFromQuery();
+                });
+            }
 
             // --- BUILD DYNAMIC LEGEND ---
             const legendContent = document.getElementById('legend-content');
@@ -3587,7 +3703,19 @@
                         ? L.point(dir === 'right' ? 16 : -16, 0)
                         : L.point(0, -5);
                     var el = tip.getElement && tip.getElement();
-                    if (el) el.classList.toggle('nt-station-callout', close);
+                    if (el) {
+                        var wasCallout = el.classList.contains('nt-station-callout');
+                        if (wasCallout !== close) {
+                            el.style.transition = 'none';
+                            el.classList.toggle('nt-station-callout', close);
+                            if (!close) {
+                                var node = el;
+                                requestAnimationFrame(function () {
+                                    if (node && !node.classList.contains('nt-station-callout')) node.style.transition = '';
+                                });
+                            }
+                        }
+                    }
                     if (typeof tip._updatePosition === 'function') {
                         try { tip._updatePosition(); } catch (_) {}
                     }
@@ -3625,7 +3753,7 @@
                 var numHtml = (spec && spec.far)
                     ? ''
                     : '<span class="nt-live-train-num" style="font-size:' + numSize + ';transform:rotate(' + labelCounterYaw + 'deg)">' + id + '</span>';
-                return '<div class="' + wrapCls + '" title="Train ' + id + '">'
+                return '<div class="' + wrapCls + '">'
                     + '<span class="nt-live-train-ring" aria-hidden="true"></span>'
                     + '<span class="nt-live-train-ring nt-live-train-ring--delay" aria-hidden="true"></span>'
                     + '<span class="' + cls + '" style="transform:rotate(' + yaw + 'deg)">'
@@ -3693,6 +3821,19 @@
                     tickRidePopupFreshness();
                     applyRideTrainStalePause();
                 }, 1000);
+                setInterval(function () {
+                    if (document.hidden) return;
+                    var ids = Object.keys(rideTrainMarkers);
+                    if (!ids.length) return;
+                    var pts = [];
+                    ids.forEach(function (id) {
+                        var marker = rideTrainMarkers[id];
+                        var ll = marker && marker.getLatLng && marker.getLatLng();
+                        if (!ll) return;
+                        pts.push({ lat: ll.lat, lng: ll.lng });
+                    });
+                    updateStationCallouts(pts);
+                }, 200);
             }
             function applyRideTrainStalePause() {
                 var now = Date.now();
@@ -3731,8 +3872,8 @@
                 }
             }
             // Keep in sync with src/lib/gps-freshness.js (RIDE_GPS_STALE_MS / RIDE_INTERPOLATION_MAX_MS).
-            var RIDE_GPS_STALE_MS = 15000;
-            var RIDE_INTERPOLATION_MAX_MS = 15000;
+            var RIDE_GPS_STALE_MS = 18000;
+            var RIDE_INTERPOLATION_MAX_MS = 18000;
             var STATION_APPROACH_M = 160;
             var STATION_DWELL_SEC = 0.7;
             var STATION_CRAWL_SEC = 0.22;
@@ -4564,8 +4705,26 @@
 
             // --- DYNAMIC TEXT RESIZING & PROGRESSIVE DISCLOSURE ---
             function keepHubMarkerSize() {
+                const focusWant = String(stationFocusQuery.station || '')
+                    .replace(/ STATION$/i, '')
+                    .replace(/[-_]+/g, ' ')
+                    .replace(/\s+/g, ' ')
+                    .trim()
+                    .toUpperCase();
                 stationLayerItems.forEach((item) => {
                     if (!item.marker || typeof item.marker.setRadius !== 'function') return;
+                    const nameKey = String(item.name || '')
+                        .replace(/ STATION$/i, '')
+                        .replace(/[-_]+/g, ' ')
+                        .replace(/\s+/g, ' ')
+                        .trim()
+                        .toUpperCase();
+                    const focused = !!(focusWant && nameKey === focusWant);
+                    if (focused) {
+                        item.marker.setRadius(7);
+                        item.marker.setStyle({ color: '#1d4ed8', weight: 3, fillColor: '#ffffff' });
+                        return;
+                    }
                     const major = !!item.isMajor;
                     item.marker.setRadius(major ? 5 : 2.5);
                     item.marker.setStyle({

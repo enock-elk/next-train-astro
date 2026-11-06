@@ -45,8 +45,8 @@
 </div>
 
 <!-- UPCOMING TRAINS / SCHEDULE MODAL -->
-<div id="schedule-modal" class="fixed inset-0 bg-black bg-opacity-70 z-[125] hidden flex items-center justify-center p-4 backdrop-blur-sm transition-opacity duration-300">
-    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-md max-h-[95dvh] flex flex-col transform transition-transform duration-300 scale-95" id="modal-content">
+<div id="schedule-modal" class="fixed inset-0 bg-black bg-opacity-70 z-[125] hidden flex flex-col p-2 backdrop-blur-sm transition-opacity duration-300">
+    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-md mx-auto flex-1 min-h-0 flex flex-col overflow-hidden transform transition-transform duration-300 scale-95" id="modal-content">
         <div class="p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-start gap-2 bg-gray-50 dark:bg-gray-900 rounded-t-xl">
             <h3 id="modal-title" class="min-w-0 flex-1 text-lg font-bold text-gray-900 dark:text-white leading-tight">
                 <span id="modal-title-route" class="block whitespace-nowrap overflow-hidden">Full Schedule</span>
@@ -56,7 +56,10 @@
                 <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
             </button>
         </div>
-        <div id="modal-list" class="p-2 overflow-y-auto flex-grow space-y-2 bg-gray-100 dark:bg-gray-800"></div>
+        <div class="relative flex-1 min-h-0">
+            <div id="modal-list" class="absolute inset-0 p-2 overflow-y-auto space-y-2 bg-gray-100 dark:bg-gray-800"></div>
+            <div class="nt-sheet-shade" data-shade-for="modal-list" aria-hidden="true"></div>
+        </div>
         <div class="p-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 rounded-b-xl">
             <button id="close-modal-btn-2" type="button" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg shadow-md transition-colors">Close</button>
         </div>
@@ -65,7 +68,10 @@
 
 <!-- PROFILE SETUP MODAL -->
 <div id="profile-modal" class="fixed inset-0 bg-black bg-opacity-90 z-[130] hidden flex items-center justify-center p-4 backdrop-blur-md transition-opacity duration-300">
-    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-sm p-6 transform transition-all scale-100">
+    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-sm p-6 pt-12 transform transition-all scale-100 relative">
+        <button type="button" id="profile-modal-close" class="absolute top-3 right-3 p-2 rounded-full text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-800 dark:hover:text-gray-100 focus:outline-none" aria-label="Close" onclick="if(window.closeSmoothModal) window.closeSmoothModal('profile-modal')">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+        </button>
         <div class="text-center">
             <div class="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-blue-100 dark:bg-blue-900 mb-4">
                 <svg class="h-8 w-8 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>
@@ -73,16 +79,16 @@
             <h3 class="text-xl font-bold text-gray-900 dark:text-white mb-2">Welcome Commuter!</h3>
             <p class="text-sm text-gray-500 dark:text-gray-400 mb-6">Select your profile to see correct fares.</p>
             <div class="space-y-3">
-                <button type="button" onclick="window.selectProfile && window.selectProfile('Adult')" class="w-full bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-900 dark:text-white font-bold py-3 px-4 rounded-lg flex items-center justify-between group transition-colors">
+                <button type="button" data-passenger="Adult" onclick="window.selectProfile && window.selectProfile('Adult')" class="w-full bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-900 dark:text-white font-bold py-3 px-4 rounded-lg flex items-center justify-between group transition-colors">
                     <span>Adult</span><span class="text-xs font-normal text-gray-500 group-hover:text-gray-700 dark:text-gray-400">Standard Fare</span>
                 </button>
-                <button type="button" onclick="window.selectProfile && window.selectProfile('Scholar')" class="w-full bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-900 dark:text-white font-bold py-3 px-4 rounded-lg flex items-center justify-between group transition-colors">
+                <button type="button" data-passenger="Scholar" onclick="window.selectProfile && window.selectProfile('Scholar')" class="w-full bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-900 dark:text-white font-bold py-3 px-4 rounded-lg flex items-center justify-between group transition-colors">
                     <span>Scholar</span><span class="text-xs font-normal text-gray-500 group-hover:text-gray-700 dark:text-gray-400">Student Rate</span>
                 </button>
-                <button type="button" onclick="window.selectProfile && window.selectProfile('Pensioner')" class="w-full bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-900 dark:text-white font-bold py-3 px-4 rounded-lg flex items-center justify-between group transition-colors">
+                <button type="button" data-passenger="Pensioner" onclick="window.selectProfile && window.selectProfile('Pensioner')" class="w-full bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-900 dark:text-white font-bold py-3 px-4 rounded-lg flex items-center justify-between group transition-colors">
                     <span>Pensioner</span><span class="text-xs font-normal text-gray-500 group-hover:text-gray-700 dark:text-gray-400">Senior Rate</span>
                 </button>
-                <button type="button" onclick="window.selectProfile && window.selectProfile('Military')" class="w-full bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-900 dark:text-white font-bold py-3 px-4 rounded-lg flex items-center justify-between group transition-colors">
+                <button type="button" data-passenger="Military" onclick="window.selectProfile && window.selectProfile('Military')" class="w-full bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-900 dark:text-white font-bold py-3 px-4 rounded-lg flex items-center justify-between group transition-colors">
                     <span>Military / Vets</span><span class="text-xs font-normal text-gray-500 group-hover:text-gray-700 dark:text-gray-400">Special Rate</span>
                 </button>
             </div>

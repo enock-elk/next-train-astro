@@ -72,6 +72,7 @@ for (const rel of htmlFiles) {
 const routeLandings = htmlFiles.filter((f) => f.startsWith('routes/') && f !== 'routes.html');
 const regionLandings = htmlFiles.filter((f) => f.startsWith('regions/'));
 const corridorLandings = htmlFiles.filter((f) => f.startsWith('corridors/'));
+const stationLandings = htmlFiles.filter((f) => f.startsWith('stations/'));
 if (routeLandings.length < 30) {
   fail(`expected SSG route landings for ~all active corridors (≥30), found ${routeLandings.length}`);
 }
@@ -81,11 +82,17 @@ if (regionLandings.length < 4) {
 if (corridorLandings.length < 8) {
   fail(`expected ≥8 corridor SEO pages (Central/Northern/etc), found ${corridorLandings.length}`);
 }
+if (stationLandings.length < 80) {
+  fail(`expected ≥80 Gauteng station SEO pages, found ${stationLandings.length}`);
+}
 for (const file of STABLE_ROUTE_SLUGS) {
   if (!existsSync(join(DIST, file))) fail(`stable SEO slug missing: /${file}`);
 }
+if (!existsSync(join(DIST, 'stations/walker-street.html'))) {
+  fail('stable station SEO slug missing: /stations/walker-street.html');
+}
 
-const seoLandings = [...routeLandings, ...regionLandings, ...corridorLandings];
+const seoLandings = [...routeLandings, ...regionLandings, ...corridorLandings, ...stationLandings];
 const known = new Set([...INDEXABLE, ...NOINDEX, ...seoLandings]);
 const unexpected = htmlFiles.filter((f) => !known.has(f));
 if (unexpected.length) notes.push(`extra HTML pages not in parity lists: ${unexpected.join(', ')}`);
@@ -94,7 +101,8 @@ const isIndexableSeo = (file) =>
   INDEXABLE.includes(file) ||
   file.startsWith('routes/') ||
   file.startsWith('regions/') ||
-  file.startsWith('corridors/');
+  file.startsWith('corridors/') ||
+  file.startsWith('stations/');
 
 // 3. Canonicals must be self-referencing against the production origin, or Google
 //    consolidates onto a URL that is not the one it has indexed.
@@ -259,5 +267,5 @@ if (failures.length) {
 }
 
 console.log(
-  `\n✓ URL parity OK — ${INDEXABLE.length} core + ${regionLandings.length} regions + ${corridorLandings.length} corridors + ${routeLandings.length} routes + ${NOINDEX.length} system pages + SPA identity/precache match.`
+  `\n✓ URL parity OK — ${INDEXABLE.length} core + ${regionLandings.length} regions + ${corridorLandings.length} corridors + ${routeLandings.length} routes + ${stationLandings.length} stations + ${NOINDEX.length} system pages + SPA identity/precache match.`
 );

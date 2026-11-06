@@ -67,6 +67,12 @@ assert.equal(formatContributionDate('2026-09-17'), '17 Sep 2026');
 assert.equal(formatContributionDuration({ startedAt: 1_000, endedAt: 1_000 + (34 * 60_000) }), '34 min');
 assert.equal(formatContributionDuration({ startedAt: 1_000, endedAt: 1_000 + (72 * 60_000) }), '1 hr 12 min');
 assert.equal(formatContributionDuration({ startedAt: 5_000 }), 'Still on this trip');
+assert.equal(formatContributionDuration({ startedAt: 1_000, endedAt: 1_000 + ((43 * 60) + 56) * 60_000 }), '');
+assert.equal(formatContributionDuration({
+    startedAt: 1_000_000,
+    endedAt: 1_000_000 + (43 * 60 * 60_000),
+    lastRealPingAt: 1_000_000 + (5 * 60_000),
+}), '15 min');
 const shareLines = contributionDetailLines({
     action: 'first_share_day',
     how: 'Share live location on the map while on a train. Points once per service day.',

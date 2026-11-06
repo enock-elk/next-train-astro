@@ -100,6 +100,15 @@ async function ensurePushAuth() {
 
 async function persistToken(token, { enabled = true, registrationType = 'token' } = {}) {
     if (!token) return;
+    try {
+        const { allowRtdbWrite, recordRtdbWrite } = await import('./rtdb-rate.js');
+        const gate = allowRtdbWrite('push');
+        if (!gate.ok) {
+            console.warn('🛡️ Guardian: push subscription rate-limited', gate.reason);
+            return;
+        }
+        recordRtdbWrite('push');
+    } catch { /* still try to persist */ }
     safeStorage.setItem(TOKEN_CACHE_KEY, token);
     safeStorage.setItem(REGISTRATION_TYPE_CACHE_KEY, registrationType);
     const deviceId = getDeviceId();
@@ -276,15 +285,13 @@ export async function enablePushNotifications() {
         return {
             ok: true,
             token: null,
-            message: isLabEnvironment()
-                ? 'Permission on - add PUBLIC_FIREBASE_VAPID_KEY to finish FCM on lab'
-                : 'Permission on - push delivery wiring completes when VAPID is configured',
+            message: 'Notifications are on. Alerts start when this phone finishes connecting.',
         };
     }
     if (!token) {
-        return { ok: true, token: null, message: 'Notifications enabled - token pending (SW / network)' };
+        return { ok: true, token: null, message: 'Notifications are on. Alerts start when this phone finishes connecting.' };
     }
-    return { ok: true, token, message: 'Push alerts enabled for your routes' };
+    return { ok: true, token, message: 'Notifications are on for your routes.' };
 }
 
 export async function disablePushNotifications() {

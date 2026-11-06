@@ -1,6 +1,232 @@
 # Changelog
 
+## V10_11.01.4 — no release notes
+
+- Guide, map loading pin, welcome pulse, tomorrow shared trains, passenger fare refresh, Co-Pilot header scroll.
+
+## V10_11.01.3 — no release notes
+
+- Homepage meta leads with Get PRASA Metrorail timetables… and stays within SERP length.
+- Route SEO metas capped ~160 chars; breadcrumb JSON-LD nests item.name for Search Console.
+
+## V10_11.01.2 — no release notes
+
+- Guide and Co-Pilot: Western Cape TIC 0800 65 64 63 and Metrorail 021 449 6181; regional desk numbers preferred over the survey.
+- Station SEO meta descriptions invite the full station timetable.
+
+## V10_11.01.1
+
+- Upcoming trains that reach the end of the line say To that terminus (green pill) instead of Direct. Short workings stay To {last stop}. Journey sheet titles still say Direct Train {id}.
+- Trip fares and fare votes round to the nearest R0.50.
+- All timed station SEO pages are indexable (full GP/WC/KZN/EC allowlist and sitemap).
+- Admin feedback shows the board station name with the route when captured.
+- Co-Pilot: skip independence line on praise cues; thank for your message asking about; poll thank-you on its own top line.
+
+## V10_10.29.3 — no release notes
+
+## V10_10.29.2 — no release notes
+
+## V10_10.29.1
+
+- The board opens from the timetable saved on this phone when the connection is slow.
+
+## V10_10.28.1
+
+- A full train sheet names Rhodesfield and Elandsfontein, instead of listing them as Kempton Park.
+
+## V10_10.27.10 — no release notes
+
+## V10_10.27.9
+
+- The network map opens on your region.
+
+## V10_10.26.16 — no release notes
+
+## V10_10.26.15 — no release notes
+
+## V10_10.26.14 — no release notes
+
+## V10_10.26.13 — no release notes
+
+## V10_10.26.10 — no release notes
+
+## V10_10.26.9 — no release notes
+
+## V10_10.26.8 — no release notes
+
+## V10_10.26.7 — no release notes
+
+## V10_10.26.6 — no release notes
+
+## V10_10.19.2 — no release notes
+
+## V10_10.19.1 — no release notes
+
+## V10_10.18.15 — no release notes
+
+## V10_10.18.14
+
+- Pull down anywhere on a bottom sheet to close it, when that sheet is scrolled to the top.
+- Trip fare: No takes the blue highlight.
+- What's New opens on the latest entries. Older entries load from Show earlier updates.
+- A monthly ticket is valid for that calendar month, and current-month tickets stay on sale until about the 10th.
+- Planner searches for 21 December 2026 to 1 January 2027 still show the trip, and say the festive timetable is not confirmed.
+- Route pages and the guide mention the scaled-down festive timetable.
+- The day button has no outer oval. The sim clock sits beside the Next Train title.
+
+## V10_10.18.13 — no release notes
+
+## V10_10.18.12 — no release notes
+
+## V10_10.18.11 — no release notes
+
+## V10_10.18.10 — no release notes
+
+## V10_10.18.9 — no release notes
+
+## V10_10.18.8 — no release notes
+
+## V10_10.18.7 — no release notes
+
+## V10_10.18.6 — no release notes
+
+## V10_10.18.5 — no release notes
+
+## V10_10.18.4 — no release notes
+
+## V10_10.18.3 — no release notes
+
+## V10_10.18.2 — no release notes
+
+## V10_10.18.1 — no release notes
+
+## V9_10.18.8 — no release notes
+
+## V9_10.18.7 — no release notes
+
+## V9_10.18.6 — no release notes
+
+## V9_10.18.5 — no release notes
+
+## V9_10.18.4 — no release notes
+
+## V9_10.18.3 — no release notes
+
+## V9_10.18.2 — no release notes
+
+## V9_10.18.1 — no release notes
+
+## V9_10.17.10 — no release notes
+
+## V9_10.17.9 — no release notes
+
+## V9_10.17.8 — no release notes
+
+## V9_10.17.7 — no release notes
+
+## V9_10.17.6 — no release notes
+
+Trip Planner shows the journey first, then fills in live reports.
+
+## V9_10.17.5 — no release notes
+
+Account sign-in, create, and reset each have their own screen. An internet image shows in the composer and in the post preview.
+
+## V9_10.17.4 — no release notes
+
+A live share asks for GPS every 3 seconds and pauses after 18 seconds without a fix. Sharing ends after 10 minutes without a ping. Receivers follow new pings within a few seconds. Two phones on one train are averaged only while they sit within about one train length. Otherwise the map keeps the more credible phone.
+
+## V9_10.17.3 — no release notes
+
+Community rooms stay on the routes that are switched on. The operator brief follows the time of day, splits a two-fact card into paragraphs, and keeps Add to alerts as a bell. A missing written note stays on the card. Back closes the brief. An operator's installed icon can show a count of new messages.
+
+## V9_10.17.2
+
+Options names this Reset this App. It clears this App's saved data. A weak connection asks before that reset.
+
+A train that reaches Durban on a Durban route is marked Direct. On the Irene timetable, a train that continues to Kempton Park is marked KEMP. Monte Vista, Maitland, and KEMP use the same kind of mark as NO SVC. Tap the mark to read it.
+
+## V9_10.17.1
+
+Options has Reset this phone. It clears this phone and keeps your user id. Pull down at the top of Next Train, Trip Planner, or Community to refresh.
+
+Check for Updates keeps the saved app when the download does not finish. The operator brief uses the route-page notes for the country scan, and a card can be posted as an alert. App stuck waits on the starting screen. A slow connection is reported after 15 seconds of the current visit.
+
+## V9_10.16.06
+
+Trip fare shows the day and time with the peak, such as Peak (Saturday @ 7:20). Passenger type has a close button.
+
+State Monitor and the scheduled queue show a poster only when the image address is real. Next Train Composer fills the screen, uses smaller action chips, and lays a rewrite out as a title and short paragraphs.
+
+## V9_10.16.05
+
+A Monte Vista train shows Monte Vista above the train number. Tap it to read the route. A Maitland train shows Maitland the same way. EXPR on the timetable is dark red.
+
+An image on a service alert or a reply can be the file's own https address. That file is shown as it is, and it is not uploaded.
+
+## V9_10.16.04 — no release notes
+
+A pasted link in an alert shows its page title, description, and image in the preview and after it is posted. The card stays inside the alert on a phone.
+
+## V9_10.16.03
+
+On the Irene timetable, a train that continues to Kempton Park is marked KEMP. Trip Planner names that train a Kempton Park train. A stop an express train skips shows EXPR.
+
+The Northern line splits after Cape Town. Weekday Bellville runs Esplanade, Century City, and Monte Vista. Kraaifontein, Strand, Wellington, and Eerste River run via Maitland, and a few columns skip that line. Those cells say via, Monte, Vista, or Via MV. The grid keeps the cells blank and puts Via Monte Vista under the train number. A train that simply calls at Maitland is not labelled. Admins set the same mark from Grid Column Order. The save keeps via when the column order changes, and reset keeps via.
+
+## V9_10.16.02 — no release notes
+
+The crucial update line keeps the version with the sentence. A narrow screen centres the version on the next line.
+
+## V9_10.16.01 — no release notes
+
+Next train cards follow the selected station. No station stays on Select station above. Standing at a terminus says You're here.
+
+## V9_10.15.13 — no release notes
+
+A train on a shared line is labelled with the last station it actually calls on that day's sheet. 0626 toward Irene stays Irene. A train that continues to Kempton Park still says so.
+
+## V9_10.15.12 — no release notes
+
+Station list colour matches the card again. Descriptions put today in the view and download line, and Gauteng reads Metrorail Gauteng. The full timetable scrolls. The bottom nav sits on the screen edge.
+
+## V9_10.15.11 — no release notes
+
+Select Route stays quick. The station list is easier to see. The planner header can leave view with the keyboard. Shared trains say at, approaching, or after a station. Check for Updates only talks after Update. Feedback from About is tagged About Next Train.
+
+## V9_10.15.9 — no release notes
+
+Dev Hub places Live Telemetry under the brief. The sync time stays inside that tile.
+
+## V9_10.15.8 — no release notes
+
+Operator composer and co-pilot layout. A blank shared note is refused. Scheduled alerts are checked again on sign-in.
+
+## V9_10.15.7
+
+Check for Updates keeps the bottom message on screen while the download runs. A quick download still shows it for up to 6 seconds. Dev Hub Brief is operator-only and has no public card.
+
 Longer release notes for the repo. The in-app “What’s New” modal uses the short bullets in `src/lib/config.js` (`CHANGELOG_DATA`). That modal is a **commuter surface**: never mention admin, Dev Hub, Alerts, Trains near me, community chat, or other hidden-test work. No emoji and no em dashes in What’s New. Keep `APP_VERSION`, `package.json` `version`, and `public/app-version.json` aligned on each release. Changelog / What’s New may be skipped, or the heading may be only **no release notes.** Every bump must add `ADMIN_CHANGELOG[APP_VERSION]` (System Health Build notes).
+
+## V9_10.14.2 — no release notes
+
+Black-box storage drops ad-script noise and truncates each line. Planner batches flush at 5 trips. Landing pages lead with the searched city, the termini, Saturday, and the fare.
+
+## V9_10.14.1 — no release notes
+
+Early What’s New cards now sit under the February 2026 trip planner, as separate days from 19 Nov 2025. Those dates are estimates. About has a few extra sentences on the first line and the November address. No new public card at the top.
+
+## V9_10.13.2
+
+A scholar weekly or monthly pass matches the adult price. Scholar single and return tickets stay half price.
+
+## V9_10.13.1
+
+Trip Fare shows the money mark on the left of the label. Show Next Train is a darker blue than the fare row under it.
+
+## V9_10.12.3
+
+A trip shows Departs and the wait on one side, and Total Time on the other. After a train has left, Departed sits above Show Next Train. Trip fare is one line across the card.
 
 ## V9_10.12.2 — no release notes
 

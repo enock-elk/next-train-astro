@@ -195,31 +195,32 @@ window.openFareModal = function(fareDetails) {
     }
 
     if (tableEl) {
-        const profile = FARE_CONFIG.profiles[currentUserProfile] || FARE_CONFIG.profiles["Adult"];
+        const profileName = currentUserProfile || 'Adult';
+        const profile = FARE_CONFIG.profiles[profileName] || FARE_CONFIG.profiles["Adult"];
         const prices = fareDetails.prices;
-        
-        const calc = (basePrice) => (Math.ceil((basePrice * profile.base) * 2) / 2).toFixed(2);
+        const listedMult = (kind) => (kind === 'pass' && profileName === 'Scholar') ? 1 : profile.base;
+        const calc = (basePrice, kind) => (Math.ceil((basePrice * listedMult(kind)) * 2) / 2).toFixed(2);
         
         tableEl.innerHTML = `
             <div class="flex justify-between items-center py-3 border-b border-dashed border-gray-300 dark:border-gray-600">
                 <span class="text-gray-600 dark:text-gray-400 text-sm font-bold">Single Trip</span>
-                <span class="font-black text-gray-900 dark:text-white text-lg">R${calc(prices.single)}</span>
+                <span class="font-black text-gray-900 dark:text-white text-lg">R${calc(prices.single, 'single')}</span>
             </div>
             <div class="flex justify-between items-center py-3 border-b border-dashed border-gray-300 dark:border-gray-600">
                 <span class="text-gray-600 dark:text-gray-400 text-sm font-bold">Return Trip</span>
-                <span class="font-black text-gray-900 dark:text-white text-lg">R${calc(prices.return)}</span>
+                <span class="font-black text-gray-900 dark:text-white text-lg">R${calc(prices.return, 'return')}</span>
             </div>
             <div class="flex justify-between items-center py-3 border-b border-dashed border-gray-300 dark:border-gray-600">
                 <span class="text-gray-600 dark:text-gray-400 text-sm font-bold">Weekly <span class="opacity-70 font-normal">(Mon-Fri)</span></span>
-                <span class="font-black text-gray-900 dark:text-white text-lg">R${calc(prices.weekly_mon_fri)}</span>
+                <span class="font-black text-gray-900 dark:text-white text-lg">R${calc(prices.weekly_mon_fri, 'pass')}</span>
             </div>
             <div class="flex justify-between items-center py-3 border-b border-dashed border-gray-300 dark:border-gray-600">
                 <span class="text-gray-600 dark:text-gray-400 text-sm font-bold">Weekly <span class="opacity-70 font-normal">(Mon-Sat)</span></span>
-                <span class="font-black text-gray-900 dark:text-white text-lg">R${calc(prices.weekly_mon_sat)}</span>
+                <span class="font-black text-gray-900 dark:text-white text-lg">R${calc(prices.weekly_mon_sat, 'pass')}</span>
             </div>
             <div class="flex justify-between items-center py-3">
                 <span class="text-gray-600 dark:text-gray-400 text-sm font-bold">Monthly Pass</span>
-                <span class="font-black text-gray-900 dark:text-white text-lg">R${calc(prices.monthly)}</span>
+                <span class="font-black text-gray-900 dark:text-white text-lg">R${calc(prices.monthly, 'pass')}</span>
             </div>
         `;
     }

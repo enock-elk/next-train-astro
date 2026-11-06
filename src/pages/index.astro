@@ -16,13 +16,12 @@ import { APP_VERSION, withBase } from '../lib/config.js';
 
 /** SPA-parity homepage SEO (full brand). Short "Next Train" remains PWA homescreen only. */
 const pageTitle = 'Metrorail Next Train | 2026 PRASA Train Times and Schedules';
+/** Lead with the brand promise; weave "today" later. Keep within ~160 SERP chars. */
 const pageDescription =
-  'View and download 2026 PRASA Metrorail train timetables for Gauteng, Cape Town, Durban and East London. Free, works offline. Ticket prices, trip planner, and next train in the Next Train app.';
+  'Get PRASA Metrorail timetables and schedules for Gauteng (Pretoria, Johannesburg), Cape Town, Durban and East London. Train times for today and Saturdays.';
 const ogTitle = 'Metrorail Next Train | 2026 PRASA Train Times';
-const ogDescription =
-  'View and download 2026 PRASA Metrorail train timetables for Gauteng, Cape Town, KZN, and Eastern Cape. Free, works offline. Ticket prices and next train in Next Train.';
-const twitterDescription =
-  'View and download 2026 PRASA Metrorail train timetables. Free, works offline. Ticket prices, trip planner, and next train in the Next Train app.';
+const ogDescription = pageDescription;
+const twitterDescription = pageDescription;
 
 const softwareAppLd = {
   '@context': 'https://schema.org',
@@ -159,6 +158,29 @@ const faqLd = {
             data-nt-help-escape="1"
         >App stuck? Get help</a>
     </div>
+    <script is:inline>
+      /* Module boot hides this at ~700ms. If those modules never run (hung
+         download on a low-end Android PWA), the OS splash stays up because
+         window.load never fires. This timer does not wait on /_astro/. */
+      setTimeout(function () {
+        try {
+          if (window.__ntHoldBootCover) return;
+          var overlay = document.getElementById('loading-overlay');
+          if (!overlay) return;
+          var shown = overlay.style.display !== 'none';
+          try { shown = shown && window.getComputedStyle(overlay).display !== 'none'; } catch (e) {}
+          if (!shown) return;
+          var main = document.getElementById('main-content');
+          if (main) main.style.visibility = '';
+          overlay.style.display = 'none';
+          try { document.documentElement.classList.add('nt-shell-ready'); } catch (e) {}
+          try { sessionStorage.setItem('nt_shell_warm', '1'); } catch (e) {}
+          var splashLine = 'NT Waterfall: splash escape after 8000ms, modules had not revealed the shell';
+          if (window.ntTrace) window.ntTrace('warn', splashLine);
+          else console.warn(splashLine);
+        } catch (e) {}
+      }, 8000);
+    </script>
 
     <!-- MAIN APP — viewport frame; header + views scroll; bottom nav stays put -->
     <main id="main-content" class="app-shell w-full max-w-md mx-auto bg-white dark:bg-gray-800 rounded-lg shadow-2xl overflow-hidden relative flex flex-col border border-gray-200 dark:border-gray-700" style="visibility: hidden;">
@@ -199,6 +221,9 @@ const faqLd = {
         <CommunityView />
         </div>
 
+        <div id="nt-scroll-hint-top" class="nt-scroll-hint nt-scroll-hint-top" aria-hidden="true"></div>
+        <div id="nt-scroll-hint" class="nt-scroll-hint" aria-hidden="true"></div>
+
         <div id="offline-wrapper" class="hidden shrink-0 nt-offline-dock px-3 pb-2" aria-live="polite">
             <div id="offline-indicator" class="nt-offline-strip">
                 <svg class="w-5 h-5 shrink-0 opacity-90" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 14a10 10 0 0116 0"/><path d="M8 16.5a6 6 0 018 0"/><path d="M12 20h.01"/><path d="M2 8a14 14 0 0120 0" class="opacity-40"/></svg>
@@ -215,31 +240,42 @@ const faqLd = {
 
         <nav id="bottom-nav" class="hidden shrink-0 z-[110] bottom-nav-bar" aria-label="Primary" aria-hidden="true">
             <div id="bottom-nav-grid">
-                <button type="button" id="bottom-nav-home" data-bottom-nav="home" class="bottom-nav-item is-active flex flex-col items-center justify-center py-2 px-0.5 min-h-[3.25rem] focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500" aria-label="Next Train: live board" aria-current="page">
-                    <svg class="w-5 h-5 sm:w-6 sm:h-6 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-4 0a1 1 0 01-1-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 01-1 1h-2z"></path></svg>
-                    <span class="text-[9px] sm:text-[10px] font-bold tracking-tight leading-tight text-center">Next Train</span>
+                <button type="button" id="bottom-nav-home" data-bottom-nav="home" class="bottom-nav-item is-active flex flex-col items-center justify-center py-2 px-0.5 min-h-[3.6rem] focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500" aria-label="Next Train: live board" aria-current="page">
+                    <span class="nt-nav-glyph">
+                        <svg class="nt-nav-icon-line" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-4 0a1 1 0 01-1-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 01-1 1h-2z"></path></svg>
+                        <svg class="nt-nav-icon-fill" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M11.47 3.84a.75.75 0 011.06 0l8.69 8.69a.75.75 0 101.06-1.06l-8.689-8.69a2.25 2.25 0 00-3.182 0l-8.69 8.69a.75.75 0 001.061 1.06l8.69-8.69z"/><path d="M12 5.432l8.159 8.159c.03.03.06.058.091.086v6.198c0 1.035-.84 1.875-1.875 1.875H15a.75.75 0 01-.75-.75v-4.5a.75.75 0 00-.75-.75h-3a.75.75 0 00-.75.75V21a.75.75 0 01-.75.75H5.625a1.875 1.875 0 01-1.875-1.875v-6.198a.75.75 0 01.091-.086L12 5.432z"/></svg>
+                    </span>
+                    <span class="nt-nav-label text-center">Next Train</span>
                 </button>
-                <button type="button" id="bottom-nav-plan" data-bottom-nav="plan" class="bottom-nav-item flex flex-col items-center justify-center py-2 px-0.5 min-h-[3.25rem] text-gray-400 dark:text-gray-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500" aria-label="Trip Planner" aria-current="false">
-                    <svg class="w-5 h-5 sm:w-6 sm:h-6 mb-1 lucide lucide-route" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="19" r="3"/><path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15"/><circle cx="18" cy="5" r="3"/></svg>
-                    <span class="text-[8px] sm:text-[10px] font-bold tracking-tight leading-tight text-center">Trip Planner</span>
+                <button type="button" id="bottom-nav-plan" data-bottom-nav="plan" class="bottom-nav-item flex flex-col items-center justify-center py-2 px-0.5 min-h-[3.6rem] text-gray-400 dark:text-gray-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500" aria-label="Trip Planner" aria-current="false">
+                    <span class="nt-nav-glyph">
+                        <svg class="nt-nav-icon-line lucide lucide-route" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="19" r="3"/><path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15"/><circle cx="18" cy="5" r="3"/></svg>
+                        <svg class="nt-nav-icon-fill" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="19" r="3" fill="currentColor"/><circle cx="18" cy="5" r="3" fill="currentColor"/><path fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15"/></svg>
+                    </span>
+                    <span class="nt-nav-label text-center">Trip Planner</span>
                 </button>
-                <button type="button" id="bottom-nav-map" data-bottom-nav="map" data-admin-authed-only hidden inert aria-hidden="true" class="hidden bottom-nav-item flex flex-col items-center justify-center py-2 px-0.5 min-h-[3.25rem] text-gray-400 dark:text-gray-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500" aria-label="Network map" aria-current="false">
-                    <svg class="w-5 h-5 sm:w-6 sm:h-6 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
-                    <span class="text-[9px] sm:text-[10px] font-bold tracking-tight leading-tight text-center">Map</span>
+                <button type="button" id="bottom-nav-map" data-bottom-nav="map" data-admin-authed-only hidden inert aria-hidden="true" class="hidden bottom-nav-item flex flex-col items-center justify-center py-2 px-0.5 min-h-[3.6rem] text-gray-400 dark:text-gray-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500" aria-label="Network map" aria-current="false">
+                    <span class="nt-nav-glyph">
+                        <svg class="nt-nav-icon-line" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                        <svg class="nt-nav-icon-fill" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 3.5a2.5 2.5 0 100 5 2.5 2.5 0 000-5z"/></svg>
+                    </span>
+                    <span class="nt-nav-label text-center">Map</span>
                 </button>
-                <button type="button" id="bottom-nav-community" data-bottom-nav="community" data-admin-authed-only hidden inert aria-hidden="true" class="hidden bottom-nav-item flex flex-col items-center justify-center py-2 px-0.5 min-h-[3.25rem] text-gray-400 dark:text-gray-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500" aria-label="Community: route feed" aria-current="false">
-                    <span class="relative inline-flex mb-1">
-                        <svg class="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8h2a2 2 0 012 2v6a2 2 0 01-2 2h-2v4l-4-4H9a2 2 0 01-2-2v-1"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 2H5a2 2 0 00-2 2v6a2 2 0 002 2h2v3l3.5-3H15a2 2 0 002-2V4a2 2 0 00-2-2z"></path></svg>
+                <button type="button" id="bottom-nav-community" data-bottom-nav="community" data-admin-authed-only hidden inert aria-hidden="true" class="hidden bottom-nav-item flex flex-col items-center justify-center py-2 px-0.5 min-h-[3.6rem] text-gray-400 dark:text-gray-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500" aria-label="Community: route feed" aria-current="false">
+                    <span class="nt-nav-glyph relative">
+                        <svg class="nt-nav-icon-line" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8h2a2 2 0 012 2v6a2 2 0 01-2 2h-2v4l-4-4H9a2 2 0 01-2-2v-1"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 2H5a2 2 0 00-2 2v6a2 2 0 002 2h2v3l3.5-3H15a2 2 0 002-2V4a2 2 0 00-2-2z"></path></svg>
+                        <svg class="nt-nav-icon-fill" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M5 4.5A2.5 2.5 0 017.5 2h9A2.5 2.5 0 0119 4.5v6A2.5 2.5 0 0116.5 13H12l-3.5 3v-3H7.5A2.5 2.5 0 015 10.5v-6z"/></svg>
                         <span id="community-unread-badge" class="hidden absolute -top-1.5 -right-2.5 min-w-[1.1rem] h-[1.1rem] px-1 flex items-center justify-center rounded-full bg-red-500 text-white text-[9px] font-black leading-none shadow-sm ring-2 ring-white dark:ring-gray-900">0</span>
                     </span>
-                    <span class="text-[9px] sm:text-[10px] font-bold tracking-tight leading-tight text-center">Community</span>
+                    <span class="nt-nav-label text-center">Community</span>
                 </button>
-                <button type="button" id="bottom-nav-options" data-bottom-nav="options" class="bottom-nav-item flex flex-col items-center justify-center py-2 px-0.5 min-h-[3.25rem] text-gray-400 dark:text-gray-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500" aria-label="Options and settings" aria-current="false">
-                    <span class="relative inline-flex mb-1">
-                        <svg class="w-5 h-5 sm:w-6 sm:h-6 lucide lucide-menu" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16"/><path d="M4 12h16"/><path d="M4 19h16"/></svg>
+                <button type="button" id="bottom-nav-options" data-bottom-nav="options" class="bottom-nav-item flex flex-col items-center justify-center py-2 px-0.5 min-h-[3.6rem] text-gray-400 dark:text-gray-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500" aria-label="Options and settings" aria-current="false">
+                    <span class="nt-nav-glyph relative">
+                        <svg class="nt-nav-icon-line" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16"/><path d="M4 12h16"/><path d="M4 19h16"/></svg>
+                        <svg class="nt-nav-icon-fill" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="3.5" y="4.4" width="17" height="2.4" rx="1.2"/><rect x="3.5" y="10.8" width="17" height="2.4" rx="1.2"/><rect x="3.5" y="17.2" width="17" height="2.4" rx="1.2"/></svg>
                         <span id="open-nav-badge" class="hidden absolute -top-1 -right-1.5 block h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-white dark:ring-gray-900" aria-hidden="true"></span>
                     </span>
-                    <span class="text-[9px] sm:text-[10px] font-bold tracking-tight leading-tight text-center">Options</span>
+                    <span class="nt-nav-label text-center">Options</span>
                 </button>
             </div>
         </nav>
@@ -250,12 +286,13 @@ const faqLd = {
 
 <script>
     // @ts-nocheck
-    import { loadAllSchedules, startClock, currentTime, currentDayType, syncRegionDisplayDom, ensureReachabilityProbed, bindKillswitchWatch } from '../lib/logic.js';
+    import { loadAllSchedules, startClock, currentTime, currentDayType, syncRegionDisplayDom, ensureReachabilityProbed, bindKillswitchWatch, initSessionPullRefresh, initScrollHint } from '../lib/logic.js';
     import { $currentRouteId, $userRegion, hydrateStores } from '../store.js';
     import { ROUTES, withBase } from '../lib/config.js';
     import { safeStorage, restorePinnedSession } from '../lib/utils.js';
 
-    const revealAppShell = () => {
+    const revealAppShell = (force = false) => {
+        if (window.__ntHoldBootCover && force !== true) return;
         const main = document.getElementById('main-content');
         const overlay = document.getElementById('loading-overlay');
         if (main) main.style.visibility = '';
@@ -307,10 +344,12 @@ const faqLd = {
         bindWebViewDeeplinkResume,
     } from '../lib/deeplink.js';
     import { setupBlackBoxLogger } from '../lib/blackbox.js';
-    import { initRecoveryWatchdog } from '../lib/recovery.js';
+    import { initRecoveryWatchdog, holdStuckBoot } from '../lib/recovery.js';
 
     window.openLegal = openLegal;
     initRecoveryWatchdog();
+    initSessionPullRefresh();
+    initScrollHint();
     // Empathy modal "Try Again" (and admin) can call this before/without bridge
     window.loadAllSchedules = loadAllSchedules;
     prepareDeeplinkIntents();
@@ -412,7 +451,10 @@ const faqLd = {
         }
         window.openAppHub?.();
     });
-    import('../lib/map-tab.js').then((m) => m.bindMapTabUi()).catch(() => {});
+    // Map tab wiring is idle-deferred — keeps home INP free of map-tab parse/bind.
+    const bootMapTab = () => import('../lib/map-tab.js').then((m) => m.bindMapTabUi()).catch(() => {});
+    if (typeof requestIdleCallback === 'function') requestIdleCallback(bootMapTab, { timeout: 3500 });
+    else setTimeout(bootMapTab, 1200);
 
     const hash = location.hash;
     if (hash === '#planner' || hash === '#planner-results') {
@@ -458,6 +500,10 @@ const faqLd = {
     }
 
     window.revealAppShell = revealAppShell;
+    document.querySelector('#loading-overlay [data-nt-help-escape]')?.addEventListener('click', (event) => {
+        event.preventDefault();
+        holdStuckBoot();
+    });
 
     const igniteDataEngine = async () => {
         // 14.1: two-frame / 700ms drop already ran. Later reveals are no-ops.

@@ -1,9 +1,12 @@
 /**
  * Pure alerts-channel feed rules (no DOM). Union scoping, expiry, posters, paging.
  */
+import { cleanHttpUrl, isPublicPreviewUrl } from './link-preview.js';
 export const ALERTS_PAGE_SIZE = 10;
 export const ALERT_PIN_SVG = `<svg class="nt-alert-pin-icon w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16 3H8v2h1v6.2L7 14v2h4v5h2v-5h4v-2l-2-2.8V5h1V3z"/></svg>`;
 export const ALERT_IMAGE_PREFIX = '/images/alerts/';
+/** Printed timetable sheets that back in-app schedules; also postable on alerts later. */
+export const SCHEDULE_IMAGE_PREFIX = '/images/schedules/';
 export const ALERT_REACTION_KEYS = ['like', 'love', 'laugh', 'wow', 'sad', 'pray'];
 export const ALERT_REACTION_EMOJI = {
     like: '👍',
@@ -249,10 +252,16 @@ export function sanitizeAlertImageUrl(url) {
     if (q >= 0) path = path.slice(0, q);
     const hash = path.indexOf('#');
     if (hash >= 0) path = path.slice(0, hash);
-    if (!path.startsWith(ALERT_IMAGE_PREFIX)) return null;
     if (path.includes('..') || path.includes('//')) return null;
-    if (!/^\/images\/alerts\/[A-Za-z0-9._-]+$/.test(path)) return null;
-    return path;
+    if (path.startsWith(ALERT_IMAGE_PREFIX)) {
+        if (!/^\/images\/alerts\/[A-Za-z0-9._-]+$/.test(path)) return null;
+        return path;
+    }
+    if (path.startsWith(SCHEDULE_IMAGE_PREFIX)) {
+        if (!/^\/images\/schedules\/[a-z0-9]+\/[A-Za-z0-9._-]+\.jpe?g$/i.test(path)) return null;
+        return path;
+    }
+    return null;
 }
 
 export function collectNoticeImageUrls(notice) {
@@ -273,10 +282,11 @@ export function collectNoticeImageUrls(notice) {
  */
 export function shouldIgnoreAlertLongPress(target) {
     if (!target || typeof target.closest !== 'function') return true;
+    if (target.closest('[data-alert-video]')) return true;
     if (target.closest('[data-alert-lightbox]')) return false;
     if (target.closest('[data-alert-media]')) return false;
     if (target.closest('button[onclick*="openLightbox"]')) return false;
-    if (target.closest('[data-alert-reply], [data-alert-jump], [data-alert-summary], .nt-poll-vote, .nt-poll, [data-poll-shell]')) return true;
+    if (target.closest('[data-alert-reply], [data-alert-jump], [data-alert-summary], [data-alert-react-add], .nt-poll-vote, .nt-poll, [data-poll-shell]')) return true;
     if (target.closest('a, input, textarea, select')) return true;
     if (target.closest('button')) return true;
     return false;
@@ -453,7 +463,21 @@ export function splitAlertTitleAndBody(html, explicitTitle = '') {
     return { title: explicit, body };
 }
 
-/** Allow already-published Firebase Storage attachments; reject everything else. */
+const PUBLIC_IMAGE_FILE = /\.(jpe?g|png|gif|webp)$/i;
+const PUBLIC_VIDEO_FILE = /\.(mp4|webm|mov|m4v|ogv)$/i;
+
+function isStoredImageHost(host) {
+    const name = String(host || '').toLowerCase();
+    return name === 'firebasestorage.googleapis.com'
+        || name === 'storage.googleapis.com'
+        || name.endsWith('.firebasestorage.app')
+        || name.endsWith('.googleusercontent.com');
+}
+
+/**
+ * Catalog posters, Firebase Storage, or a public https image file.
+ * The file can live on Imgur or any other public host. Pages are not images.
+ */
 export function sanitizeInlineAlertImageUrl(url) {
     const s = String(url || '').trim();
     if (!s || /[\s<>]/.test(s)) return null;
@@ -463,33 +487,153 @@ export function sanitizeInlineAlertImageUrl(url) {
         const u = new URL(s);
         if (u.protocol !== 'https:') return null;
         if (u.username || u.password) return null;
-        const host = u.hostname.toLowerCase();
-        if (
-            host === 'firebasestorage.googleapis.com'
-            || host === 'storage.googleapis.com'
-            || host.endsWith('.firebasestorage.app')
-            || host.endsWith('.googleusercontent.com')
-        ) {
-            return u.href;
-        }
+        if (isStoredImageHost(u.hostname)) return u.href;
+        const cleaned = cleanHttpUrl(u.href);
+        if (!cleaned || !isPublicPreviewUrl(cleaned)) return null;
+        const pub = new URL(cleaned);
+        let path = pub.pathname || '';
+        try { path = decodeURIComponent(path); } catch { /* keep the raw path */ }
+        if (!PUBLIC_IMAGE_FILE.test(path)) return null;
+        return pub.href;
     } catch {
         return null;
     }
-    return null;
+}
+
+/** Full view uses the saved poster bytes, not a second download of the https address. */
+export function preferSavedPosterSrc(objectUrl, liveSrc, fallback) {
+    const blob = String(objectUrl || '');
+    if (blob.startsWith('blob:')) return blob;
+    const live = String(liveSrc || '');
+    if (live.startsWith('blob:')) return live;
+    return String(fallback || live || '');
+}
+
+const YOUTUBE_ID = /^[A-Za-z0-9_-]{11}$/;
+
+/** YouTube watch id, or empty. Nothing is fetched. */
+export function youtubeVideoId(url) {
+    let u;
+    try { u = new URL(String(url || '')); } catch { return ''; }
+    const host = u.hostname.toLowerCase().replace(/\.$/, '').replace(/^(www|m)\./, '');
+    let id = '';
+    if (host === 'youtu.be') id = u.pathname.split('/').filter(Boolean)[0] || '';
+    else if (host === 'youtube.com' || host === 'youtube-nocookie.com' || host === 'music.youtube.com') {
+        if (u.pathname === '/watch') id = u.searchParams.get('v') || '';
+        else {
+            const parts = u.pathname.split('/').filter(Boolean);
+            if (['embed', 'shorts', 'live', 'v'].includes(parts[0])) id = parts[1] || '';
+        }
+    }
+    id = String(id || '').split(/[?&#]/)[0];
+    return YOUTUBE_ID.test(id) ? id : '';
+}
+
+/** Vimeo clip id, or empty. Nothing is fetched. */
+export function vimeoVideoId(url) {
+    let u;
+    try { u = new URL(String(url || '')); } catch { return ''; }
+    const host = u.hostname.toLowerCase().replace(/\.$/, '').replace(/^www\./, '');
+    if (host !== 'vimeo.com' && host !== 'player.vimeo.com') return '';
+    const parts = u.pathname.split('/').filter(Boolean);
+    return parts.find((part) => /^\d{6,12}$/.test(part)) || '';
+}
+
+/** file, youtube, or vimeo. Empty when the address is not a video we can show. */
+export function alertVideoKind(url) {
+    const clean = cleanHttpUrl(url);
+    if (!clean || !isPublicPreviewUrl(clean)) return '';
+    if (youtubeVideoId(clean)) return 'youtube';
+    if (vimeoVideoId(clean)) return 'vimeo';
+    try {
+        const pub = new URL(clean);
+        let path = pub.pathname || '';
+        try { path = decodeURIComponent(path); } catch { /* keep the raw path */ }
+        if (PUBLIC_VIDEO_FILE.test(path)) return 'file';
+    } catch { /* ignore */ }
+    return '';
+}
+
+/**
+ * Still picture for a YouTube link. Same jpeg an embed shows before play.
+ * Vimeo has no fixed picture address. A video file has no picture until it plays.
+ */
+export function alertVideoPosterUrl(url) {
+    const id = youtubeVideoId(url);
+    return id ? `https://i.ytimg.com/vi/${id}/hqdefault.jpg` : '';
+}
+
+/** Player address. Only used after the commuter taps Play. */
+export function alertVideoEmbedUrl(url) {
+    const yt = youtubeVideoId(url);
+    if (yt) return `https://www.youtube-nocookie.com/embed/${yt}?rel=0&playsinline=1`;
+    const vimeo = vimeoVideoId(url);
+    if (vimeo) return `https://player.vimeo.com/video/${vimeo}?playsinline=1`;
+    return '';
+}
+
+/**
+ * A direct video file, or a YouTube / Vimeo watch page.
+ * The returned address is safe to keep. It does not load the video.
+ */
+export function sanitizeAlertVideoUrl(url) {
+    const kind = alertVideoKind(url);
+    if (!kind) return null;
+    const clean = cleanHttpUrl(url);
+    if (kind === 'youtube') return `https://www.youtube.com/watch?v=${youtubeVideoId(clean)}`;
+    if (kind === 'vimeo') return `https://vimeo.com/${vimeoVideoId(clean)}`;
+    return clean;
+}
+
+function pushVideoUrl(urls, raw) {
+    const clean = sanitizeAlertVideoUrl(String(raw || '').trim().replace(/&amp;/gi, '&'));
+    if (clean && !urls.includes(clean)) urls.push(clean);
+}
+
+/** Lift direct video files out of the body. The player is added separately and must not preload. */
+export function extractAlertVideoUrls(html) {
+    const urls = [];
+    let body = String(html || '');
+    body = body.replace(/<video\b[^>]*>[\s\S]*?<\/video>/gi, (tag) => {
+        const found = String(tag || '').matchAll(/\bsrc=["']([^"']+)["']/gi);
+        for (const match of found) pushVideoUrl(urls, match[1]);
+        return '';
+    });
+    body = body.replace(/<a\b[^>]*\bhref=["']([^"']+)["'][^>]*>[\s\S]*?<\/a>/gi, (tag, href) => {
+        const before = urls.length;
+        pushVideoUrl(urls, href);
+        return urls.length > before ? '' : tag;
+    });
+    body = body.replace(/https:\/\/[^\s<>"']+/gi, (raw) => {
+        const trimmed = raw.replace(/[),.;]+$/, '');
+        const before = urls.length;
+        pushVideoUrl(urls, trimmed);
+        if (urls.length === before) return raw;
+        return raw.slice(trimmed.length);
+    });
+    return { urls, body };
 }
 
 /** Pull lightbox/img tags out of the body so photos can sit above the text. */
 export function hoistAlertImagesFromHtml(html) {
     const urls = [];
-    let body = String(html || '');
-    body = body.replace(/<button\b[^>]*>[\s\S]*?<img\b[^>]*\bsrc=["']([^"']+)["'][^>]*>[\s\S]*?<\/button>/gi, (_, src) => {
-        const s = String(src || '').trim();
+    const pushUrl = (raw) => {
+        const s = String(raw || '').trim().replace(/&amp;/gi, '&');
         if (s && !urls.includes(s)) urls.push(s);
+    };
+    const pushImgTag = (tag) => {
+        pushUrl((String(tag || '').match(/\bsrc=["']([^"']+)["']/i) || [])[1]);
+        pushUrl((String(tag || '').match(/\bdata-nt-src=["']([^"']+)["']/i) || [])[1]);
+    };
+    let body = String(html || '');
+    body = body.replace(/<button\b[^>]*>[\s\S]*?<\/button>/gi, (tag) => {
+        const img = tag.match(/<img\b[^>]*>/i);
+        if (!img) return tag;
+        pushImgTag(img[0]);
         return '';
     });
-    body = body.replace(/<img\b[^>]*\bsrc=["']([^"']+)["'][^>]*>/gi, (_, src) => {
-        const s = String(src || '').trim();
-        if (s && !urls.includes(s)) urls.push(s);
+    body = body.replace(/<img\b[^>]*>/gi, (tag) => {
+        pushImgTag(tag);
         return '';
     });
     body = body.replace(/^(?:\s|&nbsp;|<br\s*\/?>)+/gi, '');
@@ -534,11 +678,53 @@ export function layoutAlertPost(notice) {
         const clean = sanitizeInlineAlertImageUrl(u);
         if (clean && !images.includes(clean)) images.push(clean);
     });
+    const videos = [];
+    const rawMedia = (Array.isArray(notice?.imageUrls) && notice.imageUrls.length)
+        ? notice.imageUrls
+        : (notice?.imageUrl ? [notice.imageUrl] : []);
+    rawMedia.forEach((u) => pushVideoUrl(videos, u));
+    pushVideoUrl(videos, notice?.ctaUrl);
+    const extracted = extractAlertVideoUrls(hoisted.body);
+    extracted.urls.forEach((u) => pushVideoUrl(videos, u));
     return {
         title: split.title,
-        imageUrls: images.slice(0, 4),
-        body: stripAlertSignoffHtml(hoisted.body),
+        imageUrls: images.filter((u) => !sanitizeAlertVideoUrl(u)).slice(0, 4),
+        videoUrls: videos.slice(0, 2),
+        body: stripAlertSignoffHtml(extracted.body),
     };
+}
+
+const ALERT_VIDEO_PLAY_ICON = `<svg class="h-8 w-8" width="32" height="32" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5.14v13.72a1 1 0 0 0 1.54.84l10.14-6.86a1 1 0 0 0 0-1.68L9.54 4.3A1 1 0 0 0 8 5.14z"></path></svg>`;
+
+/**
+ * A play control only. The video element has no address until the commuter taps,
+ * so nothing is fetched or played on its own.
+ */
+function escapeAlertAttr(value) {
+    return String(value || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+}
+
+export function renderAlertVideoMarkup(urls) {
+    const list = (Array.isArray(urls) ? urls : []).map((u) => sanitizeAlertVideoUrl(u)).filter(Boolean);
+    if (!list.length) return '';
+    const cells = list.map((href) => {
+        const src = escapeAlertAttr(href);
+        const kind = alertVideoKind(href);
+        const poster = alertVideoPosterUrl(href);
+        const picture = poster
+            ? `<img alt="" src="${escapeAlertAttr(poster)}" referrerpolicy="no-referrer" draggable="false" class="absolute inset-0 h-full w-full object-cover" data-alert-video-poster>`
+            : (kind === 'vimeo'
+                ? `<img alt="" referrerpolicy="no-referrer" draggable="false" class="absolute inset-0 h-full w-full object-cover" data-alert-video-poster data-alert-video-poster-pending data-alert-video-page="${src}">`
+                : '');
+        const file = kind === 'file'
+            ? `<video controls playsinline preload="none" class="hidden max-h-72 w-full bg-black" data-alert-video-el></video>`
+            : '';
+        return `<div class="relative overflow-hidden rounded-xl border border-gray-200 bg-gray-900 dark:border-gray-700" data-alert-video data-alert-video-kind="${kind}">
+            ${file}
+            <button type="button" data-alert-video-play data-alert-video-src="${src}" class="relative flex min-h-[10rem] w-full items-center justify-center focus:outline-none">${picture}<span data-alert-video-play-chip class="relative z-[1] flex items-center gap-2 rounded-full bg-black/55 px-3 py-2 font-bold text-white">${ALERT_VIDEO_PLAY_ICON}<span>Play video</span></span></button>
+        </div>`;
+    }).join('');
+    return `<div class="mb-1 mt-2 grid grid-cols-1 gap-2" data-alert-media>${cells}</div>`;
 }
 
 export function buildNoticesMeta(notices) {

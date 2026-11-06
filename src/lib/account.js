@@ -7,7 +7,8 @@
  *     displayName, photoURL, email?, createdAt,
  *     lastSeenAt, region, lastRouteId, appVersion,
  *     deviceIds: { [deviceId]: linkedAtMs | true },
- *     prefs: { showPhotoInAlerts, showMarksInCommunity, notifyCategories, theme, colourPack, hapticsEnabled, passengerType, updatedAt },
+ *     prefs: { showPhotoInAlerts, showMarksInCommunity, notifyCategories, notificationsOn, theme, colourPack, hapticsEnabled, passengerType, pinnedRoutes, updatedAt },
+ *     recentTrips: [{ from, to, fullFrom, fullTo, at, region }]
  *     flags: { shadowBanned: false, shadowBannedUntil: 0, role: 'user' },
  *     trustScore: 0
  *   }
@@ -103,8 +104,19 @@ export function readLocalAccountPrefs() {
         colourPack: safeStorage.getItem('colourPack') || 'classic',
         hapticsEnabled: safeStorage.getItem('hapticsEnabled') === 'true',
         passengerType: safeStorage.getItem('userProfile') || $userProfile.get() || 'Adult',
+        notificationsOn: safeStorage.getItem('notifyRoomActivity') === 'true',
+        pinnedRoutes: readPinnedRoutes(),
         updatedAt: Date.now(),
     };
+}
+
+function readPinnedRoutes() {
+    const out = {};
+    for (const region of ['GP', 'WC', 'KZN', 'EC']) {
+        const id = safeStorage.getItem(`defaultRoute_${region}`);
+        if (id) out[region] = String(id).slice(0, 40);
+    }
+    return out;
 }
 
 export const ACCOUNT_OPS_THROTTLE_MS = 60_000;
@@ -125,6 +137,12 @@ export async function pushSignedInOps({ force = false, now = Date.now() } = {}) 
     const user = window.firebaseAuth?.currentUser;
     if (!user || user.isAnonymous || !window.firebaseDb) return false;
     if (!force && now - lastOpsWriteAt < ACCOUNT_OPS_THROTTLE_MS) return false;
+    try {
+        const { allowRtdbWrite, recordRtdbWrite } = await import('./rtdb-rate.js');
+        const gate = allowRtdbWrite('accountOps');
+        if (!gate.ok) return false;
+        recordRtdbWrite('accountOps');
+    } catch { /* proceed with local throttle only */ }
     lastOpsWriteAt = now;
     const patch = accountOpsFields(now);
     if ('lat' in patch || 'lon' in patch || 'latitude' in patch || 'longitude' in patch) return false;
@@ -194,6 +212,18 @@ export async function applyAccountPrefs(prefs) {
             if (box) box.checked = prefs.showMarksInCommunity;
             import('./rider-marks.js').then((m) => m.paintCommunityMarksChip?.()).catch(() => {});
         }
+        if (prefs.pinnedRoutes && typeof prefs.pinnedRoutes === 'object') {
+            for (const region of ['GP', 'WC', 'KZN', 'EC']) {
+                const id = prefs.pinnedRoutes[region];
+                if (typeof id === 'string' && id.trim()) {
+                    safeStorage.setItem(`defaultRoute_${region}`, id.trim().slice(0, 40));
+                }
+            }
+        }
+        if (typeof prefs.notificationsOn === 'boolean') {
+            safeStorage.setItem('notifyRoomActivity', prefs.notificationsOn ? 'true' : 'false');
+            import('./prefs.js').then((m) => m.syncNotifyUi(prefs.notificationsOn)).catch(() => {});
+        }
         if (prefs.notifyCategories && typeof prefs.notifyCategories === 'object') {
             try {
                 const { NOTIFY_CATEGORY_IDS, syncNotifyUi } = await import('./prefs.js');
@@ -240,6 +270,68 @@ export async function pushSignedInPrefs(partial = {}) {
     } catch {
         /* local prefs still apply */
     }
+}
+
+/** Push pins + ops as soon as a signed-in commuter changes their default route. */
+export async function syncAccountPinnedRoutesNow() {
+    const user = window.firebaseAuth?.currentUser;
+    if (!user || user.isAnonymous) return;
+    await Promise.all([
+        pushSignedInPrefs({ pinnedRoutes: readPinnedRoutes() }),
+        pushSignedInOps({ force: true }),
+    ]);
+}
+
+/**
+ * Lightweight activity breadcrumb on the account node (no GPS).
+ * Used for feedback, fares, delays, community, planner telemetry.
+ */
+export async function recordAccountActivity(kind, extra = {}) {
+    const user = window.firebaseAuth?.currentUser;
+    if (!user || user.isAnonymous || !window.firebaseDb || !kind) return false;
+    try {
+        const { allowRtdbWrite, recordRtdbWrite } = await import('./rtdb-rate.js');
+        const gate = allowRtdbWrite('accountActivity');
+        if (!gate.ok) return false;
+        recordRtdbWrite('accountActivity');
+    } catch { /* local throttle only */ }
+    const now = Date.now();
+    const row = {
+        kind: String(kind).slice(0, 40),
+        at: now,
+        region: $userRegion.get() || null,
+        routeId: $currentRouteId.get() || null,
+        appVersion: APP_VERSION,
+        ...extra,
+    };
+    delete row.lat;
+    delete row.lon;
+    delete row.latitude;
+    delete row.longitude;
+    try {
+        await window.firebaseDbPush(
+            window.firebaseDbRef(window.firebaseDb, `users/${user.uid}/activity`),
+            row,
+        );
+        await pushSignedInOps({ force: true, now });
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+function welcomeBackToastName(user) {
+    const raw = String(user?.displayName || $account.get()?.displayName || '').trim();
+    if (raw) return raw.split(/\s+/)[0].slice(0, 24);
+    const email = String(user?.email || '').trim();
+    if (email.includes('@')) return email.split('@')[0].slice(0, 24);
+    return '';
+}
+
+export function toastWelcomeBack(user = window.firebaseAuth?.currentUser) {
+    if (typeof window.showToast !== 'function') return;
+    const name = welcomeBackToastName(user);
+    window.showToast(name ? `Welcome back, ${name}` : 'Welcome back', 'success', 3200);
 }
 
 function cleanPhotoUrl(value) {
@@ -422,6 +514,8 @@ export async function ensureUserProfile(user, opts = {}) {
             );
         }
 
+        await syncAccountRecentTrips(existing?.recentTrips);
+
         publishUser(user, {
             displayName,
             displayNameCustom: !!(customName || existing?.displayNameCustom),
@@ -483,9 +577,28 @@ export async function initAccount() {
         if (user && user.isAnonymous) {
             publishUser(null);
             import('./rider-marks.js').then((m) => m.switchMarksAccount(null)).catch(() => {});
+            import('./operator-badge.js').then((m) => m.syncOperatorMessageBadge()).catch(() => {});
             return;
         }
+        let openedFromVerifyLink = false;
+        if (user && !user.isAnonymous && typeof location !== 'undefined' && /(?:^|[?&])verified=1(?:&|$)/.test(location.search) && typeof user.reload === 'function') {
+            openedFromVerifyLink = true;
+            try { await user.reload(); } catch { /* paint the session we already have */ }
+            user = window.firebaseAuth?.currentUser || user;
+            try {
+                const url = new URL(location.href);
+                url.searchParams.delete('verified');
+                history.replaceState(history.state, '', `${url.pathname}${url.search}${url.hash}`);
+            } catch { /* keep the query */ }
+        }
         publishUser(user);
+        import('./operator-badge.js').then((m) => {
+            m.watchOperatorMessageBadge();
+            return m.syncOperatorMessageBadge();
+        }).catch(() => {});
+        if (openedFromVerifyLink && typeof window.showToast === 'function') {
+            window.showToast(user?.emailVerified ? 'Email verified' : 'Open the link in your email, then come back.', user?.emailVerified ? 'success' : 'info');
+        }
         if (user && !user.isAnonymous) {
             import('./rider-marks.js').then((m) => {
                 m.switchMarksAccount(user.uid);
@@ -501,9 +614,16 @@ export async function initAccount() {
     });
 }
 
+async function guardAuthAttempt(kind = 'signIn') {
+    const { rtdbWriteGuard } = await import('./rtdb-rate.js');
+    const message = rtdbWriteGuard(kind === 'signUp' ? 'signUp' : 'signIn');
+    if (message) throw new Error(message);
+}
+
 export async function signInWithGoogle() {
     const ok = await waitForFirebase();
     if (!ok) throw new Error('Cloud sign-in unavailable offline.');
+    await guardAuthAttempt('signIn');
     const provider = new window.firebaseGoogleProvider();
     provider.setCustomParameters({ prompt: 'select_account' });
     const cred = await window.firebaseSignInWithPopup(window.firebaseAuth, provider);
@@ -517,6 +637,7 @@ export async function signInWithFacebook() {
     if (typeof window.firebaseFacebookProvider !== 'function') {
         throw new Error('Facebook sign-in is not available yet.');
     }
+    await guardAuthAttempt('signIn');
     const provider = new window.firebaseFacebookProvider();
     const cred = await window.firebaseSignInWithPopup(window.firebaseAuth, provider);
     await ensureUserProfile(cred.user);
@@ -565,24 +686,45 @@ export async function requestAccountDeletion() {
     }
     const now = Date.now();
     const draft = deletionRequestDraft(user);
+    const record = {
+        uid: user.uid,
+        email: user.email || null,
+        displayName: state.displayName || user.displayName || null,
+        deviceId: getDeviceId(),
+        requestedAt: now,
+        status: 'pending',
+        reason: 'user_request',
+    };
+    let wrote = false;
     try {
         await window.firebaseDbUpdate(window.firebaseDbRef(window.firebaseDb, `users/${user.uid}`), {
             deletionRequestedAt: now,
             deletionRequestedEmail: user.email || null,
             deletionRequestedReason: 'user_request',
+            deletionResolvedAt: null,
         });
+        wrote = true;
     } catch (e) {
         console.warn('Account deletion flag deferred', e?.message || e);
+    }
+    try {
+        if (typeof window.firebaseDbSet === 'function') {
+            await window.firebaseDbSet(window.firebaseDbRef(window.firebaseDb, `account_deletions/${user.uid}`), record);
+            wrote = true;
+        }
+    } catch (e) {
+        console.warn('Account deletion queue deferred', e?.message || e);
     }
     trackAnalyticsEvent('account_delete', { location: 'account_delete' });
     await signOutAccount();
     closeAccountModal();
-    notifyOperatorsOfDeletion(draft);
+    if (!wrote) openDeletionMail(draft);
 }
 
 export async function signInWithEmail(email, password) {
     const ok = await waitForFirebase();
     if (!ok) throw new Error('Cloud sign-in unavailable offline.');
+    await guardAuthAttempt('signIn');
     const cred = await window.firebaseSignIn(window.firebaseAuth, email.trim(), password);
     if (cred.user?.isAnonymous) throw new Error('Unexpected anonymous session.');
     await ensureUserProfile(cred.user);
@@ -592,6 +734,7 @@ export async function signInWithEmail(email, password) {
 export async function signUpWithEmail(email, password, displayName) {
     const ok = await waitForFirebase();
     if (!ok) throw new Error('Cloud sign-in unavailable offline.');
+    await guardAuthAttempt('signUp');
     if (password.length < 6) {
         throw new Error('Password must be at least 6 characters.');
     }
@@ -601,10 +744,8 @@ export async function signUpWithEmail(email, password, displayName) {
     }
     const cred = await window.firebaseCreateUser(window.firebaseAuth, email.trim(), password);
     try {
-        if (cred.user && typeof window.firebaseSendEmailVerification === 'function') {
-            await window.firebaseSendEmailVerification(cred.user);
-        }
-    } catch { /* non-fatal: they can resend from Account */ }
+        if (cred.user) await sendVerificationEmail(cred.user);
+    } catch { /* non-fatal: they can send it again from Account */ }
     if (displayName?.trim()) {
         const check = refuseDisplayName(displayName);
         if (!check.ok) throw new Error(check.message);
@@ -633,10 +774,7 @@ export async function resendAccountVerification() {
     if (!ok || !window.firebaseAuth?.currentUser) throw new Error('Sign in first.');
     const user = window.firebaseAuth.currentUser;
     if (user.emailVerified) return true;
-    if (typeof window.firebaseSendEmailVerification !== 'function') {
-        throw new Error('Verification email is unavailable.');
-    }
-    await window.firebaseSendEmailVerification(user);
+    await sendVerificationEmail(user);
     return true;
 }
 
@@ -652,6 +790,32 @@ export async function signOutAccount() {
     import('./rider-marks.js').then((m) => m.switchMarksAccount(null)).catch(() => {});
 }
 
+export function showAccountGuestScreen(screen) {
+    if (typeof document === 'undefined') return;
+    const guest = document.getElementById('account-guest');
+    if (!guest) return;
+    const name = screen === 'signin' || screen === 'reset' || screen === 'invalid'
+        ? screen
+        : 'create';
+    guest.setAttribute('data-account-screen', name);
+    guest.querySelectorAll('[data-account-only]').forEach((el) => {
+        const list = (el.getAttribute('data-account-only') || '').split(/\s+/).filter(Boolean);
+        el.classList.toggle('hidden', !list.includes(name));
+    });
+    const title = document.getElementById('account-screen-title');
+    const signedOpen = document.getElementById('account-signed-in') && !document.getElementById('account-signed-in').classList.contains('hidden');
+    // Hero copy already carries Welcome / Welcome back / Reset — keep the top bar empty.
+    if (title && !signedOpen) title.textContent = '';
+}
+
+/** Open sign-in when an action needs an account. Resolves false if they close it. */
+export function requestAccountSignIn() {
+    if ($account.get()?.status === 'signed-in') return Promise.resolve(true);
+    openAccountModal();
+    showAccountGuestScreen('signin');
+    return waitForSignedIn(120000);
+}
+
 export function openAccountModal() {
     const modal = typeof document !== 'undefined' ? document.getElementById('account-modal') : null;
     if (modal) {
@@ -661,6 +825,8 @@ export function openAccountModal() {
         modal.style.removeProperty('--nt-feedback-vv-top');
         modal.style.removeProperty('--nt-feedback-vv-height');
     }
+    const signedOpen = document.getElementById('account-signed-in') && !document.getElementById('account-signed-in').classList.contains('hidden');
+    if (!signedOpen) showAccountGuestScreen('create');
     if (typeof window.openSmoothModal === 'function') {
         window.openSmoothModal('account-modal');
     }
@@ -762,8 +928,107 @@ function closeAccountSheets() {
     accountSheetStack.length = 0;
 }
 
+export function openAccountProfile() {
+    setAccountProfileOpen(true);
+}
+
+let _lastTripsPush = '';
+
+/** Merge this phone's recent trips with the account, then write the union back. */
+export async function syncAccountRecentTrips(remote) {
+    if (typeof window === 'undefined' || !window.firebaseDb || !window.firebaseAuth?.currentUser) return;
+    const user = window.firebaseAuth.currentUser;
+    if (!user || user.isAnonymous) return;
+    try {
+        const planner = await import('./planner-ui.js');
+        const remoteList = Array.isArray(remote)
+            ? remote
+            : (remote && typeof remote === 'object' ? Object.values(remote) : []);
+        if (remoteList.length) planner.mergeAccountPlannerHistory(remoteList);
+        await pushAccountRecentTrips();
+    } catch { /* planner still has this phone's list */ }
+}
+
+export async function pushAccountRecentTrips() {
+    const user = window.firebaseAuth?.currentUser;
+    if (!user || user.isAnonymous || !window.firebaseDb) return;
+    try {
+        const planner = await import('./planner-ui.js');
+        const payload = planner.accountPlannerHistoryPayload();
+        const key = JSON.stringify(payload);
+        if (key === _lastTripsPush) return;
+        await window.firebaseDbUpdate(
+            window.firebaseDbRef(window.firebaseDb, `users/${user.uid}`),
+            { recentTrips: payload, recentTripsAt: Date.now() },
+        );
+        _lastTripsPush = key;
+    } catch {
+        _lastTripsPush = '';
+    }
+}
+
 function setAccountProfileOpen(open) {
-    if (!open) closeAccountSheets();
+    const panel = document.getElementById('account-profile-panel');
+    const toggle = document.getElementById('account-profile-toggle');
+    const chevron = document.getElementById('account-profile-chevron');
+    if (panel) panel.classList.toggle('hidden', !open);
+    if (toggle) toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+    if (chevron && chevron.classList) chevron.classList.toggle('rotate-180', !!open);
+    if (open) {
+        const input = document.getElementById('account-edit-display-name');
+        if (input && document.activeElement !== input) {
+            input.value = $account.get().displayName || '';
+        }
+    }
+}
+
+/** Password accounts stay out of messages until the inbox proves the address. */
+export function accountNeedsEmailVerify(state = $account.get()) {
+    return state?.status === 'signed-in'
+        && state.authProvider === 'password'
+        && !!state.email
+        && !state.emailVerified;
+}
+
+function verificationContinueUrl() {
+    const fallback = 'https://nexttrain.co.za/?verified=1';
+    if (typeof location === 'undefined') return fallback;
+    const host = String(location.hostname || '').toLowerCase();
+    const allowed = host === 'nexttrain.co.za'
+        || host === 'www.nexttrain.co.za'
+        || host === 'lab.nexttrain.co.za'
+        || host === 'localhost'
+        || host === '127.0.0.1'
+        || host.endsWith('.next-train-lab.pages.dev')
+        || host.endsWith('.github.io');
+    if (!allowed) return fallback;
+    const path = location.pathname && location.pathname !== '/' ? location.pathname : '/';
+    return `${location.origin}${path}?verified=1`;
+}
+
+async function sendVerificationEmail(user) {
+    if (!user || typeof window.firebaseSendEmailVerification !== 'function') {
+        throw new Error('Verification email is unavailable.');
+    }
+    const settings = { url: verificationContinueUrl(), handleCodeInApp: false };
+    try {
+        await window.firebaseSendEmailVerification(user, settings);
+    } catch (e) {
+        const code = e?.code || '';
+        if (code === 'auth/unauthorized-continue-uri' || code === 'auth/invalid-continue-uri') {
+            await window.firebaseSendEmailVerification(user);
+            return;
+        }
+        throw e;
+    }
+}
+
+async function refreshVerifiedSession() {
+    const user = window.firebaseAuth?.currentUser;
+    if (!user || user.isAnonymous || typeof user.reload !== 'function') return false;
+    await user.reload();
+    publishUser(window.firebaseAuth.currentUser);
+    return !!window.firebaseAuth.currentUser?.emailVerified;
 }
 
 export function closeAccountModal() {
@@ -819,10 +1084,10 @@ export function syncAccountSettingsUi(state = $account.get()) {
     if (avatarEl) avatarEl.setAttribute('data-signed-in', signed ? 'true' : 'false');
     if (signedBlock) signedBlock.classList.toggle('hidden', !signed);
     if (guestBlock) guestBlock.classList.toggle('hidden', signed || state.status === 'loading');
-    const sessionActions = document.getElementById('account-session-actions');
-    if (sessionActions) sessionActions.classList.toggle('hidden', !signed);
+    const screenTitle = document.getElementById('account-screen-title');
+    // Guest heroes already show Welcome / Welcome back / Reset; do not repeat in the top bar.
+    if (screenTitle) screenTitle.textContent = '';
     document.getElementById('account-prefs-label')?.classList.toggle('hidden', !signed);
-    document.getElementById('account-signin-create-hint')?.classList.add('hidden');
     const deleteWrap = document.getElementById('account-delete-wrap');
     const isOperator = signed && isAdminEmail(state.email);
     if (deleteWrap) {
@@ -848,11 +1113,13 @@ export function syncAccountSettingsUi(state = $account.get()) {
     } else {
         if (modalName) modalName.textContent = state.displayName || 'Passenger';
         if (modalEmail) modalEmail.textContent = state.email || '';
-        const verifyRow = document.getElementById('account-verify-row');
-        const verifyLabel = document.getElementById('account-verify-label');
-        const needsVerify = !!state.email && state.authProvider === 'password' && !state.emailVerified;
-        if (verifyRow) verifyRow.classList.toggle('hidden', !needsVerify);
-        if (verifyLabel) verifyLabel.textContent = needsVerify ? 'Not verified' : 'Verified';
+        const verifyCard = document.getElementById('account-verify-card');
+        const needsVerify = accountNeedsEmailVerify(state);
+        if (verifyCard) verifyCard.classList.toggle('hidden', !needsVerify);
+        if (needsVerify && verifyCard && !verifyCard.dataset.opened) {
+            verifyCard.dataset.opened = '1';
+            setAccountProfileOpen(true);
+        }
         const nameInput = document.getElementById('account-edit-display-name');
         if (nameInput && document.activeElement !== nameInput) {
             nameInput.value = state.displayName || '';
@@ -1020,6 +1287,10 @@ function openBadgeHowSheet(badgeId, state, marks) {
     const title = document.getElementById('account-badge-how-title');
     const status = document.getElementById('account-badge-how-status');
     const body = document.getElementById('account-badge-how-body');
+    const how = document.getElementById('account-badge-how-how');
+    const bar = document.getElementById('account-badge-how-bar');
+    const meter = document.getElementById('account-badge-how-meter');
+    const meterLabel = document.getElementById('account-badge-how-meter-label');
     const prereq = document.getElementById('account-badge-how-prereq');
     if (title) title.textContent = cat.title;
     if (status) {
@@ -1027,6 +1298,19 @@ function openBadgeHowSheet(badgeId, state, marks) {
         else if (progress.total > 1 && progress.current > 0) status.textContent = `${progress.current} of ${progress.total} service days`;
         else status.textContent = 'Not unlocked yet';
     }
+    const ratio = Math.max(0, Math.min(1, Number(progress.ratio) || 0));
+    const pct = Math.round(ratio * 100);
+    if (bar) bar.style.width = `${pct}%`;
+    if (meter) {
+        meter.setAttribute('aria-valuenow', String(pct));
+        meter.setAttribute('aria-valuemax', '100');
+    }
+    if (meterLabel) {
+        const current = Math.max(0, Number(progress.current) || 0);
+        const total = Math.max(1, Number(progress.total) || 1);
+        meterLabel.textContent = `${current} of ${total}`;
+    }
+    if (how) how.textContent = `${cat.how} ${cat.points} ${marks.pointsWord(cat.points)}.`;
     if (body) {
         if (badgeId === 'first_share_day') {
             const trips = shareTripBlocks(state, marks);
@@ -1041,10 +1325,10 @@ function openBadgeHowSheet(badgeId, state, marks) {
             } else if (on) {
                 body.textContent = 'Trip details were not saved for this share.';
             } else {
-                body.textContent = `${cat.how} ${cat.points} ${marks.pointsWord(cat.points)}.`;
+                body.textContent = '';
             }
         } else {
-            body.textContent = `${cat.how} ${cat.points} ${marks.pointsWord(cat.points)}.`;
+            body.textContent = '';
         }
     }
     const needs = Array.isArray(cat.requires) ? cat.requires : [];
@@ -1161,11 +1445,7 @@ export function paintAccountPoints(state) {
 
 export function bindAccountUi() {
     if (typeof document === 'undefined') return;
-    if (window.__ntAccountUiBound) {
-        syncAccountSettingsUi();
-        syncAuthProviderUi();
-        return;
-    }
+    if (window.__ntAccountUiBound) return;
     window.__ntAccountUiBound = true;
 
     const watchPhoto = (imgId, letterId) => {
@@ -1195,7 +1475,35 @@ export function bindAccountUi() {
     };
     document.getElementById('settings-account-btn')?.addEventListener('click', open);
 
-    document.getElementById('account-modal-close')?.addEventListener('click', closeAccountModal);
+    document.getElementById('account-modal-close')?.addEventListener('click', () => {
+        const guest = document.getElementById('account-guest');
+        const screen = guest?.getAttribute('data-account-screen') || 'create';
+        const guestOpen = guest && !guest.classList.contains('hidden');
+        if (guestOpen && screen !== 'create') {
+            showAccountGuestScreen('create');
+            return;
+        }
+        closeAccountModal();
+    });
+
+    const bindAccountScrollFade = () => {
+        const scroller = document.querySelector('[data-account-scroll]');
+        const fade = document.getElementById('account-scroll-fade');
+        if (!scroller || !fade || scroller.dataset.fadeBound === '1') return;
+        scroller.dataset.fadeBound = '1';
+        const sync = () => {
+            const more = scroller.scrollHeight - scroller.clientHeight - scroller.scrollTop > 8;
+            fade.classList.toggle('opacity-0', !more);
+            fade.classList.toggle('opacity-100', more);
+        };
+        scroller.addEventListener('scroll', sync, { passive: true });
+        window.addEventListener('resize', sync, { passive: true });
+        sync();
+        try {
+            new ResizeObserver(sync).observe(scroller);
+        } catch { /* ignore */ }
+    };
+    bindAccountScrollFade();
 
     const setBusy = (busy) => {
         _accountUiBusy = !!busy;
@@ -1205,24 +1513,59 @@ export function bindAccountUi() {
         });
         syncAuthProviderUi(getAuthProviders(), _accountUiBusy);
         if (busy) {
-            const err = document.getElementById('account-error');
-            if (err) err.textContent = '';
+            const wrap = document.getElementById('account-error');
+            const text = document.getElementById('account-error-text');
+            if (text) text.textContent = '';
+            wrap?.classList.add('hidden');
         }
     };
+    const clearErr = () => {
+        const wrap = document.getElementById('account-error');
+        const text = document.getElementById('account-error-text');
+        if (text) text.textContent = '';
+        wrap?.classList.add('hidden');
+    };
     const showErr = (msg) => {
-        const err = document.getElementById('account-error');
-        if (err) {
-            err.textContent = msg || 'Something went wrong.';
-            try { err.scrollIntoView({ block: 'nearest' }); } catch { /* ignore */ }
+        const wrap = document.getElementById('account-error');
+        const text = document.getElementById('account-error-text');
+        if (text) text.textContent = msg || 'Something went wrong.';
+        wrap?.classList.remove('hidden');
+        try { wrap?.scrollIntoView({ block: 'nearest' }); } catch { /* ignore */ }
+    };
+    const afterSignedIn = (user) => {
+        clearErr();
+        toastWelcomeBack(user || window.firebaseAuth?.currentUser);
+        paintAccountPoints();
+    };
+    const runEmailSignIn = async () => {
+        const email = document.getElementById('account-email')?.value;
+        const password = document.getElementById('account-password')?.value;
+        if (!email || !password) {
+            showErr('Enter email and password.');
+            return;
+        }
+        setBusy(true);
+        try {
+            const user = await signInWithEmail(email, password);
+            afterSignedIn(user);
+        } catch (e) {
+            const code = e?.code || '';
+            if (['auth/user-not-found', 'auth/wrong-password', 'auth/invalid-credential'].includes(code)) {
+                showAccountGuestScreen('invalid');
+                showErr('Those details did not match. Try again, or create an account.');
+            } else {
+                showErr(friendlyAuthError(e));
+            }
+        } finally {
+            setBusy(false);
         }
     };
 
     document.getElementById('account-google-btn')?.addEventListener('click', async () => {
         setBusy(true);
         try {
-            await signInWithGoogle();
-            if (typeof window.showToast === 'function') window.showToast('Signed in', 'success');
-            paintAccountPoints();
+            const user = await signInWithGoogle();
+            afterSignedIn(user);
         } catch (e) {
             showErr(e?.code === 'auth/popup-closed-by-user' ? 'Sign-in cancelled.' : friendlyAuthError(e) || 'Google sign-in failed.');
         } finally {
@@ -1233,9 +1576,8 @@ export function bindAccountUi() {
     document.getElementById('account-facebook-btn')?.addEventListener('click', async () => {
         setBusy(true);
         try {
-            await signInWithFacebook();
-            if (typeof window.showToast === 'function') window.showToast('Signed in', 'success');
-            paintAccountPoints();
+            const user = await signInWithFacebook();
+            afterSignedIn(user);
         } catch (e) {
             showErr(e?.code === 'auth/popup-closed-by-user' ? 'Sign-in cancelled.' : friendlyAuthError(e));
         } finally {
@@ -1243,35 +1585,36 @@ export function bindAccountUi() {
         }
     });
 
-    document.getElementById('account-email-signin-btn')?.addEventListener('click', async () => {
-        const email = document.getElementById('account-email')?.value;
-        const password = document.getElementById('account-password')?.value;
-        if (!email || !password) {
-            showErr('Enter email and password.');
-            return;
-        }
-        setBusy(true);
-        try {
-            await signInWithEmail(email, password);
-            if (typeof window.showToast === 'function') window.showToast('Signed in', 'success');
-            paintAccountPoints();
-        } catch (e) {
-            showErr(friendlyAuthError(e));
-            const hint = document.getElementById('account-signin-create-hint');
-            if (hint && ['auth/user-not-found', 'auth/wrong-password', 'auth/invalid-credential'].includes(e?.code || '')) {
-                hint.classList.remove('hidden');
-            }
-        } finally {
-            setBusy(false);
-        }
+    document.getElementById('account-email-signin-btn')?.addEventListener('click', () => {
+        runEmailSignIn();
+    });
+    document.getElementById('account-invalid-retry-btn')?.addEventListener('click', () => {
+        runEmailSignIn();
+    });
+    document.getElementById('account-invalid-create-btn')?.addEventListener('click', () => {
+        clearErr();
+        showAccountGuestScreen('create');
     });
 
-    document.getElementById('account-forgot-btn')?.addEventListener('click', async () => {
+    document.getElementById('account-forgot-btn')?.addEventListener('click', () => {
+        clearErr();
+        showAccountGuestScreen('reset');
+    });
+    document.getElementById('account-goto-create')?.addEventListener('click', () => {
+        clearErr();
+        showAccountGuestScreen('create');
+    });
+    document.getElementById('account-goto-signin')?.addEventListener('click', () => {
+        clearErr();
+        showAccountGuestScreen('signin');
+    });
+    document.getElementById('account-reset-send-btn')?.addEventListener('click', async () => {
         const email = document.getElementById('account-email')?.value;
         setBusy(true);
         try {
             await sendAccountPasswordReset(email);
             if (typeof window.showToast === 'function') window.showToast('Password reset email sent', 'success');
+            showAccountGuestScreen('signin');
         } catch (e) {
             showErr(friendlyAuthError(e) || e?.message || 'Could not send reset email.');
         } finally {
@@ -1294,7 +1637,12 @@ export function bindAccountUi() {
         setBusy(true);
         try {
             await signUpWithEmail(email, password, displayName);
-            if (typeof window.showToast === 'function') window.showToast('Account created', 'success');
+            if (typeof window.showToast === 'function') {
+                window.showToast(
+                    accountNeedsEmailVerify() ? 'Check your email to verify this account' : 'Account created',
+                    'success',
+                );
+            }
             paintAccountPoints();
         } catch (e) {
             if (e?.message === DISPLAY_NAME_REFUSE_MSG) {
@@ -1322,7 +1670,6 @@ export function bindAccountUi() {
             await pushSignedInPrefs({ showPhotoInAlerts: !!photo?.checked });
             if (photo) delete photo.dataset.dirty;
             if (typeof window.showToast === 'function') window.showToast('Saved', 'success');
-            requestCloseAccountSheet('account-name-sheet');
         } catch (e) {
             const msg = e?.message || 'Could not save.';
             if (msg === DISPLAY_NAME_REFUSE_MSG && typeof window.showToast === 'function') {
@@ -1374,7 +1721,7 @@ export function bindAccountUi() {
         setBusy(true);
         try {
             await resendAccountVerification();
-            if (typeof window.showToast === 'function') window.showToast('Verification email sent', 'success');
+            if (typeof window.showToast === 'function') window.showToast('We sent the email again', 'success');
         } catch (e) {
             showErr(e?.message || 'Could not send verification email.');
         } finally {
@@ -1432,18 +1779,24 @@ export function bindAccountUi() {
     document.getElementById('account-points-close')?.addEventListener('click', closePointsSheet);
     document.getElementById('account-points-overlay')?.addEventListener('click', closePointsSheet);
 
-    const openNameSheet = () => {
-        const input = document.getElementById('account-edit-display-name');
-        const nameErr = document.getElementById('account-name-error');
-        if (nameErr) nameErr.textContent = '';
-        if (input) input.value = $account.get().displayName || '';
-        showAccountSheet('account-name-sheet');
-        setTimeout(() => input?.focus(), 40);
-    };
-    const closeNameSheet = () => requestCloseAccountSheet('account-name-sheet');
-    document.getElementById('account-name-edit-btn')?.addEventListener('click', openNameSheet);
-    document.getElementById('account-name-close')?.addEventListener('click', closeNameSheet);
-    document.getElementById('account-name-overlay')?.addEventListener('click', closeNameSheet);
+    document.getElementById('account-profile-toggle')?.addEventListener('click', () => {
+        const panel = document.getElementById('account-profile-panel');
+        const open = !!panel?.classList.contains('hidden');
+        setAccountProfileOpen(open);
+    });
+    document.getElementById('account-verify-check-btn')?.addEventListener('click', async () => {
+        setBusy(true);
+        try {
+            const ok = await refreshVerifiedSession();
+            if (typeof window.showToast === 'function') {
+                window.showToast(ok ? 'Email verified' : 'Open the link in your email, then try again.', ok ? 'success' : 'info');
+            }
+        } catch (e) {
+            showErr(e?.message || 'Could not check verification yet.');
+        } finally {
+            setBusy(false);
+        }
+    });
     document.getElementById('account-passenger-type-btn')?.addEventListener('click', () => {
         if (typeof window.triggerHaptic === 'function') window.triggerHaptic();
         if (typeof window.openSmoothModal === 'function') window.openSmoothModal('profile-modal');
@@ -1509,12 +1862,16 @@ function friendlyAuthError(e) {
 if (typeof window !== 'undefined') {
     window.__ntAccountSheetOnPop = accountSheetOnPop;
     window.openAccountModal = openAccountModal;
+    window.requestAccountSignIn = requestAccountSignIn;
     window.waitForSignedIn = waitForSignedIn;
     window.signOutAccount = signOutAccount;
     window.paintAccountPoints = paintAccountPoints;
     window.updateAccountDisplayName = updateAccountDisplayName;
     window.formatAccountDisplayName = formatAccountDisplayName;
     window.pushSignedInPrefs = pushSignedInPrefs;
+    window.syncAccountPinnedRoutesNow = syncAccountPinnedRoutesNow;
+    window.recordAccountActivity = recordAccountActivity;
+    window.toastWelcomeBack = toastWelcomeBack;
     window.pickCanonicalChatDeviceId = pickCanonicalChatDeviceId;
     window.$account = $account;
 }

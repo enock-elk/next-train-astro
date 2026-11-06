@@ -4,7 +4,7 @@
 /**
  * App version scheme: V{major}_{MM.DD}.{n}
  *
- * - major: product generation (currently 9)
+ * - major: product generation (currently 10)
  * - MM.DD: calendar date of this development session (use today's date)
  * - n: deployment counter for that date (1 = first ship that day)
  *
@@ -14,7 +14,7 @@
  * Changelog / What’s New is optional: skip both, or write only "no release notes."
  * Always add ADMIN_CHANGELOG[APP_VERSION] (System Health Build notes).
  */
-export const APP_VERSION = "V9_10.12.2";
+export const APP_VERSION = "V10_11.06.3";
 
 /** Public support channels (About modal, lifeboat help.html, Safe Mode). */
 export const SUPPORT_EMAIL = 'admin@nexttrain.co.za';
@@ -108,6 +108,16 @@ export const PILOT_ROUTE_IDS = ['pta-pien', 'pta-mabopane', 'ct-bellv'];
  * Cloudflare Pages Git builds omit the public env var.
  */
 export const COMMUNITY_WORKER_FALLBACK_URL = 'https://nexttrain-community.enock.workers.dev';
+/** Operator suggest-a-reply. Override with PUBLIC_REPLY_WORKER_URL at build time. */
+export const REPLY_WORKER_FALLBACK_URL = 'https://nexttrain-reply.enock.workers.dev';
+export const REPLY_WORKER_URL = (() => {
+    try {
+        const fromEnv = String(import.meta.env?.PUBLIC_REPLY_WORKER_URL || '').replace(/\/$/, '');
+        return fromEnv || REPLY_WORKER_FALLBACK_URL;
+    } catch {
+        return REPLY_WORKER_FALLBACK_URL;
+    }
+})();
 export const COMMUNITY_WORKER_URL = (() => {
     try {
         return String(import.meta.env?.PUBLIC_COMMUNITY_WORKER_URL || '').replace(/\/$/, '');
@@ -179,10 +189,10 @@ export function getCorridorLabel(routeOrCorridorId) {
 }
 
 export const REGION_SEO = {
-    GP: { slug: 'gauteng', title: 'Gauteng Metrorail', blurb: 'Pretoria, Johannesburg and Germiston corridor timetables for Gauteng Metrorail.' },
+    GP: { slug: 'gauteng', title: 'Metrorail Gauteng', blurb: 'Pretoria, Johannesburg and Germiston corridor timetables for Metrorail Gauteng.' },
     WC: { slug: 'western-cape', title: 'Western Cape Metrorail', blurb: 'Cape Town Central, Northern, Southern, Cape Flats and Malmesbury line schedules.' },
     KZN: { slug: 'kwazulu-natal', title: 'KwaZulu-Natal Metrorail', blurb: 'Durban, Umlazi, Bridge City, Crossmoor and inland KZN Metrorail corridor pages.' },
-    EC: { slug: 'eastern-cape', title: 'Eastern Cape Metrorail', blurb: 'East London and Berlin corridor schedules for Eastern Cape Metrorail.' },
+    EC: { slug: 'eastern-cape', title: 'Eastern Cape Metrorail', blurb: 'East London to Berlin weekday schedules on the older yellow Metrorail trains. No Saturday or Sunday service.' },
 };
 export const MAX_RADIUS_KM = 6;
 
@@ -280,7 +290,7 @@ export const ROUTES = {
         name: "Pretoria <-> Pienaarspoort", 
         corridorId: "EAST_LINE",
         region: "GP",
-        colorClass: "text-green-500", 
+        colorClass: "text-[#937e3b]", 
         isActive: true, 
         destA: 'PRETORIA STATION', 
         destB: 'PIENAARSPOORT STATION', 
@@ -293,7 +303,7 @@ export const ROUTES = {
         name: "Pretoria <-> Mabopane", 
         corridorId: "NORTH_LINE", 
         region: "GP",
-        colorClass: "text-orange-500", 
+        colorClass: "text-[#f58220]", 
         isActive: true, 
         destA: 'PRETORIA STATION', 
         destB: 'MABOPANE STATION', 
@@ -305,7 +315,7 @@ export const ROUTES = {
         name: "Mabopane <-> Belle Ombre", 
         corridorId: "NORTH_LINE",
         region: "GP",
-        colorClass: "text-orange-500", 
+        colorClass: "text-[#f58220]", 
         isActive: true, 
         destA: 'MABOPANE STATION', 
         destB: 'BELLE OMBRE STATION', 
@@ -322,7 +332,7 @@ export const ROUTES = {
         name: "Pretoria <-> De Wildt", 
         corridorId: "NORTH_LINE", 
         region: "GP",
-        colorClass: "text-purple-500", 
+        colorClass: "text-[#f58220]", 
         isActive: true, 
         destA: 'PRETORIA STATION', 
         destB: 'DE WILDT STATION', 
@@ -340,7 +350,7 @@ export const ROUTES = {
         name: "Hercules <-> Koedoespoort", 
         corridorId: "NORTH_LINE", 
         region: "GP",
-        colorClass: "text-indigo-500", 
+        colorClass: "text-[#ec008c]", 
         isActive: true, 
         destA: 'HERCULES STATION', 
         destB: 'KOEDOESPOORT STATION', 
@@ -357,7 +367,7 @@ export const ROUTES = {
         name: "Pretoria <-> Saulsville", 
         corridorId: "SAUL_LINE", 
         region: "GP",
-        colorClass: "text-green-500", 
+        colorClass: "text-[#00b9f1]", 
         isActive: true, 
         destA: 'PRETORIA STATION', 
         destB: 'SAULSVILLE STATION', 
@@ -374,7 +384,7 @@ export const ROUTES = {
         name: "Germiston <-> Leralla", 
         corridorId: "JHB_EAST",
         region: "GP",
-        colorClass: "text-blue-500", 
+        colorClass: "text-[#0071bb]", 
         isActive: true, 
         destA: 'GERMISTON STATION', 
         destB: 'LERALLA STATION', 
@@ -391,7 +401,7 @@ export const ROUTES = {
         name: "Germiston <-> Kwesine", 
         corridorId: "JHB_EAST",
         region: "GP",
-        colorClass: "text-yellow-500", 
+        colorClass: "text-[#ed262e]", 
         isActive: true, 
         destA: 'GERMISTON STATION', 
         destB: 'KWESINE STATION', 
@@ -408,7 +418,7 @@ export const ROUTES = {
         name: "Pretoria <-> Irene", 
         corridorId: "SOUTH_LINE", 
         region: "GP",
-        colorClass: "text-blue-500", 
+        colorClass: "text-[#0071bb]", 
         isActive: true, 
         destA: 'PRETORIA STATION', 
         destB: 'IRENE STATION', 
@@ -425,7 +435,7 @@ export const ROUTES = {
         name: "JHB <-> Germiston", 
         corridorId: "JHB_CORE", 
         region: "GP",
-        colorClass: "text-red-500", 
+        colorClass: "text-[#ed262e]", 
         isActive: true, 
         destA: 'JOHANNESBURG STATION', 
         destB: 'GERMISTON STATION', 
@@ -442,7 +452,7 @@ export const ROUTES = {
         name: "Pretoria <-> Kempton Park", 
         corridorId: "SOUTH_LINE", 
         region: "GP",
-        colorClass: "text-blue-500", 
+        colorClass: "text-[#0071bb]", 
         isActive: true, 
         destA: 'PRETORIA STATION', 
         destB: 'KEMPTON PARK STATION', 
@@ -459,7 +469,7 @@ export const ROUTES = {
         name: "JHB <-> Randfontein", 
         corridorId: "JHB_WEST", 
         region: "GP",
-        colorClass: "text-yellow-500", 
+        colorClass: "text-[#00a651]", 
         isActive: true, 
         destA: 'JOHANNESBURG STATION', 
         destB: 'RANDFONTEIN STATION', 
@@ -477,7 +487,7 @@ export const ROUTES = {
         name: "JHB <-> Naledi", 
         corridorId: "JHB_WEST", 
         region: "GP",
-        colorClass: "text-yellow-500", 
+        colorClass: "text-[#a9cf41]", 
         isActive: true, 
         destA: 'JOHANNESBURG STATION', 
         destB: 'NALEDI STATION', 
@@ -494,7 +504,7 @@ export const ROUTES = {
         name: "JHB <-> Midway/Lenz", 
         corridorId: "JHB_SOUTH", 
         region: "GP",
-        colorClass: "text-yellow-500", 
+        colorClass: "text-[#036630]", 
         isActive: true, 
         destA: 'JOHANNESBURG STATION', 
         destB: 'LENZ STATION', 
@@ -515,7 +525,7 @@ export const ROUTES = {
         name: 'Cape Town <-> Chris Hani', 
         corridorId: 'WC_CENTRAL', 
         region: 'WC', 
-        colorClass: 'text-orange-500', 
+        colorClass: 'text-[#00b9f3]', 
         isActive: true, 
         destA: 'CAPE TOWN STATION', 
         destB: 'CHRIS HANI STATION', 
@@ -533,7 +543,7 @@ export const ROUTES = {
         name: 'Cape Town <-> Kapteinsklip', 
         corridorId: 'WC_CENTRAL', 
         region: 'WC', 
-        colorClass: 'text-purple-500', 
+        colorClass: 'text-[#00b9f3]', 
         isActive: true, 
         destA: 'CAPE TOWN STATION', 
         destB: 'KAPTEINSKLIP STATION', 
@@ -551,7 +561,7 @@ export const ROUTES = {
         name: 'Cape Town <-> Nolungile', 
         corridorId: 'WC_CENTRAL', 
         region: 'WC', 
-        colorClass: 'text-blue-500', 
+        colorClass: 'text-[#00b9f3]', 
         isActive: true, 
         destA: 'CAPE TOWN STATION', 
         destB: 'NOLUNGILE STATION', 
@@ -569,7 +579,7 @@ export const ROUTES = {
         name: 'Bellville <-> Mutual', 
         corridorId: 'WC_NORTHERN', 
         region: 'WC', 
-        colorClass: 'text-green-500', 
+        colorClass: 'text-[#00a650]', 
         isActive: true, 
         destA: 'BELLVILLE STATION', 
         destB: 'MUTUAL STATION', 
@@ -587,7 +597,7 @@ export const ROUTES = {
         name: "Cape Town <-> Simon's Town", 
         corridorId: 'WC_SOUTHERN', 
         region: 'WC', 
-        colorClass: 'text-red-500', 
+        colorClass: 'text-[#ee1a24]', 
         isActive: true, // GUARDIAN: Set active due to new data in log
         destA: 'CAPE TOWN STATION', 
         destB: "SIMON'S TOWN STATION", 
@@ -605,7 +615,7 @@ export const ROUTES = {
         name: "Cape Town <-> Retreat", 
         corridorId: 'WC_FLATS', 
         region: 'WC', 
-        colorClass: 'text-yellow-600', 
+        colorClass: 'text-[#8f5644]', 
         isActive: true, 
         destA: 'CAPE TOWN STATION', 
         destB: "RETREAT STATION", 
@@ -624,7 +634,7 @@ export const ROUTES = {
         name: "Cape Town <-> Bellville", 
         corridorId: 'WC_NORTHERN', 
         region: 'WC', 
-        colorClass: 'text-green-500', 
+        colorClass: 'text-[#00a650]', 
         isActive: true, // GUARDIAN: Set active due to new data in log
         destA: 'CAPE TOWN STATION', 
         destB: "BELLVILLE STATION", 
@@ -642,7 +652,7 @@ export const ROUTES = {
         name: "Cape Town <-> Kraaifontein", 
         corridorId: 'WC_NORTHERN', 
         region: 'WC', 
-        colorClass: 'text-green-500', 
+        colorClass: 'text-[#00a650]', 
         isActive: true, // GUARDIAN: Set active due to new data in log
         destA: 'CAPE TOWN STATION', 
         destB: "KRAAIFONTEIN STATION", 
@@ -660,7 +670,7 @@ export const ROUTES = {
         name: "Cape Town <-> Eerste River", 
         corridorId: 'WC_NORTHERN', 
         region: 'WC', 
-        colorClass: 'text-green-500', 
+        colorClass: 'text-[#00a650]', 
         isActive: true, // GUARDIAN: Set active due to new data in log
         destA: 'CAPE TOWN STATION', 
         destB: "EERSTE RIVER STATION", 
@@ -678,7 +688,7 @@ export const ROUTES = {
         name: "Cape Town <-> Strand", 
         corridorId: 'WC_NORTHERN', 
         region: 'WC', 
-        colorClass: 'text-green-500', 
+        colorClass: 'text-[#00a650]', 
         isActive: true, // GUARDIAN: Set active due to new data in log
         destA: 'CAPE TOWN STATION', 
         destB: "STRAND STATION", 
@@ -696,7 +706,7 @@ export const ROUTES = {
         name: "Eerste River <-> Du Toit", 
         corridorId: 'WC_NORTHERN', 
         region: 'WC', 
-        colorClass: 'text-green-500', 
+        colorClass: 'text-[#00a650]', 
         isActive: true, // GUARDIAN: Set active due to new data in log
         destA: 'EERSTE RIVER STATION', 
         destB: "DU TOIT STATION", 
@@ -714,7 +724,7 @@ export const ROUTES = {
         name: "Cape Town <-> Wellington", 
         corridorId: 'WC_NORTHERN', 
         region: 'WC', 
-        colorClass: 'text-green-500', 
+        colorClass: 'text-[#00a650]', 
         isActive: true, // GUARDIAN: Set active due to new data in log
         destA: 'CAPE TOWN STATION', 
         destB: "WELLINGTON STATION", 
@@ -732,7 +742,7 @@ export const ROUTES = {
         name: "Cape Town <-> Malmesbury", 
         corridorId: 'WC_REGIONAL', 
         region: 'WC', 
-        colorClass: 'text-lime-500', // GUARDIAN: Preserved the lime-500 color correction
+        colorClass: 'text-[#a6ce38]',
         isActive: true, 
         destA: 'CAPE TOWN STATION', 
         destB: "MALMESBURY STATION", 
@@ -754,7 +764,7 @@ export const ROUTES = {
         name: 'Durban <-> Umlazi', 
         corridorId: 'KZN_SOUTH', 
         region: 'KZN', 
-        colorClass: 'text-red-500', 
+        colorClass: 'text-[#ee2f33]', 
         isActive: true, 
         destA: 'DURBAN YARD STATION', 
         destB: 'UMLAZI STATION', 
@@ -771,7 +781,7 @@ export const ROUTES = {
         name: 'Berea Road <-> Bridge City', 
         corridorId: 'KZN_NORTH', 
         region: 'KZN', 
-        colorClass: 'text-red-500', 
+        colorClass: 'text-[#ee2f33]', 
         isActive: true, 
         destA: 'BEREA ROAD STATION', 
         destB: 'BRIDGE CITY STATION', 
@@ -788,7 +798,7 @@ export const ROUTES = {
         name: 'Durban <-> Winklespruit', 
         corridorId: 'KZN_SOUTH', 
         region: 'KZN', 
-        colorClass: 'text-blue-500', 
+        colorClass: 'text-[#2d88c7]', 
         isActive: true, 
         destA: 'DURBAN YARD STATION', 
         destB: 'WINKLESPRUIT STATION', 
@@ -805,7 +815,7 @@ export const ROUTES = {
         name: 'Durban <-> Cato Ridge', 
         corridorId: 'KZN_WEST', 
         region: 'KZN', 
-        colorClass: 'text-indigo-500', 
+        colorClass: 'text-[#0abcf2]', 
         isActive: true, 
         destA: 'DURBAN YARD STATION', 
         destB: 'CATO RIDGE STATION', 
@@ -822,7 +832,7 @@ export const ROUTES = {
         name: 'Durban <-> Pinetown', 
         corridorId: 'KZN_WEST', 
         region: 'KZN', 
-        colorClass: 'text-orange-500', 
+        colorClass: 'text-[#6f2729]', 
         isActive: true, 
         destA: 'DURBAN YARD STATION', 
         destB: 'PINETOWN STATION', 
@@ -839,7 +849,7 @@ export const ROUTES = {
         name: 'Durban <-> Crossmoor',
         corridorId: 'KZN_WEST',
         region: 'KZN',
-        colorClass: 'text-yellow-500',
+        colorClass: 'text-[#fad561]',
         isActive: true,
         destA: 'DURBAN STATION',
         destB: 'CROSSMOOR STATION',
@@ -860,7 +870,7 @@ export const ROUTES = {
         name: 'East London <-> Berlin', 
         corridorId: 'EC_CENTRAL', 
         region: 'EC', 
-        colorClass: 'text-red-500', 
+        colorClass: 'text-[#f5821f]', 
         isActive: true, 
         destA: 'EAST LONDON STATION', 
         destB: 'BERLIN STATION', 
@@ -930,6 +940,16 @@ export function fareMultiplierForProfile(profileName, useOffPeak) {
     return useOffPeak ? profile.offPeak : profile.base;
 }
 
+/**
+ * Listed ticket sheet. Scholar 50% is single and return only.
+ * Weekly and monthly passes stay the adult price.
+ * kind: 'single' | 'return' | 'pass'
+ */
+export function fareMultiplierForListedTicket(profileName, kind) {
+    if (kind === 'pass' && profileName === 'Scholar') return 1;
+    return fareMultiplierForProfile(profileName, false);
+}
+
 // 6. GHOST TRAIN PROTOCOL (Default Exclusions)
 // Offline-only fallback if the Firebase exclusions tree cannot be fetched.
 // Live bans belong in RTDB `exclusions/{routeId}/{trainId}` so Global State
@@ -964,6 +984,151 @@ export const HERC_KOED_JUNCTIONS = ['KOEDOESPOORT', 'HERCULES'];
 // comma, a period, or a hyphen. Do not explain strategy or "we fixed."
 // Leave every forceShow false. Never auto-open What's New over the welcome screen.
 export const CHANGELOG_DATA = [
+    {
+        id: "V10_11.01.1",
+        title: "Terminus labels and fares",
+        date: "1 Nov 2026",
+        forceShow: false,
+        features: [
+            "Upcoming trains that reach the end of the line say To that terminus, such as To Pienaarspoort, instead of Direct.",
+            "Trip fares round to the nearest R0.50, so an off-peak R8.4 shows as R8.5."
+        ]
+    },
+    {
+        id: "V10_10.29.1",
+        title: "Opens from the saved timetable",
+        date: "29 Oct 2026",
+        forceShow: false,
+        features: [
+            "The board opens from the timetable saved on this phone when the connection is slow."
+        ]
+    },
+    {
+        id: "V10_10.28.1",
+        title: "Rhodesfield on the train sheet",
+        date: "28 Oct 2026",
+        forceShow: false,
+        features: [
+            "A full train sheet names Rhodesfield and Elandsfontein, instead of listing them as Kempton Park."
+        ]
+    },
+    {
+        id: "V10_10.27.9",
+        title: "Network map",
+        date: "27 Oct 2026",
+        forceShow: false,
+        features: [
+            "The network map opens on your region."
+        ]
+    },
+    {
+        id: "V10_10.18.14",
+        title: "Sheets and the day line",
+        date: "18 Oct 2026",
+        forceShow: false,
+        features: [
+            "Pull down anywhere on Trip fare, Share your trip, and the same cards to close them.",
+            "Choosing No on a trip fare uses the blue highlight.",
+            "The day line keeps the schedule name in its pill.",
+            "A trip from 21 December 2026 to 1 January 2027 says the festive timetable is not confirmed yet."
+        ]
+    },
+    {
+        id: "V9_10.17.2",
+        title: "Timetable marks",
+        date: "17 Oct 2026",
+        forceShow: false,
+        features: [
+            "Options names this Reset this App. It clears this App's saved data.",
+            "A weak connection asks before that reset.",
+            "A train that reaches Durban on a Durban route is marked Direct.",
+            "On the Irene timetable, a train that continues to Kempton Park is marked KEMP.",
+            "Monte Vista, Maitland, and KEMP use the same kind of mark as NO SVC. Tap the mark to read it."
+        ]
+    },
+    {
+        id: "V9_10.17.1",
+        title: "Refresh",
+        date: "17 Oct 2026",
+        forceShow: false,
+        features: [
+            "Options has Reset this phone. It clears this phone and keeps your user id.",
+            "Pull down at the top of Next Train, Trip Planner, or Community to refresh."
+        ]
+    },
+    {
+        id: "V9_10.16.06",
+        title: "Trip fare",
+        date: "16 Oct 2026",
+        forceShow: false,
+        features: [
+            "Trip fare shows the day and time with the peak, such as Peak (Saturday @ 7:20).",
+            "Passenger type has a close button."
+        ]
+    },
+    {
+        id: "V9_10.16.05",
+        title: "Timetable marks",
+        date: "16 Oct 2026",
+        forceShow: false,
+        features: [
+            "A Monte Vista train shows Monte Vista above the train number. Tap it to read the route.",
+            "A Maitland train shows Maitland the same way.",
+            "EXPR on the timetable is dark red."
+        ]
+    },
+    {
+        id: "V9_10.16.03",
+        title: "Train names",
+        date: "16 Oct 2026",
+        forceShow: false,
+        features: [
+            "On the Irene timetable, a train that continues to Kempton Park is marked KEMP.",
+            "Trip Planner names that train a Kempton Park train.",
+            "A stop an express train skips shows EXPR."
+        ]
+    },
+    {
+        id: "V9_10.15.7",
+        title: "Check for Updates",
+        date: "15 Oct 2026",
+        forceShow: false,
+        features: [
+            "Check for Updates keeps its message on screen while the download runs.",
+            "A quick download still shows that message, for up to 6 seconds."
+        ]
+    },
+    {
+        id: "V9_10.13.2",
+        title: "Scholar passes",
+        date: "13 Oct 2026",
+        forceShow: false,
+        features: [
+            "A scholar weekly or monthly pass matches the adult price.",
+            "Scholar single and return tickets stay half price."
+        ]
+    },
+    {
+        id: "V9_10.13.1",
+        title: "Trip Fare",
+        date: "13 Oct 2026",
+        forceShow: false,
+        features: [
+            "Trip Fare shows the money mark on the left of the label.",
+            "Show Next Train is a darker blue than the fare row under it."
+        ]
+    },
+    {
+        id: "V9_10.12.3",
+        title: "Planner times",
+        date: "12 Oct 2026",
+        forceShow: false,
+        features: [
+            "A trip shows Departs and the wait on one side, and Total Time on the other.",
+            "After a train has left, Departed sits above Show Next Train.",
+            "Trip fare is one line across the card."
+        ]
+    },
     {
         id: "V9_10.12.1",
         title: "Planner trip card",
@@ -1503,6 +1668,145 @@ export const CHANGELOG_DATA = [
         features: [
             "<b>Smart Trip Planner:</b> Origin, destination, and transfers in one search.",
             "<b>Fare Calculator:</b> Scholar, pensioner, and off-peak discounts built in."
+        ]
+    },
+    {
+        id: "V2_01.28",
+        title: "Passed along",
+        date: "28 Jan 2026",
+        forceShow: false,
+        features: [
+            "<b>Word of mouth:</b> Friends in local Facebook groups and WhatsApp chats started sharing the link. More people began opening it after that."
+        ]
+    },
+    {
+        id: "V2_01.23",
+        title: "Ticket prices",
+        date: "23 Jan 2026",
+        forceShow: false,
+        features: [
+            "<b>Prices on the route:</b> A single, a return, and the weekly and monthly passes for the line you are on."
+        ]
+    },
+    {
+        id: "V2_01.19",
+        title: "Route map",
+        date: "19 Jan 2026",
+        forceShow: false,
+        features: [
+            "<b>A map picture:</b> The stops on a line, shown as a simple map you could look at from the app."
+        ]
+    },
+    {
+        id: "V2_01.15",
+        title: "Check for Updates",
+        date: "15 Jan 2026",
+        forceShow: false,
+        features: [
+            "<b>Check for Updates:</b> Pulls a newer copy onto this phone. At first this was called Reset the app."
+        ]
+    },
+    {
+        id: "V2_01.12",
+        title: "About",
+        date: "12 Jan 2026",
+        forceShow: false,
+        features: [
+            "<b>About:</b> A short page on how the app started, and who looks after it."
+        ]
+    },
+    {
+        id: "V2_01.06",
+        title: "A message",
+        date: "6 Jan 2026",
+        forceShow: false,
+        features: [
+            "<b>Write in:</b> You could send a message if a time looked wrong, or if you just wanted to say hello."
+        ]
+    },
+    {
+        id: "V1_12.29",
+        title: "Timetable store",
+        date: "29 Dec 2025",
+        forceShow: false,
+        features: [
+            "<b>A proper store:</b> Times moved out of the hand-kept spreadsheet into a database the app could load on its own."
+        ]
+    },
+    {
+        id: "V1_12.23",
+        title: "Dark mode",
+        date: "23 Dec 2025",
+        forceShow: false,
+        features: [
+            "<b>Dark mode:</b> A darker look, easier on the eyes for a trip after sunset."
+        ]
+    },
+    {
+        id: "V1_12.22",
+        title: "More Johannesburg lines",
+        date: "22 Dec 2025",
+        forceShow: false,
+        features: [
+            "<b>West and south:</b> Johannesburg to Randfontein, Naledi, and Midway."
+        ]
+    },
+    {
+        id: "V1_12.18",
+        title: "Germiston lines",
+        date: "18 Dec 2025",
+        forceShow: false,
+        features: [
+            "<b>Through Germiston:</b> Johannesburg to Germiston, Germiston to Leralla, and Germiston to Kwesine."
+        ]
+    },
+    {
+        id: "V1_12.16",
+        title: "Toward Johannesburg",
+        date: "16 Dec 2025",
+        forceShow: false,
+        features: [
+            "<b>Pretoria to Kempton Park:</b> The first line that reached toward Johannesburg.",
+            "<b>Pretoria to Irene:</b> Added in the same week."
+        ]
+    },
+    {
+        id: "V1_12.11",
+        title: "More Pretoria lines",
+        date: "11 Dec 2025",
+        forceShow: false,
+        features: [
+            "<b>Still in Pretoria:</b> Mabopane, Belle Ombre, Hercules to Koedoespoort, and Saulsville."
+        ]
+    },
+    {
+        id: "V1_12.08",
+        title: "De Wildt",
+        date: "8 Dec 2025",
+        forceShow: false,
+        features: [
+            "<b>Pretoria to De Wildt:</b> Added so a trip toward Ga-Rankuwa had a timetable."
+        ]
+    },
+    {
+        id: "V1_11.28",
+        title: "A proper address",
+        date: "28 Nov 2025",
+        forceShow: false,
+        features: [
+            "<b>www.nexttrain.co.za:</b> The app got its own address.",
+            "<b>Shared nearby:</b> Passed to Mamelodi commuters, and to anyone else who asked."
+        ]
+    },
+    {
+        id: "V1_11.19",
+        title: "First version",
+        date: "19 Nov 2025",
+        forceShow: false,
+        features: [
+            "<b>Metrorail App:</b> The first public version. Only Pretoria to Pienaarspoort, a local line.",
+            "<b>Hand-kept times:</b> The timetable lived in a spreadsheet and was updated by hand.",
+            "<b>A clear list:</b> Easier to read than a photo of the station board."
         ]
     }
 ];

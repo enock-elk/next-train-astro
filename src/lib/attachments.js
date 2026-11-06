@@ -129,7 +129,7 @@ export function classifyAttachmentUrl(url) {
     }
     const lower = withoutAppBase(path).toLowerCase();
     if (/\.pdf$/.test(lower)) return 'pdf';
-    if (/\.(jpe?g|png|gif|webp)$/.test(lower) || lower.includes('/images/alerts/')) return 'image';
+    if (/\.(jpe?g|png|gif|webp)$/.test(lower) || lower.includes('/images/alerts/') || lower.includes('/images/schedules/')) return 'image';
     // Commuter uploads are only photos or PDFs. A storage link with no extension is still a photo.
     if (isStorageAttachmentHost(safe)) return 'image';
     return 'file';

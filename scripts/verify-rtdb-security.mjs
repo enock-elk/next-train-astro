@@ -22,6 +22,9 @@ assert.match(rules.exclusions['.write'], /thandeka05nxumalo@gmail\.com/);
 assert.match(rules.schedules['.write'], /enockelk@gmail\.com/);
 assert.match(rules.feedback.$feedbackId['.write'], /auth != null/);
 assert.match(rules.feedback.$feedbackId['.validate'], /timestamp/);
+assert.deepEqual(rules.feedback['.indexOn'], ['timestamp'], 'feedback unread badge can orderBy timestamp');
+assert.deepEqual(rules.sys_logs.crashes['.indexOn'], ['timestamp'], 'crash badge can orderBy timestamp');
+assert.deepEqual(rules.sys_logs.routing_fails['.indexOn'], ['timestamp'], 'dead-end badge can orderBy timestamp');
 assert.match(rules.sys_logs.crashes.$crashId['.write'], /auth != null/);
 assert.match(rules.sys_logs.blackbox.$exportId['.write'], /auth != null/);
 assert.match(rules.sys_logs.routing_fails.$deadEndId['.write'], /auth != null/);
@@ -35,7 +38,12 @@ assert.match(
     /newData\.val\(\) === data\.val\(\) \+ 1/,
 );
 assert.match(rules.delay_reports.$reportId['.validate'], /length <= 280/);
+assert.deepEqual(rules.delay_reports['.indexOn'], ['routeId', 'timestamp', 'trainKey'], 'delay-report badge can orderBy timestamp');
+assert.deepEqual(rules.moderation_queue['.indexOn'], ['timestamp'], 'community queue badge can orderBy timestamp');
+assert.deepEqual(rules.account_deletions['.indexOn'], ['status'], 'deletion badge can orderBy status');
 assert.equal(rules.inbox.$deviceId['.read'], true, 'inbox stays readable without a new auth gate so Messages on older shells still load');
+assert.equal(rules.config.community_champions['.read'], true, 'community champions config is publicly readable for About');
+assert.match(rules.config['.write'], /thandeka05nxumalo@gmail\.com/, 'Thandeka can write config including champions');
 
 const env = {
     ALLOWED_ORIGINS: 'https://lab.nexttrain.co.za,https://nexttrain.co.za,https://enock-elk.github.io',

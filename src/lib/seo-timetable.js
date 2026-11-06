@@ -9,6 +9,7 @@ import { FARE_CONFIG, ROUTES } from './config.js';
 import { getGridOrderManifest, orderGridTrainIds } from './grid-order.js';
 import { isRealTime, isExpressSkip, isVariantStationName, timeToSeconds, flattenPublicHolidays } from './utils.js';
 import { displayRouteName, gridStationLabel, stationLabel, wcRoutesWithHolidaySheets } from './seo-routes.js';
+import { buildBreadcrumbList, clipMetaDescription } from './seo-meta.js';
 import {
   extractStationChain,
   measureStationChain,
@@ -26,12 +27,26 @@ let _gridOrderDump;
 
 function dumpCandidates() {
     const here = dirname(fileURLToPath(import.meta.url));
-    return [
-        // astro build cwd is the repo root; compiled modules live under dist/
-        join(process.cwd(), 'public/data/full-database.json'),
-        join(here, '../../public/data/full-database.json'),
-        join(here, '../../../public/data/full-database.json'),
+    const envPath = String(process.env.SEO_SCHEDULE_DUMP || '').trim();
+    const roots = [
+        process.cwd(),
+        join(here, '../..'),
+        join(here, '../../..'),
     ];
+    const out = [];
+    // Live fetch from prebuild (scripts/fetch-live-schedules-for-seo.mjs) wins over
+    // the checked-in GitHub dump so station/route SEO pages match RTDB on deploy.
+    if (envPath) out.push(envPath);
+    for (const root of roots) {
+        out.push(join(root, 'public/data/.seo-build-database.json'));
+        out.push(join(root, 'public/data/full-database.json'));
+    }
+    return out;
+}
+
+/** Clear the in-memory dump (tests / fetch-then-build in one process). */
+export function clearScheduleDumpCache() {
+    _dump = null;
 }
 
 export function loadScheduleDump() {
@@ -43,6 +58,9 @@ export function loadScheduleDump() {
     _dump = JSON.parse(readFileSync(path, 'utf8'));
     if (_dump?.westerncape) {
         _dump = { ..._dump, westerncape: flattenPublicHolidays(_dump.westerncape) };
+    }
+    if (String(path).includes('.seo-build-database.json')) {
+        console.log(`SEO timetable SSG: using live build dump (${_dump?._seoLiveFetchedAt || 'no timestamp'})`);
     }
     return _dump;
 }
@@ -66,6 +84,55 @@ function sheetFromNode(node, key) {
     return null;
 }
 
+function metaFromNode(node, key) {
+    if (!key || !node || typeof node !== 'object') return null;
+    const candidates = [
+        node[`${key}_meta`],
+        node.public_holidays?.[`${key}_meta`],
+        node[key]?.lastUpdated,
+        node.public_holidays?.[key]?.lastUpdated,
+    ];
+    for (const raw of candidates) {
+        if (raw == null || raw === '') continue;
+        if (typeof raw === 'string' || typeof raw === 'number') return String(raw);
+        if (typeof raw === 'object' && raw.lastUpdated) return String(raw.lastUpdated);
+    }
+    return null;
+}
+
+/** Match live-board formatEffectiveDate for SEO "Schedule effective from". */
+export function formatSeoEffectiveDate(rawDateStr) {
+    if (!rawDateStr || String(rawDateStr).toLowerCase().includes('undefined') || String(rawDateStr) === 'null') {
+        return '';
+    }
+    let cleanStr = String(rawDateStr).replace(/^last updated[:\s-]*/i, '').trim();
+    try {
+        if (cleanStr.includes(',')) cleanStr = cleanStr.split(',')[0].trim();
+        const d = new Date(cleanStr);
+        if (!Number.isNaN(d.getTime())) {
+            const months = [
+                'January', 'February', 'March', 'April', 'May', 'June',
+                'July', 'August', 'September', 'October', 'November', 'December',
+            ];
+            return `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;
+        }
+    } catch { /* keep cleanStr */ }
+    return cleanStr;
+}
+
+function lastUpdatedFromSheetRows(rows) {
+    if (!Array.isArray(rows) || !rows.length) return null;
+    const firstRow = rows[0];
+    if (!firstRow || typeof firstRow !== 'object') return null;
+    const values = Object.values(firstRow).map(String);
+    const dateValueIndex = values.findIndex((v) => /last updated/i.test(v));
+    if (dateValueIndex === -1) return null;
+    const val = values[dateValueIndex];
+    if (val.length > 15) return val;
+    if (values[dateValueIndex + 1]) return values[dateValueIndex + 1];
+    return null;
+}
+
 /**
  * Same overlay idea as live `unwrapDatabase`: region nest wins over a stale
  * top-level copy of the same sheet key (e.g. June root vs August `gauteng`).
@@ -78,6 +145,16 @@ export function getSheet(db, key) {
         if (hit) return hit;
     }
     return sheetFromNode(db, key);
+}
+
+/** Sheet `_meta` / lastUpdated with the same nest preference as getSheet. */
+export function getSheetMeta(db, key) {
+    if (!key || !db) return null;
+    for (const nest of REGION_NESTS) {
+        const hit = metaFromNode(db[nest], key);
+        if (hit) return hit;
+    }
+    return metaFromNode(db, key);
 }
 
 function manifestForSheet(db, key) {
@@ -253,6 +330,8 @@ export function extractSeoGrid(db, sheetKey, originName, options = {}) {
     const { first, last } = originClocks.first
         ? originClocks
         : firstLastFromTrainsFirstClock(keptRows, trainIds);
+    const rawEffective = getSheetMeta(db, sheetKey) || lastUpdatedFromSheetRows(rows) || '';
+    const effectiveFrom = formatSeoEffectiveDate(rawEffective);
     return {
         sheetKey,
         stations,
@@ -263,6 +342,8 @@ export function extractSeoGrid(db, sheetKey, originName, options = {}) {
         originStation,
         destStation,
         departures: departuresFromRow(originRow, trainIds),
+        lastUpdated: rawEffective || null,
+        effectiveFrom: effectiveFrom || null,
     };
 }
 
@@ -389,6 +470,9 @@ export function buildRouteJsonLd({
     dest,
     operatingNote,
     timetable,
+    regionLabel = '',
+    regionUrl = '',
+    routesIndexUrl = 'https://nexttrain.co.za/routes.html',
 }) {
     const wdA = timetable?.weekday?.a;
     const wdB = timetable?.weekday?.b;
@@ -442,6 +526,15 @@ export function buildRouteJsonLd({
         });
     }
 
+    const crumbs = [
+        { name: 'Next Train', url: 'https://nexttrain.co.za/' },
+        { name: 'Routes', url: routesIndexUrl || 'https://nexttrain.co.za/routes.html' },
+    ];
+    if (regionLabel && regionUrl) {
+        crumbs.push({ name: regionLabel, url: regionUrl });
+    }
+    crumbs.push({ name: `${origin} to ${dest}`, url: pageUrl });
+
     return {
         '@context': 'https://schema.org',
         '@graph': [
@@ -457,6 +550,7 @@ export function buildRouteJsonLd({
                     url: 'https://nexttrain.co.za/',
                 },
             },
+            buildBreadcrumbList(crumbs),
             {
                 '@type': 'FAQPage',
                 mainEntity: faqs,
@@ -514,19 +608,18 @@ export function routeDocumentTitle(origin, dest) {
     return `${origin} to ${dest} ${SEO_SCHEDULE_YEAR} Metrorail Train Times | Next Train`;
 }
 
+/**
+ * Route landing meta — stay inside Google's ~160-character SERP window.
+ * Train IDs, fares, and long nearby lists stay on the page body, not in meta.
+ */
 export function routeMetaDescription(origin, dest, province, opts = {}) {
     const pair = `${origin} to ${dest}`;
-    const trains = (opts.trainIds || []).map((id) => String(id || '').trim()).filter(Boolean).slice(0, 4);
-    const trainBit = trains.length ? ` Current trains ${trains.join(', ')}.` : '';
-    const fareBit = (opts.maxSingle && !opts.inferredZone)
-        ? ` Max adult single ${opts.maxSingle}.`
-        : ' Ticket prices in Next Train.';
-    let satBit = '';
-    if (opts.hasSaturday === true) satBit = ' Saturday schedule listed. No Sunday service.';
-    else if (opts.hasSaturday === false) satBit = ' No Sunday service.';
-    const nearby = opts.nearby ? ` ${String(opts.nearby).trim()}` : '';
-    const provinceBit = province ? ` (${province})` : '';
-    return `View and download the ${pair} Metrorail (PRASA) train schedule${provinceBit}. Updated ${SEO_SCHEDULE_YEAR} timetable.${trainBit}${fareBit} Works offline in Next Train, with next train, ticket prices, and trip planner.${satBit}${nearby}`;
+    const provinceBit = province ? ` in ${province}` : '';
+    let satBit = ' No Sunday service.';
+    if (opts.hasSaturday === true) satBit = ' Saturday schedule on this page. No Sunday service.';
+    else if (opts.hasSaturday === false) satBit = ' No Saturday or Sunday service.';
+    const raw = `${pair} ${SEO_SCHEDULE_YEAR} Metrorail (PRASA) train times and schedule${provinceBit}.${satBit}`;
+    return clipMetaDescription(raw);
 }
 
 function getDumpValue(db, key) {

@@ -12,10 +12,11 @@ import {
     MAX_RADIUS_KM
 } from './config.js';
 import {
-    normalizeStationName, timeToSeconds, formatTimeDisplay, isRealTime, safeStorage,
+    normalizeStationName, timeToSeconds, formatTimeDisplay, isRealTime, isVariantStationName, safeStorage,
     getDistanceFromLatLonInKm, escapeHTML, formatAppDate, usesWeekdayScheduleSheet, usesSaturdayScheduleSheet,
     usesPublicHolidayScheduleSheet, resolveOperatingDayType, scheduleCacheSlot, routeSheetKeyForDay,
-    simUsesSpecificDate, exclusionAppliesToSurface, resolveStationLatLon, weekdaySheetsForRoute
+    simUsesSpecificDate, exclusionAppliesToSurface, resolveStationLatLon, weekdaySheetsForRoute,
+    schedulesBelongToRoute
 } from './utils.js';
 import {
     parseJSONSchedule, currentTime, currentDayType, currentDayIndex,
@@ -33,6 +34,7 @@ import {
 } from './auto-locate.js';
 import { peekLastGeoFix, reusableGeoFix } from './geo-watch.js';
 import { resolveHolidayDayType } from './holiday-approvals.js';
+import { liveBoardStaticKey, stampLiveBoardCard } from './live-board-paint.js';
 import { isAdminAuthed } from './admin-chrome.js';
 import {
     lastSafeStopBeforeDangerZone,
@@ -293,6 +295,219 @@ export function hasForwardOverlap(trainName, otherSchedule, fromStation, targetS
     return false;
 }
 
+function sheetStationCol(schedule) {
+    return schedule?.stationColumnName || 'STATION';
+}
+
+/** Last clock time on this column. Notes, dashes, and the VARIANT row are not a terminus. */
+export function lastTimedStation(schedule, trainId) {
+    const id = String(trainId || '').trim();
+    const rows = schedule?.rows;
+    if (!id || !rows?.length) return '';
+    const col = sheetStationCol(schedule);
+    for (let i = rows.length - 1; i >= 0; i--) {
+        if (!isRealTime(rows[i]?.[id])) continue;
+        const name = String(rows[i]?.[col] || '').trim();
+        if (!name || /^last updated/i.test(name) || isVariantStationName(name)) continue;
+        return name;
+    }
+    return '';
+}
+
+function stationRowIndex(schedule, station) {
+    const target = normalizeStationName(station);
+    if (!target || !schedule?.rows) return -1;
+    const col = sheetStationCol(schedule);
+    for (let i = 0; i < schedule.rows.length; i++) {
+        if (normalizeStationName(schedule.rows[i]?.[col]) === target) return i;
+    }
+    return -1;
+}
+
+function timedStopCount(schedule, trainId) {
+    const rows = schedule?.rows || [];
+    let count = 0;
+    for (const row of rows) {
+        if (isRealTime(row?.[trainId])) count += 1;
+    }
+    return count;
+}
+
+/**
+ * Real terminus for one train on the sheets already chosen for this day type.
+ * A shared sheet that stops at Irene does not beat the same day's column that
+ * continues to Kempton Park. Two sheets that both end at Irene stay at Irene.
+ */
+export function realTrainTerminus(trainId, schedules) {
+    const id = String(trainId || '').trim();
+    const hits = [];
+    for (const schedule of schedules || []) {
+        const stop = lastTimedStation(schedule, id);
+        if (stop) hits.push({ schedule, stop });
+    }
+    if (!hits.length) return '';
+    const isAfter = (later, earlier) => hits.some((row) => {
+        const a = stationRowIndex(row.schedule, earlier);
+        const b = stationRowIndex(row.schedule, later);
+        return a >= 0 && b > a;
+    });
+    let best = hits[0];
+    for (const hit of hits.slice(1)) {
+        if (normalizeStationName(hit.stop) === normalizeStationName(best.stop)) {
+            if (timedStopCount(hit.schedule, id) > timedStopCount(best.schedule, id)) best = hit;
+            continue;
+        }
+        const hitLater = isAfter(hit.stop, best.stop);
+        const bestLater = isAfter(best.stop, hit.stop);
+        if (hitLater && !bestLater) best = hit;
+        else if (!hitLater && !bestLater && timedStopCount(hit.schedule, id) > timedStopCount(best.schedule, id)) best = hit;
+    }
+    return best.stop;
+}
+
+function stripStationWord(name) {
+    return String(name || '').replace(/\s+STATION$/i, '').trim();
+}
+
+const IRENE_KEMP_PAIR = Object.freeze({
+    'pta-irene': 'pta-kempton',
+    'pta-kempton': 'pta-irene',
+});
+
+/** The other South line sheet. Empty for every other route. */
+export function siblingCorridorRouteId(routeId) {
+    return IRENE_KEMP_PAIR[routeId] || '';
+}
+
+/** Same day and direction on the sibling route. Weekday never borrows Saturday. */
+export function siblingSheetKey(routeId, sheetKey) {
+    const siblingId = siblingCorridorRouteId(routeId);
+    const route = ROUTES[routeId];
+    const sibling = ROUTES[siblingId];
+    const key = String(sheetKey || '');
+    if (!route || !sibling || !key) return '';
+    const field = Object.keys(route.sheetKeys || {}).find((name) => route.sheetKeys[name] === key);
+    if (!field) return '';
+    return sibling.sheetKeys?.[field] || '';
+}
+
+/** Elandsfontein and Rhodesfield are shown to commuters as Kempton Park. */
+export function displaysAsKemptonPark(station) {
+    const upper = normalizeStationName(station);
+    return upper === 'KEMPTON PARK' || upper === 'ELANDSFONTEIN' || upper === 'RHODESFIELD';
+}
+
+/**
+ * End the commuter is looking at. Durban Yard is Durban.
+ * Elandsfontein and Rhodesfield stay Kempton Park.
+ */
+export function commuterEndKey(station) {
+    const upper = normalizeStationName(station);
+    if (displaysAsKemptonPark(upper)) return 'KEMPTON PARK';
+    if (upper === 'DURBAN YARD' || upper === 'DURBAN') return 'DURBAN';
+    return upper;
+}
+
+/**
+ * Irene columns whose same-day terminus is Kempton Park.
+ * A train that ends at Irene is not in the list.
+ */
+export function kempTrainIds(routeId, ownSchedule, siblingSchedule) {
+    if (routeId !== 'pta-irene' || !ownSchedule?.headers || !siblingSchedule?.rows?.length) return [];
+    const ids = [];
+    for (const raw of ownSchedule.headers) {
+        const id = String(raw || '').trim();
+        if (!/^\d{4}[a-zA-Z]*$/.test(id)) continue;
+        const terminus = realTrainTerminus(id, [ownSchedule, siblingSchedule]);
+        if (displaysAsKemptonPark(terminus)) ids.push(id);
+    }
+    return ids;
+}
+
+function sheetStopNames(schedule) {
+    const col = schedule?.stationColumnName || 'STATION';
+    const names = new Set();
+    for (const row of schedule?.rows || []) {
+        const name = normalizeStationName(row?.[col] || row?.STATION);
+        if (!name || name.startsWith('LAST UPDATED') || name === 'VARIANT') continue;
+        names.add(name);
+    }
+    return names;
+}
+
+/**
+ * Kempton Park columns that call on the Irene sheet but are not printed there.
+ * A train that only ends at Irene is not included.
+ */
+export function extraKempTrainIds(ownSchedule, siblingSchedule) {
+    if (!ownSchedule?.rows?.length || !siblingSchedule?.headers?.length) return [];
+    const ownIds = new Set((ownSchedule.headers || []).map((id) => String(id)));
+    const ownStops = sheetStopNames(ownSchedule);
+    const col = siblingSchedule.stationColumnName || 'STATION';
+    const ids = [];
+    for (const raw of siblingSchedule.headers) {
+        const id = String(raw || '').trim();
+        if (!/^\d{4}[a-zA-Z]*$/.test(id) || ownIds.has(id)) continue;
+        let serves = false;
+        let kemp = false;
+        for (const row of siblingSchedule.rows || []) {
+            if (!isRealTime(row?.[id])) continue;
+            const name = normalizeStationName(row?.[col] || row?.STATION);
+            if (ownStops.has(name)) serves = true;
+            if (displaysAsKemptonPark(name)) kemp = true;
+        }
+        if (serves && kemp) ids.push(id);
+    }
+    return ids;
+}
+
+/** Copy sibling times onto the stations this sheet already lists. Does not add stations. */
+export function withExtraTrainColumns(schedule, siblingSchedule, ids) {
+    const list = (ids || []).map((id) => String(id)).filter(Boolean);
+    if (!schedule || !list.length) return schedule;
+    const col = schedule.stationColumnName || 'STATION';
+    const sibCol = siblingSchedule?.stationColumnName || 'STATION';
+    const byName = new Map();
+    for (const row of siblingSchedule?.rows || []) {
+        const name = normalizeStationName(row?.[sibCol] || row?.STATION);
+        if (name) byName.set(name, row);
+    }
+    const rows = (schedule.rows || []).map((row) => {
+        const name = normalizeStationName(row?.[col] || row?.STATION);
+        const src = byName.get(name);
+        if (!src) return row;
+        const next = { ...row };
+        for (const id of list) {
+            if (src[id] != null && String(src[id]).trim() !== '') next[id] = src[id];
+        }
+        return next;
+    });
+    const headers = [...(schedule.headers || [])];
+    for (const id of list) {
+        if (!headers.includes(id)) headers.push(id);
+    }
+    return { ...schedule, headers, rows };
+}
+
+/**
+ * Shared-corridor pill. "To Kempton Park" only when this train, on this day
+ * type, really ends somewhere other than the board's destination.
+ * Same-end corridors still say "From …". A short working that ends here does not.
+ */
+export function sharedDestTag(currentDest, otherDest, terminus) {
+    const board = commuterEndKey(currentDest);
+    const other = commuterEndKey(otherDest);
+    const raw = stripStationWord(terminus || otherDest || '');
+    const actual = commuterEndKey(raw);
+    const leaves = !!(actual && board && actual !== board);
+    const sameEnd = !!(other && board && other === board);
+    return {
+        isShared: sameEnd || leaves,
+        isDivergent: leaves,
+        actualDestName: raw,
+    };
+}
+
 /** Same expiry + days[] rules as isTrainExcluded; returns the RTDB rule or null. DEFAULT_EXCLUSIONS stays {}. */
 export function getTrainExclusionRule(trainNumber, routeId, dayIdx, now = Date.now(), opts = null) {
     if (!trainNumber) return null;
@@ -343,6 +558,41 @@ export function trainSheetOperatingLabel(dayType, routeId, trainId, now = Date.n
     return runs.map((d) => SHEET_DAY_SHORT[d]).join(', ');
 }
 
+const SHEET_DAY_FULL = {
+    Mon: 'Monday',
+    Tue: 'Tuesday',
+    Wed: 'Wednesday',
+    Thu: 'Thursday',
+    Fri: 'Friday',
+    Sat: 'Saturday',
+    Sun: 'Sunday',
+};
+
+/** Same day modal as the header chip, for the train on this sheet. */
+export function describeTrainSheetDayNote(dayType, routeId, trainId, now = Date.now()) {
+    const label = trainSheetOperatingLabel(dayType, routeId, trainId, now);
+    if (label === 'Saturdays') {
+        return { title: 'Saturday Schedule', body: 'This train runs on Saturdays.' };
+    }
+    if (label === 'Sundays') {
+        return { title: 'Sunday Schedule', body: 'This train is listed on the Sunday sheet.' };
+    }
+    if (label === 'Public Holidays') {
+        return { title: 'Public Holiday', body: 'This train runs on the public holiday sheet.' };
+    }
+    if (label === 'Special') {
+        return { title: 'Special Train', body: 'This train is a special working. It is not on the ordinary weekday pattern.' };
+    }
+    if (label === 'Weekdays') {
+        return { title: 'Weekday Schedule', body: 'This train runs on weekdays, Monday to Friday.' };
+    }
+    const names = String(label).split(',').map((part) => SHEET_DAY_FULL[part.trim()] || part.trim()).filter(Boolean);
+    const list = names.length > 1
+        ? `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`
+        : (names[0] || 'weekdays');
+    return { title: 'Weekday Schedule', body: `This train runs on ${list}.` };
+}
+
 /**
  * Generic Weekday chip (no picked date). A Mon/Fri-only ban does not remove
  * the train, because it still runs Tue–Thu. A ban with no days, or all of
@@ -366,8 +616,40 @@ export function isTrainExcluded(trainNumber, routeId, dayIdx, surface = 'in_app'
     return exclusionAppliesToSurface(rule, surface) ? (rule.type || 'banned') : false;
 }
 
+const ADVISORY_WARN_PATH = 'M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z';
+const ADVISORY_INFO_PATH = 'M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z';
+
+/** critical stays red. caution is a delay. info is a timetable note, not a cancellation. */
+export function paintAdvisoryFrame(tone = 'critical') {
+    if (typeof document === 'undefined') return;
+    const card = document.getElementById('disruption-modal-card');
+    const icon = document.getElementById('disruption-icon-svg');
+    const reply = document.getElementById('disruption-modal-reply-btn');
+    const critical = tone === 'critical';
+    const caution = tone === 'caution';
+    if (card) {
+        card.classList.remove('border-red-500', 'border-yellow-500', 'border-blue-500');
+        card.classList.add(critical ? 'border-red-500' : caution ? 'border-yellow-500' : 'border-blue-500');
+    }
+    if (icon) {
+        icon.setAttribute('class', critical
+            ? 'w-5 h-5 mr-2 text-red-500'
+            : caution
+                ? 'w-5 h-5 mr-2 text-yellow-500'
+                : 'w-5 h-5 mr-2 text-blue-500');
+        const path = icon.querySelector('path');
+        if (path) path.setAttribute('d', tone === 'info' ? ADVISORY_INFO_PATH : ADVISORY_WARN_PATH);
+    }
+    if (reply) {
+        reply.classList.remove('bg-red-600', 'hover:bg-red-700', 'bg-blue-600', 'hover:bg-blue-700');
+        if (critical) reply.classList.add('bg-red-600', 'hover:bg-red-700');
+        else reply.classList.add('bg-blue-600', 'hover:bg-blue-700');
+    }
+}
+
 export function openTrainExclusionSheet(routeId, trainNumber, dayIdx) {
     if (typeof triggerHaptic === 'function') triggerHaptic();
+    paintAdvisoryFrame('critical');
     const rule = getTrainExclusionRule(trainNumber, routeId, dayIdx);
     const titleEl = typeof document !== 'undefined' ? document.getElementById('disruption-modal-stations') : null;
     const bodyEl = typeof document !== 'undefined' ? document.getElementById('disruption-modal-body') : null;
@@ -411,6 +693,53 @@ export function openTrainExclusionSheet(routeId, trainNumber, dayIdx) {
                 if (typeof closeSmoothModal === 'function') closeSmoothModal('disruption-modal');
                 if (typeof window.openFeedbackModal === 'function') {
                     window.openFeedbackModal({ location: 'grid_exclusion_reply' });
+                }
+            }
+        };
+    }
+    if (typeof openSmoothModal === 'function') openSmoothModal('disruption-modal');
+}
+
+/** Timetable note. Same advisory sheet as no service, without the critical treatment. */
+export function openTrainMarkSheet({ train, body, badge } = {}) {
+    if (typeof triggerHaptic === 'function') triggerHaptic();
+    paintAdvisoryFrame('info');
+    const titleEl = typeof document !== 'undefined' ? document.getElementById('disruption-modal-stations') : null;
+    const bodyEl = typeof document !== 'undefined' ? document.getElementById('disruption-modal-body') : null;
+    const badgeEl = typeof document !== 'undefined' ? document.getElementById('disruption-modal-tier-badge') : null;
+    const timeEl = typeof document !== 'undefined' ? document.getElementById('disruption-modal-timestamp') : null;
+    const trainLabel = String(train || '').trim() || 'This train';
+    const note = String(body || '').trim() || 'This train has a timetable note.';
+    const badgeText = String(badge || 'NOTE').trim();
+    if (titleEl) titleEl.textContent = `Train ${trainLabel}`;
+    if (bodyEl) bodyEl.textContent = note;
+    if (badgeEl) {
+        badgeEl.className = 'w-full text-center text-[10px] font-black uppercase tracking-widest text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/20 py-2.5 rounded-lg border border-blue-200 dark:border-blue-800/50';
+        badgeEl.textContent = badgeText;
+    }
+    if (timeEl) {
+        timeEl.textContent = '';
+        timeEl.classList.add('hidden');
+    }
+    const replyBtn = typeof document !== 'undefined' ? document.getElementById('disruption-modal-reply-btn') : null;
+    if (replyBtn) {
+        replyBtn.onclick = async (e) => {
+            e.preventDefault();
+            const snippet = `Train ${trainLabel}: ${note}`;
+            const replyOptions = {
+                label: 'Replying to Advisory:',
+                snippet,
+                rawMsg: snippet,
+                alertId: `mark-${trainLabel}`,
+                alertKind: 'disruption',
+            };
+            try {
+                const { openFeedbackReplyFromOverlay } = await import('./hub.js');
+                openFeedbackReplyFromOverlay('disruption-modal', replyOptions);
+            } catch {
+                if (typeof closeSmoothModal === 'function') closeSmoothModal('disruption-modal');
+                if (typeof window.openFeedbackModal === 'function') {
+                    window.openFeedbackModal({ location: 'grid_mark_reply' });
                 }
             }
         };
@@ -739,8 +1068,8 @@ export function getRouteFare(sheetKey) {
 
     const multiplier = fareMultiplierForProfile(getUserProfile(), useOffPeakRate);
     let finalPrice = basePrice * multiplier;
-    finalPrice = Math.ceil(finalPrice * 2) / 2;
-    finalPrice = Math.floor(finalPrice);
+    // Nearest R0.50 (R14×0.6=8.4 → 8.5; R12×0.6=7.2 → 7).
+    finalPrice = Math.round(finalPrice * 2) / 2;
 
     // GUARDIAN FIX: Mutually exclusive Promo vs OffPeak flags to prevent UI collisions
     if (getUserProfile() === "Adult") {
@@ -790,12 +1119,120 @@ export function getDetailedFareForRoute(routeId) {
     return { code: zoneCode, prices: FARE_CONFIG.zones_detailed[zoneCode] };
 }
 
-export function findNextTrains() {
+/** What one direction card is allowed to show for this station and sheet state. */
+export function boardDirectionState(selectedStation, destination, sheetsReady) {
+    if (!String(selectedStation || '').trim()) return 'placeholder';
+    if (normalizeStationName(selectedStation) === normalizeStationName(destination)) return 'here';
+    if (!sheetsReady) return 'await';
+    return 'ready';
+}
+
+/** True once this route's day sheets have been sliced. An empty wipe is not a timetable. */
+export function sheetsReadyForBoard(schedules = getSchedules(), routeId = getCurrentRouteId(), dayType = getCurrentDayType()) {
+    const route = routeId ? ROUTES[routeId] : null;
+    if (!route || !routeId) return false;
+    if (!schedulesBelongToRoute(schedules, routeId)) return false;
+    if (dayType === 'sunday') return true;
+    const region = route.region || getCurrentRegion();
+    const slotA = schedules?.[scheduleCacheSlot(dayType, region, 'a')];
+    const slotB = schedules?.[scheduleCacheSlot(dayType, region, 'b')];
+    const parsed = (sheet) => !!(sheet && Array.isArray(sheet.rows));
+    return parsed(slotA) || parsed(slotB);
+}
+
+let boardCtx = { routeId: '', station: '' };
+
+export function clearBoardJourneyLists() {
+    for (const key of Object.keys(currentScheduleData)) delete currentScheduleData[key];
+}
+
+/** Drop cached journeys when the route or station changes so a later paint cannot replay them. */
+export function syncBoardContext(routeId, station) {
+    const nextRoute = routeId || '';
+    const nextStation = station || '';
+    if (boardCtx.routeId === nextRoute && boardCtx.station === nextStation) return;
+    clearBoardJourneyLists();
+    boardCtx = { routeId: nextRoute, station: nextStation };
+}
+
+export function boardJourneysAreCurrent(routeId = getCurrentRouteId(), station = selectedBoardStation()) {
+    return !!station && boardCtx.routeId === (routeId || '') && boardCtx.station === station;
+}
+
+export function boardContextKey() {
+    return `${getCurrentRouteId() || ''}|${selectedBoardStation()}`;
+}
+
+/**
+ * Hidden select is what the board computes. The visible field is what the commuter sees.
+ * If they disagree, treat it as no station so a cleared field cannot keep the previous train.
+ */
+export function selectedBoardStation() {
+    const select = stationSelectEl();
+    const value = select?.value || '';
+    if (value === 'FIND_NEAREST') return value;
+    const input = typeof document !== 'undefined' ? document.getElementById('station-search-input') : null;
+    const inputVisible = !!(input && !input.classList.contains('hidden'));
+    if (!inputVisible) return value;
+    const shown = String(input.value || '').trim();
+    const expected = value.replace(/ STATION/gi, '').trim();
+    if (value && shown && normalizeStationName(shown) === normalizeStationName(expected)) return value;
+    if (select && value) select.value = '';
+    if (shown) input.value = '';
+    delete input.dataset.resolvedValue;
+    return '';
+}
+
+function paintSelectStation() {
+    const key = liveBoardStaticKey('placeholder');
+    const a = pretoriaTimeEl();
+    const b = pienaarspoortTimeEl();
+    if (a?.getAttribute('data-nt-board-key') === key && b?.getAttribute('data-nt-board-key') === key
+        && String(a.textContent || '').includes('Select station above')
+        && String(b.textContent || '').includes('Select station above')) return;
+    if (typeof window !== 'undefined' && window.Renderer) window.Renderer.renderPlaceholder(a, b);
+}
+
+function paintAwaitingCard(el) {
+    if (!el || typeof window === 'undefined' || !window.Renderer?.renderSkeletonLoader) return;
+    const key = liveBoardStaticKey('await');
+    if (el.getAttribute('data-nt-board-key') === key) return;
+    window.Renderer.renderSkeletonLoader(el);
+    stampLiveBoardCard(el, key);
+}
+
+function paintHeldDirection(el, station, destination) {
+    const state = boardDirectionState(station, destination, false);
+    if (state === 'here') {
+        if (typeof window !== 'undefined' && window.Renderer) window.Renderer.renderAtDestination(el);
+        if (destination) delete currentScheduleData[destination];
+        return;
+    }
+    paintAwaitingCard(el);
+}
+
+/** Route just changed and its sheets are not sliced yet. Do not call that "no trains". */
+export function holdBoardForSheets() {
+    const route = ROUTES[getCurrentRouteId()];
+    const station = selectedBoardStation();
+    syncBoardContext(getCurrentRouteId(), station === 'FIND_NEAREST' ? '' : station);
+    clearBoardJourneyLists();
+    if (!route) return;
+    if (!station) {
+        paintSelectStation();
+        return;
+    }
+    paintHeldDirection(pretoriaTimeEl(), station, route.destA);
+    paintHeldDirection(pienaarspoortTimeEl(), station, route.destB);
+}
+
+export function findNextTrains(opts) {
+    const includeShared = !opts || opts.includeShared !== false;
+    const keepCards = !!(opts && opts.keepCards);
     const quietPaint = typeof window !== 'undefined' && !!window.__ntQuietBoardPaint;
     if (!quietPaint && typeof paintHeaderDayLabel === 'function') paintHeaderDayLabel();
     if(!getCurrentRouteId()) return;
 
-    const selectedStation = (stationSelectEl() && stationSelectEl().value);
     const currentRoute = ROUTES[getCurrentRouteId()];
     
     const isAtStation = (s1, s2) => normalizeStationName(s1) === normalizeStationName(s2);
@@ -824,25 +1261,25 @@ export function findNextTrains() {
         if (footer) footer.classList.remove('hidden');
     }
 
-    if (selectedStation === "FIND_NEAREST") {
+    const rawStation = (stationSelectEl() && stationSelectEl().value) || '';
+    if (rawStation === "FIND_NEAREST") {
         trackAnalyticsEvent('click_auto_locate', { source: 'find_nearest', route_id: getCurrentRouteId() });
         findNearestStation(false);
         return;
     }
+    const selectedStation = selectedBoardStation();
+    syncBoardContext(getCurrentRouteId(), selectedStation);
     
     const uiDestA = typeof window.Renderer !== 'undefined' ? window.Renderer._applyUIIntercepts(currentRoute.destA).toUpperCase() : currentRoute.destA.replace(' STATION', '').toUpperCase();
     const uiDestB = typeof window.Renderer !== 'undefined' ? window.Renderer._applyUIIntercepts(currentRoute.destB).toUpperCase() : currentRoute.destB.replace(' STATION', '').toUpperCase();
 
-    if (!quietPaint) {
-        if (pretoriaTimeEl()) pretoriaTimeEl().innerHTML = "";
-        if (pienaarspoortTimeEl()) pienaarspoortTimeEl().innerHTML = "";
-    }
     setHeaderDest(pretoriaHeaderEl(), uiDestA);
     setHeaderDest(pienaarspoortHeaderEl(), uiDestB);
     import('./ride-pings.js').then((m) => m.paintLiveDirectionHeaders?.()).catch(() => {});
     
     if (!selectedStation) {
-        if (typeof window.Renderer !== 'undefined') window.Renderer.renderPlaceholder(pretoriaTimeEl(), pienaarspoortTimeEl());
+        clearBoardJourneyLists();
+        paintSelectStation();
         const fallbackSheetKey = routeSheetKeyForDay(currentRoute, getCurrentDayType(), 'a');
         if (typeof window.updateFareDisplay === 'function') window.updateFareDisplay(fallbackSheetKey);
         return;
@@ -884,6 +1321,22 @@ export function findNextTrains() {
             }
         }
         return;
+    }
+
+    // Sheets wiped on a corridor change are not an empty timetable.
+    if (!sheetsReadyForBoard()) {
+        clearBoardJourneyLists();
+        paintHeldDirection(pretoriaTimeEl(), selectedStation, currentRoute.destA);
+        paintHeldDirection(pienaarspoortTimeEl(), selectedStation, currentRoute.destB);
+        return;
+    }
+
+    if (!quietPaint && !keepCards) {
+        [pretoriaTimeEl(), pienaarspoortTimeEl()].forEach((el) => {
+            if (!el) return;
+            el.innerHTML = "";
+            el.removeAttribute?.('data-nt-board-key');
+        });
     }
 
     // Routes with empty Saturday sheets (e.g. Hercules–Koedoespoort, Eastern Cape).
@@ -942,10 +1395,12 @@ export function findNextTrains() {
     }
 
     sharedRoutes = sharedRoutes.filter(rId => getSharedStationCount(getCurrentRouteId(), rId) > 1);
+    const routesForMerge = includeShared ? sharedRoutes : [];
     let primarySheetKey = routeSheetKeyForDay(currentRoute, boardDayType, 'a');
 
     // --- DESTINATION A ---
     if (isAtStation(selectedStation, currentRoute.destA)) {
+        delete currentScheduleData[currentRoute.destA];
         if(typeof window.Renderer !== 'undefined') window.Renderer.renderAtDestination(pretoriaTimeEl());
     } else {
         const schedule = getSchedules()[scheduleCacheSlot(boardDayType, boardRegion, 'a')];
@@ -956,7 +1411,7 @@ export function findNextTrains() {
         const seenTrainsA = new Set(mergedJourneys.map(j => j.train || j.train1.train));
         const targetStationsA = getTargetStations(schedule, selectedStation);
 
-        sharedRoutes.forEach(rId => {
+        routesForMerge.forEach(rId => {
             const otherRoute = ROUTES[rId];
             if (normalizeStationName(otherRoute.destA) === normalizeStationName(currentRoute.destA)) {
                 const key = routeSheetKeyForDay(otherRoute, boardDayType, 'a');
@@ -1011,6 +1466,7 @@ export function findNextTrains() {
 
     // --- DESTINATION B ---
     if (isAtStation(selectedStation, currentRoute.destB)) {
+        delete currentScheduleData[currentRoute.destB];
         if(typeof window.Renderer !== 'undefined') window.Renderer.renderAtDestination(pienaarspoortTimeEl());
     } else {
         const schedule = getSchedules()[scheduleCacheSlot(boardDayType, boardRegion, 'b')];
@@ -1021,7 +1477,7 @@ export function findNextTrains() {
         const seenTrainsB = new Set(mergedJourneys.map(j => j.train || j.train1.train));
         const targetStationsB = getTargetStations(schedule, selectedStation);
 
-        sharedRoutes.forEach(rId => {
+        routesForMerge.forEach(rId => {
             const otherRoute = ROUTES[rId];
             
                  const key = routeSheetKeyForDay(otherRoute, boardDayType, 'b');
@@ -1034,17 +1490,27 @@ export function findNextTrains() {
                      const tNum = j.train || j.train1.train;
                      return hasForwardOverlap(tNum, otherSchedule, selectedStation, targetStationsB);
                  });
- 
-                 const isDivergent = normalizeStationName(otherRoute.destB) !== normalizeStationName(currentRoute.destB);
-                 
-                 const tagged = uniqueOther.map(j => ({
-                     ...j, 
-                     sourceRoute: otherRoute.name, 
-                     isShared: true,
-                     isDivergent: isDivergent, 
-                     actualDestName: otherRoute.destB.replace(' STATION', ''),
-                     sheetKey: key
-                 }));
+
+                 const daySheets = [schedule, otherSchedule].filter((sheet) => sheet?.rows?.length);
+                 const tagged = uniqueOther.map(j => {
+                     const tNum = j.train || j.train1?.train;
+                     const terminus = realTrainTerminus(tNum, daySheets);
+                     const tag = sharedDestTag(currentRoute.destB, otherRoute.destB, terminus || otherRoute.destB);
+                     const native = mergedJourneys.find((mj) => (mj.train || mj.train1?.train) === tNum);
+                     const termNorm = normalizeStationName(terminus);
+                     const nativeEnd = normalizeStationName(native?.actualDestination);
+                     const otherEnd = normalizeStationName(j.actualDestination);
+                     const keepNative = !!(native && termNorm && nativeEnd === termNorm && otherEnd !== termNorm);
+                     const chosen = keepNative ? native : j;
+                     const chosenEnd = normalizeStationName(chosen.actualDestination);
+                     return {
+                         ...chosen,
+                         actualDestination: termNorm && chosenEnd !== termNorm ? terminus : chosen.actualDestination,
+                         sourceRoute: otherRoute.name,
+                         sheetKey: keepNative ? (chosen.sheetKey || currentSheetKey) : key,
+                         ...tag,
+                     };
+                 });
                  
                  tagged.forEach(sharedJ => {
                      const tNum = sharedJ.train || sharedJ.train1.train;
@@ -1066,6 +1532,120 @@ export function findNextTrains() {
         if(typeof window.processAndRenderJourney === 'function') window.processAndRenderJourney(mergedJourneys, pienaarspoortTimeEl(), pienaarspoortHeaderEl(), currentRoute.destB);
     }
     import('./ride-pings.js').then((m) => m.paintLiveDirectionHeaders?.()).catch(() => {});
+    return { pendingShared: !includeShared && sharedRoutes.length > 0 };
+}
+
+/** Shared corridors that also serve this station (same rules as the live board merge). */
+export function listSharedRoutesForStation(routeId, selectedStation) {
+    const currentRoute = ROUTES[routeId];
+    if (!currentRoute || !selectedStation) return [];
+    const region = currentRoute.region || getCurrentRegion();
+    const shared = [];
+    Object.values(ROUTES).forEach((r) => {
+        if (r.region === region && r.id !== routeId && r.isActive && r.corridorId === currentRoute.corridorId) {
+            shared.push(r.id);
+        }
+    });
+    const stationData = getFullDatabase() && getGlobalStationIndex()[normalizeStationName(selectedStation)];
+    stationData?.routes?.forEach((rId) => {
+        if (rId !== routeId && ROUTES[rId]?.isActive && !shared.includes(rId)) shared.push(rId);
+    });
+    return shared.filter((rId) => getSharedStationCount(routeId, rId) > 1);
+}
+
+/**
+ * Full-day journeys toward a terminus, including shared-corridor trains
+ * (From De Wildt / From Saulsville, etc.). Used by See upcoming trains and
+ * Check Tomorrow Schedule so both lists stay in sync.
+ */
+export function buildMergedJourneysForDay({
+    route,
+    selectedStation,
+    destination,
+    dayType,
+    dayIdx,
+}) {
+    if (!route || !selectedStation || !destination) return [];
+    const towardA = normalizeStationName(destination) === normalizeStationName(route.destA);
+    const ab = towardA ? 'a' : 'b';
+    const region = route.region || getCurrentRegion();
+    const sheetKey = routeSheetKeyForDay(route, dayType, ab)
+        || (dayType === 'weekday' || dayType === 'sunday'
+            ? `weekday_to_${ab}`
+            : scheduleCacheSlot(dayType, region, ab));
+    const schedule = getSchedules()[scheduleCacheSlot(dayType, region, ab)]
+        || parseJSONSchedule(getFullDatabase()?.[sheetKey], getFullDatabase()?.[`${sheetKey}_meta`]);
+    if (!schedule) return [];
+
+    const finder = towardA ? findNextJourneyToDestA : findNextJourneyToDestB;
+    const { allJourneys: currentJourneys } = finder(selectedStation, '00:00:00', schedule, route, dayIdx);
+    let mergedJourneys = currentJourneys.map((j) => ({ ...j, sourceRoute: route.name, sheetKey }));
+    const targetStations = getTargetStations(schedule, selectedStation);
+    const sharedIds = listSharedRoutesForStation(route.id, selectedStation);
+
+    sharedIds.forEach((rId) => {
+        const otherRoute = ROUTES[rId];
+        if (!otherRoute) return;
+        if (towardA && normalizeStationName(otherRoute.destA) !== normalizeStationName(route.destA)) return;
+
+        const key = routeSheetKeyForDay(otherRoute, dayType, towardA ? 'a' : 'b');
+        const otherRows = getFullDatabase()?.[key];
+        const otherMeta = getFullDatabase()?.[`${key}_meta`];
+        const otherSchedule = parseJSONSchedule(otherRows, otherMeta);
+        if (!otherSchedule) return;
+
+        const { allJourneys: otherJourneys } = finder(selectedStation, '00:00:00', otherSchedule, otherRoute, dayIdx);
+        const uniqueOther = otherJourneys.filter((j) => {
+            const tNum = j.train || j.train1?.train;
+            return hasForwardOverlap(tNum, otherSchedule, selectedStation, targetStations);
+        });
+
+        if (towardA) {
+            uniqueOther.forEach((j) => {
+                const tNum = j.train || j.train1?.train;
+                const sharedJ = {
+                    ...j,
+                    sourceRoute: otherRoute.name,
+                    isShared: true,
+                    isDivergent: false,
+                    sheetKey: key,
+                };
+                mergedJourneys = mergedJourneys.filter((mj) => (mj.train || mj.train1?.train) !== tNum);
+                mergedJourneys.push(sharedJ);
+            });
+            return;
+        }
+
+        const daySheets = [schedule, otherSchedule].filter((sheet) => sheet?.rows?.length);
+        uniqueOther.forEach((j) => {
+            const tNum = j.train || j.train1?.train;
+            const terminus = realTrainTerminus(tNum, daySheets);
+            const tag = sharedDestTag(route.destB, otherRoute.destB, terminus || otherRoute.destB);
+            const native = mergedJourneys.find((mj) => (mj.train || mj.train1?.train) === tNum);
+            const termNorm = normalizeStationName(terminus);
+            const nativeEnd = normalizeStationName(native?.actualDestination);
+            const otherEnd = normalizeStationName(j.actualDestination);
+            const keepNative = !!(native && termNorm && nativeEnd === termNorm && otherEnd !== termNorm);
+            const chosen = keepNative ? native : j;
+            const chosenEnd = normalizeStationName(chosen.actualDestination);
+            const sharedJ = {
+                ...chosen,
+                actualDestination: termNorm && chosenEnd !== termNorm ? terminus : chosen.actualDestination,
+                sourceRoute: otherRoute.name,
+                sheetKey: keepNative ? (chosen.sheetKey || sheetKey) : key,
+                ...tag,
+            };
+            mergedJourneys = mergedJourneys.filter((mj) => (mj.train || mj.train1?.train) !== tNum);
+            mergedJourneys.push(sharedJ);
+        });
+    });
+
+    mergedJourneys.sort((a, b) => {
+        const timeA = timeToSeconds(a.departureTime || a.train1?.departureTime);
+        const timeB = timeToSeconds(b.departureTime || b.train1?.departureTime);
+        return timeA - timeB;
+    });
+    return mergedJourneys.filter(journeyHasRealDeparture);
 }
 
 export function findNextJourneyToDestA(fromStation, timeNow, schedule, routeConfig, targetDayIdx = getCurrentDayIndex()) {
@@ -1560,6 +2140,7 @@ export function attachLiveBoardGlobals() {
     window.isTrainExcluded = isTrainExcluded;
     window.getTrainExclusionRule = getTrainExclusionRule;
     window.openTrainExclusionSheet = openTrainExclusionSheet;
+    window.openTrainMarkSheet = openTrainMarkSheet;
     if (!window.__ntExclGridBound) {
         window.__ntExclGridBound = true;
         const openFromGrid = (el) => {

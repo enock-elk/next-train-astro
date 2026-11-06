@@ -21,6 +21,8 @@ import {
     SUPPORT_EMAIL,
 } from './recovery.js';
 import { sanitizeAttachmentDisplayUrl } from './attachments.js';
+import { alertVideoPosterUrl, preferSavedPosterSrc } from './alerts-feed.js';
+import { pinchGestureMove, pinchGestureStart, zoomAboutPoint } from './pinch-math.js';
 
 
 /** Vibrations are opt-in. Missing key (new users) means off. */
@@ -36,9 +38,23 @@ export function hapticsAreEnabled() {
 export function triggerHaptic() {
     try {
         if (hapticsAreEnabled() && navigator.vibrate) {
-            navigator.vibrate(50);
+            setTimeout(() => { try { navigator.vibrate(50); } catch (e) {} }, 0);
         }
     } catch(e) {}
+}
+
+/** Let the next frame paint before heavy DOM work (INP). */
+export function yieldToPaint() {
+    const sched = typeof globalThis !== 'undefined' ? globalThis.scheduler : undefined;
+    if (sched && typeof sched.yield === 'function') return sched.yield();
+    if (typeof requestAnimationFrame === 'function') {
+        return new Promise((resolve) => {
+            requestAnimationFrame(() => {
+                requestAnimationFrame(() => resolve());
+            });
+        });
+    }
+    return Promise.resolve();
 }
 
 /**
@@ -132,6 +148,8 @@ const MODAL_HASH = {
     'planner-train-sheet-modal': '#train-sheet',
     'planner-fare-breakdown-sheet': '#trip-fare',
     'cache-clear-modal': '#cacheclear',
+    'phone-reset-modal': '#phone-reset',
+    'phone-reset-network-modal': '#phone-reset-network',
     'account-modal': '#account',
     'login-modal': '#login',
     'dev-modal': '#dev',
@@ -143,12 +161,12 @@ const MODAL_HASH = {
     'trip-map-modal': '#trip-map',
     'community-presence-info-modal': '#community-presence',
     'region-confirm-modal': '#regionconfirm',
-    'network-slow-confirm-modal': '#networkslow',
     'blackbox-modal': '#blackbox',
     'bb-pin-modal': '#bb-pin',
     'network-struggle-modal': '#network-struggle',
     'redirect-modal': '#redirect',
     'exit-modal': '#exit-confirm',
+    'schedule-day-modal': '#schedule-day',
 };
 
 function hashForModal(modalId) {
@@ -307,6 +325,19 @@ function cancelPendingGridOpenFromUi() {
     } catch { /* ignore */ }
 }
 
+function markPassengerSelection() {
+    let current = '';
+    try { current = safeStorage.getItem('userProfile') || ''; } catch { /* ignore */ }
+    if (!current) {
+        current = (document.getElementById('account-passenger-type-display')?.textContent || '').trim();
+    }
+    document.querySelectorAll('#profile-modal [data-passenger]').forEach((btn) => {
+        const on = btn.getAttribute('data-passenger') === current;
+        btn.classList.toggle('is-selected', on);
+        btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+    });
+}
+
 function markFullGridClosedFromUi() {
     try {
         if (typeof window !== 'undefined' && typeof window.markFullGridClosed === 'function') {
@@ -326,6 +357,7 @@ export function openSmoothModal(modalId, customOrigin = null, opts = null) {
     }
 
     const modal = document.getElementById(modalId);
+    if (modalId === 'profile-modal') markPassengerSelection();
     const wasHidden = !modal || modal.classList.contains('hidden');
     const skipHash = !!(opts && opts.skipHash);
 
@@ -450,6 +482,11 @@ export function bindHistoryBackNavigation() {
         if (adminLightbox && !adminLightbox.classList.contains('hidden')) {
             if (window.Admin?.closeLightbox) window.Admin.closeLightbox(true);
             else adminLightbox.classList.add('hidden');
+            return;
+        }
+
+        // The brief sits on Dev Mode. Back closes the alert sheet, then the brief.
+        if (typeof window.Admin?.onBriefPopState === 'function' && window.Admin.onBriefPopState()) {
             return;
         }
 
@@ -769,6 +806,20 @@ const TOAST_COOLDOWN_MS = {
     warning: 20_000,
     error: 25_000,
 };
+/** Same hold as "Found: Rissik Station (0.5km)". */
+const TOAST_MATCH_MS = 2500;
+/** A longer sentence, or a status that has to stay up, may run a little past that. */
+const TOAST_LONG_MS = 4000;
+
+function toastHoldMs(message, duration, options = {}) {
+    if (options.persist) return TOAST_LONG_MS;
+    const text = String(message || '').replace(/<[^>]*>?/gm, ' ').replace(/\s+/g, ' ').trim();
+    const extra = Math.max(0, text.length - 64) * 18;
+    const fromLength = Math.min(TOAST_LONG_MS, TOAST_MATCH_MS + extra);
+    const asked = Number(duration);
+    if (!Number.isFinite(asked) || asked <= TOAST_MATCH_MS) return fromLength;
+    return Math.min(TOAST_LONG_MS, Math.max(fromLength, asked));
+}
 
 function toastMessageKey(message, type) {
     const text = String(message || '').replace(/<[^>]*>?/gm, '').replace(/\s+/g, ' ').trim().slice(0, 180);
@@ -797,17 +848,26 @@ function toastAllowsShow(message, type, options = {}) {
 }
 
 export function showToast(message, type = 'info', duration = 2500, actionHTML = '', options = {}) { 
+    const plainToast = String(message || '').replace(/<[^>]*>?/gm, ' ').replace(/\s+/g, ' ').trim();
+    if (type === 'error' && plainToast) console.error('Toast:', plainToast);
     if (typeof document === 'undefined') return;
     const toastEl = document.getElementById('toast');
-    
+    const errorToast = type === 'error';
+    const center = options.center === true;
+    const fitLine = options.fitLine === true;
+    const persist = !!options.persist;
+    const dismissible = errorToast || !!options.dismissible;
+    const holdMs = toastHoldMs(message, duration, { persist });
+
     // Debounce spamming. Ignore if the exact same message is already visible.
     if (toastEl && toastEl.classList.contains('show') && toastEl.innerText.includes(message.replace(/<[^>]*>?/gm, '').trim())) {
         return;
     }
     if (!toastAllowsShow(message, type, options)) return;
 
-    if (toastTimeout) clearTimeout(toastTimeout); 
-    const safeDuration = Math.min(duration, options.dismissible ? 12000 : 5000);
+    if (toastTimeout) clearTimeout(toastTimeout);
+    toastTimeout = null;
+    const safeDuration = holdMs;
 
     // Inject Toast CSS dynamically if not present
     if (!document.getElementById('toast-guardian-style')) {
@@ -860,20 +920,58 @@ export function showToast(message, type = 'info', duration = 2500, actionHTML = 
         iconHTML = `<svg class="w-4 h-4 text-yellow-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>`;
     }
 
-    toastEl.className = `flex items-center justify-center gap-2 px-3 py-2 rounded-2xl shadow-2xl backdrop-blur-md border ${bgClass} ${borderClass} ${textClass} w-[min(22rem,calc(100vw-1.5rem))] max-w-[calc(100vw-1.5rem)]`; 
+    // Prefer one row: grow with the copy, keep icons tight, use almost the full phone width.
+    const preferOneLine = fitLine || (!actionHTML && plainToast.length > 0 && plainToast.length <= 64);
+    const widthClass = preferOneLine
+        ? 'w-max max-w-[calc(100vw-0.75rem)]'
+        : 'w-[min(24rem,calc(100vw-0.75rem))] max-w-[calc(100vw-0.75rem)]';
+    toastEl.className = `flex items-center justify-center gap-1.5 pl-2 pr-1.5 py-1.5 rounded-2xl shadow-2xl backdrop-blur-md border ${bgClass} ${borderClass} ${textClass} ${widthClass}`;
+    // #toast sets width and max-width as an id rule. Inline wins so this line can stay one line.
+    if (preferOneLine) {
+        toastEl.style.width = 'max-content';
+        toastEl.style.maxWidth = 'calc(100vw - 0.75rem)';
+        toastEl.style.textAlign = 'center';
+    } else {
+        toastEl.style.width = '';
+        toastEl.style.maxWidth = 'calc(100vw - 0.75rem)';
+        toastEl.style.textAlign = '';
+    }
 
-    const dismissHTML = options.dismissible
-        ? `<button type="button" class="nt-toast-dismiss shrink-0 p-1 rounded-full hover:bg-white/10 focus:outline-none" aria-label="Dismiss"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg></button>`
+    const dismissHTML = dismissible
+        ? `<button type="button" class="nt-toast-dismiss shrink-0 -mr-0.5 p-0.5 rounded-full hover:bg-white/10 focus:outline-none" aria-label="Dismiss"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg></button>`
+        : '';
+
+    const oneLineCopy = preferOneLine
+        ? 'text-[11px] sm:text-xs font-semibold leading-snug tracking-normal text-center whitespace-nowrap'
+        : `text-[11px] sm:text-xs font-semibold leading-snug tracking-normal whitespace-normal break-words ${errorToast ? 'text-left max-h-40 overflow-y-auto' : 'text-center line-clamp-2'}`;
+    const rowClass = preferOneLine
+        ? 'flex items-center justify-center gap-1 min-w-0 max-w-full text-center'
+        : 'flex items-center justify-center gap-1 min-w-0 flex-1 text-center';
+    // Icon sits flush left; shrink-0 keeps the glyph from eating text width.
+    const leadingIcon = iconHTML
+        ? iconHTML.replace('flex-shrink-0', 'flex-shrink-0 -ml-0.5')
         : '';
 
     toastEl.innerHTML = `
-        <div class="flex items-center justify-center gap-1.5 min-w-0 flex-1 text-center">
-            ${iconHTML}
-            <span class="text-xs font-semibold tracking-wide leading-snug text-center whitespace-normal break-words line-clamp-2">${message}</span>
+        <div class="${rowClass}">
+            ${leadingIcon}
+            <span class="${oneLineCopy}">${message}</span>
         </div>
-        ${actionHTML ? `<div class="pl-2 border-l border-white/20 shrink-0">${actionHTML}</div>` : ''}
+        ${actionHTML ? `<div class="pl-1.5 border-l border-white/20 shrink-0">${actionHTML}</div>` : ''}
         ${dismissHTML}
     `;
+    // If nowrap overflows the phone, allow a second line instead of clipping.
+    if (preferOneLine && !fitLine) {
+        requestAnimationFrame(() => {
+            const span = toastEl.querySelector('span');
+            if (!span || !toastEl.classList.contains('show')) return;
+            if (span.scrollWidth <= span.clientWidth + 1) return;
+            span.classList.remove('whitespace-nowrap');
+            span.classList.add('whitespace-normal', 'break-words', 'line-clamp-2', 'text-left');
+            toastEl.classList.remove('w-max');
+            toastEl.style.width = '';
+        });
+    }
 
     toastEl.querySelector('.nt-toast-dismiss')?.addEventListener('click', (e) => {
         e.preventDefault();
@@ -886,7 +984,9 @@ export function showToast(message, type = 'info', duration = 2500, actionHTML = 
     toastEl.ontouchmove = (e) => e.stopPropagation();
     
     toastEl.classList.add('show');
-    toastTimeout = setTimeout(() => { toastEl.classList.remove('show'); }, safeDuration); 
+    if (safeDuration > 0) {
+        toastTimeout = setTimeout(() => { toastEl.classList.remove('show'); }, safeDuration);
+    }
 }
 
 /** Hide the toast only when it is still showing this message, so a later toast stays. */
@@ -971,11 +1071,26 @@ export function hideCheckToast() {
 let lbScale = 1;
 let lbX = 0;
 let lbY = 0;
+let lbDismissY = 0;
 let lbPanning = false;
 let lbStartX = 0;
 let lbStartY = 0;
-let lbPinchDist = null;
-let lbPinchScale = 1;
+let lbRawX = 0;
+let lbRawY = 0;
+let lbPinch = null;
+let lbMoved = false;
+let lbTracking = false;
+let lbLastTap = 0;
+let lbTapX = 0;
+let lbTapY = 0;
+let lbSlides = [];
+let lbSlide = 0;
+let lbDragX = 0;
+let lbAxis = '';
+let lbStepping = false;
+const LB_ZOOM = 2.5;
+const LB_DISMISS_PX = 96;
+const LB_STEP_PX = 56;
 
 function lightboxEls() {
     return {
@@ -989,15 +1104,81 @@ function resetAlertLightboxTransform() {
     lbScale = 1;
     lbX = 0;
     lbY = 0;
+    lbDismissY = 0;
     lbPanning = false;
-    lbPinchDist = null;
-    const { img } = lightboxEls();
-    if (img) img.style.transform = 'translate(0px, 0px) scale(1)';
+    lbPinch = null;
+    lbMoved = false;
+    lbTracking = false;
+    lbLastTap = 0;
+    const { img, overlay } = lightboxEls();
+    if (img) {
+        img.style.transition = '';
+        img.style.transform = 'translate(0px, 0px) scale(1)';
+    }
+    if (overlay) {
+        overlay.style.transition = '';
+        overlay.style.backgroundColor = '';
+    }
 }
 
 function applyAlertLightboxTransform() {
+    const { img, overlay, stage } = lightboxEls();
+    if (img) img.style.transform = `translate(${lbX}px, ${lbY + lbDismissY}px) scale(${lbScale})`;
+    stage?.classList.toggle('is-zoomed', lbScale > 1.01);
+    if (!overlay) return;
+    if (lbScale <= 1 && lbDismissY > 0) {
+        const fade = Math.max(0.25, 1 - (lbDismissY / 320));
+        overlay.style.backgroundColor = `rgba(0,0,0,${fade.toFixed(3)})`;
+    } else {
+        overlay.style.backgroundColor = '';
+    }
+}
+
+function lightboxState() {
+    return { scale: lbScale, x: lbX, y: lbY };
+}
+
+function applyLightboxState(next, animate) {
+    lbScale = next.scale;
+    lbX = next.x;
+    lbY = next.y;
+    lbDismissY = 0;
     const { img } = lightboxEls();
-    if (img) img.style.transform = `translate(${lbX}px, ${lbY}px) scale(${lbScale})`;
+    if (img) img.style.transition = animate ? 'transform 160ms ease' : 'none';
+    applyAlertLightboxTransform();
+    if (animate && img) window.setTimeout(() => { img.style.transition = ''; }, 180);
+}
+
+/** Double tap zooms toward the tap. A second double tap returns to fit. */
+function zoomLightboxAt(clientX, clientY, nextScale = LB_ZOOM) {
+    const { img, stage } = lightboxEls();
+    if (!img) return;
+    if (lbScale > 1.05 && nextScale === LB_ZOOM) {
+        applyLightboxState({ scale: 1, x: 0, y: 0 }, true);
+        return;
+    }
+    const rect = img.getBoundingClientRect();
+    applyLightboxState(zoomAboutPoint(
+        lightboxState(),
+        clientX,
+        clientY,
+        rect,
+        nextScale,
+        stage?.clientWidth || img.clientWidth,
+        stage?.clientHeight || img.clientHeight,
+    ), true);
+}
+
+function snapLightboxDismiss() {
+    const { img, overlay } = lightboxEls();
+    if (img) img.style.transition = 'transform 180ms ease';
+    if (overlay) overlay.style.transition = 'background-color 180ms ease';
+    lbDismissY = 0;
+    applyAlertLightboxTransform();
+    window.setTimeout(() => {
+        if (img) img.style.transition = '';
+        if (overlay) overlay.style.transition = '';
+    }, 220);
 }
 
 function clampAlertLightboxPan() {
@@ -1029,18 +1210,69 @@ function lightboxPosterHost(src, host) {
     return null;
 }
 
-/** Reuse the on-screen poster URL so full view does not re-encode or refetch. */
+function ensureLightboxStatus() {
+    let el = document.getElementById('alert-image-lightbox-status');
+    if (el) return el;
+    const stage = document.getElementById('alert-image-lightbox-stage');
+    if (!stage) return null;
+    el = document.createElement('div');
+    el.id = 'alert-image-lightbox-status';
+    el.className = 'absolute inset-0 z-[5] hidden flex-col items-center justify-center gap-3 px-6 text-center text-white pointer-events-none';
+    el.innerHTML = `<svg class="h-8 w-8 animate-spin text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" aria-hidden="true"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg><p data-lb-status-text class="text-sm font-semibold">Loading picture</p>`;
+    stage.appendChild(el);
+    return el;
+}
+
+function showLightboxStatus(message, spinning) {
+    const el = ensureLightboxStatus();
+    if (!el) return;
+    const text = el.querySelector('[data-lb-status-text]');
+    if (text) text.textContent = message;
+    el.querySelector('svg')?.classList.toggle('hidden', !spinning);
+    el.classList.remove('hidden');
+    el.classList.add('flex');
+}
+
+function hideLightboxStatus() {
+    const el = document.getElementById('alert-image-lightbox-status');
+    if (!el) return;
+    el.classList.add('hidden');
+    el.classList.remove('flex');
+}
+
+/** Paint the full-screen picture and say so while it is still arriving. */
+function paintLightboxImage(displaySrc) {
+    const { img } = lightboxEls();
+    if (!img || !displaySrc) return;
+    const finish = () => {
+        if (img.naturalWidth > 0) {
+            hideLightboxStatus();
+            return;
+        }
+        const decoded = typeof img.decode === 'function' ? img.decode() : Promise.resolve();
+        Promise.resolve(decoded).then(() => {
+            if (img.naturalWidth > 0) hideLightboxStatus();
+            else showLightboxStatus('Could not load this picture', false);
+        }, () => showLightboxStatus('Could not load this picture', false));
+    };
+    img.onload = finish;
+    img.onerror = () => showLightboxStatus('Could not load this picture', false);
+    showLightboxStatus('Loading picture', true);
+    if (img.getAttribute('src') !== displaySrc) img.src = displaySrc;
+    else if (img.complete) finish();
+}
+
+/** Reuse the saved poster so full view does not fetch the picture again. */
 function resolveLightboxDisplaySrc(src, host) {
     try {
         const wrap = lightboxPosterHost(src, host);
         const poster = wrap?.querySelector?.('img') || null;
-        if (/^https:\/\//i.test(src)) return src;
-        if (poster && poster.naturalWidth > 0) {
-            const live = poster.currentSrc || poster.getAttribute('src') || poster.src || '';
-            if (live) return live;
-        }
         const objectUrl = wrap?.getAttribute('data-alert-object-url') || '';
-        if (objectUrl) return objectUrl;
+        const live = poster && poster.naturalWidth > 0
+            ? (poster.currentSrc || poster.getAttribute('src') || poster.src || '')
+            : '';
+        const saved = preferSavedPosterSrc(objectUrl, live, '');
+        if (saved) return saved;
         const imgs = document.querySelectorAll('img');
         for (const node of imgs) {
             if (node.id === 'alert-image-lightbox-img') continue;
@@ -1051,6 +1283,134 @@ function resolveLightboxDisplaySrc(src, host) {
         }
     } catch { /* ignore */ }
     return src;
+}
+
+function videoPreviewHost(host) {
+    if (!host || host.nodeType !== 1) return null;
+    if (host.matches?.('[data-alert-video]')) return host;
+    return host.closest?.('[data-alert-video]') || null;
+}
+
+/** The still on a video cell. Full view shows this picture and does not play the video. */
+function videoPreviewStill(host) {
+    const el = videoPreviewHost(host);
+    if (!el) return '';
+    const poster = el.querySelector('[data-alert-video-poster]');
+    const page = el.querySelector('[data-alert-video-play]')?.getAttribute('data-alert-video-src')
+        || poster?.getAttribute('data-alert-video-page')
+        || '';
+    const live = poster ? (poster.currentSrc || poster.getAttribute('src') || '') : '';
+    const still = alertVideoPosterUrl(page) || live;
+    const safe = sanitizeAttachmentDisplayUrl(still);
+    if (safe) return safe;
+    return String(still).startsWith('blob:') ? String(still) : '';
+}
+
+function lightboxGalleryBlocked() {
+    return !!lightboxEls().overlay?.dataset?.ntFeedbackGallery;
+}
+
+/**
+ * Pictures already on the open Alerts channel, in the order they appear:
+ * poster buttons, then each video's preview still. One step, no wrap.
+ */
+function collectChannelSlides(host) {
+    const channel = document.getElementById('alerts-channel');
+    const node = host?.nodeType === 1 ? host : null;
+    if (!channel || !node || !channel.contains(node) || lightboxGalleryBlocked()) return [];
+    const slides = [];
+    channel.querySelectorAll('[data-alert-lightbox], [data-alert-video]').forEach((el) => {
+        if (el.matches('[data-alert-lightbox]')) {
+            const src = el.getAttribute('data-alert-lightbox') || '';
+            if (src) slides.push({ host: el, kind: 'image', src });
+            return;
+        }
+        const still = videoPreviewStill(el);
+        if (still) slides.push({ host: el, kind: 'video', src: still });
+    });
+    return slides;
+}
+
+function slideDisplaySrc(slide) {
+    if (!slide) return '';
+    if (slide.kind === 'video') return videoPreviewStill(slide.host) || slide.src || '';
+    return resolveLightboxDisplaySrc(slide.src, slide.host);
+}
+
+function rememberLightboxSlides(host) {
+    lbSlides = collectChannelSlides(host);
+    const node = host?.nodeType === 1 ? host : null;
+    const index = node
+        ? lbSlides.findIndex((slide) => slide.host === node || slide.host.contains(node))
+        : -1;
+    lbSlide = index >= 0 ? index : 0;
+    lbAxis = '';
+    lbDragX = 0;
+}
+
+function showLightboxSlide(index) {
+    if (index < 0 || index >= lbSlides.length) return;
+    const slide = lbSlides[index];
+    lbSlide = index;
+    lbAxis = '';
+    lbDragX = 0;
+    lbStepping = false;
+    resetAlertLightboxTransform();
+    paintLightboxImage(slideDisplaySrc(slide));
+    announceLightboxNotice(slide.host);
+}
+
+function finishLightboxStep(index, exitX) {
+    if (lbStepping || index < 0 || index >= lbSlides.length) return;
+    lbStepping = true;
+    const { img } = lightboxEls();
+    if (img) img.style.transition = 'transform 180ms ease';
+    lbScale = 1;
+    lbY = 0;
+    lbDismissY = 0;
+    lbX = exitX;
+    applyAlertLightboxTransform();
+    window.setTimeout(() => showLightboxSlide(index), 170);
+}
+
+function commitLightboxDrag() {
+    if (lbAxis !== 'x') return false;
+    const drag = lbDragX;
+    const width = lightboxEls().stage?.clientWidth || 320;
+    lbAxis = '';
+    lbDragX = 0;
+    if (drag <= -LB_STEP_PX && lbSlide < lbSlides.length - 1) {
+        finishLightboxStep(lbSlide + 1, -width);
+        return true;
+    }
+    if (drag >= LB_STEP_PX && lbSlide > 0) {
+        finishLightboxStep(lbSlide - 1, width);
+        return true;
+    }
+    applyLightboxState({ scale: 1, x: 0, y: 0 }, true);
+    return true;
+}
+
+function trackLightboxAxis(dx, dy) {
+    if (lbAxis || Math.hypot(dx, dy) <= 12) return;
+    const horizontal = Math.abs(dx) > Math.abs(dy) * 1.15;
+    if (horizontal && (lightboxGalleryBlocked() || lbSlides.length < 2)) lbAxis = 'skip';
+    else lbAxis = horizontal ? 'x' : 'y';
+}
+
+function followLightboxDrag(dx) {
+    let drag = dx;
+    const atStart = lbSlide <= 0 && drag > 0;
+    const atEnd = lbSlide >= lbSlides.length - 1 && drag < 0;
+    if (lbSlides.length < 2 || atStart || atEnd) drag *= 0.28;
+    lbDragX = drag;
+    lbX = drag;
+    lbY = 0;
+    lbDismissY = 0;
+    const { img, overlay } = lightboxEls();
+    if (img) img.style.transition = 'none';
+    if (overlay) overlay.style.transition = '';
+    applyAlertLightboxTransform();
 }
 
 function bindAlertImageLightbox() {
@@ -1074,18 +1434,71 @@ function bindAlertImageLightbox() {
     }
     if (!stage) return;
     stage.style.touchAction = 'none';
+    const zoomCenter = () => {
+        const rect = stage.getBoundingClientRect();
+        return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+    };
+    stage.querySelector('[data-nt-zoom="in"]')?.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const c = zoomCenter();
+        zoomLightboxAt(c.x, c.y, Math.min(5, lbScale * 1.35));
+    });
+    stage.querySelector('[data-nt-zoom="out"]')?.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const c = zoomCenter();
+        zoomLightboxAt(c.x, c.y, lbScale / 1.35);
+    });
+    stage.querySelector('[data-nt-zoom-controls]')?.addEventListener('mousedown', (e) => e.stopPropagation());
+    stage.addEventListener('wheel', (e) => {
+        if (!window.matchMedia('(hover: hover) and (pointer: fine)').matches) return;
+        e.preventDefault();
+        const delta = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY;
+        const { img } = lightboxEls();
+        const rect = (img || stage).getBoundingClientRect();
+        applyLightboxState(zoomAboutPoint(
+            lightboxState(),
+            e.clientX,
+            e.clientY,
+            rect,
+            lbScale * Math.exp(-delta * 0.0016),
+            stage.clientWidth,
+            stage.clientHeight,
+        ), false);
+    }, { passive: false });
     stage.addEventListener('mousedown', (e) => {
+        if (e.target?.closest?.('[data-nt-zoom-controls]')) return;
         e.preventDefault();
         lbStartX = e.clientX - lbX;
         lbStartY = e.clientY - lbY;
+        lbRawX = e.clientX;
+        lbRawY = e.clientY;
         lbPanning = true;
+        lbAxis = '';
+        lbDragX = 0;
     });
-    stage.addEventListener('mouseup', () => { lbPanning = false; });
-    stage.addEventListener('mouseleave', () => { lbPanning = false; });
+    stage.addEventListener('mouseup', () => {
+        if (lbPanning && lbAxis === 'x') commitLightboxDrag();
+        lbPanning = false;
+        lbAxis = '';
+    });
+    stage.addEventListener('mouseleave', () => {
+        if (lbPanning && lbAxis === 'x') commitLightboxDrag();
+        lbPanning = false;
+        lbAxis = '';
+    });
     stage.addEventListener('mousemove', (e) => {
         if (!lbPanning) return;
         e.preventDefault();
         if (lbScale <= 1) {
+            const dx = e.clientX - lbRawX;
+            const dy = e.clientY - lbRawY;
+            trackLightboxAxis(dx, dy);
+            if (lbAxis === 'x') {
+                followLightboxDrag(dx);
+                return;
+            }
             lbX = 0;
             lbY = 0;
             applyAlertLightboxTransform();
@@ -1096,71 +1509,196 @@ function bindAlertImageLightbox() {
         clampAlertLightboxPan();
         applyAlertLightboxTransform();
     });
+    stage.addEventListener('dblclick', (e) => {
+        e.preventDefault();
+        zoomLightboxAt(e.clientX, e.clientY);
+    });
     stage.addEventListener('touchstart', (e) => {
         if (e.touches.length === 2) {
             e.preventDefault();
             lbPanning = false;
-            lbPinchDist = Math.hypot(
-                e.touches[0].pageX - e.touches[1].pageX,
-                e.touches[0].pageY - e.touches[1].pageY
-            );
-            lbPinchScale = lbScale;
+            lbTracking = false;
+            lbMoved = true;
+            lbAxis = '';
+            lbDragX = 0;
+            lbDismissY = 0;
+            const { img } = lightboxEls();
+            const rect = (img || stage).getBoundingClientRect();
+            lbPinch = pinchGestureStart(lightboxState(), rect, e.touches[0], e.touches[1]);
+            if (img) img.style.transition = 'none';
             return;
         }
         if (e.touches.length === 1) {
-            lbStartX = e.touches[0].clientX - lbX;
-            lbStartY = e.touches[0].clientY - lbY;
-            lbPanning = true;
+            if (lbStepping) return;
+            lbRawX = e.touches[0].clientX;
+            lbRawY = e.touches[0].clientY;
+            lbStartX = lbRawX - lbX;
+            lbStartY = lbRawY - lbY;
+            lbPanning = lbScale > 1;
+            lbTracking = true;
+            lbMoved = false;
+            lbAxis = '';
+            lbDragX = 0;
+            lbDismissY = 0;
         }
     }, { passive: false });
     stage.addEventListener('touchmove', (e) => {
-        if (e.touches.length === 2 && lbPinchDist) {
+        if (e.touches.length === 2 && lbPinch) {
             e.preventDefault();
-            const currentDistance = Math.hypot(
-                e.touches[0].pageX - e.touches[1].pageX,
-                e.touches[0].pageY - e.touches[1].pageY
+            lbMoved = true;
+            const { img } = lightboxEls();
+            const next = pinchGestureMove(
+                lbPinch,
+                e.touches[0],
+                e.touches[1],
+                stage.clientWidth,
+                stage.clientHeight,
             );
-            let next = lbPinchScale * (currentDistance / lbPinchDist);
-            if (next < 1) next = 1;
-            if (next > 5) next = 5;
-            lbScale = next;
-            if (lbScale === 1) {
-                lbX = 0;
-                lbY = 0;
-            }
+            lbScale = next.scale;
+            lbX = next.x;
+            lbY = next.y;
+            lbDismissY = 0;
+            if (img) img.style.transition = 'none';
+            applyAlertLightboxTransform();
+            return;
+        }
+        if (!lbTracking || e.touches.length !== 1) return;
+        const x = e.touches[0].clientX;
+        const y = e.touches[0].clientY;
+        const dx = x - lbRawX;
+        const dy = y - lbRawY;
+        if (Math.hypot(dx, dy) > 12) lbMoved = true;
+        if (lbScale > 1) {
+            e.preventDefault();
+            lbX = x - lbStartX;
+            lbY = y - lbStartY;
             clampAlertLightboxPan();
             applyAlertLightboxTransform();
             return;
         }
-        if (!lbPanning || e.touches.length !== 1) return;
-        if (lbScale <= 1) {
-            lbX = 0;
-            lbY = 0;
-            applyAlertLightboxTransform();
+        if (lbStepping) return;
+        trackLightboxAxis(dx, dy);
+        // At fit, a sideways swipe moves to the next picture. A downward swipe closes.
+        if (lbAxis === 'x') {
+            e.preventDefault();
+            lbMoved = true;
+            followLightboxDrag(dx);
             return;
         }
-        e.preventDefault();
-        lbX = e.touches[0].clientX - lbStartX;
-        lbY = e.touches[0].clientY - lbStartY;
-        clampAlertLightboxPan();
-        applyAlertLightboxTransform();
+        if (lbAxis === 'y' && dy > 12) {
+            e.preventDefault();
+            const { img, overlay } = lightboxEls();
+            if (img) img.style.transition = '';
+            if (overlay) overlay.style.transition = '';
+            lbDismissY = dy;
+            lbX = 0;
+            applyAlertLightboxTransform();
+        }
     }, { passive: false });
     stage.addEventListener('touchend', (e) => {
-        if (e.touches.length < 2) lbPinchDist = null;
-        if (e.touches.length === 1) {
-            lbStartX = e.touches[0].clientX - lbX;
-            lbStartY = e.touches[0].clientY - lbY;
-            lbPanning = true;
+        if (e.touches.length < 2) {
+            const wasPinch = !!lbPinch;
+            lbPinch = null;
+            if (wasPinch && lbScale < 1.02) {
+                applyLightboxState({ scale: 1, x: 0, y: 0 }, true);
+                lbTracking = false;
+                lbPanning = false;
+                return;
+            }
         }
-        if (e.touches.length === 0) lbPanning = false;
+        if (e.touches.length === 1) {
+            lbRawX = e.touches[0].clientX;
+            lbRawY = e.touches[0].clientY;
+            lbStartX = lbRawX - lbX;
+            lbStartY = lbRawY - lbY;
+            lbPanning = lbScale > 1;
+            lbTracking = true;
+            lbMoved = true;
+            return;
+        }
+        if (e.touches.length > 0) return;
+        lbTracking = false;
+        lbPanning = false;
+        if (lbAxis === 'x') {
+            commitLightboxDrag();
+            return;
+        }
+        lbAxis = '';
+        if (lbScale <= 1 && lbDismissY > LB_DISMISS_PX) {
+            lbDismissY = 0;
+            closeLightbox();
+            return;
+        }
+        if (lbDismissY > 0) snapLightboxDismiss();
+        if (lbMoved) return;
+        const t = e.changedTouches && e.changedTouches[0];
+        const tx = t ? t.clientX : lbRawX;
+        const ty = t ? t.clientY : lbRawY;
+        const now = Date.now();
+        if (now - lbLastTap < 280 && Math.hypot(tx - lbTapX, ty - lbTapY) < 36) {
+            e.preventDefault();
+            lbLastTap = 0;
+            zoomLightboxAt(tx, ty);
+            return;
+        }
+        lbLastTap = now;
+        lbTapX = tx;
+        lbTapY = ty;
+    }, { passive: false });
+    document.addEventListener('keydown', (e) => {
+        if (!window._isLightboxMode || lightboxGalleryBlocked() || lbScale > 1) return;
+        const tag = document.activeElement && document.activeElement.tagName;
+        if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+        if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+        const dir = e.key === 'ArrowRight' ? 1 : -1;
+        const index = lbSlide + dir;
+        if (index < 0 || index >= lbSlides.length) return;
+        e.preventDefault();
+        const width = lightboxEls().stage?.clientWidth || 320;
+        finishLightboxStep(index, dir > 0 ? -width : width);
     });
 }
 
+function lightboxNoticeMeta(host) {
+    const node = host?.nodeType === 1 ? host : null;
+    if (!node?.getAttribute && !node?.closest) return null;
+    const card = node.closest?.('.nt-alert-card, [data-alert-post]') || null;
+    const id = node.getAttribute?.('data-alert-notice-id')
+        || card?.getAttribute?.('data-alert-id')
+        || '';
+    const src = node.getAttribute?.('data-alert-src')
+        || card?.getAttribute?.('data-alert-src')
+        || '';
+    if (!id) return null;
+    return { id: String(id), src: String(src || '') };
+}
+
+function announceLightboxNotice(host) {
+    const meta = lightboxNoticeMeta(host);
+    const { overlay } = lightboxEls();
+    if (overlay) {
+        if (meta) {
+            overlay.dataset.ntNoticeId = meta.id;
+            overlay.dataset.ntNoticeSrc = meta.src;
+        } else {
+            delete overlay.dataset.ntNoticeId;
+            delete overlay.dataset.ntNoticeSrc;
+        }
+    }
+    try {
+        window.dispatchEvent(new CustomEvent('nt-alert-lightbox', { detail: meta }));
+    } catch { /* ignore */ }
+}
+
 function lightboxCandidateSrc(url, host) {
-    const direct = sanitizeAttachmentDisplayUrl(url);
     const wrap = lightboxPosterHost(url, host) || (host?.nodeType === 1 ? host : null);
-    const posterImg = wrap?.querySelector?.('img') || null;
+    const posterImg = wrap?.querySelector?.('img.nt-alert-poster-img') || wrap?.querySelector?.('img') || null;
     const loaded = !!(posterImg && posterImg.naturalWidth > 0);
+    const blob = String(wrap?.getAttribute?.('data-alert-object-url') || '');
+    const live = String(posterImg?.currentSrc || posterImg?.getAttribute?.('src') || '');
+    const objectUrl = preferSavedPosterSrc(blob, live, '');
+    if (objectUrl.startsWith('blob:')) return { src: objectUrl, wrap, posterImg, loaded: true };
+    const direct = sanitizeAttachmentDisplayUrl(url);
     const tries = [
         direct,
         wrap?.getAttribute?.('data-alert-lightbox'),
@@ -1170,16 +1708,16 @@ function lightboxCandidateSrc(url, host) {
         const safe = sanitizeAttachmentDisplayUrl(candidate);
         if (safe) return { src: safe, wrap, posterImg, loaded };
     }
-    const blob = String(wrap?.getAttribute?.('data-alert-object-url') || '');
-    const live = loaded ? String(posterImg.currentSrc || posterImg.src || '') : '';
-    const objectUrl = live.startsWith('blob:') ? live : (blob.startsWith('blob:') ? blob : '');
-    if (objectUrl) return { src: objectUrl, wrap, posterImg, loaded: true };
     return { src: '', wrap, posterImg, loaded };
 }
 
 export function openLightbox(url, host) {
     if (typeof window === 'undefined') return;
-    const picked = lightboxCandidateSrc(url, host);
+    const videoHost = videoPreviewHost(host);
+    const still = videoHost ? videoPreviewStill(videoHost) : '';
+    const picked = still
+        ? { src: still, wrap: videoHost, loaded: true }
+        : lightboxCandidateSrc(url, host);
     const src = picked.src;
     if (!src) return;
     const wrap = picked.wrap;
@@ -1196,7 +1734,7 @@ export function openLightbox(url, host) {
     resetAlertLightboxTransform();
     img.alt = 'Image Preview';
     img.decoding = 'async';
-    const displaySrc = resolveLightboxDisplaySrc(src, wrap || host);
+    const displaySrc = still || resolveLightboxDisplaySrc(src, wrap || host);
     const devOpen = !!document.getElementById('dev-modal') && !document.getElementById('dev-modal').classList.contains('hidden');
     if (devOpen) {
         overlay.style.zIndex = '10050';
@@ -1204,7 +1742,9 @@ export function openLightbox(url, host) {
     }
     overlay.classList.remove('hidden');
     overlay.classList.add('flex');
-    if (img.getAttribute('src') !== displaySrc) img.src = displaySrc;
+    paintLightboxImage(displaySrc);
+    announceLightboxNotice(wrap || host);
+    rememberLightboxSlides(wrap || host);
 }
 
 export function closeLightbox(fromPopState = false) {
@@ -1223,7 +1763,14 @@ export function closeLightbox(fromPopState = false) {
             delete overlay.dataset.ntAdminLift;
         }
         resetAlertLightboxTransform();
+        lbSlides = [];
+        lbSlide = 0;
+        lbAxis = '';
+        lbDragX = 0;
+        lbStepping = false;
+        hideLightboxStatus();
         if (img) img.alt = '';
+        announceLightboxNotice(null);
         window._isLightboxMode = false;
         if (!anyFixedModalOpen() && !document.body.classList.contains('sidenav-open')) {
             unlockBackgroundScroll();
@@ -1538,15 +2085,20 @@ export function nudgeHomeAutoNotices() {
 export function setImmersiveChrome(on) {
     if (typeof document === 'undefined') return;
     document.body.classList.toggle('nt-immersive', !!on);
-    const bottomNav = document.getElementById('bottom-nav');
-    if (!bottomNav) return;
     if (on) {
+        const bottomNav = document.getElementById('bottom-nav');
+        if (!bottomNav) return;
         bottomNav.classList.add('hidden');
         bottomNav.setAttribute('aria-hidden', 'true');
         return;
     }
-    bottomNav.classList.remove('hidden');
-    bottomNav.setAttribute('aria-hidden', 'false');
+    // Respect welcomeSeen / nt-onboarding — do not force-show during Welcome.
+    import('./prefs.js').then(({ applyNavChrome }) => applyNavChrome()).catch(() => {
+        const bottomNav = document.getElementById('bottom-nav');
+        if (!bottomNav) return;
+        bottomNav.classList.remove('hidden');
+        bottomNav.setAttribute('aria-hidden', 'false');
+    });
 }
 
 export function switchTab(tab, opts = null) {
@@ -1827,9 +2379,17 @@ export function hideOfflineToast() {
 /** Only paint offline chrome after the app is visible and still offline. */
 const OFFLINE_CHROME_HOLD_MS = 4000;
 const OFFLINE_CHROME_AUTO_HIDE_MS = 7000;
+/** After a show/dismiss, require this much sustained online before another paint. */
+const OFFLINE_CHROME_RESHOW_ONLINE_MS = 300_000;
+/** Hard floor between paints even if the episode flag was cleared early. */
+const OFFLINE_CHROME_MIN_PAINT_GAP_MS = 300_000;
+const OFFLINE_CHROME_CONFIRM_MS = 2000;
 let _offlineChromeTimer = null;
 let _offlineChromeHideTimer = null;
+let _offlineChromeReshowTimer = null;
 let _offlineChromeBound = false;
+let _offlineChromeConfirming = false;
+let _offlineChromeLastPaintAt = 0;
 
 function offlineDock() {
     return typeof document !== 'undefined' ? document.getElementById('offline-wrapper') : null;
@@ -1846,6 +2406,102 @@ function clearOfflineChromeTimers() {
     }
 }
 
+function cancelOfflineChromeReshow() {
+    if (_offlineChromeReshowTimer) {
+        clearTimeout(_offlineChromeReshowTimer);
+        _offlineChromeReshowTimer = null;
+    }
+}
+
+/** Mark this offline episode handled so flaps cannot re-queue the dock. */
+function markOfflineChromeEpisodeHandled() {
+    if (typeof window !== 'undefined') window._hasShownOfflineToast = true;
+}
+
+function offlineChromePaintGapOpen() {
+    if (!_offlineChromeLastPaintAt) return true;
+    return Date.now() - _offlineChromeLastPaintAt >= OFFLINE_CHROME_MIN_PAINT_GAP_MS;
+}
+
+/** Clear the once-per-episode flag only after sustained online (not radio flaps). */
+function armOfflineChromeReshow() {
+    if (typeof window === 'undefined') return;
+    cancelOfflineChromeReshow();
+    _offlineChromeReshowTimer = setTimeout(() => {
+        _offlineChromeReshowTimer = null;
+        if (typeof navigator !== 'undefined' && navigator.onLine) {
+            window._hasShownOfflineToast = false;
+        }
+    }, OFFLINE_CHROME_RESHOW_ONLINE_MS);
+}
+
+/**
+ * Any HTTP response (including 403/5xx) means a path to the public internet
+ * exists. Campus firewalls often blackhole workers.dev while GitHub / Firebase
+ * still answer — do not paint "You are offline" in that case.
+ */
+async function probeReachabilityUrl(url, timeoutMs = OFFLINE_CHROME_CONFIRM_MS) {
+    try {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), timeoutMs);
+        await fetch(url, { signal: controller.signal, cache: 'no-store' });
+        clearTimeout(timer);
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+/**
+ * navigator.onLine flaps on slow/flaky mobile radios and captive campus Wi‑Fi.
+ * Confirm the tab is still marked offline and that several public endpoints
+ * cannot get through before painting "You are offline."
+ */
+async function confirmBrowserOffline() {
+    if (typeof document === 'undefined' || typeof navigator === 'undefined') return false;
+    if (document.visibilityState !== 'visible' || navigator.onLine) return false;
+    const stamp = Date.now();
+    const probes = [
+        `https://nexttrain-cache.enock.workers.dev/config/maintenance.json?offlineChrome=${stamp}`,
+        `https://metrorail-next-train-default-rtdb.firebaseio.com/.json?shallow=true&offlineChrome=${stamp}`,
+        `https://cdn.jsdelivr.net/gh/enock-elk/next-train-astro@main/public/app-version.json?offlineChrome=${stamp}`,
+    ];
+    try { console.log('NT OfflineChrome: confirm start (OS offline, visible tab)'); } catch { /* ignore */ }
+    for (const url of probes) {
+        if (document.visibilityState !== 'visible' || navigator.onLine) return false;
+        let host = url;
+        try { host = new URL(url).hostname; } catch { /* ignore */ }
+        const ok = await probeReachabilityUrl(url);
+        if (ok) {
+            try { console.log(`NT OfflineChrome: ${host} answered — not painting offline dock`); } catch { /* ignore */ }
+            return false;
+        }
+        try { console.warn(`NT OfflineChrome: ${host} failed`); } catch { /* ignore */ }
+    }
+    const really = document.visibilityState === 'visible' && !navigator.onLine;
+    try {
+        console.warn(`NT OfflineChrome: all probes failed → paint=${really}`);
+    } catch { /* ignore */ }
+    return really;
+}
+
+function paintOfflineChromeDock() {
+    const wrap = offlineDock();
+    if (wrap) wrap.classList.remove('hidden');
+    const oi = document.getElementById('offline-indicator');
+    if (oi) {
+        oi.style.removeProperty('display');
+        oi.dataset.struggleUi = '1';
+    }
+    markOfflineChromeEpisodeHandled();
+    _offlineChromeLastPaintAt = Date.now();
+    if (_offlineChromeHideTimer) clearTimeout(_offlineChromeHideTimer);
+    _offlineChromeHideTimer = setTimeout(() => {
+        _offlineChromeHideTimer = null;
+        hideOfflineChrome({ dismissed: true });
+    }, OFFLINE_CHROME_AUTO_HIDE_MS);
+}
+
 export function hideOfflineChrome(opts = {}) {
     clearOfflineChromeTimers();
     hideOfflineToast();
@@ -1856,9 +2512,7 @@ export function hideOfflineChrome(opts = {}) {
         oi.style.removeProperty('display');
         delete oi.dataset.struggleUi;
     }
-    if (opts.dismissed && typeof window !== 'undefined') {
-        window._hasShownOfflineToast = true;
-    }
+    if (opts.dismissed) markOfflineChromeEpisodeHandled();
 }
 
 export function scheduleOfflineChrome() {
@@ -1867,34 +2521,42 @@ export function scheduleOfflineChrome() {
         hideOfflineChrome();
         return;
     }
+    // A new offline episode while the reshow arm is pending keeps the dismiss.
+    cancelOfflineChromeReshow();
     if (typeof window !== 'undefined' && window._hasShownOfflineToast) return;
-    if (_offlineChromeTimer) return;
+    if (!offlineChromePaintGapOpen()) return;
+    if (_offlineChromeTimer || _offlineChromeConfirming) return;
     _offlineChromeTimer = setTimeout(() => {
         _offlineChromeTimer = null;
         if (document.visibilityState !== 'visible' || navigator.onLine) return;
         if (window._hasShownOfflineToast) return;
-        const wrap = offlineDock();
-        if (wrap) wrap.classList.remove('hidden');
-        const oi = document.getElementById('offline-indicator');
-        if (oi) {
-            oi.style.removeProperty('display');
-            oi.dataset.struggleUi = '1';
-        }
-        if (_offlineChromeHideTimer) clearTimeout(_offlineChromeHideTimer);
-        _offlineChromeHideTimer = setTimeout(() => {
-            _offlineChromeHideTimer = null;
-            hideOfflineChrome({ dismissed: true });
-        }, OFFLINE_CHROME_AUTO_HIDE_MS);
+        if (!offlineChromePaintGapOpen()) return;
+        // Consume the episode before probes so radio flaps / failed confirms
+        // cannot re-queue "You are offline" every few seconds on mobile data.
+        markOfflineChromeEpisodeHandled();
+        _offlineChromeConfirming = true;
+        confirmBrowserOffline().then((reallyOffline) => {
+            _offlineChromeConfirming = false;
+            if (!reallyOffline) return;
+            if (document.visibilityState !== 'visible' || navigator.onLine) return;
+            if (!offlineChromePaintGapOpen()) return;
+            paintOfflineChromeDock();
+        }).catch(() => {
+            _offlineChromeConfirming = false;
+        });
     }, OFFLINE_CHROME_HOLD_MS);
 }
 
 export function bindOfflineChrome() {
     if (_offlineChromeBound || typeof window === 'undefined') return;
     _offlineChromeBound = true;
-    window.addEventListener('offline', () => scheduleOfflineChrome());
+    window.addEventListener('offline', () => {
+        cancelOfflineChromeReshow();
+        scheduleOfflineChrome();
+    });
     window.addEventListener('online', () => {
-        window._hasShownOfflineToast = false;
         hideOfflineChrome();
+        armOfflineChromeReshow();
     });
     document.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'hidden') hideOfflineChrome();
@@ -2049,6 +2711,25 @@ export function isMaintenanceVisibleToUser(maintData) {
     return !!pickMaintenanceBanner(maintData);
 }
 
+/** Scroll long maintenance copy as a marquee; keep short copy still. */
+export function syncMaintenanceMarquee(banner) {
+    if (!banner || typeof window === 'undefined') return;
+    const marquee = banner.querySelector('.nt-maint-marquee');
+    const track = banner.querySelector('.nt-maint-track');
+    const label = banner.querySelector('.nt-maint-label');
+    if (!marquee || !track || !label) return;
+    const reduceMotion = !!window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
+    const overflow = label.scrollWidth > (marquee.clientWidth + 2);
+    banner.classList.toggle('nt-maint-is-marquee', overflow && !reduceMotion);
+    if (!overflow || reduceMotion) {
+        track.style.animationDuration = '';
+        return;
+    }
+    const travel = Math.max(label.scrollWidth, 80);
+    const seconds = Math.min(48, Math.max(10, travel / 28));
+    track.style.animationDuration = `${seconds}s`;
+}
+
 export async function checkMaintenanceStatus() {
     // Maintenance is an online ops signal. Never show it while offline / Lie-Fi / captive.
     if (typeof navigator === 'undefined' || !navigator.onLine) {
@@ -2085,7 +2766,7 @@ export async function checkMaintenanceStatus() {
                 banner.className = 'nt-maint-strip';
                 banner.setAttribute('role', 'status');
                 const label = escapeHTML(String(customMessage).toUpperCase());
-                banner.innerHTML = `<span class="nt-maint-inner"><svg class="nt-maint-wrench" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg><span class="nt-maint-label">${label}</span></span>`;
+                banner.innerHTML = `<span class="nt-maint-inner"><svg class="nt-maint-wrench" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg><span class="nt-maint-marquee"><span class="nt-maint-track"><span class="nt-maint-label">${label}</span><span class="nt-maint-label" aria-hidden="true">${label}</span></span></span></span>`;
                 const header = document.getElementById('app-header');
                 const mainAppNode = document.getElementById('main-content');
                 header?.classList.remove('nt-maint-active');
@@ -2098,6 +2779,9 @@ export async function checkMaintenanceStatus() {
                 } else if (!banner.parentNode) {
                     document.body.prepend(banner);
                 }
+                requestAnimationFrame(() => {
+                    try { syncMaintenanceMarquee(banner); } catch { /* ignore */ }
+                });
             };
 
             if (!existingBanner) {
@@ -2126,10 +2810,15 @@ export function bindMaintenanceBanner() {
     window.isMaintenanceVisibleToUser = isMaintenanceVisibleToUser;
     window.listMaintenanceItems = listMaintenanceItems;
     window.pickMaintenanceBanner = pickMaintenanceBanner;
+    window.syncMaintenanceMarquee = syncMaintenanceMarquee;
 
     checkMaintenanceStatus();
     window.addEventListener('online', () => { checkMaintenanceStatus(); });
     window.addEventListener('offline', () => { clearMaintenanceBanner(); });
+    window.addEventListener('resize', () => {
+        const banner = document.getElementById('maintenance-banner');
+        if (banner) syncMaintenanceMarquee(banner);
+    }, { passive: true });
     setInterval(() => { checkMaintenanceStatus(); }, 5 * 60 * 1000);
 
     // Re-evaluate when the user switches region/route (scoped banners)
@@ -2399,6 +3088,58 @@ function installAnalyticsOfflineBridge() {
  * Full-screen sheets have no blur strip. The sheet body is a child, so taps inside stay put.
  * Select Route still refuses to close when no corridor is chosen (closeSmoothModal).
  */
+function scrollableAncestor(node, dy, dx) {
+    let el = node && node.nodeType === 1 ? node : node?.parentElement;
+    const horizontal = Math.abs(dx || 0) > Math.abs(dy || 0) + 2;
+    if (horizontal && el?.closest) {
+        const grid = el.closest('#grid-container');
+        if (grid && grid.scrollWidth > grid.clientWidth + 2) return true;
+    }
+    while (el && el !== document.body && el !== document.documentElement) {
+        if (el.id === 'alert-image-lightbox') return true;
+        const style = window.getComputedStyle(el);
+        const overflowY = `${style.overflowY} ${style.overflow}`;
+        if (/(auto|scroll)/.test(overflowY) && el.scrollHeight > el.clientHeight + 2) {
+            const atTop = el.scrollTop <= 0;
+            const atBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 2;
+            if (dy < 0 && !atTop) return true;
+            if (dy > 0 && !atBottom) return true;
+            return false;
+        }
+        el = el.parentElement;
+    }
+    return false;
+}
+
+/** A short sheet must not drag the page or admin panel behind it. */
+function bindModalBackgroundGuard() {
+    if (typeof document === 'undefined' || window.__ntModalScrollGuard) return;
+    window.__ntModalScrollGuard = true;
+    let lastY = 0;
+    let lastX = 0;
+    document.addEventListener('touchstart', (event) => {
+        lastY = event.touches?.[0]?.clientY || 0;
+        lastX = event.touches?.[0]?.clientX || 0;
+    }, { passive: true, capture: true });
+    const block = (event, dy, dx) => {
+        if (!document.body.classList.contains('modal-active')) return;
+        if (scrollableAncestor(event.target, dy, dx)) return;
+        event.preventDefault();
+    };
+    document.addEventListener('touchmove', (event) => {
+        const y = event.touches?.[0]?.clientY || 0;
+        const x = event.touches?.[0]?.clientX || 0;
+        const dy = lastY - y;
+        const dx = lastX - x;
+        lastY = y;
+        lastX = x;
+        block(event, dy, dx);
+    }, { passive: false, capture: true });
+    document.addEventListener('wheel', (event) => {
+        block(event, event.deltaY, event.deltaX);
+    }, { passive: false, capture: true });
+}
+
 function bindBlurBackdropDismiss() {
     if (typeof document === 'undefined' || window.__ntBlurDismissBound) return;
     window.__ntBlurDismissBound = true;
@@ -2417,8 +3158,127 @@ function bindBlurBackdropDismiss() {
                 return;
             }
         }
+        // Ticket Prices matches the timetable: haptic on open and on user close.
+        if (el.id === 'fare-modal') {
+            triggerHaptic();
+        }
         closeSmoothModal(el.id);
     });
+}
+
+/** Bottom sheets that rise from the bottom. Pull down on the card to close. */
+const BOTTOM_SHEET_CLOSE = {
+    'planner-fare-breakdown-sheet': () => closeSmoothModal('planner-fare-breakdown-sheet'),
+    'reports-feed-modal': () => closeSmoothModal('reports-feed-modal'),
+    'nt-nearby-trains-modal': () => document.getElementById('nt-nearby-close')?.click(),
+    'nt-live-tracker-modal': () => document.getElementById('nt-live-tracker-close')?.click(),
+    'nt-on-train-sheet': () => document.getElementById('nt-on-train-secondary')?.click()
+        || document.getElementById('nt-on-train-tertiary')?.click(),
+    'account-badge-how-sheet': () => document.getElementById('account-badge-how-overlay')?.click(),
+    'account-contrib-sheet': () => document.getElementById('account-contrib-overlay')?.click(),
+    'account-points-sheet': () => document.getElementById('account-points-overlay')?.click(),
+};
+
+function isBottomSheetHost(el) {
+    if (!el || el.nodeType !== 1 || !el.id) return false;
+    if (el.classList.contains('hidden')) return false;
+    if (BOTTOM_SHEET_CLOSE[el.id]) return true;
+    const cls = typeof el.className === 'string' ? el.className : '';
+    return el.classList.contains('fixed') && cls.includes('items-end') && cls.includes('inset-0');
+}
+
+function sheetCardFromHost(host) {
+    return host.querySelector(':scope > div:not([aria-hidden])') || host.firstElementChild;
+}
+
+function bindBottomSheetPullDismiss() {
+    if (typeof document === 'undefined' || window.__ntSheetPullBound) return;
+    window.__ntSheetPullBound = true;
+    let drag = null;
+
+    const resolveHost = (target) => {
+        let node = target;
+        while (node && node !== document.body) {
+            if (isBottomSheetHost(node)) return node;
+            node = node.parentElement;
+        }
+        return Object.keys(BOTTOM_SHEET_CLOSE)
+            .map((id) => document.getElementById(id))
+            .find((el) => el && !el.classList.contains('hidden') && el.contains(target)) || null;
+    };
+
+    const onStart = (clientY, target) => {
+        const host = resolveHost(target);
+        if (!host) return;
+        const card = sheetCardFromHost(host);
+        if (!card || !card.contains(target)) return;
+        const el = target?.nodeType === 1 ? target : target?.parentElement;
+        if (!el) return;
+        // Buttons and fields keep their tap. The rest of the card, including the
+        // body under the header, can pull the sheet down when that scroller is at the top.
+        if (el.closest('button, a, input, textarea, select, label, option')) return;
+        const scrollers = card.querySelectorAll('[class*="overflow-y"], .overflow-y-auto, .custom-scrollbar');
+        for (const sc of scrollers) {
+            if (sc.contains(el) && sc.scrollTop > 2) return;
+        }
+        drag = {
+            host,
+            card,
+            startY: clientY,
+            lastY: clientY,
+            moved: false,
+        };
+        card.style.transition = 'none';
+        card.style.willChange = 'transform';
+    };
+
+    const onMove = (clientY, event) => {
+        if (!drag) return;
+        const dy = Math.max(0, clientY - drag.startY);
+        drag.lastY = clientY;
+        drag.moved = dy > 6;
+        drag.card.style.transform = `translateY(${dy}px)`;
+        if (event && dy > 0) event.preventDefault();
+    };
+
+    const onEnd = () => {
+        if (!drag) return;
+        const { host, card, startY, lastY } = drag;
+        const dy = Math.max(0, lastY - startY);
+        drag = null;
+        card.style.transition = 'transform 0.22s ease-out';
+        const shouldClose = dy > 80;
+        if (shouldClose) {
+            card.style.transform = `translateY(${Math.max(dy, card.getBoundingClientRect().height)}px)`;
+            const close = BOTTOM_SHEET_CLOSE[host.id] || (() => closeSmoothModal(host.id));
+            setTimeout(() => {
+                close();
+                card.style.transform = '';
+                card.style.transition = '';
+                card.style.willChange = '';
+            }, 180);
+            return;
+        }
+        card.style.transform = '';
+        setTimeout(() => {
+            card.style.transition = '';
+            card.style.willChange = '';
+        }, 220);
+    };
+
+    document.addEventListener('touchstart', (ev) => {
+        const t = ev.touches?.[0];
+        if (!t) return;
+        onStart(t.clientY, ev.target);
+    }, { passive: true, capture: true });
+    document.addEventListener('touchmove', (ev) => {
+        if (!drag) return;
+        const t = ev.touches?.[0];
+        if (!t) return;
+        onMove(t.clientY, ev);
+    }, { passive: false, capture: true });
+    document.addEventListener('touchend', onEnd, { capture: true });
+    document.addEventListener('touchcancel', onEnd, { capture: true });
 }
 
 // --- ATTACH EXPORTS TO WINDOW FOR GLOBAL HTML ACCESS ---
@@ -2438,6 +3298,7 @@ if (typeof window !== 'undefined') {
     window.hideOfflineChrome = hideOfflineChrome;
     window.scheduleOfflineChrome = scheduleOfflineChrome;
     window.openLightbox = openLightbox;
+    window.ntPaintAlertLightbox = paintLightboxImage;
     window.closeLightbox = closeLightbox;
     window.lockBackgroundScroll = lockBackgroundScroll;
     window.unlockBackgroundScroll = unlockBackgroundScroll;
@@ -2459,6 +3320,8 @@ if (typeof window !== 'undefined') {
     initGlobalErrorHandler();
     bindHistoryBackNavigation();
     bindBlurBackdropDismiss();
+    bindBottomSheetPullDismiss();
+    bindModalBackgroundGuard();
     installAnalyticsOfflineBridge();
     // Defer until #main-content exists (this module can load before the shell)
     if (document.readyState === 'loading') {
@@ -2477,9 +3340,9 @@ if (typeof window !== 'undefined') {
     }).catch(() => {});
 
     bindOfflineChrome();
+    // Online/offline chrome is owned by bindOfflineChrome (hold + confirm + reshow arm).
+    // These listeners only clear maintenance and flush the offline tracker.
     window.addEventListener('online', () => {
-        window._hasShownOfflineToast = false;
-        hideOfflineChrome();
         OfflineTracker.flush();
         try { window.isLieFi = false; } catch { /* ignore */ }
         try { window.resetReachabilityProbe?.(); } catch { /* ignore */ }
@@ -2490,6 +3353,5 @@ if (typeof window !== 'undefined') {
     });
     window.addEventListener('offline', () => {
         clearMaintenanceBanner();
-        scheduleOfflineChrome();
     });
 }

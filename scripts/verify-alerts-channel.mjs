@@ -16,6 +16,11 @@ import {
     hoistAlertImagesFromHtml,
     layoutAlertPost,
     sanitizeInlineAlertImageUrl,
+    sanitizeAlertVideoUrl,
+    alertVideoPosterUrl,
+    alertVideoEmbedUrl,
+    renderAlertVideoMarkup,
+    preferSavedPosterSrc,
     shouldIgnoreAlertLongPress,
     shouldForceOpen,
     pickAutoOpenNotice,
@@ -36,6 +41,9 @@ import {
     buildAlertSeeMoreMarkup,
     expandAlertSeeMore,
 } from '../src/lib/alerts-feed.js';
+import { readFileSync } from 'node:fs';
+import { firstHttpUrl, linkPreviewMarkup } from '../src/lib/link-preview.js';
+import { imageMimeForUrl } from '../src/lib/alert-image-cache.js';
 
 const failures = [];
 function assert(cond, msg) {
@@ -112,6 +120,8 @@ const now = 1_700_000_000_000;
     assert(sanitizeAlertImageUrl('/images/alerts/fare.png') === '/images/alerts/fare.png', 'same-origin poster path');
     assert(sanitizeAlertImageUrl('/images/alerts/fare.png?x=1') === '/images/alerts/fare.png', 'query stripped');
     assert(sanitizeAlertImageUrl('/images/network-map.png') === null, 'non-alerts folder blocked');
+    assert(sanitizeAlertImageUrl('/images/schedules/wc/wc-southern-weekday-inbound-2026-02-02.jpg') === '/images/schedules/wc/wc-southern-weekday-inbound-2026-02-02.jpg', 'schedule sheet path allowed');
+    assert(sanitizeAlertImageUrl('/images/schedules/../alerts/x.png') === null, 'schedule traversal blocked');
     assert(sanitizeAlertImageUrl('/images/alerts/../icons/x.png') === null, 'traversal blocked');
     assert(sanitizeAlertImageUrl('https://evil.example/images/alerts/x.png') === '/images/alerts/x.png', 'host stripped, path kept if alerts');
     assert(sanitizeAlertImageUrl('https://evil.example/etc/passwd') === null, 'foreign path blocked');
@@ -176,9 +186,11 @@ const now = 1_700_000_000_000;
     assert(!shouldIgnoreAlertLongPress(fake(['[data-alert-title]'])), 'title text is hold-to-react');
     assert(shouldIgnoreAlertLongPress(fake(['[data-alert-reply]', 'button'])), 'reply button is not hold-to-react');
     assert(shouldIgnoreAlertLongPress(fake(['[data-alert-summary]', 'button'])), 'count chip is not hold-to-react');
+    assert(shouldIgnoreAlertLongPress(fake(['[data-alert-react-add]', 'button'])), 'add reaction is not hold-to-react');
     assert(shouldIgnoreAlertLongPress(fake(['.nt-poll-vote', 'button'])), 'poll vote is not hold-to-react');
     assert(shouldIgnoreAlertLongPress(fake(['.nt-poll'])), 'poll results panel is not hold-to-react');
     assert(shouldIgnoreAlertLongPress(fake(['[data-poll-shell]'])), 'poll shell is not hold-to-react');
+    assert(shouldIgnoreAlertLongPress(fake(['[data-alert-video]', 'button'])), 'video play is not hold-to-react');
     assert(shouldIgnoreAlertLongPress(fake(['a'])), 'links are not hold-to-react');
     assert(shouldIgnoreAlertLongPress(null), 'missing target ignored');
 }
@@ -194,7 +206,12 @@ const now = 1_700_000_000_000;
     const hoisted = hoistAlertImagesFromHtml('Hello<br><img src="/images/alerts/fare.png" alt="x"><p>After</p>');
     assert(hoisted.urls[0] === '/images/alerts/fare.png' && !hoisted.body.includes('<img'), `hoist imgs ${hoisted.body}`);
 
-    assert(sanitizeInlineAlertImageUrl('https://evil.example/x.png') === null, 'foreign inline image blocked');
+    const imgur = 'https://i.imgur.com/abcdEFG.png';
+    assert(sanitizeInlineAlertImageUrl(imgur) === imgur, 'public image file allowed');
+    assert(sanitizeInlineAlertImageUrl('https://evil.example/x.html') === null, 'foreign page blocked');
+    assert(sanitizeInlineAlertImageUrl('https://192.168.1.8/x.png') === null, 'private image host blocked');
+    const internetLaid = layoutAlertPost({ message: `<p>Poster</p><img src="${imgur}">` });
+    assert(internetLaid.imageUrls[0] === imgur, 'internet image file is shown on the alert');
     assert(sanitizeInlineAlertImageUrl('https://firebasestorage.googleapis.com/v0/b/app/o/x.png') === 'https://firebasestorage.googleapis.com/v0/b/app/o/x.png', 'firebase storage allowed');
     assert(sanitizeInlineAlertImageUrl('https://user:pass@firebasestorage.googleapis.com/v0/b/app/o/x.png') === null, 'storage URL with credentials blocked');
 
@@ -213,6 +230,54 @@ const now = 1_700_000_000_000;
     assert(inlineLaid.title === 'Good news', 'inline heading becomes title');
     assert(inlineLaid.imageUrls[0].includes('firebasestorage.googleapis.com'), 'inline img hoisted');
     assert(inlineLaid.body.includes('Resume Monday') && !inlineLaid.body.includes('<img'), 'text stays below image');
+
+    const kept = layoutAlertPost({
+        message: '<p>All thanks to the UCV</p><img alt="" src="blob:https://nexttrain.co.za/abc" data-nt-src="https://i.ibb.co/hR3kQ1p/ucv.png">',
+    });
+    assert(kept.imageUrls.includes('https://i.ibb.co/hR3kQ1p/ucv.png'), 'composer image address survives a blob src');
+    assert(!kept.imageUrls.includes('blob:https://nexttrain.co.za/abc'), 'blob src is not shown');
+    assert(kept.body.includes('All thanks to the UCV') && !kept.body.includes('<img'), 'caption stays when the image is hoisted');
+
+    const clip = 'https://cdn.example.com/briefing/ucv-update.mp4';
+    assert(sanitizeAlertVideoUrl(clip) === clip, 'public mp4 allowed');
+    assert(sanitizeAlertVideoUrl('https://youtu.be/dQw4w9wg') === null, 'a short YouTube id is not a video');
+    const watch = 'https://youtu.be/dQw4w9WgXcQ';
+    assert(sanitizeAlertVideoUrl(watch) === 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', 'YouTube watch page is a video');
+    assert(alertVideoPosterUrl(watch) === 'https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg', 'YouTube preview is the still picture');
+    assert(!alertVideoEmbedUrl(watch).includes('autoplay'), 'YouTube player does not autoplay');
+    const ytLaid = layoutAlertPost({ message: `<p>Watch ${watch} today.</p>` });
+    assert(ytLaid.videoUrls[0] === 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', 'YouTube link is lifted onto the alert');
+    assert(!ytLaid.body.includes('youtu.be'), 'YouTube address is not left as a plain link');
+    const ytHtml = renderAlertVideoMarkup(ytLaid.videoUrls);
+    assert(ytHtml.includes('src="https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg"'), 'YouTube card loads the preview picture');
+    assert(!/<iframe\b/i.test(ytHtml), 'YouTube card does not load the player');
+    assert(ytHtml.includes('data-alert-video-play-chip'), 'Play video is the chip, so the still can open full view');
+    assert(sanitizeAlertVideoUrl('https://vimeo.com/76979871') === 'https://vimeo.com/76979871', 'Vimeo page is a video');
+    const vimeoHtml = renderAlertVideoMarkup(['https://vimeo.com/76979871']);
+    assert(vimeoHtml.includes('data-alert-video-poster-pending'), 'Vimeo card asks for its preview picture');
+    assert(!/<iframe\b/i.test(vimeoHtml), 'Vimeo card does not load the player');
+    assert(sanitizeAlertVideoUrl('http://cdn.example.com/a.mp4') === null, 'plain http video blocked');
+    assert(sanitizeAlertVideoUrl('https://192.168.1.8/a.mp4') === null, 'private video host blocked');
+    const withVideo = layoutAlertPost({
+        message: `<p>Watch the briefing ${clip} today.</p>`,
+        ctaUrl: clip,
+        ctaText: 'Watch',
+    });
+    assert(withVideo.videoUrls[0] === clip, 'video link is lifted onto the alert');
+    assert(!withVideo.body.includes(clip), 'video address is not left in the text');
+    assert(!withVideo.imageUrls.includes(clip), 'video is not treated as a poster');
+    const videoHtml = renderAlertVideoMarkup(withVideo.videoUrls);
+    assert(videoHtml.includes('preload="none"'), 'video does not preload');
+    assert(!/autoplay/i.test(videoHtml), 'video markup does not autoplay');
+    assert(!/<video\b[^>]*\ssrc=/i.test(videoHtml), 'player has no address until play');
+    assert(videoHtml.includes('data-alert-video-src="https://cdn.example.com/briefing/ucv-update.mp4"'), 'play control keeps the address');
+    assert(preferSavedPosterSrc('blob:poster', 'https://i.ibb.co/x.png', 'https://i.ibb.co/x.png') === 'blob:poster', 'full view reuses the saved poster');
+    assert(imageMimeForUrl('https://i.ibb.co/hR3kQ1p/ucv.png') === 'image/png', 'saved poster keeps a png type');
+    const cacheSrc = readFileSync(new URL('../src/lib/alert-image-cache.js', import.meta.url), 'utf8');
+    assert(cacheSrc.includes("mode: 'no-cors'"), 'posters are saved when the host blocks script fetches');
+    const uiSrc = readFileSync(new URL('../src/lib/ui.js', import.meta.url), 'utf8');
+    assert(uiSrc.includes('Loading picture'), 'full view says the picture is still loading');
+    assert(uiSrc.includes('Could not load this picture'), 'full view says when the picture failed');
 }
 
 {
@@ -247,14 +312,16 @@ const now = 1_700_000_000_000;
 {
     const { readFileSync } = await import('node:fs');
     const channel = readFileSync(new URL('../src/components/AlertsChannel.astro', import.meta.url), 'utf8');
-    assert(/id="alerts-channel-close"[\s\S]{0,500}M6 18L18 6M6 6l12 12/.test(channel), 'header Close is an X');
-    assert(!/id="alerts-channel-close"[^>]*>\s*Close\s*</.test(channel), 'header Close is not the word Close');
+    assert(!channel.includes('id="alerts-channel-close"'), 'alerts header has no close X');
+    assert(channel.includes('id="alerts-channel-back"'), 'alerts header keeps the back arrow');
     assert(channel.includes('>Close</button>'), 'footer Close stays labeled Close');
     assert(channel.includes('id="alerts-channel-wallpaper"'), 'alerts wallpaper sits behind the feed');
     assert(channel.includes('id="alerts-channel-footer-close"'), 'alerts has a bottom Close');
     assert(channel.includes('When Next Train posts a notice for your region or route, it will show up here.'), 'empty-state copy');
     assert(!channel.includes('When PRASA or Next Train'), 'empty-state no longer mentions PRASA');
     assert(channel.includes('bg-slate-200 dark:bg-gray-950'), 'channel background contrasts with white cards');
+    assert(channel.includes('h-full w-full'), 'alerts sheet fills the screen');
+    assert(!channel.includes('items-center justify-center'), 'alerts sheet is not a centered card');
 
     const js = readFileSync(new URL('../src/lib/alerts-channel.js', import.meta.url), 'utf8');
     assert(js.includes('scopedLiveNotices'), 'feed filters to the current route union');
@@ -283,19 +350,20 @@ const now = 1_700_000_000_000;
     assert(js.includes('nt-alert-signoff'), 'card has signature class');
     assert(js.includes('nt-alert-poster-loading'), 'poster box has a loading overlay');
     assert(js.includes('hydrateAlertPosterImages'), 'posters hydrate after feed paint');
-    assert(js.includes('img.decode'), 'poster reveal waits on decode when available');
+    assert(js.includes('if (img.naturalWidth > 0) reveal()'), 'poster reveals once the picture has pixels');
     assert(js.includes("data-alert-ready"), 'poster click waits until the image is ready');
     assert(js.includes('data-alert-object-url'), 'decoded poster keeps an object URL for full view');
     assert(js.includes('window.openLightbox(src, lightbox)'), 'feed tap passes the loaded poster into full view');
     assert(!js.includes('setTimeout(resolve, 2500)'), 'poster decode is not raced against a timeout');
-    assert(js.includes('fetchpriority="high"'), 'poster img asks for high fetch priority');
+    assert(js.includes("setAttribute('fetchpriority', 'high')"), 'poster img asks for high fetch priority');
     assert(js.includes('watchAlertPosterHydration'), 'poster hydrate survives innerHTML rewrites');
     assert(js.includes('pointer-events-none'), 'loading overlay does not steal hold-to-react');
     assert(!js.includes('onclick='), 'alert posters must not use inline onclick');
     assert(js.includes('nt-alert-chip'), 'card has severity chip class');
     assert(js.includes('nt-alert-strip flex items-center justify-between gap-2 px-3 py-1'), 'Ops/INFO strip is a single compact row');
     assert(js.includes('nt-alert-strip-info'), 'info strip uses the blue severity class');
-    assert(js.includes('🔵'), 'info chip keeps the blue emoji');
+    assert(js.includes("emoji: ''") && js.includes("label: 'Info'"), 'info chip is the word Info');
+    assert(!js.includes('🔵'), 'info chip does not lead with the blue emoji');
     assert(!js.includes('nt-alert-strip flex items-start justify-between gap-2 px-4 py-2.5'), 'Ops/INFO strip dropped the taller py-2.5 padding');
     assert(js.includes('nt-alert-time'), 'card has posted timestamp class');
     assert(js.indexOf('nt-alert-signoff') < js.indexOf('nt-alert-chip'), 'signature precedes chip in template');
@@ -305,10 +373,32 @@ const now = 1_700_000_000_000;
     assert(js.includes('nt-alert-action-row'), 'reactions and Reply share an action row');
     assert(js.indexOf('nt-alert-meta-row') < js.indexOf('nt-alert-action-row'), 'source/time sit above reactions/Reply');
     assert(js.includes("renderReactionsHtml(notice, { compact: true })"), 'footer reactions omit the leftover mt-2 gap');
+    assert(js.includes('data-alert-react-add'), 'empty reactions show an add control');
+    assert(js.includes('nt-alert-react-hang'), 'existing reactions hang off the card');
+    assert(js.includes("closest?.('[data-alert-react-add]')"), 'the plus opens the reaction row');
     assert(js.includes('📰</span>Source:'), 'source label includes the requested newspaper prefix');
     assert(js.includes('nt-alert-action-meta'), 'admin route/views share the roomier Reply row');
     const hub = readFileSync(new URL('../src/lib/hub.js', import.meta.url), 'utf8');
     assert(js.includes('hydratePollResults(feed)'), 'poll results hydrate after feed paint');
+    assert(js.includes('hydrateLinkPreviews(feed, REPLY_WORKER_URL)'), 'alert cards load a link preview in place');
+    assert(hub.includes('if (pollEl) hydratePollResults(pollEl)'), 'a quoted alert preview loads poll counts');
+    assert(hub.includes('linkPreviewMarkup(notice)'), 'the notice modal reserves a link card');
+    const titleAt = js.indexOf('${titleHtml}');
+    const mediaAt = js.indexOf('${mediaHtml}');
+    const previewAt = js.indexOf('${linkPreviewMarkup(notice)}');
+    const bodyAt = js.indexOf('${bodyHtml}');
+    assert(titleAt >= 0 && titleAt < mediaAt && mediaAt < previewAt && previewAt < bodyAt, 'alert card is title, image, link preview, then body');
+    assert(hub.includes('${titleHtml}${mediaHtml}${linkPreviewMarkup(notice)}${formattedMsg}'), 'notice modal is title, image, link preview, then body');
+    assert(hub.includes('renderAlertVideoMarkup(layout.videoUrls)'), 'notice modal paints the video preview card');
+    assert(hub.includes('hydrateAlertPosterImages(content)'), 'notice modal binds Play video after paint');
+    assert(js.includes('}, 400);') && !js.includes('}, 480)'), 'alert hold is 400ms');
+    assert(linkPreviewMarkup({
+        suppressLinkPreview: true,
+        linkPreview: { url: 'https://nexttrain.co.za', title: 'Next Train', site: 'nexttrain.co.za' },
+        message: 'https://nexttrain.co.za',
+    }) === '', 'a cleared preview stays hidden');
+    assert(firstHttpUrl({ title: 'See www.nexttrain.co.za today' }) === 'https://www.nexttrain.co.za/', 'a www title is a url');
+    assert(hub.includes('min-h-[8rem]') && hub.includes('referrerpolicy="no-referrer"'), 'alert preview keeps a visible image and does not send a hotlink referrer');
     assert(js.includes('buildPollShellHtml'), 'feed uses the shared poll shell');
     assert(js.includes('feed.dataset.ntAlertsSig'), 'alerts skip innerHTML rewrite when the feed is unchanged');
     assert(hub.includes('paintPollShellsAfterVote'), 'a vote paints every poll shell for that notice');
@@ -336,10 +426,32 @@ const now = 1_700_000_000_000;
     assert(!ui.includes('toDataURL'), 'full view does not re-encode the poster on the main thread');
     assert(!ui.includes('snapshotDecodedImage'), 'full view does not snapshot via canvas');
     assert(ui.includes('alert-image-lightbox-stage'), 'alert full view pinch is isolated to the image stage');
+    assert(ui.includes('lbDismissY') && ui.includes('closeLightbox()'), 'a downward swipe closes the image preview');
+    assert(ui.includes('collectChannelSlides') && ui.includes('[data-alert-lightbox], [data-alert-video]'), 'full view walks posters and video previews on the channel');
+    assert(ui.includes('if (index < 0 || index >= lbSlides.length) return'), 'full view moves one picture at a time and does not wrap');
+    assert(ui.includes('videoPreviewStill') && !ui.includes('alertVideoEmbedUrl'), 'a swiped video stays on its preview still');
+    assert(js.includes("!e.target.closest?.('[data-alert-video-play-chip]')"), 'tapping the preview still opens full view');
+    assert(js.includes('window.openLightbox(\'\', host)'), 'the preview still opens without starting playback');
+    assert(ui.includes('zoomLightboxAt') && ui.includes('LB_ZOOM'), 'a double tap zooms the image preview');
+    assert(ui.includes("new CustomEvent('nt-alert-lightbox'"), 'opening the preview names the notice');
+    assert(js.includes('alert-image-lightbox-react'), 'the image preview has a reaction row');
+    assert(js.includes("const LIGHTBOX_BAR_REACTIONS = ['love', 'pray', 'laugh']"), 'the image preview shows a few reactions');
+    assert(js.includes('alert-image-lightbox-reply'), 'the image preview has a reply bar');
+    assert(js.includes('submitAdvisoryReplyFromLightbox'), 'a photo reply sends without closing the picture first');
+    assert(js.includes('setLightboxComposing'), 'focusing the photo reply keeps the picture up');
+    assert(!js.includes('function openLightboxReply'), 'tapping the photo reply does not close the picture');
+    const plannerModals = readFileSync(new URL('../src/components/PlannerModals.astro', import.meta.url), 'utf8');
+    assert(plannerModals.includes('id="alert-image-lightbox-react"'), 'the preview dock is in the page');
+    assert(plannerModals.includes('id="alert-image-lightbox-reply"'), 'the preview reply bar is in the page');
+    assert(plannerModals.includes('id="alert-image-lightbox-reply" type="text"'), 'the photo reply is a text field');
+    assert(plannerModals.includes('placeholder="Reply"'), 'the photo reply field invites a reply');
+    assert(js.includes('data-lightbox-react'), 'preview reactions use the same keys as the feed');
     assert(!/class="[^"]*nt-alert-reply[^"]*\bw-full\b/.test(js), 'Reply is not a full-width button');
     assert(!/class="[^"]*\bw-full\b[^"]*nt-alert-reply/.test(js), 'Reply does not pick up w-full from a twin CTA');
 
     const appearance = readFileSync(new URL('../src/styles/appearance.css', import.meta.url), 'utf8');
+    assert(appearance.includes('html.nt-keyboard #alert-image-lightbox-dock'), 'the photo reply lifts with the keyboard');
+    assert(appearance.includes('bottom: var(--nt-kb-h, 0px);'), 'the photo reply docks to the keyboard height');
     assert(/\.nt-poll\s*\{[\s\S]*?background:\s*color-mix/.test(appearance), 'poll well uses pack tokens');
     assert(appearance.includes('.nt-poll-row.is-mine'), 'your-vote row is a padded highlight, not a ring');
     assert(/#alerts-channel-footer-close\s*\{[\s\S]*?background-color:\s*var\(--nt-primary\)/.test(appearance), 'footer Close stays the filled --nt-primary CTA');
@@ -347,8 +459,9 @@ const now = 1_700_000_000_000;
     assert(/#close-timetable-footer-btn,[\s\S]*?#fare-modal-close-btn\s*\{[\s\S]*?color:\s*var\(--nt-primary-fg\)/.test(appearance), 'timetable, tips, and fare Close match Alerts CTA ink');
     assert(/#planner-train-sheet-fare\s*\{[\s\S]*?background-color:\s*#ffffff/.test(appearance), 'train-sheet fare chip stays white on the blue header');
     assert(/\.nt-planner-map-btn\s*\{[\s\S]*?color:\s*var\(--nt-text\)/.test(appearance), 'View trip plan on map uses body ink');
-    assert(/\.nt-alert-reply\s*\{[\s\S]*?background-color:\s*var\(--nt-primary\)/.test(appearance), 'Reply uses the filled --nt-primary CTA');
-    assert(/\.nt-alert-reply\s*\{[\s\S]*?color:\s*var\(--nt-primary-fg\)/.test(appearance), 'Reply uses white primary text');
+    assert(/\.nt-alert-reply\s*\{[\s\S]*?color:\s*var\(--nt-primary\) !important/.test(appearance), 'Reply uses primary outline ink');
+    assert(/\.nt-alert-reply\s*\{[\s\S]*?border:\s*1px solid/.test(appearance), 'Reply is an outline');
+    assert(!/\.nt-alert-reply\s*\{[\s\S]*?background-color:\s*var\(--nt-primary\) !important/.test(appearance), 'Reply is not a filled primary button');
     assert(js.includes('nt-alert-source'), 'source citation uses the quiet source class');
     assert(!js.includes('nt-alert-source mt-3 text-[11px] font-semibold'), 'source dropped the chip-sized type');
     assert(!js.includes('0 views'), 'alert cards do not show a views counter');
@@ -362,6 +475,9 @@ const now = 1_700_000_000_000;
     assert(js.includes('Show raw counts'), 'admin can switch poll rows to raw counts');
     assert(!/admin && notice\?\.poll\?\.active[\s\S]{0,80}data-alert-pin-toggle/.test(js), 'pin is not limited to poll posts');
     assert(js.includes('isAdminAuthed() ? noticeScopeLabel'), 'region/scope is admin-only');
+    assert(js.includes('nt-alert-pin-label">Pinned'), 'a pinned notice shows the word Pinned');
+    assert(!js.includes('alerts-channel-close'), 'alerts close stays on the back arrow and footer Close');
+    assert(/#alerts-channel \.nt-alert-scope\s*\{[\s\S]*?border-radius:\s*999px/.test(appearance), 'admin scope is a small tag');
     assert(!js.includes('Posted ${'), 'Posted prefix removed from alert stamps');
 
     const shareApp = readFileSync(new URL('../src/lib/live-board-ui.js', import.meta.url), 'utf8');

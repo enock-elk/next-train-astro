@@ -598,10 +598,11 @@ export const ON_TIME_TOLERANCE_SEC = 90;
 
 /**
  * Where along the stop chain a projected position really is.
- * "at X" only when the position is within platform distance of X; everything
- * else between two stations is "approaching" the next one. Falls back to a
- * tight fraction split only when station coordinates are missing.
- * @returns {{ kind: 'at'|'approaching', index: number, station: string, label: string, distanceM: number|null }|null}
+ * "at X" only when the position is within platform distance of X.
+ * Past that, the train is "after X" until the next station is closer,
+ * then "approaching" that next station. Falls back to a fraction split
+ * only when station coordinates are missing.
+ * @returns {{ kind: 'at'|'after'|'approaching', index: number, station: string, label: string, distanceM: number|null }|null}
  */
 export function journeyPositionDetail(stops, progress, opts = {}) {
     if (!stops?.length || !Number.isFinite(progress)) return null;
@@ -621,18 +622,26 @@ export function journeyPositionDetail(stops, progress, opts = {}) {
     const a = coordsForStation(stops[i]?.station, index);
     const b = coordsForStation(stops[i + 1]?.station, index);
     const hopM = (a && b) ? haversineM(a.lat, a.lng, b.lat, b.lng) : 0;
+    const after = (index, station, distanceM) => (station
+        ? { kind: 'after', index, station, label: `after ${station}`, distanceM }
+        : null);
     if (hopM >= 20) {
         const fromHere = hopM * fraction;
         const toNext = hopM * (1 - fraction);
         if (fromHere <= radius) return at(i, here, fromHere);
         if (toNext <= radius) return at(i + 1, next, toNext);
-        if (next) return { kind: 'approaching', index: i + 1, station: next, label: `approaching ${next}`, distanceM: toNext };
-        return at(i, here, fromHere);
+        // Stay "after" the last station until the next one is actually closer.
+        if (next && toNext < fromHere) {
+            return { kind: 'approaching', index: i + 1, station: next, label: `approaching ${next}`, distanceM: toNext };
+        }
+        return after(i, here, fromHere) || at(i, here, fromHere);
     }
     if (fraction < 0.25) return at(i, here, null);
     if (fraction > 0.85) return at(i + 1, next, null) || at(i, here, null);
-    if (next) return { kind: 'approaching', index: i + 1, station: next, label: `approaching ${next}`, distanceM: null };
-    return at(i, here, null);
+    if (next && fraction > 0.5) {
+        return { kind: 'approaching', index: i + 1, station: next, label: `approaching ${next}`, distanceM: null };
+    }
+    return after(i, here, null) || at(i, here, null);
 }
 
 export function journeyPositionLabel(stops, progress, opts = {}) {

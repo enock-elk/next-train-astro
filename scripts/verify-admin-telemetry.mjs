@@ -109,12 +109,12 @@ ok(adminJs.includes("modal.id = 'admin-commuter-peek'"), 'user sheet modal id is
 ok(adminJs.includes('collectCommuterPeek'), 'user sheet uses cheap per-id reads');
 {
     const peekAt = adminJs.indexOf('collectCommuterPeek: async');
-    const peekSlice = adminJs.slice(peekAt, peekAt + 9000);
+    const peekSlice = adminJs.slice(peekAt, peekAt + 12000);
     ok(peekSlice.includes('sys_logs/fare_votes.json'), 'user sheet loads fare votes when the cache is cold');
     ok(peekSlice.includes('sys_logs/routing_fails.json'), 'user sheet loads routing fails when the cache is cold');
     ok(peekSlice.includes('sys_logs/fare_ticket_photos.json'), 'user sheet loads ticket photos when the cache is cold');
     ok(peekSlice.includes('fareLine') && peekSlice.includes('Fares'), 'user sheet always names fares');
-    ok(adminJs.includes('peek.fareLine') && adminJs.includes('peek.crashLine'), 'user sheet always prints fares and crashes');
+    ok(adminJs.includes("tile('Fares'") && adminJs.includes("tile('Crashes'"), 'user sheet always prints fares and crashes');
 }
 {
     const exportAt = adminJs.indexOf('Admin.exportCrashesTxt = () => {');
@@ -128,6 +128,17 @@ ok(adminJs.includes('collectCommuterPeek'), 'user sheet uses cheap per-id reads'
     ok(!uiJs.includes('Invalid or unexpected token'), 'Invalid or unexpected token is still reported');
 }
 ok(adminJs.includes('Look up more'), 'user sheet can hand off to User Trust search');
+ok(adminJs.includes('commuter-peek-feedback'), 'feedback tile opens the thread');
+ok(adminJs.includes('Last activity:'), 'user sheet shows latest activity');
+ok(adminJs.includes("Admin.startFeedbackChat(did, '')"), 'grey feedback tile can start a chat');
+ok(adminJs.includes('commuter-peek-trips'), 'trip plans tile opens plans');
+ok(!adminJs.includes('commuter-peek-chat'), 'user sheet has no Open chat button');
+ok(adminJs.includes('ut-tab-deletions') && adminJs.includes('ut-pane-deletions'), 'deletion requests live in User Trust');
+ok(!adminJs.includes("panel.id = 'account-deletions-panel'"), 'deletion requests are not a separate grid tile');
+ok(adminJs.includes('ut-unread-badge'), 'User Trust tile has a deletion badge');
+ok(adminJs.includes('purgeAccountDeletion'), 'User Trust deletions purge RTDB user data');
+ok(adminJs.includes('reclassifyPlannerFare'), 'fare votes can be reclassified by admin');
+ok(adminJs.includes('admin-changelog-meta') || adminJs.includes("id=\"admin-changelog-meta\""), 'version modal shows route/station meta');
 ok(!/showJoinedHint:[\s\S]{0,180}showToast\(label/.test(adminJs), 'i no longer only toasts the join date');
 ok(adminJs.includes('de-filter-day') && adminJs.includes('All days'), 'day-type filter stays off (All days)');
 ok(adminJs.includes('expandTripCorridorHits'), 'hit history is lazy-loaded on expand');

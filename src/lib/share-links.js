@@ -253,7 +253,7 @@ export function isSeoAppHandoff(linkOrSearch = null) {
         if (!ref) return false;
         const u = new URL(ref);
         if (u.origin !== location.origin) return false;
-        return /^\/(?:routes|regions|corridors)(?:\.html|\/|$)/i.test(u.pathname || '');
+        return /^\/(?:routes|regions|corridors|stations)(?:\.html|\/|$)/i.test(u.pathname || '');
     } catch {
         return false;
     }

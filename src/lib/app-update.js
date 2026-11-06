@@ -4,7 +4,7 @@
  * session-stability marks so CleverAds are not injected into a dying page.
  */
 import { APP_VERSION, FORCE_UPDATE_REQUIRED, withBase } from './config.js';
-import { safeStorage, destructiveNetworkIsSafe } from './utils.js';
+import { safeStorage, destructiveNetworkIsSafe, escapeHTML } from './utils.js';
 import { showToast, triggerHaptic } from './ui.js';
 import { markPendingReload } from './session-stability.js';
 
@@ -266,14 +266,19 @@ export function shouldToastAutomaticUpdate({ downloaded, newer, dumpAhead } = {}
     return !!(downloaded && newer && !dumpAhead);
 }
 
+/** One line when it fits. The version is one token, so a wrap centres that token. */
+export function crucialUpdateToastHtml(incomingVersion) {
+    const label = escapeHTML(incomingVersion || 'Latest');
+    return `Crucial system update incoming: <span class="whitespace-nowrap">${label}.</span>`;
+}
+
 /** Visible force-update toast (SPA parity) — always names the *incoming* version. */
 function showCrucialUpdateToast(incomingVersion) {
     if (crucialUpdateToastShown) return;
     crucialUpdateToastShown = true;
-    const label = incomingVersion || 'Latest';
-    const msg = `Crucial system update incoming: ${label}.`;
+    const msg = crucialUpdateToastHtml(incomingVersion);
     try {
-        showToast(msg, 'error', 5000, '', { cooldownMs: 30 * 60 * 1000 });
+        showToast(msg, 'error', 5000, '', { cooldownMs: 30 * 60 * 1000, center: true, fitLine: true });
     } catch { /* ignore */ }
 
     // Fallback banner if #toast is not in the DOM yet (early boot / race).
@@ -283,10 +288,11 @@ function showCrucialUpdateToast(incomingVersion) {
             el = document.createElement('div');
             el.id = 'nt-force-update-banner';
             el.setAttribute('role', 'status');
-            el.className = 'fixed bottom-4 left-1/2 -translate-x-1/2 z-[10000] max-w-[90vw] px-4 py-3 rounded-xl shadow-2xl bg-red-900/95 text-white text-sm font-bold border border-red-700';
+            el.className = 'fixed bottom-4 left-1/2 -translate-x-1/2 z-[10000] w-max max-w-[min(92vw,40rem)] px-4 py-3 rounded-xl shadow-2xl bg-red-900/95 text-white text-sm font-bold border border-red-700 text-center';
             document.body.appendChild(el);
         }
-        el.textContent = msg;
+        el.style.textAlign = 'center';
+        el.innerHTML = msg;
     }
 }
 

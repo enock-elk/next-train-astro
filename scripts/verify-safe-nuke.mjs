@@ -25,6 +25,7 @@ import {
     isIncomingWorkerDownloaded,
     shouldToastAutomaticUpdate,
     listAppVersionProbeUrls,
+    crucialUpdateToastHtml,
 } from '../src/lib/app-update.js';
 import {
     welcomeSeenFromPinnedSession,
@@ -124,20 +125,31 @@ assert(FORCE_UPDATE_REQUIRED === true, 'FORCE_UPDATE_REQUIRED is true for this b
 const logic = readFileSync(new URL('../src/lib/logic.js', import.meta.url), 'utf8');
 const hub = readFileSync(new URL('../src/lib/hub.js', import.meta.url), 'utf8');
 const update = readFileSync(new URL('../src/lib/app-update.js', import.meta.url), 'utf8');
+const ui = readFileSync(new URL('../src/lib/ui.js', import.meta.url), 'utf8');
 assert(logic.includes('killswitchCheckPromise'), 'concurrent killswitch calls share one in-flight check');
 assert(logic.includes("safeStorage.setItem(KILLSWITCH_PENDING_KEY"), 'killswitch writes pending marker before cleanup');
 assert(logic.indexOf('safeStorage.setItem(KILLSWITCH_APPLIED_KEY') > logic.indexOf("performHardCacheClear('system_killswitch')"), 'killswitch marks applied only after cleanup');
-assert(logic.includes("setInterval(() => poke({ visibleOnly: true }), 15_000)"), 'visible online sessions check NUKE every 15s');
+assert(logic.includes("setInterval(() => poke({ visibleOnly: true }), 60_000)"), 'visible online sessions check NUKE every 60s');
 assert(hub.indexOf('probeReachability(3500)') < hub.indexOf("if ('caches' in window)"), 'killswitch preflights before Cache Storage changes');
 assert(hub.includes("performHardCacheClear('check_updates', {"), 'manual Check for Updates still goes through the update path');
-assert(hub.includes("policy.systemKillswitch || (source === 'check_updates' && !skipNetworkPreflight)"), 'Check for Updates still preflights unless the commuter confirmed');
+assert(hub.includes("policy.systemKillswitch || source === 'check_updates'"), 'Check for Updates still preflights');
 assert(hub.includes('policy.systemKillswitch && isLieFi'), 'manual retry probes again instead of trusting a stale Lie-Fi flag');
 assert(hub.includes('openCacheClearConfirm'), 'Check for Updates asks before downloading');
-assert(hub.includes('openNetworkSlowConfirm'), 'slow Check for Updates asks before swapping');
+assert(!hub.includes('openNetworkSlowConfirm'), 'Check for Updates does not ask to proceed on a slow network');
 assert(hub.includes('installIncomingServiceWorker'), 'Check for Updates downloads the incoming worker before dropping the cached shell');
 assert(hub.includes('Kept your saved app. Try again on a stronger connection.'), 'failed Check for Updates keeps the cached app');
-assert(hub.includes('skipNetworkPreflight'), 'confirmed Check for Updates can skip only the check_updates probe');
-assert(!hub.includes('skipNetworkPreflight') || hub.includes('policy.systemKillswitch || (source === \'check_updates\' && !skipNetworkPreflight)'), 'killswitch never skips the network preflight');
+assert(!hub.includes('skipNetworkPreflight'), 'Check for Updates cannot skip the network preflight');
+assert(hub.includes('resetPhoneKeepDeviceId'), 'Reset this App keeps a device id path');
+{
+    const resetAt = hub.indexOf('export function showPhoneResetWarning');
+    const resetBody = hub.slice(resetAt, resetAt + 1400);
+    assert(resetBody.includes('openPhoneResetNetworkConfirm'), 'Reset this App asks when the connection is weak');
+    assert(resetBody.includes('probeReachability(3500)'), 'Reset this App probes the connection');
+    assert(resetBody.indexOf('probeReachability(3500)') < resetBody.indexOf('resetPhoneKeepDeviceId()'), 'Reset this App probes before it wipes');
+}
+assert(hub.includes("deleteIndexedDatabase('GuardianIdentityDB')"), 'Reset this phone clears the pinned identity store');
+assert(hub.includes('next_train_device_id'), 'Reset this phone writes the user id back');
+assert(!hub.includes("path + '?v=' + Date.now()"), 'Reset this phone does not invent a numeric hop');
 assert(hub.includes("source !== 'system_killswitch'"), 'admin NUKE never resets look or flushes prefs');
 assert(update.indexOf('await activateWaitingServiceWorker()') < update.indexOf("reloadToApplyUpdate('version_enforce')"), 'forced update activates waiting SW before reload');
 assert(update.includes("window.addEventListener('online', attempt)"), 'forced update retries immediately when online');
@@ -198,6 +210,15 @@ assert(
     'dump-ahead never toasts even if some other worker is waiting'
 );
 assert(update.includes('will not toast or restart until the worker actually installs'), 'dump-ahead already_current stays silent');
+const crucial = crucialUpdateToastHtml('V9_10.16.01');
+assert(crucial.startsWith('Crucial system update incoming: '), 'crucial line leads with the sentence');
+assert(crucial.includes('<span class="whitespace-nowrap">V9_10.16.01.</span>'), 'version stays one token on that line');
+assert(update.includes('center: true') && update.includes('fitLine: true'), 'crucial toast centres when the version uses the next line');
+assert(update.includes("el.style.textAlign = 'center'"), 'fallback banner centres the crucial line');
+assert(ui.includes("toastEl.style.textAlign = 'center'"), 'fit line centres the toast copy');
+assert(ui.includes('options.fitLine === true'), 'fit line is opt-in so other toasts stay as they are');
+assert(isAppVersionNewer('V9_10.16.01', 'V9_10.15.13'), '16.01 compares newer than 15.13');
+assert(isAppVersionNewer('V9_10.16.02', 'V9_10.16.01'), 'same-day build number increments');
 assert(
     update.indexOf('isIncomingWorkerDownloaded') < update.indexOf('showCrucialUpdateToast'),
     'forced update checks download before the crucial toast'

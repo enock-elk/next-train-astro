@@ -195,6 +195,15 @@ function pollChoiceButtons(pollId, poll) {
     return `<div class="nt-poll-choices${stack}"${multi}>${btn('A', poll.optionA)}${btn('B', poll.optionB)}${btn('C', poll.optionC)}</div>`;
 }
 
+function pollResultCounts(results) {
+    const row = results && typeof results === 'object' ? results : {};
+    const A = Number(row.A) || 0;
+    const B = Number(row.B) || 0;
+    const C = Number(row.C) || 0;
+    const total = Number(row.total);
+    return { A, B, C, total: Number.isFinite(total) && total > 0 ? total : A + B + C };
+}
+
 function pollMetaJson(poll, severity) {
     return JSON.stringify({
         question: poll.question || '',
@@ -225,10 +234,11 @@ export function buildPollShellHtml(notice, { mode = 'live' } = {}) {
     const attrs = `id="poll-container-${idAttr}" data-poll-shell="${idAttr}" data-poll-meta="${metaAttr}" data-poll-severity="${escapeHTML(severity)}" data-poll-open="${open ? '1' : '0'}"${multi ? ' data-poll-multi="1"' : ''} class="nt-poll"`;
     const liveMark = buildPollLiveLabelHtml({ open });
 
+    const seeded = pollResultCounts(notice.pollResults);
     if (!open) {
         return `<div ${attrs}><div class="nt-poll-results" data-poll-hydrate="1" data-poll-id="${idAttr}" data-poll-voted="${escapeHTML(voted)}" data-poll-closed="1">${buildPollResultsHtml({
             poll,
-            counts: { A: 0, B: 0, C: 0, total: 0 },
+            counts: seeded,
             votedOption: voted,
             includeQuestion: true,
         })}</div></div>`;
@@ -242,7 +252,7 @@ export function buildPollShellHtml(notice, { mode = 'live' } = {}) {
     if (voted && showResults) {
         return `<div ${attrs}><div class="nt-poll-results" data-poll-hydrate="1" data-poll-id="${idAttr}" data-poll-voted="${escapeHTML(voted)}">${buildPollResultsHtml({
             poll,
-            counts: { A: 0, B: 0, C: 0, total: 0 },
+            counts: pollResultCounts(notice.pollResults),
             votedOption: voted,
             includeQuestion: true,
         })}</div></div>`;

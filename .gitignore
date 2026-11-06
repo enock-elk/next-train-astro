@@ -10,6 +10,9 @@ dist/
 .netlify/
 .wrangler/
 
+# Live timetable overlay for SEO SSG (written by fetch-live-schedules-for-seo.mjs)
+public/data/.seo-build-database.json
+
 # Environment & secrets
 .env
 .env.*

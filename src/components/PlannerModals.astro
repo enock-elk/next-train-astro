@@ -2,6 +2,7 @@
 // Planner-critical modals + shared shells (strict clone from old SPA index.html)
 // Admin modals intentionally omitted until Phase 4.
 import { withBase } from '../lib/config.js';
+import ZoomControls from './ZoomControls.astro';
 ---
 
 <!-- Dropdown scrim (shared by planner day/time dropdowns) -->
@@ -25,8 +26,9 @@ import { withBase } from '../lib/config.js';
             </button>
         </div>
         
-        <div id="map-container" class="flex-grow overflow-hidden bg-gray-900 relative cursor-grab active:cursor-grabbing flex items-center justify-center">
+        <div id="map-container" class="flex-grow overflow-hidden bg-gray-900 relative flex items-center justify-center">
             <img id="map-image" data-map-src={withBase('images/network-map.png')} alt="Metrorail Network Map" class="w-full h-full object-contain transition-transform duration-75 origin-center" loading="lazy" decoding="async" onerror="if(!this.getAttribute('src'))return;this.style.display='none';var f=this.nextElementSibling;if(f){f.classList.remove('hidden');f.style.display='flex';}">
+            <ZoomControls />
             <div class="hidden flex-col items-center justify-center p-8 text-center text-gray-500 absolute inset-0">
                 <svg class="w-12 h-12 mb-4 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
                 <p class="font-bold text-gray-800 dark:text-gray-100">Map isn’t available offline</p>
@@ -41,13 +43,33 @@ import { withBase } from '../lib/config.js';
 </div>
 
 <!-- Alert / attachment image preview (do not reuse #map-modal — that flashes network-map.png).
-     Close stays in a bottom bar so an empty img cannot center it. Pinch/pan lives on the stage. -->
+     The picture fills the screen. Close is a small control. Reactions sit on a bottom dock when the picture belongs to an alert. Pinch/pan lives on the stage. -->
 <div id="alert-image-lightbox" class="fixed inset-0 bg-black z-[160] hidden flex-col [touch-action:none]" role="dialog" aria-modal="true" aria-label="Image Preview">
     <div id="alert-image-lightbox-stage" class="relative flex-1 min-h-0 overflow-hidden flex items-center justify-center [touch-action:none]">
         <img id="alert-image-lightbox-img" alt="Image Preview" draggable="false" decoding="sync" class="max-w-full max-h-full object-contain select-none pointer-events-none">
+        <ZoomControls />
     </div>
-    <div class="shrink-0 z-10 w-full px-4 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))] bg-black">
-        <button type="button" id="alert-image-lightbox-close" class="w-full max-w-sm mx-auto block bg-white hover:bg-gray-100 text-gray-900 font-bold py-3 px-4 rounded-lg focus:outline-none [touch-action:manipulation]">Close</button>
+    <button type="button" id="alert-image-lightbox-close" class="absolute top-[max(0.75rem,env(safe-area-inset-top))] right-3 z-20 w-11 h-11 rounded-full bg-black/55 text-white flex items-center justify-center border border-white/20 focus:outline-none [touch-action:manipulation]" aria-label="Close">
+        <svg class="w-6 h-6 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+    </button>
+    <div id="alert-image-lightbox-dock" class="hidden absolute inset-x-0 bottom-0 z-10 shrink-0 px-3 pt-8 pb-[max(1rem,env(safe-area-inset-bottom))] bg-gradient-to-t from-black via-black/70 to-transparent pointer-events-none [touch-action:manipulation]">
+        <form id="alert-image-lightbox-form" class="pointer-events-auto flex flex-col gap-2 [touch-action:manipulation]">
+            <div id="alert-image-lightbox-quote" class="hidden items-stretch overflow-hidden rounded-xl bg-white text-gray-900">
+                <span class="w-1 shrink-0 bg-[#25D366]" aria-hidden="true"></span>
+                <div class="min-w-0 flex-1 py-2 pl-2 pr-1">
+                    <div id="alert-image-lightbox-quote-title" class="truncate text-[13px] font-semibold text-[#128C7E]"></div>
+                    <div class="text-[12px] text-gray-500">Photo</div>
+                </div>
+                <img id="alert-image-lightbox-quote-img" alt="" class="m-1 h-12 w-12 shrink-0 rounded object-cover">
+            </div>
+            <div class="flex items-center gap-2">
+                <input id="alert-image-lightbox-reply" type="text" enterkeyhint="send" autocomplete="off" maxlength="2000" placeholder="Reply" class="min-w-0 flex-1 rounded-full border border-white/15 bg-white/10 px-4 py-2.5 text-[16px] text-white placeholder:text-white/70 focus:outline-none [touch-action:manipulation]">
+                <div id="alert-image-lightbox-react" class="flex shrink-0 items-center gap-1.5" role="group" aria-label="Reactions"></div>
+                <button type="submit" id="alert-image-lightbox-send" class="hidden h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#25D366] text-white focus:outline-none [touch-action:manipulation]" aria-label="Send">
+                    <svg class="pointer-events-none h-5 w-5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3.4 20.6 21 12 3.4 3.4l2.2 7.2L16 12l-10.4 1.4-2.2 7.2z"></path></svg>
+                </button>
+            </div>
+        </form>
     </div>
 </div>
 
@@ -70,8 +92,8 @@ import { withBase } from '../lib/config.js';
 </div>
 
 <!-- HELP / USER GUIDE MODAL -->
-<div id="help-modal" class="fixed inset-0 bg-black bg-opacity-80 z-[120] hidden flex items-center justify-center p-4 backdrop-blur-sm transition-opacity duration-300">
-    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-lg max-h-[85dvh] flex flex-col transform transition-transform duration-300 scale-95">
+<div id="help-modal" class="fixed inset-0 bg-black bg-opacity-80 z-[120] hidden flex flex-col p-2 backdrop-blur-sm transition-opacity duration-300">
+    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-lg mx-auto flex-1 min-h-0 flex flex-col overflow-hidden transform transition-transform duration-300 scale-95">
         <div class="p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center bg-gray-50 dark:bg-gray-900 rounded-t-xl">
             <h3 class="text-lg font-bold text-gray-900 dark:text-white flex items-center">
                 <svg class="w-5 h-5 mr-2 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path></svg>
@@ -82,7 +104,8 @@ import { withBase } from '../lib/config.js';
             </button>
         </div>
         
-        <div class="p-6 overflow-y-auto text-sm text-gray-700 dark:text-gray-300 space-y-5 leading-relaxed">
+        <div class="relative flex-1 min-h-0">
+        <div id="help-modal-body" class="absolute inset-0 p-6 overflow-y-auto text-sm text-gray-700 dark:text-gray-300 space-y-5 leading-relaxed">
             <div>
                 <h4 class="font-bold text-blue-600 dark:text-blue-400 mb-2 text-base tracking-tight">How planning works</h4>
                 <p class="mb-2 text-gray-600 dark:text-gray-300">Pick an origin, destination, and day. The planner searches active Metrorail corridors and shows realistic journeys, including transfers when a single train cannot take you all the way.</p>
@@ -109,10 +132,12 @@ import { withBase } from '../lib/config.js';
 
             <p class="text-xs text-gray-500 dark:text-gray-400">For the full app guide (live board, fares, offline, install), open <strong>User Guide &amp; Tips</strong> from the side menu.</p>
         </div>
+        <div class="nt-sheet-shade" data-shade-for="help-modal-body" aria-hidden="true"></div>
+        </div>
 
         <div class="p-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 rounded-b-xl">
             <button id="close-help-btn-2" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg shadow-md transition-colors focus:outline-none">
-                Got it!
+                Got it
             </button>
         </div>
     </div>
@@ -171,21 +196,24 @@ import { withBase } from '../lib/config.js';
 </div>
 
 <!-- PLANNER TRAIN SHEET (full origin → terminus column) -->
-<div id="planner-train-sheet-modal" class="fixed inset-0 bg-black/70 z-[130] hidden flex items-center justify-center p-2 backdrop-blur-sm transition-opacity duration-300">
-    <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md h-[min(96dvh,100%)] max-h-[96dvh] flex flex-col overflow-hidden border border-blue-100 dark:border-blue-900/40 transform transition-transform duration-300 scale-100">
-        <div class="relative shrink-0 px-5 pt-4 pb-3 bg-gradient-to-br from-blue-600 via-blue-600 to-indigo-700 text-white">
+<div id="planner-train-sheet-modal" class="fixed inset-0 bg-black/70 z-[130] hidden flex flex-col p-2 backdrop-blur-sm transition-opacity duration-300">
+    <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md mx-auto flex-1 min-h-0 flex flex-col overflow-hidden border border-blue-100 dark:border-blue-900/40 transform transition-transform duration-300 scale-100">
+        <div class="nt-train-sheet-head relative shrink-0 px-5 pt-4 pb-3 bg-gradient-to-br from-blue-600 via-blue-600 to-indigo-700 text-white">
             <p class="text-[10px] font-black uppercase tracking-[0.18em] text-blue-100/90 mb-1">Full train sheet</p>
             <h3 id="planner-train-sheet-title" class="text-lg font-black tracking-tight leading-snug break-words">Train</h3>
-            <p id="planner-train-sheet-direction" class="text-sm font-semibold text-white/95 mt-2">Origin → Terminus</p>
+            <p id="planner-train-sheet-direction" class="text-sm font-semibold text-white/95 mt-2 break-words">Origin → Terminus</p>
             <p id="planner-train-sheet-live" class="hidden mt-2 text-xs font-semibold text-blue-100"></p>
             <div class="mt-3 flex flex-wrap items-center gap-2">
-                <span id="planner-train-sheet-day" class="inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-widest bg-white/15 text-white">Weekdays</span>
+                <button type="button" id="planner-train-sheet-day" class="inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-widest bg-white/15 text-white cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-white/80">Weekdays</button>
                 <button type="button" id="planner-train-sheet-fare" data-route-id="" class="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-bold tracking-tight bg-white text-blue-800 hover:bg-blue-50 transition cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-white/80">Fare</button>
             </div>
         </div>
-        <ol id="planner-train-sheet-stops" class="px-5 py-2 overflow-y-auto custom-scrollbar flex-1 min-h-0"></ol>
+        <div class="relative flex-1 min-h-0">
+            <ol id="planner-train-sheet-stops" class="absolute inset-0 px-5 py-2 overflow-y-auto custom-scrollbar"></ol>
+            <div class="nt-sheet-shade" data-shade-for="planner-train-sheet-stops" aria-hidden="true"></div>
+        </div>
         <div class="p-4 border-t border-slate-100 dark:border-slate-700/70 bg-slate-50 dark:bg-slate-900/40 shrink-0">
-            <button type="button" onclick="if(location.hash === '#train-sheet') history.back(); else if(typeof window.closeSmoothModal === 'function') window.closeSmoothModal('planner-train-sheet-modal');" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-xl shadow-md transition-colors focus:outline-none">
+            <button type="button" id="planner-train-sheet-close" onclick="if(location.hash === '#train-sheet') history.back(); else if(typeof window.closeSmoothModal === 'function') window.closeSmoothModal('planner-train-sheet-modal');" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-xl transition-colors focus:outline-none">
                 Close
             </button>
         </div>

@@ -1,0 +1,101 @@
+<!--
+  About black box. Inline on purpose: production terser sets drop_console, so
+  bundled console.log never runs. window.ntTrace is the path that still reaches
+  DevTools and localStorage. Tiers: noise 6h, info 36h, flow/warn 72h, fail 7d.
+-->
+<script is:inline>
+  (function () {
+    var MAX_LOGS = 500;
+    var MAX_LINE = 240;
+    var MAX_ERROR_LINE = 800;
+    var LOG_KEY = 'nt_blackbox_logs';
+    var HOUR = 60 * 60 * 1000;
+    var TIER_MS = {
+      noise: 6 * HOUR,
+      info: 36 * HOUR,
+      flow: 72 * HOUR,
+      warn: 72 * HOUR,
+      fail: 7 * 24 * HOUR
+    };
+    function classify(type, msg) {
+      var low = String(msg || '').toLowerCase();
+      if (type === 'ERROR') return 'fail';
+      if (low.indexOf('tracker id not found') !== -1) return 'noise';
+      if (low.indexOf('admin authenticated') !== -1 || low.indexOf('admin logged out') !== -1) return 'noise';
+      if (low.indexOf('nt waterfall:') === 0 || low.indexOf('nt offlinechrome:') === 0) {
+        if (low.indexOf('fail') !== -1 || low.indexOf('timeout') !== -1 || low.indexOf('miss') !== -1
+          || low.indexOf('unavailable') !== -1 || low.indexOf('halt') !== -1
+          || low.indexOf('splash escape') !== -1 || low.indexOf('slow') !== -1
+          || low.indexOf('error') !== -1 || low.indexOf('kept-painted') !== -1)
+          return 'fail';
+        return 'flow';
+      }
+      if (type === 'WARN') return 'warn';
+      return 'info';
+    }
+    function skipLog(type, msg) {
+      if (type === 'ERROR') return false;
+      if (msg.indexOf('CLVR:') === 0) return true;
+      var low = msg.toLowerCase();
+      var optional = low.indexOf('telemetry fetch failed') !== -1
+        || low.indexOf('badge sync failed') !== -1
+        || low.indexOf('armscheduledalertpublisher') !== -1
+        || low.indexOf('publishduescheduledalerts') !== -1
+        || low.indexOf('failed to check system status') !== -1;
+      if (!optional) return false;
+      if (low.indexOf('failed to check system status') !== -1) return true;
+      return low.indexOf('abort') !== -1
+        || low.indexOf('offline') !== -1
+        || low.indexOf('failed to fetch') !== -1
+        || low.indexOf('authentication required') !== -1;
+    }
+    function saveLog(type, args) {
+      try {
+        var msg = Array.prototype.map.call(args, function (a) {
+          if (a instanceof Error) return a.message + ' ' + (a.stack || '');
+          return typeof a === 'object' ? JSON.stringify(a) : String(a);
+        }).join(' ');
+        var cap = type === 'ERROR' ? MAX_ERROR_LINE : MAX_LINE;
+        if (msg.indexOf('NT Waterfall:') !== -1 && cap < 480) cap = 480;
+        if (msg.length > cap) msg = msg.slice(0, cap);
+        if (skipLog(type, msg)) return;
+        var tier = classify(type, msg);
+        var logs = [];
+        try { logs = JSON.parse(localStorage.getItem(LOG_KEY) || '[]'); } catch (e) {}
+        if (!Array.isArray(logs)) logs = [];
+        var now = Date.now();
+        logs.push({ t: now, type: type, tier: tier, msg: msg });
+        logs = logs.filter(function (entry) {
+          var life = TIER_MS[entry && entry.tier] || TIER_MS[classify(entry && entry.type, entry && entry.msg)];
+          return entry && entry.t > now - life;
+        });
+        if (logs.length > MAX_LOGS) {
+          var rank = { noise: 0, info: 1, flow: 2, warn: 3, fail: 4 };
+          var ranked = logs.map(function (entry, index) {
+            return { index: index, rank: rank[entry.tier] != null ? rank[entry.tier] : 1, t: entry.t || 0 };
+          });
+          ranked.sort(function (a, b) { return a.rank - b.rank || a.t - b.t; });
+          var drop = {};
+          var extra = logs.length - MAX_LOGS;
+          for (var n = 0; n < extra; n++) drop[ranked[n].index] = 1;
+          logs = logs.filter(function (_, index) { return !drop[index]; });
+        }
+        localStorage.setItem(LOG_KEY, JSON.stringify(logs));
+      } catch (e) { /* quota */ }
+    }
+    var origLog = console.log, origWarn = console.warn, origError = console.error;
+    console.log = function () { saveLog('LOG', arguments); return origLog.apply(console, arguments); };
+    console.warn = function () { saveLog('WARN', arguments); return origWarn.apply(console, arguments); };
+    console.error = function () { saveLog('ERROR', arguments); return origError.apply(console, arguments); };
+    window.ntTrace = function (level, msg) {
+      var text = String(msg == null ? '' : msg);
+      var type = level === 'error' ? 'ERROR' : (level === 'warn' ? 'WARN' : 'LOG');
+      saveLog(type, [text]);
+      try {
+        if (type === 'ERROR') origError.call(console, text);
+        else if (type === 'WARN') origWarn.call(console, text);
+        else origLog.call(console, text);
+      } catch (e) {}
+    };
+  })();
+</script>

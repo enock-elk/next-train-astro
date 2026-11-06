@@ -20,6 +20,18 @@ export const RICH_TEXT_CSS = `
 #alert-msg {
   white-space: pre-wrap;
 }
+#alert-msg img, #admin-reply-text img, #disr-msg img {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  height: auto;
+  min-height: 4rem;
+  white-space: normal;
+  object-fit: contain;
+  background: #f3f4f6;
+  border-radius: 12px;
+  margin: 8px 0;
+}
 .nt-rich-body a, #notice-content a, #developer-reply-content a, #alert-msg a, #admin-reply-text a, #disr-msg a, #disruption-modal-body a {
   overflow-wrap: anywhere;
   word-break: break-word;
@@ -38,6 +50,18 @@ font[face="Times New Roman"], font[face="Times New Roman"], font[face="times new
 }
 .nt-rich-body u, #notice-content u, #developer-reply-content u, #alert-msg u, #admin-reply-text u, #disr-msg u, #disruption-modal-body u {
   text-decoration: underline;
+}
+.nt-rich-body s, #notice-content s, #alert-msg s, #admin-reply-text s, #disr-msg s {
+  text-decoration: line-through;
+}
+.nt-rich-body code, #notice-content code, #alert-msg code, #admin-reply-text code, #disr-msg code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+.nt-rich-body p, #notice-content p, #alert-msg p, #admin-reply-text p, #disr-msg p, #disruption-modal-body p {
+  margin: 0 0 0.7rem;
+}
+.nt-rich-body p:last-child, #notice-content p:last-child, #alert-msg p:last-child, #admin-reply-text p:last-child, #disr-msg p:last-child {
+  margin-bottom: 0;
 }
 .nt-rich-body h1, .nt-rich-body h2, .nt-rich-body h3, .nt-rich-body h4,
 #notice-content h1, #notice-content h2, #notice-content h3, #notice-content h4,
@@ -68,7 +92,7 @@ font[face="Times New Roman"], font[face="Times New Roman"], font[face="times new
 `;
 
 const ALLOWED_TAGS = new Set([
-    'B', 'I', 'U', 'STRONG', 'EM', 'A', 'BR', 'P', 'SPAN', 'DIV',
+    'B', 'I', 'U', 'S', 'STRIKE', 'CODE', 'STRONG', 'EM', 'A', 'BR', 'P', 'SPAN', 'DIV',
     'UL', 'OL', 'LI', 'IMG', 'BUTTON', 'FONT', 'H1', 'H2', 'H3', 'H4',
 ]);
 
@@ -81,8 +105,35 @@ const STYLE_ALLOW = new Set([
 
 const SAFE_HREF = /^(https?|mailto|tel):/i;
 
-/** Combined scanner: URL, email, then SA phone (0xx xxx xxxx / +27). */
-const CONTACT_RE = /https?:\/\/[^\s<>"'()]+|[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}|(?:\+?27|0)[\s.-]*[1-8]\d[\s.-]*\d{3}[\s.-]*\d{4}(?!\d)/g;
+/** Combined scanner: URL (http or www), email, then SA phone (0xx xxx xxxx / +27). */
+const CONTACT_RE = /(?:https?:\/\/|www\.)[^\s<>"'()]+|[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}|(?:\+?27|0)[\s.-]*[1-8]\d[\s.-]*\d{3}[\s.-]*\d{4}(?!\d)/g;
+
+function escapeMarkup(value) {
+    return String(value || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+}
+
+/**
+ * WhatsApp paste marks become the same tags the alert toolbar already uses.
+ * Plain text with no marks returns '' so the existing paste path stays as text.
+ * *bold* _italic_ ~strike~ ```mono```. A line that starts "* " stays a bullet.
+ */
+export function whatsappMarkupToHtml(value) {
+    const raw = String(value || '').replace(/\r\n/g, '\n');
+    if (!/[*_~`]/.test(raw)) return '';
+    let html = escapeMarkup(raw);
+    html = html.replace(/```([^`\n]+)```/g, '<code>$1</code>');
+    const apply = (pattern, tag) => {
+        html = html.replace(pattern, (_match, lead, body) => `${lead}<${tag}>${body}</${tag}>`);
+    };
+    apply(/(^|[\s([{"'])\*(\S(?:[^*\n]*\S)?)\*(?=$|[\s.,!?;:)\]}"'])/g, 'b');
+    apply(/(^|[\s([{"'])_(\S(?:[^_\n]*\S)?)_(?=$|[\s.,!?;:)\]}"'])/g, 'i');
+    apply(/(^|[\s([{"'])~(\S(?:[^~\n]*\S)?)~(?=$|[\s.,!?;:)\]}"'])/g, 's');
+    if (!/<(?:b|i|s|code)>/.test(html)) return '';
+    return html.replace(/\n/g, '<br>');
+}
 
 export function injectRichTextStyles() {
     if (typeof document === 'undefined') return;
@@ -146,9 +197,10 @@ export function splitContactTokens(text) {
     while (m) {
         if (m.index > last) parts.push({ type: 'text', value: src.slice(last, m.index) });
         const raw = m[0];
-        if (/^https?:\/\//i.test(raw)) {
+        if (/^https?:\/\//i.test(raw) || /^www\./i.test(raw)) {
             const { href, trail } = peelTrailingPunctuation(raw);
-            parts.push({ type: 'url', value: href, href });
+            const abs = /^www\./i.test(href) ? `https://${href}` : href;
+            parts.push({ type: 'url', value: href, href: abs });
             if (trail) parts.push({ type: 'text', value: trail });
         } else if (raw.includes('@')) {
             parts.push({ type: 'email', value: raw, href: `mailto:${raw}` });
@@ -267,6 +319,43 @@ export function sanitizeRichHtml(dirtyHtml) {
     return doc.body.innerHTML;
 }
 
+/** Escaped plain text with bare URLs, emails, and phones turned into links. */
+export function linkedPlainHtml(text) {
+    const tokens = splitContactTokens(text);
+    return tokens.map((t) => {
+        if (t.type === 'text') return escapeMarkup(t.value);
+        const extra = t.type === 'url' ? ' target="_blank" rel="noopener"' : '';
+        return `<a href="${escapeMarkup(t.href)}" class="text-blue-600 dark:text-blue-400 underline underline-offset-2"${extra}>${escapeMarkup(t.value)}</a>`;
+    }).join('');
+}
+
+/**
+ * Composer size steps: 2 small, 3 normal, 4 medium, 5 large.
+ * A pixel size is compared with the field's own size, so small steps to normal.
+ */
+export function fontStepFromPixels(px, basePx) {
+    const size = Number(px);
+    const base = Number(basePx) > 0 ? Number(basePx) : 16;
+    if (!Number.isFinite(size) || size <= 0) return 3;
+    const ratio = size / base;
+    if (ratio <= 0.9) return 2;
+    if (ratio <= 1.15) return 3;
+    if (ratio <= 1.45) return 4;
+    return 5;
+}
+
+/** One step. Small plus A+ is normal. It does not jump to large. */
+export function nextRichFontSize(current, direction) {
+    const steps = [2, 3, 4, 5];
+    let n = Number(current);
+    if (!steps.includes(n)) n = 3;
+    const index = steps.indexOf(n);
+    const next = direction === 'smaller'
+        ? Math.max(0, index - 1)
+        : Math.min(steps.length - 1, index + 1);
+    return steps[next];
+}
+
 /** Sanitize + autolink emails, phones, and bare http(s) URLs. */
 export function prepareRichHtml(dirtyHtml) {
     injectRichTextStyles();
@@ -282,4 +371,9 @@ if (typeof window !== 'undefined') {
     window.prepareRichHtml = prepareRichHtml;
     window.sanitizeRichHtml = sanitizeRichHtml;
     window.isSafeHref = isSafeHref;
+    window.whatsappMarkupToHtml = whatsappMarkupToHtml;
+    window.splitContactTokens = splitContactTokens;
+    window.linkedPlainHtml = linkedPlainHtml;
+    window.fontStepFromPixels = fontStepFromPixels;
+    window.nextRichFontSize = nextRichFontSize;
 }

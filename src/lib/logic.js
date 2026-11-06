@@ -19,8 +19,8 @@ import {
 
 import { 
     normalizeStationName, timeToSeconds, formatTimeDisplay, safeStorage, 
-    getDistanceFromLatLonInKm, resolveOperatingDayType, routeSheetKeyForDay,
-    simUsesSpecificDate, isRealTime, usesSaturdayScheduleSheet,
+    getDistanceFromLatLonInKm,     resolveOperatingDayType, routeSheetKeyForDay,
+    simUsesSpecificDate, isRealTime, usesSaturdayScheduleSheet, resolveScheduleSheetFamily,
     pruneExclusionsTree, readCachedExclusions, writeCachedExclusions,
     KILLSWITCH_APPLIED_KEY, KILLSWITCH_PENDING_KEY,
     newestUnappliedKillswitchTimestamp, createAsyncMutex, flattenPublicHolidays,
@@ -32,6 +32,7 @@ import {
     fetchScheduleOverride,
     resolveDayTypeWithOverride,
     maybePromptScheduleOverride,
+    appliedScheduleOverrideNote,
 } from './schedule-override.js';
 import {
     getGridOrderManifest,
@@ -111,6 +112,99 @@ function headerDateParts(opts = {}) {
     return { calendarDay: dateToCheck.getDay(), dateKey, year: dateToCheck.getFullYear() };
 }
 
+let headerDayNote = {
+    title: 'Schedule',
+    body: 'Weekday trains are running on this line today.',
+};
+
+function lineServiceName(routeId) {
+    const raw = String(ROUTES[routeId]?.name || '');
+    return raw.replace(/\s*<->\s*/g, ' to ').replace(/\s*↔\s*/g, ' to ').trim();
+}
+
+function saturdayClosedBody(routeId, publicHoliday, holidayName) {
+    const dayWord = String(holidayName || '').trim() || 'public holiday';
+    if (routeId === 'ec-berlin') {
+        return publicHoliday
+            ? `Metrorail Eastern Cape does not have ${dayWord} train service on the East London to Berlin line.`
+            : 'Metrorail Eastern Cape does not have Saturday train service on the East London to Berlin line.';
+    }
+    if (routeId === 'herc-koed') {
+        return publicHoliday
+            ? `Metrorail Gauteng does not have ${dayWord} train service on the Hercules to Koedoespoort line.`
+            : 'Metrorail Gauteng does not have Saturday train service on the Hercules to Koedoespoort line.';
+    }
+    const name = lineServiceName(routeId);
+    if (publicHoliday) {
+        return name
+            ? `${name} does not have ${dayWord} train service.`
+            : `This line does not have ${dayWord} train service.`;
+    }
+    return name
+        ? `${name} does not have a regular Saturday service.`
+        : 'This line does not have a regular Saturday service.';
+}
+
+/** Copy for the day-line button. An applied admin force uses that message. */
+export function describeHeaderDayNote({
+    dayType = 'weekday',
+    region = 'GP',
+    routeId = '',
+    holidayName = '',
+    holidayType = null,
+    satClosed = false,
+    override = null,
+} = {}) {
+    if (override?.title || override?.body) {
+        return {
+            title: String(override.title || '').trim() || 'Schedule update',
+            body: String(override.body || '').trim() || 'Our team has set this line to the weekday timetable.',
+        };
+    }
+    const holiday = String(holidayName || '').trim();
+    if (dayType === 'sunday') {
+        const regionName = REGIONS[region]?.name || '';
+        const line = lineServiceName(routeId);
+        const who = regionName ? `Metrorail ${regionName}` : 'Metrorail';
+        const body = line
+            ? `${who} does not run regular Sunday trains on the ${line} line.`
+            : `${who} does not run regular Sunday trains on this line.`;
+        return { title: 'No service', body: holiday ? `${holiday}. ${body}` : body };
+    }
+    const publicHoliday = holidayType === 'public_holiday' || holidayType === 'saturday' || dayType === 'public_holiday';
+    if (satClosed) {
+        return { title: 'No service', body: saturdayClosedBody(routeId, publicHoliday, holiday) };
+    }
+    if (publicHoliday) {
+        const sheet = resolveScheduleSheetFamily(dayType === 'public_holiday' ? 'public_holiday' : 'saturday', region);
+        const using = sheet === 'public_holiday'
+            ? 'The Western Cape uses its public holiday timetable today.'
+            : 'This public holiday uses the Saturday timetable.';
+        return { title: holiday || 'Public Holiday', body: holiday ? `${holiday}. ${using}` : using };
+    }
+    if (dayType === 'saturday') {
+        const running = 'Saturday trains are running on this line today.';
+        return { title: holiday || 'Saturday Schedule', body: holiday ? `${holiday}. ${running}` : running };
+    }
+    const running = 'Weekday trains are running on this line today.';
+    return { title: holiday || 'Weekday Schedule', body: holiday ? `${holiday}. ${running}` : running };
+}
+
+function openHeaderDayNote() {
+    const kicker = document.getElementById('schedule-day-kicker');
+    const titleEl = document.getElementById('schedule-day-title');
+    const bodyEl = document.getElementById('schedule-day-body');
+    if (kicker) kicker.textContent = "Today's schedule";
+    if (titleEl) titleEl.textContent = headerDayNote.title || 'Schedule';
+    if (bodyEl) bodyEl.textContent = headerDayNote.body || '';
+    const ok = document.getElementById('schedule-day-ok');
+    if (ok && ok.getAttribute('data-day-ok') !== '1') {
+        ok.setAttribute('data-day-ok', '1');
+        ok.addEventListener('click', () => closeSmoothModal('schedule-day-modal'));
+    }
+    openSmoothModal('schedule-day-modal');
+}
+
 /**
  * Header day chip. Sunday is always No Service. Saturday / GP-holiday shows
  * red No Service when the pinned route has no Saturday times in either direction.
@@ -136,26 +230,44 @@ export function paintHeaderDayLabel(opts = {}) {
     const noSatOnRoute = opts.noSaturdayOnRoute != null ? !!opts.noSaturdayOnRoute : currentRouteSaturdayClosed();
     const satClosed = usesSaturdayScheduleSheet(dayType, region) && noSatOnRoute;
 
-    let displayType = dayType === 'sunday' ? 'No Service'
+    const noService = dayType === 'sunday' || satClosed;
+    const overrideNote = appliedScheduleOverrideNote(region);
+    const overrideDayName = String(overrideNote?.title || '').trim();
+    let displayType = dayType === 'sunday' ? 'No service'
         : (dayType === 'public_holiday' ? 'Public Holiday Schedule'
         : (dayType === 'saturday' ? 'Saturday Schedule' : 'Weekday Schedule'));
     if (dateKey && HOLIDAY_NAMES[dateKey]) {
         displayType = dayType === 'sunday'
-            ? `${HOLIDAY_NAMES[dateKey]} · No Service`
+            ? `${HOLIDAY_NAMES[dateKey]} · No service`
             : (dayType === 'public_holiday'
                 ? `${HOLIDAY_NAMES[dateKey]} · Public Holiday`
                 : `${HOLIDAY_NAMES[dateKey]} Schedule`);
     }
+    // Forced schedule title becomes the day name chip (e.g. Election Day).
+    if (overrideDayName && !noService) {
+        displayType = overrideDayName;
+    }
     if (satClosed && dayType !== 'sunday') {
         displayType = (dateKey && HOLIDAY_NAMES[dateKey])
-            ? `${HOLIDAY_NAMES[dateKey]} · No Service`
-            : 'No Service';
+            ? `${HOLIDAY_NAMES[dateKey]} · No service`
+            : (overrideDayName ? `${overrideDayName} · No service` : 'No service');
     }
-    const typeClass = (dayType === 'sunday' || satClosed)
-        ? 'font-bold text-red-600 dark:text-red-400'
+    const typeClass = noService
+        ? 'font-semibold text-red-600 dark:text-red-400'
         : 'font-bold text-blue-600 dark:text-blue-400';
-    const html = `${dayNames[day] || ''} · <span class="${typeClass}">${displayType}</span>`;
+    el.classList.toggle('nt-day-quiet', noService);
+    const html = `${dayNames[day] || ''}<span class="${typeClass}">${displayType}</span>`;
     if (el.innerHTML !== html) el.innerHTML = html;
+    const holidayName = dateKey && HOLIDAY_NAMES[dateKey] ? HOLIDAY_NAMES[dateKey] : '';
+    headerDayNote = describeHeaderDayNote({
+        dayType,
+        region,
+        routeId: $currentRouteId.get() || '',
+        holidayName,
+        holidayType,
+        satClosed,
+        override: overrideNote,
+    });
     fitHeaderDayLabel();
     bindHeaderDayFit();
 }
@@ -174,7 +286,7 @@ export function fitHeaderDayLabel() {
     const avail = titleW > 8 ? titleW : (el.closest('.header-brand-block')?.clientWidth || 0);
     el.style.whiteSpace = 'nowrap';
     el.style.maxWidth = 'none';
-    el.style.display = 'block';
+    el.style.display = 'inline-block';
     el.style.boxSizing = 'border-box';
     el.style.fontWeight = '';
     el.style.color = '';
@@ -218,6 +330,7 @@ function bindHeaderDayFit() {
 
 if (typeof window !== 'undefined') {
     window.paintHeaderDayLabel = paintHeaderDayLabel;
+    window.openHeaderDayNote = openHeaderDayNote;
     window.fitHeaderDayLabel = fitHeaderDayLabel;
 }
 
@@ -231,9 +344,18 @@ export let isLieFi = false;
 export let _networkStruggleCount = 0;
 let _lastSlowNetworkToastTime = 0;
 let _reachabilityProbed = false;
+/** Share one in-flight schedule load so board+planner do not abort-restart each other. */
+let loadAllSchedulesInFlight = null;
+let loadAllSchedulesInFlightKey = '';
+/** Client-side overlay stamps — skip re-downloading exclusions/disruptions when fresh. */
+const OVERLAY_TTL_MS = 3 * 60 * 1000;
+let exclusionsOverlayAt = 0;
+let exclusionsOverlayBucket = '';
+let disruptionsOverlayAt = 0;
+let disruptionsOverlayBucket = '';
 
-/** Banner/toast only after this much continuous struggle + foreground. */
-const STRUGGLE_UI_MIN_MS = 30_000;
+/** Banner/toast only after this much of the current visible session. */
+const STRUGGLE_UI_MIN_MS = 15_000;
 let _struggleClockStartedAt = 0;
 let _pendingStruggleReason = null;
 let _struggleUiTimer = null;
@@ -242,6 +364,7 @@ let _struggleVisibilityBound = false;
 const REGION_DISPLAY_NAMES = { 'GP': 'Gauteng', 'WC': 'Western Cape', 'KZN': 'KwaZulu-Natal', 'EC': 'Eastern Cape' };
 
 function noteStruggleAttempt() {
+    bindStruggleVisibilityListener();
     if (!_struggleClockStartedAt) _struggleClockStartedAt = Date.now();
 }
 
@@ -268,9 +391,10 @@ function bindStruggleVisibilityListener() {
     document.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'hidden') {
             try { hideOfflineChrome(); } catch { /* ignore */ }
-            _pendingStruggleReason = null;
+            clearStruggleClock();
             return;
         }
+        clearStruggleClock();
         scheduleOfflineChrome();
     });
 }
@@ -320,7 +444,7 @@ function paintConnectionStruggleUi(reason = 'offline') {
 /**
  * Offline chrome only (banner + toast). Weak / Lie-Fi still arm network guards
  * via isLieFi / captive modal, but do not paint alternate banners.
- * Banner + toast only after ≥30s of trying and only while the tab is foreground.
+ * Banner + toast only after 15s of this visible session, and only while the tab is foreground.
  * @param {'offline'|'liefi'|'weak'|'slow_boot'} reason
  */
 export function engageConnectionStruggleUi(reason = 'offline') {
@@ -351,38 +475,114 @@ export function engageConnectionStruggleUi(reason = 'offline') {
  * cannot fake success.
  * @returns {Promise<'ok'|'offline'|'captive'|'timeout'>}
  */
+/** Stable blackbox prefix (ASCII, under the 240-char line cap). */
+function traceLine(level, line) {
+    try {
+        if (typeof window !== 'undefined' && typeof window.ntTrace === 'function') {
+            window.ntTrace(level, line);
+            return;
+        }
+        if (level === 'warn') console.warn(line);
+        else if (level === 'error') console.error(line);
+        else console.log(line);
+    } catch { /* ignore */ }
+}
+
+/** Survives production drop_console. The inline ntTrace writes DevTools and the black box. */
+function waterfallLog(msg) {
+    traceLine('log', `NT Waterfall: ${msg}`);
+}
+
+function waterfallWarn(msg) {
+    traceLine('warn', `NT Waterfall: ${msg}`);
+}
+
+function shortHost(url) {
+    try { return new URL(url).hostname; } catch { return String(url || '').slice(0, 40); }
+}
+
+/** Host + path for blackbox lines. Query strings stay off the log. */
+function netLabel(url) {
+    try {
+        const u = new URL(url, 'https://nexttrain.local');
+        return `${u.hostname}${u.pathname}`.replace(/\.json$/i, '').slice(0, 96);
+    } catch {
+        return String(url || '').split('?')[0].slice(0, 96);
+    }
+}
+
+/** Public hosts used when navigator.onLine lies (campus Wi‑Fi / captive radios). */
+function reachabilityFallbackUrls(stamp = Date.now()) {
+    return [
+        `https://nexttrain-cache.enock.workers.dev/config/maintenance.json?probe=${stamp}`,
+        `https://metrorail-next-train-default-rtdb.firebaseio.com/.json?shallow=true&probe=${stamp}`,
+        `https://cdn.jsdelivr.net/gh/enock-elk/next-train-astro@main/public/app-version.json?probe=${stamp}`,
+    ];
+}
+
+async function fetchReachabilityProbe(url, timeoutMs) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+        const res = await fetch(url, { signal: controller.signal, cache: 'no-store' });
+        return res;
+    } finally {
+        clearTimeout(timer);
+    }
+}
+
 export async function probeReachability(timeoutMs = 3500) {
     if (typeof window === 'undefined' || typeof navigator === 'undefined') return 'ok';
+    const urls = reachabilityFallbackUrls();
+    waterfallLog(`probe start onLine=${navigator.onLine} isLieFi=${!!isLieFi} timeoutMs=${timeoutMs}`);
+    // OS offline flag lies on some campus Wi‑Fi while GitHub / Firebase still answer.
     if (!navigator.onLine) {
+        for (const url of urls) {
+            const host = shortHost(url);
+            waterfallLog(`OS offline — probing ${host}`);
+            try {
+                const res = await fetchReachabilityProbe(url, Math.min(timeoutMs, 2500));
+                waterfallLog(`OS offline but ${host} answered HTTP ${res.status} — treat as weak, continue waterfall`);
+                engageConnectionStruggleUi('weak');
+                return 'timeout';
+            } catch (err) {
+                waterfallWarn(`OS offline — ${host} failed: ${err?.name || err?.message || 'error'}`);
+            }
+        }
+        waterfallWarn('probe result=offline (OS offline and all fallback hosts failed)');
         engageConnectionStruggleUi('offline');
         return 'offline';
     }
     try {
-        const controller = new AbortController();
-        const timer = setTimeout(() => controller.abort(), timeoutMs);
-        const url = `https://nexttrain-cache.enock.workers.dev/config/maintenance.json?probe=${Date.now()}`;
-        const res = await fetch(url, { signal: controller.signal, cache: 'no-store' });
-        clearTimeout(timer);
+        const primary = urls[0];
+        waterfallLog(`probing primary ${shortHost(primary)}`);
+        const res = await fetchReachabilityProbe(primary, timeoutMs);
         const ct = res.headers.get('content-type') || '';
-        if (ct.includes('text/html')) {
+        // Captive portals intercept with an HTML login page. A JSON 403/5xx from
+        // the edge (campus firewall, missing Origin, worker blip) is NOT captive —
+        // treating it as Lie-Fi used to halt Firebase and the GitHub dump too.
+        if (res.ok && ct.includes('text/html')) {
+            waterfallWarn(`probe result=captive (HTML ${res.status} from ${shortHost(primary)})`);
             isLieFi = true; // halt network sync immediately — do not wait for 30s banner paint
             engageConnectionStruggleUi('liefi');
             try { window.triggerNetworkStruggleModal?.('captive'); } catch { /* ignore */ }
             return 'captive';
         }
         if (!res.ok) {
-            isLieFi = true;
-            engageConnectionStruggleUi('liefi');
-            return 'captive';
+            waterfallWarn(`probe result=timeout (edge HTTP ${res.status} — not Lie-Fi; waterfall may still try Firebase/GitHub)`);
+            engageConnectionStruggleUi('weak');
+            return 'timeout';
         }
         isLieFi = false;
         clearStruggleClock();
         if (navigator.onLine) {
             try { hideOfflineChrome(); } catch { /* ignore */ }
         }
+        waterfallLog(`probe result=ok (edge HTTP ${res.status})`);
         return 'ok';
     } catch (err) {
         // Slow / blackhole — warn but allow schedule waterfall to keep trying
+        waterfallWarn(`probe result=timeout (edge error: ${err?.name || err?.message || 'error'})`);
         engageConnectionStruggleUi('weak');
         return 'timeout';
     }
@@ -391,9 +591,11 @@ export async function probeReachability(timeoutMs = 3500) {
 /** @returns {Promise<'ok'|'offline'|'captive'|'timeout'>} */
 export async function ensureReachabilityProbed() {
     if (_reachabilityProbed) {
-        if (typeof navigator !== 'undefined' && !navigator.onLine) return 'offline';
-        if (isLieFi) return 'captive';
-        return 'ok';
+        let cached = 'ok';
+        if (typeof navigator !== 'undefined' && !navigator.onLine) cached = 'offline';
+        else if (isLieFi) cached = 'captive';
+        waterfallLog(`reachability cached → ${cached} (onLine=${typeof navigator !== 'undefined' ? navigator.onLine : '?'} isLieFi=${!!isLieFi})`);
+        return cached;
     }
     _reachabilityProbed = true;
     return probeReachability();
@@ -527,27 +729,47 @@ if (typeof window !== 'undefined') {
 }
 
 // --- GUARDIAN FETCH WRAPPER ---
+/**
+ * @param {string} url
+ * @param {RequestInit & { ntSoftNetwork?: boolean }} [options]
+ *   ntSoftNetwork: schedule waterfall retries — do not trip Lie-Fi on a single
+ *   timeout (Clarity: one blocked host used to strand "Loading stations...").
+ * @param {number} [timeoutMs]
+ */
 export async function guardianFetch(url, options = {}, timeoutMs = 8000) {
+    // Do not hard-throw on navigator.onLine === false. Campus Wi‑Fi often lies
+    // while GitHub / Firebase still answer; let the request fail on its own.
+    const softNetwork = !!options.ntSoftNetwork;
+    const { ntSoftNetwork: _softFlag, ...fetchOptions } = options;
+    const startedAt = Date.now();
+    const label = netLabel(url);
+    const onLine = typeof navigator !== 'undefined' ? navigator.onLine : '?';
+    waterfallLog(`net start ${label} timeoutMs=${timeoutMs} onLine=${onLine}`);
     if (typeof window !== 'undefined' && typeof navigator !== 'undefined' && !navigator.onLine) {
+        waterfallLog(`net OS offline ${label} (still attempting)`);
         engageConnectionStruggleUi('offline');
-        throw new Error("OS reports offline state.");
     }
     
     const controller = new AbortController();
-    const id = setTimeout(() => controller.abort(), timeoutMs);
+    let timedOut = false;
+    const id = setTimeout(() => {
+        timedOut = true;
+        controller.abort();
+    }, timeoutMs);
     
-    if (options.signal) {
-        if (options.signal.aborted) controller.abort();
-        else options.signal.addEventListener('abort', () => controller.abort());
+    if (fetchOptions.signal) {
+        if (fetchOptions.signal.aborted) controller.abort();
+        else fetchOptions.signal.addEventListener('abort', () => controller.abort());
     }
     
     try {
-        const response = await fetch(url, { ...options, signal: controller.signal });
+        const response = await fetch(url, { ...fetchOptions, signal: controller.signal });
         clearTimeout(id);
 
         // Captive portals often return HTTP 200 with HTML login pages
         const contentType = response.headers.get('content-type') || '';
         if (contentType.includes('text/html')) {
+            waterfallWarn(`net fail ${label} captive HTML HTTP ${response.status} in ${Date.now() - startedAt}ms`);
             _networkStruggleCount = 0;
             isLieFi = true;
             engageConnectionStruggleUi('liefi');
@@ -558,6 +780,7 @@ export async function guardianFetch(url, options = {}, timeoutMs = 8000) {
         isLieFi = false;
         _networkStruggleCount = 0;
         clearStruggleClock();
+        waterfallLog(`net ok ${label} HTTP ${response.status} in ${Date.now() - startedAt}ms`);
         
         if (typeof document !== 'undefined') {
             try { hideOfflineChrome(); } catch { /* ignore */ }
@@ -570,16 +793,58 @@ export async function guardianFetch(url, options = {}, timeoutMs = 8000) {
         return response;
     } catch (error) {
         clearTimeout(id);
-        if (options.signal && options.signal.aborted) {
-            isLieFi = false; 
+        if (fetchOptions.signal && fetchOptions.signal.aborted) {
+            isLieFi = false;
+            waterfallWarn(`net abort ${label} in ${Date.now() - startedAt}ms`);
             throw error;
         }
 
         if (error.message === 'Captive Portal Detected') throw error;
 
+        waterfallWarn(
+            `net fail ${label} ${timedOut ? `timeout ${timeoutMs}ms` : (error?.message || error?.name || 'error')} in ${Date.now() - startedAt}ms`
+        );
+
+        // Per-attempt timeout must NOT surface as AbortError — callers that
+        // treat AbortError as "cancel the whole waterfall" would skip GitHub.
+        if (timedOut) {
+            const timeoutErr = new Error(`Timeout after ${timeoutMs}ms`);
+            timeoutErr.name = 'TimeoutError';
+            if (!softNetwork) {
+                _networkStruggleCount++;
+                noteStruggleAttempt();
+                if (typeof navigator !== 'undefined' && navigator.onLine) {
+                    console.warn(`🛡️ Guardian: Request to ${url} timed out while OS reports online.`);
+                    const failThreshold = (typeof window !== 'undefined' && !window._appStabilized) ? 1 : 3;
+                    if (_networkStruggleCount >= failThreshold) {
+                        const hasRamCache = !!$fullDatabase.get();
+                        const hasDiskCache = !!safeStorage.getItem(`full_db_${$userRegion.get() || 'GP'}`);
+                        _networkStruggleCount = 0;
+                        engageConnectionStruggleUi('liefi');
+                        if (!hasRamCache && !hasDiskCache && typeof window !== 'undefined' && typeof window.triggerNetworkStruggleModal === 'function' && struggleElapsedOk() && isActiveForegroundSession()) {
+                            window.triggerNetworkStruggleModal();
+                        }
+                    } else if (struggleElapsedOk() && isActiveForegroundSession()) {
+                        const now = Date.now();
+                        if (now - _lastSlowNetworkToastTime > 120_000) {
+                            _lastSlowNetworkToastTime = now;
+                            showToast("Connection is very slow. Still trying...", "warning", 3500, '', { cooldownMs: 120_000 });
+                        }
+                    }
+                } else {
+                    engageConnectionStruggleUi('offline');
+                }
+            }
+            throw timeoutErr;
+        }
+
         if (error.name === 'AbortError' || (error.message && (error.message.includes('fetch') || error.message.includes('Network') || error.message.includes('Failed to fetch')))) {
             _networkStruggleCount++;
             noteStruggleAttempt();
+            // Soft schedule retries: count noise, but do not hard-stop as Lie-Fi.
+            if (softNetwork) {
+                throw error;
+            }
             // First boot: trip Lie-Fi after 1 failure. Mid-session: need 3 (avoid flapping).
             const failThreshold = (typeof window !== 'undefined' && !window._appStabilized) ? 1 : 3;
             // OS may still report online for Wi‑Fi/mobile without a usable internet path
@@ -590,7 +855,7 @@ export async function guardianFetch(url, options = {}, timeoutMs = 8000) {
                     const hasDiskCache = !!safeStorage.getItem(`full_db_${$userRegion.get() || 'GP'}`);
                     _networkStruggleCount = 0;
                     engageConnectionStruggleUi('liefi');
-                    // Modal also waits for the 30s struggle gate (same clock).
+                    // Modal also waits for the 15s struggle gate of this visible session.
                     if (!hasRamCache && !hasDiskCache && typeof window !== 'undefined' && typeof window.triggerNetworkStruggleModal === 'function' && struggleElapsedOk() && isActiveForegroundSession()) {
                         window.triggerNetworkStruggleModal();
                     }
@@ -689,8 +954,8 @@ export function bindKillswitchWatch() {
         if (document.visibilityState === 'visible') poke();
     });
     poke();
-    setInterval(() => poke({ visibleOnly: true }), 15_000);
-    console.log('🛡️ Guardian: NUKE listener armed (every 15s while visible, and on focus/online).');
+    setInterval(() => poke({ visibleOnly: true }), 60_000);
+    console.log('🛡️ Guardian: NUKE listener armed (every 60s while visible, and on focus/online).');
 }
 
 /** Remote special-event route activation without a deploy. */
@@ -747,7 +1012,7 @@ const DB_NAME = 'NextTrainDB';
 const STORE_NAME = 'SchedulesStore';
 const DB_VERSION = 1;
 
-export function initDB(retryCount = 0) {
+export function initDB() {
     return new Promise((resolve, reject) => {
         if (typeof window === 'undefined' || !window.indexedDB) {
             reject(new Error("IndexedDB not supported"));
@@ -755,13 +1020,10 @@ export function initDB(retryCount = 0) {
         }
         try {
             const request = indexedDB.open(DB_NAME, DB_VERSION);
-            request.onerror = (e) => {
-                if (retryCount === 0) {
-                    const deleteReq = indexedDB.deleteDatabase(DB_NAME);
-                    deleteReq.onsuccess = () => initDB(1).then(resolve).catch(reject);
-                    deleteReq.onerror = () => reject(new Error("Fatal IDB Deletion Failure"));
-                } else reject(e.target.error || new Error("IDB Open Error"));
-            };
+            // Never deleteDatabase here. A blocked or one-off open error used to
+            // wipe the only offline timetable, then hang the splash on the delete.
+            request.onerror = (e) => reject(e.target.error || new Error("IDB Open Error"));
+            request.onblocked = () => reject(new Error("IDB open blocked"));
             request.onsuccess = (e) => resolve(e.target.result);
             request.onupgradeneeded = (e) => {
                 const db = e.target.result;
@@ -771,22 +1033,49 @@ export function initDB(retryCount = 0) {
     });
 }
 
+/** Low-end Android can leave indexedDB.open pending forever. */
+const IDB_CACHE_TIMEOUT_MS = 1200;
+/** Which store satisfied the latest loadFromLocalCache call. */
+let lastLocalCacheTier = 'none';
+
+function withTimeout(promise, ms, label) {
+    return new Promise((resolve, reject) => {
+        const timer = setTimeout(() => {
+            const err = new Error(`${label} timed out after ${ms}ms`);
+            err.name = 'TimeoutError';
+            reject(err);
+        }, ms);
+        Promise.resolve(promise).then(
+            (value) => { clearTimeout(timer); resolve(value); },
+            (err) => { clearTimeout(timer); reject(err); },
+        );
+    });
+}
+
 export async function saveToLocalCache(key, data, signal = null) {
     if (signal && signal.aborted) return false;
     const cacheEntry = { timestamp: Date.now(), data: data };
     memoryFallbackCache[key] = cacheEntry;
 
     try {
-        const db = await initDB();
+        const db = await withTimeout(initDB(), IDB_CACHE_TIMEOUT_MS, 'idb-open');
         if (signal && signal.aborted) return false;
         return new Promise((resolve, reject) => {
             const tx = db.transaction(STORE_NAME, 'readwrite');
             tx.objectStore(STORE_NAME).put(cacheEntry, key);
-            tx.oncomplete = () => resolve(true);
+            tx.oncomplete = () => {
+                waterfallLog(`cache write idb key=${key}`);
+                resolve(true);
+            };
             tx.onerror = () => reject(tx.error);
         });
     } catch (e) {
-        try { safeStorage.setItem(key, JSON.stringify(cacheEntry)); } catch(ex) {}
+        try {
+            safeStorage.setItem(key, JSON.stringify(cacheEntry));
+            waterfallWarn(`cache write localStorage key=${key} (idb unavailable)`);
+        } catch (ex) {
+            waterfallWarn(`cache write failed key=${key}`);
+        }
         return false;
     }
 }
@@ -804,32 +1093,56 @@ function readLocalStorageCache(key) {
 }
 
 export async function loadFromLocalCache(key, signal = null) {
-    if (signal && signal.aborted) return null;
-    if (memoryFallbackCache[key]) return memoryFallbackCache[key];
+    if (signal && signal.aborted) {
+        lastLocalCacheTier = 'aborted';
+        return null;
+    }
+    if (memoryFallbackCache[key]) {
+        lastLocalCacheTier = 'memory';
+        waterfallLog(`cache hit memory key=${key}`);
+        return memoryFallbackCache[key];
+    }
 
+    waterfallLog(`cache lookup key=${key} memory=miss`);
     try {
-        const db = await initDB();
-        if (signal && signal.aborted) return null;
-        
-        const fromIdb = await new Promise((resolve, reject) => {
+        const db = await withTimeout(initDB(), IDB_CACHE_TIMEOUT_MS, 'idb-open');
+        if (signal && signal.aborted) {
+            lastLocalCacheTier = 'aborted';
+            return null;
+        }
+
+        const fromIdb = await withTimeout(new Promise((resolve, reject) => {
             const tx = db.transaction(STORE_NAME, 'readonly');
             const request = tx.objectStore(STORE_NAME).get(key);
             request.onsuccess = () => {
                 if (signal && signal.aborted) return resolve(null);
                 if (request.result) {
-                    memoryFallbackCache[key] = request.result; 
+                    memoryFallbackCache[key] = request.result;
                     resolve(request.result);
                 } else resolve(null);
-            }
+            };
             request.onerror = () => reject(request.error);
-        });
-        // IDB open success with a missing key used to skip localStorage entirely —
-        // that broke offline relaunch when only the localStorage fallback was written.
-        if (fromIdb) return fromIdb;
-        return readLocalStorageCache(key);
+        }), IDB_CACHE_TIMEOUT_MS, 'idb-read');
+        if (fromIdb) {
+            lastLocalCacheTier = 'idb';
+            waterfallLog(`cache hit idb key=${key}`);
+            return fromIdb;
+        }
+        waterfallLog(`cache miss idb key=${key}`);
     } catch (e) {
-        return readLocalStorageCache(key);
+        waterfallWarn(`cache idb unavailable key=${key} reason=${e?.message || e?.name || 'error'}`);
     }
+    // IDB open success with a missing key used to skip localStorage entirely —
+    // that broke offline relaunch when only the localStorage fallback was written.
+    const fromLs = readLocalStorageCache(key);
+    if (fromLs) {
+        lastLocalCacheTier = 'localStorage';
+        waterfallLog(`cache hit localStorage key=${key}`);
+        return fromLs;
+    }
+    lastLocalCacheTier = 'miss';
+    waterfallLog(`cache miss key=${key} (memory, idb, localStorage)`);
+    return null;
 }
 
 // --- PARSERS & HELPERS ---
@@ -1135,17 +1448,38 @@ async function loadBundledScheduleDump(signal = null) {
         try { signal.addEventListener('abort', onAbort, { once: true }); } catch { /* ignore */ }
     }
     const timer = setTimeout(onAbort, 4000);
+    const startedAt = Date.now();
+    waterfallLog('bundled dump try data/full-database.json cache=force-cache timeoutMs=4000');
     try {
         const res = await fetch(url, {
             signal: ctrl?.signal,
             cache: 'force-cache',
             headers: { Accept: 'application/json' },
         });
-        if (!res || !res.ok) return null;
+        if (!res || !res.ok) {
+            waterfallWarn(`bundled dump miss HTTP ${res ? res.status : 'none'} in ${Date.now() - startedAt}ms`);
+            return null;
+        }
         const ct = res.headers.get('content-type') || '';
-        if (ct.includes('text/html')) return null;
-        return await res.json();
-    } catch {
+        if (ct.includes('text/html')) {
+            waterfallWarn('bundled dump miss HTML (captive or missing file)');
+            return null;
+        }
+        let via = 'unknown';
+        try {
+            const name = res.url || url;
+            const entries = typeof performance !== 'undefined' && performance.getEntriesByName
+                ? performance.getEntriesByName(name)
+                : [];
+            const timing = entries && entries.length ? entries[entries.length - 1] : null;
+            if (timing && timing.transferSize === 0 && timing.decodedBodySize > 0) via = 'cache';
+            else if (timing && timing.transferSize > 0) via = 'network';
+        } catch { /* ignore */ }
+        const body = await res.json();
+        waterfallLog(`bundled dump hit HTTP ${res.status} via=${via} in ${Date.now() - startedAt}ms`);
+        return body;
+    } catch (err) {
+        waterfallWarn(`bundled dump fail ${err?.name === 'AbortError' ? 'timeout 4000ms' : (err?.message || err?.name || 'error')} in ${Date.now() - startedAt}ms`);
         return null;
     } finally {
         clearTimeout(timer);
@@ -1171,10 +1505,21 @@ function markSchedulesCoreReady() {
 }
 
 // --- GUARDIAN PHASE B: EAGER RENDERING PROTOCOL ---
-export async function loadAllSchedules(force = false) {
-    if (typeof window !== 'undefined' && window._suppressReloads && !force) return;
+async function loadAllSchedulesInner(force = false) {
+    const scheduleStartedAt = Date.now();
+    if (typeof window !== 'undefined' && window._suppressReloads && !force) {
+        waterfallLog('schedule load skipped suppressReloads');
+        return;
+    }
 
-    let usedCache = false; 
+    let usedCache = false;
+    /** What painted the board first this session (cache / bundled / none). */
+    let paintedFrom = 'none';
+    /** Which network host won the background waterfall (or none / skipped). */
+    let networkWon = '';
+    /** Per-host outcome so the black box shows the chain, not only the winner. */
+    let sourceChain = 'not-started';
+    let cacheTier = 'none';
     const currentGen = regionSwapGeneration; 
     
     if (scheduleAbortController) scheduleAbortController.abort();
@@ -1183,9 +1528,15 @@ export async function loadAllSchedules(force = false) {
     const requestedRouteId = $currentRouteId.get();
     
     try {
-        if (!requestedRouteId) return; 
+        if (!requestedRouteId) {
+            waterfallLog('schedule load skipped no route');
+            return;
+        }
         const currentRoute = ROUTES[requestedRouteId];
-        if (!currentRoute) return;
+        if (!currentRoute) {
+            waterfallLog(`schedule load skipped unknown route=${requestedRouteId}`);
+            return;
+        }
         const rememberRouteRevision = (database, notify = false) => {
             if ($currentRouteId.get() !== requestedRouteId) return;
             const changed = recordRouteScheduleRevision({
@@ -1214,7 +1565,10 @@ export async function loadAllSchedules(force = false) {
             return flattenPublicHolidays(mergedDb);
         };
 
-        if (!currentRoute.isActive) return;
+        if (!currentRoute.isActive) {
+            waterfallLog(`schedule load skipped inactive route=${requestedRouteId}`);
+            return;
+        }
 
         // Last-good corridor bans before any board/grid paint (offline + slow overlay fetch).
         try {
@@ -1229,6 +1583,7 @@ export async function loadAllSchedules(force = false) {
         // reached IndexedDB, so the board stayed on "Loading stations…".
         const cacheKey = `full_db_${$userRegion.get()}`;
         const cachedDB = await loadFromLocalCache(cacheKey, fetchSignal);
+        cacheTier = lastLocalCacheTier;
 
         if (fetchSignal.aborted || $currentRouteId.get() !== requestedRouteId) return;
 
@@ -1250,6 +1605,8 @@ export async function loadAllSchedules(force = false) {
                 if (typeof window !== 'undefined') window.MASTER_STATION_LIST = mList;
                 
                 usedCache = true;
+                paintedFrom = 'cache';
+                waterfallLog(`painted from local cache key=${cacheKey} tier=${cacheTier}`);
                 // Boot UX: drop "Loading schedules…" as soon as IndexedDB paints —
                 // do not hold the shell for the background network waterfall.
                 markSchedulesCoreReady();
@@ -1271,18 +1628,28 @@ export async function loadAllSchedules(force = false) {
                     $masterStationList.set(mList);
                     if (typeof window !== 'undefined') window.MASTER_STATION_LIST = mList;
                     usedCache = true;
+                    paintedFrom = 'bundled';
+                    waterfallLog('painted from bundled same-origin dump');
                     markSchedulesCoreReady();
                     try { await saveToLocalCache(cacheKey, bundledDump, fetchSignal); } catch { /* ignore */ }
                 } catch (err) {
                     console.error("🛡️ Guardian: Bundled schedule dump parse failed.", err);
                 }
+            } else {
+                waterfallLog('no local cache and no bundled dump — waiting on network waterfall');
             }
         }
 
 
         // 2. BACKGROUND NETWORK SYNC (LIE-FI PROTECTED)
-        if (typeof window !== 'undefined' && typeof navigator !== 'undefined' && (!navigator.onLine || (isLieFi && !force))) {
-            console.log("🛡️ Guardian: Offline/Lie-Fi detected. Halting background network sync.");
+        // Captive Lie-Fi still hard-stops. A false navigator.onLine=false must not
+        // skip the waterfall — probeReachability + guardianFetch decide that.
+        waterfallLog(`sync start region=${$userRegion.get()} route=${requestedRouteId} force=${!!force} paintedFrom=${paintedFrom} onLine=${typeof navigator !== 'undefined' ? navigator.onLine : '?'} isLieFi=${!!isLieFi}`);
+        if (typeof window !== 'undefined' && isLieFi && !force) {
+            networkWon = 'halt-lie-fi';
+            sourceChain = 'halt-lie-fi';
+            waterfallWarn('halt: Lie-Fi hard-stop (background sync skipped)');
+            console.log("🛡️ Guardian: Lie-Fi detected. Halting background network sync.");
             // Ensure shell is visible even when cache miss — never leave browser-looking spinner up
             if (typeof window.revealAppShell === 'function') window.revealAppShell();
             if (usedCache || $fullDatabase.get()) markSchedulesCoreReady();
@@ -1312,12 +1679,17 @@ export async function loadAllSchedules(force = false) {
 
         // Reachability / captive pre-flight — do not trust navigator.onLine alone
         const reach = await ensureReachabilityProbed();
+        waterfallLog(`preflight reach=${reach}`);
         if (reach === 'offline' || reach === 'captive') {
+            networkWon = `halt-${reach}`;
+            sourceChain = `halt-${reach}`;
+            waterfallWarn(`halt: skipping schedule waterfall (reach=${reach})`);
             console.warn("🛡️ Guardian: No usable internet (offline / captive). Skipping network waterfall.");
             try { $opsOverlaysReady.set(true); } catch { /* ignore */ }
             return;
         }
         // 'timeout' / weak: still attempt waterfall — schedules may load slowly
+        waterfallLog(`preflight ok to continue (reach=${reach}) — overlays then CLOUDFLARE→FIREBASE→GITHUB`);
 
         await fetchGridOrderConfig($userRegion.get(), fetchSignal);
         if (fetchSignal.aborted || $currentRouteId.get() !== requestedRouteId) return;
@@ -1331,55 +1703,71 @@ export async function loadAllSchedules(force = false) {
         await fetchScheduleOverride(force);
         if (fetchSignal.aborted || $currentRouteId.get() !== requestedRouteId) return;
 
-        // Ops overlays (ghost trains / disruption badges)
+        // Ops overlays (ghost trains / disruption badges) — stamp-gated client TTL.
         const edgeCacheBucket = Math.floor(Date.now() / 300000);
-        try {
-            const exclResp = await guardianFetch(`${DYNAMIC_BASE_URL}exclusions.json?t=${edgeCacheBucket}`, { signal: fetchSignal }, 4000);
-            if (exclResp.ok) {
-                const exclData = await exclResp.json();
-                if (exclData) {
-                    const nextExclusions = pruneExclusionsTree(exclData);
-                    $globalExclusions.set(nextExclusions);
-                    writeCachedExclusions(nextExclusions);
-                }
-            }
-        } catch (e) {
-            console.warn('Exclusions fetch failed, using defaults.');
+        const overlayNow = Date.now();
+        const exclFresh = !force
+            && exclusionsOverlayBucket === String(edgeCacheBucket)
+            && (overlayNow - exclusionsOverlayAt) < OVERLAY_TTL_MS
+            && Object.keys($globalExclusions.get() || {}).length > 0;
+        const disrFresh = !force
+            && disruptionsOverlayBucket === String(edgeCacheBucket)
+            && (overlayNow - disruptionsOverlayAt) < OVERLAY_TTL_MS
+            && $opsOverlaysReady.get();
+        if (!exclFresh) {
             try {
-                if (!Object.keys($globalExclusions.get() || {}).length && DEFAULT_EXCLUSIONS) {
-                    $globalExclusions.set({ ...DEFAULT_EXCLUSIONS });
+                const exclResp = await guardianFetch(`${DYNAMIC_BASE_URL}exclusions.json?t=${edgeCacheBucket}`, { signal: fetchSignal }, 4000);
+                if (exclResp.ok) {
+                    const exclData = await exclResp.json();
+                    if (exclData) {
+                        const nextExclusions = pruneExclusionsTree(exclData);
+                        $globalExclusions.set(nextExclusions);
+                        writeCachedExclusions(nextExclusions);
+                        exclusionsOverlayAt = Date.now();
+                        exclusionsOverlayBucket = String(edgeCacheBucket);
+                    }
                 }
-            } catch { /* ignore */ }
+            } catch (e) {
+                console.warn('Exclusions fetch failed, using defaults.');
+                try {
+                    if (!Object.keys($globalExclusions.get() || {}).length && DEFAULT_EXCLUSIONS) {
+                        $globalExclusions.set({ ...DEFAULT_EXCLUSIONS });
+                    }
+                } catch { /* ignore */ }
+            }
         }
 
-        try {
-            const disrResp = await guardianFetch(`${DYNAMIC_BASE_URL}disruptions.json?t=${edgeCacheBucket}`, { signal: fetchSignal }, 4000);
-            if (disrResp.ok) {
-                const disrData = await disrResp.json();
-                if (disrData) {
-                    const now = Date.now();
-                    const nextDisruptions = {};
-                    Object.keys(disrData).forEach((routeKey) => {
-                        const routeObj = disrData[routeKey];
-                        if (routeObj && typeof routeObj === 'object') {
-                            Object.values(routeObj).forEach((d) => {
-                                if (d && d.routeId && (!d.expiresAt || d.expiresAt > now)) {
-                                    if (!nextDisruptions[d.routeId]) nextDisruptions[d.routeId] = [];
-                                    nextDisruptions[d.routeId].push(d);
-                                }
-                            });
-                        }
-                    });
-                    $globalDisruptions.set(nextDisruptions);
+        if (!disrFresh) {
+            try {
+                const disrResp = await guardianFetch(`${DYNAMIC_BASE_URL}disruptions.json?t=${edgeCacheBucket}`, { signal: fetchSignal }, 4000);
+                if (disrResp.ok) {
+                    const disrData = await disrResp.json();
+                    if (disrData) {
+                        const now = Date.now();
+                        const nextDisruptions = {};
+                        Object.keys(disrData).forEach((routeKey) => {
+                            const routeObj = disrData[routeKey];
+                            if (routeObj && typeof routeObj === 'object') {
+                                Object.values(routeObj).forEach((d) => {
+                                    if (d && d.routeId && (!d.expiresAt || d.expiresAt > now)) {
+                                        if (!nextDisruptions[d.routeId]) nextDisruptions[d.routeId] = [];
+                                        nextDisruptions[d.routeId].push(d);
+                                    }
+                                });
+                            }
+                        });
+                        $globalDisruptions.set(nextDisruptions);
+                        disruptionsOverlayAt = Date.now();
+                        disruptionsOverlayBucket = String(edgeCacheBucket);
+                    }
                 }
+            } catch (e) {
+                console.warn('Disruptions fetch failed.');
             }
-        } catch (e) {
-            console.warn('Disruptions fetch failed.');
-        } finally {
-            // Planner must know overlays finished loading (even empty/failed) so it
-            // does not publish sinkhole-blind itineraries, then "magically" gain alerts later.
-            try { $opsOverlaysReady.set(true); } catch { /* ignore */ }
         }
+        // Planner must know overlays finished loading (even empty/failed) so it
+        // does not publish sinkhole-blind itineraries, then "magically" gain alerts later.
+        try { $opsOverlaysReady.set(true); } catch { /* ignore */ }
 
         // GUARDIAN SMART SYNC: ping lastUpdated only — skip the multi-MB payload
         // when the cached regional DB is already current (critical on metered 3G).
@@ -1437,10 +1825,32 @@ export async function loadAllSchedules(force = false) {
         if (needsDownload) {
             let newDatabase = null;
             let fetchSuccess = false;
-            let sourcesToTry = ['FIREBASE', 'CLOUDFLARE', 'GITHUB'];
+            // Edge first (RTDB cost + speed), origin next, GitHub dump last (campus firewalls).
+            const sourcesToTry = ['CLOUDFLARE', 'FIREBASE', 'GITHUB'];
+            const SOURCE_TIMEOUT_MS = { CLOUDFLARE: 5000, FIREBASE: 7000, GITHUB: 8000 };
+            /** Hard ceiling so a blackhole radio cannot sit on Loading stations for minutes. */
+            const WATERFALL_BUDGET_MS = 18_000;
+            let wonSource = '';
+            const sourceOutcomes = [];
+            const downloadStartedAt = Date.now();
+
+            waterfallLog(`schedule download start sources=${sourcesToTry.join('→')} region=${$userRegion.get()} budgetMs=${WATERFALL_BUDGET_MS}`);
 
             for (const sourceKey of sourcesToTry) {
-                if (fetchSignal.aborted || $currentRouteId.get() !== requestedRouteId) return;
+                if (fetchSignal.aborted || $currentRouteId.get() !== requestedRouteId) {
+                    sourceOutcomes.push(`${sourceKey}:aborted`);
+                    sourceChain = sourceOutcomes.join('>');
+                    waterfallWarn(`schedule download aborted before ${sourceKey}`);
+                    return;
+                }
+
+                const elapsed = Date.now() - downloadStartedAt;
+                const budgetLeft = WATERFALL_BUDGET_MS - elapsed;
+                if (budgetLeft < 1200) {
+                    sourceOutcomes.push(`${sourceKey}:skipped-budget`);
+                    waterfallWarn(`budget exhausted (${elapsed}ms) — skipping ${sourceKey} and later sources`);
+                    break;
+                }
 
                 let regionDbUrl = "";
                 if (PIPELINE_SOURCES[sourceKey]) {
@@ -1452,21 +1862,75 @@ export async function loadAllSchedules(force = false) {
                 regionDbUrl += `${separator}t=${Date.now()}`;
 
                 try {
-                    const timeoutMs = sourceKey === 'CLOUDFLARE' ? 8000 : 12000;
-                    const response = await guardianFetch(regionDbUrl, { signal: fetchSignal }, timeoutMs);
-                    if (fetchSignal.aborted || $currentRouteId.get() !== requestedRouteId) return; 
+                    const preferred = SOURCE_TIMEOUT_MS[sourceKey] || 7000;
+                    const timeoutMs = Math.max(1200, Math.min(preferred, budgetLeft));
+                    waterfallLog(`try ${sourceKey} host=${shortHost(regionDbUrl)} timeoutMs=${timeoutMs} budgetLeftMs=${budgetLeft}`);
+                    const response = await guardianFetch(
+                        regionDbUrl,
+                        { signal: fetchSignal, ntSoftNetwork: true },
+                        timeoutMs,
+                    );
+                    if (fetchSignal.aborted || $currentRouteId.get() !== requestedRouteId) {
+                        sourceOutcomes.push(`${sourceKey}:aborted`);
+                        sourceChain = sourceOutcomes.join('>');
+                        waterfallWarn(`aborted after ${sourceKey} response`);
+                        return;
+                    }
                     if (!response.ok) throw new Error(`HTTP ${response.status}`);
                     newDatabase = await response.json();
                     if (!newDatabase) throw new Error("Empty database payload");
                     fetchSuccess = true;
+                    wonSource = sourceKey;
+                    sourceOutcomes.push(`${sourceKey}:ok`);
+                    waterfallLog(`success ${sourceKey} HTTP ${response.status} in ${Date.now() - downloadStartedAt}ms`);
                     break; 
                 } catch (e) {
-                    if (e.name === 'AbortError') throw e; 
+                    // Only cancel the whole waterfall on route/user abort — never on
+                    // per-host timeout (old bug: AbortError skipped GitHub entirely).
+                    if (e.name === 'AbortError' && fetchSignal.aborted) {
+                        sourceOutcomes.push(`${sourceKey}:aborted`);
+                        sourceChain = sourceOutcomes.join('>');
+                        throw e;
+                    }
+                    sourceOutcomes.push(`${sourceKey}:fail`);
+                    waterfallWarn(`fail ${sourceKey}: ${e?.message || e?.name || 'error'} — trying next`);
+                }
+            }
+            sourceChain = sourceOutcomes.join('>') || 'none';
+
+            if (!fetchSuccess || !newDatabase) {
+                // Last resort: same-origin dump already tried at boot, but retry if
+                // eager cache missed and every remote host failed (slow phones / TUKS).
+                if (!$fullDatabase.get()) {
+                    waterfallWarn('all remotes failed — retrying bundled same-origin dump');
+                    try {
+                        const bundledDump = await loadBundledScheduleDump(fetchSignal);
+                        if (bundledDump) {
+                            newDatabase = bundledDump;
+                            fetchSuccess = true;
+                            wonSource = 'BUNDLED';
+                            sourceChain = `${sourceChain}>BUNDLED:ok`;
+                            waterfallLog('success BUNDLED same-origin dump');
+                        }
+                    } catch (bundleErr) {
+                        waterfallWarn(`bundled dump failed: ${bundleErr?.message || bundleErr?.name || 'error'}`);
+                    }
                 }
             }
 
-            if (!fetchSuccess || !newDatabase) throw new Error("All data pipeline endpoints failed");
+            if (!fetchSuccess || !newDatabase) {
+                if ($fullDatabase.get()) {
+                    networkWon = 'kept-painted';
+                    sourceChain = `${sourceChain}>kept-painted`;
+                    waterfallWarn('all remotes failed — keeping the timetable already painted');
+                } else {
+                    sourceChain = `${sourceChain}>BUNDLED:fail`;
+                    waterfallWarn('all sources failed (CLOUDFLARE→FIREBASE→GITHUB→BUNDLED)');
+                    throw new Error("All data pipeline endpoints failed");
+                }
+            }
 
+            if (fetchSuccess && newDatabase) {
             const newStr = JSON.stringify(newDatabase);
             const oldStr = cachedDB ? JSON.stringify(cachedDB.data) : "";
             const downloadedDB = unwrapDatabase(newDatabase, $userRegion.get());
@@ -1488,19 +1952,45 @@ export async function loadAllSchedules(force = false) {
                     $masterStationList.set(mList);
                     if (typeof window !== 'undefined') window.MASTER_STATION_LIST = mList;
 
-                    await saveToLocalCache(cacheKey, newDatabase, fetchSignal); 
+                    if (wonSource !== 'BUNDLED') {
+                        await saveToLocalCache(cacheKey, newDatabase, fetchSignal);
+                    } else {
+                        try { await saveToLocalCache(cacheKey, newDatabase, fetchSignal); } catch { /* ignore */ }
+                    }
+                    networkWon = wonSource;
+                    waterfallLog(`applied ${wonSource} payload and saved local cache`);
                 } catch(e) { throw e; }
+            } else {
+                networkWon = wonSource;
+                waterfallLog(`applied ${wonSource} but payload unchanged vs cache`);
             }
             rememberRouteRevision(downloadedDB, true);
+            }
+        } else {
+            networkWon = 'skipped-cache-current';
+            sourceChain = 'skipped-cache-current';
+            waterfallLog('schedule download skipped (smart sync: cache already current)');
         }
     } catch (error) {
         if (error.name === 'AbortError') return;
+        waterfallWarn(`sync error: ${error?.message || error?.name || 'error'}`);
         console.error("Fetch Error:", error);
         const hasUsableData = !!$fullDatabase.get();
-        if (!usedCache && !hasUsableData && typeof document !== 'undefined') {
+        // Fetch errors on a slow-but-online radio must not flash the dock.
+        if (!usedCache && !hasUsableData && typeof document !== 'undefined'
+            && typeof navigator !== 'undefined' && !navigator.onLine) {
             try { scheduleOfflineChrome(); } catch { /* ignore */ }
         }
     } finally {
+        const scheduleMs = Date.now() - scheduleStartedAt;
+        waterfallLog(
+            `session summary paintedFrom=${paintedFrom} tier=${cacheTier} networkWon=${networkWon || 'none'} `
+            + `chain=${sourceChain} tried=CLOUDFLARE>FIREBASE>GITHUB region=${$userRegion.get()} route=${requestedRouteId} `
+            + `aborted=${fetchSignal && fetchSignal.aborted ? 'yes' : 'no'} ms=${scheduleMs}`
+        );
+        if (scheduleMs >= 8000) {
+            waterfallWarn(`slow schedule load ${scheduleMs}ms paintedFrom=${paintedFrom} chain=${sourceChain}`);
+        }
         if (fetchSignal && fetchSignal.aborted) return;
 
         const forceReloadBtn = typeof document !== 'undefined' ? document.getElementById('force-reload-btn') : null;
@@ -1513,10 +2003,21 @@ export async function loadAllSchedules(force = false) {
         const mainContent = typeof document !== 'undefined' ? document.getElementById('main-content') : null;
         if ($currentRouteId.get() && mainContent) mainContent.style.display = '';
 
+        // Never leave the board on "Loading stations..." after the sync attempt.
+        // IndexedDB/bundled already painted when available; this covers cold fails too.
+        if (typeof window !== 'undefined') {
+            try { window.revealAppShell?.(true); } catch { /* ignore */ }
+        }
+
         const welcomeModal = typeof document !== 'undefined' ? document.getElementById('welcome-modal') : null;
         const isWelcomeActive = welcomeModal && !welcomeModal.classList.contains('hidden');
         if (typeof window !== 'undefined' && $currentRouteId.get() && !isWelcomeActive) {
             markSchedulesCoreReady();
+            try {
+                if ($masterStationList.get()?.length && typeof window.populateStationList === 'function') {
+                    window.populateStationList();
+                }
+            } catch { /* ignore */ }
             const baseType = window.__ntPreOverrideDayType || window.currentDayType || currentDayType;
             maybePromptScheduleOverride(baseType).catch(() => { /* ignore */ });
             // Home-board auto notices (alerts / holidays) wait for stabilize + route.
@@ -1525,23 +2026,49 @@ export async function loadAllSchedules(force = false) {
     }
 }
 
+/** Public entry: share one in-flight load per route unless force=true. */
+export async function loadAllSchedules(force = false) {
+    const routeId = $currentRouteId.get() || '';
+    const key = `${regionSwapGeneration}|${routeId}|${force ? 1 : 0}`;
+    if (!force && loadAllSchedulesInFlight && loadAllSchedulesInFlightKey === key) {
+        return loadAllSchedulesInFlight;
+    }
+    // A forced refresh supersedes a soft in-flight load.
+    loadAllSchedulesInFlightKey = key;
+    const run = loadAllSchedulesInner(force).finally(() => {
+        if (loadAllSchedulesInFlightKey === key) {
+            loadAllSchedulesInFlight = null;
+            loadAllSchedulesInFlightKey = '';
+        }
+    });
+    loadAllSchedulesInFlight = run;
+    return run;
+}
+
 /**
  * SPA deeplink boot parity: loadAllSchedules no-ops without a route.
  * Prefer the user-pinned default; otherwise browse the first active route
  * without writing it as a pin.
  */
-export function ensureRoutePinnedForRegion(region) {
+export function ensureRoutePinnedForRegion(region, options = {}) {
     const target = ['GP', 'WC', 'KZN', 'EC'].includes(region) ? region : ($userRegion.get() || 'GP');
     const current = $userRegion.get() || 'GP';
+    const persistRegion = options.persistRegion !== false;
 
     if (current !== target) {
         console.log(`🛡️ Guardian: Deeplink soft region pin ${current} → ${target}`);
         regionSwapGeneration++;
         $userRegion.set(target);
         syncRegionDisplayDom(target);
-        try { safeStorage.setItem('userRegion', target); } catch { /* ignore */ }
+        if (persistRegion) {
+            try { safeStorage.setItem('userRegion', target); } catch { /* ignore */ }
+        } else {
+            waterfallLog(`seo handoff browses ${target} and keeps saved userRegion`);
+        }
         try { window.syncCrmRegionAnalytics?.(target); } catch { /* ignore */ }
-        memoryFallbackCache = {};
+        // Drop the active sheet only. Other regions' memory timetable entries stay
+        // so a wedged IndexedDB can still paint the commuter's home region.
+        waterfallLog(`region view ${current} → ${target} kept memory keys=${Object.keys(memoryFallbackCache).join(',') || 'none'}`);
         $fullDatabase.set(null);
         $schedules.set({});
         $globalStationIndex.set({});
@@ -1587,7 +2114,7 @@ export function executeRegionSwap(newRegion, isFromWelcomeScreen = false) {
     syncRegionDisplayDom(newRegion);
     try { window.syncCrmRegionAnalytics?.(newRegion); } catch { /* ignore */ }
 
-    memoryFallbackCache = {}; 
+    waterfallLog(`region swap to ${newRegion} kept memory keys=${Object.keys(memoryFallbackCache).join(',') || 'none'}`);
     $fullDatabase.set(null); 
     $schedules.set({});
     $globalStationIndex.set({}); 
@@ -1725,7 +2252,7 @@ export function executeRegionSwap(newRegion, isFromWelcomeScreen = false) {
             if (pien) window.Renderer.renderSkeletonLoader(pien);
         }
 
-        loadAllSchedules(true).then(() => {
+        loadAllSchedules(false).then(() => {
             hideRegionSwapLoader();
             if (typeof window !== 'undefined' && typeof window.checkServiceAlerts === 'function') {
                 window.checkServiceAlerts();
@@ -1983,6 +2510,183 @@ export function startClock() {
     if (typeof window !== 'undefined') {
         setInterval(updateTime, 1000);
     }
+}
+
+const PULL_ARM_PX = 72;
+
+function sessionRefreshBlocked() {
+    if (typeof document === 'undefined') return true;
+    if (document.body.classList.contains('sidenav-open')) return true;
+    if (document.body.classList.contains('modal-active')) return true;
+    const tab = safeStorage.getItem('activeTab') || 'next-train';
+    return tab !== 'next-train' && tab !== 'trip-planner' && tab !== 'community';
+}
+
+function chainIsAtTop(start, scroller) {
+    let node = start instanceof Element ? start : null;
+    while (node && node !== scroller) {
+        const style = window.getComputedStyle(node);
+        const scrollable = /(auto|scroll)/.test(`${style.overflowY} ${style.overflow}`)
+            && node.scrollHeight > node.clientHeight + 2;
+        if (scrollable && node.scrollTop > 2) return false;
+        node = node.parentElement;
+    }
+    return scroller.scrollTop <= 2;
+}
+
+/** Darken the edge above the bottom bar only while more of the page is below. */
+export function initScrollHint() {
+    if (typeof document === 'undefined' || window.__ntScrollHintBound) return;
+    const scroller = document.getElementById('app-scroll');
+    const hint = document.getElementById('nt-scroll-hint');
+    if (!scroller || !hint) return;
+    window.__ntScrollHintBound = true;
+    let topHint = document.getElementById('nt-scroll-hint-top');
+    if (!topHint) {
+        topHint = document.createElement('div');
+        topHint.id = 'nt-scroll-hint-top';
+        topHint.className = 'nt-scroll-hint nt-scroll-hint-top';
+        topHint.setAttribute('aria-hidden', 'true');
+        hint.parentElement?.insertBefore(topHint, hint);
+    }
+    const sync = () => {
+        const mapOpen = document.getElementById('view-map')?.classList.contains('active');
+        const remain = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight;
+        hint.classList.toggle('is-on', !mapOpen && remain > 28);
+        topHint.classList.toggle('is-on', !mapOpen && scroller.scrollTop > 28);
+    };
+    scroller.addEventListener('scroll', sync, { passive: true });
+    window.addEventListener('resize', sync);
+    if (typeof ResizeObserver !== 'undefined') {
+        const ro = new ResizeObserver(sync);
+        ro.observe(scroller);
+        Array.from(scroller.children).forEach((child) => ro.observe(child));
+    }
+    sync();
+    bindSheetShades();
+}
+
+/** Fade the bottom of a sheet only while that sheet still has more below. */
+function bindSheetShades() {
+    document.querySelectorAll('.nt-sheet-shade').forEach((shade) => {
+        const scroller = document.getElementById(shade.getAttribute('data-shade-for') || '');
+        if (!scroller || scroller.dataset.shadeBound === '1') return;
+        scroller.dataset.shadeBound = '1';
+        let topShade = shade.parentElement?.querySelector(':scope > .nt-sheet-shade-top');
+        if (!topShade && shade.parentElement) {
+            topShade = document.createElement('div');
+            topShade.className = 'nt-sheet-shade nt-sheet-shade-top';
+            topShade.setAttribute('aria-hidden', 'true');
+            shade.parentElement.appendChild(topShade);
+        }
+        const sync = () => {
+            const remain = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight;
+            shade.classList.toggle('is-on', remain > 20);
+            topShade?.classList.toggle('is-on', scroller.scrollTop > 20);
+        };
+        scroller.addEventListener('scroll', sync, { passive: true });
+        if (typeof ResizeObserver !== 'undefined') new ResizeObserver(sync).observe(scroller);
+        if (typeof MutationObserver !== 'undefined') {
+            new MutationObserver(sync).observe(scroller, { childList: true, subtree: true });
+            const modal = scroller.closest('.fixed');
+            if (modal) new MutationObserver(sync).observe(modal, { attributes: true, attributeFilter: ['class'] });
+        }
+        sync();
+    });
+}
+
+/** Pull down at the top of Next Train, Trip Planner, or Community to reload this session. */
+export function initSessionPullRefresh() {
+    if (typeof document === 'undefined' || window.__ntPullRefreshBound) return;
+    const scroller = document.getElementById('app-scroll');
+    if (!scroller) return;
+    window.__ntPullRefreshBound = true;
+    let startY = 0;
+    let startX = 0;
+    let tracking = false;
+    let armed = false;
+    let hint = null;
+
+    const paintHint = (px, ready) => {
+        if (!hint) {
+            hint = document.createElement('div');
+            hint.id = 'nt-pull-refresh';
+            hint.setAttribute('aria-hidden', 'true');
+            hint.style.cssText = 'height:0;overflow:hidden;text-align:center;font-size:11px;font-weight:700;line-height:56px;color:#64748b;';
+            scroller.prepend(hint);
+        }
+        const height = Math.min(56, Math.max(0, px));
+        hint.style.height = height ? `${height}px` : '0';
+        hint.textContent = ready ? 'Release to refresh' : '';
+    };
+
+    scroller.addEventListener('touchstart', (event) => {
+        if (sessionRefreshBlocked()) {
+            tracking = false;
+            return;
+        }
+        const touch = event.touches?.[0];
+        if (!touch || !chainIsAtTop(event.target, scroller)) {
+            tracking = false;
+            return;
+        }
+        startY = touch.clientY;
+        startX = touch.clientX;
+        tracking = true;
+        armed = false;
+    }, { passive: true });
+
+    scroller.addEventListener('touchmove', (event) => {
+        if (!tracking) return;
+        const touch = event.touches?.[0];
+        if (!touch) return;
+        const dy = touch.clientY - startY;
+        const dx = Math.abs(touch.clientX - startX);
+        if (!chainIsAtTop(event.target, scroller) || dy <= 0 || dx > dy) {
+            if (dy > 8) {
+                tracking = false;
+                armed = false;
+                paintHint(0, false);
+            }
+            return;
+        }
+        if (dy < 10) return;
+        if (event.cancelable) event.preventDefault();
+        armed = dy >= PULL_ARM_PX;
+        paintHint(dy, armed);
+    }, { passive: false });
+
+    const release = async () => {
+        const go = tracking && armed && !sessionRefreshBlocked();
+        tracking = false;
+        armed = false;
+        paintHint(0, false);
+        if (!go || window.__ntPullRefreshing) return;
+        window.__ntPullRefreshing = true;
+        try {
+            const tab = safeStorage.getItem('activeTab') || 'next-train';
+            await loadAllSchedules(true);
+            if (typeof window.findNextTrains === 'function') window.findNextTrains();
+            if (typeof window.updateNextTrainView === 'function') window.updateNextTrainView();
+            if (tab === 'trip-planner') {
+                const results = document.getElementById('planner-results-section');
+                if (results && !results.classList.contains('hidden')) {
+                    document.getElementById('planner-search-btn')?.click();
+                }
+            }
+            if (tab === 'community') {
+                const community = await import('./community.js');
+                community.openRouteCommunity?.();
+            }
+        } catch { /* the open tab keeps the times it already has */ }
+        finally { window.__ntPullRefreshing = false; }
+    };
+    scroller.addEventListener('touchend', () => { release(); }, { passive: true });
+    scroller.addEventListener('touchcancel', () => {
+        tracking = false;
+        armed = false;
+        paintHint(0, false);
+    }, { passive: true });
 }
 
 // Attach to window namespace for backward-compatible triggers & third-party shims

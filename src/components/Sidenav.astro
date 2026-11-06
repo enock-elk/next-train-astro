@@ -8,12 +8,12 @@ import { APP_VERSION } from '../lib/config.js';
 const versionBadge = String(APP_VERSION);
 ---
 
-<div id="sidenav-overlay" class="fixed inset-0 bg-black/50 z-[90] hidden opacity-0 transition-opacity duration-300"></div>
+<div id="sidenav-overlay" class="fixed inset-0 bg-black/50 z-[90] hidden opacity-0 transition-opacity duration-150"></div>
 
 <!-- APP HUB SIDENAV — slides in from the right -->
 <div
   id="sidenav"
-  class="fixed top-0 bottom-0 right-0 w-[80vw] sm:w-[21.5rem] shadow-2xl bg-white dark:bg-gray-900 flex flex-col z-[100] translate-x-full transition-transform duration-300"
+  class="fixed top-0 bottom-0 right-0 w-[80vw] sm:w-[21.5rem] shadow-2xl bg-white dark:bg-gray-900 flex flex-col z-[100] translate-x-full transition-transform duration-150"
   role="dialog"
   aria-label="App Hub"
   style="transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);"
@@ -241,6 +241,16 @@ const versionBadge = String(APP_VERSION);
           </div>
           <svg class="w-4 h-4 text-gray-300 dark:text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
         </button>
+        <button type="button" id="reset-phone-btn" class="w-full flex justify-between items-center py-3 px-4 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors focus:outline-none group">
+          <div class="flex items-center space-x-4">
+            <svg class="w-5 h-5 text-red-500 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M9 7V4a1 1 0 011-1h4a1 1 0 011 1v3m-7 0h8"></path></svg>
+            <div class="text-left">
+              <p class="text-sm font-bold text-gray-900 dark:text-white leading-tight">Reset this App</p>
+              <p class="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">Clears this App's saved data</p>
+            </div>
+          </div>
+          <svg class="w-4 h-4 text-gray-300 dark:text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+        </button>
       </div>
     </div>
 
@@ -372,7 +382,7 @@ const versionBadge = String(APP_VERSION);
   /* Mirror SPA JIT bypass so open class wins over Tailwind translate utilities */
   #sidenav {
     transform: translateX(100%);
-    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    transition: transform 0.16s cubic-bezier(0.4, 0, 0.2, 1) !important;
   }
   #sidenav.open {
     transform: translateX(0) !important;

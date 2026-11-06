@@ -336,6 +336,53 @@ export function exclusionAppliesToSurface(rule, surface = 'in_app') {
         : configured === 'in_app';
 }
 
+/**
+ * Solid swatch for a route's map colour. Full class strings so Tailwind
+ * keeps them. Gauteng values follow the network map; other regions keep
+ * the colour they already shipped with.
+ */
+export function lineSwatchClass(colorClass, kind = 'bg') {
+    const c = String(colorClass || '');
+    const border = kind === 'border';
+    if (c.includes('#937e3b')) return border ? 'border-[#937e3b]' : 'bg-[#937e3b]';
+    if (c.includes('#ec008c')) return border ? 'border-[#ec008c]' : 'bg-[#ec008c]';
+    if (c.includes('#f58220')) return border ? 'border-[#f58220]' : 'bg-[#f58220]';
+    if (c.includes('#f5821f')) return border ? 'border-[#f5821f]' : 'bg-[#f5821f]';
+    if (c.includes('#00b9f1')) return border ? 'border-[#00b9f1]' : 'bg-[#00b9f1]';
+    if (c.includes('#0071bb')) return border ? 'border-[#0071bb]' : 'bg-[#0071bb]';
+    if (c.includes('#ed262e')) return border ? 'border-[#ed262e]' : 'bg-[#ed262e]';
+    if (c.includes('#ee1a24')) return border ? 'border-[#ee1a24]' : 'bg-[#ee1a24]';
+    if (c.includes('#ee2f33')) return border ? 'border-[#ee2f33]' : 'bg-[#ee2f33]';
+    if (c.includes('#036630')) return border ? 'border-[#036630]' : 'bg-[#036630]';
+    if (c.includes('#00a651')) return border ? 'border-[#00a651]' : 'bg-[#00a651]';
+    if (c.includes('#00a650')) return border ? 'border-[#00a650]' : 'bg-[#00a650]';
+    if (c.includes('#a9cf41')) return border ? 'border-[#a9cf41]' : 'bg-[#a9cf41]';
+    if (c.includes('#a6ce38')) return border ? 'border-[#a6ce38]' : 'bg-[#a6ce38]';
+    if (c.includes('#8f5644')) return border ? 'border-[#8f5644]' : 'bg-[#8f5644]';
+    if (c.includes('#00b9f3')) return border ? 'border-[#00b9f3]' : 'bg-[#00b9f3]';
+    if (c.includes('#2d88c7')) return border ? 'border-[#2d88c7]' : 'bg-[#2d88c7]';
+    if (c.includes('#fad561')) return border ? 'border-[#fad561]' : 'bg-[#fad561]';
+    if (c.includes('#0abcf2')) return border ? 'border-[#0abcf2]' : 'bg-[#0abcf2]';
+    if (c.includes('#6f2729')) return border ? 'border-[#6f2729]' : 'bg-[#6f2729]';
+    if (c.includes('#887c4c')) return border ? 'border-[#887c4c]' : 'bg-[#887c4c]';
+    if (c.includes('pink')) return border ? 'border-pink-600' : 'bg-pink-600';
+    if (c.includes('sky-700') || c.includes('sky-800')) return border ? 'border-sky-700' : 'bg-sky-700';
+    if (c.includes('sky')) return border ? 'border-sky-500' : 'bg-sky-500';
+    if (c.includes('green-800')) return border ? 'border-green-800' : 'bg-green-800';
+    if (c.includes('green-600')) return border ? 'border-green-600' : 'bg-green-600';
+    if (c.includes('lime')) return border ? 'border-lime-500' : 'bg-lime-500';
+    if (c.includes('green')) return border ? 'border-green-500' : 'bg-green-500';
+    if (c.includes('orange')) return border ? 'border-orange-500' : 'bg-orange-500';
+    if (c.includes('purple')) return border ? 'border-purple-500' : 'bg-purple-500';
+    if (c.includes('indigo')) return border ? 'border-indigo-500' : 'bg-indigo-500';
+    if (c.includes('yellow-600')) return border ? 'border-yellow-600' : 'bg-yellow-600';
+    if (c.includes('yellow')) return border ? 'border-yellow-500' : 'bg-yellow-500';
+    if (c.includes('red-600')) return border ? 'border-red-600' : 'bg-red-600';
+    if (c.includes('red')) return border ? 'border-red-500' : 'bg-red-500';
+    if (c.includes('blue')) return border ? 'border-blue-500' : 'bg-blue-500';
+    return border ? 'border-gray-400' : 'bg-gray-400';
+}
+
 /** HTML route label with SVG arrow between corridor ends. */
 export function formatRouteLabelHtml(raw) {
     if (typeof raw !== 'string' || !raw) return escapeHTML('Select a route');
@@ -431,26 +478,160 @@ export function isVariantStationName(rawName) {
     return bare === 'VARIANT';
 }
 
-/** Known VARIANT cell codes. Unknown prose is ignored. */
-export function variantViaLabel(code) {
+const SHEET_META_COLS = new Set(['STATION', 'COORDINATES', 'KM_MARK', 'row_index']);
+
+/**
+ * Branch code for a via note.
+ * Sheets spell a Monte Vista working as one cell "Via MV", or as
+ * Woodstock "via" / Salt River "Monte" / Koeberg Rd "Vista".
+ * A timed call at Maitland is the normal line, not a via mark.
+ */
+export function canonicalViaCode(code) {
     const key = String(code || '').trim().toUpperCase().replace(/[\s-]+/g, '_');
-    if (key === 'MONTE_VISTA') return 'Monte Vista';
+    if (key === 'MONTE_VISTA' || key === 'VIA_MV' || key === 'VIA_MONTE_VISTA') return 'MONTE_VISTA';
+    if (key === 'MAITLAND' || key === 'VIA_MAITLAND') return 'MAITLAND';
     return '';
 }
 
-/** Train id → "Monte Vista" from a VARIANT row. */
+/** Codes an admin may store. Sheet prose is recognised separately. */
+export function adminViaCode(code) {
+    const key = String(code || '').trim().toUpperCase();
+    if (key === 'MONTE_VISTA' || key === 'MAITLAND') return key;
+    return '';
+}
+
+/** Known branch codes. Display label, or empty when the code is not a branch. */
+export function variantViaLabel(code) {
+    const key = canonicalViaCode(code);
+    if (key === 'MONTE_VISTA') return 'Monte Vista';
+    if (key === 'MAITLAND') return 'Maitland';
+    return '';
+}
+
+function viaNoteToken(val) {
+    const raw = String(val || '').trim();
+    if (!raw || raw === '-' || raw === '—' || raw === '–') return '';
+    if (isRealTime(raw) || isExpressSkip(raw)) return '';
+    if (raw.length > 24) return '';
+    const token = raw.toUpperCase().replace(/[^A-Z]/g, '');
+    if (!token || token.length > 12) return '';
+    return token;
+}
+
+function tokensInOrder(tokens, words) {
+    let index = 0;
+    for (const token of tokens) {
+        if (token === words[index]) index += 1;
+        if (index === words.length) return true;
+    }
+    return false;
+}
+
+/**
+ * Train id → "Monte Vista" or "Maitland" from sheet structure.
+ *
+ * Priority inside the sheet:
+ * 1. Explicit `schedule.via` map (structured Firebase field)
+ * 2. VARIANT meta row
+ * 3. Legacy cell prose (`via`/`Monte`/`Vista`, `Via MV`) — kept for older dumps
+ *
+ * A real clock at Monte Vista or Maitland does not mark the column.
+ */
 export function variantMapFromSchedule(schedule) {
     const map = {};
+    const notes = {};
     const rows = schedule?.rows || [];
+
+    // 1) Structured sheet field: { "3201": "MONTE_VISTA", ... }
+    const sheetVia = schedule?.via;
+    if (sheetVia && typeof sheetVia === 'object' && !Array.isArray(sheetVia)) {
+        for (const [id, code] of Object.entries(sheetVia)) {
+            const label = variantViaLabel(code);
+            if (label) map[String(id)] = label;
+        }
+    }
+
+    // 2) VARIANT row (only fills trains not already set by schedule.via)
     for (const row of rows) {
         if (!isVariantStationName(row?.STATION)) continue;
         for (const [col, val] of Object.entries(row)) {
-            if (col === 'STATION' || col === 'COORDINATES' || col === 'KM_MARK' || col === 'row_index') continue;
+            if (SHEET_META_COLS.has(col) || map[String(col)]) continue;
             const label = variantViaLabel(val);
             if (label) map[String(col)] = label;
         }
     }
+
+    // 3) Legacy prose in station cells (back-compat until dumps are cleaned)
+    for (const row of rows) {
+        if (isVariantStationName(row?.STATION)) continue;
+        for (const [col, val] of Object.entries(row)) {
+            if (SHEET_META_COLS.has(col) || map[String(col)]) continue;
+            const direct = canonicalViaCode(val);
+            if (direct) {
+                map[String(col)] = variantViaLabel(direct);
+                continue;
+            }
+            const token = viaNoteToken(val);
+            if (!token) continue;
+            const id = String(col);
+            if (!notes[id]) notes[id] = [];
+            notes[id].push(token);
+        }
+    }
+    for (const [col, tokens] of Object.entries(notes)) {
+        if (map[col]) continue;
+        if (tokensInOrder(tokens, ['VIA', 'MONTE', 'VISTA'])) map[col] = 'Monte Vista';
+        else if (tokensInOrder(tokens, ['VIA', 'MAITLAND'])) map[col] = 'Maitland';
+    }
     return map;
+}
+
+/**
+ * Sheet structure first (via map → VARIANT → prose). Admin `grid_order.via`
+ * replaces the sheet note for that train (operator force).
+ */
+export function mergeVariantLabels(schedule, adminVia) {
+    const map = variantMapFromSchedule(schedule);
+    if (!adminVia || typeof adminVia !== 'object' || Array.isArray(adminVia)) return map;
+    for (const [id, code] of Object.entries(adminVia)) {
+        const label = variantViaLabel(adminViaCode(code));
+        if (label) map[String(id)] = label;
+    }
+    return map;
+}
+
+const VIA_TRAIN_RE = /^\d{4}[a-zA-Z]*$/;
+
+/** `{ trainId: 'MONTE_VISTA' | 'MAITLAND' }` from a grid-order RTDB record. */
+export function viaCodesFromGridOrderRecord(record) {
+    const via = record?.via;
+    if (!via || typeof via !== 'object' || Array.isArray(via)) return {};
+    const out = {};
+    for (const [id, code] of Object.entries(via)) {
+        const train = String(id || '').trim();
+        const norm = adminViaCode(code);
+        if (!VIA_TRAIN_RE.test(train) || !norm) continue;
+        out[train] = norm;
+    }
+    return out;
+}
+
+/**
+ * Full PUT body for config/grid_order/{region}/{sheetKey}.
+ * A reset drops the saved order and keeps via. An empty via map is omitted
+ * so the replace clears marks the operator removed.
+ */
+export function buildGridOrderWriteRecord({ order, via, action, updatedAt, updatedBy, source } = {}) {
+    const record = {
+        updatedAt: Number(updatedAt) || Date.now(),
+        updatedBy: String(updatedBy || 'unknown'),
+        source: String(source || 'admin'),
+    };
+    if (action === 'reset') record.action = 'reset';
+    else if (Array.isArray(order)) record.order = order.slice();
+    const clean = viaCodesFromGridOrderRecord({ via });
+    if (Object.keys(clean).length) record.via = clean;
+    return record;
 }
 
 export function formatTimeDisplay(timeStr) {
@@ -1190,6 +1371,11 @@ export function restorePinnedSession() {
             if (safeStorage.getItem('welcomeSeen') !== 'true') {
                 safeStorage.setItem('welcomeSeen', 'true');
                 console.log('🛡️ Guardian: Restored welcomeSeen from pinned route (iOS storage hop / ITP).');
+            }
+            // Layout / hydratePrefs may have run while welcomeSeen was still missing
+            // (IDB pin not resurrected yet). Refresh bottom-nav chrome once the pin proves returning.
+            if (typeof document !== 'undefined') {
+                import('./prefs.js').then(({ syncInAppChrome }) => syncInAppChrome()).catch(() => {});
             }
         }
         const region = inferRegionFromPins();

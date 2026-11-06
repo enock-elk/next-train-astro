@@ -1,13 +1,16 @@
 /**
  * Alerts channel UI — bell gateway, WhatsApp-style column, reactions.
  */
-import { DYNAMIC_BASE_URL, ROUTES, withBase } from './config.js';
+import { DYNAMIC_BASE_URL, REPLY_WORKER_URL, ROUTES, withBase } from './config.js';
+import { noticeQuotePlain } from './feedback-quote.js';
+import { hydrateLinkPreviews, linkPreviewMarkup } from './link-preview.js';
 import { safeStorage, escapeHTML, repairMojibake, formatAppTime, formatThreadDateLabel } from './utils.js';
-import { prepareRichHtml, injectRichTextStyles } from './rich-text.js';
+import { prepareRichHtml, injectRichTextStyles, linkedPlainHtml } from './rich-text.js';
+import { isPublicPreviewUrl } from './link-preview.js';
 import { showToast, triggerHaptic, openSmoothModal, closeSmoothModal } from './ui.js';
 import { isAdminAuthed } from './admin-chrome.js';
 import { $currentRouteId, $userRegion } from '../store.js';
-import { cacheAlertImages, pruneExpiredAlertImages, resolveCachedAlertImage } from './alert-image-cache.js';
+import { loadAlertImageBlob, pruneExpiredAlertImages } from './alert-image-cache.js';
 import {
     ALERTS_PAGE_SIZE,
     ALERT_PIN_SVG,
@@ -27,6 +30,10 @@ import {
     pickAutoOpenNotice as pickAutoOpenFromFeed,
     sanitizeAlertImageUrl,
     sanitizeInlineAlertImageUrl,
+    sanitizeAlertVideoUrl,
+    alertVideoEmbedUrl,
+    alertVideoKind,
+    renderAlertVideoMarkup,
     collectNoticeImageUrls,
     hoistAlertImagesFromHtml,
     layoutAlertPost,
@@ -137,23 +144,62 @@ export function scopedLiveNotices(list = cachedLiveNotices, region = $userRegion
     return (Array.isArray(list) ? list : []).filter((n) => keys.has(n._sourceKey));
 }
 
-async function fetchBucket(key) {
+/** Last notices_meta stamp we already hydrated per scope key. */
+const noticesMetaStamp = Object.create(null);
+/** Last parsed bucket kept when meta says nothing changed. */
+const noticesBucketCache = Object.create(null);
+let unionNoticesInFlight = null;
+let unionNoticesInFlightKey = '';
+
+async function fetchBucket(key, { force = false } = {}) {
     try {
+        if (!force) {
+            try {
+                const metaRes = await fetch(
+                    `${DYNAMIC_BASE_URL}notices_meta/${encodeURIComponent(key)}.json?t=${Date.now()}`,
+                    { cache: 'no-store' }
+                );
+                if (metaRes.ok) {
+                    const meta = await metaRes.json();
+                    const stamp = meta && typeof meta === 'object'
+                        ? `${meta.latestId || ''}|${meta.latestAt || 0}|${meta.liveCount || 0}|${meta.latestCriticalAt || 0}`
+                        : '';
+                    if (stamp && stamp === noticesMetaStamp[key] && Array.isArray(noticesBucketCache[key])) {
+                        return noticesBucketCache[key];
+                    }
+                    if (stamp) noticesMetaStamp[key] = stamp;
+                }
+            } catch { /* meta is optional; fall through to full bucket */ }
+        }
         const res = await fetch(`${DYNAMIC_BASE_URL}notices/${encodeURIComponent(key)}.json?t=${Date.now()}`);
-        if (!res.ok) return [];
+        if (!res.ok) return noticesBucketCache[key] || [];
         const ct = res.headers.get('content-type') || '';
         if (ct.includes('text/html')) throw new Error('Captive Portal Detected');
-        return parseNoticeBucket(await res.json(), key);
+        const parsed = parseNoticeBucket(await res.json(), key);
+        noticesBucketCache[key] = parsed;
+        return parsed;
     } catch (e) {
         if (e?.message === 'Captive Portal Detected') throw e;
-        return [];
+        return noticesBucketCache[key] || [];
     }
 }
 
-export async function fetchUnionNotices(region, routeId) {
+export async function fetchUnionNotices(region, routeId, { force = false } = {}) {
     const keys = scopeKeyOverride ? [...scopeKeyOverride] : noticeScopeKeys(region, routeId);
-    const buckets = await Promise.all(keys.map(fetchBucket));
-    return mergeUnionNotices(buckets);
+    const flightKey = `${keys.join(',')}|${force ? 1 : 0}`;
+    if (unionNoticesInFlight && unionNoticesInFlightKey === flightKey) {
+        return unionNoticesInFlight;
+    }
+    unionNoticesInFlightKey = flightKey;
+    unionNoticesInFlight = Promise.all(keys.map((key) => fetchBucket(key, { force })))
+        .then((buckets) => mergeUnionNotices(buckets))
+        .finally(() => {
+            if (unionNoticesInFlightKey === flightKey) {
+                unionNoticesInFlight = null;
+                unionNoticesInFlightKey = '';
+            }
+        });
+    return unionNoticesInFlight;
 }
 
 function formatPosted(notice) {
@@ -193,7 +239,7 @@ function severityChrome(severity) {
         bar: 'border-blue-500',
         strip: 'nt-alert-strip-info bg-blue-50 text-blue-800',
         chip: 'text-blue-700',
-        emoji: '🔵',
+        emoji: '',
         label: 'Info',
     };
 }
@@ -213,7 +259,7 @@ export function renderLazyPosterHtml(urls, notice = null) {
         const src = escapeHTML(href);
         return `<button type="button" data-alert-lightbox="${src}" data-alert-notice-id="${noticeId}" data-alert-expires="${expiresAt}" class="relative block w-full aspect-square min-h-[10rem] max-h-72 focus:outline-none cursor-zoom-in rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm active:scale-[0.99] transition-transform">
             <span class="nt-alert-poster-loading absolute inset-0 flex items-center justify-center bg-gray-100 dark:bg-gray-900 pointer-events-none" aria-hidden="true">${spinner}</span>
-            <img src="${src}" alt="Service poster" draggable="false" fetchpriority="high" decoding="async" class="nt-alert-poster-img absolute inset-0 w-full h-full object-cover opacity-0">
+            <img alt="" referrerpolicy="no-referrer" draggable="false" decoding="async" class="nt-alert-poster-img absolute inset-0 w-full h-full object-cover opacity-0">
             <span class="nt-zoom-plus absolute bottom-1.5 right-1.5 w-5 h-5 rounded-full bg-black/40 text-white text-xs font-bold leading-none flex items-center justify-center border border-white/20 pointer-events-none select-none shadow-sm" aria-hidden="true">+</span>
         </button>`;
     }).join('');
@@ -221,9 +267,63 @@ export function renderLazyPosterHtml(urls, notice = null) {
     return `<div class="${grid} mt-2 mb-1" data-alert-media>${cells}</div>`;
 }
 
+function bindAlertVideoPlayers(root) {
+    root.querySelectorAll('[data-alert-video-poster-pending]').forEach((img) => {
+        if (img.dataset.ntVideoPosterBound === '1') return;
+        img.dataset.ntVideoPosterBound = '1';
+        const page = img.getAttribute('data-alert-video-page') || '';
+        if (alertVideoKind(page) !== 'vimeo') return;
+        const endpoint = `https://vimeo.com/api/oembed.json?url=${encodeURIComponent(page)}`;
+        fetch(endpoint).then((res) => (res.ok ? res.json() : null)).then((data) => {
+            const thumb = data && typeof data.thumbnail_url === 'string' ? data.thumbnail_url : '';
+            if (thumb && isPublicPreviewUrl(thumb)) img.src = thumb;
+        }).catch(() => {});
+    });
+    root.querySelectorAll('[data-alert-video-play]').forEach((btn) => {
+        if (btn.dataset.ntVideoBound === '1') return;
+        btn.dataset.ntVideoBound = '1';
+        btn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const src = btn.getAttribute('data-alert-video-src') || '';
+            const host = btn.parentElement;
+            if (!host || !src) return;
+            if (!e.target.closest?.('[data-alert-video-play-chip]')) {
+                if (typeof window.openLightbox === 'function') window.openLightbox('', host);
+                return;
+            }
+            const kind = host.getAttribute('data-alert-video-kind') || alertVideoKind(src);
+            if (kind === 'youtube' || kind === 'vimeo') {
+                const embed = alertVideoEmbedUrl(src);
+                if (!embed || host.querySelector('iframe')) return;
+                const frame = document.createElement('iframe');
+                frame.src = embed;
+                frame.title = 'Video';
+                frame.allowFullscreen = true;
+                frame.setAttribute('allow', 'encrypted-media; picture-in-picture; fullscreen');
+                frame.setAttribute('referrerpolicy', 'strict-origin-when-cross-origin');
+                frame.className = 'aspect-video w-full max-h-72 bg-black';
+                host.textContent = '';
+                host.appendChild(frame);
+                return;
+            }
+            const video = host.querySelector('video');
+            if (!video) return;
+            video.autoplay = false;
+            video.preload = 'none';
+            if (!video.getAttribute('src')) video.src = src;
+            video.classList.remove('hidden');
+            btn.classList.add('hidden');
+            const started = video.play();
+            if (started && typeof started.catch === 'function') started.catch(() => {});
+        });
+    });
+}
+
 export function hydrateAlertPosterImages(root = typeof document !== 'undefined' ? document : null) {
     if (!root?.querySelectorAll) return;
     watchAlertPosterHydration(root);
+    bindAlertVideoPlayers(root);
     root.querySelectorAll('[data-alert-lightbox] img.nt-alert-poster-img').forEach((img) => {
         if (img.dataset.ntPosterBound === '1') return;
         img.dataset.ntPosterBound = '1';
@@ -231,6 +331,7 @@ export function hydrateAlertPosterImages(root = typeof document !== 'undefined' 
         img.decoding = 'async';
         const host = img.closest('[data-alert-lightbox]');
         const originalSrc = host?.getAttribute('data-alert-lightbox') || img.getAttribute('src') || '';
+        if (!originalSrc) return;
         const rememberObjectUrl = (blob) => {
             if (!blob || !host) return '';
             try {
@@ -245,15 +346,26 @@ export function hydrateAlertPosterImages(root = typeof document !== 'undefined' 
                 return '';
             }
         };
-        resolveCachedAlertImage(originalSrc).then((cached) => {
-            if (!cached) return;
-            return cached.blob().then((blob) => {
-                const obj = rememberObjectUrl(blob);
-                if (!obj) return;
-                if (img.dataset.ntPosterRevealed === '1' || img.naturalWidth > 0) return;
+        loadAlertImageBlob(originalSrc, {
+            expiresAt: Number(host?.getAttribute('data-alert-expires') || 0),
+            noticeId: host?.getAttribute('data-alert-notice-id') || '',
+        }).then((blob) => {
+            const obj = rememberObjectUrl(blob);
+            img.setAttribute('fetchpriority', 'high');
+            if (obj) {
                 img.src = obj;
-            });
-        }).catch(() => {});
+                if (window._isLightboxMode && typeof window.ntPaintAlertLightbox === 'function') {
+                    const full = document.getElementById('alert-image-lightbox-img');
+                    if (full && !String(full.getAttribute('src') || '').startsWith('blob:')) {
+                        window.ntPaintAlertLightbox(obj);
+                    }
+                }
+                return;
+            }
+            if (!img.getAttribute('src')) img.src = originalSrc;
+        }).catch(() => {
+            if (!img.getAttribute('src')) img.src = originalSrc;
+        });
         const reveal = () => {
             if (img.dataset.ntPosterRevealed === '1') return;
             if (!(img.naturalWidth > 0)) return;
@@ -264,13 +376,6 @@ export function hydrateAlertPosterImages(root = typeof document !== 'undefined' 
             host?.setAttribute('data-alert-ready', '1');
             const live = img.currentSrc || img.src || '';
             if (live.startsWith('blob:')) host?.setAttribute('data-alert-object-url', live);
-            if (originalSrc) {
-                cacheAlertImages({
-                    id: host?.getAttribute('data-alert-notice-id') || '',
-                    expiresAt: Number(host?.getAttribute('data-alert-expires') || 0),
-                    imageUrls: [originalSrc],
-                }, (u) => u);
-            }
         };
         const fail = () => {
             if (img.dataset.ntPosterRevealed === '1') return;
@@ -278,26 +383,21 @@ export function hydrateAlertPosterImages(root = typeof document !== 'undefined' 
             host?.querySelector('.nt-alert-poster-loading')?.classList.add('hidden');
             host?.removeAttribute('data-alert-ready');
         };
-        const tryDecode = () => {
-            if (!(img.naturalWidth > 0)) return;
-            if (typeof img.decode === 'function') {
-                img.decode().then(reveal, () => {
-                    if (img.naturalWidth > 0) reveal();
-                });
-                return;
-            }
-            reveal();
-        };
         const onLoad = () => {
-            if (img.naturalWidth > 0) tryDecode();
+            if (img.naturalWidth > 0) reveal();
         };
         let errors = 0;
         img.addEventListener('load', onLoad);
         img.addEventListener('error', () => {
             if (img.dataset.ntPosterRevealed === '1') return;
-            if (errors++ < 2) {
-                const src = img.getAttribute('src');
-                if (src) setTimeout(() => { img.src = src; }, 400 * errors);
+            const src = img.getAttribute('src') || '';
+            if (src.startsWith('blob:') && originalSrc && img.dataset.ntBlobFailed !== '1') {
+                img.dataset.ntBlobFailed = '1';
+                img.src = originalSrc;
+                return;
+            }
+            if (errors++ < 2 && src) {
+                setTimeout(() => { img.src = src; }, 400 * errors);
                 return;
             }
             fail();
@@ -307,7 +407,7 @@ export function hydrateAlertPosterImages(root = typeof document !== 'undefined' 
             const kick = () => {
                 if (img.dataset.ntPosterRevealed === '1') return;
                 if (img.naturalWidth > 0) {
-                    tryDecode();
+                    reveal();
                     return;
                 }
                 if (!img.complete) setTimeout(kick, 4000);
@@ -337,13 +437,15 @@ function renderReactionsHtml(notice, opts = {}) {
     const mine = mineReactionKey(notice);
     const { total, rows } = buildAlertReactionBreakdown(notice, mine);
     const wrapClass = opts.compact ? 'nt-alert-react-summary' : 'nt-alert-react-summary mt-2';
+    const id = escapeHTML(String(notice.id || ''));
+    const src = escapeHTML(String(notice._sourceKey || ''));
     if (!total) {
-        return `<div class="${wrapClass} min-h-[22px]" data-alert-summary="${escapeHTML(String(notice.id || ''))}"></div>`;
+        return `<button type="button" class="${wrapClass} nt-alert-react-add inline-flex items-center justify-center w-[22px] h-[22px] rounded-full border border-gray-300 dark:border-gray-500 text-gray-500 dark:text-gray-300 bg-white dark:bg-gray-900 focus:outline-none" data-alert-summary="${id}" data-alert-react-add="1" data-alert-id="${id}" data-alert-src="${src}" aria-label="Add a reaction"><span class="text-sm font-bold leading-none" aria-hidden="true">+</span></button>`;
     }
     const faces = rows.map((row) => (
         `<span class="text-sm leading-none" aria-hidden="true">${row.emoji}</span>`
     )).join('');
-    return `<button type="button" class="${wrapClass} inline-flex items-center gap-1.5 px-2 py-1 rounded-full bg-gray-100 dark:bg-gray-900/80 border border-gray-200 dark:border-gray-600 text-gray-800 dark:text-gray-100 focus:outline-none" data-alert-summary="${escapeHTML(String(notice.id || ''))}" data-alert-id="${escapeHTML(String(notice.id || ''))}" data-alert-src="${escapeHTML(String(notice._sourceKey || ''))}" aria-label="${total} reactions">
+    return `<button type="button" class="${wrapClass} nt-alert-react-hang inline-flex items-center gap-1.5 px-2 py-1 rounded-full bg-gray-100 dark:bg-gray-900/80 border border-gray-200 dark:border-gray-600 text-gray-800 dark:text-gray-100 focus:outline-none" data-alert-summary="${id}" data-alert-id="${id}" data-alert-src="${src}" aria-label="${total} reactions">
         <span class="inline-flex items-center gap-0.5">${faces}</span>
         <span class="text-[11px] font-bold tabular-nums">${total}</span>
     </button>`;
@@ -414,8 +516,11 @@ function openAlertReactionPicker(notice, anchorEl) {
     const reactBtns = ALERT_REACTION_KEYS.map((key) => (
         `<button type="button" data-alert-react="${escapeHTML(key)}" data-alert-id="${escapeHTML(String(notice.id || ''))}" data-alert-src="${escapeHTML(String(notice._sourceKey || ''))}" class="w-10 h-10 text-xl rounded-full ${
             mine === key ? 'bg-white/15 ring-1 ring-white/40' : 'hover:bg-white/10'
-        }" aria-label="React ${ALERT_REACTION_EMOJI[key]}">${ALERT_REACTION_EMOJI[key]}</button>`
+        }" aria-label="${mine === key ? 'Remove reaction' : `React ${ALERT_REACTION_EMOJI[key]}`}">${ALERT_REACTION_EMOJI[key]}</button>`
     )).join('');
+    const removeMine = mine
+        ? `<button type="button" data-alert-react="${escapeHTML(mine)}" data-alert-id="${escapeHTML(String(notice.id || ''))}" data-alert-src="${escapeHTML(String(notice._sourceKey || ''))}" class="text-[11px] font-bold text-white/90 px-3 py-1 rounded-full bg-white/10">Remove</button>`
+        : '';
     const menuBtn = (attrs, label, danger = false) => (
         `<button type="button" ${attrs} class="nt-alert-admin-item${danger ? ' is-danger' : ''}">${label}</button>`
     );
@@ -433,6 +538,7 @@ function openAlertReactionPicker(notice, anchorEl) {
         : '';
     sheet.innerHTML = `<div class="flex flex-col items-center gap-2">
         <div class="nt-alert-react-pill flex items-center gap-0.5 px-2 py-1.5 rounded-full bg-gray-950/95 text-white shadow-2xl border border-white/10" data-alert-picker-row>${reactBtns}</div>
+        ${removeMine}
         ${adminMenu}
     </div>`;
     const rect = anchorEl.getBoundingClientRect();
@@ -444,11 +550,26 @@ function openAlertReactionPicker(notice, anchorEl) {
     const anchorY = Number.isFinite(pressY) ? pressY : rect.top;
     const left = Math.max(8, Math.min(window.innerWidth - pillW - 8, midX - (pillW / 2)));
     const pickerH = sheet.offsetHeight || (admin ? 148 : 58);
-    let top = anchorY - pickerH;
-    if (top < 8) top = Math.min(window.innerHeight - (pickerH + 8), anchorY + 16);
+    // Keep the pill and Delete off the finger. A menu under the press
+    // gets selected with the alert text and the phone shows Copy / Share.
+    const gap = 36;
+    let top = anchorY - pickerH - gap;
+    if (top < 8) top = Math.min(window.innerHeight - pickerH - 8, anchorY + gap);
     sheet.style.left = `${left}px`;
     sheet.style.top = `${top}px`;
+    clearAlertTextSelection();
     triggerHaptic();
+}
+
+function clearAlertTextSelection() {
+    try {
+        const sel = window.getSelection?.();
+        if (!sel || sel.isCollapsed || sel.rangeCount < 1) return;
+        const node = sel.anchorNode;
+        const el = node && node.nodeType === 1 ? node : node?.parentElement;
+        if (!el?.closest?.('.nt-alert-card, #alerts-reaction-picker, #alerts-channel')) return;
+        sel.removeAllRanges();
+    } catch { /* ignore */ }
 }
 
 async function deleteAlertForEveryone(notice) {
@@ -568,6 +689,17 @@ function openAlertReactionBreakdown(notice) {
             </div>`;
         document.body.appendChild(sheet);
         sheet.querySelector('[data-breakdown-scrim]')?.addEventListener('click', hideAlertReactionBreakdown);
+        sheet.addEventListener('click', (e) => {
+            const btn = e.target.closest?.('[data-alert-react]');
+            if (!btn) return;
+            e.preventDefault();
+            const id = btn.getAttribute('data-alert-id');
+            const src = btn.getAttribute('data-alert-src');
+            const emoji = btn.getAttribute('data-alert-react');
+            const target = cachedLiveNotices.find((n) => String(n.id) === String(id) && String(n._sourceKey) === String(src));
+            hideAlertReactionBreakdown();
+            if (target && emoji) submitAlertReaction(target, emoji);
+        });
     }
     const mine = mineReactionKey(notice);
     const { total, rows } = buildAlertReactionBreakdown(notice, mine);
@@ -576,9 +708,9 @@ function openAlertReactionBreakdown(notice) {
     const chips = sheet.querySelector('[data-breakdown-chips]');
     if (chips) {
         chips.innerHTML = rows.map((row) => (
-            `<span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gray-100 dark:bg-gray-900/80 border border-gray-200 dark:border-gray-600 text-sm font-bold text-gray-900 dark:text-white ${
-                row.mine ? 'ring-1 ring-blue-400' : ''
-            }">${row.emoji} <span class="tabular-nums">${row.count}</span></span>`
+            row.mine
+                ? `<button type="button" data-alert-react="${escapeHTML(row.key)}" data-alert-id="${escapeHTML(String(notice.id || ''))}" data-alert-src="${escapeHTML(String(notice._sourceKey || ''))}" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gray-100 dark:bg-gray-900/80 border border-gray-200 dark:border-gray-600 text-sm font-bold text-gray-900 dark:text-white ring-1 ring-blue-400" aria-label="Remove reaction">${row.emoji} <span class="tabular-nums">${row.count}</span></button>`
+                : `<span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gray-100 dark:bg-gray-900/80 border border-gray-200 dark:border-gray-600 text-sm font-bold text-gray-900 dark:text-white">${row.emoji} <span class="tabular-nums">${row.count}</span></span>`
         )).join('');
     }
     sheet.classList.remove('hidden');
@@ -592,16 +724,16 @@ function renderPostCard(notice, opts = {}) {
     const highlight = opts.highlight && String(notice.id) === String(opts.highlight);
     const body = prepareRichHtml(stripAlertSignoffHtml(layout.body));
     const titleHtml = layout.title
-        ? `<h3 class="text-base font-black text-gray-900 dark:text-white leading-snug mb-2" data-alert-title>${escapeHTML(layout.title)}</h3>`
+        ? `<h3 class="text-base font-black text-gray-900 dark:text-white leading-snug mb-2" data-alert-title>${linkedPlainHtml(layout.title)}</h3>`
         : '';
-    const mediaHtml = renderPosterHtml(layout.imageUrls, notice);
+    const mediaHtml = `${renderPosterHtml(layout.imageUrls, notice)}${renderAlertVideoMarkup(layout.videoUrls)}`;
     const bodyHtml = body
         ? (alertCopyNeedsSeeMore(body)
             ? buildAlertSeeMoreMarkup(body, { className: mediaHtml ? 'mt-3' : '' })
             : `<div class="nt-rich-body text-sm text-gray-800 dark:text-gray-200 leading-relaxed ${mediaHtml ? 'mt-3' : ''}" data-alert-body>${body}</div>`)
         : '';
     let extra = '';
-    if (notice.ctaUrl && notice.ctaText) {
+    if (notice.ctaUrl && notice.ctaText && !sanitizeAlertVideoUrl(notice.ctaUrl)) {
         extra += `<a href="${escapeHTML(notice.ctaUrl)}" target="_blank" rel="noopener" class="mt-3 inline-flex items-center justify-center w-full bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 font-bold py-2 px-3 rounded-lg text-xs uppercase tracking-wide border border-blue-200 dark:border-blue-800">${escapeHTML(notice.ctaText)}</a>`;
     }
     const rawHtml = repairMojibake(notice.message || notice.text || '');
@@ -623,7 +755,7 @@ function renderPostCard(notice, opts = {}) {
     const adminMetaHtml = scope
         ? `<span class="nt-alert-scope">${escapeHTML(scope)}</span>`
         : '';
-    const replyBtn = `<button type="button" class="nt-alert-reply text-xs font-bold inline-flex items-center gap-1 px-3 py-1.5 rounded-full shrink-0 focus:outline-none" data-alert-reply="${escapeHTML(String(notice.id || ''))}" data-alert-snippet="${escapeHTML(snippet)}"><svg class="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>Reply</button>`;
+    const replyBtn = `<button type="button" class="nt-alert-reply text-xs font-bold inline-flex items-center gap-1 px-3 py-1.5 rounded-full shrink-0 focus:outline-none" data-alert-reply="${escapeHTML(String(notice.id || ''))}" data-alert-snippet="${escapeHTML(snippet)}"><svg class="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>Reply</button>`;
     const footerHtml = `<div class="nt-alert-card-footer">
             <div class="nt-alert-meta-row">
                 <div class="nt-alert-meta-source">${sourceHtml}</div>
@@ -643,13 +775,14 @@ function renderPostCard(notice, opts = {}) {
         <div class="nt-alert-strip flex items-center justify-between gap-2 px-3 py-1 ${chrome.strip}">
             <span class="nt-alert-signoff text-xs font-semibold leading-none tracking-wide">${escapeHTML(signoff)}</span>
             <span class="nt-alert-chip-wrap inline-flex items-center gap-1.5 shrink-0">
-                ${isNoticePinned(notice) ? `<span class="nt-alert-pin" title="Pinned" aria-label="Pinned">${ALERT_PIN_SVG}</span>` : ''}
-                <span class="nt-alert-chip inline-flex items-center shrink-0 px-1.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider leading-none ${chrome.chip}">${chrome.emoji} ${chrome.label}</span>
+                ${isNoticePinned(notice) ? `<span class="nt-alert-pin" title="Pinned" aria-label="Pinned">${ALERT_PIN_SVG}<span class="nt-alert-pin-label">Pinned</span></span>` : ''}
+                <span class="nt-alert-chip inline-flex items-center shrink-0 px-1.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider leading-none ${chrome.chip}">${chrome.emoji ? `${chrome.emoji} ` : ''}${chrome.label}</span>
             </span>
         </div>
         <div class="px-4 pt-3 pb-4">
         ${titleHtml}
         ${mediaHtml}
+        ${linkPreviewMarkup(notice)}
         ${bodyHtml}
         ${extra}
         ${renderPollHtml(notice)}
@@ -744,14 +877,15 @@ export function renderAlertsChannel(notices = cachedLiveNotices, opts = {}) {
     if (feed.dataset.ntAlertsSig === html) {
         hydrateAlertPosterImages(feed);
         hydratePollResults(feed);
+        hydrateLinkPreviews(feed, REPLY_WORKER_URL);
         return true;
     }
     feed.dataset.ntAlertsSig = html;
     feed.innerHTML = html;
     pruneExpiredAlertImages(list);
-    list.forEach((n) => cacheAlertImages(n, resolveAlertImageSrc));
     hydrateAlertPosterImages(feed);
     hydratePollResults(feed);
+    hydrateLinkPreviews(feed, REPLY_WORKER_URL);
     return true;
 }
 
@@ -826,6 +960,10 @@ export function openAlertsChannel(opts = {}) {
     requestAnimationFrame(() => requestAnimationFrame(align));
     setTimeout(align, 280);
     bindAlertsChannelOnce();
+    // Opening Alerts always revalidates notices (idle poll may be 2–3 min).
+    if (typeof window !== 'undefined' && typeof window.checkServiceAlerts === 'function') {
+        try { window.checkServiceAlerts({ force: true }); } catch { /* ignore */ }
+    }
 }
 
 export function applyBellFromNotices(notices) {
@@ -835,7 +973,12 @@ export function applyBellFromNotices(notices) {
     notices = scopedLiveNotices(notices);
 
     if (!notices || notices.length === 0) {
-        bellBtn.classList.add('hidden');
+        // Keep layout space (invisible, not display:none) so the bell does not CLS the brand.
+        bellBtn.classList.add('invisible');
+        bellBtn.classList.remove('hidden');
+        bellBtn.setAttribute('aria-hidden', 'true');
+        bellBtn.setAttribute('tabindex', '-1');
+        if (dot) dot.classList.add('hidden');
         return;
     }
 
@@ -857,7 +1000,9 @@ export function applyBellFromNotices(notices) {
         dotClass += 'bg-blue-600';
     }
     bellBtn.className = bellClass;
-    bellBtn.classList.remove('hidden');
+    bellBtn.classList.remove('hidden', 'invisible');
+    bellBtn.removeAttribute('aria-hidden');
+    bellBtn.removeAttribute('tabindex');
     bellBtn.setAttribute('aria-label', 'Service alerts');
     const bellSvg = bellBtn.querySelector('svg');
     if (bellSvg) bellSvg.setAttribute('class', 'w-6 h-6');
@@ -894,34 +1039,53 @@ async function ensureReactAuthToken() {
     return '';
 }
 
+async function writeAlertReactionCount(path, emoji, token, delta) {
+    const url = `${DYNAMIC_BASE_URL}notices/${path}/reactions/${encodeURIComponent(emoji)}.json?auth=${encodeURIComponent(token)}`;
+    const curRes = await fetch(url);
+    const cur = curRes.ok ? await curRes.json() : 0;
+    const next = Math.max(0, (Number(cur) || 0) + delta);
+    const put = await fetch(url, {
+        method: 'PUT',
+        body: JSON.stringify(next > 0 ? next : null),
+    });
+    if (!put.ok) throw new Error(`react ${put.status}`);
+    return next;
+}
+
 export async function submitAlertReaction(notice, emoji) {
     if (!notice || !ALERT_REACTION_KEYS.includes(emoji)) return false;
     const storeKey = reactionStorageKey(notice);
-    if (safeStorage.getItem(storeKey)) {
-        showToast('You already reacted to this notice.', 'info');
-        return false;
-    }
+    const prev = safeStorage.getItem(storeKey) || '';
+    const removing = prev === emoji;
     const token = await ensureReactAuthToken();
     if (!token) {
         showToast('Could not save reaction. Try again in a moment.', 'error');
         return false;
     }
     const path = notice._reactPath || `${notice._sourceKey}/${notice.id}`;
-    const url = `${DYNAMIC_BASE_URL}notices/${path}/reactions/${encodeURIComponent(emoji)}.json?auth=${encodeURIComponent(token)}`;
     try {
-        const curRes = await fetch(url);
-        const cur = curRes.ok ? await curRes.json() : 0;
-        const next = (Number(cur) || 0) + 1;
-        const put = await fetch(url, { method: 'PUT', body: JSON.stringify(next) });
-        if (!put.ok) throw new Error(`react ${put.status}`);
-        safeStorage.setItem(storeKey, emoji);
         if (!notice.reactions || typeof notice.reactions !== 'object') notice.reactions = {};
-        notice.reactions[emoji] = next;
+        if (prev && prev !== emoji) {
+            const left = await writeAlertReactionCount(path, prev, token, -1);
+            if (left > 0) notice.reactions[prev] = left;
+            else delete notice.reactions[prev];
+        }
+        if (removing) {
+            const left = await writeAlertReactionCount(path, emoji, token, -1);
+            if (left > 0) notice.reactions[emoji] = left;
+            else delete notice.reactions[emoji];
+            safeStorage.removeItem(storeKey);
+        } else if (prev !== emoji) {
+            const next = await writeAlertReactionCount(path, emoji, token, 1);
+            notice.reactions[emoji] = next;
+            safeStorage.setItem(storeKey, emoji);
+        }
         const card = document.querySelector(`[data-alert-post="${CSS.escape ? CSS.escape(String(notice.id)) : notice.id}"]`);
         if (card) {
             const wrap = card.querySelector('[data-alert-summary]');
             if (wrap) wrap.outerHTML = renderReactionsHtml(notice);
         }
+        paintLightboxReactions({ id: String(notice.id || ''), src: String(notice._sourceKey || '') });
         triggerHaptic();
         return true;
     } catch (e) {
@@ -929,6 +1093,178 @@ export async function submitAlertReaction(notice, emoji) {
         showToast('Could not save reaction.', 'error');
         return false;
     }
+}
+
+function noticeForLightbox(detail) {
+    if (!detail?.id) return null;
+    const id = String(detail.id);
+    const src = String(detail.src || '');
+    const byBoth = cachedLiveNotices.find((n) => String(n.id) === id && (!src || String(n._sourceKey) === src));
+    return byBoth || cachedLiveNotices.find((n) => String(n.id) === id) || null;
+}
+
+const LIGHTBOX_BAR_REACTIONS = ['love', 'pray', 'laugh'];
+let lightboxReplySending = false;
+
+function setLightboxComposing(on) {
+    document.getElementById('alert-image-lightbox-dock')?.classList.toggle('is-composing', !!on);
+}
+
+function lightboxNoticeFromField() {
+    const reply = document.getElementById('alert-image-lightbox-reply');
+    const id = reply?.dataset.alertId || '';
+    const src = reply?.dataset.alertSrc || '';
+    if (!id) return null;
+    return cachedLiveNotices.find((n) => String(n.id) === String(id) && String(n._sourceKey) === String(src))
+        || cachedLiveNotices.find((n) => String(n.id) === String(id))
+        || null;
+}
+
+function fillLightboxQuote(notice) {
+    const titleEl = document.getElementById('alert-image-lightbox-quote-title');
+    const thumb = document.getElementById('alert-image-lightbox-quote-img');
+    const img = document.getElementById('alert-image-lightbox-img');
+    const reply = document.getElementById('alert-image-lightbox-reply');
+    const title = String(notice?.title || notice?.buttonText || reply?.dataset.alertTitle || '').replace(/<[^>]+>/g, '').trim();
+    if (titleEl) titleEl.textContent = title || 'Photo';
+    const src = img?.currentSrc || img?.getAttribute('src') || '';
+    if (thumb && src) thumb.src = src;
+}
+
+function revealThreadAfterLightbox() {
+    let opened = false;
+    const openThread = () => {
+        if (opened) return;
+        opened = true;
+        try { window.openMessagesThread?.(); } catch { /* ignore */ }
+    };
+    if (location.hash === '#lightbox' && window._isLightboxMode) {
+        window.addEventListener('popstate', () => setTimeout(openThread, 0), { once: true });
+        window.closeLightbox?.();
+        setTimeout(() => {
+            if (window._isLightboxMode) window.closeLightbox?.(true);
+            openThread();
+        }, 700);
+        return;
+    }
+    window.closeLightbox?.(true);
+    openThread();
+}
+
+async function sendLightboxReply(notice) {
+    const input = document.getElementById('alert-image-lightbox-reply');
+    const text = String(input?.value || '').trim();
+    if (text.length < 5) {
+        showToast('Please provide more details (at least 5 characters).', 'error');
+        input?.focus();
+        return;
+    }
+    if (!notice || lightboxReplySending) return;
+    lightboxReplySending = true;
+    const rawHtml = repairMojibake(notice.message || notice.text || '');
+    const snippet = htmlToPlainSnippet(rawHtml, 6).replace(/[—–].*/, '').trim();
+    let ok = false;
+    try {
+        if (typeof window.submitAdvisoryReplyFromLightbox !== 'function') {
+            const hub = await import('./hub.js');
+            if (typeof hub.submitAdvisoryReplyFromLightbox === 'function') {
+                window.submitAdvisoryReplyFromLightbox = hub.submitAdvisoryReplyFromLightbox;
+            }
+        }
+        if (typeof window.submitAdvisoryReplyFromLightbox !== 'function') return;
+        ok = await window.submitAdvisoryReplyFromLightbox({
+            text,
+            label: 'Replying to Advisory:',
+            snippet,
+            rawMsg: snippet,
+            alertId: String(notice.id || ''),
+            alertKind: 'notice',
+            quotedText: noticeQuotePlain(notice),
+        });
+    } catch (e) {
+        console.warn('Lightbox reply failed', e);
+        showToast('Could not send feedback.', 'error');
+    } finally {
+        lightboxReplySending = false;
+    }
+    if (!ok) return;
+    if (input) input.value = '';
+    setLightboxComposing(false);
+    revealThreadAfterLightbox();
+}
+
+function paintLightboxReactions(detail) {
+    const dock = document.getElementById('alert-image-lightbox-dock');
+    const row = document.getElementById('alert-image-lightbox-react');
+    if (!dock || !row) return;
+    const notice = noticeForLightbox(detail);
+    const reply = document.getElementById('alert-image-lightbox-reply');
+    if (!notice) {
+        dock.classList.add('hidden');
+        row.replaceChildren();
+        setLightboxComposing(false);
+        if (reply) {
+            reply.value = '';
+            delete reply.dataset.alertId;
+            delete reply.dataset.alertSrc;
+            delete reply.dataset.alertTitle;
+        }
+        return;
+    }
+    const mine = mineReactionKey(notice);
+    row.innerHTML = LIGHTBOX_BAR_REACTIONS.map((key) => {
+        const on = mine === key;
+        const emoji = ALERT_REACTION_EMOJI[key];
+        return `<button type="button" data-lightbox-react="${escapeHTML(key)}" data-alert-id="${escapeHTML(String(notice.id || ''))}" data-alert-src="${escapeHTML(String(notice._sourceKey || ''))}" class="w-10 h-10 text-[1.7rem] leading-none focus:outline-none ${on ? 'scale-110' : ''}" aria-pressed="${on ? 'true' : 'false'}" aria-label="${on ? 'Remove reaction' : `React ${emoji}`}">${emoji}</button>`;
+    }).join('');
+    if (reply) {
+        const nextId = String(notice.id || '');
+        if (reply.dataset.alertId && reply.dataset.alertId !== nextId) reply.value = '';
+        reply.dataset.alertId = nextId;
+        reply.dataset.alertSrc = String(notice._sourceKey || '');
+        reply.dataset.alertTitle = String(notice.title || notice.buttonText || '').replace(/<[^>]+>/g, '').trim();
+    }
+    if (!String(reply?.value || '').trim()) setLightboxComposing(false);
+    dock.classList.remove('hidden');
+}
+
+function bindLightboxReactionClicks() {
+    const overlay = document.getElementById('alert-image-lightbox');
+    if (!overlay || overlay.dataset.ntReactBound === '1') return;
+    overlay.dataset.ntReactBound = '1';
+    overlay.addEventListener('focusin', (e) => {
+        if (e.target?.id !== 'alert-image-lightbox-reply') return;
+        fillLightboxQuote(lightboxNoticeFromField());
+        setLightboxComposing(true);
+    });
+    overlay.addEventListener('focusout', () => {
+        setTimeout(() => {
+            if (lightboxReplySending) return;
+            const input = document.getElementById('alert-image-lightbox-reply');
+            const active = document.activeElement;
+            if (active && overlay.contains(active)) return;
+            if (String(input?.value || '').trim()) return;
+            setLightboxComposing(false);
+        }, 120);
+    });
+    document.getElementById('alert-image-lightbox-form')?.addEventListener('submit', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const notice = lightboxNoticeFromField();
+        if (notice) sendLightboxReply(notice);
+    });
+    overlay.addEventListener('click', (e) => {
+        const btn = e.target.closest?.('[data-lightbox-react]');
+        if (!btn || !overlay.contains(btn)) return;
+        e.preventDefault();
+        e.stopPropagation();
+        const id = btn.getAttribute('data-alert-id');
+        const src = btn.getAttribute('data-alert-src');
+        const emoji = btn.getAttribute('data-lightbox-react');
+        const notice = cachedLiveNotices.find((n) => String(n.id) === String(id) && String(n._sourceKey) === String(src))
+            || cachedLiveNotices.find((n) => String(n.id) === String(id));
+        if (notice && emoji) submitAlertReaction(notice, emoji);
+    });
 }
 
 function bindAlertsChannelOnce() {
@@ -943,7 +1279,6 @@ function bindAlertsChannelOnce() {
         closeAlertsChannel();
     };
     document.getElementById('alerts-channel-back')?.addEventListener('click', closeChannel);
-    document.getElementById('alerts-channel-close')?.addEventListener('click', closeChannel);
     document.getElementById('alerts-channel-footer-close')?.addEventListener('click', closeChannel);
 
     document.getElementById('alerts-load-earlier')?.addEventListener('click', () => {
@@ -976,9 +1311,11 @@ function bindAlertsChannelOnce() {
             const id = card.getAttribute('data-alert-id');
             const src = card.getAttribute('data-alert-src');
             const notice = cachedLiveNotices.find((n) => String(n.id) === String(id) && String(n._sourceKey) === String(src));
+            clearAlertTextSelection();
             if (notice) openAlertReactionPicker(notice, card);
             card.classList.remove('is-pressing');
-        }, 480);
+            [40, 120, 280, 500].forEach((ms) => setTimeout(clearAlertTextSelection, ms));
+        }, 400);
     };
 
     root.addEventListener('pointerdown', (e) => {
@@ -998,10 +1335,19 @@ function bindAlertsChannelOnce() {
     });
     root.addEventListener('pointerup', clearLong);
     root.addEventListener('pointercancel', clearLong);
+    root.addEventListener('selectstart', (e) => {
+        if (!e.target.closest?.('.nt-alert-card')) return;
+        e.preventDefault();
+    });
+    document.addEventListener('selectstart', (e) => {
+        if (!e.target.closest?.('#alerts-reaction-picker')) return;
+        e.preventDefault();
+    });
     root.addEventListener('contextmenu', (e) => {
         const card = e.target.closest?.('.nt-alert-card');
         if (!card || ignoreLongPressTarget(e.target)) return;
         e.preventDefault();
+        clearAlertTextSelection();
         const id = card.getAttribute('data-alert-id');
         const src = card.getAttribute('data-alert-src');
         const notice = cachedLiveNotices.find((n) => String(n.id) === String(id) && String(n._sourceKey) === String(src));
@@ -1056,6 +1402,15 @@ function bindAlertsChannelOnce() {
             scrollFeedTo(id, false);
             return;
         }
+        const addReact = e.target.closest?.('[data-alert-react-add]');
+        if (addReact) {
+            e.preventDefault();
+            const id = addReact.getAttribute('data-alert-id');
+            const src = addReact.getAttribute('data-alert-src');
+            const notice = cachedLiveNotices.find((n) => String(n.id) === String(id) && String(n._sourceKey) === String(src));
+            if (notice) openAlertReactionPicker(notice, addReact);
+            return;
+        }
         const summary = e.target.closest?.('[data-alert-summary]');
         if (summary && summary.getAttribute('data-alert-id')) {
             e.preventDefault();
@@ -1081,6 +1436,7 @@ function bindAlertsChannelOnce() {
             triggerHaptic();
             const id = replyBtn.getAttribute('data-alert-reply');
             const snippet = replyBtn.getAttribute('data-alert-snippet') || '';
+            const notice = cachedLiveNotices.find((n) => String(n.id) === String(id));
             if (typeof window.openFeedbackReplyFromOverlay === 'function') {
                 window.openFeedbackReplyFromOverlay('alerts-channel', {
                     label: 'Replying to Advisory:',
@@ -1088,6 +1444,7 @@ function bindAlertsChannelOnce() {
                     rawMsg: snippet,
                     alertId: id || '',
                     alertKind: 'notice',
+                    quotedText: noticeQuotePlain(notice),
                 });
             }
         }
@@ -1096,6 +1453,7 @@ function bindAlertsChannelOnce() {
 
 export function initAlertsChannel() {
     bindAlertsChannelOnce();
+    bindLightboxReactionClicks();
     if (typeof window === 'undefined') return;
     window.openAlertsChannel = openAlertsChannel;
     window.closeAlertsChannel = closeAlertsChannel;
@@ -1111,6 +1469,10 @@ export function initAlertsChannel() {
 }
 
 if (typeof window !== 'undefined') {
+    window.addEventListener('nt-alert-lightbox', (event) => {
+        bindLightboxReactionClicks();
+        paintLightboxReactions(event?.detail || null);
+    });
     window.withBase = window.withBase || withBase;
     window.sanitizeAlertImageUrl = sanitizeAlertImageUrl;
     window.collectNoticeImageUrls = collectNoticeImageUrls;

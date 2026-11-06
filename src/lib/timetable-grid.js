@@ -3,10 +3,10 @@
  */
 import { ROUTES, HOLIDAY_NAMES } from './config.js';
 import { safeStorage, escapeHTML, routeArrowSvg, routePrimaryGridDirection, scheduleCacheSlot, normalizeScheduleSheetDay, schedulesBelongToRoute } from './utils.js';
-import { $currentRouteId, $userRegion, $schedules, $globalExclusions, $globalDisruptions, $opsOverlaysReady } from '../store.js';
-import { loadAllSchedules, ensureRoutePinnedForRegion } from './logic.js';
-import { showToast, triggerHaptic, openSmoothModal, closeSmoothModal, switchTab, toggleDropdownScrim } from './ui.js';
-import { simulateNextActiveService, routeHasSaturdayService, scheduleHasService } from './live-board.js';
+import { $currentRouteId, $userRegion, $schedules, $fullDatabase, $globalExclusions, $globalDisruptions, $opsOverlaysReady } from '../store.js';
+import { loadAllSchedules, ensureRoutePinnedForRegion, processRouteDataFromDBAsync } from './logic.js';
+import { showToast, triggerHaptic, openSmoothModal, closeSmoothModal, switchTab, toggleDropdownScrim, yieldToPaint } from './ui.js';
+import { simulateNextActiveService, routeHasSaturdayService, scheduleHasService, openTrainMarkSheet } from './live-board.js';
 import {
     buildRouteShareUrl,
     parseRouteDeepLinkParams,
@@ -14,6 +14,59 @@ import {
     isSeoAppHandoff,
 } from './share-links.js';
 import { consumeShareDeeplinkSnapshot, peekShareDeeplinkSnapshot, armSlowDeeplinkToast, lockShareBoot } from './deeplink.js';
+
+function centerInScroller(scroller, el, axis) {
+    if (!scroller || !el) return;
+    const sRect = scroller.getBoundingClientRect();
+    const eRect = el.getBoundingClientRect();
+    if (axis === 'y') {
+        scroller.scrollTop += eRect.top - sRect.top - (sRect.height - eRect.height) / 2;
+    } else {
+        scroller.scrollLeft += eRect.left - sRect.left - (sRect.width - eRect.width) / 2;
+    }
+}
+
+function syncGridEdgeFade() {
+    const grid = document.getElementById('grid-container');
+    const frame = grid?.closest('.nt-grid-frame');
+    if (!grid || !frame) return;
+    // Shades only signal content outside the viewport: right when more trains
+    // are off-screen to the right; left (station→times) only after a horizontal
+    // scroll so the first visible train is never shaded at scrollLeft 0.
+    const overflow = grid.scrollWidth - grid.clientWidth > 8;
+    const scrollLeft = grid.scrollLeft;
+    const atStart = scrollLeft <= 4;
+    const atEnd = scrollLeft + grid.clientWidth >= grid.scrollWidth - 8;
+    frame.classList.toggle('can-scroll-x', overflow && !atEnd);
+    frame.classList.toggle('can-scroll-x-start', overflow && !atStart);
+    const stationCol = grid.querySelector('.nt-station-col, th.sticky.left-0, td.sticky.left-0');
+    const stationW = stationCol ? Math.round(stationCol.getBoundingClientRect().width) : 0;
+    if (stationW > 0) frame.style.setProperty('--nt-station-col-w', `${stationW}px`);
+}
+
+function bindGridEdgeFade() {
+    const grid = document.getElementById('grid-container');
+    if (!grid || grid.dataset.ntEdgeFade === '1') return;
+    grid.dataset.ntEdgeFade = '1';
+    const frame = grid.closest('.nt-grid-frame');
+    // Drop the old far-left fade; ensure the times-edge fade node exists.
+    frame?.querySelectorAll('.nt-grid-edge-fade-left').forEach((el) => el.remove());
+    if (frame && !frame.querySelector('.nt-grid-edge-fade-times')) {
+        const timesFade = document.createElement('div');
+        timesFade.className = 'nt-grid-edge-fade-times';
+        timesFade.setAttribute('aria-hidden', 'true');
+        frame.appendChild(timesFade);
+    }
+    grid.addEventListener('scroll', syncGridEdgeFade, { passive: true });
+}
+
+function alignOpenGrid() {
+    const grid = document.getElementById('grid-container');
+    if (!grid) return;
+    centerInScroller(grid, document.getElementById('grid-selected-row'), 'y');
+    centerInScroller(grid, document.getElementById('grid-active-col'), 'x');
+    syncGridEdgeFade();
+}
 
 let lastGridBody = null;
 let gridSchedulesRefreshBound = false;
@@ -24,12 +77,15 @@ let gridOpenIntent = null;
 let gridRouteIntentPrimed = false;
 /** One view_full_grid per open; day/dir switches must not re-count. */
 let gridViewEventOpen = false;
+let gridRenderGen = 0;
+
+const GRID_LOADING_HTML = '<div class="p-6 text-center text-sm text-gray-500 dark:text-gray-400 font-bold">Loading timetable…</div>';
 
 const GRID_INTENT_BLOCKING_MODALS = [
     'route-modal', 'fare-modal', 'alerts-channel', 'notice-modal', 'schedule-modal',
     'profile-modal', 'feedback-modal', 'about-modal', 'legal-modal', 'messages-thread-modal',
     'dev-modal', 'login-modal', 'holiday-notice-modal', 'exit-modal', 'cache-clear-modal',
-    'network-slow-confirm-modal', 'region-confirm-modal', 'schedule-override-modal',
+    'region-confirm-modal', 'schedule-override-modal',
 ];
 
 function scheduleBundleHasRows(scheds) {
@@ -170,6 +226,9 @@ function paintOpenGridBody() {
         : window.Renderer._buildGridHTML(schedule, routeSheetKey, routeId, targetDayIdx, isTodayType, false, lastGridBody.selectedDay);
     if (noServiceSheet) bindNoWeekendWeekdaySwitch(lastGridBody.direction || window._gridSwapDir || 'A');
     bindGridExpressSkips();
+    bindGridKempNotes();
+    bindGridViaNotes();
+    window.Renderer?.fitGridStatusTags?.(grid);
 }
 
 function bindGridExpressSkips() {
@@ -183,7 +242,67 @@ function bindGridExpressSkips() {
         e.stopPropagation();
         const station = btn.getAttribute('data-expr-station') || 'this station';
         const train = btn.getAttribute('data-expr-train') || 'This train';
-        showToast(`Train ${train} does not stop at ${station}.`, 'info', 3500);
+        openTrainMarkSheet({
+            train,
+            body: `Train ${train} does not stop at ${station}.`,
+            badge: 'EXPR',
+        });
+    });
+}
+
+function bindGridKempNotes() {
+    const grid = document.getElementById('grid-container');
+    if (!grid || grid.dataset.kempBound === '1') return;
+    grid.dataset.kempBound = '1';
+    const open = (el) => {
+        const train = el?.getAttribute?.('data-kemp-train') || 'This train';
+        openTrainMarkSheet({
+            train,
+            body: `Train ${train} continues to Kempton Park. Irene is not the last stop.`,
+            badge: 'KEMP',
+        });
+    };
+    grid.addEventListener('click', (e) => {
+        const hit = e.target?.closest?.('[data-kemp-open="1"]');
+        if (!hit || e.target?.closest?.('[data-expr-skip="1"]')) return;
+        e.preventDefault();
+        open(hit);
+    });
+    grid.addEventListener('keydown', (e) => {
+        if (e.key !== 'Enter' && e.key !== ' ') return;
+        const hit = e.target?.closest?.('[data-kemp-open="1"]');
+        if (!hit || hit.tagName === 'TD') return;
+        e.preventDefault();
+        open(hit);
+    });
+}
+
+function bindGridViaNotes() {
+    const grid = document.getElementById('grid-container');
+    if (!grid || grid.dataset.viaBound === '1') return;
+    grid.dataset.viaBound = '1';
+    const open = (el) => {
+        const train = el?.getAttribute?.('data-via-train') || 'This train';
+        const route = el?.getAttribute?.('data-via-route') || 'that';
+        openTrainMarkSheet({
+            train,
+            body: `Train ${train} goes via the ${route} route.`,
+            badge: route,
+        });
+    };
+    grid.addEventListener('click', (e) => {
+        const hit = e.target?.closest?.('[data-via-open="1"]');
+        if (!hit || e.target?.closest?.('[data-expr-skip="1"]')) return;
+        e.preventDefault();
+        e.stopPropagation();
+        open(hit);
+    });
+    grid.addEventListener('keydown', (e) => {
+        if (e.key !== 'Enter' && e.key !== ' ') return;
+        const hit = e.target?.closest?.('[data-via-open="1"]');
+        if (!hit || hit.tagName === 'TD') return;
+        e.preventDefault();
+        open(hit);
     });
 }
 
@@ -289,16 +408,22 @@ export async function applyRouteDeepLink() {
     const defaultKey = 'defaultRoute_' + route.region;
     const existingDefault = safeStorage.getItem(defaultKey);
     const hasUsableDefault = !!(existingDefault && ROUTES[existingDefault] && ROUTES[existingDefault].region === route.region);
+    let savedRegionBefore = null;
+    try { savedRegionBefore = safeStorage.getItem('userRegion'); } catch { /* ignore */ }
 
     if (!returning) {
         safeStorage.setItem('welcomeSeen', 'true');
     }
     try { document.getElementById('welcome-modal')?.classList.add('hidden'); } catch { /* ignore */ }
-    // SEO timetable download always pins that corridor. Shared links pin only when none exists.
+    // Layout may have stamped nt-onboarding before welcomeSeen / pin restore.
+    // SEO Open and shared route links skip Welcome, so re-show the bottom bar here.
+    import('./prefs.js').then(({ syncInAppChrome }) => syncInAppChrome()).catch(() => {});
+    // SEO cold launch seeds a pin only when none exists. Returning commuters keep their default.
+    // Shared links pin only when none exists.
     if (seoHandoff) {
         try {
-            safeStorage.setItem('userRegion', route.region);
-            safeStorage.setItem(defaultKey, link.routeId);
+            if (!savedRegionBefore) safeStorage.setItem('userRegion', route.region);
+            if (!hasUsableDefault) safeStorage.setItem(defaultKey, link.routeId);
         } catch { /* ignore */ }
     } else if (!hasUsableDefault) {
         safeStorage.setItem(defaultKey, link.routeId);
@@ -308,8 +433,14 @@ export async function applyRouteDeepLink() {
     // (or any other default) before schedules load.
     const region = ['GP', 'WC', 'KZN', 'EC'].includes(link.region) ? link.region : route.region;
     $currentRouteId.set(link.routeId);
-    ensureRoutePinnedForRegion(region);
+    // A returning commuter opening an SEO page must not overwrite their saved
+    // region. The linked route still paints; their home timetable cache stays.
+    ensureRoutePinnedForRegion(region, { persistRegion: !(seoHandoff && savedRegionBefore) });
     $currentRouteId.set(link.routeId);
+    // Cross-region SEO open may rewrite userRegion in storage; restore a returning pin.
+    if (seoHandoff && savedRegionBefore) {
+        try { safeStorage.setItem('userRegion', savedRegionBefore); } catch { /* ignore */ }
+    }
 
     // Strip share params — renderFullScheduleGrid will push #grid so Close/Back stays in-app
     stripShareParamsFromUrl();
@@ -374,7 +505,8 @@ export async function applyRouteDeepLink() {
     return true;
 }
 
-export function renderFullScheduleGrid(direction = null, dayOverride = null, opts = {}) {
+export async function renderFullScheduleGrid(direction = null, dayOverride = null, opts = {}) {
+    const renderGen = ++gridRenderGen;
     if (!opts.silent) triggerHaptic();
     bindGridScheduleRouteRefresh();
     const routeId = $currentRouteId.get();
@@ -389,14 +521,35 @@ export function renderFullScheduleGrid(direction = null, dayOverride = null, opt
     if (!schedulesBelongToRoute(scheds, routeId) || !scheduleBundleHasRows(scheds)) {
         const alreadyWaiting = !!(gridOpenIntent && gridOpenIntent.routeId === routeId);
         gridOpenIntent = { routeId, direction, dayOverride };
-        if (!alreadyWaiting) showToast('Loading latest schedules... please wait.', 'info', 2000);
+        const db = $fullDatabase.get();
+        const memoryKey = route?.sheetKeys?.weekday_to_a;
+        const memorySheet = memoryKey ? db?.[memoryKey] : null;
+        const canSlice = !!(memorySheet && (Array.isArray(memorySheet) || typeof memorySheet === 'object'));
+        if (canSlice) {
+            processRouteDataFromDBAsync(route, db).then((schedules) => {
+                if ($currentRouteId.get() !== routeId || !schedules?._routeId) return;
+                $schedules.set(schedules);
+                tryHonorPendingGridOpen();
+            }).catch(() => { /* the saved copy still opens below */ });
+            return;
+        }
         if (gridReloadPendingFor !== routeId) {
             gridReloadPendingFor = routeId;
-            loadAllSchedules(true).then(() => {
+            const toastTimer = setTimeout(() => {
+                if (gridOpenIntent && gridOpenIntent.routeId === routeId) {
+                    showToast('Loading latest schedules... please wait.', 'info', 2000);
+                }
+            }, 1200);
+            loadAllSchedules(false).then(() => {
+                clearTimeout(toastTimer);
                 tryHonorPendingGridOpen();
-            }).catch(() => { /* ignore */ }).finally(() => {
+            }).catch(() => {
+                clearTimeout(toastTimer);
+            }).finally(() => {
                 if (gridReloadPendingFor === routeId) gridReloadPendingFor = '';
             });
+        } else if (!alreadyWaiting) {
+            showToast('Loading latest schedules... please wait.', 'info', 2000);
         }
         return;
     }
@@ -470,7 +623,8 @@ export function renderFullScheduleGrid(direction = null, dayOverride = null, opt
     }
 
     let modal = document.getElementById('full-schedule-modal');
-    const isFirstOpen = !gridViewEventOpen && (!modal || modal.classList.contains('hidden'));
+    const alreadyOpen = !!(modal && !modal.classList.contains('hidden'));
+    const isFirstOpen = !gridViewEventOpen && !alreadyOpen;
     if (isFirstOpen && typeof window.trackAnalyticsEvent === 'function') {
         gridViewEventOpen = true;
         window.trackAnalyticsEvent('view_full_grid', {
@@ -487,7 +641,7 @@ export function renderFullScheduleGrid(direction = null, dayOverride = null, opt
         modal.id = 'full-schedule-modal';
         modal.className = 'fixed inset-0 bg-white dark:bg-gray-900 z-[125] hidden flex items-center justify-center p-0 full-screen backdrop-blur-md transition-opacity duration-300';
         modal.innerHTML = `
-            <div class="bg-white dark:bg-gray-900 rounded-none shadow-2xl w-full h-full flex flex-col overflow-hidden relative transform">
+            <div class="bg-white dark:bg-gray-900 rounded-none shadow-2xl w-full h-full min-h-0 flex flex-col overflow-hidden relative transform">
                 <div class="px-3 py-1.5 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center gap-2 bg-gray-50 dark:bg-gray-800 z-20 shrink-0">
                     <h3 class="flex-grow min-w-0"></h3>
                     <button type="button" id="close-full-grid-btn" class="p-1.5 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-500 shrink-0" aria-label="Close">
@@ -495,7 +649,11 @@ export function renderFullScheduleGrid(direction = null, dayOverride = null, opt
                     </button>
                 </div>
                 <div id="grid-controls" class="px-2 py-1.5 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 flex items-center shadow-sm relative z-10 shrink-0"></div>
-                <div id="grid-container" class="flex-grow overflow-auto bg-white dark:bg-gray-900 relative z-10"></div>
+                <div class="nt-grid-frame relative flex-1 min-h-0">
+                    <div id="grid-container" class="h-full overflow-auto bg-white dark:bg-gray-900 relative z-10"></div>
+                    <div class="nt-grid-edge-fade" aria-hidden="true"></div>
+                    <div class="nt-grid-edge-fade-times" aria-hidden="true"></div>
+                </div>
                 <div class="shrink-0 p-3 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 z-20">
                     <button type="button" id="close-timetable-footer-btn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-4 rounded-lg shadow-md transition-colors text-sm focus:outline-none">Close Timetable</button>
                 </div>
@@ -519,6 +677,25 @@ export function renderFullScheduleGrid(direction = null, dayOverride = null, opt
                 closeFullGridModal();
             });
         }
+    }
+
+    // Open first so the tap can paint (INP), then build the heavy grid HTML.
+    if (!alreadyOpen) {
+        const gridEl = document.getElementById('grid-container');
+        const sameBody = !!(lastGridBody
+            && lastGridBody.routeId === routeId
+            && lastGridBody.direction === direction
+            && lastGridBody.selectedDay === selectedDay);
+        if (gridEl && (!gridEl.innerHTML.trim() || !sameBody)) {
+            gridEl.innerHTML = GRID_LOADING_HTML;
+        }
+        openSmoothModal('full-schedule-modal');
+        if (typeof location !== 'undefined' && location.hash !== '#grid') {
+            try { history.pushState({ modal: 'grid' }, '', '#grid'); } catch { /* ignore */ }
+        }
+        await yieldToPaint();
+        if (renderGen !== gridRenderGen) return;
+        if (!modal || modal.classList.contains('hidden')) return;
     }
 
     const destName = window.Renderer._applyUIIntercepts(direction === 'A' ? route.destA : route.destB).toUpperCase();
@@ -686,18 +863,24 @@ export function renderFullScheduleGrid(direction = null, dayOverride = null, opt
     if (grid) grid.innerHTML = html;
     if (noServiceSheet) bindNoWeekendWeekdaySwitch(direction);
     bindGridExpressSkips();
+    bindGridKempNotes();
+    bindGridViaNotes();
     bindGridExclusionRefresh();
 
-    openSmoothModal('full-schedule-modal');
-    if (location.hash !== '#grid') {
-        history.pushState({ modal: 'grid' }, '', '#grid');
+    if (alreadyOpen && modal?.classList.contains('hidden')) {
+        openSmoothModal('full-schedule-modal');
+    }
+    window.Renderer?.fitGridStatusTags?.(grid);
+    if (typeof location !== 'undefined' && location.hash !== '#grid') {
+        try { history.pushState({ modal: 'grid' }, '', '#grid'); } catch { /* ignore */ }
     }
     if (!$opsOverlaysReady.get()) {
         ensureOpsOverlaysReady().then(() => paintOpenGridBody());
     }
 
+    bindGridEdgeFade();
     setTimeout(() => {
-        document.getElementById('grid-active-col')?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+        alignOpenGrid();
     }, 100);
 }
 

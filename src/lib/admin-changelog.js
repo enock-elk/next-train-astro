@@ -5,6 +5,318 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_11.06.3': [
+        'Co-Pilot: focusing the reply field no longer pins the sheet to the visual viewport or rewinds scroll, so the browser can move the Next Train Co-Pilot header away. Alert hold no longer leaves the phone selection bar (Copy, Select all, Share) over the reaction pill. Delete for everyone sits clear of the finger. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_11.06.2': [
+        'SEO station map: Back inside the map frame closes the sheet, so Close Map does not stay over the schedule page. Co-Pilot writes the KZN, EC, and WC desk into a PRASA handoff instead of halting to ask for a number the contact block already has. A bare independence line does not count as a handoff. Poll replies get "Thank you for replying to our poll." on its own line under the greeting. "Thank you for asking about" becomes "Thank you for your message where you\'re asking about". Feedback Hub resets the iOS viewport pan after the keyboard closes so Back stays reachable, and the header sticks while the sheet scrolls. Redeploy nexttrain-reply. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_11.06.1': [
+        'Dev Hub unread badges: Delay Reports count rows newer than dr_last_checked. Community Monitor counts community_activity rows newer than community_seen (capped route fan-out) plus moderation_queue rows newer than mq_last_checked that are still open. User Trust counts account_deletions with status pending. A 400 leaves the last dot instead of counting every key. Deploy firebase-database.rules.json (moderation_queue .indexOn timestamp, account_deletions .indexOn status). No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_11.02.1': [
+        'RTDB cost: operator badge and Dev Hub badges use timestamp queries / shallow keys (not full feedback/crash/community trees). Killswitch 60s while visible. Alerts share one in-flight check, prefer notices_meta before bucket GETs, idle poll 150s (45s while Alerts open). Browser notices_scheduled publisher disarmed; GitHub Actions hourly backup only (Worker cron remains primary). Exclusions/disruptions stamp-gated 3 min; loadAllSchedules shares one in-flight promise. Live share writes 5/6/8s (20s paused), onDisconnect cleanup, no root ride_pings.json, Map skips REST while onValue live. Dev Hub telemetry 45s. Co-Pilot: known regions omit survey URL; guardDraft halts survey-only ops drafts without desk digits; similar-reply bias; easterncape normalize; WC desks in soft knowledge; header scroll preserved across visualViewport/focus; single outer scroller. map-tab gold hash updated. Deploy firebase-database.rules.json (feedback/crashes/routing_fails .indexOn). Redeploy nexttrain-reply (and community if needed). No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_11.01.4': [
+        'Map loading uses the Map tab pin SVG. Welcome pulse is half as frequent. Guide refreshed for current board, Trip Planner (Pick a date), Passenger Type, Install Next Train wording, SVG section icons, Direct/Transfer pills sized to body text, and the Metrorail Commuters SA Facebook group name. Co-Pilot reply no longer yanking the header back on keyboard focus. Check Tomorrow Schedule merges shared-corridor trains like See upcoming trains. Changing Passenger Type refreshes the home fare chip and open Ticket Prices sheet. No gold map files touched. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_11.01.3': [
+        'Homepage and OG meta lead with Get PRASA Metrorail timetables… (no Train schedule today opener) and stay within 160 SERP chars. Route/region/station/corridor metas clipped to ~160 with train times keywords for low-CTR queries (Cape Town train times, train schedule today woven later). BreadcrumbList JSON-LD on routes, regions, corridors, stations, and routes index nests item.name to fix Search Console Item name N/A. HTML crumbs use nav/ol. robots.txt keeps /cdn-cgi/ disallowed and documents GSC Removals plus auth.nexttrain.co.za soft 404 (Firebase Auth host, not this app). No gold map files touched. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_11.01.2': [
+        'Guide and Co-Pilot: Western Cape gets Transport Information Centre 0800 65 64 63 and Metrorail 021 449 6181. KZN/EC/WC drafts prefer those desk numbers; the PRASA survey is only an extra for complex cases. Co-Pilot also knows WC emergencies, station ops, rail tourism, protection, claims, and railway police. Station SEO meta descriptions invite the full station timetable and drop awkward span about wording. No gold map or advert files touched. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_11.01.1': [
+        'Station SEO phases 1–4 released: every timed stop on active routes is allowlisted and sitemap\'d (279 pages), same Pretoria-style station template for WC/KZN/EC. Upcoming modal and station SEO departure pills say To {terminus} instead of Direct (green styling kept; Direct Train {id} titles untouched). Board/planner fares and fare votes round to nearest R0.50 (R14×0.6→R8.5, R12×0.6→R7). Admin feedback changelog meta and inbox route row show the station name when captured; getBoardStationContext also reads the search field. Co-Pilot skips the PRASA disclaimer on praise cues like their service is good, prefers Thanks for your message asking about, and puts poll thank-you on its own top body line. forceShow stays false.',
+    ],
+    'V10_10.29.3': [
+        'About black box missed the schedule waterfall because production terser drop_console removes console.* from bundled modules. admin.js is not bundled, so only those lines survived. Waterfall now uses window.ntTrace. Noise (tracker id, admin sign-in) expires in 6 hours. Failures stay 7 days. Station review form no longer says a note waits for approval until after it is sent, then a popup says so. Live RTDB allows anonymous pending writes, but station_reviews_public is not publicly readable, so the repo rules are not what is deployed. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_10.29.2': [
+        'Deploy production was failing at Verify map gold before the build. public/js/map-app.js had the empty lat/lon centre fix (85a7058) and GOLD.json still hashed the older file. Tracks and ads were unchanged. GOLD.json now hashes that map-app.js and frozenAt is 1a909c8. map-gold fast-forwards to this lockfile commit. Agents must run verify:map-gold before every app update. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_10.29.1': [
+        'Boot no longer waits forever on a stuck IndexedDB open: 1.2s timeout, then localStorage, then the same-origin full-database.json (SW CacheFirst cache schedule-dump, not shared with other JSON). An inline 8s splash escape reveals the shell if hashed modules never run. SEO Open in Next Train does not rewrite a saved userRegion or wipe other regions\' memory timetable entries; region swap keeps those entries too. NT Waterfall logs cache tier, each guardianFetch, and the CLOUDFLARE>FIREBASE>GITHUB chain into the console and the About black box. Schedule dump updated (Gauteng 26 Oct 2026, KZN 6 Oct 2026). Commuter What\'s New: opens from the saved timetable. forceShow stays false.',
+    ],
+    'V10_10.28.1': [
+        'Full train sheet and planner stop lists keep Rhodesfield and Elandsfontein as their own names. Trains that end there still count as Kempton Park for upcoming-train matching and the KEMP tag (displaysAsKemptonPark / commuterEndKey unchanged). No other timetable paint. forceShow stays false.',
+    ],
+    'V10_10.27.12': [
+        'Agent docs: docs/AGENT-ORIENTATION.md is the cold-start map (folders, deploy, workers, verifiers, pitfalls index). AGENTS.md / instructions.md link it and add a short codebase map plus schedule-intake, regional contacts, and EC fleet notes. docs/README.md indexes the docs folder. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_10.27.11': [
+        'Image schedules: Cape Flats weekend in/out (Oct 2025), Central weekday in/out (02 Mar 2026 kept beside Jun 2026), Pretoria–Pienaarspoort weekday amended grid (21 Aug 2025). Skipped same-date Southern weekday, Northern weekend, and undated Central Saturday re-exports. Guide and Co-Pilot gain PRASA EC 043 700 2030 (plus email/Facebook) and KZN 031 813 0456 on the guide. EC SEO notes yellow trains vs blue People\'s Train and station restoration. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_10.27.10': [
+        'Station SEO reviews: Community Monitor Reviews tab finally loads station_reviews (methods were missing), operators can Approve/Reject, approved rows mirror to station_reviews_public without contact, and RTDB rules let admins list while anonymous creates stay pending. Co-Pilot Guide this reply is a full-screen modal with a multi-line note plus photo/PDF attachments for that draft. Suggest voice follows archived Enock replies more closely; KZN drafts may use Customer Service desk 031 813 0456. Toasts prefer one row with tighter icon/dismiss padding and nearly full phone width. Deploy firebase-database.rules.json or pending reviews stay invisible. No commuter What\'s New beyond the map note already shipped. forceShow stays false.',
+    ],
+    'V10_10.27.9': [
+        'Network map: absent ?lat=/?lon= no longer becomes Number(null)===0, which opened Leaflet at 0,0 in the Gulf of Guinea and then re-centred there after the corridor fit. Missing coords stay null so the view starts on the commuter region. Sidenav Network Map and planner Open Network Map pass ?region= from userRegion. Commuter What\'s New notes the map opens on your region. forceShow stays false.',
+    ],
+    'V10_10.27.8': [
+        'Full timetable shades only when content is off-screen: left station→times shade after horizontal scroll (first train column no longer shaded at rest); right shade while more columns remain. Soften both fades. NT Waterfall logs paintedFrom (cache/bundled) and a session summary (CLOUDFLARE→FIREBASE→GITHUB). Admin optional badge/telemetry/scheduled-alert timeouts stay quiet so they do not look like a failed login. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_10.27.7': [
+        'Image schedules batch 5: GP weekday grids/departures for Saulsville, De Wildt, Lenz, Mabopane, Belle Ombre, Leralla, Naledi, Germiston, Kwesine, Randfontein, Kempton, Hercules–Koedoespoort. Keep grid beside departures; keep Lenz 14 Oct connections and 26 Oct grid with Saturday sheets. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_10.27.6': [
+        'Image schedules batch 4: first GP folder (Naledi, Germiston, Leralla, Kempton, Mabopane, Irene, Pienaarspoort, Saulsville, Belle Ombre, De Wildt, Kwesine, Lenz Saturday notices) plus WC Central weekday in/out (08 Jun 2026). Tag grid vs departures and keep both formats; keep older Leralla 2025-08-02 departures beside 2026-08-22. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_10.27.5': [
+        'Image schedules batch 3: KZN Umlazi weekday p52/53/58/59 and Saturday p64/65, Berea/kwaMashu Saturday inbound p42, plus WC Cape Flats / Northern / Central / Southern public-holiday 2026 combined posters. Skipped exact byte duplicates of already-filed Berea pages. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_10.27.4': [
+        'Image schedules: WC Northern weekend (Oct 2025), Stellenbosch weekday early/later posters (eff. 12 Oct 2026), and KZN Berea/kwaMashu, Crossmoor, Pinetown weekday + Saturday booklet pages (keep multi-page detail variants). Prefer newer effective dates; do not drop companion pages. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_10.27.3': [
+        'Image schedule archive started under public/images/schedules/ (WC Southern, Northern, Central Saturday, Cape Flats, Monte Vista sheets + manifest). Paths are allowlisted for a future Alerts poster picker; do not copy into alerts/. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_10.27.2': [
+        'Alert Preview / Post modal paints YouTube, Vimeo, and file video the same way the Alerts feed does (still + Play video). Media → From the internet accepts those video links and loads the crawled link preview card. Preview Alert attaches the crawled card before the modal opens. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_10.27.1': [
+        'Via branch marks prefer structured schedule.via, then VARIANT, then legacy via/Monte/Vista cell prose. Admin Grid Column Order can save Via marks to all day sheets for a route. Force schedule type accepts multiple YYYY-MM-DD dates (empty dates keep while-Active behaviour). No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_10.26.18': [
+        'Station SEO Leaflet full view drops the corner X so Network Lines / Show all lines stays tappable; Close Map remains. Full timetable header X restored. Grid scroll shade sits on the left edge of the time columns (at the sticky station width), not on the far-left of the station names. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_10.26.17': [
+        'Offline dock marks an episode before probes and keeps a 5 minute paint gap so flaky mobile radios cannot spam You are offline. Account create/sign-in keep Welcome in the hero only (empty top bar). In-app timetable shades the right edge of the station column toward the times, drops the left edge fade, and removes the header X (Close Timetable stays). Layout recovers bottom nav after Chrome Signed-in browser toasts leave a blank strip. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_10.26.16': [
+        'Account: Welcome to Next Train / Welcome back headers, invalid-credentials screen with Create account, premium verify card, and Welcome back toast. Pinned routes sync to the account immediately (pin, unpin, Welcome pick). Feedback, Messages, community, fares, trip plans, and delays write account activity breadcrumbs. Feedback Filter has Done; outside click no longer closes Dev Hub. Check for Updates still keeps pins; Reset this App still clears route and region. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_10.26.15': [
+        'About adds a Next Train Champions card under Built & Maintained (name + region). Admin System Controls loads and saves champions to config/community_champions; WhatsApp, channel, and Facebook icons only show when those fields are filled. Ticket Prices matches the full timetable: haptic on open and on Close / X / backdrop dismiss. Deploy firebase-database.rules.json for the new public-read config path. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_10.26.14': [
+        'Schedule waterfall is CLOUDFLARE→FIREBASE→GITHUB (edge first for RTDB cost), with 5s/7s/8s timeouts and an 18s hard budget so Clarity never sits on Loading stations for minutes. Per-host timeout is TimeoutError, not AbortError, so GitHub still runs after a blocked edge. Soft network retries do not trip Lie-Fi mid-waterfall. Bundled same-origin dump is a last resort; finally always reveals the shell and repopulates stations when a list exists. Builds on the TUKS Lie-Fi / Black Box logging fix. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_10.26.13': [
+        'Campus / restricted Wi-Fi (e.g. TUKS): a non-OK JSON response from nexttrain-cache is no longer captive Lie-Fi, so Firebase and the GitHub dump still run. navigator.onLine false no longer hard-throws guardianFetch or skips the waterfall before probing. Reachability and the offline dock confirm workers.dev, then Firebase, then jsDelivr. Offline dock only re-arms after 5 minutes sustained online. Black Box logs each waterfall step under NT Waterfall: (probe, preflight, FIREBASE→CLOUDFLARE→GITHUB try/fail/success). No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_10.26.12': [
+        'Map gold catch-up: GOLD.json hashes now match the station SEO map isolate and routeLineColor runtime already on main (map-app.js, map.astro). Tracks and CleverAds hashes unchanged. verify:map-lines, verify:map-hops, and verify:clever-ads passed before the lock update. Fast-forward map-gold after this lands. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_10.26.11': [
+        'SEO Open in Next Train (and other share deep links) re-runs syncInAppChrome after minting welcomeSeen or restoring a pinned route, so html.nt-onboarding cannot leave the bottom nav stuck hidden for returning commuters. Welcome skip path and immersive chrome exit do the same. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_10.26.10': [
+        'SEO route (and WC holiday) grids show Schedule effective from above each sheet and move Download above the timetable. Sheet meta comes from the same nest overlay as the times. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_10.26.9': [
+        'astro check: SeoStationReviews client script uses @ts-nocheck so DOM value/disabled/reset casts no longer fail the preview build (same 16 errors blocked V10_10.26.7 and .8). No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_10.26.8': [
+        'Offline dock confirms with a short reachability probe after the 4s visible hold, and only re-arms after 45s of sustained online so flaky/slow radios do not spam You are offline. Select Route and full timetable open before heavy DOM (INP yield). Header bell and corridor label keep reserved space (CLS). Map tab bind is idle-deferred on home. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_10.26.7': [
+        'Feedback filters support Has and Missing (e.g. no WhatsApp and no email), and Inbox/Archive counts follow the filtered list. WhatsApp/email outreach keeps an Opened chip, stays re-clickable, and adds Resolve on that sheet. Johannesburg to Wellington-style cross-region planner fails report Cross-region instead of No Physical Link. Station SEO map lightbox drops the title bar; Reviews sit at the bottom of station landings (pending RTDB approval). Client RTDB and sign-in writes share rate limits. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_10.26.6': [
+        'Station SEO phase 1 adds WC/KZN/EC route termini and hubs (Cape Town, Bellville, Durban, East London, and the other corridor ends) onto the allowlist, SSG, and sitemap. Mid-corridor stops in those regions wait for phases 2-4. Plan documented in seo-station-allowlist.js and AGENTS.md. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_10.26.5': [
+        'Station SEO drops Expand map (tap the preview), splits lead copy into paragraphs, and says departure & more. Account opens on Create with Welcome, logo, Google first, less copy, and a bottom scroll fade; Delete account sits with Sign out and Reset. Community tab only when the board route has an open room. Feedback and planner telemetries send the selected station plus auto-locate, shown under the version modal. User Trust deletions Delete data from RTDB and badge the tile. Fare corrections can be reclassified (ticket type / peak) which updates agree and accuracy. Force schedule titles paint on the day chip (Election Day). No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_10.26.4': [
+        'Station SEO neighbour headlines only slash-join corridor ends that share the same next stop (Pretoria - Irene / Kempton Park via Sportpark; other nexts stay middle-dot groups). The GPS preview isolates ?station= at street-level zoom instead of fitting the whole corridor, keeps pan/zoom along the line, and shows Loading map without the network sync copy. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_10.26.3': [
+        'Station SEO landings drop Open live board for a Leaflet GPS map preview (map.html?station=) that expands into a full-view overlay matching the in-app Network Map sheet, not browser fullscreen. Neighbouring stations are one headline (Pretoria - Irene / Kempton Park) plus a per-corridor accordion of stop order. About this station and Quick facts are generated from the sheets. SEO Open in Next Train soft-pins only on cold launch so saved defaults stay put. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_10.26.2': [
+        'SEO SSG (station and route landings) pulls live regional timetable sheets at build time via scripts/fetch-live-schedules-for-seo.mjs (Cloudflare cache, then Firebase), writes public/data/.seo-build-database.json, and prefers that over the checked-in dump. Production and github.io builds set SEO_REQUIRE_LIVE=1. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_10.26.1': [
+        'Gauteng station SEO landings at /stations/{slug}.html for every timed stop on active GP routes (88 pages). Each page lists lines, neighbouring stations, and weekday/Saturday departures in both directions with Direct and short-working badges. Indexing is gated by seo-station-allowlist.js (phase 1 = all GP). Route SEO station lists link through. Sitemap, SW denylist, and verify:station-seo cover the new URLs. Reviews and out-of-network stubs are deferred. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_10.24.3': [
+        'Earthy day line matches Classic: weekday name, then a spaced schedule capsule in taupe wash (Classic blue pill unchanged). Suggest reply uses a short independence line only for PRASA or operations asks they cannot fix, and thanks poll or call-for-response replies. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_10.24.2': [
+        'Co-Pilot is full screen with a scrollable header, contact chips, and a settings sheet for future-reply notes, this-reply notes, and Suggest images. Guide this reply sits below Suggest and hides Suggest while open so the two are harder to mis-tap. The maintenance strip marquees when the phone is too narrow for the full line. GPS network lines take the colour from each route\'s colorClass hex. Signed-in Account keeps Sign out and Reset this App inside the name/photo accordion, side by side (stacked under 360px), hidden until that header is opened. The home bottom bar is 10% shorter (3.6rem, 2.925rem on short screens) with equal tab columns. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_10.24.1': [
+        'GPS network lines take the colour from each route\'s colorClass hex, so they cannot all fall back to grey. Signed-in Account keeps Sign out and Reset this App inside the name/photo accordion, side by side (stacked under 360px), hidden until that header is opened. The home bottom bar is 10% shorter (3.6rem, 2.925rem on short screens) and the active tab grows with --nt-nav-active-grow while idle tabs share the rest. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_10.19.2': [
+        'The bottom bar is 4rem again, with the larger icon and label from before the shorten. Very short screens stay at 3.25rem. The bar stays a rectangle. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_10.19.1': [
+        'Alert reaction chips sit on the same line as Reply. The 12px hang is gone. Reply stays where it was. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_10.18.15': [
+        'Alert cards keep a rounded top. The Ops strip was painting square corners because the card stays overflow visible so a reaction can hang off the bottom. View full timetable uses the same light shadow as the route and station rows. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_10.18.14': [
+        'A bottom sheet pulls closed from anywhere on the card when that scroller is at the top. Trip fare No takes the blue highlight. What\'s New paints the latest six cards first and loads older ones on Show earlier updates. The guide FAQ says a monthly ticket covers that calendar month and is on sale until about the 10th, and that December uses a scaled-down festive timetable from the early 20s of December through the first week of January. A planner search for 21 Dec 2026 to 1 Jan 2027 still shows the trip, with a banner that the festive sheet is not confirmed. Route pages mention that timetable. The day button has no outer oval. The sim clock sits beside the Next Train title. forceShow stays false.',
+    ],
+    'V10_10.18.13': [
+        'Bottom sheets close on a pull down. Sunday No service is one quiet pill with an amber dot. Signed-in Account matches a ride-app layout: large name, photo on the right, quick tiles, then Sign out. Feedback Hub header is shorter. What\'s New and Today\'s schedule share the same type stack and Got it button, without a blank slab under the card. Trip fare bolds only the word Peak. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_10.18.12': [
+        'Scroll fades show on the opposite edge once you leave the start of a sheet, the page, or the timetable. Earthy light buttons use the fare Zone badge outline. The info strip name and the Info chip share one ink, and the chip is the word Info. Co-Pilot keeps the line you are typing above Suggest reply. Account drops the Account and Profile headings, puts the photo on the right, and opens Passenger type on the saved choice. Share your trip blurs the screen behind it and shows a progress bar. A share that outlives the browser is recorded from the last real ping, and stops after 10 minutes idle or 4 hours. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_10.18.11': [
+        'Alert full view swipes one picture at a time through the posters and video previews on the channel. Dark and Earthy dark modal edges are quieter. Holding a brief card copies its text. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_10.18.10': [
+        'Alerts is the full-screen sheet again. A suggested reply is told which lines Next Train posted and which lines the commuter wrote. An alert is Next Train\'s notice. The commuter only replies to it. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_10.18.9': [
+        'The alerts bell is the 24px icon with its previous padding again, and it sits on the vertical middle of Next Train and the day line. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_10.18.8': [
+        'Reply uses the same speech-bubble icon as Next Train Advisory. The Sunday No Service chip has no dots between the day and the pill. Alerts is the same large sheet, centered on the scrim. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_10.18.7': [
+        'Full train sheet, Trip Planner Tips, and the upcoming list fill the screen, so a long list is not stuck in a short card with empty space underneath. The blue header wordmark, padding, and bell track the screen height. Sunday No Service is a red status pill on the day button. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_10.18.6': [
+        'The full train sheet fades while more stops are below. Opening Add contact details for a reply focuses that field so the keyboard stays up. Dark floating sheets keep a light rim, because the header was the same navy as the page. Dark route names stay the line colour, lightened so olive and the other map colours can be read on the navy card. No grey title and no dot. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_10.18.5': [
+        'Dark route names use a light edge. View full timetable stays off white in every dark pack, and Earthy uses a paper chip. Earthy full train sheet is blue with a cream corner, and the day pill opens the same schedule note as the header. Earthy Plan Trip, Close Timetable, Got it, and Reply keep a hard edge. Upcoming trains and Trip Planner Tips fade while more is below. Trip plans in the brief are the last 48 hours, with this week against the week before. Across the country is one card per region for the day rules, and standing notes sit in Others. Explain this crash reads the log when the written note is down. GPS lines are not restyled by Earthy. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_10.18.4': [
+        'Route names and the GPS map lines use the colours on the official network maps. Naledi to Merafe is the light green line. Hercules to Koedoespoort is the pink Capital Park line. Cape Flats is brown, the Central line is cyan, Malmesbury is lime, and the Northern line is green. Umlazi and Bridge City are red, the South Coast is blue, Crossmoor is yellow, Cato Ridge is cyan, and Pinetown is maroon. Berlin is orange. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_10.18.3': [
+        'A YouTube or Vimeo link in an alert shows the preview picture, the same still an embed shows before play. The player is not loaded until Play video. A direct video file still waits for that tap. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_10.18.2': [
+        'Pretoria to Pienaarspoort uses the olive of the Rissik to Hartbeesspruit line. The pink was the Rayton branch. Pinch keeps the point under the fingers. On a desktop, zoom controls sit at the bottom right of the network map, photo view, and SEO map, and a double click zooms. The homepage description leads with train schedule today. An alert poster is kept on the device until that alert expires, and full view opens that saved picture with a loading line if it is not ready yet. A direct video link can be posted. It does not play or download until Play video. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V10_10.18.1': [
+        'Sunday’s day note names the region and the line. Who’s here counts everyone with that route’s Community open, including people who are not signed in, and no longer says it is not a contact list. Version moves to V10 after the design changes. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V9_10.18.8': [
+        'The bottom bar is shorter, and the day line pill sits tighter under the title. A short fade sits just above the bar while the board still has more below it, and it lifts when you reach the end. Gauteng route colours follow the network map, with a thin bar on each route row. The home route name keeps that colour and its shadow. The map loading mark is a route, on the GPS map and in the map tab. Feedback Hub contact and message sit on the bottom edge. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V9_10.18.7': [
+        'Feedback Hub wallpaper continues behind the message and contact fields, and those fields sit above the bottom bar. The send button lines up with the message box. The contact row says Add contact details for a reply. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V9_10.18.6': [
+        'A full-screen photo closes when you swipe down, and a double tap zooms in. Feedback Hub keeps contact details in a row above the message, and the message box starts at two lines. The day line under the title opens a note for the timetable in use, including Sunday, Saturday closures, public holidays, and a forced schedule. Forcing a schedule requires a message. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V9_10.18.5': [
+        'The route name keeps its line colour. A slight shadow separates yellow from a white card. On a dark card the shadow is a soft lower edge. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V9_10.18.4': [
+        'The route name, No Service line, fare label, timetable button, and page padding are back to the previous treatment. The bottom bar stays a pill behind the icon, with dimmer inactive labels and no top line. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V9_10.18.3': [
+        'The current tab is only the pill behind the icon. The top line is gone. Other tab labels are dimmer. The route name is dark ink with a small stripe in the line colour. No Service is white on a red pill. The fare label is one colour. View full timetable is sentence case. The page padding matches the bar height. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V9_10.18.2': [
+        'The bottom bar is one step darker than the header. The current tab is a soft pill behind the icon, a filled icon, a bold label, and a thin line on the top edge. Other tabs are quieter. The fare card scrolls clear of the bar. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V9_10.18.1': [
+        'The timetable grid is the previous size again. On an alert photo, Reply is a text field. Focusing it lifts the field above the keyboard, and the photo stays up. Send uses the same advisory reply. Heart, pray, and laugh stay on that bar until the field is focused. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V9_10.17.10': [
+        'Close Timetable is the solid full-width button again. The bottom bar is a rectangle in the same colour as the top bar. The alert photo fills the screen, and the bottom is a reply bar with a few reactions. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V9_10.17.9': [
+        'View full timetable is a light outline and stays full width. Close Timetable is a short light control. In the app, a long station name wraps to two lines, rows are tighter, the selected station scrolls into view, and a fade on the right shows there are more trains. The header is a flat colour. Alerts keeps the back arrow and the bottom Close, and drops the header X. Reply is an outline. A pinned notice says Pinned. The operator scope is a small tag. The downloaded sheet is unchanged. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V9_10.17.8': [
+        'The alert image preview fills the screen. Close is a small control. When the picture belongs to an alert, the same reactions sit along the bottom. After an in-app reply, Later saves that reply on the roadmap under To do or In progress, and that card can open WhatsApp or email. Email keeps the paragraphs and leaves off the operator sign-off. Co-Pilot fills the screen from top to bottom. Suggest reply stays hidden while the draft is halted. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V9_10.17.7': [
+        'Alert Title is its own field under the formatting row, off until Title is pressed. Selected text becomes the title. Title, body, attached images, and the link preview stay apart, so Write replaces the words and leaves the picture. An image or a link preview leaves only from its X. Clearing the preview keeps it off for commuters. A URL in the title or the body is a link. A- and A+ move one size from the size under the cursor, so small then A+ is normal. Holding an alert opens reactions at 400 milliseconds. The header bell keeps its icon. While alerts are up, the blue header has a soft torch from the bell and no ring around it. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V9_10.17.6': [
+        'Check for Updates retries a slow probe and still downloads when the phone is online and not a captive portal. Offline and Lie-Fi still keep the saved app. Every toast matches the Found station toast at 2.5 seconds. A longer message, and the update status, may stay up to 4 seconds. The brief trip card is rows. What this means keeps readable text in dark mode, and an expiring alert is a short line without the raw countdown. Accounts is its own experimental switch and starts off. A listed route is the only route. Operators and someone who is already signed in still see Account. Community, a reply, a reaction, a late report, and sharing a trip ask for sign-in in the account sheet when the action needs it. The composer does not say sign in first. Options opens without waiting on the account layout. Planner results paint before live line alerts, then update when those alerts arrive. The homepage bell keeps its icon and glows while alerts are up, with a faint header wash that leaves when the bell is hidden. A reaction can be removed on an alert, in Community, and in Feedback Hub. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V9_10.17.5': [
+        'Account opens on a sign-in screen, with separate create and reset steps. The back chevron returns to sign-in before it closes. An internet image in the composer is a picture, not a button labelled Admin Attachment. The preview keeps that picture above the text, and the image request does not send the site as a referrer. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V9_10.17.4': [
+        'A live share asks for a GPS fix every 3 seconds and pauses after six misses, 18 seconds. It keeps publishing every 3 seconds while it has a fix, and it stops after 10 minutes without a ping. Receivers follow new pings within a few seconds. The station name beside a moving train opens and closes with the train. Join train is on the tracking card when someone else is already sharing it. Two phones are averaged on the rail only while they are within 250 m, about one train length. Farther apart, the map keeps the phone whose heading matches the trip, then the one closer to the rail, then the fresher fix, then a train-like speed. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V9_10.17.3': [
+        'Community rooms follow the routes that are actually on. A region checkbox does not open the other communities in that region. The brief sky follows the time of day. A card is two short paragraphs when it has two facts. Add to alerts is the bell at the bottom right of the card. What this means uses the cards when the written note is unavailable, and Explain this crash keeps that reading on the card. Back on the brief closes the brief. A signed-in operator gets a home-screen count of new messages without opening Dev Mode. A commuter does not. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V9_10.17.2': [
+        'Reset this App is the name in Data and Sync, on the signed-in Account sheet, and on the confirm. The user-id sentence is gone. A weak or failed connection probe asks before the wipe. Cancel keeps the saved schedules. Check for Updates still does not ask. The full timetable paints the saved dump first and only downloads when the live stamp is newer. Upcoming trains treat Durban Yard as Durban, so a Dalbridge to Durban train is Direct. Elandsfontein and Rhodesfield stay Kempton Park. Irene sheets also show the Kempton Park trains that call there, tagged KEMP. Monte Vista, Maitland, and KEMP use the same status-slot tag as NO SVC, in the app and on the light export, in blue. A long name such as Monte Vista scales down inside that slot so the column stays with the others. The export header wash is blue-100 so it is not the zebra row. Tap opens the advisory in blue, not the red no-service sheet. EXPR opens that same note. What\'s New covers the reset name, Direct, KEMP, and the marks. forceShow stays false.',
+    ],
+    'V9_10.17.1': [
+        'Check for Updates no longer asks about a slow network. A failed download keeps the saved app. Reset this phone, in Data and Sync and on the signed-in Account sheet, clears this phone and writes back only next_train_device_id. The account stays. The operator brief holds standing notes to today or tomorrow, and the country card is the route-page insights. A live disruption adds a Rail card. Crashes this week start collapsed, and a card opens its rows. Add to alerts turns that card into an alert and asks only who sees it, the severity, and the expiry. Guide this reply regenerates the current draft. App stuck stays on the starting screen until the shell lands, then toasts Next Train loaded. Pull to refresh reloads the open tab. The slow-connection toast waits 15 seconds of the current visible session. What\'s New covers the phone reset and pull to refresh. forceShow stays false.',
+    ],
+    'V9_10.16.06': [
+        'Trip fare peak line reads Peak (Saturday @ 7:20). The passenger type sheet has a close X. State Monitor and the scheduled queue only show an image when the address is a real poster or image file, with the site base applied, and a failed image is removed. Next Train Composer fills the screen. Its actions are small chips. A rewrite comes back as a short title and paragraphs, and Replace keeps that shape in the field. What\'s New covers the fare line and the close button. forceShow stays false.',
+    ],
+    'V9_10.16.05': [
+        'The grid via mark is Monte Vista or Maitland in the one-row status slot above the train number. The word Via is not on the grid. Tap explains the route. NO SVC and SPL still take that slot. Saved grids keep the same words in light-sheet ink. EXPR is dark red on the in-app grid and the saved grid only. Media on a service alert, a reply, and a disruption asks for a file from this device or an image file from the internet. An https JPEG, PNG, GIF, or WebP link is shown to commuters and is not uploaded. What\'s New covers the timetable marks. forceShow stays false.',
+    ],
+    'V9_10.16.04': [
+        'A pasted https link gets a link card in the alert preview and on the posted alert. The reply worker is tried first. When that route is missing, the card is read from the public page and stored on the notice. A failed lookup is not retried until the next visit. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V9_10.16.03': [
+        'Cape Town sheets that spell via / Monte / Vista, or Via MV, label that column Via Monte Vista. A timed call at Monte Vista or Maitland does not. Grid order can set Via Monte Vista or Via Maitland on config/grid_order via, and that mark wins over the sheet. The via line wraps inside the column. Irene columns that continue to Kempton Park, Elandsfontein, or Rhodesfield show KEMP with no colour wash. NO SVC keeps the status slot. Trip Planner names the further same-day terminus and extends the train sheet past Irene. What’s New covers KEMP, the Kempton Park train name, and EXPR. forceShow stays false.',
+    ],
+    'V9_10.16.02': [
+        'Crucial system update keeps the version on the same line as the sentence. When the screen is too narrow, that version drops to the next line and the line is centred. The phone still reads same-origin /app-version.json only, so nexttrain.co.za stays on the last production shell until Deploy production. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V9_10.16.01': [
+        'Next Train cards follow the station that is actually selected. With no station, both directions say Select station above, including while a corridor\'s sheets are still opening. Standing at Pretoria says You\'re here, and does not keep an earlier stop\'s train such as 0603. The minute countdown still updates in place. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V9_10.15.13': [
+        'Suggest reply stays off the independent-app speech unless the commuter asked who runs the trains or the fares. A quoted advisory is sent to the draft in full, including the poll and the vote counts. The inbox no longer shows Sent while signed out. A shared train uses its own last stop on that day sheet, so 0626 on the Irene board is not labelled To Kempton Park, and a train that does run through to Kempton Park still is. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V9_10.15.12': [
+        'Station list colour is the card surface again. Homepage and region descriptions put today in the view and download line: View and download weekday and Saturday sheets for today. Gauteng reads Metrorail Gauteng. The full timetable scrolls across and down. A readonly station field keeps the shell at full height, and the shell fills a short gap under the bottom nav. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V9_10.15.11': [
+        'Homepage and Gauteng descriptions name Gauteng, timetables, and view and download. Select Route no longer rebuilds the list on every tap, and a corridor already in memory is sliced instead of reloading the dump. The Next Train station list is a step darker than the card. The planner To field lets the header scroll away with the keyboard. All trains departed measures the card before it locks one line. Check for Updates waits for Update before it says it is checking, and every toast leaves on its own. A shared train reads last seen at, approaching, or after a station. Speed, heading, GPS, rail, accuracy, and rider count stay on the tracking card for operators only. About feedback is tagged About Next Train. The feedback field says Only if you want a reply, and the details box takes the spare height. The guide transfer label matches the yellow trip card, and a download is a timetable image. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V9_10.15.10': [
+        'Alerts show a WhatsApp-style link card. The card is reserved while it loads, then fills in. A posted alert keeps the card so every commuter sees the same preview. Suggest reply keeps the draft for that commuter message. Closing Co-Pilot and opening it again shows that draft. Suggest reply writes a new one. A quoted inactive poll loads its real vote counts. Co-Pilot leaves a blurred strip, and tapping that strip closes it. A short modal no longer scrolls the screen behind it. Community Monitor messages are left-side bubbles and open on the latest message. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V9_10.15.9': [
+        'Dev Hub keeps Live Telemetry under the brief. The sync time stays inside that tile. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V9_10.15.8': [
+        'Write is Next Train Composer and uses the whole field, with larger buttons. Reply to a commuter is Next Train Co-Pilot and fills the screen. A finished draft note sits inside Instructions and images. A blank shared note is not saved, and a save waits until the current note has loaded. Signing in checks scheduled alerts again, on top of the existing minute timer. The brief sits on its own row. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V9_10.15.7': [
+        'Dev Hub has a Brief button. It stays until dismissed for the day, and it only reads logs after it is opened. The report covers the next few days (Cato Ridge first Monday, Saturday gaps, 0618/0619, holidays), expiries, trip plans, fare notes, routing failures, feature switches, and crash cards. Explain sends that crash log to the reply worker after emails and phone numbers are removed. Check for Updates keeps its bottom message up while the download runs, and a quick download still shows it for up to 6 seconds. No commuter What\'s New for the brief. forceShow stays false.',
+    ],
+    'V9_10.15.6': [
+        'Suggest reply reads the whole thread, the route key they had open, and any photo or PDF already in the chat. If earlier messages never got a reply, that same draft answers those too. A halt can take the missing fact and run again. The reply box keeps its formatting bar. Service alert paste turns WhatsApp bold marks into bold. While a draft is writing, the status lists what it is doing. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V9_10.15.5': [
+        'The in-app timetable station column shrinks to the longest station name, and still stops at the previous width. A longer name is cut off as before. Downloaded timetable sheets keep the same column width. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V9_10.15.4': [
+        'Suggest reply and Write use Gemini 3.5 Flash-Lite, which new API keys can call. Error toasts show the full message, stay until dismissed, and are stored in the console log. Write is on alerts, notifications, exclusions, disruptions, replies, and holiday popups. Replace puts the text back. Nothing posts until you save or send. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V9_10.15.3': [
+        'Suggest reply uses Dear and a first name, or Dear Mr and a surname, only when that name is clear from the alias, the message, or the email. Otherwise it stays Hi there. The email address itself is not sent to the draft. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V9_10.15.2': [
+        'Suggest reply still waits in the box until Send. A reply older than a week gets a calm late-reply line. WhatsApp opens with the quote title Metrorail Next Train | Response. Email subject is Metrorail Next Train | Feedback Response. No commuter What\'s New. forceShow stays false.',
+    ],
+    'V9_10.15.1': [
+        'Feedback Options and the reply composer can Suggest reply. The draft lands in the box for editing and does not send. A missing route, fare, or ticket rule stops and asks. Gauteng office numbers stay off other regions. A shared note and up to three images can shape the draft. WhatsApp and email open with that same reply already written. No commuter What’s New. forceShow stays false.',
+    ],
+    'V9_10.14.2': [
+        'Black box lines cap at 240 characters. Ad-script lines and expected offline, abort, and signed-out publisher misses are not stored. The scheduled publisher skips a tick when the phone is offline or signed out. Badge sync ignores a second call that is already running. Planner batches flush at 5 successful trips. Route, region, corridor, and the station map lead with the city, the termini, Saturday, and the adult single when it is known. No commuter What’s New. forceShow stays false.',
+    ],
+    'V9_10.14.1': [
+        'What’s New keeps the same day cards. Under the February trip planner, guessed day entries run from 19 Nov 2025 (Metrorail App, Pretoria to Pienaarspoort, a hand-kept spreadsheet) through late January 2026: the public address, De Wildt, more Pretoria and Johannesburg lines, dark mode, a timetable store, messages, About, Check for Updates, a route map, ticket prices, and word of mouth. Dates in that gap are estimates. About adds the launch date, the old name, the first line, and the November address. No new top card. forceShow stays false. Those cards do not name alerts.',
+    ],
+    'V9_10.13.2': [
+        'User sheet names the latest activity and the app version on that event. Every tile stays on the grid. A grey Feedback tile opens the reply composer. Scholar weekly and monthly passes use the adult price. Single and return stay half. Home taps paint the pinned route after the frame, then shared corridors. Inter uses a metric fallback. Pilot nav columns are stamped before first paint. Viewport writes skip unchanged values. What’s New covers scholar passes only. forceShow stays false.',
+    ],
+    'V9_10.13.1': [
+        'Planner Trip Fare puts the money mark on the left of the label. Show Next Train is a darker blue than the fare row. User Trust keeps bans, lookup, and deletion requests in one panel. The user sheet drops the duplicate id and the Open chat button: Feedback opens the thread, Trip plans opens plans, Joined stays inert, and Contacts lists email and phone when both exist. An alert with no reactions shows a circled plus that opens the reaction row. Existing reactions hang off the card. Hold-to-react stays. No alerts copy in What’s New. forceShow stays false.',
+    ],
+    'V9_10.12.3': [
+        'Planner result times read Departs and Total Time, with Departed above Show Next Train, and trip fare on one row. Password accounts stay out of messages until the email link is opened. The verify card says the email needs to be verified, and the link returns to Next Train. Account profile opens name, photo, Sign out, and Delete account. Delete writes account_deletions for a Dev Hub Deletion requests tile (rules deploy still required). Sign-in merges recent trips, pinned routes, and the notification switch onto the account. Commuter toasts no longer say token, SW, or FCM. Legal pages use the Next Train header and skip their own footer link. User sheet is a tile grid. Fares shows quote match percent. /auth-action.html is ready if the Firebase action URL can be changed (case 10430971). forceShow stays false.',
+    ],
     'V9_10.12.2': [
         'RTDB write-once logs and feedback now require an ID token (anonymous is enough, same as polls). replyCount can only step by one. Delay notes cap at 280 characters in rules. Community worker CORS no longer allows every pages.dev or github.io host. Community avatars only load https identity-CDN URLs. nexttrain-cache allows lab. No App Check and no CSP, so boards, ads, and Messages stay as they are. Deploy firebase-database.rules.json after this app build. No commuter What’s New. forceShow stays false.',
     ],

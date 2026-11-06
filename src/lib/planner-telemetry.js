@@ -3,7 +3,7 @@
  *
  * Two trip buckets (intentionally separate):
  *  1. UI recent trips — plannerHistory_* in planner-ui.js (display cap 5)
- *  2. Telemetry queue — nt_trip_plan_queue_v1 here (flush to RTDB every 10)
+ *  2. Telemetry queue — nt_trip_plan_queue_v1 here (flush to RTDB every 5)
  *
  * Fare votes write immediately to sys_logs/fare_votes/$voteId (create-once).
  * Offline devices keep a queue of one vote and flush on reconnect.
@@ -17,6 +17,8 @@
 import { DYNAMIC_BASE_URL, APP_VERSION, FARE_CONFIG } from './config.js';
 import { safeStorage, normalizeStationName } from './utils.js';
 import { $deviceId, $userRegion } from '../store.js';
+import { getBoardStationContext } from './auto-locate.js';
+import { allowRtdbWrite, recordRtdbWrite } from './rtdb-rate.js';
 
 /** Optional signed-in Firebase uid (null for guests / anonymous). */
 function authUid() {
@@ -35,7 +37,7 @@ function authUid() {
 
 const FAIL_DEBOUNCE_MS = 45_000;
 /** Flush telemetry batch size — independent of UI history display cap. */
-export const TRIP_FLUSH_SIZE = 10;
+export const TRIP_FLUSH_SIZE = 5;
 /** Soft cap if flush keeps failing offline — avoid unbounded local growth. */
 const TRIP_QUEUE_HARD_CAP = 50;
 export const TRIP_QUEUE_KEY = 'nt_trip_plan_queue_v1';
@@ -92,6 +94,7 @@ export async function logRoutingFail({ origin, destination, reason, dayType, tim
     lastFailAt = now;
 
     const did = deviceId();
+    const stationCtx = getBoardStationContext();
     const payload = {
         origin,
         destination,
@@ -104,9 +107,16 @@ export async function logRoutingFail({ origin, destination, reason, dayType, tim
         authUid: authUid(),
         region: $userRegion.get() || null,
         appVersion: APP_VERSION,
+        station: stationCtx.station,
+        stationAutoLocated: stationCtx.stationAutoLocated,
     };
 
     const failId = uid();
+    const gate = allowRtdbWrite('telemetry');
+    if (!gate.ok) {
+        console.warn('🛡️ Guardian: routing_fails rate-limited', gate.reason);
+        return;
+    }
     try {
         const q = await authQuery();
         const res = await fetch(`${DYNAMIC_BASE_URL}sys_logs/routing_fails/${failId}.json${q}`, {
@@ -115,7 +125,9 @@ export async function logRoutingFail({ origin, destination, reason, dayType, tim
         });
         if (!res.ok) {
             console.warn('🛡️ Guardian: routing_fails write failed', res.status);
+            return;
         }
+        recordRtdbWrite('telemetry');
     } catch (e) {
         console.warn('🛡️ Guardian: routing_fails write error', e);
     }
@@ -208,6 +220,7 @@ async function upsertTripPlanIndexes(userId, region, trips, q) {
 export function enqueueSuccessfulTripPlan(entry) {
     const queue = readTripQueue();
     const did = deviceId();
+    const stationCtx = getBoardStationContext();
     queue.push({
         ...entry,
         timestamp: Date.now(),
@@ -217,6 +230,10 @@ export function enqueueSuccessfulTripPlan(entry) {
         region: entry.region || $userRegion.get() || null,
         dayType: entry.dayType || null,
         appVersion: APP_VERSION,
+        station: entry.station != null ? entry.station : stationCtx.station,
+        stationAutoLocated: entry.stationAutoLocated != null
+            ? !!entry.stationAutoLocated
+            : stationCtx.stationAutoLocated,
     });
     writeTripQueue(queue.slice(-TRIP_QUEUE_HARD_CAP));
 
@@ -296,6 +313,9 @@ export async function flushTripPlanQueue(force = false) {
             } catch (idxErr) {
                 console.warn('🛡️ Guardian: trip_plan index write failed', idxErr);
             }
+            import('./account.js').then((m) => m.recordAccountActivity?.('trip_plan', {
+                count: batch.length,
+            })).catch(() => {});
             // Success — reset flushed portion; keep any trips enqueued during the request
             const latest = readTripQueue();
             // Prefer remainder + anything appended after we snapshotted `queue`
@@ -314,12 +334,11 @@ export async function flushTripPlanQueue(force = false) {
     }
 }
 
-/** Same floor as the board fare button: half-rand ceil, then whole rand (R7.50 → 7). */
+/** Same as the board fare button: nearest R0.50 (R8.4 → 8.5, R7.2 → 7). */
 export function roundFareVoteRand(raw) {
     let n = Number(raw);
     if (!Number.isFinite(n)) return 0;
-    n = Math.ceil(n * 2) / 2;
-    return Math.floor(n);
+    return Math.round(n * 2) / 2;
 }
 
 export const FARE_VOTE_QUEUE_KEY = 'nt_fare_vote_queue_v1';
@@ -457,6 +476,13 @@ export function buildFareVotePayload({
         authUid: uidOverride !== undefined ? uidOverride : authUid(),
         appVersion: clipStr(appVersion || APP_VERSION, 32),
         at: Number(at) || Date.now(),
+        ...(() => {
+            const stationCtx = getBoardStationContext();
+            return {
+                station: clipStr(stationCtx.station, 79) || null,
+                stationAutoLocated: !!stationCtx.stationAutoLocated,
+            };
+        })(),
     };
 }
 
@@ -507,6 +533,10 @@ export async function submitFareVote(input) {
     try {
         const voteId = await putFareVote(payload);
         markFareVoteSent(key);
+        import('./account.js').then((m) => m.recordAccountActivity?.('fare_vote', {
+            origin: payload.origin,
+            destination: payload.destination,
+        })).catch(() => {});
         return { ok: true, voteId };
     } catch (e) {
         console.warn('🛡️ Guardian: fare_votes write failed', e);

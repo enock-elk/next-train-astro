@@ -3,15 +3,30 @@
  * Crawlable timetable grid styled like the in-app sheet (light first-paint).
  * Ghost stations are already dropped by extractSeoGrid. A skip is the text EXPR.
  * Sticky Station column; train columns ~70px so phones show a few + scroll.
+ * Toolbar: schedule effective-from + optional Download sit above the grid.
  */
-const { grid, caption } = Astro.props;
+const { grid, caption, downloadHref } = Astro.props;
 const trainIds = grid?.trainIds || [];
 const stations = grid?.stations || [];
 const cells = grid?.cells || [];
+const effectiveFrom = grid?.effectiveFrom || '';
 ---
 
 {grid && stations.length > 0 && trainIds.length > 0 && (
   <div class="seo-tt">
+    <div class="seo-tt-toolbar">
+      {effectiveFrom ? (
+        <p class="seo-tt-effective">Schedule effective from: {effectiveFrom}</p>
+      ) : (
+        <span class="seo-tt-effective-spacer" aria-hidden="true"></span>
+      )}
+      {downloadHref && (
+        <a
+          href={downloadHref}
+          class="seo-tt-download inline-flex items-center justify-center rounded-xl border border-blue-600 text-blue-700 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-950/40 font-bold px-4 py-2.5 text-sm transition-colors shrink-0"
+        >Download</a>
+      )}
+    </div>
     <div class="seo-tt-wrap">
       <table>
         {caption && <caption class="sr-only">{caption}</caption>}
@@ -40,6 +55,23 @@ const cells = grid?.cells || [];
 
 <style is:global>
   .seo-tt { margin-top: 0.5rem; }
+  .seo-tt-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem 0.75rem;
+    margin-bottom: 0.5rem;
+  }
+  .seo-tt-effective {
+    margin: 0;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #64748b;
+    line-height: 1.3;
+  }
+  .dark .seo-tt-effective { color: #94a3b8; }
+  .seo-tt-effective-spacer { flex: 1 1 auto; min-width: 0; }
   .seo-tt-wrap {
     max-height: min(80vh, 56rem);
     overflow: auto;

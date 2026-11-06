@@ -87,6 +87,8 @@ const gridRules = rules.rules.config.grid_order;
 assert.equal(gridRules['.read'], true, 'grid order must be public-readable');
 assert.match(gridRules['.write'], /enockelk@gmail\.com/);
 assert.match(gridRules['.write'], /thandeka05nxumalo@gmail\.com/);
+assert.match(JSON.stringify(gridRules), /MONTE_VISTA/);
+assert.match(JSON.stringify(gridRules), /MAITLAND/);
 
 const admin = read('public/js/admin.js');
 for (const required of [
@@ -97,12 +99,20 @@ for (const required of [
   'beforeunload',
   'Discard unsaved grid order changes?',
   'config/grid_order/',
+  'data-grid-via',
+  'Via is the structured branch mark',
+  'grid-order-via-all-days',
+  'Save via marks to all days',
+  'MONTE_VISTA',
+  'MAITLAND',
   'ensureGridOrderDb',
   'schedules/westerncape.json',
   'schedules/kzn.json',
 ]) {
   assert(admin.includes(required), `admin editor missing ${required}`);
 }
+assert(admin.includes('sched-override-dates'), 'Force schedule type supports multiple dates');
+assert(admin.includes('sched-override-date-add'), 'Force schedule type can append calendar dates');
 assert(
   admin.includes('id="grid-order-header-btn" class="w-full text-left text-xs font-bold text-gray-400 uppercase tracking-wider'),
   'Grid Column Order tile title must use the same muted uppercase as other Dev Hub home tiles'
@@ -243,5 +253,51 @@ for (const [label, source] of [
     `${label} coordinate counter must count payload rows that still have COORDINATES`
   );
 }
+
+const {
+  normalizeScheduleOverrideDates,
+  scheduleOverrideAppliesToday,
+  localScheduleOverrideDateKey,
+} = await import('../src/lib/schedule-override.js');
+assert.deepEqual(
+  normalizeScheduleOverrideDates('2026-10-27, 2026-10-28\n2026-10-27'),
+  ['2026-10-27', '2026-10-28'],
+  'schedule override dates normalize and dedupe'
+);
+assert.equal(
+  scheduleOverrideAppliesToday({ active: true, dayType: 'saturday' }, new Date('2026-10-27T12:00:00')),
+  true,
+  'empty dates keep while-Active behaviour'
+);
+assert.equal(
+  scheduleOverrideAppliesToday(
+    { active: true, dayType: 'saturday', dates: ['2026-10-28'] },
+    new Date('2026-10-27T12:00:00')
+  ),
+  false,
+  'dated override stays off outside the list'
+);
+assert.equal(
+  scheduleOverrideAppliesToday(
+    { active: true, dayType: 'saturday', dates: ['2026-10-27', '2026-10-28'] },
+    new Date('2026-10-27T08:00:00')
+  ),
+  true,
+  'dated override applies on a listed day'
+);
+assert.match(localScheduleOverrideDateKey(new Date('2026-10-27T23:30:00')), /^\d{4}-\d{2}-\d{2}$/);
+
+const { variantMapFromSchedule } = await import('../src/lib/utils.js');
+const viaPriority = variantMapFromSchedule({
+  via: { '3201': 'MAITLAND' },
+  rows: [
+    { STATION: 'VARIANT', '3201': 'MONTE_VISTA', '3203': 'MONTE_VISTA' },
+    { STATION: 'WOODSTOCK', '3201': 'via', '3203': 'via' },
+    { STATION: 'SALT RIVER', '3201': 'Monte', '3203': 'Monte' },
+    { STATION: 'KOEBERG RD', '3201': 'Vista', '3203': 'Vista' },
+  ],
+});
+assert.equal(viaPriority['3201'], 'Maitland', 'schedule.via beats VARIANT and prose');
+assert.equal(viaPriority['3203'], 'Monte Vista', 'VARIANT still labels trains missing from schedule.via');
 
 console.log('✓ dynamic grid order resolver, fixtures, rules, admin, and integrations OK');

@@ -222,12 +222,12 @@ function explainCommunityPresence() {
             <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-sm p-5">
                 <h3 class="text-base font-black text-gray-900 dark:text-white mb-2">Who’s here</h3>
                 <p class="text-sm text-gray-600 dark:text-gray-300 leading-relaxed mb-3">
-                    This shows how many people currently have this route’s Community open. It’s a live room count, not a contact list, so you can tell when the line is quiet or active.
+                    This shows how many people currently have this route’s Community open. It’s a live room count, so you can tell when the line is quiet or active.
                 </p>
                 <p class="text-xs text-gray-500 dark:text-gray-400 leading-relaxed mb-4">
                     Presence updates while you’re on the page and clears shortly after you leave.
                 </p>
-                <button type="button" id="community-presence-info-close" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded-xl focus:outline-none">Got it</button>
+                <button type="button" id="community-presence-info-close" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg shadow-md transition-colors focus:outline-none">Got it</button>
             </div>`;
         document.body.appendChild(modal);
         modal.addEventListener('click', (e) => {

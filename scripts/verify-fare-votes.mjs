@@ -30,9 +30,10 @@ function resetVotes() {
     safeStorage.setItem('nt_fare_vote_sent_v1', '[]');
 }
 
-assert(roundFareVoteRand(7.5) === 7, 'R7.50 stores as 7');
+assert(roundFareVoteRand(7.5) === 7.5, 'R7.50 stores as 7.5');
 assert(roundFareVoteRand(8) === 8, 'whole rand stays whole');
-assert(roundFareVoteRand(7.01) === 7, 'just over 7 floors after half-rand ceil');
+assert(roundFareVoteRand(7.2) === 7, 'R7.2 rounds to nearest R0.5 as 7');
+assert(roundFareVoteRand(8.4) === 8.5, 'R8.4 rounds to nearest R0.5 as 8.5');
 
 {
     const yes = buildFareVotePayload({
@@ -138,7 +139,7 @@ try {
         at: 3,
     });
     assert(noRes.ok === true, 'no submit writes immediately');
-    assert(sent && sent.agree === false && sent.reportedPrice === 7 && sent.quotedPrice === 8, 'no PUT body ships entered rand after board floor');
+    assert(sent && sent.agree === false && sent.reportedPrice === 7.5 && sent.quotedPrice === 8, 'no PUT body ships entered rand after nearest-R0.5 round');
 
     resetVotes();
     Object.defineProperty(globalThis, 'navigator', { value: { onLine: false }, configurable: true });
@@ -192,7 +193,7 @@ assert(ui.includes('planner-fare-vote-yes') && ui.includes('planner-fare-vote-no
     assert(noBtn > 0 && yesBtn > noBtn, 'No sits on the left, Yes on the right');
 }
 assert(ui.includes('planner-fare-vote-send'), 'No path has Send');
-assert(ui.includes('roundFareVoteRand'), 'correction uses the board whole-rand floor');
+assert(ui.includes('roundFareVoteRand'), 'correction uses the board nearest-R0.5 round');
 assert(ui.includes('submitFareVote'), 'fare sheet writes votes immediately');
 assert(ui.includes('smoothKm: km') && ui.includes('abKm: crowKm'), 'fare sheet sends smooth and A-B km');
 assert(ui.includes('showPlannerFareTicketPrompt'), 'disagree path can offer an optional ticket photo');

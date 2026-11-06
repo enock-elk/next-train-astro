@@ -5,6 +5,7 @@ import AppFonts from '../components/AppFonts.astro';
 import RecoveryLifeline from '../components/RecoveryLifeline.astro';
 import ShellFallbackStyles from '../components/ShellFallbackStyles.astro';
 import StuckUpdateGuard from '../components/StuckUpdateGuard.astro';
+import BlackBoxCapture from '../components/BlackBoxCapture.astro';
 import { APP_VERSION, MANIFEST_FILENAME, normalizeBase, withBase } from '../lib/config.js';
 
 const {
@@ -102,6 +103,13 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
         var lastFullLayoutH = 0;
         var lastShellTop = 0;
         var lastShellH = 0;
+        var paintedShellTop = -1;
+        var paintedShellH = -1;
+        var paintedVvH = -1;
+        var paintedVvTop = -1;
+        var paintedKb = -1;
+        var cachedEnv = -1;
+        var fitQueued = false;
         function markStandalone() {
           var on = false;
           try {
@@ -134,6 +142,8 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
           return /Android/i.test((window.navigator && window.navigator.userAgent) || '');
         }
         function envBottom() {
+          if (cachedEnv >= 0) return cachedEnv;
+          if (!document.body) return 0;
           try {
             var probe = document.createElement('div');
             probe.setAttribute('aria-hidden', 'true');
@@ -141,8 +151,10 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
             (document.body || root).appendChild(probe);
             var h = probe.getBoundingClientRect().height || 0;
             probe.parentNode.removeChild(probe);
+            cachedEnv = h;
             return h;
           } catch (e) {
+            cachedEnv = 0;
             return 0;
           }
         }
@@ -157,9 +169,11 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
           // Some Android builds shrink layout height with the keyboard (gap≈0).
           // If an editable is focused and the frame collapsed, keep the last full height.
           var ae = document.activeElement;
+          // A readonly station field opens a list, not the IME. Treating it
+          // as typing shrank the shell and left a gap under the bottom nav.
           var editing = !!(ae && (
             ae.tagName === 'TEXTAREA' ||
-            ae.tagName === 'INPUT' ||
+            (ae.tagName === 'INPUT' && !ae.readOnly) ||
             ae.isContentEditable
           ));
           var env = envBottom();
@@ -190,6 +204,10 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
             var cv = document.getElementById('view-community');
             communityOn = !!(cv && cv.classList.contains('active'));
           } catch (e) {}
+          // Select To Station sits low on the planner. Keep the shell at full
+          // height so #app-scroll can carry the Next Train header off screen
+          // while the keyboard is open.
+          var plannerTo = !!(ae && ae.id === 'planner-to-search');
           var hubOn = false;
           try {
             var hubEl = document.getElementById('messages-thread-modal');
@@ -211,6 +229,11 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
               var missing = Math.round(layoutH - shellH);
               if (missing < 180) shellTop = missing;
             }
+            // visualViewport can stop short of the layout bottom. That
+            // remainder paints as a light band under the oval. Stay inside
+            // layoutH so the oval cannot ride past the screen.
+            var tail = Math.round(layoutH - shellTop - shellH);
+            if (tail > 8 && tail < 180) shellH += tail;
             lastLayoutH = layoutH;
             lastFullLayoutH = layoutH;
             lastShellTop = shellTop;
@@ -223,7 +246,7 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
             // Hub also keeps the last shell so the composer can dock to --nt-kb-h.
             layoutH = full;
             lastLayoutH = full;
-            if (communityOn || hubOn) {
+            if (communityOn || hubOn || plannerTo) {
               shellTop = lastShellTop;
               shellH = lastShellH || full;
             } else if (shellH < 240) {
@@ -243,16 +266,29 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
               lastH = h;
               root.style.setProperty('--nt-app-h', h + 'px');
             }
-            root.style.setProperty('--nt-shell-top', shellTop + 'px');
-            root.style.setProperty('--nt-shell-h', shellH + 'px');
+            if (Math.abs(shellTop - paintedShellTop) >= 1) {
+              paintedShellTop = shellTop;
+              root.style.setProperty('--nt-shell-top', shellTop + 'px');
+            }
+            if (Math.abs(shellH - paintedShellH) >= 1) {
+              paintedShellH = shellH;
+              root.style.setProperty('--nt-shell-h', shellH + 'px');
+            }
           }
           if (Math.abs(sys - lastSys) >= 1) {
             lastSys = sys;
             root.style.setProperty('--nt-sys-bottom', sys + 'px');
           }
           var vvH = Math.round((vv && vv.height) ? vv.height : (inner || 0));
-          if (vvH >= 240) root.style.setProperty('--nt-vv-h', vvH + 'px');
-          root.style.setProperty('--nt-vv-top', Math.max(0, off) + 'px');
+          if (vvH >= 240 && Math.abs(vvH - paintedVvH) >= 1) {
+            paintedVvH = vvH;
+            root.style.setProperty('--nt-vv-h', vvH + 'px');
+          }
+          var vvTop = Math.max(0, off);
+          if (Math.abs(vvTop - paintedVvTop) >= 1) {
+            paintedVvTop = vvTop;
+            root.style.setProperty('--nt-vv-top', vvTop + 'px');
+          }
           var kbH = 0;
           if (keyboard) {
             kbH = Math.max(0, Math.round(gap));
@@ -261,7 +297,10 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
               if (covered > kbH) kbH = covered;
             }
           }
-          root.style.setProperty('--nt-kb-h', kbH + 'px');
+          if (Math.abs(kbH - paintedKb) >= 1) {
+            paintedKb = kbH;
+            root.style.setProperty('--nt-kb-h', kbH + 'px');
+          }
           root.classList.toggle('nt-keyboard', keyboard);
           root.classList.toggle('nt-standalone', markStandalone());
           root.classList.toggle('nt-android', isAndroid());
@@ -270,19 +309,93 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
           } catch (e) {}
         }
         window.ntFitAppViewport = apply;
+        function scheduleApply() {
+          if (fitQueued) return;
+          fitQueued = true;
+          requestAnimationFrame(function () {
+            fitQueued = false;
+            apply();
+          });
+        }
+        // Chrome/Samsung "Signed in as…" (and similar) bottom browser toasts can
+        // shrink visualViewport, then leave a blank strip under #bottom-nav when
+        // they dismiss without a clean resize. Re-measure a few times and, if the
+        // nav still sits short of the layout bottom, force the shell back open.
+        var recoverTimers = [];
+        function clearRecoverTimers() {
+          while (recoverTimers.length) {
+            clearTimeout(recoverTimers.pop());
+          }
+        }
+        function navNeedsRecover() {
+          try {
+            var nav = document.getElementById('bottom-nav');
+            if (!nav || nav.classList.contains('hidden')) return false;
+            if (document.body && document.body.classList.contains('nt-immersive')) return false;
+            var rect = nav.getBoundingClientRect();
+            if (!rect || rect.height < 8) return false;
+            var layout = window.innerHeight || document.documentElement.clientHeight || 0;
+            var vv = window.visualViewport;
+            var visibleBottom = vv
+              ? Math.round((vv.offsetTop || 0) + (vv.height || 0))
+              : layout;
+            var floor = Math.max(layout, visibleBottom);
+            // More than ~6px of dead space under the bar → recover.
+            return floor - rect.bottom > 6;
+          } catch (e) {
+            return false;
+          }
+        }
+        function recoverAppViewport() {
+          clearRecoverTimers();
+          cachedEnv = -1;
+          // Forget a toast-shrunk "full" height so apply() can re-expand.
+          lastFullLayoutH = 0;
+          lastLayoutH = 0;
+          apply();
+          [50, 150, 350, 700, 1200].forEach(function (ms) {
+            recoverTimers.push(setTimeout(function () {
+              apply();
+              if (navNeedsRecover()) {
+                lastFullLayoutH = 0;
+                lastLayoutH = 0;
+                lastShellH = 0;
+                apply();
+              }
+            }, ms));
+          });
+        }
+        window.ntRecoverAppViewport = recoverAppViewport;
+        var lastVvHForToast = -1;
+        function onViewportPossiblyToasted() {
+          scheduleApply();
+          var vv = window.visualViewport;
+          var h = vv && vv.height ? Math.round(vv.height) : Math.round(window.innerHeight || 0);
+          if (lastVvHForToast > 0 && h > lastVvHForToast + 24) {
+            // Viewport grew (browser toast / URL bar dismissed) — recover nav.
+            recoverAppViewport();
+          } else if (navNeedsRecover()) {
+            recoverAppViewport();
+          }
+          lastVvHForToast = h;
+        }
         apply();
-        window.addEventListener('resize', apply, { passive: true });
-        window.addEventListener('orientationchange', function () { setTimeout(apply, 80); });
+        window.addEventListener('resize', onViewportPossiblyToasted, { passive: true });
+        window.addEventListener('orientationchange', function () {
+          cachedEnv = -1;
+          setTimeout(recoverAppViewport, 80);
+        });
         document.addEventListener('focusin', apply, { passive: true });
-        document.addEventListener('focusout', function () { setTimeout(apply, 50); }, { passive: true });
+        document.addEventListener('focusout', function () { setTimeout(recoverAppViewport, 50); }, { passive: true });
         if (window.visualViewport) {
-          window.visualViewport.addEventListener('resize', apply, { passive: true });
-          window.visualViewport.addEventListener('scroll', apply, { passive: true });
+          window.visualViewport.addEventListener('resize', onViewportPossiblyToasted, { passive: true });
+          window.visualViewport.addEventListener('scroll', scheduleApply, { passive: true });
         }
         document.addEventListener('visibilitychange', function () {
-          if (document.visibilityState === 'visible') apply();
+          if (document.visibilityState === 'visible') recoverAppViewport();
         });
-        window.addEventListener('pageshow', function () { apply(); });
+        window.addEventListener('pageshow', function () { recoverAppViewport(); });
+        window.addEventListener('focus', function () { setTimeout(recoverAppViewport, 30); }, { passive: true });
         if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', apply);
       })();
     </script>
@@ -440,32 +553,7 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
         try { window.dispatchEvent(new Event('pwa-install-ready')); } catch (_) {}
       });
     </script>
-    <!-- Black Box: capture console into localStorage before app modules boot -->
-    <script is:inline>
-      (function () {
-        var MAX_LOGS = 500;
-        var LOG_KEY = 'nt_blackbox_logs';
-        function saveLog(type, args) {
-          try {
-            var msg = Array.prototype.map.call(args, function (a) {
-              if (a instanceof Error) return a.message + ' ' + (a.stack || '');
-              return typeof a === 'object' ? JSON.stringify(a) : String(a);
-            }).join(' ');
-            var logs = [];
-            try { logs = JSON.parse(localStorage.getItem(LOG_KEY) || '[]'); } catch (e) {}
-            logs.push({ t: Date.now(), type: type, msg: msg });
-            var cutoff = Date.now() - (72 * 60 * 60 * 1000);
-            logs = logs.filter(function (l) { return l.t > cutoff; });
-            if (logs.length > MAX_LOGS) logs = logs.slice(logs.length - MAX_LOGS);
-            localStorage.setItem(LOG_KEY, JSON.stringify(logs));
-          } catch (e) { /* quota / recursion guard */ }
-        }
-        var origLog = console.log, origWarn = console.warn, origError = console.error;
-        console.log = function () { saveLog('LOG', arguments); return origLog.apply(console, arguments); };
-        console.warn = function () { saveLog('WARN', arguments); return origWarn.apply(console, arguments); };
-        console.error = function () { saveLog('ERROR', arguments); return origError.apply(console, arguments); };
-      })();
-    </script>
+    <BlackBoxCapture />
     <script is:inline define:vars={{ base, cartoKey }}>
       window.__NT_BASE__ = base;
       window.__NT_CARTO_KEY = cartoKey || '';
@@ -800,6 +888,12 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
         if (!localStorage.getItem('next_train_device_id')) {
           localStorage.setItem('next_train_device_id', 'usr_' + Math.random().toString(36).substr(2, 9) + '_' + Date.now());
         }
+        if (localStorage.getItem('ntOperatorAuthed') !== '1') {
+          var pilot = null;
+          try { pilot = JSON.parse(localStorage.getItem('ntPilotChrome') || 'null'); } catch (e2) { pilot = null; }
+          if (pilot && pilot.map === '1') document.documentElement.setAttribute('data-pilot-map', '1');
+          if (pilot && pilot.community === '1') document.documentElement.setAttribute('data-pilot-community', '1');
+        }
       } catch (e) {}
     </script>
 
@@ -809,7 +903,16 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
       .hidden { display: none !important; }
 
       html, body { height: 100%; }
-      body { font-family: Inter, system-ui, -apple-system, 'Segoe UI', sans-serif; }
+      /* Arial metrics matched to Inter so the swap does not reflow the board. */
+      @font-face {
+        font-family: "Inter Fallback";
+        src: local("Arial");
+        size-adjust: 107.64%;
+        ascent-override: 90.49%;
+        descent-override: 22.56%;
+        line-gap-override: 0%;
+      }
+      body { font-family: Inter, "Inter Fallback", system-ui, -apple-system, 'Segoe UI', sans-serif; }
       body.modal-active { overflow: hidden !important; overscroll-behavior: none; }
       /* iOS: body overflow:hidden does not stop #app-scroll under the Options scrim. */
       body.sidenav-open #app-scroll {
@@ -1028,8 +1131,9 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
          and body fill the layout (no white slab). --nt-shell-* pin the frame
          to the visible hole so NEXT TRAIN sits below the URL bar and the
          oval sits on the visual bottom. While the IME is open those tokens
-         follow the live visual hole except on Community, where the header
-         stays free in #app-scroll. Do not pad a tray under the floating
+         follow the live visual hole except on Community and the planner
+         To station field, where the header stays free in #app-scroll.
+         Do not pad a tray under the floating
          pill. 100svh fallback keeps first paint on-screen before JS
          measures. Do not transform #nt-shell. */
       #nt-shell {
@@ -1113,6 +1217,23 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
         border-radius: 0 !important;
         max-height: none !important;
       }
+      /* The timetable is a flex child of a fixed-height sheet. Without a
+         zero minimum it grows with the table, the sheet clips it, and the
+         touch guard cancels the pan. Both axes scroll here. */
+      #full-schedule-modal.fixed {
+        touch-action: pan-x pan-y;
+      }
+      #full-schedule-modal.full-screen > div {
+        min-height: 0;
+        height: 100%;
+      }
+      #full-schedule-modal #grid-container {
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow: auto;
+        -webkit-overflow-scrolling: touch;
+        touch-action: pan-x pan-y;
+      }
 
       /* SPA custom.css motion primitives */
       @keyframes shake {
@@ -1146,15 +1267,16 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
         transform: scale(0.95);
       }
 
-      /* Compact header (returning users) — slim WhatsApp-style bar */
+      /* Compact header still follows screen height. A fixed 2rem wordmark
+         stayed tall on a short phone. */
       .chrome-compact .app-header,
       body.chrome-compact .app-header {
-        padding-top: 0.45rem !important;
-        padding-bottom: 0.45rem !important;
+        padding-top: clamp(0.16rem, 0.55dvh, 0.4rem) !important;
+        padding-bottom: clamp(0.12rem, 0.45dvh, 0.32rem) !important;
       }
       .chrome-compact .header-title,
       body.chrome-compact .header-title {
-        font-size: 2rem !important;
+        font-size: clamp(1.25rem, 3.7dvh, 2rem) !important;
         letter-spacing: -0.035em !important;
       }
 
@@ -1167,19 +1289,21 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
         opacity: 0;
         transform: translateY(10px);
       }
-      /* Oval floats over the board canvas — no shell tray behind the pill.
-         Safari (not Add to Home Screen) already sits above the home indicator;
-         lifting the oval by env(safe-area-inset-bottom) left a white strip. */
+      /* Full-width bar, same colour as the header. It sits on the bottom edge.
+         Safari (not Add to Home Screen) already sits above the home indicator.
+         Standalone pads inside the bar so the colour reaches the screen edge. */
       html.nt-in-app body.nav-bottom:not(.nt-immersive) #bottom-nav.bottom-nav-bar {
         position: absolute;
-        left: 0.75rem;
-        right: 0.75rem;
+        left: 0;
+        right: 0;
         bottom: 0;
         margin: 0;
         z-index: 110;
+        border-radius: 0;
       }
       html.nt-standalone.nt-in-app body.nav-bottom:not(.nt-immersive) #bottom-nav.bottom-nav-bar {
-        bottom: var(--nt-sys-bottom, env(safe-area-inset-bottom, 0px));
+        bottom: 0;
+        padding-bottom: var(--nt-sys-bottom, env(safe-area-inset-bottom, 0px));
       }
       html.nt-standalone.nt-in-app body.nav-bottom:not(.nt-immersive) #nt-shell {
         background-color: var(--nt-chrome-header);
@@ -1218,12 +1342,12 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
         background-color: var(--nt-canvas);
       }
       html.nt-in-app body.nav-bottom:not(.nt-immersive) .view-section.active {
-        padding-bottom: 4.75rem;
+        padding-bottom: calc(var(--nt-nav-h, 4rem) + var(--nt-sys-bottom, env(safe-area-inset-bottom, 0px)) + 0.75rem);
         box-sizing: border-box;
       }
       html.nt-in-app body.nav-bottom:not(.nt-immersive) #view-map.view-section.active,
       html.nt-in-app body.nav-bottom:not(.nt-immersive) #view-community.view-section.active {
-        padding-bottom: 4.75rem;
+        padding-bottom: calc(var(--nt-nav-h, 4rem) + var(--nt-sys-bottom, env(safe-area-inset-bottom, 0px)) + 0.75rem);
         box-sizing: border-box;
       }
       /* Keyboard: keep Community filling leftover height (no gray slab)
@@ -1273,28 +1397,20 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
         position: absolute;
         left: 0;
         right: 0;
-        bottom: 4.5rem;
+        bottom: calc(var(--nt-nav-h, 4rem) + var(--nt-sys-bottom, env(safe-area-inset-bottom, 0px)) + 0.35rem);
         z-index: 111;
         background: transparent;
       }
       @media (max-height: 740px) {
-        html.nt-in-app body.nav-bottom:not(.nt-immersive) .view-section.active {
-          padding-bottom: 3.85rem;
-        }
         html.nt-in-app body.nav-bottom:not(.nt-immersive) #offline-wrapper:not(.hidden) {
-          bottom: 3.6rem;
-        }
-      }
-      @media (max-height: 620px) {
-        html.nt-in-app body.nav-bottom:not(.nt-immersive) .view-section.active {
-          padding-bottom: 3.35rem;
+          bottom: calc(var(--nt-nav-h, 4rem) + 0.35rem);
         }
       }
       /* Drawer sits above the bar so Options stays tappable for right-handers.
          The scrim stays inset:0 — raising overlay bottom left a full-width
          undimmed strip behind the oval (white on Classic light). Nav is z-110. */
       body.nav-bottom:not(.nt-immersive) #sidenav {
-        bottom: calc(3.5rem + var(--nt-sys-bottom, env(safe-area-inset-bottom, 0px)) + 0.75rem);
+        bottom: calc(var(--nt-nav-h, 4rem) + var(--nt-sys-bottom, env(safe-area-inset-bottom, 0px)));
         height: auto;
         border-bottom-left-radius: 1.25rem;
       }
@@ -1313,7 +1429,7 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
         transform: scale(0.96);
       }
       body.nav-bottom #offline-toast {
-        bottom: calc(4.5rem + var(--nt-sys-bottom, env(safe-area-inset-bottom, 0px)));
+        bottom: calc(var(--nt-nav-h, 4rem) + var(--nt-sys-bottom, env(safe-area-inset-bottom, 0px)) + 0.5rem);
       }
 
       /* CleverAds is a vendor overlay. Never reserve page space for it. */

@@ -14,19 +14,20 @@ import {
     ROUTES, CHANGELOG_DATA, CORRIDOR_META, getCorridorLabel, APP_VERSION, SPECIAL_DATES, HOLIDAY_NAMES
 } from './config.js';
 
-import { orderGridTrainIds } from './grid-order.js';
+import { orderGridTrainIds, getRuntimeGridOrderRecord } from './grid-order.js';
 
 import { 
     normalizeStationName, timeToSeconds, formatTimeDisplay, isRealTime, isExpressSkip,
-    isVariantStationName, variantMapFromSchedule, escapeHTML, safeStorage,
-    formatRouteLabelHtml, formatRouteLabelPlain, expandJhbLabel, fitRouteNameNodes, fitJhbNodes, routePrimaryGridDirection, shortSharedSourceLabel,
+    isVariantStationName, mergeVariantLabels, viaCodesFromGridOrderRecord, escapeHTML, safeStorage,
+    formatRouteLabelHtml, formatRouteLabelPlain, expandJhbLabel, fitRouteNameNodes, fitJhbNodes, routePrimaryGridDirection, shortSharedSourceLabel, lineSwatchClass,
     scheduleCacheSlot, routeSheetKeyForDay, warningTriangleSvg, gridNoticeShowsOnDay,
     resolveOperatingDayType, simUsesSpecificDate
 } from './utils.js';
 
 import { 
-    currentTime, currentDayType, currentDayIndex 
+    currentTime, currentDayType, currentDayIndex, getScheduleFromDb
 } from './logic.js';
+import { extraKempTrainIds, kempTrainIds, siblingSheetKey, withExtraTrainColumns } from './live-board.js';
 
 import { buildTrainReportSlotHtml, buildTrainTitleReportButton } from './delay-reports.js';
 import { showToast, triggerHaptic } from './ui.js';
@@ -49,6 +50,75 @@ import {
     isQuietBoardPaint,
 } from './live-board-paint.js';
 import { disruptedStationMap, disruptionAppliesToTime, disruptionIsAllDay } from './disruption-zones.js';
+
+/**
+ * Font size for a status tag that is wider than its column.
+ * Short tags (NO SVC, KEMP) pass through at the gold size.
+ * Long names scale down, and stop at a readable floor.
+ */
+export function fittedStatusFontPx(basePx, neededPx, availablePx, minPx = 6.5) {
+    const base = Number(basePx);
+    const needed = Number(neededPx);
+    const available = Number(availablePx);
+    const floor = Number(minPx) > 0 ? Number(minPx) : 6.5;
+    if (!(base > 0) || !(needed > 0) || !(available > 0)) return base > 0 ? base : floor;
+    const comfort = Math.max(1, available - 4);
+    if (needed <= comfort) return base;
+    const scaled = Math.round((base * (comfort / needed)) * 10) / 10;
+    return Math.min(base, Math.max(floor, scaled));
+}
+
+/** Shrink a long status name into the normal train column. NO SVC stays put. */
+export function fitGridStatusTags(root) {
+    if (!root || typeof root.querySelectorAll !== 'function') return;
+    root.querySelectorAll('.nt-fit-status').forEach((label) => {
+        const status = label.closest('.nt-grid-train-status');
+        const th = label.closest('th');
+        if (!status || !th) return;
+        const row = th.parentElement;
+        const sample = row
+            ? [...row.children].find((cell) => cell !== th && cell.querySelector?.('.nt-grid-train-id') && !cell.querySelector('.nt-fit-status'))
+            : null;
+        const box = sample?.clientWidth || parseFloat(getComputedStyle(th).minWidth) || 0;
+        if (!(box > 0)) return;
+        const boxCs = getComputedStyle(sample || th);
+        const pad = (parseFloat(boxCs.paddingLeft) || 0) + (parseFloat(boxCs.paddingRight) || 0);
+        const available = Math.max(8, box - pad);
+        label.style.display = 'inline-block';
+        label.style.whiteSpace = 'nowrap';
+        label.style.fontSize = '';
+        label.style.letterSpacing = '';
+        const base = parseFloat(getComputedStyle(status).fontSize) || 8;
+        const track = /letter-spacing:\s*0\.08em/.test(status.getAttribute('style') || '') ? 0.08 : 0.02;
+        const floor = 7;
+        const room = Math.max(8, available - 4);
+        label.style.position = 'absolute';
+        let size = base;
+        const applySize = (px) => {
+            label.style.fontSize = `${px}px`;
+            label.style.letterSpacing = px >= base - 0.05
+                ? `${track}em`
+                : `${Math.round(track * (px / base) * 1000) / 1000}em`;
+        };
+        applySize(size);
+        while (size > floor && label.scrollWidth > room) {
+            size = Math.round((size - 0.5) * 10) / 10;
+            applySize(size);
+        }
+        const fittedWidth = label.scrollWidth;
+        label.style.position = '';
+        if (size >= base - 0.05) {
+            label.style.fontSize = '';
+            label.style.letterSpacing = '';
+            return;
+        }
+        if (fittedWidth > room) {
+            const thCs = getComputedStyle(th);
+            const thPad = (parseFloat(thCs.paddingLeft) || 0) + (parseFloat(thCs.paddingRight) || 0);
+            th.style.minWidth = `${Math.ceil(fittedWidth + thPad + 4)}px`;
+        }
+    });
+}
 
 // --- Astro MPA Migration Shims ---
 const getCurrentDayType = () => typeof window !== 'undefined' && window.currentDayType ? window.currentDayType : 'weekday';
@@ -160,12 +230,14 @@ export const Renderer = {
             const isActive = r.id === activeRouteId;
             const activeBg = isActive ? 'bg-blue-50 dark:bg-blue-900/20 font-black text-blue-700 dark:text-blue-300' : 'hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-800 dark:text-gray-200 font-bold';
             const dotColor = Renderer._getDotColor(r.colorClass);
+            const pinBar = lineSwatchClass(r.colorClass, 'bg');
             
             html += `
                 <div id="pinned-section" class="mb-3 rounded-xl overflow-hidden border border-blue-200 dark:border-blue-900/50 shadow-sm">
                     <li class="list-none">
-                        <a class="block px-4 py-3 ${activeBg} transition-colors cursor-pointer flex items-center justify-between text-sm" data-route-id="${r.id}">
-                            <div class="flex items-center min-w-0 pr-2">
+                        <a class="flex items-stretch ${activeBg} transition-colors cursor-pointer text-sm" data-route-id="${r.id}">
+                            <span class="nt-line-bar w-1 shrink-0 ${pinBar}" aria-hidden="true"></span>
+                            <div class="flex items-center min-w-0 flex-1 py-3 pl-3 pr-2">
                                 <span class="w-3 h-3 rounded-full mr-3 flex-shrink-0 ${dotColor} ${isActive ? 'ring-2 ring-blue-300 dark:ring-blue-700' : ''}"></span>
                                 <span class="text-[10px] font-black text-blue-500 dark:text-blue-400 uppercase tracking-widest mr-2 flex-shrink-0">Pinned:</span>
                                 <span class="truncate" data-route-raw="${escapeHTML(r.name)}">${formatRouteLabelHtml(r.name)}</span>
@@ -189,38 +261,32 @@ export const Renderer = {
                     if (!r.isActive) {
                         html += `
                             <li class="list-none opacity-60 bg-gray-50 dark:bg-gray-800/30">
-                                <a class="block px-4 py-3 cursor-not-allowed flex items-center justify-between text-sm text-gray-500 dark:text-gray-400" data-route-id="${r.id}">
-                                    <div class="flex items-center min-w-0 pr-2">
-                                        <div class="w-7 h-7 rounded-md flex items-center justify-center mr-3 flex-shrink-0 bg-gray-200 dark:bg-gray-700 text-gray-400 shadow-sm">
+                                <a class="flex items-stretch cursor-not-allowed text-sm text-gray-500 dark:text-gray-400" data-route-id="${r.id}">
+                                    <span class="nt-line-bar w-1 shrink-0 bg-gray-300 dark:bg-gray-600" aria-hidden="true"></span>
+                                    <div class="flex items-center min-w-0 flex-1 py-3 pl-3 pr-3">
+                                        <div class="w-7 h-7 rounded-md flex items-center justify-center mr-3 flex-shrink-0 bg-gray-200 dark:bg-gray-700 text-gray-400">
                                             <svg class="w-4 h-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="16" rx="2" ry="2"></rect><path d="M4 11h16"></path><path d="M12 3v8"></path><path d="M8 19l-2 3"></path><path d="M18 22l-2-3"></path><path d="M8 15h0"></path><path d="M16 15h0"></path></svg>
                                         </div>
                                         <span class="truncate" data-route-raw="${escapeHTML(r.name)}">${displayName}</span>
+                                        <span class="ml-2 text-[8px] bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 px-1.5 py-0.5 rounded uppercase font-black tracking-widest flex-shrink-0">Soon</span>
                                     </div>
-                                    <span class="ml-2 text-[8px] bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 px-1.5 py-0.5 rounded uppercase font-black tracking-widest flex-shrink-0">Soon</span>
                                 </a>
                             </li>
                         `;
                     } else {
-                        let tileBg = 'bg-gray-100 dark:bg-gray-800 text-gray-500';
-                        if (r.colorClass.includes('green')) tileBg = 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400';
-                        else if (r.colorClass.includes('orange')) tileBg = 'bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400';
-                        else if (r.colorClass.includes('purple')) tileBg = 'bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400';
-                        else if (r.colorClass.includes('indigo')) tileBg = 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400';
-                        else if (r.colorClass.includes('blue')) tileBg = 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400';
-                        else if (r.colorClass.includes('yellow')) tileBg = 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-600 dark:text-yellow-400';
-                        else if (r.colorClass.includes('red')) tileBg = 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400';
-                        else if (r.colorClass.includes('lime')) tileBg = 'bg-lime-100 dark:bg-lime-900/30 text-lime-600 dark:text-lime-400';
+                        const bar = lineSwatchClass(r.colorClass, 'bg');
 
                         html += `
                             <li class="list-none">
-                                <a class="block px-4 py-3.5 ${activeBg} transition-colors cursor-pointer flex items-center justify-between text-sm group rounded-lg mx-2 mb-1 w-[calc(100%-1rem)]" data-route-id="${r.id}">
-                                    <div class="flex items-center min-w-0 pr-2">
-                                        <div class="w-7 h-7 rounded-md flex items-center justify-center mr-3 flex-shrink-0 ${tileBg} shadow-sm group-hover:scale-105 transition-transform">
+                                <a class="flex items-stretch ${activeBg} transition-colors cursor-pointer text-sm rounded-lg mx-2 mb-1 w-[calc(100%-1rem)] overflow-hidden" data-route-id="${r.id}">
+                                    <span class="nt-line-bar w-1 shrink-0 ${bar}" aria-hidden="true"></span>
+                                    <div class="flex items-center min-w-0 flex-1 py-3.5 pl-3 pr-3">
+                                        <div class="w-7 h-7 rounded-md flex items-center justify-center mr-3 flex-shrink-0 bg-gray-100 dark:bg-gray-700/70 text-gray-500 dark:text-gray-300">
                                             <svg class="w-4 h-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="16" rx="2" ry="2"></rect><path d="M4 11h16"></path><path d="M12 3v8"></path><path d="M8 19l-2 3"></path><path d="M18 22l-2-3"></path><path d="M8 15h0"></path><path d="M16 15h0"></path></svg>
                                         </div>
                                         <span class="truncate" data-route-raw="${escapeHTML(r.name)}">${displayName}</span>
+                                        ${isActive ? '<svg class="w-4 h-4 ml-2 text-blue-600 dark:text-blue-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"></path></svg>' : ''}
                                     </div>
-                                    ${isActive ? '<svg class="w-4 h-4 text-blue-600 dark:text-blue-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"></path></svg>' : ''}
                                 </a>
                             </li>
                         `;
@@ -231,8 +297,13 @@ export const Renderer = {
         });
 
         container.innerHTML = html;
-        fitRouteNameNodes(container);
-        fitJhbNodes(container);
+        const fitNames = () => {
+            if (!container.isConnected) return;
+            fitRouteNameNodes(container);
+            fitJhbNodes(container);
+        };
+        if (typeof requestAnimationFrame === 'function') requestAnimationFrame(fitNames);
+        else fitNames();
     },
 
     renderWelcomeList: (containerId, routes, onSelectCallback) => {
@@ -249,14 +320,7 @@ export const Renderer = {
             const displayName = formatRouteLabelHtml(route.name);
             
             if (route.isActive) {
-                let borderColor = 'border-gray-500';
-                if (route.colorClass.includes('orange')) borderColor = 'border-orange-500';
-                else if (route.colorClass.includes('purple')) borderColor = 'border-purple-500';
-                else if (route.colorClass.includes('green')) borderColor = 'border-green-500';
-                else if (route.colorClass.includes('blue')) borderColor = 'border-blue-500';
-                else if (route.colorClass.includes('red')) borderColor = 'border-red-500';
-                else if (route.colorClass.includes('yellow')) borderColor = 'border-yellow-500';
-                else if (route.colorClass.includes('indigo')) borderColor = 'border-indigo-500';
+                const borderColor = lineSwatchClass(route.colorClass, 'border');
 
                 btn.className = `w-full text-left p-4 rounded-xl shadow-md flex items-center justify-between group transition-all transform hover:scale-[1.02] active:scale-95 bg-white dark:bg-gray-800 border-l-4 ${borderColor}`;
                 
@@ -291,8 +355,13 @@ export const Renderer = {
 
             container.appendChild(btn);
         });
-        fitRouteNameNodes(container);
-        fitJhbNodes(container);
+        const fitNames = () => {
+            if (!container.isConnected) return;
+            fitRouteNameNodes(container);
+            fitJhbNodes(container);
+        };
+        if (typeof requestAnimationFrame === 'function') requestAnimationFrame(fitNames);
+        else fitNames();
     },
 
     // --- 2. LAYOUT PLACEHOLDERS & ERRORS ---
@@ -330,8 +399,15 @@ export const Renderer = {
                 <span class="text-xs font-bold group-hover:text-blue-500 transition-colors">Select station above</span>
             </div>`;
 
-        if (element1) element1.innerHTML = placeholderHTML;
-        if (element2) element2.innerHTML = placeholderHTML;
+        const placeholderKey = liveBoardStaticKey('placeholder');
+        if (element1) {
+            element1.innerHTML = placeholderHTML;
+            stampLiveBoardCard(element1, placeholderKey);
+        }
+        if (element2) {
+            element2.innerHTML = placeholderHTML;
+            stampLiveBoardCard(element2, placeholderKey);
+        }
     },
 
     renderRouteError: (element, error) => {
@@ -387,7 +463,9 @@ export const Renderer = {
     renderAtDestination: (element) => {
         if (!element) return;
         const hereKey = liveBoardStaticKey('here');
-        if (isQuietBoardPaint() && element.getAttribute('data-nt-board-key') === hereKey) return;
+        const showingHere = element.getAttribute('data-nt-board-key') === hereKey
+            && String(element.textContent || '').includes("You're here");
+        if (isQuietBoardPaint() && showingHere) return;
         element.innerHTML = `
             <div class="h-24 flex flex-col justify-center items-center gap-1.5">
                 <svg class="w-7 h-7 text-blue-500 dark:text-blue-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
@@ -657,7 +735,7 @@ export const Renderer = {
             ? `<div class="text-[9px] font-bold text-blue-600 dark:text-blue-300 mt-0.5">${escapeHTML(liveDeco.liveHint)}</div>`
             : '';
         const onTrainHtml = '';
-        const boardKey = liveBoardJourneyKey(journey, destination);
+        const boardKey = liveBoardJourneyKey(journey, destination, liveStation);
         if (tryPatchLiveBoardCountdown(element, boardKey, timeDiffStr, { clockTime: safeDepTime })) return;
         element.innerHTML = "";
         
@@ -913,6 +991,22 @@ export const Renderer = {
     // --- 3. TIMETABLE DAILY MATRIX COMPILER ---
 
     _buildGridHTML: (schedule, sheetName, routeId, dayIdx, highlightNextTrain = true, isExport = false, dayType = null) => {
+        const kempIds = new Set();
+        if (routeId === 'pta-irene') {
+            const sibKey = siblingSheetKey(routeId, sheetName);
+            const db = $fullDatabase.get();
+            if (sibKey && db && db[sibKey]) {
+                const sibling = getScheduleFromDb(db, sibKey);
+                for (const id of kempTrainIds(routeId, schedule, sibling)) kempIds.add(String(id));
+                if (!isExport) {
+                    const extra = extraKempTrainIds(schedule, sibling);
+                    if (extra.length) {
+                        schedule = withExtraTrainColumns(schedule, sibling, extra);
+                        for (const id of extra) kempIds.add(String(id));
+                    }
+                }
+            }
+        }
         const trainCols = schedule.headers.slice(1).filter(header => /^\d{4}[a-zA-Z]*$/.test(header.trim()));
         const masterStations = (typeof window !== 'undefined' && typeof window.routeGeometryStations === 'function')
             ? (window.routeGeometryStations(routeId) || [])
@@ -984,6 +1078,9 @@ export const Renderer = {
         const paddingClass = isExport ? 'p-2' : (isTallGrid ? 'py-2 px-3' : 'p-3'); 
         const fontSizeClass = isExport ? 'text-sm' : 'text-xs'; 
         const minWidthClass = showRightAnchor ? 'min-w-[46px]' : 'min-w-[70px]';
+        const stationHeadWidth = isExport ? 'min-w-[140px]' : 'w-0';
+        const stationCellWidth = isExport ? 'truncate max-w-[140px]' : 'w-0';
+        const stationHeadLabel = isExport ? 'Station' : '<div class="w-max max-w-[140px] truncate">Station</div>';
         
         let tableClass = isExport ? (showRightAnchor ? 'export-compact' : '') : 'bg-white dark:bg-gray-900';
         let theadClass = isExport ? '' : 'bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-200'; 
@@ -1011,14 +1108,17 @@ export const Renderer = {
             }
         }
 
-        const variantByTrain = variantMapFromSchedule(schedule);
-
+        const viaRegion = ROUTES[routeId]?.region || $userRegion.get();
+        const variantByTrain = mergeVariantLabels(
+            schedule,
+            viaCodesFromGridOrderRecord(getRuntimeGridOrderRecord(viaRegion, sheetName))
+        );
         let html = `
             ${gridNoticeHtml}
             <table class="w-full ${fontSizeClass} text-left border-collapse ${tableClass}">
                 <thead class="text-[10px] uppercase ${theadClass} sticky top-0 z-20 shadow-sm">
                     <tr>
-                        <th class="nt-station-col sticky left-0 z-30 ${stickyHeaderClass} ${paddingClass} border-b border-r font-bold min-w-[140px] shadow-lg text-left pl-3">Station</th>
+                        <th class="nt-station-col sticky left-0 z-30 ${stickyHeaderClass} ${paddingClass} border-b border-r font-bold ${stationHeadWidth} ${isExport ? '' : 'nt-station-scroll-shade'} text-left pl-3">${stationHeadLabel}</th>
                         ${sortedCols.map((h, i) => {
                             const isHighlight = i === activeColIndex;
                             const viaLabel = variantByTrain[h] || '';
@@ -1037,9 +1137,15 @@ export const Renderer = {
                                 return `<span class="nt-grid-train-head" style="display:grid;grid-template-rows:11px ${isExport ? '21px' : '14px'};align-items:center;justify-items:center;gap:2px;line-height:1;white-space:nowrap;"><span class="nt-grid-train-status" style="display:flex;height:11px;align-items:center;justify-content:center;${statusStyle}">${statusHtml}</span><span class="nt-grid-train-id" style="${trainIdStyle}">${h}</span></span>`;
                             };
                             let headerContent = stack('&nbsp;', 'visibility:hidden;');
-                            const viaHtml = viaLabel
-                                ? `<span class="nt-grid-via" title="Via ${escapeHTML(viaLabel)}" style="display:block;margin-top:2px;font-size:8px;font-weight:800;letter-spacing:0.02em;line-height:1.15;white-space:normal;">Via ${escapeHTML(viaLabel)}</span>`
-                                : '';
+                            const continuesToKemp = kempIds.has(String(h));
+                            // Same status-slot metrics as NO SVC. Blue, because the train runs.
+                            // A longer name is marked nt-fit-status and scaled into this column.
+                            const noteTagStyle = isExport
+                                ? 'font-size:9px;font-weight:800;letter-spacing:0.08em;color:#1e40af;'
+                                : 'font-size:8px;color:#1d4ed8;font-weight:900;letter-spacing:0.02em;text-decoration:underline dotted #93c5fd;text-underline-offset:2px;';
+                            const noteHeadClass = isExport
+                                ? 'export-note-col'
+                                : 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300';
                             
                             if (paintExclusion && exclusionType === 'special') {
                                 const splIcon = `<svg class="inline-block w-2 h-2 mr-0.5 mb-[1px]" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>`;
@@ -1059,6 +1165,14 @@ export const Renderer = {
                                     bgClass = 'bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 opacity-90';
                                     headerContent = stack(`${banIcon} NO SVC`, 'font-size:8px;color:#dc2626;font-weight:900;letter-spacing:0.02em;text-decoration:underline dotted #f87171;text-underline-offset:2px;');
                                 }
+                            } else if (continuesToKemp) {
+                                headerContent = stack('KEMP', noteTagStyle);
+                                bgClass = noteHeadClass;
+                                if (!isExport && isHighlight) bgClass += ' font-bold';
+                            } else if (viaLabel) {
+                                headerContent = stack(`<span class="nt-fit-status">${escapeHTML(viaLabel)}</span>`, noteTagStyle);
+                                bgClass = noteHeadClass;
+                                if (!isExport && isHighlight) bgClass += ' font-bold';
                             } else if (!isExport && isHighlight) {
                                 bgClass = 'bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-300 font-bold';
                             }
@@ -1066,9 +1180,15 @@ export const Renderer = {
                             const exclHeadAttrs = (!isExport && paintExclusion && exclusionType !== 'special')
                                 ? ` data-excl-open="1" data-excl-route="${escapeHTML(String(routeId || ''))}" data-excl-train="${escapeHTML(String(h || ''))}" data-excl-day="${Number(dayIdx)}" tabindex="0" role="button" aria-label="Why train ${escapeHTML(String(h))} has no service"`
                                 : '';
-                            headerContent += viaHtml;
+                            const kempHeadAttrs = (!isExport && continuesToKemp && !paintExclusion)
+                                ? ` data-kemp-open="1" data-kemp-train="${escapeHTML(String(h || ''))}" tabindex="0" role="button" aria-label="Train ${escapeHTML(String(h))} continues to Kempton Park"`
+                                : '';
+                            const viaColumn = !!(viaLabel && !paintExclusion && !continuesToKemp);
+                            const viaHeadAttrs = (!isExport && viaColumn)
+                                ? ` data-via-open="1" data-via-train="${escapeHTML(String(h || ''))}" data-via-route="${escapeHTML(viaLabel)}" tabindex="0" role="button" aria-label="Train ${escapeHTML(String(h))} goes via the ${escapeHTML(viaLabel)} route"`
+                                : '';
                             const wrapClass = (isExport && paintExclusion && exclusionType !== 'special') ? 'whitespace-normal' : 'whitespace-nowrap';
-                            return `<th class="${paddingClass} border-b border-r ${borderClass} ${wrapClass} text-center ${bgClass} ${minWidthClass}" ${isHighlight ? 'id="grid-active-col"' : ''} ${!isExport ? `data-nt-live-host="${escapeHTML(String(h || ''))}"` : ''}${exclHeadAttrs}>${headerContent}</th>`;
+                            return `<th class="${paddingClass} border-b border-r ${borderClass} ${wrapClass} text-center ${bgClass} ${minWidthClass}" ${isHighlight ? 'id="grid-active-col"' : ''} ${!isExport ? `data-nt-live-host="${escapeHTML(String(h || ''))}"` : ''}${exclHeadAttrs}${kempHeadAttrs}${viaHeadAttrs}>${headerContent}</th>`;
                         }).join('')}
                         ${showRightAnchor ? `<th class="right-anchor-header ${paddingClass} border-b border-l font-bold min-w-[50px] text-center">STN</th>` : ''}
                     </tr>
@@ -1120,15 +1240,15 @@ export const Renderer = {
                 : '';
 
             html += `
-                <tr class="${rowClass.trim()}"${disrRowAttrs}>
-                    <td class="sticky left-0 z-10 ${currentStickyCellClass} ${paddingClass} border-r font-bold truncate max-w-[140px] shadow-lg border-b text-left pl-3">${cleanStation}</td>
+                <tr class="${rowClass.trim()}"${isSelectedRow ? ' id="grid-selected-row"' : ''}${disrRowAttrs}>
+                    <td class="sticky left-0 z-10 ${currentStickyCellClass} ${paddingClass} border-r font-bold ${stationCellWidth} ${isExport ? '' : 'nt-station-scroll-shade'} border-b text-left pl-3">${isExport ? cleanStation : `<div class="w-max max-w-[140px] truncate">${cleanStation}</div>`}</td>
                     ${sortedCols.map((col, i) => {
                         let val = row[col] || "-";
                         const expressSkip = isExpressSkip(val);
                         if (expressSkip) {
                             val = isExport
-                                ? 'EXPR'
-                                : `<button type="button" class="nt-expr-btn text-[10px] font-black tracking-wide text-amber-700 dark:text-amber-300 underline decoration-dotted focus:outline-none" data-expr-skip="1" data-expr-station="${escapeHTML(cleanStation)}" data-expr-train="${escapeHTML(String(col))}" aria-label="Train ${escapeHTML(String(col))} does not stop at ${escapeHTML(cleanStation)}">EXPR</button>`;
+                                ? '<span class="nt-expr" style="color:#7f1d1d;">EXPR</span>'
+                                : `<button type="button" class="nt-expr-btn text-[10px] font-black tracking-wide text-[#7f1d1d] dark:text-red-400 underline decoration-dotted focus:outline-none" data-expr-skip="1" data-expr-station="${escapeHTML(cleanStation)}" data-expr-train="${escapeHTML(String(col))}" aria-label="Train ${escapeHTML(String(col))} does not stop at ${escapeHTML(cleanStation)}">EXPR</button>`;
                         } else if (val !== "-") {
                             if (isRealTime(val)) {
                                 val = formatTimeDisplay(val); 
@@ -1180,8 +1300,15 @@ export const Renderer = {
                         const exclCellAttrs = (!isExport && paintExclusion && exclusionType !== 'special')
                             ? ` data-excl-open="1" data-excl-route="${escapeHTML(String(routeId || ''))}" data-excl-train="${escapeHTML(String(col || ''))}" data-excl-day="${Number(dayIdx)}"`
                             : '';
+                        const kempCellAttrs = (!isExport && kempIds.has(String(col)) && !paintExclusion)
+                            ? ` data-kemp-open="1" data-kemp-train="${escapeHTML(String(col || ''))}"`
+                            : '';
+                        const viaForCol = variantByTrain[String(col)] || '';
+                        const viaCellAttrs = (!isExport && viaForCol && !paintExclusion && !kempIds.has(String(col)))
+                            ? ` data-via-open="1" data-via-train="${escapeHTML(String(col || ''))}" data-via-route="${escapeHTML(viaForCol)}"`
+                            : '';
                         
-                        return `<td class="${cellClass}"${exclCellAttrs}>${val}</td>`;
+                        return `<td class="${cellClass}"${exclCellAttrs}${kempCellAttrs}${viaCellAttrs}>${val}</td>`;
                     }).join('')}
                     ${showRightAnchor ? `<td class="right-anchor-col ${paddingClass} border-l border-b font-mono font-bold text-center text-[10px] sm:text-xs">${getAbbrev(cleanStation)}</td>` : ''}
                 </tr>
@@ -1232,7 +1359,7 @@ export const Renderer = {
                 ? 'nt-station-col bg-gray-200 dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white'
                 : 'nt-station-col bg-gray-100 dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-white';
             return `<tr class="${rowClass}">
-                <td class="sticky left-0 z-10 ${stationBg} py-2.5 px-3 pl-3 border-r border-b font-bold text-xs truncate max-w-[140px] shadow-lg text-left">${escapeHTML(name)}</td>
+                <td class="sticky left-0 z-10 ${stationBg} py-2.5 px-3 pl-3 border-r border-b font-bold text-xs w-0 nt-station-scroll-shade text-left"><div class="w-max max-w-[140px] truncate">${escapeHTML(name)}</div></td>
             </tr>`;
         }).join('');
 
@@ -1252,7 +1379,7 @@ export const Renderer = {
                 <table class="w-full text-xs text-left border-collapse bg-white dark:bg-gray-900">
                     <thead class="text-[10px] uppercase bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-200 sticky top-0 z-20 shadow-sm">
                         <tr>
-                            <th class="nt-station-col sticky left-0 z-30 bg-gray-200 dark:bg-gray-700 border-gray-300 dark:border-gray-600 py-2.5 px-3 pl-3 border-b border-r font-bold min-w-[140px] shadow-lg text-left">Station</th>
+                            <th class="nt-station-col sticky left-0 z-30 bg-gray-200 dark:bg-gray-700 border-gray-300 dark:border-gray-600 py-2.5 px-3 pl-3 border-b border-r font-bold w-0 nt-station-scroll-shade text-left"><div class="w-max max-w-[140px] truncate">Station</div></th>
                         </tr>
                     </thead>
                     <tbody class="divide-y border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900">
@@ -1270,22 +1397,14 @@ export const Renderer = {
     },
     
     _getDotColor: (colorClass) => {
-        if (!colorClass) return 'bg-gray-400';
-        if (colorClass.includes('green')) return 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.5)]';
-        if (colorClass.includes('orange')) return 'bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.5)]';
-        if (colorClass.includes('purple')) return 'bg-purple-500 shadow-[0_0_8px_rgba(168,85,247,0.5)]';
-        if (colorClass.includes('indigo')) return 'bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.5)]'; 
-        if (colorClass.includes('blue')) return 'bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.5)]';
-        if (colorClass.includes('yellow')) return 'bg-yellow-400 shadow-[0_0_8px_rgba(250,204,21,0.5)]';
-        if (colorClass.includes('red')) return 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]';
-        return 'bg-gray-400';
+        const swatch = lineSwatchClass(colorClass, 'bg');
+        return `${swatch} shadow-sm`;
     },
 
     _applyUIIntercepts: (stationName) => {
         if (!stationName) return '';
         let name = stationName.replace(/ STATION/gi, '').trim();
         const upperName = name.toUpperCase();
-        if (upperName === 'ELANDSFONTEIN' || upperName === 'RHODESFIELD') return 'Kempton Park';
         if (upperName === 'DURBAN YARD') return 'Durban';
         return Renderer._toTitleCase(name);
     },
@@ -1315,8 +1434,8 @@ export const Renderer = {
             modal.id = 'changelog-modal';
             modal.className = 'fixed inset-0 bg-black bg-opacity-70 z-[140] hidden flex items-center justify-center p-4 backdrop-blur-sm transition-opacity duration-300';
             modal.innerHTML = `
-                <div class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-sm p-0 overflow-hidden transform transition-all scale-95 flex flex-col max-h-[85vh]">
-                    <div class="p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center bg-gray-50 dark:bg-gray-900">
+                <div class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-sm p-0 overflow-hidden transform transition-all scale-95 flex flex-col max-h-[min(85dvh,calc(100dvh-2rem))]">
+                    <div class="p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center bg-gray-50 dark:bg-gray-900 shrink-0">
                         <div>
                             <h3 class="font-bold text-lg text-gray-900 dark:text-white">What's New</h3>
                             <p class="changelog-app-version mt-0.5 font-mono text-[11px] font-black tracking-widest text-gray-400">${escapeHTML(APP_VERSION)}</p>
@@ -1325,9 +1444,9 @@ export const Renderer = {
                             <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
                         </button>
                     </div>
-                    <div class="p-6 overflow-y-auto flex-grow space-y-6" id="changelog-list"></div>
-                    <div class="p-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 text-center">
-                        <button type="button" onclick="if(window.closeSmoothModal) closeSmoothModal('changelog-modal'); else history.back();" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg shadow-md transition-colors">Got it!</button>
+                    <div class="p-6 overflow-y-auto flex-grow space-y-6 min-h-0" id="changelog-list"></div>
+                    <div class="p-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 text-center shrink-0">
+                        <button type="button" id="changelog-got-it" onclick="if(window.closeSmoothModal) closeSmoothModal('changelog-modal'); else history.back();" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg shadow-md transition-colors">Got it</button>
                     </div>
                 </div>`;
             document.body.appendChild(modal);
@@ -1338,29 +1457,50 @@ export const Renderer = {
 
         const listContainer = document.getElementById('changelog-list');
         if (listContainer) {
+            const entryMarkup = (entry, index) => {
+                const isLatest = index === 0;
+                const verId = entry.id || String(entry.version || '').split('<')[0].trim().replace(/\s+/g, '_');
+                const titleHtml = entry.title
+                    ? `<br><span class="text-sm text-blue-600 dark:text-blue-400">${sanitizeWhatsNewText(entry.title)}</span>`
+                    : '';
+                const features = (entry.features || []).slice(0, 5).map(sanitizeWhatsNewText);
+                return `
+                    <div class="relative pl-4 border-l-2 ${isLatest ? 'border-blue-500' : 'border-gray-300 dark:border-gray-700'}">
+                        ${isLatest ? '<span class="absolute -left-[5px] top-0 w-2.5 h-2.5 rounded-full bg-blue-500 ring-4 ring-blue-100 dark:ring-blue-900"></span>' : '<span class="absolute -left-[5px] top-0 w-2.5 h-2.5 rounded-full bg-gray-300 dark:bg-gray-700"></span>'}
+                        <div class="mb-1 flex items-baseline justify-between gap-2">
+                            <h4 class="font-bold text-gray-900 dark:text-white ${isLatest ? 'text-lg' : 'text-sm'}">${verId}${titleHtml}</h4>
+                            <span class="text-xs text-gray-500 dark:text-gray-400 font-mono shrink-0">${entry.date || ''}</span>
+                        </div>
+                        <ul class="space-y-2">
+                            ${features.map(f => `<li class="text-sm text-gray-600 dark:text-gray-300 leading-relaxed">${f}</li>`).join('')}
+                        </ul>
+                    </div>`;
+            };
             listContainer.innerHTML = '';
+            listContainer.scrollTop = 0;
             if (!changelogData || changelogData.length === 0) {
                 listContainer.innerHTML = '<p class="text-center text-gray-500 italic">No updates found.</p>';
             } else {
-                changelogData.forEach((entry, index) => {
-                    const isLatest = index === 0;
-                    const verId = entry.id || String(entry.version || '').split('<')[0].trim().replace(/\s+/g, '_');
-                    const titleHtml = entry.title
-                        ? `<br><span class="text-sm text-blue-600 dark:text-blue-400">${sanitizeWhatsNewText(entry.title)}</span>`
-                        : '';
-                    const features = (entry.features || []).slice(0, 5).map(sanitizeWhatsNewText);
-                    listContainer.innerHTML += `
-                        <div class="relative pl-4 border-l-2 ${isLatest ? 'border-blue-500' : 'border-gray-300 dark:border-gray-700'}">
-                            ${isLatest ? '<span class="absolute -left-[5px] top-0 w-2.5 h-2.5 rounded-full bg-blue-500 ring-4 ring-blue-100 dark:ring-blue-900"></span>' : '<span class="absolute -left-[5px] top-0 w-2.5 h-2.5 rounded-full bg-gray-300 dark:bg-gray-700"></span>'}
-                            <div class="mb-1 flex items-baseline justify-between gap-2">
-                                <h4 class="font-bold text-gray-900 dark:text-white ${isLatest ? 'text-lg' : 'text-sm'}">${verId}${titleHtml}</h4>
-                                <span class="text-xs text-gray-500 dark:text-gray-400 font-mono shrink-0">${entry.date || ''}</span>
-                            </div>
-                            <ul class="space-y-2">
-                                ${features.map(f => `<li class="text-sm text-gray-600 dark:text-gray-300 leading-relaxed">${f}</li>`).join('')}
-                            </ul>
-                        </div>`;
-                });
+                const firstCount = 6;
+                const first = changelogData.slice(0, firstCount);
+                listContainer.innerHTML = first.map((entry, index) => entryMarkup(entry, index)).join('');
+                const rest = changelogData.slice(firstCount);
+                if (rest.length) {
+                    const more = document.createElement('button');
+                    more.type = 'button';
+                    more.id = 'changelog-show-earlier';
+                    more.className = 'w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 text-sm font-bold text-blue-600 dark:text-blue-400 py-2.5';
+                    more.textContent = 'Show earlier updates';
+                    let shown = firstCount;
+                    more.addEventListener('click', () => {
+                        const batch = rest.slice(shown - firstCount, shown - firstCount + 8);
+                        const start = shown;
+                        more.insertAdjacentHTML('beforebegin', batch.map((entry, index) => entryMarkup(entry, start + index)).join(''));
+                        shown += batch.length;
+                        if (shown >= changelogData.length) more.remove();
+                    });
+                    listContainer.appendChild(more);
+                }
             }
         }
 
@@ -1372,6 +1512,8 @@ export const Renderer = {
     }
 };
 
+Renderer.fitGridStatusTags = fitGridStatusTags;
+
 // --- 5. CANVAS GRID EXPORT & SOCIAL SHARE SHIELD ---
 
 export async function takeGridSnapshot(direction = 'A', dayType = 'weekday') {
@@ -1379,7 +1521,7 @@ export async function takeGridSnapshot(direction = 'A', dayType = 'weekday') {
     if (typeof triggerHaptic === 'function') triggerHaptic(); 
 
     if (typeof window.html2canvas === 'undefined') {
-        if (typeof showToast === 'function') showToast("Loading snapshot engine...", "info", 1500);
+        if (typeof showToast === 'function') showToast('Preparing your timetable image...', 'info', 1500);
         try {
             await new Promise((resolve, reject) => {
                 const script = document.createElement('script');
@@ -1389,12 +1531,12 @@ export async function takeGridSnapshot(direction = 'A', dayType = 'weekday') {
                 document.head.appendChild(script);
             });
         } catch(e) {
-            if (typeof showToast === 'function') showToast("Failed to load snapshot engine.", "error");
+            if (typeof showToast === 'function') showToast('Could not prepare the timetable image.', 'error');
             return;
         }
     }
 
-    if (typeof showToast === 'function') showToast("📄 Generating Commuter Notice...", "info", 4000);
+    if (typeof showToast === 'function') showToast('Creating your timetable image...', 'info', 4000);
 
     const activeRouteId = $currentRouteId.get();
     const route = ROUTES[activeRouteId];
@@ -1606,6 +1748,9 @@ export async function takeGridSnapshot(direction = 'A', dayType = 'weekday') {
             td.style.boxShadow = 'none';
             if (isCompact) td.style.letterSpacing = '-0.5px'; 
         });
+        t.querySelectorAll('.nt-expr').forEach((el) => {
+            el.style.color = '#7f1d1d';
+        });
 
         t.querySelectorAll('th.export-spl-col').forEach(headerCell => {
             headerCell.style.backgroundColor = '#f0fdf4'; 
@@ -1614,6 +1759,13 @@ export async function takeGridSnapshot(direction = 'A', dayType = 'weekday') {
         t.querySelectorAll('th.export-banned-col').forEach(headerCell => {
             headerCell.style.backgroundColor = '#fef2f2'; 
             headerCell.style.color = '#991b1b';
+            headerCell.style.verticalAlign = 'middle';
+        });
+        t.querySelectorAll('th.export-note-col').forEach(headerCell => {
+            // Zebra rows are already #eff6ff. Blue-100 keeps the note tag
+            // visible the way NO SVC's #fef2f2 sits off the zebra.
+            headerCell.style.backgroundColor = '#dbeafe';
+            headerCell.style.color = '#1e40af';
             headerCell.style.verticalAlign = 'middle';
         });
         t.querySelectorAll('td.export-spl-cell').forEach(td => {
@@ -1676,6 +1828,7 @@ export async function takeGridSnapshot(direction = 'A', dayType = 'weekday') {
     try {
         await new Promise(r => setTimeout(r, 100));
 
+        fitGridStatusTags(exportContainer);
         exportContainer.querySelectorAll('.nt-export-route-title').forEach((title) => {
             const section = title.closest('.mb-4, .mb-8');
             const table = section?.querySelector('table');

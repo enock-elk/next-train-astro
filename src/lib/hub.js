@@ -5,6 +5,7 @@ import {
     APP_VERSION,
     CHANGELOG_DATA,
     DYNAMIC_BASE_URL,
+    REPLY_WORKER_URL,
     withBase,
     getLatestChangelog,
     getChangelogVersionId,
@@ -14,7 +15,7 @@ import {
     safeStorage, escapeHTML, repairMojibake, restoreDeviceIdentity, formatAppDate,
     cacheClearPolicy, shouldDeleteCacheForPolicy, destructiveNetworkIsSafe,
 } from './utils.js';
-import { encodeFeedbackAlertQuote, commuterFeedbackText } from './feedback-quote.js';
+import { encodeFeedbackAlertQuote, commuterFeedbackText, noticeQuotePlain } from './feedback-quote.js';
 import {
     validateFeedbackContact,
     looksLikeContactOnlyMessage,
@@ -42,9 +43,10 @@ import {
 import { isAdminAuthed } from './admin-chrome.js';
 import { bindMapOverrideSaveListener } from './map-overrides.js';
 import { trackAnalyticsEvent } from './analytics.js';
-import { prepareRichHtml, injectRichTextStyles, isSafeHref } from './rich-text.js';
+import { prepareRichHtml, injectRichTextStyles, isSafeHref, linkedPlainHtml } from './rich-text.js';
+import { hydrateLinkPreviews, linkPreviewMarkup } from './link-preview.js';
 import {
-    showToast, triggerHaptic, openSmoothModal, closeSmoothModal, canAutoOpenHomeNotices,
+    showToast, hideToastIfMessage, triggerHaptic, openSmoothModal, closeSmoothModal, canAutoOpenHomeNotices,
     hapticsAreEnabled, bindPasswordReveal
 } from './ui.js';
 import { whenSettledForAutoNotices } from './session-stability.js';
@@ -64,7 +66,17 @@ import {
     toggleAlertPinned,
     toggleAlertPollRawCounts,
 } from './alerts-channel.js';
-import { layoutAlertPost, hoistAlertImagesFromHtml, ALERT_PIN_SVG, isNoticePinned, alertCopyNeedsSeeMore, buildAlertSeeMoreMarkup, expandAlertSeeMore } from './alerts-feed.js';
+import {
+    layoutAlertPost,
+    hoistAlertImagesFromHtml,
+    ALERT_PIN_SVG,
+    isNoticePinned,
+    alertCopyNeedsSeeMore,
+    buildAlertSeeMoreMarkup,
+    expandAlertSeeMore,
+    renderAlertVideoMarkup,
+    sanitizeAlertVideoUrl,
+} from './alerts-feed.js';
 import {
     buildPollShellHtml,
     hydratePollResults,
@@ -80,7 +92,8 @@ import {
     renderPollResultsInto,
 } from './alert-poll.js';
 import { $userProfile, $currentRouteId, $userRegion, $deviceId } from '../store.js';
-import { $account } from './account.js';
+import { $account, accountNeedsEmailVerify, openAccountModal, openAccountProfile, signOutAccount } from './account.js';
+import { fetchCommunityChampions } from './community-champions.js';
 import { isLieFi } from './logic.js';
 import { bindColourPackControls, setColourPack, getColourPack, resetLookToClassicLight } from './prefs.js';
 import { markPendingReload } from './session-stability.js';
@@ -95,6 +108,7 @@ import {
     unstickStaleServiceWorker,
 } from './app-update.js';
 import { setupMapLogic } from './map-viewer.js';
+import { getBoardStationContext } from './auto-locate.js';
 import { applyShadowBanCloak, checkContentSafety, queueAutoModeration, checkRateLimit, recordRateHit, startRateLimitCountdown } from './trust.js';
 import {
     sniffAttachmentFile,
@@ -180,6 +194,7 @@ function paintContactField(input, { toast = false, persist = false, showError = 
         input.classList.remove('nt-contact-invalid');
         input.removeAttribute('aria-invalid');
         if (hint) hint.textContent = '';
+        paintThreadContactSummary();
         return { ok: true, value: signedInContactEmail() };
     }
     const result = validateFeedbackContact(input.value);
@@ -189,11 +204,34 @@ function paintContactField(input, { toast = false, persist = false, showError = 
     else input.removeAttribute('aria-invalid');
     if (hint) hint.textContent = show ? contactHintMessage(result.reason) : '';
     if (!result.ok) {
+        if (input.id === 'messages-thread-contact') paintThreadContactSummary();
         if (toast) showToast(contactHintMessage(result.reason), 'error');
         return result;
     }
     if (persist && !signedInContactEmail()) persistValidContact(result.value);
+    if (input.id === 'messages-thread-contact') paintThreadContactSummary();
     return result;
+}
+
+function paintThreadContactSummary() {
+    const summary = document.getElementById('messages-thread-contact-summary');
+    const input = document.getElementById('messages-thread-contact');
+    if (!summary || !input) return;
+    const value = String(input.value || '').trim();
+    summary.textContent = value || 'Optional';
+}
+
+function setThreadContactOpen(open) {
+    const panel = document.getElementById('messages-thread-contact-panel');
+    const toggle = document.getElementById('messages-thread-contact-toggle');
+    const chevron = document.getElementById('messages-thread-contact-chevron');
+    if (panel) panel.classList.toggle('hidden', !open);
+    if (toggle) toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+    chevron?.classList.toggle('rotate-180', !!open);
+    if (open) {
+        const input = document.getElementById('messages-thread-contact');
+        input?.focus({ preventScroll: true });
+    }
 }
 
 function paintThreadContactRow() {
@@ -211,6 +249,7 @@ function paintThreadContactRow() {
     }
     if (!input.value) input.value = readStoredContact();
     paintContactField(input, { showError: false });
+    paintThreadContactSummary();
 }
 
 function paintThreadFileChip(fileInput) {
@@ -234,7 +273,7 @@ function autosizeMessagesThreadInput() {
     const cs = window.getComputedStyle(el);
     const line = parseFloat(cs.lineHeight) || 20;
     const pad = (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0);
-    const minH = Math.max(44, line + pad);
+    const minH = Math.max(60, (2 * line) + pad);
     const maxByRows = (10 * line) + pad;
     const maxByVp = Math.round((window.visualViewport?.height || window.innerHeight) * 0.35);
     const maxH = Math.max(minH, Math.min(maxByRows, maxByVp));
@@ -285,6 +324,33 @@ function clearHubInlineGeometry(modal, card) {
 }
 
 /** Size commuter feedback overlays to the viewport left above the software keyboard. */
+function hubSheetOpen() {
+    const modal = document.getElementById('messages-thread-modal');
+    return !!(modal && !modal.classList.contains('hidden'));
+}
+
+function hubFieldFocused() {
+    return !!document.activeElement?.closest?.('#messages-thread-form');
+}
+
+/**
+ * iOS pans the layout viewport when the message field focuses, then leaves
+ * that pan in place after the keyboard closes. The sheet is not a document
+ * the commuter can drag, so Back stays above the screen. Put the sheet back.
+ */
+function settleHubAfterKeyboard() {
+    if (!hubSheetOpen() || hubFieldFocused()) return;
+    const modal = document.getElementById('messages-thread-modal');
+    const root = document.scrollingElement || document.documentElement;
+    if (root) root.scrollTop = 0;
+    document.body.scrollTop = 0;
+    try { window.scrollTo(0, 0); } catch { /* ignore */ }
+    const off = Math.max(0, Math.round(window.visualViewport?.offsetTop || 0));
+    if (!modal) return;
+    if (off > 0) modal.style.top = `${off}px`;
+    else modal.style.removeProperty('top');
+}
+
 function syncFeedbackModalViewport() {
     if (typeof window === 'undefined') return;
     const vv = window.visualViewport;
@@ -308,6 +374,7 @@ function syncFeedbackModalViewport() {
         const card = modal.querySelector(':scope > div');
         if (id === 'messages-thread-modal') {
             clearHubInlineGeometry(modal, card);
+            settleHubAfterKeyboard();
             return;
         }
         modal.style.setProperty('--nt-feedback-vv-height', `${height}px`);
@@ -349,8 +416,10 @@ function bindFeedbackViewportHandling() {
             }, ms);
         });
     });
-    document.addEventListener('focusout', () => {
+    document.addEventListener('focusout', (event) => {
         setTimeout(() => syncFeedbackModalViewport(), 50);
+        if (!event.target?.closest?.('#messages-thread-modal')) return;
+        [0, 80, 200, 500, 1000].forEach((ms) => setTimeout(settleHubAfterKeyboard, ms));
     });
     syncFeedbackModalViewport();
 }
@@ -400,7 +469,7 @@ function htmlToPlainSnippet(html, maxWords = 8) {
 }
 
 function feedbackReplySvg() {
-    return '<svg class="w-4 h-4 mr-2 shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>';
+    return '<svg class="w-4 h-4 mr-2 shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>';
 }
 
 /** Overlay parked under feedback (e.g. developer-reply) so cancel/send restores it. */
@@ -449,6 +518,9 @@ export function openFeedbackModal({ location = 'unknown', skipClear = false } = 
         clearFeedbackReplyMode();
         restoreFeedbackReturnOverlay();
     }
+    const fType = document.getElementById('feedback-type');
+    if (fType && location === 'about') fType.value = 'about';
+    else if (fType && !skipClear && fType.value !== 'thread_reply') fType.value = 'general';
     trackAlertEvent('open_feedback_modal', { location });
     syncFeedbackModalViewport();
     openSmoothModal('feedback-modal');
@@ -463,6 +535,7 @@ export function clearFeedbackReplyMode() {
         delete contextBox.dataset.rawMsg;
         delete contextBox.dataset.alertId;
         delete contextBox.dataset.alertKind;
+        delete contextBox.dataset.quotedText;
     }
     const typeWrap = document.getElementById('feedback-type-wrap');
     if (typeWrap) typeWrap.classList.remove('hidden');
@@ -474,7 +547,7 @@ export function clearFeedbackReplyMode() {
 }
 
 /** Show reply context chip and lock type to Thread Reply. */
-export function enterFeedbackReplyMode({ label = 'Replying to Advisory:', snippet = '', rawMsg = '', alertId = '', alertKind = 'notice' } = {}) {
+export function enterFeedbackReplyMode({ label = 'Replying to Advisory:', snippet = '', rawMsg = '', alertId = '', alertKind = 'notice', quotedText = '' } = {}) {
     const fText = document.getElementById('feedback-text');
     const fType = document.getElementById('feedback-type');
     const typeWrap = document.getElementById('feedback-type-wrap');
@@ -493,6 +566,9 @@ export function enterFeedbackReplyMode({ label = 'Replying to Advisory:', snippe
         if (alertId) contextBox.dataset.alertId = alertId;
         else delete contextBox.dataset.alertId;
         contextBox.dataset.alertKind = alertKind === 'disruption' ? 'disruption' : 'notice';
+        const fullQuote = String(quotedText || '').trim();
+        if (fullQuote) contextBox.dataset.quotedText = fullQuote.slice(0, 8000);
+        else delete contextBox.dataset.quotedText;
         contextBox.classList.remove('hidden');
     }
     if (fText) fText.value = '';
@@ -534,17 +610,10 @@ export function openAppHub() {
     try { window.cancelPendingGridOpen?.(); } catch { /* ignore */ }
     // Sign-in / account chrome lives in a deferred chunk — kick it as soon as
     // the hub is actually opened so first tap is not a no-op.
-    import('./account.js')
-        .then(({ bindAccountUi, initAccount }) => {
-            bindAccountUi();
-            initAccount();
-        })
-        .catch(() => {});
     const sidenav = document.getElementById('sidenav');
     const overlay = document.getElementById('sidenav-overlay');
     sidenav?.classList.remove('-translate-x-full', 'translate-x-full');
     sidenav?.classList.add('translate-x-0', 'open');
-    import('./ui.js').then((m) => m.syncBottomNavActive?.()).catch(() => {});
     if (overlay) {
         overlay.classList.remove('hidden');
         overlay.classList.add('open');
@@ -555,6 +624,17 @@ export function openAppHub() {
     if (location.hash !== '#sidenav') {
         try { history.pushState({ view: 'sidenav' }, '', '#sidenav'); } catch { /* ignore */ }
     }
+    // Account sync moves Options rows. Do it after the drawer has painted,
+    // so the open is not waiting on that layout.
+    setTimeout(() => {
+        import('./ui.js').then((m) => m.syncBottomNavActive?.()).catch(() => {});
+        import('./account.js')
+            .then(({ bindAccountUi, initAccount }) => {
+                bindAccountUi();
+                initAccount();
+            })
+            .catch(() => {});
+    }, 160);
 }
 
 function collapsePrefsAccordion() {
@@ -576,9 +656,26 @@ export function resetProfile() {
     setTimeout(() => openSmoothModal('profile-modal'), 50);
 }
 
-export async function performHardCacheClear(source = 'modal_confirm', { latestVersion = false, skipNetworkPreflight = false } = {}) {
+const UPDATE_TOAST_MAX_MS = 4000;
+const KEPT_APP_TOAST = 'Kept your saved app. Try again on a stronger connection.';
+
+function showUpdateToast(message) {
+    showToast(message, 'info', UPDATE_TOAST_MAX_MS, '', { persist: true, force: true });
+}
+
+function showKeptAppToast() {
+    showToast(KEPT_APP_TOAST, 'error');
+}
+
+function waitOutUpdateToast(startedAt) {
+    const left = UPDATE_TOAST_MAX_MS - (Date.now() - startedAt);
+    if (left <= 0) return Promise.resolve();
+    return new Promise((resolve) => setTimeout(resolve, left));
+}
+
+export async function performHardCacheClear(source = 'modal_confirm', { latestVersion = false } = {}) {
     const policy = cacheClearPolicy(source);
-    const requiresNetworkPreflight = policy.systemKillswitch || (source === 'check_updates' && !skipNetworkPreflight);
+    const requiresNetworkPreflight = policy.systemKillswitch || source === 'check_updates';
     if (requiresNetworkPreflight) {
         const online = typeof navigator === 'undefined' || navigator.onLine === true;
         // A manual retry must actively probe again so a stale Lie-Fi flag cannot
@@ -592,11 +689,27 @@ export async function performHardCacheClear(source = 'modal_confirm', { latestVe
         } catch {
             preflight = 'unavailable';
         }
-        if (!destructiveNetworkIsSafe({
-            online: typeof navigator === 'undefined' || navigator.onLine === true,
+        // A 3.5s miss is common on a phone that can still download. Check for
+        // Updates retries once, then continues when the phone is online and
+        // not a captive portal. Offline and Lie-Fi still stop. Killswitch
+        // keeps the strict 3.5s result.
+        if (source === 'check_updates' && preflight === 'timeout') {
+            try {
+                preflight = typeof window.probeReachability === 'function'
+                    ? await window.probeReachability(9000)
+                    : preflight;
+            } catch {
+                preflight = 'timeout';
+            }
+        }
+        const onlineNow = typeof navigator === 'undefined' || navigator.onLine === true;
+        const networkSafe = destructiveNetworkIsSafe({
+            online: onlineNow,
             lieFi: isLieFi,
             preflight,
-        })) {
+        }) || (source === 'check_updates' && preflight === 'timeout' && onlineNow && isLieFi !== true);
+        if (!networkSafe) {
+            if (source === 'check_updates') showKeptAppToast();
             return false;
         }
     }
@@ -606,19 +719,21 @@ export async function performHardCacheClear(source = 'modal_confirm', { latestVe
 
     if (policy.downloadThenSwap) {
         const incoming = await peekIncomingVersion();
+        const updateToastStarted = Date.now();
         if (incoming && isAppVersionNewer(incoming, APP_VERSION)) {
             console.log(`🛡️ Guardian: NEW APP VERSION found: ${incoming} (running ${APP_VERSION}). Not downloaded yet. Check for Updates will download, then restart to implement it.`);
-            showToast(`Downloading ${incoming}…`, 'info', 5000);
+            showUpdateToast(`Downloading ${incoming}…`);
         } else {
             console.log(`🛡️ Guardian: Check for Updates — running ${APP_VERSION}, published ${incoming || 'unknown'}. Downloading the worker, then restart.`);
-            showToast('Downloading the update…', 'info', 5000);
+            showUpdateToast('Downloading the update…');
         }
         const installed = await installIncomingServiceWorker();
         if (!installed.ok) {
             console.warn(`🛡️ Guardian: Incoming version ${incoming || APP_VERSION} NOT downloaded (${installed.reason}). Keeping ${APP_VERSION}.`);
-            showToast('Kept your saved app. Try again on a stronger connection.', 'error', 4500);
+            showKeptAppToast();
             return false;
         }
+        showUpdateToast('Update ready. Opening it now.');
         console.log(`🛡️ Guardian: Incoming version ${incoming || APP_VERSION} downloaded (${installed.reason}).`);
         if (installed.reason === 'already_current' && incoming && isAppVersionNewer(incoming, APP_VERSION)) {
             console.warn(`🛡️ Guardian: Service worker still ${APP_VERSION} while published ${incoming}. Unsticking so Check for Updates can land one shell.`);
@@ -626,6 +741,7 @@ export async function performHardCacheClear(source = 'modal_confirm', { latestVe
         } else {
             try { await activateWaitingServiceWorker(); } catch { /* reload still applies the new shell */ }
         }
+        await waitOutUpdateToast(updateToastStarted);
         closeAppHub(true);
         const updateModal = document.getElementById('cache-clear-modal');
         if (updateModal) closeSmoothModal('cache-clear-modal');
@@ -711,25 +827,6 @@ export async function performHardCacheClear(source = 'modal_confirm', { latestVe
     return true;
 }
 
-function openNetworkSlowConfirm(onProceed) {
-    const modal = document.getElementById('network-slow-confirm-modal');
-    const cancelBtn = document.getElementById('network-slow-cancel-btn');
-    const proceedBtn = document.getElementById('network-slow-proceed-btn');
-    if (!modal || !cancelBtn || !proceedBtn) {
-        onProceed?.();
-        return;
-    }
-    const finish = (proceed) => {
-        cancelBtn.onclick = null;
-        proceedBtn.onclick = null;
-        closeSmoothModal('network-slow-confirm-modal');
-        if (proceed) onProceed?.();
-    };
-    cancelBtn.onclick = () => finish(false);
-    proceedBtn.onclick = () => finish(true);
-    openSmoothModal('network-slow-confirm-modal');
-}
-
 function openCacheClearConfirm(onProceed) {
     const modal = document.getElementById('cache-clear-modal');
     const cancelBtn = document.getElementById('cache-clear-cancel-btn');
@@ -749,31 +846,146 @@ function openCacheClearConfirm(onProceed) {
     openSmoothModal('cache-clear-modal');
 }
 
-export async function showCacheClearWarning() {
+export function showCacheClearWarning() {
     triggerHaptic();
-    const incomingVersion = (typeof navigator === 'undefined' || navigator.onLine)
-        ? await peekIncomingVersion()
-        : null;
-    if (incomingVersion && isAppVersionNewer(incomingVersion, APP_VERSION)) {
-        console.log(`🛡️ Guardian: Check for Updates — NEW APP VERSION found: ${incomingVersion} (running ${APP_VERSION}). Not downloaded yet.`);
-    } else {
-        console.log(`🛡️ Guardian: Check for Updates — running ${APP_VERSION}, published ${incomingVersion || 'unknown'}.`);
-    }
-    const runReset = (skipNetworkPreflight) => performHardCacheClear('check_updates', {
-        latestVersion: !!(incomingVersion && !isAppVersionNewer(incomingVersion, APP_VERSION)),
-        skipNetworkPreflight,
-    });
-    const afterConfirm = async () => {
-        if (!navigator.onLine || !incomingVersion) {
-            openNetworkSlowConfirm(() => runReset(true));
+    // The confirm sheet opens first. "Checking…" only starts after Update.
+    openCacheClearConfirm(async () => {
+        showUpdateToast('Checking for updates…');
+        const incomingVersion = (typeof navigator === 'undefined' || navigator.onLine)
+            ? await peekIncomingVersion()
+            : null;
+        hideToastIfMessage('Checking for updates…');
+        if (incomingVersion && isAppVersionNewer(incomingVersion, APP_VERSION)) {
+            console.log(`🛡️ Guardian: Check for Updates — NEW APP VERSION found: ${incomingVersion} (running ${APP_VERSION}). Not downloaded yet.`);
+        } else {
+            console.log(`🛡️ Guardian: Check for Updates — running ${APP_VERSION}, published ${incomingVersion || 'unknown'}.`);
+        }
+        if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+            showKeptAppToast();
             return;
         }
-        const restarted = await runReset(false);
-        if (!restarted) {
-            openNetworkSlowConfirm(() => runReset(true));
+        await performHardCacheClear('check_updates', {
+            latestVersion: !!(incomingVersion && !isAppVersionNewer(incomingVersion, APP_VERSION)),
+        });
+    });
+}
+
+function deleteIndexedDatabase(name) {
+    return new Promise((resolve) => {
+        if (typeof indexedDB === 'undefined') {
+            resolve();
+            return;
         }
+        try {
+            const req = indexedDB.deleteDatabase(name);
+            req.onsuccess = () => resolve();
+            req.onerror = () => resolve();
+            req.onblocked = () => resolve();
+        } catch {
+            resolve();
+        }
+    });
+}
+
+/** Wipe this phone back to welcome. Keeps next_train_device_id. Does not delete the account. */
+export async function resetPhoneKeepDeviceId() {
+    const keep = safeStorage.getItem('next_train_device_id')
+        || (typeof window !== 'undefined' ? window.NEXT_TRAIN_DEVICE_ID : '')
+        || '';
+    try { await signOutAccount(); } catch { /* the account stays on the server */ }
+    try { sessionStorage.clear(); } catch { /* ignore */ }
+    try { localStorage.clear(); } catch { /* ignore */ }
+    safeStorage.memoryFallback = {};
+    if (keep) {
+        try { localStorage.setItem('next_train_device_id', keep); } catch { /* ignore */ }
+        try {
+            document.cookie = `nt_did=${encodeURIComponent(keep)}; max-age=31536000; path=/; SameSite=Lax`;
+        } catch { /* ignore */ }
+        if (typeof window !== 'undefined') window.NEXT_TRAIN_DEVICE_ID = keep;
+    }
+    try { safeStorage._idbInstance?.close(); } catch { /* ignore */ }
+    safeStorage._idbInstance = null;
+    safeStorage._idbOpenPromise = null;
+    await deleteIndexedDatabase('NextTrainDB');
+    await deleteIndexedDatabase('GuardianIdentityDB');
+    if (keep) {
+        try { await safeStorage.setResilientItem('next_train_device_id', keep); } catch { /* local copy remains */ }
+    }
+    try {
+        if (typeof caches !== 'undefined') {
+            const names = await caches.keys();
+            await Promise.all(names.map((name) => caches.delete(name)));
+        }
+    } catch { /* ignore */ }
+    try {
+        if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
+            const regs = await navigator.serviceWorker.getRegistrations();
+            for (const reg of regs) await reg.unregister();
+        }
+    } catch { /* ignore */ }
+    window.location.replace(withBase('/'));
+}
+
+function openPhoneResetConfirm(onProceed) {
+    const modal = document.getElementById('phone-reset-modal');
+    const cancelBtn = document.getElementById('phone-reset-cancel-btn');
+    const proceedBtn = document.getElementById('phone-reset-confirm-btn');
+    if (!modal || !cancelBtn || !proceedBtn) {
+        onProceed?.();
+        return;
+    }
+    const finish = (proceed) => {
+        cancelBtn.onclick = null;
+        proceedBtn.onclick = null;
+        closeSmoothModal('phone-reset-modal');
+        if (proceed) onProceed?.();
     };
-    openCacheClearConfirm(afterConfirm);
+    cancelBtn.onclick = () => finish(false);
+    proceedBtn.onclick = () => finish(true);
+    openSmoothModal('phone-reset-modal');
+}
+
+function openPhoneResetNetworkConfirm(onProceed) {
+    const modal = document.getElementById('phone-reset-network-modal');
+    const cancelBtn = document.getElementById('phone-reset-network-cancel-btn');
+    const proceedBtn = document.getElementById('phone-reset-network-confirm-btn');
+    if (!modal || !cancelBtn || !proceedBtn) {
+        onProceed?.();
+        return;
+    }
+    const finish = (proceed) => {
+        cancelBtn.onclick = null;
+        proceedBtn.onclick = null;
+        closeSmoothModal('phone-reset-network-modal');
+        if (proceed) onProceed?.();
+    };
+    cancelBtn.onclick = () => finish(false);
+    proceedBtn.onclick = () => finish(true);
+    openSmoothModal('phone-reset-network-modal');
+}
+
+export function showPhoneResetWarning() {
+    triggerHaptic();
+    openPhoneResetConfirm(async () => {
+        const online = typeof navigator === 'undefined' || navigator.onLine !== false;
+        let preflight = 'ok';
+        if (typeof window !== 'undefined' && typeof window.probeReachability === 'function') {
+            showToast('Checking the connection…', 'info', 4000);
+            try {
+                preflight = await window.probeReachability(3500);
+            } catch {
+                preflight = 'timeout';
+            }
+            hideToastIfMessage('Checking the connection…');
+        }
+        if (!destructiveNetworkIsSafe({ online, lieFi: isLieFi, preflight })) {
+            openPhoneResetNetworkConfirm(() => {
+                resetPhoneKeepDeviceId();
+            });
+            return;
+        }
+        resetPhoneKeepDeviceId();
+    });
 }
 
 function syncProfileDisplay() {
@@ -829,7 +1041,8 @@ function maybeForceShowChangelog() {
     openChangelog();
 }
 
-async function submitFeedback() {
+async function submitFeedback(opts = {}) {
+    let sent = false;
     const type = document.getElementById('feedback-type')?.value;
     let text = document.getElementById('feedback-text')?.value.trim() || '';
     const fileInput = document.getElementById('feedback-file');
@@ -887,6 +1100,8 @@ async function submitFeedback() {
                         isPWA: isStandalone,
                         // Held messages are text-only for v1 (attachments not uploaded on hold).
                         attachmentsHeld: hasFile,
+                        quotedText: String(document.getElementById('feedback-reply-context')?.dataset.quotedText || '').trim() || null,
+                        ...getBoardStationContext(),
                         ...chatScopeFields(),
                     },
                 },
@@ -967,6 +1182,8 @@ async function submitFeedback() {
             userAgent: navigator.userAgent,
             deviceId: $deviceId.get() || safeStorage.getItem('next_train_device_id') || 'unknown',
             isPWA: isStandalone,
+            quotedText: String(document.getElementById('feedback-reply-context')?.dataset.quotedText || '').trim() || null,
+            ...getBoardStationContext(),
             ...chatScopeFields(),
         };
 
@@ -990,11 +1207,13 @@ async function submitFeedback() {
             });
         } catch { /* thread copy is best-effort */ }
 
+        sent = true;
         showToast('Feedback sent! Thank you.', 'success');
+        import('./account.js').then((m) => m.recordAccountActivity?.('feedback', { type: type || 'general' })).catch(() => {});
         closeSmoothModal('feedback-modal');
         clearFeedbackReplyMode();
         feedbackReturnModalId = null;
-        setTimeout(() => openMessagesThread(), 420);
+        if (!opts.skipThread) setTimeout(() => openMessagesThread(), 420);
         const ta = document.getElementById('feedback-text');
         const em = document.getElementById('feedback-email');
         if (ta) ta.value = '';
@@ -1016,6 +1235,20 @@ async function submitFeedback() {
         if (submitText) submitText.textContent = 'Submit';
         spinner?.classList.add('hidden');
     }
+    return sent;
+}
+
+/** Send an advisory reply from the photo field. The feedback sheet stays closed. */
+export async function submitAdvisoryReplyFromLightbox({ text = '', label = 'Replying to Advisory:', snippet = '', rawMsg = '', alertId = '', alertKind = 'notice', quotedText = '' } = {}) {
+    enterFeedbackReplyMode({ label, snippet, rawMsg: rawMsg || snippet, alertId, alertKind, quotedText });
+    const fText = document.getElementById('feedback-text');
+    if (fText) fText.value = String(text || '');
+    const ok = await submitFeedback({ skipThread: true });
+    if (!ok) {
+        clearFeedbackReplyMode();
+        if (fText) fText.value = '';
+    }
+    return !!ok;
 }
 
 /** Survives sanitizeHTML (no SVG) — clear circular “+” expand affordance on alert images. */
@@ -1266,6 +1499,7 @@ function signedInUid() {
 }
 
 function chatScopeFields() {
+    if (accountNeedsEmailVerify()) return { chatScope: 'guest', sentSignedOut: true };
     const uid = signedInUid();
     if (uid) return { accountUid: uid, chatScope: 'account' };
     return { chatScope: 'guest', sentSignedOut: true };
@@ -1274,6 +1508,7 @@ function chatScopeFields() {
 /** Signed-out view is a new chat on the same device id. Never-signed-in guests still see history. */
 function inboxMessageInScope(m) {
     if (!m) return false;
+    if (accountNeedsEmailVerify()) return false;
     const uid = signedInUid();
     const guestSince = Number(safeStorage.getItem(CHAT_GUEST_SINCE_KEY) || 0);
     const scope = m.chatScope || '';
@@ -1340,6 +1575,7 @@ async function putCommuterInboxMessage(deviceId, msgId, payload) {
 async function mergeGuestChatIntoAccount() {
     if (guestMergeFlight) return guestMergeFlight;
     guestMergeFlight = (async () => {
+        if (accountNeedsEmailVerify()) return;
         const since = Number(safeStorage.getItem(CHAT_GUEST_SINCE_KEY) || 0);
         const acct = $account.get();
         const uid = acct?.status === 'signed-in' ? String(acct.uid || '') : '';
@@ -1410,11 +1646,11 @@ function bindChatAccountListener() {
             beginGuestChat();
             return;
         }
-        if (next === 'signed-in' && safeStorage.getItem(CHAT_GUEST_SINCE_KEY)) {
+        if (next === 'signed-in' && !accountNeedsEmailVerify() && safeStorage.getItem(CHAT_GUEST_SINCE_KEY)) {
             mergeGuestChatIntoAccount().catch(() => {});
         }
     });
-    if (lastStatus === 'signed-in' && safeStorage.getItem(CHAT_GUEST_SINCE_KEY)) {
+    if (lastStatus === 'signed-in' && !accountNeedsEmailVerify() && safeStorage.getItem(CHAT_GUEST_SINCE_KEY)) {
         mergeGuestChatIntoAccount().catch(() => {});
     }
 }
@@ -1691,6 +1927,14 @@ async function postCommuterInboxCopy({ text, feedbackType, feedbackId, attachmen
 }
 
 export async function openMessagesThread(replyToAcknowledge = latestPendingAdminReply) {
+    if (accountNeedsEmailVerify()) {
+        triggerHaptic();
+        showToast('Verify your email before opening messages.', 'info', 4000);
+        openAccountModal();
+        openAccountProfile();
+        return;
+    }
+    import('./account.js').then((m) => m.recordAccountActivity?.('messages_open')).catch(() => {});
     triggerHaptic();
     closeAppHub(true);
     document.getElementById('developer-reply-banner')?.classList.add('hidden');
@@ -1706,6 +1950,7 @@ export async function openMessagesThread(replyToAcknowledge = latestPendingAdmin
         else host.innerHTML = '<p class="text-xs text-gray-400 text-center py-8">Loading…</p>';
     }
     paintThreadContactRow();
+    setThreadContactOpen(false);
     setTimeout(() => {
         try { window.ntFitAppViewport?.(); } catch { /* ignore */ }
         openSmoothModal('messages-thread-modal');
@@ -1722,6 +1967,7 @@ export async function openMessagesThread(replyToAcknowledge = latestPendingAdmin
             rememberAcknowledgedInboxReplies(unread, deviceId);
             markInboxRead(deviceId, unread).catch(() => {});
             syncInboxBadges(0);
+            import('./account.js').then((m) => m.recordAccountActivity?.('admin_reply_read', { count: unread.length })).catch(() => {});
         }
     } catch {
         renderMessagesThread(readLocalInbox());
@@ -1771,7 +2017,7 @@ export function renderServiceAlertModal(notice, options = {}) {
             ? '🔴 Critical'
             : severity === 'warning'
                 ? '🟡 Warning'
-                : '🔵 Info';
+                : 'Info';
     }
     if (pinEl) {
         const pinned = isNoticePinned(notice);
@@ -1792,7 +2038,7 @@ export function renderServiceAlertModal(notice, options = {}) {
 
     const layout = layoutAlertPost(notice);
     const titleHtml = layout.title
-        ? `<h3 class="text-base font-black text-gray-900 dark:text-white leading-snug mb-2">${escapeHTML(layout.title)}</h3>`
+        ? `<h3 class="text-base font-black text-gray-900 dark:text-white leading-snug mb-2">${linkedPlainHtml(layout.title)}</h3>`
         : '';
     let formattedMsg = sanitizeHTML(layout.body);
     if (alertCopyNeedsSeeMore(layout.body)) {
@@ -1810,7 +2056,7 @@ export function renderServiceAlertModal(notice, options = {}) {
     }
 
     const posterUrls = layout.imageUrls;
-    let mediaHtml = '';
+    let posterHtml = '';
     if (posterUrls.length) {
         const cells = posterUrls.map((path) => {
             const href = resolveAlertImageSrc(path);
@@ -1818,15 +2064,16 @@ export function renderServiceAlertModal(notice, options = {}) {
             const src = escapeHTML(href);
             const onclick = lightboxOnclickJs(href);
             if (!onclick) return '';
-            return `<button type="button" onclick='event.stopPropagation(); ${onclick}' class="relative block w-full focus:outline-none cursor-zoom-in rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm"><img src="${src}" alt="Service poster" class="w-full h-auto max-h-56 object-cover"></button>`;
+            return `<button type="button" onclick='event.stopPropagation(); ${onclick}' class="relative block w-full min-h-[8rem] focus:outline-none cursor-zoom-in rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm bg-gray-100 dark:bg-gray-900"><img src="${src}" alt="" referrerpolicy="no-referrer" class="w-full h-auto max-h-56 min-h-[8rem] object-contain bg-gray-100 dark:bg-gray-900"></button>`;
         }).join('');
         const grid = posterUrls.length > 1 ? 'grid grid-cols-2 gap-2' : 'grid grid-cols-1';
-        mediaHtml = `<div class="${grid} mt-2 mb-1">${cells}</div>`;
+        posterHtml = `<div class="${grid} mt-2 mb-1">${cells}</div>`;
     }
-    content.innerHTML = `${titleHtml}${mediaHtml}${formattedMsg}`;
+    const mediaHtml = `${posterHtml}${renderAlertVideoMarkup(layout.videoUrls)}`;
+    content.innerHTML = `${titleHtml}${mediaHtml}${linkPreviewMarkup(notice)}${formattedMsg}`;
     ensureLightboxPlusBadges(content);
 
-    if (notice.ctaUrl && notice.ctaText) {
+    if (notice.ctaUrl && notice.ctaText && !sanitizeAlertVideoUrl(notice.ctaUrl)) {
         content.innerHTML += `
             <a href="${escapeHTML(notice.ctaUrl)}" target="_blank" rel="noopener" class="mt-4 flex items-center justify-center w-full bg-blue-50 dark:bg-blue-900/30 hover:bg-blue-100 dark:hover:bg-blue-800 text-blue-700 dark:text-blue-300 font-bold py-2.5 px-4 rounded-lg transition-colors text-xs uppercase tracking-wide border border-blue-200 dark:border-blue-800 shadow-sm focus:outline-none">
                 ${escapeHTML(notice.ctaText)}
@@ -1837,8 +2084,11 @@ export function renderServiceAlertModal(notice, options = {}) {
     if (notice.poll && notice.poll.active) {
         content.innerHTML += buildPollShellHtml({ ...notice, severity: severity || notice.severity }, { mode });
         const pollEl = content.querySelector('[data-poll-shell]');
-        if (pollEl && mode === 'live') hydratePollResults(pollEl);
+        if (pollEl) hydratePollResults(pollEl);
     }
+
+    hydrateAlertPosterImages(content);
+    hydrateLinkPreviews(content, REPLY_WORKER_URL);
 
     if (timestamp) {
         if (options.timestampHtml) {
@@ -1926,7 +2176,7 @@ export function renderServiceAlertModal(notice, options = {}) {
         }
     } else {
         rightBtn.className = 'flex-1 bg-white dark:bg-gray-800 hover:bg-blue-50 dark:hover:bg-blue-900/30 text-blue-700 dark:text-blue-300 font-bold py-2.5 px-4 rounded-lg border border-blue-500/70 dark:border-blue-400/70 shadow-none transition-colors focus:outline-none flex items-center justify-center';
-        const replySvg = '<svg class="w-4 h-4 mr-1.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>';
+        const replySvg = '<svg class="w-4 h-4 mr-1.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>';
         rightBtn.innerHTML = `${replySvg} Reply`;
         rightBtn.onclick = () => {
             triggerHaptic();
@@ -1939,6 +2189,7 @@ export function renderServiceAlertModal(notice, options = {}) {
                 rawMsg: truncatedMsg,
                 alertId: notice?.id || '',
                 alertKind: 'notice',
+                quotedText: noticeQuotePlain(notice),
             });
         };
         btnContainer.appendChild(rightBtn);
@@ -2017,8 +2268,16 @@ if (typeof window !== 'undefined') {
 }
 
 let alertsCheckGen = 0;
+let alertsCheckInFlight = null;
+let alertsCheckInFlightKey = '';
 
-export async function checkServiceAlerts() {
+function alertsUiOpen() {
+    const channel = document.getElementById('alerts-channel');
+    return !!(channel && !channel.classList.contains('hidden'));
+}
+
+export async function checkServiceAlerts(opts = {}) {
+    const force = opts?.force === true;
     const bellBtn = document.getElementById('notice-bell');
     const dot = document.getElementById('notice-dot');
     const modal = document.getElementById('notice-modal');
@@ -2027,19 +2286,29 @@ export async function checkServiceAlerts() {
     const deviceId = $deviceId.get() || safeStorage.getItem('next_train_device_id');
     const routeId = $currentRouteId.get();
     const region = $userRegion.get() || 'GP';
+    const flightKey = `${region}|${routeId || ''}|${deviceId || ''}|${force ? 1 : 0}`;
+    if (alertsCheckInFlight && alertsCheckInFlightKey === flightKey) {
+        return alertsCheckInFlight;
+    }
     const gen = ++alertsCheckGen;
-
+    alertsCheckInFlightKey = flightKey;
+    alertsCheckInFlight = (async () => {
     try {
         // Notices first so a route swap does not wait on the inbox round-trip.
-        const noticesPromise = fetchUnionNotices(region, routeId).then((validNotices) => {
+        const noticesPromise = fetchUnionNotices(region, routeId, { force }).then((validNotices) => {
             if (gen !== alertsCheckGen) return null;
             setCachedLiveNotices(validNotices);
             const channel = document.getElementById('alerts-channel');
             if (channel && !channel.classList.contains('hidden')) {
                 renderAlertsChannel(validNotices);
             }
-            if (!validNotices.length) bellBtn.classList.add('hidden');
-            else applyBellFromNotices(validNotices);
+            if (!validNotices.length) {
+                bellBtn.classList.add('invisible');
+                bellBtn.classList.remove('hidden');
+                bellBtn.setAttribute('aria-hidden', 'true');
+                bellBtn.setAttribute('tabindex', '-1');
+                if (dot) dot.classList.add('hidden');
+            } else applyBellFromNotices(validNotices);
             return validNotices;
         });
 
@@ -2146,6 +2415,13 @@ export async function checkServiceAlerts() {
     } catch (e) {
         console.warn('Service alerts check failed', e);
     }
+    })().finally(() => {
+        if (alertsCheckInFlightKey === flightKey) {
+            alertsCheckInFlight = null;
+            alertsCheckInFlightKey = '';
+        }
+    });
+    return alertsCheckInFlight;
 }
 
 export function initHub() {
@@ -2165,6 +2441,7 @@ export function initHub() {
     window.prepareRichHtml = prepareRichHtml;
     window.injectRichTextStyles = injectRichTextStyles;
     window.openFeedbackReplyFromOverlay = openFeedbackReplyFromOverlay;
+    window.submitAdvisoryReplyFromLightbox = submitAdvisoryReplyFromLightbox;
     window.openFeedbackModal = openFeedbackModal;
     window.syncFeedbackModalViewport = syncFeedbackModalViewport;
     bindChatAccountListener();
@@ -2625,8 +2902,18 @@ export function initHub() {
         } catch { /* ignore */ }
     };
 
+    // In-app Network Map follows the region the commuter already picked.
+    function networkMapSheetUrl() {
+        let region = 'GP';
+        try {
+            const saved = safeStorage.getItem('userRegion');
+            if (saved === 'GP' || saved === 'WC' || saved === 'KZN' || saved === 'EC') region = saved;
+        } catch { /* keep GP */ }
+        return withBase(`/map.html?region=${encodeURIComponent(region)}`);
+    }
+
     // Map-tab embed calls this for the Full screen control — never from map.html boot.
-    window.__ntOpenNetworkMapSheet = () => openInAppSheet(withBase('/map.html'), 'Network Map');
+    window.__ntOpenNetworkMapSheet = () => openInAppSheet(networkMapSheetUrl(), 'Network Map');
     window.__ntFullscreenMapTab = () => {
         if (typeof window.fullscreenMapTab === 'function') {
             window.fullscreenMapTab();
@@ -2655,7 +2942,7 @@ export function initHub() {
         closeAppHub(true);
         setTimeout(() => {
             trackAnalyticsEvent('open_interactive_map', { location: 'sidenav' });
-            openInAppSheet(withBase('/map.html'), 'Network Map');
+            openInAppSheet(networkMapSheetUrl(), 'Network Map');
         }, 120);
     });
 
@@ -2664,8 +2951,48 @@ export function initHub() {
         trackAnalyticsEvent('check_updates_click', { location: 'sidenav' });
         showCacheClearWarning();
     });
+    const openPhoneReset = () => showPhoneResetWarning();
+    document.getElementById('reset-phone-btn')?.addEventListener('click', openPhoneReset);
+    document.getElementById('account-reset-phone-btn')?.addEventListener('click', openPhoneReset);
 
     // About / Help / Changelog
+    const championLinkIcon = (kind) => {
+        if (kind === 'facebook') {
+            return '<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M24 12.073C24 5.405 18.627 0 12 0S0 5.405 0 12.073C0 18.1 4.388 23.094 10.125 24v-8.437H7.078v-3.49h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.49h-2.796V24C19.612 23.094 24 18.1 24 12.073z"/></svg>';
+        }
+        // WhatsApp number + channel share the same glyph
+        return '<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.435 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>';
+    };
+    const paintAboutChampions = async () => {
+        const host = document.getElementById('about-champions');
+        const list = document.getElementById('about-champions-list');
+        if (!host || !list) return;
+        let rows = [];
+        try {
+            rows = await fetchCommunityChampions();
+        } catch {
+            rows = [];
+        }
+        if (!rows.length) {
+            host.classList.add('hidden');
+            list.innerHTML = '';
+            return;
+        }
+        list.innerHTML = rows.map((row) => {
+            // Contact icons only when admin filled those fields.
+            const links = (row.links || []).map((link) => (
+                `<a href="${escapeHTML(link.href)}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center justify-center w-8 h-8 rounded-full bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-700 hover:text-blue-600 dark:hover:text-blue-400 transition-colors" aria-label="${escapeHTML(link.label)}" title="${escapeHTML(link.label)}">${championLinkIcon(link.kind)}</a>`
+            )).join('');
+            return `<div class="flex items-center justify-between gap-3">
+                <div class="min-w-0 text-left">
+                    <p class="text-sm font-bold text-gray-900 dark:text-white leading-tight truncate">${escapeHTML(row.name)}</p>
+                    <p class="text-[10px] text-gray-500 dark:text-gray-400 tracking-wide mt-0.5">${escapeHTML(row.region)}</p>
+                </div>
+                ${links ? `<div class="flex items-center gap-1.5 shrink-0">${links}</div>` : ''}
+            </div>`;
+        }).join('');
+        host.classList.remove('hidden');
+    };
     document.getElementById('settings-about-btn')?.addEventListener('click', () => {
         triggerHaptic();
         closeAppHub(true);
@@ -2674,6 +3001,7 @@ export function initHub() {
             const edition = (getLatestChangelog()?.title) || 'Next Train';
             ver.textContent = `Version ${APP_VERSION} (${edition})`;
         }
+        paintAboutChampions();
         setTimeout(() => {
             trackAnalyticsEvent('view_about_page', { location: 'sidenav' });
             openSmoothModal('about-modal');
@@ -2721,6 +3049,24 @@ export function initHub() {
         openMessagesThread();
     });
     document.getElementById('messages-thread-close')?.addEventListener('click', () => closeSmoothModal('messages-thread-modal'));
+    const contactToggle = document.getElementById('messages-thread-contact-toggle');
+    const toggleThreadContact = () => {
+        setThreadContactOpen(contactToggle?.getAttribute('aria-expanded') !== 'true');
+    };
+    // touchend, not a later click: iOS drops the keyboard when the tap blurs
+    // the message field, and a delayed focus cannot bring it back.
+    contactToggle?.addEventListener('touchend', (event) => {
+        event.preventDefault();
+        toggleThreadContact();
+        contactToggle.dataset.ntTouchToggle = '1';
+    });
+    contactToggle?.addEventListener('click', () => {
+        if (contactToggle.dataset.ntTouchToggle === '1') {
+            delete contactToggle.dataset.ntTouchToggle;
+            return;
+        }
+        toggleThreadContact();
+    });
     document.getElementById('messages-thread-form')?.addEventListener('submit', async (e) => {
         e.preventDefault();
         const input = document.getElementById('messages-thread-input');
@@ -2734,7 +3080,10 @@ export function initHub() {
             return;
         }
         const contactField = paintContactField(document.getElementById('messages-thread-contact'), { toast: true, persist: true });
-        if (!contactField.ok) return;
+        if (!contactField.ok) {
+            setThreadContactOpen(true);
+            return;
+        }
         const email = signedInContactEmail() || contactField.value || resolveThreadContact();
         const limit = checkFeedbackRate();
         if (!limit.ok) {
@@ -2774,6 +3123,7 @@ export function initHub() {
                         deviceId,
                         isPWA: isStandalone,
                         attachmentsHeld: hasFile,
+                        quotedText: String(document.getElementById('feedback-reply-context')?.dataset.quotedText || '').trim() || null,
                         ...chatScopeFields(),
                     },
                 },
@@ -2897,7 +3247,9 @@ export function initHub() {
     });
     document.getElementById('about-contact-btn')?.addEventListener('click', () => {
         trackAlertEvent('click_about_inapp_message', { location: 'about_modal' });
-        openFeedbackModal({ location: 'about', skipClear: true });
+        openFeedbackModal({ location: 'about' });
+        const fType = document.getElementById('feedback-type');
+        if (fType) fType.value = 'about';
     });
     document.getElementById('about-email-btn')?.addEventListener('click', () => {
         trackAlertEvent('click_about_email', { location: 'about_modal' });
@@ -2929,9 +3281,11 @@ export function initHub() {
     });
     document.getElementById('messages-thread-contact')?.addEventListener('input', () => {
         paintContactField(document.getElementById('messages-thread-contact'), { showError: false });
+        paintThreadContactSummary();
     });
     document.getElementById('messages-thread-contact')?.addEventListener('blur', () => {
         paintContactField(document.getElementById('messages-thread-contact'), { persist: true, showError: true });
+        paintThreadContactSummary();
     });
 
     // Legal in sidenav
@@ -2945,17 +3299,24 @@ export function initHub() {
 
     // Admin password eye is bound after stampAdminChrome (login lives in a <template>).
 
-    // Poll notices soon after boot, then often while the app is open (refresh was
-    // previously the only reliable way to see a just-published alert).
-    setTimeout(() => checkServiceAlerts(), 600);
+    // Poll notices soon after boot. Idle poll is slow while Alerts is closed;
+    // opening the channel / visibility / route change still refresh immediately.
+    const ALERTS_IDLE_POLL_MS = 150 * 1000;
+    const ALERTS_OPEN_POLL_MS = 45 * 1000;
+    setTimeout(() => checkServiceAlerts({ force: true }), 600);
     setInterval(() => {
         if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
-        checkServiceAlerts();
-    }, 45 * 1000);
+        checkServiceAlerts({ force: alertsUiOpen() });
+    }, ALERTS_IDLE_POLL_MS);
+    setInterval(() => {
+        if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+        if (!alertsUiOpen()) return;
+        checkServiceAlerts({ force: true });
+    }, ALERTS_OPEN_POLL_MS);
     if (!window.__ntAlertVisibilityBound) {
         window.__ntAlertVisibilityBound = true;
         document.addEventListener('visibilitychange', () => {
-            if (document.visibilityState === 'visible') checkServiceAlerts();
+            if (document.visibilityState === 'visible') checkServiceAlerts({ force: true });
         });
         const paintAlertsForCurrentRoute = () => {
             const scoped = scopedLiveNotices();
@@ -2965,7 +3326,7 @@ export function initHub() {
                 renderAlertsChannel(scoped, { resetVisible: true });
             }
             applyBellFromNotices(scoped);
-            checkServiceAlerts();
+            checkServiceAlerts({ force: true });
         };
         $currentRouteId.subscribe(paintAlertsForCurrentRoute);
         $userRegion.subscribe(paintAlertsForCurrentRoute);

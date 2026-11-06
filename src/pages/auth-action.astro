@@ -1,0 +1,44 @@
+---
+/**
+ * Optional Firebase action handler. Unused until the console action URL
+ * points here. The email link's continue URL already returns to Next Train.
+ */
+import ContentLayout from '../layouts/ContentLayout.astro';
+import { withBase } from '../lib/config.js';
+
+const home = withBase('');
+---
+
+<ContentLayout
+  title="Next Train"
+  description="Finish email verification or a password reset, then return to Next Train."
+  canonicalPath="/auth-action.html"
+  robots="noindex, nofollow"
+  trackSeo={false}
+  bodyClass="bg-gray-50 dark:bg-gray-900 text-gray-900 min-h-screen"
+>
+  <div class="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white">
+    <header id="app-header" class="app-header shrink-0 px-3 py-2.5 border-b">
+      <a href={home} class="block" aria-label="Next Train home">
+        <p class="header-title text-[2.55rem] font-black tracking-[-0.035em] leading-none">Next Train</p>
+      </a>
+    </header>
+    <main class="max-w-md mx-auto px-4 pt-6 pb-16">
+      <section id="auth-action-card" class="rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-sm px-4 py-5 space-y-3">
+        <h1 id="auth-action-title" class="text-xl font-black tracking-tight">One moment</h1>
+        <p id="auth-action-copy" class="text-[15px] leading-relaxed text-gray-600 dark:text-gray-300">Finishing this step, then opening Next Train.</p>
+        <form id="auth-reset-form" class="hidden space-y-3">
+          <label class="block text-[13px] text-gray-500" for="auth-reset-password">New password</label>
+          <input id="auth-reset-password" type="password" minlength="6" autocomplete="new-password" class="w-full h-11 px-3 rounded-xl bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-[15px] focus:outline-none">
+          <button type="submit" class="w-full py-3 rounded-xl bg-blue-600 text-white font-bold">Save password</button>
+        </form>
+        <a id="auth-action-home" href={home} class="hidden inline-flex w-full justify-center py-3 rounded-xl bg-blue-600 text-white font-bold">Open Next Train</a>
+      </section>
+    </main>
+  </div>
+</ContentLayout>
+
+<script>
+  import { runAuthAction } from '../lib/auth-action.js';
+  runAuthAction();
+</script>

@@ -34,7 +34,11 @@ assert(css.includes('#route-list a.text-blue-700.bg-blue-50'), 'Earthy light sel
 assert(css.includes('#telemetry-region-modal .bg-blue-50'), 'Earthy Gauteng tile is paper and charcoal');
 assert(!/html\[data-colour-pack="classic"\][^{]*\.bg-blue-600/.test(css), 'Classic blue-600 buttons are not restyled');
 assert(!/html\[data-colour-pack="classic"\][^{]*#planner-swap-btn/.test(css), 'Classic planner swap is not restyled');
-assert(/html\[data-colour-pack="earthy"\] #view-full-timetable-btn/.test(css), 'Earthy weakens the timetable CTA halo');
+assert(/html\[data-colour-pack="earthy"\]:not\(\.dark\) #view-full-timetable-btn/.test(css), 'Earthy timetable button is a paper chip');
+assert(/html\.dark #view-full-timetable-btn/.test(css), 'dark timetable button does not mix against white');
+assert(/html\[data-colour-pack="earthy"\]\.dark #view-full-timetable-btn/.test(css), 'Earthy dark timetable button is its own chip');
+assert(/#view-full-timetable-btn\s*\{[^}]*box-shadow:\s*0 1px 2px 0 rgb\(0 0 0 \/ 0\.05\)/.test(css), 'timetable button uses the home card shadow');
+assert(!/#view-full-timetable-btn\s*\{[^}]*box-shadow:\s*none/.test(css), 'timetable button is not flat');
 assert(!css.includes('data-colour-pack="ember"'), 'Ember pack CSS is gone');
 assert(/\.text-gray-400,[\s\S]*?--nt-text-faint/.test(css), 'gray-400 maps to faint, not muted');
 assert(css.includes('--nt-chrome-nav'), 'appearance defines --nt-chrome-nav');
@@ -54,9 +58,27 @@ assert(css.includes('--nt-chrome-nav: #0e0d0c'), 'Earthy dark nav is near-black,
 assert(!/html\.dark #app-header\.nt-maint-active \{\s*background-color: rgb\(31 41 55\)/.test(css), 'maint header must not hardcode gray-800');
 assert(css.includes('#grid-trigger-container'), 'timetable CTA has extra canvas gap');
 assert(css.includes('.nt-board-footer.mt-auto'), 'board footer padding stays on nt-board-footer mt-auto');
-assert(css.includes('0 6px 18px') || css.includes('0 -10px 28px') || css.includes('0 -8px'), 'nav has a drop shadow');
-assert(css.includes('border-radius: 999px'), 'bottom nav is a floating pill');
+assert(/#bottom-nav\.bottom-nav-bar \{[\s\S]*?box-shadow: none/.test(css), 'bottom nav does not float on a drop shadow');
+assert(/#bottom-nav\.bottom-nav-bar \{[\s\S]*?background-color: var\(--nt-chrome-nav\)/.test(css), 'bottom nav is one step darker than the header');
+assert(css.includes('--nt-nav-h: 3.6rem'), 'bottom nav is 10% shorter than the prior 4rem bar');
+assert(!css.includes('--nt-nav-active-grow'), 'bottom nav tabs do not grow the active column');
+assert(/#bottom-nav-grid \{\s*display: grid/.test(css), 'bottom nav uses equal grid columns');
+assert(css.includes('color-mix(in srgb, var(--nt-chrome-fg) 20%, transparent)'), 'active tab icon sits on a soft pill');
+assert(css.includes('color-mix(in srgb, var(--nt-chrome-fg) 45%, transparent)'), 'inactive tabs are clearly dimmer than the active label');
+assert(!css.includes('color-mix(in srgb, var(--nt-chrome-fg) 70%, transparent)'), 'inactive tabs are not 70% white');
+assert(!css.includes('#bottom-nav .bottom-nav-item.is-active::before'), 'active tab has no top bar');
+assert(/#route-subtitle-text \{\s*text-shadow: 0 1px 0 rgba\(15, 23, 42, 0\.32\);/.test(css), 'route name has a slight shadow on light cards');
+assert(/html\.dark #route-subtitle-text \{[\s\S]*?color-mix\(in srgb, var\(--nt-line/.test(css), 'dark route name uses a lighter tint of the line colour');
+assert(/html\.dark #route-subtitle-text \{[\s\S]*?text-shadow: 0 1px 0 rgba\(15, 23, 42, 0\.55\);/.test(css), 'dark route name keeps a dark edge under the lighter tint');
+assert(css.includes('html.dark [id$="-modal"].fixed > div[class*="rounded-xl"]'), 'dark floating modals keep a visible edge');
+assert(css.includes('color-mix(in srgb, var(--nt-text) 22%, transparent)'), 'dark modal edge is a quiet line');
+assert(!css.includes('color-mix(in srgb, var(--nt-text) 58%, transparent)'), 'dark modal edge is not a white halo');
+assert(css.includes('color-mix(in srgb, var(--nt-surface) 96%, var(--nt-text))'), 'dark modal header stays with the card');
+assert(/#bottom-nav\.bottom-nav-bar \{[\s\S]*?border-radius: 0;/.test(css), 'bottom nav is rectangular');
 assert(css.includes('#current-day'), 'day label letter-spacing rule present');
+assert(/html\[data-colour-pack="earthy"\] button#current-day:not\(\.nt-day-quiet\) span[\s\S]{0,220}margin-left:\s*0\.12rem/.test(css), 'Earthy schedule pill keeps space after the weekday name');
+assert(/html\[data-colour-pack="earthy"\] button#current-day:not\(\.nt-day-quiet\) span[\s\S]{0,280}var\(--nt-accent\)/.test(css), 'Earthy schedule pill uses accent wash, not Classic blue');
+assert(/html\[data-colour-pack="classic"\] button#current-day:not\(\.nt-day-quiet\) span[\s\S]{0,220}margin-left:\s*0\.12rem/.test(css), 'Classic schedule pill is unchanged');
 
 ['midnight', 'contrast', 'signal', 'earthy'].forEach((pack) => {
     const block = css.split(`html[data-colour-pack="${pack}"]`)[1] || '';
@@ -65,7 +87,8 @@ assert(css.includes('#current-day'), 'day label letter-spacing rule present');
 });
 
 const logic = readFileSync(new URL('../src/lib/logic.js', import.meta.url), 'utf8');
-assert(logic.includes(' · <span class="${typeClass}">'), 'logic.js day label uses middot');
+assert(logic.includes('${dayNames[day] || \'\'}<span class="${typeClass}">'), 'logic.js day label has no middot before the status');
+assert(!logic.includes(' · <span class="${typeClass}">'), 'logic.js day label dropped the middot');
 assert(!logic.includes('ml-1'), 'logic.js day type span dropped ml-1');
 assert(logic.includes('export function fitHeaderDayLabel'), 'day line scales to the Next Train title width');
 assert(logic.includes('title.scrollWidth'), 'day line measures the Next Train title width');
@@ -74,10 +97,14 @@ assert(!logic.includes('titlePx * 0.55'), 'day line is not scaled as a second he
 assert(!/#current-day,[\s\S]{0,220}font-size: 2\.55rem/.test(css), 'day line no longer defaults to the title size');
 assert(!css.includes('#current-day span {\n  font-weight: inherit'), 'day line span no longer inherits the title color');
 assert(!css.includes('color: #fecaca !important'), 'Classic No Service is not peach-red');
-assert(css.includes('#current-day span.text-red-600'), 'No Service targets the red-600 span');
-assert(css.includes('color: #f87171 !important;'), 'No Service uses dark-mode red-400 in light and dark');
+assert(css.includes('button#current-day.nt-day-quiet'), 'Sunday uses the quiet day class');
+assert(css.includes('background: #fbbf24'), 'Sunday status is an amber dot');
+assert(css.includes('button#current-day.nt-day-quiet span.text-red-600::before'), 'Sunday status paints a leading dot');
+assert(css.includes('color: #f87171 !important;'), 'SEO day line keeps pale red');
+assert(!css.includes('background: #e11d48'), 'Sunday is no longer a solid red nested pill');
 assert(!/#current-day span\.text-red-600[\s\S]{0,180}color:\s*#dc2626 !important;/.test(css), 'No Service no longer uses red-600 on Classic light');
-assert(css.includes('html.dark #current-day span.text-red-600'), 'dark No Service uses one red-400');
+assert(css.includes('html.dark button#current-day.nt-day-quiet span.text-red-600'), 'dark Sunday uses the quiet pill');
+assert(css.includes('clamp(1.35rem, 4.15dvh, 2.35rem)'), 'header wordmark tracks screen height');
 assert(css.includes('color: var(--nt-chrome-muted) !important'), 'Classic Sunday stays muted chrome, not white');
 assert(css.includes('#notice-bell.nt-bell-info {\n  background-color: #ffffff !important;'), 'info bell is a white disc on every pack');
 assert(css.includes('html.dark #notice-bell.nt-bell-info {\n  background-color: #ffffff !important;'), 'dark info bell keeps a white disc');
@@ -85,16 +112,33 @@ assert(!css.includes('background-color: var(--nt-surface) !important;\n  color: 
 assert(css.includes('html[data-colour-pack="earthy"] #notice-bell.nt-bell-info'), 'paper packs keep a stronger bell ring');
 
 const header = readFileSync(new URL('../src/components/Header.astro', import.meta.url), 'utf8');
-assert(header.includes("names[day] + ' · <span"), 'Header boot uses middot');
+assert(header.includes("names[day] + '<span"), 'Header boot has no middot before the status');
+assert(!header.includes("names[day] + ' · <span"), 'Header boot dropped the middot');
 assert(!header.includes('ml-1'), 'Header boot dropped ml-1');
 assert(header.includes('translate-x-1/4 -translate-y-1/4'), 'unread dot sits on the outer corner of the bell');
 assert(header.includes('w-6 h-6'), 'header bell icon is 24px');
+assert(!css.includes('clamp(1.1rem, 2.5dvh, 1.5rem)'), 'alerts bell keeps the 24px icon');
+assert(header.includes('flex items-center justify-between gap-2'), 'bell centers on the title and the day line');
+assert(!header.includes('-mt-0.5'), 'bell is not nudged above the wordmark');
 assert(header.includes('text-[11px] sm:text-xs font-medium'), 'Header day line uses the original subtitle face');
+assert(header.includes('<button type="button" id="current-day"'), 'the day line is a button');
+assert(header.includes('header-title-row'), 'the sim clock shares a row with the title');
+assert(/header-title-row[\s\S]{0,500}id="current-time"/.test(header), 'the sim clock sits beside Next Train');
+assert(!/id="current-day"[\s\S]{0,240}id="current-time"/.test(header), 'the sim clock is not under the day line');
+assert(css.includes('button#current-day'), 'the day line reads as a control');
+assert(!/button#current-day \{[\s\S]{0,420}border:\s*1px solid/.test(css), 'the day button has no outer oval border');
+assert(!/button#current-day \{[\s\S]{0,420}linear-gradient/.test(css), 'the day button has no outer oval shading');
+assert(css.includes('nt-day-quiet'), 'No service stays a quiet day pill on the day button');
+assert(css.includes('#changelog-modal'), 'What\'s New skips the bottom-nav clearance gap');
+assert(logic.includes("title: 'No service'") || logic.includes('No service'), 'Sunday note title is sentence case');
+assert(logic.includes('nt-day-quiet'), 'header day label toggles the quiet class');
 assert(!header.includes('header-day-label'), 'Header day line is not a second bold title');
 assert(header.includes('fitHeaderDayLabel') || logic.includes('fitHeaderDayLabel'), 'day line fit helper is present');
 
 assert(css.includes('#bottom-nav-grid'), 'bottom nav uses #bottom-nav-grid');
 assert(css.includes('html[data-admin-authed="1"] #bottom-nav-grid'), 'admin auth expands bottom nav to 5 columns');
+assert(css.includes('grid-template-columns: repeat(5, minmax(0, 1fr))'), 'admin/pilot bottom nav uses five equal columns');
+assert(css.includes('--nt-nav-h: 2.925rem'), 'short screens keep a 10% shorter compact nav');
 
 const indexPage = readFileSync(new URL('../src/pages/index.astro', import.meta.url), 'utf8');
 assert(indexPage.includes('lucide lucide-route'), 'Plan tab uses Lucide route icon');
@@ -129,6 +173,7 @@ assert(chrome.includes('applyAdminAuthedChrome'), 'admin-chrome reveal helper ex
 assert(chrome.includes('Never use five-tap unlock'), 'admin chrome is not five-tap gated');
 
 const layout = readFileSync(new URL('../src/layouts/Layout.astro', import.meta.url), 'utf8');
+assert(layout.includes('calc(var(--nt-nav-h, 4rem) + var(--nt-sys-bottom, env(safe-area-inset-bottom, 0px)) + 0.75rem)'), 'board padding clears the nav plus the safe area');
 assert(layout.includes('window.ntCartoVoyagerUrl'), 'Layout exposes optional CARTO Voyager URL helper');
 assert(layout.includes('PUBLIC_CARTO_API_KEY'), 'Layout reads PUBLIC_CARTO_API_KEY');
 assert(layout.includes('html.nt-onboarding #bottom-nav'), 'Welcome hides the bottom bar');
@@ -152,6 +197,8 @@ assert(!/max-width:\s*639px[\s\S]{0,180}max-width:\s*none/.test(layout), 'phone 
 assert(css.includes('#app-header .seo-open-app'), 'SEO header Open link uses chrome foreground');
 assert(css.includes('.nt-maint-wrench'), 'maintenance strip has a wrench icon');
 assert(css.includes('.nt-maint-label'), 'maintenance strip has a label');
+assert(css.includes('nt-maint-slide'), 'long maintenance copy can marquee');
+assert(css.includes('nt-maint-is-marquee'), 'maintenance marquee is opt-in per overflow');
 assert(!css.includes('repeating-linear-gradient'), 'maintenance strip is not hazard tape');
 assert(!css.includes('#app-header.nt-maint-active #app-title'), 'maintenance bar does not restyle the title overlay');
 
@@ -172,8 +219,16 @@ assert(!layout.includes("localStorage.setItem('theme', 'light')"), 'Layout boot 
 const welcome = readFileSync(new URL('../src/components/WelcomeModal.astro', import.meta.url), 'utf8');
 assert(welcome.includes('later in Options'), 'Welcome copy points at Options, not side menu');
 assert(welcome.includes('syncInAppChrome'), 'Welcome calls syncInAppChrome after a route pick');
+assert(welcome.includes('Re-apply chrome so the bottom bar is not stuck hidden'), 'Welcome skip path re-applies bottom-nav chrome');
 
 const plannerUi = readFileSync(new URL('../src/lib/planner-ui.js', import.meta.url), 'utf8');
+const gridHandoff = readFileSync(new URL('../src/lib/timetable-grid.js', import.meta.url), 'utf8');
+assert(gridHandoff.includes('syncInAppChrome'), 'route / SEO Open handoff re-shows the bottom bar');
+assert(plannerUi.includes('syncInAppChrome'), 'planner handoff re-shows the bottom bar');
+
+const utilsSrc = readFileSync(new URL('../src/lib/utils.js', import.meta.url), 'utf8');
+assert(utilsSrc.includes('syncInAppChrome'), 'pin restore refreshes bottom-nav chrome after welcomeSeen resurrection');
+
 assert(css.includes('height: 2rem') && css.includes('#planner-header-badge > div'), 'planner Back, day, and Share share the old 2rem box');
 assert(!/#planner-back-btn,[\s\S]{0,400}min-height: 2.5rem/.test(css), 'planner toolbar is not the taller 2.5rem lock');
 assert(!/#planner-back-btn,[\s\S]{0,360}font-size: calc\(0.8rem \* var\(--nt-ui-scale/.test(css), 'planner toolbar is not scaled down on phones');
@@ -222,6 +277,9 @@ assert(planner.includes('min-h-[32px]'), 'planner results toolbar row is the old
 assert(plannerUi.includes('h-8') && plannerUi.includes('text-xs font-bold'), 'planner weekday and Share use the same 2rem text-xs pill');
 
 const plannerModals = readFileSync(new URL('../src/components/PlannerModals.astro', import.meta.url), 'utf8');
+assert(plannerModals.includes('id="planner-train-sheet-modal"') && plannerModals.includes('flex-1 min-h-0 flex flex-col'), 'full train sheet fills the screen');
+assert(!plannerModals.includes('h-[min(96dvh,100%)]'), 'full train sheet is not capped short of the screen');
+assert(!plannerModals.includes('max-h-[58dvh]'), 'trip planner tips are not capped short of the card');
 assert(plannerModals.includes('id="close-help-btn"') && plannerModals.includes('text-gray-700 dark:text-gray-200'), 'Tips close uses ink on a chip');
 assert(!plannerModals.includes('text-gray-50 hover:text-gray-700'), 'Tips close is not white-on-white');
 
@@ -285,6 +343,7 @@ assert(
 );
 assert(css.includes('mask-image'), 'alerts wallpaper tiles via mask-image so pack tokens colour it');
 assert(css.includes('color-mix(in srgb, var(--nt-chrome-header) 16%, var(--nt-canvas))'), 'alerts wallpaper wash follows chrome + canvas');
+assert(css.includes('border-top-left-radius: 0.85rem'), 'alert strip follows the card’s top corners');
 assert(/nt-alert-strip-info \{\s*background-color: color-mix\(in srgb, var\(--nt-primary\)/.test(css), 'info strip is a quiet primary wash');
 assert(!/nt-alert-strip-info \{\s*background-color: #2563eb/.test(css), 'info strip is no longer a solid blue banner');
 assert(css.includes('.nt-alert-card'), 'alert posts have a distinct card rule');
@@ -292,8 +351,9 @@ assert(css.includes('.nt-train-flag'), 'train flags are CSS-gated');
 assert(css.includes('html[data-admin-authed="1"] .nt-train-flag'), 'train flags only show after admin auth');
 assert(css.includes('html:not([data-admin-authed="1"]) #ride-nearby-btn'), 'Trains near you hidden unless admin authed');
 assert(css.includes('padding-bottom: calc(4.5rem + var(--nt-sys-bottom, env(safe-area-inset-bottom, 0px)))'), 'non-fullscreen modals clear the bottom nav');
+assert(css.includes(':not(#planner-train-sheet-modal):not(#help-modal):not(#schedule-modal)'), 'tall sheets are not held short above the nav');
 assert(css.includes('--nt-sys-bottom'), 'appearance defines --nt-sys-bottom');
-assert(css.includes('max-height: 740px'), 'short screens compact the bottom nav');
+assert(css.includes('max-height: 620px'), 'very short screens ease the bottom nav');
 assert(css.includes('--nt-chrome-nav-active'), 'active tab uses --nt-chrome-nav-active');
 assert(css.includes('color-mix(in srgb, #fff 10%, var(--nt-chrome-nav))'), 'Classic light tab chip is a quiet white mix');
 assert(css.includes('color-mix(in srgb, #fff 12%, var(--nt-chrome-nav))'), 'dark active tab uses a quieter mix, not a loud ring');
@@ -312,9 +372,11 @@ assert(ridePings.includes('canSeeLiveShareChrome'), 'live-share chip is pin/admi
 assert(!ridePings.includes('data-live-share-stop'), 'Next Train board has no legacy sharing stop chip');
 assert(ridePings.includes('findConflictingShare') && ridePings.includes('Already sharing elsewhere'), 'second-device share is blocked');
 assert(ridePings.includes('shareReachedTerminus'), 'share ends at the last station');
-assert(ridePings.includes('RIDE_SHARE_IDLE_MS = 30 * 60 * 1000'), 'ride ping idle TTL is 30 minutes');
+assert(ridePings.includes('RIDE_SHARE_IDLE_MS = 10 * 60 * 1000'), 'ride ping idle TTL is 10 minutes');
 
 const liveBoardModals = readFileSync(new URL('../src/components/LiveBoardModals.astro', import.meta.url), 'utf8');
+assert(liveBoardModals.includes('id="schedule-modal"') && liveBoardModals.includes('flex-1 min-h-0 flex flex-col'), 'upcoming list fills the screen');
+assert(!liveBoardModals.includes('max-h-[62dvh]'), 'upcoming list is not capped short of the card');
 assert(liveBoardModals.includes('id="schedule-modal"') && liveBoardModals.includes('z-[125]'), 'upcoming trains modal sits above bottom nav z-110');
 assert(!liveBoardModals.includes('id="schedule-modal" class="fixed inset-0 bg-black bg-opacity-70 z-[90]'), 'upcoming trains no longer z-90 under the nav');
 assert(liveBoardModals.includes('id="modal-title-route"'), 'upcoming title has a shrink-to-fit route line');
@@ -489,11 +551,13 @@ assert(!delayReports.includes('Verify delay'), 'board cards do not show Verify d
 assert(layout.includes('html.nt-in-app body.nav-bottom:not(.nt-immersive) #bottom-nav.bottom-nav-bar'), 'in-app bottom nav floats over the board');
 assert(layout.includes('html.nt-in-app body.nav-bottom:not(.nt-immersive) #app-scroll'), 'scroll canvas shows around the floating pill');
 assert(layout.includes('window.ntFitAppViewport'), 'Layout exposes ntFitAppViewport for PWA/TWA inset');
+assert(layout.includes('window.ntRecoverAppViewport'), 'Layout recovers bottom nav after browser Signed-in toasts');
+assert(layout.includes('navNeedsRecover'), 'Layout detects blank space under the bottom nav');
 assert(layout.includes('--nt-sys-bottom'), 'Layout still measures --nt-sys-bottom for the pill offset');
 assert(!layout.includes('pinBottomNav'), 'bottom nav has no synthetic geometry pin');
 assert(!layout.includes('--nt-nav-lift'), 'bottom nav has no synthetic lift token');
 assert(layout.includes('html.nt-standalone.nt-in-app body.nav-bottom:not(.nt-immersive) #bottom-nav.bottom-nav-bar'), 'standalone oval clears the home indicator');
-assert(layout.includes('bottom: var(--nt-sys-bottom, env(safe-area-inset-bottom, 0px));'), 'oval uses only the measured system inset on standalone');
+assert(layout.includes('padding-bottom: var(--nt-sys-bottom, env(safe-area-inset-bottom, 0px));'), 'standalone bar pads the home indicator inside the header colour');
 assert(layout.includes('if (!markStandalone()) sys = 0'), 'Safari does not lift the oval by the home-indicator inset');
 assert(layout.includes('100svh'), 'shell first-paint height falls back to 100svh');
 assert(layout.includes('Never use Math.max(inner, client)'), 'shell height never grows past the visible frame');
@@ -503,12 +567,16 @@ assert(/#nt-shell #messages-thread-modal\.fixed \{\s*position: absolute !importa
 assert(!/#nt-shell #messages-thread-modal\.fixed \{[^}]*var\(--nt-(app-h|shell-h|vv-h|feedback-vv)/.test(layout), 'Feedback Hub is not sized from a measured viewport token');
 assert(layout.includes('hubOn'), 'keyboard keeps Feedback Hub shell height like Community');
 assert(
-    css.includes(':not(#blackbox-modal):not(#messages-thread-modal):not(#account-modal) > div'),
-    'Feedback Hub and Account cards are not capped by the bottom-nav clearance that left the slab'
+    css.includes(':not(#messages-thread-modal):not(#account-modal):not(#admin-reply-modal)')
+        && css.includes(':not(#changelog-modal)')
+        && css.includes('> div'),
+    'Feedback Hub, Account, and Co-Pilot cards are not capped by the bottom-nav clearance that left the slab'
 );
 assert(
-    css.includes(':not(#blackbox-modal):not(#messages-thread-modal):not(#account-modal),'),
-    'Feedback Hub and Account do not get the bottom-nav padding meant for centred cards'
+    css.includes(':not(#messages-thread-modal):not(#account-modal):not(#admin-reply-modal)')
+        && css.includes(':not(#schedule-day-modal)')
+        && css.includes('padding-bottom: calc(4.5rem'),
+    'Feedback Hub, Account, and Co-Pilot do not get the bottom-nav padding meant for centred cards'
 );
 assert(layout.includes('#nt-shell #account-modal.fixed'), 'Account overlay is a full-screen page');
 assert(/#nt-shell #account-modal\.fixed \{\s*\/\*[\s\S]*?\*\/\s*position: absolute !important;\s*inset: 0 !important;/.test(layout), 'Account fills #nt-shell without measured viewport height');
@@ -632,6 +700,9 @@ assert(/\.nt-alert-source\s*\{[\s\S]*?text-decoration-style:\s*dotted/.test(css)
 assert(css.includes('.nt-alert-card-footer'), 'alert footer is styled as two rows');
 assert(css.includes('.nt-alert-meta-row'), 'alert source/time row is styled');
 assert(css.includes('.nt-alert-action-row'), 'alert reactions/Reply row is styled');
+assert(css.includes('.nt-alert-react-hang'), 'reaction chips hang off the card');
+assert(/\.nt-alert-react-hang\s*\{[^}]*transform:\s*none/.test(css), 'reaction chips line up with Reply');
+assert(!css.includes('transform: translateY(12px)'), 'reaction chips are not pushed below Reply');
 assert(adminJs.includes("APP_MONTHS_SHORT") || readFileSync(new URL('../src/lib/utils.js', import.meta.url), 'utf8').includes("'Sept'"), 'app dates use Sept');
 assert(/font\[size="4"\][^{]*\{[^}]*1\.05rem/.test(css), 'composer size 4 is the in-between tier');
 assert(/font\[size="5"\][^{]*\{[^}]*font-weight:\s*inherit/.test(css), 'size 5 is not auto-bold');

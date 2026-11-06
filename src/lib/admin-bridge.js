@@ -9,10 +9,41 @@
 import {
     ROUTES, DYNAMIC_BASE_URL, APP_VERSION, DEFAULT_EXCLUSIONS, REGIONS, FARE_CONFIG, withBase,
     ADMIN_EMAILS, isAdminEmail, COMMUNITY_WORKER_URL, COMMUNITY_WORKER_FALLBACK_URL,
+    REPLY_WORKER_URL,
     SPECIAL_DATES, HOLIDAY_NAMES, SATURDAY_PLACEHOLDER_ROUTES
 } from './config.js';
-import { safeStorage, escapeHTML, formatAppDate, formatAppTime, formatThreadDateLabel, normalizeStationName, flattenPublicHolidays } from './utils.js';
-import { parseFeedbackAlertQuote } from './feedback-quote.js';
+import { safeStorage, escapeHTML, formatAppDate, formatAppTime, formatThreadDateLabel, normalizeStationName, flattenPublicHolidays, buildGridOrderWriteRecord, viaCodesFromGridOrderRecord } from './utils.js';
+import { noticeQuotePlain, parseFeedbackAlertQuote } from './feedback-quote.js';
+import {
+    applyDraftGuard,
+    buildSuggestPayload,
+    composerHtmlFromResult,
+    haltPanelText,
+    htmlAttrUrl,
+    unansweredCommuterMessages,
+    suggestDraftMessageId,
+    mailtoReplyUrl,
+    outreachPlainText,
+    SUGGEST_MAX_IMAGE_BYTES,
+    SUGGEST_MAX_IMAGES,
+    whatsappReplyUrl,
+} from './reply-suggest.js';
+import { TEXT_ASSIST_ACTIONS, comfortAssistText, assistHtmlFromText } from './text-assist.js';
+import { fetchLinkPreview, firstHttpUrl } from './link-preview.js';
+import {
+    alertDraftFromBriefCard,
+    briefDismissed,
+    briefLauncherHtml,
+    briefReportHtml,
+    briefSky,
+    buildOperatorBrief,
+    dismissBrief,
+    johannesburgClock,
+    localBriefNote,
+    localCrashReading,
+    restoreBrief,
+    scrubOperatorText,
+} from './operator-brief.js';
 import {
     showToast, openSmoothModal, closeSmoothModal, triggerHaptic,
     lockBackgroundScroll, unlockBackgroundScroll, bindPasswordReveal
@@ -50,6 +81,7 @@ import {
     ATTACHMENT_MAX_FILES,
 } from './attachments.js';
 import { prepareRichHtml, sanitizeRichHtml, isSafeHref } from './rich-text.js';
+import { sanitizeAlertVideoUrl } from './alerts-feed.js';
 import {
     getGridOrderManifest,
     getRuntimeGridOrderRecord,
@@ -96,6 +128,38 @@ export function exposeAdminGlobals() {
     window.ROUTES = ROUTES;
     window.DYNAMIC_BASE_URL = DYNAMIC_BASE_URL;
     window.COMMUNITY_WORKER_URL = COMMUNITY_WORKER_URL || COMMUNITY_WORKER_FALLBACK_URL;
+    window.REPLY_WORKER_URL = REPLY_WORKER_URL;
+    window.ntReplySuggest = {
+        applyDraftGuard,
+        buildSuggestPayload,
+        composerHtmlFromResult,
+        haltPanelText,
+        htmlAttrUrl,
+        unansweredCommuterMessages,
+        suggestDraftMessageId,
+        mailtoReplyUrl,
+        outreachPlainText,
+        SUGGEST_MAX_IMAGE_BYTES,
+        SUGGEST_MAX_IMAGES,
+        whatsappReplyUrl,
+        noticeQuotePlain,
+    };
+    window.ntTextAssist = { TEXT_ASSIST_ACTIONS, comfortAssistText, assistHtmlFromText };
+    window.ntLinkPreview = { fetchLinkPreview, firstHttpUrl };
+    window.ntOperatorBrief = {
+        alertDraftFromBriefCard,
+        briefDismissed,
+        briefLauncherHtml,
+        briefReportHtml,
+        briefSky,
+        buildOperatorBrief,
+        dismissBrief,
+        johannesburgClock,
+        localBriefNote,
+        localCrashReading,
+        restoreBrief,
+        scrubOperatorText,
+    };
     window.APP_VERSION = APP_VERSION;
     window.ADMIN_EMAILS = ADMIN_EMAILS;
     window.isAdminEmail = isAdminEmail;
@@ -142,6 +206,8 @@ export function exposeAdminGlobals() {
     window.normalizeGridOrder = normalizeGridOrder;
     window.orderGridTrainIds = orderGridTrainIds;
     window.setRuntimeGridOrderConfig = setRuntimeGridOrderConfig;
+    window.buildGridOrderWriteRecord = buildGridOrderWriteRecord;
+    window.viaCodesFromGridOrderRecord = viaCodesFromGridOrderRecord;
     window.inboxReactionActorId = inboxReactionActorId;
     window.renderInboxReactionChips = renderInboxReactionChips;
     window.renderInboxReactionPickerHtml = renderInboxReactionPickerHtml;
@@ -170,6 +236,7 @@ export function exposeAdminGlobals() {
     window.sniffAttachmentBytes = sniffAttachmentBytes;
     window.sanitizeAttachmentDisplayUrl = sanitizeAttachmentDisplayUrl;
     window.classifyAttachmentUrl = classifyAttachmentUrl;
+    window.sanitizeAlertVideoUrl = sanitizeAlertVideoUrl;
     window.isSafeLightboxOnclick = isSafeLightboxOnclick;
     window.lightboxOnclickJs = lightboxOnclickJs;
     window.attachmentPreviewHtml = attachmentPreviewHtml;

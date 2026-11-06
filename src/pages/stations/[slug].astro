@@ -1,0 +1,292 @@
+---
+import ContentLayout from '../../layouts/ContentLayout.astro';
+import SeoPageHeader from '../../components/SeoPageHeader.astro';
+import SeoStationDepartures from '../../components/SeoStationDepartures.astro';
+import SeoStationMap from '../../components/SeoStationMap.astro';
+import SeoStationReviews from '../../components/SeoStationReviews.astro';
+import { withBase } from '../../lib/config.js';
+import { listSeoRegions, regionName, seoIntroParagraphs, slugifyStation } from '../../lib/seo-routes.js';
+import { isStationIndexable } from '../../lib/seo-station-allowlist.js';
+import {
+  buildStationAbout,
+  buildStationBoardAppPath,
+  buildStationCorridorTimetables,
+  buildStationJsonLd,
+  buildStationNeighbourHeadline,
+  buildStationQuickFacts,
+  getSeoStationBySlug,
+  listIndexableSeoStations,
+  stationDocumentTitle,
+  stationHasPublicPage,
+  stationMetaDescription,
+} from '../../lib/seo-stations.js';
+
+export function getStaticPaths() {
+  // All timed stops on active routes (phases 1–4). See seo-station-allowlist.js.
+  return listIndexableSeoStations().map((station) => ({
+    params: { slug: station.slug },
+  }));
+}
+
+const { slug } = Astro.params;
+const station = getSeoStationBySlug(slug);
+if (!station) {
+  return Astro.redirect('/routes.html');
+}
+
+const corridors = buildStationCorridorTimetables(station);
+const indexable = isStationIndexable(station.slug);
+const province = regionName(station.region);
+const regionEntry = listSeoRegions().find((r) => r.region === station.region);
+const title = stationDocumentTitle(station);
+const description = stationMetaDescription(station, corridors);
+const canonicalPath = `/stations/${station.slug}.html`;
+const pageUrl = `https://nexttrain.co.za${canonicalPath}`;
+const liveBoardHref = withBase(buildStationBoardAppPath(station));
+const routesIndexHref = withBase('routes.html');
+const regionHref = regionEntry ? withBase(`regions/${regionEntry.slug}.html`) : routesIndexHref;
+const neighbourHeadline = buildStationNeighbourHeadline(station, corridors);
+const aboutText = buildStationAbout(station, corridors);
+const quickFacts = buildStationQuickFacts(station, corridors);
+const accordionCorridors = corridors.filter((c) => (c.stopOrder || []).length > 0);
+
+const jsonLd = buildStationJsonLd({
+  station,
+  corridors,
+  pageUrl,
+  description,
+});
+
+const lineLinks = corridors.map((c) => ({
+  href: c.routeSlug ? withBase(`routes/${c.routeSlug}.html`) : routesIndexHref,
+  label: c.routeName,
+  lineLabel: c.lineLabel,
+}));
+---
+
+<ContentLayout
+  title={title}
+  description={description}
+  canonicalPath={canonicalPath}
+  themeColor="#1d4ed8"
+  forceLight={true}
+  robots={indexable ? 'index, follow' : 'noindex, follow'}
+  seoPageType="station"
+  seoSlug={station.slug}
+  seoRegion={station.region}
+  seoRouteId={station.routeIds[0] || ''}
+>
+  <script type="application/ld+json" slot="head" set:html={JSON.stringify(jsonLd)} />
+  <SeoPageHeader region={station.region} regionLabel={province} ctaHref={liveBoardHref} />
+
+  <main class="min-h-screen bg-slate-50 text-slate-800 dark:bg-slate-950 dark:text-slate-100">
+    <div class="max-w-6xl mx-auto px-4 pt-6 sm:pt-8 pb-2">
+      <nav class="text-xs font-bold uppercase tracking-widest text-blue-600 dark:text-blue-400 mb-3" aria-label="Breadcrumb">
+        <ol class="flex flex-wrap items-center gap-x-1">
+          <li><a href={routesIndexHref} class="hover:underline">Metrorail routes</a></li>
+          <li class="text-slate-400 dark:text-slate-500" aria-hidden="true">/</li>
+          <li><a href={regionHref} class="hover:underline">{province}</a></li>
+          <li class="text-slate-400 dark:text-slate-500" aria-hidden="true">/</li>
+          <li class="text-slate-500 dark:text-slate-400" aria-current="page">{station.name} station</li>
+        </ol>
+      </nav>
+
+      <div class="grid gap-8 lg:grid-cols-2 lg:items-start">
+        <div>
+          <div class="flex flex-wrap items-center gap-2">
+            <h1 class="text-2xl sm:text-3xl font-black tracking-tight text-slate-900 dark:text-white leading-tight">
+              {station.name} station
+            </h1>
+            <span class="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-200">
+              Active
+            </span>
+          </div>
+
+          {neighbourHeadline && (
+            <p class="mt-3 text-base sm:text-lg font-semibold text-slate-800 dark:text-slate-100 tracking-tight">
+              {neighbourHeadline}
+            </p>
+          )}
+
+          <div class="mt-3 text-base text-slate-600 dark:text-slate-300 leading-relaxed space-y-3">
+            {seoIntroParagraphs(
+              `Weekday and Saturday Metrorail departures from ${station.name} in ${province}. Use the GPS map for this stop, then open Next Train for the next live departure & more.`,
+            ).map((para) => (
+              <p>{para}</p>
+            ))}
+          </div>
+
+          {lineLinks.length > 0 && (
+            <div class="mt-6">
+              <h2 class="text-sm font-black uppercase tracking-widest text-slate-500">Lines through this station</h2>
+              <ul class="mt-3 space-y-2">
+                {lineLinks.map((line) => (
+                  <li>
+                    <a href={line.href} class="text-blue-700 dark:text-blue-300 font-semibold hover:underline">
+                      {line.label}
+                    </a>
+                    {line.lineLabel && line.lineLabel !== line.label && (
+                      <span class="text-sm text-slate-500 dark:text-slate-400"> · {line.lineLabel}</span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+
+        <SeoStationMap station={station} regionLabel={province} />
+      </div>
+    </div>
+
+    <div class="max-w-6xl mx-auto px-4 pt-8">
+      <div class="grid gap-6 lg:grid-cols-5">
+        <section class="lg:col-span-3 rounded-2xl border border-blue-100 bg-blue-50/80 dark:border-blue-900/40 dark:bg-blue-950/30 px-4 py-4 sm:px-5 sm:py-5">
+          <h2 class="text-[10px] font-black uppercase tracking-widest text-blue-700 dark:text-blue-300 mb-2">
+            About this station
+          </h2>
+          <p class="text-sm sm:text-base text-slate-800 dark:text-slate-100 leading-relaxed">
+            {aboutText}
+          </p>
+        </section>
+
+        {quickFacts.length > 0 && (
+          <section class="lg:col-span-2 rounded-2xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900/60 px-4 py-4 sm:px-5 sm:py-5">
+            <h2 class="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-3">
+              Quick facts
+            </h2>
+            <dl class="space-y-2.5">
+              {quickFacts.map((fact) => (
+                <div class="flex items-baseline justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-2 last:border-0 last:pb-0">
+                  <dt class="text-[11px] font-bold uppercase tracking-wider text-slate-500 shrink-0">{fact.label}</dt>
+                  <dd class="text-sm font-semibold text-slate-900 dark:text-white text-right leading-snug">{fact.value}</dd>
+                </div>
+              ))}
+            </dl>
+          </section>
+        )}
+      </div>
+    </div>
+
+    {accordionCorridors.length > 0 && (
+      <div class="max-w-6xl mx-auto px-4 pt-8">
+        <h2 class="text-lg font-bold text-slate-900 dark:text-white">Neighbouring stations</h2>
+        {neighbourHeadline && (
+          <p class="mt-1 text-sm sm:text-base font-semibold text-slate-700 dark:text-slate-200">
+            {neighbourHeadline}
+          </p>
+        )}
+        <p class="mt-1 text-sm text-slate-600 dark:text-slate-300">
+          Expand a corridor to see every timed stop in boarding order.
+        </p>
+        <div class="mt-4 space-y-3">
+          {accordionCorridors.map((c) => {
+            const routeHref = c.routeSlug ? withBase(`routes/${c.routeSlug}.html`) : null;
+            return (
+              <details class="group rounded-2xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900/60 open:shadow-md">
+                <summary class="cursor-pointer list-none flex items-center justify-between gap-3 px-4 py-3.5 text-sm font-bold text-slate-900 dark:text-white [&::-webkit-details-marker]:hidden">
+                  <span class="min-w-0">
+                    <span class="block truncate">{c.routeName}</span>
+                    <span class="mt-0.5 block text-[11px] font-semibold text-slate-500 dark:text-slate-400">
+                      {c.origin} → {c.dest}
+                      {c.stopOrder?.length ? ` · ${c.stopOrder.length} stops` : ''}
+                    </span>
+                  </span>
+                  <svg class="w-5 h-5 shrink-0 text-slate-400 transition-transform group-open:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                  </svg>
+                </summary>
+                <div class="px-4 pb-4 border-t border-slate-100 dark:border-slate-800 pt-3">
+                  {routeHref && (
+                    <p class="mb-3 text-sm">
+                      <a href={routeHref} class="text-blue-700 dark:text-blue-300 font-semibold hover:underline">
+                        Full {c.routeName} timetable
+                      </a>
+                    </p>
+                  )}
+                  <ol class="space-y-1.5 text-sm">
+                    {(c.stopOrder || []).map((stop, idx) => {
+                      const here = stop.toLowerCase() === station.name.toLowerCase();
+                      const stopSlug = slugifyStation(stop);
+                      const stopHref = stopSlug && stopSlug !== station.slug && stationHasPublicPage(stopSlug)
+                        ? withBase(`stations/${stopSlug}.html`)
+                        : null;
+                      return (
+                        <li class={`flex items-baseline gap-2 ${here ? 'font-bold text-slate-900 dark:text-white' : 'text-slate-700 dark:text-slate-200'}`}>
+                          <span class="w-6 shrink-0 text-[10px] font-black tabular-nums text-slate-400">{idx + 1}</span>
+                          {here ? (
+                            <span>{stop}</span>
+                          ) : stopHref ? (
+                            <a href={stopHref} class="text-blue-700 dark:text-blue-300 font-semibold hover:underline">{stop}</a>
+                          ) : (
+                            <span>{stop}</span>
+                          )}
+                          {here && (
+                            <span class="text-[10px] font-black uppercase tracking-wider text-emerald-700 dark:text-emerald-300">You are here</span>
+                          )}
+                        </li>
+                      );
+                    })}
+                  </ol>
+                </div>
+              </details>
+            );
+          })}
+        </div>
+      </div>
+    )}
+
+    <div class="max-w-6xl mx-auto px-4 pt-8 pb-10 space-y-10">
+      <div>
+        <h2 class="text-lg font-bold text-slate-900 dark:text-white">Station timetable</h2>
+        <p class="mt-1 text-sm text-slate-600 dark:text-slate-300">
+          Full weekday lists in each direction. Short workings show the train&apos;s last stop on this sheet.
+        </p>
+      </div>
+
+      {corridors.map((card) => (
+        <section class="space-y-4">
+          {corridors.length > 1 && (
+            <h3 class="text-base font-bold text-slate-900 dark:text-white">
+              {card.routeSlug ? (
+                <a href={withBase(`routes/${card.routeSlug}.html`)} class="hover:underline">
+                  {card.routeName}
+                </a>
+              ) : card.routeName}
+            </h3>
+          )}
+          <div class="grid gap-4 lg:grid-cols-2">
+            {card.weekday.towardA.trains.length > 0 && (
+              <SeoStationDepartures title={card.weekday.towardA.title} trains={card.weekday.towardA.trains} />
+            )}
+            {card.weekday.towardB.trains.length > 0 && (
+              <SeoStationDepartures title={card.weekday.towardB.title} trains={card.weekday.towardB.trains} />
+            )}
+          </div>
+
+          {card.hasSaturday && (
+            <details class="rounded-2xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900/80 p-4">
+              <summary class="cursor-pointer text-sm font-bold text-slate-900 dark:text-white">
+                Saturday timetable · {card.routeName}
+              </summary>
+              <div class="mt-4 grid gap-4 lg:grid-cols-2">
+                {card.saturday.towardA.trains.length > 0 && (
+                  <SeoStationDepartures title={card.saturday.towardA.title} trains={card.saturday.towardA.trains} />
+                )}
+                {card.saturday.towardB.trains.length > 0 && (
+                  <SeoStationDepartures title={card.saturday.towardB.title} trains={card.saturday.towardB.trains} />
+                )}
+              </div>
+            </details>
+          )}
+        </section>
+      ))}
+
+      {!corridors.length && (
+        <p class="text-sm text-slate-500">No published timetable rows for this station in the current dump.</p>
+      )}
+    </div>
+
+    <SeoStationReviews station={station} />
+  </main>
+</ContentLayout>

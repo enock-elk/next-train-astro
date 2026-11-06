@@ -3,8 +3,8 @@
  * Run: node scripts/verify-home-polish.mjs
  */
 import { readFileSync } from 'node:fs';
-import { warningTriangleSvg, expandJhbLabel, applyFittedLabel } from '../src/lib/utils.js';
-import { APP_VERSION, CHANGELOG_DATA, FARE_CONFIG, FORCE_UPDATE_REQUIRED } from '../src/lib/config.js';
+import { warningTriangleSvg, expandJhbLabel, applyFittedLabel, lineSwatchClass } from '../src/lib/utils.js';
+import { APP_VERSION, CHANGELOG_DATA, FARE_CONFIG, FORCE_UPDATE_REQUIRED, ROUTES } from '../src/lib/config.js';
 import {
     collectHubOnwardOptions,
     fitStationLabel,
@@ -16,6 +16,7 @@ import { formatAccountDisplayName, clampDisplayName, refuseDisplayName, DISPLAY_
 import { pickCanonicalChatDeviceId } from '../src/lib/account.js';
 import { normalizeAdminChangelogKey } from '../src/lib/admin-changelog.js';
 import { hoistAlertImagesFromHtml } from '../src/lib/alerts-feed.js';
+import { pinchGestureMove, pinchGestureStart, zoomAboutPoint } from '../src/lib/pinch-math.js';
 
 const failures = [];
 
@@ -158,6 +159,8 @@ assert(!CHANGELOG_DATA.some((e) => e.id === 'V8_08.18.1'), 'Alerts channel card 
     const changelogRenderer = readFileSync(new URL('../src/lib/renderer.js', import.meta.url), 'utf8');
     assert(changelogRenderer.includes('sanitizeWhatsNewText'), 'What’s New renderer strips em dashes');
     assert(changelogRenderer.includes('changelog-app-version'), 'What’s New header paints APP_VERSION');
+    assert(changelogRenderer.includes('changelog-show-earlier'), 'What’s New defers older entries');
+    assert(!changelogRenderer.includes('listContainer.innerHTML +='), 'What’s New does not rebuild the list on every entry');
 }
 const hub = readFileSync(new URL('../src/lib/hub.js', import.meta.url), 'utf8');
 assert(hub.includes("welcomeSeen") && hub.includes('maybeForceShowChangelog'), 'What’s New auto-open waits until welcome is done');
@@ -175,6 +178,8 @@ assert(hub.includes('paintContactField'), 'hub paints contact validity on input 
     assert(ui.includes('armModalPopLock()'), 'overlays fade then pop history');
     assert(ui.includes('Close the top overlay first'), 'Account Back closes Account before Options');
     assert(ui.includes('line-clamp-2'), 'toasts wrap at most two lines');
+    assert(ui.includes('preferOneLine'), 'short toasts try to stay on one row');
+    assert(ui.includes('calc(100vw - 0.75rem)'), 'toasts use nearly the full phone width');
 }
 
 const layout = readFileSync(new URL('../src/layouts/Layout.astro', import.meta.url), 'utf8');
@@ -276,14 +281,51 @@ assert(logic.includes('window.__ntQuietBoardPaint = true'), 'minute tick sets qu
 const ui = readFileSync(new URL('../src/lib/ui.js', import.meta.url), 'utf8');
 assert(ui.includes('OFFLINE_CHROME_HOLD_MS = 4000'), 'offline chrome waits 4s');
 assert(ui.includes('OFFLINE_CHROME_AUTO_HIDE_MS = 7000'), 'offline dock auto-hides after 7s');
+assert(ui.includes('OFFLINE_CHROME_RESHOW_ONLINE_MS = 300_000'), 'offline chrome waits for 5 minutes sustained online before reshow');
+assert(ui.includes('OFFLINE_CHROME_MIN_PAINT_GAP_MS = 300_000'), 'offline chrome enforces a 5 minute paint gap');
+assert(ui.includes('markOfflineChromeEpisodeHandled'), 'offline chrome marks an episode before probes so flaps cannot re-queue');
+assert(ui.includes('confirmBrowserOffline'), 'offline chrome probes before painting');
+assert(ui.includes('probeReachabilityUrl'), 'offline chrome probes more than one public host');
+assert(ui.includes('cdn.jsdelivr.net'), 'offline confirm falls back to the GitHub dump CDN');
+assert(ui.includes('firebaseio.com'), 'offline confirm falls back to Firebase');
 assert(ui.includes('document.visibilityState !== \'visible\''), 'offline chrome requires visible tab');
 assert(ui.includes("offlineDock()"), 'offline chrome toggles #offline-wrapper');
 assert(!ui.includes("oi.textContent = 'WORKING OFFLINE'"), 'offline dock keeps mockup copy');
 assert(ui.includes("scheduleOfflineChrome();"), 'already-offline boot schedules the dock');
 assert(ui.includes("hideOfflineChrome({ dismissed: true })"), 'Close / auto-hide marks the dock dismissed');
+assert(ui.includes('armOfflineChromeReshow'), 'online arms sustained reshow instead of clearing dismiss immediately');
+assert(ui.includes('cancelOfflineChromeReshow'), 'a new offline episode cancels a pending reshow arm');
+assert(logic.includes("res.ok && ct.includes('text/html')"), 'reachability treats only HTML 200 as captive');
+assert(logic.includes("engageConnectionStruggleUi('weak')"), 'edge HTTP errors stay weak so the GitHub waterfall can run');
+assert(logic.includes('reachabilityFallbackUrls'), 'reachability has Firebase and GitHub fallbacks');
+assert(logic.includes('Do not hard-throw on navigator.onLine'), 'guardianFetch does not hard-stop on OS offline');
+assert(logic.includes('isLieFi && !force'), 'only Lie-Fi hard-stops the schedule waterfall');
+assert(!logic.includes("OS reports offline state."), 'guardianFetch no longer throws the OS-offline Error');
+assert(logic.includes('NT Waterfall:'), 'waterfall steps log under NT Waterfall for Black Box');
+assert(logic.includes('window.ntTrace'), 'waterfall uses ntTrace so drop_console cannot strip it');
+const blackBox = readFileSync(new URL('../src/components/BlackBoxCapture.astro', import.meta.url), 'utf8');
+assert(blackBox.includes('window.ntTrace'), 'black box exposes ntTrace');
+assert(blackBox.includes('fail: 7 * 24 * HOUR'), 'black box keeps failures longer than noise');
+assert(readFileSync(new URL('../astro.config.mjs', import.meta.url), 'utf8').includes('drop_console: true'), 'production still drops bundled console calls');
+assert(logic.includes('try ${sourceKey}'), 'waterfall logs each source attempt');
+assert(logic.includes('fail ${sourceKey}'), 'waterfall logs each source failure');
+assert(logic.includes('success ${sourceKey}'), 'waterfall logs the winning source');
+assert(ui.includes('NT OfflineChrome:'), 'offline dock confirm logs each probe host');
+assert(logic.includes("sourcesToTry = ['CLOUDFLARE', 'FIREBASE', 'GITHUB']"), 'waterfall prefers Cloudflare before Firebase');
+assert(logic.includes('WATERFALL_BUDGET_MS = 18_000'), 'waterfall has an 18s hard budget');
+assert(logic.includes('CLOUDFLARE: 5000'), 'Cloudflare schedule timeout is 5s');
+assert(logic.includes('FIREBASE: 7000'), 'Firebase schedule timeout is 7s');
+assert(logic.includes('GITHUB: 8000'), 'GitHub schedule timeout is 8s');
+assert(logic.includes('ntSoftNetwork: true'), 'schedule waterfall uses soft network retries');
+assert(logic.includes("timeoutErr.name = 'TimeoutError'"), 'per-host timeout is not AbortError');
+assert(logic.includes("e.name === 'AbortError' && fetchSignal.aborted"), 'only route abort cancels the waterfall');
+assert(logic.includes("wonSource = 'BUNDLED'"), 'bundled dump is a last-resort schedule source');
+assert(logic.includes('revealAppShell?.(true)'), 'sync finally force-reveals the shell');
 assert(ui.includes('PLANNER_INLINE_LISTS'), 'Travel Day scrim does not steal pointer events');
 assert(ui.includes('header.parentNode.insertBefore(banner, header)'), 'maintenance bar sits above #app-header inside the scroller');
 assert(ui.includes('nt-maint-wrench'), 'maintenance bar uses the wrench SVG');
+assert(ui.includes('syncMaintenanceMarquee'), 'long maintenance copy enables a marquee');
+assert(ui.includes('nt-maint-track'), 'maintenance marquee duplicates the label for a seamless loop');
 assert(!ui.includes('repeating-linear-gradient'), 'maintenance bar is not hazard tape');
 
 const manifest = JSON.parse(readFileSync(new URL('../public/images/alerts/manifest.json', import.meta.url), 'utf8'));
@@ -417,52 +459,133 @@ assert(communityJs.includes('Please be kind and respectful.'), 'composer kindnes
 const hubModals = readFileSync(new URL('../src/components/HubModals.astro', import.meta.url), 'utf8');
 assert(hubModals.includes('#feedback-panel .feedback-thread-chat.nt-pack-wallpaper'), 'feedback wallpaper is scoped darker than bubbles');
 assert(hubModals.includes('background-color: #6f8070'), 'feedback wallpaper is darker than white bubbles');
+assert(hubModals.includes('id="about-champions"') && hubModals.includes('Next Train Champions'), 'About has Next Train Champions under admin credits');
+assert(hubModals.indexOf('Built & Maintained By') < hubModals.indexOf('id="about-champions"'), 'Champions sit below Built & Maintained');
+const championsJs = readFileSync(new URL('../src/lib/community-champions.js', import.meta.url), 'utf8');
+assert(championsJs.includes('whatsappChannel') && championsJs.includes('facebook') && championsJs.includes('COMMUNITY_CHAMPIONS_PATH'), 'champions load WhatsApp, channel, and Facebook from RTDB');
+assert(championsJs.includes("config/community_champions") && championsJs.includes('fetchCommunityChampions'), 'About fetches champions from config/community_champions');
+assert(championsJs.includes('championContactLinks') && championsJs.includes("kind: 'whatsapp'"), 'contact icons only build when fields are set');
+const liveBoardUi = readFileSync(new URL('../src/lib/live-board-ui.js', import.meta.url), 'utf8');
+assert(liveBoardUi.includes('export function closeFareModal') && liveBoardUi.includes("triggerHaptic();\n    closeSmoothModal('fare-modal')"), 'fare modal close haptics match the timetable');
+assert(hub.includes('paintAboutChampions') && hub.includes('fetchCommunityChampions'), 'About paints champions from RTDB');
+assert(hub.includes('Contact icons only when admin filled those fields'), 'About only shows contact icons when fields are set');
+assert(admin.includes('id="champions-save"') && admin.includes('config/community_champions.json'), 'admin can save champions to RTDB');
+assert(admin.includes('champions-whatsapp') && admin.includes('champions-channel') && admin.includes('champions-facebook'), 'admin form has optional contact fields');
 const accountJs = readFileSync(new URL('../src/lib/account.js', import.meta.url), 'utf8');
 const delayReports = readFileSync(new URL('../src/lib/delay-reports.js', import.meta.url), 'utf8');
 const trainGhosts = readFileSync(new URL('../src/lib/train-ghosts.js', import.meta.url), 'utf8');
-assert(hubModals.includes('completely free, and you can cancel anytime'), 'account guest copy is free and cancellable');
-assert(hubModals.includes('Sign in is optional. An account keeps your name and points with you.'), 'account guest copy is commuter-facing');
+assert(hubModals.includes('Create a free account to keep your name and pins with you.'), 'account guest create copy mentions pins');
+assert(hubModals.includes('Welcome to Next Train') && hubModals.includes('Welcome back'), 'account guest headers are Welcome to Next Train / Welcome back');
+assert(accountJs.includes("if (title && !signedOpen) title.textContent = ''") || accountJs.includes('title.textContent = \'\''), 'account top bar does not repeat Welcome / Welcome back');
+assert(hubModals.includes('Sign in to continue on this phone.'), 'account guest sign-in copy is short');
+assert(hubModals.includes('id="account-invalid-create-btn"') && hubModals.includes('data-account-only="invalid"'), 'invalid credentials screen nudges Create account');
+assert(hubModals.includes('id="account-error-text"'), 'auth errors use a card, not a bare red line');
+assert(hubModals.includes('Verify your email'), 'verify card title is Verify your email');
 assert(!/route rooms|delay reports|trip sharing/i.test(hubModals.slice(hubModals.indexOf('id="account-modal"'), hubModals.indexOf('id="nt-admin-chrome-template"'))), 'Account panel does not pitch hidden features');
 assert(!hubModals.includes('Schedules and trip planning work fully as a guest'), 'account no longer uses schedule/trip-planning pitch');
 assert(hubModals.includes('Show my photo next to my name'), 'photo opt-in is commuter-facing');
 assert(hubModals.includes('Show my level on Community'), 'Community level opt-out sits with photo');
 assert(hubModals.includes('id="account-photo-alerts"'), 'photo opt-in checkbox exists');
 assert(hubModals.includes('id="account-marks-community"'), 'Community level checkbox exists');
-assert(hubModals.includes('id="account-name-edit-btn"') && hubModals.includes('Edit display name'), 'signed-in name opens from a pencil');
-assert(!hubModals.includes('id="account-profile-toggle"') && !hubModals.includes('id="account-profile-panel"'), 'signed-in name is not an accordion');
+assert(hubModals.includes('id="account-profile-toggle"') && hubModals.includes('id="account-profile-panel"'), 'signed-in name, email, and photo open as an accordion');
+assert(hubModals.includes('Messages stay locked until this is done'), 'verify card explains messages stay locked');
+assert(accountJs.includes('toastWelcomeBack') && accountJs.includes('Welcome back,'), 'sign-in shows Welcome back toast');
+assert(accountJs.includes('syncAccountPinnedRoutesNow'), 'pinned routes sync to the account immediately');
+assert(accountJs.includes('recordAccountActivity'), 'account activity breadcrumbs exist');
+assert(accountJs.includes("screen === 'invalid'"), 'guest screens include invalid credentials');
+const welcomeModal = readFileSync(new URL('../src/components/WelcomeModal.astro', import.meta.url), 'utf8');
+assert(welcomeModal.includes('syncAccountPinnedRoutesNow'), 'Welcome route pick syncs pins to the account');
+assert(hub.includes("recordAccountActivity?.('messages_open')") || hub.includes("recordAccountActivity?.(\"messages_open\")"), 'opening Messages writes account activity');
 assert(hubModals.includes('id="account-passenger-type-btn"') && hubModals.includes('id="account-passenger-type-display"'), 'preview shows passenger type');
 assert(hubModals.includes('id="account-modal-display-name"') && hubModals.includes('id="account-modal-email"'), 'preview shows name and email');
 assert(hubModals.includes('id="account-photo-toggle"') && hubModals.includes('toggle-checkbox'), 'photo opt-in is a settings toggle');
 assert(hubModals.includes('id="account-marks-toggle"'), 'Community level opt-out is a settings toggle');
 assert(hubModals.includes('>Save<') && hubModals.includes('id="account-save-display-name"'), 'display name and photo share one Save');
-assert(hubModals.includes('id="account-name-sheet"'), 'name edits open in a sheet');
+assert(!hubModals.includes('id="account-name-sheet"'), 'name edits live in the profile accordion');
 assert(hubModals.includes('id="account-points-sheet"') && hubModals.includes('h-[min(92dvh,100%)]'), 'points open in a tall sheet');
 assert(hubModals.includes('Continue with Facebook'), 'guest Facebook sign-in');
 assert(hubModals.includes('id="account-facebook-btn"'), 'Facebook button id');
 assert(hubModals.includes('Delete account'), 'signed-in delete row');
 assert(hubModals.includes('id="account-delete-confirm"'), 'delete confirm sheet');
-assert(hubModals.includes('This asks Next Train to delete your account.'), 'delete confirm is commuter-facing');
+assert(hubModals.includes('This sends a deletion request.'), 'delete confirm is commuter-facing');
 assert(!hubModals.includes('id="account-operator-delete-note"'), 'Account panel does not mention operator logins');
 assert(!/for the operators/.test(hubModals.slice(hubModals.indexOf('id="account-modal"'), hubModals.indexOf('id="nt-admin-chrome-template"'))), 'Account panel does not mention operators');
 assert(hubModals.includes('id="account-guest-points-wrap"'), 'guest points row can be hidden after sign-out');
 assert(hubModals.includes('id="account-settings-host"'), 'Account can host Passenger Type and Theme');
 assert(!hubModals.includes('id="account-identity-host"'), 'Passenger Type is no longer a separate Community identity card');
 assert(!hubModals.includes('id="account-notify-block"'), 'Account no longer has a duplicate Notifications accordion');
-assert(hubModals.includes('id="account-modal-close"') && hubModals.includes('M10 19l-7-7m0 0l7-7m-7 7h18'), 'Account close control uses the guide Back arrow');
+assert(/id="account-modal-close"[\s\S]{0,500}M15 19l-7-7 7-7/.test(hubModals), 'Account close is the back chevron');
+assert(!/id="account-modal-close"[\s\S]{0,300}>\s*Back\s*</.test(hubModals), 'Account close is not labelled Back');
+assert(hubModals.includes('Create with email') && hubModals.includes('Reset your password'), 'account guest screens keep create-first and reset');
+assert(admin.includes('id="fb-filter-done"'), 'feedback filter has Done to close the popover');
+assert(admin.includes("e.stopPropagation();\n            }, true)"), 'feedback filter outside click does not close Dev Hub');
+assert(hubModals.includes('id="account-reset-send-btn"') && hubModals.includes('id="account-goto-create"'), 'reset and create are their own steps');
+assert(hubModals.includes('data-account-screen="create"'), 'account opens on the create account screen');
+assert(hubModals.indexOf('id="account-google-btn"') < hubModals.indexOf('id="account-email-signup-btn"'), 'Google sits above email create');
+assert(hubModals.includes('id="account-scroll-fade"'), 'account sheet shows a bottom scroll fade');
 assert(!/id="account-modal-close"[^>]*>\s*Done\s*</.test(hubModals), 'Account close is not labelled Done');
 assert(!/<h3[^>]*>Account<\/h3>/.test(hubModals), 'Account overlay has no large Account title');
 assert(hubModals.includes('placeholder="Email or WhatsApp for a reply"'), 'Hub contact placeholder is the shorter line');
+assert(hubModals.includes('id="messages-thread-contact-toggle"'), 'Hub contact sits in a row above the message');
+assert(hubModals.includes('padding-bottom: max(0.75rem, var(--nt-sys-bottom, env(safe-area-inset-bottom, 0px)));'), 'Hub composer sits on the bottom edge');
+assert(ROUTES['pta-pien'].colorClass === 'text-[#937e3b]', 'Pienaarspoort uses the Rissik to Hartbeesspruit olive');
+assert(ROUTES['pta-dewildt'].colorClass === 'text-[#f58220]' && ROUTES['pta-mabopane'].colorClass === 'text-[#f58220]' && ROUTES['mab-belle'].colorClass === 'text-[#f58220]', 'De Wildt, Mabopane, and Belle Ombre share the orange north line');
+assert(ROUTES['herc-koed'].colorClass === 'text-[#ec008c]', 'Hercules to Koedoespoort uses the Capital Park pink line');
+assert(ROUTES['pta-saul'].colorClass === 'text-[#00b9f1]', 'Saulsville uses the light blue line');
+assert(ROUTES['jhb-rand'].colorClass === 'text-[#00a651]', 'Randfontein uses the green line');
+assert(ROUTES['jhb-soweto'].colorClass === 'text-[#a9cf41]', 'Naledi to Merafe uses the light green line');
+assert(ROUTES['jhb-midway'].colorClass === 'text-[#036630]', 'Lenz uses the dark green line');
+assert(ROUTES['germ-kwesine'].colorClass === 'text-[#ed262e]' && ROUTES['jhb-germiston'].colorClass === 'text-[#ed262e]', 'Kwesine and Germiston use the red line');
+assert(ROUTES['pta-irene'].colorClass === 'text-[#0071bb]' && ROUTES['pta-kempton'].colorClass === 'text-[#0071bb]' && ROUTES['germ-leralla'].colorClass === 'text-[#0071bb]', 'Irene, Kempton Park, and Leralla use the blue line');
+assert(ROUTES['ct-malm'].colorClass === 'text-[#a6ce38]', 'Malmesbury uses the lime Worcester line');
+assert(ROUTES['ct-simon'].colorClass === 'text-[#ee1a24]', 'Simon\'s Town uses the Southern red line');
+assert(ROUTES['ct-flats'].colorClass === 'text-[#8f5644]', 'Retreat uses the Cape Flats brown line');
+assert(ROUTES['ct-chrishani'].colorClass === 'text-[#00b9f3]' && ROUTES['ct-kapteinsklip'].colorClass === 'text-[#00b9f3]' && ROUTES['ct-nolu'].colorClass === 'text-[#00b9f3]', 'Chris Hani, Kapteinsklip, and Nolungile use the Central cyan line');
+assert(ROUTES['ct-bellv'].colorClass === 'text-[#00a650]' && ROUTES['ct-well'].colorClass === 'text-[#00a650]' && ROUTES['ct-strnd'].colorClass === 'text-[#00a650]' && ROUTES['eerst-dtoit'].colorClass === 'text-[#00a650]', 'Bellville, Wellington, Strand, and Du Toit use the Northern green line');
+assert(ROUTES['kzn-umlazi'].colorClass === 'text-[#ee2f33]' && ROUTES['kzn-bridgecity'].colorClass === 'text-[#ee2f33]', 'Umlazi and Bridge City use the kwaMashu red line');
+assert(ROUTES['kzn-winklespruit'].colorClass === 'text-[#2d88c7]', 'Winklespruit uses the South Coast blue line');
+assert(ROUTES['kzn-crossmoor'].colorClass === 'text-[#fad561]', 'Crossmoor uses the yellow line');
+assert(ROUTES['kzn-catoridge'].colorClass === 'text-[#0abcf2]', 'Cato Ridge uses the New Main cyan line');
+assert(ROUTES['kzn-pinetown'].colorClass === 'text-[#6f2729]', 'Pinetown uses the Old Main maroon line');
+assert(ROUTES['ec-berlin'].colorClass === 'text-[#f5821f]', 'Berlin uses the orange line');
+{
+    const mapApp = readFileSync(new URL('../public/js/map-app.js', import.meta.url), 'utf8');
+    Object.values(ROUTES).forEach((route) => {
+        if (!route.isActive) return;
+        const hex = String(route.colorClass).match(/#([0-9a-fA-F]{6})/);
+        assert(hex, `${route.id} colour is a map hex`);
+        assert(mapApp.includes(`'${route.colorClass}': '#${hex[1]}'`), `${route.id} GPS line uses ${route.colorClass}`);
+        const swatch = lineSwatchClass(route.colorClass, 'bg');
+        assert(swatch === `bg-[#${hex[1]}]`, `${route.id} route stripe uses ${swatch}`);
+    });
+    assert(mapApp.includes('function routeLineColor(colorClass)'), 'GPS lines resolve colour from the route class');
+    assert(mapApp.includes('color: routeLineColor(route.colorClass)'), 'drawn GPS lines use routeLineColor');
+    assert(mapApp.includes('/#([0-9a-fA-F]{6})\\b/i'), 'GPS colour falls back to the hex inside colorClass');
+    assert(mapApp.includes("color: '#00a650'"), 'Maitland to Mutual uses the Northern green line');
+}
+assert(!hubModals.includes('#messages-thread-form {\n    flex-shrink: 0;\n    background: transparent;\n    border-top: 0;\n    padding-bottom: calc(var(--nt-nav-h'), 'Hub composer does not reserve a bar-sized gap');
+assert(hubModals.includes('id="messages-thread-input" rows="2"'), 'Hub message box starts at two rows');
+assert(/id="messages-thread-close"[\s\S]{0,400}M15 19l-7-7 7-7/.test(hubModals), 'Feedback Hub close is the back chevron');
+assert(hubModals.includes('id="schedule-day-modal"') && hubModals.includes('id="schedule-day-body"'), 'the day line opens its own schedule note');
 assert(!hubModals.includes('Email or WhatsApp if you want a reply'), 'Hub contact placeholder is not the long iOS-clipping line');
 assert(hubModals.includes('id="messages-thread-contact-row"') && hubModals.includes('min-w-0'), 'Hub contact row can shrink without changing input font-size');
 assert(hubModals.includes('id="account-delete-type"'), 'delete confirm requires typing DELETE');
 assert(hubModals.includes('id="account-badge-how-sheet"') && hubModals.includes('id="account-badge-how-close"'), 'badge how-to sheet exists');
 assert(
-    hubModals.indexOf('id="account-modal-display-name"') < hubModals.indexOf('id="account-passenger-type-btn"')
-    && hubModals.indexOf('id="account-passenger-type-btn"') < hubModals.indexOf('id="account-points-btn"')
-    && hubModals.indexOf('id="account-points-btn"') < hubModals.indexOf('id="account-signout-btn"')
-    && hubModals.indexOf('id="account-signout-btn"') < hubModals.indexOf('id="account-settings-host"'),
-    'signed-in Account order is identity preview, sign out, settings',
+    hubModals.indexOf('id="account-modal-display-name"') < hubModals.indexOf('id="account-profile-panel"')
+    && hubModals.indexOf('id="account-profile-panel"') < hubModals.indexOf('id="account-delete-btn"')
+    && hubModals.indexOf('id="account-delete-btn"') < hubModals.indexOf('id="account-points-btn"')
+    && hubModals.indexOf('id="account-points-btn"') < hubModals.indexOf('id="account-passenger-type-btn"')
+    && hubModals.indexOf('id="account-passenger-type-btn"') < hubModals.indexOf('id="account-settings-host"'),
+    'signed-in Account order is identity, profile with Delete tucked in, then points and passenger tiles',
 );
+assert(
+    hubModals.indexOf('id="account-profile-panel"') < hubModals.indexOf('id="account-signout-btn"')
+    && hubModals.indexOf('id="account-signout-btn"') < hubModals.indexOf('id="account-reset-phone-btn"')
+    && hubModals.indexOf('id="account-reset-phone-btn"') < hubModals.indexOf('id="account-points-btn"'),
+    'Sign out and Reset this App sit in the profile accordion above the quick tiles',
+);
+assert(hubModals.includes('id="account-danger-actions"') && hubModals.includes('min-[360px]:grid-cols-2'), 'Sign out and Reset sit side by side and stack on small screens');
 assert(hubModals.includes('?from=account'), 'Account legal links return with from=account');
 assert(hubModals.includes('account-points-panel'), 'points details live inside Account');
 assert(
@@ -471,11 +594,13 @@ assert(
     'Community level switch and the breakdown live in the points sheet',
 );
 assert(
-    hubModals.indexOf('id="account-name-sheet"') < hubModals.indexOf('id="account-edit-display-name"')
+    hubModals.indexOf('id="account-profile-panel"') < hubModals.indexOf('id="account-edit-display-name"')
     && hubModals.indexOf('id="account-edit-display-name"') < hubModals.indexOf('id="account-photo-alerts"')
-    && hubModals.indexOf('id="account-photo-alerts"') < hubModals.indexOf('id="account-save-display-name"')
-    && hubModals.indexOf('id="account-save-display-name"') < hubModals.indexOf('id="account-name-close"'),
-    'name sheet holds the field, photo switch, and Save',
+    && hubModals.indexOf('id="account-photo-alerts"') < hubModals.indexOf('id="account-signout-btn"')
+    && hubModals.indexOf('id="account-signout-btn"') < hubModals.indexOf('id="account-reset-phone-btn"')
+    && hubModals.indexOf('id="account-reset-phone-btn"') < hubModals.indexOf('id="account-delete-btn"')
+    && hubModals.indexOf('id="account-delete-btn"') < hubModals.indexOf('id="account-save-display-name"'),
+    'profile edit holds the name field, photo switch, Sign out, Reset, Delete, then Save',
 );
 assert(!accountJs.includes("insertAdjacentElement('afterend'"), 'points panel stays in the tall sheet');
 assert(accountJs.includes("openSmoothModal('profile-modal')"), 'passenger type opens the profile modal on the account back stack');
@@ -499,13 +624,13 @@ assert(delayReports.includes('WEEKDAY_REPORT_MAX_AGE_MS = 60 * 60 * 1000'), 'wee
 assert(delayReports.includes('isReportStillLive'), 'stale and past-time reports are filtered');
 assert(trainGhosts.includes('TRACKING_WINDOW_SEC = 45 * 60'), 'tracking window is 45 minutes');
 assert(hubModals.includes('No trains in the next 45 minutes'), 'nearby empty copy matches the 45-minute window');
-assert(hubModals.includes('id="network-slow-confirm-modal"'), 'Check for Updates has a slow-network confirm');
+assert(!hubModals.includes('id="network-slow-confirm-modal"'), 'Check for Updates has no slow-network confirm');
 assert(hubModals.includes('id="cache-clear-modal"'), 'Check for Updates has a confirm popup');
 assert(hubModals.includes('This downloads the latest app onto this phone, then restarts Next Train.'), 'Check for Updates confirm explains the restart');
 assert(hubModals.includes('Your pinned route stays.'), 'Check for Updates confirm says the pinned route stays');
 assert(!hubModals.includes('the look goes back to Classic light'), 'Check for Updates confirm does not reset the look to Classic light');
 assert(!hubModals.includes('stuck copy'), 'Check for Updates does not mention stuck copy');
-assert(hubModals.includes('Your network seems slow. Are you sure?'), 'slow-network confirm asks before wiping');
+assert(!hubModals.includes('Your network seems slow. Are you sure?'), 'slow-network confirm is not offered');
 assert(hubModals.includes('id="nt-admin-publish-train"'), 'admin nearby sheet can publish a test train');
     assert(hubModals.includes('Share on the map as this train'), 'admin publish button copy is Share on the map as this train');
 {
@@ -565,12 +690,14 @@ assert(hubModals.includes('id="nt-admin-publish-train"'), 'admin nearby sheet ca
     assert(mapPage.includes('nt-live-train-halo'), 'map train ring animation is slow and faint');
     assert(mapPage.includes('overflow: visible'), 'leaflet icon does not clip the pulse');
     assert(mapPage.includes('nt-live-train-num'), 'map page styles the train number');
-    assert(gpsFreshness.includes('RIDE_INTERPOLATION_MAX_MS = 15 * 1000'), 'interpolation caps at 15 seconds');
-    assert(gpsFreshness.includes('RIDE_GPS_STALE_MS = RIDE_INTERPOLATION_MAX_MS'), 'GPS stale window matches the 15 second interpolation cap');
-    assert(ridePings.includes('RIDE_SHARE_IDLE_MS = 30 * 60 * 1000'), 'share stops after 30 minutes idle');
+    assert(gpsFreshness.includes('RIDE_INTERPOLATION_MAX_MS = 18 * 1000'), 'interpolation caps at 18 seconds');
+    assert(gpsFreshness.includes('RIDE_GPS_STALE_MS = RIDE_INTERPOLATION_MAX_MS'), 'GPS stale window matches the 18 second interpolation cap');
+    assert(ridePings.includes('RIDE_SHARE_IDLE_MS = 10 * 60 * 1000'), 'share stops after 10 minutes idle');
     assert(ridePings.includes('RIDE_GPS_STALE_MS'), 'GPS stale window is exported');
-    assert(ridePings.includes('ONBOARD_FAST_PING_MS = 3 * 1000'), 'a moving train publishes every 3 seconds');
-    assert(ridePings.includes('ONBOARD_STATIONARY_PING_MS = 6 * 1000'), 'a parked train heartbeats every 6 seconds, inside the 15s grey window');
+    assert(ridePings.includes('ONBOARD_FAST_PING_MS = 5 * 1000'), 'a moving train publishes every 5 seconds');
+    assert(ridePings.includes('ONBOARD_STATIONARY_PING_MS = 8 * 1000'), 'a parked train publishes every 8 seconds');
+    assert(ridePings.includes('armRidePingOnDisconnect'), 'sharer arms onDisconnect cleanup');
+    assert(ridePings.includes('STATIONARY_AUTO_STOP_MS'), 'prolonged stationary sharing auto-stops');
     assert(ridePings.includes('startBackgroundTicker(') && ridePings.includes('ONBOARD_LOOP_TICK_MS'), 'onboard loop ticks from a Web Worker so background throttling cannot starve it');
     assert(ridePings.includes('SHARE_PROMPT_TIMEOUT_MS = 90 * 1000'), 'unanswered share prompts stop the share after 90 seconds');
     assert(ridePings.includes("title: 'Is the train moving?'") && ridePings.includes("id: 'stuck'") && ridePings.includes("id: 'cancelled'"), 'a parked sharer can mark the train stuck or cancelled');
@@ -582,7 +709,7 @@ assert(hubModals.includes('id="nt-admin-publish-train"'), 'admin nearby sheet ca
     assert(mapTab.includes('trackingLastSeenLine'), 'last seen says at or approaching honestly');
     assert(mapApp.includes('RIDE_BACK_JITTER_M') && mapApp.includes('rideTravelDirAlongPath'), 'receivers hold the glyph on small backward jitter and never flip the nose from glide direction');
     assert(!mapApp.includes('travelDir < 0'), 'glide direction no longer flips the train glyph');
-    assert(mapApp.includes('RIDE_INTERPOLATION_MAX_MS = 15000'), 'map glide matches the 15 second cap');
+    assert(mapApp.includes('RIDE_INTERPOLATION_MAX_MS = 18000'), 'map glide matches the 18 second cap');
     assert(mapApp.includes('applyRideTrainStalePause'), 'listeners grey the train when GPS goes stale locally');
     assert(mapTab.includes('RIDE_GPS_STALE_MS'), 'tracking card uses the shared GPS stale window');
     assert(ridePings.includes('compactPingsForMap'), 'map pings are compacted per train');
@@ -609,7 +736,8 @@ assert(hubModals.includes('id="nt-admin-publish-train"'), 'admin nearby sheet ca
     assert(mapTab.includes('isMapTabFullscreen()'), 'map fullscreen can exit when already full');
     assert(mapView.includes('allow="geolocation; fullscreen"'), 'map iframe allows fullscreen');
     assert(mapPage.includes('data-map-fs-icon="minimize"'), 'fullscreen control becomes minimize');
-    assert(mapTab.includes('PINGS_POLL_WITH_LISTENER_MS'), 'map REST poll backs off when the listener is live');
+    assert(mapTab.includes('PINGS_POLL_MS = 8 * 1000'), 'map REST poll is slower when the listener is down');
+    assert(mapTab.includes('allowRest'), 'map skips REST while the ride_pings listener is live');
     assert(mapView.includes('Stop sharing'), 'tracking card can stop sharing');
     assert(ridePings.includes('Stop the other share'), 'second device is offered a stop');
     assert(ridePings.includes('appendRideShareLog'), 'share start/stop writes a log');
@@ -657,9 +785,10 @@ assert(hubModals.includes('id="account-session-actions"'), 'delete account stays
     assert(uiJs.includes("hashNow === '#sidenav'"), 'back from Account leaves Options open');
 }
 assert(
-    hubModals.indexOf('id="account-points-btn"') < hubModals.indexOf('id="account-signout-btn"')
-    && hubModals.indexOf('id="account-signout-btn"') < hubModals.indexOf('id="account-settings-host"'),
-    'Sign out is a row on the identity card, above settings',
+    hubModals.indexOf('id="account-signout-btn"') < hubModals.indexOf('id="account-delete-btn"')
+    && hubModals.indexOf('id="account-reset-phone-btn"') < hubModals.indexOf('id="account-delete-btn"')
+    && hubModals.indexOf('id="account-delete-btn"') < hubModals.indexOf('id="account-settings-host"'),
+    'Sign out sits in the profile accordion; Delete account stays above settings',
 );
 assert(!/id="account-signout-btn"[^>]*text-center/.test(hubModals), 'Sign out is not a centered bottom bar');
 assert(
@@ -716,6 +845,7 @@ const mapPage = readFileSync(new URL('../src/pages/map.astro', import.meta.url),
 const mapTab = readFileSync(new URL('../src/lib/map-tab.js', import.meta.url), 'utf8');
 assert(!mapView.includes('Loading network map'), 'Map tab overlay does not duplicate the iframe loader');
 assert(mapPage.includes('Loading network…'), 'iframe keeps one loading heading');
+assert(mapPage.includes('M9 19h8.5a3.5 3.5 0 0 0 0-7h-11') && !mapPage.includes('L15 7m0 13V7'), 'map loading mark is a route, not the broken folded map');
 assert(!mapPage.includes('Loading Network...'), 'iframe heading is not Title Case Loading Network');
 assert(mapTab.includes("map-tab-placeholder')?.classList.add('hidden')"), 'Map tab does not unhide a second loader');
 assert(!mapTab.includes("map-tab-placeholder')?.classList.remove('hidden')"), 'Map tab never shows the outer loader');
@@ -787,6 +917,8 @@ assert(refuseDisplayName('Enock').ok === true, 'ordinary first names are still a
     const appearance = readFileSync(new URL('../src/styles/appearance.css', import.meta.url), 'utf8');
     assert(layout.includes('font-size: max(16px, 1em) !important'), 'Layout keeps the iOS 16px input floor');
     assert(appearance.includes('font-size: max(16px, 1em) !important'), 'appearance.css keeps the iOS 16px input floor');
+    assert(appearance.includes('.nt-scroll-hint') && appearance.includes('rgba(15, 23, 42, 0.18)'), 'board fade matches the timetable edge darkening');
+    assert(logic.includes('export function initScrollHint'), 'board fade tracks whether more content is below');
     const plannerModals = readFileSync(new URL('../src/components/PlannerModals.astro', import.meta.url), 'utf8');
     assert(plannerModals.includes('id="alert-image-lightbox"') && plannerModals.includes('id="alert-image-lightbox-img"'), 'dedicated alert image lightbox markup exists');
     assert(plannerModals.includes('id="alert-image-lightbox-stage"'), 'alert preview zoom lives on a dedicated stage');
@@ -810,6 +942,26 @@ assert(normalizeAdminChangelogKey('V9_09.15.5 - extra') === 'V9_09.15.5', 'versi
     assert(!/<img/i.test(hoisted.body), 'hoist removes leftover img tags');
 }
 
+{
+    const rect = { left: 0, right: 400, top: 0, bottom: 400 };
+    const start = { scale: 1, x: 0, y: 0 };
+    const gesture = pinchGestureStart(start, rect, { clientX: 250, clientY: 200 }, { clientX: 350, clientY: 200 });
+    const zoomed = pinchGestureMove(gesture, { clientX: 200, clientY: 200 }, { clientX: 400, clientY: 200 }, 400, 400);
+    const originX = 200;
+    const contentX = gesture.contentX;
+    const landed = originX + contentX * zoomed.scale + zoomed.x;
+    assert(Math.abs(landed - 300) < 0.6, `pinch keeps the midpoint under the fingers, landed ${landed}`);
+    assert(zoomed.scale > 1.4 && zoomed.scale < 2.2, `pinch scale follows the finger span, got ${zoomed.scale}`);
+    const button = zoomAboutPoint(start, 300, 200, rect, 2, 400, 400);
+    const buttonLanded = 200 + ((300 - 200 - 0) / 1) * button.scale + button.x;
+    assert(Math.abs(buttonLanded - 300) < 0.6, 'a zoom control keeps the clicked point still');
+    const mapJs = readFileSync(new URL('../src/lib/map-viewer.js', import.meta.url), 'utf8');
+    assert(mapJs.includes("addEventListener('dblclick'"), 'desktop double click zooms the network map');
+    assert(mapJs.includes('pinchGestureMove'), 'map pinch stays under the fingers');
+    const mapModal = readFileSync(new URL('../src/components/PlannerModals.astro', import.meta.url), 'utf8');
+    assert(mapModal.includes('<ZoomControls />') && mapModal.includes('id="map-container"'), 'the network map has desktop zoom controls');
+    assert(!mapModal.includes('cursor-grab'), 'the map does not use a hand cursor before it is zoomed');
+}
 if (failures.length) {
     console.error('verify-home-polish failed:');
     failures.forEach((f) => console.error(' -', f));

@@ -3,6 +3,7 @@
  */
 import { openSmoothModal, closeSmoothModal, lockBackgroundScroll } from './ui.js';
 import { trackAnalyticsEvent } from './analytics.js';
+import { pinchGestureMove, pinchGestureStart, zoomAboutPoint } from './pinch-math.js';
 
 let mapModal, closeMapBtn, closeMapBtn2, viewMapBtn;
 let mapContainer, mapImage, mapZoomIn, mapZoomOut;
@@ -13,8 +14,7 @@ let pointY = 0;
 let panning = false;
 let startX = 0;
 let startY = 0;
-let initialPinchDistance = null;
-let initialScale = 1;
+let pinchGesture = null;
 let lastTap = 0;
 let _bound = false;
 
@@ -27,10 +27,44 @@ export function resetMap() {
     }
 }
 
+function mapState() {
+    return { scale, x: pointX, y: pointY };
+}
+
+function applyMapState(next, animate) {
+    scale = next.scale;
+    pointX = next.x;
+    pointY = next.y;
+    if (mapImage) {
+        mapImage.style.transition = animate ? 'transform 160ms ease' : 'none';
+        if (animate) {
+            window.setTimeout(() => {
+                if (mapImage) mapImage.style.transition = '';
+            }, 180);
+        }
+    }
+    updateTransform();
+}
+
 function updateTransform() {
     if (mapImage) {
         mapImage.style.transform = `translate(${pointX}px, ${pointY}px) scale(${scale})`;
     }
+    mapContainer?.classList.toggle('is-zoomed', scale > 1.01);
+}
+
+function zoomMapAt(clientX, clientY, nextScale, animate) {
+    if (!mapContainer) return;
+    const rect = (mapImage || mapContainer).getBoundingClientRect();
+    applyMapState(zoomAboutPoint(
+        mapState(),
+        clientX,
+        clientY,
+        rect,
+        nextScale,
+        mapContainer.offsetWidth,
+        mapContainer.offsetHeight,
+    ), animate);
 }
 
 function openMap() {
@@ -86,8 +120,8 @@ export function setupMapLogic() {
     viewMapBtn = document.getElementById('view-map-btn');
     mapContainer = document.getElementById('map-container');
     mapImage = document.getElementById('map-image');
-    mapZoomIn = document.getElementById('map-zoom-in');
-    mapZoomOut = document.getElementById('map-zoom-out');
+    mapZoomIn = mapContainer?.querySelector('[data-nt-zoom="in"]') || null;
+    mapZoomOut = mapContainer?.querySelector('[data-nt-zoom="out"]') || null;
 
     if (!mapModal) return;
 
@@ -113,26 +147,26 @@ export function setupMapLogic() {
         closeMap();
     };
 
+    const zoomCenter = () => {
+        const rect = mapContainer.getBoundingClientRect();
+        return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+    };
     if (mapZoomIn) {
         mapZoomIn.onclick = (e) => {
+            e.preventDefault();
             e.stopPropagation();
-            scale += 0.5;
-            if (scale > 5) scale = 5;
-            updateTransform();
+            const c = zoomCenter();
+            zoomMapAt(c.x, c.y, Math.min(5, scale * 1.35), true);
         };
     }
     if (mapZoomOut) {
         mapZoomOut.onclick = (e) => {
+            e.preventDefault();
             e.stopPropagation();
-            if (scale > 1) {
-                scale -= 0.5;
-                if (scale < 1) scale = 1;
-                if (scale === 1) { pointX = 0; pointY = 0; }
-                updateTransform();
-            }
+            const c = zoomCenter();
+            zoomMapAt(c.x, c.y, scale / 1.35, true);
         };
     }
-
     if (_bound || !mapContainer) {
         window.resetMap = resetMap;
         return;
@@ -142,7 +176,9 @@ export function setupMapLogic() {
     mapContainer.style.touchAction = 'none';
 
     mapContainer.addEventListener('mousedown', (e) => {
+        if (e.target?.closest?.('[data-nt-zoom-controls]')) return;
         e.preventDefault();
+        if (scale <= 1) return;
         startX = e.clientX - pointX;
         startY = e.clientY - pointY;
         panning = true;
@@ -168,15 +204,27 @@ export function setupMapLogic() {
         updateTransform();
     });
 
+    mapContainer.addEventListener('dblclick', (e) => {
+        if (e.target?.closest?.('[data-nt-zoom-controls]')) return;
+        e.preventDefault();
+        if (scale > 1.05) applyMapState({ scale: 1, x: 0, y: 0 }, true);
+        else zoomMapAt(e.clientX, e.clientY, 2.5, true);
+    });
+
+    mapContainer.addEventListener('wheel', (e) => {
+        if (!window.matchMedia('(hover: hover) and (pointer: fine)').matches) return;
+        e.preventDefault();
+        const delta = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY;
+        zoomMapAt(e.clientX, e.clientY, scale * Math.exp(-delta * 0.0016), false);
+    }, { passive: false });
+
     mapContainer.addEventListener('touchstart', (e) => {
         if (e.touches.length === 2) {
             e.preventDefault();
             panning = false;
-            initialPinchDistance = Math.hypot(
-                e.touches[0].pageX - e.touches[1].pageX,
-                e.touches[0].pageY - e.touches[1].pageY
-            );
-            initialScale = scale;
+            const rect = (mapImage || mapContainer).getBoundingClientRect();
+            pinchGesture = pinchGestureStart(mapState(), rect, e.touches[0], e.touches[1]);
+            if (mapImage) mapImage.style.transition = 'none';
             return;
         }
         if (e.touches.length === 1) {
@@ -184,27 +232,8 @@ export function setupMapLogic() {
             const tapLength = currentTime - lastTap;
             if (tapLength < 300 && tapLength > 0) {
                 e.preventDefault();
-                if (scale > 1) {
-                    resetMap();
-                } else {
-                    scale = 2.5;
-                    const rect = mapContainer.getBoundingClientRect();
-                    const tapX = e.touches[0].clientX - rect.left;
-                    const tapY = e.touches[0].clientY - rect.top;
-                    const centerX = rect.width / 2;
-                    const centerY = rect.height / 2;
-                    pointX = -(tapX - centerX) * (scale - 1);
-                    pointY = -(tapY - centerY) * (scale - 1);
-                    const limitX = (mapContainer.offsetWidth * scale - mapContainer.offsetWidth) / 2;
-                    const limitY = (mapContainer.offsetHeight * scale - mapContainer.offsetHeight) / 2;
-                    const safeLimitX = Math.max(0, limitX);
-                    const safeLimitY = Math.max(0, limitY);
-                    if (pointX > safeLimitX) pointX = safeLimitX;
-                    if (pointX < -safeLimitX) pointX = -safeLimitX;
-                    if (pointY > safeLimitY) pointY = safeLimitY;
-                    if (pointY < -safeLimitY) pointY = -safeLimitY;
-                    updateTransform();
-                }
+                if (scale > 1) applyMapState({ scale: 1, x: 0, y: 0 }, true);
+                else zoomMapAt(e.touches[0].clientX, e.touches[0].clientY, 2.5, true);
                 lastTap = 0;
                 return;
             }
@@ -216,17 +245,19 @@ export function setupMapLogic() {
     }, { passive: false });
 
     mapContainer.addEventListener('touchmove', (e) => {
-        if (e.touches.length === 2 && initialPinchDistance) {
+        if (e.touches.length === 2 && pinchGesture) {
             e.preventDefault();
-            const currentDistance = Math.hypot(
-                e.touches[0].pageX - e.touches[1].pageX,
-                e.touches[0].pageY - e.touches[1].pageY
+            const next = pinchGestureMove(
+                pinchGesture,
+                e.touches[0],
+                e.touches[1],
+                mapContainer.offsetWidth,
+                mapContainer.offsetHeight,
             );
-            let newScale = initialScale * (currentDistance / initialPinchDistance);
-            if (newScale < 1) newScale = 1;
-            if (newScale > 5) newScale = 5;
-            scale = newScale;
-            if (scale === 1) { pointX = 0; pointY = 0; }
+            scale = next.scale;
+            pointX = next.x;
+            pointY = next.y;
+            if (mapImage) mapImage.style.transition = 'none';
             updateTransform();
             return;
         }
@@ -249,7 +280,26 @@ export function setupMapLogic() {
     }, { passive: false });
 
     mapContainer.addEventListener('touchend', (e) => {
-        if (e.touches.length < 2) initialPinchDistance = null;
+        if (e.touches.length < 2) {
+            const wasPinch = !!pinchGesture;
+            pinchGesture = null;
+            if (wasPinch && scale < 1.02) {
+                applyMapState({ scale: 1, x: 0, y: 0 }, true);
+                panning = false;
+                return;
+            }
+            if (wasPinch && scale > 5) {
+                applyMapState(zoomAboutPoint(
+                    mapState(),
+                    mapContainer.getBoundingClientRect().left + mapContainer.offsetWidth / 2,
+                    mapContainer.getBoundingClientRect().top + mapContainer.offsetHeight / 2,
+                    (mapImage || mapContainer).getBoundingClientRect(),
+                    5,
+                    mapContainer.offsetWidth,
+                    mapContainer.offsetHeight,
+                ), true);
+            }
+        }
         if (e.touches.length === 1) {
             startX = e.touches[0].clientX - pointX;
             startY = e.touches[0].clientY - pointY;

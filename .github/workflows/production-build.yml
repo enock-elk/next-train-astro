@@ -43,6 +43,7 @@ jobs:
           PUBLIC_CARTO_API_KEY: ${{ secrets.PUBLIC_CARTO_API_KEY }}
           PUBLIC_FIREBASE_VAPID_KEY: ${{ secrets.PUBLIC_FIREBASE_VAPID_KEY }}
           PUBLIC_COMMUNITY_WORKER_URL: https://nexttrain-community.enock.workers.dev
+          SEO_REQUIRE_LIVE: '1'
 
       - name: Verify URL parity with the live SPA
         run: npm run verify:urls

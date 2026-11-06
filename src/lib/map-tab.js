@@ -30,7 +30,7 @@ import { relaxLiveShareGuards } from './features.js';
 import { isAdminAuthed } from './admin-chrome.js';
 import { bindMapOverrideSaveListener } from './map-overrides.js';
 import { getLiveTrainFollow } from './live-train-follow.js';
-import { formatGpsPingAge, formatGpsPingClock, formatLastSeenWithPingClock, gpsPingSuccessAt, RIDE_GPS_STALE_MS } from './gps-freshness.js';
+import { formatGpsPingAge, formatLastSeenWithPingClock, gpsPingSuccessAt, RIDE_GPS_STALE_MS } from './gps-freshness.js';
 import {
     acquireGeoWatch,
     releaseGeoWatch,
@@ -77,12 +77,11 @@ const MOVE_MIN_M = 20;
 const HIGHWAY_KMH = 90;
 
 /**
- * Others' pins: REST is a backup when the route listener is down. 20s keeps a
- * listener-less receiver inside two glide windows (sharers publish every 3-6s,
- * receivers glide for 15s). Live updates come from the route listener.
+ * Others' pins: REST is a backup when the route listener is down.
+ * Never poll REST while onValue is live — the listener owns the cache.
  */
-const PINGS_POLL_MS = 20 * 1000;
-const PINGS_POLL_WITH_LISTENER_MS = 120 * 1000;
+const PINGS_POLL_MS = 8 * 1000;
+const PINGS_POLL_WITH_LISTENER_MS = 0;
 let pingsTimer = 0;
 let lastMapPingSig = '';
 let trackingCardMode = 'expanded';
@@ -331,24 +330,18 @@ export function stationTitleCase(name) {
 }
 
 /**
- * Honest position line. "Last seen at Rissik" only when the projection is on
- * the platform; between stations it is "Approaching Rissik".
+ * Honest position line.
+ * Last seen at Mears, last seen approaching Mears, or last seen after Mears.
  */
 export function trackingLastSeenLine(place, pingAt) {
     const raw = String(place || '').trim();
-    const clock = formatGpsPingClock(pingAt);
-    let line = '';
-    const approaching = raw.match(/^approaching\s+(.+)$/i);
-    if (approaching) {
-        const station = stationTitleCase(approaching[1]);
-        line = clock ? `Approaching ${station} - last seen ${clock}` : `Approaching ${station}`;
-    } else {
-        const at = raw.match(/^at\s+(.+)$/i);
-        if (at) line = formatLastSeenWithPingClock(`at ${stationTitleCase(at[1])}`, pingAt);
-        else if (!raw || /^on the route$/i.test(raw)) line = formatLastSeenWithPingClock('on the route', pingAt);
-        else line = formatLastSeenWithPingClock(`near ${stationTitleCase(raw)}`, pingAt);
+    const placed = raw.match(/^(approaching|at|after)\s+(.+)$/i);
+    if (placed) {
+        const station = stationTitleCase(placed[2]);
+        return formatLastSeenWithPingClock(`${placed[1].toLowerCase()} ${station}`, pingAt);
     }
-    return line ? line.replace(/^Last seen/i, 'Last Seen') : '';
+    if (!raw || /^on the route$/i.test(raw)) return formatLastSeenWithPingClock('on the route', pingAt);
+    return formatLastSeenWithPingClock(`near ${stationTitleCase(raw)}`, pingAt);
 }
 
 /** Card copy spells the unit: "47 minutes late". */
@@ -704,6 +697,8 @@ function renderTrackingStatusCard(active, marker = null) {
     speedEl?.classList.toggle('dark:text-gray-100', !fast);
     setTrackingText('map-tracking-heading', trackingHeadingLabel(bearing));
     setTrackingText('map-tracking-gps', formatGpsPingAge(pingAt));
+    document.getElementById('map-tracking-gps')?.setAttribute('data-nt-gps-at', pingAt ? String(pingAt) : '');
+    document.getElementById('map-tracking-last-seen')?.setAttribute('data-nt-last-place', place || '');
     setTrackingText('map-tracking-rail', trackingDistanceLabel(railM));
     const railEl = document.getElementById('map-tracking-rail');
     const railFar = Number.isFinite(railM) && railM >= RIDE_OFFTRACK_HARD_M;
@@ -713,7 +708,9 @@ function renderTrackingStatusCard(active, marker = null) {
     railEl?.classList.toggle('dark:text-gray-100', !railFar);
     setTrackingText('map-tracking-accuracy', Number.isFinite(accuracy) ? `±${Math.round(accuracy)} m` : 'Unknown');
     setTrackingText('map-tracking-count', String(Math.max(1, Number(subjectMarker?.n || subject.n) || 1)));
-    document.getElementById('map-tracking-warning')?.classList.toggle('hidden', !subject.directionWarning);
+    const showDiag = isAdminAuthed();
+    document.getElementById('map-tracking-diagnostics')?.classList.toggle('hidden', !showDiag);
+    document.getElementById('map-tracking-warning')?.classList.toggle('hidden', !showDiag || !subject.directionWarning);
     setTrackingText('map-tracking-restore-label', `${trainHeadboardTitle(subject.trainId, subject.destination)} · ${stateLabel.toLowerCase()}`);
     const toggle = document.getElementById('map-tracking-toggle');
     if (toggle) {
@@ -721,6 +718,14 @@ function renderTrackingStatusCard(active, marker = null) {
         toggle.setAttribute('aria-label', paused ? 'Restart sharing' : 'Pause sharing');
     }
     setTrackingOwnerChrome(owner);
+    const joinBtn = document.getElementById('map-tracking-join');
+    const showJoin = !owner && !!trainId && !cancelled;
+    if (joinBtn) {
+        joinBtn.classList.toggle('hidden', !showJoin);
+        if (showJoin) joinBtn.removeAttribute('hidden');
+        else joinBtn.setAttribute('hidden', '');
+        joinBtn.textContent = trainId ? `Join train ${trainId}` : 'Join this train';
+    }
     // Community trust: anyone watching someone else's train can say whether it
     // is where the map shows it. The sharer never votes on their own share.
     const sharerDeviceId = subjectMarker?.deviceId || subject.deviceId || '';
@@ -2462,13 +2467,14 @@ export async function contributeForTrain(candidate) {
 }
 
 /** Push corridor riders onto the embedded map. Prefer the live listener cache. */
-export async function syncRidePingsToMap(routeId = $currentRouteId.get()) {
+export async function syncRidePingsToMap(routeId = $currentRouteId.get(), { allowRest = true } = {}) {
     if (!routeId) return;
     try {
         const ride = await import('./ride-pings.js');
         const mine = getDeviceId();
         let pings = ride.getCachedRidePings?.(routeId) || [];
-        if (!ride.hasRidePingsListener?.(routeId) || !pings.length) {
+        const listening = !!ride.hasRidePingsListener?.(routeId);
+        if (allowRest && !listening) {
             pings = await ride.fetchRouteRidePings(routeId);
             // Votes ride along with the REST backup when the listener is down.
             await ride.fetchRouteRideVotes?.(routeId);
@@ -2579,18 +2585,22 @@ function startPingsPolling() {
     stopPingsPolling();
     const schedule = async () => {
         let ms = PINGS_POLL_MS;
+        let allowRest = true;
         try {
             const ride = await import('./ride-pings.js');
             const id = $currentRouteId.get();
-            if (ride.hasRidePingsListener?.(id)) ms = PINGS_POLL_WITH_LISTENER_MS;
+            if (ride.hasRidePingsListener?.(id)) {
+                // Listener owns updates; paint from cache only, no REST.
+                allowRest = false;
+                ms = 15 * 1000;
+            }
         } catch { /* keep REST interval */ }
         pingsTimer = setTimeout(async () => {
             if (document.getElementById('view-map')?.classList.contains('active')) {
-                lastMapPingSig = '';
-                await syncRidePingsToMap();
+                await syncRidePingsToMap($currentRouteId.get(), { allowRest });
             }
             if (pingsTimer) schedule();
-        }, ms);
+        }, ms || PINGS_POLL_MS);
     };
     schedule();
 }
@@ -2703,6 +2713,7 @@ async function runTripWatch(watch) {
             lateBucket: 'unsure',
             source: 'trip_watch',
         });
+        if (!result.ok && result.quiet) return;
         showToast(
             result.ok ? 'Thanks - we’ll show this train as late' : (result.message || 'Couldn’t send the late report'),
             result.ok ? 'success' : 'error',
@@ -2778,15 +2789,10 @@ export function maybeOfferPlannerContribute() {
 }
 
 async function sharePlannerTrip(c) {
-    const { $account, openAccountModal, waitForSignedIn } = await import('./account.js');
+    const { $account, requestAccountSignIn } = await import('./account.js');
     if ($account.get().status !== 'signed-in') {
-        showToast('Quick sign-in to share this trip and earn points.', 'info');
-        openAccountModal();
-        const ok = await waitForSignedIn();
-        if (!ok) {
-            showToast('Sign in when you’re ready - you can still use the trip plan.', 'info');
-            return;
-        }
+        const ok = await requestAccountSignIn();
+        if (!ok) return;
     }
 
     showToast('Checking you’re near the station…', 'info');
@@ -3075,6 +3081,32 @@ async function shareLiveTrain() {
     }
 }
 
+function tickTrackingShareReadout() {
+    const card = document.getElementById('map-tracking-card');
+    const restore = document.getElementById('map-tracking-restore');
+    const cardOn = !!(card && !card.classList.contains('hidden'));
+    const pillOn = !!(restore && !restore.classList.contains('hidden'));
+    if (!cardOn && !pillOn) return;
+    const gps = document.getElementById('map-tracking-gps');
+    const at = Number(gps?.getAttribute('data-nt-gps-at') || 0);
+    if (!at) return;
+    if (gps) gps.textContent = formatGpsPingAge(at);
+    const seen = document.getElementById('map-tracking-last-seen');
+    const place = seen?.getAttribute('data-nt-last-place') || '';
+    if (seen && place) seen.textContent = trackingLastSeenLine(place, at);
+    const title = document.getElementById('map-tracking-title');
+    const saidPaused = /Paused|Cancelled|Stuck/.test(title?.textContent || '');
+    if ((Date.now() - at) >= RIDE_GPS_STALE_MS && !saidPaused) {
+        import('./ride-pings.js').then((ride) => {
+            const active = ride.getActiveShare?.();
+            const own = active
+                ? (ride.getCachedRidePings?.(active.routeId) || []).find((p) => p.deviceId === getDeviceId())
+                : null;
+            renderTrackingStatusCard(active, viewedTrain?.ping || own || null);
+        }).catch(() => {});
+    }
+}
+
 function locateSharedTrainOnMap() {
     import('./ride-pings.js').then((ride) => {
         const active = ride.getActiveShare?.();
@@ -3085,6 +3117,9 @@ function locateSharedTrainOnMap() {
 export function bindMapTabUi() {
     if (typeof document === 'undefined' || window.__ntMapTabBound) return;
     window.__ntMapTabBound = true;
+    if (!window.__ntTrackingReadoutTick) {
+        window.__ntTrackingReadoutTick = setInterval(tickTrackingShareReadout, 1000);
+    }
     bindMapOverrideSaveListener();
     window.__ntFullscreenMapTab = fullscreenMapTab;
     exposeEmbedBridge();
@@ -3233,6 +3268,19 @@ export function bindMapTabUi() {
             syncMapShareChrome();
             syncRidePingsToMap();
         }
+    });
+    document.getElementById('map-tracking-join')?.addEventListener('click', () => {
+        const trainId = String(viewedTrain?.trainId || '').trim();
+        if (!trainId) return;
+        triggerHaptic();
+        contributeForTrain({
+            trainId,
+            routeId: viewedTrain?.routeId || $currentRouteId.get(),
+            station: viewedTrain?.ping?.station || document.getElementById('station-select')?.value || '',
+            destination: viewedTrain?.destination || viewedTrain?.ping?.destination || '',
+            source: 'map_join',
+            skipVolunteer: true,
+        });
     });
     document.getElementById('map-tracking-share')?.addEventListener('click', () => {
         shareLiveTrain();

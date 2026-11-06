@@ -4,11 +4,20 @@
 import { withBase } from '../lib/config.js';
 ---
 
+<style>
+  /* Half the default Tailwind ping cadence (1s → 2s). */
+  @keyframes nt-welcome-ping {
+    75%, 100% { transform: scale(2); opacity: 0; }
+  }
+  .nt-welcome-ping {
+    animation: nt-welcome-ping 2s cubic-bezier(0, 0, 0.2, 1) infinite;
+  }
+</style>
 <div id="welcome-modal" class="fixed inset-0 bg-gray-100 dark:bg-gray-900 z-[100] hidden overflow-y-auto overscroll-contain transition-opacity duration-300">
     <div class="w-full max-w-sm mx-auto flex flex-col items-center animate-fade-in-up px-6 pt-6 sm:pt-8 pb-8 min-h-full">
         <!-- Animated branded logo -->
         <div class="relative w-16 h-16 sm:w-20 sm:h-20 mb-3 sm:mb-4">
-            <div class="absolute inset-0 bg-blue-500 rounded-full opacity-20 animate-ping"></div>
+            <div class="absolute inset-0 bg-blue-500 rounded-full opacity-20 nt-welcome-ping"></div>
             <div class="relative bg-white dark:bg-gray-800 p-3 sm:p-4 rounded-full shadow-xl ring-4 ring-blue-50 dark:ring-gray-700 flex items-center justify-center">
                 <img src={withBase('icons/loading-logo-splash.webp')} class="w-full h-full object-contain" alt="Logo" width="64" height="64" onerror="this.style.display='none'" />
             </div>
@@ -41,7 +50,7 @@ import { withBase } from '../lib/config.js';
     // @ts-nocheck — pre-existing bridge; typed globals live in env.d.ts
     import { $userRegion, $currentRouteId } from '../store.js';
     import { ROUTES, getCorridorLabel } from '../lib/config.js';
-    import { safeStorage, formatRouteLabelHtml, expandJhbLabel, fitRouteNameNodes, fitJhbNodes, escapeHTML, restorePinnedSession } from '../lib/utils.js';
+    import { safeStorage, formatRouteLabelHtml, expandJhbLabel, fitRouteNameNodes, fitJhbNodes, escapeHTML, restorePinnedSession, lineSwatchClass } from '../lib/utils.js';
     import { loadAllSchedules, executeRegionSwap } from '../lib/logic.js';
     import { prepareDeeplinkIntents, flushPendingDeeplinkIntents, hasInboundShareIntent } from '../lib/deeplink.js';
     import { markWelcomeShownThisVisit, snapshotReturningForStartupLocate, maybeAutoLocateBoard } from '../lib/auto-locate.js';
@@ -87,14 +96,7 @@ import { withBase } from '../lib/config.js';
             const displayName = formatRouteLabelHtml(route.name);
             
             if (route.isActive) {
-                let borderColor = 'border-gray-500';
-                if (route.colorClass.includes('orange')) borderColor = 'border-orange-500';
-                else if (route.colorClass.includes('purple')) borderColor = 'border-purple-500';
-                else if (route.colorClass.includes('green')) borderColor = 'border-green-500';
-                else if (route.colorClass.includes('blue')) borderColor = 'border-blue-500';
-                else if (route.colorClass.includes('red')) borderColor = 'border-red-500';
-                else if (route.colorClass.includes('yellow')) borderColor = 'border-yellow-500';
-                else if (route.colorClass.includes('indigo')) borderColor = 'border-indigo-500';
+                const borderColor = lineSwatchClass(route.colorClass, 'border');
 
                 const corridor = getCorridorLabel(route);
                 const corridorText = corridor || 'View schedules';
@@ -117,6 +119,7 @@ import { withBase } from '../lib/config.js';
                     safeStorage.setItem('userRegion', region);
                     safeStorage.setItem('defaultRoute_' + region, route.id);
                     safeStorage.setItem('welcomeSeen', 'true');
+                    import('../lib/account.js').then((m) => m.syncAccountPinnedRoutesNow?.()).catch(() => {});
                     
                     // 2. Hydrate global reactive store states
                     $currentRouteId.set(route.id);
@@ -261,8 +264,13 @@ import { withBase } from '../lib/config.js';
                     }
                 });
             });
-        } else if (returningAtBoot) {
-            maybeAutoLocateBoard().catch(() => {});
+        } else {
+            // Pin restore / SEO Open may mint welcomeSeen after Layout stamped
+            // nt-onboarding. Re-apply chrome so the bottom bar is not stuck hidden.
+            import('../lib/prefs.js').then(({ syncInAppChrome }) => syncInAppChrome()).catch(() => {});
+            if (returningAtBoot) {
+                maybeAutoLocateBoard().catch(() => {});
+            }
         }
     };
 

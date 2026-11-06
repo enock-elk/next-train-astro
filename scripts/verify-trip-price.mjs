@@ -5,10 +5,10 @@
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { FARE_CONFIG, fareMultiplierForProfile } from '../src/lib/config.js';
+import { FARE_CONFIG, fareMultiplierForProfile, fareMultiplierForListedTicket } from '../src/lib/config.js';
 import { FEATURE_KEYS, GRANTABLE_FEATURES, isFeatureEnabled } from '../src/lib/features.js';
 import { suggestZoneFromKm, DEFAULT_ZONE_KM_BANDS, bakedDestToDestKm } from '../src/lib/zone-distance-audit.js';
-import { computeZoneFareForTrip, getCrowFliesTripKm, collectTripStopsForDistance } from '../src/lib/planner-ui.js';
+import { computeZoneFareForTrip, plannerTicketRowsHtml, getCrowFliesTripKm, collectTripStopsForDistance } from '../src/lib/planner-ui.js';
 import { compactTime } from '../src/lib/share-links.js';
 import {
     cheaperZone,
@@ -82,10 +82,13 @@ assert(singleRouteIdFromList([{ id: 'pta-saul' }, { id: 'pta-jhb' }]) === null, 
     assert(sat && sat.isOffPeak === false, `Saturday 11:00 must be peak, got ${JSON.stringify(sat)}`);
     const wk = computeZoneFareForTrip('Z2', { dayType: 'weekday', depTime: '11:00' });
     assert(wk && wk.isOffPeak === true, `weekday 11:00 must be off-peak, got ${JSON.stringify(wk)}`);
-    assert(wk.price === 7 && wk.priceLabel === '7', `Z2 weekday off-peak floors R7.50 to R7, got ${JSON.stringify(wk)}`);
+    assert(wk.price === 7 && wk.priceLabel === '7', `Z2 weekday off-peak rounds R7.2 to nearest R0.5 as R7, got ${JSON.stringify(wk)}`);
     assert(wk.rawPrice > wk.price, 'fare sheet can reveal the unrounded calculated price');
     const peak = computeZoneFareForTrip('Z2', { dayType: 'weekday', depTime: '07:30' });
     assert(peak && peak.isOffPeak === false, `weekday 07:30 must be peak, got ${JSON.stringify(peak)}`);
+    const z3Off = computeZoneFareForTrip('Z3', { dayType: 'weekday', depTime: '11:00' });
+    assert(z3Off && z3Off.isOffPeak === true && z3Off.price === 8.5 && z3Off.priceLabel === '8.5',
+        `Z3 weekday off-peak rounds R8.4 to R8.5, got ${JSON.stringify(z3Off)}`);
 }
 
 assert(FARE_CONFIG.profiles.Scholar.alwaysDiscount === true, 'Scholar is the always-on discount profile');
@@ -97,6 +100,20 @@ assert(fareMultiplierForProfile('Adult', false) === 1, 'Adult peak is full fare'
 assert(fareMultiplierForProfile('Adult', true) === 0.6, 'Adult off-peak is 40% off');
 assert(fareMultiplierForProfile('Pensioner', false) === 1, 'Pensioner peak is full fare');
 assert(fareMultiplierForProfile('Pensioner', true) === 0.5, 'Pensioner off-peak is 50%');
+assert(fareMultiplierForListedTicket('Scholar', 'single') === 0.5, 'Scholar single stays 50%');
+assert(fareMultiplierForListedTicket('Scholar', 'return') === 0.5, 'Scholar return stays 50%');
+assert(fareMultiplierForListedTicket('Scholar', 'pass') === 1, 'Scholar weekly and monthly stay full adult price');
+assert(fareMultiplierForListedTicket('Adult', 'pass') === 1, 'Adult passes stay full price');
+assert(fareMultiplierForListedTicket('Pensioner', 'pass') === 1, 'Pensioner passes stay the peak adult price');
+{
+    const scholarRows = plannerTicketRowsHtml('Z2', { priceLabel: '6', profile: 'Scholar', price: 6 });
+    assert(scholarRows.includes('>R6<'), 'Scholar single row stays R6');
+    assert(scholarRows.includes('>R12<'), 'Scholar return stays half of Z2 R24');
+    assert(scholarRows.includes('>R70<'), 'Scholar Mon-Fri weekly stays adult R70');
+    assert(scholarRows.includes('>R80<'), 'Scholar Mon-Sat weekly stays adult R80');
+    assert(scholarRows.includes('>R220<'), 'Scholar monthly stays adult R220');
+    assert(!scholarRows.includes('>R110<'), 'Scholar monthly is not half of R220');
+}
 
 {
     $userProfile.set('Scholar');
@@ -119,7 +136,9 @@ const ui = readFileSync(join(ROOT, 'src/lib/planner-ui.js'), 'utf8');
 assert(ui.includes('function canShowTripPrice() {\n    return true;\n}'), 'trip fare is not feature-gated');
 assert(!ui.includes('isFeatureEnabled(FEATURE_KEYS.TRIP_PRICE)'), 'planner does not read the tripPrice flag');
 assert(!ui.includes("canAccessPilotSurface('tripPrice')"), 'planner does not use the tripPrice pilot surface');
-assert(ui.includes('Trip fare'), 'fare label is Trip fare');
+assert(ui.includes('Trip Fare</span>'), 'fare label is Trip Fare');
+assert(ui.includes("plannerMoneySvg('w-4 h-4 text-blue-700 dark:text-blue-300')}Trip Fare"), 'money mark sits left of Trip Fare');
+assert(ui.includes('bg-blue-200 hover:bg-blue-300'), 'Show Next Train is darker than the fare row');
 assert(!ui.includes('TRIP FARE:'), 'fare label is not all-caps TRIP FARE');
 assert(ui.includes('text-base font-black text-gray-900'), 'Trip fare price is conspicuous');
 assert(ui.includes('plannerMoneySvg') || ui.includes('M3 7.5h13.5'), 'trip fare button has a money SVG');
@@ -132,8 +151,9 @@ assert(!ui.includes("String(fare.depTime).slice(0, 5)"), 'do not slice HH:MM:SS 
 assert(compactTime('5:10:00') === '5:10', '5:10:00 compactTime is 5:10');
 assert(compactTime('05:10') === '05:10', 'HH:MM compactTime stays HH:MM');
 assert(ui.includes('openPassengerTypePicker'), 'Adult opens the passenger profile picker');
-assert(ui.includes('roundBoardFare'), 'planner uses the board whole-rand floor');
-assert(ui.includes('flex justify-center mt-3'), 'Trip fare sits centered under the time row');
+assert(ui.includes('roundBoardFare'), 'planner uses the board nearest-R0.5 round');
+assert(ui.includes('Math.round(finalPrice * 2) / 2'), 'board fare rounds to nearest R0.5');
+assert(ui.includes('w-full flex items-center justify-between'), 'Trip fare is one full-width row');
 assert(ui.includes('planner-departed-next'), 'departed trips still offer Show Next Train');
 assert(ui.includes('plannerTrainColumnTerminus'), 'train names use that train column last stop');
 assert(ui.includes('getSmoothTripDistanceKm'), 'fare uses smoothed rail distance');
@@ -145,6 +165,8 @@ assert(ui.includes('Straight-line'), 'fare sheet still has the crow-flies line')
 assert(ui.includes('data-admin-authed-only') && ui.includes('Straight-line') && ui.includes('Zone'), 'straight-line and zone are admin-only');
 assert(ui.includes('applyAdminAuthedChrome(isAdminAuthed())'), 'fare sheet re-applies admin chrome after innerHTML');
 assert(ui.includes("peakTitle = fare.alwaysDiscount ? 'Discount'"), 'scholar sheet labels Discount, not Peak / off-peak');
+assert(ui.includes('peakWhen') && ui.includes('`@ ${depLabel}`'), 'peak line includes the day and time in parentheses');
+assert(readFileSync(new URL('../src/components/LiveBoardModals.astro', import.meta.url), 'utf8').includes('id="profile-modal-close"'), 'passenger type has a close button');
 assert(ui.includes('50% all day'), 'scholar sheet says 50% all day');
 assert(ui.includes('planner-fare-breakdown-sheet'), 'fare sheet is wired');
 assert(ui.includes('applyApprovedPlannerFare'), 'planner results apply approved live prices');

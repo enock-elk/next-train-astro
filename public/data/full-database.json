@@ -20,6 +20,26 @@
         "updatedAt": 1789161019485,
         "updatedBy": "enockelk@gmail.com"
       },
+      "usr_5rdleuvrw_1778642269337": {
+        "communityRealtime": false,
+        "communityTab": true,
+        "delayReportsUi": false,
+        "mapTab": true,
+        "pushNotify": false,
+        "rideCheckIn": false,
+        "updatedAt": 1791543101098,
+        "updatedBy": "enockelk@gmail.com"
+      },
+      "usr_b03e1sftt_1790614008268": {
+        "communityRealtime": false,
+        "communityTab": false,
+        "delayReportsUi": false,
+        "mapTab": true,
+        "pushNotify": false,
+        "rideCheckIn": false,
+        "updatedAt": 1791542996691,
+        "updatedBy": "enockelk@gmail.com"
+      },
       "usr_n5y4p4ha1_1782725917959": {
         "communityRealtime": true,
         "communityTab": true,
@@ -43,11 +63,43 @@
       }
     },
     "features": {
+      "accounts": {
+        "enabled": false,
+        "regionIds": [
+          "WC",
+          "KZN"
+        ]
+      },
       "communityRealtime": {
         "enabled": false
       },
       "communityTab": {
-        "enabled": false
+        "enabled": false,
+        "regionIds": [
+          "WC",
+          "KZN"
+        ],
+        "routeIds": [
+          "kzn-bridgecity",
+          "kzn-catoridge",
+          "kzn-crossmoor",
+          "kzn-pinetown",
+          "kzn-umlazi",
+          "kzn-winklespruit",
+          "bellville-mutual",
+          "ct-chrishani",
+          "ct-bellv",
+          "ct-eerst",
+          "ct-kapteinsklip",
+          "ct-kraai",
+          "ct-malm",
+          "ct-nolu",
+          "ct-simon",
+          "ct-flats",
+          "ct-strnd",
+          "ct-well",
+          "eerst-dtoit"
+        ]
       },
       "delayReportsUi": {
         "enabled": false
@@ -81,7 +133,7 @@
           "pta-saul"
         ]
       },
-      "updatedAt": 1790220641280,
+      "updatedAt": 1792952343527,
       "updatedBy": "enockelk@gmail.com"
     },
     "grid_order": {
@@ -94,7 +146,7 @@
             "0007"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "berln-to-eastl_weekday": {
@@ -105,7 +157,7 @@
             "0007"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "berln_to_eastl_sat": {
@@ -116,7 +168,7 @@
             "0007"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "berln_to_eastl_weekday": {
@@ -127,7 +179,7 @@
             "0007"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "eastl-to-berln_sat": {
@@ -138,7 +190,7 @@
             "0020"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "eastl-to-berln_weekday": {
@@ -149,7 +201,7 @@
             "0020"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "eastl_to_berln_sat": {
@@ -160,7 +212,7 @@
             "0020"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "eastl_to_berln_weekday": {
@@ -171,7 +223,7 @@
             "0020"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         }
       },
@@ -184,7 +236,7 @@
             "0817"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "belle-to-mab_weekday": {
@@ -203,7 +255,7 @@
             "0819"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "belle_to_mab_sat": {
@@ -214,7 +266,7 @@
             "0817"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "belle_to_mab_weekday": {
@@ -233,7 +285,7 @@
             "0819"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "dewil-to-pta_sat": {
@@ -243,7 +295,7 @@
             "4420"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "dewil-to-pta_weekday": {
@@ -278,7 +330,7 @@
             "4462"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "dewil_to_pta_sat": {
@@ -288,7 +340,7 @@
             "4420"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "dewil_to_pta_weekday": {
@@ -323,7 +375,7 @@
             "4462"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "event-to-a_sat": {
@@ -333,7 +385,7 @@
             "4420"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "event-to-a_weekday": {
@@ -343,7 +395,7 @@
             "4420"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "event-to-b_sat": {
@@ -353,7 +405,7 @@
             "4420"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "event-to-b_weekday": {
@@ -363,7 +415,7 @@
             "4420"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "event_to_a_sat": {
@@ -373,7 +425,7 @@
             "4420"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "event_to_a_weekday": {
@@ -383,7 +435,7 @@
             "4420"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "event_to_b_sat": {
@@ -393,7 +445,7 @@
             "4420"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "event_to_b_weekday": {
@@ -403,7 +455,7 @@
             "4420"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "germ-to-jhb_sat": {
@@ -417,7 +469,7 @@
             "6548"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "germ-to-jhb_weekday": {
@@ -442,7 +494,7 @@
             "6554"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "germ-to-kwesi_sat": {
@@ -455,7 +507,7 @@
             "7645"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "germ-to-kwesi_weekday": {
@@ -476,7 +528,7 @@
             "7629"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "germ-to-lerl_sat": {
@@ -492,7 +544,7 @@
             "0517"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "germ-to-lerl_weekday": {
@@ -511,7 +563,7 @@
             "0523"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "germ_to_jhb_sat": {
@@ -525,7 +577,7 @@
             "6548"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "germ_to_jhb_weekday": {
@@ -550,7 +602,7 @@
             "6554"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "germ_to_kwesi_sat": {
@@ -563,7 +615,7 @@
             "7645"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "germ_to_kwesi_weekday": {
@@ -584,7 +636,7 @@
             "7629"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "germ_to_lerl_sat": {
@@ -600,7 +652,7 @@
             "0517"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "germ_to_lerl_weekday": {
@@ -619,7 +671,7 @@
             "0523"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "herc-to-koed_sat": {
@@ -633,31 +685,19 @@
             "6555"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "herc-to-koed_weekday": {
           "order": [
-            "6503",
-            "6505",
-            "6509",
-            "6513",
-            "6515",
-            "6517",
-            "6525",
-            "6531",
-            "6535",
-            "6539",
-            "6545",
-            "6543",
-            "6549",
-            "6547",
-            "6553",
-            "6555",
-            "6557"
+            "1201",
+            "1203",
+            "1215",
+            "1217",
+            "1219"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "herc_to_koed_sat": {
@@ -671,31 +711,19 @@
             "6555"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "herc_to_koed_weekday": {
           "order": [
-            "6503",
-            "6505",
-            "6509",
-            "6513",
-            "6515",
-            "6517",
-            "6525",
-            "6531",
-            "6535",
-            "6539",
-            "6545",
-            "6543",
-            "6549",
-            "6547",
-            "6553",
-            "6555",
-            "6557"
+            "1201",
+            "1203",
+            "1215",
+            "1217",
+            "1219"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "irene-to-pta_sat": {
@@ -708,7 +736,7 @@
             "0645"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "irene-to-pta_weekday": {
@@ -727,7 +755,7 @@
             "0647"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "irene_to_pta_sat": {
@@ -740,7 +768,7 @@
             "0645"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "irene_to_pta_weekday": {
@@ -759,7 +787,7 @@
             "0647"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "jhb-to-germ_sat": {
@@ -773,7 +801,7 @@
             "6555"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "jhb-to-germ_weekday": {
@@ -797,7 +825,7 @@
             "6557"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "jhb-to-midwy_sat": {
@@ -808,7 +836,7 @@
             "9014"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "jhb-to-midwy_weekday": {
@@ -829,7 +857,7 @@
             "9216"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "jhb-to-nald_sat": {
@@ -841,7 +869,7 @@
             "9316"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "jhb-to-nald_weekday": {
@@ -863,7 +891,7 @@
             "9328"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "jhb-to-rand_sat": {
@@ -880,7 +908,7 @@
             "0224"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "jhb-to-rand_weekday": {
@@ -902,7 +930,7 @@
             "0218"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "jhb_to_germ_sat": {
@@ -916,7 +944,7 @@
             "6555"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "jhb_to_germ_weekday": {
@@ -940,7 +968,7 @@
             "6557"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "jhb_to_midwy_sat": {
@@ -951,7 +979,7 @@
             "9014"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "jhb_to_midwy_weekday": {
@@ -972,7 +1000,7 @@
             "9216"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "jhb_to_nald_sat": {
@@ -984,7 +1012,7 @@
             "9316"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "jhb_to_nald_weekday": {
@@ -1006,7 +1034,7 @@
             "9328"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "jhb_to_rand_sat": {
@@ -1023,7 +1051,7 @@
             "0224"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "jhb_to_rand_weekday": {
@@ -1045,7 +1073,7 @@
             "0218"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "kemp-to-pta_sat": {
@@ -1053,11 +1081,10 @@
             "0603",
             "0605",
             "0607",
-            "0621",
             "0609"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "kemp-to-pta_weekday": {
@@ -1082,7 +1109,7 @@
             "0647"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "kemp_to_pta_sat": {
@@ -1090,11 +1117,10 @@
             "0603",
             "0605",
             "0607",
-            "0621",
             "0609"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "kemp_to_pta_weekday": {
@@ -1119,7 +1145,7 @@
             "0647"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "koed-to-herc_sat": {
@@ -1133,32 +1159,19 @@
             "6548"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "koed-to-herc_weekday": {
           "order": [
-            "6500",
-            "6504",
-            "6506",
-            "6508",
-            "6512",
-            "6514",
-            "6518",
-            "6522",
-            "6528",
-            "6532",
-            "6536",
-            "6542",
-            "6544",
-            "6546",
-            "6548",
-            "6550",
-            "6552",
-            "6554"
+            "1202",
+            "1204",
+            "1216",
+            "1218",
+            "1220"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "koed_to_herc_sat": {
@@ -1172,32 +1185,19 @@
             "6548"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "koed_to_herc_weekday": {
           "order": [
-            "6500",
-            "6504",
-            "6506",
-            "6508",
-            "6512",
-            "6514",
-            "6518",
-            "6522",
-            "6528",
-            "6532",
-            "6536",
-            "6542",
-            "6544",
-            "6546",
-            "6548",
-            "6550",
-            "6552",
-            "6554"
+            "1202",
+            "1204",
+            "1216",
+            "1218",
+            "1220"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "kwesi-to-germ_sat": {
@@ -1211,7 +1211,7 @@
             "7648"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "kwesi-to-germ_weekday": {
@@ -1232,7 +1232,7 @@
             "7626"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "kwesi_to_germ_sat": {
@@ -1246,7 +1246,7 @@
             "7648"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "kwesi_to_germ_weekday": {
@@ -1267,7 +1267,7 @@
             "7626"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "lerl-to-germ_sat": {
@@ -1284,7 +1284,7 @@
             "0518"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "lerl-to-germ_weekday": {
@@ -1302,7 +1302,7 @@
             "0520"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "lerl_to_germ_sat": {
@@ -1319,7 +1319,7 @@
             "0518"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "lerl_to_germ_weekday": {
@@ -1337,7 +1337,7 @@
             "0520"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "mab-to-belle_sat": {
@@ -1347,7 +1347,7 @@
             "0816"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "mab-to-belle_weekday": {
@@ -1366,7 +1366,7 @@
             "0818"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "mab-to-pta_sat": {
@@ -1376,7 +1376,7 @@
             "1822"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "mab-to-pta_weekday": {
@@ -1412,7 +1412,7 @@
             "1864"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "mab_to_belle_sat": {
@@ -1422,7 +1422,7 @@
             "0816"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "mab_to_belle_weekday": {
@@ -1441,7 +1441,7 @@
             "0818"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "mab_to_pta_sat": {
@@ -1451,7 +1451,7 @@
             "1822"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "mab_to_pta_weekday": {
@@ -1487,7 +1487,7 @@
             "1864"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "midwy-to-jhb_sat": {
@@ -1498,7 +1498,7 @@
             "9013"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "midwy-to-jhb_weekday": {
@@ -1519,7 +1519,7 @@
             "9215"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "midwy_to_jhb_sat": {
@@ -1530,7 +1530,7 @@
             "9013"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "midwy_to_jhb_weekday": {
@@ -1551,7 +1551,7 @@
             "9215"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "nald-to-jhb_sat": {
@@ -1563,7 +1563,7 @@
             "9315"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "nald-to-jhb_weekday": {
@@ -1586,7 +1586,7 @@
             "9331"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "nald_to_jhb_sat": {
@@ -1598,7 +1598,7 @@
             "9315"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "nald_to_jhb_weekday": {
@@ -1621,7 +1621,7 @@
             "9331"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "pien-to-pta_sat": {
@@ -1633,7 +1633,7 @@
             "9118"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "pien-to-pta_weekday": {
@@ -1674,7 +1674,7 @@
             "9122b"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "pien_to_pta_sat": {
@@ -1686,7 +1686,7 @@
             "9118"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "pien_to_pta_weekday": {
@@ -1727,7 +1727,7 @@
             "9122b"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "pta-to-dewil_sat": {
@@ -1738,7 +1738,7 @@
             "4421"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "pta-to-dewil_weekday": {
@@ -1760,6 +1760,7 @@
             "4433",
             "4439",
             "4435",
+            "4443",
             "4445",
             "4447",
             "4449",
@@ -1772,7 +1773,7 @@
             "4463"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "pta-to-irene_sat": {
@@ -1782,11 +1783,10 @@
             "0628",
             "0640",
             "0642",
-            "0644",
-            "0646"
+            "0644"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "pta-to-irene_weekday": {
@@ -1805,7 +1805,7 @@
             "0646"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "pta-to-kemp_sat": {
@@ -1816,7 +1816,7 @@
             "0610"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "pta-to-kemp_weekday": {
@@ -1841,7 +1841,7 @@
             "0648"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "pta-to-mab_sat": {
@@ -1852,7 +1852,7 @@
             "1823"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "pta-to-mab_weekday": {
@@ -1887,7 +1887,7 @@
             "1865"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "pta-to-pien_sat": {
@@ -1899,7 +1899,7 @@
             "9119"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "pta-to-pien_weekday": {
@@ -1940,7 +1940,7 @@
             "9123"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "pta-to-saul_sat": {
@@ -1954,7 +1954,7 @@
             "0029"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "pta-to-saul_weekday": {
@@ -2005,7 +2005,7 @@
             "0099"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "pta_to_dewil_sat": {
@@ -2016,7 +2016,7 @@
             "4421"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "pta_to_dewil_weekday": {
@@ -2038,6 +2038,7 @@
             "4433",
             "4439",
             "4435",
+            "4443",
             "4445",
             "4447",
             "4449",
@@ -2050,7 +2051,7 @@
             "4463"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "pta_to_irene_sat": {
@@ -2060,11 +2061,10 @@
             "0628",
             "0640",
             "0642",
-            "0644",
-            "0646"
+            "0644"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "pta_to_irene_weekday": {
@@ -2083,7 +2083,7 @@
             "0646"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "pta_to_kemp_sat": {
@@ -2094,7 +2094,7 @@
             "0610"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "pta_to_kemp_weekday": {
@@ -2119,7 +2119,7 @@
             "0648"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "pta_to_mab_sat": {
@@ -2130,7 +2130,7 @@
             "1823"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "pta_to_mab_weekday": {
@@ -2165,7 +2165,7 @@
             "1865"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "pta_to_pien_sat": {
@@ -2177,7 +2177,7 @@
             "9119"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "pta_to_pien_weekday": {
@@ -2218,7 +2218,7 @@
             "9123"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "pta_to_saul_sat": {
@@ -2232,7 +2232,7 @@
             "0029"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "pta_to_saul_weekday": {
@@ -2283,7 +2283,7 @@
             "0099"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "rand-to-jhb_sat": {
@@ -2300,7 +2300,7 @@
             "0223"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "rand-to-jhb_weekday": {
@@ -2323,7 +2323,7 @@
             "0237"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "rand_to_jhb_sat": {
@@ -2340,7 +2340,7 @@
             "0223"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "rand_to_jhb_weekday": {
@@ -2363,7 +2363,7 @@
             "0237"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "saul-to-pta_sat": {
@@ -2377,7 +2377,7 @@
             "0028"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "saul-to-pta_weekday": {
@@ -2428,7 +2428,7 @@
             "0098"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "saul_to_pta_sat": {
@@ -2442,7 +2442,7 @@
             "0028"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "saul_to_pta_weekday": {
@@ -2493,7 +2493,7 @@
             "0098"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         }
       },
@@ -2505,11 +2505,8 @@
             "9344",
             "9732",
             "9364",
-            "9736",
             "9374",
-            "9748",
             "9404",
-            "9758",
             "9424",
             "9762",
             "9434",
@@ -2517,7 +2514,7 @@
             "9454"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "bridg-to-durbn_weekday": {
@@ -2525,7 +2522,7 @@
             "9712",
             "9314",
             "9716",
-            "9324",
+            "0024",
             "9720",
             "9334",
             "9724",
@@ -2536,13 +2533,9 @@
             "9364",
             "9736",
             "9374",
-            "9742",
             "9384",
-            "9748",
             "9404",
-            "9754",
             "9414",
-            "9758",
             "9424",
             "9762",
             "9434",
@@ -2550,11 +2543,10 @@
             "9444",
             "9776",
             "9454",
-            "9782",
             "9464"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "bridg_to_durbn_sat": {
@@ -2564,11 +2556,8 @@
             "9344",
             "9732",
             "9364",
-            "9736",
             "9374",
-            "9748",
             "9404",
-            "9758",
             "9424",
             "9762",
             "9434",
@@ -2576,7 +2565,7 @@
             "9454"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "bridg_to_durbn_weekday": {
@@ -2584,7 +2573,7 @@
             "9712",
             "9314",
             "9716",
-            "9324",
+            "0024",
             "9720",
             "9334",
             "9724",
@@ -2595,13 +2584,9 @@
             "9364",
             "9736",
             "9374",
-            "9742",
             "9384",
-            "9748",
             "9404",
-            "9754",
             "9414",
-            "9758",
             "9424",
             "9762",
             "9434",
@@ -2609,66 +2594,73 @@
             "9444",
             "9776",
             "9454",
-            "9782",
             "9464"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "cator-to-durbn_sat": {
           "order": [
             "1013",
             "1023",
-            "1033"
+            "1027",
+            "1031"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "cator-to-durbn_weekday": {
           "order": [
+            "1009",
             "1013",
             "1019",
             "1023",
+            "1027",
             "1031",
-            "1033"
+            "1063"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "cator_to_durbn_sat": {
           "order": [
             "1013",
             "1023",
-            "1033"
+            "1027",
+            "1031"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "cator_to_durbn_weekday": {
           "order": [
+            "1009",
             "1013",
             "1019",
             "1023",
+            "1027",
             "1031",
-            "1033"
+            "1063"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "cross-to-durbn_sat": {
           "order": [
             "9613",
             "9621",
+            "9629",
+            "0735",
             "9673",
             "9681"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "cross-to-durbn_weekday": {
@@ -2676,25 +2668,33 @@
             "9613",
             "9621",
             "9629",
-            "9637",
+            "9635",
+            "0743",
+            "9641",
+            "9195",
+            "9647",
+            "9215",
             "9665",
+            "9225",
             "9673",
             "9681",
             "9689"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "cross_to_durbn_sat": {
           "order": [
             "9613",
             "9621",
+            "9629",
+            "0735",
             "9673",
             "9681"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "cross_to_durbn_weekday": {
@@ -2702,54 +2702,58 @@
             "9613",
             "9621",
             "9629",
-            "9637",
+            "9635",
+            "0743",
+            "9641",
+            "9195",
+            "9647",
+            "9215",
             "9665",
+            "9225",
             "9673",
             "9681",
             "9689"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "durbn-to-bridg_sat": {
           "order": [
             "9323",
+            "9725",
             "9333",
             "9729",
             "9373",
-            "9749",
             "9393",
-            "9759",
             "9413",
             "9767",
             "9443",
             "9779",
+            "9781",
             "9463",
-            "9787",
-            "9473",
-            "9791"
+            "9473"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "durbn-to-bridg_weekday": {
           "order": [
+            "9711",
             "9313",
             "9715",
             "9323",
             "9723",
-            "9333",
+            "9725",
+            "9327",
             "9729",
+            "9333",
+            "9733",
             "9353",
-            "9739",
             "9373",
-            "9749",
             "9383",
-            "9755",
             "9393",
-            "9759",
             "9403",
             "9763",
             "9413",
@@ -2763,45 +2767,48 @@
             "9453",
             "9783",
             "9463",
-            "9787",
-            "9473",
-            "9791"
+            "9473"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "durbn-to-cator_sat": {
           "order": [
+            "1022",
             "1062",
             "1072",
             "1082"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "durbn-to-cator_weekday": {
           "order": [
+            "1022",
             "1052",
             "1062",
             "1072",
+            "1078",
             "1082",
             "1092"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "durbn-to-cross_sat": {
           "order": [
             "9612",
             "9620",
+            "9136",
+            "9628",
             "9672",
             "9680"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "durbn-to-cross_weekday": {
@@ -2809,77 +2816,90 @@
             "9612",
             "9620",
             "9628",
-            "9656",
+            "0738",
+            "9638",
+            "9150",
+            "9648",
+            "9658",
+            "9166",
             "9664",
             "9672",
             "9680",
             "9688"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "durbn-to-pinet_sat": {
           "order": [
+            "0720",
             "0024",
+            "9136",
             "0036",
+            "0778",
             "0080"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "durbn-to-pinet_weekday": {
           "order": [
             "0024",
             "0036",
+            "0744",
+            "0042",
+            "0750",
             "0052",
+            "0756",
             "0064",
+            "0768",
             "0080",
+            "0786",
             "0090"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "durbn-to-umlaz_sat": {
           "order": [
-            "9130",
-            "9140",
-            "9150",
-            "9170",
-            "9204",
-            "9230",
-            "9260",
-            "9270",
-            "9280"
+            "9106",
+            "9116",
+            "9136",
+            "9146",
+            "9156",
+            "9176",
+            "9196",
+            "9226",
+            "9246"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "durbn-to-umlaz_weekday": {
           "order": [
-            "9110",
+            "9106",
+            "9116",
             "9130",
+            "9136",
             "9140",
+            "9146",
             "9150",
+            "9156",
             "9160",
-            "9170",
-            "9180",
-            "9190",
-            "9210",
-            "9220",
-            "9230",
-            "9240",
-            "9244",
-            "9250",
-            "9254",
-            "9264",
-            "9274"
+            "9166",
+            "9186",
+            "9206",
+            "9216",
+            "9226",
+            "9236",
+            "9256"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "durbn-to-winkl_sat": {
@@ -2894,12 +2914,12 @@
             "0790"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "durbn-to-winkl_weekday": {
           "order": [
-            "9006",
+            "0706",
             "0708",
             "0712",
             "0716",
@@ -2916,51 +2936,48 @@
             "0774",
             "0778",
             "0782",
-            "0786",
-            "0790"
+            "0786"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "durbn_to_bridg_sat": {
           "order": [
             "9323",
+            "9725",
             "9333",
             "9729",
             "9373",
-            "9749",
             "9393",
-            "9759",
             "9413",
             "9767",
             "9443",
             "9779",
+            "9781",
             "9463",
-            "9787",
-            "9473",
-            "9791"
+            "9473"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "durbn_to_bridg_weekday": {
           "order": [
+            "9711",
             "9313",
             "9715",
             "9323",
             "9723",
-            "9333",
+            "9725",
+            "9327",
             "9729",
+            "9333",
+            "9733",
             "9353",
-            "9739",
             "9373",
-            "9749",
             "9383",
-            "9755",
             "9393",
-            "9759",
             "9403",
             "9763",
             "9413",
@@ -2974,45 +2991,48 @@
             "9453",
             "9783",
             "9463",
-            "9787",
-            "9473",
-            "9791"
+            "9473"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "durbn_to_cator_sat": {
           "order": [
+            "1022",
             "1062",
             "1072",
             "1082"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "durbn_to_cator_weekday": {
           "order": [
+            "1022",
             "1052",
             "1062",
             "1072",
+            "1078",
             "1082",
             "1092"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "durbn_to_cross_sat": {
           "order": [
             "9612",
             "9620",
+            "9136",
+            "9628",
             "9672",
             "9680"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "durbn_to_cross_weekday": {
@@ -3020,77 +3040,90 @@
             "9612",
             "9620",
             "9628",
-            "9656",
+            "0738",
+            "9638",
+            "9150",
+            "9648",
+            "9658",
+            "9166",
             "9664",
             "9672",
             "9680",
             "9688"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "durbn_to_pinet_sat": {
           "order": [
+            "0720",
             "0024",
+            "9136",
             "0036",
+            "0778",
             "0080"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "durbn_to_pinet_weekday": {
           "order": [
             "0024",
             "0036",
+            "0744",
+            "0042",
+            "0750",
             "0052",
+            "0756",
             "0064",
+            "0768",
             "0080",
+            "0786",
             "0090"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "durbn_to_umlaz_sat": {
           "order": [
-            "9130",
-            "9140",
-            "9150",
-            "9170",
-            "9204",
-            "9230",
-            "9260",
-            "9270",
-            "9280"
+            "9106",
+            "9116",
+            "9136",
+            "9146",
+            "9156",
+            "9176",
+            "9196",
+            "9226",
+            "9246"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "durbn_to_umlaz_weekday": {
           "order": [
-            "9110",
+            "9106",
+            "9116",
             "9130",
+            "9136",
             "9140",
+            "9146",
             "9150",
+            "9156",
             "9160",
-            "9170",
-            "9180",
-            "9190",
-            "9210",
-            "9220",
-            "9230",
-            "9240",
-            "9244",
-            "9250",
-            "9254",
-            "9264",
-            "9274"
+            "9166",
+            "9186",
+            "9206",
+            "9216",
+            "9226",
+            "9236",
+            "9256"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "durbn_to_winkl_sat": {
@@ -3105,12 +3138,12 @@
             "0790"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "durbn_to_winkl_weekday": {
           "order": [
-            "9006",
+            "0706",
             "0708",
             "0712",
             "0716",
@@ -3127,21 +3160,23 @@
             "0774",
             "0778",
             "0782",
-            "0786",
-            "0790"
+            "0786"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "pinet-to-durbn_sat": {
           "order": [
             "0023",
+            "0715",
             "0035",
-            "0079"
+            "0735",
+            "0079",
+            "0745"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "pinet-to-durbn_weekday": {
@@ -3149,22 +3184,31 @@
             "0023",
             "0035",
             "0047",
+            "0749",
+            "0053",
+            "0755",
             "0063",
+            "0761",
             "0079",
-            "0091"
+            "0767",
+            "0091",
+            "0783"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "pinet_to_durbn_sat": {
           "order": [
             "0023",
+            "0715",
             "0035",
-            "0079"
+            "0735",
+            "0079",
+            "0745"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "pinet_to_durbn_weekday": {
@@ -3172,94 +3216,96 @@
             "0023",
             "0035",
             "0047",
+            "0749",
+            "0053",
+            "0755",
             "0063",
+            "0761",
             "0079",
-            "0091"
+            "0767",
+            "0091",
+            "0783"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "umlaz-to-durbn_sat": {
           "order": [
-            "9129",
-            "9139",
-            "9149",
-            "9159",
-            "9179",
-            "9209",
-            "9239",
-            "9259",
-            "9279"
+            "9135",
+            "9155",
+            "9165",
+            "9185",
+            "9215",
+            "9235",
+            "9245",
+            "9255",
+            "9265"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "umlaz-to-durbn_weekday": {
           "order": [
-            "9113",
-            "9119",
-            "9123",
-            "9133",
-            "9139",
-            "9143",
-            "9153",
-            "9163",
-            "9173",
-            "9183",
-            "9203",
-            "9213",
-            "9223",
-            "9233",
-            "9243",
-            "9253",
-            "9277",
-            "9287"
+            "9125",
+            "9135",
+            "9145",
+            "9155",
+            "9165",
+            "9175",
+            "9185",
+            "9189",
+            "9195",
+            "9209",
+            "9215",
+            "9219",
+            "9225",
+            "9235",
+            "9245",
+            "9265"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "umlaz_to_durbn_sat": {
           "order": [
-            "9129",
-            "9139",
-            "9149",
-            "9159",
-            "9179",
-            "9209",
-            "9239",
-            "9259",
-            "9279"
+            "9135",
+            "9155",
+            "9165",
+            "9185",
+            "9215",
+            "9235",
+            "9245",
+            "9255",
+            "9265"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "umlaz_to_durbn_weekday": {
           "order": [
-            "9113",
-            "9119",
-            "9123",
-            "9133",
-            "9139",
-            "9143",
-            "9153",
-            "9163",
-            "9173",
-            "9183",
-            "9203",
-            "9213",
-            "9223",
-            "9233",
-            "9243",
-            "9253",
-            "9277",
-            "9287"
+            "9125",
+            "9135",
+            "9145",
+            "9155",
+            "9165",
+            "9175",
+            "9185",
+            "9189",
+            "9195",
+            "9209",
+            "9215",
+            "9219",
+            "9225",
+            "9235",
+            "9245",
+            "9265"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "winkl-to-durbn_sat": {
@@ -3274,7 +3320,7 @@
             "0779"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "winkl-to-durbn_weekday": {
@@ -3295,11 +3341,10 @@
             "0773",
             "0779",
             "0783",
-            "0787",
             "0791"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "winkl_to_durbn_sat": {
@@ -3314,7 +3359,7 @@
             "0779"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "winkl_to_durbn_weekday": {
@@ -3335,11 +3380,10 @@
             "0773",
             "0779",
             "0783",
-            "0787",
             "0791"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         }
       },
@@ -3354,7 +3398,7 @@
             "2508"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "bellv-to-ct_weekday": {
@@ -3378,7 +3422,7 @@
             "3414"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "bellv-to-mutul_sat": {
@@ -3391,7 +3435,7 @@
             "9012"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "bellv-to-mutul_weekday": {
@@ -3412,7 +3456,7 @@
             "9028"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "bellv_to_ct_sat": {
@@ -3425,7 +3469,7 @@
             "2508"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "bellv_to_ct_weekday": {
@@ -3449,7 +3493,7 @@
             "3414"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "bellv_to_mutul_sat": {
@@ -3462,7 +3506,7 @@
             "9012"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "bellv_to_mutul_weekday": {
@@ -3483,7 +3527,7 @@
             "9028"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "ct-to-bellv_sat": {
@@ -3495,7 +3539,7 @@
             "2661"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "ct-to-bellv_weekday": {
@@ -3515,7 +3559,7 @@
             "3515"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "ct-to-eerst_sat": {
@@ -3526,7 +3570,7 @@
             "2307"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "ct-to-eerst_weekday": {
@@ -3534,7 +3578,7 @@
             "2301"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "ct-to-hani_sat": {
@@ -3547,7 +3591,7 @@
             "9911"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "ct-to-hani_weekday": {
@@ -3565,7 +3609,7 @@
             "9921"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "ct-to-kap_sat": {
@@ -3579,7 +3623,7 @@
             "9513"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "ct-to-kap_weekday": {
@@ -3597,7 +3641,7 @@
             "9521"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "ct-to-kraai_sat": {
@@ -3609,7 +3653,7 @@
             "2661"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "ct-to-kraai_weekday": {
@@ -3626,7 +3670,7 @@
             "2521"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "ct-to-malm_sat": {
@@ -3634,7 +3678,7 @@
             "2661"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "ct-to-malm_weekday": {
@@ -3642,7 +3686,7 @@
             "2677"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "ct-to-nolu_sat": {
@@ -3653,12 +3697,13 @@
             "9407"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "ct-to-nolu_weekday": {
           "order": [
             "9703",
+            "9301",
             "9401",
             "9403",
             "9405",
@@ -3669,7 +3714,7 @@
             "9415"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "ct-to-rtret_sat": {
@@ -3684,7 +3729,7 @@
             "0515"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "ct-to-rtret_weekday": {
@@ -3713,7 +3758,7 @@
             "0543"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "ct-to-simon_sat": {
@@ -3742,7 +3787,7 @@
             "0127"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "ct-to-simon_weekday": {
@@ -3792,7 +3837,19 @@
             "0185"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
+          "updatedBy": "seed:MANUAL_GRID_ORDER"
+        },
+        "ct-to-strnd_sat": {
+          "order": [
+            "3201",
+            "3203",
+            "3205",
+            "3207",
+            "3209"
+          ],
+          "source": "manual-fallback-seed",
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "ct-to-strnd_weekday": {
@@ -3810,7 +3867,7 @@
             "3221"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "ct-to-well_sat": {
@@ -3819,7 +3876,7 @@
             "3503"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "ct-to-well_weekday": {
@@ -3835,7 +3892,7 @@
             "3517"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "ct_to_bellv_sat": {
@@ -3847,7 +3904,7 @@
             "2661"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "ct_to_bellv_weekday": {
@@ -3867,7 +3924,7 @@
             "3515"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "ct_to_eerst_sat": {
@@ -3878,7 +3935,7 @@
             "2307"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "ct_to_eerst_weekday": {
@@ -3886,7 +3943,7 @@
             "2301"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "ct_to_hani_sat": {
@@ -3899,7 +3956,7 @@
             "9911"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "ct_to_hani_weekday": {
@@ -3917,7 +3974,7 @@
             "9921"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "ct_to_kap_sat": {
@@ -3931,7 +3988,7 @@
             "9513"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "ct_to_kap_weekday": {
@@ -3949,7 +4006,7 @@
             "9521"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "ct_to_kraai_sat": {
@@ -3961,7 +4018,7 @@
             "2661"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "ct_to_kraai_weekday": {
@@ -3978,7 +4035,7 @@
             "2521"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "ct_to_malm_sat": {
@@ -3986,7 +4043,7 @@
             "2661"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "ct_to_malm_weekday": {
@@ -3994,7 +4051,7 @@
             "2677"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "ct_to_nolu_sat": {
@@ -4005,12 +4062,13 @@
             "9407"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "ct_to_nolu_weekday": {
           "order": [
             "9703",
+            "9301",
             "9401",
             "9403",
             "9405",
@@ -4021,7 +4079,7 @@
             "9415"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "ct_to_rtret_sat": {
@@ -4036,7 +4094,7 @@
             "0515"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "ct_to_rtret_weekday": {
@@ -4065,7 +4123,7 @@
             "0543"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "ct_to_simon_sat": {
@@ -4094,7 +4152,7 @@
             "0127"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "ct_to_simon_weekday": {
@@ -4144,7 +4202,19 @@
             "0185"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
+          "updatedBy": "seed:MANUAL_GRID_ORDER"
+        },
+        "ct_to_strnd_sat": {
+          "order": [
+            "3201",
+            "3203",
+            "3205",
+            "3207",
+            "3209"
+          ],
+          "source": "manual-fallback-seed",
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "ct_to_strnd_weekday": {
@@ -4162,7 +4232,7 @@
             "3221"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "ct_to_well_sat": {
@@ -4171,7 +4241,7 @@
             "3503"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "ct_to_well_weekday": {
@@ -4187,7 +4257,7 @@
             "3517"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "ctcen_in_sat": {
@@ -4220,7 +4290,7 @@
             "9912"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "ctcen_in_weekday": {
@@ -4274,7 +4344,7 @@
             "9522"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "ctcen_out_sat": {
@@ -4303,7 +4373,7 @@
             "9911"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "ctcen_out_weekday": {
@@ -4356,7 +4426,7 @@
             "9921"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "dtoit-to-eerst_sat": {
@@ -4368,7 +4438,7 @@
             "3208"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "dtoit-to-eerst_weekday": {
@@ -4383,7 +4453,7 @@
             "3414"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "dtoit_to_eerst_sat": {
@@ -4395,7 +4465,7 @@
             "3208"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "dtoit_to_eerst_weekday": {
@@ -4410,7 +4480,7 @@
             "3414"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "eerst-to-ct_sat": {
@@ -4421,7 +4491,7 @@
             "2306"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "eerst-to-ct_weekday": {
@@ -4430,7 +4500,7 @@
             "2302"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "eerst-to-dtoit_sat": {
@@ -4442,7 +4512,7 @@
             "3209"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "eerst-to-dtoit_weekday": {
@@ -4458,7 +4528,7 @@
             "3417"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "eerst_to_ct_sat": {
@@ -4469,7 +4539,7 @@
             "2306"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "eerst_to_ct_weekday": {
@@ -4478,7 +4548,7 @@
             "2302"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "eerst_to_dtoit_sat": {
@@ -4490,7 +4560,7 @@
             "3209"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "eerst_to_dtoit_weekday": {
@@ -4506,7 +4576,7 @@
             "3417"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "hani-to-ct_sat": {
@@ -4520,7 +4590,7 @@
             "9912"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "hani-to-ct_weekday": {
@@ -4538,7 +4608,7 @@
             "9920"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "hani_to_ct_sat": {
@@ -4552,7 +4622,7 @@
             "9912"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "hani_to_ct_weekday": {
@@ -4570,7 +4640,7 @@
             "9920"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "kap-to-ct_sat": {
@@ -4585,7 +4655,7 @@
             "9514"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "kap-to-ct_weekday": {
@@ -4604,7 +4674,7 @@
             "9522"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "kap_to_ct_sat": {
@@ -4619,7 +4689,7 @@
             "9514"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "kap_to_ct_weekday": {
@@ -4638,7 +4708,7 @@
             "9522"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "kraai-to-ct_sat": {
@@ -4651,7 +4721,7 @@
             "2508"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "kraai-to-ct_weekday": {
@@ -4668,7 +4738,7 @@
             "2522"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "kraai_to_ct_sat": {
@@ -4681,7 +4751,7 @@
             "2508"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "kraai_to_ct_weekday": {
@@ -4698,7 +4768,7 @@
             "2522"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "malm-to-ct_sat": {
@@ -4706,7 +4776,7 @@
             "2632"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "malm-to-ct_weekday": {
@@ -4714,7 +4784,7 @@
             "2630"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "malm_to_ct_sat": {
@@ -4722,7 +4792,7 @@
             "2632"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "malm_to_ct_weekday": {
@@ -4730,7 +4800,7 @@
             "2630"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "mutul-to-bellv_sat": {
@@ -4742,7 +4812,7 @@
             "9009"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "mutul-to-bellv_weekday": {
@@ -4763,7 +4833,7 @@
             "9027"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "mutul_to_bellv_sat": {
@@ -4775,7 +4845,7 @@
             "9009"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "mutul_to_bellv_weekday": {
@@ -4796,7 +4866,7 @@
             "9027"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "nolu-to-ct_sat": {
@@ -4808,15 +4878,24 @@
             "9408"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "nolu-to-ct_weekday": {
           "order": [
-            "9301"
+            "9400",
+            "9402",
+            "9420",
+            "9404",
+            "9406",
+            "9408",
+            "9410",
+            "9412",
+            "9414",
+            "9416"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "nolu_to_ct_sat": {
@@ -4828,15 +4907,24 @@
             "9408"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "nolu_to_ct_weekday": {
           "order": [
-            "9301"
+            "9400",
+            "9402",
+            "9420",
+            "9404",
+            "9406",
+            "9408",
+            "9410",
+            "9412",
+            "9414",
+            "9416"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "rtret-to-ct_sat": {
@@ -4851,7 +4939,7 @@
             "0514"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "rtret-to-ct_weekday": {
@@ -4879,7 +4967,7 @@
             "0540"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "rtret_to_ct_sat": {
@@ -4894,7 +4982,7 @@
             "0514"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "rtret_to_ct_weekday": {
@@ -4922,7 +5010,7 @@
             "0540"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "simon-to-ct_sat": {
@@ -4953,7 +5041,7 @@
             "0130"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "simon-to-ct_weekday": {
@@ -5002,7 +5090,7 @@
             "0182"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "simon_to_ct_sat": {
@@ -5033,7 +5121,7 @@
             "0130"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "simon_to_ct_weekday": {
@@ -5082,15 +5170,20 @@
             "0182"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "strnd-to-ct_sat": {
           "order": [
+            "3200",
+            "3202",
+            "3204",
+            "3206",
+            "3208",
             "3210"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "strnd-to-ct_weekday": {
@@ -5109,15 +5202,20 @@
             "3222"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "strnd_to_ct_sat": {
           "order": [
+            "3200",
+            "3202",
+            "3204",
+            "3206",
+            "3208",
             "3210"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "strnd_to_ct_weekday": {
@@ -5136,7 +5234,7 @@
             "3222"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "well-to-ct_sat": {
@@ -5145,7 +5243,7 @@
             "3504"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "well-to-ct_weekday": {
@@ -5161,7 +5259,7 @@
             "3516"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "well_to_ct_sat": {
@@ -5170,7 +5268,7 @@
             "3504"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         },
         "well_to_ct_weekday": {
@@ -5186,18 +5284,18 @@
             "3516"
           ],
           "source": "manual-fallback-seed",
-          "updatedAt": 1789085280000,
+          "updatedAt": 1791319051960,
           "updatedBy": "seed:MANUAL_GRID_ORDER"
         }
       }
     },
     "killswitch": {
-      "timestamp": 1791151658739,
+      "timestamp": 1792178799064,
       "triggeredBy": "enockelk@gmail.com"
     },
     "maintenance": {
       "active": true,
-      "expiresAt": 1791151140000,
+      "expiresAt": 1792360740000,
       "items": {
         "_legacy": {
           "active": false,
@@ -5314,7 +5412,7 @@
         "m_mugksflurpwf": {
           "active": true,
           "createdAt": 1790317457922,
-          "expiresAt": 1791151140000,
+          "expiresAt": 1792360740000,
           "id": "m_mugksflurpwf",
           "message": "Maintenance In progress",
           "regions": [
@@ -5323,7 +5421,7 @@
             "KZN",
             "EC"
           ],
-          "updatedAt": 1791138890525,
+          "updatedAt": 1792325441653,
           "updatedBy": "enockelk@gmail.com"
         }
       },
@@ -5334,7 +5432,7 @@
         "KZN",
         "EC"
       ],
-      "updatedAt": 1791138890525,
+      "updatedAt": 1792325441653,
       "updatedBy": "enockelk@gmail.com"
     },
     "planner_fares": {
@@ -5404,1028 +5502,206 @@
     }
   },
   "notices": {
-    "all": {
-      "1789563338579": {
-        "authorName": "Next Train Ops",
-        "expiresAt": 1789855140000,
-        "forcePopup": false,
-        "id": "1789563338579",
-        "isRepost": false,
-        "message": "🙏❤️<br><button type=\"button\" onclick=\"window.openLightbox(&quot;https://firebasestorage.googleapis.com/v0/b/metrorail-next-train.firebasestorage.app/o/admin_attachments%2Finline_1789563297442_9xaba.jpg?alt=media&amp;token=52dc81a6-5efb-46dc-9d52-061b8f0b21ba&quot;)\" class=\"relative block w-full focus:outline-none my-2 cursor-zoom-in rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm active:scale-[0.98] transition-transform\"><img src=\"https://firebasestorage.googleapis.com/v0/b/metrorail-next-train.firebasestorage.app/o/admin_attachments%2Finline_1789563297442_9xaba.jpg?alt=media&amp;token=52dc81a6-5efb-46dc-9d52-061b8f0b21ba\" class=\"w-full h-auto object-cover hover:opacity-90 transition-opacity\" alt=\"Admin Attachment\"><span class=\"nt-zoom-plus absolute bottom-1.5 right-1.5 w-5 h-5 rounded-full bg-black/40 text-white text-xs font-bold leading-none flex items-center justify-center border border-white/20 pointer-events-none select-none shadow-sm\" aria-hidden=\"true\">+</span></button><br><br><br><span class=\"opacity-75 text-[10px] uppercase font-bold tracking-wider\">- Next Train Ops</span>",
-        "poll": {
-          "active": false,
-          "showResults": false
-        },
-        "postedAt": 1789563338579,
-        "reactions": {
-          "like": 1,
-          "love": 4,
-          "sad": 3
-        },
-        "severity": "info",
-        "sourceName": "John-Da-Tourguider🚉 Channel",
-        "sourceUrl": "https://whatsapp.com/channel/0029Vb5ueHpCsU9YpEsHJd0K"
-      },
-      "1790219835871": {
-        "authorName": "Next Train Ops",
-        "expiresAt": 1790287140000,
-        "forcePopup": false,
-        "id": "1790219835871",
-        "isRepost": false,
-        "message": "Dear commuters,<div><br></div><div><b>Happy Heritage Day to all of you!</b></div><div><br></div><div>We hope you have a wonderful time celebrating our rich and diverse cultures across South Africa today.</div><div><br></div><div>Travel safely, enjoy the braais, and have a beautiful and restful public holiday!</div><br><br><span class=\"opacity-75 text-[10px] uppercase font-bold tracking-wider\">- Next Train Ops</span>",
-        "poll": {
-          "active": false,
-          "showResults": false
-        },
-        "postedAt": 1790219835871,
-        "severity": "info"
-      },
-      "1790350161707": {
-        "authorName": "Next Train Ops",
-        "expiresAt": 1790805540000,
-        "forcePopup": false,
-        "id": "1790350161707",
-        "isRepost": false,
-        "message": "<h3>​Spotted on the tracks!</h3><div><br><div><font size=\"4\">Huge thanks to Dees for sharing his smooth, delay-free Heritage Day trip from Doonside to Durban using  Next Train to navigate the Saturday holiday schedule. </font></div><div><font size=\"4\"><br></font></div><div><font size=\"4\">Watch his short Facebook video here: </font></div><div><br></div><div><a href=\"https://www.facebook.com/share/r/1GUiGokqCa/\" target=\"_blank\" class=\"text-blue-500 dark:text-blue-400 underline underline-offset-2\" style=\"\"><font size=\"3\">https://www.facebook.com/share/r/1GUiGokqCa/</font></a></div></div><br><br><span class=\"opacity-75 text-[10px] uppercase font-bold tracking-wider\">- Next Train Ops</span>",
-        "poll": {
-          "active": false,
-          "showResults": false
-        },
-        "postedAt": 1790350161707,
-        "severity": "info",
-        "sourceName": "Dees Chetty Facebook page",
-        "sourceUrl": "https://www.facebook.com/share/18KVVs8FjE/"
-      }
-    },
     "all_EC": {
-      "1789097891802": {
+      "1792947343140": {
         "authorName": "Next Train Ops",
-        "expiresAt": 1789423140000,
-        "forcePopup": false,
-        "id": "1789097891802",
-        "imageUrls": [
-          "/images/alerts/inflation_rising_train_isnt.jpg"
-        ],
-        "isRepost": false,
-        "message": "",
-        "poll": {
-          "active": false,
-          "showResults": false
-        },
-        "postedAt": 1789097891802,
-        "severity": "info"
-      },
-      "1789371025676": {
-        "authorName": "Next Train Ops",
-        "expiresAt": 1789768740000,
-        "forcePopup": false,
-        "id": "1789371025676",
-        "imageUrls": [
-          "/images/alerts/off_peak_discounts.jpg"
-        ],
-        "isRepost": false,
-        "message": "",
-        "poll": {
-          "active": false,
-          "showResults": false
-        },
-        "postedAt": 1789371025676,
-        "severity": "info"
-      },
-      "1789926569374": {
-        "authorName": "Next Train Ops",
-        "expiresAt": 1790114340000,
-        "forcePopup": false,
-        "id": "1789926569374",
-        "imageUrls": [
-          "/images/alerts/smoke_free_stations.jpg"
-        ],
-        "isRepost": false,
-        "message": "",
-        "poll": {
-          "active": false,
-          "showResults": false
-        },
-        "postedAt": 1789926569374,
-        "severity": "info"
-      },
-      "1791024678410": {
-        "authorName": "Next Train Ops",
-        "expiresAt": 1791323940000,
+        "expiresAt": 1793224740000,
         "forcePopup": true,
-        "id": "1791024678410",
+        "id": "1792947343140",
         "isRepost": false,
-        "message": "<br><button type=\"button\" onclick=\"window.openLightbox(&quot;https://firebasestorage.googleapis.com/v0/b/metrorail-next-train.firebasestorage.app/o/admin_attachments%2Finline_1791024618913_95qq4.jpg?alt=media&amp;token=a461bf98-de1c-456b-b8a9-61bfecb5ea81&quot;)\" class=\"relative block w-full focus:outline-none my-2 cursor-zoom-in rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm active:scale-[0.98] transition-transform\"><img src=\"https://firebasestorage.googleapis.com/v0/b/metrorail-next-train.firebasestorage.app/o/admin_attachments%2Finline_1791024618913_95qq4.jpg?alt=media&amp;token=a461bf98-de1c-456b-b8a9-61bfecb5ea81\" class=\"w-full h-auto object-cover hover:opacity-90 transition-opacity\" alt=\"Admin Attachment\"><span class=\"nt-zoom-plus absolute bottom-1.5 right-1.5 w-5 h-5 rounded-full bg-black/40 text-white text-xs font-bold leading-none flex items-center justify-center border border-white/20 pointer-events-none select-none shadow-sm\" aria-hidden=\"true\">+</span></button><br><br><br><span class=\"opacity-75 text-[10px] uppercase font-bold tracking-wider\">- Next Train Ops</span>",
-        "poll": {
-          "active": false,
-          "showResults": false
-        },
-        "postedAt": 1791024678410,
-        "severity": "info"
-      },
-      "1791143068636": {
-        "authorName": "Next Train Ops",
-        "expiresAt": 1791151140000,
-        "forcePopup": false,
-        "id": "1791143068636",
-        "isRepost": false,
-        "message": "Poll test<br><br><span class=\"opacity-75 text-[10px] uppercase font-bold tracking-wider\">- Next Train Ops</span>",
-        "pinned": true,
-        "pinnedAt": 1791145216873,
-        "poll": {
-          "active": true,
-          "optionA": "Yes",
-          "optionB": "No",
-          "optionC": "Maybe",
-          "question": "What are your thoughts on the proposed new ticket prices?",
-          "showRawCounts": false,
-          "showResults": true
-        },
-        "postedAt": 1791143068636,
-        "severity": "info"
-      },
-      "1791145244439": {
-        "authorName": "Next Train Ops",
-        "expiresAt": 1791151140000,
-        "forcePopup": false,
-        "id": "1791145244439",
-        "isRepost": false,
-        "message": "Testing<br><br><span class=\"opacity-75 text-[10px] uppercase font-bold tracking-wider\">- Next Train Ops</span>",
+        "message": "<img src=\"https://firebasestorage.googleapis.com/v0/b/metrorail-next-train.firebasestorage.app/o/admin_attachments%2Finline_1792947309549_hf4pc.jpg?alt=media&amp;token=bcff4aa1-3e1e-4eb6-bc3b-368116d21a53\" data-nt-src=\"https://firebasestorage.googleapis.com/v0/b/metrorail-next-train.firebasestorage.app/o/admin_attachments%2Finline_1792947309549_hf4pc.jpg?alt=media&amp;token=bcff4aa1-3e1e-4eb6-bc3b-368116d21a53\" alt=\"\">",
         "pinned": false,
         "poll": {
           "active": false,
+          "allowMultiple": false,
           "showRawCounts": false,
           "showResults": false
         },
-        "postedAt": 1791145244439,
-        "severity": "info"
-      },
-      "sched_mud52lpc_1l1uurd": {
-        "authorName": "Next Train Ops",
-        "expiresAt": 1790114340000,
-        "forcePopup": false,
-        "id": "sched_mud52lpc_1l1uurd",
-        "imageUrls": [
-          "/images/alerts/priority-seating.jpg"
-        ],
-        "message": "",
-        "poll": {
-          "active": false,
-          "showResults": false
-        },
-        "postedAt": 1790109660000,
-        "severity": "info"
+        "postedAt": 1792947343140,
+        "severity": "info",
+        "suppressLinkPreview": false
       }
     },
     "all_GP": {
-      "1789370992109": {
+      "1792933841928": {
         "authorName": "Next Train Ops",
-        "expiresAt": 1789768740000,
+        "expiresAt": 1793570340000,
         "forcePopup": false,
-        "id": "1789370992109",
-        "imageUrls": [
-          "/images/alerts/inflation_rising_train_isnt.jpg"
-        ],
+        "id": "1792933841928",
         "isRepost": false,
-        "message": "",
+        "linkPreview": {
+          "url": "https://whatsapp.com/channel/0029Vb5ueHpCsU9YpEsHJd0K"
+        },
+        "message": "<img src=\"https://i.supaimg.com/91823a93-b62d-40a2-8b3c-6fcd2648778c/e872d668-2683-440b-a66f-90ff9119dbf8.jpg\" data-nt-src=\"https://i.supaimg.com/91823a93-b62d-40a2-8b3c-6fcd2648778c/e872d668-2683-440b-a66f-90ff9119dbf8.jpg\" alt=\"\">",
+        "pinned": false,
         "poll": {
           "active": false,
+          "allowMultiple": false,
+          "showRawCounts": false,
           "showResults": false
         },
-        "postedAt": 1789370992109,
+        "postedAt": 1792933841928,
         "reactions": {
-          "like": 1,
-          "love": 3
+          "like": 3,
+          "love": 1,
+          "pray": 1
         },
-        "severity": "info"
-      },
-      "1789926569374": {
-        "authorName": "Next Train Ops",
-        "expiresAt": 1790114340000,
-        "forcePopup": false,
-        "id": "1789926569374",
-        "imageUrls": [
-          "/images/alerts/smoke_free_stations.jpg"
-        ],
-        "isRepost": false,
-        "message": "",
-        "poll": {
-          "active": false,
-          "showResults": false
-        },
-        "postedAt": 1789926569374,
-        "severity": "info"
-      },
-      "1790082884429": {
-        "authorName": "Next Train Ops",
-        "expiresAt": 1790287140000,
-        "forcePopup": false,
-        "id": "1790082884429",
-        "isRepost": false,
-        "message": "<br><button type=\"button\" onclick=\"window.openLightbox(&quot;https://firebasestorage.googleapis.com/v0/b/metrorail-next-train.firebasestorage.app/o/admin_attachments%2Finline_1790082871066_40qk0.jpg?alt=media&amp;token=7262456c-4ec1-4f0a-8a21-34c19d6abb2e&quot;)\" class=\"relative block w-full focus:outline-none my-2 cursor-zoom-in rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm active:scale-[0.98] transition-transform\"><img src=\"https://firebasestorage.googleapis.com/v0/b/metrorail-next-train.firebasestorage.app/o/admin_attachments%2Finline_1790082871066_40qk0.jpg?alt=media&amp;token=7262456c-4ec1-4f0a-8a21-34c19d6abb2e\" class=\"w-full h-auto object-cover hover:opacity-90 transition-opacity\" alt=\"Admin Attachment\"><span class=\"nt-zoom-plus absolute bottom-1.5 right-1.5 w-5 h-5 rounded-full bg-black/40 text-white text-xs font-bold leading-none flex items-center justify-center border border-white/20 pointer-events-none select-none shadow-sm\" aria-hidden=\"true\">+</span></button><br><br><br><span class=\"opacity-75 text-[10px] uppercase font-bold tracking-wider\">- Next Train Ops</span>",
-        "poll": {
-          "active": false,
-          "showResults": false
-        },
-        "postedAt": 1790082884429,
-        "severity": "info"
-      },
-      "1790767987931": {
-        "authorName": "Next Train Ops",
-        "expiresAt": 1790891940000,
-        "forcePopup": false,
-        "id": "1790767987931",
-        "isRepost": false,
-        "message": "Pretoria - Irene/Kempton Park <br><button type=\"button\" onclick=\"window.openLightbox(&quot;https://firebasestorage.googleapis.com/v0/b/metrorail-next-train.firebasestorage.app/o/admin_attachments%2Finline_1790767941362_7lr82.jpg?alt=media&amp;token=d8d1f139-5cda-43cd-b545-a36340ecb372&quot;)\" class=\"relative block w-full focus:outline-none my-2 cursor-zoom-in rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm active:scale-[0.98] transition-transform\"><img src=\"https://firebasestorage.googleapis.com/v0/b/metrorail-next-train.firebasestorage.app/o/admin_attachments%2Finline_1790767941362_7lr82.jpg?alt=media&amp;token=d8d1f139-5cda-43cd-b545-a36340ecb372\" class=\"w-full h-auto object-cover hover:opacity-90 transition-opacity\" alt=\"Admin Attachment\"><span class=\"nt-zoom-plus absolute bottom-1.5 right-1.5 w-5 h-5 rounded-full bg-black/40 text-white text-xs font-bold leading-none flex items-center justify-center border border-white/20 pointer-events-none select-none shadow-sm\" aria-hidden=\"true\">+</span></button><br><br><br><span class=\"opacity-75 text-[10px] uppercase font-bold tracking-wider\">- Next Train Ops</span>",
-        "poll": {
-          "active": false,
-          "showResults": false
-        },
-        "postedAt": 1790767987931,
-        "severity": "info"
-      },
-      "1790768747257": {
-        "authorName": "Next Train Ops",
-        "expiresAt": 1790978340000,
-        "forcePopup": false,
-        "id": "1790768747257",
-        "isRepost": false,
-        "message": "Monthly Ticket Fare Adjustment<br><button type=\"button\" onclick=\"window.openLightbox(&quot;https://firebasestorage.googleapis.com/v0/b/metrorail-next-train.firebasestorage.app/o/admin_attachments%2Finline_1790768699559_c13at.jpg?alt=media&amp;token=139cc9f3-4b9f-4105-a50c-b38625489e72&quot;)\" class=\"relative block w-full focus:outline-none my-2 cursor-zoom-in rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm active:scale-[0.98] transition-transform\"><img src=\"https://firebasestorage.googleapis.com/v0/b/metrorail-next-train.firebasestorage.app/o/admin_attachments%2Finline_1790768699559_c13at.jpg?alt=media&amp;token=139cc9f3-4b9f-4105-a50c-b38625489e72\" class=\"w-full h-auto object-cover hover:opacity-90 transition-opacity\" alt=\"Admin Attachment\"><span class=\"nt-zoom-plus absolute bottom-1.5 right-1.5 w-5 h-5 rounded-full bg-black/40 text-white text-xs font-bold leading-none flex items-center justify-center border border-white/20 pointer-events-none select-none shadow-sm\" aria-hidden=\"true\">+</span></button><br><br><br><span class=\"opacity-75 text-[10px] uppercase font-bold tracking-wider\">- Next Train Ops</span>",
-        "poll": {
-          "active": false,
-          "showResults": false
-        },
-        "postedAt": 1790768747257,
         "severity": "info",
-        "sourceName": "RailTalk SA WhatsApp Channel",
-        "sourceUrl": "https://whatsapp.com/channel/0029Vb61eoeCnA7xvYauuf0x"
+        "sourceName": "John-Da-Tourguider🚉",
+        "sourceUrl": "https://whatsapp.com/channel/0029Vb5ueHpCsU9YpEsHJd0K",
+        "suppressLinkPreview": true
       }
     },
     "all_KZN": {
-      "1789097867817": {
+      "1792771665628": {
         "authorName": "Next Train Ops",
-        "expiresAt": 1789423140000,
+        "expiresAt": 1793483940000,
         "forcePopup": false,
-        "id": "1789097867817",
-        "imageUrls": [
-          "/images/alerts/level_crossing_warning.jpg"
-        ],
+        "id": "1792771665628",
         "isRepost": false,
-        "message": "",
+        "message": "<img src=\"https://i.supaimg.com/91823a93-b62d-40a2-8b3c-6fcd2648778c/97b9c7e3-4969-45e4-b475-507429002b43.jpg\" data-nt-src=\"https://i.supaimg.com/91823a93-b62d-40a2-8b3c-6fcd2648778c/97b9c7e3-4969-45e4-b475-507429002b43.jpg\" alt=\"\">",
+        "pinned": true,
+        "pinnedAt": 1792830512679,
         "poll": {
           "active": false,
+          "allowMultiple": false,
+          "showRawCounts": false,
           "showResults": false
         },
-        "postedAt": 1789097867817,
-        "severity": "info"
+        "postedAt": 1792771665628,
+        "severity": "warning",
+        "suppressLinkPreview": false
       },
-      "1789371054954": {
+      "1793185286284": {
         "authorName": "Next Train Ops",
-        "expiresAt": 1789768740000,
+        "expiresAt": 1793224740000,
         "forcePopup": false,
-        "id": "1789371054954",
-        "imageUrls": [
-          "/images/alerts/stand_behind_yellow.jpg"
-        ],
+        "id": "1793185286284",
         "isRepost": false,
-        "message": "",
+        "message": "<p>Please take note that the Pinetown line is currently closed due to an emergency occupation at Poet's Corner.</p><p>Train numbers 0053 and 0052 have been cancelled.</p><br><br><span class=\"opacity-75 text-[10px] uppercase font-bold tracking-wider\">- Next Train Ops</span>",
+        "pinned": false,
         "poll": {
           "active": false,
+          "allowMultiple": false,
+          "showRawCounts": false,
           "showResults": false
         },
-        "postedAt": 1789371054954,
-        "reactions": {
-          "like": 1
-        },
-        "severity": "info"
+        "postedAt": 1793185286284,
+        "severity": "warning",
+        "suppressLinkPreview": false
       },
-      "1789457245136": {
+      "1793189782169": {
         "authorName": "Next Train Ops",
-        "expiresAt": 1790373540000,
-        "forcePopup": true,
-        "id": "1789457245136",
-        "isRepost": false,
-        "message": "<span style=\"font-size: 0.75rem;\"><u><b>Screening Operations and Service Adjustment</b></u></span><div><br></div><div>Screening operations on the Umlazi line will resume from today, Tuesday, 15 September 2026 and the train service will be adjusted as follows:</div><div><br></div><div>During the week from Tuesday, 15 September 2026 until further notice:</div><div><br></div><div>The following trains will turn at KwaMnyandu:</div><div>9140 / 9150 / 9160 / 9170 / 9180 / 9190 / 9210 / 9163 / 9173 / 9183 / 9203 / 9213 / 9223 / 9233</div><div><br></div><div>Saturday service from 25 September 2026 until further notice:</div><div><br></div><div>The following trains will turn at KwaMnyandu station:</div><div>9170 / 9209 / 9204</div><div><br></div><div>A new train number 9206 has been added, departing KwaMnyandu to Umlazi (as an extension of 9204) from 15:00 to 15:08.</div><div><br></div><div>NB: There will be days when the work will be suspended and all affected parties will be informed of the schedule that will apply.</div><br><br><span class=\"opacity-75 text-[10px] uppercase font-bold tracking-wider\">- Next Train Ops</span>",
-        "poll": {
-          "active": false,
-          "showResults": false
-        },
-        "postedAt": 1789457245136,
-        "reactions": {
-          "like": 1
-        },
-        "severity": "info"
-      },
-      "1789474692414": {
-        "authorName": "Next Train Ops",
-        "expiresAt": 1789509540000,
+        "expiresAt": 1793656740000,
         "forcePopup": false,
-        "id": "1789474692414",
+        "id": "1793189782169",
         "isRepost": false,
-        "message": "<i>\"Attention commuters: Due to the bad weather in KwaZulu-Natal, Durban and surrounding areas. Which caused a power outage, train services have been suspended until further notice; we apologize for the inconvenience caused.</i><div><i><br></i></div><div><i>For more info: 031 813 0456 </i></div><div><i>#Asiphephe\"</i></div><br><br><span class=\"opacity-75 text-[10px] uppercase font-bold tracking-wider\">- Next Train Ops</span>",
+        "message": "<img src=\"https://firebasestorage.googleapis.com/v0/b/metrorail-next-train.firebasestorage.app/o/admin_attachments%2Finline_1793189748825_chbvk.jpg?alt=media&amp;token=cd582345-83bb-49d0-9300-63d3c754c18e\" data-nt-src=\"https://firebasestorage.googleapis.com/v0/b/metrorail-next-train.firebasestorage.app/o/admin_attachments%2Finline_1793189748825_chbvk.jpg?alt=media&amp;token=cd582345-83bb-49d0-9300-63d3c754c18e\" alt=\"\">",
+        "pinned": false,
         "poll": {
           "active": false,
+          "allowMultiple": false,
+          "showRawCounts": false,
           "showResults": false
         },
-        "postedAt": 1789474692414,
-        "severity": "critical",
-        "sourceName": "Metrorail KZN WhatsApp Channel",
-        "sourceUrl": "https://whatsapp.com/channel/0029Vao04EvLo4hldLZlPz3P"
-      },
-      "1789477103049": {
-        "authorName": "Next Train Ops",
-        "expiresAt": 1789509540000,
-        "forcePopup": false,
-        "id": "1789477103049",
-        "isRepost": false,
-        "message": "Power has been restored but CTC panel still out<br><br><span class=\"opacity-75 text-[10px] uppercase font-bold tracking-wider\">- Next Train Ops</span>",
-        "poll": {
-          "active": false,
-          "showResults": false
-        },
-        "postedAt": 1789477103049,
-        "severity": "info"
-      },
-      "1789926569374": {
-        "authorName": "Next Train Ops",
-        "expiresAt": 1790114340000,
-        "forcePopup": false,
-        "id": "1789926569374",
-        "imageUrls": [
-          "/images/alerts/smoke_free_stations.jpg"
-        ],
-        "isRepost": false,
-        "message": "",
-        "poll": {
-          "active": false,
-          "showResults": false
-        },
-        "postedAt": 1789926569374,
-        "severity": "info"
-      },
-      "1789956302694": {
-        "authorName": "Next Train Ops",
-        "expiresAt": 1790287140000,
-        "forcePopup": true,
-        "id": "1789956302694",
-        "isRepost": false,
-        "message": "Heritage Day train from KwaMashu toKwaMnyandu: first train departure time 06:12. Second train departure time 07:05. <div><br></div><div>Return trip from KwaMnyandu all stops to KwaMashu: first train departure 15:27. Second train departure time 16:27. Train rules apply.</div><br><button type=\"button\" onclick=\"window.openLightbox(&quot;https://firebasestorage.googleapis.com/v0/b/metrorail-next-train.firebasestorage.app/o/admin_attachments%2Finline_1789956243941_tlxnn.jpg?alt=media&amp;token=33c2e5b5-bd10-459f-bd00-f156ca5d0d1e&quot;)\" class=\"relative block w-full focus:outline-none my-2 cursor-zoom-in rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm active:scale-[0.98] transition-transform\"><img src=\"https://firebasestorage.googleapis.com/v0/b/metrorail-next-train.firebasestorage.app/o/admin_attachments%2Finline_1789956243941_tlxnn.jpg?alt=media&amp;token=33c2e5b5-bd10-459f-bd00-f156ca5d0d1e\" class=\"w-full h-auto object-cover hover:opacity-90 transition-opacity\" alt=\"Admin Attachment\"><span class=\"nt-zoom-plus absolute bottom-1.5 right-1.5 w-5 h-5 rounded-full bg-black/40 text-white text-xs font-bold leading-none flex items-center justify-center border border-white/20 pointer-events-none select-none shadow-sm\" aria-hidden=\"true\">+</span></button><br><br><br><span class=\"opacity-75 text-[10px] uppercase font-bold tracking-wider\">- Next Train Ops</span>",
-        "poll": {
-          "active": false,
-          "showResults": false
-        },
-        "postedAt": 1789956302694,
+        "postedAt": 1793189782169,
         "severity": "info",
-        "sourceName": "Metrorail KZN WhatsApp Channel",
-        "sourceUrl": "https://whatsapp.com/channel/0029Vao04EvLo4hldLZlPz3P"
-      },
-      "1790240897510": {
-        "authorName": "Next Train Ops",
-        "expiresAt": 1790287140000,
-        "forcePopup": false,
-        "id": "1790240897510",
-        "isRepost": false,
-        "message": "<br><button type=\"button\" onclick=\"window.openLightbox(&quot;https://firebasestorage.googleapis.com/v0/b/metrorail-next-train.firebasestorage.app/o/admin_attachments%2Finline_1790240859148_vkgdr.jpg?alt=media&amp;token=d905af92-baf2-43be-af8f-032fd0cdca43&quot;)\" class=\"relative block w-full focus:outline-none my-2 cursor-zoom-in rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm active:scale-[0.98] transition-transform\"><img src=\"https://firebasestorage.googleapis.com/v0/b/metrorail-next-train.firebasestorage.app/o/admin_attachments%2Finline_1790240859148_vkgdr.jpg?alt=media&amp;token=d905af92-baf2-43be-af8f-032fd0cdca43\" class=\"w-full h-auto object-cover hover:opacity-90 transition-opacity\" alt=\"Admin Attachment\"><span class=\"nt-zoom-plus absolute bottom-1.5 right-1.5 w-5 h-5 rounded-full bg-black/40 text-white text-xs font-bold leading-none flex items-center justify-center border border-white/20 pointer-events-none select-none shadow-sm\" aria-hidden=\"true\">+</span></button><br><br><br><span class=\"opacity-75 text-[10px] uppercase font-bold tracking-wider\">- Next Train Ops</span>",
-        "poll": {
-          "active": false,
-          "showResults": false
-        },
-        "postedAt": 1790240897510,
-        "severity": "info",
-        "sourceName": "PRASA Group Facebook",
-        "sourceUrl": "https://www.facebook.com/share/p/1HjhqSSSVo/"
-      },
-      "1791024678410": {
-        "authorName": "Next Train Ops",
-        "expiresAt": 1791323940000,
-        "forcePopup": true,
-        "id": "1791024678410",
-        "isRepost": false,
-        "message": "<br><button type=\"button\" onclick=\"window.openLightbox(&quot;https://firebasestorage.googleapis.com/v0/b/metrorail-next-train.firebasestorage.app/o/admin_attachments%2Finline_1791024618913_95qq4.jpg?alt=media&amp;token=a461bf98-de1c-456b-b8a9-61bfecb5ea81&quot;)\" class=\"relative block w-full focus:outline-none my-2 cursor-zoom-in rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm active:scale-[0.98] transition-transform\"><img src=\"https://firebasestorage.googleapis.com/v0/b/metrorail-next-train.firebasestorage.app/o/admin_attachments%2Finline_1791024618913_95qq4.jpg?alt=media&amp;token=a461bf98-de1c-456b-b8a9-61bfecb5ea81\" class=\"w-full h-auto object-cover hover:opacity-90 transition-opacity\" alt=\"Admin Attachment\"><span class=\"nt-zoom-plus absolute bottom-1.5 right-1.5 w-5 h-5 rounded-full bg-black/40 text-white text-xs font-bold leading-none flex items-center justify-center border border-white/20 pointer-events-none select-none shadow-sm\" aria-hidden=\"true\">+</span></button><br><br><br><span class=\"opacity-75 text-[10px] uppercase font-bold tracking-wider\">- Next Train Ops</span>",
-        "poll": {
-          "active": false,
-          "showResults": false
-        },
-        "postedAt": 1791024678410,
-        "reactions": {
-          "love": 1
-        },
-        "severity": "info"
-      },
-      "1791024857457": {
-        "authorName": "Next Train Ops",
-        "expiresAt": 1791323940000,
-        "forcePopup": true,
-        "id": "1791024857457",
-        "isRepost": false,
-        "message": "<h3>Please note:</h3><div><br></div><div>There will be new train schedules from Monday onwards.</div><br><br><span class=\"opacity-75 text-[10px] uppercase font-bold tracking-wider\">- Next Train Ops</span>",
-        "poll": {
-          "active": false,
-          "showResults": false
-        },
-        "postedAt": 1791024857457,
-        "severity": "info"
+        "suppressLinkPreview": false
       }
     },
     "all_WC": {
-      "1789371167568": {
+      "1792417105004": {
         "authorName": "Next Train Ops",
-        "expiresAt": 1789768740000,
+        "expiresAt": 1793483940000,
         "forcePopup": false,
-        "id": "1789371167568",
-        "imageUrls": [
-          "/images/alerts/be-rail-smart-pea.jpg"
-        ],
+        "id": "1792417105004",
         "isRepost": false,
-        "message": "",
+        "message": "<p>TFR Perway planned Occupation from 16 to 31 October 2026 between Paarl and Kraaifontein.</p><p>Wellington trains T3501, T3504 and T3509 cancelled.</p><p>Additional train 2515 operates between Bellville and Kraaifontein.</p><p>Train 3512 operates from Kraaifontein to Cape Town.</p><p>Train T3509 (Bellville 12:50 to Wellington 14:35) cancelled from 16 October 2026.</p><p>Train T3512 cancelled between Wellington and Kraaifontein.</p><p>Additional train T2515 departs Bellville at 14:00, arrives Kraaifontein at 14:25, then returns as train T3512 departing Kraaifontein at 16:35 to Cape Town.</p><p>Set working 126 trains cancelled from 19 October 2026.</p><p>Trains T0810 (Kraaifontein 04:00 to Bellville 04:25), T3501 (Bellville 05:00 to Wellington 06:45) and T3504 (Wellington 07:00 to Cape Town 09:26) are cancelled.</p><br><br><span class=\"opacity-75 text-[10px] uppercase font-bold tracking-wider\">- Next Train Ops</span>",
+        "pinned": false,
         "poll": {
           "active": false,
+          "allowMultiple": false,
+          "showRawCounts": false,
           "showResults": false
         },
-        "postedAt": 1789371167568,
-        "severity": "info"
-      },
-      "1790082485897": {
-        "authorName": "Next Train Ops",
-        "expiresAt": 1790114340000,
-        "forcePopup": false,
-        "id": "1790082485897",
-        "isRepost": false,
-        "message": "<i>\"Overhead power failure between Muldersvlei and Klapmuts impacts the Wellington train service.</i><div><i><br></i></div><div><i>Single line working has been introduced between Kraaifontein and Wellington. </i></div><div><i><br></i></div><div><i>Allow for additional travel time of 30 - 40 minutes.</i></div><div><i><br></i></div><div><i>We apologize sincerely for the inconvenience caused and appreciate your patience and understanding during this time.\"</i></div><br><br><span class=\"opacity-75 text-[10px] uppercase font-bold tracking-wider\">- Next Train Ops</span>",
-        "poll": {
-          "active": false,
-          "showResults": false
+        "postedAt": 1792417105004,
+        "reactions": {
+          "like": 1
         },
-        "postedAt": 1790082485897,
         "severity": "warning",
-        "sourceName": "Metrorail Region Updates channel",
-        "sourceUrl": "https://whatsapp.com/channel/0029VbBIBHgF6sn4wFFMtB24"
+        "suppressLinkPreview": false
       },
-      "1790089959655": {
+      "1793245212291": {
         "authorName": "Next Train Ops",
-        "expiresAt": 1790114340000,
+        "expiresAt": 1793311140000,
         "forcePopup": false,
-        "id": "1790089959655",
+        "id": "1793245212291",
         "isRepost": false,
-        "message": "<i>Service Update: Earlier overhead power failure between Muldersvlei and Klapmuts impacts the Wellington train service.</i><div><i><br></i></div><div><i>T3510 will operate from kraaifontein and terminate at Bellville. </i></div><div><i>T3515 - 17:05 will operate from Bellville till Kraaifontein to connect with T2519</i></div><div><i><br></i></div><div><i>Allow for additional travel time of 30 - 40 minutes.</i></div><div><i><br></i></div><div><i>We apologize sincerely for the inconvenience caused and appreciate your patience and understanding during this time.</i></div><br><br><span class=\"opacity-75 text-[10px] uppercase font-bold tracking-wider\">- Next Train Ops</span>",
+        "linkPreview": {
+          "url": "https://whatsapp.com/channel/0029VbBFXZBIiRoma4U6Pz2D"
+        },
+        "message": "<img src=\"https://firebasestorage.googleapis.com/v0/b/metrorail-next-train.firebasestorage.app/o/admin_attachments%2Finline_1793245137592_il2cx.jpg?alt=media&amp;token=68c00101-6d52-48c5-861f-10036dc5f579\" data-nt-src=\"https://firebasestorage.googleapis.com/v0/b/metrorail-next-train.firebasestorage.app/o/admin_attachments%2Finline_1793245137592_il2cx.jpg?alt=media&amp;token=68c00101-6d52-48c5-861f-10036dc5f579\" alt=\"\"><p><strong><br></strong></p><p><strong>Notice</strong></p><p>The circulating notice regarding a public transport shutdown in Cape Town on 29 October 2026 is false and misleading.</p><p>Please refrain from spreading unverified information that may cause unnecessary panic and confusion.</p><p>We advise passengers to verify all information through official channels before sharing.</p><br><br><span class=\"opacity-75 text-[10px] uppercase font-bold tracking-wider\">- Next Train Ops</span>",
+        "pinned": false,
         "poll": {
           "active": false,
+          "allowMultiple": false,
+          "showRawCounts": false,
           "showResults": false
         },
-        "postedAt": 1790089959655,
-        "severity": "warning",
-        "sourceName": "Metrorail Region Updates channel",
-        "sourceUrl": "https://whatsapp.com/channel/0029VbBIBHgF6sn4wFFMtB24"
-      },
-      "1790171145397": {
-        "authorName": "Next Train Ops",
-        "expiresAt": 1790200740000,
-        "forcePopup": true,
-        "id": "1790171145397",
-        "isRepost": false,
-        "message": "Hi everyone, <div><br></div><div>We received some schedules for tomorrow, we will be updating our times right away.</div><div><br></div><div>Thank you for using Next Train!</div><br><br><span class=\"opacity-75 text-[10px] uppercase font-bold tracking-wider\">- Next Train Ops</span>",
-        "poll": {
-          "active": false,
-          "showResults": false
-        },
-        "postedAt": 1790171145397,
-        "severity": "info"
-      },
-      "1790173622169": {
-        "authorName": "Next Train Ops",
-        "expiresAt": 1790200740000,
-        "forcePopup": false,
-        "id": "1790173622169",
-        "isRepost": false,
-        "message": "To see the public holiday timetables:<div><br></div><div><ul><li>On the <b>Next Train</b>  homescreen tab.</li><li>Click the blue \"<b>VIEW FULL TIMETABLES</b>\"</li><li>Click the top left, click \"<b>Mon-Fri</b>\" </li><li>Select \"<b>Public Holidays</b>\" </li></ul><div>That's it.</div></div><br><br><span class=\"opacity-75 text-[10px] uppercase font-bold tracking-wider\">- Next Train Ops</span>",
-        "poll": {
-          "active": false,
-          "showResults": false
-        },
-        "postedAt": 1790173622169,
-        "severity": "info"
-      },
-      "1790246422060": {
-        "authorName": "Next Train Ops",
-        "expiresAt": 1790287140000,
-        "forcePopup": false,
-        "id": "1790246422060",
-        "isRepost": false,
-        "message": "<br><button type=\"button\" onclick=\"window.openLightbox(&quot;https://firebasestorage.googleapis.com/v0/b/metrorail-next-train.firebasestorage.app/o/admin_attachments%2Finline_1790246406069_p3tvu.jpg?alt=media&amp;token=504e6d5f-e61b-4d7f-9886-331ac0262c76&quot;)\" class=\"relative block w-full focus:outline-none my-2 cursor-zoom-in rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm active:scale-[0.98] transition-transform\"><img src=\"https://firebasestorage.googleapis.com/v0/b/metrorail-next-train.firebasestorage.app/o/admin_attachments%2Finline_1790246406069_p3tvu.jpg?alt=media&amp;token=504e6d5f-e61b-4d7f-9886-331ac0262c76\" class=\"w-full h-auto object-cover hover:opacity-90 transition-opacity\" alt=\"Admin Attachment\"><span class=\"nt-zoom-plus absolute bottom-1.5 right-1.5 w-5 h-5 rounded-full bg-black/40 text-white text-xs font-bold leading-none flex items-center justify-center border border-white/20 pointer-events-none select-none shadow-sm\" aria-hidden=\"true\">+</span></button><br><br><br><span class=\"opacity-75 text-[10px] uppercase font-bold tracking-wider\">- Next Train Ops</span>",
-        "poll": {
-          "active": false,
-          "showResults": false
-        },
-        "postedAt": 1790246422060,
-        "severity": "info",
-        "sourceName": "Western Cape Metrorail/PRASA Train Updates channel",
-        "sourceUrl": "https://whatsapp.com/channel/0029VbBFXZBIiRoma4U6Pz2D"
-      },
-      "1790330030973": {
-        "authorName": "Next Train Ops",
-        "expiresAt": 1790373540000,
-        "forcePopup": false,
-        "id": "1790330030973",
-        "isRepost": false,
-        "message": "<i>Service Advisory: Emergency occupation between Bellville/Brackenfell</i><div><i><br></i></div><div><i>As from T3507- 10: 30 Cape Town to Wellington.</i></div><div><i> Single line working has been implemented between Bellville and Kraaifontein.</i></div><div><i>  </i></div><div><i>We apologize sincerely for the inconvenience caused and appreciate your patience and understanding during this time.</i></div><br><br><span class=\"opacity-75 text-[10px] uppercase font-bold tracking-wider\">- Next Train Ops</span>",
-        "poll": {
-          "active": false,
-          "showResults": false
-        },
-        "postedAt": 1790330030973,
-        "severity": "warning",
-        "sourceName": "Western Cape Metrorail/PRASA Updates",
-        "sourceUrl": "https://whatsapp.com/channel/0029VbBFXZBIiRoma4U6Pz2D"
-      },
-      "1790339830621": {
-        "authorName": "Next Train Ops",
-        "expiresAt": 1790632740000,
-        "forcePopup": false,
-        "id": "1790339830621",
-        "isRepost": false,
-        "message": "Good News for Central Line<div><br></div><div>As from 28/09/2026, we will be having 01x new additional train from Cape Town to Nyanga that'll operate via Mutual. Train no. will be T92.</div><div><br></div><div>Morning peak</div><div>T9201 - Cape Town 05:15 - Nyanga 05:56</div><div>T9200 - Nyanga 06:15 - Cape Town 06:50</div><div><br></div><div>Afternoon peak</div><div>T9203 - Cape Town 16:55 - Nyanga 17:36</div><div>T9202 - Nyanga 17:45 - Cape Town 18:30</div><div><br></div><div>Time table will be shared once it is ready.</div><br><br><span class=\"opacity-75 text-[10px] uppercase font-bold tracking-wider\">- Next Train Ops</span>",
-        "poll": {
-          "active": false,
-          "showResults": false
-        },
-        "postedAt": 1790339830621,
-        "severity": "info",
-        "sourceName": "Metrorail KZN WhatsApp Channel",
-        "sourceUrl": "https://whatsapp.com/channel/0029Vao04EvLo4hldLZlPz3P"
-      },
-      "1790582640880": {
-        "authorName": "Next Train Ops",
-        "expiresAt": 1790632740000,
-        "forcePopup": false,
-        "id": "1790582640880",
-        "isRepost": false,
-        "message": "SERVICE ADVISORY: TRAIN CANCELLATIONS<div><br></div><div>Due to passenger-related incident at Heideveld Station</div><div><br></div><div>T9405 - 08:23 – Cape Town to Nolungile</div><div>T9408 - 09:32 – Nolungile to Cape Town.</div><div><br></div><div>Commuters are advised to make use of alternative transport arrangements.</div><div><br></div><div>We sincerely apologize for the inconvenience caused and appreciate your patience and understanding.</div><br><br><span class=\"opacity-75 text-[10px] uppercase font-bold tracking-wider\">- Next Train Ops</span>",
-        "poll": {
-          "active": false,
-          "showResults": false
-        },
-        "postedAt": 1790582640880,
+        "postedAt": 1793245212291,
         "severity": "info",
         "sourceName": "Western Cape Metrorail/PRASA Updates",
-        "sourceUrl": "https://whatsapp.com/channel/0029VbBFXZBIiRoma4U6Pz2D"
-      },
-      "1790871979433": {
-        "authorName": "Next Train Ops",
-        "expiresAt": 1790891940000,
-        "forcePopup": false,
-        "id": "1790871979433",
-        "isRepost": false,
-        "message": "Service Update: Overhead power failure at Firgrove impacts T3220/T3217.<div><br></div><div>All Strand trains will terminate at Eerste River</div><div> </div><div>Allow for additional travel time of 60+ minutes.</div><div><br></div><div>Commuters are advised to make use of alternative transport arrangements in the affected areas.</div><div><br></div><div>We apologize sincerely for the inconvenience caused and appreciate your patience and understanding during this time.</div><br><br><span class=\"opacity-75 text-[10px] uppercase font-bold tracking-wider\">- Next Train Ops</span>",
-        "poll": {
-          "active": false,
-          "showResults": false
-        },
-        "postedAt": 1790871979433,
-        "severity": "info",
-        "sourceName": "Metrorail Region Updates channel",
-        "sourceUrl": "https://whatsapp.com/channel/0029VbBIBHgF6sn4wFFMtB24"
-      },
-      "1791024678410": {
-        "authorName": "Next Train Ops",
-        "expiresAt": 1791323940000,
-        "forcePopup": true,
-        "id": "1791024678410",
-        "isRepost": false,
-        "message": "<br><button type=\"button\" onclick=\"window.openLightbox(&quot;https://firebasestorage.googleapis.com/v0/b/metrorail-next-train.firebasestorage.app/o/admin_attachments%2Finline_1791024618913_95qq4.jpg?alt=media&amp;token=a461bf98-de1c-456b-b8a9-61bfecb5ea81&quot;)\" class=\"relative block w-full focus:outline-none my-2 cursor-zoom-in rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm active:scale-[0.98] transition-transform\"><img src=\"https://firebasestorage.googleapis.com/v0/b/metrorail-next-train.firebasestorage.app/o/admin_attachments%2Finline_1791024618913_95qq4.jpg?alt=media&amp;token=a461bf98-de1c-456b-b8a9-61bfecb5ea81\" class=\"w-full h-auto object-cover hover:opacity-90 transition-opacity\" alt=\"Admin Attachment\"><span class=\"nt-zoom-plus absolute bottom-1.5 right-1.5 w-5 h-5 rounded-full bg-black/40 text-white text-xs font-bold leading-none flex items-center justify-center border border-white/20 pointer-events-none select-none shadow-sm\" aria-hidden=\"true\">+</span></button><br><br><br><span class=\"opacity-75 text-[10px] uppercase font-bold tracking-wider\">- Next Train Ops</span>",
-        "poll": {
-          "active": false,
-          "showResults": false
-        },
-        "postedAt": 1791024678410,
-        "severity": "info"
-      }
-    },
-    "mab-belle": {
-      "1788991323989": {
-        "authorName": "Next Train Ops",
-        "expiresAt": 1789423140000,
-        "forcePopup": false,
-        "id": "1788991323989",
-        "isRepost": false,
-        "message": "<h3>Ga-Rankuwa Line:</h3><p><font size=\"3\" style=\"\"><b>Timetable Adjustment</b></font></p><div><br></div><div><br></div><div>Ga-Rankuwa commuters, please note the following timetable adjustments effective from Monday:</div><div><br></div><div><ul><li>Train 4400: Will depart De Wildt at 03:50 to Pretoria.</li><li>Train 4402: Will depart De Wildt at 04:27 to Pretoria.</li></ul></div><div><br></div><div>This adjustment will allow for smoother connections at Pretoria Station.</div><div><br></div><div>Additionally, PRASA will introduce a new afternoon service:</div><div><br></div><div><ul><li>New Train: Departing Pretoria Station to De Wildt at 14:50.</li></ul></div><div><br></div><div>Have a blessed day!</div><br><br><span class=\"opacity-75 text-[10px] uppercase font-bold tracking-wider\">- Next Train Ops</span>",
-        "poll": {
-          "active": false,
-          "showResults": false
-        },
-        "postedAt": 1788991323989,
-        "severity": "info",
-        "sourceName": "John Da TourGuider🛺🚂🚢🚉🚀",
-        "sourceUrl": "https://whatsapp.com/channel/0029Vb5ueHpCsU9YpEsHJd0K"
-      },
-      "1789047824051": {
-        "authorName": "Next Train Ops",
-        "expiresAt": 1789336740000,
-        "forcePopup": false,
-        "id": "1789047824051",
-        "isRepost": false,
-        "message": "<br><button type=\"button\" onclick=\"window.openLightbox(&quot;https://firebasestorage.googleapis.com/v0/b/metrorail-next-train.firebasestorage.app/o/admin_attachments%2Finline_1789047756891_42jij.jpg?alt=media&amp;token=7deeaa0c-496e-4a39-bc49-16a16db57ccc&quot;)\" class=\"relative block w-full focus:outline-none my-2 cursor-zoom-in rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm active:scale-[0.98] transition-transform\"><img src=\"https://firebasestorage.googleapis.com/v0/b/metrorail-next-train.firebasestorage.app/o/admin_attachments%2Finline_1789047756891_42jij.jpg?alt=media&amp;token=7deeaa0c-496e-4a39-bc49-16a16db57ccc\" class=\"w-full h-auto object-cover hover:opacity-90 transition-opacity\" alt=\"Admin Attachment\"><span class=\"nt-zoom-plus absolute bottom-1.5 right-1.5 w-5 h-5 rounded-full bg-black/40 text-white text-xs font-bold leading-none flex items-center justify-center border border-white/20 pointer-events-none select-none shadow-sm\" aria-hidden=\"true\">+</span></button><br><br><br><span class=\"opacity-75 text-[10px] uppercase font-bold tracking-wider\">- Next Train Ops</span>",
-        "poll": {
-          "active": false,
-          "showResults": false
-        },
-        "postedAt": 1789047824051,
-        "severity": "info"
-      }
-    },
-    "pta-dewildt": {
-      "1788991323989": {
-        "authorName": "Next Train Ops",
-        "expiresAt": 1789423140000,
-        "forcePopup": false,
-        "id": "1788991323989",
-        "isRepost": false,
-        "message": "<h3>Ga-Rankuwa Line:</h3><p><font size=\"3\" style=\"\"><b>Timetable Adjustment</b></font></p><div><br></div><div><br></div><div>Ga-Rankuwa commuters, please note the following timetable adjustments effective from Monday:</div><div><br></div><div><ul><li>Train 4400: Will depart De Wildt at 03:50 to Pretoria.</li><li>Train 4402: Will depart De Wildt at 04:27 to Pretoria.</li></ul></div><div><br></div><div>This adjustment will allow for smoother connections at Pretoria Station.</div><div><br></div><div>Additionally, PRASA will introduce a new afternoon service:</div><div><br></div><div><ul><li>New Train: Departing Pretoria Station to De Wildt at 14:50.</li></ul></div><div><br></div><div>Have a blessed day!</div><br><br><span class=\"opacity-75 text-[10px] uppercase font-bold tracking-wider\">- Next Train Ops</span>",
-        "poll": {
-          "active": false,
-          "showResults": false
-        },
-        "postedAt": 1788991323989,
-        "severity": "info",
-        "sourceName": "John Da TourGuider🛺🚂🚢🚉🚀",
-        "sourceUrl": "https://whatsapp.com/channel/0029Vb5ueHpCsU9YpEsHJd0K"
-      },
-      "1789047824051": {
-        "authorName": "Next Train Ops",
-        "expiresAt": 1789336740000,
-        "forcePopup": false,
-        "id": "1789047824051",
-        "isRepost": false,
-        "message": "<br><button type=\"button\" onclick=\"window.openLightbox(&quot;https://firebasestorage.googleapis.com/v0/b/metrorail-next-train.firebasestorage.app/o/admin_attachments%2Finline_1789047756891_42jij.jpg?alt=media&amp;token=7deeaa0c-496e-4a39-bc49-16a16db57ccc&quot;)\" class=\"relative block w-full focus:outline-none my-2 cursor-zoom-in rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm active:scale-[0.98] transition-transform\"><img src=\"https://firebasestorage.googleapis.com/v0/b/metrorail-next-train.firebasestorage.app/o/admin_attachments%2Finline_1789047756891_42jij.jpg?alt=media&amp;token=7deeaa0c-496e-4a39-bc49-16a16db57ccc\" class=\"w-full h-auto object-cover hover:opacity-90 transition-opacity\" alt=\"Admin Attachment\"><span class=\"nt-zoom-plus absolute bottom-1.5 right-1.5 w-5 h-5 rounded-full bg-black/40 text-white text-xs font-bold leading-none flex items-center justify-center border border-white/20 pointer-events-none select-none shadow-sm\" aria-hidden=\"true\">+</span></button><br><br><br><span class=\"opacity-75 text-[10px] uppercase font-bold tracking-wider\">- Next Train Ops</span>",
-        "poll": {
-          "active": false,
-          "showResults": false
-        },
-        "postedAt": 1789047824051,
-        "severity": "info"
-      },
-      "1789122073826": {
-        "authorName": "Next Train Ops",
-        "expiresAt": 1789509540000,
-        "forcePopup": false,
-        "id": "1789122073826",
-        "isRepost": false,
-        "message": "<div><span style=\"font-size: 0.75rem;\"><i><b><u>Attention De Wildt Commuters</u></b></i></span></div><div><br></div><div>If you travel on the Pretoria to De Wildt route, you can join this WhatsApp group for train updates, delays and service information.</div><div><br></div><div><b>Group Name: </b>De Wildt Train Update 2</div><div><br></div><div><b>Invite Link:</b></div><div><a href=\"https://chat.whatsapp.com/IsYHpumLyhDDGY7HuaSYQM?s=cl&amp;p=i&amp;mlu=0&amp;ilr=4\" target=\"_blank\" class=\"text-blue-500 dark:text-blue-400 underline underline-offset-2\">https://chat.whatsapp.com/IsYHpumLyhDDGY7HuaSYQM?s=cl&amp;p=i&amp;mlu=0&amp;ilr=4</a></div><div><br></div><div>Please read and follow the rules in the group's description once you join.</div><br><br><span class=\"opacity-75 text-[10px] uppercase font-bold tracking-wider\">- Next Train Ops</span>",
-        "poll": {
-          "active": false,
-          "showResults": false
-        },
-        "postedAt": 1789122073826,
-        "severity": "info"
-      },
-      "1789326968773": {
-        "authorName": "Next Train Ops",
-        "expiresAt": 1789509540000,
-        "forcePopup": false,
-        "id": "1789326968773",
-        "isRepost": false,
-        "message": "<p><b style=\"\"><u style=\"\"><font size=\"3\">Service Amendments for De Wildt</font></u></b></p><div><br></div><div>Please note:</div><div><br></div><div><ul><li>4400 departs De Wildt to Pretoria at 03h50</li><li>4402 departs De Wildt to Pretoria at 04h27</li><li>4443 departs Pretoria to De Wildt at 14h50</li></ul></div><div><br></div><div>All other trains remain unchanged.</div><br><br><span class=\"opacity-75 text-[10px] uppercase font-bold tracking-wider\">- Next Train Ops</span>",
-        "poll": {
-          "active": false,
-          "showResults": false
-        },
-        "postedAt": 1789326968773,
-        "severity": "info"
+        "sourceUrl": "https://whatsapp.com/channel/0029VbBFXZBIiRoma4U6Pz2D",
+        "suppressLinkPreview": true
       }
     },
     "pta-irene": {
-      "1789047824051": {
+      "1793167511814": {
         "authorName": "Next Train Ops",
-        "expiresAt": 1789336740000,
-        "forcePopup": false,
-        "id": "1789047824051",
+        "expiresAt": 1793224740000,
+        "forcePopup": true,
+        "id": "1793167511814",
+        "imageUrls": [
+          "/images/alerts/pta-kempton-0618-0619.jpg"
+        ],
         "isRepost": false,
-        "message": "<br><button type=\"button\" onclick=\"window.openLightbox(&quot;https://firebasestorage.googleapis.com/v0/b/metrorail-next-train.firebasestorage.app/o/admin_attachments%2Finline_1789047756891_42jij.jpg?alt=media&amp;token=7deeaa0c-496e-4a39-bc49-16a16db57ccc&quot;)\" class=\"relative block w-full focus:outline-none my-2 cursor-zoom-in rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm active:scale-[0.98] transition-transform\"><img src=\"https://firebasestorage.googleapis.com/v0/b/metrorail-next-train.firebasestorage.app/o/admin_attachments%2Finline_1789047756891_42jij.jpg?alt=media&amp;token=7deeaa0c-496e-4a39-bc49-16a16db57ccc\" class=\"w-full h-auto object-cover hover:opacity-90 transition-opacity\" alt=\"Admin Attachment\"><span class=\"nt-zoom-plus absolute bottom-1.5 right-1.5 w-5 h-5 rounded-full bg-black/40 text-white text-xs font-bold leading-none flex items-center justify-center border border-white/20 pointer-events-none select-none shadow-sm\" aria-hidden=\"true\">+</span></button><br><br><br><span class=\"opacity-75 text-[10px] uppercase font-bold tracking-wider\">- Next Train Ops</span>",
-        "poll": {
-          "active": false,
-          "showResults": false
-        },
-        "postedAt": 1789047824051,
-        "severity": "info"
-      },
-      "sched_mu0cxj40_1k1ulyy": {
-        "authorName": "Next Train Ops",
-        "expiresAt": 1789423199999,
-        "forcePopup": false,
-        "id": "sched_mu0cxj40_1k1ulyy",
-        "imageUrls": [
-          "/images/alerts/pta-kempton-0618-0619.jpg"
-        ],
         "message": "",
+        "pinned": false,
         "poll": {
           "active": false,
+          "allowMultiple": false,
+          "showRawCounts": false,
           "showResults": false
         },
-        "postedAt": 1789336800000,
-        "severity": "info"
-      },
-      "sched_mu62oxs0_1k1ulyy": {
-        "authorName": "Next Train Ops",
-        "expiresAt": 1789768799999,
-        "forcePopup": false,
-        "id": "sched_mu62oxs0_1k1ulyy",
-        "imageUrls": [
-          "/images/alerts/pta-kempton-0618-0619.jpg"
-        ],
-        "message": "",
-        "poll": {
-          "active": false,
-          "showResults": false
-        },
-        "postedAt": 1789682400000,
-        "severity": "info"
-      },
-      "sched_muad0hs0_1k1ulyy": {
-        "authorName": "Next Train Ops",
-        "expiresAt": 1790027999999,
-        "forcePopup": false,
-        "id": "sched_muad0hs0_1k1ulyy",
-        "imageUrls": [
-          "/images/alerts/pta-kempton-0618-0619.jpg"
-        ],
-        "message": "",
-        "poll": {
-          "active": false,
-          "showResults": false
-        },
-        "postedAt": 1789941600000,
-        "severity": "info"
-      },
-      "sched_mug2rwg0_1k1ulyy": {
-        "authorName": "Next Train Ops",
-        "expiresAt": 1790373599999,
-        "forcePopup": false,
-        "id": "sched_mug2rwg0_1k1ulyy",
-        "imageUrls": [
-          "/images/alerts/pta-kempton-0618-0619.jpg"
-        ],
-        "message": "",
-        "poll": {
-          "active": false,
-          "showResults": false
-        },
-        "postedAt": 1790287200000,
-        "severity": "info"
-      },
-      "sched_mukd3gg0_1k1ulyy": {
-        "authorName": "Next Train Ops",
-        "expiresAt": 1790632799999,
-        "forcePopup": false,
-        "id": "sched_mukd3gg0_1k1ulyy",
-        "imageUrls": [
-          "/images/alerts/pta-kempton-0618-0619.jpg"
-        ],
-        "message": "",
-        "poll": {
-          "active": false,
-          "showResults": false
-        },
-        "postedAt": 1790546400000,
-        "severity": "info"
-      },
-      "sched_muq2uv40_1k1ulyy": {
-        "authorName": "Next Train Ops",
-        "expiresAt": 1790978399999,
-        "forcePopup": false,
-        "id": "sched_muq2uv40_1k1ulyy",
-        "imageUrls": [
-          "/images/alerts/pta-kempton-0618-0619.jpg"
-        ],
-        "message": "",
-        "poll": {
-          "active": false,
-          "showResults": false
-        },
-        "postedAt": 1790892000000,
-        "severity": "info"
-      },
-      "sched_muud6f40_1k1ulyy": {
-        "authorName": "Next Train Ops",
-        "expiresAt": 1791237599999,
-        "forcePopup": false,
-        "id": "sched_muud6f40_1k1ulyy",
-        "imageUrls": [
-          "/images/alerts/pta-kempton-0618-0619.jpg"
-        ],
-        "message": "",
-        "poll": {
-          "active": false,
-          "showResults": false
-        },
-        "postedAt": 1791151200000,
-        "severity": "info"
+        "postedAt": 1793167511814,
+        "severity": "warning",
+        "suppressLinkPreview": false
       }
     },
     "pta-kempton": {
-      "1789047824051": {
+      "1793167511814": {
         "authorName": "Next Train Ops",
-        "expiresAt": 1789336740000,
-        "forcePopup": false,
-        "id": "1789047824051",
-        "isRepost": false,
-        "message": "<br><button type=\"button\" onclick=\"window.openLightbox(&quot;https://firebasestorage.googleapis.com/v0/b/metrorail-next-train.firebasestorage.app/o/admin_attachments%2Finline_1789047756891_42jij.jpg?alt=media&amp;token=7deeaa0c-496e-4a39-bc49-16a16db57ccc&quot;)\" class=\"relative block w-full focus:outline-none my-2 cursor-zoom-in rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm active:scale-[0.98] transition-transform\"><img src=\"https://firebasestorage.googleapis.com/v0/b/metrorail-next-train.firebasestorage.app/o/admin_attachments%2Finline_1789047756891_42jij.jpg?alt=media&amp;token=7deeaa0c-496e-4a39-bc49-16a16db57ccc\" class=\"w-full h-auto object-cover hover:opacity-90 transition-opacity\" alt=\"Admin Attachment\"><span class=\"nt-zoom-plus absolute bottom-1.5 right-1.5 w-5 h-5 rounded-full bg-black/40 text-white text-xs font-bold leading-none flex items-center justify-center border border-white/20 pointer-events-none select-none shadow-sm\" aria-hidden=\"true\">+</span></button><br><br><br><span class=\"opacity-75 text-[10px] uppercase font-bold tracking-wider\">- Next Train Ops</span>",
-        "poll": {
-          "active": false,
-          "showResults": false
-        },
-        "postedAt": 1789047824051,
-        "severity": "info"
-      },
-      "1790255185155": {
-        "authorName": "Next Train Ops",
-        "expiresAt": 1790265540000,
+        "expiresAt": 1793224740000,
         "forcePopup": true,
-        "id": "1790255185155",
+        "id": "1793167511814",
+        "imageUrls": [
+          "/images/alerts/pta-kempton-0618-0619.jpg"
+        ],
         "isRepost": false,
-        "message": "Dear Commuters,<div><br></div><div>Please take note that Train 0608 from Pretoria station to Kempton park station will depart at 15h30.</div><br><br><span class=\"opacity-75 text-[10px] uppercase font-bold tracking-wider\">- Next Train Ops</span>",
+        "message": "",
+        "pinned": false,
         "poll": {
           "active": false,
+          "allowMultiple": false,
+          "showRawCounts": false,
           "showResults": false
         },
-        "postedAt": 1790255185155,
+        "postedAt": 1793167511814,
+        "reactions": {
+          "love": 1
+        },
         "severity": "warning",
-        "sourceName": "RailTalk SA WhatsApp Channel",
-        "sourceUrl": "https://whatsapp.com/channel/0029Vb61eoeCnA7xvYauuf0x"
-      },
-      "sched_mu0cxj40_1k1ulyy": {
-        "authorName": "Next Train Ops",
-        "expiresAt": 1789423199999,
-        "forcePopup": false,
-        "id": "sched_mu0cxj40_1k1ulyy",
-        "imageUrls": [
-          "/images/alerts/pta-kempton-0618-0619.jpg"
-        ],
-        "message": "",
-        "poll": {
-          "active": false,
-          "showResults": false
-        },
-        "postedAt": 1789336800000,
-        "severity": "info"
-      },
-      "sched_mu62oxs0_1k1ulyy": {
-        "authorName": "Next Train Ops",
-        "expiresAt": 1789768799999,
-        "forcePopup": false,
-        "id": "sched_mu62oxs0_1k1ulyy",
-        "imageUrls": [
-          "/images/alerts/pta-kempton-0618-0619.jpg"
-        ],
-        "message": "",
-        "poll": {
-          "active": false,
-          "showResults": false
-        },
-        "postedAt": 1789682400000,
-        "severity": "info"
-      },
-      "sched_muad0hs0_1k1ulyy": {
-        "authorName": "Next Train Ops",
-        "expiresAt": 1790027999999,
-        "forcePopup": false,
-        "id": "sched_muad0hs0_1k1ulyy",
-        "imageUrls": [
-          "/images/alerts/pta-kempton-0618-0619.jpg"
-        ],
-        "message": "",
-        "poll": {
-          "active": false,
-          "showResults": false
-        },
-        "postedAt": 1789941600000,
-        "severity": "info"
-      },
-      "sched_mug2rwg0_1k1ulyy": {
-        "authorName": "Next Train Ops",
-        "expiresAt": 1790373599999,
-        "forcePopup": false,
-        "id": "sched_mug2rwg0_1k1ulyy",
-        "imageUrls": [
-          "/images/alerts/pta-kempton-0618-0619.jpg"
-        ],
-        "message": "",
-        "poll": {
-          "active": false,
-          "showResults": false
-        },
-        "postedAt": 1790287200000,
-        "severity": "info"
-      },
-      "sched_mukd3gg0_1k1ulyy": {
-        "authorName": "Next Train Ops",
-        "expiresAt": 1790632799999,
-        "forcePopup": false,
-        "id": "sched_mukd3gg0_1k1ulyy",
-        "imageUrls": [
-          "/images/alerts/pta-kempton-0618-0619.jpg"
-        ],
-        "message": "",
-        "poll": {
-          "active": false,
-          "showResults": false
-        },
-        "postedAt": 1790546400000,
-        "severity": "info"
-      },
-      "sched_muq2uv40_1k1ulyy": {
-        "authorName": "Next Train Ops",
-        "expiresAt": 1790978399999,
-        "forcePopup": false,
-        "id": "sched_muq2uv40_1k1ulyy",
-        "imageUrls": [
-          "/images/alerts/pta-kempton-0618-0619.jpg"
-        ],
-        "message": "",
-        "poll": {
-          "active": false,
-          "showResults": false
-        },
-        "postedAt": 1790892000000,
-        "severity": "info"
-      },
-      "sched_muud6f40_1k1ulyy": {
-        "authorName": "Next Train Ops",
-        "expiresAt": 1791237599999,
-        "forcePopup": false,
-        "id": "sched_muud6f40_1k1ulyy",
-        "imageUrls": [
-          "/images/alerts/pta-kempton-0618-0619.jpg"
-        ],
-        "message": "",
-        "poll": {
-          "active": false,
-          "showResults": false
-        },
-        "postedAt": 1791151200000,
-        "severity": "info"
-      }
-    },
-    "pta-mabopane": {
-      "1788991323989": {
-        "authorName": "Next Train Ops",
-        "expiresAt": 1789423140000,
-        "forcePopup": false,
-        "id": "1788991323989",
-        "isRepost": false,
-        "message": "<h3>Ga-Rankuwa Line:</h3><p><font size=\"3\" style=\"\"><b>Timetable Adjustment</b></font></p><div><br></div><div><br></div><div>Ga-Rankuwa commuters, please note the following timetable adjustments effective from Monday:</div><div><br></div><div><ul><li>Train 4400: Will depart De Wildt at 03:50 to Pretoria.</li><li>Train 4402: Will depart De Wildt at 04:27 to Pretoria.</li></ul></div><div><br></div><div>This adjustment will allow for smoother connections at Pretoria Station.</div><div><br></div><div>Additionally, PRASA will introduce a new afternoon service:</div><div><br></div><div><ul><li>New Train: Departing Pretoria Station to De Wildt at 14:50.</li></ul></div><div><br></div><div>Have a blessed day!</div><br><br><span class=\"opacity-75 text-[10px] uppercase font-bold tracking-wider\">- Next Train Ops</span>",
-        "poll": {
-          "active": false,
-          "showResults": false
-        },
-        "postedAt": 1788991323989,
-        "severity": "info",
-        "sourceName": "John Da TourGuider🛺🚂🚢🚉🚀",
-        "sourceUrl": "https://whatsapp.com/channel/0029Vb5ueHpCsU9YpEsHJd0K"
-      },
-      "1789047824051": {
-        "authorName": "Next Train Ops",
-        "expiresAt": 1789336740000,
-        "forcePopup": false,
-        "id": "1789047824051",
-        "isRepost": false,
-        "message": "<br><button type=\"button\" onclick=\"window.openLightbox(&quot;https://firebasestorage.googleapis.com/v0/b/metrorail-next-train.firebasestorage.app/o/admin_attachments%2Finline_1789047756891_42jij.jpg?alt=media&amp;token=7deeaa0c-496e-4a39-bc49-16a16db57ccc&quot;)\" class=\"relative block w-full focus:outline-none my-2 cursor-zoom-in rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm active:scale-[0.98] transition-transform\"><img src=\"https://firebasestorage.googleapis.com/v0/b/metrorail-next-train.firebasestorage.app/o/admin_attachments%2Finline_1789047756891_42jij.jpg?alt=media&amp;token=7deeaa0c-496e-4a39-bc49-16a16db57ccc\" class=\"w-full h-auto object-cover hover:opacity-90 transition-opacity\" alt=\"Admin Attachment\"><span class=\"nt-zoom-plus absolute bottom-1.5 right-1.5 w-5 h-5 rounded-full bg-black/40 text-white text-xs font-bold leading-none flex items-center justify-center border border-white/20 pointer-events-none select-none shadow-sm\" aria-hidden=\"true\">+</span></button><br><br><br><span class=\"opacity-75 text-[10px] uppercase font-bold tracking-wider\">- Next Train Ops</span>",
-        "poll": {
-          "active": false,
-          "showResults": false
-        },
-        "postedAt": 1789047824051,
-        "severity": "info"
-      }
-    },
-    "pta-saul": {
-      "1788991323989": {
-        "authorName": "Next Train Ops",
-        "expiresAt": 1789423140000,
-        "forcePopup": false,
-        "id": "1788991323989",
-        "isRepost": false,
-        "message": "<h3>Ga-Rankuwa Line:</h3><p><font size=\"3\" style=\"\"><b>Timetable Adjustment</b></font></p><div><br></div><div><br></div><div>Ga-Rankuwa commuters, please note the following timetable adjustments effective from Monday:</div><div><br></div><div><ul><li>Train 4400: Will depart De Wildt at 03:50 to Pretoria.</li><li>Train 4402: Will depart De Wildt at 04:27 to Pretoria.</li></ul></div><div><br></div><div>This adjustment will allow for smoother connections at Pretoria Station.</div><div><br></div><div>Additionally, PRASA will introduce a new afternoon service:</div><div><br></div><div><ul><li>New Train: Departing Pretoria Station to De Wildt at 14:50.</li></ul></div><div><br></div><div>Have a blessed day!</div><br><br><span class=\"opacity-75 text-[10px] uppercase font-bold tracking-wider\">- Next Train Ops</span>",
-        "poll": {
-          "active": false,
-          "showResults": false
-        },
-        "postedAt": 1788991323989,
-        "severity": "info",
-        "sourceName": "John Da TourGuider🛺🚂🚢🚉🚀",
-        "sourceUrl": "https://whatsapp.com/channel/0029Vb5ueHpCsU9YpEsHJd0K"
-      },
-      "1789047824051": {
-        "authorName": "Next Train Ops",
-        "expiresAt": 1789336740000,
-        "forcePopup": false,
-        "id": "1789047824051",
-        "isRepost": false,
-        "message": "<br><button type=\"button\" onclick=\"window.openLightbox(&quot;https://firebasestorage.googleapis.com/v0/b/metrorail-next-train.firebasestorage.app/o/admin_attachments%2Finline_1789047756891_42jij.jpg?alt=media&amp;token=7deeaa0c-496e-4a39-bc49-16a16db57ccc&quot;)\" class=\"relative block w-full focus:outline-none my-2 cursor-zoom-in rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm active:scale-[0.98] transition-transform\"><img src=\"https://firebasestorage.googleapis.com/v0/b/metrorail-next-train.firebasestorage.app/o/admin_attachments%2Finline_1789047756891_42jij.jpg?alt=media&amp;token=7deeaa0c-496e-4a39-bc49-16a16db57ccc\" class=\"w-full h-auto object-cover hover:opacity-90 transition-opacity\" alt=\"Admin Attachment\"><span class=\"nt-zoom-plus absolute bottom-1.5 right-1.5 w-5 h-5 rounded-full bg-black/40 text-white text-xs font-bold leading-none flex items-center justify-center border border-white/20 pointer-events-none select-none shadow-sm\" aria-hidden=\"true\">+</span></button><br><br><br><span class=\"opacity-75 text-[10px] uppercase font-bold tracking-wider\">- Next Train Ops</span>",
-        "poll": {
-          "active": false,
-          "showResults": false
-        },
-        "postedAt": 1789047824051,
-        "severity": "info"
+        "suppressLinkPreview": false
       }
     }
   },
@@ -9688,7 +8964,7 @@
     "dewil_to_pta_weekday_zone": "Z2",
     "event_to_a_sat": [
       {
-        "STATION": "Last Updated: 1 October 2026"
+        "STATION": "Last Updated: 26 October 2026"
       },
       {
         "COORDINATES": "-25.75864361043285, 28.189866445989118",
@@ -9759,11 +9035,11 @@
         "STATION": "PIENAARSPOORT "
       }
     ],
-    "event_to_a_sat_meta": "1 October 2026",
+    "event_to_a_sat_meta": "26 October 2026",
     "event_to_a_sat_zone": "Z2",
     "event_to_a_weekday": [
       {
-        "STATION": "Last Updated: 1 October 2026"
+        "STATION": "Last Updated: 26 October 2026"
       },
       {
         "COORDINATES": "-25.75864361043285, 28.189866445989118",
@@ -9834,11 +9110,11 @@
         "STATION": "PIENAARSPOORT "
       }
     ],
-    "event_to_a_weekday_meta": "1 October 2026",
+    "event_to_a_weekday_meta": "26 October 2026",
     "event_to_a_weekday_zone": "Z2",
     "event_to_b_sat": [
       {
-        "STATION": "Last Updated: 1 October 2026"
+        "STATION": "Last Updated: 26 October 2026"
       },
       {
         "COORDINATES": "-25.75864361043285, 28.189866445989118",
@@ -9909,11 +9185,11 @@
         "STATION": "PIENAARSPOORT "
       }
     ],
-    "event_to_b_sat_meta": "1 October 2026",
+    "event_to_b_sat_meta": "26 October 2026",
     "event_to_b_sat_zone": "Z2",
     "event_to_b_weekday": [
       {
-        "STATION": "Last Updated: 1 October 2026"
+        "STATION": "Last Updated: 26 October 2026"
       },
       {
         "COORDINATES": "-25.75864361043285, 28.189866445989118",
@@ -9984,7 +9260,7 @@
         "STATION": "PIENAARSPOORT "
       }
     ],
-    "event_to_b_weekday_meta": "1 October 2026",
+    "event_to_b_weekday_meta": "26 October 2026",
     "event_to_b_weekday_zone": "Z2",
     "germ_to_jhb_sat": [
       {
@@ -11457,250 +10733,223 @@
     "jhb_to_midwy_sat_zone": "Z2",
     "jhb_to_midwy_weekday": [
       {
-        "STATION": "Last Updated: 8 June 2026"
+        "STATION": "Last Updated: 26 October 2026"
       },
       {
-        "9004": "5:45:00",
-        "9006": "8:15:00",
-        "9008": "11:00:00",
-        "9010": "14:00:00",
+        "9004": "5:38:00",
+        "9006": "8:20:00",
+        "9008": "11:05:00",
+        "9010": "13:50:00",
         "9012": "16:30:00",
-        "9014": "19:10:00",
+        "9014": "19:25:00",
         "COORDINATES": "-26.197647593316965, 28.04233618836466",
         "STATION": "JOHANNESBURG"
       },
       {
-        "9004": "5:53:00",
-        "9006": "8:23:00",
-        "9008": "11:08:00",
-        "9010": "14:08:00",
-        "9012": "16:38:00",
-        "9014": "19:18:00",
+        "9004": "5:45:00",
+        "9006": "8:27:00",
+        "9008": "11:12:00",
+        "9010": "13:57:00",
+        "9012": "16:37:00",
+        "9014": "19:32:00",
         "COORDINATES": "-26.19785038795819, 28.022075850924722",
         "STATION": "BRAAMFONTEIN"
       },
       {
-        "9004": "5:59:00",
-        "9006": "8:29:00",
-        "9008": "11:14:00",
-        "9010": "14:14:00",
+        "9004": "5:52:00",
+        "9006": "8:34:00",
+        "9008": "11:19:00",
+        "9010": "14:04:00",
         "9012": "16:44:00",
-        "9014": "19:24:00",
+        "9014": "19:39:00",
         "COORDINATES": "-26.204357573800028, 28.014409877846887",
         "STATION": "MAYFAIR"
       },
       {
-        "9004": "6:02:00",
-        "9006": "8:32:00",
-        "9008": "11:17:00",
-        "9010": "14:17:00",
+        "9004": "5:55:00",
+        "9006": "8:37:00",
+        "9008": "11:22:00",
+        "9010": "14:07:00",
         "9012": "16:47:00",
-        "9014": "19:27:00",
+        "9014": "19:42:00",
         "COORDINATES": "-26.202962977069127, 28.00593136680137",
         "STATION": "GROSVENOR"
       },
       {
-        "9004": "6:06:00",
-        "9006": "8:36:00",
-        "9008": "11:21:00",
-        "9010": "14:21:00",
+        "9004": "5:59:00",
+        "9006": "8:41:00",
+        "9008": "11:26:00",
+        "9010": "14:11:00",
         "9012": "16:51:00",
-        "9014": "19:31:00",
+        "9014": "19:46:00",
         "COORDINATES": "-26.201719229862785, 27.990539266801267",
         "STATION": "LANGLAAGTE"
       },
       {
-        "9004": "6:11:00",
-        "9006": "8:41:00",
-        "9008": "11:26:00",
-        "9010": "14:26:00",
+        "9004": "6:04:00",
+        "9006": "8:46:00",
+        "9008": "11:31:00",
+        "9010": "14:16:00",
         "9012": "16:56:00",
-        "9014": "19:36:00",
-        "9202": "5:20:00",
-        "9204": "7:20:00",
-        "9206": "9:20:00",
-        "9208": "11:20:00",
-        "9210": "13:20:00",
-        "9212": "15:20:00",
-        "9214": "17:20:00",
-        "9216": "19:40:00",
+        "9014": "19:51:00",
+        "9202": "5:45:00",
+        "9204": "7:45:00",
+        "9206": "9:45:00",
+        "9212": "15:45:00",
+        "9214": "17:55:00",
         "COORDINATES": "-26.201595050664512, 27.97172133796557",
         "STATION": "CROESUS"
       },
       {
-        "9004": "6:14:00",
-        "9006": "8:44:00",
-        "9008": "11:29:00",
-        "9010": "14:29:00",
+        "9004": "6:07:00",
+        "9006": "8:49:00",
+        "9008": "11:34:00",
+        "9010": "14:19:00",
         "9012": "16:59:00",
-        "9014": "19:39:00",
-        "9202": "5:23:00",
-        "9204": "7:23:00",
-        "9206": "9:23:00",
-        "9208": "11:23:00",
-        "9210": "13:23:00",
-        "9212": "15:23:00",
-        "9214": "17:23:00",
-        "9216": "19:43:00",
+        "9014": "19:54:00",
+        "9202": "5:48:00",
+        "9204": "7:48:00",
+        "9206": "9:48:00",
+        "9212": "15:48:00",
+        "9214": "17:58:00",
         "COORDINATES": "-26.198503123750555, 27.962929509129903",
         "STATION": "LONGDALE"
       },
       {
-        "9004": "6:21:00",
-        "9006": "8:51:00",
-        "9008": "11:36:00",
-        "9010": "14:36:00",
-        "9012": "17:06:00",
-        "9014": "19:46:00",
-        "9202": "5:30:00",
-        "9204": "7:30:00",
-        "9206": "9:30:00",
-        "9208": "11:30:00",
-        "9210": "13:30:00",
-        "9212": "15:30:00",
-        "9214": "17:30:00",
-        "9216": "19:50:00",
+        "9004": "6:13:00",
+        "9006": "8:55:00",
+        "9008": "11:40:00",
+        "9010": "14:25:00",
+        "9012": "17:05:00",
+        "9014": "20:00:00",
+        "9202": "5:55:00",
+        "9204": "7:55:00",
+        "9206": "9:55:00",
+        "9212": "15:55:00",
+        "9214": "18:05:00",
         "COORDINATES": "-26.214411850342184, 27.94240072447306",
         "STATION": "NEW CANADA"
       },
       {
-        "9004": "6:25:00",
-        "9006": "8:55:00",
-        "9008": "11:40:00",
-        "9010": "14:40:00",
-        "9012": "17:10:00",
-        "9014": "19:50:00",
-        "9202": "5:34:00",
-        "9204": "7:34:00",
-        "9206": "9:34:00",
-        "9208": "11:34:00",
-        "9210": "13:34:00",
-        "9212": "15:34:00",
-        "9214": "17:34:00",
-        "9216": "19:54:00",
+        "9004": "6:17:00",
+        "9006": "8:59:00",
+        "9008": "11:44:00",
+        "9010": "14:29:00",
+        "9012": "17:09:00",
+        "9014": "20:04:00",
+        "9202": "5:59:00",
+        "9204": "7:59:00",
+        "9206": "9:59:00",
+        "9212": "15:59:00",
+        "9214": "18:09:00",
         "COORDINATES": "-26.22594835366509, 27.928217035582186",
         "STATION": "MLAMLANKUNZI"
       },
       {
-        "9004": "6:30:00",
-        "9006": "9:00:00",
-        "9008": "11:45:00",
-        "9010": "14:45:00",
-        "9012": "17:15:00",
-        "9014": "19:55:00",
-        "9202": "5:39:00",
-        "9204": "7:39:00",
-        "9206": "9:39:00",
-        "9208": "11:39:00",
-        "9210": "13:39:00",
-        "9212": "15:39:00",
-        "9214": "17:39:00",
-        "9216": "19:59:00",
+        "9004": "6:21:00",
+        "9006": "9:03:00",
+        "9008": "11:48:00",
+        "9010": "14:33:00",
+        "9012": "17:13:00",
+        "9014": "20:08:00",
+        "9202": "6:04:00",
+        "9204": "8:04:00",
+        "9206": "10:04:00",
+        "9212": "16:04:00",
+        "9214": "18:14:00",
         "COORDINATES": "-26.237577526260885, 27.91727947272508",
         "STATION": "ORLANDO"
       },
       {
-        "9004": "6:35:00",
-        "9006": "9:05:00",
-        "9008": "11:50:00",
-        "9010": "14:50:00",
-        "9012": "17:20:00",
-        "9014": "20:00:00",
-        "9202": "5:44:00",
-        "9204": "7:44:00",
-        "9206": "9:44:00",
-        "9208": "11:44:00",
-        "9210": "13:44:00",
-        "9212": "15:44:00",
-        "9214": "17:44:00",
-        "9216": "20:04:00",
+        "9004": "6:26:00",
+        "9006": "9:08:00",
+        "9008": "11:53:00",
+        "9010": "14:38:00",
+        "9012": "17:18:00",
+        "9014": "20:13:00",
+        "9202": "6:09:00",
+        "9204": "8:09:00",
+        "9206": "10:09:00",
+        "9212": "16:09:00",
+        "9214": "18:19:00",
         "COORDINATES": "-26.25168123666912, 27.906423465881122",
         "STATION": "NANCEFIELD"
       },
       {
-        "9004": "6:41:00",
-        "9006": "9:11:00",
-        "9008": "11:56:00",
-        "9010": "14:56:00",
-        "9012": "17:26:00",
-        "9014": "20:06:00",
-        "9202": "5:50:00",
-        "9204": "7:50:00",
-        "9206": "9:50:00",
-        "9208": "11:50:00",
-        "9210": "13:50:00",
-        "9212": "15:50:00",
-        "9214": "17:50:00",
-        "9216": "20:10:00",
+        "9004": "6:32:00",
+        "9006": "9:14:00",
+        "9008": "11:59:00",
+        "9010": "14:44:00",
+        "9012": "17:24:00",
+        "9014": "20:19:00",
+        "9202": "6:15:00",
+        "9204": "8:15:00",
+        "9206": "10:15:00",
+        "9212": "16:15:00",
+        "9214": "18:25:00",
         "COORDINATES": "-26.272809958189928, 27.887633494308975",
         "STATION": "KLIPTOWN"
       },
       {
-        "9004": "6:46:00",
-        "9006": "9:16:00",
-        "9008": "12:01:00",
-        "9010": "15:01:00",
-        "9012": "17:31:00",
-        "9014": "20:11:00",
-        "9202": "5:56:00",
-        "9204": "7:56:00",
-        "9206": "9:56:00",
-        "9208": "11:56:00",
-        "9210": "13:56:00",
-        "9212": "15:56:00",
-        "9214": "17:56:00",
-        "9216": "20:16:00",
+        "9004": "6:37:00",
+        "9006": "9:19:00",
+        "9008": "12:04:00",
+        "9010": "14:49:00",
+        "9012": "17:29:00",
+        "9014": "20:24:00",
+        "9202": "6:21:00",
+        "9204": "8:21:00",
+        "9206": "10:21:00",
+        "9212": "16:21:00",
+        "9214": "18:31:00",
         "COORDINATES": "-26.288947777153577, 27.87068768853021",
         "STATION": "TSHIAWELO"
       },
       {
-        "9004": "6:50:00",
-        "9006": "9:20:00",
-        "9008": "12:05:00",
-        "9010": "15:05:00",
-        "9012": "17:35:00",
-        "9014": "20:15:00",
-        "9202": "6:00:00",
-        "9204": "8:00:00",
-        "9206": "10:00:00",
-        "9208": "12:00:00",
-        "9210": "14:00:00",
-        "9212": "16:00:00",
-        "9214": "18:00:00",
-        "9216": "20:20:00",
+        "9004": "6:41:00",
+        "9006": "9:23:00",
+        "9008": "12:08:00",
+        "9010": "14:53:00",
+        "9012": "17:33:00",
+        "9014": "20:28:00",
+        "9202": "6:25:00",
+        "9204": "8:25:00",
+        "9206": "10:25:00",
+        "9212": "16:25:00",
+        "9214": "18:35:00",
         "COORDINATES": "-26.292695060119772, 27.851230923913732",
         "STATION": "MIDWAY"
       },
       {
-        "9202": "6:10:00",
-        "9204": "8:10:00",
-        "9206": "10:10:00",
-        "9208": "12:10:00",
-        "9210": "14:10:00",
-        "9212": "16:10:00",
-        "9214": "18:10:00",
-        "9216": "20:30:00",
+        "9004": "6:50:00",
+        "9006": "9:32:00",
+        "9008": "12:17:00",
+        "9010": "15:02:00",
+        "9012": "17:42:00",
+        "9014": "20:37:00",
+        "9202": "6:35:00",
+        "9204": "8:35:00",
+        "9206": "10:35:00",
+        "9212": "16:35:00",
+        "9214": "18:45:00",
         "COORDINATES": "-26.319519733948702, 27.82296719973482",
         "STATION": "LENZ"
       }
     ],
     "jhb_to_midwy_weekday_columnOrder": [
-      "9202",
       "9004",
+      "9202",
       "9204",
       "9006",
       "9206",
       "9008",
-      "9208",
-      "9210",
       "9010",
       "9212",
       "9012",
       "9214",
-      "9014",
-      "9216"
+      "9014"
     ],
-    "jhb_to_midwy_weekday_meta": "8 June 2026",
+    "jhb_to_midwy_weekday_meta": "26 October 2026",
     "jhb_to_midwy_weekday_zone": "Z2",
     "jhb_to_nald_sat": [
       {
@@ -13371,7 +12620,7 @@
     ],
     "kwesi_to_germ_weekday_meta": "19 August 2026",
     "kwesi_to_germ_weekday_zone": "Z2",
-    "lastUpdated": "10/1/2026, 10:25:13 AM",
+    "lastUpdated": "10/26/2026, 8:39:46 PM",
     "lerl_to_germ_sat": [
       {
         "STATION": "Last Updated: 22 August 2026"
@@ -14050,7 +13299,7 @@
     "mab_to_pta_sat_zone": "Z2",
     "mab_to_pta_weekday": [
       {
-        "STATION": "Last Updated: 8 April 2026"
+        "STATION": "Last Updated: 8 October 2026"
       },
       {
         "1800": "4:02:00 ",
@@ -14078,9 +13327,9 @@
         "1852": "15:47:00 ",
         "1854": "16:09:00 ",
         "1856": "16:33:00 ",
-        "1858": "16:56:00 ",
+        "1858": "16:57:00 ",
         "1860": "17:20:00 ",
-        "1862": "17:43:00 ",
+        "1862": "17:50:00 ",
         "1864": "18:07:00 ",
         "COORDINATES": "-25.495963167301053, 28.089659387779985",
         "STATION": "MABOPANE"
@@ -14119,9 +13368,9 @@
         "1852": "15:59:00 ",
         "1854": "16:21:00 ",
         "1856": "16:45:00 ",
-        "1858": "17:08:00 ",
+        "1858": "17:09:00 ",
         "1860": "17:32:00 ",
-        "1862": "17:55:00 ",
+        "1862": "18:02:00 ",
         "1864": "18:19:00 ",
         "COORDINATES": "-25.581315356478292, 28.0903223133063",
         "STATION": "KOPANONG"
@@ -14154,7 +13403,7 @@
         "1856": "16:51:00 ",
         "1858": "17:15:00 ",
         "1860": "17:38:00 ",
-        "1862": "18:02:00 ",
+        "1862": "18:09:00 ",
         "1864": "18:25:00 ",
         "COORDINATES": "-25.62343788217021, 28.107351095613126",
         "STATION": "AKASIABOOM"
@@ -14187,7 +13436,7 @@
         "1856": "16:58:00 ",
         "1858": "17:22:00 ",
         "1860": "17:45:00 ",
-        "1862": "18:09:00 ",
+        "1862": "18:16:00 ",
         "1864": "18:32:00 ",
         "COORDINATES": "-25.646665143468105, 28.128664081235527",
         "STATION": "WINTERSNEST"
@@ -14218,9 +13467,9 @@
         "1852": "16:18:00 ",
         "1854": "16:40:00 ",
         "1856": "17:04:00 ",
-        "1858": "17:27:00 ",
+        "1858": "17:28:00 ",
         "1860": "17:51:00 ",
-        "1862": "18:14:00 ",
+        "1862": "18:21:00 ",
         "1864": "18:38:00 ",
         "COORDINATES": "-25.656754583256834, 28.166308537943245",
         "STATION": "WOLMERTON"
@@ -14253,7 +13502,7 @@
         "1856": "17:08:00 ",
         "1858": "17:32:00 ",
         "1860": "17:55:00 ",
-        "1862": "18:19:00 ",
+        "1862": "18:26:00 ",
         "1864": "18:42:00 ",
         "COORDINATES": "-25.672156912459837, 28.181972182122085",
         "STATION": "PRETORIA-N"
@@ -14290,7 +13539,7 @@
         "1856": "17:15:00 ",
         "1858": "17:39:00 ",
         "1860": "18:02:00 ",
-        "1862": "18:26:00 ",
+        "1862": "18:33:00 ",
         "1864": "18:49:00 ",
         "COORDINATES": "-25.701154966265122, 28.1710407244521",
         "STATION": "MOUNTAIN VIEW"
@@ -14325,9 +13574,9 @@
         "1852": "16:34:00 ",
         "1854": "16:56:00 ",
         "1856": "17:20:00 ",
-        "1858": "17:43:00 ",
+        "1858": "17:44:00 ",
         "1860": "18:07:00 ",
-        "1862": "18:30:00 ",
+        "1862": "18:37:00 ",
         "1864": "18:54:00 ",
         "COORDINATES": "-25.724426332570793, 28.16740145328856",
         "STATION": "HERCULES"
@@ -14376,7 +13625,7 @@
         "1856": "17:27:00 ",
         "1858": "17:51:00 ",
         "1860": "18:14:00 ",
-        "1862": "18:38:00 ",
+        "1862": "18:45:00 ",
         "1864": "19:01:00 ",
         "COORDINATES": "-25.75612607001734, 28.167454033423436",
         "STATION": "PRETORIA WES"
@@ -14415,9 +13664,9 @@
         "1852": "16:47:00 ",
         "1854": "17:09:00 ",
         "1856": "17:33:00 ",
-        "1858": "17:56:00 ",
+        "1858": "17:57:00 ",
         "1860": "18:20:00 ",
-        "1862": "18:43:00 ",
+        "1862": "18:50:00 ",
         "1864": "19:07:00 ",
         "COORDINATES": "-25.75864361043285, 28.189866445989118",
         "STATION": "PRETORIA"
@@ -14454,7 +13703,7 @@
       "1862",
       "1864"
     ],
-    "mab_to_pta_weekday_meta": "8 April 2026",
+    "mab_to_pta_weekday_meta": "8 October 2026",
     "mab_to_pta_weekday_zone": "Z2",
     "midwy_to_jhb_sat": [
       {
@@ -14591,250 +13840,223 @@
     "midwy_to_jhb_sat_zone": "Z2",
     "midwy_to_jhb_weekday": [
       {
-        "STATION": "Last Updated: 8 June 2026"
+        "STATION": "Last Updated: 26 October 2026"
       },
       {
-        "9201": "4:15:00",
-        "9203": "6:20:00",
-        "9205": "8:20:00",
-        "9207": "10:20:00",
-        "9209": "12:20:00",
-        "9211": "14:20:00",
-        "9213": "16:20:00",
-        "9215": "18:20:00",
+        "9003": "4:15:00",
+        "9005": "7:00:00",
+        "9007": "9:40:00",
+        "9009": "12:30:00",
+        "9011": "15:10:00",
+        "9013": "17:50:00",
+        "9201": "4:45:00",
+        "9203": "6:45:00",
+        "9205": "8:45:00",
+        "9211": "14:30:00",
+        "9213": "16:45:00",
         "COORDINATES": "-26.319519733948702, 27.82296719973482",
         "STATION": "LENZ"
       },
       {
-        "9003": "4:30:00",
-        "9005": "7:00:00",
-        "9007": "9:30:00",
-        "9009": "12:30:00",
-        "9011": "15:15:00",
-        "9013": "17:45:00",
-        "9201": "4:23:00",
-        "9203": "6:28:00",
-        "9205": "8:28:00",
-        "9207": "10:28:00",
-        "9209": "12:28:00",
-        "9211": "14:28:00",
-        "9213": "16:28:00",
-        "9215": "18:28:00",
+        "9003": "4:22:00",
+        "9005": "7:07:00",
+        "9007": "9:47:00",
+        "9009": "12:37:00",
+        "9011": "15:17:00",
+        "9013": "17:57:00",
+        "9201": "4:53:00",
+        "9203": "6:53:00",
+        "9205": "8:53:00",
+        "9211": "14:38:00",
+        "9213": "16:53:00",
         "COORDINATES": "-26.292695060119772, 27.851230923913732",
         "STATION": "MIDWAY"
       },
       {
-        "9003": "4:35:00",
-        "9005": "7:05:00",
-        "9007": "9:35:00",
-        "9009": "12:35:00",
-        "9011": "15:20:00",
-        "9013": "17:50:00",
-        "9201": "4:28:00",
-        "9203": "6:33:00",
-        "9205": "8:33:00",
-        "9207": "10:33:00",
-        "9209": "12:33:00",
-        "9211": "14:33:00",
-        "9213": "16:33:00",
-        "9215": "18:33:00",
+        "9003": "4:27:00",
+        "9005": "7:12:00",
+        "9007": "9:52:00",
+        "9009": "12:42:00",
+        "9011": "15:22:00",
+        "9013": "18:02:00",
+        "9201": "4:58:00",
+        "9203": "6:58:00",
+        "9205": "8:58:00",
+        "9211": "14:43:00",
+        "9213": "16:58:00",
         "COORDINATES": "-26.288947777153577, 27.87068768853021",
         "STATION": "TSHIAWELO"
       },
       {
-        "9003": "4:42:00",
-        "9005": "7:12:00",
-        "9007": "9:42:00",
-        "9009": "12:42:00",
-        "9011": "15:27:00",
-        "9013": "17:56:00",
-        "9201": "4:36:00",
-        "9203": "6:41:00",
-        "9205": "8:41:00",
-        "9207": "10:41:00",
-        "9209": "12:41:00",
-        "9211": "14:41:00",
-        "9213": "16:41:00",
-        "9215": "18:41:00",
+        "9003": "4:34:00",
+        "9005": "7:19:00",
+        "9007": "9:59:00",
+        "9009": "12:49:00",
+        "9011": "15:29:00",
+        "9013": "18:09:00",
+        "9201": "5:06:00",
+        "9203": "7:06:00",
+        "9205": "9:06:00",
+        "9211": "14:51:00",
+        "9213": "17:06:00",
         "COORDINATES": "-26.272809958189928, 27.887633494308975",
         "STATION": "KLIPTOWN"
       },
       {
-        "9003": "4:48:00",
-        "9005": "7:18:00",
-        "9007": "9:48:00",
-        "9009": "12:48:00",
-        "9011": "15:33:00",
-        "9013": "18:02:00",
-        "9201": "4:42:00",
-        "9203": "6:47:00",
-        "9205": "8:47:00",
-        "9207": "10:47:00",
-        "9209": "12:47:00",
-        "9211": "14:47:00",
-        "9213": "16:47:00",
-        "9215": "18:47:00",
+        "9003": "4:40:00",
+        "9005": "7:25:00",
+        "9007": "10:05:00",
+        "9009": "12:55:00",
+        "9011": "15:35:00",
+        "9013": "18:15:00",
+        "9201": "5:12:00",
+        "9203": "7:12:00",
+        "9205": "9:12:00",
+        "9211": "14:57:00",
+        "9213": "17:12:00",
         "COORDINATES": "-26.25168123666912, 27.906423465881122",
         "STATION": "NANCEFIELD"
       },
       {
-        "9003": "4:53:00",
-        "9005": "7:23:00",
-        "9007": "9:53:00",
-        "9009": "12:53:00",
-        "9011": "15:38:00",
-        "9013": "18:06:00",
-        "9201": "4:47:00",
-        "9203": "6:52:00",
-        "9205": "8:52:00",
-        "9207": "10:52:00",
-        "9209": "12:52:00",
-        "9211": "14:52:00",
-        "9213": "16:52:00",
-        "9215": "18:52:00",
+        "9003": "4:45:00",
+        "9005": "7:30:00",
+        "9007": "10:10:00",
+        "9009": "13:00:00",
+        "9011": "15:40:00",
+        "9013": "18:20:00",
+        "9201": "5:17:00",
+        "9203": "7:17:00",
+        "9205": "9:17:00",
+        "9211": "15:02:00",
+        "9213": "17:17:00",
         "COORDINATES": "-26.237577526260885, 27.91727947272508",
         "STATION": "ORLANDO"
       },
       {
-        "9003": "4:56:00",
-        "9005": "7:26:00",
-        "9007": "9:56:00",
-        "9009": "12:56:00",
-        "9011": "15:41:00",
-        "9013": "18:09:00",
-        "9201": "4:50:00",
-        "9203": "6:55:00",
-        "9205": "8:55:00",
-        "9207": "10:55:00",
-        "9209": "12:55:00",
-        "9211": "14:55:00",
-        "9213": "16:55:00",
-        "9215": "18:55:00",
+        "9003": "4:49:00",
+        "9005": "7:34:00",
+        "9007": "10:14:00",
+        "9009": "13:04:00",
+        "9011": "15:44:00",
+        "9013": "18:24:00",
+        "9201": "5:20:00",
+        "9203": "7:20:00",
+        "9205": "9:20:00",
+        "9211": "15:05:00",
+        "9213": "17:20:00",
         "COORDINATES": "-26.22594835366509, 27.928217035582186",
         "STATION": "MLAMLANKUNZI"
       },
       {
-        "9003": "5:01:00",
-        "9005": "7:31:00",
-        "9007": "10:01:00",
-        "9009": "13:01:00",
-        "9011": "15:46:00",
-        "9013": "18:13:00",
-        "9201": "4:55:00",
-        "9203": "7:00:00",
-        "9205": "9:00:00",
-        "9207": "11:00:00",
-        "9209": "13:00:00",
-        "9211": "15:00:00",
-        "9213": "17:00:00",
-        "9215": "19:00:00",
+        "9003": "4:53:00",
+        "9005": "7:38:00",
+        "9007": "10:18:00",
+        "9009": "13:08:00",
+        "9011": "15:48:00",
+        "9013": "18:28:00",
+        "9201": "5:25:00",
+        "9203": "7:25:00",
+        "9205": "9:25:00",
+        "9211": "15:10:00",
+        "9213": "17:25:00",
         "COORDINATES": "-26.214411850342184, 27.94240072447306",
         "STATION": "NEW CANADA"
       },
       {
-        "9003": "5:07:00",
-        "9005": "7:37:00",
-        "9007": "10:07:00",
-        "9009": "13:07:00",
-        "9011": "15:52:00",
-        "9013": "18:20:00",
-        "9201": "5:02:00",
-        "9203": "7:07:00",
-        "9205": "9:07:00",
-        "9207": "11:07:00",
-        "9209": "13:07:00",
-        "9211": "15:07:00",
-        "9213": "17:07:00",
-        "9215": "19:07:00",
+        "9003": "5:00:00",
+        "9005": "7:45:00",
+        "9007": "10:25:00",
+        "9009": "13:15:00",
+        "9011": "15:55:00",
+        "9013": "18:35:00",
+        "9201": "5:32:00",
+        "9203": "7:32:00",
+        "9205": "9:32:00",
+        "9211": "15:17:00",
+        "9213": "17:32:00",
         "COORDINATES": "-26.198503123750555, 27.962929509129903",
         "STATION": "LONGDALE"
       },
       {
-        "9003": "5:10:00",
-        "9005": "7:40:00",
-        "9007": "10:10:00",
-        "9009": "13:10:00",
-        "9011": "15:55:00",
-        "9013": "18:22:00",
-        "9201": "5:05:00",
-        "9203": "7:10:00",
-        "9205": "9:10:00",
-        "9207": "11:10:00",
-        "9209": "13:10:00",
-        "9211": "15:10:00",
-        "9213": "17:10:00",
-        "9215": "19:10:00",
+        "9003": "5:02:00",
+        "9005": "7:47:00",
+        "9007": "10:27:00",
+        "9009": "13:17:00",
+        "9011": "15:57:00",
+        "9013": "18:37:00",
+        "9201": "5:35:00",
+        "9203": "7:35:00",
+        "9205": "9:35:00",
+        "9211": "15:20:00",
+        "9213": "17:35:00",
         "COORDINATES": "-26.201595050664512, 27.97172133796557",
         "STATION": "CROESUS"
       },
       {
-        "9003": "5:16:00",
-        "9005": "7:46:00",
-        "9007": "10:16:00",
-        "9009": "13:16:00",
-        "9011": "16:01:00",
-        "9013": "18:28:00",
+        "9003": "5:08:00",
+        "9005": "7:53:00",
+        "9007": "10:33:00",
+        "9009": "13:23:00",
+        "9011": "16:03:00",
+        "9013": "18:43:00",
         "COORDINATES": "-26.201719229862785, 27.990539266801267",
         "STATION": "LANGLAAGTE"
       },
       {
-        "9003": "5:21:00",
-        "9005": "7:51:00",
-        "9007": "10:21:00",
-        "9009": "13:21:00",
-        "9011": "16:06:00",
-        "9013": "18:32:00",
+        "9003": "5:13:00",
+        "9005": "7:58:00",
+        "9007": "10:38:00",
+        "9009": "13:28:00",
+        "9011": "16:08:00",
+        "9013": "18:48:00",
         "COORDINATES": "-26.202962977069127, 28.00593136680137",
         "STATION": "GROSVENOR"
       },
       {
-        "9003": "5:24:00",
-        "9005": "7:54:00",
-        "9007": "10:24:00",
-        "9009": "13:24:00",
-        "9011": "16:09:00",
-        "9013": "18:35:00",
+        "9003": "5:16:00",
+        "9005": "8:01:00",
+        "9007": "10:41:00",
+        "9009": "13:31:00",
+        "9011": "16:11:00",
+        "9013": "18:51:00",
         "COORDINATES": "-26.204357573800028, 28.014409877846887",
         "STATION": "MAYFAIR"
       },
       {
-        "9003": "5:28:00",
-        "9005": "7:58:00",
-        "9007": "10:28:00",
-        "9009": "13:28:00",
-        "9011": "16:13:00",
-        "9013": "18:39:00",
+        "9003": "5:20:00",
+        "9005": "8:05:00",
+        "9007": "10:45:00",
+        "9009": "13:35:00",
+        "9011": "16:15:00",
+        "9013": "18:55:00",
         "COORDINATES": "-26.19785038795819, 28.022075850924722",
         "STATION": "BRAAMFONTEIN"
       },
       {
-        "9003": "5:35:00",
-        "9005": "8:05:00",
-        "9007": "10:35:00",
-        "9009": "13:35:00",
-        "9011": "16:20:00",
-        "9013": "18:45:00",
+        "9003": "5:27:00",
+        "9005": "8:12:00",
+        "9007": "10:52:00",
+        "9009": "13:42:00",
+        "9011": "16:22:00",
+        "9013": "19:02:00",
         "COORDINATES": "-26.197647593316965, 28.04233618836466",
         "STATION": "JOHANNESBURG"
       }
     ],
     "midwy_to_jhb_weekday_columnOrder": [
-      "9201",
       "9003",
+      "9201",
       "9203",
       "9005",
       "9205",
       "9007",
-      "9207",
-      "9209",
       "9009",
       "9211",
       "9011",
       "9213",
-      "9013",
-      "9215"
+      "9013"
     ],
-    "midwy_to_jhb_weekday_meta": "8 June 2026",
+    "midwy_to_jhb_weekday_meta": "26 October 2026",
     "midwy_to_jhb_weekday_zone": "Z2",
     "nald_to_jhb_sat": [
       {
@@ -17175,7 +16397,7 @@
     "pta_to_mab_sat_zone": "Z2",
     "pta_to_mab_weekday": [
       {
-        "STATION": "Last Updated: 8 April 2026"
+        "STATION": "Last Updated: 8 October 2026"
       },
       {
         "1801": "5:12:00 ",
@@ -17198,13 +16420,13 @@
         "1845": "15:22:00 ",
         "1847": "15:46:00 ",
         "1849": "16:09:00 ",
-        "1851": "16:33:00 ",
+        "1851": "16:40:00 ",
         "1853": "16:56:00 ",
         "1855": "17:20:00 ",
         "1857": "17:43:00 ",
         "1859": "18:07:00 ",
         "1861": "18:29:00 ",
-        "1863": "18:54:00 ",
+        "1863": "19:13:00 ",
         "1865": "19:30:00 ",
         "COORDINATES": "-25.75864361043285, 28.189866445989118",
         "STATION": "PRETORIA"
@@ -17238,13 +16460,13 @@
         "1845": "15:29:00 ",
         "1847": "15:52:00 ",
         "1849": "16:16:00 ",
-        "1851": "16:39:00 ",
+        "1851": "16:46:00 ",
         "1853": "17:03:00 ",
         "1855": "17:26:00 ",
         "1857": "17:50:00 ",
         "1859": "18:13:00 ",
         "1861": "18:36:00 ",
-        "1863": "19:00:00 ",
+        "1863": "19:19:00 ",
         "1865": "19:36:00 ",
         "COORDINATES": "-25.75612607001734, 28.167454033423436",
         "STATION": "PRETORIA WES"
@@ -17286,13 +16508,13 @@
         "1845": "15:36:00 ",
         "1847": "16:00:00 ",
         "1849": "16:23:00 ",
-        "1851": "16:47:00 ",
+        "1851": "16:54:00 ",
         "1853": "17:10:00 ",
         "1855": "17:34:00 ",
         "1857": "17:57:00 ",
         "1859": "18:21:00 ",
         "1861": "18:43:00 ",
-        "1863": "19:08:00 ",
+        "1863": "19:27:00 ",
         "1865": "19:44:00 ",
         "COORDINATES": "-25.724426332570793, 28.16740145328856",
         "STATION": "HERCULES"
@@ -17322,13 +16544,13 @@
         "1845": "15:42:00 ",
         "1847": "16:05:00 ",
         "1849": "16:29:00 ",
-        "1851": "16:52:00 ",
+        "1851": "16:59:00 ",
         "1853": "17:16:00 ",
         "1855": "17:39:00 ",
         "1857": "18:03:00 ",
         "1859": "18:26:00 ",
         "1861": "18:49:00 ",
-        "1863": "19:13:00 ",
+        "1863": "19:32:00 ",
         "1865": "19:49:00 ",
         "COORDINATES": "-25.701154966265122, 28.1710407244521",
         "STATION": "MOUNTAIN VIEW"
@@ -17358,13 +16580,13 @@
         "1845": "15:48:00 ",
         "1847": "16:12:00 ",
         "1849": "16:35:00 ",
-        "1851": "16:59:00 ",
+        "1851": "17:06:00 ",
         "1853": "17:22:00 ",
         "1855": "17:46:00 ",
         "1857": "18:09:00 ",
         "1859": "18:33:00 ",
         "1861": "18:55:00 ",
-        "1863": "19:20:00 ",
+        "1863": "19:39:00 ",
         "1865": "19:56:00 ",
         "COORDINATES": "-25.672156912459837, 28.181972182122085",
         "STATION": "PRETORIA-N"
@@ -17390,13 +16612,13 @@
         "1845": "15:53:00 ",
         "1847": "16:16:00 ",
         "1849": "16:40:00 ",
-        "1851": "17:03:00 ",
+        "1851": "17:10:00 ",
         "1853": "17:27:00 ",
         "1855": "17:50:00 ",
         "1857": "18:14:00 ",
         "1859": "18:37:00 ",
         "1861": "19:00:00 ",
-        "1863": "19:24:00 ",
+        "1863": "19:43:00 ",
         "1865": "20:00:00 ",
         "COORDINATES": "-25.656754583256834, 28.166308537943245",
         "STATION": "WOLMERTON"
@@ -17422,13 +16644,13 @@
         "1845": "15:58:00 ",
         "1847": "16:21:00 ",
         "1849": "16:45:00 ",
-        "1851": "17:08:00 ",
+        "1851": "17:15:00 ",
         "1853": "17:32:00 ",
         "1855": "17:55:00 ",
         "1857": "18:19:00 ",
         "1859": "18:42:00 ",
         "1861": "19:05:00 ",
-        "1863": "19:29:00 ",
+        "1863": "19:48:00 ",
         "1865": "20:05:00 ",
         "COORDINATES": "-25.646665143468105, 28.128664081235527",
         "STATION": "WINTERSNEST"
@@ -17454,13 +16676,13 @@
         "1845": "16:04:00 ",
         "1847": "16:28:00 ",
         "1849": "16:51:00 ",
-        "1851": "17:15:00 ",
+        "1851": "17:22:00 ",
         "1853": "17:38:00 ",
         "1855": "18:02:00 ",
         "1857": "18:25:00 ",
         "1859": "18:49:00 ",
         "1861": "19:11:00 ",
-        "1863": "19:36:00 ",
+        "1863": "19:55:00 ",
         "1865": "20:12:00 ",
         "COORDINATES": "-25.62343788217021, 28.107351095613126",
         "STATION": "AKASIABOOM"
@@ -17486,13 +16708,13 @@
         "1845": "16:10:00 ",
         "1847": "16:33:00 ",
         "1849": "16:57:00 ",
-        "1851": "17:20:00 ",
+        "1851": "17:27:00 ",
         "1853": "17:44:00 ",
         "1855": "18:07:00 ",
         "1857": "18:31:00 ",
         "1859": "18:54:00 ",
         "1861": "19:17:00 ",
-        "1863": "19:41:00 ",
+        "1863": "20:00:00 ",
         "1865": "20:17:00 ",
         "COORDINATES": "-25.581315356478292, 28.0903223133063",
         "STATION": "KOPANONG"
@@ -17526,13 +16748,13 @@
         "1845": "16:22:00 ",
         "1847": "16:46:00 ",
         "1849": "17:09:00 ",
-        "1851": "17:33:00 ",
+        "1851": "17:40:00 ",
         "1853": "17:56:00 ",
         "1855": "18:20:00 ",
         "1857": "18:43:00 ",
         "1859": "19:07:00 ",
         "1861": "19:29:00 ",
-        "1863": "19:54:00 ",
+        "1863": "20:13:00 ",
         "1865": "20:30:00 ",
         "COORDINATES": "-25.495963167301053, 28.089659387779985",
         "STATION": "MABOPANE"
@@ -17568,7 +16790,7 @@
       "1863",
       "1865"
     ],
-    "pta_to_mab_weekday_meta": "8 April 2026",
+    "pta_to_mab_weekday_meta": "8 October 2026",
     "pta_to_mab_weekday_zone": "Z2",
     "pta_to_pien_sat": [
       {
@@ -26974,7 +26196,7 @@
     ],
     "durbn_to_winkl_weekday_meta": "5 October 2026",
     "durbn_to_winkl_weekday_zone": "Z2",
-    "lastUpdated": "10/5/2026, 3:14:10 AM",
+    "lastUpdated": "10/6/2026, 11:07:18 PM",
     "pinet_to_durbn_sat": [
       {
         "STATION": "Last Updated: 5 October 2026"

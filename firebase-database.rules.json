@@ -9,6 +9,7 @@
       "killswitch": { ".read": true },
       "special_event": { ".read": true },
       "schedule_override": { ".read": true },
+      "community_champions": { ".read": true },
       "features": { ".read": true },
       "feature_grants": { ".read": true },
       "planner_fares": {
@@ -45,6 +46,11 @@
             "order": {
               "$index": {
                 ".validate": "newData.isString() && newData.val().matches(/^\\d{4}[a-zA-Z]*$/)"
+              }
+            },
+            "via": {
+              "$trainId": {
+                ".validate": "$trainId.matches(/^\\d{4}[a-zA-Z]*$/) && (newData.val() === 'MONTE_VISTA' || newData.val() === 'MAITLAND')"
               }
             }
           }
@@ -147,6 +153,7 @@
 
     "feedback": {
       ".read": "auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')",
+      ".indexOn": ["timestamp"],
       "$feedbackId": {
         ".write": "auth != null && (!data.exists() || auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')",
         ".validate": "!newData.exists() || (newData.hasChildren(['timestamp', 'deviceId']) && newData.child('timestamp').isNumber() && newData.child('deviceId').isString() && newData.child('deviceId').val().length > 0 && newData.child('deviceId').val().length < 120 && (!newData.hasChild('text') || (newData.child('text').isString() && newData.child('text').val().length <= 4000)))"
@@ -176,6 +183,7 @@
       ".read": "auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')",
       "crashes": {
         ".write": "auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')",
+        ".indexOn": ["timestamp"],
         "$crashId": {
           ".write": "auth != null && !data.exists()",
           ".validate": "newData.hasChild('timestamp') && newData.child('timestamp').isNumber() && (!newData.hasChild('error') || (newData.child('error').isString() && newData.child('error').val().length < 8000)) && (!newData.hasChild('deviceId') || (newData.child('deviceId').isString() && newData.child('deviceId').val().length < 120))"
@@ -190,6 +198,7 @@
       },
       "routing_fails": {
         ".write": "auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')",
+        ".indexOn": ["timestamp"],
         "$deadEndId": {
           ".write": "auth != null && !data.exists()",
           ".validate": "newData.hasChildren(['timestamp', 'deviceId']) && newData.child('timestamp').isNumber() && newData.child('deviceId').isString() && newData.child('deviceId').val().length > 0 && newData.child('deviceId').val().length < 120"
@@ -378,14 +387,26 @@
     "moderation_queue": {
       ".read": "auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')",
       ".write": "auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')",
+      ".indexOn": ["timestamp"],
       "$reportId": {
         ".write": "(!data.exists() && auth != null) || (auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com'))",
         ".validate": "!newData.exists() || (newData.hasChildren(['reportId', 'timestamp', 'status']) && newData.child('timestamp').isNumber() && (newData.child('status').val() === 'open' || auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com'))"
       }
     },
 
+    "account_deletions": {
+      ".read": "auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')",
+      ".indexOn": ["status"],
+      "$uid": {
+        ".read": "auth != null && (auth.uid === $uid || auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')",
+        ".write": "(auth != null && auth.uid === $uid && auth.token.firebase.sign_in_provider != 'anonymous' && newData.child('uid').val() === auth.uid && newData.child('status').val() === 'pending') || (auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com'))",
+        ".validate": "!newData.exists() || (newData.hasChildren(['uid', 'requestedAt', 'status']) && newData.child('uid').val() === $uid && newData.child('requestedAt').isNumber() && (newData.child('status').val() === 'pending' || newData.child('status').val() === 'done'))"
+      }
+    },
+
     "users": {
       ".read": "auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')",
+      ".indexOn": ["deletionRequestedAt"],
       "$uid": {
         ".read": "auth != null && (auth.uid === $uid || auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')",
         ".write": "auth != null && (auth.uid === $uid || auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')",
@@ -409,6 +430,28 @@
       "$deviceId": {
         ".read": "auth != null && ((data.exists() && auth.uid === data.child('uid').val()) || auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')",
         ".write": "(auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')) || (auth != null && auth.token.firebase.sign_in_provider != 'anonymous' && (!data.exists() || data.child('uid').val() === auth.uid) && newData.child('uid').val() === auth.uid)"
+      }
+    },
+
+    "station_reviews": {
+      ".read": "auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')",
+      "$slug": {
+        ".read": "auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')",
+        "$reviewId": {
+          ".read": "auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')",
+          ".write": "!data.exists() || (auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com'))",
+          ".validate": "!newData.exists() || (newData.hasChildren(['stationSlug', 'rating', 'text', 'status', 'createdAt']) && newData.child('stationSlug').isString() && newData.child('stationSlug').val() === $slug && newData.child('stationSlug').val().length > 0 && newData.child('stationSlug').val().length < 80 && newData.child('rating').isNumber() && newData.child('rating').val() >= 1 && newData.child('rating').val() <= 5 && newData.child('text').isString() && newData.child('text').val().length >= 12 && newData.child('text').val().length <= 1200 && ((!data.exists() && newData.child('status').val() === 'pending') || (data.exists() && auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com') && (newData.child('status').val() === 'pending' || newData.child('status').val() === 'approved' || newData.child('status').val() === 'rejected'))) && newData.child('createdAt').isNumber() && (!newData.hasChild('displayName') || newData.child('displayName').val() == null || (newData.child('displayName').isString() && newData.child('displayName').val().length <= 80)) && (!newData.hasChild('contact') || newData.child('contact').val() == null || (newData.child('contact').isString() && newData.child('contact').val().length <= 120)))"
+        }
+      }
+    },
+
+    "station_reviews_public": {
+      "$slug": {
+        ".read": true,
+        "$reviewId": {
+          ".write": "auth != null && (auth.token.email === 'enockelk@gmail.com' || auth.token.email === 'thandeka05nxumalo@gmail.com')",
+          ".validate": "!newData.exists() || (newData.hasChildren(['stationSlug', 'rating', 'text', 'status', 'createdAt']) && newData.child('stationSlug').isString() && newData.child('stationSlug').val() === $slug && newData.child('rating').isNumber() && newData.child('rating').val() >= 1 && newData.child('rating').val() <= 5 && newData.child('text').isString() && newData.child('text').val().length >= 12 && newData.child('text').val().length <= 1200 && newData.child('status').val() === 'approved' && newData.child('createdAt').isNumber() && !newData.hasChild('contact'))"
+        }
       }
     }
   }

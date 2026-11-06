@@ -154,4 +154,17 @@ const trust = await readFile(new URL('../src/lib/trust.js', import.meta.url), 'u
 assert.match(trust, /remaining: 0/, 'exhausted quota reports remaining 0');
 assert.match(trust, /return \{ ok: true, remaining \}/, 'rate check reports remaining sends');
 
+const { communityRouteOnEntry } = await import('../src/lib/features.js');
+const pienOnly = { enabled: true, routeIds: ['pta-pien'], regionIds: ['GP'] };
+assert.equal(communityRouteOnEntry(pienOnly, 'pta-pien'), true, 'PTA-Pien stays open when it is the listed room');
+assert.equal(communityRouteOnEntry(pienOnly, 'pta-mabopane'), false, 'another Gauteng room stays closed when only PTA-Pien is listed');
+const regionOnly = { enabled: true, routeIds: [], regionIds: ['GP'] };
+assert.equal(communityRouteOnEntry(regionOnly, 'pta-mabopane'), true, 'an empty route list still opens the region');
+assert.equal(communityRouteOnEntry(regionOnly, 'ct-bellv'), false, 'another region stays closed');
+assert.equal(communityRouteOnEntry({ enabled: true, routeIds: ['*'], regionIds: [] }, 'ct-bellv'), true, 'a star list opens every room');
+assert.equal(communityRouteOnEntry({ enabled: false, routeIds: ['pta-pien'], regionIds: ['GP'] }, 'pta-pien'), false, 'a switched-off community opens nothing');
+assert.match(community, /isListedCommunityRoute/, 'the picker uses the community room list');
+assert.doesNotMatch(community, /keep foreign route/, 'a deep link cannot add a room that is off');
+assert.match(community, /communityRoomAllowed/, 'opening a feed checks the room');
+
 console.log('Community Monitor verified: grouping, activity order, per-operator unread, seen paths, write hooks, held actions, and rules.');

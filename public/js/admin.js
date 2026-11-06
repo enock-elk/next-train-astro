@@ -13736,6 +13736,7 @@ const Admin = {
         const remoteAt = Number(remote?.at) || 0;
         if (box && remoteHtml && !editing && !box.dataset.draftTouched && remoteAt >= Number(local?.at || 0)) {
             box.innerHTML = remoteHtml;
+            Admin.hoistEditorImages(box);
             Admin.writeLocalReplyDraft(id, remoteHtml, remoteAt);
         }
         Admin.syncReplyGuide();
@@ -13745,7 +13746,7 @@ const Admin = {
     persistReplyDraft: async () => {
         const modal = document.getElementById('admin-reply-modal');
         const id = String(modal?.dataset.draftMessageId || '').trim();
-        const html = document.getElementById('admin-reply-text')?.innerHTML || '';
+        const html = Admin.composerOutgoingHtml(document.getElementById('admin-reply-text'));
         if (!id || !Admin.draftHasText(html)) return;
         const at = Date.now();
         Admin.writeLocalReplyDraft(id, html, at);
@@ -14459,6 +14460,7 @@ const Admin = {
             }
             const kept = !editKey ? Admin.readLocalReplyDraft(draftId) : null;
             editorEl.innerHTML = editKey ? String(editMsg.text || editMsg.message || '') : (kept?.html || '');
+            Admin.hoistEditorImages(editorEl);
         }
         modal._draftRestore = editKey ? Promise.resolve('') : Admin.restoreReplyDraft(draftId);
         if (!modal.dataset.scrimBound) {
@@ -14489,7 +14491,8 @@ const Admin = {
 
         // GUARDIAN PHASE 3: Inline WYSIWYG File Uploader (Admin Inbox Reply)
         const replyUploadFile = document.getElementById('admin-reply-upload-file');
-        if (replyUploadFile) {
+        if (replyUploadFile && replyUploadFile.dataset.ntUploadBound !== '1') {
+            replyUploadFile.dataset.ntUploadBound = '1';
             replyUploadFile.addEventListener('change', async function() {
                 const editor = document.getElementById('admin-reply-text');
                 // GUARDIAN UX FIX: Retrieve pre-upload cursor position locked via mousedown
@@ -14605,7 +14608,7 @@ const Admin = {
         Admin.closeCopilotSettings();
         if (!editKey) Admin.loadReplySuggestNote(modal);
         document.getElementById('reply-send').onclick = async () => {
-            let text = document.getElementById('admin-reply-text').innerHTML.trim();
+            let text = Admin.composerOutgoingHtml(document.getElementById('admin-reply-text')).trim();
             if (!text || text === '<br>') {
                 if (typeof showToast === 'function') showToast("Please enter a message.", "error");
                 return;
@@ -15135,7 +15138,7 @@ const Admin = {
 
     composerXButton: (kind) => {
         const label = kind === 'preview' ? 'Remove link preview' : 'Remove image';
-        return `<button type="button" class="nt-composer-x" data-nt-composer-x="${kind}" aria-label="${label}"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg></button>`;
+        return `<button type="button" class="nt-composer-x" data-nt-composer-x="${kind}" aria-label="${label}">×</button>`;
     },
 
     slotBeforeEditor: (editor, attr, className) => {
@@ -15215,9 +15218,30 @@ const Admin = {
         });
     },
 
+    composerOutgoingHtml: (editor) => {
+        if (!editor) return '';
+        Admin.hoistEditorImages(editor);
+        const slot = editor.parentElement?.querySelector('[data-nt-media-slot]');
+        const esc = typeof escapeHTML === 'function' ? escapeHTML : (v) => String(v || '');
+        const imgHtml = [...(slot?.querySelectorAll('img') || [])].map((img) => {
+            const src = img.getAttribute('data-nt-src') || img.getAttribute('src') || '';
+            const safe = esc(src);
+            return safe ? `<img src="${safe}" data-nt-src="${safe}" alt="">` : '';
+        }).join('');
+        const body = String(editor.innerHTML || '').trim();
+        return `${imgHtml}${body}`.trim();
+    },
+
+    clearComposerMedia: (editor) => {
+        const slot = editor?.parentElement?.querySelector('[data-nt-media-slot]');
+        if (!slot) return;
+        slot.innerHTML = '';
+        slot.classList.add('hidden');
+    },
+
     placeComposerAttachment: (editor, url, isPdf, savedRange) => {
         if (!editor) return false;
-        if (!isPdf && editor.id === 'alert-msg' && Admin.addComposerImage(editor, url)) return true;
+        if (!isPdf && Admin.addComposerImage(editor, url)) return true;
         const htmlToInsert = Admin.inlineAttachmentHtml(url, isPdf);
         if (!htmlToInsert) return false;
         Admin.focusEditorSafely(editor);
@@ -15656,12 +15680,27 @@ const Admin = {
             document.execCommand('justifyRight', false, null);
         } else if (tag === 'ul') {
             document.execCommand('insertUnorderedList', false, null);
-        } else if (tag === 'link') { 
+        } else if (tag === 'link') {
+            const selection = window.getSelection();
+            const selectedText = selection ? selection.toString().trim() : '';
+            let highlighted = '';
+            if (selectedText && !/\s/.test(selectedText)) {
+                const withScheme = /^www\./i.test(selectedText) ? `https://${selectedText}` : selectedText;
+                try {
+                    const parsed = new URL(withScheme);
+                    if (parsed.protocol === 'http:' || parsed.protocol === 'https:') highlighted = parsed.href;
+                } catch { /* not a url, so the prompt stays */ }
+            }
+            if (highlighted) {
+                const esc = typeof escapeHTML === 'function' ? escapeHTML : (v) => String(v || '');
+                const html = `<a href="${esc(highlighted)}" target="_blank" rel="noopener" class="text-blue-500 dark:text-blue-400 underline underline-offset-2">${esc(selectedText)}</a>`;
+                document.execCommand('insertHTML', false, html);
+                return;
+            }
             const url = prompt("Enter the full URL (e.g., https://nexttrain.co.za):", "https://");
             if (!url) return;
-            const selection = window.getSelection();
-            const selectedText = selection.toString() || "Link";
-            const html = `<a href="${url}" target="_blank" class="text-blue-500 dark:text-blue-400 underline underline-offset-2">${selectedText}</a>`;
+            const label = selectedText || "Link";
+            const html = `<a href="${url}" target="_blank" class="text-blue-500 dark:text-blue-400 underline underline-offset-2">${label}</a>`;
             document.execCommand('insertHTML', false, html);
         }
     },
@@ -18019,7 +18058,8 @@ const Admin = {
 
         // GUARDIAN PHASE 3: Inline WYSIWYG File Uploader (Service Alerts)
         const inlineUploadFile = document.getElementById('alert-upload-file');
-        if (inlineUploadFile) {
+        if (inlineUploadFile && inlineUploadFile.dataset.ntUploadBound !== '1') {
+            inlineUploadFile.dataset.ntUploadBound = '1';
             inlineUploadFile.addEventListener('change', async function() {
                 const editor = document.getElementById('alert-msg');
                 // GUARDIAN UX FIX: Retrieve pre-upload cursor position locked via mousedown
@@ -19229,7 +19269,8 @@ const Admin = {
         };
 
         const disrUploadFile = document.getElementById('disr-upload-file');
-        if (disrUploadFile) {
+        if (disrUploadFile && disrUploadFile.dataset.ntUploadBound !== '1') {
+            disrUploadFile.dataset.ntUploadBound = '1';
             disrUploadFile.addEventListener('change', async function() {
                 const editor = document.getElementById('disr-msg');
                 const savedRange = Admin._savedRange;
@@ -19563,7 +19604,7 @@ const Admin = {
             const statA = statASelect.value;
             const statB = statBSelect.value;
             const btnText = btnTextInput.value.trim() || (tier === 'CRITICAL' ? 'Severance Advisory' : 'Delay Advisory');
-            const msg = (msgInput?.innerHTML || '').trim();
+            const msg = Admin.composerOutgoingHtml(msgInput).trim();
             const expiryTs = expiryInput.value ? new Date(expiryInput.value).getTime() : Date.now() + (48 * 3600 * 1000);
             const applyDays = collectDisrApplyDays();
             const startTime = (document.getElementById('disr-from')?.value || '').trim();
@@ -19611,7 +19652,10 @@ const Admin = {
 
                 if (res.ok) {
                     if (typeof showToast === 'function') showToast(`Incident Deployed!`, "success");
-                    if (msgInput) msgInput.innerHTML = '';
+                    if (msgInput) {
+                        msgInput.innerHTML = '';
+                        Admin.clearComposerMedia(msgInput);
+                    }
                     btnTextInput.value = '';
                     statASelect.value = '';
                     statBSelect.value = '';
@@ -19659,7 +19703,10 @@ const Admin = {
                             }
                             document.getElementById('disr-btn-text').value = data.buttonText || '';
                             const reviveEditor = document.getElementById('disr-msg');
-                            if (reviveEditor) reviveEditor.innerHTML = data.message || data.longExplanation || '';
+                            if (reviveEditor) {
+                                reviveEditor.innerHTML = data.message || data.longExplanation || '';
+                                Admin.hoistEditorImages(reviveEditor);
+                            }
                             setDisrApplyDays(data.applyDays);
                             const fromEl = document.getElementById('disr-from');
                             const untilEl = document.getElementById('disr-until');

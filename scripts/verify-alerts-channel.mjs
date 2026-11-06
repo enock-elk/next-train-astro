@@ -17,6 +17,7 @@ import {
     layoutAlertPost,
     sanitizeInlineAlertImageUrl,
     sanitizeAlertVideoUrl,
+    alertVideoKind,
     alertVideoPosterUrl,
     alertVideoEmbedUrl,
     renderAlertVideoMarkup,
@@ -398,6 +399,17 @@ const now = 1_700_000_000_000;
         message: 'https://nexttrain.co.za',
     }) === '', 'a cleared preview stays hidden');
     assert(firstHttpUrl({ title: 'See www.nexttrain.co.za today' }) === 'https://www.nexttrain.co.za/', 'a www title is a url');
+    const many = linkPreviewMarkup({
+        message: 'See https://nexttrain.co.za/guide.html and https://www.prasa.com/ today.',
+    });
+    assert((many.match(/data-link-preview-url=/g) || []).length === 2, 'every url in an alert is crawled');
+    const tiktok = 'https://www.tiktok.com/@metrorail/video/1234567890123456789';
+    assert(sanitizeAlertVideoUrl(tiktok) === tiktok, 'a TikTok video is a video, not only YouTube');
+    const fb = 'https://www.facebook.com/watch/?v=123456789012345';
+    assert(alertVideoKind(fb) === 'page', 'a Facebook watch link is a video page');
+    const pageHtml = renderAlertVideoMarkup([fb]);
+    assert(pageHtml.includes('data-alert-video-poster-pending'), 'a non-YouTube video asks the crawler for its picture');
+    assert(pageHtml.includes('data-alert-video-kind="page"'), 'the card remembers it is a page video');
     assert(hub.includes('min-h-[8rem]') && hub.includes('referrerpolicy="no-referrer"'), 'alert preview keeps a visible image and does not send a hotlink referrer');
     assert(js.includes('buildPollShellHtml'), 'feed uses the shared poll shell');
     assert(js.includes('feed.dataset.ntAlertsSig'), 'alerts skip innerHTML rewrite when the feed is unchanged');

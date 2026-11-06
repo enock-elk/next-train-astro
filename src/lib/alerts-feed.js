@@ -1,7 +1,7 @@
 /**
  * Pure alerts-channel feed rules (no DOM). Union scoping, expiry, posters, paging.
  */
-import { cleanHttpUrl, isPublicPreviewUrl } from './link-preview.js';
+import { cleanHttpUrl, externalVideoPageUrl, isPublicPreviewUrl } from './link-preview.js';
 export const ALERTS_PAGE_SIZE = 10;
 export const ALERT_PIN_SVG = `<svg class="nt-alert-pin-icon w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16 3H8v2h1v6.2L7 14v2h4v5h2v-5h4v-2l-2-2.8V5h1V3z"/></svg>`;
 export const ALERT_IMAGE_PREFIX = '/images/alerts/';
@@ -539,12 +539,13 @@ export function vimeoVideoId(url) {
     return parts.find((part) => /^\d{6,12}$/.test(part)) || '';
 }
 
-/** file, youtube, or vimeo. Empty when the address is not a video we can show. */
+/** file, youtube, vimeo, or another video page. Empty when the address is not a video we can show. */
 export function alertVideoKind(url) {
     const clean = cleanHttpUrl(url);
     if (!clean || !isPublicPreviewUrl(clean)) return '';
     if (youtubeVideoId(clean)) return 'youtube';
     if (vimeoVideoId(clean)) return 'vimeo';
+    if (externalVideoPageUrl(clean)) return 'page';
     try {
         const pub = new URL(clean);
         let path = pub.pathname || '';
@@ -582,6 +583,7 @@ export function sanitizeAlertVideoUrl(url) {
     const clean = cleanHttpUrl(url);
     if (kind === 'youtube') return `https://www.youtube.com/watch?v=${youtubeVideoId(clean)}`;
     if (kind === 'vimeo') return `https://vimeo.com/${vimeoVideoId(clean)}`;
+    if (kind === 'page') return externalVideoPageUrl(clean) || clean;
     return clean;
 }
 
@@ -713,7 +715,7 @@ export function renderAlertVideoMarkup(urls) {
         const poster = alertVideoPosterUrl(href);
         const picture = poster
             ? `<img alt="" src="${escapeAlertAttr(poster)}" referrerpolicy="no-referrer" draggable="false" class="absolute inset-0 h-full w-full object-cover" data-alert-video-poster>`
-            : (kind === 'vimeo'
+            : ((kind === 'vimeo' || kind === 'page')
                 ? `<img alt="" referrerpolicy="no-referrer" draggable="false" class="absolute inset-0 h-full w-full object-cover" data-alert-video-poster data-alert-video-poster-pending data-alert-video-page="${src}">`
                 : '');
         const file = kind === 'file'

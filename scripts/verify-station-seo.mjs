@@ -108,6 +108,7 @@ ok(!stationHasPublicPage('wolseley'), 'Wolseley (out of network) has no public p
 
 const pageSrc = readFileSync(new URL('../src/pages/stations/[slug].astro', import.meta.url), 'utf8');
 ok(pageSrc.includes('robots={indexable ? \'index, follow\' : \'noindex, follow\'}'), 'station page gates robots on allowlist');
+ok(pageSrc.includes('isStationIndexable(station.slug) || !!station.listedWithoutTimes'), 'a ghost station page is indexable');
 ok(pageSrc.includes('SeoStationDepartures'), 'station page renders departure lists');
 ok(pageSrc.includes('Neighbouring stations'), 'station page shows neighbours');
 ok(pageSrc.includes('SeoStationMap'), 'station page embeds Leaflet GPS map');

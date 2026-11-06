@@ -70,7 +70,8 @@ function siteLabel(href) {
     }
 }
 
-export function firstHttpUrl(notice) {
+/** Every public https address in the notice, in the order they appear. */
+export function listHttpUrls(notice) {
     const html = `${notice?.title || ''} ${notice?.message || notice?.text || notice?.longExplanation || ''}`;
     const hrefs = [];
     const re = /href\s*=\s*["']([^"']+)["']/gi;
@@ -82,12 +83,58 @@ export function firstHttpUrl(notice) {
     const plain = html.replace(/<[^>]+>/g, ' ');
     const bare = plain.match(/(?:https?:\/\/|www\.)[^\s<>"']+/gi) || [];
     const list = [...hrefs, ...bare, notice?.ctaUrl, notice?.sourceUrl];
+    const out = [];
     for (const item of list) {
         const raw = String(item || '').trim();
         const url = cleanHttpUrl(/^www\./i.test(raw) ? `https://${raw}` : raw);
-        if (url && isPublicPreviewUrl(url)) return url;
+        if (!url || !isPublicPreviewUrl(url) || out.includes(url)) continue;
+        out.push(url);
+        if (out.length >= 8) break;
     }
+    return out;
+}
+
+export function firstHttpUrl(notice) {
+    return listHttpUrls(notice)[0] || '';
+}
+
+/**
+ * A watch page the alert paints as a video card. Those stay off the link cards
+ * so one address is not crawled twice.
+ */
+export function externalVideoPageUrl(value) {
+    const href = cleanHttpUrl(value);
+    if (!href || !isPublicPreviewUrl(href)) return '';
+    let url;
+    try { url = new URL(href); } catch { return ''; }
+    const host = url.hostname.toLowerCase().replace(/\.$/, '').replace(/^(www|m)\./, '');
+    const path = url.pathname || '';
+    if (host === 'tiktok.com' || host.endsWith('.tiktok.com')) return href;
+    if (host === 'fb.watch') return href;
+    if (host === 'facebook.com' || host === 'fb.com') {
+        if (/\/(videos|watch|reel|reels)(\/|$)/i.test(path) || url.searchParams.has('v')) return href;
+    }
+    if (host === 'instagram.com' && /\/(reel|reels|tv)\//i.test(path)) return href;
+    if (host === 'dailymotion.com' || host === 'dai.ly') return href;
+    if (host === 'streamable.com') return href;
     return '';
+}
+
+function isLiftedVideoUrl(value) {
+    const href = cleanHttpUrl(value);
+    if (!href) return false;
+    if (externalVideoPageUrl(href)) return true;
+    let url;
+    try { url = new URL(href); } catch { return false; }
+    const host = url.hostname.toLowerCase().replace(/\.$/, '').replace(/^(www|m)\./, '');
+    let path = url.pathname || '';
+    try { path = decodeURIComponent(path); } catch { /* keep */ }
+    if (/\.(mp4|webm|ogg|mov)$/i.test(path)) return true;
+    if (host === 'youtu.be' || host === 'youtube.com' || host === 'youtube-nocookie.com' || host === 'music.youtube.com') {
+        return /[A-Za-z0-9_-]{11}/.test(`${path}${url.search}`);
+    }
+    if (host === 'vimeo.com' || host === 'player.vimeo.com') return /\/\d{6,12}(?:\/|$)/.test(path);
+    return false;
 }
 
 function clip(value, max) {
@@ -232,12 +279,19 @@ function loadingMarkup(url) {
 export function linkPreviewMarkup(notice) {
     if (notice?.suppressLinkPreview) return '';
     const stored = normalizeLinkPreview(notice?.linkPreview);
-    if (stored) return readyMarkup(stored);
-    const url = firstHttpUrl(notice);
-    if (!url) return '';
-    const peeked = peekLinkPreview(url);
-    if (peeked) return readyMarkup(peeked);
-    return loadingMarkup(url);
+    const urls = [];
+    if (stored?.url && !isLiftedVideoUrl(stored.url)) urls.push(stored.url);
+    listHttpUrls(notice).forEach((url) => {
+        if (isLiftedVideoUrl(url) || urls.includes(url)) return;
+        urls.push(url);
+    });
+    if (!urls.length) return '';
+    return urls.map((url) => {
+        if (stored && stored.url === url) return readyMarkup(stored);
+        const peeked = peekLinkPreview(url);
+        if (peeked) return readyMarkup(peeked);
+        return loadingMarkup(url);
+    }).join('');
 }
 
 /** Microlink's card, kept on the link the operator pasted. */

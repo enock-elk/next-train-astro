@@ -1,7 +1,8 @@
 /**
  * Admin-forced schedule day-type per region (System Controls).
- * App boots with the normal calendar day type; when a remote override is active
- * and differs, commuters see a one-time modal then timetables switch.
+ * Once a commuter accepts a force, this device stores it and paints that
+ * timetable immediately on later visits. A later check, at most every 10 minutes
+ * while a force is showing, drops it if the operator has turned it off.
  *
  * Optional `dates: ['YYYY-MM-DD', ...]` limits the force to those calendar days
  * (local). Empty / missing dates means “while Active” (legacy behaviour).
@@ -14,9 +15,12 @@ import { $userRegion } from '../store.js';
 let cachedConfig = null;
 let loadedAt = 0;
 let loadPromise = null;
-const CACHE_TTL_MS = 60 * 1000;
+let remoteKnown = false;
+const RECHECK_ACTIVE_MS = 10 * 60 * 1000;
+const RECHECK_IDLE_MS = 3 * 60 * 1000;
 const PROMPT_UNLOCK_MS = 5 * 60 * 1000;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const LOCAL_FORCE_KEY = 'ntSchedForce';
 
 /** Region → forced dayType when commuter has acknowledged the override. */
 const appliedOverrides = {};
@@ -71,29 +75,84 @@ export function scheduleOverrideAppliesToday(entry, now = new Date()) {
     return dates.includes(localScheduleOverrideDateKey(now));
 }
 
-export async function fetchScheduleOverride(force = false) {
-    if (!force && cachedConfig && (Date.now() - loadedAt) < CACHE_TTL_MS) {
-        return cachedConfig;
+function readLocalForces() {
+    try {
+        const raw = safeStorage.getItem(LOCAL_FORCE_KEY);
+        const parsed = raw ? JSON.parse(raw) : {};
+        return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch {
+        return {};
     }
-    if (!force && loadPromise) return loadPromise;
+}
+
+function writeLocalForces(map) {
+    try {
+        if (!map || !Object.keys(map).length) safeStorage.removeItem(LOCAL_FORCE_KEY);
+        else safeStorage.setItem(LOCAL_FORCE_KEY, JSON.stringify(map));
+    } catch { /* ignore */ }
+}
+
+function localRowApplies(row, now = new Date()) {
+    if (!row?.dayType) return false;
+    return scheduleOverrideAppliesToday({ active: true, dayType: row.dayType, dates: row.dates }, now);
+}
+
+/** Paint the last acknowledged force before the network answers. */
+function hydrateLocalForces() {
+    const map = readLocalForces();
+    let changed = false;
+    Object.keys(map).forEach((code) => {
+        if (!localRowApplies(map[code])) {
+            delete map[code];
+            delete appliedOverrides[code];
+            changed = true;
+            return;
+        }
+        appliedOverrides[code] = map[code].dayType;
+    });
+    if (changed) writeLocalForces(map);
+}
+
+function rememberLocalForce(code, entry, rev) {
+    const map = readLocalForces();
+    map[code] = {
+        dayType: entry.dayType,
+        rev: String(rev || ''),
+        dates: normalizeScheduleOverrideDates(entry.dates),
+        title: String(entry.title || '').trim(),
+        body: String(entry.body || '').trim(),
+        savedAt: Date.now(),
+    };
+    writeLocalForces(map);
+}
+
+export async function fetchScheduleOverride(force = false) {
+    const showingForce = Object.keys(appliedOverrides).length > 0;
+    const minGap = !remoteKnown
+        ? 60 * 1000
+        : (showingForce ? RECHECK_ACTIVE_MS : (force ? 60 * 1000 : RECHECK_IDLE_MS));
+    if (loadedAt && (Date.now() - loadedAt) < minGap) return cachedConfig;
+    if (loadPromise) return loadPromise;
 
     loadPromise = (async () => {
+        const before = JSON.stringify(appliedOverrides);
         try {
-            const res = await fetch(`${DYNAMIC_BASE_URL}config/schedule_override.json?t=${Date.now()}`, { cache: 'no-store' });
-            if (!res.ok) {
-                cachedConfig = null;
-                clearAppliedScheduleOverrides();
-            } else {
+            const res = await fetch(`${DYNAMIC_BASE_URL}config/schedule_override.json`);
+            loadedAt = Date.now();
+            if (res.ok) {
                 const data = await res.json();
                 cachedConfig = (data && typeof data === 'object' && !data.error) ? data : null;
-                if (!cachedConfig?.regions) clearAppliedScheduleOverrides();
+                remoteKnown = true;
             }
         } catch {
-            // Keep last known config on transient failures
+            loadedAt = Date.now();
+            // Keep the local flag when the check cannot be reached.
         }
-        loadedAt = Date.now();
         loadPromise = null;
-        syncAppliedOverridesFromConfig();
+        if (remoteKnown) syncAppliedOverridesFromConfig();
+        if (JSON.stringify(appliedOverrides) !== before && typeof window !== 'undefined' && typeof window.updateTime === 'function') {
+            try { window.updateTime(); } catch { /* ignore */ }
+        }
         return cachedConfig;
     })();
 
@@ -104,13 +163,42 @@ function syncAppliedOverridesFromConfig() {
     const regions = cachedConfig?.regions;
     if (!regions || typeof regions !== 'object') {
         clearAppliedScheduleOverrides();
+        writeLocalForces({});
         return;
     }
     Object.keys(appliedOverrides).forEach((code) => {
         const r = regions[code];
-        if (!scheduleOverrideAppliesToday(r)) delete appliedOverrides[code];
-        else if (appliedOverrides[code] !== r.dayType) delete appliedOverrides[code];
+        if (!scheduleOverrideAppliesToday(r) || appliedOverrides[code] !== r.dayType) delete appliedOverrides[code];
     });
+    const local = readLocalForces();
+    Object.keys(regions).forEach((code) => {
+        const r = regions[code];
+        if (!scheduleOverrideAppliesToday(r)) {
+            delete local[code];
+            delete appliedOverrides[code];
+            return;
+        }
+        const entry = { code, ...r, dates: normalizeScheduleOverrideDates(r.dates) };
+        const rev = revisionFor(entry);
+        const seen = safeStorage.getItem(seenKeyFor(entry, rev)) === 'true';
+        if (seen) appliedOverrides[code] = r.dayType;
+        if (appliedOverrides[code] === r.dayType) {
+            local[code] = {
+                dayType: r.dayType,
+                rev,
+                dates: entry.dates,
+                title: String(r.title || '').trim(),
+                body: String(r.body || '').trim(),
+                savedAt: Date.now(),
+            };
+        } else {
+            delete local[code];
+        }
+    });
+    Object.keys(local).forEach((code) => {
+        if (!scheduleOverrideAppliesToday(regions[code])) delete local[code];
+    });
+    writeLocalForces(local);
 }
 
 function regionOverrideEntry(region) {
@@ -161,12 +249,16 @@ export function appliedScheduleOverrideNote(region) {
  * Apply admin override to a calendar-derived day type (after holiday resolution).
  */
 export function resolveDayTypeWithOverride(baseDayType, region) {
+    const code = region || $userRegion.get() || 'GP';
     const entry = regionOverrideEntry(region);
-    if (!entry) return baseDayType;
+    if (!entry) {
+        if (!remoteKnown && appliedOverrides[code]) return appliedOverrides[code];
+        return baseDayType;
+    }
     const rev = revisionFor(entry);
     const seen = safeStorage.getItem(seenKeyFor(entry, rev)) === 'true';
-    if (seen || appliedOverrides[entry.code]) {
-        appliedOverrides[entry.code] = entry.dayType;
+    if (seen || appliedOverrides[code]) {
+        appliedOverrides[code] = entry.dayType;
         return entry.dayType;
     }
     return baseDayType;
@@ -223,6 +315,7 @@ export async function maybePromptScheduleOverride(baseDayType) {
         const applyAndClose = () => {
             try { safeStorage.setItem(seenKey, 'true'); } catch { /* ignore */ }
             appliedOverrides[entry.code] = entry.dayType;
+            rememberLocalForce(entry.code, entry, rev);
             closeSmoothModal('schedule-override-modal');
             if (typeof window !== 'undefined' && typeof window.updateTime === 'function') {
                 window.updateTime();
@@ -252,7 +345,19 @@ export async function maybePromptScheduleOverride(baseDayType) {
     });
 }
 
+hydrateLocalForces();
+
 if (typeof window !== 'undefined') {
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState !== 'visible') return;
+        if (!Object.keys(appliedOverrides).length) return;
+        fetchScheduleOverride(false);
+    });
+    setInterval(() => {
+        if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+        if (!Object.keys(appliedOverrides).length) return;
+        fetchScheduleOverride(false);
+    }, RECHECK_ACTIVE_MS);
     window.fetchScheduleOverride = fetchScheduleOverride;
     window.maybePromptScheduleOverride = maybePromptScheduleOverride;
     window.normalizeScheduleOverrideDates = normalizeScheduleOverrideDates;

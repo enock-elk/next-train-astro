@@ -286,6 +286,10 @@ assert.equal(
   'dated override applies on a listed day'
 );
 assert.match(localScheduleOverrideDateKey(new Date('2026-10-27T23:30:00')), /^\d{4}-\d{2}-\d{2}$/);
+const overrideSrc = readFileSync(new URL('../src/lib/schedule-override.js', import.meta.url), 'utf8');
+assert(overrideSrc.includes('ntSchedForce') && overrideSrc.includes('hydrateLocalForces'), 'an accepted force is stored on this device');
+assert(overrideSrc.includes('RECHECK_ACTIVE_MS = 10 * 60 * 1000'), 'a showing force is rechecked about every 10 minutes');
+assert(!overrideSrc.includes('schedule_override.json?t='), 'the force check does not cache-bust every read');
 
 const { variantMapFromSchedule } = await import('../src/lib/utils.js');
 const viaPriority = variantMapFromSchedule({

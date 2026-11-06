@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_11.06.5': [
+        'Forced schedule: after the commuter accepts it, the device stores the day type and paints it on the next visit before the network. While a force is showing, the app rechecks config/schedule_override at most every 10 minutes, and a schedule reload does not add another read. Welcome, sign-in, and reset password hide the passenger type and appearance block. Modal close no longer vibrates. Back on the reaction counts sheet closes that sheet. User Trust gains an Accounts tab from account_directory (created accounts only). Deploy firebase-database.rules.json. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_11.06.4': [
         'Lab builds (PUBLIC_LAB_MODE, lab.nexttrain host, or the lab branch) ship no sitemap and stamp noindex, nofollow on every page, plus an X-Robots-Tag. A lab build fails if a sitemap file or an indexable page remains. Notice toasts use the notice title, never "Corridor notice" plus a raw link. View opens that alert above the sheet you have open. No commuter What\'s New. forceShow stays false.',
     ],

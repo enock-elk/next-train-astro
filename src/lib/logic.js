@@ -1700,7 +1700,7 @@ async function loadAllSchedulesInner(force = false) {
         await fetchSpecialEventConfig(force);
         if (fetchSignal.aborted || $currentRouteId.get() !== requestedRouteId) return;
 
-        await fetchScheduleOverride(force);
+        await fetchScheduleOverride(false);
         if (fetchSignal.aborted || $currentRouteId.get() !== requestedRouteId) return;
 
         // Ops overlays (ghost trains / disruption badges) — stamp-gated client TTL.

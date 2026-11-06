@@ -668,8 +668,17 @@ export async function toggleAlertPollRawCounts(notice) {
     });
 }
 
-function hideAlertReactionBreakdown() {
-    document.getElementById('alerts-reaction-breakdown')?.classList.add('hidden');
+let reactionBreakdownPushed = false;
+
+function hideAlertReactionBreakdown(fromPop = false) {
+    const sheet = document.getElementById('alerts-reaction-breakdown');
+    const open = !!(sheet && !sheet.classList.contains('hidden'));
+    if (!fromPop && open && reactionBreakdownPushed) {
+        try { history.back(); } catch { /* ignore */ }
+        return;
+    }
+    sheet?.classList.add('hidden');
+    reactionBreakdownPushed = false;
 }
 
 function openAlertReactionBreakdown(notice) {
@@ -714,6 +723,10 @@ function openAlertReactionBreakdown(notice) {
         )).join('');
     }
     sheet.classList.remove('hidden');
+    if (!reactionBreakdownPushed) {
+        reactionBreakdownPushed = true;
+        try { history.pushState({ sheet: 'alert-reactions' }, '', location.hash || '#alerts'); } catch { /* ignore */ }
+    }
     triggerHaptic();
 }
 
@@ -1281,7 +1294,6 @@ function bindAlertsChannelOnce() {
 
     const closeChannel = (e) => {
         e.preventDefault();
-        triggerHaptic();
         closeAlertsChannel();
     };
     document.getElementById('alerts-channel-back')?.addEventListener('click', closeChannel);
@@ -1462,6 +1474,7 @@ export function initAlertsChannel() {
     bindLightboxReactionClicks();
     if (typeof window === 'undefined') return;
     window.openAlertsChannel = openAlertsChannel;
+    window.__ntHideAlertReactionBreakdown = hideAlertReactionBreakdown;
     window.closeAlertsChannel = closeAlertsChannel;
     window.renderAlertsChannel = renderAlertsChannel;
     window.renderLazyPosterHtml = renderLazyPosterHtml;

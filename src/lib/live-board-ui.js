@@ -455,9 +455,8 @@ export function openFareModalForRoute(routeId) {
     return false;
 }
 
-/** Same open/close haptic rule as the full timetable sheet. */
+/** Ticket Prices vibrates when it opens. Closing does not. */
 export function closeFareModal() {
-    triggerHaptic();
     closeSmoothModal('fare-modal');
 }
 

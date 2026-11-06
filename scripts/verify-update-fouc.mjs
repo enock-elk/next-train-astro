@@ -315,7 +315,9 @@ assert(worker.includes("url.pathname === '/sw.js'"), 'edge worker intercepts sw.
 assert(worker.includes('no-store, no-cache, must-revalidate'), 'edge worker serves update probes with no-store');
 assert(!worker.includes('rollback only') && !worker.includes('routes are detached'), 'edge worker is attached, not documented as detached');
 const wrangler = readFileSync(new URL('../workers/nexttrain-edge/wrangler.jsonc', import.meta.url), 'utf8');
-assert(wrangler.includes('nexttrain.co.za/_astro/'), 'wrangler routes hashed /_astro/');
+assert(!wrangler.includes('nexttrain.co.za/_astro/'), 'wrangler does not route hashed /_astro/ (each file was a Worker request)');
+assert(!wrangler.includes('nexttrain.co.za/icons/'), 'wrangler does not route /icons/');
+assert(wrangler.includes('"enabled": false'), 'edge worker observability is off');
 assert(wrangler.includes('nexttrain.co.za/app-version.json'), 'wrangler routes app-version.json');
 assert(wrangler.includes('nexttrain.co.za/sw.js'), 'wrangler routes sw.js');
 const spec = loadEdgeZoneSpec();

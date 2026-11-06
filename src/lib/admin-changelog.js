@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_11.07.3': [
+        'nexttrain-edge no longer runs on /_astro or /icons. Those files were most of the 100,000 Worker requests a day. sw.js and app-version.json stay on the Worker with no-store. Observability is off on that Worker. Hashed-file Cache-Control moves to the zone Cache Rules. Until those rules are applied, GitHub Pages sends a 10-minute cache. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_11.07.2': [
         'Station pages for names that are on the sheet without times are indexable, so Verify URL parity no longer fails those 61 pages. A photo attached in a reply, an alert, or an incident is inserted once, and each picture has an x that removes it. Alerts crawl every link in the post. TikTok, Facebook, Instagram, Dailymotion, and Streamable watch links get a video preview, not only YouTube. Highlighting a URL and tapping URL turns that text into the link. No commuter What\'s New. forceShow stays false.',
     ],

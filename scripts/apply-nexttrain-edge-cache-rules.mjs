@@ -91,9 +91,14 @@ async function upsertPhase(token, zoneId, phase, name, managed, refs) {
     return cf(token, 'PUT', `/zones/${zoneId}/rulesets/${entry.id}`, { rules });
 }
 
+function isAssetWorkerRoute(pattern) {
+    const text = String(pattern || '');
+    return text.includes('/_astro/') || text.includes('/icons/');
+}
+
 async function detachWorkerRoutes(token, zoneId, scriptName) {
     const routes = await cf(token, 'GET', `/zones/${zoneId}/workers/routes`);
-    const ours = (routes || []).filter((r) => r.script === scriptName);
+    const ours = (routes || []).filter((r) => r.script === scriptName && isAssetWorkerRoute(r.pattern));
     const removed = [];
     for (const route of ours) {
         await cf(token, 'DELETE', `/zones/${zoneId}/workers/routes/${route.id}`);

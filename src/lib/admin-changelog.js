@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_11.06.2': [
+        'SEO station map: Back inside the map frame closes the sheet, so Close Map does not stay over the schedule page. Co-Pilot writes the KZN, EC, and WC desk into a PRASA handoff instead of halting to ask for a number the contact block already has. A bare independence line does not count as a handoff. Poll replies get "Thank you for replying to our poll." on its own line under the greeting. "Thank you for asking about" becomes "Thank you for your message where you\'re asking about". Feedback Hub resets the iOS viewport pan after the keyboard closes so Back stays reachable, and the header sticks while the sheet scrolls. Redeploy nexttrain-reply. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_11.06.1': [
         'Dev Hub unread badges: Delay Reports count rows newer than dr_last_checked. Community Monitor counts community_activity rows newer than community_seen (capped route fan-out) plus moderation_queue rows newer than mq_last_checked that are still open. User Trust counts account_deletions with status pending. A 400 leaves the last dot instead of counting every key. Deploy firebase-database.rules.json (moderation_queue .indexOn timestamp, account_deletions .indexOn status). No commuter What\'s New. forceShow stays false.',
     ],

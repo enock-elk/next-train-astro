@@ -687,7 +687,7 @@ import { withBase } from '../lib/config.js';
 <!-- MESSAGES THREAD (commuter POV — WhatsApp-style Feedback Hub) -->
 <div id="messages-thread-modal" class="fixed inset-0 bg-white dark:bg-gray-900 z-[135] hidden flex items-stretch justify-center p-0 transition-opacity duration-300">
     <div class="bg-white dark:bg-gray-900 rounded-none shadow-none w-full max-w-md h-full flex flex-col overflow-hidden border-0">
-        <div class="flex items-center gap-1 px-1 h-12 shrink-0 border-b border-gray-200 dark:border-gray-700" style="margin-top: env(safe-area-inset-top, 0px);">
+        <div id="messages-thread-header" class="flex items-center gap-1 px-1 h-12 shrink-0 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900" style="margin-top: env(safe-area-inset-top, 0px);">
             <button type="button" id="messages-thread-close" class="w-10 h-10 inline-flex items-center justify-center rounded-full text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none" aria-label="Back">
                 <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
             </button>
@@ -754,6 +754,13 @@ import { withBase } from '../lib/config.js';
     inset: 0;
     height: auto;
     max-height: none;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  #messages-thread-header {
+    position: sticky;
+    top: 0;
+    z-index: 5;
   }
   #account-modal {
     position: absolute;

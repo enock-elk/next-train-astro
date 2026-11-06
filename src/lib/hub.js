@@ -324,6 +324,33 @@ function clearHubInlineGeometry(modal, card) {
 }
 
 /** Size commuter feedback overlays to the viewport left above the software keyboard. */
+function hubSheetOpen() {
+    const modal = document.getElementById('messages-thread-modal');
+    return !!(modal && !modal.classList.contains('hidden'));
+}
+
+function hubFieldFocused() {
+    return !!document.activeElement?.closest?.('#messages-thread-form');
+}
+
+/**
+ * iOS pans the layout viewport when the message field focuses, then leaves
+ * that pan in place after the keyboard closes. The sheet is not a document
+ * the commuter can drag, so Back stays above the screen. Put the sheet back.
+ */
+function settleHubAfterKeyboard() {
+    if (!hubSheetOpen() || hubFieldFocused()) return;
+    const modal = document.getElementById('messages-thread-modal');
+    const root = document.scrollingElement || document.documentElement;
+    if (root) root.scrollTop = 0;
+    document.body.scrollTop = 0;
+    try { window.scrollTo(0, 0); } catch { /* ignore */ }
+    const off = Math.max(0, Math.round(window.visualViewport?.offsetTop || 0));
+    if (!modal) return;
+    if (off > 0) modal.style.top = `${off}px`;
+    else modal.style.removeProperty('top');
+}
+
 function syncFeedbackModalViewport() {
     if (typeof window === 'undefined') return;
     const vv = window.visualViewport;
@@ -347,6 +374,7 @@ function syncFeedbackModalViewport() {
         const card = modal.querySelector(':scope > div');
         if (id === 'messages-thread-modal') {
             clearHubInlineGeometry(modal, card);
+            settleHubAfterKeyboard();
             return;
         }
         modal.style.setProperty('--nt-feedback-vv-height', `${height}px`);
@@ -388,8 +416,10 @@ function bindFeedbackViewportHandling() {
             }, ms);
         });
     });
-    document.addEventListener('focusout', () => {
+    document.addEventListener('focusout', (event) => {
         setTimeout(() => syncFeedbackModalViewport(), 50);
+        if (!event.target?.closest?.('#messages-thread-modal')) return;
+        [0, 80, 200, 500, 1000].forEach((ms) => setTimeout(settleHubAfterKeyboard, ms));
     });
     syncFeedbackModalViewport();
 }

@@ -97,7 +97,18 @@ const label = regionLabel || station?.region || '';
     overlay.dataset.bound = '1';
 
     let open = false;
+    let closing = false;
     const mapSrc = overlay.getAttribute('data-map-src') || '';
+
+    const frameIsMap = () => {
+      let href = '';
+      try { href = frame.contentWindow?.location?.href || ''; } catch { return true; }
+      if (!href || href === 'about:blank') return true;
+      try {
+        const path = new URL(href).pathname.replace(/\/+$/, '');
+        return /\/map(?:\.html)?$/i.test(path);
+      } catch { return true; }
+    };
 
     const lockScroll = () => document.body.classList.add('modal-active');
     const unlockScroll = () => {
@@ -111,15 +122,19 @@ const label = regionLabel || station?.region || '';
         try { history.back(); return; } catch { /* fall through */ }
       }
       open = false;
+      closing = false;
       overlay.classList.add('hidden');
       overlay.classList.remove('flex');
       overlay.setAttribute('aria-hidden', 'true');
       unlockScroll();
+      // Drop a schedule page the map Back button loaded into this frame.
+      try { frame.src = 'about:blank'; } catch { /* ignore */ }
     };
 
     const openMap = () => {
       if (!mapSrc) return;
-      if (!frame.getAttribute('src')) frame.setAttribute('src', mapSrc);
+      closing = false;
+      frame.setAttribute('src', mapSrc);
       open = true;
       overlay.classList.remove('hidden');
       overlay.classList.add('flex');
@@ -152,6 +167,14 @@ const label = regionLabel || station?.region || '';
     });
     window.addEventListener('popstate', () => {
       if (open && location.hash !== '#station-map') close(true);
+    });
+    // Map Back is inside the frame. It navigates that frame to the region
+    // schedule and leaves this Close Map bar on top. Close the sheet instead.
+    frame.addEventListener('load', () => {
+      if (!open || closing) return;
+      if (frameIsMap()) return;
+      closing = true;
+      close();
     });
   }
 

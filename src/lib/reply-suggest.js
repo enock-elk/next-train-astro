@@ -735,7 +735,8 @@ export function liaisonRules(region) {
         'If the user text gives a Certain greeting, use that exact first line, such as Dear Enock, or Dear Mr Kazembe. If it says none, use Hi there,. Never invent a name, and never turn an email address into a greeting yourself.',
         'After the greeting line, leave two blank lines, then the body.',
         'The first body line acknowledges what they wrote. Do not open cold.',
-        'When thanking them for a question about a train, a fare, a station, or a timetable, prefer "Thanks for your message asking about …" or "Thank you for your message where you are asking about …". Do not write "Thanks for asking about …" or "Thank you for asking about …" on its own.',
+        'When thanking them for a question about a train, a fare, a station, or a timetable, the first body line is "Thank you for your message where you\'re asking about …". Do not write "Thanks for asking about …" or "Thank you for asking about …".',
+        'If the contact block already lists a desk number for this region, write that number into the draft. Do not halt to ask the operator for a number the contact block already has. Gauteng, KwaZulu-Natal, Eastern Cape, and Western Cape all work this way.',
         'End every draft, including a short thank-you, with this exact final line: Thank you for using Next Train.',
         'One thought per paragraph. A blank line between paragraphs.',
         'If you already replied and the commuter has not written since, action is halt. Say that no reply is needed.',
@@ -941,6 +942,94 @@ export function parseSuggestResult(raw) {
     };
 }
 
+const POLL_THANKS_LINE = 'Thank you for replying to our poll.';
+
+/** A commuter answered a Next Train alert that carried a poll. */
+export function threadAnswersPoll(thread) {
+    const rows = Array.isArray(thread) ? thread : [];
+    let sawPoll = false;
+    for (const row of rows) {
+        const text = String(row?.text || '');
+        if (row?.role === 'alert' && /^poll:/im.test(text)) sawPoll = true;
+        else if (sawPoll && row?.from !== 'admin' && String(text).trim()) return true;
+    }
+    return false;
+}
+
+/** Desk lines the draft should contain. Primary offices only, not the WC extra list. */
+export function primaryDeskLines(region) {
+    const code = normalizeSuggestRegion(region);
+    if (code === 'GP') return GAUTENG_OFFICES.map((office) => `${office.office}: ${office.phones.join(' / ')}`);
+    if (code === 'KZN') return KZN_OFFICES.map((office) => `${office.office}: ${office.phones.join(' / ')}`);
+    if (code === 'EC') {
+        return [
+            ...EC_OFFICES.map((office) => `${office.office}: ${office.phones.join(' / ')}`),
+            `Email: ${EC_EMAIL}`,
+        ];
+    }
+    if (code === 'WC') return WC_OFFICES.map((office) => `${office.office}: ${office.phones.join(' / ')}`);
+    return [];
+}
+
+/** A handoff to PRASA, not the short independence sentence on its own. */
+export function needsRegionalDesk(reply) {
+    const text = String(reply || '');
+    if (/docs\.google\.com\/forms|customer experience survey/i.test(text)) return true;
+    if (/\b(call|phone|dial|whatsapp|contact|reach)\b/i.test(text) && /\b(prasa|metrorail|desk|office|customer service)\b/i.test(text)) return true;
+    if (/\b(lodge|report this|report it|reference number)\b/i.test(text)) return true;
+    return false;
+}
+
+export function rewriteAskingThanks(reply) {
+    return String(reply || '')
+        .replace(
+            /\b(?:thanks|thank you) for asking about\b/gi,
+            "Thank you for your message where you're asking about",
+        )
+        .replace(
+            /\b(?:thanks|thank you) for your message asking about\b/gi,
+            "Thank you for your message where you're asking about",
+        )
+        .replace(
+            /\bthank you for your message where you are asking about\b/gi,
+            "Thank you for your message where you're asking about",
+        );
+}
+
+/** Poll thank-you is its own line at the top of the body, after the greeting. */
+export function ensurePollThanks(reply) {
+    const text = String(reply || '').trim();
+    if (!text) return `${POLL_THANKS_LINE}`;
+    const escaped = POLL_THANKS_LINE.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const without = text
+        .replace(new RegExp(escaped, 'gi'), '')
+        .replace(/[ \t]+\n/g, '\n')
+        .replace(/\n{3,}/g, '\n\n')
+        .trim();
+    const nl = without.indexOf('\n');
+    if (nl === -1) return `${without}\n\n\n${POLL_THANKS_LINE}`;
+    const greeting = without.slice(0, nl).trim();
+    const body = without.slice(nl).replace(/^\n+/, '').trim();
+    return `${greeting}\n\n\n${POLL_THANKS_LINE}${body ? `\n\n${body}` : ''}`;
+}
+
+/** Write the region's desk into a handoff draft instead of asking the operator for it. */
+export function ensureRegionalDesk(reply, region) {
+    const text = String(reply || '').trim();
+    const lines = primaryDeskLines(region);
+    const desks = deskDigitsForRegion(normalizeSuggestRegion(region));
+    if (!text || !lines.length || !desks.length) return text;
+    if (!needsRegionalDesk(text)) return text;
+    const digits = phoneDigits(text);
+    if (desks.some((phone) => phone && digits.includes(phone))) return text;
+    const block = `${lines.join('\n')}\nPlease ask for a reference number.`;
+    const closing = 'Thank you for using Next Train.';
+    if (text.includes(closing)) {
+        return text.replace(closing, `${block}\n\n${closing}`);
+    }
+    return `${text}\n\n${block}`;
+}
+
 export function guardDraft(reply, region) {
     const code = normalizeSuggestRegion(region);
     const text = String(reply || '');
@@ -979,11 +1068,9 @@ export function guardDraft(reply, region) {
         };
     }
     const desks = deskDigitsForRegion(code);
-    if (desks.length) {
-        const mentionsContact = /contact|call|phone|desk|office|prasa|metrorail|customer (?:service|experience)|survey|report (?:this|it)|lodge/i.test(text);
-        const hasSurvey = text.includes(PRASA_SURVEY_URL) || /customer experience survey|docs\.google\.com\/forms/i.test(text);
+    if (desks.length && needsRegionalDesk(text)) {
         const hasDesk = desks.some((phone) => phone && digits.includes(phone));
-        if ((mentionsContact || hasSurvey) && !hasDesk) {
+        if (!hasDesk) {
             return {
                 ok: false,
                 reason: `Draft points them at PRASA or the survey without the ${code} desk number.`,
@@ -994,13 +1081,21 @@ export function guardDraft(reply, region) {
     return { ok: true };
 }
 
-export function applyDraftGuard(result, region) {
+export function applyDraftGuard(result, region, thread) {
     const base = result && result.action ? result : parseSuggestResult(result);
     if (base.action !== 'draft') return { ...base, reply: '' };
-    const reply = commuterFacingReply(base.reply || '');
+    let reply = commuterFacingReply(base.reply || '');
     if (!reply) {
         return { action: 'halt', reply: '', reason: 'The model returned an empty draft.', questions: [] };
     }
+    reply = rewriteAskingThanks(reply);
+    if (threadAnswersPoll(thread)) reply = ensurePollThanks(reply);
+    const early = guardDraft(reply, region);
+    // A wrong-region number still halts. A missing desk is filled from the contact block.
+    if (!early.ok && !/desk number/.test(early.reason || '')) {
+        return { action: 'halt', reply: '', reason: early.reason, questions: early.questions };
+    }
+    reply = ensureRegionalDesk(reply, region);
     const guard = guardDraft(reply, region);
     if (!guard.ok) {
         return { action: 'halt', reply: '', reason: guard.reason, questions: guard.questions };

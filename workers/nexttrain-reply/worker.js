@@ -408,7 +408,7 @@ async function suggestReply(request, env) {
     }
     const gemini = await callGemini(env, geminiBody);
     if (gemini.error) return json(env, request, gemini.status, { error: gemini.error });
-    const parsed = applyDraftGuard(parseSuggestResult(geminiText(gemini.data)), payload.region);
+    const parsed = applyDraftGuard(parseSuggestResult(geminiText(gemini.data)), payload.region, payload.thread);
     return json(env, request, 200, {
         action: parsed.action,
         reply: parsed.action === 'draft' ? parsed.reply : '',

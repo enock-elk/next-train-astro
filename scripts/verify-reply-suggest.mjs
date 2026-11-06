@@ -119,7 +119,7 @@ ok(liaisonRules('GP').includes('Only Next Train can post an alert'), 'only admin
 ok(liaisonRules('GP').includes('thank-you for replying to the poll on its own line'), 'poll thank-you sits on its own line at the top');
 ok(liaisonRules('GP').includes('Do not thank them for sharing'), 'a reply is not treated as the commuter posting the alert');
 ok(liaisonRules('GP').includes('their service is good'), 'praise cues skip the PRASA disclaimer');
-ok(liaisonRules('GP').includes('Thanks for your message asking about'), 'train questions thank for the message, not for asking alone');
+ok(liaisonRules('GP').includes("Thank you for your message where you're asking about"), 'train questions thank for the message, not for asking alone');
 ok(liaisonRules('GP').includes('Do not write "Thanks for asking about'), 'Thanks for asking about is banned');
 ok(!liaisonRules('GP').includes('independent unofficial'), 'the system prompt does not hand the model the old disclaimer');
 const quoted = buildSuggestPayload([
@@ -326,7 +326,32 @@ const surveyOnly = applyDraftGuard({
     action: 'draft',
     reply: `Please complete the PRASA Customer Experience Survey: ${PRASA_SURVEY_URL}`,
 }, 'KZN');
-ok(surveyOnly.action === 'halt', 'a survey-only KZN ops draft becomes a halt');
+ok(surveyOnly.action === 'draft', 'a survey-only KZN draft is filled with the desk instead of a halt');
+ok(surveyOnly.reply.includes('031 813 0456'), 'that KZN draft receives the customer desk number');
+const wcHandoff = applyDraftGuard({
+    action: 'draft',
+    reply: 'Hi there,\n\n\nPlease contact PRASA about the cancelled train.\n\nThank you for using Next Train.',
+}, 'WC');
+ok(wcHandoff.action === 'draft' && wcHandoff.reply.includes('0800 65 64 63') && wcHandoff.reply.includes('021 449 6181'), 'a Western Cape handoff gets both primary desks');
+const independence = applyDraftGuard({
+    action: 'draft',
+    reply: 'Hi there,\n\n\nSince Next Train is an independent app we developed, we are unfortunately not able to assist with this one.\n\nThank you for using Next Train.',
+}, 'EC');
+ok(independence.action === 'draft' && !independence.reply.includes('043 700 2030'), 'the independence line alone does not demand a desk number');
+const asking = applyDraftGuard({
+    action: 'draft',
+    reply: 'Hi there,\n\n\nThank you for asking about the Sunday train.\n\nThank you for using Next Train.',
+}, 'GP');
+ok(asking.reply.includes("Thank you for your message where you're asking about the Sunday train."), 'asking-about becomes thank you for your message');
+ok(!/thank you for asking about/i.test(asking.reply), 'the short asking-about line is removed');
+const pollDraft = applyDraftGuard({
+    action: 'draft',
+    reply: 'Hi there,\n\n\nThey are right about the student prices.\n\nThank you for using Next Train.',
+}, 'GP', quoted.thread);
+ok(pollDraft.action === 'draft', 'a poll reply still drafts');
+const pollLines = pollDraft.reply.split('\n');
+ok(pollLines[0] === 'Hi there,', 'poll thank-you keeps the greeting');
+ok(pollLines[3] === 'Thank you for replying to our poll.', 'poll thank-you is its own line under the greeting');
 const deskOk = applyDraftGuard({
     action: 'draft',
     reply: 'Please call the Customer Service desk on 031 813 0456 and ask for a reference number.',

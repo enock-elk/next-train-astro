@@ -13974,7 +13974,7 @@ const Admin = {
             });
             const data = await res.json().catch(() => ({}));
             if (!res.ok) throw new Error(data.error || 'Could not draft a reply.');
-            const guarded = api.applyDraftGuard(data, payload.region);
+            const guarded = api.applyDraftGuard(data, payload.region, payload.thread);
             const html = api.composerHtmlFromResult(guarded);
             if (!html) {
                 Admin.showSuggestHalt(guarded);

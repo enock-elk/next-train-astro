@@ -92,8 +92,9 @@ const label = regionLabel || station?.region || '';
 <script>
   function bindSeoStationMap() {
     const overlay = document.getElementById('seo-station-map-lightbox');
-    const frame = document.getElementById('seo-station-map-frame');
-    if (!overlay || !frame || overlay.dataset.bound === '1') return;
+    const frameEl = document.getElementById('seo-station-map-frame');
+    if (!overlay || !(frameEl instanceof HTMLIFrameElement) || overlay.dataset.bound === '1') return;
+    const frame = frameEl;
     overlay.dataset.bound = '1';
 
     let open = false;

@@ -147,6 +147,21 @@ const week = buildOperatorBrief({
 });
 ok(week.cards.find((card) => card.id === 'fails')?.title.startsWith('1 '), 'routing rows older than a week stay out');
 ok(!week.digest.crashes.recent.some((row) => /old boom/.test(row.error)), 'crash rows older than a week stay out');
+const keyed = buildOperatorBrief({
+    now: thursdayEvening,
+    crashes: {
+        bb_123: {
+            error: 'bindBlurBackdropDismiss is not defined',
+            appVersion: 'V10_11.06.3',
+            timestamp: thursdayEvening,
+            blobPath: 'sys_logs/blackbox/bb_123',
+            stack: 'ReferenceError: bindBlurBackdropDismiss is not defined',
+        },
+    },
+});
+ok(keyed.crashes[0]?.id === 'bb_123', 'a crash keeps its database key');
+ok(keyed.crashes[0]?.version === 'V10_11.06.3', 'a crash keeps the build on the card');
+ok(briefReportHtml(keyed).includes('data-crash-id="bb_123"'), 'Explain this crash asks for that log');
 
 const report = briefReportHtml(brief);
 ok(report.includes('What this means'), 'the report has a written note');

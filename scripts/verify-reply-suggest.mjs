@@ -26,6 +26,7 @@ import {
     unansweredCommuterMessages,
     suggestDraftMessageId,
     emailOutreachText,
+    emailOutreachBody,
     mailtoReplyUrl,
     normalizeSuggestRegion,
     outreachPlainText,
@@ -396,8 +397,9 @@ ok(suggestBody.includes('composerHtmlFromResult'), 'suggest fills the composer f
 const sent = outreachPlainText('Hi there<br><br><span style="color: #9ca3af; font-style: italic;">- Enock</span>');
 ok(sent === 'Hi there\n\n- Enock', 'outreach text keeps the same reply and sign-off');
 const rich = '<div>Hi there,</div><div>Thanks for sharing your thoughts.</div><br><br><span style="color: #9ca3af; font-style: italic;">- Enock</span>';
-ok(outreachPlainText(rich) === 'Hi there,\nThanks for sharing your thoughts.\n\n- Enock', 'outreach keeps paragraphs and the sign-off');
-ok(emailOutreachText(rich) === 'Hi there,\nThanks for sharing your thoughts.', 'email text keeps paragraphs and drops the sign-off');
+ok(outreachPlainText(rich) === 'Hi there,\n\nThanks for sharing your thoughts.\n\n- Enock', 'outreach keeps paragraphs and the sign-off');
+ok(emailOutreachText(rich) === 'Hi there,\n\nThanks for sharing your thoughts.', 'email text keeps paragraphs and drops the sign-off');
+ok(emailOutreachBody(rich) === 'Hi there,<br><br>Thanks for sharing your thoughts.', 'Zoho email body uses br for the paragraph gaps');
 const wa = whatsappReplyUrl('27821234567', sent);
 const waText = decodeURIComponent(wa.split('?text=')[1]);
 ok(wa.startsWith('https://wa.me/27821234567?text='), 'WhatsApp opens on the number they gave');
@@ -406,7 +408,7 @@ ok(waText.endsWith(sent), 'WhatsApp body is the same reply under the title');
 const mail = mailtoReplyUrl('rider@example.com', rich);
 ok(mail.startsWith('mailto:rider@example.com?'), 'email opens to their address');
 ok(decodeURIComponent(mail.split('subject=')[1].split('&')[0]) === 'Metrorail Next Train | Feedback Response', 'email subject is the feedback response line');
-ok(decodeURIComponent(mail.split('body=')[1]).replace(/\r\n/g, '\n') === 'Hi there,\nThanks for sharing your thoughts.', 'email body keeps paragraphs and drops the sign-off');
+ok(decodeURIComponent(mail.split('body=')[1]) === 'Hi there,<br><br>Thanks for sharing your thoughts.', 'email body keeps paragraphs as br tags and drops the sign-off');
 ok(!decodeURIComponent(mail.split('body=')[1]).includes('- Enock'), 'email body has no operator sign-off');
 const weekAgo = Date.parse('2026-10-01T00:00:00Z');
 const today = Date.parse('2026-10-15T00:00:00Z');

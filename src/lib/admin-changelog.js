@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_11.06.7': [
+        'Email outreach puts paragraph breaks in as br tags, because Zoho Mail compose turns mailto newlines into one wall of text. Explain this crash uses the database key for that log, and when the written note is down it still reads the error, the preview, and the stack. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_11.06.6': [
         'Campus Wi-Fi: the schedule probe checks cache.nexttrain.co.za, workers.dev, Firebase, and jsDelivr together. A cache host that does not answer within 1.2s is skipped and Firebase is next. Route cache.nexttrain.co.za at the existing nexttrain-cache worker when you can. Qualified untimed sheet stops get the same station page, with the corridor and a no-times line, and they join the sitemap. A later dump that adds clocks keeps the slug. Admin exclusions can mark a train provisional (not a ban). A sheet cell 50%, PROVISIONAL, or NOT_GUARANTEED sets the same flag. Nothing is painted yet. Monte Vista stays on the sheet. No commuter What\'s New. forceShow stays false.',
     ],

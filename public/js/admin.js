@@ -5556,7 +5556,12 @@ const Admin = {
             const read = window.ntOperatorBrief?.localCrashReading;
             if (note) {
                 note.textContent = typeof read === 'function'
-                    ? read({ error: row.error || row.preview || '', appVersion: row.appVersion || '' })
+                    ? read({
+                        error: row.error || '',
+                        preview: preview || row.preview || '',
+                        stack: stack || row.stack || row.raw || '',
+                        appVersion: row.appVersion || row.version || '',
+                    })
                     : 'A reading is not available for this log yet. The line above is the crash.';
             }
         } finally {

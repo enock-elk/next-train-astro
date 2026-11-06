@@ -550,13 +550,23 @@ export function summarizeFares(votes) {
     return { sample: list.length, agree, disagree, widest, types };
 }
 
+function crashEntries(crashes) {
+    if (Array.isArray(crashes)) {
+        return crashes.filter((row) => row && typeof row === 'object').map((row, index) => [String(row.id || index), row]);
+    }
+    if (crashes && typeof crashes === 'object') {
+        return Object.entries(crashes).filter(([, row]) => row && typeof row === 'object');
+    }
+    return [];
+}
+
 export function summarizeCrashes(crashes, now = Date.now()) {
-    const list = asList(crashes)
-        .map((row) => ({
-            id: String(row.id || ''),
-            error: scrubOperatorText(row.error || row.preview || 'Crash report', 180),
-            version: String(row.appVersion || ''),
-            at: Number(row.timestamp || row.exportedAt || 0),
+    const list = crashEntries(crashes)
+        .map(([key, row]) => ({
+            id: String(row.id || key || ''),
+            error: scrubOperatorText(row.error || row.message || row.preview || row.kind || 'Crash report', 180),
+            version: String(row.appVersion || row.version || ''),
+            at: Number(row.timestamp || row.exportedAt || row.at || 0),
         }))
         .filter((row) => (row.id || row.error) && withinWeek(row, now))
         .sort((a, b) => b.at - a.at)
@@ -1033,18 +1043,27 @@ export function buildBriefRequest(digest) {
 
 /** A reading from the crash line itself, when the written note is not available. */
 export function localCrashReading(crash) {
-    const error = scrubOperatorText(crash?.error || crash?.preview || '', 400);
     const version = String(crash?.appVersion || crash?.version || '').trim();
     const versionBit = version ? ` This card is from ${version}.` : '';
-    const missing = error.match(/does not provide an export named ['"]([^'"]+)['"]/);
+    const raw = [crash?.error, crash?.preview, crash?.stack, crash?.raw]
+        .map((part) => String(part || ''))
+        .filter(Boolean)
+        .join('\n');
+    const missing = raw.match(/does not provide an export named ['"]([^'"]+)['"]/);
     if (missing) {
         return `The page asked for ${missing[1]}, and the module that loaded does not export it. That is a phone still holding an older page while a newer file arrived, or the other way around.${versionBit} The line above is the crash. A written note was not available.`;
     }
-    const undef = error.match(/([A-Za-z_$][\w$]*) is not defined/);
+    const undef = raw.match(/([A-Za-z_$][\w$]*) is not defined/);
     if (undef) {
         return `${undef[1]} was called, and this build does not define it.${versionBit} The line above is the crash. A written note was not available.`;
     }
-    if (error) return `${error}${versionBit} A written note was not available, so this is the log itself.`;
+    const line = scrubOperatorText(
+        String(crash?.error || crash?.preview || '').trim() || raw,
+        400,
+    );
+    if (line && !/^crash report$/i.test(line)) {
+        return `${line}${versionBit} A written note was not available, so this is the log itself.`;
+    }
     return 'A reading is not available for this log yet. The line above is the crash.';
 }
 

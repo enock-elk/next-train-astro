@@ -3,7 +3,7 @@
  */
 import { DYNAMIC_BASE_URL, REPLY_WORKER_URL, ROUTES, withBase } from './config.js';
 import { noticeQuotePlain } from './feedback-quote.js';
-import { hydrateLinkPreviews, linkPreviewMarkup } from './link-preview.js';
+import { fetchLinkPreview, hydrateLinkPreviews, linkPreviewMarkup } from './link-preview.js';
 import { safeStorage, escapeHTML, repairMojibake, formatAppTime, formatThreadDateLabel } from './utils.js';
 import { prepareRichHtml, injectRichTextStyles, linkedPlainHtml } from './rich-text.js';
 import { isPublicPreviewUrl } from './link-preview.js';
@@ -272,12 +272,22 @@ function bindAlertVideoPlayers(root) {
         if (img.dataset.ntVideoPosterBound === '1') return;
         img.dataset.ntVideoPosterBound = '1';
         const page = img.getAttribute('data-alert-video-page') || '';
-        if (alertVideoKind(page) !== 'vimeo') return;
-        const endpoint = `https://vimeo.com/api/oembed.json?url=${encodeURIComponent(page)}`;
-        fetch(endpoint).then((res) => (res.ok ? res.json() : null)).then((data) => {
-            const thumb = data && typeof data.thumbnail_url === 'string' ? data.thumbnail_url : '';
-            if (thumb && isPublicPreviewUrl(thumb)) img.src = thumb;
-        }).catch(() => {});
+        const kind = alertVideoKind(page);
+        const paint = (thumb) => {
+            if (thumb && isPublicPreviewUrl(thumb) && img.isConnected) img.src = thumb;
+        };
+        if (kind === 'vimeo') {
+            const endpoint = `https://vimeo.com/api/oembed.json?url=${encodeURIComponent(page)}`;
+            fetch(endpoint).then((res) => (res.ok ? res.json() : null)).then((data) => {
+                const thumb = data && typeof data.thumbnail_url === 'string' ? data.thumbnail_url : '';
+                if (thumb) paint(thumb);
+                else fetchLinkPreview(page, REPLY_WORKER_URL).then((preview) => paint(preview?.image));
+            }).catch(() => {
+                fetchLinkPreview(page, REPLY_WORKER_URL).then((preview) => paint(preview?.image));
+            });
+            return;
+        }
+        fetchLinkPreview(page, REPLY_WORKER_URL).then((preview) => paint(preview?.image)).catch(() => {});
     });
     root.querySelectorAll('[data-alert-video-play]').forEach((btn) => {
         if (btn.dataset.ntVideoBound === '1') return;
@@ -293,6 +303,10 @@ function bindAlertVideoPlayers(root) {
                 return;
             }
             const kind = host.getAttribute('data-alert-video-kind') || alertVideoKind(src);
+            if (kind === 'page') {
+                window.open(src, '_blank', 'noopener');
+                return;
+            }
             if (kind === 'youtube' || kind === 'vimeo') {
                 const embed = alertVideoEmbedUrl(src);
                 if (!embed || host.querySelector('iframe')) return;

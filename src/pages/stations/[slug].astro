@@ -35,7 +35,7 @@ if (!station) {
 }
 
 const corridors = buildStationCorridorTimetables(station);
-const indexable = isStationIndexable(station.slug);
+const indexable = isStationIndexable(station.slug) || !!station.listedWithoutTimes;
 const province = regionName(station.region);
 const regionEntry = listSeoRegions().find((r) => r.region === station.region);
 const title = stationDocumentTitle(station);

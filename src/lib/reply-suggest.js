@@ -1128,11 +1128,11 @@ export function composerHtmlFromResult(result) {
 const OUTREACH_BODY_MAX = 3500;
 const EMAIL_SIGNOFF_RE = /(?:\n[ \t]*)?[-–—]\s*(?:Enock|Thandeka|Admin)\s*$/i;
 
-/** Keep paragraph breaks from the composer. Block tags become lines. */
+/** Keep paragraph breaks from the composer. A block is a paragraph, not a soft wrap. */
 function htmlToPlainBlocks(value) {
     return String(value || '')
         .replace(/<br\s*\/?>/gi, '\n')
-        .replace(/<\/(p|div|h[1-6]|li|tr|blockquote)>/gi, '\n')
+        .replace(/<\/(p|div|h[1-6]|li|tr|blockquote)>/gi, '\n\n')
         .replace(/<li(\s[^>]*)?>/gi, '\n- ')
         .replace(/<[^>]+>/g, ' ')
         .replace(/&nbsp;/gi, ' ')
@@ -1153,9 +1153,17 @@ export function outreachPlainText(value) {
     return htmlToPlainBlocks(value);
 }
 
-/** Email body. Paragraphs stay. The operator sign-off stays off, because the mailbox already signs it. */
+/**
+ * Email body. Paragraphs stay. The operator sign-off stays off, because the mailbox already signs it.
+ * Zoho Mail's compose turns mailto newlines into spaces. It does render a <br> in that same body.
+ */
 export function emailOutreachText(value) {
     return outreachPlainText(value).replace(EMAIL_SIGNOFF_RE, '').replace(/\n{3,}/g, '\n\n').trim();
+}
+
+/** Zoho Mail compose collapses mailto newlines into spaces and renders a <br> as a line break. */
+export function emailOutreachBody(value) {
+    return emailOutreachText(value).replace(/\n/g, '<br>');
 }
 
 export function whatsappPrefill(body) {
@@ -1178,7 +1186,7 @@ export function whatsappReplyUrl(phone, body) {
 export function mailtoReplyUrl(email, body) {
     const addr = String(email || '').trim();
     if (!addr.includes('@') || /[\s<>"']/.test(addr)) return '';
-    const text = emailOutreachText(body).replace(/\n/g, '\r\n').slice(0, OUTREACH_BODY_MAX);
+    const text = emailOutreachBody(body).slice(0, OUTREACH_BODY_MAX);
     if (!text) return `mailto:${addr}`;
     return `mailto:${addr}?subject=${encodeURIComponent(EMAIL_SUBJECT)}&body=${encodeURIComponent(text)}`;
 }

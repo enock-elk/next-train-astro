@@ -1976,6 +1976,10 @@ async function postCommuterInboxCopy({ text, feedbackType, feedbackId, attachmen
         timestamp: Date.now(),
         type: feedbackType || 'general',
         read: true,
+        appVersion: APP_VERSION,
+        routeId: $currentRouteId.get() || 'none',
+        diagnostics: feedbackDiagnostics(),
+        ...getBoardStationContext(),
         ...chatScopeFields(),
     };
     if (feedbackId) payload.feedbackId = String(feedbackId);
@@ -3193,6 +3197,7 @@ export function initHub() {
                         attachmentsHeld: hasFile,
                         quotedText: String(document.getElementById('feedback-reply-context')?.dataset.quotedText || '').trim() || null,
                         diagnostics: feedbackDiagnostics(),
+                        ...getBoardStationContext(),
                         ...chatScopeFields(),
                     },
                 },
@@ -3239,6 +3244,7 @@ export function initHub() {
                 deviceId: getThreadDeviceId() || 'unknown',
                 isPWA: window.matchMedia('(display-mode: standalone)').matches || !!window.navigator.standalone,
                 diagnostics: feedbackDiagnostics(),
+                ...getBoardStationContext(),
                 ...chatScopeFields(),
             };
             const authParam = authToken ? `?auth=${authToken}` : '';

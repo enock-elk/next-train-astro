@@ -10272,6 +10272,9 @@ const Admin = {
                     if (hit.msg.mergedIntoId) item.mergedIntoId = hit.msg.mergedIntoId;
                     if (!item.appVersion && hit.msg.appVersion) item.appVersion = hit.msg.appVersion;
                     if (Admin.isBlankInboxRoute(item.routeId) && hit.msg.routeId) item.routeId = hit.msg.routeId;
+                    if (!String(item.station || '').trim() && hit.msg.station) item.station = hit.msg.station;
+                    if (item.stationAutoLocated == null && hit.msg.stationAutoLocated != null) item.stationAutoLocated = hit.msg.stationAutoLocated;
+                    if (!item.diagnostics && hit.msg.diagnostics) item.diagnostics = hit.msg.diagnostics;
                     if (!item.attachmentUrl && hit.msg.attachmentUrl) item.attachmentUrl = hit.msg.attachmentUrl;
                     if (!item.attachmentUrls && hit.msg.attachmentUrls) item.attachmentUrls = hit.msg.attachmentUrls;
                     usedInboxKeys.add(`${did}/${hit.msgKey}`);
@@ -10316,6 +10319,9 @@ const Admin = {
                                 feedbackId: msg.feedbackId,
                                 appVersion: msg.appVersion,
                                 routeId: msg.routeId,
+                                station: msg.station,
+                                stationAutoLocated: msg.stationAutoLocated,
+                                diagnostics: msg.diagnostics,
                                 attachmentUrl: msg.attachmentUrl,
                                 attachmentUrls: msg.attachmentUrls,
                                 fromName: msg.fromName,

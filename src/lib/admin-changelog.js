@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_11.07.18': [
+        'Feedback Hub messages store the station selected on the Next Train home board. Build notes then read Pretoria ↔ Pienaarspoort · Pretoria (Auto), or (man) when the station was picked from the list. A message already saved without a station stays on the route line. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_11.07.17': [
         'Route sheets: Sunday and Special are per line. A _Sun tab is used on Sundays when that route is ticked. A _Special tab is used on the dates you list, or every day if the date box is empty. Other routes stay on their normal day. A ticked route whose tab has no times keeps the normal sheet. Spreadsheet sync picks up tabs ending in _Sun or _Special after that region Apps Script is updated. Deploy firebase-database.rules.json so commuters can read config/route_sheets. No commuter What\'s New. forceShow stays false.',
     ],

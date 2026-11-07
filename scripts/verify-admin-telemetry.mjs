@@ -200,7 +200,14 @@ ok(adminJs.includes('People today (Analytics):'), 'Analytics people stay beside 
 ok(!adminJs.includes('No region on the hit'), 'regional modal no longer shows an overlapping unset bucket');
 ok(adminJs.includes('hideRegionNote'), 'an exact Worker split clears the overlapping-region warning');
 ok(adminJs.includes('previous overlapping region report'), 'a legacy Worker payload still explains the old cards');
-ok(adminJs.includes("stationChoiceLabel") || adminJs.includes("(${autoFlag ? 'auto' : 'man'})"), 'build notes name the station as (man) or (auto)');
+ok(adminJs.includes("stationChoiceLabel") || adminJs.includes("(${autoFlag ? 'Auto' : 'man'})"), 'build notes name the station as (man) or (auto)');
+{
+    const hubJs = readFileSync(join(ROOT, 'src/lib/hub.js'), 'utf8');
+    const stationSpreads = hubJs.split('...getBoardStationContext()').length - 1;
+    ok(stationSpreads >= 5, 'feedback form, Feedback Hub, and the inbox copy store the home-board station');
+    ok(adminJs.includes('item.station = hit.msg.station'), 'an inbox copy can fill a feedback row that has no station');
+    ok(adminJs.includes('station: msg.station'), 'an inbox-only message keeps the home-board station');
+}
 ok(adminJs.includes("data.metric !== 'reportingDevices'"), 'old overlapping Worker payloads are not labelled as an exact split');
 ok(workerJs.includes('readRegionalSplit'), 'worker reads the exact regional split');
 ok(workerJs.includes("pathname === '/region-presence'"), 'worker accepts the region presence beacon');

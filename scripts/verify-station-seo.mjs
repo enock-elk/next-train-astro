@@ -4,6 +4,7 @@
  */
 import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
+import { canonicalStationPin, STATION_PINS } from '../src/lib/station-pins.js';
 import {
   buildStationAbout,
   buildStationCorridorTimetables,
@@ -169,6 +170,27 @@ ok(mapApp.includes('!stationFocusQuery.station'), 'station focus skips embed cor
 ok(mapApp.includes('stationFocusZoom'), 'station focus uses a street-level zoom');
 ok(!mapApp.includes("Number(q.get('lat'))"), 'missing lat query is not coerced to 0');
 ok(mapApp.includes('Gulf of Guinea'), 'map-app records why absent lat/lon must stay null');
+ok(mapApp.includes('Station pins stay on the config dictionary'), 'map markers use the station config pin ahead of a moved sheet coordinate');
+{
+  const block = mapApp.match(/const STATION_COORDINATES = \{([\s\S]*?)\n\s*\};/);
+  const fromMap = {};
+  for (const m of block[1].matchAll(/"([^"]+)":\s*\[([-\d.]+),\s*([-\d.]+)\]/g)) {
+    fromMap[m[1]] = [Number(m[2]), Number(m[3])];
+  }
+  ok(Object.keys(fromMap).length === Object.keys(STATION_PINS).length, 'station-pins.js has every map config pin');
+  ok(Object.entries(fromMap).every(([name, pair]) => {
+    const pin = STATION_PINS[name];
+    return pin && pin[0] === pair[0] && pin[1] === pair[1];
+  }), 'station-pins.js matches STATION_COORDINATES');
+  for (const [slug, label] of [['montclair', 'Montclair'], ['bellville', 'Bellville'], ['athlone', 'Athlone'], ['amanzimtoti', 'Amanzimtoti']]) {
+    const station = getSeoStationBySlug(slug);
+    const pin = canonicalStationPin(label);
+    ok(station?.coords && pin
+      && Math.abs(station.coords.lat - pin.lat) < 1e-6
+      && Math.abs(station.coords.lon - pin.lon) < 1e-6,
+    `${label} SEO coordinate is the station config pin`);
+  }
+}
 
 const mapPage = readFileSync(new URL('../src/pages/map.astro', import.meta.url), 'utf8');
 ok(mapPage.includes("Loading map"), 'station-focus loader says Loading map');

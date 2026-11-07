@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_11.07.5': [
+        'Operator track patch is the baked line for Durban to Winklespruit. It starts at Durban Yard. The export began 631 m north of that pin, so the stored line starts at the yard and keeps the rest of the trace. Station pins that had moved off the map config are back on that pin, on the map, on SEO station pages, and on the along-rail distance. Rail lines other than Winklespruit are unchanged. Duff\'s Road is unchanged. SEO Durban to Winklespruit is 34.6 km on the new line. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_11.07.4': [
         'Operator track patches are the baked lines for Durban to Cato Ridge, Eerste River to Du Toit, and Cape Town to Kraaifontein. Cato Ridge now starts at Durban Yard. The export began 564 m north of that pin, so the stored line starts at the yard and keeps the rest of the trace through Cato Ridge. Duff\'s Road is unchanged. No commuter What\'s New. forceShow stays false.',
     ],

@@ -1824,18 +1824,21 @@
                         if (sName === 'VARIANT') continue;
 
                         let lat = null, lon = null;
-                        const cVal = row[coordKey];
-                        if (cVal) {
-                            const parts = String(cVal).split(',').map(s => parseFloat(s.trim()));
-                            if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) { 
-                                lat = parts[0]; lon = parts[1]; 
+                        // Station pins stay on the config dictionary. A sheet
+                        // COORDINATES cell that was moved off that pin does not
+                        // move the marker. The rail line is painted separately.
+                        const dictPin = STATION_COORDINATES[sName];
+                        if (dictPin) {
+                            lat = dictPin[0];
+                            lon = dictPin[1];
+                        } else {
+                            const cVal = row[coordKey];
+                            if (cVal) {
+                                const parts = String(cVal).split(',').map(s => parseFloat(s.trim()));
+                                if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
+                                    lat = parts[0]; lon = parts[1];
+                                }
                             }
-                        }
-
-                        // Rescue missing coordinates
-                        if (lat === null && STATION_COORDINATES[sName]) {
-                            lat = STATION_COORDINATES[sName][0];
-                            lon = STATION_COORDINATES[sName][1];
                         }
                         if (lat === null && globalStations[sName]) {
                             lat = globalStations[sName].lat;

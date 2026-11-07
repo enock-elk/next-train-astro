@@ -1,28 +1,28 @@
 {
   "branch": "map-gold",
-  "frozenAt": "2d844c2a47f243cfb4cb21be76975325164efc57",
+  "frozenAt": "79cdf6d3c3c0b386523dc8a5df189606527db4fb",
   "version": "V9_09.20.11",
-  "note": "Gold snapshot: operator patches for kzn-catoridge (Durban Yard to Cato Ridge), eerst-dtoit, and ct-kraai. The Cato Ridge export started 564 m north of Durban Yard; the bake begins at the yard vertex and keeps the rest of that trace. Duff's Road, GP, EC, map runtime, and advert handling are unchanged. frozenAt is the geometry commit. Fast-forward map-gold to the commit that records this lockfile. Never force-push map-gold.",
+  "note": "Gold snapshot: operator patch for kzn-winklespruit (Durban Yard to Winklespruit). The export started 631 m north of Durban Yard; the bake begins at the yard vertex and keeps the rest of that trace. Station pins that had left STATION_COORDINATES are back on that dictionary. Map markers prefer the dictionary over a moved sheet coordinate. Duff's Road, EC rail geometry, and advert handling are unchanged. frozenAt is the map-runtime commit. Fast-forward map-gold to the commit that records this lockfile. Never force-push map-gold.",
   "files": {
     "public/tracks/rail-tracks-EC.geojson": {
       "md5": "43409bfd05405205e596f0d03345ab18",
       "sha256": "ba0ae80e8c6955ae99288ac5c06e85ea3075383f13f813f40375b78395812108"
     },
     "public/tracks/rail-tracks-GP.geojson": {
-      "md5": "b002d127081715cb4121c663e2509f9f",
-      "sha256": "498efff3f9ee0aa0a6fcf838a891b9444c52148d778a82c24b51e432c5ec512c"
+      "md5": "0a968fa6640c6aeccda356fe89449c77",
+      "sha256": "46e1fefe08f4505cb95c8323f912a89f7796b023c6ca84cfe82af1b1b1ded6df"
     },
     "public/tracks/rail-tracks-KZN.geojson": {
-      "md5": "ee323fff4b496e64dacbf9c1f872189a",
-      "sha256": "31ca36ec2a9c9174de3c7f1e37e84bc4f763258400d2f36a1e55d22737053ce4"
+      "md5": "9131d503e65e5c37d330b644c24306db",
+      "sha256": "9eab0adf3ccfa3fbc6fee1d44423f216cfa1635783132b8293492db0bdbed9e9"
     },
     "public/tracks/rail-tracks-WC.geojson": {
-      "md5": "955015a89d4cf35acebc1581694bb0a2",
-      "sha256": "6a8fafebf4024a81a5b010917999d9917cbd534a9ae9ba1022549b1de4211a76"
+      "md5": "2397b16ece1046232fac56e1e5640c9e",
+      "sha256": "4baba3b7d507f1c3069f26126ddcd931fd94a5425edfb84ce42985a78741ba99"
     },
     "public/js/map-app.js": {
-      "md5": "590f84a4b8d15ba41e9d98fa0a4e49d4",
-      "sha256": "2036b35e382b3cb4c64f151dd2f69e5ab2e0867210b5320e7bc4779d96c0f6e5"
+      "md5": "7ce5cf9f05bd8413551fe37a8c0d260d",
+      "sha256": "83921b78048b8199763a055c327c217c116125526322473cf32c6016cfe28eb5"
     },
     "src/pages/map.astro": {
       "md5": "f02b01877f1468b541262a300c53bfae",

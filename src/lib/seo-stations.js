@@ -22,6 +22,7 @@ import {
 } from './seo-timetable.js';
 import { isStationIndexable } from './seo-station-allowlist.js';
 import { buildBreadcrumbList, clipMetaDescription } from './seo-meta.js';
+import { canonicalStationPin } from './station-pins.js';
 
 const IGNORE_KEYS = new Set(['STATION', 'COORDINATES', 'KM_MARK', 'row_index']);
 
@@ -75,6 +76,8 @@ function stationNameFromRow(row) {
 }
 
 function parseCoords(row) {
+  const pin = canonicalStationPin(row?.STATION);
+  if (pin) return pin;
   const raw = String(row?.COORDINATES || '').trim();
   if (!raw) return null;
   const parts = raw.split(/[,/\s]+/).map((p) => Number(p)).filter((n) => Number.isFinite(n));

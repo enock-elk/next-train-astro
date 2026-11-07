@@ -24,6 +24,7 @@
  */
 import { ROUTES, FARE_CONFIG } from './config.js';
 import { normalizeStationName, flattenPublicHolidays } from './utils.js';
+import { canonicalStationPin } from './station-pins.js';
 
 /** Official PRASA max km (inclusive) for Z1–Z3; above Z3 → Z4. */
 export const DEFAULT_ZONE_KM_BANDS = {
@@ -245,6 +246,25 @@ export function extractSheetUnionChain(schedule) {
     return uniqueRowChain(schedule);
 }
 
+function pinStop(stop) {
+    const pin = canonicalStationPin(stop?.name);
+    if (!pin || !stop) return stop;
+    stop.lat = pin.lat;
+    stop.lon = pin.lon;
+    return stop;
+}
+
+function applyCanonicalPins(lookup) {
+    if (!lookup) return lookup;
+    for (const stop of lookup.values()) pinStop(stop);
+    return lookup;
+}
+
+function pinChain(chain) {
+    if (Array.isArray(chain)) chain.forEach(pinStop);
+    return chain;
+}
+
 function coordLookupFromSchedule(schedule) {
     const lookup = new Map();
     for (const stop of uniqueRowChain(schedule)) {
@@ -382,6 +402,7 @@ export function resolveStationChain(schedule, opts = {}) {
     const lookup = coordLookupFromSchedule(schedule);
     for (const feature of opts.bakedFeatures || []) mergeBakedCoordLookup(lookup, feature);
     if (opts.bakedFeature) mergeBakedCoordLookup(lookup, opts.bakedFeature);
+    applyCanonicalPins(lookup);
 
     const mapCorridors = [];
     if (Array.isArray(opts.mapCorridors)) {
@@ -404,7 +425,7 @@ export function resolveStationChain(schedule, opts = {}) {
         lookup,
         opts.mapCorridor,
     );
-    if (mapChain?.length >= 2) return { chain: mapChain, source: 'map' };
+    if (mapChain?.length >= 2) return { chain: pinChain(mapChain), source: 'map' };
 
     const timed = extractTimedTrainChains(schedule);
     const slices = [];
@@ -424,14 +445,14 @@ export function resolveStationChain(schedule, opts = {}) {
             return { s, km: measureStationChain(s).pathKm, jumps };
         }).filter((x) => x.km != null && x.km > 0);
         scored.sort((a, b) => (a.jumps - b.jumps) || (a.km - b.km));
-        if (scored.length) return { chain: scored[Math.floor(scored.length / 2)].s, source: 'stops' };
-        return { chain: slices[0], source: 'stops' };
+        if (scored.length) return { chain: pinChain(scored[Math.floor(scored.length / 2)].s), source: 'stops' };
+        return { chain: pinChain(slices[0]), source: 'stops' };
     }
     if (destA && destB) {
         const sliced = sliceChainBetween(uniqueRowChain(schedule), destA, destB);
-        if (sliced?.length >= 2) return { chain: sliced, source: 'sheet' };
+        if (sliced?.length >= 2) return { chain: pinChain(sliced), source: 'sheet' };
     }
-    return { chain: uniqueRowChain(schedule), source: 'sheet' };
+    return { chain: pinChain(uniqueRowChain(schedule)), source: 'sheet' };
 }
 
 function flattenBakedLatLngs(feature) {

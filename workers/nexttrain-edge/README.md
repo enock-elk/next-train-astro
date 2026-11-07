@@ -1,8 +1,8 @@
 # nexttrain-edge
 
-Sets long `Cache-Control` on hashed `/_astro/*` chunks and `/icons/*` for `nexttrain.co.za`. GitHub Pages otherwise sends `max-age=600`, which PageSpeed flags as "Use efficient cache lifetimes".
+`/sw.js` and `/app-version.json` are on this Worker with **no-store**. HTML is **not** on these routes.
 
-`/sw.js` and `/app-version.json` are on this Worker with **no-store**. HTML is **not** on these routes. Admin NUKE still:
+Hashed `/_astro/*` and `/icons/*` are **not** Worker routes. Each of those files was one Workers request, and that route was most of the account's 100,000 request day. Long `Cache-Control` for them lives in `zone-rules.json` (Cache Rules + header transforms). Until those rules are applied, GitHub Pages sends `max-age=600`. Observability is off on this Worker. Admin NUKE still:
 
 1. Writes `config/killswitch.json` (online clients wipe SW + Cache Storage)
 2. Purges Cloudflare (`POST /admin/purge-cloudflare-cache`)
@@ -16,4 +16,4 @@ npx wrangler deploy
 
 Requires a Cloudflare account that can attach routes on the `nexttrain.co.za` zone.
 
-`zone-rules.json` and `scripts/apply-nexttrain-edge-cache-rules.mjs` are a later Cache Rules cutover. **Do not run the apply script** while this Worker is attached — the two would fight.
+`zone-rules.json` and `scripts/apply-nexttrain-edge-cache-rules.mjs` set the long browser cache without putting `/_astro/` or `/icons/` back on a Worker. The script leaves the `sw.js` and `app-version.json` routes in place.

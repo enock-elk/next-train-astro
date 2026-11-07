@@ -3,9 +3,9 @@
  * no-store for the update probes.
  *
  * GitHub Pages sends max-age=600 (the PSI "efficient cache lifetimes" hit).
- * This Worker sits on nexttrain.co.za/_astro/* and /icons/* (long TTL) plus
- * /app-version.json and /sw.js (no-store so PWA/TWA Check for Updates and
- * NUKE are not stuck on a 10-minute origin cache). HTML is not routed here.
+ * Routes are only /app-version.json and /sw.js (no-store so PWA/TWA Check
+ * for Updates and NUKE are not stuck on a 10-minute origin cache).
+ * /_astro/* and /icons/* are not routed here. HTML is not routed here.
  */
 export default {
   async fetch(request) {

@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_11.07.4': [
+        'Operator track patches are the baked lines for Durban to Cato Ridge, Eerste River to Du Toit, and Cape Town to Kraaifontein. Cato Ridge now starts at Durban Yard. The export began 564 m north of that pin, so the stored line starts at the yard and keeps the rest of the trace through Cato Ridge. Duff\'s Road is unchanged. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_11.07.3': [
         'nexttrain-edge no longer runs on /_astro or /icons. Those files were most of the 100,000 Worker requests a day. sw.js and app-version.json stay on the Worker with no-store. Observability is off on that Worker. Hashed-file Cache-Control moves to the zone Cache Rules. Until those rules are applied, GitHub Pages sends a 10-minute cache. No commuter What\'s New. forceShow stays false.',
     ],

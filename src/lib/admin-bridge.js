@@ -14,6 +14,7 @@ import {
 } from './config.js';
 import { safeStorage, escapeHTML, formatAppDate, formatAppTime, formatThreadDateLabel, normalizeStationName, flattenPublicHolidays, buildGridOrderWriteRecord, viaCodesFromGridOrderRecord } from './utils.js';
 import { noticeQuotePlain, parseFeedbackAlertQuote } from './feedback-quote.js';
+import { extraSheetKey, suggestedSheetTab, normalizeRouteSheetDates } from './route-sheets.js';
 import {
     applyDraftGuard,
     buildSuggestPayload,
@@ -169,6 +170,9 @@ export function exposeAdminGlobals() {
     window.FARE_CONFIG = FARE_CONFIG;
     window.withBase = withBase;
     window.SPECIAL_DATES = SPECIAL_DATES;
+    window.extraSheetKey = extraSheetKey;
+    window.suggestedSheetTab = suggestedSheetTab;
+    window.normalizeRouteSheetDates = normalizeRouteSheetDates;
     window.HOLIDAY_NAMES = HOLIDAY_NAMES;
     window.SATURDAY_PLACEHOLDER_ROUTES = SATURDAY_PLACEHOLDER_ROUTES;
     window.normalizeStationName = normalizeStationName;

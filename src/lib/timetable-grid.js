@@ -7,6 +7,7 @@ import { $currentRouteId, $userRegion, $schedules, $fullDatabase, $globalExclusi
 import { loadAllSchedules, ensureRoutePinnedForRegion, processRouteDataFromDBAsync } from './logic.js';
 import { showToast, triggerHaptic, openSmoothModal, closeSmoothModal, switchTab, toggleDropdownScrim, yieldToPaint } from './ui.js';
 import { simulateNextActiveService, routeHasSaturdayService, scheduleHasService, openTrainMarkSheet } from './live-board.js';
+import { effectiveRouteSheetMode } from './route-sheets.js';
 import {
     buildRouteShareUrl,
     parseRouteDeepLinkParams,
@@ -601,8 +602,16 @@ export async function renderFullScheduleGrid(direction = null, dayOverride = nul
         } else if (currentDayType === 'public_holiday') {
             const slot = scheduleCacheSlot('public_holiday', route.region, direction.toLowerCase());
             hasServiceToday = scheduleHasService(scheds[slot]) || routeHasSaturdayService(scheds);
-        } else if (currentDayType !== 'sunday') {
-            const testKey = scheduleCacheSlot(currentDayType, route.region, direction.toLowerCase());
+        } else if (currentDayType === 'sunday') {
+            const mode = effectiveRouteSheetMode(route, 'sunday');
+            if (mode === 'sunday' || mode === 'special') {
+                const dir = direction.toLowerCase();
+                hasServiceToday = scheduleHasService(scheds[`${mode}_to_${dir}`])
+                    || scheduleHasService(scheds[`${mode}_to_a`])
+                    || scheduleHasService(scheds[`${mode}_to_b`]);
+            }
+        } else {
+            const testKey = scheduleCacheSlot(currentDayType, route.region, direction.toLowerCase(), route);
             hasServiceToday = scheduleHasService(scheds[testKey]);
         }
         if (!hasServiceToday) {
@@ -626,11 +635,19 @@ export async function renderFullScheduleGrid(direction = null, dayOverride = nul
         else if (dayOverride === 'sunday') targetDayIdx = 0;
     }
 
-    // Sunday maps to weekday sheets; WC public_holiday uses pub sheets
-    const sheetDayType = selectedDay === 'sunday'
-        ? 'weekday'
-        : normalizeScheduleSheetDay(selectedDay, route.region);
-    const sheetKey = scheduleCacheSlot(selectedDay === 'sunday' ? 'weekday' : selectedDay, route.region, direction.toLowerCase());
+    // Sunday maps to weekday sheets unless this route's Sunday or Special tab is on.
+    const gridMode = effectiveRouteSheetMode(route, selectedDay);
+    const sheetDayType = (gridMode === 'special' || gridMode === 'sunday')
+        ? gridMode
+        : (selectedDay === 'sunday'
+            ? 'weekday'
+            : normalizeScheduleSheetDay(selectedDay, route.region));
+    const sheetKey = scheduleCacheSlot(
+        selectedDay,
+        route.region,
+        direction.toLowerCase(),
+        (gridMode === 'sunday' || gridMode === 'special') ? route : null
+    );
     const noSatService = sheetDayType === 'saturday' && !routeHasSaturdayService(scheds);
     const noPubService = sheetDayType === 'public_holiday'
         && !scheduleHasService(scheds[sheetKey])

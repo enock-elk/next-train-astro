@@ -1,5 +1,6 @@
 // --- METRORAIL NEXT TRAIN UTILITIES (V7 06.17 - Guardian Edition) ---
 // Pure, stateless helper functions shared across the application.
+import { effectiveRouteSheetMode, extraSheetKey } from './route-sheets.js';
 
 /** True when admin time-sim is pinned to a specific calendar date (not Weekday/Sat/Sun). */
 export function simUsesSpecificDate() {
@@ -112,9 +113,16 @@ export function normalizeScheduleSheetDay(dayType, region) {
     return resolveScheduleSheetFamily(dayType, region);
 }
 
-/** Cache slot on the per-route schedules object: weekday_to_a | saturday_to_b | pub_to_a | … */
-export function scheduleCacheSlot(dayType, region, ab = 'a') {
+/**
+ * Cache slot on the per-route schedules object: weekday_to_a | saturday_to_b | pub_to_a | special_to_a | sunday_to_b.
+ * Pass the route when a Sunday or Special sheet may replace that route only.
+ */
+export function scheduleCacheSlot(dayType, region, ab = 'a', route = null, asOf = null) {
     const dir = ab === 'b' || ab === 'B' ? 'b' : 'a';
+    if (route) {
+        const mode = effectiveRouteSheetMode(route, dayType, asOf);
+        if (mode === 'special' || mode === 'sunday') return `${mode}_to_${dir}`;
+    }
     const family = resolveScheduleSheetFamily(dayType, region);
     if (family === 'public_holiday') return `pub_to_${dir}`;
     if (family === 'saturday') return `saturday_to_${dir}`;
@@ -130,10 +138,19 @@ export function schedulesBelongToRoute(schedules, routeId) {
     return String(schedules._routeId || '') === String(routeId);
 }
 
-/** Firebase / sheetKeys key for a route direction on the given day type. */
-export function routeSheetKeyForDay(route, dayType, ab = 'a') {
+/**
+ * Firebase / sheetKeys key for a route direction on the given day type.
+ * Sunday with no enabled Sunday or Special sheet returns null, so a bare Sunday
+ * does not borrow the weekday tab. Weekday, Saturday, and public-holiday keys are unchanged.
+ */
+export function routeSheetKeyForDay(route, dayType, ab = 'a', asOf = null) {
     const dir = ab === 'b' || ab === 'B' ? 'b' : 'a';
     const keys = route?.sheetKeys || {};
+    const mode = route ? effectiveRouteSheetMode(route, dayType, asOf) : null;
+    if (mode === 'special' || mode === 'sunday') {
+        return extraSheetKey(route, mode, dir) || null;
+    }
+    if (dayType === 'sunday') return null;
     const family = resolveScheduleSheetFamily(dayType, route?.region);
     if (family === 'public_holiday') {
         return keys[`pub_to_${dir}`] || keys[`saturday_to_${dir}`] || null;

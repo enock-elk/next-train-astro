@@ -248,7 +248,7 @@ export function todaysStopsForTrain(trainId, routeId, opts = {}) {
     const schedules = opts.schedules || $schedules.get() || {};
     let anySheet = false;
     for (const ab of ['a', 'b']) {
-        const sheet = schedules[scheduleCacheSlot(dayType, region, ab)];
+        const sheet = schedules[scheduleCacheSlot(dayType, region, ab, ROUTES[routeId] || null)];
         if (!sheet?.rows?.length) continue;
         anySheet = true;
         const stops = stopsForTrain(sheet, trainId);

@@ -59,7 +59,7 @@ function syncToFirebase() {
   const allData = {};
   let totalCoordRows = 0;
 
-  SHEET_NAMES.forEach(sheetName => {
+  sheetNamesToSync(ss).forEach(sheetName => {
     const sheet = ss.getSheetByName(sheetName);
     if (!sheet) {
       console.log(`⚠️ Warning: Sheet '${sheetName}' not found. Skipping.`);
@@ -153,6 +153,22 @@ function syncToFirebase() {
     console.log("❌ Error: " + e.message);
     SpreadsheetApp.getActiveSpreadsheet().toast("Error: Check execution logs.", "Guardian Bot");
   }
+}
+
+// Any tab ending in _Sun or _Special is included. Missing tabs are skipped.
+function sheetNamesToSync(ss) {
+  const names = SHEET_NAMES.slice();
+  const seen = {};
+  names.forEach(function (name) { seen[name] = true; });
+  const sheets = ss.getSheets();
+  for (let i = 0; i < sheets.length; i++) {
+    const name = sheets[i].getName();
+    if (seen[name]) continue;
+    if (!/_(Sun|Special)$/.test(name)) continue;
+    names.push(name);
+    seen[name] = true;
+  }
+  return names;
 }
 
 function normalizeSheetHeader(value, index) {

@@ -17,6 +17,7 @@ import {
     currentDayIndex as logicCurrentDayIndex,
 } from './logic.js';
 import { getLookaheadDayInfo, isTrainExcluded, isWeekdayPatternExcluded, realTrainTerminus, siblingCorridorRouteId, siblingSheetKey } from './live-board.js';
+import { effectiveRouteSheetMode, extraSheetKey, pushRouteSheetAsOf } from './route-sheets.js';
 import { getRuntimeGridOrderRecord } from './grid-order.js';
 import {
     classifySaturdayPlaceholderTrip,
@@ -98,7 +99,7 @@ export function planDirectTrip(origin, dest, dayType, isRollover = false, contex
 
     for (const routeId of commonRoutes) {
         const routeConfig = ROUTES[routeId];
-        const directions = getDirectionsForRoute(routeConfig, dayType);
+        const directions = getDirectionsForRoute(routeConfig, dayType, context?.sheetAsOf || null);
         
         for (let dir of directions) {
             if (!db || !db[dir.key]) continue;
@@ -518,7 +519,7 @@ export function findAllLegsBetween(stationA, stationB, routeSet, dayType, contex
 
     for (const rId of routesToCheck) {
         const routeConfig = ROUTES[rId];
-        let directions = getDirectionsForRoute(routeConfig, dayType);
+        let directions = getDirectionsForRoute(routeConfig, dayType, context?.sheetAsOf || null);
         for (let dir of directions) {
             if (!db || !db[dir.key]) continue;
             const schedule = getScheduleFromDb(db, dir.key);
@@ -538,10 +539,17 @@ export function findAllLegsBetween(stationA, stationB, routeSet, dayType, contex
     return legs;
 }
 
-export function getDirectionsForRoute(route, dayType) {
+export function getDirectionsForRoute(route, dayType, asOf = null) {
     if (!route?.sheetKeys) return [];
-    // Sunday has no dedicated sheets — connectivity / graph builds use weekday.
-    // planUnifiedTrip still short-circuits real Sunday planning via SUNDAY_SKIP.
+    const mode = effectiveRouteSheetMode(route, dayType, asOf);
+    if (mode === 'special' || mode === 'sunday') {
+        return [
+            { key: extraSheetKey(route, mode, 'a') },
+            { key: extraSheetKey(route, mode, 'b') },
+        ].filter((d) => !!d.key);
+    }
+    // A bare Sunday has no trains. Callers that need the weekday graph pass 'weekday'.
+    if (dayType === 'sunday') return [];
     const sheetDay = scheduleDayType(dayType, route.region);
     if (sheetDay === 'public_holiday') {
         return [
@@ -1007,7 +1015,8 @@ export function planDijkstraTrip(origin, dest, dayType, isRolloverLoop = false, 
 
     // GUARDIAN PHASE 16: Transit Graph Memoization — avoid rebuilding the heavy
     // graph on every Dijkstra run within one unified plan lifecycle.
-    const cacheKey = `graph_${dayType}_${dayIdx}_${weekdayPattern ? 'wd' : 'd'}`;
+    const asOfKey = context.sheetAsOf || 'today';
+    const cacheKey = `graph_${dayType}_${dayIdx}_${weekdayPattern ? 'wd' : 'd'}_${asOfKey}`;
     if (!context.graphCache) context.graphCache = {};
     if (!context.graphCache[cacheKey]) {
         context.graphCache[cacheKey] = buildTransitGraph(dayType, dayIdx, { weekdayPattern });
@@ -1499,14 +1508,17 @@ export async function planUnifiedTrip(origin, dest, dayType, externalContext = {
         });
         targetDayIdx = exclusionDay.targetDayIdx;
         context.weekdayPattern = exclusionDay.weekdayPattern;
-
-        if (targetDayType === 'sunday' && !isExplicitOverride) {
-            return { status: 'SUNDAY_SKIP', trips: [], severedTerminus: null };
-        }
-
-        context.targetDayIdx = targetDayIdx; 
+        context.sheetAsOf = (offset > startOffset)
+            ? (getLookaheadDayInfo(offset)?.iso || null)
+            : (context.specificDate || null);
+        const popSheetAsOf = pushRouteSheetAsOf(context.sheetAsOf);
+        try {
+        context.targetDayIdx = targetDayIdx;
 
         let allRawTrips = fetchRawTrips(evalOrigin, evalDest, targetDayType, isFutureOffset, context);
+        if (targetDayType === 'sunday' && !isExplicitOverride && !allRawTrips.length) {
+            return { status: 'SUNDAY_SKIP', trips: [], severedTerminus: null };
+        }
 
         let capturedTerminus = null;
 
@@ -1644,6 +1656,9 @@ export async function planUnifiedTrip(origin, dest, dayType, externalContext = {
         }
 
         return { status: finalStatus, trips: optimalTrips, targetDayLabel, severedTerminus: capturedTerminus };
+        } finally {
+            popSheetAsOf();
+        }
     };
 
     let loopStatus = 'NO_PATH';
@@ -1687,7 +1702,14 @@ export async function planUnifiedTrip(origin, dest, dayType, externalContext = {
         }
         return [...new Set(possibleStations)];
     };
-    const testStations = getBackwardStationSequence(dest, dayType);
+    context.sheetAsOf = context.specificDate || null;
+    const popStationAsOf = pushRouteSheetAsOf(context.sheetAsOf);
+    let testStations;
+    try {
+        testStations = getBackwardStationSequence(dest, dayType);
+    } finally {
+        popStationAsOf();
+    }
     if (satClass?.kind === 'DEST_CUT') {
         for (const j of [...(satClass.junctions || [])].reverse()) {
             const already = testStations.some((s) => normalizeStationName(s) === normalizeStationName(j));
@@ -1728,7 +1750,7 @@ export async function planUnifiedTrip(origin, dest, dayType, externalContext = {
             
             if (offset === startOffset) {
                 initialStatus = evalResult.status;
-                if (dayType === 'sunday' || evalResult.status === 'SUNDAY_SKIP') {
+                if (evalResult.status === 'SUNDAY_SKIP') {
                     initialStatus = 'SUNDAY_ROLLOVER';
                 }
 

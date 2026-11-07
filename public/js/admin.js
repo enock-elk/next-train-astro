@@ -4977,6 +4977,7 @@ const Admin = {
         runAdminSetup('holidayApprovals', () => Admin.setupHolidayApprovalsManager());
         runAdminSetup('maintenance', () => Admin.setupMaintenanceManager());
         runAdminSetup('specialEvent', () => Admin.setupSpecialEventManager());
+        runAdminSetup('routeSheets', () => Admin.setupRouteSheetManager());
         runAdminSetup('pushNotifications', () => Admin.setupPushNotificationsManager());
         runAdminSetup('diagnostics', () => Admin.setupDiagnosticsManager());
         runAdminSetup('scheduleQa', () => Admin.setupScheduleQaManager());
@@ -21500,6 +21501,216 @@ const Admin = {
             } finally {
                 saveBtn.textContent = "Publish Event";
                 saveBtn.disabled = false;
+            }
+        };
+    },
+
+    // --- 6b. PER-ROUTE SUNDAY AND SPECIAL SHEETS ---
+    setupRouteSheetManager: () => {
+        const alertPanel = document.getElementById('alert-panel');
+        if (!alertPanel || !alertPanel.parentNode) return;
+
+        let panel = document.getElementById('route-sheet-panel');
+        if (!panel) {
+            panel = document.createElement('div');
+            panel.id = 'route-sheet-panel';
+            alertPanel.parentNode.appendChild(panel);
+        }
+        if (panel.dataset.loaded === 'true') return;
+        panel.dataset.loaded = 'true';
+        panel.className = 'bg-white dark:bg-gray-800 rounded-xl shadow-md border border-gray-200 dark:border-gray-700 p-4 mb-4 relative overflow-hidden transition-all duration-300';
+
+        const esc = (str) => {
+            const raw = String(str || '').replace(/\$\{/g, '');
+            if (typeof escapeHTML === 'function') return escapeHTML(raw);
+            return raw.replace(/[&<>"']/g, (m) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
+        };
+        const tabName = (route, family, ab) => {
+            if (typeof window.suggestedSheetTab === 'function') return window.suggestedSheetTab(route, family, ab);
+            return '';
+        };
+        const datesOf = (raw) => {
+            if (typeof window.normalizeRouteSheetDates === 'function') return window.normalizeRouteSheetDates(raw);
+            return String(raw || '').split(/[\s,;]+/).map((s) => s.trim().slice(0, 10)).filter((s) => /^\d{4}-\d{2}-\d{2}$/.test(s));
+        };
+
+        let draft = {};
+        let regionCode = 'GP';
+
+        panel.innerHTML = `
+            <button id="route-sheet-header" type="button" class="w-full text-left text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center justify-center focus:outline-none relative">
+                <span class="flex flex-col items-center">
+                    ${Admin.tileIcon('calendar', 'text-blue-500 dark:text-blue-400')}
+                    <span>Route sheets</span>
+                </span>
+                <svg id="route-sheet-chevron" class="w-4 h-4 transform transition-transform -rotate-90 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+            </button>
+            <div id="route-sheet-body" class="hidden mt-4 space-y-3">
+                <p class="text-[11px] leading-snug text-gray-500 dark:text-gray-400">Turn Sunday or Special on for the lines that are running. Other lines stay on their normal day. Add tabs such as <span class="font-mono">PTA-to-PIEN_Sun</span> and <span class="font-mono">PTA-to-PIEN_Special</span>, then sync the spreadsheet. Empty dates on Special means every day until you turn it off. Empty dates on Sunday means every Sunday. A ticked route with no times in the tab stays on its normal sheet.</p>
+                <div id="route-sheet-regions" class="flex gap-1"></div>
+                <div id="route-sheet-list" class="space-y-2 max-h-[28rem] overflow-y-auto"></div>
+                <button id="route-sheet-save" type="button" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg shadow-md transition-colors text-xs uppercase tracking-wide">Save route sheets</button>
+            </div>
+        `;
+
+        const header = document.getElementById('route-sheet-header');
+        const body = document.getElementById('route-sheet-body');
+        const chevron = document.getElementById('route-sheet-chevron');
+        const regionBox = document.getElementById('route-sheet-regions');
+        const list = document.getElementById('route-sheet-list');
+        const saveBtn = document.getElementById('route-sheet-save');
+
+        const scrape = () => {
+            list.querySelectorAll('[data-route-sheet]').forEach((row) => {
+                const id = row.getAttribute('data-route-sheet');
+                if (!id) return;
+                const prev = draft[id] || {};
+                const sunday = prev.sunday || {};
+                const special = prev.special || {};
+                const title = (row.querySelector('.route-sheet-title')?.value || '').trim();
+                const message = (row.querySelector('.route-sheet-body')?.value || '').trim();
+                draft[id] = {
+                    sunday: {
+                        active: !!row.querySelector('.route-sheet-sun')?.checked,
+                        dates: datesOf(row.querySelector('.route-sheet-sun-dates')?.value || ''),
+                        title,
+                        body: message,
+                    },
+                    special: {
+                        active: !!row.querySelector('.route-sheet-special')?.checked,
+                        dates: datesOf(row.querySelector('.route-sheet-special-dates')?.value || ''),
+                        title: title || sunday.title || special.title || '',
+                        body: message || sunday.body || special.body || '',
+                    },
+                };
+                draft[id].sunday.title = title;
+                draft[id].sunday.body = message;
+            });
+        };
+
+        const paintRegions = () => {
+            regionBox.innerHTML = ['GP', 'WC', 'KZN', 'EC'].map((code) => `
+                <button type="button" data-route-sheet-region="${code}" class="px-2 py-1 rounded text-[10px] font-black uppercase tracking-wider ${code === regionCode ? 'bg-blue-600 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300'}">${code}</button>
+            `).join('');
+            regionBox.querySelectorAll('[data-route-sheet-region]').forEach((btn) => {
+                btn.onclick = () => {
+                    scrape();
+                    regionCode = btn.getAttribute('data-route-sheet-region') || 'GP';
+                    paintRegions();
+                    paintRoutes();
+                };
+            });
+        };
+
+        const paintRoutes = () => {
+            const routes = Object.values(typeof ROUTES !== 'undefined' ? ROUTES : {})
+                .filter((route) => route && route.isActive && route.id !== 'special_event' && route.region === regionCode)
+                .sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
+            list.innerHTML = routes.map((route) => {
+                const row = draft[route.id] || {};
+                const sunday = row.sunday || {};
+                const special = row.special || {};
+                const sunTabs = `${tabName(route, 'sunday', 'a')} · ${tabName(route, 'sunday', 'b')}`;
+                const specialTabs = `${tabName(route, 'special', 'a')} · ${tabName(route, 'special', 'b')}`;
+                const title = special.title || sunday.title || '';
+                const message = special.body || sunday.body || '';
+                return `
+                    <div data-route-sheet="${esc(route.id)}" class="rounded-lg border border-gray-200 dark:border-gray-700 p-2 space-y-2">
+                        <div class="flex items-center gap-2">
+                            <button type="button" data-route-sheet-open class="flex-1 text-left text-[11px] font-bold text-gray-800 dark:text-gray-100">${esc(route.name || route.id)}</button>
+                            <label class="flex items-center gap-1 text-[10px] font-bold text-gray-600 dark:text-gray-300"><input type="checkbox" class="route-sheet-sun" ${sunday.active ? 'checked' : ''}> Sun</label>
+                            <label class="flex items-center gap-1 text-[10px] font-bold text-gray-600 dark:text-gray-300"><input type="checkbox" class="route-sheet-special" ${special.active ? 'checked' : ''}> Special</label>
+                        </div>
+                        <div class="route-sheet-detail hidden space-y-1">
+                            <p class="text-[10px] font-mono text-gray-500 break-all">Sun: ${esc(sunTabs)}</p>
+                            <textarea class="route-sheet-sun-dates w-full min-h-[36px] px-2 py-1 rounded-md bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-[10px] font-mono" placeholder="Sunday dates, empty = every Sunday">${esc((sunday.dates || []).join('\n'))}</textarea>
+                            <p class="text-[10px] font-mono text-gray-500 break-all">Special: ${esc(specialTabs)}</p>
+                            <textarea class="route-sheet-special-dates w-full min-h-[36px] px-2 py-1 rounded-md bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-[10px] font-mono" placeholder="YYYY-MM-DD, empty = every day while on">${esc((special.dates || []).join('\n'))}</textarea>
+                            <input type="text" class="route-sheet-title w-full h-8 px-2 rounded-md bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-[10px]" placeholder="Chip title, optional" value="${esc(title)}">
+                            <textarea class="route-sheet-body w-full min-h-[44px] px-2 py-1 rounded-md bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-[10px]" placeholder="Message when someone taps the day chip, optional">${esc(message)}</textarea>
+                        </div>
+                    </div>
+                `;
+            }).join('') || '<p class="text-[11px] text-gray-500">No routes in this region.</p>';
+            list.querySelectorAll('[data-route-sheet-open]').forEach((btn) => {
+                btn.onclick = () => btn.parentElement?.nextElementSibling?.classList.toggle('hidden');
+            });
+        };
+
+        const load = async () => {
+            try {
+                const endpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
+                const res = await fetch(`${endpoint}config/route_sheets.json`);
+                const data = res.ok ? await res.json() : null;
+                draft = (data && data.routes && typeof data.routes === 'object') ? data.routes : {};
+            } catch {
+                draft = draft || {};
+            }
+            paintRegions();
+            paintRoutes();
+        };
+
+        header.onclick = () => {
+            if (Admin.isGridMode) return;
+            body.classList.toggle('hidden');
+            chevron.classList.toggle('-rotate-90', body.classList.contains('hidden'));
+            if (!body.classList.contains('hidden') && !panel.dataset.hydrated) {
+                panel.dataset.hydrated = 'true';
+                load();
+            }
+        };
+
+        saveBtn.onclick = async () => {
+            scrape();
+            const secret = await Admin.getAuthKey();
+            if (!secret) {
+                if (typeof showToast === 'function') showToast('Authentication required', 'error');
+                return;
+            }
+            const routes = {};
+            Object.keys(draft).forEach((id) => {
+                const row = draft[id] || {};
+                const sundayOn = !!row.sunday?.active;
+                const specialOn = !!row.special?.active;
+                if (!sundayOn && !specialOn) return;
+                routes[id] = {
+                    sunday: {
+                        active: sundayOn,
+                        dates: datesOf(row.sunday?.dates),
+                        title: String(row.sunday?.title || '').trim(),
+                        body: String(row.sunday?.body || '').trim(),
+                    },
+                    special: {
+                        active: specialOn,
+                        dates: datesOf(row.special?.dates),
+                        title: String(row.special?.title || row.sunday?.title || '').trim(),
+                        body: String(row.special?.body || row.sunday?.body || '').trim(),
+                    },
+                };
+            });
+            const payload = {
+                updatedAt: Date.now(),
+                updatedBy: Admin.currentUser?.email || 'Admin',
+                routes,
+            };
+            saveBtn.disabled = true;
+            saveBtn.textContent = 'Saving...';
+            try {
+                const endpoint = typeof DYNAMIC_BASE_URL !== 'undefined' ? DYNAMIC_BASE_URL : 'https://metrorail-next-train-default-rtdb.firebaseio.com/';
+                const res = await window.guardianFetch(`${endpoint}config/route_sheets.json?auth=${secret}`, {
+                    method: 'PUT',
+                    body: JSON.stringify(payload),
+                }, 10000);
+                if (!res.ok) throw new Error('Save failed');
+                if (typeof showToast === 'function') showToast('Route sheets saved', 'success');
+                if (typeof window.fetchRouteSheets === 'function') {
+                    try { await window.fetchRouteSheets(true); } catch { /* ignore */ }
+                }
+            } catch (e) {
+                if (typeof showToast === 'function') showToast('Failed to save route sheets', 'error');
+            } finally {
+                saveBtn.disabled = false;
+                saveBtn.textContent = 'Save route sheets';
             }
         };
     },

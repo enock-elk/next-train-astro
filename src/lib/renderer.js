@@ -28,6 +28,7 @@ import {
     currentTime, currentDayType, currentDayIndex, getScheduleFromDb
 } from './logic.js';
 import { extraKempTrainIds, kempTrainIds, siblingSheetKey, withExtraTrainColumns } from './live-board.js';
+import { effectiveRouteSheetMode } from './route-sheets.js';
 
 import { buildTrainReportSlotHtml, buildTrainTitleReportButton } from './delay-reports.js';
 import { showToast, triggerHaptic } from './ui.js';
@@ -1557,9 +1558,10 @@ export async function takeGridSnapshot(direction = 'A', dayType = 'weekday') {
     if (!route) return;
 
     const selectedDay = dayType || 'weekday';
-    // Resolve weekday / saturday / pub_to_* cache slots (WC public_holiday → pub sheets).
-    const keyA = scheduleCacheSlot(selectedDay, route.region, 'a');
-    const keyB = scheduleCacheSlot(selectedDay, route.region, 'b');
+    const exportMode = effectiveRouteSheetMode(route, selectedDay);
+    // Resolve weekday / saturday / pub / sunday / special cache slots.
+    const keyA = scheduleCacheSlot(selectedDay, route.region, 'a', route);
+    const keyB = scheduleCacheSlot(selectedDay, route.region, 'b', route);
     const firebaseKeyA = routeSheetKeyForDay(route, selectedDay, 'a') || route.sheetKeys?.[keyA];
     const firebaseKeyB = routeSheetKeyForDay(route, selectedDay, 'b') || route.sheetKeys?.[keyB];
     const schedA = $schedules.get()?.[keyA];
@@ -1609,10 +1611,14 @@ export async function takeGridSnapshot(direction = 'A', dayType = 'weekday') {
     const destAName = Renderer._applyUIIntercepts(route.destA).toUpperCase();
     const destBName = Renderer._applyUIIntercepts(route.destB).toUpperCase();
     const dateText = new Date().toLocaleDateString('en-ZA', { day: 'numeric', month: 'long', year: 'numeric' }).toUpperCase();
-    const scheduleTypeLabel = selectedDay === 'weekday' || selectedDay === 'sunday'
-        ? 'WEEKDAY'
-        : (selectedDay === 'public_holiday' ? 'PUBLIC HOLIDAY'
-            : (selectedDay === 'saturday' ? 'SATURDAY' : 'WEEKEND'));
+    const scheduleTypeLabel = exportMode === 'special'
+        ? 'SPECIAL'
+        : (exportMode === 'sunday'
+            ? 'SUNDAY'
+            : (selectedDay === 'weekday' || selectedDay === 'sunday'
+                ? 'WEEKDAY'
+                : (selectedDay === 'public_holiday' ? 'PUBLIC HOLIDAY'
+                    : (selectedDay === 'saturday' ? 'SATURDAY' : 'WEEKEND'))));
     const finalScheduleTypeLabel = hasExceptions ? `AMENDED ${scheduleTypeLabel}` : scheduleTypeLabel;
     
     const displayRouteName = formatRouteLabelPlain(route.name);

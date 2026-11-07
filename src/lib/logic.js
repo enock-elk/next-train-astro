@@ -40,8 +40,26 @@ import {
     setRuntimeGridOrderConfig,
 } from './grid-order.js';
 import { recordRouteScheduleRevision } from './schedule-revision.js';
+import {
+    extraSheetKey,
+    fetchRouteSheets,
+    setRouteSheetAsOfReader,
+    setRouteSheetDatabaseReader,
+    effectiveRouteSheetMode,
+    routeSheetNote,
+} from './route-sheets.js';
 import { applyMapStationOverrides, fetchMapStationOverrides } from './map-overrides.js';
 import { canonicalStationPin } from './station-pins.js';
+
+setRouteSheetDatabaseReader(() => $fullDatabase.get());
+setRouteSheetAsOfReader(() => {
+    if (typeof document === 'undefined') return null;
+    const simActive = $isSimMode.get() || (typeof window !== 'undefined' && !!window.isSimMode);
+    if (!simActive || !simUsesSpecificDate()) return null;
+    const input = document.getElementById('sim-date');
+    const value = input instanceof HTMLInputElement ? input.value : '';
+    return /^\d{4}-\d{2}-\d{2}$/.test(value || '') ? value : null;
+});
 
 // --- MODULE STATE VARIABLES ---
 export let regionCheckPromise = Promise.resolve();
@@ -156,7 +174,14 @@ export function describeHeaderDayNote({
     holidayType = null,
     satClosed = false,
     override = null,
+    sheetNote = null,
 } = {}) {
+    if (sheetNote?.title || sheetNote?.body) {
+        return {
+            title: String(sheetNote.title || '').trim() || 'Schedule',
+            body: String(sheetNote.body || '').trim() || 'This line is using a different timetable today.',
+        };
+    }
     if (override?.title || override?.body) {
         return {
             title: String(override.title || '').trim() || 'Schedule update',
@@ -231,8 +256,13 @@ export function paintHeaderDayLabel(opts = {}) {
     const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
     const noSatOnRoute = opts.noSaturdayOnRoute != null ? !!opts.noSaturdayOnRoute : currentRouteSaturdayClosed();
     const satClosed = usesSaturdayScheduleSheet(dayType, region) && noSatOnRoute;
+    const pinnedRoute = ROUTES[$currentRouteId.get()] || null;
+    const sheetAsOf = (dateKey && year) ? `${year}-${dateKey}` : null;
+    const sheetMode = effectiveRouteSheetMode(pinnedRoute, dayType, sheetAsOf);
+    const sheetNote = routeSheetNote(pinnedRoute, dayType, sheetAsOf);
 
-    const noService = dayType === 'sunday' || satClosed;
+    let noService = dayType === 'sunday' || satClosed;
+    if (sheetMode === 'special' || sheetMode === 'sunday') noService = false;
     const overrideNote = appliedScheduleOverrideNote(region);
     const overrideDayName = String(overrideNote?.title || '').trim();
     let displayType = dayType === 'sunday' ? 'No service'
@@ -254,6 +284,10 @@ export function paintHeaderDayLabel(opts = {}) {
             ? `${HOLIDAY_NAMES[dateKey]} · No service`
             : (overrideDayName ? `${overrideDayName} · No service` : 'No service');
     }
+    if (sheetMode === 'special' || sheetMode === 'sunday') {
+        displayType = String(sheetNote?.title || '').trim()
+            || (sheetMode === 'special' ? 'Special' : 'Sunday Schedule');
+    }
     const typeClass = noService
         ? 'font-bold text-red-600 dark:text-red-400'
         : 'font-bold text-blue-600 dark:text-blue-400';
@@ -269,6 +303,7 @@ export function paintHeaderDayLabel(opts = {}) {
         holidayType,
         satClosed,
         override: overrideNote,
+        sheetNote,
     });
     fitHeaderDayLabel();
     bindHeaderDayFit();
@@ -1320,7 +1355,11 @@ export async function processRouteDataFromDBAsync(route, targetDB) {
         weekday_to_a: await getSched(route.sheetKeys.weekday_to_a),
         weekday_to_b: await getSched(route.sheetKeys.weekday_to_b),
         saturday_to_a: await getSched(route.sheetKeys.saturday_to_a),
-        saturday_to_b: await getSched(route.sheetKeys.saturday_to_b)
+        saturday_to_b: await getSched(route.sheetKeys.saturday_to_b),
+        sunday_to_a: await getSched(extraSheetKey(route, 'sunday', 'a')),
+        sunday_to_b: await getSched(extraSheetKey(route, 'sunday', 'b')),
+        special_to_a: await getSched(extraSheetKey(route, 'special', 'a')),
+        special_to_b: await getSched(extraSheetKey(route, 'special', 'b')),
     };
 
     // WC public-holiday sheets (*_pub). Missing/empty → fall back to saturday so UI never breaks.
@@ -1426,6 +1465,12 @@ export async function buildGlobalStationIndexAsync(targetDB) {
         const sheetKeys = Object.entries(route.sheetKeys).sort(([a], [b]) => {
             const rank = (key) => (String(key).startsWith('weekday') ? 0 : String(key).startsWith('saturday') ? 1 : 2);
             return rank(a) - rank(b);
+        });
+        ['sunday', 'special'].forEach((family) => {
+            ['a', 'b'].forEach((ab) => {
+                const dbKey = extraSheetKey(route, family, ab);
+                if (dbKey) sheetKeys.push([`${family}_to_${ab}`, dbKey]);
+            });
         });
         sheetKeys.forEach(([, dbKey]) => {
             let sheetData = targetDB[dbKey];
@@ -1791,6 +1836,9 @@ async function loadAllSchedulesInner(force = false) {
         if (fetchSignal.aborted || $currentRouteId.get() !== requestedRouteId) return;
 
         await fetchScheduleOverride(false);
+        if (fetchSignal.aborted || $currentRouteId.get() !== requestedRouteId) return;
+
+        await fetchRouteSheets(false);
         if (fetchSignal.aborted || $currentRouteId.get() !== requestedRouteId) return;
 
         // Ops overlays (ghost trains / disruption badges) — stamp-gated client TTL.
@@ -2807,6 +2855,7 @@ if (typeof window !== 'undefined') {
     window.fetchSpecialEventConfig = fetchSpecialEventConfig;
     window.fetchGridOrderConfig = fetchGridOrderConfig;
     window.fetchScheduleOverride = fetchScheduleOverride;
+    window.fetchRouteSheets = fetchRouteSheets;
     window.updateTime = updateTime;
     window.probeReachability = probeReachability;
     window.ensureReachabilityProbed = ensureReachabilityProbed;

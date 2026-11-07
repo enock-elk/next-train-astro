@@ -156,6 +156,7 @@ Aggregated routing fails. Expand contributors (full user ids + app version). Dev
 | **Schedule Exceptions** | Load trains; **Ban Train** / **Mark Special**; **Apply Exceptions**. Specials stay on boards/planner; bans hide service. `DEFAULT_EXCLUSIONS` in client stays `{}` — corridor bans live in RTDB `exclusions/`. |
 | **Transit Incident Manager** | CRITICAL/WARNING; stations; badge + notice; days; map; **Deploy Incident** / **Resolve** → `disruptions` |
 | **Special Event Route** | Temporary event corridor → `config/special_event` |
+| **Route sheets** | Per route, not the whole region. Sunday uses a `_Sun` tab. Special uses a `_Special` tab. Tick the routes and the dates. Empty Special dates stay on until you untick. A ticked route with no times in the tab keeps its normal sheet. → `config/route_sheets` |
 | **Holiday Notices** | Pending / Approved regional holiday day-type sheets |
 | **System Controls → Maintenance Mode** | Scoped banners; master pause |
 | **System Controls → Force schedule type** | Per-region timetable override |

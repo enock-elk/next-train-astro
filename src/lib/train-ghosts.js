@@ -128,7 +128,7 @@ export function currentDirectionSchedules(schedules = $schedules.get() || {}) {
     const dayType = currentDayType();
     const region = $userRegion.get() || 'GP';
     return ['a', 'b']
-        .map((ab) => schedules[scheduleCacheSlot(dayType, region, ab)])
+        .map((ab) => schedules[scheduleCacheSlot(dayType, region, ab, ROUTES[$currentRouteId.get()] || null)])
         .filter((s) => s?.rows?.length);
 }
 

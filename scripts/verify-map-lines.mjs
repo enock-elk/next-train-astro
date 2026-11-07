@@ -132,6 +132,11 @@ assert(gapDrape.includes('gautrain'), 'gap drape skips Gautrain-named ways');
 assert(gapDrape.includes('TUBE_M'), 'drape stays inside a corridor tube');
 
 const plannerUi = readFileSync(new URL('../src/lib/planner-ui.js', import.meta.url), 'utf8');
+assert(plannerUi.includes('tripStationPopup'), 'trip map builds a station popup');
+assert(plannerUi.includes("bindTripStation(m, 'Stop'"), 'trip map stop dots open on click');
+assert(plannerUi.includes("'Start'"), 'trip map start marker names its role');
+assert(plannerUi.includes("\n                    'End',"), 'trip map end marker names its role');
+assert(plannerUi.includes('pointer-events: none'), 'trip map labels do not cover the station dot');
 assert(plannerUi.includes('routeId: routeId || null'), 'planner trip stops carry a corridor id for the bake slice');
 assert(plannerUi.includes('addStops(trip.stops, trip.route?.id)'), 'direct trips pass the route id into the trip map');
 
@@ -140,6 +145,8 @@ assert(!mapView.includes('Share my location'), 'Map tab has no Share my location
 assert(!mapView.includes('map-tab-contribute-btn'), 'Map tab dropped the share-location button');
 
 const mapApp = readFileSync(new URL('../public/js/map-app.js', import.meta.url), 'utf8');
+assert(mapApp.includes('stationPopupHtml'), 'network, Map tab, and SEO station maps still open a station popup');
+assert(mapApp.includes('.bindPopup('), 'network map markers can open a popup on click');
 assert(!mapApp.includes('Share my location'), 'map-app does not prompt Share my location');
 assert(mapApp.includes('"TSHIAWELO", "MIDWAY", "LENZ"'), 'JHB Midway static path continues from Midway to Lenz');
 assert(mapApp.includes('"LENZ": [-26.319519733948702, 27.82296719973482]'), 'map station dictionary includes Lenz');

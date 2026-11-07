@@ -5,7 +5,8 @@ Worker URL: `https://nexttrain-telemetry.enock.workers.dev/`
 ## Routes
 
 - `GET /region` — first-visit province → product region guess
-- GET `/` (Bearer admin) — GA / Sentry / Clever telemetry payload (V1.11: INTRADAY through latest GA4 bucket; ALL-time months from Jan 2026; regional `sessions` alongside unique users)
+- `POST /region-presence` — selected app region for one reporting device, once per Johannesburg day. A later region the same day moves that device. Origins are limited to Next Train. The stored key is a hash.
+- GET `/` (Bearer admin) — GA / Sentry / Clever telemetry payload. Regional cards are the exact D1 reporting-device split. `sentryStatus` is `ok`, `zero`, `unconfigured`, or `error`.
 - `POST /admin/deploy-production` (Bearer Firebase admin, body `{ "confirm": "DEPLOY", "dryRun": false }`) — start GitHub Actions **Deploy production → metrorail-app**
 - `GET /admin/deploy-status` (Bearer Firebase admin, optional `run_id` / `since`) — GitHub job status + `metrorail-app` `astro-deploy.json`
 - `POST /admin/purge-cloudflare-cache` (Bearer Firebase admin) — Cloudflare zone **Purge Everything** (dashboard equivalent)
@@ -19,6 +20,24 @@ Worker URL: `https://nexttrain-telemetry.enock.workers.dev/`
 | `SENTRY_AUTH_TOKEN` | Sentry stats |
 | `CF_API_TOKEN` | Cloudflare API token with **Zone → Cache Purge → Purge** on `nexttrain.co.za` |
 | `GH_ACTIONS_TOKEN` | Fine-grained GitHub PAT: **Actions: Read and write** on **`enock-elk/next-train-astro` only** |
+| `REGION_PRESENCE_PEPPER` | Secret mixed into the reporting-device hash. Never a browser id. |
+
+## Exact regional split
+
+The admin cards count reporting devices, not Analytics people. Each device is stored once per Johannesburg day under the selected app region. Changing region updates that row. Rows older than 35 days are deleted. A cleared browser starts a new reporting device, so the cards are not a count of physical people. Analytics people today stays on the telemetry tile for comparison. The split starts empty until this Worker is deployed with the database below.
+
+```bash
+cd workers/nexttrain-telemetry
+npx wrangler d1 create nexttrain-region-presence
+```
+
+Put the printed `database_id` in `wrangler.jsonc` under `d1_databases` with binding `REGION_PRESENCE_DB`, then:
+
+```bash
+npx wrangler d1 migrations apply nexttrain-region-presence --remote
+npx wrangler secret put REGION_PRESENCE_PEPPER
+npx wrangler deploy
+```
 
 Create the cache-purge token: Cloudflare Dashboard → My Profile → API Tokens → Create Token → custom token with Zone.Cache Purge on `nexttrain.co.za`, then:
 

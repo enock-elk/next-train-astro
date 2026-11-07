@@ -14,6 +14,18 @@ import {
     enumerateYearMonths,
 } from '../workers/nexttrain-telemetry/chart-math.js';
 import {
+    assignReportingDevice,
+    countsForDay,
+    hashDeviceId,
+    johannesburgDay,
+    parsePresenceBody,
+    presenceOriginAllowed,
+    retentionFloorDay,
+    sentryStatusFromResult,
+} from '../workers/nexttrain-telemetry/region-presence.js';
+import { handleRegionPresence, readRegionalSplit } from '../workers/nexttrain-telemetry/region-store.js';
+import { formatFeedbackDiagLine } from '../src/lib/feedback-diag-line.js';
+import {
     computeDeployPhase,
     dispatchProductionDeploy,
     shaMatches,
@@ -182,11 +194,22 @@ ok(adminJs.includes("Admin.icon('map', 'w-3 h-3')"), 'trip-plans indicator is th
 }
 ok(adminJs.includes('confirmClearDb'), 'Clear DB uses a second confirmation popup');
 ok(adminJs.includes("telemetryRange === 'ALL'"), 'admin ALL range does not use the 7-point slicer');
-ok(adminJs.includes('Users and sessions by region on the hit'), 'regional modal names users and sessions on the hit');
-ok(adminJs.includes('People today:'), 'regional modal calls the total people, not a unique split');
-ok(adminJs.includes('No region on the hit'), 'missing region is hits with no region, not people with no region');
-ok(adminJs.includes('The cards are not a split of people today.'), 'regional note says the cards overlap');
-ok(workerJs.includes('unsetUsers'), 'worker keeps hits with no region separate from unrecognised values');
+ok(adminJs.includes('Reporting devices by selected region'), 'regional modal names reporting devices');
+ok(adminJs.includes('Reporting devices today:'), 'regional modal total is reporting devices');
+ok(adminJs.includes('People today (Analytics):'), 'Analytics people stay beside the exact split');
+ok(!adminJs.includes('No region on the hit'), 'regional modal no longer shows an overlapping unset bucket');
+ok(adminJs.includes('The four cards add up to'), 'regional note says the cards are one assignment each');
+ok(adminJs.includes("data.metric !== 'reportingDevices'"), 'old overlapping Worker payloads are not labelled as an exact split');
+ok(workerJs.includes('readRegionalSplit'), 'worker reads the exact regional split');
+ok(workerJs.includes("pathname === '/region-presence'"), 'worker accepts the region presence beacon');
+ok(workerJs.includes('sentryStatusFromResult'), 'worker separates Sentry status from the count');
+ok(!/dimensions:\s*\[\{\s*name:\s*"customUser:crm_region"/.test(workerJs), 'regional cards no longer come from overlapping GA rows');
+ok(adminJs.includes('SENTRY TODAY'), 'error tile is Sentry today');
+ok(adminJs.includes('App diagnostics, last 24h'), 'Firebase diagnostics stay a separate 24h list');
+ok(!adminJs.includes('est. @ sample'), 'Firebase rows are not presented as a Sentry sample estimate');
+ok(adminJs.includes('id="admin-changelog-diag"'), 'build notes modal has a diagnostics line');
+ok(adminJs.includes('data-cl-diag='), 'version chip carries the diagnostics line');
+ok(!adminJs.includes('diagHtml'), 'feedback card no longer repeats the diagnostics line');
 ok(adminJs.includes("chartPanel.id = 'telemetry-chart-panel'"), 'telemetry chart is an admin drill subview');
 ok(adminJs.includes("Admin.deepLinkToPanel('telemetry-chart-panel')"), 'chart enters through history-aware admin navigation');
 ok(adminJs.includes("chartPanel.dataset.adminSubview = 'true'"), 'analytics subview is excluded from the admin tile grid');
@@ -340,6 +363,114 @@ ok(adminJs.includes('inbox/${encodeURIComponent(replyDeviceId)}/${encodeURICompo
 ok(adminJs.includes("from: 'admin'"), 'admin send tags from admin');
 ok(adminJs.includes("String(msg.from || '') !== 'commuter'"), 'inbox fold does not swallow untagged admin replies');
 ok(!adminJs.includes("icon('more'"), 'feedback Options dropped the more icon');
+
+ok(johannesburgDay(Date.UTC(2026, 10, 6, 21, 59)) === '2026-11-06', '21:59 UTC is still 6 Nov in Johannesburg');
+ok(johannesburgDay(Date.UTC(2026, 10, 6, 22, 0)) === '2026-11-07', '22:00 UTC rolls to 7 Nov in Johannesburg');
+ok(retentionFloorDay(Date.UTC(2026, 10, 7, 10, 0), 35) === '2026-10-03', 'presence rows older than 35 Johannesburg days are eligible for deletion');
+ok(parsePresenceBody(JSON.stringify({ deviceId: 'usr_abc12xyz9_1700000000000', region: 'gp' })).region === 'GP', 'presence region is canonical');
+ok(parsePresenceBody('{"region":"ALL","deviceId":"usr_abc12xyz9_1700000000000"}').ok === false, 'unknown region is rejected');
+ok(parsePresenceBody('{"region":"GP","deviceId":"K"}').ok === false, 'short device id is rejected');
+ok(presenceOriginAllowed('https://nexttrain.co.za') === true, 'production origin can report');
+ok(presenceOriginAllowed('https://preview-1.next-train-lab.pages.dev') === true, 'lab preview origin can report');
+ok(presenceOriginAllowed('https://evil.example') === false, 'foreign origin cannot report');
+{
+    const hashA = await hashDeviceId('usr_abc12xyz9_1700000000000', 'pepper-a');
+    const hashB = await hashDeviceId('usr_abc12xyz9_1700000000000', 'pepper-b');
+    ok(hashA.length === 64 && hashA !== hashB, 'device hash is a peppered digest');
+    ok(!hashA.includes('usr_abc12xyz9_1700000000000'), 'device hash does not keep the browser id');
+}
+{
+    const now = Date.UTC(2026, 10, 7, 8, 0);
+    const day = johannesburgDay(now);
+    let rows = assignReportingDevice(new Map(), {
+        day, deviceHash: 'h1', region: 'GP', now, retentionFloor: '2026-10-03',
+    });
+    rows = assignReportingDevice(rows, {
+        day, deviceHash: 'h1', region: 'WC', now: now + 1000, retentionFloor: '2026-10-03',
+    });
+    rows = assignReportingDevice(rows, {
+        day: '2026-09-01', deviceHash: 'old', region: 'EC', now, retentionFloor: '2026-10-03',
+    });
+    const counts = countsForDay(rows, day);
+    ok(counts.GP === 0 && counts.WC === 1 && counts.total === 1, 'a region change moves the device instead of double counting');
+    ok(!rows.has('2026-09-01\0old'), 'assignment helper drops rows before the retention floor');
+}
+{
+    const zero = sentryStatusFromResult({ configured: true, ok: true, count: 0 });
+    const missing = sentryStatusFromResult({ configured: false });
+    const failed = sentryStatusFromResult({ configured: true, ok: false, detail: 'Bearer secret-token rejected' });
+    ok(zero.sentryStatus === 'zero' && zero.todayErrors === '0', 'a real Sentry zero stays zero');
+    ok(missing.sentryStatus === 'unconfigured' && missing.todayErrors === '--', 'missing Sentry config is not a zero');
+    ok(failed.sentryStatus === 'error' && !failed.sentryErrorDetail.includes('secret-token'), 'Sentry error detail redacts bearer tokens');
+}
+ok(formatFeedbackDiagLine({
+    phone: 'K', network: 'mobile', signal: 'weak', viewport: '384x748',
+}) === 'Mobile network · Weak signal · 384 × 748', 'one-letter handset token is left off and the rest is readable');
+ok(formatFeedbackDiagLine({
+    phone: 'iPhone', network: 'wifi', signal: 'excellent', viewport: '390x844',
+}) === 'iPhone · Wi-Fi · Excellent signal · 390 × 844', 'a real handset name stays on the diagnostics line');
+{
+    function memoryPresenceDb() {
+        const rows = new Map();
+        return {
+            prepare(sql) {
+                let args = [];
+                const stmt = {
+                    bind(...bound) { args = bound; return stmt; },
+                    async run() {
+                        if (sql.startsWith('INSERT')) {
+                            const [day, deviceHash, region, firstSeen, lastSeen] = args;
+                            const key = `${day}\0${deviceHash}`;
+                            const prev = rows.get(key);
+                            rows.set(key, prev ? { ...prev, region, lastSeen } : { day, deviceHash, region, firstSeen, lastSeen });
+                        } else if (sql.startsWith('DELETE')) {
+                            const floor = args[0];
+                            for (const [key, row] of rows) if (row.day < floor) rows.delete(key);
+                        }
+                        return { success: true };
+                    },
+                    async all() {
+                        const day = args[0];
+                        const counts = new Map();
+                        for (const row of rows.values()) {
+                            if (row.day !== day) continue;
+                            counts.set(row.region, (counts.get(row.region) || 0) + 1);
+                        }
+                        return { results: [...counts].map(([region, n]) => ({ region, n })) };
+                    },
+                };
+                return stmt;
+            },
+            batch(statements) { return Promise.all(statements.map((s) => s.run())); },
+        };
+    }
+    const now = Date.UTC(2026, 10, 7, 8, 0);
+    const db = memoryPresenceDb();
+    const env = { REGION_PRESENCE_DB: db, REGION_PRESENCE_PEPPER: 'test-pepper' };
+    const post = (body, origin = 'https://nexttrain.co.za') => handleRegionPresence(new Request('https://nexttrain-telemetry.enock.workers.dev/region-presence', {
+        method: 'POST',
+        headers: { Origin: origin, 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+    }), env, now);
+    const first = await post({ deviceId: 'usr_abc12xyz9_1700000000000', region: 'GP' });
+    const moved = await post({ deviceId: 'usr_abc12xyz9_1700000000000', region: 'WC' });
+    const other = await post({ deviceId: 'usr_otherdevice_1700000000001', region: 'KZN' });
+    const blocked = await post({ deviceId: 'usr_abc12xyz9_1700000000000', region: 'GP' }, 'https://evil.example');
+    const invalid = await post({ deviceId: 'nope', region: 'GP' });
+    const split = await readRegionalSplit(db, now);
+    ok(first.status === 200 && moved.status === 200 && other.status === 200, 'valid presence reports are stored');
+    ok(blocked.status === 403, 'presence route rejects a foreign origin');
+    ok(invalid.status === 400, 'presence route rejects a bad device id');
+    ok(split.GP === 0 && split.WC === 1 && split.KZN === 1 && split.EC === 0 && split.reportingDevices === 2, 'stored cards are a partition of reporting devices');
+    const body = await moved.json();
+    ok(body.ok === true && !JSON.stringify(body).includes('usr_abc'), 'presence response does not echo the device id');
+    const unconfigured = await readRegionalSplit(null, now);
+    ok(unconfigured.status === 'unconfigured' && unconfigured.exact === false, 'missing D1 binding is not shown as an exact zero split');
+}
+const storeJs = readFileSync(join(ROOT, 'workers/nexttrain-telemetry/region-store.js'), 'utf8');
+ok(storeJs.includes('ON CONFLICT(day, device_hash)'), 'daily region upsert moves a device instead of inserting another row');
+const prefsJs = readFileSync(join(ROOT, 'src/lib/prefs.js'), 'utf8');
+ok(prefsJs.includes('region-presence-client.js'), 'selected region changes report the exact daily assignment');
 
 if (failures.length) {
     console.error('verify-admin-telemetry FAILED:\n - ' + failures.join('\n - '));

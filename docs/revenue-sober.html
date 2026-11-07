@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
+<title>Next Train — sober revenue brief (Sep 2026)</title>
+<style>
+  :root {
+    --bg: #111110; --card: #1a1a17; --line: rgba(255,255,255,.08);
+    --text: #eceae3; --muted: #8a877c; --gold: #c9a84c; --ok: #5fb88a;
+    --bad: #d46a62; --blue: #7aa2d6;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: ui-sans-serif, system-ui, sans-serif; background: var(--bg); color: var(--text);
+    max-width: 880px; margin: 0 auto; padding: 20px 16px 48px; line-height: 1.5; }
+  h1 { font-size: 1.35rem; font-weight: 650; margin-bottom: 4px; }
+  .sub { color: var(--muted); font-size: 12px; margin-bottom: 18px; }
+  .tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 18px; }
+  .tabs button { appearance: none; border: .5px solid var(--line); background: transparent; color: var(--muted);
+    font: inherit; font-size: 12px; font-weight: 650; letter-spacing: .04em; text-transform: uppercase;
+    padding: 8px 12px; border-radius: 8px; cursor: pointer; }
+  .tabs button[aria-selected="true"] { color: var(--bg); background: var(--gold); border-color: var(--gold); }
+  .pane[hidden] { display: none; }
+  h2 { font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); margin: 22px 0 10px; }
+  .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  .card { background: var(--card); border: .5px solid var(--line); border-radius: 8px; padding: 12px; }
+  .k { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; }
+  .v { font-size: 1.25rem; font-weight: 650; margin-top: 4px; font-variant-numeric: tabular-nums; }
+  .s { font-size: 11px; color: var(--muted); margin-top: 4px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 8px 8px; border-bottom: .5px solid var(--line); vertical-align: top; }
+  th { font-size: 10px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); font-weight: 600; }
+  .n { font-variant-numeric: tabular-nums; }
+  .gold { color: var(--gold); }
+  .ok { color: var(--ok); }
+  .bad { color: var(--bad); }
+  .note { border-left: 3px solid var(--gold); background: rgba(201,168,76,.08); padding: 10px 12px; border-radius: 0 8px 8px 0; margin: 12px 0; font-size: 13px; }
+  .note.ok { border-color: var(--ok); background: rgba(95,184,138,.08); }
+  .note.bad { border-color: var(--bad); background: rgba(212,106,98,.08); }
+  .note.info { border-color: var(--blue); background: rgba(122,162,214,.08); }
+  .note strong { display: block; margin-bottom: 2px; }
+  .bar { height: 8px; background: #2a2a26; border-radius: 99px; overflow: hidden; margin: 6px 0 4px; }
+  .bar > span { display: block; height: 100%; background: var(--gold); }
+  .row { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  ul { padding-left: 1.1rem; font-size: 13px; }
+  li { margin: 4px 0; }
+  footer { margin-top: 28px; padding-top: 12px; border-top: .5px solid var(--line); font-size: 11px; color: var(--muted); }
+  @media (max-width: 640px) {
+    .grid { grid-template-columns: 1fr 1fr; }
+    .two { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+  <h1>Next Train — sober revenue brief</h1>
+  <p class="sub">Operator only · noindex · as at 21 Sep 2026 · $4 CPM confirmed · model FX R16.40/USD (not live spot) · peak Friday is not the baseline</p>
+
+  <div class="tabs" role="tablist">
+    <button type="button" role="tab" id="tab-pedro" aria-selected="true" aria-controls="pane-pedro">Pedro / Clever</button>
+    <button type="button" role="tab" id="tab-forecast" aria-selected="false" aria-controls="pane-forecast">May–Dec forecast</button>
+    <button type="button" role="tab" id="tab-defender" aria-selected="false" aria-controls="pane-defender">Defender roadmap</button>
+  </div>
+
+  <!-- TAB 1 -->
+  <section class="pane" id="pane-pedro" role="tabpanel" aria-labelledby="tab-pedro">
+    <p class="note ok">
+      <strong>Ledger (Gemini, confirmed against Clever)</strong>
+      Advance received $480.00 (2 × $240). Delivered $454.01. Outstanding $25.99 = 6,498 hits at $4 CPM. First hit 30 Apr 2026. Estimated run-out Friday 25 Sep 2026. After that, the same $4 is cash, not repayment.
+    </p>
+
+    <div class="grid">
+      <div class="card"><p class="k">Delivered hits</p><p class="v n">113,504</p><p class="s">to 19 Sep</p></div>
+      <div class="card"><p class="k">Delivered $</p><p class="v n gold">$454.01</p><p class="s">Clever $4 CPM</p></div>
+      <div class="card"><p class="k">Still owed</p><p class="v n">$25.99</p><p class="s">6,498 hits</p></div>
+      <div class="card"><p class="k">Sep 1–21 dashboard</p><p class="v n">21,358</p><p class="s">$85.43 est. · ZA 100%</p></div>
+    </div>
+
+    <h2>What actually shipped</h2>
+    <table>
+      <thead><tr><th>Period</th><th>Hits</th><th>$ at $4</th><th>Hits / day</th></tr></thead>
+      <tbody>
+        <tr><td>May 2026</td><td class="n">21,853</td><td class="n">$87.41</td><td class="n">705</td></tr>
+        <tr><td>1 Jun – 31 Aug</td><td class="n">72,730</td><td class="n">$290.92</td><td class="n">791</td></tr>
+        <tr><td>1–19 Sep</td><td class="n">18,921</td><td class="n">$75.68</td><td class="n">995</td></tr>
+        <tr><td>15–19 Sep (5 days)</td><td class="n">3,409</td><td class="n">$13.63</td><td class="n">682</td></tr>
+        <tr><td><b>Total to 19 Sep</b></td><td class="n"><b>113,504</b></td><td class="n"><b>$454.01</b></td><td class="n">~790 life</td></tr>
+      </tbody>
+    </table>
+    <p class="s" style="margin-top:8px;">Jun–Aug is one blob in the ledger. Implied split if growth was roughly linear from May’s 705/day toward Sep’s ~1,000/day, then scaled to the known 72,730: Jun ~21.6k · Jul ~24.5k · Aug ~26.6k. Treat as a sketch, not invoices.</p>
+
+    <h2>Traffic that ads actually see</h2>
+    <div class="grid">
+      <div class="card"><p class="k">Weekday DAU</p><p class="v n">~1,650–1,900</p><p class="s">week of 15–21 Sep</p></div>
+      <div class="card"><p class="k">Peak Friday</p><p class="v n gold">~2,100–2,200</p><p class="s">a peak. not every day</p></div>
+      <div class="card"><p class="k">Sunday DAU</p><p class="v n">~680</p><p class="s">commute product</p></div>
+      <div class="card"><p class="k">Weekday ad hits</p><p class="v n">~1,100</p><p class="s">~0.6 hits per DAU</p></div>
+    </div>
+    <p class="note">
+      <strong>Do not equate DAU with billable hits</strong>
+      Clever is viewable impressions, not unique users. ~1,100 weekday hits on ~1,800 DAU is the real yield. WAU was 8,109 (7 Sep) then 7,852 (14 Sep). That is a down week. Traffic is lumpy. 2,200 on one Friday does not become 2,200 forever.
+    </p>
+
+    <h2>CPM and stacking</h2>
+    <ul>
+      <li>You are on Pedro / Overads / Clever at <b>$4 CPM</b>. That is the number in the ledger. $6 was a hope, not the contract.</li>
+      <li>Do not stack AdSense on gambling demand. That can kill AdSense.</li>
+      <li>Negotiate CPM only after the $480 is cleared and you have a clean month of $4 cash. Floor stay $4 until then.</li>
+      <li>Paid Facebook/Google user acquisition still fails the maths: roughly R2–R8 per click vs about R2 of ad revenue per user per month at $4.</li>
+    </ul>
+  </section>
+
+  <!-- TAB 2 -->
+  <section class="pane" id="pane-forecast" role="tabpanel" aria-labelledby="tab-forecast" hidden>
+    <p class="note bad">
+      <strong>Old briefs were too hot</strong>
+      They put Aug at 2,200–2,900 average DAU and Dec Astro at 4,800 DAU / R9k. You are not there. September weekday DAU is still under 2,000. Astro landings are indexed and still ~1% of Search clicks. This table uses <b>ad hits</b>, because that is what Clever pays.
+    </p>
+
+    <h2>Observed (hits)</h2>
+    <table>
+      <thead><tr><th>Month</th><th>Hits</th><th>$4</th><th>R at 16.40</th><th>Note</th></tr></thead>
+      <tbody>
+        <tr><td>May</td><td class="n">21,853</td><td class="n">$87</td><td class="n">R1,433</td><td>confirmed</td></tr>
+        <tr><td>Jun–Aug</td><td class="n">72,730</td><td class="n">$291</td><td class="n">R4,771</td><td>confirmed blob</td></tr>
+        <tr><td>Sep 1–21</td><td class="n">21,358</td><td class="n">$85</td><td class="n">R1,401</td><td>Clever dashboard</td></tr>
+      </tbody>
+    </table>
+
+    <h2>Forward (hits, not DAU fanfic)</h2>
+    <p class="s" style="margin-bottom:8px;">Three paths. Plan on Flat. Gentle is “SEO helps a bit.” Bull is not a budget.</p>
+    <table>
+      <thead>
+        <tr>
+          <th>Month</th>
+          <th>Flat hits</th>
+          <th>Flat $</th>
+          <th>Gentle +8%/mo</th>
+          <th>Gentle $</th>
+          <th>Stall −5%</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Sep (full, est.)</td>
+          <td class="n">30,200</td>
+          <td class="n">$121</td>
+          <td class="n">30,200</td>
+          <td class="n">$121</td>
+          <td class="n">$121</td>
+        </tr>
+        <tr>
+          <td>Oct</td>
+          <td class="n">30,000</td>
+          <td class="n">$120</td>
+          <td class="n">32,400</td>
+          <td class="n">$130</td>
+          <td class="n">$114</td>
+        </tr>
+        <tr>
+          <td>Nov</td>
+          <td class="n">30,000</td>
+          <td class="n">$120</td>
+          <td class="n">35,000</td>
+          <td class="n">$140</td>
+          <td class="n">$108</td>
+        </tr>
+        <tr>
+          <td>Dec (holiday ~72%)</td>
+          <td class="n">21,600</td>
+          <td class="n">$86</td>
+          <td class="n">25,200</td>
+          <td class="n">$101</td>
+          <td class="n">$78</td>
+        </tr>
+        <tr>
+          <td><b>Oct–Dec cash</b></td>
+          <td class="n">81,600</td>
+          <td class="n gold"><b>$326</b></td>
+          <td class="n">92,600</td>
+          <td class="n"><b>$370</b></td>
+          <td class="n">~$300</td>
+        </tr>
+      </tbody>
+    </table>
+    <p class="s" style="margin-top:8px;">Sep full ≈ dashboard 21,358 through the 21st + ~7 weekdays × 1,100 + one weekend ~1,150. After 25 Sep the $4 is yours, but the monthly run-rate does not jump. Flat ≈ R1,970/month. Gentle ≈ R2,100–R2,300. Stall ≈ R1,800.</p>
+
+    <div class="two" style="margin-top:16px;">
+      <div class="card">
+        <p class="k">Salary parity at $4</p>
+        <p class="v n">~305k hits / mo</p>
+        <p class="s">R20,000 ÷ 16.40 = $1,220 → 304,900 hits. You do ~30k. About <b>10×</b> today. Not Q4 2026.</p>
+      </div>
+      <div class="card">
+        <p class="k">Astro vs ads</p>
+        <p class="v">Indexed ≠ paid</p>
+        <p class="s">New URLs raised Search impressions and cut CTR. Homepage still ~95%+ of Search clicks. Ads follow DAU on the app, not GSC impression spikes.</p>
+      </div>
+    </div>
+
+    <p class="note info">
+      <strong>December</strong>
+      Keep a 25–35% hit dip. Schools and offices empty. Do not spend November’s $120 as if December will match.
+    </p>
+  </section>
+
+  <!-- TAB 3 -->
+  <section class="pane" id="pane-defender" role="tabpanel" aria-labelledby="tab-defender" hidden>
+    <p class="note bad">
+      <strong>Next Train does not buy the Defender on this CPM</strong>
+      Old brief had ads at R8k–R22k/month covering half an instalment. At the real ~R2,000/month, ads are coffee money next to a used D300 (~R19k instalment + ~R7k insurance/fuel). The car still runs on salary and the visa, not Clever.
+    </p>
+
+    <div class="grid">
+      <div class="card"><p class="k">Take-home (stated)</p><p class="v">R20,000</p><p class="s">contractor</p></div>
+      <div class="card"><p class="k">Ads now (flat)</p><p class="v gold">~R2,000</p><p class="s">$120 × 16.40</p></div>
+      <div class="card"><p class="k">Used D300 deposit 20%</p><p class="v">~R190k</p><p class="s">on ~R950k</p></div>
+      <div class="card"><p class="k">New D250 SE 20%</p><p class="v">~R366k</p><p class="s">on ~R1.83m</p></div>
+    </div>
+
+    <h2>If you save from salary, not ads</h2>
+    <div class="card" style="margin-bottom:10px;">
+      <div class="row"><span>Used deposit R190k at R5k/month</span><span>38 months</span></div>
+      <div class="bar"><span style="width:5%"></span></div>
+      <div class="row"><span>Used deposit at R10k/month</span><span>19 months</span></div>
+      <div class="bar"><span style="width:10%"></span></div>
+      <div class="row"><span>New deposit R366k at R10k/month</span><span>37 months</span></div>
+      <div class="bar"><span style="width:5%"></span></div>
+    </div>
+    <p class="s">Bars are empty-progress sketches (you did not give current savings). Ads at R2k/month, if fully saved, shave ~1 month per year off a R10k salary-save plan. Nice. Not decisive.</p>
+
+    <h2>Phases, rewritten</h2>
+    <div class="two">
+      <div class="card">
+        <p class="k">Now – 6 months</p>
+        <p class="v" style="font-size:1rem;">Hold</p>
+        <p class="s">Salary R20k. Ads ~R1.8k–R2.3k. Clear the $480, then bank $4 cash. Do not budget a CPM hike. Do not budget 3,000 DAU.</p>
+      </div>
+      <div class="card">
+        <p class="k">6–18 months</p>
+        <p class="v" style="font-size:1rem;">Visa / salary</p>
+        <p class="s">Still the only lever that moves a Defender. Market actuarial pay is a different conversation from $120 ad months.</p>
+      </div>
+    </div>
+
+    <h2>Direct answers (same questions, colder numbers)</h2>
+    <ul>
+      <li><b>New or used?</b> Used, if at all. New instalment ~R30k is above take-home.</li>
+      <li><b>When?</b> Used: whenever salary save hits the deposit — often 18–36 months if you actually put R5–10k aside. New: years. Ads do not pull this forward by a year.</li>
+      <li><b>Role of Next Train?</b> A few thousand rand a month, lumpy, ZA-only, weekend-soft. Treat as discretionary. Do not write it into a bank affordability letter as R10k.</li>
+      <li><b>Risk?</b> DAU already wiggled down one week. CPM stays $4. December dips. ZAR moves. Plateau at ~30k hits/month is the base case, not a disaster.</li>
+    </ul>
+  </section>
+
+  <footer>
+    Sources: Clever 1–21 Sep 2026 (21,358 hits, $85.43) · Gemini ledger to 19 Sep · in-app DAU 15–21 Sep · GSC 6-month export (homepage still almost all clicks).
+    Hits × $4 / 1000 = $. $ × 16.40 = model rand. Not tax advice. Not a bank quote.
+  </footer>
+
+  <script>
+    const tabs = [...document.querySelectorAll('[role="tab"]')];
+    const panes = {
+      'tab-pedro': document.getElementById('pane-pedro'),
+      'tab-forecast': document.getElementById('pane-forecast'),
+      'tab-defender': document.getElementById('pane-defender')
+    };
+    function select(id) {
+      tabs.forEach((t) => {
+        const on = t.id === id;
+        t.setAttribute('aria-selected', on ? 'true' : 'false');
+        panes[t.id].hidden = !on;
+      });
+      history.replaceState(null, '', '#' + id.replace('tab-', ''));
+    }
+    tabs.forEach((t) => t.addEventListener('click', () => select(t.id)));
+    const hash = (location.hash || '#pedro').slice(1);
+    const start = { pedro: 'tab-pedro', forecast: 'tab-forecast', defender: 'tab-defender' }[hash] || 'tab-pedro';
+    select(start);
+  </script>
+</body>
+</html>

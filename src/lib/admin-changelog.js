@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_11.07.14': [
+        'A wide screen with a mouse opens a desktop window: the same Home, Trip Planner, and Options sit in a side rail, and the two next-train cards sit side by side. Phone preview sits at the bottom of that rail, and under Theme and Preferences. A phone stays the phone column. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_11.07.13': [
         'Departure rows no longer say Earlier or Later. A planner train name uses a dotted underline. A reply to an advisory wraps a long link inside the quote. Feedback Hub wraps long links and long unbroken text in a message. Add attachment sits in the corner of the details box, not as its own field. No commuter What\'s New. forceShow stays false.',
     ],

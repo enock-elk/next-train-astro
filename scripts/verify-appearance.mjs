@@ -192,6 +192,9 @@ const contentLayout = readFileSync(new URL('../src/layouts/ContentLayout.astro',
 assert(contentLayout.includes('font-size: clamp(13.12px, calc(100vw * 16 / 390), 16px)'), 'map layout first-paint scales html rem on phones');
 assert(contentLayout.includes('font-size: max(16px, 1em) !important'), 'map layout floors focused fields at 16px');
 assert(layout.includes('max-width: 28rem'), 'phone shell keeps the 28rem max stretch');
+assert(layout.includes('data-nt-frame'), 'desktop layout is a frame, not the phone column');
+assert(layout.includes('Phone preview'), 'a desktop can switch back to the phone column');
+assert(readFileSync(new URL('../src/lib/desktop-frame.js', import.meta.url), 'utf8').includes('ntFrame'), 'phone preview is remembered');
 assert(!/max-width:\s*639px[\s\S]{0,180}max-width:\s*none/.test(layout), 'phone shell no longer drops max-width');
 
 assert(css.includes('#app-header .seo-open-app'), 'SEO header Open link uses chrome foreground');

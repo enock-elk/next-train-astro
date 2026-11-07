@@ -24,7 +24,7 @@ import {
     sentryStatusFromResult,
 } from '../workers/nexttrain-telemetry/region-presence.js';
 import { handleRegionPresence, readRegionalSplit } from '../workers/nexttrain-telemetry/region-store.js';
-import { formatFeedbackDiagLine } from '../src/lib/feedback-diag-line.js';
+import { formatFeedbackDiagLine, stationChoiceLabel } from '../src/lib/feedback-diag-line.js';
 import {
     computeDeployPhase,
     dispatchProductionDeploy,
@@ -198,7 +198,9 @@ ok(adminJs.includes('Reporting devices by selected region'), 'regional modal nam
 ok(adminJs.includes('Reporting devices today:'), 'regional modal total is reporting devices');
 ok(adminJs.includes('People today (Analytics):'), 'Analytics people stay beside the exact split');
 ok(!adminJs.includes('No region on the hit'), 'regional modal no longer shows an overlapping unset bucket');
-ok(adminJs.includes('The four cards add up to'), 'regional note says the cards are one assignment each');
+ok(adminJs.includes('hideRegionNote'), 'an exact Worker split clears the overlapping-region warning');
+ok(adminJs.includes('previous overlapping region report'), 'a legacy Worker payload still explains the old cards');
+ok(adminJs.includes("stationChoiceLabel") || adminJs.includes("(${autoFlag ? 'auto' : 'man'})"), 'build notes name the station as (man) or (auto)');
 ok(adminJs.includes("data.metric !== 'reportingDevices'"), 'old overlapping Worker payloads are not labelled as an exact split');
 ok(workerJs.includes('readRegionalSplit'), 'worker reads the exact regional split');
 ok(workerJs.includes("pathname === '/region-presence'"), 'worker accepts the region presence beacon');
@@ -403,6 +405,9 @@ ok(presenceOriginAllowed('https://evil.example') === false, 'foreign origin cann
     ok(missing.sentryStatus === 'unconfigured' && missing.todayErrors === '--', 'missing Sentry config is not a zero');
     ok(failed.sentryStatus === 'error' && !failed.sentryErrorDetail.includes('secret-token'), 'Sentry error detail redacts bearer tokens');
 }
+ok(stationChoiceLabel('PRETORIA', false) === 'Pretoria (man)', 'a manual station is Pretoria (man)');
+ok(stationChoiceLabel('LENZ', true) === 'Lenz (Auto)', 'an auto-located station is Lenz (Auto)');
+ok(stationChoiceLabel('', false) === '', 'a missing station is not called Manual station');
 ok(formatFeedbackDiagLine({
     phone: 'K', network: 'mobile', signal: 'weak', viewport: '384x748',
 }) === 'Mobile network · Weak signal · 384 × 748', 'one-letter handset token is left off and the rest is readable');

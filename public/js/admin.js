@@ -4506,26 +4506,35 @@ const Admin = {
         const todayEl = document.getElementById('region-today-total');
         const gaEl = document.getElementById('region-today-sessions');
         const note = document.getElementById('region-note');
+        const showRegionNote = (text) => {
+            if (!note) return;
+            note.textContent = text;
+            note.classList.remove('hidden');
+        };
+        const hideRegionNote = () => {
+            if (!note) return;
+            note.textContent = '';
+            note.classList.add('hidden');
+        };
         if (data.metric !== 'reportingDevices') {
             if (todayEl) todayEl.textContent = `People today: ${n(data.todayUsers ?? Admin.currentTodayUsers)}`;
             if (gaEl) gaEl.textContent = 'Exact device split is not on this telemetry Worker yet.';
-            if (note) note.textContent = 'These cards are the previous overlapping region report. Deploy the telemetry Worker before reading them as one device per region.';
+            showRegionNote('These cards are the previous overlapping region report. Deploy the telemetry Worker before reading them as one device per region.');
             return;
         }
         if (todayEl) todayEl.textContent = `Reporting devices today: ${n(reporting)}`;
         if (gaEl) gaEl.textContent = `People today (Analytics): ${n(gaPeople)}`;
-        if (!note) return;
-        if (data.status === 'unconfigured') {
-            note.textContent = 'The exact split is not available until the telemetry database is bound. Analytics people today stays the site-wide total.';
-            return;
-        }
         if (data.status === 'error') {
-            note.textContent = data.detail
+            showRegionNote(data.detail
                 ? `Could not read the reporting-device split. ${data.detail}`
-                : 'Could not read the reporting-device split.';
+                : 'Could not read the reporting-device split.');
             return;
         }
-        note.textContent = `Each reporting device is counted once, under the region selected most recently today, Johannesburg time. The four cards add up to ${Admin.formatNumber(assigned)}. Analytics people today is separate: visitors on an older build, and anyone who has not reported yet, are not in this split. Clearing the browser starts a new reporting device.`;
+        if (data.status === 'unconfigured' || data.exact !== true) {
+            showRegionNote('The exact split is not available until the telemetry database is bound. Analytics people today stays the site-wide total.');
+            return;
+        }
+        hideRegionNote();
     },
 
     // GROWTH SPRINT PHASE 6: Dynamic 7-Day Chart Snapshot Engine (SVG Clone Method)
@@ -8853,9 +8862,12 @@ const Admin = {
                     const verBtn = /^V\d+_/i.test(ver)
                         ? ` · <button type="button" class="fb-version-chip font-mono underline decoration-dotted underline-offset-2 focus:outline-none" data-admin-changelog="${esc(ver)}" data-cl-route="" data-cl-station="${esc(station)}" data-cl-auto="${auto ? '1' : '0'}">${esc(ver)}</button>`
                         : (ver ? ` · ${esc(ver)}` : '');
-                    const stationBit = station
-                        ? ` · ${esc(station)}${auto ? ' (auto)' : ' (manual)'}`
-                        : '';
+                    const stationBit = (typeof window.stationChoiceLabel === 'function')
+                        ? (() => {
+                            const label = window.stationChoiceLabel(station, auto);
+                            return label ? ` · ${esc(label)}` : '';
+                        })()
+                        : (station ? ` · ${esc(station)} (${auto ? 'Auto' : 'man'})` : '');
                     return Admin.stackedContributorRowHtml(
                         h.userId,
                         `${Admin.formatDate(h.timestamp)} · dep ${esc(h.depTime || '-')}${stationBit}${verBtn}`,
@@ -21923,9 +21935,12 @@ const Admin = {
                         const commuterRouteLabel = Admin.inboxRouteLabel(item.routeId) || threadRouteLabel;
                         const stationLabel = String(item.station || '').trim();
                         const stationAuto = item.stationAutoLocated === true || item.stationAutoLocated === '1' || item.stationAutoLocated === 1;
+                        const stationChoice = (typeof window.stationChoiceLabel === 'function')
+                            ? window.stationChoiceLabel(stationLabel, stationAuto)
+                            : (stationLabel ? `${stationLabel} (${stationAuto ? 'Auto' : 'man'})` : '');
                         const routeStationBits = [];
                         if (commuterRouteLabel) routeStationBits.push(commuterRouteLabel);
-                        if (stationLabel) routeStationBits.push(stationLabel);
+                        if (stationChoice) routeStationBits.push(stationChoice);
                         const commuterRouteHtml = routeStationBits.length
                             ? `<div class="inbox-bubble-route-row">${secureEscape(routeStationBits.join(' · '))}</div>`
                             : '';
@@ -22336,14 +22351,12 @@ const Admin = {
             const routeLabel = String(ctx.routeLabel || ctx.route || '').trim();
             const station = String(ctx.station || '').trim();
             const autoFlag = ctx.stationAutoLocated === true || ctx.stationAutoLocated === '1' || ctx.stationAutoLocated === 1;
+            const choice = (typeof window.stationChoiceLabel === 'function')
+                ? window.stationChoiceLabel(station, autoFlag)
+                : (station ? `${station} (${autoFlag ? 'Auto' : 'man'})` : '');
             const bits = [];
             if (routeLabel) bits.push(routeLabel);
-            if (station) {
-                bits.push(station);
-                bits.push(autoFlag ? 'Auto-locate' : 'Manual');
-            } else if (routeLabel) {
-                bits.push(autoFlag ? 'Auto-locate' : 'Manual station');
-            }
+            if (choice) bits.push(choice);
             if (bits.length) {
                 meta.textContent = bits.join(' · ');
                 meta.classList.remove('hidden');

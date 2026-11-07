@@ -227,6 +227,7 @@ function paintOpenGridBody() {
     if (noServiceSheet) bindNoWeekendWeekdaySwitch(lastGridBody.direction || window._gridSwapDir || 'A');
     bindGridExpressSkips();
     bindGridKempNotes();
+    bindGridProvNotes();
     bindGridViaNotes();
     window.Renderer?.fitGridStatusTags?.(grid);
 }
@@ -271,6 +272,33 @@ function bindGridKempNotes() {
     grid.addEventListener('keydown', (e) => {
         if (e.key !== 'Enter' && e.key !== ' ') return;
         const hit = e.target?.closest?.('[data-kemp-open="1"]');
+        if (!hit || hit.tagName === 'TD') return;
+        e.preventDefault();
+        open(hit);
+    });
+}
+
+function bindGridProvNotes() {
+    const grid = document.getElementById('grid-container');
+    if (!grid || grid.dataset.provBound === '1') return;
+    grid.dataset.provBound = '1';
+    const open = (el) => {
+        const train = el?.getAttribute?.('data-prov-train') || 'This train';
+        openTrainMarkSheet({
+            train,
+            body: `Train ${train} is provisional. It is listed, but it is not guaranteed to run.`,
+            badge: 'Prov',
+        });
+    };
+    grid.addEventListener('click', (e) => {
+        const hit = e.target?.closest?.('[data-prov-open="1"]');
+        if (!hit || e.target?.closest?.('[data-expr-skip="1"]')) return;
+        e.preventDefault();
+        open(hit);
+    });
+    grid.addEventListener('keydown', (e) => {
+        if (e.key !== 'Enter' && e.key !== ' ') return;
+        const hit = e.target?.closest?.('[data-prov-open="1"]');
         if (!hit || hit.tagName === 'TD') return;
         e.preventDefault();
         open(hit);
@@ -862,6 +890,7 @@ export async function renderFullScheduleGrid(direction = null, dayOverride = nul
     if (noServiceSheet) bindNoWeekendWeekdaySwitch(direction);
     bindGridExpressSkips();
     bindGridKempNotes();
+    bindGridProvNotes();
     bindGridViaNotes();
     bindGridExclusionRefresh();
 

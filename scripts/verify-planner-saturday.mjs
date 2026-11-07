@@ -565,6 +565,23 @@ if (!ui.includes('flex-col items-start text-left') || !ui.includes('Via ${escape
     fail('planner train name must stack Via under the train on a narrow card');
 }
 if (!gridJs.includes('Irene is not the last stop')) fail('KEMP tap must explain the train continues');
+globalThis.window = { isTrainProvisional: (train) => train === '0626' };
+const provHtml = Renderer._buildGridHTML(ireneGrid, 'pta_to_irene_weekday', 'pta-irene', 1, false, false, 'weekday');
+const provExport = Renderer._buildGridHTML(ireneGrid, 'pta_to_irene_weekday', 'pta-irene', 1, false, true, 'weekday');
+delete globalThis.window;
+if (!provHtml.includes('>Prov<') || !provHtml.includes('data-prov-train="0626"') || provHtml.includes('data-prov-open="1" data-prov-train="0604"')) {
+    fail('a provisional column must show a clickable Prov tag');
+}
+if (!provHtml.includes('color:#1d4ed8') || !provHtml.includes('letter-spacing:0.02em')) {
+    fail('Prov must use the KEMP tag metrics');
+}
+if (provHtml.includes('data-kemp-train="0626"')) fail('Prov must take the status slot ahead of KEMP');
+if (!provExport.includes('>Prov<') || provExport.includes('data-prov-open') || !provExport.includes('color:#1e40af') || !provExport.includes('export-note-col')) {
+    fail('export Prov must use the light KEMP tag and must not be a click target');
+}
+if (!gridJs.includes('data-prov-open') || !gridJs.includes('it is not guaranteed to run')) {
+    fail('Prov tap must open the same advisory as KEMP');
+}
 if (!gridJs.includes('goes via the ${route} route')) fail('via tap must explain the route');
 if (!gridJs.includes('fitGridStatusTags')) fail('in-app grid must fit long status tags after paint');
 if (!gridJs.includes("e.target?.closest?.('[data-expr-skip=\"1\"]')")) {

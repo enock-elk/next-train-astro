@@ -98,8 +98,11 @@ assert(!/#current-day,[\s\S]{0,220}font-size: 2\.55rem/.test(css), 'day line no 
 assert(!css.includes('#current-day span {\n  font-weight: inherit'), 'day line span no longer inherits the title color');
 assert(!css.includes('color: #fecaca !important'), 'Classic No Service is not peach-red');
 assert(css.includes('button#current-day.nt-day-quiet'), 'Sunday uses the quiet day class');
-assert(css.includes('background: #fbbf24'), 'Sunday status is an amber dot');
-assert(css.includes('button#current-day.nt-day-quiet span.text-red-600::before'), 'Sunday status paints a leading dot');
+assert(css.includes('background: #fef3c7'), 'Sunday No service uses a pale amber capsule');
+assert(css.includes('color: #92400e !important'), 'Sunday No service text stays dark amber on a light header');
+assert(/html\.dark button#current-day\.nt-day-quiet span\.text-red-600,[\s\S]{0,180}background:\s*#78350f/.test(css), 'dark Sunday No service uses a brown capsule');
+assert(css.includes('color: #fef3c7 !important'), 'dark Sunday No service text stays cream');
+assert(!css.includes('button#current-day.nt-day-quiet span.text-red-600::before'), 'Sunday No service no longer uses only an amber dot');
 assert(css.includes('color: #f87171 !important;'), 'SEO day line keeps pale red');
 assert(!css.includes('background: #e11d48'), 'Sunday is no longer a solid red nested pill');
 assert(!/#current-day span\.text-red-600[\s\S]{0,180}color:\s*#dc2626 !important;/.test(css), 'No Service no longer uses red-600 on Classic light');

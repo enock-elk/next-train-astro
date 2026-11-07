@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_11.07.15': [
+        'Build notes name the selected station as Pretoria (man) or Lenz (Auto). Manual station without a name is gone. The regional overlapping-report warning hides once the telemetry Worker returns an exact device split. A provisional train shows Prov in the timetable and on the saved sheet, in the same slot as KEMP, and a tap opens the advisory. Sunday No service uses the Saturday Schedule capsule, in amber, on light and dark headers. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_11.07.14': [
         'Regional breakdown counts each reporting device once, under the app region selected most recently today, Johannesburg time. The four cards add up. Analytics people today stays separate because older builds have not reported yet. Sentry today shows whether Sentry is unconfigured, failed, or genuinely at zero. The 24h list under it is the Firebase app diagnostic record, not a Sentry estimate. Feedback handset, network, signal, and screen size sit under the route line in Build notes. A one-letter handset token is left off. A trip-map station dot opens the station name. No commuter What\'s New. forceShow stays false.',
     ],

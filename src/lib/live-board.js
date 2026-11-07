@@ -738,7 +738,8 @@ export function openTrainMarkSheet({ train, body, badge } = {}) {
     if (titleEl) titleEl.textContent = `Train ${trainLabel}`;
     if (bodyEl) bodyEl.textContent = note;
     if (badgeEl) {
-        badgeEl.className = 'w-full text-center text-[10px] font-black uppercase tracking-widest text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/20 py-2.5 rounded-lg border border-blue-200 dark:border-blue-800/50';
+        const keepCase = badgeText === 'Prov';
+        badgeEl.className = `w-full text-center text-[10px] font-black${keepCase ? '' : ' uppercase'} tracking-widest text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/20 py-2.5 rounded-lg border border-blue-200 dark:border-blue-800/50`;
         badgeEl.textContent = badgeText;
     }
     if (timeEl) {

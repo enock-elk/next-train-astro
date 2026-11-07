@@ -54,7 +54,7 @@ import {
 import { runScheduleQaReport, scanScheduleSheet, QA_ISSUE_TYPES } from './schedule-qa.js';
 import { runZoneDistanceAudit, DEFAULT_ZONE_KM_BANDS, ZONE_KM_RANGE_LABELS } from './zone-distance-audit.js';
 import { ADMIN_CHANGELOG, lookupAdminChangelog, listAdminChangelogVersions, normalizeAdminChangelogKey } from './admin-changelog.js';
-import { formatFeedbackDiagLine } from './feedback-diag-line.js';
+import { formatFeedbackDiagLine, stationChoiceLabel } from './feedback-diag-line.js';
 import { $currentRouteId, $userRegion, $fullDatabase, $globalStationIndex, $deviceId, $isSimMode, $simTime } from '../store.js';
 import { bootFirebase } from './firebase-boot.js';
 import { applyAdminAuthedChrome } from './admin-chrome.js';
@@ -203,6 +203,7 @@ export function exposeAdminGlobals() {
     window.listAdminChangelogVersions = listAdminChangelogVersions;
     window.normalizeAdminChangelogKey = normalizeAdminChangelogKey;
     window.formatFeedbackDiagLine = formatFeedbackDiagLine;
+    window.stationChoiceLabel = stationChoiceLabel;
     window.getGridOrderManifest = getGridOrderManifest;
     window.getRuntimeGridOrderRecord = getRuntimeGridOrderRecord;
     window.normalizeGridOrder = normalizeGridOrder;

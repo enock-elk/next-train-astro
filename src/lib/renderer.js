@@ -1124,7 +1124,7 @@ export const Renderer = {
                             const isHighlight = i === activeColIndex;
                             const viaLabel = variantByTrain[h] || '';
                             const exclusionType = isTrainExcluded(h, routeId, dayIdx, isExport ? 'export' : 'grid');
-                            const provisional = !isExport && isTrainProvisional(h, routeId, dayIdx, schedule, 'grid');
+                            const provisional = isTrainProvisional(h, routeId, dayIdx, schedule, isExport ? 'export' : 'grid');
                             const paintExclusion = !!exclusionType && (!isExport || exclusionShowsOnExport(h, routeId, dayIdx));
                             
                             let bgClass = '';
@@ -1167,6 +1167,10 @@ export const Renderer = {
                                     bgClass = 'bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 opacity-90';
                                     headerContent = stack(`${banIcon} NO SVC`, 'font-size:8px;color:#dc2626;font-weight:900;letter-spacing:0.02em;text-decoration:underline dotted #f87171;text-underline-offset:2px;');
                                 }
+                            } else if (provisional) {
+                                headerContent = stack('Prov', noteTagStyle);
+                                bgClass = noteHeadClass;
+                                if (!isExport && isHighlight) bgClass += ' font-bold';
                             } else if (continuesToKemp) {
                                 headerContent = stack('KEMP', noteTagStyle);
                                 bgClass = noteHeadClass;
@@ -1182,16 +1186,19 @@ export const Renderer = {
                             const exclHeadAttrs = (!isExport && paintExclusion && exclusionType !== 'special')
                                 ? ` data-excl-open="1" data-excl-route="${escapeHTML(String(routeId || ''))}" data-excl-train="${escapeHTML(String(h || ''))}" data-excl-day="${Number(dayIdx)}" tabindex="0" role="button" aria-label="Why train ${escapeHTML(String(h))} has no service"`
                                 : '';
-                            const kempHeadAttrs = (!isExport && continuesToKemp && !paintExclusion)
+                            const provHeadAttrs = (!isExport && provisional && !paintExclusion)
+                                ? ` data-prov-open="1" data-prov-train="${escapeHTML(String(h || ''))}" tabindex="0" role="button" aria-label="Train ${escapeHTML(String(h))} is provisional"`
+                                : '';
+                            const kempHeadAttrs = (!isExport && continuesToKemp && !paintExclusion && !provisional)
                                 ? ` data-kemp-open="1" data-kemp-train="${escapeHTML(String(h || ''))}" tabindex="0" role="button" aria-label="Train ${escapeHTML(String(h))} continues to Kempton Park"`
                                 : '';
-                            const viaColumn = !!(viaLabel && !paintExclusion && !continuesToKemp);
+                            const viaColumn = !!(viaLabel && !paintExclusion && !continuesToKemp && !provisional);
                             const viaHeadAttrs = (!isExport && viaColumn)
                                 ? ` data-via-open="1" data-via-train="${escapeHTML(String(h || ''))}" data-via-route="${escapeHTML(viaLabel)}" tabindex="0" role="button" aria-label="Train ${escapeHTML(String(h))} goes via the ${escapeHTML(viaLabel)} route"`
                                 : '';
                             const wrapClass = (isExport && paintExclusion && exclusionType !== 'special') ? 'whitespace-normal' : 'whitespace-nowrap';
                             const provisionalAttrs = provisional ? ' data-provisional="1"' : '';
-                            return `<th class="${paddingClass} border-b border-r ${borderClass} ${wrapClass} text-center ${bgClass} ${minWidthClass}" ${isHighlight ? 'id="grid-active-col"' : ''} ${!isExport ? `data-nt-live-host="${escapeHTML(String(h || ''))}"` : ''}${provisionalAttrs}${exclHeadAttrs}${kempHeadAttrs}${viaHeadAttrs}>${headerContent}</th>`;
+                            return `<th class="${paddingClass} border-b border-r ${borderClass} ${wrapClass} text-center ${bgClass} ${minWidthClass}" ${isHighlight ? 'id="grid-active-col"' : ''} ${!isExport ? `data-nt-live-host="${escapeHTML(String(h || ''))}"` : ''}${provisionalAttrs}${exclHeadAttrs}${provHeadAttrs}${kempHeadAttrs}${viaHeadAttrs}>${headerContent}</th>`;
                         }).join('')}
                         ${showRightAnchor ? `<th class="right-anchor-header ${paddingClass} border-b border-l font-bold min-w-[50px] text-center">STN</th>` : ''}
                     </tr>
@@ -1303,15 +1310,19 @@ export const Renderer = {
                         const exclCellAttrs = (!isExport && paintExclusion && exclusionType !== 'special')
                             ? ` data-excl-open="1" data-excl-route="${escapeHTML(String(routeId || ''))}" data-excl-train="${escapeHTML(String(col || ''))}" data-excl-day="${Number(dayIdx)}"`
                             : '';
-                        const kempCellAttrs = (!isExport && kempIds.has(String(col)) && !paintExclusion)
+                        const colProvisional = isTrainProvisional(col, routeId, dayIdx, schedule, isExport ? 'export' : 'grid');
+                        const provCellAttrs = (!isExport && colProvisional && !paintExclusion)
+                            ? ` data-prov-open="1" data-prov-train="${escapeHTML(String(col || ''))}"`
+                            : '';
+                        const kempCellAttrs = (!isExport && kempIds.has(String(col)) && !paintExclusion && !colProvisional)
                             ? ` data-kemp-open="1" data-kemp-train="${escapeHTML(String(col || ''))}"`
                             : '';
                         const viaForCol = variantByTrain[String(col)] || '';
-                        const viaCellAttrs = (!isExport && viaForCol && !paintExclusion && !kempIds.has(String(col)))
+                        const viaCellAttrs = (!isExport && viaForCol && !paintExclusion && !kempIds.has(String(col)) && !colProvisional)
                             ? ` data-via-open="1" data-via-train="${escapeHTML(String(col || ''))}" data-via-route="${escapeHTML(viaForCol)}"`
                             : '';
                         
-                        return `<td class="${cellClass}"${exclCellAttrs}${kempCellAttrs}${viaCellAttrs}>${val}</td>`;
+                        return `<td class="${cellClass}"${exclCellAttrs}${provCellAttrs}${kempCellAttrs}${viaCellAttrs}>${val}</td>`;
                     }).join('')}
                     ${showRightAnchor ? `<td class="right-anchor-col ${paddingClass} border-l border-b font-mono font-bold text-center text-[10px] sm:text-xs">${getAbbrev(cleanStation)}</td>` : ''}
                 </tr>

@@ -24,6 +24,15 @@ export function feedbackPhoneBit(phone) {
     return value;
 }
 
+/** "Pretoria (man)" or "Lenz (Auto)". Empty when the report has no station name. */
+export function stationChoiceLabel(station, autoLocated) {
+    const raw = String(station || '').replace(/\s+STATION\s*$/i, '').trim();
+    if (!raw || /^select a station/i.test(raw)) return '';
+    const name = raw.replace(/\w\S*/g, (word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase());
+    const auto = autoLocated === true || autoLocated === '1' || autoLocated === 1;
+    return `${name} (${auto ? 'Auto' : 'man'})`;
+}
+
 export function formatFeedbackDiagLine(diag) {
     if (!diag || typeof diag !== 'object') return '';
     const bits = [];

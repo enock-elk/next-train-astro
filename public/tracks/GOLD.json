@@ -1,8 +1,8 @@
 {
   "branch": "map-gold",
-  "frozenAt": "235f6756abd3d62688c60b65fbb32b27ec965021",
+  "frozenAt": "2d844c2a47f243cfb4cb21be76975325164efc57",
   "version": "V9_09.20.11",
-  "note": "Gold snapshot: map-tab skips REST ride_pings poll while onValue is live (RTDB cost). Tracks, map-app, MapView, rail-tracks, map.astro, and advert handling otherwise unchanged. Fast-forward map-gold to the commit that records this lockfile. Never force-push map-gold.",
+  "note": "Gold snapshot: operator patches for kzn-catoridge (Durban Yard to Cato Ridge), eerst-dtoit, and ct-kraai. The Cato Ridge export started 564 m north of Durban Yard; the bake begins at the yard vertex and keeps the rest of that trace. Duff's Road, GP, EC, map runtime, and advert handling are unchanged. frozenAt is the geometry commit. Fast-forward map-gold to the commit that records this lockfile. Never force-push map-gold.",
   "files": {
     "public/tracks/rail-tracks-EC.geojson": {
       "md5": "43409bfd05405205e596f0d03345ab18",
@@ -13,12 +13,12 @@
       "sha256": "498efff3f9ee0aa0a6fcf838a891b9444c52148d778a82c24b51e432c5ec512c"
     },
     "public/tracks/rail-tracks-KZN.geojson": {
-      "md5": "36e4df5f583f1dc663266cb4c2b0672f",
-      "sha256": "93135692b2be6b11a06bbef984927fe4b444a59a3d7195f8a9665f85a63044fb"
+      "md5": "ee323fff4b496e64dacbf9c1f872189a",
+      "sha256": "31ca36ec2a9c9174de3c7f1e37e84bc4f763258400d2f36a1e55d22737053ce4"
     },
     "public/tracks/rail-tracks-WC.geojson": {
-      "md5": "eae7f554daf9a27ba4b2175cde2cc8f7",
-      "sha256": "090a5d7fc45cafb8c7b81dc583ae24978540f38278cab447953bc90c8821f01f"
+      "md5": "955015a89d4cf35acebc1581694bb0a2",
+      "sha256": "6a8fafebf4024a81a5b010917999d9917cbd534a9ae9ba1022549b1de4211a76"
     },
     "public/js/map-app.js": {
       "md5": "590f84a4b8d15ba41e9d98fa0a4e49d4",

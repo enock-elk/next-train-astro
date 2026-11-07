@@ -286,6 +286,13 @@ assert(shouldOpenRoutePicker({ swapGen: 1, currentGen: 2, currentRouteId: null }
     const seoStationMap = readFileSync(new URL('../src/components/SeoStationMap.astro', import.meta.url), 'utf8');
     assert(seoStationMap.includes('data-seo-station-map-close') && seoStationMap.includes('Close Map'), 'SEO station map keeps Close Map');
     assert(!/absolute top-3 right-3[\s\S]*data-seo-station-map-close/.test(seoStationMap), 'SEO station map drops the corner X over Network Lines');
+    assert(seoStationMap.includes('hideSheet()'), 'a frame that leaves the map hides Close Map without history.back');
+    assert(!/frame\.addEventListener\('load'[\s\S]{0,500}closing = true;\s*close\(\)/.test(seoStationMap), 'map frame load must not call close() while #station-map is still the hash');
+    const layout = readFileSync(new URL('../src/layouts/Layout.astro', import.meta.url), 'utf8');
+    assert(/#alert-severity-list\s*\{[^}]*max-width:\s*100%/.test(layout), 'severity menu stays within its trigger');
+    assert(!/#alert-severity-list,[\s\S]{0,80}width:\s*max-content/.test(layout), 'severity menu is not width:max-content');
+    const adminJs = readFileSync(new URL('../public/js/admin.js', import.meta.url), 'utf8');
+    assert(!adminJs.includes('cursor-pointer inline-flex items-center gap-1.5 w-full'), 'severity rows are not inline-flex');
     const logicJs = readFileSync(new URL('../src/lib/logic.js', import.meta.url), 'utf8');
     assert(logicJs.includes("res.ok && ct.includes('text/html')"), 'workers.dev HTTP errors are not Lie-Fi');
     assert(!/if \(!res\.ok\) \{\s*isLieFi = true/m.test(logicJs), 'non-OK probe must not set isLieFi');
@@ -312,7 +319,6 @@ assert(shouldOpenRoutePicker({ swapGen: 1, currentGen: 2, currentRouteId: null }
     assert(ui.includes('.at is not a function'), 'crash shield ignores missing .at from third-party');
     const store = readFileSync(new URL('../src/store.js', import.meta.url), 'utf8');
     assert(store.includes('safeStorage.getItem'), 'hydrateStores does not touch raw localStorage');
-    const layout = readFileSync(new URL('../src/layouts/Layout.astro', import.meta.url), 'utf8');
     const content = readFileSync(new URL('../src/layouts/ContentLayout.astro', import.meta.url), 'utf8');
     assert(layout.includes('Uint8Array') && content.includes('Uint8Array'), '.at polyfill covers typed arrays on app and map layouts');
     const planner = readFileSync(new URL('../src/lib/planner-ui.js', import.meta.url), 'utf8');

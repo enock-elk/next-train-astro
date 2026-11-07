@@ -117,11 +117,7 @@ const label = regionLabel || station?.region || '';
       document.body.classList.remove('modal-active');
     };
 
-    const close = (fromPopState = false) => {
-      if (!open) return;
-      if (!fromPopState && location.hash === '#station-map') {
-        try { history.back(); return; } catch { /* fall through */ }
-      }
+    const hideSheet = () => {
       open = false;
       closing = false;
       overlay.classList.add('hidden');
@@ -130,6 +126,14 @@ const label = regionLabel || station?.region || '';
       unlockScroll();
       // Drop a schedule page the map Back button loaded into this frame.
       try { frame.src = 'about:blank'; } catch { /* ignore */ }
+    };
+
+    const close = (fromPopState = false) => {
+      if (!open) return;
+      if (!fromPopState && location.hash === '#station-map') {
+        try { history.back(); return; } catch { /* fall through */ }
+      }
+      hideSheet();
     };
 
     const openMap = () => {
@@ -169,13 +173,18 @@ const label = regionLabel || station?.region || '';
     window.addEventListener('popstate', () => {
       if (open && location.hash !== '#station-map') close(true);
     });
-    // Map Back is inside the frame. It navigates that frame to the region
-    // schedule and leaves this Close Map bar on top. Close the sheet instead.
+    // Map Back is supposed to press Close Map. If this frame still navigates
+    // to the region page, the parent URL stays #station-map, so history.back()
+    // does not hide the sheet. Hide it here.
     frame.addEventListener('load', () => {
-      if (!open || closing) return;
+      if (!open) return;
       if (frameIsMap()) return;
-      closing = true;
-      close();
+      if (location.hash === '#station-map') {
+        try {
+          history.replaceState(history.state, '', location.pathname + location.search);
+        } catch { /* ignore */ }
+      }
+      hideSheet();
     });
   }
 

@@ -481,6 +481,7 @@ assert(mapPage.includes('id="map-fullscreen-btn"'), 'Map tab has a full screen c
 assert(mapPage.includes('function inMapTab()'), 'map embed detects the Map tab');
 assert(mapPage.includes('if (inMapTab()) return false;'), 'Map tab iframe is not treated as the sidenav sheet');
 assert(!mapPage.includes("typeof window.parent.__ntCloseInAppSheet === 'function'"), 'map embed does not treat CloseInAppSheet as the sheet');
+assert(mapPage.includes("frame.id === 'seo-station-map-frame'") && mapPage.includes("querySelector('[data-seo-station-map-close]')") && mapPage.includes('closeBtn.click()'), 'SEO map Back presses the parent Close Map button');
 
 const board = readFileSync(new URL('../src/components/LiveBoard.astro', import.meta.url), 'utf8');
 assert(board.includes('min-h-[2.875rem]'), 'route pill min-height follows rem scale');

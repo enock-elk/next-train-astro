@@ -1,8 +1,8 @@
 {
   "branch": "map-gold",
-  "frozenAt": "8f6c3fea7da90f4b6d7312510d8424d07dfa12ed",
+  "frozenAt": "d5047b14378d433853ae412206ea1004e8ffb7c2",
   "version": "V9_09.20.11",
-  "note": "Gold snapshot: advert gold change on owner request. The Clever cloak now follows the map, tabs and modals both ways, and a cloaked top unit gives back its slot (height only, no display:none, no left/top/transform), so a hidden pushdown no longer leaves a blank slab above the header. Rail geometry, station pins and map runtime are unchanged from the kzn-winklespruit snapshot. frozenAt is the advert fix commit. Fast-forward map-gold to the commit that records this lockfile. Never force-push map-gold.",
+  "note": "Gold snapshot: map.astro Back, inside the SEO station map frame, presses the parent Close Map button instead of loading the region page under that bar. Rail geometry, station pins, map-app.js, and advert handling are unchanged. frozenAt is the Back-button commit. Fast-forward map-gold to the commit that records this lockfile. Never force-push map-gold.",
   "files": {
     "public/tracks/rail-tracks-EC.geojson": {
       "md5": "43409bfd05405205e596f0d03345ab18",
@@ -25,8 +25,8 @@
       "sha256": "83921b78048b8199763a055c327c217c116125526322473cf32c6016cfe28eb5"
     },
     "src/pages/map.astro": {
-      "md5": "f02b01877f1468b541262a300c53bfae",
-      "sha256": "6462bc38ee2e62cc31a8aca8bf3cad93782ccda40658efbad9de8cd0d96c9b3b"
+      "md5": "4131622f980e9b4b87268b4b8fdd6a65",
+      "sha256": "fb3ddb4e0ec157ee849568eca94758ce62c1b5205f2f66fcf3f0fa44e74ccd28"
     },
     "src/components/MapView.astro": {
       "md5": "444c75381d8a8049d0051aeccf559118",

@@ -950,6 +950,19 @@ const regionSeoSlugs = Object.fromEntries(
       });
       paintMapFullscreenBtn();
       document.getElementById('map-back-link')?.addEventListener('click', function () {
+        // SEO station map: Back is the map's top-left control, inside this
+        // frame. Close Map sits on the parent page. Loading the region page
+        // here left that bar on top of the schedule. Press Close Map instead.
+        try {
+          var frame = window.frameElement;
+          if (frame && frame.id === 'seo-station-map-frame' && window.parent && window.parent.document) {
+            var closeBtn = window.parent.document.querySelector('[data-seo-station-map-close]');
+            if (closeBtn) {
+              closeBtn.click();
+              return;
+            }
+          }
+        } catch (_) {}
         var href = this.getAttribute('data-href') || '';
         if (!href) return;
         if (inAppSheet()) {

@@ -988,9 +988,10 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
       .custom-scrollbar::-webkit-scrollbar-thumb { background-color: rgba(156, 163, 175, 0.5); border-radius: 20px; }
       .dark .custom-scrollbar::-webkit-scrollbar-thumb { background-color: rgba(75, 85, 99, 0.5); }
 
-      /* Admin custom dropdowns: grow to widest option, never narrower than the trigger */
+      /* Admin custom dropdowns: grow to widest option, never narrower than the trigger.
+         Severity is not in this list: max-content plus a full-width row grew the
+         menu to the sheet width and stretched attached pictures. */
       #alert-target-list,
-      #alert-severity-list,
       #disr-route-list,
       #disr-tier-list,
       #disr-station-a-list,
@@ -999,6 +1000,13 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
       #excl-direction-list {
         width: max-content;
         min-width: 100%;
+      }
+      #alert-severity-list {
+        left: 0;
+        right: 0;
+        width: auto;
+        min-width: 0;
+        max-width: 100%;
       }
       
       /* Utilities */

@@ -34,8 +34,11 @@ const MAX_PLAUSIBLE_SPEED_MPS = 70;
 const SHARE_SILENT_RESTART_MS = 9 * 1000;
 /** Manual Refresh GPS / resume. The share loop uses the shorter attempt below. */
 const SHARE_FRESH_OPTS = { enableHighAccuracy: true, maximumAge: 0, timeout: 8000 };
-/** One try while sharing. Times out inside the 3s cadence so the next try is not stacked. */
-const SHARE_ATTEMPT_OPTS = { enableHighAccuracy: true, maximumAge: 0, timeout: 2800 };
+/**
+ * One try while sharing. Eight seconds lets a high-accuracy chip finish.
+ * The share loop does not start another try while this one is in flight.
+ */
+const SHARE_ATTEMPT_OPTS = { enableHighAccuracy: true, maximumAge: 0, timeout: 8000 };
 
 /** Map pin / last fused sample is still good enough to attach or list nearby trains. */
 export const GEO_REUSE_MAX_AGE_MS = 30 * 1000;
@@ -246,6 +249,7 @@ function syncShareWatchdog(on) {
     // Worker-backed so a backgrounded tab cannot throttle the restart check.
     shareWatchdogTimer = startBackgroundTicker(() => {
         if (desiredWatchKind() !== 'share') return;
+        if (shareFixInFlight) return;
         const last = lastWatchCallbackAt || 0;
         if (last && Date.now() - last < SHARE_SILENT_RESTART_MS) return;
         clearWatch();

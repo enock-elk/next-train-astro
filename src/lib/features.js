@@ -182,7 +182,34 @@ function normalizeEntry(name, raw) {
         ? [...new Set(raw.regionIds.map((id) => String(id).toUpperCase()).filter((id) => FEATURE_REGIONS.includes(id)))]
         : (fallback.regionIds || []);
     const enabled = typeof raw.enabled === 'boolean' ? raw.enabled : !!fallback.enabled;
-    return { enabled, routeIds, regionIds };
+    const signedInOnly = typeof raw.signedInOnly === 'boolean' ? raw.signedInOnly : !!fallback.signedInOnly;
+    return { enabled, routeIds, regionIds, signedInOnly };
+}
+
+/** A Next Train account, not an anonymous session and not a guest. */
+function viewerHasNextTrainAccount() {
+    try {
+        const acct = typeof window !== 'undefined' ? window.$account?.get?.() : null;
+        return acct?.status === 'signed-in' && !!acct.uid;
+    } catch {
+        return false;
+    }
+}
+
+/** Operators can open a signed-in-only feature while they are testing it. */
+function viewerIsOperator() {
+    try {
+        if (typeof window === 'undefined') return false;
+        if (window.__ntAdminAuthed === true) return true;
+        const flag = document?.documentElement?.getAttribute('data-admin-authed');
+        return flag === '1' || flag === 'true';
+    } catch {
+        return false;
+    }
+}
+
+function viewerMayUseSignedInFeature() {
+    return viewerIsOperator() || viewerHasNextTrainAccount();
 }
 
 export async function fetchFeatures(force = false) {
@@ -242,12 +269,14 @@ export function isFeatureEnabled(name, routeId = '', region = '') {
     // Planner trip fare is public. Ignore leftover RTDB tripPrice flags and grants.
     if (name === FEATURE_KEYS.TRIP_PRICE) return true;
     if (grantedFeatures[name] === true) return true;
-    // Lab testers need ride sharing on every corridor, even if RTDB still
-    // has the production allow-list. The green chip does not use this shortcut.
-    if (name === FEATURE_KEYS.RIDE_CHECKIN && isLabEnvironment()) return true;
     const bag = cachedFeatures || defaultsForEnv();
     const entry = normalizeEntry(name, bag?.[name]);
     if (!entry.enabled) return false;
+    // signedInOnly keeps guests out. A device beta grant already returned above.
+    if (entry.signedInOnly && !viewerMayUseSignedInFeature()) return false;
+    // Lab testers need ride sharing on every corridor, even if RTDB still
+    // has the production allow-list. The green chip does not use this shortcut.
+    if (name === FEATURE_KEYS.RIDE_CHECKIN && isLabEnvironment()) return true;
     const ids = entry.routeIds || [];
     const regions = entry.regionIds || [];
     if (ids.includes('*')) return true;
@@ -283,6 +312,7 @@ export function isListedAccountsRoute(routeId) {
     if (isFeatureGranted(FEATURE_KEYS.ACCOUNTS)) return true;
     const bag = cachedFeatures || defaultsForEnv();
     const entry = normalizeEntry(FEATURE_KEYS.ACCOUNTS, bag?.[FEATURE_KEYS.ACCOUNTS]);
+    if (entry.signedInOnly && !viewerMayUseSignedInFeature()) return false;
     return communityRouteOnEntry(entry, routeId);
 }
 
@@ -291,6 +321,7 @@ export function isListedCommunityRoute(routeId) {
     if (isFeatureGranted(FEATURE_KEYS.COMMUNITY_TAB)) return true;
     const bag = cachedFeatures || defaultsForEnv();
     const entry = normalizeEntry(FEATURE_KEYS.COMMUNITY_TAB, bag?.[FEATURE_KEYS.COMMUNITY_TAB]);
+    if (entry.signedInOnly && !viewerMayUseSignedInFeature()) return false;
     return communityRouteOnEntry(entry, routeId);
 }
 
@@ -304,6 +335,7 @@ export function isRideCheckInPinned(routeId = '') {
     const bag = cachedFeatures || defaultsForEnv();
     const entry = normalizeEntry(FEATURE_KEYS.RIDE_CHECKIN, bag?.[FEATURE_KEYS.RIDE_CHECKIN]);
     if (!entry.enabled) return false;
+    if (entry.signedInOnly && !viewerMayUseSignedInFeature()) return false;
     const ids = entry.routeIds || [];
     const regions = entry.regionIds || [];
     if (!ids.length && !regions.length) return false;

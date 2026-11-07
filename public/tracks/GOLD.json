@@ -1,8 +1,8 @@
 {
   "branch": "map-gold",
-  "frozenAt": "d5047b14378d433853ae412206ea1004e8ffb7c2",
+  "frozenAt": "929a2771104a6191108ca68baed0a970885a2a69",
   "version": "V9_09.20.11",
-  "note": "Gold snapshot: map.astro Back, inside the SEO station map frame, presses the parent Close Map button instead of loading the region page under that bar. Rail geometry, station pins, map-app.js, and advert handling are unchanged. frozenAt is the Back-button commit. Fast-forward map-gold to the commit that records this lockfile. Never force-push map-gold.",
+  "note": "Gold snapshot: the map tracking card speaks to the person sharing and to everyone else separately. A viewer gets a shorter card and a button to join the share. Rail geometry, station pins, map-app.js, map.astro, and advert handling are unchanged. frozenAt is the tracking-card commit. Fast-forward map-gold to the commit that records this lockfile. Never force-push map-gold.",
   "files": {
     "public/tracks/rail-tracks-EC.geojson": {
       "md5": "43409bfd05405205e596f0d03345ab18",
@@ -29,16 +29,16 @@
       "sha256": "fb3ddb4e0ec157ee849568eca94758ce62c1b5205f2f66fcf3f0fa44e74ccd28"
     },
     "src/components/MapView.astro": {
-      "md5": "444c75381d8a8049d0051aeccf559118",
-      "sha256": "95ea01a70f2b515e802eb5fe4b4c1a63e637b7afa2ded62aa09d383576892880"
+      "md5": "ceac5694b040c4c3107f6a27a8e96168",
+      "sha256": "910fe23fc1b51ee5e03dbd9887f2080f5180ba965c2e775dec5f21ff4b3819c5"
     },
     "src/lib/rail-tracks.js": {
       "md5": "4d01be4e4e6347559351a8d039770d3d",
       "sha256": "e7385a8e07415f0862e983a5ffca225fc23e68c22f550ee13bc84ffdb52cf3dc"
     },
     "src/lib/map-tab.js": {
-      "md5": "9309abc38744b43a482d745aa1c5a565",
-      "sha256": "69ec6907cdfe36eb5330ce15d3ddcd95e9aedb8b095b1b9de6f5803f7e8b3eae"
+      "md5": "27edad849228f212e1c4185bf1df53c4",
+      "sha256": "3b86bd64054af3a29f26eb6974a0547b0163a8360637d8944ba63c1ca653fa7b"
     },
     "src/lib/clever-ads.js": {
       "md5": "9de4e93c20057598507ad7fce024b9e9",

@@ -21920,6 +21920,7 @@ const Admin = {
         if (key === 'mapTab') {
             return {
                 enabled: 'exp-map-enabled',
+                signedIn: 'exp-map-signed-in',
                 routes: 'exp-map-routes',
                 regions: 'exp-map-regions',
                 all: 'exp-map-all',
@@ -21932,6 +21933,7 @@ const Admin = {
         if (key === 'communityTab') {
             return {
                 enabled: 'exp-community-enabled',
+                signedIn: 'exp-community-signed-in',
                 routes: 'exp-community-routes',
                 regions: 'exp-community-regions',
                 all: 'exp-community-all',
@@ -21943,6 +21945,7 @@ const Admin = {
         }
         return {
             enabled: `exp-feat-${key}-enabled`,
+            signedIn: `exp-feat-${key}-signed-in`,
             routes: `exp-feat-${key}-routes`,
             regions: `exp-feat-${key}-regions`,
             all: `exp-feat-${key}-all`,
@@ -21970,6 +21973,13 @@ const Admin = {
                                 <label class="flex items-center justify-between gap-3 pt-2">
                                     <span class="text-xs font-bold text-teal-900 dark:text-teal-100">Allow this feature</span>
                                     <input type="checkbox" id="${ids.enabled}" class="rounded border-teal-400 text-teal-600 focus:ring-teal-500">
+                                </label>
+                                <label class="flex items-start justify-between gap-3">
+                                    <span class="min-w-0">
+                                        <span class="block text-xs font-bold text-teal-900 dark:text-teal-100">Signed-in accounts only</span>
+                                        <span class="block text-[10px] font-medium text-teal-700/80 dark:text-teal-300/80 leading-snug">Guests stay out. A Next Train account can open it. A device beta grant still can.</span>
+                                    </span>
+                                    <input type="checkbox" id="${ids.signedIn}" class="mt-0.5 rounded border-teal-400 text-teal-600 focus:ring-teal-500">
                                 </label>
                                 <label class="flex items-center gap-2 text-[11px] font-bold text-teal-800 dark:text-teal-200 cursor-pointer">
                                     <input type="checkbox" id="${ids.all}" class="exp-feat-all rounded border-teal-400 text-teal-600 focus:ring-teal-500" data-exp-key="${f.key}">
@@ -24957,7 +24967,7 @@ const Admin = {
         const expFeatureState = {};
         let expFeaturesHydrated = false;
         Admin.grantableFeatures().forEach((f) => {
-            expFeatureState[f.key] = { enabled: false, routes: new Set(), regions: new Set(), allRoutes: false };
+            expFeatureState[f.key] = { enabled: false, signedInOnly: false, routes: new Set(), regions: new Set(), allRoutes: false };
         });
 
         const listExpRoutes = () => {
@@ -24969,13 +24979,14 @@ const Admin = {
 
         const expFeatCountLabel = (state) => {
             if (!state?.enabled) return 'Off';
-            if (state.allRoutes) return 'All routes';
+            if (state.allRoutes) return state.signedInOnly ? 'All routes · accounts' : 'All routes';
             const parts = [];
             const regionCount = state.regions?.size || 0;
             const routeCount = state.routes?.size || 0;
             if (regionCount === 1) parts.push([...state.regions][0]);
             else if (regionCount > 1) parts.push(`${regionCount} regions`);
             if (routeCount) parts.push(`${routeCount} route${routeCount === 1 ? '' : 's'}`);
+            if (state.signedInOnly) parts.push('accounts');
             return parts.length ? parts.join(' · ') : 'Nothing selected';
         };
 
@@ -25049,6 +25060,7 @@ const Admin = {
             const body = document.getElementById(ids.body);
             const chevron = document.getElementById(ids.chevron);
             const enabled = document.getElementById(ids.enabled);
+            const signedIn = document.getElementById(ids.signedIn);
             const all = document.getElementById(ids.all);
             if (header && body) {
                 header.onclick = () => {
@@ -25060,6 +25072,12 @@ const Admin = {
             if (enabled) {
                 enabled.onchange = () => {
                     expFeatureState[key].enabled = !!enabled.checked;
+                    paintExpFeatCount(key);
+                };
+            }
+            if (signedIn) {
+                signedIn.onchange = () => {
+                    expFeatureState[key].signedInOnly = !!signedIn.checked;
                     paintExpFeatCount(key);
                 };
             }
@@ -25080,6 +25098,7 @@ const Admin = {
                 const state = expFeatureState[f.key];
                 if (!state) return;
                 state.enabled = !!raw.enabled;
+                state.signedInOnly = !!raw.signedInOnly;
                 state.allRoutes = Array.isArray(raw.routeIds) && raw.routeIds.includes('*');
                 state.routes.clear();
                 state.regions.clear();
@@ -25092,8 +25111,10 @@ const Admin = {
                 });
                 const ids = Admin.expFeatureControlIds(f.key);
                 const enabled = document.getElementById(ids.enabled);
+                const signedIn = document.getElementById(ids.signedIn);
                 const all = document.getElementById(ids.all);
                 if (enabled) enabled.checked = state.enabled;
+                if (signedIn) signedIn.checked = state.signedInOnly;
                 if (all) all.checked = state.allRoutes;
                 paintExpRegionBox(f.key);
                 paintExpRouteBox(f.key);
@@ -25523,9 +25544,10 @@ const Admin = {
                         updatedBy: Admin.currentUser?.email || 'Admin',
                     };
                     Admin.grantableFeatures().forEach((f) => {
-                        const state = expFeatureState[f.key] || { enabled: false, routes: new Set(), regions: new Set(), allRoutes: false };
+                        const state = expFeatureState[f.key] || { enabled: false, signedInOnly: false, routes: new Set(), regions: new Set(), allRoutes: false };
                         payload[f.key] = {
                             enabled: !!state.enabled,
+                            signedInOnly: !!state.signedInOnly,
                             routeIds: state.allRoutes ? ['*'] : [...state.routes],
                             regionIds: state.allRoutes ? [] : [...state.regions],
                         };

@@ -72,7 +72,7 @@ const mapSrc = `${withBase('/map.html')}?embed=1&v=${APP_VERSION}`;
                         </div>
                         <p id="map-tracking-dest" class="mt-0.5 truncate text-[11px] font-bold text-gray-500 dark:text-gray-400"></p>
                         <p id="map-tracking-toward" class="hidden mt-0.5 text-[11px] font-bold text-blue-700 dark:text-blue-300 truncate" hidden></p>
-                        <p class="mt-1 text-[10px] font-black uppercase tracking-widest text-gray-400 leading-snug">Real-Time:</p>
+                        <p id="map-tracking-live-label" class="mt-1 text-[10px] font-black uppercase tracking-widest text-gray-400 leading-snug">Real-Time:</p>
                         <p id="map-tracking-last-seen" class="text-[11px] font-semibold text-gray-500 dark:text-gray-400 leading-snug">Waiting for a GPS fix</p>
                         <p id="map-tracking-timetable-label" class="hidden mt-1 text-[10px] font-black uppercase tracking-widest text-gray-400 leading-snug" hidden>Timetable:</p>
                         <button type="button" id="map-tracking-timing" class="hidden mt-0.5 text-left text-[11px] font-black text-green-700 dark:text-green-300 leading-snug underline decoration-dotted underline-offset-2 decoration-current focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-sm" hidden></button>
@@ -108,7 +108,7 @@ const mapSrc = `${withBase('/map.html')}?embed=1&v=${APP_VERSION}`;
                         </span>
                     </div>
                     <div class="mt-2.5 flex flex-col gap-2">
-                        <button type="button" id="map-tracking-join" class="hidden w-full py-2.5 rounded-xl bg-blue-600 text-white text-sm font-black focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500" hidden>Join this train</button>
+                        <button type="button" id="map-tracking-join" class="hidden w-full py-2.5 rounded-xl bg-blue-600 text-white text-sm font-black focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500" hidden>Join this share</button>
                         <button type="button" id="map-tracking-refresh" class="py-2 rounded-xl bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-200 text-[11px] font-black border border-blue-200 dark:border-blue-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">Refresh GPS</button>
                         <div class="grid grid-cols-2 gap-2">
                             <button type="button" id="map-tracking-toggle" class="py-2 rounded-xl bg-slate-900 dark:bg-white text-white dark:text-gray-900 text-[11px] font-black focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">Pause</button>
@@ -128,3 +128,17 @@ const mapSrc = `${withBase('/map.html')}?embed=1&v=${APP_VERSION}`;
         </div>
     </div>
 </div>
+<style is:global>
+  #map-tracking-card.nt-tracking-viewer {
+    width: min(calc(100% - 1.5rem), 17.5rem);
+  }
+  #map-tracking-card.nt-tracking-viewer #map-tracking-diagnostics,
+  #map-tracking-card.nt-tracking-viewer #map-tracking-live-label,
+  #map-tracking-card.nt-tracking-viewer #map-tracking-timetable-label,
+  #map-tracking-card.nt-tracking-viewer #map-tracking-warning {
+    display: none !important;
+  }
+  #map-tracking-card.nt-tracking-viewer #map-tracking-title {
+    font-size: 0.95rem;
+  }
+</style>

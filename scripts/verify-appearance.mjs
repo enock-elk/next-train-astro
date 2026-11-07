@@ -691,6 +691,7 @@ assert(adminJs.includes("I'm on it / live share") && adminJs.includes('Delay rep
 assert(!adminJs.includes("{ key: 'tripPrice', label: 'Trip price' }"), 'Trip price is not a grantable experimental feature');
 assert(adminJs.includes('exp-feat-header') && adminJs.includes('exp-feat-body'), 'feature types are nested accordions');
 assert(adminJs.includes('config/features.json'), 'experimental save writes config/features');
+assert(adminJs.includes('signedInOnly: !!state.signedInOnly'), 'experimental save can limit a feature to signed-in accounts');
 assert(adminJs.includes('config/feature_grants/'), 'feedback beta grants write config/feature_grants');
 assert(adminJs.includes('grantableFeatures()') && adminJs.includes("routeIds: state.allRoutes ? ['*']"), 'save writes every grantable feature and keeps * for all-routes');
 assert(css.includes('.nt-alert-reply'), 'alert Reply is styled separately from Close');

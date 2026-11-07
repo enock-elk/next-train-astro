@@ -91,6 +91,21 @@ if (!layout.includes('[data-nt-ad-idle="1"]')) fail('Layout must collapse idle l
 if (layout.includes('[data-nt-ad-idle="1"]') && /\[data-nt-ad-idle="1"\][\s\S]{0,400}display:\s*none/.test(layout)) {
   fail('do not reclaim leftover ads with display:none');
 }
+if (!/html\.nt-ads-cloaked #nt-ad-scroll-host[\s\S]{0,160}\{[^}]*height:\s*0\s*!important[^}]*overflow:\s*hidden\s*!important/.test(layout)) {
+  fail('a cloaked top unit must not keep its pushdown box above the header (blank slab)');
+}
+if (/html\.nt-ads-cloaked #nt-ad-scroll-host[\s\S]{0,160}\{[^}]*display:\s*none/.test(layout)) {
+  fail('collapse the cloaked ad slot by height, not display:none');
+}
+if (!ads.includes('syncCloakToSafeZone') || !ads.includes('isSafeZoneSignal')) {
+  fail('cloak must follow safe-zone changes (closing the map or a modal must uncloak)');
+}
+if (!ads.includes("addEventListener('popstate', scheduleSafeZoneCheck)")) {
+  fail('Back out of the map or a modal must re-check the ad safe zone');
+}
+if (/function isSafeZoneSignal[\s\S]{0,260}documentElement/.test(ads)) {
+  fail('safe-zone watcher must not react to html class flips (the cloak writes those)');
+}
 if (!ads.includes('markResumeInstant')) fail('resume must collapse leftover gap without a second ease');
 if (!ads.includes("addEventListener('pageshow'")) fail('must remeasure ads on pageshow (bfcache)');
 if (!ads.includes('visibilitychange')) fail('must remeasure ads when the app becomes visible');

@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_11.07.6': [
+        'Advert gold change, owner request. The blank grey or black slab above the header was the Clever top ad still holding its 30% box while hidden. Opening the map or a modal and then locking the phone or switching apps hid the ad. Closing the map never showed it again, because that close changes no hash and the ad code only rechecked on resume. The ad hide now follows the map, tabs, and modals both ways. A hidden top ad also gives its slot back, so the board sits at the top. A live ad comes back on close without reloading. GOLD.json advert hashes updated and map-gold fast-forwarded. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_11.07.5': [
         'Operator track patch is the baked line for Durban to Winklespruit. It starts at Durban Yard. The export began 631 m north of that pin, so the stored line starts at the yard and keeps the rest of the trace. Station pins that had moved off the map config are back on that pin, on the map, on SEO station pages, and on the along-rail distance. Rail lines other than Winklespruit are unchanged. Duff\'s Road is unchanged. SEO Durban to Winklespruit is 34.6 km on the new line. No commuter What\'s New. forceShow stays false.',
     ],

@@ -1,8 +1,8 @@
 {
   "branch": "map-gold",
-  "frozenAt": "79cdf6d3c3c0b386523dc8a5df189606527db4fb",
+  "frozenAt": "8f6c3fea7da90f4b6d7312510d8424d07dfa12ed",
   "version": "V9_09.20.11",
-  "note": "Gold snapshot: operator patch for kzn-winklespruit (Durban Yard to Winklespruit). The export started 631 m north of Durban Yard; the bake begins at the yard vertex and keeps the rest of that trace. Station pins that had left STATION_COORDINATES are back on that dictionary. Map markers prefer the dictionary over a moved sheet coordinate. Duff's Road, EC rail geometry, and advert handling are unchanged. frozenAt is the map-runtime commit. Fast-forward map-gold to the commit that records this lockfile. Never force-push map-gold.",
+  "note": "Gold snapshot: advert gold change on owner request. The Clever cloak now follows the map, tabs and modals both ways, and a cloaked top unit gives back its slot (height only, no display:none, no left/top/transform), so a hidden pushdown no longer leaves a blank slab above the header. Rail geometry, station pins and map runtime are unchanged from the kzn-winklespruit snapshot. frozenAt is the advert fix commit. Fast-forward map-gold to the commit that records this lockfile. Never force-push map-gold.",
   "files": {
     "public/tracks/rail-tracks-EC.geojson": {
       "md5": "43409bfd05405205e596f0d03345ab18",
@@ -41,8 +41,8 @@
       "sha256": "69ec6907cdfe36eb5330ce15d3ddcd95e9aedb8b095b1b9de6f5803f7e8b3eae"
     },
     "src/lib/clever-ads.js": {
-      "md5": "4d78da253d60d3ba285de6c41d697cad",
-      "sha256": "8b33d5d05e76b08c79947fecc4ded53c3cb384fa46708c1d0afa3a7a6b05bf22"
+      "md5": "9de4e93c20057598507ad7fce024b9e9",
+      "sha256": "a5a3c6560fff2be7c31e120505e3caf675fe4f123b9beb78814cc6f4475577dd"
     },
     "src/lib/clever-ad-lifecycle.js": {
       "md5": "cb7881c006e3b658e05c7fde77cfa6c6",

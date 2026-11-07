@@ -88,6 +88,8 @@ function isWelcomeActive() {
     return welcome && !welcome.classList.contains('hidden');
 }
 
+const SAFE_ZONE_BLOCKERS = ['map-modal', 'trip-map-modal', 'full-schedule-modal', 'about-modal', 'blackbox-modal', 'account-modal'];
+
 function isSafeZone() {
     if (safeStorage.getItem('welcomeSeen') !== 'true') return false;
     if (isWelcomeActive()) return false;
@@ -97,12 +99,19 @@ function isSafeZone() {
     const mainOk = hash === '' || hash === '#home' || hash === '#planner' || hash === '#planner-results';
     if (!mainOk) return false;
 
-    const blocked = ['map-modal', 'trip-map-modal', 'full-schedule-modal', 'about-modal', 'blackbox-modal', 'account-modal'];
-    for (const id of blocked) {
+    for (const id of SAFE_ZONE_BLOCKERS) {
         const el = document.getElementById(id);
         if (el && !el.classList.contains('hidden')) return false;
     }
     return true;
+}
+
+/** Class flips that can open or close the safe zone. Never html or #nt-shell (we write those). */
+function isSafeZoneSignal(el) {
+    if (!(el instanceof Element)) return false;
+    if (el === document.body) return true;
+    if (el.id === 'welcome-modal' || SAFE_ZONE_BLOCKERS.includes(el.id)) return true;
+    return el.classList.contains('view-section');
 }
 
 /** True when we should not treat the app as ready to start the ad schedule. */
@@ -823,10 +832,31 @@ export function initCleverAds() {
         refreshOverlayObservations();
     }
 
+    // The cloak must follow the safe zone both ways. Map, tabs and modals open
+    // via pushState + class flips (no hashchange). Cloaked on resume while the
+    // map was up and never uncloaked on close, the hidden pushdown kept its
+    // in-flow box above the header: the blank grey/black slab commuters saw.
+    let safeZoneCheckTimer = 0;
+    const syncCloakToSafeZone = () => {
+        safeZoneCheckTimer = 0;
+        if (window._adNetworkDestroyed || adEntering) return;
+        if (isSafeZone() === !isAdsCloaked()) return;
+        refreshAdVisibility(adContainer);
+    };
+    const scheduleSafeZoneCheck = () => {
+        if (safeZoneCheckTimer) return;
+        safeZoneCheckTimer = window.setTimeout(syncCloakToSafeZone, 120);
+    };
+    window.addEventListener('popstate', scheduleSafeZoneCheck);
+    window.addEventListener('hashchange', scheduleSafeZoneCheck);
+
     if (window.MutationObserver && document.body) {
         const adObserver = new MutationObserver((mutations) => {
             let sawChildList = false;
             for (const m of mutations) {
+                if (m.type === 'attributes' && m.attributeName === 'class' && isSafeZoneSignal(m.target)) {
+                    scheduleSafeZoneCheck();
+                }
                 if (m.type === 'attributes' && m.attributeName === 'style') {
                     const el = m.target;
                     if (!(el instanceof Element)) continue;

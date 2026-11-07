@@ -73,6 +73,12 @@ if (!ui.includes('openDisruptionModal')) fail('TRAIN TERMINATES / Details open t
 if (!ui.includes('Departed:')) fail('Departed stays a status above Show Next Train');
 if (!ui.includes('Departs:')) fail('upcoming trips label the wait as Departs');
 if (!ui.includes('Total Time:')) fail('duration is labelled Total Time');
+if (!ui.includes('plannerClock24')) fail('planner times use a 24-hour clock');
+if (!ui.includes('1 change')) fail('a single transfer is called 1 change');
+if (!ui.includes('Trip with ${n} changes')) fail('multi-change trips are not called bridge trips');
+if (ui.includes('Bridge Trip')) fail('bridge trip wording is gone');
+if (!ui.includes('plannerDepartureMenuOpen')) fail('an open departure list is not rebuilt shut');
+if (!ui.includes('· Earlier')) fail('departed options are marked Earlier');
 if (!ui.includes('planner-departed-next')) fail('Show Next Train is its own button');
 if (!ui.includes('Show Next Train')) fail('departed card still offers Show Next Train');
 if (ui.includes('getInjectionHtml(0) ?')) fail('must not double-call getInjectionHtml(0)');

@@ -733,6 +733,10 @@ export async function performHardCacheClear(source = 'modal_confirm', { latestVe
             showKeptAppToast();
             return false;
         }
+        if (!(incoming && isAppVersionNewer(incoming, APP_VERSION))) {
+            showUpdateToast(`You're on the latest version, ${APP_VERSION}.`);
+            return true;
+        }
         showUpdateToast('Update ready. Opening it now.');
         console.log(`🛡️ Guardian: Incoming version ${incoming || APP_VERSION} downloaded (${installed.reason}).`);
         if (installed.reason === 'already_current' && incoming && isAppVersionNewer(incoming, APP_VERSION)) {
@@ -864,9 +868,11 @@ export function showCacheClearWarning() {
             showKeptAppToast();
             return;
         }
-        await performHardCacheClear('check_updates', {
-            latestVersion: !!(incomingVersion && !isAppVersionNewer(incomingVersion, APP_VERSION)),
-        });
+        if (!(incomingVersion && isAppVersionNewer(incomingVersion, APP_VERSION))) {
+            showUpdateToast(`You're on the latest version, ${APP_VERSION}.`);
+            return;
+        }
+        await performHardCacheClear('check_updates', { latestVersion: false });
     });
 }
 

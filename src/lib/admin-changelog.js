@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_11.07.12': [
+        'Planner departure list stays open. Each row is the 24-hour times, then the trip length and Direct, 1 change, or 2 changes. A long wait is named on that second line. Trains that already left are marked Earlier. Total time uses the same blue as the departs countdown. Depart and arrive on the result use 24-hour times. A trip with two changes is no longer called a bridge trip. Check for Updates says you are on the latest version when nothing newer is published, and only says an update is opening when one is. The top strip can be amber, green, or blue, and the icon can be a wrench, info, bell, alert, check, or none. Missing icon and colour stay the amber wrench. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_11.07.11': [
         'User sheet is one column. A long route or fare wraps on its own row. Swiping the trip fare sheet down keeps the card off screen while the overlay hides, so the empty sheet does not slide back up. Planner fare corrections have a Saved corrections section for quotes marked right and for accepted corrections. Approving an incorrect single writes that rand, at the peak or off-peak the operator set, into the price everyone sees. Return, weekly, and monthly stay off that live single price. Saving a classification updates the fare accuracy percentage. The fares list shows the curved kilometres only. Fail cards keep each app version inside the card, with a gap between them. Fare vote rules allow an operator to save a classification. Deploy the rules before Save will stick. No commuter What\'s New. forceShow stays false.',
     ],

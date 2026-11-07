@@ -24576,6 +24576,27 @@ const Admin = {
                             </div>
                         </div>
                         <input type="text" id="maint-message" class="w-full h-10 px-3 rounded-lg bg-white dark:bg-gray-800 border border-orange-200 dark:border-orange-700/50 text-gray-900 dark:text-white text-xs focus:ring-2 focus:ring-orange-500 outline-none shadow-sm" placeholder="Banner text (e.g. Cape Town Northern Line update...)">
+                        <div class="grid grid-cols-2 gap-2">
+                            <label class="block">
+                                <span class="text-[9px] font-black uppercase tracking-widest text-orange-700 dark:text-orange-300 mb-1.5 block">Icon</span>
+                                <select id="maint-icon" class="w-full h-10 px-2 rounded-lg bg-white dark:bg-gray-800 border border-orange-200 dark:border-orange-700/50 text-gray-900 dark:text-white text-xs focus:ring-2 focus:ring-orange-500 outline-none">
+                                    <option value="wrench">Wrench</option>
+                                    <option value="info">Info</option>
+                                    <option value="bell">Bell</option>
+                                    <option value="alert">Alert</option>
+                                    <option value="check">Check</option>
+                                    <option value="none">No icon</option>
+                                </select>
+                            </label>
+                            <label class="block">
+                                <span class="text-[9px] font-black uppercase tracking-widest text-orange-700 dark:text-orange-300 mb-1.5 block">Colour</span>
+                                <select id="maint-tone" class="w-full h-10 px-2 rounded-lg bg-white dark:bg-gray-800 border border-orange-200 dark:border-orange-700/50 text-gray-900 dark:text-white text-xs focus:ring-2 focus:ring-orange-500 outline-none">
+                                    <option value="amber">Amber</option>
+                                    <option value="green">Green</option>
+                                    <option value="blue">Blue</option>
+                                </select>
+                            </label>
+                        </div>
                         <div>
                             <p class="text-[9px] font-black uppercase tracking-widest text-orange-700 dark:text-orange-300 mb-1.5">Regions (optional)</p>
                             <div id="maint-region-checks" class="flex flex-wrap gap-2">
@@ -24777,6 +24798,8 @@ const Admin = {
         const chevron = document.getElementById('maint-chevron');
         const toggle = document.getElementById('maint-toggle');
         const maintMsg = document.getElementById('maint-message');
+        const maintIcon = document.getElementById('maint-icon');
+        const maintTone = document.getElementById('maint-tone');
         const maintExpires = document.getElementById('maint-expires');
         const maintEditId = document.getElementById('maint-edit-id');
         const maintRegionBox = document.getElementById('maint-region-checks');
@@ -24807,6 +24830,8 @@ const Admin = {
 
         const resetMaintComposer = () => {
             if (maintMsg) maintMsg.value = '';
+            if (maintIcon) maintIcon.value = 'wrench';
+            if (maintTone) maintTone.value = 'amber';
             if (maintEditId) maintEditId.value = '';
             if (maintExpires) maintExpires.value = defaultMaintExpiryValue();
             _maintSelectedRoutes = new Set();
@@ -24850,6 +24875,8 @@ const Admin = {
                 if (Array.isArray(it.regions) && it.regions.length) entry.regions = it.regions;
                 if (Array.isArray(it.routes) && it.routes.length) entry.routes = it.routes;
                 if (it.expiresAt) entry.expiresAt = Number(it.expiresAt);
+                if (it.icon) entry.icon = it.icon;
+                if (it.tone) entry.tone = it.tone;
                 items[id] = entry;
             });
 
@@ -24959,6 +24986,8 @@ const Admin = {
             if (!it) return;
             if (maintEditId) maintEditId.value = id;
             if (maintMsg) maintMsg.value = it.message || '';
+            if (maintIcon) maintIcon.value = it.icon || 'wrench';
+            if (maintTone) maintTone.value = it.tone || 'amber';
             if (maintExpires) maintExpires.value = it.expiresAt ? toLocalDatetimeValue(it.expiresAt) : '';
             const regions = Array.isArray(it.regions) ? it.regions : [];
             maintRegionBox?.querySelectorAll('.maint-region-cb').forEach((cb) => {
@@ -25479,6 +25508,8 @@ const Admin = {
                                 createdAt: it.createdAt || null,
                                 updatedAt: it.updatedAt || null,
                                 updatedBy: it.updatedBy || null,
+                                icon: it.icon || '',
+                                tone: it.tone || '',
                             };
                         });
                     } else if (maintData.active || maintData.message) {
@@ -25875,6 +25906,8 @@ const Admin = {
                 createdAt: prev.createdAt || Date.now(),
                 updatedAt: Date.now(),
                 updatedBy: Admin.currentUser?.email || 'Admin',
+                icon: maintIcon?.value || 'wrench',
+                tone: maintTone?.value || 'amber',
             };
         };
 

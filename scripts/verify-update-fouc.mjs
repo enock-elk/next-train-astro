@@ -182,7 +182,9 @@ assert(!hubJs.includes('skipNetworkPreflight'), 'Check for Updates cannot skip t
 assert(hubJs.includes('peekIncomingVersion'), 'Check for Updates probes the published version before restart');
 assert(hubJs.includes('reloadToApplyUpdate'), 'Check for Updates restarts without a numeric ?v= hop');
 assert(!hubJs.includes("pathname + '?v=' + Date.now()"), 'Check for Updates does not invent numeric ?v=');
-assert(hubJs.includes('latestVersion: !!(incomingVersion && !isAppVersionNewer(incomingVersion, APP_VERSION))'), 'Check for Updates always resets and classifies the post-reload toast');
+assert(hubJs.includes("You're on the latest version, ${APP_VERSION}."), 'Check for Updates says you are current when nothing newer is published');
+assert(hubJs.includes('Update ready. Opening it now.'), 'a real update still says it is opening');
+assert(hubJs.includes('if (!(incomingVersion && isAppVersionNewer(incomingVersion, APP_VERSION)))'), 'a current shell does not restart just to announce itself');
 assert(hubJs.includes("policy.systemKillswitch || source === 'check_updates'"), 'Check for Updates still preflights');
 assert(appUpdate.includes('You’re on the latest version'), 'current release gets a grey informational toast after restart');
 assert(appUpdate.includes("'info', 3000"), 'latest-version toast uses the grey info style');

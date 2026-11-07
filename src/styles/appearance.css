@@ -616,21 +616,6 @@ html.dark #route-subtitle-text {
   border-color: var(--nt-border) !important;
 }
 
-.nt-frame-choice {
-  height: 2.25rem;
-  border-radius: 0.7rem;
-  border: 1px solid var(--nt-border);
-  background: var(--nt-surface);
-  color: var(--nt-text);
-  font-size: 0.78rem;
-  font-weight: 800;
-}
-.nt-frame-choice.is-on {
-  border-color: var(--nt-primary);
-  color: var(--nt-primary);
-  background: color-mix(in srgb, var(--nt-primary) 12%, var(--nt-surface));
-}
-
 .app-header,
 #app-top-tabs {
   background-color: var(--nt-chrome-header) !important;
@@ -2729,42 +2714,4 @@ html.dark:not([data-colour-pack]) #bottom-nav .bottom-nav-item.is-active {
    --------------------------------------------------------------------------- */
 #nt-recovery-lifeline {
   display: none !important;
-}
-
-/* Desktop window. Phone column rules above stay in force until this frame. */
-html[data-nt-frame="desktop"] #bottom-nav.bottom-nav-bar {
-  border: none !important;
-  border-right: 1px solid color-mix(in srgb, var(--nt-chrome-fg) 16%, transparent) !important;
-  border-radius: 1.25rem 0 0 1.25rem !important;
-}
-html[data-nt-frame="desktop"] #bottom-nav-grid {
-  display: flex !important;
-  flex-direction: column !important;
-  max-width: none !important;
-}
-html[data-nt-frame="desktop"] #bottom-nav .bottom-nav-item {
-  flex-direction: row !important;
-  justify-content: flex-start !important;
-  align-items: center !important;
-  gap: 0.65rem;
-  min-height: 2.75rem !important;
-  padding: 0.35rem 0.7rem !important;
-  border-radius: 0.75rem !important;
-}
-html[data-nt-frame="desktop"] #bottom-nav .bottom-nav-item.is-active {
-  background: color-mix(in srgb, var(--nt-chrome-fg) 14%, transparent) !important;
-}
-html[data-nt-frame="desktop"] #bottom-nav .nt-nav-glyph {
-  min-width: 1.75rem;
-  margin-bottom: 0;
-  padding: 0;
-  background: transparent !important;
-}
-html[data-nt-frame="desktop"] #bottom-nav .bottom-nav-item svg {
-  width: 1.25rem !important;
-  height: 1.25rem !important;
-}
-html[data-nt-frame="desktop"] #bottom-nav .nt-nav-label {
-  font-size: 0.84rem !important;
-  text-align: left;
 }

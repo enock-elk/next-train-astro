@@ -6,7 +6,6 @@ import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
     'V10_11.07.14': [
-        'A wide screen with a mouse opens a desktop window: the same Home, Trip Planner, and Options sit in a side rail, and the two next-train cards sit side by side. Phone preview sits at the bottom of that rail, and under Theme and Preferences. A phone stays the phone column. No commuter What\'s New. forceShow stays false.',
         'Regional breakdown counts each reporting device once, under the app region selected most recently today, Johannesburg time. The four cards add up. Analytics people today stays separate because older builds have not reported yet. Sentry today shows whether Sentry is unconfigured, failed, or genuinely at zero. The 24h list under it is the Firebase app diagnostic record, not a Sentry estimate. Feedback handset, network, signal, and screen size sit under the route line in Build notes. A one-letter handset token is left off. A trip-map station dot opens the station name. No commuter What\'s New. forceShow stays false.',
     ],
     'V10_11.07.13': [

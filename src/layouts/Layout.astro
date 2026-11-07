@@ -45,31 +45,6 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, minimum-scale=1.0, viewport-fit=cover" />
-    <script is:inline>
-      (function () {
-        var root = document.documentElement;
-        var key = 'ntFrame';
-        var q = '';
-        try { q = new URLSearchParams(location.search).get('frame') || ''; } catch (e) {}
-        if (q === 'phone' || q === 'desktop' || q === 'auto') {
-          try {
-            if (q === 'auto') localStorage.removeItem(key);
-            else localStorage.setItem(key, q);
-          } catch (e) {}
-        }
-        var saved = '';
-        try { saved = localStorage.getItem(key) || ''; } catch (e) {}
-        var wide = false;
-        try {
-          wide = window.matchMedia('(min-width: 1024px) and (any-hover: hover) and (any-pointer: fine), (min-width: 1024px) and (hover: hover) and (pointer: fine)').matches;
-        } catch (e) {}
-        if (wide) root.setAttribute('data-nt-can-desktop', '1');
-        else root.removeAttribute('data-nt-can-desktop');
-        var frame = 'phone';
-        if (wide && saved !== 'phone') frame = 'desktop';
-        root.setAttribute('data-nt-frame', frame);
-      })();
-    </script>
     <style is:inline>
       /* Phone width scale before the hashed bundle. Design 390. Floor 320 (SE).
          Tablets/desktop keep 16px rem; the shell stays max-w-md (28rem). */
@@ -1635,162 +1610,6 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
       html.nt-ad-scroll-sync .nt-ad-undocked {
         translate: 0 var(--nt-ad-scroll, 0px);
       }
-
-      /* Desktop window. Phones and Phone preview keep the 28rem column.
-         The side rail is the same bottom nav, not a new tab. */
-      html[data-nt-frame="desktop"] #main-content.app-shell {
-        display: grid;
-        grid-template-columns: 13.5rem minmax(0, 1fr);
-        grid-template-rows: minmax(0, 1fr) auto;
-        width: min(72rem, 100%);
-        max-width: min(72rem, 100%) !important;
-        height: 100%;
-        border-radius: 1.25rem;
-      }
-      html[data-nt-frame="desktop"] #app-scroll {
-        grid-column: 2;
-        grid-row: 1;
-        min-width: 0;
-        min-height: 0;
-      }
-      html[data-nt-frame="desktop"] #offline-wrapper {
-        grid-column: 2;
-        grid-row: 2;
-      }
-      html[data-nt-frame="desktop"].nt-in-app body.nav-bottom:not(.nt-immersive) #bottom-nav.bottom-nav-bar,
-      html[data-nt-frame="desktop"] #bottom-nav.bottom-nav-bar {
-        position: relative;
-        left: auto;
-        right: auto;
-        bottom: auto;
-        grid-column: 1;
-        grid-row: 1 / -1;
-        height: 100%;
-        width: auto;
-        margin: 0;
-        visibility: visible;
-        pointer-events: auto;
-        border-top: none !important;
-        border-right: 1px solid color-mix(in srgb, var(--nt-chrome-fg, #fff) 16%, transparent) !important;
-        border-radius: 1.25rem 0 0 1.25rem;
-      }
-      html[data-nt-frame="desktop"] #bottom-nav-grid {
-        display: flex !important;
-        flex-direction: column;
-        max-width: none;
-        height: 100%;
-        padding: 0.85rem 0.6rem;
-        gap: 0.2rem;
-      }
-      html[data-nt-frame="desktop"] #bottom-nav .bottom-nav-item {
-        flex-direction: row;
-        justify-content: flex-start;
-        gap: 0.7rem;
-        min-height: 2.75rem;
-        padding: 0 0.7rem;
-        border-radius: 0.75rem;
-      }
-      html[data-nt-frame="desktop"] #bottom-nav .bottom-nav-item.is-active {
-        background: color-mix(in srgb, var(--nt-primary, #2563eb) 16%, transparent);
-      }
-      html[data-nt-frame="desktop"] #bottom-nav .nt-nav-label {
-        font-size: 0.84rem;
-        text-align: left;
-      }
-      html[data-nt-frame="desktop"].nt-in-app body.nav-bottom:not(.nt-immersive) .view-section.active {
-        padding-bottom: 1.25rem;
-      }
-      html[data-nt-frame="desktop"] .nt-scroll-hint {
-        bottom: 0;
-        left: 13.5rem;
-      }
-      html[data-nt-frame="desktop"] .nt-scroll-hint-top {
-        left: 13.5rem;
-      }
-      .nt-frame-toggle {
-        position: fixed;
-        z-index: 120;
-        top: 0.85rem;
-        right: 0.85rem;
-        display: none;
-        align-items: center;
-        justify-content: center;
-        height: 2.25rem;
-        padding: 0 0.85rem;
-        border-radius: 999px;
-        border: 1px solid rgba(15, 23, 42, 0.12);
-        background: #fff;
-        color: #1e3a8a;
-        font-size: 0.78rem;
-        font-weight: 800;
-        letter-spacing: 0.01em;
-        box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
-        cursor: pointer;
-      }
-      html[data-nt-frame="desktop"] .nt-frame-toggle {
-        position: absolute;
-        top: auto;
-        right: auto;
-        left: 0.55rem;
-        bottom: 0.7rem;
-        width: calc(13.5rem - 1.1rem);
-      }
-      html.dark .nt-frame-toggle {
-        background: #111827;
-        color: #bfdbfe;
-        border-color: rgba(255, 255, 255, 0.12);
-      }
-      html[data-nt-can-desktop="1"] .nt-frame-toggle {
-        display: inline-flex;
-      }
-      html[data-nt-frame="desktop"] #view-next-train > .space-y-3.mb-4 {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 0.75rem;
-      }
-      html[data-nt-frame="desktop"] #view-next-train > .space-y-3.mb-4 > * {
-        margin-top: 0;
-      }
-      html[data-nt-frame="desktop"] #main-content.app-shell:has(#bottom-nav.hidden) #app-scroll,
-      html[data-nt-frame="desktop"] #main-content.app-shell:has(#bottom-nav.hidden) #offline-wrapper {
-        grid-column: 1 / -1;
-      }
-      html[data-nt-frame="desktop"] #main-content.app-shell:has(#bottom-nav.hidden) .nt-scroll-hint,
-      html[data-nt-frame="desktop"] #main-content.app-shell:has(#bottom-nav.hidden) .nt-scroll-hint-top {
-        left: 0;
-      }
-      html[data-nt-frame="desktop"] body.nav-bottom:not(.nt-immersive) #sidenav {
-        bottom: 0;
-        height: auto;
-      }
-      html[data-nt-frame="desktop"].nt-in-app body.nav-bottom:not(.nt-immersive) #offline-wrapper:not(.hidden) {
-        left: 13.5rem;
-        bottom: 0.35rem;
-      }
-      html[data-nt-frame="desktop"] #planner-info-btn {
-        max-width: 28rem;
-      }
-      html[data-nt-frame="desktop"] #planner-input-section {
-        display: grid;
-        grid-template-columns: minmax(0, 28rem) minmax(0, 1fr);
-        column-gap: 1.25rem;
-        align-items: start;
-        width: 100%;
-        max-width: none;
-      }
-      html[data-nt-frame="desktop"] #planner-input-section > *:not(#planner-history-container) {
-        grid-column: 1;
-      }
-      html[data-nt-frame="desktop"] #planner-history-container {
-        grid-column: 2;
-        grid-row: 1 / span 8;
-        margin-top: 0;
-        border-top: none;
-        padding-top: 0;
-      }
-      html[data-nt-frame="desktop"] #planner-results-section {
-        max-width: 48rem;
-      }
     </style>
     <!--
       CleverAds vendor tag. Original IIFE is wrapped so Guardian can delay it
@@ -1843,19 +1662,6 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
     <div id="nt-shell" class="flex items-stretch sm:items-center justify-center p-0 sm:p-4">
     <slot />
     </div>
-    <script is:inline>
-      (function () {
-        var b = document.getElementById('nt-frame-toggle');
-        if (!b) return;
-        var root = document.documentElement;
-        if (root.getAttribute('data-nt-can-desktop') !== '1') {
-          b.hidden = true;
-          return;
-        }
-        b.hidden = false;
-        b.textContent = root.getAttribute('data-nt-frame') === 'phone' ? 'Desktop layout' : 'Phone preview';
-      })();
-    </script>
 
     <!-- Client-Side Bootstrapper -->
     <script>
@@ -1863,7 +1669,6 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
       import { hydrateStores } from '../store.js';
       import { registerSW } from 'virtual:pwa-register';
       import { bindPwaInstallPrompt } from '../lib/ui.js';
-      import { initDesktopFrame } from '../lib/desktop-frame.js';
       import { initCleverAds } from '../lib/clever-ads.js';
       import {
         bindAppUpdateLifecycle,
@@ -1874,7 +1679,6 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
 
       // Capture installability before SW registration can race the event
       bindPwaInstallPrompt();
-      initDesktopFrame();
 
       // 1. Hydrate Nano Stores from LocalStorage
       hydrateStores();

@@ -1,8 +1,8 @@
 {
   "branch": "map-gold",
-  "frozenAt": "929a2771104a6191108ca68baed0a970885a2a69",
+  "frozenAt": "4240dd79f83ea739cdcd7c55007473424af7eb8a",
   "version": "V9_09.20.11",
-  "note": "Gold snapshot: the map tracking card speaks to the person sharing and to everyone else separately. A viewer gets a shorter card and a button to join the share. Rail geometry, station pins, map-app.js, map.astro, and advert handling are unchanged. frozenAt is the tracking-card commit. Fast-forward map-gold to the commit that records this lockfile. Never force-push map-gold.",
+  "note": "Gold snapshot: planner Share this trip no longer opens an account screen before the location checks. The account question is asked at the publish step, outside this file. Rail geometry, station pins, map-app.js, map.astro, MapView, and advert handling are unchanged. frozenAt is the account-gate commit. Fast-forward map-gold to the commit that records this lockfile. Never force-push map-gold.",
   "files": {
     "public/tracks/rail-tracks-EC.geojson": {
       "md5": "43409bfd05405205e596f0d03345ab18",
@@ -37,8 +37,8 @@
       "sha256": "e7385a8e07415f0862e983a5ffca225fc23e68c22f550ee13bc84ffdb52cf3dc"
     },
     "src/lib/map-tab.js": {
-      "md5": "27edad849228f212e1c4185bf1df53c4",
-      "sha256": "3b86bd64054af3a29f26eb6974a0547b0163a8360637d8944ba63c1ca653fa7b"
+      "md5": "f006766c9a7e3254f5476316fcd1ae51",
+      "sha256": "f23684682a6f221421eafb1cf83fa1e2f1eb8b8bad6dd87a965fb36b24c9ad2b"
     },
     "src/lib/clever-ads.js": {
       "md5": "9de4e93c20057598507ad7fce024b9e9",

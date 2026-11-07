@@ -80,7 +80,7 @@ for (const [id, route] of Object.entries(ROUTES)) {
         if (satClosed) type = holidayName ? (holidayName + ' · No service') : 'No service';
         el.classList.toggle('nt-day-quiet', quiet);
         var typeClass = quiet
-          ? 'font-semibold text-red-600 dark:text-red-400'
+          ? 'font-bold text-red-600 dark:text-red-400'
           : 'font-bold text-blue-600 dark:text-blue-400';
         el.innerHTML = names[day] + '<span class="' + typeClass + '">' + type + '</span>';
         if (typeof window.fitHeaderDayLabel === 'function') window.fitHeaderDayLabel();

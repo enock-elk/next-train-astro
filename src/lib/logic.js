@@ -255,7 +255,7 @@ export function paintHeaderDayLabel(opts = {}) {
             : (overrideDayName ? `${overrideDayName} · No service` : 'No service');
     }
     const typeClass = noService
-        ? 'font-semibold text-red-600 dark:text-red-400'
+        ? 'font-bold text-red-600 dark:text-red-400'
         : 'font-bold text-blue-600 dark:text-blue-400';
     el.classList.toggle('nt-day-quiet', noService);
     const html = `${dayNames[day] || ''}<span class="${typeClass}">${displayType}</span>`;

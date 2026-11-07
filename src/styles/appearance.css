@@ -568,7 +568,7 @@ button#current-day {
   line-height: 1.15;
 }
 /* The day button stays clickable, with no outer oval. The schedule words
-   keep their own capsule. Sunday / closed Saturday use an amber capsule. */
+   keep their own capsule. Sunday / closed Saturday use that same capsule. */
 button#current-day.nt-day-quiet {
   border: 0;
   background: none;
@@ -2576,28 +2576,32 @@ html[data-colour-pack="earthy"] button#current-day:not(.nt-day-quiet) span:not(.
 html[data-colour-pack="earthy"].dark button#current-day:not(.nt-day-quiet) span:not(.text-red-600):not(.dark\:text-red-400) {
   background: color-mix(in srgb, var(--nt-chrome-fg) 18%, transparent);
 }
-/* Sunday / closed Saturday: same capsule as Saturday Schedule, amber so
-   No service stays readable on blue, navy, cream, and charcoal headers. */
-button#current-day.nt-day-quiet span.text-red-600,
-button#current-day.nt-day-quiet span.dark\:text-red-400 {
-  display: inline-flex;
-  align-items: center;
+/* Sunday / closed Saturday: the Saturday Schedule capsule, amber ink only.
+   Same margin, padding, radius, and wash strength. No border, no extra weight. */
+html[data-colour-pack="classic"] button#current-day.nt-day-quiet span.text-red-600,
+html[data-colour-pack="classic"] button#current-day.nt-day-quiet span.dark\:text-red-400,
+html:not([data-colour-pack]) button#current-day.nt-day-quiet span.text-red-600,
+html:not([data-colour-pack]) button#current-day.nt-day-quiet span.dark\:text-red-400 {
+  color: #fcd34d !important;
   margin-left: 0.12rem;
   padding: 0.05rem 0.42rem;
   border-radius: 999px;
-  background: #fef3c7;
-  color: #92400e !important;
-  border: 1px solid #d97706;
-  letter-spacing: 0.01em;
-  font-weight: 700 !important;
-  box-shadow: none;
-  line-height: 1.15;
+  background: color-mix(in srgb, #fcd34d 16%, transparent);
 }
-html.dark button#current-day.nt-day-quiet span.text-red-600,
-html.dark button#current-day.nt-day-quiet span.dark\:text-red-400 {
-  background: #78350f;
-  color: #fef3c7 !important;
-  border-color: #fbbf24;
+html[data-colour-pack="earthy"] button#current-day.nt-day-quiet span.text-red-600,
+html[data-colour-pack="earthy"] button#current-day.nt-day-quiet span.dark\:text-red-400 {
+  color: #9a3412 !important;
+  margin-left: 0.12rem;
+  padding: 0.05rem 0.42rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, #9a3412 28%, transparent);
+}
+html[data-colour-pack="earthy"].dark button#current-day.nt-day-quiet span.text-red-600,
+html.dark[data-colour-pack="earthy"] button#current-day.nt-day-quiet span.text-red-600,
+html[data-colour-pack="earthy"].dark button#current-day.nt-day-quiet span.dark\:text-red-400,
+html.dark[data-colour-pack="earthy"] button#current-day.nt-day-quiet span.dark\:text-red-400 {
+  color: #fcd34d !important;
+  background: color-mix(in srgb, #fcd34d 18%, transparent);
 }
 p#current-day span.text-red-600,
 html.dark p#current-day span.text-red-600,

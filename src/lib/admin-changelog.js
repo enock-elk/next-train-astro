@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_11.07.16': [
+        'Sunday No service uses the Saturday Schedule capsule: same offset, padding, radius, and wash. Only the ink is amber. No extra border or heavier fill. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_11.07.15': [
         'Build notes name the selected station as Pretoria (man) or Lenz (Auto). Manual station without a name is gone. The regional overlapping-report warning hides once the telemetry Worker returns an exact device split. A provisional train shows Prov in the timetable and on the saved sheet, in the same slot as KEMP, and a tap opens the advisory. Sunday No service uses the Saturday Schedule capsule, in amber, on light and dark headers. No commuter What\'s New. forceShow stays false.',
     ],

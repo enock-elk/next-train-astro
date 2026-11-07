@@ -41,6 +41,7 @@ import {
 } from './grid-order.js';
 import { recordRouteScheduleRevision } from './schedule-revision.js';
 import { applyMapStationOverrides, fetchMapStationOverrides } from './map-overrides.js';
+import { canonicalStationPin } from './station-pins.js';
 
 // --- MODULE STATE VARIABLES ---
 export let regionCheckPromise = Promise.resolve();
@@ -1380,6 +1381,11 @@ export async function buildGlobalStationIndexAsync(targetDB) {
         const stationName = normalizeStationName(row[stationKey]);
         if (isSheetMetaStationName(stationName)) return;
         const coords = parseRowCoords(row, coordKey);
+        const fixedPin = canonicalStationPin(stationName);
+        if (fixedPin) {
+            coords.lat = fixedPin.lat;
+            coords.lon = fixedPin.lon;
+        }
         if (!hasActiveService(row, stationKey, coordKey)) {
             if (!ghostCandidates[stationName]) {
                 ghostCandidates[stationName] = { lat: coords.lat, lon: coords.lon, routes: new Set() };

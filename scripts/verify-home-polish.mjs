@@ -454,6 +454,8 @@ assert(communityJs.includes('grouped'), 'consecutive same-author posts still omi
 assert(communityJs.includes('renderBubbleMarksHtml'), 'points render on named bubbles');
 assert(communityJs.includes('No posts on this line yet'), 'Community empty heading stays');
 assert(communityJs.includes('Be the first to share a heads-up, or ask a question.'), 'Community empty state invites a heads-up or a question');
+assert(communityJs.includes('offerNextTrainAccount') && communityJs.includes('ntCommunityComposerDraft'), 'a guest post asks for an account and keeps the typed text');
+assert(!communityJs.includes('requestAccountSignIn'), 'community post does not jump straight to Welcome back');
 assert(!/shouting match/i.test(communityJs), 'Community empty copy dropped the shouting-match lecture');
 assert(communityJs.includes('Please be kind and respectful.'), 'composer kindness placeholder stays');
 const hubModals = readFileSync(new URL('../src/components/HubModals.astro', import.meta.url), 'utf8');
@@ -477,6 +479,8 @@ const delayReports = readFileSync(new URL('../src/lib/delay-reports.js', import.
 const trainGhosts = readFileSync(new URL('../src/lib/train-ghosts.js', import.meta.url), 'utf8');
 assert(hubModals.includes('Create a free account to open more features.'), 'account guest create copy offers more features');
 assert(hubModals.includes('Welcome to Next Train') && hubModals.includes('Welcome back'), 'account guest headers are Welcome to Next Train / Welcome back');
+assert(hubModals.includes('id="nt-account-gate"') && hubModals.includes('data-account-gate="create"'), 'account gate offers Create account');
+assert(accountJs.includes("showAccountGuestScreen(choice === 'signin' ? 'signin' : 'create')"), 'Create account on the prompt opens Welcome to Next Train');
 assert(accountJs.includes("if (title && !signedOpen) title.textContent = ''") || accountJs.includes('title.textContent = \'\''), 'account top bar does not repeat Welcome / Welcome back');
 assert(hubModals.includes('Sign in to continue on this phone.'), 'account guest sign-in copy is short');
 assert(hubModals.includes('id="account-invalid-create-btn"') && hubModals.includes('data-account-only="invalid"'), 'invalid credentials screen nudges Create account');

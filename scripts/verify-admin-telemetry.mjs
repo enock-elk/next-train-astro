@@ -148,6 +148,8 @@ ok(adminJs.includes('fetchTripPlanEverStats'), 'admin loads all-time user + pair
 ok(adminJs.includes('Users ever'), 'banner shows Users ever');
 ok(adminJs.includes('unique trip combinations'), 'banner shows unique trip combinations');
 ok(adminJs.includes('buildTripInsightsHtml') && adminJs.includes('id="de-trip-insights"'), 'insights strip lives on the trips panel');
+ok(adminJs.includes('rollupTopCorridors') && adminJs.includes('corridorStopKey'), 'top corridors roll one row per origin and destination');
+ok(!adminJs.includes('const top = (sorted || []).slice(0, 5)'), 'top corridors are not the raw day-split list');
 ok(adminJs.includes("bindDeSwipe(document.getElementById('de-tabs-swipe'))"), 'swipe is bound on the tab strip');
 ok(!/bindDeSwipe\(\s*document\.getElementById\('de-list'\)\s*\)/.test(adminJs), 'swipe is not bound on #de-list alone');
 ok(adminJs.includes('fetchDiagJson:'), 'Admin.fetchDiagJson is hoisted');

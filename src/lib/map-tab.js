@@ -2791,12 +2791,6 @@ export function maybeOfferPlannerContribute() {
 }
 
 async function sharePlannerTrip(c) {
-    const { $account, requestAccountSignIn } = await import('./account.js');
-    if ($account.get().status !== 'signed-in') {
-        const ok = await requestAccountSignIn();
-        if (!ok) return;
-    }
-
     showToast('Checking you’re near the station…', 'info');
     let pos;
     try {

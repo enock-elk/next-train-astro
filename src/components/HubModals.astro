@@ -1445,6 +1445,19 @@ import { withBase } from '../lib/config.js';
     </div>
 </div>
 
+<!-- ACCOUNT GATE: community post and live share, before Welcome / Welcome back -->
+<div id="nt-account-gate" class="fixed inset-0 z-[160] hidden flex items-end sm:items-center justify-center p-4 bg-gray-900/50 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="nt-account-gate-title">
+    <div class="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-sm border border-gray-200 dark:border-gray-700 p-5" data-account-gate-card>
+        <h3 id="nt-account-gate-title" class="text-base font-black text-gray-900 dark:text-white tracking-tight">Only signed-in users can post</h3>
+        <p id="nt-account-gate-body" class="mt-2 text-sm text-gray-600 dark:text-gray-300 leading-relaxed">Would you like to quickly create a Next Train account so you can post and open more features?</p>
+        <div class="mt-5 flex flex-col gap-2">
+            <button type="button" data-account-gate="create" class="w-full py-3 rounded-full bg-[#4C8DFF] hover:bg-[#3b7aef] text-white text-sm font-bold focus:outline-none">Create account</button>
+            <button type="button" data-account-gate="signin" class="w-full py-3 rounded-full border border-[#4C8DFF]/50 text-[#4C8DFF] text-sm font-bold focus:outline-none">Sign in</button>
+            <button type="button" data-account-gate="later" class="w-full py-2 text-[12px] font-semibold text-gray-500 dark:text-gray-400 focus:outline-none">Not now</button>
+        </div>
+    </div>
+</div>
+
 <!-- ON-TRAIN SHARE / CLOSEST-TRAIN / LOCATE PROMPT -->
 <div id="nt-on-train-sheet" class="fixed inset-0 z-[140] hidden flex items-end sm:items-center justify-center p-4 bg-gray-900/50 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="nt-on-train-title">
     <div class="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-sm border border-gray-200 dark:border-gray-700 p-5">

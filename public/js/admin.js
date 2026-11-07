@@ -8995,6 +8995,45 @@ const Admin = {
             return { usersEver: Admin._deTripEverUsers, pairsEver: Admin._deTripEverPairs };
         };
 
+        Admin.corridorStopKey = (name) => {
+            if (typeof normalizeStationName === 'function') return normalizeStationName(name);
+            return String(name || '').toUpperCase().replace(/ STATION/g, '').replace(/-/g, ' ').replace(/\s+/g, ' ').trim();
+        };
+
+        // One row per origin and destination. Day and region stay on the trip cards.
+        // Weekday and Saturday of the same pair, or "DENNEBOOM" and "DENNEBOOM STATION", merge.
+        // Users are a union. Hits add up.
+        Admin.rollupTopCorridors = (sorted) => {
+            const rolled = new Map();
+            (sorted || []).forEach((item) => {
+                const originKey = Admin.corridorStopKey(item?.origin);
+                const destKey = Admin.corridorStopKey(item?.dest);
+                if (!originKey || !destKey) return;
+                const key = `${originKey}|${destKey}`;
+                let row = rolled.get(key);
+                if (!row) {
+                    const tidy = (raw) => String(raw || '').replace(/\s+station\b/gi, '').replace(/\s+/g, ' ').trim();
+                    row = {
+                        origin: tidy(item.origin) || originKey,
+                        dest: tidy(item.dest) || destKey,
+                        uniqueKeys: new Set(),
+                        hitCount: 0,
+                    };
+                    rolled.set(key, row);
+                }
+                if (item.uniqueKeys && typeof item.uniqueKeys.forEach === 'function') {
+                    item.uniqueKeys.forEach((id) => row.uniqueKeys.add(id));
+                }
+                row.hitCount += Number(item.hitCount) || 0;
+            });
+            return [...rolled.values()].map((row) => ({
+                origin: row.origin,
+                dest: row.dest,
+                count: row.uniqueKeys.size,
+                hitCount: row.hitCount,
+            })).sort((a, b) => (b.hitCount - a.hitCount) || (b.count - a.count) || String(a.origin).localeCompare(String(b.origin)));
+        };
+
         Admin.buildTripInsightsHtml = (sorted, rows, esc) => {
             const regionCounts = { GP: 0, WC: 0, KZN: 0, EC: 0 };
             const dayCounts = {};
@@ -9003,6 +9042,8 @@ const Admin = {
             const xferCounts = { 0: 0, 1: 0, 2: 0, '3+': 0 };
             const originHits = {};
             const destHits = {};
+            const originLabels = {};
+            const destLabels = {};
             const pairHits = {};
             let direct = 0;
             let transfer = 0;
@@ -9032,16 +9073,25 @@ const Admin = {
                 if (searchH >= 0) searchHours[searchH] += 1;
                 const depH = parseHour(r.depTime);
                 if (depH >= 0) depHours[depH] += 1;
-                const origin = String(r.origin || '').trim();
-                const dest = String(r.destination || r.dest || '').trim();
-                if (origin) originHits[origin] = (originHits[origin] || 0) + 1;
-                if (dest) destHits[dest] = (destHits[dest] || 0) + 1;
+                const originRaw = String(r.origin || '').trim();
+                const destRaw = String(r.destination || r.dest || '').trim();
+                const origin = Admin.corridorStopKey(originRaw);
+                const dest = Admin.corridorStopKey(destRaw);
+                const tidy = (raw) => String(raw || '').replace(/\s+station\b/gi, '').replace(/\s+/g, ' ').trim();
+                if (origin) {
+                    originHits[origin] = (originHits[origin] || 0) + 1;
+                    if (!originLabels[origin]) originLabels[origin] = tidy(originRaw) || origin;
+                }
+                if (dest) {
+                    destHits[dest] = (destHits[dest] || 0) + 1;
+                    if (!destLabels[dest]) destLabels[dest] = tidy(destRaw) || dest;
+                }
                 if (origin && dest) {
                     const key = `${origin}|${dest}`;
                     pairHits[key] = (pairHits[key] || 0) + 1;
                 }
             });
-            const top = (sorted || []).slice(0, 5);
+            const top = Admin.rollupTopCorridors(sorted).slice(0, 5);
             const failReasons = {};
             Object.values(Admin._cachedRoutingFails || {}).forEach((f) => {
                 if (!f) return;
@@ -9095,6 +9145,8 @@ const Admin = {
             }).join('');
             const topOrigins = Object.entries(originHits).sort((a, b) => b[1] - a[1]).slice(0, 6).map(([name]) => name);
             const topDests = Object.entries(destHits).sort((a, b) => b[1] - a[1]).slice(0, 6).map(([name]) => name);
+            const originLabel = (key) => originLabels[key] || key;
+            const destLabel = (key) => destLabels[key] || key;
             const heatMax = Math.max(1, ...topOrigins.flatMap((o) => topDests.map((d) => pairHits[`${o}|${d}`] || 0)));
             const heatCell = (n) => {
                 const t = n / heatMax;
@@ -9103,11 +9155,11 @@ const Admin = {
             };
             const heatRows = topOrigins.map((origin) => `
                 <tr>
-                    <th class="text-left text-[8px] font-bold text-slate-500 pr-1 truncate max-w-[72px]">${esc(origin)}</th>
+                    <th class="text-left text-[8px] font-bold text-slate-500 pr-1 truncate max-w-[72px]">${esc(originLabel(origin))}</th>
                     ${topDests.map((dest) => heatCell(pairHits[`${origin}|${dest}`] || 0)).join('')}
                 </tr>
             `).join('');
-            const heatHead = topDests.map((dest) => `<th class="text-[7px] font-bold text-slate-400 w-8 truncate max-w-[32px]" title="${esc(dest)}">${esc(dest.slice(0, 4))}</th>`).join('');
+            const heatHead = topDests.map((dest) => `<th class="text-[7px] font-bold text-slate-400 w-8 truncate max-w-[32px]" title="${esc(destLabel(dest))}">${esc(destLabel(dest).slice(0, 4))}</th>`).join('');
             return `
                 <div id="de-trip-insights" class="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-gray-900/50 px-3 py-2.5 mb-2 space-y-3">
                     <p class="text-[10px] font-black uppercase tracking-widest text-slate-500">Insights (all time)</p>

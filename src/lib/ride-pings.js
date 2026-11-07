@@ -22,7 +22,7 @@ import { APP_VERSION, DYNAMIC_BASE_URL, ROUTES } from './config.js';
 import { isAdminAuthed, getPinnedRouteIds } from './admin-chrome.js';
 import { safeStorage, escapeHTML, normalizeStationName, getDistanceFromLatLonInKm, formatTimeDisplay } from './utils.js';
 import { $currentRouteId, $deviceId, $globalStationIndex } from '../store.js';
-import { $account } from './account.js';
+import { $account, offerNextTrainAccount } from './account.js';
 import { showToast, triggerHaptic } from './ui.js';
 import { bootFirebase } from './firebase-boot.js';
 import { FEATURE_KEYS, fetchFeatures, isFeatureEnabled, isRideCheckInPinned, relaxLiveShareGuards } from './features.js';
@@ -2042,6 +2042,18 @@ export async function submitRideCheckIn({
     if (!st && relaxLiveShareGuards()) st = 'here';
     if (!st) return { ok: false, message: 'Pick a station or allow location.' };
     if (!navigator.onLine) return { ok: false, message: 'You appear offline.' };
+
+    const heartbeatShare = String(source || '').startsWith('onboard_') || source === 'stop';
+    if (!heartbeatShare && !trustedAdminOverride && $account.get()?.status !== 'signed-in') {
+        const signed = await offerNextTrainAccount({
+            title: 'Only signed-in users can share',
+            body: 'Would you like to quickly create a Next Train account so you can share this train and open more features?',
+            wait: true,
+        });
+        if (!signed && $account.get()?.status !== 'signed-in') {
+            return { ok: false, cancelled: true };
+        }
+    }
 
     const deviceId = getDeviceId();
     const now = Date.now();

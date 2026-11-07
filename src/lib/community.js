@@ -15,9 +15,9 @@ import { formatAccountDisplayName } from './display-name.js';
 import { safeStorage, escapeHTML } from './utils.js';
 import { sanitizeCommunityPhotoUrl } from './community-photo.js';
 import { $currentRouteId, $userRegion, $deviceId } from '../store.js';
-import { $account, requestAccountSignIn } from './account.js';
+import { $account, offerNextTrainAccount } from './account.js';
 import { isAdminAuthed } from './admin-chrome.js';
-import { showToast, triggerHaptic, openSmoothModal } from './ui.js';
+import { showToast, triggerHaptic } from './ui.js';
 import { bootFirebase } from './firebase-boot.js';
 import {
     isShadowBanned,
@@ -1537,11 +1537,48 @@ function setCommunityRouteListOpen(open) {
 }
 
 const KIND_PLACEHOLDER = 'Please be kind and respectful.';
+const COMPOSER_DRAFT_KEY = 'ntCommunityComposerDraft';
+
+function rememberComposerDraft(value) {
+    const text = String(value ?? '');
+    if (text) safeStorage.setItem(COMPOSER_DRAFT_KEY, text);
+    else safeStorage.removeItem(COMPOSER_DRAFT_KEY);
+}
+
+function restoreComposerDraft(composer) {
+    const el = composer || document.getElementById('community-composer');
+    if (!el || el.value) return;
+    const saved = safeStorage.getItem(COMPOSER_DRAFT_KEY) || '';
+    if (!saved) return;
+    el.value = saved;
+    el.style.height = 'auto';
+    el.style.height = `${Math.min(Math.max(el.scrollHeight, 44), 160)}px`;
+}
+
+function keepComposerText(composer) {
+    const el = composer || document.getElementById('community-composer');
+    const typed = el?.value || '';
+    if (typed) rememberComposerDraft(typed);
+    return () => {
+        if (!el) {
+            restoreComposerDraft();
+            return;
+        }
+        if (typed && el.value !== typed) el.value = typed;
+        if (el.value) rememberComposerDraft(el.value);
+    };
+}
+
+const ACCOUNT_POST_PROMPT = {
+    title: 'Only signed-in users can post',
+    body: 'Would you like to quickly create a Next Train account so you can post and open more features?',
+};
 
 function syncComposerChrome() {
     const composer = document.getElementById('community-composer');
     if (!composer) return;
     composer.disabled = false;
+    restoreComposerDraft(composer);
     if (document.activeElement === composer) composer.placeholder = '';
     else composer.placeholder = KIND_PLACEHOLDER;
 }
@@ -1691,8 +1728,10 @@ async function handlePostSubmit() {
     if (errEl) errEl.textContent = '';
     if ($account.get().status !== 'signed-in') {
         if (btn) btn.disabled = false;
-        const ok = await requestAccountSignIn();
-        if (!ok) return;
+        const restore = keepComposerText(composer);
+        await offerNextTrainAccount(ACCOUNT_POST_PROMPT);
+        restore();
+        return;
     }
     if (btn) btn.disabled = true;
 
@@ -1705,8 +1744,14 @@ async function handlePostSubmit() {
         }
         if (btn) btn.disabled = false;
         if (result.needsAuth) {
-            const ok = await requestAccountSignIn();
-            if (ok) return handlePostSubmit();
+            if ($account.get().status !== 'signed-in') {
+                const restore = keepComposerText(composer);
+                await offerNextTrainAccount(ACCOUNT_POST_PROMPT);
+                restore();
+            } else if (errEl) {
+                errEl.textContent = result.message || 'Sign in again to post.';
+            }
+            if (btn) btn.disabled = false;
         }
         return;
     }
@@ -1715,6 +1760,7 @@ async function handlePostSubmit() {
         composer.value = '';
         composer.style.height = '';
     }
+    rememberComposerDraft('');
     clearReplyDraft();
     signalCommunityTyping(routeId, false);
     if (result.held) {
@@ -1827,8 +1873,11 @@ export function bindCommunityUi() {
         const rid = document.getElementById('community-route-select')?.value || $currentRouteId.get();
         renderCommunityFeed(rid);
     });
-    document.getElementById('community-signin-cta')?.addEventListener('click', () => {
-        openSmoothModal('account-modal');
+    document.getElementById('community-signin-cta')?.addEventListener('click', async () => {
+        const composer = document.getElementById('community-composer');
+        const restore = keepComposerText(composer);
+        await offerNextTrainAccount(ACCOUNT_POST_PROMPT);
+        restore();
     });
     document.getElementById('community-guest-hint-dismiss')?.addEventListener('click', (e) => {
         e.preventDefault();
@@ -1851,7 +1900,9 @@ export function bindCommunityUi() {
     composerEl?.addEventListener('blur', () => {
         syncComposerChrome($account.get().status === 'signed-in');
     });
+    restoreComposerDraft(composerEl);
     composerEl?.addEventListener('input', () => {
+        rememberComposerDraft(composerEl.value);
         // Auto-grow with new lines (WhatsApp-style), capped
         composerEl.style.height = 'auto';
         const next = Math.min(Math.max(composerEl.scrollHeight, 44), 160);
@@ -1973,9 +2024,8 @@ export function bindCommunityUi() {
             const emojiId = reactBtn.getAttribute('data-emoji');
             let result = await togglePostReaction(routeId, postId, emojiId);
             if (!result.ok && result.needsAuth) {
-                const ok = await requestAccountSignIn();
-                if (!ok) return;
-                result = await togglePostReaction(routeId, postId, emojiId);
+                await offerNextTrainAccount(ACCOUNT_POST_PROMPT);
+                return;
             }
             if (!result.ok) {
                 if (!result.needsAuth) showToast(result.message || 'Could not react', 'error');
@@ -1994,8 +2044,17 @@ export function bindCommunityUi() {
             const routeId = send.getAttribute('data-route');
             const input = document.querySelector(`.community-reply-input[data-post-id="${postId}"]`);
             if ($account.get().status !== 'signed-in') {
-                const ok = await requestAccountSignIn();
-                if (!ok) return;
+                const typedReply = input?.value || '';
+                const composer = document.getElementById('community-composer');
+                if (typedReply && composer && !composer.value) {
+                    composer.value = typedReply;
+                    rememberComposerDraft(typedReply);
+                }
+                const restore = keepComposerText(composer);
+                await offerNextTrainAccount(ACCOUNT_POST_PROMPT);
+                restore();
+                if (input && typedReply && input.isConnected && input.value !== typedReply) input.value = typedReply;
+                return;
             }
             const result = await submitCommunityReply(postId, input?.value || '', routeId);
             paintCommunityQuotaHint();

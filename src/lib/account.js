@@ -840,6 +840,67 @@ export function requestAccountSignIn() {
     return waitForSignedIn(120000);
 }
 
+let accountGateWaiter = null;
+
+function settleAccountGate(choice) {
+    const finish = accountGateWaiter;
+    accountGateWaiter = null;
+    document.getElementById('nt-account-gate')?.classList.add('hidden');
+    if (finish) finish(choice === 'create' || choice === 'signin' ? choice : 'later');
+}
+
+function bindAccountGate() {
+    if (typeof document === 'undefined' || window.__ntAccountGateBound) return;
+    const sheet = document.getElementById('nt-account-gate');
+    if (!sheet) return;
+    window.__ntAccountGateBound = true;
+    sheet.addEventListener('click', (e) => {
+        const button = e.target.closest?.('[data-account-gate]');
+        if (button) {
+            settleAccountGate(button.getAttribute('data-account-gate'));
+            return;
+        }
+        if (e.target === sheet) settleAccountGate('later');
+    });
+    document.addEventListener('keydown', (e) => {
+        if (e.key !== 'Escape' || !accountGateWaiter) return;
+        if (document.getElementById('nt-account-gate')?.classList.contains('hidden')) return;
+        settleAccountGate('later');
+    });
+}
+
+/** Ask before opening an account screen. Resolves create, signin, or later. */
+export function promptAccountGate({ title, body } = {}) {
+    if (typeof document === 'undefined') return Promise.resolve('later');
+    bindAccountGate();
+    const sheet = document.getElementById('nt-account-gate');
+    if (!sheet) return Promise.resolve('later');
+    if (accountGateWaiter) settleAccountGate('later');
+    const titleEl = document.getElementById('nt-account-gate-title');
+    const bodyEl = document.getElementById('nt-account-gate-body');
+    if (titleEl) titleEl.textContent = title || 'Only signed-in users can post';
+    if (bodyEl) bodyEl.textContent = body || 'Would you like to quickly create a Next Train account so you can post and open more features?';
+    sheet.classList.remove('hidden');
+    return new Promise((resolve) => {
+        accountGateWaiter = resolve;
+    });
+}
+
+/**
+ * Prompt, then open Welcome to Next Train or Welcome back.
+ * wait false returns false so the caller does not send on their behalf.
+ * wait true stays until they sign in, close the account screen, or time out.
+ */
+export async function offerNextTrainAccount({ title, body, wait = false } = {}) {
+    if ($account.get()?.status === 'signed-in') return true;
+    const choice = await promptAccountGate({ title, body });
+    if (choice !== 'create' && choice !== 'signin') return false;
+    openAccountModal();
+    showAccountGuestScreen(choice === 'signin' ? 'signin' : 'create');
+    if (!wait) return false;
+    return waitForSignedIn(180000);
+}
+
 export function openAccountModal() {
     const modal = typeof document !== 'undefined' ? document.getElementById('account-modal') : null;
     if (modal) {
@@ -1975,6 +2036,8 @@ if (typeof window !== 'undefined') {
     window.__ntAccountSheetOnPop = accountSheetOnPop;
     window.openAccountModal = openAccountModal;
     window.requestAccountSignIn = requestAccountSignIn;
+    window.offerNextTrainAccount = offerNextTrainAccount;
+    window.promptAccountGate = promptAccountGate;
     window.waitForSignedIn = waitForSignedIn;
     window.signOutAccount = signOutAccount;
     window.paintAccountPoints = paintAccountPoints;

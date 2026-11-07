@@ -740,6 +740,8 @@ assert(mapAppSource.includes('nt-map-request-locate'), 'locate button asks the p
 assert(mapAppSource.includes('enableHighAccuracy: false'), 'standalone map watch is fused, not GPS-only');
 assert(!mapAppSource.includes('enableHighAccuracy: true});'), 'map no longer starts a Leaflet high-accuracy watch');
 assert(mapTabSource.includes('acquireGeoWatch'), 'map tab holds the fused geo watch while visible');
+assert(!mapTabSource.includes('requestAccountSignIn'), 'map share does not open Welcome back before the checks finish');
+assert(ridePingsSource.includes('offerNextTrainAccount') && ridePingsSource.includes('heartbeatShare'), 'a new live share asks for an account at publish, and GPS heartbeats do not');
 assert(mapTabSource.includes('releaseGeoWatch'), 'leaving the map tab drops the map geo-watch holder');
 assert(ridePingsSource.includes("acquireGeoWatch('share')"), 'an active share keeps the geo watch');
 assert(ridePingsSource.includes('payload.motionClass'), 'sender writes motionClass on the existing ride_pings node');

@@ -2665,6 +2665,8 @@ export function listMaintenanceItems(maintData) {
                 id: String(it.id || key),
                 active: it.active !== false,
                 message: String(it.message || '').trim(),
+                icon: it.icon || '',
+                tone: it.tone || '',
                 regions: normalizeMaintScopeList(it.regions).map((r) => r.toUpperCase()),
                 routes: normalizeMaintScopeList(it.routes),
                 expiresAt: it.expiresAt ? Number(it.expiresAt) : null,
@@ -2680,6 +2682,8 @@ export function listMaintenanceItems(maintData) {
         id: '_legacy',
         active: !!maintData.active,
         message: String(maintData.message || '').trim() || 'MAINTENANCE IN PROGRESS',
+        icon: maintData.icon || '',
+        tone: maintData.tone || '',
         regions: normalizeMaintScopeList(maintData.regions).map((r) => r.toUpperCase()),
         routes: normalizeMaintScopeList(maintData.routes),
         expiresAt: maintData.expiresAt ? Number(maintData.expiresAt) : null,
@@ -2759,6 +2763,34 @@ export function isMaintenanceVisibleToUser(maintData) {
     return !!pickMaintenanceBanner(maintData);
 }
 
+const MAINT_ICON_PATHS = {
+    wrench: '<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>',
+    info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v6"/><path d="M12 8h.01"/>',
+    bell: '<path d="M18 8a6 6 0 10-12 0c0 7-3 7-3 7h18s-3 0-3-7"/><path d="M13.7 21a2 2 0 01-3.4 0"/>',
+    alert: '<path d="M10.3 3.9L1.8 18a2 2 0 001.7 3h16.9a2 2 0 001.7-3L13.7 3.9a2 2 0 00-3.4 0z"/><path d="M12 9v4"/><path d="M12 17h.01"/>',
+    check: '<circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.5 2.5L16 9"/>',
+};
+
+function maintenanceIconKey(raw) {
+    const key = String(raw || '').trim().toLowerCase();
+    if (key === 'none' || key === 'off') return 'none';
+    if (MAINT_ICON_PATHS[key]) return key;
+    return 'wrench';
+}
+
+function maintenanceToneClass(raw) {
+    const key = String(raw || '').trim().toLowerCase();
+    if (key === 'green') return 'nt-maint-tone-green';
+    if (key === 'blue') return 'nt-maint-tone-blue';
+    return '';
+}
+
+function maintenanceIconHtml(iconKey) {
+    if (iconKey === 'none') return '';
+    const path = MAINT_ICON_PATHS[iconKey] || MAINT_ICON_PATHS.wrench;
+    return `<svg class="nt-maint-wrench" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${path}</svg>`;
+}
+
 /** Scroll long maintenance copy as a marquee; keep short copy still. */
 export function syncMaintenanceMarquee(banner) {
     if (!banner || typeof window === 'undefined') return;
@@ -2811,10 +2843,12 @@ export async function checkMaintenanceStatus() {
                 // In-flow strip immediately above #app-header so it scrolls away
                 // with the name (not position:absolute over the title, not sticky).
                 banner.removeAttribute('style');
-                banner.className = 'nt-maint-strip';
+                const toneClass = maintenanceToneClass(picked?.tone);
+                banner.className = toneClass ? `nt-maint-strip ${toneClass}` : 'nt-maint-strip';
                 banner.setAttribute('role', 'status');
                 const label = escapeHTML(String(customMessage).toUpperCase());
-                banner.innerHTML = `<span class="nt-maint-inner"><svg class="nt-maint-wrench" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg><span class="nt-maint-marquee"><span class="nt-maint-track"><span class="nt-maint-label">${label}</span><span class="nt-maint-label" aria-hidden="true">${label}</span></span></span></span>`;
+                const iconHtml = maintenanceIconHtml(maintenanceIconKey(picked?.icon));
+                banner.innerHTML = `<span class="nt-maint-inner">${iconHtml}<span class="nt-maint-marquee"><span class="nt-maint-track"><span class="nt-maint-label">${label}</span><span class="nt-maint-label" aria-hidden="true">${label}</span></span></span></span>`;
                 const header = document.getElementById('app-header');
                 const mainAppNode = document.getElementById('main-content');
                 header?.classList.remove('nt-maint-active');

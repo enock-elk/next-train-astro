@@ -1156,6 +1156,16 @@ html.dark .nt-offline-strip {
   pointer-events: none;
   box-shadow: none;
 }
+#maintenance-banner.nt-maint-tone-green,
+.nt-maint-strip.nt-maint-tone-green {
+  background: linear-gradient(90deg, #bbf7d0 0%, #4ade80 52%, #16a34a 100%);
+  color: #14532d;
+}
+#maintenance-banner.nt-maint-tone-blue,
+.nt-maint-strip.nt-maint-tone-blue {
+  background: linear-gradient(90deg, #bfdbfe 0%, #60a5fa 52%, #2563eb 100%);
+  color: #1e3a8a;
+}
 .nt-maint-inner {
   display: inline-flex;
   align-items: center;

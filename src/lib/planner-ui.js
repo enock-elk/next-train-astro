@@ -3477,10 +3477,7 @@ export const PlannerRenderer = {
 
         const colorClass = transferCount > 0 ? 'text-yellow-600 dark:text-yellow-400' : (isNextDay ? 'text-orange-600 dark:text-orange-400' : 'text-blue-600 dark:text-blue-400');
         
-        let headerLabel = 'Direct Trip';
-        if (transferCount === 1) headerLabel = 'Transfer Trip';
-        else if (transferCount >= 2) headerLabel = `Bridge Trip (${transferCount} Transfers)`;
-        if (isNextDay) headerLabel = 'Future Trip';
+        const headerLabel = plannerTripKindLabel(transferCount, isNextDay);
 
         const { countdown, duration, isDeparted } = PlannerRenderer.calculateTimes(step, isNextDay);
 
@@ -3518,7 +3515,7 @@ export const PlannerRenderer = {
                     <div class="text-left flex-1 w-0 pr-2">
                         <p class="text-[9px] text-gray-500 uppercase font-black tracking-widest">Depart</p>
                         <p class="text-base sm:text-lg font-black text-gray-900 dark:text-white leading-tight tracking-tight mt-0.5 break-words" title="${step.from}">${step.from}</p>
-                        <p class="text-lg font-black ${colorClass} mt-1">${PlannerRenderer.format12h(step.depTime)}</p>
+                        <p class="text-lg font-black ${colorClass} mt-1">${plannerClock24(step.depTime)}</p>
                     </div>
                     
                     <button onclick="if(typeof window.swapPlannerResults === 'function') window.swapPlannerResults()" class="flex-none p-1.5 bg-gray-50 dark:bg-gray-800 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-400 dark:text-gray-500 transition focus:outline-none shrink-0 border border-gray-200 dark:border-gray-700" title="Reverse Trip">
@@ -3528,7 +3525,7 @@ export const PlannerRenderer = {
                     <div class="text-right flex-1 w-0 pl-2">
                         <p class="text-[9px] text-gray-500 uppercase font-black tracking-widest">Arrive</p>
                         <p class="text-base sm:text-lg font-black text-gray-900 dark:text-white leading-tight tracking-tight mt-0.5 break-words" title="${step.to}">${step.to}</p>
-                        <p class="text-lg font-black ${colorClass} mt-1">${PlannerRenderer.format12h(step.arrTime)}</p>
+                        <p class="text-lg font-black ${colorClass} mt-1">${plannerClock24(step.arrTime)}</p>
                     </div>
                 </div>
                 <div class="flex justify-between items-start mt-3 pt-3 border-t border-gray-100 dark:border-gray-800">
@@ -3537,7 +3534,7 @@ export const PlannerRenderer = {
                      </div>
                      <div class="flex flex-col items-end text-right shrink-0 pl-2">
                         <p class="text-[11px] font-bold text-gray-500 dark:text-gray-400">Total Time:</p>
-                        <p class="text-sm font-black text-gray-700 dark:text-gray-200 mt-0.5 whitespace-nowrap">${duration}</p>
+                        <p class="text-sm font-black text-blue-600 dark:text-blue-400 mt-0.5 whitespace-nowrap">${duration}</p>
                      </div>
                 </div>
                 ${canShowTripPrice(step) ? `<button type="button" data-nt-trip-fare="1" class="planner-trip-fare mt-3 w-full flex items-center justify-between gap-3 px-3 py-2 rounded-xl bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400">
@@ -3576,27 +3573,39 @@ export const PlannerRenderer = {
                 if (opt.leg3 && opt.leg3.isRelayComposite) transferCount += 1;
             }
 
-            let typeLabel = transferCount === 0 ? "Direct" : `${transferCount} Transfer${transferCount > 1 ? 's' : ''}`;
-            
-            // GUARDIAN PHASE 14: Dynamic future label injection (compact on narrow screens)
-            if (opt.dayLabel) {
-                label = ` (${compactPlannerDayLabel(opt.dayLabel, opt)})`;
-            } else if (midnightRollover) {
-                label = " (Tomorrow)";
-            }
-            
-            // Formatted explicitly as "08:59 ➔ 10:30 [1 Transfer]"
-            const text = `${formatTimeDisplay(opt.depTime)} ➔ ${formatTimeDisplay(opt.arrTime)} [${typeLabel}]${label}`;
+            const changeLabel = plannerChangeLabel(transferCount);
+            const waitMins = plannerLongestWaitMins(opt);
+            const waitBit = waitMins ? ` · ${escapeHTML(PlannerRenderer.formatDuration(waitMins))} wait` : '';
+            if (opt.dayLabel) label = ` · ${escapeHTML(compactPlannerDayLabel(opt.dayLabel, opt))}`;
+            else if (midnightRollover) label = ' · Tomorrow';
+            const earlierBit = isPast ? ' · Earlier' : '';
+            const clockLine = `${plannerClock24(opt.depTime)} → ${plannerClock24(opt.arrTime)}`;
+            const detailLine = `${escapeHTML(plannerTripDurationLabel(opt))} · ${escapeHTML(changeLabel)}${waitBit}${earlierBit}${label}`;
             const isSelected = (idx === selectedIndex);
-            
             if (isSelected) {
-                selectedText = text;
+                selectedText = `<span class="block truncate">${clockLine}</span><span class="block truncate text-[11px] font-semibold text-gray-500 dark:text-gray-400 mt-0.5">${detailLine}</span>`;
             }
+            const rowTone = isSelected
+                ? 'bg-blue-600 text-white hover:bg-blue-700 border-transparent'
+                : (isPast
+                    ? 'text-gray-400 dark:text-gray-500 opacity-70 hover:bg-gray-50 dark:hover:bg-gray-800'
+                    : 'text-gray-700 dark:text-gray-200 hover:bg-blue-50 dark:hover:bg-gray-700');
+            const detailTone = isSelected ? 'text-blue-100' : (isPast ? 'text-gray-400 dark:text-gray-500' : 'text-gray-500 dark:text-gray-400');
+            const divider = (!isPast && idx > 0 && allOptions.slice(0, idx).some((prev, prevIdx) => {
+                const prevSec = timeToSeconds(prev.depTime);
+                return isToday && !midnightRollover && !prev.dayLabel && prevSec < nowSec;
+            }) && !allOptions.slice(0, idx).some((prev) => {
+                const prevSec = timeToSeconds(prev.depTime);
+                return !(isToday && !midnightRollover && !prev.dayLabel && prevSec < nowSec);
+            }))
+                ? `<li class="px-3.5 py-1.5 text-[9px] font-black uppercase tracking-widest text-gray-400 bg-gray-50 dark:bg-gray-900/60 pointer-events-none">Later</li>`
+                : '';
 
-            // GUARDIAN PHASE 6: Dynamic legibility inversion for active trip
             return `
-                <li onclick="if(typeof window._selectCustomTrip === 'function') window._selectCustomTrip(${idx})" class="p-3.5 border-b border-gray-100 dark:border-gray-700 cursor-pointer text-sm sm:text-base font-medium transition-colors ${isSelected ? 'bg-blue-600 text-white hover:bg-blue-700 border-transparent' : 'hover:bg-blue-50 dark:hover:bg-gray-700 ' + (isPast ? 'text-gray-400 dark:text-gray-500' : 'text-gray-700 dark:text-gray-200')}">
-                    ${text}
+                ${divider}
+                <li onclick="if(typeof window._selectCustomTrip === 'function') window._selectCustomTrip(${idx})" class="px-3.5 py-2.5 border-b border-gray-100 dark:border-gray-700 cursor-pointer text-sm font-medium transition-colors ${rowTone}">
+                    <span class="block font-bold tabular-nums">${clockLine}</span>
+                    <span class="block text-[11px] font-semibold mt-0.5 ${detailTone}">${detailLine}</span>
                 </li>
             `;
         }).join('');
@@ -3614,7 +3623,7 @@ export const PlannerRenderer = {
                 </style>
                 <label class="text-[9px] uppercase font-black text-gray-400 mb-1.5 block tracking-widest pl-1">Departure Time</label>
                 <div onclick="this.classList.remove('planner-gentle-pulse'); if(typeof window._toggleCustomTimeDropdown === 'function') window._toggleCustomTimeDropdown(event)" class="w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white text-sm rounded-lg p-3 focus:outline-none font-bold shadow-sm cursor-pointer flex justify-between items-center transition-colors hover:border-blue-400 group planner-gentle-pulse">
-                    <span id="custom-time-display" class="truncate pr-2">${selectedText}</span>
+                    <span id="custom-time-display" class="min-w-0 pr-2 leading-tight">${selectedText}</span>
                     <svg class="w-4 h-4 text-blue-500 dark:text-blue-400 shrink-0 transform transition-transform" id="custom-time-chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
                 </div>
                 <ul id="custom-time-list" class="absolute z-[200] w-full left-0 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-2xl max-h-64 overflow-y-auto hidden mt-1 custom-scrollbar flex flex-col text-left">
@@ -3978,7 +3987,7 @@ export function initPlanner() {
                 : 0;
             const trip = currentTripOptions[idx];
             const container = document.getElementById('planner-results-list');
-            if (trip && container && currentTripOptions.length) {
+            if (trip && container && currentTripOptions.length && !plannerDepartureMenuOpen()) {
                 renderSelectedTrip(container, idx);
             }
             refreshOpenPlannerFare();
@@ -5332,6 +5341,65 @@ export function planFromAlternateOrigin(newOrigin, dest) {
 /** Last complex-trip ping so the 30s pulse does not spam Clarity/GA. */
 let lastComplexRouteTrackedKey = '';
 
+function plannerClock24(timeStr) {
+    const parts = String(timeStr || '').trim().split(':');
+    const hour = parseInt(parts[0], 10);
+    const minute = parseInt(parts[1], 10);
+    if (!Number.isFinite(hour) || !Number.isFinite(minute)) return '--:--';
+    return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+}
+
+function plannerChangeLabel(count) {
+    const n = Number(count) || 0;
+    if (n <= 0) return 'Direct';
+    if (n === 1) return '1 change';
+    return `${n} changes`;
+}
+
+function plannerTripKindLabel(count, isNextDay) {
+    if (isNextDay) return 'Future Trip';
+    const n = Number(count) || 0;
+    if (n <= 0) return 'Direct Trip';
+    if (n === 1) return 'Trip with 1 change';
+    return `Trip with ${n} changes`;
+}
+
+function plannerTripDurationLabel(step) {
+    let mins = Math.floor((timeToSeconds(step?.arrTime) - timeToSeconds(step?.depTime)) / 60);
+    if (!Number.isFinite(mins)) return '';
+    if (mins < 0) mins += 1440;
+    return PlannerRenderer.formatDuration(mins);
+}
+
+/** Longest changeover. Short connections stay off the row. */
+function plannerLongestWaitMins(step) {
+    if (!step) return 0;
+    let max = 0;
+    const consider = (arr, dep) => {
+        if (!arr || !dep) return;
+        let wait = Math.floor((timeToSeconds(dep) - timeToSeconds(arr)) / 60);
+        if (!Number.isFinite(wait)) return;
+        if (wait < 0) wait += 1440;
+        if (wait > max) max = wait;
+    };
+    if (step.type === 'TRANSFER') consider(step.leg1?.arrTime, step.leg2?.depTime);
+    if (step.type === 'DOUBLE_TRANSFER') {
+        consider(step.leg1?.arrTime, step.leg2?.depTime);
+        consider(step.leg2?.arrTime, step.leg3?.depTime);
+    }
+    if (step.type === 'MULTI_TRANSFER' && Array.isArray(step.legs)) {
+        for (let i = 0; i < step.legs.length - 1; i++) {
+            consider(step.legs[i]?.arrTime, step.legs[i + 1]?.depTime);
+        }
+    }
+    return max >= 20 ? max : 0;
+}
+
+function plannerDepartureMenuOpen() {
+    const list = typeof document !== 'undefined' ? document.getElementById('custom-time-list') : null;
+    return !!(list && !list.classList.contains('hidden'));
+}
+
 function plannerTransferCount(step) {
     if (!step) return 0;
     if (step.type === 'MULTI_TRANSFER') {
@@ -5349,6 +5417,8 @@ function plannerTransferCount(step) {
 }
 
 export function renderSelectedTrip(container, index) {
+    const menuWasOpen = plannerDepartureMenuOpen();
+    const menuScroll = menuWasOpen ? (document.getElementById('custom-time-list')?.scrollTop || 0) : 0;
     window._plannerCurrentTripIndex = index; // GUARDIAN: Synchronize global state for Custom Dropdowns
     const selectedTrip = currentTripOptions[index];
     if (!selectedTrip) return;
@@ -5392,6 +5462,13 @@ export function renderSelectedTrip(container, index) {
     }
     hydratePlannerFareButton(selectedTrip);
     scheduleFitPlannerNotices(container);
+    if (menuWasOpen) {
+        const list = document.getElementById('custom-time-list');
+        if (list && list.classList.contains('hidden')) {
+            toggleCustomTimeDropdown();
+            if (menuScroll) list.scrollTop = menuScroll;
+        }
+    }
 }
 
 export function startPlannerPulse(currentIndex) {
@@ -5400,6 +5477,7 @@ export function startPlannerPulse(currentIndex) {
 
     let trackedIndex = currentIndex;
     plannerPulse = setInterval(() => {
+        if (plannerDepartureMenuOpen()) return;
         const trip = currentTripOptions[trackedIndex];
         if (!trip) return;
         if (typeof window !== 'undefined' && typeof window._plannerCurrentTripIndex !== 'undefined') trackedIndex = window._plannerCurrentTripIndex;

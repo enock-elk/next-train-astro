@@ -591,6 +591,9 @@ export function syncCrmRegionAnalytics(region) {
             window.clarity('set', 'crm_region', code);
         }
     } catch { /* ignore */ }
+    import('./region-presence-client.js')
+        .then((mod) => mod.reportSelectedRegionPresence?.(code))
+        .catch(() => {});
 }
 
 if (typeof window !== 'undefined') {

@@ -2358,7 +2358,7 @@ export async function openTripMapRenderer(routeData) {
             .custom-div-icon { background: transparent; border: none; }
             .dark .leaflet-tile-pane { filter: invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%); }
             .tooltip-dynamic { transition: opacity 0.3s ease, font-size 0.2s ease; font-family: inherit; opacity: 0; }
-            .leaflet-tooltip.tooltip-halo { background: transparent !important; border: none !important; box-shadow: none !important; white-space: nowrap; color: #1f2937; text-shadow: -1.5px -1.5px 0 #ffffff, 1.5px -1.5px 0 #ffffff, -1.5px 1.5px 0 #ffffff, 1.5px 1.5px 0 #ffffff; }
+            .leaflet-tooltip.tooltip-halo { background: transparent !important; border: none !important; box-shadow: none !important; white-space: nowrap; color: #1f2937; text-shadow: -1.5px -1.5px 0 #ffffff, 1.5px -1.5px 0 #ffffff, -1.5px 1.5px 0 #ffffff, 1.5px 1.5px 0 #ffffff; pointer-events: none !important; }
             .dark .leaflet-tooltip.tooltip-halo { color: #ffffff !important; text-shadow: -1px -1px 0 rgba(0,0,0,0.8), 1px -1px 0 rgba(0,0,0,0.8), -1px 1px 0 rgba(0,0,0,0.8), 1px 1px 0 rgba(0,0,0,0.8), 0 0 8px rgba(0,0,0,0.9) !important; }
             .leaflet-tooltip.tooltip-halo::before { display: none !important; }
             .disruption-line-overlay { animation: ntDashPulse 1.5s linear infinite; }
@@ -2596,6 +2596,25 @@ export async function openTripMapRenderer(routeData) {
                     if (tOut) return `${clean} · ${tOut}`;
                     return clean;
                 };
+                const escapeTripHtml = (value) => String(value || '').replace(/[&<>"']/g, (c) => ({
+                    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+                }[c]));
+                const tripStationPopup = (role, name, time, timeOut = null) => {
+                    const title = escapeTripHtml(String(name || '').replace(/ STATION/gi, ''));
+                    let when = '';
+                    if (tripMapShowStationTimes) {
+                        const tIn = time && time !== '---' ? formatTimeDisplay(time) : '';
+                        const tOut = timeOut && timeOut !== '---' ? formatTimeDisplay(timeOut) : '';
+                        if (tIn && tOut && tIn !== tOut) when = `${tIn} → ${tOut}`;
+                        else when = tIn || tOut || '';
+                    }
+                    const roleHtml = role ? `<div class="text-[10px] uppercase tracking-wide text-gray-500">${escapeTripHtml(role)}</div>` : '';
+                    const timeHtml = when ? `<div class="text-[10px] font-normal text-gray-600">${escapeTripHtml(when)}</div>` : '';
+                    return `<div class="text-xs font-bold text-center text-gray-900">${roleHtml}<div>${title}</div>${timeHtml}</div>`;
+                };
+                const bindTripStation = (marker, role, name, time, timeOut = null) => marker
+                    .bindPopup(tripStationPopup(role, name, time, timeOut), { maxWidth: 220 })
+                    .on('click', function () { this.openPopup(); });
 
                 tripMapMarkers = [];
                 const majorStops = tripMajorStationNames();
@@ -2611,7 +2630,8 @@ export async function openTripMapRenderer(routeData) {
                                 fillOpacity: 1
                             }).bindTooltip(stationLabel(stop.name, stop.time, stop.timeOut), {
                                 permanent: true, direction: 'top', offset: [0, -5], className: major ? majorLabelClass : minorLabelClass
-                            }).addTo(routeLayerGroup);
+                            });
+                            bindTripStation(m, 'Stop', stop.name, stop.time, stop.timeOut).addTo(routeLayerGroup);
                             tripMapMarkers.push(m);
                         }
                     });
@@ -2628,15 +2648,27 @@ export async function openTripMapRenderer(routeData) {
                     ? currentValidStops[currentValidStops.length - 1]
                     : null;
 
-                L.marker(startLatLng, { icon: createDot('#22c55e', 14) })
-                    .bindTooltip(`<b>Start:</b> ${stationLabel(currentOrigin, startStop?.time, startStop?.timeOut)}`, {
-                        permanent: true, direction: 'top', offset: [0, -10], className: majorLabelClass
-                    }).addTo(routeLayerGroup);
+                bindTripStation(
+                    L.marker(startLatLng, { icon: createDot('#22c55e', 14) })
+                        .bindTooltip(`<b>Start:</b> ${stationLabel(currentOrigin, startStop?.time, startStop?.timeOut)}`, {
+                            permanent: true, direction: 'top', offset: [0, -10], className: majorLabelClass
+                        }),
+                    'Start',
+                    currentOrigin,
+                    startStop?.time,
+                    startStop?.timeOut
+                ).addTo(routeLayerGroup);
 
-                L.marker(endLatLng, { icon: createDot('#ef4444', 14) })
-                    .bindTooltip(`<b>End:</b> ${stationLabel(currentDest, endStop?.time, endStop?.timeOut)}`, {
-                        permanent: true, direction: 'top', offset: [0, -10], className: majorLabelClass
-                    }).addTo(routeLayerGroup);
+                bindTripStation(
+                    L.marker(endLatLng, { icon: createDot('#ef4444', 14) })
+                        .bindTooltip(`<b>End:</b> ${stationLabel(currentDest, endStop?.time, endStop?.timeOut)}`, {
+                            permanent: true, direction: 'top', offset: [0, -10], className: majorLabelClass
+                        }),
+                    'End',
+                    currentDest,
+                    endStop?.time,
+                    endStop?.timeOut
+                ).addTo(routeLayerGroup);
 
                 const activeDisruptions = routeData.globalDisruptions || {};
                 if (currentValidStops.length > 0) {

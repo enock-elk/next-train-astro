@@ -1,5 +1,5 @@
 /**
- * METRORAIL NEXT TRAIN - CLOUDFLARE WORKER (V1.11 - Latest-available charts)
+ * METRORAIL NEXT TRAIN - CLOUDFLARE WORKER (V1.12 - Exact regional split)
  * --------------------------------------------------------------------------
  * Path B: Secure Telemetry Bridge
  *
@@ -10,10 +10,15 @@
  * V1.11: INTRADAY plots through the latest GA4 bucket (no 3h hide). ALL-time
  *        fills months from Jan 2026. Regional payload includes sessions + note
  *        that unique users by region are not a partition of TODAY.
+ * V1.12: Regional cards come from D1. One reporting device, one selected region
+ *        per Johannesburg day. GA stays the site-wide people total. Sentry
+ *        status is separate from Firebase app diagnostics.
  */
 
-import { classifyCrmRegion, clipIntradayCutoff, fillYearMonthSeries } from './chart-math.js';
+import { clipIntradayCutoff, fillYearMonthSeries } from './chart-math.js';
 import { dispatchProductionDeploy, getDeployStatus } from './deploy-github.js';
+import { sentryStatusFromResult, safeSentryDetail } from './region-presence.js';
+import { handleRegionPresence, readRegionalSplit } from './region-store.js';
 
 async function getGoogleAccessToken(clientEmail, privateKey) {
     const header = { alg: 'RS256', typ: 'JWT' };
@@ -200,6 +205,12 @@ export default {
             });
         }
 
+        // Public selected-region beacon. CORS is limited to Next Train origins.
+        // The response never echoes the device id. The stored key is a hash.
+        if (url.pathname === '/region-presence' && (request.method === 'POST' || request.method === 'OPTIONS')) {
+            return handleRegionPresence(request, env);
+        }
+
         // Admin: start production publish (GitHub workflow_dispatch). Token never
         // leaves this Worker. Live host push still uses repo secret METRORAIL_APP_DEPLOY_TOKEN.
         if (request.method === 'POST' && url.pathname === '/admin/deploy-production') {
@@ -307,17 +318,23 @@ export default {
             mauUsers: '--',
             allTimeUsers: '--',
             todayErrors: '--',
+            sentryStatus: 'unconfigured',
+            sentryErrorDetail: null,
             cleverRevenue: '--',
             cleverHits: '--',
             sevenDayTrend: [0, 0, 0, 0, 0, 0, 0],
             chartData: [],
             chartLabels: [],
             regionalBreakdown: {
-                GP: 0, WC: 0, KZN: 0, EC: 0, OTHER: 0,
-                unsetUsers: 0,
-                otherUsers: 0,
-                sessions: { GP: 0, WC: 0, KZN: 0, EC: 0, OTHER: 0 },
-                metric: 'users',
+                GP: 0, WC: 0, KZN: 0, EC: 0,
+                reportingDevices: 0,
+                gaPeopleToday: null,
+                metric: 'reportingDevices',
+                source: 'selected-region',
+                exact: false,
+                status: 'error',
+                day: null,
+                detail: 'Regional split did not finish',
             },
             intradayMode: null,
             intradayAsOf: null,
@@ -335,6 +352,22 @@ export default {
         }
 
         const telemetryTasks = [];
+
+        telemetryTasks.push((async () => {
+            try {
+                const split = await readRegionalSplit(env.REGION_PRESENCE_DB);
+                telemetryData.regionalBreakdown = {
+                    ...telemetryData.regionalBreakdown,
+                    ...split,
+                    metric: 'reportingDevices',
+                    source: 'selected-region',
+                };
+            } catch (e) {
+                telemetryData.regionalBreakdown.status = 'error';
+                telemetryData.regionalBreakdown.exact = false;
+                telemetryData.regionalBreakdown.detail = String(e?.message || e).slice(0, 180);
+            }
+        })());
 
         if (env.GA_PROPERTY_ID && env.GA_CLIENT_EMAIL && env.GA_PRIVATE_KEY) {
             telemetryTasks.push((async () => {
@@ -414,13 +447,6 @@ export default {
                                 metrics: [{ name: "activeUsers" }],
                                 orderBys: trendOrderBys
                             })
-                        }),
-                        fetch(`https://analyticsdata.googleapis.com/v1beta/properties/${env.GA_PROPERTY_ID}:runReport`, {
-                            method: 'POST', headers: gaHeaders, body: JSON.stringify({
-                                dateRanges: [{ startDate: "today", endDate: "today" }],
-                                dimensions: [{ name: "customUser:crm_region" }],
-                                metrics: [{ name: "activeUsers" }, { name: "sessions" }]
-                            })
                         })
                     ]);
 
@@ -431,7 +457,7 @@ export default {
                     const [
                         realtime30Data, realtime5Data,
                         dailyData, wauData, mauData, allTimeData,
-                        trendData, regionalData
+                        trendData
                     ] = await Promise.all(responses.map(r => r.json()));
 
                     telemetryData.active30m = String(parseInt(realtime30Data?.rows?.[0]?.metricValues?.[0]?.value) || 0);
@@ -441,21 +467,6 @@ export default {
                     telemetryData.wauUsers = String(parseInt(wauData?.rows?.[0]?.metricValues?.[0]?.value) || 0);
                     telemetryData.mauUsers = String(parseInt(mauData?.rows?.[0]?.metricValues?.[0]?.value) || 0);
                     telemetryData.allTimeUsers = String(parseInt(allTimeData?.rows?.[0]?.metricValues?.[0]?.value) || 0);
-
-                    if (regionalData?.rows) {
-                        regionalData.rows.forEach(row => {
-                            const bucket = classifyCrmRegion(row.dimensionValues?.[0]?.value);
-                            const users = parseInt(row.metricValues?.[0]?.value) || 0;
-                            const sessions = parseInt(row.metricValues?.[1]?.value) || 0;
-                            if (bucket === 'UNSET') telemetryData.regionalBreakdown.unsetUsers += users;
-                            else if (bucket === 'OTHER') telemetryData.regionalBreakdown.otherUsers += users;
-                            const key = (bucket === 'UNSET' || bucket === 'OTHER') ? 'OTHER' : bucket;
-                            telemetryData.regionalBreakdown[key] += users;
-                            telemetryData.regionalBreakdown.sessions[key] += sessions;
-                        });
-                    }
-                    telemetryData.regionalBreakdown.todayUsers = parseInt(telemetryData.todayUsers, 10) || 0;
-                    telemetryData.regionalBreakdown.todaySessions = parseInt(telemetryData.todaySessions, 10) || 0;
 
                     let activeCountsArray = [];
                     let labelsArray = [];
@@ -569,23 +580,26 @@ export default {
 
                     if (!sentryRes.ok) {
                         const errText = await sentryRes.text();
-                        throw new Error(`Sentry API Rejected: ${errText}`);
+                        throw new Error(`Sentry API Rejected: ${safeSentryDetail(errText)}`);
                     }
 
                     const sentryData = await sentryRes.json();
-
-                    if (Array.isArray(sentryData) && sentryData.length > 0) {
-                        const lastDataPoint = sentryData[sentryData.length - 1];
-                        telemetryData.todayErrors = String(parseInt(lastDataPoint?.[1]) || 0);
-                    } else {
-                        telemetryData.todayErrors = "0";
-                    }
+                    const lastDataPoint = Array.isArray(sentryData) && sentryData.length > 0
+                        ? sentryData[sentryData.length - 1]
+                        : null;
+                    const count = parseInt(lastDataPoint?.[1], 10) || 0;
+                    Object.assign(telemetryData, sentryStatusFromResult({ configured: true, ok: true, count }));
                 } catch (e) {
                     console.error("Sentry Fetch Error:", e.message);
-                    telemetryData.todayErrors = "ERR";
-                    telemetryData.sentryErrorDetail = e.message;
+                    Object.assign(telemetryData, sentryStatusFromResult({
+                        configured: true,
+                        ok: false,
+                        detail: e.message,
+                    }));
                 }
             })());
+        } else {
+            Object.assign(telemetryData, sentryStatusFromResult({ configured: false }));
         }
 
         telemetryTasks.push((async () => {
@@ -612,6 +626,9 @@ export default {
         })());
 
         await Promise.allSettled(telemetryTasks);
+
+        const gaPeople = parseInt(telemetryData.todayUsers, 10);
+        telemetryData.regionalBreakdown.gaPeopleToday = Number.isFinite(gaPeople) ? gaPeople : null;
 
         const finalResponsePayload = JSON.stringify(telemetryData);
 

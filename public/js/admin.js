@@ -1456,8 +1456,17 @@ const Admin = {
             }
         }
     },
+    sentryStatusLine: (sentry = Admin.currentSentry) => {
+        const status = String(sentry?.sentryStatus || '');
+        const detail = String(sentry?.sentryErrorDetail || '').trim();
+        const count = sentry?.todayErrors;
+        if (status === 'ok') return `Sentry received ${Admin.formatNumber(count)} events today.`;
+        if (status === 'zero') return 'Sentry received 0 events today.';
+        if (status === 'unconfigured') return detail || 'Sentry is not configured on the telemetry Worker.';
+        if (status === 'error') return detail || 'Sentry request failed.';
+        return 'Sentry has not reported in this session yet.';
+    },
     openDiagnosticErrorsModal: async () => {
-        const SENTRY_SAMPLE = 0.3;
         let modal = document.getElementById('admin-diag-errors-modal');
         if (!modal) {
             modal = document.createElement('div');
@@ -1469,14 +1478,20 @@ const Admin = {
             <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-lg max-h-[85vh] flex flex-col border border-gray-200 dark:border-gray-700">
                 <div class="p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center shrink-0">
                     <div>
-                        <h3 class="text-base font-black text-gray-900 dark:text-white">System Errors 24H</h3>
-                        <p id="diag-errors-meta" class="text-[10px] text-gray-500 mt-0.5">Loading...</p>
+                        <h3 class="text-base font-black text-gray-900 dark:text-white">Sentry today</h3>
+                        <p id="diag-sentry-meta" class="text-[10px] text-gray-500 mt-0.5 leading-snug"></p>
                     </div>
                     <button type="button" id="diag-errors-close" class="p-2 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300" aria-label="Close">${Admin.icon('x', 'w-4 h-4')}</button>
+                </div>
+                <div class="px-4 pt-3 shrink-0">
+                    <h4 class="text-[11px] font-black uppercase tracking-wider text-gray-700 dark:text-gray-200">App diagnostics, last 24h</h4>
+                    <p id="diag-errors-meta" class="text-[10px] text-gray-500 mt-0.5 leading-snug">Loading app diagnostics...</p>
                 </div>
                 <div id="diag-errors-list" class="p-3 overflow-y-auto flex-grow space-y-2 custom-scrollbar text-sm">Loading...</div>
             </div>`;
         modal.classList.remove('hidden');
+        const sentryMeta = document.getElementById('diag-sentry-meta');
+        if (sentryMeta) sentryMeta.textContent = Admin.sentryStatusLine();
         document.getElementById('diag-errors-close').onclick = () => modal.classList.add('hidden');
 
         const list = document.getElementById('diag-errors-list');
@@ -1496,8 +1511,9 @@ const Admin = {
             const items = all.filter((c) => !isDistress(c));
             items.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
             const n = items.length;
-            const est = Math.round(n / SENTRY_SAMPLE);
-            meta.textContent = `${n} JS/crash captures (~${est} est. @ sample ${SENTRY_SAMPLE}). Distress: use Crash Analytics.`;
+            meta.textContent = n
+                ? `${n} app diagnostic entries in the last 24h. These are Firebase runtime and black-box records, separate from Sentry.`
+                : 'No app diagnostic entries in the last 24h. Sentry is reported above. Distress: use Crash Analytics.';
             if (!n) {
                 list.innerHTML = `
                     <p class="text-xs text-gray-500 text-center py-4">No JS / black-box diagnostic entries in the last 24h.</p>
@@ -3480,13 +3496,13 @@ const Admin = {
             const errorBox = telBody.querySelector('.bg-red-50') || telBody.querySelector('#stat-errors')?.closest('div');
             if (errorBox) {
                 errorBox.className = "bg-gray-50 dark:bg-gray-800/80 p-3 rounded-lg border border-gray-200 dark:border-gray-700 flex items-center justify-between shadow-sm mt-3 transition-colors cursor-pointer hover:border-blue-400 dark:hover:border-blue-500 hover:shadow-md";
-                errorBox.title = 'System / Sentry diagnostic errors (24h). Distress/help lives under Crash Analytics.';
+                errorBox.title = 'Sentry events today. Opens Sentry status and the separate 24h app diagnostic list.';
                 errorBox.onclick = () => Admin.openDiagnosticErrorsModal();
                 const label = errorBox.querySelector('span:first-child');
                 const value = errorBox.querySelector('span:last-child');
                 if (label) {
                     label.className = "text-[10px] text-gray-600 dark:text-gray-400 font-bold uppercase tracking-wider flex items-center";
-                    label.innerHTML = `<span class="mr-1.5 inline-flex text-amber-500">${Admin.icon('alert', 'w-4 h-4')}</span> SYSTEM ERRORS 24H`;
+                    label.innerHTML = `<span class="mr-1.5 inline-flex text-amber-500">${Admin.icon('alert', 'w-4 h-4')}</span> SENTRY TODAY`;
                 }
                 if (value) value.className = "text-lg font-black text-gray-800 dark:text-gray-200";
             }
@@ -3600,44 +3616,32 @@ const Admin = {
                             </button>
                         </div>
                         <div class="p-5 flex-grow bg-white dark:bg-gray-800 rounded-b-2xl">
-                            <p id="region-metric-label" class="text-center text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1">Users and sessions by region on the hit</p>
-                            <p id="region-today-total" class="text-center text-xs font-black text-gray-800 dark:text-gray-200 mb-1">People today: --</p>
-                            <p id="region-today-sessions" class="text-center text-[10px] font-bold text-gray-500 mb-4">Sessions today: --</p>
+                            <p id="region-metric-label" class="text-center text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1">Reporting devices by selected region</p>
+                            <p id="region-today-total" class="text-center text-xs font-black text-gray-800 dark:text-gray-200 mb-1">Reporting devices today: --</p>
+                            <p id="region-today-sessions" class="text-center text-[10px] font-bold text-gray-500 mb-4">People today (Analytics): --</p>
                             <div class="grid grid-cols-2 gap-3 mb-3">
                                 <div class="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg border border-blue-100 dark:border-blue-800/50 flex flex-col items-center justify-center shadow-sm">
                                     <span class="text-[10px] text-blue-600 dark:text-blue-400 font-bold uppercase tracking-wider mb-1">Gauteng</span>
                                     <span id="region-stat-gp" class="text-2xl font-black text-blue-700 dark:text-blue-300">--</span>
-                                    <span class="text-[9px] font-bold uppercase tracking-wider text-blue-600/80 dark:text-blue-300/70">users</span>
-                                    <span id="region-sess-gp" class="text-[9px] font-bold text-blue-500/80 dark:text-blue-300/70 mt-0.5">-- sessions</span>
+                                    <span class="text-[9px] font-bold uppercase tracking-wider text-blue-600/80 dark:text-blue-300/70">devices</span>
                                 </div>
                                 <div class="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg border border-blue-100 dark:border-blue-800/50 flex flex-col items-center justify-center shadow-sm">
                                     <span class="text-[10px] text-blue-600 dark:text-blue-400 font-bold uppercase tracking-wider mb-1">Western Cape</span>
                                     <span id="region-stat-wc" class="text-2xl font-black text-blue-700 dark:text-blue-300">--</span>
-                                    <span class="text-[9px] font-bold uppercase tracking-wider text-blue-600/80 dark:text-blue-300/70">users</span>
-                                    <span id="region-sess-wc" class="text-[9px] font-bold text-blue-500/80 dark:text-blue-300/70 mt-0.5">-- sessions</span>
+                                    <span class="text-[9px] font-bold uppercase tracking-wider text-blue-600/80 dark:text-blue-300/70">devices</span>
                                 </div>
                                 <div class="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg border border-blue-100 dark:border-blue-800/50 flex flex-col items-center justify-center shadow-sm">
                                     <span class="text-[10px] text-blue-600 dark:text-blue-400 font-bold uppercase tracking-wider mb-1">KwaZulu-Natal</span>
                                     <span id="region-stat-kzn" class="text-2xl font-black text-blue-700 dark:text-blue-300">--</span>
-                                    <span class="text-[9px] font-bold uppercase tracking-wider text-blue-600/80 dark:text-blue-300/70">users</span>
-                                    <span id="region-sess-kzn" class="text-[9px] font-bold text-blue-500/80 dark:text-blue-300/70 mt-0.5">-- sessions</span>
+                                    <span class="text-[9px] font-bold uppercase tracking-wider text-blue-600/80 dark:text-blue-300/70">devices</span>
                                 </div>
                                 <div class="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg border border-blue-100 dark:border-blue-800/50 flex flex-col items-center justify-center shadow-sm">
                                     <span class="text-[10px] text-blue-600 dark:text-blue-400 font-bold uppercase tracking-wider mb-1">Eastern Cape</span>
                                     <span id="region-stat-ec" class="text-2xl font-black text-blue-700 dark:text-blue-300">--</span>
-                                    <span class="text-[9px] font-bold uppercase tracking-wider text-blue-600/80 dark:text-blue-300/70">users</span>
-                                    <span id="region-sess-ec" class="text-[9px] font-bold text-blue-500/80 dark:text-blue-300/70 mt-0.5">-- sessions</span>
+                                    <span class="text-[9px] font-bold uppercase tracking-wider text-blue-600/80 dark:text-blue-300/70">devices</span>
                                 </div>
                             </div>
-                            <div class="bg-gray-50 dark:bg-gray-800/50 p-3 rounded-lg border border-gray-200 dark:border-gray-700 flex items-center justify-between shadow-sm mt-1 mb-3">
-                                <span id="region-stat-other-label" class="text-[10px] text-gray-500 dark:text-gray-400 font-bold uppercase tracking-wider flex items-center">No region on the hit</span>
-                                <div class="text-right">
-                                    <span id="region-stat-other" class="text-lg font-black text-gray-700 dark:text-gray-300">--</span>
-                                    <span class="block text-[9px] font-bold uppercase tracking-wider text-gray-500">users</span>
-                                    <span id="region-sess-other" class="block text-[9px] font-bold text-gray-500">-- sessions</span>
-                                </div>
-                            </div>
-                            <p id="region-note" class="text-[10px] leading-relaxed text-gray-500 dark:text-gray-400 mb-4">People today and Sessions today are the totals. Each card counts a person, and their sessions, once for every region value on their hits. The cards are not a split of people today.</p>
+                            <p id="region-note" class="text-[10px] leading-relaxed text-gray-500 dark:text-gray-400 mb-4">Each reporting device is counted once, under the region selected most recently today, Johannesburg time. The four cards add up to the reporting-device total.</p>
                             
                             <!-- GROWTH SPRINT PHASE 12: Pivot to Graph CTA -->
                             <button id="region-view-graph-btn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl shadow-md transition-colors text-xs uppercase tracking-widest focus:outline-none flex items-center justify-center">
@@ -3976,6 +3980,11 @@ const Admin = {
                 if(statErrors) statErrors.textContent = data.todayErrors !== undefined ? Admin.formatNumber(data.todayErrors) : '--';
                 Admin.currentTodayUsers = data.todayUsers;
                 Admin.currentTodaySessions = data.todaySessions;
+                Admin.currentSentry = {
+                    todayErrors: data.todayErrors,
+                    sentryStatus: data.sentryStatus || (data.todayErrors === 'ERR' ? 'error' : (data.todayErrors === '--' || data.todayErrors == null) ? 'unconfigured' : (Number(data.todayErrors) === 0 ? 'zero' : 'ok')),
+                    sentryErrorDetail: data.sentryErrorDetail || '',
+                };
                 
                 // GUARDIAN: Store and update regional breakdown seamlessly
                 if (data.regionalBreakdown) {
@@ -4293,6 +4302,11 @@ const Admin = {
             const telMsg = String((e && e.message) || e || '');
             if (!/abort|offline|failed to fetch|timeout/i.test(telMsg)) {
                 console.warn("Telemetry Fetch Failed:", e.message);
+                Admin.currentSentry = {
+                    todayErrors: '--',
+                    sentryStatus: 'error',
+                    sentryErrorDetail: 'Telemetry worker did not respond.',
+                };
             }
             
             if(stat5m && stat5m.textContent === '--') stat5m.textContent = "Wait";
@@ -4474,60 +4488,44 @@ const Admin = {
     updateRegionalModal: () => {
         const data = Admin.currentRegionalBreakdown;
         if (!data) return;
-        
+
         const gpEl = document.getElementById('region-stat-gp');
         const wcEl = document.getElementById('region-stat-wc');
         const kznEl = document.getElementById('region-stat-kzn');
         const ecEl = document.getElementById('region-stat-ec');
-        const otherEl = document.getElementById('region-stat-other');
-        const n = (v) => (v !== undefined && v !== null ? Admin.formatNumber(v) : '--');
-        const sess = data.sessions || {};
-        
+        const n = (v) => (v !== undefined && v !== null && v !== '--' && v !== 'ERR' ? Admin.formatNumber(v) : '--');
+
         if (gpEl) gpEl.textContent = n(data.GP);
         if (wcEl) wcEl.textContent = n(data.WC);
         if (kznEl) kznEl.textContent = n(data.KZN);
         if (ecEl) ecEl.textContent = n(data.EC);
-        if (otherEl) otherEl.textContent = n(data.OTHER);
-
-        const setSess = (id, value) => {
-            const el = document.getElementById(id);
-            if (el) el.textContent = `${n(value)} sessions`;
-        };
-        setSess('region-sess-gp', sess.GP);
-        setSess('region-sess-wc', sess.WC);
-        setSess('region-sess-kzn', sess.KZN);
-        setSess('region-sess-ec', sess.EC);
-        setSess('region-sess-other', sess.OTHER);
-
-        const todayUsers = data.todayUsers ?? Admin.currentTodayUsers;
-        const todaySessions = data.todaySessions ?? Admin.currentTodaySessions;
-        const todayEl = document.getElementById('region-today-total');
-        if (todayEl) todayEl.textContent = `People today: ${n(todayUsers)}`;
-        const sessEl = document.getElementById('region-today-sessions');
-        if (sessEl) sessEl.textContent = `Sessions today: ${n(todaySessions)}`;
-
-        const otherLabel = document.getElementById('region-stat-other-label');
-        if (otherLabel) {
-            const unset = Number(data.unsetUsers) || 0;
-            const unrecognised = Number(data.otherUsers) || 0;
-            otherLabel.textContent = unrecognised > 0 && unset === 0
-                ? 'Unrecognised region'
-                : unrecognised > 0
-                    ? 'No region on the hit, plus unrecognised'
-                    : 'No region on the hit';
-        }
 
         const assigned = (Number(data.GP) || 0) + (Number(data.WC) || 0) + (Number(data.KZN) || 0) + (Number(data.EC) || 0);
-        const other = Number(data.OTHER) || 0;
-        const people = Number(todayUsers) || 0;
-        const cardUsers = assigned + other;
-        const extra = Math.max(0, cardUsers - people);
+        const reporting = Number.isFinite(Number(data.reportingDevices)) ? Number(data.reportingDevices) : assigned;
+        const gaPeople = data.gaPeopleToday != null ? data.gaPeopleToday : Admin.currentTodayUsers;
+        const todayEl = document.getElementById('region-today-total');
+        const gaEl = document.getElementById('region-today-sessions');
         const note = document.getElementById('region-note');
-        if (note) {
-            note.textContent = extra > 0
-                ? `People today and Sessions today are the totals. Each card counts a person, and their sessions, once for every region value on their hits, so the user numbers add up to ${Admin.formatNumber(cardUsers)}, which is ${Admin.formatNumber(extra)} above the ${Admin.formatNumber(people)} people. The cards are not a split of people today.`
-                : 'People today and Sessions today are the totals. Each card is the users who had that region on a hit today, and the sessions on those hits.';
+        if (data.metric !== 'reportingDevices') {
+            if (todayEl) todayEl.textContent = `People today: ${n(data.todayUsers ?? Admin.currentTodayUsers)}`;
+            if (gaEl) gaEl.textContent = 'Exact device split is not on this telemetry Worker yet.';
+            if (note) note.textContent = 'These cards are the previous overlapping region report. Deploy the telemetry Worker before reading them as one device per region.';
+            return;
         }
+        if (todayEl) todayEl.textContent = `Reporting devices today: ${n(reporting)}`;
+        if (gaEl) gaEl.textContent = `People today (Analytics): ${n(gaPeople)}`;
+        if (!note) return;
+        if (data.status === 'unconfigured') {
+            note.textContent = 'The exact split is not available until the telemetry database is bound. Analytics people today stays the site-wide total.';
+            return;
+        }
+        if (data.status === 'error') {
+            note.textContent = data.detail
+                ? `Could not read the reporting-device split. ${data.detail}`
+                : 'Could not read the reporting-device split.';
+            return;
+        }
+        note.textContent = `Each reporting device is counted once, under the region selected most recently today, Johannesburg time. The four cards add up to ${Admin.formatNumber(assigned)}. Analytics people today is separate: visitors on an older build, and anyone who has not reported yet, are not in this split. Clearing the browser starts a new reporting device.`;
     },
 
     // GROWTH SPRINT PHASE 6: Dynamic 7-Day Chart Snapshot Engine (SVG Clone Method)
@@ -21932,21 +21930,15 @@ const Admin = {
                             ? `<div class="inbox-bubble-route-row">${secureEscape(routeStationBits.join(' · '))}</div>`
                             : '';
                         const diag = item.diagnostics && typeof item.diagnostics === 'object' ? item.diagnostics : null;
-                        const diagNet = diag?.network === 'mobile' ? 'Mobile' : (diag?.network === 'wifi' ? 'Wi-Fi' : (diag?.network === 'ethernet' ? 'Ethernet' : (diag?.network === 'offline' ? 'Offline' : (diag?.network && diag.network !== 'unknown' ? String(diag.network) : ''))));
-                        const diagBits = diag ? [
-                            diag.phone || '',
-                            diagNet ? `${diagNet}${diag.captive ? ', captive' : ''}` : (diag.captive ? 'Captive' : ''),
-                            diag.signal && diag.signal !== 'unknown' ? String(diag.signal) : '',
-                            diag.viewport || '',
-                        ].filter(Boolean) : [];
-                        const diagHtml = diagBits.length
-                            ? `<div class="text-[10px] leading-snug text-gray-400 break-words mt-0.5">${secureEscape(diagBits.join(' · '))}</div>`
-                            : '';
+                        const diagLine = (typeof window.formatFeedbackDiagLine === 'function')
+                            ? window.formatFeedbackDiagLine(diag)
+                            : (typeof Admin.formatFeedbackDiagLine === 'function' ? Admin.formatFeedbackDiagLine(diag) : '');
                         const clRouteAttr = secureEscape(commuterRouteLabel || '');
                         const clStationAttr = secureEscape(stationLabel);
                         const clAutoAttr = stationAuto ? '1' : '0';
+                        const clDiagAttr = secureEscape(diagLine || '');
                         const commuterVerBtn = /^V\d+_/i.test(verLabel)
-                            ? `<button type="button" class="fb-version-chip relative z-[2] font-mono font-medium opacity-80 ml-2 shrink-0 underline decoration-dotted underline-offset-2 hover:opacity-100 focus:outline-none" data-admin-changelog="${verLabel}" data-cl-route="${clRouteAttr}" data-cl-station="${clStationAttr}" data-cl-auto="${clAutoAttr}" onclick="event.preventDefault();event.stopPropagation();if(window.Admin&amp;&amp;Admin.openAdminChangelogLookup)Admin.openAdminChangelogLookup(this.getAttribute('data-admin-changelog')||this.textContent,window.Admin.changelogContextFromEl(this));">${verLabel}</button>`
+                            ? `<button type="button" class="fb-version-chip relative z-[2] font-mono font-medium opacity-80 ml-2 shrink-0 underline decoration-dotted underline-offset-2 hover:opacity-100 focus:outline-none" data-admin-changelog="${verLabel}" data-cl-route="${clRouteAttr}" data-cl-station="${clStationAttr}" data-cl-auto="${clAutoAttr}" data-cl-diag="${clDiagAttr}" onclick="event.preventDefault();event.stopPropagation();if(window.Admin&amp;&amp;Admin.openAdminChangelogLookup)Admin.openAdminChangelogLookup(this.getAttribute('data-admin-changelog')||this.textContent,window.Admin.changelogContextFromEl(this));">${verLabel}</button>`
                             : `<span class="font-mono font-medium opacity-60 ml-2 shrink-0">${verLabel}</span>`;
                         const integratedHeaderHtml = `
                             <div class="inbox-bubble-name-row">
@@ -21954,7 +21946,6 @@ const Admin = {
                                 ${commuterVerBtn}
                             </div>
                             ${commuterRouteHtml}
-                            ${diagHtml}
                         `;
 
                         const inboxReactId = item.inboxMsgId || '';
@@ -22305,7 +22296,8 @@ const Admin = {
             modal.innerHTML = `
                 <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-sm p-5 border border-gray-200 dark:border-gray-700 transform transition-transform scale-95 flex flex-col overflow-hidden max-h-[min(85dvh,var(--nt-vv-h,85dvh))]">
                     <h3 id="admin-changelog-title" class="text-base font-black text-gray-900 dark:text-white mb-1 shrink-0"></h3>
-                    <p id="admin-changelog-meta" class="hidden text-[11px] text-gray-500 dark:text-gray-400 leading-snug mb-2 shrink-0"></p>
+                    <p id="admin-changelog-meta" class="hidden text-[11px] text-gray-500 dark:text-gray-400 leading-snug mb-1 shrink-0"></p>
+                    <p id="admin-changelog-diag" class="hidden text-[11px] leading-snug text-gray-500 dark:text-gray-400 break-words mb-2 shrink-0"></p>
                     <div id="admin-changelog-notes" class="text-sm text-gray-700 dark:text-gray-300 space-y-1.5 mb-4 min-h-0 flex-1 overflow-y-auto custom-scrollbar overscroll-contain"></div>
                     <button type="button" id="admin-changelog-close" class="w-full bg-slate-700 hover:bg-slate-800 text-white font-bold py-2.5 rounded-xl shrink-0">Close</button>
                 </div>`;
@@ -22331,6 +22323,13 @@ const Admin = {
         modal.style.touchAction = 'none';
         const title = modal.querySelector('#admin-changelog-title');
         const meta = modal.querySelector('#admin-changelog-meta');
+        let diagEl = modal.querySelector('#admin-changelog-diag');
+        if (!diagEl) {
+            diagEl = document.createElement('p');
+            diagEl.id = 'admin-changelog-diag';
+            diagEl.className = 'hidden text-[11px] leading-snug text-gray-500 dark:text-gray-400 break-words mb-2 shrink-0';
+            if (meta) meta.insertAdjacentElement('afterend', diagEl);
+        }
         const body = modal.querySelector('#admin-changelog-notes');
         if (title) title.textContent = key || 'Unknown version';
         if (meta) {
@@ -22353,6 +22352,16 @@ const Admin = {
                 meta.classList.add('hidden');
             }
         }
+        if (diagEl) {
+            const diagLine = String(ctx.diagnostics || '').trim();
+            if (diagLine) {
+                diagEl.textContent = diagLine;
+                diagEl.classList.remove('hidden');
+            } else {
+                diagEl.textContent = '';
+                diagEl.classList.add('hidden');
+            }
+        }
         if (body) {
             if (!notes || !notes.length) {
                 body.textContent = 'No notes for this build.';
@@ -22370,16 +22379,21 @@ const Admin = {
         }
     },
 
+    formatFeedbackDiagLine: (diag) => (
+        typeof window.formatFeedbackDiagLine === 'function' ? window.formatFeedbackDiagLine(diag) : ''
+    ),
     changelogContextFromEl: (el) => {
         if (!el) return null;
         const routeLabel = el.getAttribute('data-cl-route') || '';
         const station = el.getAttribute('data-cl-station') || '';
         const auto = el.getAttribute('data-cl-auto');
-        if (!routeLabel && !station && auto == null) return null;
+        const diagnostics = el.getAttribute('data-cl-diag') || '';
+        if (!routeLabel && !station && auto == null && !diagnostics) return null;
         return {
             routeLabel,
             station,
             stationAutoLocated: auto === '1',
+            diagnostics,
         };
     },
 

@@ -969,8 +969,13 @@ const cartoKey = String(import.meta.env.PUBLIC_CARTO_API_KEY || '').trim();
         overflow: hidden;
       }
       #admin-changelog-title,
-      #admin-changelog-close {
+      #admin-changelog-close,
+      #admin-changelog-meta,
+      #admin-changelog-diag {
         flex-shrink: 0;
+      }
+      #admin-changelog-diag {
+        overflow-wrap: anywhere;
       }
       #admin-changelog-notes {
         flex: 1 1 auto;

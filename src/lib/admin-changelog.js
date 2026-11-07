@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_11.07.13': [
+        'Departure rows no longer say Earlier or Later. A planner train name uses a dotted underline. A reply to an advisory wraps a long link inside the quote. Feedback Hub wraps long links and long unbroken text in a message. Add attachment sits in the corner of the details box, not as its own field. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_11.07.12': [
         'Planner departure list stays open. Each row is the 24-hour times, then the trip length and Direct, 1 change, or 2 changes. A long wait is named on that second line. Trains that already left are marked Earlier. Total time uses the same blue as the departs countdown. Depart and arrive on the result use 24-hour times. A trip with two changes is no longer called a bridge trip. Check for Updates says you are on the latest version when nothing newer is published, and only says an update is opening when one is. The top strip can be amber, green, or blue, and the icon can be a wrench, info, bell, alert, check, or none. Missing icon and colour stay the amber wrench. No commuter What\'s New. forceShow stays false.',
     ],

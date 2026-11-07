@@ -2929,8 +2929,8 @@ function plannerTrainNameButton(routeId, dest, trainId, extraClass = '') {
         ? `<span class="block max-w-full break-words text-[10px] font-bold leading-tight normal-case tracking-normal">Via ${escapeHTML(via)}</span>`
         : '';
     const stack = via ? 'flex-col items-start text-left' : 'items-center';
-    const nameLine = via ? 'break-words underline underline-offset-2 decoration-1 decoration-blue-400/60' : 'break-words';
-    const btnLine = via ? '' : 'underline underline-offset-2 decoration-1 decoration-blue-400/60';
+    const nameLine = via ? 'break-words underline decoration-dotted underline-offset-2 decoration-1 decoration-blue-400/60' : 'break-words';
+    const btnLine = via ? '' : 'underline decoration-dotted underline-offset-2 decoration-1 decoration-blue-400/60';
     return `<button type="button" class="planner-train-name-btn inline-flex ${stack} gap-0.5 max-w-full min-w-0 ${btnLine} font-medium hover:decoration-blue-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 rounded-sm ${extraClass}" data-route-id="${routeSafe}" data-train-id="${trainSafe}" onclick="event.stopPropagation(); if(typeof window.openPlannerTrainSheet==='function') window.openPlannerTrainSheet('${routeJs}','${trainJs}')"><span class="${nameLine}">${label}</span>${viaHtml}</button>`;
 }
 
@@ -3578,9 +3578,8 @@ export const PlannerRenderer = {
             const waitBit = waitMins ? ` · ${escapeHTML(PlannerRenderer.formatDuration(waitMins))} wait` : '';
             if (opt.dayLabel) label = ` · ${escapeHTML(compactPlannerDayLabel(opt.dayLabel, opt))}`;
             else if (midnightRollover) label = ' · Tomorrow';
-            const earlierBit = isPast ? ' · Earlier' : '';
             const clockLine = `${plannerClock24(opt.depTime)} → ${plannerClock24(opt.arrTime)}`;
-            const detailLine = `${escapeHTML(plannerTripDurationLabel(opt))} · ${escapeHTML(changeLabel)}${waitBit}${earlierBit}${label}`;
+            const detailLine = `${escapeHTML(plannerTripDurationLabel(opt))} · ${escapeHTML(changeLabel)}${waitBit}${label}`;
             const isSelected = (idx === selectedIndex);
             if (isSelected) {
                 selectedText = `<span class="block truncate">${clockLine}</span><span class="block truncate text-[11px] font-semibold text-gray-500 dark:text-gray-400 mt-0.5">${detailLine}</span>`;
@@ -3591,18 +3590,8 @@ export const PlannerRenderer = {
                     ? 'text-gray-400 dark:text-gray-500 opacity-70 hover:bg-gray-50 dark:hover:bg-gray-800'
                     : 'text-gray-700 dark:text-gray-200 hover:bg-blue-50 dark:hover:bg-gray-700');
             const detailTone = isSelected ? 'text-blue-100' : (isPast ? 'text-gray-400 dark:text-gray-500' : 'text-gray-500 dark:text-gray-400');
-            const divider = (!isPast && idx > 0 && allOptions.slice(0, idx).some((prev, prevIdx) => {
-                const prevSec = timeToSeconds(prev.depTime);
-                return isToday && !midnightRollover && !prev.dayLabel && prevSec < nowSec;
-            }) && !allOptions.slice(0, idx).some((prev) => {
-                const prevSec = timeToSeconds(prev.depTime);
-                return !(isToday && !midnightRollover && !prev.dayLabel && prevSec < nowSec);
-            }))
-                ? `<li class="px-3.5 py-1.5 text-[9px] font-black uppercase tracking-widest text-gray-400 bg-gray-50 dark:bg-gray-900/60 pointer-events-none">Later</li>`
-                : '';
 
             return `
-                ${divider}
                 <li onclick="if(typeof window._selectCustomTrip === 'function') window._selectCustomTrip(${idx})" class="px-3.5 py-2.5 border-b border-gray-100 dark:border-gray-700 cursor-pointer text-sm font-medium transition-colors ${rowTone}">
                     <span class="block font-bold tabular-nums">${clockLine}</span>
                     <span class="block text-[11px] font-semibold mt-0.5 ${detailTone}">${detailLine}</span>

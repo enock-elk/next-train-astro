@@ -560,8 +560,9 @@ export function enterFeedbackReplyMode({ label = 'Replying to Advisory:', snippe
         fText.parentNode.insertBefore(contextBox, fText);
     }
     if (contextBox) {
-        contextBox.className = 'mb-1 p-3 bg-gray-100 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600 text-xs text-gray-500 dark:text-gray-400 italic flex items-start shadow-inner';
-        contextBox.innerHTML = `${feedbackReplySvg()}<div><span class="block font-bold text-[10px] uppercase tracking-wider mb-0.5 text-gray-400">${escapeHTML(label)}</span><span class="line-clamp-2">"${escapeHTML(snippet)}"</span></div>`;
+        contextBox.className = 'mb-1 p-3 bg-gray-100 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600 text-xs text-gray-500 dark:text-gray-400 italic flex items-start gap-2 shadow-inner min-w-0';
+        const quote = linkedPlainHtml(String(snippet || ''));
+        contextBox.innerHTML = `${feedbackReplySvg()}<div class="nt-reply-quote min-w-0 flex-1"><span class="block font-bold text-[10px] uppercase tracking-wider mb-0.5 text-gray-400 not-italic">${escapeHTML(label)}</span><span class="nt-reply-quote-body">"${quote}"</span></div>`;
         contextBox.dataset.rawMsg = rawMsg || snippet;
         if (alertId) contextBox.dataset.alertId = alertId;
         else delete contextBox.dataset.alertId;

@@ -453,7 +453,7 @@ assert(communityJs.includes('community-bubble-name'), 'name stays on the far lef
 assert(communityJs.includes('grouped'), 'consecutive same-author posts still omit the name row');
 assert(communityJs.includes('renderBubbleMarksHtml'), 'points render on named bubbles');
 assert(communityJs.includes('No posts on this line yet'), 'Community empty heading stays');
-assert(communityJs.includes('Be the first to share a heads-up for fellow passengers.'), 'Community empty state keeps the first-post invitation');
+assert(communityJs.includes('Be the first to share a heads-up, or ask a question.'), 'Community empty state invites a heads-up or a question');
 assert(!/shouting match/i.test(communityJs), 'Community empty copy dropped the shouting-match lecture');
 assert(communityJs.includes('Please be kind and respectful.'), 'composer kindness placeholder stays');
 const hubModals = readFileSync(new URL('../src/components/HubModals.astro', import.meta.url), 'utf8');
@@ -475,7 +475,7 @@ const accountJs = readFileSync(new URL('../src/lib/account.js', import.meta.url)
 assert(accountJs.includes("getElementById('account-settings-host')?.classList.toggle('hidden', !signed)"), 'welcome screens hide the passenger type block until sign-in');
 const delayReports = readFileSync(new URL('../src/lib/delay-reports.js', import.meta.url), 'utf8');
 const trainGhosts = readFileSync(new URL('../src/lib/train-ghosts.js', import.meta.url), 'utf8');
-assert(hubModals.includes('Create a free account to keep your name and pins with you.'), 'account guest create copy mentions pins');
+assert(hubModals.includes('Create a free account to open more features.'), 'account guest create copy offers more features');
 assert(hubModals.includes('Welcome to Next Train') && hubModals.includes('Welcome back'), 'account guest headers are Welcome to Next Train / Welcome back');
 assert(accountJs.includes("if (title && !signedOpen) title.textContent = ''") || accountJs.includes('title.textContent = \'\''), 'account top bar does not repeat Welcome / Welcome back');
 assert(hubModals.includes('Sign in to continue on this phone.'), 'account guest sign-in copy is short');

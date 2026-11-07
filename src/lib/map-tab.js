@@ -653,7 +653,7 @@ function renderTrackingStatusCard(active, marker = null) {
     const reasonEl = document.getElementById('map-tracking-reason');
     if (reasonEl) {
         const reason = trainStatusCopy(trainStatus, owner)
-            || (paused ? (pauseReasonCopy(pauseReason) || (pingAt ? 'Paused. Waiting for a fresh GPS fix from the sharer.' : '')) : '');
+            || (paused ? (pauseReasonCopy(pauseReason, owner) || (pingAt ? pauseReasonCopy('staleGps', owner) : '')) : '');
         reasonEl.textContent = reason;
         reasonEl.classList.toggle('hidden', !reason);
     }
@@ -708,7 +708,7 @@ function renderTrackingStatusCard(active, marker = null) {
     railEl?.classList.toggle('dark:text-gray-100', !railFar);
     setTrackingText('map-tracking-accuracy', Number.isFinite(accuracy) ? `±${Math.round(accuracy)} m` : 'Unknown');
     setTrackingText('map-tracking-count', String(Math.max(1, Number(subjectMarker?.n || subject.n) || 1)));
-    const showDiag = isAdminAuthed();
+    const showDiag = owner && isAdminAuthed();
     document.getElementById('map-tracking-diagnostics')?.classList.toggle('hidden', !showDiag);
     document.getElementById('map-tracking-warning')?.classList.toggle('hidden', !showDiag || !subject.directionWarning);
     setTrackingText('map-tracking-restore-label', `${trainHeadboardTitle(subject.trainId, subject.destination)} · ${stateLabel.toLowerCase()}`);
@@ -717,6 +717,8 @@ function renderTrackingStatusCard(active, marker = null) {
         toggle.textContent = paused ? 'Restart' : 'Pause';
         toggle.setAttribute('aria-label', paused ? 'Restart sharing' : 'Pause sharing');
     }
+    card.classList.toggle('nt-tracking-viewer', !owner);
+    card.setAttribute('aria-label', owner ? 'Your train tracking status' : 'This shared train');
     setTrackingOwnerChrome(owner);
     const joinBtn = document.getElementById('map-tracking-join');
     const showJoin = !owner && !!trainId && !cancelled;
@@ -724,7 +726,7 @@ function renderTrackingStatusCard(active, marker = null) {
         joinBtn.classList.toggle('hidden', !showJoin);
         if (showJoin) joinBtn.removeAttribute('hidden');
         else joinBtn.setAttribute('hidden', '');
-        joinBtn.textContent = trainId ? `Join train ${trainId}` : 'Join this train';
+        joinBtn.textContent = trainId ? `Join train ${trainId}` : 'Join this share';
     }
     // Community trust: anyone watching someone else's train can say whether it
     // is where the map shows it. The sharer never votes on their own share.

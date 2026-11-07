@@ -467,7 +467,7 @@ import { withBase } from '../lib/config.js';
                     </div>
                     <p data-account-only="create invalid" class="text-[26px] font-bold tracking-tight text-gray-900 dark:text-white leading-tight">Welcome to Next Train</p>
                     <p data-account-only="signin" class="hidden text-[26px] font-bold tracking-tight text-gray-900 dark:text-white leading-tight">Welcome back</p>
-                    <p data-account-only="create" class="text-[14px] font-normal text-gray-500 dark:text-gray-400 leading-snug">Create a free account to keep your name and pins with you.</p>
+                    <p data-account-only="create" class="text-[14px] font-normal text-gray-500 dark:text-gray-400 leading-snug">Create a free account to open more features.</p>
                     <p data-account-only="signin" class="hidden text-[14px] font-normal text-gray-500 dark:text-gray-400 leading-snug">Sign in to continue on this phone.</p>
                     <p data-account-only="invalid" class="hidden text-[14px] font-normal text-gray-500 dark:text-gray-400 leading-snug">Those details did not match. Try again, or create an account.</p>
                 </div>
@@ -876,6 +876,33 @@ import { withBase } from '../lib/config.js';
   #account-haptics-slot #settings-haptics-toggle svg,
   #account-notifications-slot #settings-notify-toggle svg {
     color: #4C8DFF;
+  }
+  #account-haptics-slot #settings-haptics-toggle {
+    min-height: 60px;
+    padding: 0.75rem 1rem !important;
+    gap: 0.75rem;
+  }
+  #account-haptics-slot #settings-haptics-toggle > div:first-child {
+    min-width: 0;
+    flex: 1 1 auto;
+  }
+  #account-haptics-slot #settings-haptics-toggle > div:first-child > :not(:first-child) {
+    margin-left: 0.75rem !important;
+  }
+  #account-haptics-slot #settings-haptics-toggle svg {
+    width: 2.25rem !important;
+    height: 2.25rem !important;
+    padding: 0.4rem;
+    box-sizing: border-box;
+    border-radius: 0.75rem;
+    background: rgba(76, 141, 255, 0.1);
+    flex: 0 0 2.25rem;
+  }
+  #account-haptics-slot #settings-haptics-toggle p {
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: -0.025em;
+    line-height: 1.25;
   }
   #account-appearance-slot #account-theme-choice > p:first-of-type {
     display: none;

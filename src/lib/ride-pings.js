@@ -148,10 +148,13 @@ export const ONBOARD_STATIONARY_PING_MS = 8 * 1000;
 export const ONBOARD_PAUSED_PING_MS = 20 * 1000;
 /** Stop a share that stays near 0 km/h this long (wall clock). */
 export const STATIONARY_AUTO_STOP_MS = 45 * 60 * 1000;
-/** Loop tick: the fastest band, so a due broadcast is never late by more than one tick. */
-const ONBOARD_LOOP_TICK_MS = ONBOARD_FAST_PING_MS;
 /** Ask for a new GPS sample this often while the last one is older than this. */
 export const SHARE_EAGER_GPS_MS = 3 * 1000;
+/**
+ * Loop tick matches the GPS ask. A due broadcast still uses the slower
+ * publish cadence, so this does not write Firebase every 3 seconds.
+ */
+const ONBOARD_LOOP_TICK_MS = SHARE_EAGER_GPS_MS;
 /** Pause to grey after this many missed 3s tries (3s × 6 = 18s). */
 export const SHARE_GPS_MISS_LIMIT = 6;
 /**
@@ -502,19 +505,42 @@ async function confirmShareContinue({
     }
 }
 
-/** Commuter-readable reason shown on the tracking card while a share is paused. */
-export function pauseReasonCopy(reason) {
+/**
+ * Commuter-readable reason shown on the tracking card while a share is paused.
+ * `mine` is the person whose phone is sharing. Everyone else gets the viewer line.
+ */
+export function pauseReasonCopy(reason, mine = false) {
+    const own = !!mine;
     switch (String(reason || '')) {
-        case 'user': return 'Paused by the sharer.';
-        case 'offTrack': return 'Paused. The phone is not on this train’s rail line right now.';
-        case 'offTrain': return 'Paused. The phone is on the corridor but not on this train’s route.';
-        case 'direction': return 'Paused. The phone is moving against this train’s direction of travel.';
-        case 'reverseProgress': return 'Paused. The phone is moving against this train’s direction of travel.';
-        case 'staleGps': return 'Paused. Waiting for a fresh GPS fix from the sharer.';
-        case 'offline': return 'Paused. The sharer’s phone is offline.';
-        case 'geometryUnavailable': return 'Paused. No rail line is available for this corridor yet.';
-        case 'community': return 'Paused. Other riders reported this position as inaccurate.';
-        case 'dwell': return 'Paused. Checking whether this train is still moving.';
+        case 'user':
+            return own ? 'Paused. You paused this share.' : 'Paused by the person sharing.';
+        case 'offTrack':
+            return own
+                ? 'Paused. This phone is not on this train’s line right now.'
+                : 'Paused. The shared position is off this train’s line.';
+        case 'offTrain':
+            return own
+                ? 'Paused. This phone is on the corridor, not on this train’s route.'
+                : 'Paused. The shared position is not on this train’s route.';
+        case 'direction':
+        case 'reverseProgress':
+            return own
+                ? 'Paused. This phone is moving against this train’s direction.'
+                : 'Paused. The shared position is moving against this train’s direction.';
+        case 'staleGps':
+            return own
+                ? 'Paused. This phone is still getting a GPS fix.'
+                : 'Paused. The live position is a moment behind.';
+        case 'offline':
+            return own ? 'Paused. This phone is offline.' : 'Paused. The person sharing is offline.';
+        case 'geometryUnavailable':
+            return 'Paused. No rail line is available for this corridor yet.';
+        case 'community':
+            return 'Paused. Other riders reported this position as inaccurate.';
+        case 'dwell':
+            return own
+                ? 'Paused. Checking whether this train is still moving.'
+                : 'Paused. The train may be waiting at a station.';
         default: return reason ? 'Paused.' : '';
     }
 }
@@ -3153,6 +3179,42 @@ export function startOnboardPingLoop() {
     }, ONBOARD_LOOP_TICK_MS);
 }
 
+let shareGpsAttemptPending = false;
+let shareGpsKickAt = 0;
+
+/**
+ * Ask for one high-accuracy sample without blocking the publish tick.
+ * A 2.8s abort was ending the read before Android returned a fix, so the
+ * share sat in the 18s grey window while the chip was still working.
+ */
+function kickEagerShareGps() {
+    const now = Date.now();
+    if (shareGpsAttemptPending) return;
+    if (shareGpsKickAt && now - shareGpsKickAt < 500) return;
+    shareGpsKickAt = now;
+    shareGpsAttemptPending = true;
+    import('./geo-watch.js').then(({ attemptShareGpsFix }) => attemptShareGpsFix()).then((attempt) => {
+        const afterFixAt = Number(onboardLatestFix?.t || 0);
+        const stillOld = !afterFixAt || Date.now() - afterFixAt >= SHARE_EAGER_GPS_MS;
+        if (attempt?.fresh && attempt.fix) {
+            shareGpsMisses = 0;
+            onboardGpsDroughtSince = 0;
+            onboardLatestFix = attempt.fix;
+        } else if (!stillOld) {
+            shareGpsMisses = 0;
+            onboardGpsDroughtSince = 0;
+        } else if (!attempt?.busy) {
+            shareGpsMisses += 1;
+            if (!onboardGpsDroughtSince) onboardGpsDroughtSince = Date.now();
+        }
+    }).catch(() => {
+        shareGpsMisses += 1;
+        if (!onboardGpsDroughtSince) onboardGpsDroughtSince = Date.now();
+    }).finally(() => {
+        shareGpsAttemptPending = false;
+    });
+}
+
 async function onboardLoopTick() {
     const current = getActiveShare();
     if (!current?.trainId) {
@@ -3169,26 +3231,9 @@ async function onboardLoopTick() {
     }
     const lastFixAt = Number(onboardLatestFix?.t || 0);
     const age = lastFixAt ? Date.now() - lastFixAt : Infinity;
-    if (age >= SHARE_EAGER_GPS_MS) {
-        const g = await import('./geo-watch.js');
-        const attempt = await g.attemptShareGpsFix();
-        const afterFixAt = Number(onboardLatestFix?.t || 0);
-        const stillOld = !afterFixAt || Date.now() - afterFixAt >= SHARE_EAGER_GPS_MS;
-        if (attempt?.fresh && attempt.fix) {
-            shareGpsMisses = 0;
-            onboardGpsDroughtSince = 0;
-            onboardLatestFix = attempt.fix;
-        } else if (!stillOld) {
-            shareGpsMisses = 0;
-            onboardGpsDroughtSince = 0;
-        } else if (!attempt?.busy) {
-            shareGpsMisses += 1;
-            if (!onboardGpsDroughtSince) onboardGpsDroughtSince = Date.now();
-        }
-    }
-    const freshAt = Number(onboardLatestFix?.t || 0);
+    if (age >= SHARE_EAGER_GPS_MS) kickEagerShareGps();
     const droughtFor = onboardGpsDroughtSince ? Date.now() - onboardGpsDroughtSince : 0;
-    if (shareGpsMisses >= SHARE_GPS_MISS_LIMIT || droughtFor >= RIDE_GPS_STALE_MS) {
+    if (!shareGpsAttemptPending && (shareGpsMisses >= SHARE_GPS_MISS_LIMIT || droughtFor >= RIDE_GPS_STALE_MS)) {
         await queueOnboardPause('staleGps', onboardLatestFix);
         return;
     }

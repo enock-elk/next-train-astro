@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_11.07.9': [
+        'Account hub: the Haptic row uses the same blue icon well as Notifications and Appearance, and the label starts on the same line. Welcome to Next Train says a free account opens more features. Experimental features can be limited to signed-in Next Train accounts, per feature. Guests stay out. Operators and a device beta grant still open it. Community empty line invites a heads-up or a question. A live share asks for a high-accuracy GPS fix every 3 seconds and lets that read finish for up to 8 seconds, instead of aborting it at 2.8 seconds. The publish loop does not wait on the chip, and it does not pause while a read is still in flight. The 18 second grey window is unchanged. The tracking card speaks to the person sharing and to everyone else separately. Viewers get a shorter card and Join this share. Speed, heading, and GPS age stay on the sharer card. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_11.07.8': [
         'Signed-in Account is a short hub. Photo, name, and email open Edit profile, where the name, photo switch, and Save live. Points and Passenger type stay on the hub. Notifications and Appearance open their own pages. Notification types are switches that save immediately. Haptic feedback stays a switch on the hub. Terms and Privacy are rows. Sign out, Reset this App, and Delete account sit at the bottom, and only Delete is red. No commuter What\'s New. forceShow stays false.',
     ],

@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_11.07.8': [
+        'Signed-in Account is a short hub. Photo, name, and email open Edit profile, where the name, photo switch, and Save live. Points and Passenger type stay on the hub. Notifications and Appearance open their own pages. Notification types are switches that save immediately. Haptic feedback stays a switch on the hub. Terms and Privacy are rows. Sign out, Reset this App, and Delete account sit at the bottom, and only Delete is red. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_11.07.7': [
         'SEO station map: the map\'s top-left Back presses Close Map on the page around it, so the bar does not stay over the region schedule. The earlier watcher called close while the address was still #station-map, and that only went back in history, which left the bar up. Service alert severity menu stays the width of its button. A max-content menu was stretching the composer, and attached pictures with it. Map gold: map.astro Back handler. No commuter What\'s New. forceShow stays false.',
     ],

@@ -488,7 +488,7 @@ assert(hubModals.includes('Show my photo next to my name'), 'photo opt-in is com
 assert(hubModals.includes('Show my level on Community'), 'Community level opt-out sits with photo');
 assert(hubModals.includes('id="account-photo-alerts"'), 'photo opt-in checkbox exists');
 assert(hubModals.includes('id="account-marks-community"'), 'Community level checkbox exists');
-assert(hubModals.includes('id="account-profile-toggle"') && hubModals.includes('id="account-profile-panel"'), 'signed-in name, email, and photo open as an accordion');
+assert(hubModals.includes('id="account-profile-toggle"') && hubModals.includes('id="account-profile-panel"'), 'signed-in name, email, and photo open Edit profile');
 assert(hubModals.includes('Messages stay locked until this is done'), 'verify card explains messages stay locked');
 assert(accountJs.includes('toastWelcomeBack') && accountJs.includes('Welcome back,'), 'sign-in shows Welcome back toast');
 assert(accountJs.includes('syncAccountPinnedRoutesNow'), 'pinned routes sync to the account immediately');
@@ -502,7 +502,7 @@ assert(hubModals.includes('id="account-modal-display-name"') && hubModals.includ
 assert(hubModals.includes('id="account-photo-toggle"') && hubModals.includes('toggle-checkbox'), 'photo opt-in is a settings toggle');
 assert(hubModals.includes('id="account-marks-toggle"'), 'Community level opt-out is a settings toggle');
 assert(hubModals.includes('>Save<') && hubModals.includes('id="account-save-display-name"'), 'display name and photo share one Save');
-assert(!hubModals.includes('id="account-name-sheet"'), 'name edits live in the profile accordion');
+assert(!hubModals.includes('id="account-name-sheet"'), 'name edits live on the Edit profile page');
 assert(hubModals.includes('id="account-points-sheet"') && hubModals.includes('h-[min(92dvh,100%)]'), 'points open in a tall sheet');
 assert(hubModals.includes('Continue with Facebook'), 'guest Facebook sign-in');
 assert(hubModals.includes('id="account-facebook-btn"'), 'Facebook button id');
@@ -573,20 +573,26 @@ assert(hubModals.includes('id="messages-thread-contact-row"') && hubModals.inclu
 assert(hubModals.includes('id="account-delete-type"'), 'delete confirm requires typing DELETE');
 assert(hubModals.includes('id="account-badge-how-sheet"') && hubModals.includes('id="account-badge-how-close"'), 'badge how-to sheet exists');
 assert(
-    hubModals.indexOf('id="account-modal-display-name"') < hubModals.indexOf('id="account-profile-panel"')
-    && hubModals.indexOf('id="account-profile-panel"') < hubModals.indexOf('id="account-delete-btn"')
-    && hubModals.indexOf('id="account-delete-btn"') < hubModals.indexOf('id="account-points-btn"')
+    hubModals.indexOf('id="account-modal-display-name"') < hubModals.indexOf('id="account-points-btn"')
     && hubModals.indexOf('id="account-points-btn"') < hubModals.indexOf('id="account-passenger-type-btn"')
-    && hubModals.indexOf('id="account-passenger-type-btn"') < hubModals.indexOf('id="account-settings-host"'),
-    'signed-in Account order is identity, profile with Delete tucked in, then points and passenger tiles',
+    && hubModals.indexOf('id="account-passenger-type-btn"') < hubModals.indexOf('id="account-open-notifications"')
+    && hubModals.indexOf('id="account-open-notifications"') < hubModals.indexOf('id="account-open-appearance"')
+    && hubModals.indexOf('id="account-open-appearance"') < hubModals.indexOf('id="account-haptics-slot"')
+    && hubModals.indexOf('id="account-haptics-slot"') < hubModals.indexOf('id="account-signout-btn"')
+    && hubModals.indexOf('id="account-signout-btn"') < hubModals.indexOf('id="account-reset-phone-btn"')
+    && hubModals.indexOf('id="account-reset-phone-btn"') < hubModals.indexOf('id="account-delete-btn"')
+    && hubModals.indexOf('id="account-delete-btn"') < hubModals.indexOf('id="account-profile-panel"')
+    && hubModals.indexOf('id="account-profile-panel"') < hubModals.indexOf('id="account-settings-host"'),
+    'signed-in Account is a hub: identity, points, passenger type, settings, then account actions',
 );
 assert(
-    hubModals.indexOf('id="account-profile-panel"') < hubModals.indexOf('id="account-signout-btn"')
-    && hubModals.indexOf('id="account-signout-btn"') < hubModals.indexOf('id="account-reset-phone-btn"')
-    && hubModals.indexOf('id="account-reset-phone-btn"') < hubModals.indexOf('id="account-points-btn"'),
-    'Sign out and Reset this App sit in the profile accordion above the quick tiles',
+    hubModals.indexOf('id="account-signout-btn"') < hubModals.indexOf('id="account-reset-phone-btn"')
+    && hubModals.indexOf('id="account-reset-phone-btn"') < hubModals.indexOf('id="account-delete-btn"')
+    && hubModals.indexOf('id="account-delete-btn"') < hubModals.indexOf('id="account-profile-panel"'),
+    'Sign out and Reset this App sit at the bottom of the hub, after the quick tiles',
 );
-assert(hubModals.includes('id="account-danger-actions"') && hubModals.includes('min-[360px]:grid-cols-2'), 'Sign out and Reset sit side by side and stack on small screens');
+assert(hubModals.includes('id="account-danger-actions"') && hubModals.includes('Clears saved routes and settings on this phone'), 'Reset this App is its own row with a short explanation');
+assert(!hubModals.includes('min-[360px]:grid-cols-2'), 'Sign out and Reset are stacked rows, not side by side');
 assert(hubModals.includes('?from=account'), 'Account legal links return with from=account');
 assert(hubModals.includes('account-points-panel'), 'points details live inside Account');
 assert(
@@ -597,11 +603,9 @@ assert(
 assert(
     hubModals.indexOf('id="account-profile-panel"') < hubModals.indexOf('id="account-edit-display-name"')
     && hubModals.indexOf('id="account-edit-display-name"') < hubModals.indexOf('id="account-photo-alerts"')
-    && hubModals.indexOf('id="account-photo-alerts"') < hubModals.indexOf('id="account-signout-btn"')
-    && hubModals.indexOf('id="account-signout-btn"') < hubModals.indexOf('id="account-reset-phone-btn"')
-    && hubModals.indexOf('id="account-reset-phone-btn"') < hubModals.indexOf('id="account-delete-btn"')
-    && hubModals.indexOf('id="account-delete-btn"') < hubModals.indexOf('id="account-save-display-name"'),
-    'profile edit holds the name field, photo switch, Sign out, Reset, Delete, then Save',
+    && hubModals.indexOf('id="account-photo-alerts"') < hubModals.indexOf('id="account-save-display-name"')
+    && hubModals.indexOf('id="account-signout-btn"') < hubModals.indexOf('id="account-profile-panel"'),
+    'Edit profile holds the name field, photo switch, and Save. Sign out stays on the hub',
 );
 assert(!accountJs.includes("insertAdjacentElement('afterend'"), 'points panel stays in the tall sheet');
 assert(accountJs.includes("openSmoothModal('profile-modal')"), 'passenger type opens the profile modal on the account back stack');
@@ -789,13 +793,18 @@ assert(
     hubModals.indexOf('id="account-signout-btn"') < hubModals.indexOf('id="account-delete-btn"')
     && hubModals.indexOf('id="account-reset-phone-btn"') < hubModals.indexOf('id="account-delete-btn"')
     && hubModals.indexOf('id="account-delete-btn"') < hubModals.indexOf('id="account-settings-host"'),
-    'Sign out sits in the profile accordion; Delete account stays above settings',
+    'Sign out, Reset, and Delete stay on the hub, with Delete last and above the settings host',
 );
 assert(!/id="account-signout-btn"[^>]*text-center/.test(hubModals), 'Sign out is not a centered bottom bar');
 assert(
-    hubModals.indexOf('id="account-signout-btn"') < hubModals.indexOf('privacy.html'),
-    'Sign out is above the Account legal links',
+    hubModals.indexOf('terms.html') < hubModals.indexOf('id="account-signout-btn"')
+    && hubModals.indexOf('privacy.html') < hubModals.indexOf('id="account-signout-btn"'),
+    'Terms and Privacy are About rows above Sign out',
 );
+assert(hubModals.includes('id="account-open-notifications"') && hubModals.includes('id="account-notifications-slot"'), 'Notifications open their own page');
+assert(hubModals.includes('id="account-open-appearance"') && hubModals.includes('id="account-appearance-slot"'), 'Appearance opens its own page');
+assert(hubModals.includes('Changes save as you switch. No Save button needed.'), 'notification switches save on their own');
+assert(accountJs.includes('#account-notifications') && accountJs.includes('#account-appearance') && accountJs.includes('#account-profile'), 'account inner pages push their own history entry');
 assert(hubModals.includes('privacy.html') && hubModals.includes('terms.html') && hubModals.includes('Privacy Policy') && hubModals.includes('Terms of Use'), 'account footer links the public privacy and terms pages');
 assert(!hubModals.includes('Bronze · 0 marks'), 'account uses points, not marks');
 const riderMarks = readFileSync(new URL('../src/lib/rider-marks.js', import.meta.url), 'utf8');

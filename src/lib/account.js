@@ -829,7 +829,7 @@ export function showAccountGuestScreen(screen) {
     // Hero copy already carries Welcome / Welcome back / Reset — keep the top bar empty.
     if (title && !signedOpen) title.textContent = '';
     document.getElementById('account-settings-host')?.classList.toggle('hidden', !signedOpen);
-    document.getElementById('account-prefs-label')?.classList.toggle('hidden', !signedOpen);
+    document.getElementById('account-prefs-label')?.classList.add('hidden');
 }
 
 /** Open sign-in when an action needs an account. Resolves false if they close it. */
@@ -899,6 +899,74 @@ const ACCOUNT_SHEET_HASH = {
 const ACCOUNT_SHEET_ORDER = ['account-contrib-sheet', 'account-badge-how-sheet', 'account-name-sheet', 'account-points-sheet'];
 const accountSheetStack = [];
 
+const ACCOUNT_PANE_HASH = {
+    profile: '#account-profile',
+    notifications: '#account-notifications',
+    appearance: '#account-appearance',
+};
+const ACCOUNT_PANE_TITLE = {
+    profile: 'Edit profile',
+    notifications: 'Notifications',
+    appearance: 'Appearance',
+};
+
+function getAccountPane() {
+    const pane = document.getElementById('account-signed-in')?.getAttribute('data-account-pane') || 'hub';
+    return ACCOUNT_PANE_TITLE[pane] ? pane : 'hub';
+}
+
+function paintAccountPane(pane) {
+    const root = document.getElementById('account-signed-in');
+    if (!root) return;
+    const next = ACCOUNT_PANE_TITLE[pane] ? pane : 'hub';
+    root.setAttribute('data-account-pane', next);
+    root.querySelectorAll('[data-account-view]').forEach((el) => {
+        el.classList.toggle('hidden', el.getAttribute('data-account-view') !== next);
+    });
+    const signedOpen = !root.classList.contains('hidden');
+    const title = document.getElementById('account-screen-title');
+    if (title && signedOpen) title.textContent = ACCOUNT_PANE_TITLE[next] || '';
+    document.getElementById('account-profile-toggle')?.setAttribute('aria-expanded', next === 'profile' ? 'true' : 'false');
+    if (next === 'profile') {
+        const input = document.getElementById('account-edit-display-name');
+        if (input && document.activeElement !== input) {
+            input.value = $account.get().displayName || '';
+        }
+    }
+    const scroller = document.querySelector('[data-account-scroll]');
+    if (scroller) scroller.scrollTop = 0;
+}
+
+function setAccountPane(pane, opts = {}) {
+    const prev = getAccountPane();
+    const next = ACCOUNT_PANE_TITLE[pane] ? pane : 'hub';
+    paintAccountPane(next);
+    if (opts.skipHistory || typeof location === 'undefined') return;
+    const hash = ACCOUNT_PANE_HASH[next];
+    if (hash && location.hash !== hash) {
+        try { history.pushState({ accountPane: next }, '', hash); } catch { /* ignore */ }
+    } else if (next === 'hub' && ACCOUNT_PANE_HASH[prev] && location.hash === ACCOUNT_PANE_HASH[prev]) {
+        try { history.back(); } catch { /* ignore */ }
+    }
+}
+
+function requestCloseAccountPane() {
+    const pane = getAccountPane();
+    const hash = ACCOUNT_PANE_HASH[pane];
+    if (hash && typeof location !== 'undefined' && location.hash === hash) {
+        try { history.back(); return; } catch { /* fall through */ }
+    }
+    setAccountPane('hub', { skipHistory: true });
+}
+
+function collapseAccountPaneHash() {
+    const pane = getAccountPane();
+    if (pane !== 'hub' && typeof location !== 'undefined' && location.hash === ACCOUNT_PANE_HASH[pane]) {
+        try { history.replaceState({ modal: 'account-modal' }, '', '#account'); } catch { /* ignore */ }
+    }
+    paintAccountPane('hub');
+}
+
 function hideAccountSheetEl(id) {
     document.getElementById(id)?.classList.add('hidden');
     const at = accountSheetStack.lastIndexOf(id);
@@ -941,10 +1009,18 @@ function requestCloseAccountSheet(id) {
 
 function accountSheetOnPop(hashNow) {
     const top = topAccountSheetId();
-    if (!top) return false;
-    if (ACCOUNT_SHEET_HASH[top] === hashNow) return false;
-    hideAccountSheetEl(top);
-    return true;
+    if (top) {
+        if (ACCOUNT_SHEET_HASH[top] === hashNow) return false;
+        hideAccountSheetEl(top);
+        return true;
+    }
+    const pane = getAccountPane();
+    if (pane !== 'hub') {
+        if (ACCOUNT_PANE_HASH[pane] === hashNow) return false;
+        paintAccountPane('hub');
+        return true;
+    }
+    return false;
 }
 
 function closeAccountSheets() {
@@ -992,12 +1068,8 @@ export async function pushAccountRecentTrips() {
 }
 
 function setAccountProfileOpen(open) {
-    const panel = document.getElementById('account-profile-panel');
-    const toggle = document.getElementById('account-profile-toggle');
-    const chevron = document.getElementById('account-profile-chevron');
-    if (panel) panel.classList.toggle('hidden', !open);
-    if (toggle) toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
-    if (chevron && chevron.classList) chevron.classList.toggle('rotate-180', !!open);
+    if (open) setAccountPane('profile');
+    else if (getAccountPane() === 'profile') setAccountPane('hub', { skipHistory: true });
     if (open) {
         const input = document.getElementById('account-edit-display-name');
         if (input && document.activeElement !== input) {
@@ -1061,7 +1133,7 @@ export function closeAccountModal() {
         if (top) requestCloseAccountSheet(top);
         return;
     }
-    setAccountProfileOpen(false);
+    collapseAccountPaneHash();
     if (typeof window.closeSmoothModal === 'function') {
         window.closeSmoothModal('account-modal');
     }
@@ -1110,9 +1182,11 @@ export function syncAccountSettingsUi(state = $account.get()) {
     if (guestBlock) guestBlock.classList.toggle('hidden', signed || state.status === 'loading');
     const screenTitle = document.getElementById('account-screen-title');
     // Guest heroes already show Welcome / Welcome back / Reset; do not repeat in the top bar.
-    if (screenTitle) screenTitle.textContent = '';
-    document.getElementById('account-prefs-label')?.classList.toggle('hidden', !signed);
+    if (screenTitle) screenTitle.textContent = signed ? (ACCOUNT_PANE_TITLE[getAccountPane()] || '') : '';
+    document.getElementById('account-prefs-label')?.classList.add('hidden');
     document.getElementById('account-settings-host')?.classList.toggle('hidden', !signed);
+    document.getElementById('account-legal-footer')?.classList.toggle('hidden', signed);
+    if (!signed) paintAccountPane('hub');
     const deleteWrap = document.getElementById('account-delete-wrap');
     const isOperator = signed && isAdminEmail(state.email);
     if (deleteWrap) {
@@ -1508,6 +1582,15 @@ export function bindAccountUi() {
             showAccountGuestScreen('create');
             return;
         }
+        if (topAccountSheetId()) {
+            closeAccountModal();
+            return;
+        }
+        const signedOpen = document.getElementById('account-signed-in') && !document.getElementById('account-signed-in').classList.contains('hidden');
+        if (signedOpen && getAccountPane() !== 'hub') {
+            requestCloseAccountPane();
+            return;
+        }
         closeAccountModal();
     });
 
@@ -1805,9 +1888,13 @@ export function bindAccountUi() {
     document.getElementById('account-points-overlay')?.addEventListener('click', closePointsSheet);
 
     document.getElementById('account-profile-toggle')?.addEventListener('click', () => {
-        const panel = document.getElementById('account-profile-panel');
-        const open = !!panel?.classList.contains('hidden');
-        setAccountProfileOpen(open);
+        setAccountPane('profile');
+    });
+    document.getElementById('account-open-notifications')?.addEventListener('click', () => {
+        setAccountPane('notifications');
+    });
+    document.getElementById('account-open-appearance')?.addEventListener('click', () => {
+        setAccountPane('appearance');
     });
     document.getElementById('account-verify-check-btn')?.addEventListener('click', async () => {
         setBusy(true);

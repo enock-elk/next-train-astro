@@ -2830,13 +2830,13 @@ const Admin = {
         modal.className = 'fixed inset-0 bg-black/80 z-[220] flex items-center justify-center p-4 backdrop-blur-sm';
         const close = () => modal.remove();
         modal.innerHTML = `
-            <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md p-5 border border-gray-200 dark:border-gray-700" role="dialog" aria-labelledby="commuter-peek-title" aria-modal="true">
-                <h3 id="commuter-peek-title" class="text-lg font-black text-gray-900 dark:text-white mb-1">User sheet</h3>
-                <p class="text-[11px] text-gray-500 dark:text-gray-400 mb-3 leading-relaxed">Quick facts for this id. Search User Trust if you need the full profile.</p>
-                <div id="commuter-peek-body" class="space-y-1.5 text-[11px] text-gray-700 dark:text-gray-200">
+            <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md max-h-[min(88dvh,40rem)] flex flex-col p-5 border border-gray-200 dark:border-gray-700" role="dialog" aria-labelledby="commuter-peek-title" aria-modal="true">
+                <h3 id="commuter-peek-title" class="text-lg font-black text-gray-900 dark:text-white mb-1 shrink-0">User sheet</h3>
+                <p class="text-[11px] text-gray-500 dark:text-gray-400 mb-3 leading-relaxed shrink-0">Quick facts for this id. Search User Trust if you need the full profile.</p>
+                <div id="commuter-peek-body" class="space-y-1.5 text-[11px] text-gray-700 dark:text-gray-200 min-h-0 overflow-y-auto">
                     <p class="animate-pulse text-gray-400">Loading...</p>
                 </div>
-                <div class="flex flex-wrap gap-2 mt-4">
+                <div class="flex flex-wrap gap-2 mt-4 shrink-0">
                     <button type="button" id="commuter-peek-lookup" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded-lg text-sm">Look up more</button>
                     <button type="button" id="commuter-peek-close" class="flex-1 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 font-bold py-2.5 rounded-lg text-sm">Close</button>
                 </div>
@@ -2872,9 +2872,9 @@ const Admin = {
                 const type = actionId ? ' type="button"' : '';
                 const idAttr = actionId ? ` id="${actionId}"` : '';
                 return `
-                <${tag}${type}${idAttr} class="rounded-xl border px-2 py-2 text-left ${absent ? 'opacity-55 border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-900' : 'border-blue-100 dark:border-blue-900 bg-blue-50/70 dark:bg-blue-950/20'}${actionId ? ' cursor-pointer hover:border-blue-300 dark:hover:border-blue-700 focus:outline-none' : ''}">
-                    <p class="text-[9px] font-black uppercase tracking-widest ${absent ? 'text-gray-400' : 'text-blue-700 dark:text-blue-300'}">${esc(label)}</p>
-                    <p class="mt-1 text-[11px] font-bold leading-snug break-words ${absent ? 'text-gray-400' : 'text-gray-900 dark:text-white'}">${value}</p>
+                <${tag}${type}${idAttr} class="w-full rounded-xl border px-3 py-2 text-left flex items-start gap-3 ${absent ? 'border-gray-100 dark:border-gray-800 bg-gray-50/80 dark:bg-gray-900/40' : 'border-blue-100 dark:border-blue-900 bg-blue-50/70 dark:bg-blue-950/20'}${actionId ? ' cursor-pointer hover:border-blue-300 dark:hover:border-blue-700 focus:outline-none' : ''}">
+                    <span class="w-[5.5rem] shrink-0 pt-0.5 text-[9px] font-black uppercase tracking-widest ${absent ? 'text-gray-400' : 'text-blue-700 dark:text-blue-300'}">${esc(label)}</span>
+                    <span class="min-w-0 flex-1 text-[12px] font-bold leading-snug break-words ${absent ? 'text-gray-400 font-semibold' : 'text-gray-900 dark:text-white'}">${value}</span>
                 </${tag}>`;
             };
             const countLabel = (count, noun) => {
@@ -2889,7 +2889,7 @@ const Admin = {
                     ? `<p class="text-[11px]">Last activity: <b>${esc(Admin.formatDate(peek.lastActivity.ms))}</b> · ${esc(peek.lastActivity.label)}${peek.lastActivity.appVersion ? ` · ${esc(peek.lastActivity.appVersion)}` : ''}</p>`
                     : '<p class="text-[11px] text-gray-400">No activity on file.</p>'}
                 ${peek.email ? `<p class="text-[11px]">Email: <b>${esc(peek.email)}</b></p>` : ''}
-                <div class="grid grid-cols-2 gap-2 pt-1">
+                <div class="flex flex-col gap-1.5 pt-1">
                     ${tile('Joined', esc(joinedLabel), joinedLabel === 'unknown')}
                     ${tile('Trip plans', peek.tripLast ? esc(`yes${peek.tripRegion ? ` · ${peek.tripRegion}` : ''}`) : 'none', !peek.tripLast, peek.tripLast ? 'commuter-peek-trips' : '')}
                     ${tile('Feedback', peek.hasChat ? esc(peek.feedbackCount ? `${peek.feedbackCount} messages` : 'open thread') : 'none', !peek.hasChat, 'commuter-peek-feedback')}
@@ -7955,13 +7955,16 @@ const Admin = {
 
         refreshBtn.onclick = () => Admin.fetchDeadEnds();
 
-        Admin.approvePlannerFare = async (vote) => {
+        Admin.approvePlannerFare = async (vote, patchIn = {}) => {
             const secret = await Admin.getAuthKey();
             if (!secret) throw new Error('Not signed in');
             if (typeof window.plannerFareOverrideKey !== 'function' || typeof window.buildPlannerFareOverrideRecord !== 'function') {
                 throw new Error('Planner fare helpers are not loaded');
             }
-            const item = vote && typeof vote === 'object' ? vote : {};
+            const item = vote && typeof vote === 'object' ? { ...vote } : {};
+            if (patchIn.ticketType) item.ticketType = String(patchIn.ticketType).toLowerCase();
+            if (patchIn.isOffPeak != null) item.isOffPeak = !!patchIn.isOffPeak;
+            if (patchIn.agree != null) item.agree = !!patchIn.agree;
             const reported = Number(item.reportedPrice);
             if (!Number.isFinite(reported) || reported < 1 || reported > 500) {
                 throw new Error('Correction needs a whole rand between 1 and 500');
@@ -7990,8 +7993,26 @@ const Admin = {
             if (typeof window.setPlannerFareOverridesCache === 'function') {
                 window.setPlannerFareOverridesCache(Admin._cachedPlannerFares);
             }
-            if (typeof showToast === 'function') showToast(`Planner will quote R${record.price}`, 'success');
-            await Admin.fetchDeadEnds();
+            if (!patchIn.skipVotePatch && item.id) {
+                const votePatch = {
+                    review: 'saved',
+                    reviewedAt: Date.now(),
+                    reviewedBy: Admin.currentUser?.email || Admin.currentUser?.uid || 'Admin',
+                    ticketType,
+                    isOffPeak: !!item.isOffPeak,
+                    agree: false,
+                };
+                const voteRes = await fetch(`${dynamicEndpoint}sys_logs/fare_votes/${encodeURIComponent(item.id)}.json?auth=${secret}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(votePatch),
+                });
+                if (voteRes.ok && Admin._cachedFareVotes && Admin._cachedFareVotes[item.id]) {
+                    Admin._cachedFareVotes[item.id] = { ...Admin._cachedFareVotes[item.id], ...votePatch };
+                }
+            }
+            if (!patchIn.quiet && typeof showToast === 'function') showToast(`Planner will quote R${record.price}`, 'success');
+            if (!patchIn.skipReload) await Admin.fetchDeadEnds();
         };
 
         Admin.reclassifyPlannerFare = async (vote, patchIn = {}) => {
@@ -8018,6 +8039,9 @@ const Admin = {
                 ticketType,
                 isOffPeak,
                 agree,
+                review: 'saved',
+                reviewedAt: Date.now(),
+                reviewedBy: Admin.currentUser?.email || Admin.currentUser?.uid || 'Admin',
                 reclassifiedAt: Date.now(),
                 reclassifiedBy: Admin.currentUser?.email || Admin.currentUser?.uid || 'Admin',
             };
@@ -8030,10 +8054,10 @@ const Admin = {
             if (Admin._cachedFareVotes && Admin._cachedFareVotes[id]) {
                 Admin._cachedFareVotes[id] = { ...Admin._cachedFareVotes[id], ...patch };
             }
-            if (typeof showToast === 'function') {
+            if (!patchIn.quiet && typeof showToast === 'function') {
                 showToast(agree ? 'Classification saved · quote marked correct' : 'Classification saved', 'success');
             }
-            await Admin.fetchDeadEnds();
+            if (!patchIn.skipReload) await Admin.fetchDeadEnds();
         };
 
         Admin.refutePlannerFare = async (vote) => {
@@ -8300,26 +8324,17 @@ const Admin = {
                         const livePrice = liveRow ? Number(liveRow.price) : NaN;
                         return Number.isFinite(livePrice) && livePrice === Number(item.reportedPrice);
                     };
-                    const fareGroups = [
-                        { title: 'Pending', items: entries.filter((item) => item.review !== 'refuted' && !fareIsLive(item)) },
-                        { title: 'Approved', items: entries.filter((item) => item.review !== 'refuted' && fareIsLive(item)) },
-                        { title: 'Refuted', items: entries.filter((item) => item.review === 'refuted') },
-                    ];
-                    fareGroups.forEach((group) => {
-                        if (!group.items.length) return;
-                        const heading = document.createElement('p');
-                        heading.className = 'text-[10px] font-black uppercase tracking-widest text-gray-500 dark:text-gray-400 pt-2';
-                        heading.textContent = `${group.title} (${group.items.length})`;
-                        listDiv.appendChild(heading);
-                        group.items.forEach((item) => {
+                    const fareIsDecided = (item) => item.review === 'saved' || item.review === 'refuted' || !!item.reclassifiedAt || fareIsLive(item);
+                    const savedItems = entries.filter((item) => fareIsDecided(item));
+                    const pendingItems = entries.filter((item) => !fareIsDecided(item));
+                    const paintFareVoteCard = (item, host) => {
                         const card = document.createElement('div');
                         card.className = "de-fare-card bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden cursor-pointer transition-colors hover:border-amber-300";
                         const quoted = item.quotedPrice != null ? `R${item.quotedPrice}` : '-';
                         const reported = item.reportedPrice != null ? `R${item.reportedPrice}` : '-';
                         const peakLabel = item.isOffPeak ? 'Off-peak' : 'Peak';
                         const smoothKm = item.smoothKm ?? item.km;
-                        const abKm = item.abKm ?? item.crowKm;
-                        const kmLabel = `smooth ${smoothKm != null && smoothKm !== '' ? smoothKm : '-'} km · A-B ${abKm != null && abKm !== '' ? abKm : '-'} km`;
+                        const kmLabel = `smooth ${smoothKm != null && smoothKm !== '' ? smoothKm : '-'} km`;
                         const profileLabel = item.profile || 'Adult';
                         const vsLabel = item.agree ? `${quoted} (yes)` : `${quoted} → ${reported}`;
                         const fareDid = String(item.deviceId || item.userId || '').trim();
@@ -8402,10 +8417,33 @@ const Admin = {
                         card.querySelector('.de-fare-approve')?.addEventListener('click', async (ev) => {
                             ev.stopPropagation();
                             try {
-                                await Admin.approvePlannerFare(item);
+                                const typeEl = card.querySelector('.de-fare-type');
+                                const peakEl = card.querySelector('.de-fare-peak');
+                                const ticketType = typeEl?.value || 'single';
+                                const isOffPeak = peakEl?.value === 'off';
+                                if (ticketType !== 'single') {
+                                    await Admin.reclassifyPlannerFare(item, {
+                                        ticketType,
+                                        isOffPeak,
+                                        agree: false,
+                                        skipReload: true,
+                                        quiet: true,
+                                    });
+                                    if (typeof showToast === 'function') showToast('Saved. Only a single ticket updates the price everyone sees.', 'info');
+                                    await Admin.fetchDeadEnds();
+                                    return;
+                                }
+                                await Admin.approvePlannerFare({
+                                    ...item,
+                                    ticketType,
+                                    isOffPeak,
+                                    agree: false,
+                                }, { skipReload: true });
+                                await Admin.fetchDeadEnds();
                             } catch (e) {
                                 console.error('Approve planner fare failed', e);
                                 if (typeof showToast === 'function') showToast(e.message || 'Approve failed', 'error');
+                                await Admin.fetchDeadEnds();
                             }
                         });
                         card.querySelector('.de-fare-refute')?.addEventListener('click', async (ev) => {
@@ -8443,9 +8481,34 @@ const Admin = {
                                 Admin.expandFareContributor(panel, item);
                             }
                         });
-                        listDiv.appendChild(card);
-                        });
-                    });
+                        host.appendChild(card);
+                    };
+                    const savedWrap = document.createElement('div');
+                    savedWrap.className = 'mb-3';
+                    savedWrap.innerHTML = `
+                        <details class="rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50/80 dark:bg-gray-950/40">
+                            <summary class="cursor-pointer list-none px-3 py-2 text-[10px] font-black uppercase tracking-widest text-gray-500">Saved corrections (${savedItems.length})</summary>
+                            <div class="de-saved-fares px-3 pb-3 space-y-2"></div>
+                        </details>`;
+                    listDiv.appendChild(savedWrap);
+                    const savedHost = savedWrap.querySelector('.de-saved-fares');
+                    if (!savedItems.length) {
+                        savedHost.innerHTML = '<p class="text-[11px] text-gray-500 italic">None saved yet.</p>';
+                    } else {
+                        savedItems.forEach((item) => paintFareVoteCard(item, savedHost));
+                    }
+                    if (pendingItems.length) {
+                        const heading = document.createElement('p');
+                        heading.className = 'text-[10px] font-black uppercase tracking-widest text-gray-500 dark:text-gray-400 pt-2';
+                        heading.textContent = `Pending (${pendingItems.length})`;
+                        listDiv.appendChild(heading);
+                        pendingItems.forEach((item) => paintFareVoteCard(item, listDiv));
+                    } else {
+                        const done = document.createElement('p');
+                        done.className = 'text-xs text-gray-500 italic text-center py-3';
+                        done.textContent = 'No pending corrections.';
+                        listDiv.appendChild(done);
+                    }
                     return;
                 }
 
@@ -8575,14 +8638,15 @@ const Admin = {
                     const timeLabel = secureEscape(item.timeOfDay || '-');
                     const countLabel = countMode === 'hits' ? 'Hits' : 'Users';
                     const versionEntries = Object.entries(item.versions || {}).sort((a, b) => (b[1].lastSeen || 0) - (a[1].lastSeen || 0));
+                    const versionChip = (ver) => {
+                        const safeVer = secureEscape(ver);
+                        if (/^V\d+_/i.test(ver)) {
+                            return `<button type="button" class="fb-version-chip inline-flex max-w-full shrink-0 text-left text-[9px] font-mono font-medium underline decoration-dotted underline-offset-2 text-gray-600 dark:text-gray-300 focus:outline-none" data-admin-changelog="${safeVer}" onclick="event.preventDefault();event.stopPropagation();if(window.Admin&&Admin.openAdminChangelogLookup)Admin.openAdminChangelogLookup(this.getAttribute('data-admin-changelog')||this.textContent);">${safeVer}</button>`;
+                        }
+                        return `<span class="inline-flex shrink-0 text-[9px] font-mono text-gray-500">${safeVer}</span>`;
+                    };
                     const versionChips = versionEntries.length
-                        ? versionEntries.slice(0, 3).map(([ver]) => {
-                            const safeVer = secureEscape(ver);
-                            if (/^V\d+_/i.test(ver)) {
-                                return `<button type="button" class="fb-version-chip inline max-w-full whitespace-normal break-all text-left text-[9px] font-mono font-medium underline decoration-dotted underline-offset-2 text-gray-600 dark:text-gray-300 focus:outline-none" data-admin-changelog="${safeVer}" onclick="event.preventDefault();event.stopPropagation();if(window.Admin&&Admin.openAdminChangelogLookup)Admin.openAdminChangelogLookup(this.getAttribute('data-admin-changelog')||this.textContent);">${safeVer}</button>`;
-                            }
-                            return `<span class="text-[9px] font-mono text-gray-500">${safeVer}</span>`;
-                        }).join('') + (versionEntries.length > 3 ? `<span class="text-[9px] font-mono text-gray-400">+${versionEntries.length - 3}</span>` : '')
+                        ? `${versionEntries.slice(0, 8).map(([ver]) => versionChip(ver)).join('')}${versionEntries.length > 8 ? `<span class="text-[9px] font-mono text-gray-400">+${versionEntries.length - 8}</span>` : ''}`
                         : '<span class="text-[9px] font-mono text-gray-400">No version</span>';
                     const versionList = versionEntries.map(([ver, info]) => `${ver} (${info.count})`).join(', ') || 'no version';
                     const corridorKey = Admin.failCorridorKey({
@@ -8612,8 +8676,8 @@ const Admin = {
                                     <span class="text-[9px] font-bold text-indigo-600 dark:text-indigo-400 uppercase">${dayLabel}</span>
                                     <span class="text-[9px] text-gray-400 font-mono">${timeLabel}</span>
                                     <span class="text-[9px] text-gray-400 font-mono">Last: ${dateStr}</span>
+                                    ${versionChips}
                                 </div>
-                                <div class="mt-1.5 max-w-full break-all">${versionChips}</div>
                             </div>
                             <div class="flex flex-col items-end shrink-0 gap-1.5 ml-2">
                                 <div class="flex items-center justify-center bg-gray-50 dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-lg px-2.5 py-1.5 shadow-sm min-w-[4.5rem]">

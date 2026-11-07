@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_11.07.11': [
+        'User sheet is one column. A long route or fare wraps on its own row. Swiping the trip fare sheet down keeps the card off screen while the overlay hides, so the empty sheet does not slide back up. Planner fare corrections have a Saved corrections section for quotes marked right and for accepted corrections. Approving an incorrect single writes that rand, at the peak or off-peak the operator set, into the price everyone sees. Return, weekly, and monthly stay off that live single price. Saving a classification updates the fare accuracy percentage. The fares list shows the curved kilometres only. Fail cards keep each app version inside the card, with a gap between them. Fare vote rules allow an operator to save a classification. Deploy the rules before Save will stick. No commuter What\'s New. forceShow stays false.',
+    ],
     'V10_11.07.10': [
         'Planner telemetry Top corridors is one row per origin and destination. Weekday and Saturday of the same pair, and a station name with or without STATION, used to show as two rows. Users are a union and hits add up. The trip cards stay split by day. A guest who posts or replies on Community gets a prompt first. Create account opens Welcome to Next Train. Sign in opens Welcome back. The text they typed stays in the composer so they can send it after they create and verify the account. Live train sharing still walks the checks, then asks for the same account at the publish step. A GPS heartbeat does not ask again. No commuter What\'s New. forceShow stays false.',
     ],

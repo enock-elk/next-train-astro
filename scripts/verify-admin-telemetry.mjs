@@ -126,6 +126,7 @@ ok(adminJs.includes('collectCommuterPeek'), 'user sheet uses cheap per-id reads'
 {
     const uiJs = readFileSync(new URL('../src/lib/ui.js', import.meta.url), 'utf8');
     ok(!uiJs.includes('Invalid or unexpected token'), 'Invalid or unexpected token is still reported');
+    ok(uiJs.includes("card.style.transition = 'none'"), 'a dismissed bottom sheet does not animate back into the fade');
 }
 ok(adminJs.includes('Look up more'), 'user sheet can hand off to User Trust search');
 ok(adminJs.includes('commuter-peek-feedback'), 'feedback tile opens the thread');
@@ -222,7 +223,9 @@ ok(adminJs.includes('id="de-tab-fares"'), 'planner telemetry has a Fares tab');
 ok(adminJs.includes('id="de-tab-trips"') && adminJs.indexOf('id="de-tab-fails"') < adminJs.indexOf('id="de-tab-fares"'), 'Fails tab is listed before Fares');
 ok(adminJs.includes('sys_logs/fare_votes'), 'admin reads fare_votes');
 ok(adminJs.includes('smoothKm') && adminJs.includes('abKm'), 'Fares tab exports smooth and A-B km');
-ok(adminJs.includes('A-B '), 'Fares list labels crow-flies as A-B');
+ok(!adminJs.includes('· A-B '), 'Fares list does not show straight-line A-B');
+ok(adminJs.includes('Saved corrections'), 'Fares tab keeps a saved corrections section');
+ok(adminJs.includes("review: 'saved'"), 'saving a fare correction files it as saved');
 ok(adminJs.includes('Admin.approvePlannerFare'), 'Fares tab can approve a correction');
 ok(adminJs.includes('config/planner_fares/'), 'Approve writes config/planner_fares/$key');
 ok(adminJs.includes('de-fare-approve'), 'correction cards have an Approve button');

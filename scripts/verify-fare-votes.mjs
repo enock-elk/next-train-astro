@@ -225,6 +225,7 @@ assert(modal.includes('The price algorithm is still being developed and tested, 
 
 const rules = readFileSync(join(ROOT, 'firebase-database.rules.json'), 'utf8');
 assert(rules.includes('"fare_votes"'), 'rules include fare_votes');
+assert(rules.includes("newData.child('review').val() == 'saved'"), 'operators can file a fare correction as saved');
 assert(rules.includes('!data.exists()'), 'fare votes are create-once');
 assert(rules.includes('"planner_fares"'), 'rules include planner_fares');
 assert(rules.includes('"route_fares"'), 'rules include route_fares');

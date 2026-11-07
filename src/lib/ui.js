@@ -173,8 +173,8 @@ function hashForModal(modalId) {
     return MODAL_HASH[modalId] || null;
 }
 
-/** Account sheets sit above #account. Keep in sync with account.js ACCOUNT_SHEET_HASH. */
-const ACCOUNT_SHEET_HASHES = new Set(['#account-points', '#account-name', '#account-badge', '#account-contrib']);
+/** Account sheets and inner pages sit above #account. Keep in sync with account.js. */
+const ACCOUNT_SHEET_HASHES = new Set(['#account-points', '#account-name', '#account-badge', '#account-contrib', '#account-profile', '#account-notifications', '#account-appearance']);
 
 function isAccountSheetHash(hash) {
     return ACCOUNT_SHEET_HASHES.has(hash || '');
@@ -2161,7 +2161,8 @@ export function switchTab(tab, opts = null) {
             || location.hash === '#terms'
             || location.hash === '#legal'
             || location.hash === '#fare'
-            || location.hash === '#account';
+            || location.hash === '#account'
+            || isAccountSheetHash(location.hash);
         if (!keepHash) {
             history.replaceState({ tab: 'next-train' }, '', '#home');
         }

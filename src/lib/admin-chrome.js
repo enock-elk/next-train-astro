@@ -112,6 +112,49 @@ export function canOpenTrackingMap() {
     return canAccessPilotSurface('map') || isLiveTrainFollowActive();
 }
 
+const ACCOUNT_PREF_IDS = [
+    'settings-colour-pack-block',
+    'settings-theme-toggle',
+    'account-theme-choice',
+    'settings-haptics-toggle',
+    'settings-notify-toggle',
+    'account-notify-types',
+];
+
+function prefsPanel() {
+    return document.getElementById('prefs-accordion-panel');
+}
+
+function restoreAccountPrefOrder() {
+    const panel = prefsPanel();
+    if (!panel) return;
+    ACCOUNT_PREF_IDS.forEach((id) => {
+        const el = document.getElementById(id);
+        if (el) panel.appendChild(el);
+    });
+}
+
+/** Park colour pack, notifications, and haptics on the account hub pages. */
+function splitAccountPrefPages() {
+    const appearance = document.getElementById('account-appearance-slot');
+    const notifications = document.getElementById('account-notifications-slot');
+    const haptics = document.getElementById('account-haptics-slot');
+    const pack = document.getElementById('settings-colour-pack-block');
+    const themeChoice = document.getElementById('account-theme-choice');
+    const hapticsToggle = document.getElementById('settings-haptics-toggle');
+    const notifyToggle = document.getElementById('settings-notify-toggle');
+    const types = document.getElementById('account-notify-types');
+    if (!appearance || !notifications || !haptics || !pack || !themeChoice || !hapticsToggle || !notifyToggle || !types) {
+        return false;
+    }
+    appearance.appendChild(pack);
+    appearance.appendChild(themeChoice);
+    notifications.appendChild(notifyToggle);
+    notifications.appendChild(types);
+    haptics.appendChild(hapticsToggle);
+    return true;
+}
+
 /** Passenger Type + Theme live in Account when that row is visible. */
 export function placeAccountSettings(accountOn) {
     if (typeof document === 'undefined') return;
@@ -149,7 +192,10 @@ export function placeAccountSettings(accountOn) {
             notifyToggle.setAttribute('aria-hidden', 'false');
         }
         paxNote?.classList.remove('hidden');
+        accountSlot.classList.toggle('nt-account-split', splitAccountPrefPages());
     } else {
+        accountSlot?.classList.remove('nt-account-split');
+        restoreAccountPrefOrder();
         prefs?.classList.remove('nt-prefs-flat');
         if (themeChoice) {
             themeChoice.hidden = true;

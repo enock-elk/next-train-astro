@@ -104,7 +104,7 @@ const versionBadge = String(APP_VERSION);
 
         <div id="prefs-accordion-panel" class="hidden flex-col border-b border-gray-100 dark:border-gray-800 bg-gray-50/60 dark:bg-gray-800/30">
 
-          <div class="py-3 px-4">
+          <div id="settings-colour-pack-block" class="py-3 px-4">
             <p class="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2">Colour Pack · <span id="settings-colour-pack-display" class="normal-case tracking-normal">Classic</span></p>
             <div id="colour-pack-picker" class="grid grid-cols-2 gap-2 relative z-10" role="group" aria-label="Colour pack">
               <button type="button" data-colour-pack-option="classic" class="colour-pack-option cursor-pointer" aria-pressed="true" style="--pack-accent:#2563eb">
@@ -175,26 +175,56 @@ const versionBadge = String(APP_VERSION);
           </button>
 
           <div id="account-notify-types" class="hidden divide-y divide-black/10 dark:divide-white/10 border-t border-black/10 dark:border-white/10">
-            <p class="px-4 py-2 text-[12px] font-normal text-gray-500 dark:text-gray-400 leading-snug">Choose what this phone may receive.</p>
-            <label class="flex items-center justify-between gap-3 px-4 py-[11px]">
-              <span class="text-[13px] font-normal text-gray-900 dark:text-white">Incidents</span>
-              <input type="checkbox" data-notify-category="incidents" class="rounded border-gray-300 text-blue-600 shrink-0">
+            <p class="px-4 py-2 text-[11px] font-bold uppercase tracking-[0.14em] text-gray-400 dark:text-gray-500">What this phone may receive</p>
+            <label class="flex items-center justify-between gap-3 px-4 py-3">
+              <span class="min-w-0">
+                <span class="block text-[15px] font-semibold tracking-tight text-gray-900 dark:text-white">Incidents</span>
+                <span class="mt-0.5 block text-[12px] font-normal text-gray-500 dark:text-gray-400">Safety and service incidents</span>
+              </span>
+              <span class="relative inline-block w-10 shrink-0 align-middle select-none">
+                <input type="checkbox" data-notify-category="incidents" class="toggle-checkbox absolute block w-5 h-5 rounded-full bg-white border-4 border-gray-300 appearance-none cursor-pointer outline-none">
+                <span class="toggle-label block overflow-hidden h-5 rounded-full bg-gray-300 cursor-pointer"></span>
+              </span>
             </label>
-            <label class="flex items-center justify-between gap-3 px-4 py-[11px]">
-              <span class="text-[13px] font-normal text-gray-900 dark:text-white">Delays</span>
-              <input type="checkbox" data-notify-category="delays" class="rounded border-gray-300 text-blue-600 shrink-0">
+            <label class="flex items-center justify-between gap-3 px-4 py-3">
+              <span class="min-w-0">
+                <span class="block text-[15px] font-semibold tracking-tight text-gray-900 dark:text-white">Delays</span>
+                <span class="mt-0.5 block text-[12px] font-normal text-gray-500 dark:text-gray-400">Late or cancelled trains</span>
+              </span>
+              <span class="relative inline-block w-10 shrink-0 align-middle select-none">
+                <input type="checkbox" data-notify-category="delays" class="toggle-checkbox absolute block w-5 h-5 rounded-full bg-white border-4 border-gray-300 appearance-none cursor-pointer outline-none">
+                <span class="toggle-label block overflow-hidden h-5 rounded-full bg-gray-300 cursor-pointer"></span>
+              </span>
             </label>
-            <label class="flex items-center justify-between gap-3 px-4 py-[11px]">
-              <span class="text-[13px] font-normal text-gray-900 dark:text-white">Community chats</span>
-              <input type="checkbox" data-notify-category="community" class="rounded border-gray-300 text-blue-600 shrink-0">
+            <label class="flex items-center justify-between gap-3 px-4 py-3">
+              <span class="min-w-0">
+                <span class="block text-[15px] font-semibold tracking-tight text-gray-900 dark:text-white">Community chats</span>
+                <span class="mt-0.5 block text-[12px] font-normal text-gray-500 dark:text-gray-400">Replies and new messages</span>
+              </span>
+              <span class="relative inline-block w-10 shrink-0 align-middle select-none">
+                <input type="checkbox" data-notify-category="community" class="toggle-checkbox absolute block w-5 h-5 rounded-full bg-white border-4 border-gray-300 appearance-none cursor-pointer outline-none">
+                <span class="toggle-label block overflow-hidden h-5 rounded-full bg-gray-300 cursor-pointer"></span>
+              </span>
             </label>
-            <label class="flex items-center justify-between gap-3 px-4 py-[11px]">
-              <span class="text-[13px] font-normal text-gray-900 dark:text-white">Train nearby reminders</span>
-              <input type="checkbox" data-notify-category="nearby" class="rounded border-gray-300 text-blue-600 shrink-0">
+            <label class="flex items-center justify-between gap-3 px-4 py-3">
+              <span class="min-w-0">
+                <span class="block text-[15px] font-semibold tracking-tight text-gray-900 dark:text-white">Train nearby reminders</span>
+                <span class="mt-0.5 block text-[12px] font-normal text-gray-500 dark:text-gray-400">When your train is close</span>
+              </span>
+              <span class="relative inline-block w-10 shrink-0 align-middle select-none">
+                <input type="checkbox" data-notify-category="nearby" class="toggle-checkbox absolute block w-5 h-5 rounded-full bg-white border-4 border-gray-300 appearance-none cursor-pointer outline-none">
+                <span class="toggle-label block overflow-hidden h-5 rounded-full bg-gray-300 cursor-pointer"></span>
+              </span>
             </label>
-            <label class="flex items-center justify-between gap-3 px-4 py-[11px]">
-              <span class="text-[13px] font-normal text-gray-900 dark:text-white">Admin feedback</span>
-              <input type="checkbox" data-notify-category="feedback" class="rounded border-gray-300 text-blue-600 shrink-0">
+            <label class="flex items-center justify-between gap-3 px-4 py-3">
+              <span class="min-w-0">
+                <span class="block text-[15px] font-semibold tracking-tight text-gray-900 dark:text-white">Admin feedback</span>
+                <span class="mt-0.5 block text-[12px] font-normal text-gray-500 dark:text-gray-400">Replies from the Next Train team</span>
+              </span>
+              <span class="relative inline-block w-10 shrink-0 align-middle select-none">
+                <input type="checkbox" data-notify-category="feedback" class="toggle-checkbox absolute block w-5 h-5 rounded-full bg-white border-4 border-gray-300 appearance-none cursor-pointer outline-none">
+                <span class="toggle-label block overflow-hidden h-5 rounded-full bg-gray-300 cursor-pointer"></span>
+              </span>
             </label>
           </div>
         </div>

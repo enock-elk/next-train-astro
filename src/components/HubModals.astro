@@ -309,96 +309,152 @@ import { withBase } from '../lib/config.js';
                 <p id="account-error-text" class="mt-1 text-[13px] font-medium text-red-800 dark:text-red-200 leading-snug"></p>
             </div>
 
-            <!-- Signed-in panel. Large name left, photo right; quick tiles; then account actions. -->
-            <div id="account-signed-in" class="hidden space-y-4">
-                <button type="button" id="account-profile-toggle" class="w-full flex items-center gap-4 px-1 py-1 text-left focus:outline-none" aria-expanded="false" aria-controls="account-profile-panel">
-                    <div class="min-w-0 flex-1">
-                        <p id="account-modal-display-name" class="text-[28px] font-bold tracking-tight text-gray-900 dark:text-white truncate leading-none">Passenger</p>
-                        <p id="account-modal-email" class="mt-1.5 text-[14px] font-normal text-gray-500 dark:text-gray-400 truncate"></p>
-                    </div>
-                    <div class="w-16 h-16 rounded-full bg-[#e8e8e8] dark:bg-[#3a3a3c] flex items-center justify-center text-[22px] font-semibold text-gray-600 dark:text-gray-300 shrink-0 overflow-hidden">
-                        <img id="account-modal-avatar-img" class="hidden w-full h-full object-cover" alt="" referrerpolicy="no-referrer">
-                        <span id="account-modal-avatar-letter" class="select-none"></span>
-                    </div>
-                    <svg id="account-profile-chevron" class="sr-only" aria-hidden="true"></svg>
-                </button>
-                <div id="account-profile-panel" class="hidden rounded-2xl bg-[#f6f6f6] dark:bg-[#1c1c1e] overflow-hidden">
-                    <div id="account-verify-card" class="hidden mx-4 mt-4 rounded-2xl border border-[#4C8DFF]/35 bg-gradient-to-br from-[#eff6ff] via-white to-white dark:from-[#0b1a33] dark:via-[#121212] dark:to-[#1c1c1e] px-4 py-5 space-y-3 shadow-sm">
-                        <div class="flex items-start gap-3">
-                            <span class="mt-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#4C8DFF]/15 text-[#4C8DFF]" aria-hidden="true">
-                                <svg class="w-4.5 h-4.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>
-                            </span>
-                            <div class="min-w-0">
-                                <p id="account-verify-label" class="text-[16px] font-semibold text-gray-900 dark:text-white">Verify your email</p>
-                                <p class="mt-1 text-[13px] font-normal text-gray-600 dark:text-gray-300 leading-snug">Open the link we sent, then tap below. Messages stay locked until this is done. Google sign-in skips this step.</p>
-                            </div>
-                        </div>
-                        <button type="button" id="account-verify-check-btn" class="w-full py-2.5 rounded-xl text-[13px] font-semibold text-white bg-[#4C8DFF] focus:outline-none">I've verified</button>
-                        <button type="button" id="account-verify-resend-btn" class="w-full py-2.5 rounded-xl text-[13px] font-medium text-gray-800 dark:text-gray-100 bg-white/90 dark:bg-black/30 border border-black/10 dark:border-white/10 focus:outline-none">Resend email</button>
-                    </div>
-                    <div class="px-4 pt-4 pb-4 space-y-3">
-                        <p class="text-[13px] font-normal text-gray-500 dark:text-gray-400 leading-snug">Used on the Community tab.</p>
-                        <div>
-                            <label class="block text-[12px] font-normal text-gray-500 dark:text-gray-400 mb-1" for="account-edit-display-name">Name</label>
-                            <input id="account-edit-display-name" type="text" maxlength="80" autocomplete="nickname" class="w-full h-11 px-3 rounded-[10px] bg-white dark:bg-[#2c2c2e] text-[13px] font-normal text-gray-900 dark:text-white focus:outline-none" placeholder="First name">
-                        </div>
-                        <p id="account-name-error" class="text-[13px] font-normal text-red-600 dark:text-red-400 empty:hidden" role="alert"></p>
-                        <button type="button" id="account-photo-toggle" class="w-full flex items-center justify-between gap-3 py-1 text-left focus:outline-none">
-                            <span class="min-w-0">
-                                <span class="block text-[13px] font-normal text-gray-900 dark:text-white">Show my photo next to my name</span>
-                                <span class="block text-[12px] font-normal text-gray-500 dark:text-gray-400 mt-0.5 leading-snug">Off unless you turn it on.</span>
-                            </span>
-                            <span class="relative inline-block w-10 align-middle select-none shrink-0">
-                                <input type="checkbox" id="account-photo-alerts" class="toggle-checkbox absolute block w-5 h-5 rounded-full bg-white border-4 border-gray-300 appearance-none cursor-pointer outline-none" />
-                                <label for="account-photo-alerts" class="toggle-label block overflow-hidden h-5 rounded-full bg-gray-300 cursor-pointer"></label>
-                            </span>
+            <!-- Signed-in hub. Profile, points, and settings open inner pages. Account actions stay last. -->
+            <div id="account-signed-in" class="hidden space-y-5" data-account-pane="hub">
+                <div data-account-view="hub" class="space-y-5">
+                    <button type="button" id="account-profile-toggle" class="relative w-full pt-2 pb-1 text-center focus:outline-none" aria-expanded="false" aria-controls="account-profile-panel" aria-label="Edit profile">
+                        <span class="pointer-events-none absolute left-1/2 top-0 -translate-x-1/2 w-[16rem] h-[8.5rem] rounded-full bg-[radial-gradient(ellipse_at_center,rgba(76,141,255,0.22),transparent_70%)] dark:bg-[radial-gradient(ellipse_at_center,rgba(76,141,255,0.16),transparent_70%)]" aria-hidden="true"></span>
+                        <span class="relative mx-auto flex h-[4.5rem] w-[4.5rem] items-center justify-center overflow-hidden rounded-full bg-white text-[26px] font-bold text-[#4C8DFF] shadow-[0_10px_28px_rgba(76,141,255,0.28)] ring-4 ring-[#4C8DFF]/25 dark:bg-[#1c1c1e]">
+                            <img id="account-modal-avatar-img" class="hidden h-full w-full object-cover" alt="" referrerpolicy="no-referrer">
+                            <span id="account-modal-avatar-letter" class="select-none"></span>
+                        </span>
+                        <span id="account-modal-display-name" class="relative mt-3 block truncate text-[26px] font-bold tracking-tight text-gray-900 dark:text-white leading-tight">Passenger</span>
+                        <span id="account-modal-email" class="relative mt-1 block truncate text-[14px] font-normal text-gray-500 dark:text-gray-400"></span>
+                        <span class="relative mt-3 inline-flex h-9 items-center rounded-full bg-[#4C8DFF] px-4 text-[13px] font-semibold text-white shadow-[0_8px_20px_rgba(76,141,255,0.28)]">Edit profile</span>
+                        <svg id="account-profile-chevron" class="sr-only" aria-hidden="true"></svg>
+                    </button>
+                    <div class="grid grid-cols-2 gap-3">
+                        <button type="button" id="account-points-btn" class="rounded-2xl border border-black/[0.04] bg-white px-4 py-4 text-left shadow-[0_8px_24px_rgba(15,23,42,0.06)] focus:outline-none active:bg-[#f4f7ff] dark:border-white/10 dark:bg-[#1c1c1e] dark:active:bg-[#2c2c2e]">
+                            <span class="block text-[12px] font-medium text-gray-500 dark:text-gray-400">Points</span>
+                            <span data-rider-marks class="mt-1 block truncate text-[15px] font-semibold tracking-tight text-gray-900 dark:text-white">Bronze · 0 points</span>
                         </button>
-                        <div id="account-danger-actions" class="grid grid-cols-1 min-[360px]:grid-cols-2 gap-2 pt-1">
-                            <button type="button" id="account-signout-btn" data-account-action class="w-full py-2.5 rounded-xl text-[13px] font-normal text-[#ff3b30] bg-white dark:bg-[#2c2c2e] focus:outline-none active:bg-black/[0.03] dark:active:bg-white/[0.04]">
+                        <button type="button" id="account-passenger-type-btn" class="rounded-2xl border border-black/[0.04] bg-white px-4 py-4 text-left shadow-[0_8px_24px_rgba(15,23,42,0.06)] focus:outline-none active:bg-[#f4f7ff] dark:border-white/10 dark:bg-[#1c1c1e] dark:active:bg-[#2c2c2e]">
+                            <span class="block text-[12px] font-medium text-gray-500 dark:text-gray-400">Passenger type</span>
+                            <span class="mt-1 flex items-center gap-1 min-w-0">
+                                <span id="account-passenger-type-display" class="truncate text-[15px] font-semibold tracking-tight text-gray-900 dark:text-white">Adult</span>
+                                <svg class="h-3.5 w-3.5 shrink-0 text-[#4C8DFF]" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"></path></svg>
+                            </span>
+                            <span class="mt-0.5 block text-[12px] font-normal text-gray-500 dark:text-gray-400">Used for fare estimates</span>
+                        </button>
+                    </div>
+                    <div class="space-y-2">
+                        <p class="px-1 text-[11px] font-bold uppercase tracking-[0.14em] text-gray-400 dark:text-gray-500">Settings</p>
+                        <div class="overflow-hidden rounded-2xl border border-black/[0.04] bg-white shadow-[0_8px_24px_rgba(15,23,42,0.06)] divide-y divide-black/[0.06] dark:divide-white/10 dark:border-white/10 dark:bg-[#1c1c1e]">
+                            <button type="button" id="account-open-notifications" class="flex min-h-[60px] w-full items-center gap-3 px-4 py-3 text-left focus:outline-none active:bg-[#f4f7ff] dark:active:bg-white/[0.04]">
+                                <span class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#4C8DFF]/10 text-[#4C8DFF]" aria-hidden="true">
+                                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path></svg>
+                                </span>
+                                <span class="min-w-0 flex-1">
+                                    <span class="block text-[15px] font-semibold tracking-tight text-gray-900 dark:text-white">Notifications</span>
+                                    <span id="account-notify-summary" class="mt-0.5 block truncate text-[12px] font-normal text-gray-500 dark:text-gray-400">Off</span>
+                                </span>
+                                <svg class="h-4 w-4 shrink-0 text-gray-300 dark:text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+                            </button>
+                            <button type="button" id="account-open-appearance" class="flex min-h-[60px] w-full items-center gap-3 px-4 py-3 text-left focus:outline-none active:bg-[#f4f7ff] dark:active:bg-white/[0.04]">
+                                <span class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#4C8DFF]/10 text-[#4C8DFF]" aria-hidden="true">
+                                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01"></path></svg>
+                                </span>
+                                <span class="min-w-0 flex-1">
+                                    <span class="block text-[15px] font-semibold tracking-tight text-gray-900 dark:text-white">Appearance</span>
+                                    <span id="account-appearance-summary" class="mt-0.5 block truncate text-[12px] font-normal text-gray-500 dark:text-gray-400">System · Classic colours</span>
+                                </span>
+                                <svg class="h-4 w-4 shrink-0 text-gray-300 dark:text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+                            </button>
+                            <div id="account-haptics-slot"></div>
+                        </div>
+                    </div>
+                    <div class="space-y-2">
+                        <p class="px-1 text-[11px] font-bold uppercase tracking-[0.14em] text-gray-400 dark:text-gray-500">About</p>
+                        <div class="overflow-hidden rounded-2xl border border-black/[0.04] bg-white shadow-[0_8px_24px_rgba(15,23,42,0.06)] divide-y divide-black/[0.06] dark:divide-white/10 dark:border-white/10 dark:bg-[#1c1c1e]">
+                            <a href={`${withBase('terms.html')}?from=account`} class="flex min-h-[56px] items-center justify-between gap-3 px-4 text-[15px] font-semibold tracking-tight text-gray-900 dark:text-white">
+                                Terms of Use
+                                <svg class="h-4 w-4 shrink-0 text-gray-300 dark:text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+                            </a>
+                            <a href={`${withBase('privacy.html')}?from=account`} class="flex min-h-[56px] items-center justify-between gap-3 px-4 text-[15px] font-semibold tracking-tight text-gray-900 dark:text-white">
+                                Privacy Policy
+                                <svg class="h-4 w-4 shrink-0 text-gray-300 dark:text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+                            </a>
+                        </div>
+                    </div>
+                    <div class="space-y-2">
+                        <p class="px-1 text-[11px] font-bold uppercase tracking-[0.14em] text-gray-400 dark:text-gray-500">Account</p>
+                        <div id="account-danger-actions" class="overflow-hidden rounded-2xl border border-black/[0.04] bg-white shadow-[0_8px_24px_rgba(15,23,42,0.06)] divide-y divide-black/[0.06] dark:divide-white/10 dark:border-white/10 dark:bg-[#1c1c1e]">
+                            <button type="button" id="account-signout-btn" data-account-action class="min-h-[56px] w-full px-4 text-left text-[15px] font-semibold tracking-tight text-gray-900 dark:text-white focus:outline-none active:bg-[#f4f7ff] dark:active:bg-white/[0.04]">
                                 Sign out
                             </button>
-                            <button type="button" id="account-reset-phone-btn" class="w-full py-2.5 rounded-xl text-[13px] font-normal text-[#ff3b30] bg-white dark:bg-[#2c2c2e] focus:outline-none active:bg-black/[0.03] dark:active:bg-white/[0.04]">
-                                Reset this App
-                            </button>
-                        </div>
-                        <div id="account-signout-confirm" class="hidden rounded-xl bg-white dark:bg-[#2c2c2e] px-3 py-3 space-y-3">
-                            <p class="text-[13px] font-normal text-gray-600 dark:text-gray-300 leading-snug">Sign out of this account?</p>
-                            <div class="flex gap-2">
-                                <button type="button" id="account-signout-cancel-btn" class="flex-1 py-2 rounded-lg text-[13px] font-normal text-gray-700 dark:text-gray-200 bg-[#f6f6f6] dark:bg-[#1c1c1e] focus:outline-none">Cancel</button>
-                                <button type="button" id="account-signout-confirm-btn" class="flex-1 py-2 rounded-lg text-[13px] font-normal text-white bg-[#ff3b30] focus:outline-none">Sign out</button>
+                            <div id="account-signout-confirm" class="hidden space-y-3 bg-[#f4f7ff] px-4 py-3 dark:bg-white/[0.04]">
+                                <p class="text-[13px] font-normal leading-snug text-gray-600 dark:text-gray-300">Sign out of this account?</p>
+                                <div class="flex gap-2">
+                                    <button type="button" id="account-signout-cancel-btn" class="flex-1 rounded-full py-2 text-[13px] font-semibold text-gray-700 dark:text-gray-200 bg-white dark:bg-[#1c1c1e] focus:outline-none">Cancel</button>
+                                    <button type="button" id="account-signout-confirm-btn" class="flex-1 rounded-full py-2 text-[13px] font-semibold text-white bg-red-600 focus:outline-none">Sign out</button>
+                                </div>
                             </div>
-                        </div>
-                        <div id="account-session-actions">
-                            <div id="account-delete-wrap">
-                                <button type="button" id="account-delete-btn" class="w-full py-2.5 rounded-xl text-[13px] font-normal text-[#ff3b30] bg-white dark:bg-[#2c2c2e] focus:outline-none active:bg-black/[0.03] dark:active:bg-white/[0.04]">
-                                    Delete account
-                                </button>
-                                <div id="account-delete-confirm" class="hidden mt-2 rounded-xl bg-white dark:bg-[#2c2c2e] px-3 py-3 space-y-3">
-                                    <p class="text-[13px] font-normal text-gray-600 dark:text-gray-300 leading-snug">This sends a deletion request. You will be signed out.</p>
-                                    <label class="block text-[12px] font-normal text-gray-500 dark:text-gray-400" for="account-delete-type">Type DELETE to confirm</label>
-                                    <input id="account-delete-type" type="text" autocomplete="off" autocapitalize="characters" class="w-full h-11 px-3 rounded-lg bg-[#f6f6f6] dark:bg-[#1c1c1e] text-[13px] font-normal text-gray-900 dark:text-white focus:outline-none" placeholder="DELETE">
-                                    <div class="flex gap-2">
-                                        <button type="button" id="account-delete-cancel-btn" class="flex-1 py-2 rounded-lg text-[13px] font-normal text-gray-700 dark:text-gray-200 bg-[#f6f6f6] dark:bg-[#1c1c1e] focus:outline-none">Cancel</button>
-                                        <button type="button" id="account-delete-confirm-btn" data-account-action disabled class="flex-1 py-2 rounded-lg text-[13px] font-normal text-white bg-[#ff3b30] opacity-40 focus:outline-none">Delete</button>
+                            <button type="button" id="account-reset-phone-btn" class="w-full px-4 py-3 text-left focus:outline-none active:bg-[#f4f7ff] dark:active:bg-white/[0.04]">
+                                <span class="block text-[15px] font-semibold tracking-tight text-gray-900 dark:text-white">Reset this App</span>
+                                <span class="mt-0.5 block text-[12px] font-normal text-gray-500 dark:text-gray-400">Clears saved routes and settings on this phone</span>
+                            </button>
+                            <div id="account-session-actions">
+                                <div id="account-delete-wrap">
+                                    <button type="button" id="account-delete-btn" class="min-h-[56px] w-full px-4 text-left text-[15px] font-semibold tracking-tight text-red-600 focus:outline-none active:bg-red-50 dark:active:bg-red-950/30">
+                                        Delete account
+                                    </button>
+                                    <div id="account-delete-confirm" class="hidden space-y-3 px-4 py-3">
+                                        <p class="text-[13px] font-normal leading-snug text-gray-600 dark:text-gray-300">This sends a deletion request. You will be signed out.</p>
+                                        <label class="block text-[12px] font-normal text-gray-500 dark:text-gray-400" for="account-delete-type">Type DELETE to confirm</label>
+                                        <input id="account-delete-type" type="text" autocomplete="off" autocapitalize="characters" class="h-11 w-full rounded-2xl border border-black/10 bg-white px-3 text-[13px] font-normal text-gray-900 focus:border-[#4C8DFF] focus:outline-none dark:border-white/10 dark:bg-black dark:text-white" placeholder="DELETE">
+                                        <div class="flex gap-2">
+                                            <button type="button" id="account-delete-cancel-btn" class="flex-1 rounded-full py-2 text-[13px] font-semibold text-gray-700 dark:text-gray-200 bg-[#f2f2f7] dark:bg-[#2c2c2e] focus:outline-none">Cancel</button>
+                                            <button type="button" id="account-delete-confirm-btn" data-account-action disabled class="flex-1 rounded-full py-2 text-[13px] font-semibold text-white bg-red-600 opacity-40 focus:outline-none">Delete</button>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
                         </div>
-                        <button type="button" id="account-save-display-name" data-account-action class="w-full py-2.5 rounded-xl text-[13px] font-semibold text-white bg-blue-600 focus:outline-none">Save</button>
                     </div>
                 </div>
-                <div class="grid grid-cols-2 gap-3">
-                    <button type="button" id="account-points-btn" class="rounded-2xl bg-[#f3f3f3] dark:bg-[#1c1c1e] px-4 py-4 text-left focus:outline-none active:bg-[#ececec] dark:active:bg-[#2c2c2e]">
-                        <span class="block text-[16px] font-semibold text-gray-900 dark:text-white">Points</span>
-                        <span data-rider-marks class="block mt-0.5 text-[13px] font-normal text-gray-500 dark:text-gray-400 truncate">Bronze · 0 points</span>
-                    </button>
-                    <button type="button" id="account-passenger-type-btn" class="rounded-2xl bg-[#f3f3f3] dark:bg-[#1c1c1e] px-4 py-4 text-left focus:outline-none active:bg-[#ececec] dark:active:bg-[#2c2c2e]">
-                        <span class="block text-[16px] font-semibold text-gray-900 dark:text-white">Passenger type</span>
-                        <span class="mt-0.5 flex items-center gap-1 min-w-0">
-                            <span id="account-passenger-type-display" class="text-[13px] font-normal text-gray-500 dark:text-gray-400 truncate">Adult</span>
-                            <svg class="w-3.5 h-3.5 text-gray-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"></path></svg>
+                <div id="account-profile-panel" data-account-view="profile" class="hidden space-y-4">
+                    <div id="account-verify-card" class="hidden rounded-2xl border border-[#4C8DFF]/35 bg-gradient-to-br from-[#eff6ff] via-white to-white px-4 py-5 shadow-[0_8px_24px_rgba(76,141,255,0.12)] space-y-3 dark:from-[#0b1a33] dark:via-[#121212] dark:to-[#1c1c1e]">
+                        <div class="flex items-start gap-3">
+                            <span class="mt-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#4C8DFF]/15 text-[#4C8DFF]" aria-hidden="true">
+                                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>
+                            </span>
+                            <div class="min-w-0">
+                                <p id="account-verify-label" class="text-[16px] font-semibold text-gray-900 dark:text-white">Verify your email</p>
+                                <p class="mt-1 text-[13px] font-normal leading-snug text-gray-600 dark:text-gray-300">Open the link we sent, then tap below. Messages stay locked until this is done. Google sign-in skips this step.</p>
+                            </div>
+                        </div>
+                        <button type="button" id="account-verify-check-btn" class="h-11 w-full rounded-full bg-[#4C8DFF] text-[13px] font-semibold text-white shadow-[0_8px_20px_rgba(76,141,255,0.28)] focus:outline-none">I've verified</button>
+                        <button type="button" id="account-verify-resend-btn" class="h-11 w-full rounded-full border border-black/10 bg-white text-[13px] font-semibold text-gray-800 focus:outline-none dark:border-white/10 dark:bg-black/30 dark:text-gray-100">Resend email</button>
+                    </div>
+                    <p class="px-1 text-[13px] font-normal leading-snug text-gray-500 dark:text-gray-400">Used on the Community tab.</p>
+                    <div>
+                        <label class="mb-1.5 block text-[12px] font-medium text-gray-500 dark:text-gray-400" for="account-edit-display-name">Name</label>
+                        <input id="account-edit-display-name" type="text" maxlength="80" autocomplete="nickname" class="h-12 w-full rounded-2xl border border-black/10 bg-white px-4 text-[15px] font-medium text-gray-900 focus:border-[#4C8DFF] focus:outline-none dark:border-white/10 dark:bg-[#1c1c1e] dark:text-white" placeholder="First name">
+                    </div>
+                    <p id="account-name-error" class="text-[13px] font-normal text-red-600 empty:hidden dark:text-red-400" role="alert"></p>
+                    <button type="button" id="account-photo-toggle" class="flex w-full items-center justify-between gap-3 rounded-2xl border border-black/[0.04] bg-white px-4 py-3.5 text-left shadow-[0_8px_24px_rgba(15,23,42,0.06)] focus:outline-none dark:border-white/10 dark:bg-[#1c1c1e]">
+                        <span class="min-w-0">
+                            <span class="block text-[15px] font-semibold tracking-tight text-gray-900 dark:text-white">Show my photo next to my name</span>
+                            <span class="mt-0.5 block text-[12px] font-normal leading-snug text-gray-500 dark:text-gray-400">Off unless you turn it on.</span>
+                        </span>
+                        <span class="relative inline-block w-10 shrink-0 select-none align-middle">
+                            <input type="checkbox" id="account-photo-alerts" class="toggle-checkbox absolute block h-5 w-5 appearance-none rounded-full border-4 border-gray-300 bg-white outline-none" />
+                            <label for="account-photo-alerts" class="toggle-label block h-5 cursor-pointer overflow-hidden rounded-full bg-gray-300"></label>
                         </span>
                     </button>
+                    <button type="button" id="account-save-display-name" data-account-action class="h-11 w-full rounded-full bg-[#4C8DFF] text-[15px] font-semibold text-white shadow-[0_8px_20px_rgba(76,141,255,0.28)] focus:outline-none">Save</button>
+                </div>
+                <div data-account-view="notifications" class="hidden space-y-3">
+                    <div class="overflow-hidden rounded-2xl border border-black/[0.04] bg-white shadow-[0_8px_24px_rgba(15,23,42,0.06)] dark:border-white/10 dark:bg-[#1c1c1e]">
+                        <div id="account-notifications-slot"></div>
+                    </div>
+                    <p class="px-1 text-[12px] font-normal leading-snug text-gray-500 dark:text-gray-400">Changes save as you switch. No Save button needed.</p>
+                </div>
+                <div data-account-view="appearance" class="hidden space-y-3">
+                    <div class="overflow-hidden rounded-2xl border border-black/[0.04] bg-white shadow-[0_8px_24px_rgba(15,23,42,0.06)] dark:border-white/10 dark:bg-[#1c1c1e]">
+                        <div id="account-appearance-slot"></div>
+                    </div>
+                    <p class="px-1 text-[12px] font-normal leading-snug text-gray-500 dark:text-gray-400">Changes save as you switch. No Save button needed.</p>
                 </div>
             </div>
 
@@ -491,7 +547,7 @@ import { withBase } from '../lib/config.js';
             <p id="account-prefs-label" class="hidden px-1 text-[12px] font-normal uppercase tracking-wide text-gray-500 dark:text-gray-500">Preferences</p>
             <div id="account-settings-host" class="space-y-3 hidden"></div>
 
-            <p class="px-1 pb-2 text-center text-[12px] font-normal text-gray-500 dark:text-gray-400 leading-relaxed">
+            <p id="account-legal-footer" class="px-1 pb-2 text-center text-[12px] font-normal text-gray-500 dark:text-gray-400 leading-relaxed">
                 By continuing, you agree to our
                 <a href={`${withBase('terms.html')}?from=account`} class="whitespace-nowrap text-[#4C8DFF] underline underline-offset-2">Terms of Use</a>
                 and
@@ -813,8 +869,22 @@ import { withBase } from '../lib/config.js';
     max-width: none;
     border-radius: 0;
   }
-  #account-settings-host:empty {
+  #account-settings-host:empty,
+  #account-settings-host.nt-account-split {
     display: none;
+  }
+  #account-haptics-slot #settings-haptics-toggle svg,
+  #account-notifications-slot #settings-notify-toggle svg {
+    color: #4C8DFF;
+  }
+  #account-appearance-slot #account-theme-choice > p:first-of-type {
+    display: none;
+  }
+  #account-notifications-slot #account-notify-types {
+    border-top-color: rgba(0, 0, 0, 0.06);
+  }
+  html.dark #account-notifications-slot #account-notify-types {
+    border-top-color: rgba(255, 255, 255, 0.1);
   }
   #account-settings-host #prefs-accordion-toggle {
     background: #fff;

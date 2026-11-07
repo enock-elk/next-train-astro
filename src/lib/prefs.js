@@ -158,6 +158,34 @@ export function syncPrefsAccordionSummary(pack = getColourPack()) {
         ? 'System'
         : (document.documentElement.classList.contains('dark') ? 'Dark' : 'Light');
     sub.textContent = `${packLabel} · ${mode}`;
+    paintAccountHubSummaries();
+}
+
+function paintAccountHubSummaries() {
+    if (typeof document === 'undefined') return;
+    const appearance = document.getElementById('account-appearance-summary');
+    const sub = document.getElementById('prefs-accordion-sub');
+    if (appearance && sub) {
+        const parts = String(sub.textContent || '').split('·').map((part) => part.trim()).filter(Boolean);
+        appearance.textContent = parts.length >= 2
+            ? `${parts[1]} · ${parts[0]} colours`
+            : (sub.textContent || 'System · Classic colours');
+    }
+    const summary = document.getElementById('account-notify-summary');
+    if (!summary) return;
+    const master = document.getElementById('settings-notify-checkbox');
+    const hint = document.getElementById('settings-notify-hint')?.textContent || '';
+    const boxes = Array.from(document.querySelectorAll('[data-notify-category]'));
+    const on = boxes.filter((box) => box.checked).length;
+    if (hint === 'Blocked in browser settings' || hint === 'Not supported on this device') {
+        summary.textContent = hint;
+    } else if (!master?.checked) {
+        summary.textContent = 'Off';
+    } else if (boxes.length) {
+        summary.textContent = `On · ${on} of ${boxes.length} types`;
+    } else {
+        summary.textContent = 'On';
+    }
 }
 
 export function setColourPack(pack) {
@@ -406,6 +434,7 @@ export function syncNotifyUi(enabled = getNotifyPref()) {
         input.removeAttribute('aria-disabled');
         input.closest('label')?.classList.remove('opacity-50', 'cursor-not-allowed');
     });
+    paintAccountHubSummaries();
 }
 
 export async function setNotifyPref(wantOn) {

@@ -3293,14 +3293,24 @@ function bindBottomSheetPullDismiss() {
         card.style.transition = 'transform 0.22s ease-out';
         const shouldClose = dy > 80;
         if (shouldClose) {
+            // Keep the card off-screen while the overlay hides. Clearing the
+            // translate while transition-transform is still on slides the empty
+            // sheet back up from the bottom during the fade.
             card.style.transform = `translateY(${Math.max(dy, card.getBoundingClientRect().height)}px)`;
             const close = BOTTOM_SHEET_CLOSE[host.id] || (() => closeSmoothModal(host.id));
             setTimeout(() => {
+                card.style.transition = 'none';
+                host.style.transition = 'none';
                 close();
-                card.style.transform = '';
-                card.style.transition = '';
-                card.style.willChange = '';
-            }, 180);
+                setTimeout(() => {
+                    card.style.transform = '';
+                    card.style.willChange = '';
+                    requestAnimationFrame(() => {
+                        card.style.transition = '';
+                        host.style.transition = '';
+                    });
+                }, 340);
+            }, 200);
             return;
         }
         card.style.transform = '';

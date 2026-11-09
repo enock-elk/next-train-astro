@@ -580,7 +580,8 @@ assert(
     hubModals.indexOf('id="account-modal-display-name"') < hubModals.indexOf('id="account-points-btn"')
     && hubModals.indexOf('id="account-points-btn"') < hubModals.indexOf('id="account-passenger-type-btn"')
     && hubModals.indexOf('id="account-passenger-type-btn"') < hubModals.indexOf('id="account-open-notifications"')
-    && hubModals.indexOf('id="account-open-notifications"') < hubModals.indexOf('id="account-open-appearance"')
+    && hubModals.indexOf('id="account-open-notifications"') < hubModals.indexOf('id="account-open-data"')
+    && hubModals.indexOf('id="account-open-data"') < hubModals.indexOf('id="account-open-appearance"')
     && hubModals.indexOf('id="account-open-appearance"') < hubModals.indexOf('id="account-haptics-slot"')
     && hubModals.indexOf('id="account-haptics-slot"') < hubModals.indexOf('id="account-signout-btn"')
     && hubModals.indexOf('id="account-signout-btn"') < hubModals.indexOf('id="account-reset-phone-btn"')
@@ -806,9 +807,10 @@ assert(
     'Terms and Privacy are About rows above Sign out',
 );
 assert(hubModals.includes('id="account-open-notifications"') && hubModals.includes('id="account-notifications-slot"'), 'Notifications open their own page');
+assert(hubModals.includes('id="account-open-data"') && hubModals.includes('data-account-view="data"') && hubModals.includes('Data saving starts off'), 'Data saving opens its own page and starts off');
 assert(hubModals.includes('id="account-open-appearance"') && hubModals.includes('id="account-appearance-slot"'), 'Appearance opens its own page');
 assert(!hubModals.includes('Changes save as you switch. No Save button needed.'), 'account pages do not explain that switches save themselves');
-assert(accountJs.includes('#account-notifications') && accountJs.includes('#account-appearance') && accountJs.includes('#account-profile'), 'account inner pages push their own history entry');
+assert(accountJs.includes('#account-notifications') && accountJs.includes('#account-data') && accountJs.includes('#account-appearance') && accountJs.includes('#account-profile'), 'account inner pages push their own history entry');
 assert(hubModals.includes('privacy.html') && hubModals.includes('terms.html') && hubModals.includes('Privacy Policy') && hubModals.includes('Terms of Use'), 'account footer links the public privacy and terms pages');
 assert(!hubModals.includes('Bronze · 0 marks'), 'account uses points, not marks');
 const riderMarks = readFileSync(new URL('../src/lib/rider-marks.js', import.meta.url), 'utf8');

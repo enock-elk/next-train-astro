@@ -10,7 +10,8 @@ import { isPublicPreviewUrl } from './link-preview.js';
 import { showToast, triggerHaptic, openSmoothModal, closeSmoothModal } from './ui.js';
 import { isAdminAuthed } from './admin-chrome.js';
 import { $currentRouteId, $userRegion } from '../store.js';
-import { loadAlertImageBlob, pruneExpiredAlertImages } from './alert-image-cache.js';
+import { loadAlertImageBlob, pruneExpiredAlertImages, resolveCachedAlertImage } from './alert-image-cache.js';
+import { pictureWasShown, picturesWaitForTap, posterLoadPlan, rememberPicture } from './data-saver.js';
 import {
     ALERTS_PAGE_SIZE,
     ALERT_PIN_SVG,
@@ -277,9 +278,13 @@ function bindAlertVideoPlayers(root) {
         if (img.dataset.ntVideoPosterBound === '1') return;
         img.dataset.ntVideoPosterBound = '1';
         const page = img.getAttribute('data-alert-video-page') || '';
+        if (picturesWaitForTap() && !pictureWasShown(page)) return;
         const kind = alertVideoKind(page);
         const paint = (thumb) => {
-            if (thumb && isPublicPreviewUrl(thumb) && img.isConnected) img.src = thumb;
+            if (thumb && isPublicPreviewUrl(thumb) && img.isConnected) {
+                rememberPicture(page);
+                img.src = thumb;
+            }
         };
         if (kind === 'vimeo') {
             const endpoint = `https://vimeo.com/api/oembed.json?url=${encodeURIComponent(page)}`;
@@ -339,6 +344,50 @@ function bindAlertVideoPlayers(root) {
     });
 }
 
+function holdPosterForTap(host, startLoad) {
+    if (!host || host.dataset.ntPosterHeld === '1') return;
+    host.dataset.ntPosterHeld = '1';
+    host.querySelector('.nt-alert-poster-loading')?.classList.add('hidden');
+    let ask = host.querySelector('[data-nt-poster-ask]');
+    if (!ask) {
+        ask = document.createElement('span');
+        ask.setAttribute('data-nt-poster-ask', '1');
+        ask.className = 'absolute inset-0 flex items-center justify-center bg-gray-100 text-gray-600 dark:bg-gray-900 dark:text-gray-300';
+        ask.innerHTML = '<span class="pointer-events-none absolute inset-3 rounded-md border border-dashed border-gray-400/80" aria-hidden="true"></span><span class="relative inline-flex items-center gap-1.5 text-[13px] font-semibold"><svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3"></path></svg>Photo</span>';
+        host.appendChild(ask);
+    }
+    const onTap = (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        event.stopImmediatePropagation();
+        host.removeEventListener('click', onTap, true);
+        delete host.__ntPosterHoldTap;
+        ask.remove();
+        delete host.dataset.ntPosterHeld;
+        host.querySelector('.nt-alert-poster-loading')?.classList.remove('hidden');
+        startLoad();
+    };
+    host.__ntPosterHoldTap = onTap;
+    host.addEventListener('click', onTap, true);
+}
+
+function releaseHeldPosters(root) {
+    root?.querySelectorAll?.('[data-nt-poster-held]').forEach((host) => {
+        if (host.__ntPosterHoldTap) {
+            host.removeEventListener('click', host.__ntPosterHoldTap, true);
+            delete host.__ntPosterHoldTap;
+        }
+        host.querySelector('[data-nt-poster-ask]')?.remove();
+        delete host.dataset.ntPosterHeld;
+        const img = host.querySelector('img.nt-alert-poster-img');
+        if (img) {
+            delete img.dataset.ntPosterBound;
+            delete img.dataset.ntPosterStarted;
+        }
+        host.querySelector('.nt-alert-poster-loading')?.classList.remove('hidden');
+    });
+}
+
 export function hydrateAlertPosterImages(root = typeof document !== 'undefined' ? document : null) {
     if (!root?.querySelectorAll) return;
     watchAlertPosterHydration(root);
@@ -351,40 +400,60 @@ export function hydrateAlertPosterImages(root = typeof document !== 'undefined' 
         const host = img.closest('[data-alert-lightbox]');
         const originalSrc = host?.getAttribute('data-alert-lightbox') || img.getAttribute('src') || '';
         if (!originalSrc) return;
-        const rememberObjectUrl = (blob) => {
-            if (!blob || !host) return '';
-            try {
-                const prev = host.getAttribute('data-alert-object-url') || '';
-                const obj = URL.createObjectURL(blob);
-                host.setAttribute('data-alert-object-url', obj);
-                if (prev && prev.startsWith('blob:') && prev !== obj) {
-                    try { URL.revokeObjectURL(prev); } catch { /* ignore */ }
-                }
-                return obj;
-            } catch {
-                return '';
-            }
-        };
-        loadAlertImageBlob(originalSrc, {
-            expiresAt: Number(host?.getAttribute('data-alert-expires') || 0),
-            noticeId: host?.getAttribute('data-alert-notice-id') || '',
-        }).then((blob) => {
-            const obj = rememberObjectUrl(blob);
-            img.setAttribute('fetchpriority', 'high');
-            if (obj) {
-                img.src = obj;
-                if (window._isLightboxMode && typeof window.ntPaintAlertLightbox === 'function') {
-                    const full = document.getElementById('alert-image-lightbox-img');
-                    if (full && !String(full.getAttribute('src') || '').startsWith('blob:')) {
-                        window.ntPaintAlertLightbox(obj);
+        const startLoad = () => {
+            if (img.dataset.ntPosterStarted === '1') return;
+            img.dataset.ntPosterStarted = '1';
+            rememberPicture(originalSrc);
+            const rememberObjectUrl = (blob) => {
+                if (!blob || !host) return '';
+                try {
+                    const prev = host.getAttribute('data-alert-object-url') || '';
+                    const obj = URL.createObjectURL(blob);
+                    host.setAttribute('data-alert-object-url', obj);
+                    if (prev && prev.startsWith('blob:') && prev !== obj) {
+                        try { URL.revokeObjectURL(prev); } catch { /* ignore */ }
                     }
+                    return obj;
+                } catch {
+                    return '';
                 }
-                return;
-            }
-            if (!img.getAttribute('src')) img.src = originalSrc;
-        }).catch(() => {
-            if (!img.getAttribute('src')) img.src = originalSrc;
-        });
+            };
+            loadAlertImageBlob(originalSrc, {
+                expiresAt: Number(host?.getAttribute('data-alert-expires') || 0),
+                noticeId: host?.getAttribute('data-alert-notice-id') || '',
+            }).then((blob) => {
+                const obj = rememberObjectUrl(blob);
+                img.setAttribute('fetchpriority', 'high');
+                if (obj) {
+                    img.src = obj;
+                    if (window._isLightboxMode && typeof window.ntPaintAlertLightbox === 'function') {
+                        const full = document.getElementById('alert-image-lightbox-img');
+                        if (full && !String(full.getAttribute('src') || '').startsWith('blob:')) {
+                            window.ntPaintAlertLightbox(obj);
+                        }
+                    }
+                    return;
+                }
+                if (!img.getAttribute('src')) img.src = originalSrc;
+            }).catch(() => {
+                if (!img.getAttribute('src')) img.src = originalSrc;
+            });
+        };
+        if (posterLoadPlan(originalSrc) === 'show') {
+            startLoad();
+        } else if (host) {
+            host.dataset.ntPosterChecking = '1';
+            resolveCachedAlertImage(originalSrc).then((cached) => {
+                if (!img.isConnected) return;
+                delete host.dataset.ntPosterChecking;
+                if (posterLoadPlan(originalSrc, { cached: !!cached }) === 'show') startLoad();
+                else holdPosterForTap(host, startLoad);
+            }).catch(() => {
+                if (!img.isConnected) return;
+                delete host.dataset.ntPosterChecking;
+                holdPosterForTap(host, startLoad);
+            });
+        }
         const reveal = () => {
             if (img.dataset.ntPosterRevealed === '1') return;
             if (!(img.naturalWidth > 0)) return;
@@ -1422,6 +1491,7 @@ function bindAlertsChannelOnce() {
         }
         const lightbox = e.target.closest?.('[data-alert-lightbox]');
         if (lightbox) {
+            if (lightbox.dataset.ntPosterHeld === '1' || lightbox.dataset.ntPosterChecking === '1') return;
             e.preventDefault();
             const src = lightbox.getAttribute('data-alert-lightbox');
             if (src && typeof window.openLightbox === 'function') window.openLightbox(src, lightbox);
@@ -1509,6 +1579,18 @@ export function initAlertsChannel() {
 }
 
 if (typeof window !== 'undefined') {
+    window.addEventListener('ntdatasaver', () => {
+        const channel = document.getElementById('alerts-channel');
+        const channelOpen = channel && !channel.classList.contains('hidden');
+        if (!picturesWaitForTap()) {
+            releaseHeldPosters(document);
+            document.querySelectorAll('[data-alert-video-poster-pending]').forEach((img) => {
+                if (!img.getAttribute('src')) delete img.dataset.ntVideoPosterBound;
+            });
+            if (!channelOpen) hydrateAlertPosterImages(document);
+        }
+        if (channelOpen) renderAlertsChannel();
+    });
     window.addEventListener('nt-alert-lightbox', (event) => {
         bindLightboxReactionClicks();
         paintLightboxReactions(event?.detail || null);

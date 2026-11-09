@@ -5,6 +5,9 @@
 import { CHANGELOG_DATA } from './config.js';
 
 export const ADMIN_CHANGELOG = {
+    'V10_11.10.2': [
+        'Data saving is a signed-in Account page, next to Notifications. It starts off: pictures load on their own, link cards stay on, and profile photos stay on. Only when I tap waits for a tap before a new picture download. A poster already in the alert image cache, or a picture this phone has already shown, still paints with no download chip. Link cards off skips the card and the lookup. Profile photos off skips the photo and keeps the existing placeholder. The timetable is unchanged. The map still loads its picture when that map is opened. forceShow stays false.',
+    ],
     'V10_11.10.1': [
         'Media and Upload a photo take up to four photos in one pick. The notice stores each photo in the text as well as the poster list, so phones already on V10_11.09.2 still show all four. A catalog poster does not push one of those photos off that older screen. The photo address has no token. Posting still uses the operator sign-in the alert post already requires. No commuter What\'s New. forceShow stays false.',
     ],

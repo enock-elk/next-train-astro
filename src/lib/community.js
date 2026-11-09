@@ -14,6 +14,7 @@ import { APP_VERSION, COMMUNITY_WORKER_FALLBACK_URL, COMMUNITY_WORKER_URL, DYNAM
 import { formatAccountDisplayName } from './display-name.js';
 import { safeStorage, escapeHTML, expandJhbLabel, applyFittedLabel } from './utils.js';
 import { sanitizeCommunityPhotoUrl } from './community-photo.js';
+import { pictureMarkup, profilePhotosOn, settleDeferredPictures } from './data-saver.js';
 import { $currentRouteId, $userRegion, $deviceId } from '../store.js';
 import { $account, offerNextTrainAccount } from './account.js';
 import { isAdminAuthed } from './admin-chrome.js';
@@ -265,7 +266,7 @@ function communityNameFor(acct) {
 }
 
 function renderAvatarHtml(photoURL) {
-    const safePhoto = sanitizeCommunityPhotoUrl(photoURL);
+    const safePhoto = profilePhotosOn() ? sanitizeCommunityPhotoUrl(photoURL) : '';
     if (safePhoto) {
         return `<span class="relative inline-flex w-8 h-8 shrink-0">
             <img src="${escapeHTML(safePhoto)}" alt="" class="w-8 h-8 rounded-full object-cover bg-gray-200 dark:bg-gray-700" loading="lazy" onerror="this.classList.add('hidden');const f=this.parentElement.querySelector('.avatar-fallback');if(f)f.classList.remove('hidden');"/>
@@ -1346,10 +1347,7 @@ function renderCommunityMedia(post) {
     if (isCommunityTombstone(post)) return '';
     const images = communityImageUrls(post);
     const imageHtml = images.length
-        ? `<div class="community-msg-images">${images.map((url) => {
-            const src = escapeHTML(url);
-            return `<a href="${src}" target="_blank" rel="noopener noreferrer"><img src="${src}" alt="" referrerpolicy="no-referrer"></a>`;
-        }).join('')}</div>`
+        ? `<div class="community-msg-images">${images.map((url) => pictureMarkup(url, { link: true })).join('')}</div>`
         : '';
     const link = sanitizeCommunityLinkUrl(post?.linkUrl);
     const linkHtml = link
@@ -1456,6 +1454,7 @@ function applyFeedFilter(routeId) {
         prevUid = uid;
     });
     listEl.innerHTML = html;
+    settleDeferredPictures(listEl);
     wireCommunityChatGestures(listEl);
     pinCommunityFeedToLatest();
     if (profileRepaintRoute === routeId) return;
@@ -2632,6 +2631,12 @@ export function bindCommunityUi() {
 }
 
 if (typeof window !== 'undefined') {
+    window.addEventListener('ntdatasaver', () => {
+        const view = document.getElementById('view-community');
+        if (!view || view.classList.contains('hidden')) return;
+        const routeId = document.getElementById('community-route-select')?.value || '';
+        if (routeId) applyFeedFilter(routeId);
+    });
     window.openRouteCommunity = openRouteCommunity;
     window.renderCommunityFeed = renderCommunityFeed;
     window.leaveCommunityRoom = leaveCommunityRoom;

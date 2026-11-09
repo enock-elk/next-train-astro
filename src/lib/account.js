@@ -7,7 +7,7 @@
  *     displayName, photoURL, email?, createdAt,
  *     lastSeenAt, region, lastRouteId, appVersion,
  *     deviceIds: { [deviceId]: linkedAtMs | true },
- *     prefs: { showPhotoInAlerts, showMarksInCommunity, notifyCategories, notificationsOn, theme, colourPack, hapticsEnabled, passengerType, pinnedRoutes, updatedAt },
+ *     prefs: { showPhotoInAlerts, showMarksInCommunity, notifyCategories, notificationsOn, theme, colourPack, hapticsEnabled, passengerType, pinnedRoutes, dataSaver, updatedAt },
  *     recentTrips: [{ from, to, fullFrom, fullTo, at, region }]
  *     flags: { shadowBanned: false, shadowBannedUntil: 0, role: 'user' },
  *     trustScore: 0
@@ -33,6 +33,7 @@ import {
     refuseDisplayName,
     DISPLAY_NAME_REFUSE_MSG,
 } from './display-name.js';
+import { paintDataSaverUi, readDataSaver, writeDataSaver } from './data-saver.js';
 
 /** @typedef {'guest' | 'loading' | 'signed-in'} AccountStatus */
 
@@ -105,6 +106,7 @@ export function readLocalAccountPrefs() {
         hapticsEnabled: safeStorage.getItem('hapticsEnabled') === 'true',
         passengerType: safeStorage.getItem('userProfile') || $userProfile.get() || 'Adult',
         notificationsOn: safeStorage.getItem('notifyRoomActivity') === 'true',
+        dataSaver: readDataSaver(),
         pinnedRoutes: readPinnedRoutes(),
         updatedAt: Date.now(),
     };
@@ -230,6 +232,9 @@ export async function applyAccountPrefs(prefs) {
                     safeStorage.setItem(`defaultRoute_${region}`, id.trim().slice(0, 40));
                 }
             }
+        }
+        if (prefs.dataSaver && typeof prefs.dataSaver === 'object') {
+            writeDataSaver({ ...prefs.dataSaver, push: false });
         }
         if (typeof prefs.notificationsOn === 'boolean') {
             safeStorage.setItem('notifyRoomActivity', prefs.notificationsOn ? 'true' : 'false');
@@ -978,11 +983,13 @@ const accountSheetStack = [];
 const ACCOUNT_PANE_HASH = {
     profile: '#account-profile',
     notifications: '#account-notifications',
+    data: '#account-data',
     appearance: '#account-appearance',
 };
 const ACCOUNT_PANE_TITLE = {
     profile: 'Edit profile',
     notifications: 'Notifications',
+    data: 'Data saving',
     appearance: 'Appearance',
 };
 
@@ -1009,6 +1016,7 @@ function paintAccountPane(pane) {
             input.value = $account.get().displayName || '';
         }
     }
+    if (next === 'data') paintDataSaverUi();
     const scroller = document.querySelector('[data-account-scroll]');
     if (scroller) scroller.scrollTop = 0;
 }
@@ -2023,6 +2031,22 @@ export function bindAccountUi() {
     document.getElementById('account-open-notifications')?.addEventListener('click', () => {
         setAccountPane('notifications');
     });
+    document.getElementById('account-open-data')?.addEventListener('click', () => {
+        setAccountPane('data');
+    });
+    document.getElementById('account-data-pictures-auto')?.addEventListener('click', () => {
+        writeDataSaver({ pictures: 'auto' });
+    });
+    document.getElementById('account-data-pictures-tap')?.addEventListener('click', () => {
+        writeDataSaver({ pictures: 'tap' });
+    });
+    document.getElementById('account-data-link-cards')?.addEventListener('change', (event) => {
+        writeDataSaver({ linkCards: !!event.target.checked });
+    });
+    document.getElementById('account-data-profile-photos')?.addEventListener('change', (event) => {
+        writeDataSaver({ profilePhotos: !!event.target.checked });
+    });
+    paintDataSaverUi();
     document.getElementById('account-open-appearance')?.addEventListener('click', () => {
         setAccountPane('appearance');
     });

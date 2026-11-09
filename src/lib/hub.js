@@ -15,6 +15,7 @@ import {
     safeStorage, escapeHTML, repairMojibake, restoreDeviceIdentity, formatAppDate,
     cacheClearPolicy, shouldDeleteCacheForPolicy, destructiveNetworkIsSafe,
 } from './utils.js';
+import { rememberPicture, shouldHoldPicture } from './data-saver.js';
 import { encodeFeedbackAlertQuote, commuterFeedbackText, noticeQuotePlain } from './feedback-quote.js';
 import {
     validateFeedbackContact,
@@ -2134,6 +2135,10 @@ export function renderServiceAlertModal(notice, options = {}) {
             const href = resolveAlertImageSrc(path);
             if (!href) return '';
             const src = escapeHTML(href);
+            if (shouldHoldPicture(href)) {
+                return `<button type="button" data-alert-lightbox="${src}" data-alert-notice-id="${escapeHTML(String(notice.id || ''))}" data-alert-expires="${escapeHTML(String(notice.expiresAt || ''))}" class="relative block w-full min-h-[8rem] focus:outline-none cursor-zoom-in rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm bg-gray-100 dark:bg-gray-900"><span class="nt-alert-poster-loading absolute inset-0 flex items-center justify-center bg-gray-100 dark:bg-gray-900 pointer-events-none" aria-hidden="true"><span class="h-6 w-6 animate-spin rounded-full border-2 border-gray-300 border-t-blue-600"></span></span><img alt="" referrerpolicy="no-referrer" class="nt-alert-poster-img w-full h-auto max-h-56 min-h-[8rem] object-contain bg-gray-100 dark:bg-gray-900 opacity-0"></button>`;
+            }
+            rememberPicture(href);
             const onclick = lightboxOnclickJs(href);
             if (!onclick) return '';
             return `<button type="button" onclick='event.stopPropagation(); ${onclick}' class="relative block w-full min-h-[8rem] focus:outline-none cursor-zoom-in rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm bg-gray-100 dark:bg-gray-900"><img src="${src}" alt="" referrerpolicy="no-referrer" class="w-full h-auto max-h-56 min-h-[8rem] object-contain bg-gray-100 dark:bg-gray-900"></button>`;
@@ -2161,6 +2166,16 @@ export function renderServiceAlertModal(notice, options = {}) {
 
     hydrateAlertPosterImages(content);
     hydrateLinkPreviews(content, REPLY_WORKER_URL);
+    if (content.dataset.ntModalPoster !== '1') {
+        content.dataset.ntModalPoster = '1';
+        content.addEventListener('click', (event) => {
+            const lightbox = event.target.closest?.('[data-alert-lightbox]');
+            if (!lightbox || lightbox.dataset.ntPosterHeld === '1' || lightbox.dataset.ntPosterChecking === '1') return;
+            event.preventDefault();
+            const src = lightbox.getAttribute('data-alert-lightbox');
+            if (src && typeof window.openLightbox === 'function') window.openLightbox(src, lightbox);
+        });
+    }
 
     if (timestamp) {
         if (options.timestampHtml) {

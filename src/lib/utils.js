@@ -1023,6 +1023,8 @@ export const VOLATILE_FLUSH_PROTECTED_KEYS = Object.freeze([
     'authUid',
     'activeTab',
     'ntPrefsAccordionOpen',
+    'ntDataSaver',
+    'ntDataSaverSeen',
     'ntLabEmberSeededV1',
     'ntProdClassicPackV1',
     'analytics_ignore',

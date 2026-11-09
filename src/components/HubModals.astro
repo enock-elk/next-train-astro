@@ -344,6 +344,16 @@ import { withBase } from '../lib/config.js';
                                 </span>
                                 <svg class="h-4 w-4 shrink-0 text-gray-300 dark:text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
                             </button>
+                            <button type="button" id="account-open-data" class="flex min-h-[60px] w-full items-center gap-3 px-4 py-3 text-left focus:outline-none active:bg-[#f4f7ff] dark:active:bg-white/[0.04]">
+                                <span class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#4C8DFF]/10 text-[#4C8DFF]" aria-hidden="true">
+                                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3"></path></svg>
+                                </span>
+                                <span class="min-w-0 flex-1">
+                                    <span class="block text-[15px] font-semibold tracking-tight text-gray-900 dark:text-white">Data saving</span>
+                                    <span id="account-data-summary" class="mt-0.5 block truncate text-[12px] font-normal text-gray-500 dark:text-gray-400">Off</span>
+                                </span>
+                                <svg class="h-4 w-4 shrink-0 text-gray-300 dark:text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+                            </button>
                             <button type="button" id="account-open-appearance" class="flex min-h-[60px] w-full items-center gap-3 px-4 py-3 text-left focus:outline-none active:bg-[#f4f7ff] dark:active:bg-white/[0.04]">
                                 <span class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#4C8DFF]/10 text-[#4C8DFF]" aria-hidden="true">
                                     <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01"></path></svg>
@@ -441,6 +451,45 @@ import { withBase } from '../lib/config.js';
                 <div data-account-view="notifications" class="hidden space-y-3">
                     <div class="overflow-hidden rounded-2xl border border-black/[0.04] bg-white shadow-[0_8px_24px_rgba(15,23,42,0.06)] dark:border-white/10 dark:bg-[#1c1c1e]">
                         <div id="account-notifications-slot"></div>
+                    </div>
+                </div>
+                <div data-account-view="data" class="hidden space-y-3">
+                    <p class="px-1 text-[13px] font-normal leading-snug text-gray-500 dark:text-gray-400">Data saving starts off. The timetable always loads. A picture already saved on this phone still shows.</p>
+                    <div class="overflow-hidden rounded-2xl border border-black/[0.04] bg-white shadow-[0_8px_24px_rgba(15,23,42,0.06)] divide-y divide-black/[0.06] dark:divide-white/10 dark:border-white/10 dark:bg-[#1c1c1e]">
+                        <button type="button" id="account-data-pictures-auto" aria-pressed="true" class="flex min-h-[56px] w-full items-center justify-between gap-3 px-4 py-3 text-left focus:outline-none active:bg-[#f4f7ff] dark:active:bg-white/[0.04]">
+                            <span class="min-w-0">
+                                <span class="block text-[15px] font-semibold tracking-tight text-gray-900 dark:text-white">Automatic</span>
+                                <span class="mt-0.5 block text-[12px] font-normal text-gray-500 dark:text-gray-400">Pictures load on their own.</span>
+                            </span>
+                            <svg data-nt-data-check class="h-5 w-5 shrink-0 text-[#4C8DFF]" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"></path></svg>
+                        </button>
+                        <button type="button" id="account-data-pictures-tap" aria-pressed="false" class="flex min-h-[56px] w-full items-center justify-between gap-3 px-4 py-3 text-left focus:outline-none active:bg-[#f4f7ff] dark:active:bg-white/[0.04]">
+                            <span class="min-w-0">
+                                <span class="block text-[15px] font-semibold tracking-tight text-gray-900 dark:text-white">Only when I tap</span>
+                                <span class="mt-0.5 block text-[12px] font-normal text-gray-500 dark:text-gray-400">A picture waits until you tap it.</span>
+                            </span>
+                            <svg data-nt-data-check class="hidden h-5 w-5 shrink-0 text-[#4C8DFF]" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"></path></svg>
+                        </button>
+                    </div>
+                    <div class="flex w-full items-center justify-between gap-3 rounded-2xl border border-black/[0.04] bg-white px-4 py-3.5 text-left shadow-[0_8px_24px_rgba(15,23,42,0.06)] dark:border-white/10 dark:bg-[#1c1c1e]">
+                        <label for="account-data-link-cards" class="min-w-0">
+                            <span class="block text-[15px] font-semibold tracking-tight text-gray-900 dark:text-white">Link cards</span>
+                            <span class="mt-0.5 block text-[12px] font-normal leading-snug text-gray-500 dark:text-gray-400">Shows a card for a web address. Off leaves the address as text.</span>
+                        </label>
+                        <span class="relative inline-block w-10 shrink-0 select-none align-middle">
+                            <input type="checkbox" id="account-data-link-cards" class="toggle-checkbox absolute block h-5 w-5 appearance-none rounded-full border-4 border-gray-300 bg-white outline-none" checked />
+                            <label for="account-data-link-cards" class="toggle-label block h-5 cursor-pointer overflow-hidden rounded-full bg-gray-300"></label>
+                        </span>
+                    </div>
+                    <div class="flex w-full items-center justify-between gap-3 rounded-2xl border border-black/[0.04] bg-white px-4 py-3.5 text-left shadow-[0_8px_24px_rgba(15,23,42,0.06)] dark:border-white/10 dark:bg-[#1c1c1e]">
+                        <label for="account-data-profile-photos" class="min-w-0">
+                            <span class="block text-[15px] font-semibold tracking-tight text-gray-900 dark:text-white">Profile photos</span>
+                            <span class="mt-0.5 block text-[12px] font-normal leading-snug text-gray-500 dark:text-gray-400">Off keeps the usual placeholder and does not download the photo.</span>
+                        </label>
+                        <span class="relative inline-block w-10 shrink-0 select-none align-middle">
+                            <input type="checkbox" id="account-data-profile-photos" class="toggle-checkbox absolute block h-5 w-5 appearance-none rounded-full border-4 border-gray-300 bg-white outline-none" checked />
+                            <label for="account-data-profile-photos" class="toggle-label block h-5 cursor-pointer overflow-hidden rounded-full bg-gray-300"></label>
+                        </span>
                     </div>
                 </div>
                 <div data-account-view="appearance" class="hidden space-y-3">

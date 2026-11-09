@@ -1,5 +1,11 @@
 # Changelog
 
+## V10_11.10.2
+
+- Data saving starts off. Pictures load on their own until you change that.
+- You can make a picture wait until you tap it. A picture already saved on this phone still shows.
+- Link cards can stay off. The timetable still loads.
+
 ## V10_11.01.4 — no release notes
 
 - Guide, map loading pin, welcome pulse, tomorrow shared trains, passenger fare refresh, Co-Pilot header scroll.

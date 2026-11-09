@@ -4,6 +4,8 @@
  * and a stored card on the notice is what every commuter paints.
  */
 
+import { linkCardsOn, rememberPicture, shouldHoldPicture } from './data-saver.js';
+
 const memory = new Map();
 const failedUrls = new Set();
 const STORAGE_PREFIX = 'nt_link_preview:';
@@ -248,7 +250,9 @@ function rememberLinkPreview(preview) {
 function readyMarkup(preview) {
     const card = normalizeLinkPreview(preview);
     if (!card) return '';
-    const media = card.image
+    const showImage = !!(card.image && !shouldHoldPicture(card.image));
+    if (showImage) rememberPicture(card.image);
+    const media = showImage
         ? `<img class="nt-link-preview-media" alt="" src="${escapeAttr(card.image)}" referrerpolicy="no-referrer">`
         : '';
     const desc = card.description
@@ -277,6 +281,7 @@ function loadingMarkup(url) {
 }
 
 export function linkPreviewMarkup(notice) {
+    if (!linkCardsOn()) return '';
     if (notice?.suppressLinkPreview) return '';
     const stored = normalizeLinkPreview(notice?.linkPreview);
     const urls = [];
@@ -344,11 +349,19 @@ export async function fetchLinkPreview(url, workerBase) {
 }
 
 export function hydrateLinkPreviews(root, workerBase) {
+    if (!linkCardsOn()) {
+        root?.querySelectorAll?.('.nt-link-preview, [data-link-preview-url]').forEach((el) => el.remove());
+        return;
+    }
     if (!root || typeof root.querySelectorAll !== 'function') return;
     root.querySelectorAll('[data-link-preview-url]').forEach((el) => {
         if (el.getAttribute('data-link-preview-state') === 'ready') return;
         const url = el.getAttribute('data-link-preview-url') || '';
         fetchLinkPreview(url, workerBase).then((preview) => {
+            if (!linkCardsOn()) {
+                if (el.isConnected) el.remove();
+                return;
+            }
             if (!el.isConnected) return;
             if (!preview) {
                 el.remove();
@@ -367,5 +380,12 @@ export function hydrateLinkPreviews(root, workerBase) {
         }).catch(() => {
             if (el.isConnected) el.remove();
         });
+    });
+}
+
+if (typeof window !== 'undefined') {
+    window.addEventListener('ntdatasaver', () => {
+        if (linkCardsOn()) return;
+        document.querySelectorAll('.nt-link-preview, [data-link-preview-url]').forEach((el) => el.remove());
     });
 }

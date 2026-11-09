@@ -14,7 +14,7 @@
  * Changelog / What’s New is optional: skip both, or write only "no release notes."
  * Always add ADMIN_CHANGELOG[APP_VERSION] (System Health Build notes).
  */
-export const APP_VERSION = "V10_11.10.1";
+export const APP_VERSION = "V10_11.10.2";
 
 /** Public support channels (About modal, lifeboat help.html, Safe Mode). */
 export const SUPPORT_EMAIL = 'admin@nexttrain.co.za';
@@ -994,6 +994,17 @@ export const HERC_KOED_JUNCTIONS = ['KOEDOESPOORT', 'HERCULES'];
 // comma, a period, or a hyphen. Do not explain strategy or "we fixed."
 // Leave every forceShow false. Never auto-open What's New over the welcome screen.
 export const CHANGELOG_DATA = [
+    {
+        id: "V10_11.10.2",
+        title: "Data saving",
+        date: "10 Nov 2026",
+        forceShow: false,
+        features: [
+            "Data saving starts off. Pictures load on their own until you change that.",
+            "You can make a picture wait until you tap it. A picture already saved on this phone still shows.",
+            "Link cards can stay off. The timetable still loads."
+        ]
+    },
     {
         id: "V10_11.01.1",
         title: "Terminus labels and fares",
